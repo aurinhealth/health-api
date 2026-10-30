@@ -164,7 +164,47 @@ export async function signedInResponse(userId, env, body = { status: "ok" }) {
 export async function signedOutElsewhere(db, userId, env, response) {
   await bumpSessionEpoch(db, userId);
   response.headers.append("Set-Cookie", await userSessionCookie(db, userId, sessionSecret(env)));
+  // This device stays a known device for e-mail codes; the others lose it with the epoch.
+  const device = await knownDeviceCookie(db, env, userId);
+  if (device) response.headers.append("Set-Cookie", device);
   return response;
+}
+
+// The device a sign-in happened on (e-mail code sign-in, or a device that just got a fresh
+// session): "<nonce>.<signature of the account, its session epoch, the address and the nonce>".
+// It exempts the device from the address's daily code limit and wrong-code lock
+// (email-login.js). Bumping the epoch (sign out everywhere, e-mail change, removing a passkey,
+// unlinking Apple ID, blocking) or deleting the account ends it everywhere but on the device that
+// made the change, and an address that later belongs to someone else never matches an older cookie.
+export const KNOWN_COOKIE = "aurin_known";
+const KNOWN_SECONDS = 365 * 24 * 60 * 60;
+// Read with the request: a missing account is compared against a dummy, so both take as long.
+const NO_OWNER = { id: 0, email: "", session_epoch: -1 };
+async function knownOwner(db, where, value) {
+  try {
+    return await db.prepare(`SELECT id, email, session_epoch FROM users WHERE ${where}=?`).bind(value).first();
+  } catch (error) {
+    console.error("Known device: account not read", error?.message);
+    return null;
+  }
+}
+const knownSignature = (env, owner, nonce) => signText("known-device:" + owner.id + ":" + (Number(owner.session_epoch) || 0) + ":" + owner.email + ":" + nonce, sessionSecret(env));
+
+export async function knownDeviceCookie(db, env, userId) {
+  const owner = await knownOwner(db, "id", Number(userId));
+  if (!owner?.email) return null;
+  const nonce = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(16).padStart(2, "0")).join("");
+  return KNOWN_COOKIE + "=" + nonce + "." + await knownSignature(env, owner, nonce) + "; Path=/auth/email; Max-Age=" + KNOWN_SECONDS + "; HttpOnly; Secure; SameSite=Lax";
+}
+
+// The nonce when the request comes from a known device of the account that owns this address, else null.
+export async function knownDevice(request, env, email) {
+  const value = String(request.headers.get("Cookie") || "").split(/;\s*/).find(c => c.startsWith(KNOWN_COOKIE + "="))?.slice(KNOWN_COOKIE.length + 1) || "";
+  const [nonce, signature] = value.split(".");
+  if (!/^[0-9a-f]{24}$/.test(nonce || "") || !/^[A-Za-z0-9_\-+/=]{16,128}$/.test(signature || "")) return null;
+  const owner = await knownOwner(env.DB, "email", email);
+  const match = timingSafeEqualString(signature, await knownSignature(env, owner || NO_OWNER, nonce));
+  return owner && match ? nonce : null;
 }
 
 // Settings → Účet: POST /app/api/account/sign-out-everywhere.

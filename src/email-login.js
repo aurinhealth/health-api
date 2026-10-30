@@ -15,7 +15,7 @@
 // Codes for moving an account to another address have their own day's budget
 // (EMAIL_CHANGE_CODES_PER_DAY, 100), so they never take from the codes for signing in, and one
 // account asks for at most 2 a minute, 5 an hour and 10 a day, one caller for 5, 20 and 30.
-import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie } from "./dashboard-auth.js";
+import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie, knownDevice, knownDeviceCookie } from "./dashboard-auth.js";
 import { allowClient, allowRequest } from "./ip-rate-limit.js";
 import { normalizeEmail, emailCodeAccess, signInEmailUser, changeUserEmail } from "./tenancy.js";
 import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail } from "./email-sender.js";
@@ -46,30 +46,7 @@ const LOCKED_TODAY = () => L("Na tenhle e-mail bylo zadáno příliš mnoho špa
 const REVIEW_LOCKED = () => L("Na tenhle e-mail bylo zadáno příliš mnoho špatných kódů.", "Too many wrong codes were entered for this email.");
 const today = now => new Date(now).toISOString().slice(0, 10);
 
-// The device a code was used on: "<nonce>.<signature of the account, the address and the nonce>".
-// The signature covers the account's id and session epoch, so signing out everywhere, an e-mail
-// change, blocking or deleting the account ends the device's exemption, and an address that later
-// belongs to someone else never matches an older cookie.
-export const KNOWN_COOKIE = "aurin_known";
-const KNOWN_SECONDS = 365 * 24 * 60 * 60;
 const MAX_KNOWN_TRIES_PER_DAY = 20;
-const knownOwner = (db, email) => db.prepare("SELECT id, session_epoch FROM users WHERE email=?").bind(email).first().catch(() => null);
-const knownSignature = (env, email, nonce, owner) => signText("known-device:" + owner.id + ":" + (Number(owner.session_epoch) || 0) + ":" + email + ":" + nonce, sessionSecret(env));
-async function knownCookie(env, email) {
-  const owner = await knownOwner(env.DB, email);
-  if (!owner) return null;
-  const nonce = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(16).padStart(2, "0")).join("");
-  return KNOWN_COOKIE + "=" + nonce + "." + await knownSignature(env, email, nonce, owner) + "; Path=/auth/email; Max-Age=" + KNOWN_SECONDS + "; HttpOnly; Secure; SameSite=Lax";
-}
-// The nonce when the request comes from a device that signed in with this address, else null.
-export async function knownDevice(request, env, email) {
-  const value = String(request.headers.get("Cookie") || "").split(/;\s*/).find(c => c.startsWith(KNOWN_COOKIE + "="))?.slice(KNOWN_COOKIE.length + 1) || "";
-  const [nonce, signature] = value.split(".");
-  if (!/^[0-9a-f]{24}$/.test(nonce || "") || !signature) return null;
-  const owner = await knownOwner(env.DB, email);
-  if (!owner) return null;
-  return timingSafeEqualString(signature, await knownSignature(env, email, nonce, owner)) ? nonce : null;
-}
 
 const json = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
@@ -86,16 +63,16 @@ export async function handleEmailLogin(request, env, pathname, ctx) {
   const body = await request.json().catch(() => ({}));
   const email = normalizeEmail(body?.email);
   if (email.length > 254 || !EMAIL_PATTERN.test(email)) return json({ message: L("Zadej platný e-mail.", "Enter a valid email.") }, 400);
-  const known = await knownDevice(request, env, email);
   if (pathname === "/auth/email/start") {
     if (!(await allowClient(env.DB, request, sessionSecret(env), "email", Date.now(), START_LIMITS))) return json({ message: TOO_MANY() }, 429);
+    const known = await knownDevice(request, env, email);
     // Whether a code goes out (and how long that takes) stays out of the answer.
     const work = sendCode(env, email, requestLanguage(request), { known }).catch(error => console.error("Sign-in code e-mail failed", error?.code || error?.message));
     if (ctx?.waitUntil) ctx.waitUntil(work); else await work;
     return json({ status: "ok" });
   }
   if (!(await allowClient(env.DB, request, sessionSecret(env), "email-verify", Date.now(), VERIFY_LIMITS))) return json({ message: TOO_MANY() }, 429);
-  return verifyCode(env, email, body?.code, known);
+  return verifyCode(env, email, body?.code, await knownDevice(request, env, email));
 }
 
 function randomCode() {
@@ -194,7 +171,7 @@ async function verifyCode(env, email, input, known = null) {
   if (!user) return json({ message: L("Tento e-mail nemá do Aurinu přístup.", "This email doesn't have access to Aurin.") }, 403);
   // This device signed in with the address: a stranger's wrong codes no longer lock it out.
   const response = await signedInResponse(user.id, env, { status: "ok", created: user.created });
-  const device = await knownCookie(env, email);
+  const device = await knownDeviceCookie(env.DB, env, user.id);
   if (device) response.headers.append("Set-Cookie", device);
   return response;
 }
@@ -285,9 +262,12 @@ export async function handleEmailChange(request, env, url, session, ctx) {
   const changed = await changeUserEmail(db, env, user.id, email);
   if (changed.error) return emailChangeRefusal(changed.error);
   await notifyOldAddress(env, changed, requestLanguage(request), ctx);
-  // The change signs every other device out (session_epoch); this one gets a fresh cookie.
+  // The change signs every other device out (session_epoch); this one gets a fresh cookie, and
+  // stays a known device for the new address.
   const response = json({ status: "ok", email: changed.email });
   response.headers.append("Set-Cookie", await userSessionCookie(db, user.id, sessionSecret(env)));
+  const device = await knownDeviceCookie(db, env, user.id);
+  if (device) response.headers.append("Set-Cookie", device);
   return response;
 }
 

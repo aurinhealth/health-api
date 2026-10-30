@@ -6,7 +6,7 @@ import { handleEmailLogin, sendCode, codesPerDay, openCodesPerDay } from "../src
 import { emailConfigured, emailSender, signInCodeEmail, passkeyAddedEmail, emailChangedEmail } from "../src/email-sender.js";
 import { withTimeZone } from "../src/user-time.js";
 import { ensureTenancy, inviteUser, signInEmailUser, setUserDisabled, _resetTenancyForTest } from "../src/tenancy.js";
-import { resolvePrincipal } from "../src/dashboard-auth.js";
+import { resolvePrincipal, handleSignOutEverywhere } from "../src/dashboard-auth.js";
 
 const ORIGIN = "https://aurin.health";
 const MIGRATION = ["0014_passkeys_email_codes.sql", "0027_email_code_limits.sql"].map(name => readFileSync(new URL("../migrations/" + name, import.meta.url), "utf8")).join("\n");
@@ -361,23 +361,35 @@ test("a stranger's wrong codes lock out only devices that never signed in with t
   assert.equal((await at(later + 120_000, () => verify(env, "owner@example.com", "123456", { ip: "192.0.2.9", cookie: forged }))).status, 429);
 });
 
-test("signing out everywhere ends the device's exemption", async () => {
+test("signing out everywhere ends the other devices' exemption, not the caller's", async () => {
   const { env, sent } = await setup();
   const t0 = Date.parse("2026-10-07T08:00:00Z");
-  await at(t0, () => start(env, "owner@example.com", { ip: "192.0.2.1" }));
-  const first = await at(t0 + 1000, () => verify(env, "owner@example.com", codeIn(sent.at(-1)), { ip: "192.0.2.1" }));
-  const cookie = first.headers.getSetCookie().find(c => c.startsWith("aurin_known=")).split(";")[0];
+  const signIn = async (ip, time) => {
+    await at(time, () => start(env, "owner@example.com", { ip }));
+    const ok = await at(time + 1000, () => verify(env, "owner@example.com", codeIn(sent.at(-1)), { ip }));
+    return ok.headers.getSetCookie().find(c => c.startsWith("aurin_known=")).split(";")[0];
+  };
+  const phone = await signIn("192.0.2.1", t0), laptop = await signIn("192.0.2.2", t0 + 61_000);
   let caller = 0;
   for (let round = 0; round < 5; round++) {
-    const time = t0 + 120_000 + round * 61_000;
+    const time = t0 + 180_000 + round * 61_000;
     await sendCode(env, "owner@example.com", "cs", { now: time });
     const wrong = codeIn(sent.at(-1)) === "000000" ? "111111" : "000000";
     for (let i = 0; i < 4; i++) await at(time + 1000, () => verify(env, "owner@example.com", wrong, { ip: "198.51.100." + (++caller) }));
   }
-  env.DB.sqlite.prepare("UPDATE users SET session_epoch = session_epoch + 1 WHERE email = 'owner@example.com'").run();
-  const later = t0 + 10 * 61_000;
-  const before = sent.length;
-  await at(later, () => start(env, "owner@example.com", { ip: "192.0.2.1", cookie }));
-  assert.equal(sent.length, before, "no code past the daily limit any more");
-  assert.equal((await at(later + 1000, () => verify(env, "owner@example.com", "123456", { ip: "192.0.2.1", cookie }))).status, 429);
+  // The phone signs out everywhere: it gets a fresh device cookie, the laptop's no longer counts.
+  const id = env.DB.sqlite.prepare("SELECT id FROM users WHERE email='owner@example.com'").get().id;
+  const url = new URL("https://aurin.health/app/api/account/sign-out-everywhere");
+  const out = await handleSignOutEverywhere(new Request(url, { method: "POST", headers: { Origin: url.origin } }), env, url, { signedIn: true, user: { id } });
+  const fresh = out.headers.getSetCookie().find(c => c.startsWith("aurin_known=")).split(";")[0];
+  assert.notEqual(fresh, phone);
+  const later = t0 + 12 * 61_000;
+  let before = sent.length;
+  await at(later, () => start(env, "owner@example.com", { ip: "192.0.2.2", cookie: laptop }));
+  assert.equal(sent.length, before, "the laptop gets no code past the daily limit");
+  assert.equal((await at(later + 1000, () => verify(env, "owner@example.com", "123456", { ip: "192.0.2.2", cookie: laptop }))).status, 429);
+  before = sent.length;
+  await at(later + 61_000, () => start(env, "owner@example.com", { ip: "192.0.2.1", cookie: fresh }));
+  assert.equal(sent.length, before + 1, "the phone still gets a code");
+  assert.equal((await at(later + 62_000, () => verify(env, "owner@example.com", codeIn(sent.at(-1)), { ip: "192.0.2.1", cookie: fresh }))).status, 200);
 });
