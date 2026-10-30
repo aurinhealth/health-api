@@ -1,3 +1,4 @@
+import CoreSpotlight
 import SwiftUI
 
 @main
@@ -23,6 +24,11 @@ struct AurinApp: App {
                 .environment(model)
                 // loadwise://open/sleep from the home-screen widgets.
                 .onOpenURL { model.handle($0) }
+                // A planned session found in Spotlight (AurinSpotlight.swift).
+                .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                    guard let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String else { return }
+                    model.openPlanned(id)
+                }
                 // A gym Live Activity left from before the app closed has no screen behind it.
                 .task {
                     GymLiveActivity.endOrphans()
