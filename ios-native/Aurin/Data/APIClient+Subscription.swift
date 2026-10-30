@@ -58,7 +58,11 @@ struct SubscriptionStatus: Decodable, Equatable {
 struct CoachAllowance: Decodable, Equatable {
     let limit: Int
     let used: Int
+    /// This week's and the bought messages together.
     let left: Int
+    /// This week's messages alone and the bought ones (src/coach-packs.js); nil from an older server.
+    var weekLeft: Int? = nil
+    var extra: Int? = nil
     /// The Monday a new week's messages come, "YYYY-MM-DD".
     let resetsOn: String?
     /// 75 % used: the counter and the Settings line show.
@@ -92,8 +96,32 @@ struct CoachAllowance: Decodable, Equatable {
     static var placeholder: String { L10n.tr(tomorrow ? "Další zprávy zítra" : "Další zprávy v pondělí") }
 }
 
+/// Extra coach messages bought in the app: what is left and the purchases (src/coach-packs.js).
+struct CoachPacks: Decodable, Equatable {
+    let left: Int
+    let purchases: [Purchase]
+
+    struct Purchase: Decodable, Equatable {
+        let productId: String
+        let messages: Int
+        /// false: a test purchase (TestFlight) that added nothing on this server.
+        let counted: Bool
+        let environment: String?
+        /// What it cost, in `currency` ("EUR", "CZK").
+        let price: Double?
+        let currency: String?
+        /// ISO 8601.
+        let purchasedAt: String
+        let refunded: Bool
+    }
+}
+
 extension APIClient {
     func subscription() async throws -> SubscriptionStatus {
         try await get("/app/api/subscription")
+    }
+
+    func coachPacks() async throws -> CoachPacks {
+        try await get("/app/api/coach-packs")
     }
 }
