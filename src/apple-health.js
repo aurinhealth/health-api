@@ -18,6 +18,7 @@ import { KEEP_TYPE_SQL } from "./activity-type.js";
 import { healthPointJson } from "./health-point-json.js";
 import { saveAppleFood } from "./apple-food.js";
 import { resolveSources, MANAGED_TYPES } from "./source-priority.js";
+import { rebuildHourSummary, SUMMARY_TYPES } from "./hour-summary.js";
 import { fromGoogleApp } from "./activity-origin.js";
 import { overlapShare, sessionGap } from "./activity-match.js";
 
@@ -278,13 +279,41 @@ export async function afterGoogleSync(env, type, points, { since: changedFrom = 
     // sync was most of the D1 rows read.
     const floor = new Date(Date.now() - 35 * 86400000).toISOString().slice(0, 10);
     const since = changedFrom && changedFrom > floor ? changedFrom : floor;
-    if (MANAGED_TYPES.includes(type)) return await resolveSources(env.DB, env.USER_ID, { types: [type], since, cacheHistory: true });
+    // Measurements several devices take: marked here, chosen once after the
+    // whole sync (flushGoogleSync) instead of after every page of every type.
+    if (MANAGED_TYPES.includes(type)) { await markPending(env.DB, env.USER_ID, type, since); return 0; }
     let on = appleUsers.get(env);
     if (on === undefined) { on = Boolean(await env.DB.prepare("SELECT 1 FROM sync_status WHERE user_id = ? AND sync_name = ? AND status != 'disconnected'").bind(env.USER_ID, STATUS).first()); appleUsers.set(env, on); }
     if (!on) return 0;
     // Workouts: the days the sync read and the activity matching after it covers (index.js).
     return await replaceGoogleWithApple(env.DB, env.USER_ID, [type], new Date(Date.now() - (type === "exercise" ? 14 : 400) * 86400000).toISOString().slice(0, 10));
   } catch (error) { console.error("Apple Health dedupe failed", error.message); return 0; }
+}
+
+const pendingTable = db => db.prepare("CREATE TABLE IF NOT EXISTS health_pending (user_id INTEGER NOT NULL, data_type TEXT NOT NULL, since TEXT NOT NULL, marks INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (user_id, data_type))").run();
+async function markPending(db, userId, type, since) {
+  await pendingTable(db);
+  await db.prepare("INSERT INTO health_pending (user_id, data_type, since, marks) VALUES (?, ?, ?, 1) ON CONFLICT (user_id, data_type) DO UPDATE SET since = MIN(since, excluded.since), marks = marks + 1")
+    .bind(userId, type, since).run();
+}
+
+// After a Google sync (index.js): the source chosen for the types it changed,
+// once, from the oldest hour a row changed, and the hourly summary rebuilt from
+// there (hour-summary.js). It ran after each page before: ~1,300 times a day.
+// A type marked again meanwhile (another sync) stays for the next run.
+export async function flushGoogleSync(env) {
+  if (!env?.DB || !env.USER_ID) return 0;
+  try {
+    await pendingTable(env.DB);
+    const rows = (await env.DB.prepare("SELECT data_type, since, marks FROM health_pending WHERE user_id = ?").bind(env.USER_ID).all()).results || [];
+    if (!rows.length) return 0;
+    const since = rows.map(r => String(r.since)).sort()[0], types = rows.map(r => r.data_type);
+    const changed = await resolveSources(env.DB, env.USER_ID, { types, since: since.slice(0, 10), cacheHistory: true });
+    // A changed choice moves rows of whole days; else only the hours written.
+    if (types.some(t => SUMMARY_TYPES.includes(t))) await rebuildHourSummary(env.DB, env.USER_ID, changed ? since.slice(0, 10) : since);
+    await env.DB.batch(rows.map(r => env.DB.prepare("DELETE FROM health_pending WHERE user_id = ? AND data_type = ? AND marks = ?").bind(env.USER_ID, r.data_type, r.marks)));
+    return changed;
+  } catch (error) { console.error("Source choice after the sync failed", error.message); return 0; }
 }
 
 async function writeStatus(db, userId, status, details) {
@@ -374,6 +403,10 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
   if (oldest && types.some(t => MANAGED_TYPES.includes(t) || t === "daily-wear-hours")) {
     const since = new Date(Date.parse(oldest + "T12:00:00Z") - 86400000).toISOString().slice(0, 10);
     replaced += await resolveSources(db, userId, { types: types.includes("daily-wear-hours") ? [...types, "steps", "active-energy-burned", "distance", "time-in-heart-rate-zone"] : types, since });
+  }
+  // Steps, energy and zones Today adds up per hour (hour-summary.js).
+  if (oldest && types.some(t => SUMMARY_TYPES.includes(t) || t === "daily-wear-hours")) {
+    await rebuildHourSummary(db, userId, new Date(Date.parse(oldest + "T12:00:00Z") - 86400000).toISOString().slice(0, 10)).catch(error => console.error("Hour summary rebuild failed", error.message));
   }
   // Food and drinks other apps logged (apple-food.js), with their own window.
   const food = body.food && typeof body.food === "object" ? await saveAppleFood(db, userId, body.food) : { saved: 0, removed: 0 };

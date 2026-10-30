@@ -16,6 +16,10 @@ export const PERSONAL_TABLES = {
     unique: [["user_id", "source_family", "data_type", "external_id"]],
     indexes: [["user_id", "data_type", "sample_time DESC"], ["user_id", "source_family", "data_type", "start_time"]]
   },
+  // Per hour and source, what Today and the source choice add up (hour-summary.js),
+  // and the types a Google sync changed until the source is chosen (apple-health.js).
+  health_hour_summary: { pk: ["user_id", "hour", "source_family"] },
+  health_pending: { pk: ["user_id", "data_type"] },
   food_logs: { indexes: [["user_id", "consumed_date", "consumed_at"]] },
   personal_foods: { pk: ["user_id", "food_key"] },
   food_google_exports: { pk: ["user_id", "entry_id"] },
