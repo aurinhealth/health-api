@@ -111,7 +111,8 @@ struct SettingsGoalsCard: View {
                         VStack(spacing: 7) {
                             GoalRing(progress: cell.progress, color: cell.color, systemImage: cell.symbol)
                             Text(verbatim: cell.value).font(Typo.number(20)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
-                            Text(L10n.tr(cell.label)).font(Typo.tiny).foregroundStyle(Palette.muted).lineLimit(1)
+                            Text(L10n.tr(cell.label)).font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.secondary)
+                                .lineLimit(1).minimumScaleFactor(0.8)
                         }
                         .frame(maxWidth: .infinity)
                         .accessibilityElement(children: .ignore)
@@ -149,14 +150,14 @@ struct SettingsGoalsCard: View {
             Units.imperial ? Fmt.int(Units.volume(ml)) : Fmt.decimal(ml / 1000, digits: 1)
         } ?? "–"
         return [
-            Cell(symbol: "moon.fill", color: Palette.indigo, value: sleepGoal.map { Fmt.hoursMinutes($0) } ?? "–", label: "spánek",
+            Cell(symbol: "moon.fill", color: Palette.indigo, value: sleepGoal.map { Fmt.hoursMinutes($0) } ?? "–", label: "Spánek",
                  progress: Self.share(today?.sleep?.minutes, sleepGoal)),
-            Cell(symbol: "flame.fill", color: Palette.amber, value: kcal.map { Fmt.int($0) } ?? "–", label: "kcal",
+            Cell(symbol: "flame.fill", color: Palette.amber, value: kcal.map { Fmt.int($0) } ?? "–", label: "Kalorie",
                  progress: Self.share(today?.nutrition.kcal, kcal)),
-            Cell(symbol: "drop.fill", color: Palette.blue, value: waterValue, label: Units.imperial ? "fl oz" : "l",
+            Cell(symbol: "drop.fill", color: Palette.blue, value: waterValue, label: Units.imperial ? "Unce" : "Litry",
                  progress: Self.share(water?.ml, water?.target)),
             Cell(symbol: "scalemass.fill", color: Palette.green, value: weightGoal.map { Fmt.decimal(Units.weight($0), digits: 0) } ?? "–",
-                 label: Units.weightUnit, progress: nil)
+                 label: Units.imperial ? "Libry" : "Kilogramy", progress: nil)
         ]
     }
 }
@@ -172,15 +173,15 @@ struct SettingsSectionTiles: View {
         store.profile["sex"]?.string == "female" || model.cycle?.enabled == true
     }
 
-    /// Four tiles in a row; with Cyklus, three and two.
+    /// Four tiles in a row, as in "+" (AddSheet): the icon on its own tile and
+    /// the name under it; Cyklus goes to a second row.
     var body: some View {
-        let cycle = Self.cycleTile(store, model)
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: cycle ? 3 : 4), alignment: .leading, spacing: 10) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: 4), alignment: .leading, spacing: 14) {
             tile("Spánek", "moon.fill", Palette.indigo) { SleepSettingsView(given: store) }
             tile("Posilovna", "dumbbell.fill", Palette.brown) { GymSettingsView() }
             tile("Výživa", "fork.knife", Palette.amber) { FoodDrinkSettingsView() }
             tile("Deník", "book.closed.fill", Palette.indigo) { JournalSettingsView() }
-            if cycle {
+            if Self.cycleTile(store, model) {
                 tile("Cyklus", "calendar", Palette.pink) { CycleSettingsView() }
             }
         }
@@ -190,20 +191,18 @@ struct SettingsSectionTiles: View {
         NavigationLink {
             destination()
         } label: {
-            VStack(alignment: .leading, spacing: 0) {
-                Image(systemName: symbol).scaledFont(16, weight: .medium, cap: .denseCap).foregroundStyle(color)
-                    .frame(width: 34, height: 34)
-                    .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                Spacer(minLength: 14)
-                Text(L10n.tr(title)).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
-                    .lineLimit(2).minimumScaleFactor(0.85).fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 6) {
+                Image(systemName: symbol).scaledFont(20, cap: .denseCap).foregroundStyle(color)
+                    .frame(maxWidth: .infinity).frame(height: 52)
+                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                Text(L10n.tr(title)).font(.caption.weight(.medium)).foregroundStyle(Palette.ink)
+                    .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
-            .padding(14)
-            .cardSurface(cornerRadius: 20)
+            .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableCardStyle())
     }
 }
 
