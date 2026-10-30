@@ -67,23 +67,30 @@ export async function restoreCentralRows({ api, plan, ids, apply, log = console.
       if (!total) continue;
       const users = (await rows(api, db, `SELECT DISTINCT user_id FROM ${name(table)} ORDER BY user_id`)).map(r => Number(r.user_id));
       log(`${shard.name}: ${table} ${total} rows (accounts ${users.join(', ')})`);
-      if (!apply) { result.push({ shard: shard.name, table, rows: total, restored: 0, left: total }); continue; }
-      let restored = 0, left = 0;
+      // Per row: back to the central database (missing there), already there for the same
+      // account (a newer row the app wrote; the shard copy only goes), or kept on the shard
+      // (another account holds the key). The dry run counts the same probe without changing anything.
+      let restored = 0, kept = 0, left = 0;
+      const probe = row => rows(api, core, `SELECT user_id FROM ${name(table)} WHERE ${key.map(c => `${name(c)} IS ?`).join(' AND ')} LIMIT 1`, key.map(c => row[c]));
       for (let after = Number.MIN_SAFE_INTEGER; ;) {
         const page = await rows(api, db, `SELECT rowid AS restore_rowid, ${columns.map(name).join(', ')} FROM ${name(table)} WHERE rowid>? ORDER BY rowid LIMIT ?`, [after, PAGE_ROWS]);
         if (!page.length) break;
         after = page[page.length - 1].restore_rowid;
         for (const row of page) {
-          await api.query(core, `INSERT INTO ${name(table)} (${columns.map(name).join(', ')}) VALUES (${columns.map(() => '?').join(', ')}) ON CONFLICT DO NOTHING`, columns.map(c => row[c]));
-          const held = await rows(api, core, `SELECT user_id FROM ${name(table)} WHERE ${key.map(c => `${name(c)} IS ?`).join(' AND ')} LIMIT 1`, key.map(c => row[c]));
-          if (held.length && Number(held[0].user_id) === Number(row.user_id)) {
-            await api.query(db, `DELETE FROM ${name(table)} WHERE rowid=?`, [row.restore_rowid]);
-            restored++;
-          } else left++;
+          const before = await probe(row);
+          if (before.length && Number(before[0].user_id) !== Number(row.user_id)) { left++; continue; }
+          if (before.length) kept++; else restored++;
+          if (!apply) continue;
+          if (!before.length) {
+            await api.query(core, `INSERT INTO ${name(table)} (${columns.map(name).join(', ')}) VALUES (${columns.map(() => '?').join(', ')}) ON CONFLICT DO NOTHING`, columns.map(c => row[c]));
+            const held = await probe(row);
+            if (!held.length || Number(held[0].user_id) !== Number(row.user_id)) { restored--; left++; continue; }
+          }
+          await api.query(db, `DELETE FROM ${name(table)} WHERE rowid=?`, [row.restore_rowid]);
         }
       }
-      log(`${shard.name}: ${table} ${restored} rows back in the central database` + (left ? `, ${left} left on the shard (key taken by a newer or other row)` : ''));
-      result.push({ shard: shard.name, table, rows: total, restored, left });
+      log(`${shard.name}: ${table} ${apply ? '' : 'would be '}${restored} back in the central database, ${kept} already there for the same account (shard copy ${apply ? 'deleted' : 'to delete'}), ${left} left on the shard (key held by another account)`);
+      result.push({ shard: shard.name, table, rows: total, restored, kept, left });
     }
   }
   if (!result.length) log('No central rows on any user database.');

@@ -45,6 +45,8 @@ test("a dry run only counts", async () => {
   const lines = [];
   await restoreCentralRows({ api, plan, ids, apply: false, log: l => lines.push(l) });
   assert.ok(lines.includes("health-data-users-001: user_consents 2 rows (accounts 6)"));
+  assert.ok(lines.includes("health-data-users-001: user_consents would be 1 back in the central database, 1 already there for the same account (shard copy to delete), 0 left on the shard (key held by another account)"));
+  assert.ok(lines.includes("health-data-users-001: connection_credentials would be 1 back in the central database, 0 already there for the same account (shard copy to delete), 1 left on the shard (key held by another account)"));
   assert.ok(!lines.some(l => /health_datapoints/.test(l)), "shard tables are not touched");
   assert.equal(count(one, "SELECT COUNT(*) AS n FROM user_consents"), 2);
   assert.equal(count(central, "SELECT COUNT(*) AS n FROM push_tokens"), 0);
@@ -63,7 +65,7 @@ test("central rows come back from the shard; a newer row and another account's i
   assert.equal(count(one, "SELECT COUNT(*) AS n FROM push_tokens"), 0);
   assert.equal(one.prepare("SELECT id FROM connection_credentials").all().map(r => r.id).join(), "9", "a key another account holds stays on the shard");
   assert.equal(count(one, "SELECT COUNT(*) AS n FROM health_datapoints"), 1);
-  assert.deepEqual(result.find(r => r.table === "connection_credentials"), { shard: "health-data-users-001", table: "connection_credentials", rows: 2, restored: 1, left: 1 });
+  assert.deepEqual(result.find(r => r.table === "connection_credentials"), { shard: "health-data-users-001", table: "connection_credentials", rows: 2, restored: 1, kept: 0, left: 1 });
   const lines = [];
   await restoreCentralRows({ api, plan, ids, apply: true, log: l => lines.push(l) });
   assert.equal(count(central, "SELECT COUNT(*) AS n FROM connection_credentials"), 2, "a second run adds nothing");
