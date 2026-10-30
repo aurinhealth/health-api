@@ -104,9 +104,10 @@ export function structureMinutes(structure) {
 // A planned event as a workout the dashboard can draw like a library one.
 export function plannedEventWorkout(event = {}) {
   const type = String(event.type || ''), text = (type + ' ' + String(event.name || '')).toLowerCase();
-  const sport = /run|běh/.test(text) ? 'run' : 'ride';
-  // A place the athlete picked in the app wins over the event's type and name.
-  const environment = event.indoor === true ? 'indoor' : event.indoor === false ? 'outdoor' : /virtual|indoor|trainer|treadmill|pás|zwift/.test(text) ? 'indoor' : 'outdoor';
+  const sport = /swim|plav/.test(text) ? 'swim' : /run|běh/.test(text) ? 'run' : 'ride';
+  // A place the athlete picked in the app wins over the event's type and name;
+  // a swim is in a pool unless it is in open water.
+  const environment = event.indoor === true ? 'indoor' : event.indoor === false ? 'outdoor' : sport === 'swim' ? (/open.?water|volné vodě|volná voda/.test(text) ? 'outdoor' : 'indoor') : /virtual|indoor|trainer|treadmill|pás|zwift/.test(text) ? 'indoor' : 'outdoor';
   let structure = structureFromWorkoutDoc(event.workout_doc);
   if (!structure.length) structure = parseIntervalsDescription(event.description);
   const minutes = n(event.moving_time) ? n(event.moving_time) / 60 : structureMinutes(structure) || null;

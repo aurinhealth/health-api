@@ -20,31 +20,34 @@ const KIND_NAMES = () => ({
   tempo: L("tempo", "tempo"), sweet_spot: L("sweet spot", "sweet spot"), threshold: L("práh", "threshold"), vo2: L("VO2max", "VO2max"),
   vo2max: L("VO2max", "VO2max"), anaerobic: L("anaerobní", "anaerobic"), sprint: L("sprinty", "sprints"), rest: L("volno", "rest")
 });
-const MAIN = { cycling: "ride", running: "run", strength: "gym", triathlon: "ride" };
+// A triathlete has three main sports.
+const MAIN = { cycling: ["ride"], running: ["run"], swimming: ["swim"], strength: ["gym"], triathlon: ["ride", "run", "swim"] };
 
 const sentence = text => { const t = String(text || "").trim(); return t ? t[0].toUpperCase() + t.slice(1).replace(/\.?$/, ".") : ""; };
 
+// swim: the swim coach, only for those who swim (main sport or recent swims);
+// without it swimming stays a fixed easy option.
 // sports: kinds done in the last 60 days (activityKindOf of each), today: kinds
 // done today, declines: [{top, date}] of the last two weeks, planned: the
 // kinds planned for today.
 // done: today's sessions [{kind, minutes, tss}] for the words after training.
-export function rankOptions({ ride, run, mainSport = "general", sports = [], today = [], declines = [], planned = [], done = [], athleteStatus = "active", illness = false }) {
+export function rankOptions({ ride, run, swim = null, mainSport = "general", sports = [], today = [], declines = [], planned = [], done = [], athleteStatus = "active", illness = false }) {
   if (athleteStatus && athleteStatus !== "active") return pausedOptions(athleteStatus);
   const status = ride?.readiness?.status || run?.readiness?.status || "yellow";
   const names = KIND_NAMES();
   const lowerTired = (ride?.load?.lowerBodyGymSignals48h || 0) > 0;
-  const practised = new Set(sports), main = MAIN[mainSport] || null, trainedToday = today.some(k => k !== "walk");
+  const practised = new Set(sports), main = MAIN[mainSport] || [], trainedToday = today.some(k => k !== "walk");
   const session = coach => coach?.recommendation?.session || {};
   const endurance = (sport, coach) => {
-    const s = session(coach), kind = s.kind || "endurance", minutes = Math.round(Number(s.durationMinutes) || (sport === "run" ? 45 : 75));
-    const title = (sport === "run" ? L("Běh", "Run") : L("Kolo", "Ride")) + " · " + (names[kind] || kind);
-    return { kind: sport, title, detail: L(`${minutes} min`, `${minutes} min`) + (isHardKind(kind) ? "" : sport === "run" ? L(" · zóna 2", " · zone 2") : L(" · lehce", " · easy")), hard: isHardKind(kind), rest: kind === "rest" || kind === "recovery" };
+    const s = session(coach), kind = s.kind || "endurance", minutes = Math.round(Number(s.durationMinutes) || (sport === "swim" ? 40 : sport === "run" ? 45 : 75));
+    const title = (sport === "run" ? L("Běh", "Run") : sport === "swim" ? L("Plavání", "Swim") : L("Kolo", "Ride")) + " · " + (names[kind] || kind);
+    return { kind: sport, title, detail: L(`${minutes} min`, `${minutes} min`) + (isHardKind(kind) ? "" : sport === "run" ? L(" · zóna 2", " · zone 2") : sport === "swim" ? L(" · plynule", " · steady") : L(" · lehce", " · easy")), hard: isHardKind(kind), rest: kind === "rest" || kind === "recovery" };
   };
   const options = [
     endurance("ride", ride),
     endurance("run", run),
     { kind: "gym", title: lowerTired ? L("Posilovna · horní polovina", "Gym · upper body") : L("Posilovna · celé tělo", "Gym · full body"), detail: lowerTired ? L("60 min · nohy nech odpočinout", "60 min · let the legs rest") : L("60 min", "60 min") },
-    { kind: "swim", title: L("Plavání · technika", "Swim · technique"), detail: L("45 min · 1 800 m", "45 min · 1,800 m"), lines: [[L("Rozplavání", "Warm-up"), "200 m"], [L("Technika", "Drills"), L("8 × 50 m · pauza 20 s", "8 × 50 m · 20 s rest")], [L("Plynule", "Steady"), L("1 000 m lehce", "1,000 m easy")], [L("Vyplavání", "Cool-down"), "200 m"]] },
+    swim ? endurance("swim", swim) : { kind: "swim", title: L("Plavání · technika", "Swim · technique"), detail: L("45 min · 1 800 m", "45 min · 1,800 m"), lines: [[L("Rozplavání", "Warm-up"), "200 m"], [L("Technika", "Drills"), L("8 × 50 m · pauza 20 s", "8 × 50 m · 20 s rest")], [L("Plynule", "Steady"), L("1 000 m lehce", "1,000 m easy")], [L("Vyplavání", "Cool-down"), "200 m"]] },
     { kind: "sauna", title: L("Sauna", "Sauna"), detail: L("3 × 12 min", "3 × 12 min"), lines: [[L("3 kola", "3 rounds"), L("12 min v sauně", "12 min in the sauna")], [L("Mezi tím", "Between"), L("5 min venku nebo sprcha", "5 min outside or a shower")], [L("Pití", "Drink"), L("0,5 l vody", "0.5 l of water")]] },
     { kind: "rest", title: L("Volno", "Day off"), detail: L("Procházka 30 min a protažení", "A 30 min walk and stretching"), lines: [[L("Procházka", "Walk"), "30 min"], [L("Protažení", "Stretching"), "15 min"]] }
   ];
@@ -56,8 +59,10 @@ export function rankOptions({ ride, run, mainSport = "general", sports = [], tod
   for (const o of options) {
     let score = base[o.kind] ?? 30;
     if (["ride", "run", "gym", "swim"].includes(o.kind)) {
-      if (o.kind === main) score += 15;
-      if (!practised.has(o.kind === "gym" ? "strength" : o.kind)) score -= o.kind === main ? 0 : 25;
+      if (main.includes(o.kind)) score += 15;
+      if (!practised.has(o.kind === "gym" ? "strength" : o.kind)) score -= main.includes(o.kind) ? 0 : 25;
+      // A triathlete with tired legs: swimming trains without loading them.
+      if (o.kind === "swim" && mainSport === "triathlon" && lowerTired) score += 10;
       if (planned.includes(o.kind) && status !== "red") score += 30;
       if (o.hard && status === "green") score += 5;
       if (o.rest) score -= 20;
@@ -81,7 +86,7 @@ export function rankOptions({ ride, run, mainSport = "general", sports = [], tod
   if (trainedToday && rest) { rest.title = L("Protažení", "Stretching"); rest.detail = L("15 min · večer procházka 30 min", "15 min · an evening walk of 30 min"); rest.lines = [[L("Protažení", "Stretching"), "15 min"], [L("Večer", "Evening"), L("procházka 30 min", "a 30 min walk")]]; }
   best.best = true;
   best.reason = reasonFor(best, { status, ride, lowerTired, planned, trainedToday, done });
-  return { status, score: ride?.readiness?.score ?? null, lowerTired, options: options.map(({ score, hard, rest, ...o }) => ({ ...o, action: o.kind === "ride" || o.kind === "run" ? "library" : o.kind === "gym" ? "gym" : "accept" })) };
+  return { status, score: ride?.readiness?.score ?? null, lowerTired, options: options.map(({ score, hard, rest, ...o }) => ({ ...o, action: o.kind === "ride" || o.kind === "run" || o.kind === "swim" && swim ? "library" : o.kind === "gym" ? "gym" : "accept" })) };
 }
 
 // Nemoc, Zranění or Pauza set by the athlete: no training on offer, only rest
@@ -237,6 +242,7 @@ export async function storeDetails(db, userId, date, signature, details) {
 
 // The table rows of a ride or run: each section's length and target.
 export function workoutLines(steps = [], sport = "ride") {
+  if (sport === "swim") return swimLines(steps);
   const run = sport === "run";
   const minutes = s => Math.round((s.durationSeconds || 0) / 60);
   const target = s => run ? (s.paceFast ? s.paceFast + "/km" : null) : s.wattsLow != null ? Math.round((s.wattsLow + (s.wattsHigh ?? s.wattsLow)) / 2) + " W" : Math.round((s.percentLow + s.percentHigh) / 2) + " % FTP";
@@ -250,6 +256,17 @@ export function workoutLines(steps = [], sport = "ride") {
       return [b.repeats + " × " + (work.note || L("úsek", "effort")), value(work)];
     }
     return list[0] ? [name(list[0], i, last), value(list[0])] : null;
+  }).filter(Boolean);
+}
+
+// A swim's rows: each set in metres with its pace per 100 m and rest.
+function swimLines(steps = []) {
+  const one = s => [s.meters ? s.meters + " m" : Math.round((s.durationSeconds || 0) / 60) + " min", s.paceFast ? s.paceFast + "/100 m" : null].filter(Boolean).join(" · ");
+  return steps.slice(0, 8).map(b => {
+    const list = (b.steps || []).filter(s => !s.rest), rest = (b.steps || []).find(s => s.rest);
+    if (!list.length) return null;
+    if ((b.repeats || 1) > 1 || list.length > 1) return [(b.repeats > 1 ? b.repeats + " × " : "") + (list[0].note || L("úsek", "set")), one(list[0]) + (rest ? L(" · pauza ", " · rest ") + Math.round(rest.durationSeconds) + " s" : "")];
+    return [list[0].note || L("Plavání", "Swim"), one(list[0])];
   }).filter(Boolean);
 }
 

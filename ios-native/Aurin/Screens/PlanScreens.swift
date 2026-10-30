@@ -201,7 +201,16 @@ struct StartPlanSheet: View {
                         }
                     }
                 }
-                planSetup
+                if let per = template.perSport {
+                    // A triathlon plan: the days come from the usual week, a day may have two sports.
+                    VStack(alignment: .leading, spacing: 8) {
+                        SectionLabel(text: "Týden")
+                        Text(L10n.f("Kolo %@×, běh %@× a plavání %@× týdně. Dny rozdělím podle času, který v týdnu máš.", String(per["ride"] ?? 0), String(per["run"] ?? 0), String(per["swim"] ?? 0)))
+                            .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                } else {
+                    planSetup
+                }
                 if let preview {
                     VStack(alignment: .leading, spacing: 8) {
                         SectionLabel(text: "Přehled")
@@ -265,8 +274,8 @@ struct StartPlanSheet: View {
             try? await Task.sleep(nanoseconds: 250_000_000)
             if Task.isCancelled { return }
             do {
-                let fresh = try await model.api.trainingPlanPreview(templateId: template.id, startDate: template.race == nil ? start : nil, days: ownDays && !days.isEmpty ? days : nil, raceDate: template.race == nil ? nil : AppModel.localDate(raceDate),
-                                                                     raceKm: template.race == nil ? nil : raceKm, targetSeconds: target, count: ownDays ? nil : count)
+                let fresh = try await model.api.trainingPlanPreview(templateId: template.id, startDate: template.race == nil ? start : nil, days: template.perSport == nil && ownDays && !days.isEmpty ? days : nil, raceDate: template.race == nil ? nil : AppModel.localDate(raceDate),
+                                                                     raceKm: template.race == nil ? nil : raceKm, targetSeconds: target, count: template.perSport == nil && !ownDays ? count : nil)
                 preview = fresh
                 if !ownDays || days.isEmpty { days = fresh.days }
                 error = nil
@@ -281,7 +290,7 @@ struct StartPlanSheet: View {
     @ViewBuilder private var planSetup: some View {
             if range.count > 1 {
                 VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel(text: template.sport == "run" ? "Běhů týdně" : "Jízd týdně")
+                    SectionLabel(text: template.sport == "run" ? "Běhů týdně" : template.sport == "swim" ? "Plavání týdně" : "Jízd týdně")
                     HStack(spacing: 6) {
                         ForEach(Array(range), id: \.self) { n in
                             let on = n == (count ?? (ownDays ? days.count : preview?.days.count ?? range.lowerBound))
@@ -333,6 +342,7 @@ struct StartPlanSheet: View {
     /// Under the race: a running race's estimate and goal pace, a cycling race's power and time.
     private var raceNote: String? {
         guard let race = preview?.race else { return nil }
+        if let legs = race.legsText { return L10n.f("Odhad: %@.", legs) }
         if template.sport == "run" {
             guard let estimate = race.estimate else { return L10n.tr("Odhad času se ukáže, až bude známé tvoje prahové tempo.") }
             let pace = Units.paceText(Double(target ?? estimate) / max(race.km, 1))
@@ -625,7 +635,7 @@ struct ActivePlanContent: View {
         }
         .padding(.top, 16)
         if let race = active.race {
-            if active.template.sport == "run" { runGoal(race).padding(.top, 12) } else { rideRace(race).padding(.top, 12) }
+            if race.legs != nil { triRace(race).padding(.top, 12) } else if active.template.sport == "run" { runGoal(race).padding(.top, 12) } else { rideRace(race).padding(.top, 12) }
         }
 
         // Upravit: at most four tiles, a title on one line and up to two lines under it.
@@ -747,6 +757,30 @@ struct ActivePlanContent: View {
     }
 
     /// A cycling race: its power and time on its course.
+    /// A triathlon: each leg's estimated time on race day.
+    @ViewBuilder private func triRace(_ race: PlanRace) -> some View {
+        if let legs = race.legs {
+            Card {
+                WidgetHeader(title: L10n.tr("Závod"), color: Palette.green, trailing: active.raceDate.map { Fmt.dayMonth($0) })
+                Text(verbatim: active.template.name).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
+                HStack(alignment: .top, spacing: 20) {
+                    leg(Fmt.int(Double(legs.swim.meters ?? 0)) + " m", legs.swim.minutes)
+                    leg(raceDistance(legs.ride.km ?? 0), legs.ride.minutes)
+                    leg(raceDistance(legs.run.km ?? 0), legs.run.minutes)
+                    Spacer(minLength: 0)
+                }
+                Text("Odhad času z tvých prahových hodnot, bez depa.").font(Typo.caption).foregroundStyle(Palette.muted)
+            }
+        }
+    }
+
+    private func leg(_ distance: String, _ minutes: Int) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(verbatim: "~" + planDuration(minutes)).font(Typo.number(22)).foregroundStyle(Palette.ink)
+            Text(verbatim: distance).font(Typo.caption).foregroundStyle(Palette.muted)
+        }
+    }
+
     @ViewBuilder private func rideRace(_ race: PlanRace) -> some View {
         if let low = race.low, let high = race.high, let minutes = race.minutes {
             Card {
@@ -814,6 +848,8 @@ struct PlanWeekDetail: Decodable, Equatable {
         let kind: String
         let minutes: Double?
         let workoutId: String?
+        /// A triathlon plan's session: its own sport.
+        var sport: String? = nil
         let workout: PlannedWorkout.Workout?
         var done: Bool? = nil
         /// Today or later and not done yet: it can be moved, shortened or skipped.
@@ -929,7 +965,7 @@ struct PlanSessionList: View {
             VStack(spacing: 0) {
                 ForEach(Array(detail.sessions.enumerated()), id: \.element.id) { index, s in
                     if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                    NavigationLink { PlanSessionView(session: s, sport: sport) } label: { row(s) }
+                    NavigationLink { PlanSessionView(session: s, sport: s.sport ?? sport) } label: { row(s) }
                         .buttonStyle(.plain)
                         .disabled(s.workout == nil)
                         .contextMenu { if s.editable == true { actions(s) } }
@@ -953,7 +989,8 @@ struct PlanSessionList: View {
     }
 
     @ViewBuilder private func actions(_ s: PlanWeekDetail.Session) -> some View {
-        Button { moving = s } label: { Label("Přesunout", systemImage: "calendar") }
+        // A triathlon week's days are shared by three sports: shorten or skip only.
+        if s.sport == nil { Button { moving = s } label: { Label("Přesunout", systemImage: "calendar") } }
         Button { shortening = s } label: { Label("Zkrátit", systemImage: "clock") }
         Button(role: .destructive) { skipping = s } label: { Label("Vynechat", systemImage: "xmark") }
         if s.edited == true {
@@ -1010,7 +1047,7 @@ struct PlanSessionList: View {
 
     @ViewBuilder private func profile(_ s: PlanWeekDetail.Session) -> some View {
         if let blocks = s.workout?.steps, !WorkoutProfile.segments(blocks).isEmpty {
-            WorkoutProfile(blocks: blocks, sport: sport, compact: true).opacity(s.done == true ? 0.5 : 1)
+            WorkoutProfile(blocks: blocks, sport: s.sport ?? sport, compact: true).opacity(s.done == true ? 0.5 : 1)
         }
     }
 

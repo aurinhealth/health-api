@@ -3,6 +3,8 @@ import { L } from './lang.js';
 // Sport-neutral structured workout model. Prescribed intensity is a percentage
 // of threshold; power on free efforts is only an estimate for load and charts.
 // Steps: {durationMinutes, power, [powerStart, powerEnd, ramp], cadence, note, free}
+// Swim steps also carry `meters` (the pool length the step is swum over) and
+// rests `rest: true`; their minutes are at the athlete's pace per 100 m.
 // Blocks: a step, or {repeats, steps:[...]}.
 
 export const n = (v, d = null) => v === null || v === undefined || v === "" ? d : Number.isFinite(Number(v)) ? Number(v) : d;
@@ -35,22 +37,35 @@ export const RUNNING_ZONES = [
   ["recovery", 0, 77], ["endurance", 78, 88], ["tempo", 89, 95], ["threshold", 96, 101],
   ["vo2max", 102, 110], ["anaerobic", 111, 125], ["sprint", 126, 400]
 ];
-export const zonesFor = sport => sport === "run" ? RUNNING_ZONES : CYCLING_ZONES;
+// Swimming bands, as % of CSS speed (100 % = critical swim speed, the
+// threshold pace per 100 m; 95 % ≈ CSS + 6 s at 2:00/100 m).
+export const SWIM_ZONES = [
+  ["recovery", 0, 89], ["endurance", 90, 95], ["tempo", 96, 98], ["threshold", 99, 102],
+  ["vo2max", 103, 108], ["sprint", 109, 400]
+];
+export const zonesFor = sport => sport === "run" ? RUNNING_ZONES : sport === "swim" ? SWIM_ZONES : CYCLING_ZONES;
+// The pace a step is swum at without the athlete's CSS: 2:00 per 100 m.
+export const DEFAULT_SWIM_PACE = 120;
+// Minutes of a swim step of `meters` at `percent` of CSS speed.
+export const swimMinutes = (meters, percent, pace = DEFAULT_SWIM_PACE) => meters / 100 * pace / Math.max(n(percent, 90), 30) * 100 / 60;
+export function totalMeters(structure = []) { return flattenSteps(structure).reduce((sum, s) => sum + n(s.meters, 0), 0); }
 // The bands are continuous: each reaches up to where the next starts, so 75.5 % is still endurance.
 export function zoneOf(power, zones = CYCLING_ZONES) { return (zones.findLast(([, lo]) => power >= lo) || zones.at(-1))[0]; }
 
 export function zoneMinutes(structure = [], zones = CYCLING_ZONES) {
   const out = Object.fromEntries(zones.map(([z]) => [z, 0]));
-  for (const s of flattenSteps(structure)) { const z = zoneOf(n(s.power, 50), zones); out[z] = (out[z] || 0) + n(s.durationMinutes, 0); }
+  for (const s of flattenSteps(structure)) { if (s.rest) continue; const z = zoneOf(n(s.power, 50), zones); out[z] = (out[z] || 0) + n(s.durationMinutes, 0); }
   return Object.fromEntries(Object.entries(out).map(([k, v]) => [k, round(v, 2)]));
 }
 
 // Normalised intensity (fourth-power mean, like NP) and training load. For
-// running it is the average speed relative to threshold, as in rTSS.
+// running it is the average speed relative to threshold, as in rTSS; for
+// swimming the cube, as in sTSS (water resistance grows with speed cubed).
+// Rests at the wall count as time at nothing.
 export function intensityFactor(structure = [], sport = "ride") {
   let minutes = 0, sum = 0;
-  const exponent = sport === "run" ? 1 : 4;
-  for (const s of flattenSteps(structure)) { const d = n(s.durationMinutes, 0), p = n(s.power, 50) / 100; minutes += d; sum += d * p ** exponent; }
+  const exponent = sport === "run" ? 1 : sport === "swim" ? 3 : 4;
+  for (const s of flattenSteps(structure)) { const d = n(s.durationMinutes, 0), p = s.rest ? 0 : n(s.power, 50) / 100; minutes += d; sum += d * p ** exponent; }
   return round(clamp((sum / Math.max(minutes, 1e-9)) ** (1 / exponent), 0.3, 1.6), 2);
 }
 export function trainingLoad(structure = [], sport = "ride") { const minutes = totalMinutes(structure), f = intensityFactor(structure, sport); return Math.round((minutes / 60) * f * f * 100); }
@@ -78,13 +93,22 @@ const RUN_ANCHORS = {
   anaerobic: { lo: 111, ref: 115, w0: 3, d0: 4, w1: 16, d1: 9 },
   sprint: { lo: 126, ref: 135, w0: .5, d0: 3, w1: 3, d1: 7.5 }
 };
+// Swimming: shorter sessions, work counted in minutes at CSS-relative pace.
+const SWIM_ANCHORS = {
+  recovery: { lo: 0, ref: 85, w0: 15, d0: 1, w1: 40, d1: 2 },
+  endurance: { lo: 90, ref: 93, w0: 15, d0: 1.8, w1: 90, d1: 7.5 },
+  tempo: { lo: 96, ref: 97, w0: 10, d0: 3.4, w1: 45, d1: 8 },
+  threshold: { lo: 99, ref: 100, w0: 8, d0: 4, w1: 35, d1: 8.8 },
+  vo2max: { lo: 103, ref: 105, w0: 4, d0: 4, w1: 18, d1: 9 },
+  sprint: { lo: 109, ref: 112, w0: .5, d0: 3, w1: 4, d1: 7.5 }
+};
 export function difficultyFromStructure(system, structure = [], sport = "ride") {
-  const anchors = sport === "run" ? RUN_ANCHORS : ANCHORS;
+  const anchors = sport === "run" ? RUN_ANCHORS : sport === "swim" ? SWIM_ANCHORS : ANCHORS;
   const a = anchors[system] || anchors.endurance;
   const steps = flattenSteps(structure);
-  const lateStart = Math.min(sport === "run" ? 60 : 90, Math.max(30, totalMinutes(structure) * .6));
+  const lateStart = Math.min(sport === "run" ? 60 : sport === "swim" ? 40 : 90, Math.max(30, totalMinutes(structure) * .6));
   let work = 0, weighted = 0, rest = 0, elapsed = 0, lateWork = 0;
-  const inWork = s => n(s.power, 0) >= a.lo;
+  const inWork = s => !s.rest && n(s.power, 0) >= a.lo;
   for (const s of steps) {
     const d = n(s.durationMinutes, 0), p = n(s.power, 0);
     if (inWork(s)) { work += d; weighted += d * p; lateWork += Math.max(0, elapsed + d - Math.max(elapsed, lateStart)); }
@@ -114,11 +138,11 @@ function stepDuration(minutes) {
 }
 export function outdoorWidth(power, sport = "ride") {
   const p = n(power, 0);
-  return sport === "run" ? (p >= 96 ? 2 : p >= 89 ? 3 : 4) : (p >= 106 ? 4 : p >= 76 ? 3 : 5);
+  return sport === "swim" ? (p >= 99 ? 2 : 3) : sport === "run" ? (p >= 96 ? 2 : p >= 89 ? 3 : 4) : (p >= 106 ? 4 : p >= 76 ? 3 : 5);
 }
 function stepTarget(s, { sport, environment }) {
   if (s.free) return "freeride";
-  const unit = sport === "run" ? "% Pace" : "%";
+  const unit = sport === "run" || sport === "swim" ? "% Pace" : "%";
   const width = environment === "outdoor" ? outdoorWidth(s.power, sport) : 0;
   if (s.ramp && n(s.powerStart) != null && n(s.powerEnd) != null) return "ramp " + Math.round(s.powerStart) + "-" + Math.round(s.powerEnd) + unit;
   // A range of the athlete's own workout (Moje tréninky) stays a range.
@@ -131,10 +155,10 @@ function stepTarget(s, { sport, environment }) {
 // one cools down, efforts from tempo up are intervals, easy steps inside an
 // interval block are its recoveries, and the rest is steady riding/running.
 // A step read from a plan keeps the kind the plan gave it.
-const KIND_LIMITS = { ride: { work: 76, easy: 56, warmup: 75, cooldown: 60 }, run: { work: 89, easy: 78, warmup: 88, cooldown: 80 } };
+const KIND_LIMITS = { ride: { work: 76, easy: 56, warmup: 75, cooldown: 60 }, run: { work: 89, easy: 78, warmup: 88, cooldown: 80 }, swim: { work: 96, easy: 90, warmup: 95, cooldown: 92 } };
 export function stepIntensities(structure = [], sport = "ride") {
   const lim = KIND_LIMITS[sport] || KIND_LIMITS.ride, last = structure.length - 1;
-  const kind = (s, inBlock) => s.free || n(s.power, 0) >= lim.work ? "interval" : inBlock || n(s.power, 0) < lim.easy ? "recovery" : "active";
+  const kind = (s, inBlock) => s.rest ? "rest" : s.free || n(s.power, 0) >= lim.work ? "interval" : inBlock || n(s.power, 0) < lim.easy ? "recovery" : "active";
   return structure.map((block, i) => {
     if (Array.isArray(block.steps)) return block.steps.map(s => s.intensity || kind(s, block.steps.some(o => o !== s && (o.free || n(o.power, 0) >= lim.work))));
     if (block.intensity) return block.intensity;
@@ -143,7 +167,13 @@ export function stepIntensities(structure = [], sport = "ride") {
     return kind(block, false);
   });
 }
+// A pool swim step goes by its metres ("100mtr"), a rest by its seconds
+// without a target; in open water every step goes by time.
 function stepLine(s, opts, intensity = null) {
+  if (opts.sport === "swim") {
+    const length = s.meters && opts.environment !== "outdoor" ? Math.round(s.meters) + "mtr" : stepDuration(n(s.durationMinutes, 0));
+    return "- " + length + (s.rest ? "" : " " + stepTarget(s, opts)) + (s.note ? " " + s.note : "") + (intensity ? " intensity=" + intensity : "");
+  }
   const cadence = opts.sport === "ride" && s.cadence ? " " + String(s.cadence).replace(/[–—]/g, "-").replace(/[^0-9-]/g, "") + "rpm" : "";
   const note = s.note ? " " + s.note : "";
   return "- " + stepDuration(n(s.durationMinutes, 0)) + " " + stepTarget(s, opts) + cadence + note + (intensity ? " intensity=" + intensity : "");
@@ -160,8 +190,14 @@ export function intervalsText(structure = [], { sport = "ride", environment = "i
 // Converts a (trainer-style) workout for riding or running outside: longer
 // warm-up, rounded step lengths and terrain hints for micro-intervals.
 // Only explicitly free efforts are all-out; % FTP does not determine intent.
+// Swimming: "indoor" is the pool, "outdoor" open water, where a watch
+// measures distance only roughly: steps go by time, rests at a wall drop out.
 export function adaptStructure(structure = [], environment = "indoor", sport = "ride", system = null) {
   if (environment !== "outdoor") return structure;
+  if (sport === "swim") {
+    const timed = s => { const { meters, ...rest } = s; void meters; return { ...rest, durationMinutes: Math.max(.5, Math.round(n(s.durationMinutes, 0) * 2) / 2) }; };
+    return structure.map(block => Array.isArray(block.steps) ? { ...block, steps: block.steps.filter(s => !s.rest).map(timed) } : timed(block)).filter(b => !Array.isArray(b.steps) || b.steps.length);
+  }
   const roundStep = s => {
     const d = n(s.durationMinutes, 0);
     const rounded = d >= 3 ? Math.round(d * 2) / 2 : d >= 1 ? Math.round(d * 4) / 4 : Math.max(sec(10), Math.round(d * 12) / 12);
@@ -180,6 +216,9 @@ export function adaptStructure(structure = [], environment = "indoor", sport = "
 
 export function environmentNotes(environment, sport = "ride", system = null, tags = []) {
   const easy = system === "recovery" || system === "endurance";
+  if (sport === "swim") return environment === "outdoor"
+    ? [L("Nikdy neplav sám: parťák ve vodě nebo někdo na břehu.", "Never swim alone: a buddy in the water or someone on the shore."), L("Výrazná čepice a plovák za sebou.", "A bright cap and a tow float."), L("Pod 15 °C neopren, do vody pomalu a drž se u břehu.", "Below 15 °C wear a wetsuit, go in slowly and stay near the shore."), L("Každých 6 až 10 záběrů se podívej dopředu.", "Look ahead every 6 to 10 strokes.")]
+    : [L("Tempo je na 100 m; pauzy jsou u stěny.", "Pace is per 100 m; rests are at the wall."), L("Hodinky si délku bazénu potvrdí při startu.", "The watch confirms the pool length at the start."), L("Láhev s pitím nech na kraji bazénu.", "Leave a bottle at the side of the pool.")];
   const hills = tags.includes("hills");
   if (sport === "run") {
     if (hills) return environment === "outdoor"
@@ -202,13 +241,14 @@ export function environmentNotes(environment, sport = "ride", system = null, tag
 
 // A catalog record in the shape the dashboard, ranking and Intervals use.
 export function buildWorkout({ id, sport = "ride", name, system, secondarySystem = null, structure, family = null, level = null, sourceName = "Aurin", sourceKind = "original", sourceUrl = null, licenseNote = "Original structured workout for Aurin.", attribution = null, citation = null, description = "", tags = [], cadence = null, indoorOnly = false, difficulty = null }) {
-  const duration = Math.round(totalMinutes(structure));
+  const duration = Math.round(totalMinutes(structure)), meters = sport === "swim" ? Math.round(totalMeters(structure)) : 0;
   const zones = zoneMinutes(structure, zonesFor(sport));
   return {
     id, sport, name, family, level,
     source_name: sourceName, source_kind: sourceKind, source_url: sourceUrl, license_note: licenseNote, attribution, citation, external_id: null,
     primary_system: system, secondary_system: secondarySystem,
     duration_minutes: duration,
+    ...(meters ? { distance_meters: meters } : {}),
     work_minutes: round(Object.entries(zones).filter(([z]) => !["recovery", "endurance"].includes(z)).reduce((s, [, v]) => s + v, 0), 1),
     difficulty: difficulty ?? difficultyFromStructure(system, structure, sport),
     intensity_factor: intensityFactor(structure, sport),
@@ -236,7 +276,8 @@ export function renderForEnvironment(workout, environment = "indoor") {
     structure_json: JSON.stringify(adapted),
     duration_minutes: Math.round(totalMinutes(adapted)),
     intervals_description: intervalsText(adapted, { sport, environment: env }),
-    intervals_type: sport === "run" ? (env === "indoor" ? "VirtualRun" : "Run") : (env === "indoor" ? "VirtualRide" : "Ride"),
+    intervals_type: sport === "swim" ? (env === "indoor" ? "Swim" : "OpenWaterSwim") : sport === "run" ? (env === "indoor" ? "VirtualRun" : "Run") : (env === "indoor" ? "VirtualRide" : "Ride"),
+    ...(sport === "swim" ? { distance_meters: Math.round(totalMeters(adapted)) || null } : {}),
     environment_notes: environmentNotes(env, sport, workout.primary_system, (() => { try { return JSON.parse(workout.tags_json || "[]"); } catch { return []; } })())
   };
 }

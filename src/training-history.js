@@ -1,15 +1,17 @@
 // Measured history and conservative starting templates are separate inputs.
 import { L } from './lang.js';
 import {activityFromRow,dedupeActivities} from './coach-reflection.js';
+import {POOL_LENGTHS} from './training-zones.js';
 import {localToday} from './user-time.js';
 import {latestStoredWeight} from './athlete-weight.js';
+import {yearBySport} from './triathlon-split.js';
 const DAY=86400000;
 export const TRAINING_REFERENCES=[
   {name:'WHO 2020: 150–300 min střední intenzity týdně; síla alespoň 2 dny',url:'https://doi.org/10.1136/bjsports-2020-102955'},
   {name:'ACSM: postupná progrese silového tréninku podle zkušeností',url:'https://doi.org/10.1249/MSS.0b013e3181915670'}
 ];
 export const EXPERIENCE_LEVELS=['beginner','regular','experienced'];
-export const EXPERIENCE_SPORTS=['strength','ride','run'];
+export const EXPERIENCE_SPORTS=['strength','ride','run','swim'];
 const EXPERIENCE_DAYS=730;
 // Per-sport experience (gym, cycling, running) from up to two years of history.
 // It counts months with training (>=4 sessions of that sport), never how recent
@@ -51,7 +53,9 @@ export function sportExperience({activities=[],strengthSets=[],weightKg=null,ftp
   const km={};for(const a of of('run'))km[a.date.slice(0,7)]=(km[a.date.slice(0,7)]||0)+(a.distanceKm||0);
   if(Object.values(km).some(v=>v>30*52/12))run=max(run,'regular');
   const own={strength,ride,run},out={};
-  for(const sport of EXPERIENCE_SPORTS){const other=Math.max(...EXPERIENCE_SPORTS.filter(s=>s!==sport).map(s=>rank(own[s])));out[sport]=EXPERIENCE_LEVELS[Math.max(rank(own[sport]),Math.min(other,rank(own[sport])+1))];}
+  for(const sport of Object.keys(own)){const other=Math.max(...Object.keys(own).filter(s=>s!==sport).map(s=>rank(own[s])));out[sport]=EXPERIENCE_LEVELS[Math.max(rank(own[sport]),Math.min(other,rank(own[sport])+1))];}
+  // Swimming is technique: fitness from the other sports doesn't make a swimmer.
+  out.swim=byMonths(months('swim'));
   return out;
 }
 export async function trainingHistory(db,userId=db.userId,{now=Date.now()}={}){
@@ -60,7 +64,7 @@ export async function trainingHistory(db,userId=db.userId,{now=Date.now()}={}){
   const end=localToday(new Date(now)),daysBack=n=>new Date(Date.parse(end+'T12:00:00Z')-n*DAY).toISOString().slice(0,10),since=daysBack(84);
   // Up to two years for the per-sport experience; the rest uses the last 12 weeks.
   const rows=(await db.prepare("SELECT source_family,data_type,start_time,end_time,sample_time,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND COALESCE(start_time,sample_time)>=? AND COALESCE(start_time,sample_time)<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY COALESCE(start_time,sample_time)").bind(userId,daysBack(EXPERIENCE_DAYS),end+'T23:59:59').all().catch(()=>({results:[]}))).results||[];
-  const all=dedupeActivities(rows.map(row=>{const a=activityFromRow({...row,start_time:row.start_time||row.sample_time});if(a){let p={};try{p=JSON.parse(row.payload_json||'{}');}catch{}const num=v=>Number.isFinite(Number(v))&&Number(v)>0?Number(v):null;a.distanceKm=num(p.distance)!=null?num(p.distance)/1000:null;a.ftp=num(p.icu_ftp);a.thresholdSpeed=num(p.threshold_pace);}return a;}).filter(a=>a&&a.minutes>0&&a.minutes<=1440));
+  const all=dedupeActivities(rows.map(row=>{const a=activityFromRow({...row,start_time:row.start_time||row.sample_time});if(a){let p={};try{p=JSON.parse(row.payload_json||'{}');}catch{}const num=v=>Number.isFinite(Number(v))&&Number(v)>0?Number(v):null;a.distanceKm=num(p.distance)!=null?num(p.distance)/1000:null;a.ftp=num(p.icu_ftp);a.thresholdSpeed=num(p.threshold_pace);a.poolLength=num(p.pool_length);}return a;}).filter(a=>a&&a.minutes>0&&a.minutes<=1440));
   const activities=all.filter(a=>a.date>=since);
   const sets=(await db.prepare("SELECT workout_date,exercise,actual_kg,actual_reps FROM strength_sets WHERE user_id=? AND completed=1 AND type='WORK' AND workout_date>=?").bind(userId,daysBack(EXPERIENCE_DAYS)).all().catch(()=>({results:[]}))).results||[];
   const weight=await latestStoredWeight(db,userId).catch(()=>null);
@@ -77,7 +81,11 @@ export async function trainingHistory(db,userId=db.userId,{now=Date.now()}={}){
   const experience=perWeek>=4&&activeWeeks>=10?'experienced':perWeek>=2&&activeWeeks>=6?'regular':'beginner';
   const weeklyMinutes=Math.round(recent.reduce((sum,a)=>sum+a.minutes,0)/4);
   const weekdayMinutes=Array(7).fill(0);for(const a of recent)weekdayMinutes[(new Date(a.date+'T12:00:00Z').getUTCDay()+6)%7]+=a.minutes/4;
-  return {mainSport,experience,sportExperience:sportExperienceLevels,weeklyMinutes,weeklyHours:Math.round(weeklyMinutes/60*10)/10,automaticSportAvailable:recent.length>0,activeWeeks,activityCount:training.length,recentCount:recent.length,recentActiveWeeks:new Set(recent.map(a=>weekOf(a.date))).size,weekdayMinutes,periods:{sportDays:56,experienceDays:84,sportExperienceDays:EXPERIENCE_DAYS,volumeDays:28}};
+  // The last 12 months per sport (sessions, hours) for the triathlon split, from the rows already read.
+  const sports=yearBySport(all,daysBack(365));
+  // The pool of the last pool swim (25 or 50 m, 25 yd), from the rows already read: the default until one is chosen by hand.
+  const poolLength=[...all].reverse().find(a=>a.kind==='swim'&&POOL_LENGTHS.some(m=>Math.abs(m-a.poolLength)<.1))?.poolLength??null;
+  return {mainSport,experience,sportExperience:sportExperienceLevels,sports,poolLength,weeklyMinutes,weeklyHours:Math.round(weeklyMinutes/60*10)/10,automaticSportAvailable:recent.length>0,activeWeeks,activityCount:training.length,recentCount:recent.length,recentActiveWeeks:new Set(recent.map(a=>weekOf(a.date))).size,weekdayMinutes,periods:{sportDays:56,experienceDays:84,sportExperienceDays:EXPERIENCE_DAYS,volumeDays:28}};
 }
 export function starterPlan(history,experience=history.experience){
   // These are app templates, not published averages of free time. An inactive

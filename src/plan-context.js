@@ -9,7 +9,7 @@ import { athleteThresholds } from "./intervals-athlete.js";
 import { latestStoredWeight } from "./athlete-weight.js";
 import { getWeekPlan, planWeekRoles, roleTime } from "./week-planner.js";
 import { getAthleteState } from "./athlete-state.js";
-import { reviewPlan, planWeek, planQuality, planLoad, applyPlan, activePlan } from "./training-plans.js";
+import { reviewPlan, planWeek, planQuality, planLoad, applyPlan, activePlan, planSports } from "./training-plans.js";
 import { weekWeather, dayHours } from "./adaptive-week.js";
 import { weatherKitConfigured, weatherKitDetail } from "./weatherkit.js";
 import { ensureGymPlans } from "./gym-plan-store.js";
@@ -33,9 +33,11 @@ export async function planForWeek(env,ctx,start){
   }
   const pw=plan&&!plan.pauseFrom?planWeek(plan,start):null;
   if(!pw)return {plan:null,pw:null,roles:{},load:null,apply:t=>t};
-  const [thresholds,capabilities,weight]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),getCapabilities(env.DB,plan.sport).catch(()=>({})),plan.sport==='ride'?latestStoredWeight(env.DB).catch(()=>null):null]);
-  const options={thresholdPace:thresholds.runThresholdPace,hasPower:Number(thresholds.ftp)>0,shifts:capabilities,ftp:Number(thresholds.ftp)||null,weight:weightKg(weight)};
-  return {plan,pw,roles:{quality:planQuality(pw),prefer:plan.sport},load:planLoad(pw),apply:t=>applyPlan(t,plan,start,options)};
+  // A triathlon plan: the capabilities of each of its sports.
+  const tri=plan.sport==='triathlon',capabilitiesOf=()=>tri?Promise.all(planSports(plan.sport).map(s=>getCapabilities(env.DB,s).catch(()=>({})))).then(list=>Object.fromEntries(planSports(plan.sport).map((s,i)=>[s,list[i]]))):getCapabilities(env.DB,plan.sport).catch(()=>({}));
+  const [thresholds,capabilities,weight]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),capabilitiesOf(),plan.sport==='ride'||tri?latestStoredWeight(env.DB).catch(()=>null):null]);
+  const options={thresholdPace:thresholds.runThresholdPace,hasPower:Number(thresholds.ftp)>0,shifts:capabilities,ftp:Number(thresholds.ftp)||null,weight:weightKg(weight),swimCss:thresholds.swimCss||null};
+  return {plan,pw,roles:{quality:planQuality(pw),prefer:tri?'ride':plan.sport},load:planLoad(pw),apply:t=>applyPlan(t,plan,start,options)};
 }
 // The endurance and the gym plan with the athlete's status applied: sick,
 // injured or on a break pauses them, back to training moves them on
@@ -48,19 +50,19 @@ export async function syncedPlans(env,today=localToday()){
 // Days with an activity of the sport, from (inclusive) to (exclusive).
 export async function planSportDates(env,sport,from,to){
   const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(from,-1),shiftDate(to,1)).all()).results||[];
-  return [...new Set(rows.map(activityFromRow).filter(a=>a&&a.kind===sport&&a.date>=from&&a.date<to&&(a.minutes==null||a.minutes>=15)).map(a=>a.date))];
+  return [...new Set(rows.map(activityFromRow).filter(a=>a&&planSports(sport).includes(a.kind)&&a.date>=from&&a.date<to&&(a.minutes==null||a.minutes>=15)).map(a=>a.date))];
 }
 // Minutes of the sport done, from (inclusive) to (exclusive): a plan's result.
 export async function planSportMinutes(env,sport,from,to){
   const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(from,-1),shiftDate(to,1)).all()).results||[];
-  return dedupeActivities(rows.map(activityFromRow)).filter(a=>a&&a.kind===sport&&a.date>=from&&a.date<to).reduce((sum,a)=>sum+(Number(a.minutes)||0),0);
+  return dedupeActivities(rows.map(activityFromRow)).filter(a=>a&&planSports(sport).includes(a.kind)&&a.date>=from&&a.date<to).reduce((sum,a)=>sum+(Number(a.minutes)||0),0);
 }
 // The key days (quality, test, long) the plan put in a week.
 export async function planKeyDates(env,plan,monday){
   const pw=planWeek(plan,monday),prefs=pw?await getWeekPlan(env.DB,monday).catch(()=>null):null;
   if(!prefs?.days)return [];
-  const roles=planWeekRoles(prefs.days,{quality:planQuality(pw),prefer:plan.sport,...roleTime(prefs)});
-  return roles.map((d,i)=>d.items.some(x=>x.sport===plan.sport&&['quality','long'].includes(x.role))?shiftDate(monday,i):null).filter(Boolean);
+  const roles=planWeekRoles(prefs.days,{quality:planQuality(pw),prefer:plan.sport==='triathlon'?'ride':plan.sport,...roleTime(prefs)});
+  return roles.map((d,i)=>d.items.some(x=>planSports(plan.sport).includes(x.sport)&&['quality','long'].includes(x.role))?shiftDate(monday,i):null).filter(Boolean);
 }
 
 // The weather place of the week plan and today's forecast for Today (app-today.js
@@ -92,6 +94,17 @@ export async function todayPlace(env,ctx,date){
   }catch{return {location:null,forecast:null};}
 }
 
+// A triathlete's history for the week split (triathlon-split.js): the year per
+// sport as the profile suggestions last saved it and the levels chosen by hand.
+// Two single-row reads, only for a triathlete; never the activity history again.
+export async function triathlonHistory(env){
+  const [suggestions,setup]=await Promise.all([
+    env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=2').bind(env.USER_ID).first().catch(()=>null),
+    env.DB.prepare('SELECT training_json FROM user_setup WHERE user_id=?').bind(env.USER_ID).first().catch(()=>null)
+  ]);
+  const parse=t=>{try{return JSON.parse(t||'{}')||{};}catch{return {};}};
+  return {year:parse(suggestions?.profile_json).trainingHistory?.sports??null,levels:parse(setup?.training_json).experienceBySport||{}};
+}
 export async function planningHistory(env,date,days=84){
   const from=shiftDate(date,-days),to=shiftDate(date,1);
   const [rows,gymDays]=await Promise.all([

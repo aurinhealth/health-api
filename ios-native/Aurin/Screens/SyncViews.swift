@@ -326,8 +326,9 @@ struct SyncHealthView: View {
         SettingsPage(title: "Zdravotní data") {
             if let destination {
                 SettingsGroup {
-                    SettingsToggle(title: "Vše", isOn: Binding(get: { destination.prefs.health == .all },
-                                                              set: { on in set(on ? .all : .some(destination.healthTypes)) }))
+                    // Off sends none: it used to keep every type ticked (only no longer the ones added later).
+                    SettingsToggle(title: "Vše", isOn: Binding(get: { destination.healthTypes.allSatisfy(destination.prefs.health.allows) },
+                                                              set: { on in set(on ? .all : .some([])) }))
                 }
                 SettingsGroup(footer: footer) {
                     ForEach(Array(destination.healthTypes.enumerated()), id: \.element) { index, type in
