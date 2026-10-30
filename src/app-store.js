@@ -19,6 +19,7 @@
 //   notifications must name this app.
 // APP_STORE_BUNDLE_ID: optional, health.aurin.app unless set.
 import { L } from './lang.js';
+import { packProducts, savePackTransaction, refundPackTransaction } from './coach-packs.js';
 
 // SHA-256 of Apple Root CA - G3 (https://www.apple.com/certificateauthority/).
 export const APPLE_ROOT_CA_G3 = '63343abfb89a6a03ebb57e9b3f5fa7be7c4f5c756f3017b3a8c488c3653e9179';
@@ -185,10 +186,13 @@ export async function storePurchase(env) {
 
 const ENVIRONMENTS = new Set(['Production', 'Sandbox']);
 
+// A pack of extra coach messages (coach-packs.js), not the subscription.
+const isPack = (env, tx) => packProducts(bundleId(env)).includes(tx.productId);
+
 // Checks a decoded transaction belongs to this app and plan.
 function checkTransaction(env, tx) {
   if (tx.bundleId !== bundleId(env)) throw refuse(L('Nákup patří jiné aplikaci.', 'The purchase belongs to another app.'));
-  if (!proProducts(env).includes(tx.productId)) throw refuse(L('Neznámý tarif.', 'Unknown plan.'));
+  if (!proProducts(env).includes(tx.productId) && !isPack(env, tx)) throw refuse(L('Neznámý tarif.', 'Unknown plan.'));
   // Xcode's local StoreKit testing signs with its own key, which never verifies above.
   if (!ENVIRONMENTS.has(tx.environment)) throw refuse(L('Nákup z neznámého prostředí.', 'Purchase from an unknown environment.'));
   if (!tx.originalTransactionId) throw refuse(L('Neplatný doklad o nákupu.', 'Invalid purchase record.'));
@@ -221,6 +225,7 @@ export async function saveAppTransaction(env, body, options = {}) {
   checkTransaction(env, tx);
   const mine = await appAccountToken(env);
   if (tx.appAccountToken && String(tx.appAccountToken).toLowerCase() !== mine.toLowerCase()) throw refuse(L('Tento nákup patří jinému účtu Aurin.', 'This purchase belongs to another Aurin account.'), 409);
+  if (isPack(env, tx)) return savePackTransaction(env, tx);
   // An offer code redeemed outside the app has no token: the first account to send it keeps it.
   const raw = env.RAW_DB || env.DB;
   const holder = await raw.prepare('SELECT user_id FROM subscriptions WHERE original_transaction_id=?').bind(String(tx.originalTransactionId)).first();
@@ -245,6 +250,8 @@ export async function handleAppStoreNotification(request, env, options = {}) {
     const tx = await verifyAppStoreJws(data.signedTransactionInfo, options);
     const renewal = data.signedRenewalInfo ? await verifyAppStoreJws(data.signedRenewalInfo, options) : null;
     checkTransaction(env, tx);
+    // A refunded pack stops counting; nothing else about a pack needs the server.
+    if (isPack(env, tx)) return Response.json({ status: 'ok', refunded: tx.revocationDate || note.notificationType === 'REFUND' ? await refundPackTransaction(env.DB, tx) : false });
     const row = await withColumns(env.DB, async () => (tx.appAccountToken ? await env.DB.prepare('SELECT user_id FROM subscriptions WHERE app_account_token=?').bind(String(tx.appAccountToken).toLowerCase()).first() : null)
       || await env.DB.prepare('SELECT user_id FROM subscriptions WHERE original_transaction_id=?').bind(String(tx.originalTransactionId)).first());
     if (!row) return Response.json({ status: 'ok', unknown: true });

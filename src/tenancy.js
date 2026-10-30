@@ -58,6 +58,9 @@ export const PERSONAL_TABLES = {
   coach_messages: {},
   // What a deleted account of the same person used this week (ai-limit-memory.js).
   coach_carryover: {},
+  // Extra coach messages bought in the app and how many were used (coach-packs.js).
+  coach_pack_purchases: {},
+  coach_pack_balance: {},
   user_setup: {}, subscriptions: {}, local_workouts: {}, workout_exports: {},
   personal_recipes: {}, recipe_contributions: {}, food_contributions: {}, food_reports: {},
   user_language: {}, user_time_zone: {}, recovery_sessions: {}, user_consents: {},
