@@ -38,7 +38,7 @@ enum GymWhy {
         }
         if has("differ from the plan for", "liší od plánu na") {
             let day = s.components(separatedBy: low.contains("plan for") ? "plan for " : "plánu na ").last ?? s
-            return Reason(symbol: "arrow.triangle.2.circlepath", title: L10n.tr("Nové cviky"), detail: L10n.f("Jiné než %@", trimmed(day)))
+            return Reason(symbol: "arrow.triangle.2.circlepath", title: L10n.tr("Nové cviky"), detail: L10n.f("Jiné než %@", trimmed(day, capitalised: false)))
         }
         if has("about pain", "o bolesti") {
             return Reason(symbol: "bandage", title: L10n.tr("Bolest"), detail: s)
@@ -74,10 +74,11 @@ enum GymWhy {
         trimmed(s.split(separator: cut, maxSplits: 1).first.map(String.init) ?? s)
     }
 
-    private static func trimmed(_ s: String) -> String {
+    /// A day inside a sentence keeps its small letter ("Jiné než čt 29. 10").
+    private static func trimmed(_ s: String, capitalised: Bool = true) -> String {
         var t = s.trimmingCharacters(in: .whitespaces)
         while t.hasSuffix(".") { t.removeLast() }
-        return t.prefix(1).uppercased() + t.dropFirst()
+        return capitalised ? t.prefix(1).uppercased() + t.dropFirst() : t
     }
 }
 
