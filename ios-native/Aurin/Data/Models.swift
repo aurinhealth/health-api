@@ -163,11 +163,20 @@ struct TodaySnapshot: Decodable, Equatable {
         var build: WaterBuild? = nil
     }
 
-    /// Build-up: today's goal without training, whether it reached Auto, and the last two finished days (newest first).
+    /// Build-up: today's goal without training, whether it reached Auto, the last two finished days (newest first) and two weeks.
     struct WaterBuild: Decodable, Equatable {
         let baseMl: Double
         let done: Bool
         let days: [Day]
+        /// The last 7 finished days and the 7 before (only weeks with a logged day).
+        var weeks: [Week]? = nil
+
+        struct Week: Decodable, Equatable {
+            let drunkMl: Double
+            let goalMl: Double
+            let met: Int
+            let days: Int
+        }
 
         struct Day: Decodable, Equatable {
             let date: String

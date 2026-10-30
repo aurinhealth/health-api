@@ -155,7 +155,7 @@ struct WaterGoalSheet: View {
         .onAppear(perform: fill)
     }
 
-    /// Start, today's goal, and how the last two days went.
+    /// Start, today's goal, and how the last two days and two weeks went.
     private var build: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
@@ -173,6 +173,12 @@ struct WaterGoalSheet: View {
                         SettingsRow(title: index == 0 ? "Včera" : "Předevčírem",
                                     subtitle: day.logged ? L10n.f("%@ z %@", waterText(day.drunkMl), waterText(day.goalMl)) : L10n.tr("Nezapsáno"),
                                     value: day.logged ? Fmt.int(day.drunkMl / max(1, day.goalMl) * 100) + Fmt.percentSign : "–", chevron: false)
+                    }
+                    ForEach(Array((build.weeks ?? []).enumerated()), id: \.offset) { index, week in
+                        SettingsDivider()
+                        SettingsRow(title: index == 0 ? "Posledních 7 dní" : "7 dní předtím",
+                                    subtitle: L10n.f("%@ z %@ denně · splněno %@ z %@ dní", waterText(week.drunkMl), waterText(week.goalMl), String(week.met), String(week.days)),
+                                    value: Fmt.int(week.drunkMl / max(1, week.goalMl) * 100) + Fmt.percentSign, chevron: false)
                     }
                 }
             } else {

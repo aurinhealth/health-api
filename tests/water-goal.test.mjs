@@ -77,3 +77,10 @@ test("the profile keeps the goals only in range", () => {
   assert.deepEqual([p.waterMode, p.waterStart, p.waterFrom], ["build", 2000, "2026-10-26"]);
   assert.equal(normalizeProfile({ waterMode: "x" }).waterMode, "");
 });
+
+test("Build-up shows the last 7 days and the 7 before from the stored days", () => {
+  const days = Array.from({ length: 14 }, (_, i) => ({ date: `2026-10-${String(10 + i).padStart(2, "0")}`, goalMl: 1500, extraMl: 0, drunkMl: i < 7 ? 1200 : 1500, logged: i !== 13 }));
+  const w = waterGoal({ ml: 3000, baseMl: 3000, exerciseMl: 0 }, { waterMode: "build", waterStart: 1500 }, { baseMl: 1600, days }).build.weeks;
+  assert.deepEqual(w[0], { drunkMl: 1500, goalMl: 1500, met: 6, days: 6 });
+  assert.deepEqual(w[1], { drunkMl: 1200, goalMl: 1500, met: 0, days: 7 });
+});

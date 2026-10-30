@@ -3308,3 +3308,6 @@
 "Došel jsi na doporučený cíl." = "You reached the recommended goal.";
 "Předevčírem" = "Day before";
 "Nezapsáno" = "Not logged";
+"Posledních 7 dní" = "Last 7 days";
+"7 dní předtím" = "7 days before";
+"%@ z %@ denně · splněno %@ z %@ dní" = "%@ of %@ a day · %@ of %@ days met";

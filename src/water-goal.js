@@ -33,6 +33,15 @@ export function nextBase(base, days, { capMl = MAX_ML } = {}) {
   return clamp(next, MIN_ML, Math.max(MIN_ML, Number(capMl) || MAX_ML));
 }
 
+// Seven finished days in one line: the average drunk and goal of the logged
+// days and how many of them met the goal (95 %). Null when none was logged.
+function weekOf(days) {
+  const logged = days.filter(d => d.logged);
+  if (!logged.length) return null;
+  const avg = key => Math.round(logged.reduce((n, d) => n + d[key], 0) / logged.length);
+  return { drunkMl: avg("drunkMl"), goalMl: avg("goalMl"), met: logged.filter(d => d.drunkMl >= d.goalMl * 0.95).length, days: logged.length };
+}
+
 // The day's goal: auto = hydrationTarget() of the day; built = loadBuild() for Build-up.
 export function waterGoal(auto, profile = {}, built = null) {
   const extra = Number(auto?.exerciseMl) || 0, autoMl = Number(auto?.ml) || null;
@@ -42,7 +51,7 @@ export function waterGoal(auto, profile = {}, built = null) {
   if (mode === "build" && built) {
     const baseMl = Math.min(built.baseMl, Math.max(MIN_ML, Number(auto?.baseMl) || MAX_ML));
     return { ...auto, ml: Math.min(MAX_ML, baseMl + extra), autoMl, mode,
-      build: { baseMl, done: baseMl >= (Number(auto?.baseMl) || MAX_ML), days: built.days.slice(-2).reverse() } };
+      build: { baseMl, done: baseMl >= (Number(auto?.baseMl) || MAX_ML), days: built.days.slice(-2).reverse(), weeks: [weekOf(built.days.slice(-7)), weekOf(built.days.slice(-14, -7))].filter(Boolean) } };
   }
   return { ...auto, autoMl, mode: "auto" };
 }
