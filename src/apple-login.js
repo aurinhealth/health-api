@@ -18,6 +18,9 @@ let forcedJwksAt = 0;
 // traded for a refresh token, which deleting the account revokes (App Store rule 5.1.1(v)).
 // The body must be JSON, so another site cannot post a form here to sign someone in.
 const APP_BUNDLE_ID = "health.aurin.app";
+// The Loadwise app signed in with Apple for a while before the rename (#477); a refresh token it
+// got belongs to this client, and Apple revokes a token only for the client it was issued to.
+const LEGACY_APP_BUNDLE_ID = "eu.petrfitnessdata.loadwise.native";
 export const appBundleId = env => String(env?.APPLE_APP_BUNDLE_ID || APP_BUNDLE_ID).trim();
 const canRevoke = env => Boolean(env?.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY);
 const appJson = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -68,16 +71,19 @@ async function exchangeAppCode(env, code, fetchImpl, client = appBundleId(env)) 
 export async function revokeApple(env, fetchImpl = fetch) {
   if (!env?.APPLE_REFRESH_TOKEN) return "none";
   if (!canRevoke(env)) return "failed";
-  try {
-    const response = await fetchImpl(APPLE + "/auth/revoke", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ client_id: appBundleId(env), client_secret: await appleClientSecret(env, undefined, appBundleId(env)), token: env.APPLE_REFRESH_TOKEN, token_type_hint: "refresh_token" })
-    });
-    return response.ok ? "revoked" : "failed";
-  } catch {
-    return "failed";
+  for (const client of [...new Set([appBundleId(env), LEGACY_APP_BUNDLE_ID])]) {
+    try {
+      const response = await fetchImpl(APPLE + "/auth/revoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ client_id: client, client_secret: await appleClientSecret(env, undefined, client), token: env.APPLE_REFRESH_TOKEN, token_type_hint: "refresh_token" })
+      });
+      if (response.ok) return "revoked";
+    } catch {
+      // Apple was unreachable or refused this client; the next one is tried.
+    }
   }
+  return "failed";
 }
 
 function cleanName(value) {

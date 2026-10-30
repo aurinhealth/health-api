@@ -84,6 +84,19 @@ test("the app signs in with Apple natively and keeps the token that deleting the
   assert.equal(await revokeApple({ ...apple }), "none");
 });
 
+test("a token the Loadwise app got is revoked as that app", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    const body = new URLSearchParams(String(init.body));
+    calls.push(body.get("client_id"));
+    return body.get("client_id") === "eu.petrfitnessdata.loadwise.native" ? new Response("") : Response.json({ error: "invalid_grant" }, { status: 400 });
+  };
+  assert.equal(await revokeApple({ ...apple, APPLE_REFRESH_TOKEN: "legacy-refresh" }, fetchImpl), "revoked");
+  assert.deepEqual(calls, ["health.aurin.app", "eu.petrfitnessdata.loadwise.native"]);
+  const refused = async () => Response.json({ error: "invalid_grant" }, { status: 400 });
+  assert.equal(await revokeApple({ ...apple, APPLE_REFRESH_TOKEN: "unknown" }, refused), "failed");
+});
+
 test("the old Loadwise app no longer signs in with Apple", async () => {
   const env = await withUsers();
   const token = await idToken({ aud: "eu.petrfitnessdata.loadwise.native", nonce: await hex(APP_NONCE) });
