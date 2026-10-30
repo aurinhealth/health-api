@@ -13,28 +13,43 @@ struct WeekSessionsList: View {
     @State private var changing: WeekSession?
     @State private var cancelling: WeekSession?
     @State private var moving: WeekSession?
+    /// "Hned po sobě, nebo zvlášť" of a joined pair (BrickSheet).
+    @State private var joining: WeekSession?
     /// Cancelled sessions leave the list at once; the server hears of it when the undo is gone.
     @State private var hidden: Set<String> = []
     @State private var error: String?
 
-    private var shown: [WeekSession] { sessions.filter { !hidden.contains($0.id) } }
+    /// A joined pair's second leg right under its first.
+    private var shown: [WeekSession] { PlanLinks.joined(sessions.filter { !hidden.contains($0.id) }) }
 
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(shown.enumerated()), id: \.element.id) { index, session in
                 HStack(spacing: 0) {
                     NavigationLink(value: Self.destination(session)) {
-                        SessionRow(session: session, today: today)
+                        SessionRow(session: session, today: today,
+                                   afterSport: session.after.flatMap { a in sessions.first { $0.eventId == a }?.sport })
                     }
                     .buttonStyle(.plain)
                     .disabled(Self.destination(session) == nil)
                     let upcoming = PlanSessionActions.upcoming(session)
                     let changeable = GymPlanActions.changeable(session) && !upcoming
                     let candidates = pairCandidates(session)
+                    let joinable = PlanLinks.candidates(for: session, in: sessions)
+                    let paired = PlanLinks.pair(of: session, in: sessions) != nil
                     if (upcoming || changeable || !candidates.isEmpty || session.unpairTarget != nil) && !model.demo {
                         Menu {
                             if upcoming {
                                 Button { moving = session } label: { Label("Přesunout", systemImage: "arrow.right") }
+                                if paired {
+                                    Button { joining = session } label: { Label("Hned po sobě, nebo zvlášť", systemImage: "link") }
+                                }
+                                // Another session of the day this one can go right after (a brick).
+                                ForEach(joinable) { other in
+                                    Button { Task { await join(session, after: other) } } label: {
+                                        Label(L10n.f("Hned po: %@", other.title), systemImage: "link")
+                                    }
+                                }
                                 if let route = Self.destination(session) {
                                     Button { model.paths[model.tab, default: []].append(route) } label: { Label("Upravit", systemImage: "pencil") }
                                 }
@@ -81,6 +96,11 @@ struct WeekSessionsList: View {
         .sheet(item: $moving) { s in
             MovePlannedSheet(session: s, today: today) { date, note in moved(s, to: date, note: note) }
         }
+        .sheet(item: $joining) { s in
+            if let p = PlanLinks.pair(of: s, in: sessions) {
+                BrickSheet(first: p.0, second: p.1) { Task { await reload() } }
+            }
+        }
         .confirmationDialog(cancelling.map { L10n.f("Zrušit %@?", $0.title) } ?? "",
                             isPresented: Binding(get: { cancelling != nil }, set: { if !$0 { cancelling = nil } }),
                             titleVisibility: .visible, presenting: cancelling) { s in
@@ -100,6 +120,18 @@ struct WeekSessionsList: View {
     private func pair(plannedId: String, activityId: String?, date: String) async {
         do {
             try await model.api.pairActivity(plannedId: plannedId, activityId: activityId, date: date)
+            error = nil
+            await reload()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// "Hned po": this session right after the other one of the day.
+    private func join(_ s: WeekSession, after other: WeekSession) async {
+        guard let id = s.eventId, let first = other.eventId else { return }
+        do {
+            try await model.api.linkPlanned(eventId: id, after: first)
             error = nil
             await reload()
         } catch {
@@ -183,6 +215,8 @@ struct WeekSessionsList: View {
 struct SessionRow: View {
     let session: WeekSession
     let today: String
+    /// Joined right after a session of this sport (a brick): "Hned po kole".
+    var afterSport: String? = nil
 
     var body: some View {
         let state = PlanState(session)
@@ -194,6 +228,9 @@ struct SessionRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
                 Text(subtitle).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                if let afterSport, session.status == "planned" {
+                    Label(PlanLinks.afterText(afterSport), systemImage: "link").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.amber).lineLimit(1)
+                }
                 // Only a session done differently says why; one with a percent shows just that.
                 if state == .off, session.compliance == nil, let reason = session.adherenceReason, !reason.isEmpty {
                     Text(reason).font(Typo.caption).foregroundStyle(Palette.amber).lineLimit(1)
