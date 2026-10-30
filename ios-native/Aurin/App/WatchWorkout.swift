@@ -36,6 +36,30 @@ enum WatchWorkout {
         return WorkoutPlan(.custom(custom))
     }
 
+    /// A joined pair (a brick) as one multisport workout: the Workout app
+    /// times each leg and the change between them. It carries no steps inside
+    /// the legs, so only steady legs go this way (steady); a leg with
+    /// intervals goes as its own workout, one right after the other.
+    static func multisport(_ legs: [PlannedWorkout.Workout], title: String) -> WorkoutPlan? {
+        let activities: [SwimBikeRunWorkout.Activity] = legs.compactMap { w in
+            switch w.sport {
+            case "swim": return .swimming(w.environment == "outdoor" ? .openWater : .pool)
+            case "run": return .running(w.environment == "indoor" ? .indoor : .outdoor)
+            case "ride": return .cycling(w.environment == "indoor" ? .indoor : .outdoor)
+            default: return nil
+            }
+        }
+        guard activities.count == legs.count, activities.count >= 2, SwimBikeRunWorkout.supportsActivityOrdering(activities) else { return nil }
+        return WorkoutPlan(.swimBikeRun(SwimBikeRunWorkout(activities: activities, displayName: String(title.prefix(60)))))
+    }
+
+    /// No repeats and no interval steps: a leg the multisport workout loses nothing of.
+    static func steady(_ workout: PlannedWorkout.Workout) -> Bool {
+        !(workout.steps ?? []).contains { block in
+            (block.repeats ?? 1) > 1 || (block.steps ?? []).contains { $0.intensity == "interval" }
+        }
+    }
+
     private static func swimPlan(_ workout: PlannedWorkout.Workout, title: String, openWater: Bool) -> WorkoutPlan? {
         guard CustomWorkout.supportsActivity(.swimming) else { return nil }
         let location: HKWorkoutSessionLocationType = openWater ? .outdoor : .indoor

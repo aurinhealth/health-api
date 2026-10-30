@@ -142,6 +142,25 @@ test("a move cut off after the switch is finished: late rows copied, the central
   assert.equal(count(two, "SELECT COUNT(*) AS n FROM assistant_messages WHERE user_id=1"), 2);
 });
 
+test("sign-in, consents and push stay in the central database, for moved accounts and those already on a shard", async () => {
+  const { central, one, two, ids, api } = setup();
+  central.exec(`CREATE TABLE user_consents (user_id INTEGER NOT NULL, kind TEXT NOT NULL, PRIMARY KEY(user_id, kind));
+    CREATE TABLE push_tokens (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL);
+    CREATE TABLE user_passkeys (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL);
+    INSERT INTO user_consents VALUES (1, 'health'), (3, 'health');
+    INSERT INTO push_tokens VALUES ('a', 1), ('b', 3);
+    INSERT INTO user_passkeys VALUES ('k1', 1), ('k3', 3);`);
+  const lines = [];
+  await moveLegacyUsers({ api, plan, ids, apply: false, log: l => lines.push(l) });
+  assert.ok(!lines.some(l => /Account 3/.test(l)), "an account on a shard with only central tables is not a cut-off move");
+  await moveLegacyUsers({ api, plan, ids, apply: true, log: () => {} });
+  for (const table of ["user_consents", "push_tokens", "user_passkeys"]) {
+    assert.equal(count(central, `SELECT COUNT(*) AS n FROM ${table}`), 2, table);
+    for (const shard of [one, two]) assert.equal(count(shard, `SELECT COUNT(*) AS n FROM sqlite_master WHERE name='${table}'`), 0, table);
+  }
+  assert.equal(count(central, "SELECT COUNT(*) AS n FROM health_datapoints WHERE user_id=1"), 0);
+});
+
 test("inserts stay under D1's parameter limit", () => {
   const table = { name: "t", columns: Array.from({ length: 12 }, (_, i) => "c" + i) };
   const page = Array.from({ length: 50 }, () => Object.fromEntries(table.columns.map(c => [c, 1])));

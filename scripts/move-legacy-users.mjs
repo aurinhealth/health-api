@@ -3,7 +3,8 @@
 // (health-data), which has no EU jurisdiction. This moves each such account
 // to a user data database in the EU, the way a new account starts:
 //
-//   1. copy the account's rows of every personal table to the chosen shard,
+//   1. copy the account's rows of every personal table a shard holds (not
+//      CENTRAL_PERSONAL_TABLES) to the chosen shard,
 //   2. point the account's route at the shard (from then on the Worker reads
 //      and writes there),
 //   3. copy the rows whose key the shard lacks (what the app wrote in
@@ -27,6 +28,7 @@ import { parseConfig, shardPlan } from './provision-user-shards.mjs';
 import { cloudflareD1 } from './food-catalog-tools.mjs';
 import { USER_ROUTES_SQL, routeBinding } from '../src/user-data-shards.js';
 import { PERSONAL_TABLES } from '../src/tenancy.js';
+import { CENTRAL_PERSONAL_TABLES } from '../src/user-data-routing.js';
 
 // D1 takes at most 100 bound parameters per statement.
 const MAX_PARAMS = 99;
@@ -37,6 +39,11 @@ const name = value => {
   if (!/^[a-z_][a-z0-9_]*$/i.test(value)) throw new Error('Unexpected identifier');
   return value;
 };
+
+// Literal names (more tables than D1 takes parameters) of the personal tables
+// a shard holds. The rest (sign-in, consents, connections, subscriptions, push)
+// stay in the central database for every account, the way the router reads them.
+const SHARD_TABLE_LIST = `(${Object.keys(PERSONAL_TABLES).filter(t => !CENTRAL_PERSONAL_TABLES.has(t)).map(t => `'${name(t)}'`).join(',')})`;
 
 async function rows(api, db, sql, params = []) {
   return (await api.query(db, sql, params)).results || [];
@@ -69,8 +76,7 @@ async function tableInfo(api, db, table) {
 }
 
 export async function personalTables(api, core, shard) {
-  // Literal names: more tables than D1 takes parameters.
-  const list = `(${Object.keys(PERSONAL_TABLES).map(t => `'${name(t)}'`).join(',')})`;
+  const list = SHARD_TABLE_LIST;
   const central = await rows(api, core, `SELECT name, sql FROM sqlite_master WHERE type='table' AND name IN ${list} ORDER BY name`);
   const indexes = await rows(api, core, `SELECT tbl_name, sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL AND tbl_name IN ${list}`);
   const there = new Set((await rows(api, shard, `SELECT name FROM sqlite_master WHERE type='table' AND name IN ${list}`)).map(r => r.name));
@@ -231,7 +237,7 @@ function settled(log, userId, database, result) {
 // Accounts already routed to a shard that still have personal rows in the
 // central database (a move cut off after the switch).
 async function leftoverAccounts(api, core, plan, ids) {
-  const list = `(${Object.keys(PERSONAL_TABLES).map(t => `'${name(t)}'`).join(',')})`;
+  const list = SHARD_TABLE_LIST;
   const present = (await rows(api, core, `SELECT name FROM sqlite_master WHERE type='table' AND name IN ${list}`)).map(r => r.name);
   const users = new Set();
   for (const table of present) {
