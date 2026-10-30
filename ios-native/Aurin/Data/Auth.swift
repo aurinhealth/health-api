@@ -86,10 +86,9 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
     }
 
     // 32 random bytes as base64url: 43 characters, like the web app's verifier.
+    // CryptoKit's key never comes back empty, as an unchecked SecRandomCopyBytes could.
     static func randomVerifier() -> String {
-        var bytes = [UInt8](repeating: 0, count: 32)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-        return base64url(Data(bytes))
+        base64url(SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) })
     }
 
     /// Sign in with Apple: the request asks Apple to put the SHA-256 (hex) of
