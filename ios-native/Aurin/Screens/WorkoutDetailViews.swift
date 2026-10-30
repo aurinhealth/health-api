@@ -13,28 +13,43 @@ struct WeekSessionsList: View {
     @State private var changing: WeekSession?
     @State private var cancelling: WeekSession?
     @State private var moving: WeekSession?
+    /// "Hned po sobě, nebo zvlášť" of a joined pair (BrickSheet).
+    @State private var joining: WeekSession?
     /// Cancelled sessions leave the list at once; the server hears of it when the undo is gone.
     @State private var hidden: Set<String> = []
     @State private var error: String?
 
-    private var shown: [WeekSession] { sessions.filter { !hidden.contains($0.id) } }
+    /// A joined pair's second leg right under its first.
+    private var shown: [WeekSession] { PlanLinks.joined(sessions.filter { !hidden.contains($0.id) }) }
 
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(shown.enumerated()), id: \.element.id) { index, session in
                 HStack(spacing: 0) {
                     NavigationLink(value: Self.destination(session)) {
-                        SessionRow(session: session, today: today)
+                        SessionRow(session: session, today: today,
+                                   afterSport: session.after.flatMap { a in sessions.first { $0.eventId == a }?.sport })
                     }
                     .buttonStyle(.plain)
                     .disabled(Self.destination(session) == nil)
                     let upcoming = PlanSessionActions.upcoming(session)
                     let changeable = GymPlanActions.changeable(session) && !upcoming
                     let candidates = pairCandidates(session)
+                    let joinable = PlanLinks.candidates(for: session, in: sessions)
+                    let paired = PlanLinks.pair(of: session, in: sessions) != nil
                     if (upcoming || changeable || !candidates.isEmpty || session.unpairTarget != nil) && !model.demo {
                         Menu {
                             if upcoming {
                                 Button { moving = session } label: { Label("Přesunout", systemImage: "arrow.right") }
+                                if paired {
+                                    Button { joining = session } label: { Label("Hned po sobě, nebo zvlášť", systemImage: "link") }
+                                }
+                                // Another session of the day this one can go right after (a brick).
+                                ForEach(joinable) { other in
+                                    Button { Task { await join(session, after: other) } } label: {
+                                        Label(L10n.f("Hned po: %@", other.title), systemImage: "link")
+                                    }
+                                }
                                 if let route = Self.destination(session) {
                                     Button { model.paths[model.tab, default: []].append(route) } label: { Label("Upravit", systemImage: "pencil") }
                                 }
@@ -81,6 +96,11 @@ struct WeekSessionsList: View {
         .sheet(item: $moving) { s in
             MovePlannedSheet(session: s, today: today) { date, note in moved(s, to: date, note: note) }
         }
+        .sheet(item: $joining) { s in
+            if let p = PlanLinks.pair(of: s, in: sessions) {
+                BrickSheet(first: p.0, second: p.1) { Task { await reload() } }
+            }
+        }
         .confirmationDialog(cancelling.map { L10n.f("Zrušit %@?", $0.title) } ?? "",
                             isPresented: Binding(get: { cancelling != nil }, set: { if !$0 { cancelling = nil } }),
                             titleVisibility: .visible, presenting: cancelling) { s in
@@ -100,6 +120,18 @@ struct WeekSessionsList: View {
     private func pair(plannedId: String, activityId: String?, date: String) async {
         do {
             try await model.api.pairActivity(plannedId: plannedId, activityId: activityId, date: date)
+            error = nil
+            await reload()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// "Hned po": this session right after the other one of the day.
+    private func join(_ s: WeekSession, after other: WeekSession) async {
+        guard let id = s.eventId, let first = other.eventId else { return }
+        do {
+            try await model.api.linkPlanned(eventId: id, after: first)
             error = nil
             await reload()
         } catch {
@@ -183,6 +215,8 @@ struct WeekSessionsList: View {
 struct SessionRow: View {
     let session: WeekSession
     let today: String
+    /// Joined right after a session of this sport (a brick): "Hned po kole".
+    var afterSport: String? = nil
 
     var body: some View {
         let state = PlanState(session)
@@ -194,6 +228,9 @@ struct SessionRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
                 Text(subtitle).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                if let afterSport, session.status == "planned" {
+                    Label(PlanLinks.afterText(afterSport), systemImage: "link").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.amber).lineLimit(1)
+                }
                 // Only a session done differently says why; one with a percent shows just that.
                 if state == .off, session.compliance == nil, let reason = session.adherenceReason, !reason.isEmpty {
                     Text(reason).font(Typo.caption).foregroundStyle(Palette.amber).lineLimit(1)
@@ -798,6 +835,8 @@ struct PlannedWorkoutView: View {
     @State private var confirmDelete = false
     @State private var rating = false
     @State private var ratingClosed = 0
+    /// A ride, run or swim: the sports with sections, a place and a send sheet.
+    static func endurance(_ sport: String) -> Bool { ["ride", "run", "swim"].contains(sport) }
     /// The time of day set here (Čas): .some(nil) after "Bez času".
     @State private var timeSet: String??
     @State private var pickingTime = false
@@ -834,7 +873,7 @@ struct PlannedWorkoutView: View {
                 if ratable {
                     FeedbackRow(session: session, workoutId: libraryId, reload: ratingClosed) { rating = true }.padding(.top, 16)
                 }
-                if let blocks = plan?.workout.steps, !WorkoutProfile.segments(blocks).isEmpty, session.sport == "ride" || session.sport == "run" {
+                if let blocks = plan?.workout.steps, !WorkoutProfile.segments(blocks).isEmpty, Self.endurance(session.sport) {
                     Card { WorkoutProfile(blocks: blocks, sport: session.sport) }.padding(.top, 16)
                 }
                 if let description = plan?.workout.description, !description.isEmpty {
@@ -848,10 +887,10 @@ struct PlannedWorkoutView: View {
                         }
                     }
                     .padding(.top, 10)
-                    if let workout = plan?.workout, session.sport == "ride" || session.sport == "run", !model.demo {
+                    if let workout = plan?.workout, Self.endurance(session.sport), !model.demo {
                         SendToButton(workout: workout, session: session).padding(.top, 18)
                     }
-                    if let id = session.eventId, session.sport == "ride" || session.sport == "run" {
+                    if let id = session.eventId, Self.endurance(session.sport) {
                         PlannedTemplateButtons(eventId: id, date: session.date).padding(.top, 10)
                     }
                 }
@@ -876,10 +915,10 @@ struct PlannedWorkoutView: View {
                     } else {
                         Button { moving = true } label: { action("Přesunout na jiný den", filled: false) }
                     }
-                    if session.sport == "ride" || session.sport == "run" {
+                    if Self.endurance(session.sport) {
                         HStack(spacing: 10) {
-                            Button { Task { await environment(indoor: true) } } label: { action("Uvnitř", filled: false) }
-                            Button { Task { await environment(indoor: false) } } label: { action("Venku", filled: false) }
+                            Button { Task { await environment(indoor: true) } } label: { action(session.sport == "swim" ? "Bazén" : "Uvnitř", filled: false) }
+                            Button { Task { await environment(indoor: false) } } label: { action(session.sport == "swim" ? "Volná voda" : "Venku", filled: false) }
                         }
                     }
                     Button(role: .destructive) { confirmDelete = true } label: {
@@ -1068,6 +1107,16 @@ struct StepBlockRow: View {
 
     private func describe(_ s: PlannedWorkout.Step) -> String {
         var parts: [String] = []
+        if s.rest == true {
+            return [L10n.f("%@ pauza", Fmt.int(s.durationSeconds) + " s"), s.note].compactMap { $0 }.joined(separator: " · ")
+        }
+        // A swim: metres, the pace per 100 m.
+        if let m = s.meters {
+            parts.append(Fmt.int(m) + " m")
+            if let slow = s.paceSlow, let fast = s.paceFast { parts.append(ZonesSettingsView.pace(fast) + "–" + ZonesSettingsView.pace(slow) + " /100 m") }
+            if let note = s.note { parts.append(note) }
+            return parts.joined(separator: " · ")
+        }
         if let d = s.durationSeconds { parts.append(d >= 60 ? Fmt.duration(Int(d / 60)) : Fmt.int(d) + " s") }
         if let lo = s.wattsLow, let hi = s.wattsHigh { parts.append(Fmt.int(lo) + "–" + Fmt.int(hi) + " W") }
         else if let lo = s.percentLow, let hi = s.percentHigh { parts.append(Fmt.int(lo) + "–" + Fmt.int(hi) + Fmt.percentSign) }

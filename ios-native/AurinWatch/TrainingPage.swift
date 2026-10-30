@@ -313,8 +313,8 @@ struct WeekRow: View {
     }
 }
 
-/// A planned ride or run in Apple's Workout app (WorkoutKit), its steps by
-/// time: zone 3 and up as work, the rest as recovery, repeats as one block.
+/// A planned ride, run or swim in Apple's Workout app (WorkoutKit), its steps by
+/// time (a pool swim by metres): zone 3 and up as work, the rest as recovery, repeats as one block.
 @MainActor
 enum WorkoutOpener {
     static func workout(_ plan: WatchPlan, sport: String, name: String) -> WorkoutPlan? {
@@ -322,6 +322,7 @@ enum WorkoutOpener {
         switch sport {
         case "ride": activity = .cycling
         case "run": activity = .running
+        case "swim": activity = .swimming
         default: return nil
         }
         guard CustomWorkout.supportsActivity(activity) else { return nil }
@@ -333,13 +334,26 @@ enum WorkoutOpener {
             blocks.append(IntervalBlock(steps: current, iterations: max(1, min(repeats, 20))))
             current = []
         }
+        // A swim in the pool goes by metres as from the iPhone (WatchWorkout.swift); the
+        // watch asks for the pool length. Open water goes by time, without rests.
+        let openWater = sport == "swim" && plan.openWater == true
+        let location: HKWorkoutSessionLocationType = sport == "swim" && !openWater ? .indoor : .outdoor
         for step in plan.steps {
             if step.first { flush(); repeats = step.repeats }
-            current.append(IntervalStep(step.zone >= 3 ? .work : .recovery, goal: .time(max(step.seconds, 5), .seconds)))
+            if step.rest == true {
+                if !openWater { current.append(IntervalStep(.recovery, goal: .time(max(step.seconds, 5), .seconds))) }
+                continue
+            }
+            let kind: IntervalStep.Purpose = step.zone >= 3 ? .work : .recovery
+            if !openWater, let meters = step.meters, CustomWorkout.supportsGoal(.distance(meters, .meters), activity: activity, location: location) {
+                current.append(IntervalStep(kind, goal: .distance(meters, .meters)))
+            } else {
+                current.append(IntervalStep(kind, goal: .time(max(step.seconds, 5), .seconds)))
+            }
         }
         flush()
         guard !blocks.isEmpty else { return nil }
-        let custom = CustomWorkout(activity: activity, location: .outdoor, displayName: name, blocks: blocks)
+        let custom = CustomWorkout(activity: activity, location: location, displayName: name, blocks: blocks)
         return WorkoutPlan(.custom(custom))
     }
 

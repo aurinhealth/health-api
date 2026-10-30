@@ -66,6 +66,14 @@ struct PlannedSendSheet: View {
     @State private var watchPlan: WorkoutPlan?
     @State private var watchShowing = false
     @State private var sharing = false
+    /// A swim to the watch: in the pool (metres) or in open water (time).
+    @State private var openWater = false
+    /// Joined to another session of the day (a brick): both legs steady go as
+    /// one multisport workout; with intervals, two workouts one after the other.
+    @State private var multisport: WorkoutPlan?
+    @State private var multisportShowing = false
+    @State private var legs: String?
+    @State private var twoWorkouts = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -80,8 +88,21 @@ struct PlannedSendSheet: View {
                 if destinations == nil {
                     ProgressView().frame(maxWidth: .infinity).padding(.vertical, 14)
                 }
-                if let watchPlan {
-                    row(icon: AnyView(symbol("applewatch")), name: "Apple Watch", status: L10n.tr("Aplikace Cvičení"), statusColor: Palette.muted,
+                if workout.sport == "swim", watchPlan != nil {
+                    Picker("Kde", selection: $openWater) {
+                        Text("Bazén").tag(false)
+                        Text("Volná voda").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.vertical, 10)
+                }
+                if let multisport, let legs {
+                    row(icon: AnyView(symbol("applewatch")), name: L10n.tr("Apple Watch · multisport"), status: legs, statusColor: Palette.muted,
+                        action: "Přidat", primary: false, busy: false) { multisportShowing = true }
+                        .workoutPreview(multisport, isPresented: $multisportShowing)
+                } else if let watchPlan {
+                    row(icon: AnyView(symbol("applewatch")), name: "Apple Watch",
+                        status: twoWorkouts ? L10n.tr("S intervaly: dva tréninky hned po sobě") : L10n.tr("Aplikace Cvičení"), statusColor: Palette.muted,
                         action: "Přidat", primary: false, busy: false) { watchShowing = true }
                         .workoutPreview(watchPlan, isPresented: $watchShowing)
                 }
@@ -100,13 +121,36 @@ struct PlannedSendSheet: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 22).padding(.top, 14)
+        .onChange(of: openWater) { watchPlan = WatchWorkout.plan(workout, title: session.title, openWater: openWater) }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
         .glassSheetBackground()
         .task {
-            watchPlan = WatchWorkout.plan(workout, title: session.title)
+            openWater = workout.environment == "outdoor"
+            watchPlan = WatchWorkout.plan(workout, title: session.title, openWater: openWater)
+            await joined()
             guard let id = session.eventId else { destinations = []; return }
             destinations = (try? await model.api.plannedDestinations(eventId: id))?.destinations ?? []
+        }
+    }
+
+    /// The pair this session belongs to, with the other leg's steps.
+    private func joined() async {
+        guard let pair = PlanLinks.pair(of: session, in: model.training?.sessions ?? []) else { return }
+        let other = pair.0.id == session.id ? pair.1 : pair.0
+        guard let otherId = other.eventId, let otherWorkout = try? await model.api.plannedWorkout(eventId: otherId).workout else { return }
+        let ordered = pair.0.id == session.id ? [workout, otherWorkout] : [otherWorkout, workout]
+        guard ordered.allSatisfy(WatchWorkout.steady) else { twoWorkouts = true; return }
+        multisport = WatchWorkout.multisport(ordered, title: pair.0.title + " + " + pair.1.title)
+        legs = L10n.f("Jeden trénink: %@", [pair.0, pair.1].map { L10n.tr(Self.sportWord($0.sport)) }.joined(separator: ", "))
+    }
+
+    private static func sportWord(_ sport: String) -> String {
+        switch sport {
+        case "ride": return "kolo"
+        case "run": return "běh"
+        case "swim": return "plavání"
+        default: return "trénink"
         }
     }
 

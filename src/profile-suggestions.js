@@ -177,7 +177,7 @@ export async function loadProfiles(db, userId) {
   const rows = (await db.prepare("SELECT id, profile_json FROM dashboard_profile WHERE user_id = ? AND id IN (1, 2)").bind(userId).all().catch(() => ({ results: [] }))).results || [];
   const parsed = id => { try { return JSON.parse(rows.find(r => Number(r.id) === id)?.profile_json || "null"); } catch { return null; } };
   const saved = parsed(1), suggested = parsed(2);
-  return { saved, effective: saved || suggested ? effectiveProfile(saved, suggested) : null };
+  return { saved, suggested, effective: saved || suggested ? effectiveProfile(saved, suggested) : null };
 }
 
 export async function loadEffectiveProfile(db, userId) {

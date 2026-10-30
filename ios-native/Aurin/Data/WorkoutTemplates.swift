@@ -15,8 +15,9 @@ struct TemplateExercise: Codable, Hashable {
     }
 }
 
-/// A section of a ride or run: a length in time (or distance when running)
-/// and the intensity as % of FTP or of threshold pace, low to high.
+/// A section of a ride, run or swim: a length in time (or distance when
+/// running, metres when swimming) and the intensity as % of FTP, of threshold
+/// pace or of CSS, low to high. A swim also has rests at the wall.
 struct EnduranceStep: Codable, Hashable {
     var label: String
     var seconds: Int?
@@ -24,16 +25,24 @@ struct EnduranceStep: Codable, Hashable {
     var low: Int
     var high: Int
     var cadence: Int?
+    var meters: Int? = nil
+    var rest: Bool? = nil
+
+    var isRest: Bool { rest == true }
 
     var json: JSONValue {
+        if isRest { return .object(["label": .string(label), "rest": .bool(true), "seconds": .number(Double(seconds ?? 20))]) }
         var out: JSONObject = ["label": .string(label), "low": .number(Double(low)), "high": .number(Double(high))]
-        if let km { out["km"] = .number(km) } else { out["seconds"] = .number(Double(seconds ?? 60)) }
+        if let meters { out["meters"] = .number(Double(meters)) } else if let km { out["km"] = .number(km) } else { out["seconds"] = .number(Double(seconds ?? 60)) }
         if let cadence { out["cadence"] = .number(Double(cadence)) }
         return .object(out)
     }
 
-    /// Minutes, a distance at 5:00 /km at threshold (as the server counts without the athlete's pace).
-    func minutes(thresholdPace: Double? = nil) -> Double {
+    /// Minutes, a distance at 5:00 /km at threshold (as the server counts without the athlete's pace);
+    /// metres at the CSS, 2:00 /100 m without it.
+    func minutes(thresholdPace: Double? = nil, swimCss: Double? = nil) -> Double {
+        if isRest { return Double(seconds ?? 0) / 60 }
+        if let meters { return Double(meters) / 100 * (swimCss ?? 120) * 100 / Double(low + high) * 2 / 60 }
         if let km { return km * (thresholdPace ?? 300) * 100 / Double(low + high) * 2 / 60 }
         return Double(seconds ?? 0) / 60
     }
@@ -54,7 +63,7 @@ struct WorkoutTemplate: Codable, Hashable {
     var exercises: [TemplateExercise]
     var blocks: [EnduranceBlock]? = nil
 
-    var isEndurance: Bool { sport == "ride" || sport == "run" }
+    var isEndurance: Bool { sport == "ride" || sport == "run" || sport == "swim" }
     /// Nothing to save or share yet.
     var isEmpty: Bool { isEndurance ? (blocks ?? []).isEmpty : exercises.isEmpty }
 
@@ -70,18 +79,30 @@ struct WorkoutTemplate: Codable, Hashable {
     }
 
     /// The length of a ride or run in minutes.
-    func enduranceMinutes(thresholdPace: Double? = nil) -> Double {
-        (blocks ?? []).reduce(0) { sum, b in sum + Double(b.repeats) * b.steps.reduce(0) { $0 + $1.minutes(thresholdPace: thresholdPace) } }
+    func enduranceMinutes(thresholdPace: Double? = nil, swimCss: Double? = nil) -> Double {
+        (blocks ?? []).reduce(0) { sum, b in sum + Double(b.repeats) * b.steps.reduce(0) { $0 + $1.minutes(thresholdPace: thresholdPace, swimCss: swimCss) } }
     }
 
     /// The sections as the library's step rows, for its chart and rows
     /// (WorkoutProfile, StepBlockRow); watts and paces when they are known.
-    func profile(ftp: Double? = nil, thresholdPace: Double? = nil) -> [PlannedWorkout.Block] {
-        let run = sport == "run"
+    func profile(ftp: Double? = nil, thresholdPace: Double? = nil, swimCss: Double? = nil) -> [PlannedWorkout.Block] {
+        let run = sport == "run", swim = sport == "swim"
         let blocks: [JSONValue] = (self.blocks ?? []).map { b in
             .object(["repeats": .number(Double(b.repeats)), "steps": .array(b.steps.map { s in
-                var row: JSONObject = ["durationSeconds": .number((s.minutes(thresholdPace: thresholdPace) * 60).rounded()),
+                let seconds = JSONValue.number((s.minutes(thresholdPace: thresholdPace, swimCss: swimCss) * 60).rounded())
+                if s.isRest {
+                    var row: JSONObject = ["durationSeconds": seconds, "rest": .bool(true)]
+                    if !s.label.isEmpty { row["note"] = .string(s.label) }
+                    return .object(row)
+                }
+                var row: JSONObject = ["durationSeconds": seconds,
                                        "percentLow": .number(Double(s.low)), "percentHigh": .number(Double(s.high))]
+                if swim {
+                    if let meters = s.meters { row["meters"] = .number(Double(meters)) }
+                    if let css = swimCss { row["paceSlow"] = .number((css * 100 / Double(s.low)).rounded()); row["paceFast"] = .number((css * 100 / Double(s.high)).rounded()) }
+                    if !s.label.isEmpty { row["note"] = .string(s.label) }
+                    return .object(row)
+                }
                 if !s.label.isEmpty { row["note"] = .string(s.label) }
                 if let cadence = s.cadence, !run { row["cadence"] = .number(Double(cadence)) }
                 if !run, let ftp { row["wattsLow"] = .number((ftp * Double(s.low) / 100).rounded()); row["wattsHigh"] = .number((ftp * Double(s.high) / 100).rounded()) }
@@ -187,10 +208,11 @@ private struct SavedWorkoutsResponse: Decodable {
     let athlete: AthleteThresholds?
 }
 
-/// FTP and threshold pace (s/km) for watts and paces in the ride and run editor.
+/// FTP, threshold pace (s/km) and CSS (s/100 m) for watts and paces in the editor.
 struct AthleteThresholds: Decodable, Hashable {
     var ftp: Double?
     var runThresholdPace: Double?
+    var swimCss: Double? = nil
 }
 
 private struct DescribeResponse: Decodable {

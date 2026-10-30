@@ -793,7 +793,7 @@ export function overviewPage(request) {
     ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
       ['html:strain', 'strainMade', 200, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000]]],
     ['trenink', '', 'A plan that adapts.', 'An activity for every day, picked for how you recovered.', 'green', 'glow-today', [
-      ['training', 'week', 150, 'Your week at a glance.', 'Follow a plan for your race, from 5 km to a marathon or a gran fondo, or let the AI plan the week; a busy day in your calendar gets a shorter workout. Send a planned ride or run to Wahoo, Intervals.icu, your Apple Watch or Zwift.', 9500]]],
+      ['training', 'week', 150, 'Your week at a glance.', 'Follow a plan for your race, from 5 km to a marathon, a gran fondo or a triathlon from sprint to full distance, or one that takes you to 1,500 m of swimming without stopping, or let the AI plan the week of rides, runs, swims and gym; for a triathlon your newest sport gets more short sessions, with a short run straight after a ride that goes to your Apple Watch as one multisport workout, or apart, each at its own time. A busy day in your calendar gets a shorter workout. Send a planned ride, run or pool swim to Intervals.icu or your Apple Watch, and a ride or run also to Wahoo or Zwift.', 9500]]],
     ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym.', 'amber', 'glow-training', [
       ['builder', 'builder', 200, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and builds the workout only from the equipment your gym has.', 8500],
       ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, set their length or pick a warm-up of your own, and move them into the order you like. Then start.', 7000]]],
@@ -848,7 +848,7 @@ ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style
   // Muscles sit between training mode and food, as Svaly sits under Trénink in the app. The bubble's
   // words are the sample day's (DemoData.muscles), in English.
   const muscles = `<section id="svaly" class="muscles"><div class="wrap mu">
-<div class="copy reveal"><div class="eyebrow">Muscles</div><h3 class="big">Know what’s recovered.</h3><p class="sub">From the gym and from your runs and rides. Turn the figure and tap a muscle.</p>
+<div class="copy reveal"><div class="eyebrow">Muscles</div><h3 class="big">Know what’s recovered.</h3><p class="sub">From the gym and from your rides, runs and swims. Turn the figure and tap a muscle.</p>
 <div class="key" aria-hidden="true"><span style="--c:var(--rust)"><i></i>Tired</span><span style="--c:var(--amber-bar)"><i></i>Recovering</span><span style="--c:color-mix(in srgb,var(--text) 22%,var(--bg))"><i></i>Rested</span></div>
 <div class="mpick" role="group" aria-label="Open a muscle"></div>
 </div>
@@ -933,6 +933,7 @@ ${layer('wide')}${layer('tall')}
     ['What does it cost?', 'Nothing during testing. After the release, the coach, food from a photo and reviews come with Aurin Pro: CZK 199 a month or CZK 1,490 a year with the first week free, in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from.'],
     ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
+    ['Where is my data and who sees it?', 'In Aurin’s database in Europe, encrypted. We never sell it or use it for ads. AI features get only what a question needs, and only once you allow them. <a href="/privacy">More in the privacy policy</a>.'],
     ['Can I delete my data?', 'Yes. In Settings → Privacy &amp; data you can download all your data or delete your account with everything in it.'],
     ['Is Aurin a medical device?', 'No. Aurin helps you plan training, food and rest. It does not diagnose or treat anything, so if you feel unwell, see a doctor.'],
     ['Something doesn’t work. What now?', `In the app, open Settings → Help → Report a problem and send it with diagnostics attached, or write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.`],

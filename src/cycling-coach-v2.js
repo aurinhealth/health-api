@@ -29,6 +29,9 @@ const RUN_NAME_RE=/\b(run|running|běh|beh|jog)\b/i;
 function isRide(a){const type=typeOf(a);if(RUN_TYPE_RE.test(type)||OTHER_TYPE_RE.test(type)||(!type&&RUN_NAME_RE.test(String(a?.name||""))))return false;return BIKE_RE.test(type+" "+String(a?.name||""))}
 function isRun(a){const type=typeOf(a);if(type)return RUN_TYPE_RE.test(type);return RUN_NAME_RE.test(String(a?.name||""))}
 const isHardRun=a=>isHardSession(a,"run"),isHard=a=>isHardSession(a,"ride");
+const SWIM_RE=/swim|plav/i;
+function isSwim(a){const type=typeOf(a);if(type)return SWIM_RE.test(type);return SWIM_RE.test(String(a?.name||""))}
+const isHardSwim=a=>isHardSession(a,"swim");
 function allWeekActivities(week){
   const out=[];
   for(const row of week?.days||[]){
@@ -116,8 +119,34 @@ function runTemplate(kind,minutes){
   });
   return {...(templates[kind]||templates.endurance),durationMinutes:m};
 }
+function swimTemplate(kind,minutes){
+  const m=Math.max(15,Math.round(minutes||40));
+  const templates=L({
+    recovery:{name:"Volné plavání",kind:"recovery",target:"o 12 s na 100 m pomaleji než práh (CSS) a víc",structure:[Math.min(m,30)+" min volně, klidně s piškotem"]},
+    endurance:{name:"Plynulé plavání",kind:"endurance",target:"o 6–10 s na 100 m pomaleji než práh (CSS)",structure:["200 m rozplavání","2–4× 50 m drily","delší úseky plynule","100 m vyplavání"]},
+    tempo:{name:"Plynulé úseky",kind:"tempo",target:"o 3–5 s na 100 m pomaleji než práh",structure:["200 m rozplavání","4–6× 200 m, 20 s pauza","100 m vyplavání"]},
+    sweet_spot:{name:"Práh (CSS)",kind:"sweet_spot",target:"prahové tempo (CSS)",structure:["200 m rozplavání","8× 100 m, 15 s pauza","100 m vyplavání"]},
+    threshold:{name:"Práh (CSS)",kind:"threshold",target:"prahové tempo (CSS)",structure:["200 m rozplavání","8× 100 m, 15 s pauza","100 m vyplavání"]},
+    vo2:{name:"Rychlé úseky",kind:"vo2",target:"o 3–5 s na 100 m rychleji než práh",structure:["200 m rozplavání","10× 50 m rychle, 25 s pauza","100 m vyplavání"]},
+    long_endurance:{name:"Dlouhé plavání",kind:"long_endurance",target:"o 6–10 s na 100 m pomaleji než práh",structure:["200 m rozplavání","souvisle plynule","100 m vyplavání"]},
+    openers:{name:"Aktivace před závodem",kind:"openers",target:"lehce, krátce závodní tempo",structure:["300 m lehce","4× 50 m závodní tempo, 30 s pauza","100 m volně"]},
+    race:{name:"Závod",kind:"race",target:"rozplavání 5–10 min",structure:["5–10 min rozplavání","start"]}
+  },{
+    recovery:{name:"Easy swim",kind:"recovery",target:"12 s per 100 m slower than threshold (CSS) or more",structure:[Math.min(m,30)+" min easy, a pull buoy is fine"]},
+    endurance:{name:"Steady swim",kind:"endurance",target:"6–10 s per 100 m slower than threshold (CSS)",structure:["200 m warm-up","2–4× 50 m drills","longer repeats, steady","100 m cool-down"]},
+    tempo:{name:"Steady repeats",kind:"tempo",target:"3–5 s per 100 m slower than threshold",structure:["200 m warm-up","4–6× 200 m, 20 s rest","100 m cool-down"]},
+    sweet_spot:{name:"Threshold (CSS)",kind:"sweet_spot",target:"threshold pace (CSS)",structure:["200 m warm-up","8× 100 m, 15 s rest","100 m cool-down"]},
+    threshold:{name:"Threshold (CSS)",kind:"threshold",target:"threshold pace (CSS)",structure:["200 m warm-up","8× 100 m, 15 s rest","100 m cool-down"]},
+    vo2:{name:"Fast repeats",kind:"vo2",target:"3–5 s per 100 m faster than threshold",structure:["200 m warm-up","10× 50 m fast, 25 s rest","100 m cool-down"]},
+    long_endurance:{name:"Long swim",kind:"long_endurance",target:"6–10 s per 100 m slower than threshold",structure:["200 m warm-up","continuous and steady","100 m cool-down"]},
+    openers:{name:"Pre-race openers",kind:"openers",target:"easy, briefly at race pace",structure:["300 m easy","4× 50 m at race pace, 30 s rest","100 m easy"]},
+    race:{name:"Race",kind:"race",target:"5–10 min warm-up swim",structure:["5–10 min warm-up","start"]}
+  });
+  return {...(templates[kind]||templates.endurance),durationMinutes:m};
+}
 function workoutTemplate(kind,minutes,cadence="85–95 rpm",sport="ride"){
   if(sport==="run") return runTemplate(kind,minutes);
+  if(sport==="swim") return swimTemplate(kind,minutes);
   const m=Math.max(30,Math.round(minutes||75));
   const templates=L({
     recovery:{name:"Recovery / lehké Z1",kind:"recovery",target:"45–55 % FTP nebo RPE 1–2",structure:["10 min velmi lehce","20–35 min plynule Z1","5–10 min vyjetí"],cadence},
@@ -165,7 +194,8 @@ export const CYCLING_COACH_V2_META={
 // IF² × 100 = 49 TSS/h; easy running at IF 0.83 is 69 rTSS/h, and a run gets
 // 20 % less time for its higher mechanical load.
 function capacityMinutes({ctl,tsb,sleepMinutes,readiness,recoveryWeek,returning,sport,taper=false,ramp=null}){
-  const run=sport==="run",reasons=[];
+  // A swim is counted like a run (shorter sessions), at most 75 min.
+  const run=sport==="run"||sport==="swim",reasons=[];
   let m;
   if(ctl==null){m=run?45:75;reasons.push(L("kondici (CTL) zatím neznám, beru "+m+" min","fitness (CTL) unknown so far, using "+m+" min"));}
   else{
@@ -184,17 +214,17 @@ function capacityMinutes({ctl,tsb,sleepMinutes,readiness,recoveryWeek,returning,
   if(recoveryWeek)apply(.7,L("regenerační týden","recovery week"));
   if(taper)apply(.6,L("ladění formy před závodem","tapering before a race"));
   if(returning)apply(.7,L("návrat po pauze","returning after a break"));
-  return {minutes:clamp(m,run?20:30,run?150:300),reasons};
+  return {minutes:clamp(m,run?20:30,sport==="swim"?75:run?150:300),reasons};
 }
 // The session length for the chosen kind.
 function sessionMinutesFor(kind,capacity,sport){
-  const run=sport==="run",step=run?5:15,round=m=>Math.max(step,Math.round(m/step)*step),reasons=[...capacity.reasons];
+  const run=sport==="run"||sport==="swim",step=run?5:15,round=m=>Math.max(step,Math.round(m/step)*step),reasons=[...capacity.reasons];
   let m=capacity.minutes;
   if(kind==="recovery"){m=clamp(m*.5,run?20:30,run?40:60);reasons.push(L("regenerace je krátká","recovery is short"));}
   else if(kind==="openers"){m=run?30:45;reasons.push(L("aktivace před závodem je krátká","pre-race openers are short"));}
   else if(kind==="race"){m=run?20:30;reasons.push(L("jen rozjetí před startem","just a warm-up before the start"));}
   else if(isHardKind(kind)){
-    const [lo,hi]=run?[40,80]:[60,120];
+    const [lo,hi]=sport==="swim"?[30,60]:run?[40,80]:[60,120];
     if(m<lo||m>hi)reasons.push(L("kvalitní trénink držím na "+lo+"–"+hi+" min","I keep quality sessions at "+lo+"–"+hi+" min"));
     m=clamp(m,lo,hi);
   }
@@ -204,18 +234,20 @@ function sessionMinutesFor(kind,capacity,sport){
 // Words that differ between the bike and the run coach.
 const WORDS_CS={
   ride:{novice:"Kondice je zatím nízká – první týdny stavím aerobní základ bez intervalů a jízdy prodlužuji postupně; kvalitu přidám, až kondice poroste.",hard3:"v aktuálním týdnu už byly nejméně 3 náročné cyklistické dny",hard2:"rozpočet kvalitních cyklistických dnů je už téměř vyčerpaný",today:"dnes už proběhla cyklistická jednotka",none:"V datech nevidím žádnou nedávnou jízdu – začínám aerobní jízdou; kvalitu přidám, až bude trénink zase pravidelný.",off:d=>"Posledních "+d+" dní bez jízdy – návrat přes aerobní jízdu se sníženou obtížností, kvalita přijde v dalších dnech.",two:"Dvě kvalitní jízdy v týdnu už byly – dnes aerobní objem.",recent:"Kvalita byla před méně než 48 h – dnes aerobní jízda na zotavení.",safe:"Připravenost není ideální pro kvalitu – aerobní jízda je bezpečná volba.",gym:"chránit kvalitu kola po posilování dolní části těla",labels:{sweet_spot:"Sweet spot",threshold:"Práh",vo2max:"VO₂max",tempo:"Tempo"}},
-  run:{novice:"S běháním začínáš – první týdny jen lehký běh (klidně s chůzí) a délku zvyšuji postupně; úseky přidám, až bude běhání pravidelné.",hard3:"v aktuálním týdnu už byly nejméně 3 náročné běhy",hard2:"rozpočet kvalitních běhů je už téměř vyčerpaný",today:"dnes už proběhl běh",none:"V datech nevidím žádný nedávný běh – začínám lehkým během; kvalitu přidám, až bude běhání zase pravidelné.",off:d=>"Posledních "+d+" dní bez běhu – návrat přes lehký běh se sníženou obtížností; šlachy a klouby si na běh zvykají pomaleji než srdce.",two:"Dva kvalitní běhy v týdnu už byly – dnes lehký objem.",recent:"Kvalita byla před méně než 48 h – dnes lehký běh na zotavení.",safe:"Připravenost není ideální pro kvalitu – lehký běh je bezpečná volba.",gym:"chránit kvalitu běhu po posilování dolní části těla",labels:{sweet_spot:"Sub-threshold",threshold:"Práh",vo2max:"VO₂max",tempo:"Tempo"}}
+  run:{novice:"S běháním začínáš – první týdny jen lehký běh (klidně s chůzí) a délku zvyšuji postupně; úseky přidám, až bude běhání pravidelné.",hard3:"v aktuálním týdnu už byly nejméně 3 náročné běhy",hard2:"rozpočet kvalitních běhů je už téměř vyčerpaný",today:"dnes už proběhl běh",none:"V datech nevidím žádný nedávný běh – začínám lehkým během; kvalitu přidám, až bude běhání zase pravidelné.",off:d=>"Posledních "+d+" dní bez běhu – návrat přes lehký běh se sníženou obtížností; šlachy a klouby si na běh zvykají pomaleji než srdce.",two:"Dva kvalitní běhy v týdnu už byly – dnes lehký objem.",recent:"Kvalita byla před méně než 48 h – dnes lehký běh na zotavení.",safe:"Připravenost není ideální pro kvalitu – lehký běh je bezpečná volba.",gym:"chránit kvalitu běhu po posilování dolní části těla",labels:{sweet_spot:"Sub-threshold",threshold:"Práh",vo2max:"VO₂max",tempo:"Tempo"}},
+  swim:{novice:"S plaváním začínáš – první týdny krátké délky a technika; tři kratší plavání týdně naučí víc než jedno dlouhé. Rychlé úseky přidám, až budeš plavat souvisle.",hard3:"v aktuálním týdnu už byla nejméně 3 náročná plavání",hard2:"rozpočet kvalitních plavání je už téměř vyčerpaný",today:"dnes už proběhlo plavání",none:"V datech nevidím žádné nedávné plavání – začínám lehce a technikou.",off:d=>"Posledních "+d+" dní bez plavání – návrat přes plynulé plavání a techniku.",two:"Dvě kvalitní plavání v týdnu už byla – dnes plynule.",recent:"Kvalita byla před méně než 48 h – dnes plynulé plavání a technika.",safe:"Připravenost není ideální pro kvalitu – plynulé plavání je bezpečná volba.",gym:"chránit ramena po posilování horní části těla",labels:{sweet_spot:"Práh (CSS)",threshold:"Práh (CSS)",vo2max:"Rychlé úseky",tempo:"Plynulé úseky"}}
 };
 const WORDS_EN={
   ride:{novice:"Your fitness is still low – for the first weeks I'm building an aerobic base without intervals and lengthening rides gradually; quality comes once your fitness grows.",hard3:"there have already been at least 3 hard cycling days this week",hard2:"the budget of quality cycling days is almost used up",today:"you've already ridden today",none:"I don't see any recent ride in the data – starting with an aerobic ride; quality comes once training is regular again.",off:d=>"The last "+d+" days without a ride – coming back with an easier aerobic ride, quality follows in the next days.",two:"Two quality rides this week already – aerobic volume today.",recent:"The last quality session was less than 48 h ago – an aerobic recovery ride today.",safe:"Readiness isn't ideal for quality – an aerobic ride is the safe choice.",gym:"protect the quality of the ride after lower-body strength work",labels:{sweet_spot:"Sweet spot",threshold:"Threshold",vo2max:"VO₂max",tempo:"Tempo"}},
-  run:{novice:"You're new to running – for the first weeks only easy runs (walk breaks are fine) and I increase the duration gradually; intervals come once running is regular.",hard3:"there have already been at least 3 hard runs this week",hard2:"the budget of quality runs is almost used up",today:"you've already run today",none:"I don't see any recent run in the data – starting with an easy run; quality comes once running is regular again.",off:d=>"The last "+d+" days without a run – coming back with an easier easy run; tendons and joints adapt to running more slowly than the heart.",two:"Two quality runs this week already – easy volume today.",recent:"The last quality session was less than 48 h ago – an easy recovery run today.",safe:"Readiness isn't ideal for quality – an easy run is the safe choice.",gym:"protect the quality of the run after lower-body strength work",labels:{sweet_spot:"Sub-threshold",threshold:"Threshold",vo2max:"VO₂max",tempo:"Tempo"}}
+  run:{novice:"You're new to running – for the first weeks only easy runs (walk breaks are fine) and I increase the duration gradually; intervals come once running is regular.",hard3:"there have already been at least 3 hard runs this week",hard2:"the budget of quality runs is almost used up",today:"you've already run today",none:"I don't see any recent run in the data – starting with an easy run; quality comes once running is regular again.",off:d=>"The last "+d+" days without a run – coming back with an easier easy run; tendons and joints adapt to running more slowly than the heart.",two:"Two quality runs this week already – easy volume today.",recent:"The last quality session was less than 48 h ago – an easy recovery run today.",safe:"Readiness isn't ideal for quality – an easy run is the safe choice.",gym:"protect the quality of the run after lower-body strength work",labels:{sweet_spot:"Sub-threshold",threshold:"Threshold",vo2max:"VO₂max",tempo:"Tempo"}},
+  swim:{novice:"You're new to swimming – for the first weeks short lengths and technique; three shorter swims a week teach more than one long one. Fast repeats come once you swim without stopping.",hard3:"there have already been at least 3 hard swims this week",hard2:"the budget of quality swims is almost used up",today:"you've already swum today",none:"I don't see any recent swim in the data – starting easy, with technique.",off:d=>"No swim for the last "+d+" days – coming back with steady swimming and technique.",two:"There have already been two quality swims this week – steady swimming today.",recent:"Quality was less than 48 h ago – steady swimming and technique today.",safe:"Readiness isn't ideal for quality – steady swimming is the safe choice.",gym:"protect the shoulders after upper-body gym work",labels:{sweet_spot:"Threshold (CSS)",threshold:"Threshold (CSS)",vo2max:"Fast repeats",tempo:"Steady repeats"}}
 };
 
 
 export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null,focus=null,profile=null,checkin=null,upcomingTest=null,recoveryTime=null,today=null}={}){
   const policy=trainingStatus(athleteState);
-  sport=sport==="run"?"run":"ride";
-  const W=L(WORDS_CS,WORDS_EN)[sport],isSport=sport==="run"?isRun:isRide,hardOf=sport==="run"?isHardRun:isHard,run=sport==="run";
+  sport=sport==="run"||sport==="swim"?sport:"ride";
+  const W=L(WORDS_CS,WORDS_EN)[sport],isSport=sport==="run"?isRun:sport==="swim"?isSwim:isRide,hardOf=sport==="run"?isHardRun:sport==="swim"?isHardSwim:isHard,run=sport==="run",swim=sport==="swim",short=run||swim;
   const targetDate=isoDate(date)||localToday();
   // Workouts only the watch recorded have no TSS: their heart-rate load
   // (hrTSS, training-load.js) lets hardOf see a hard session from the watch.
@@ -234,7 +266,8 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const ctl=n(wellness.ctl),atl=n(wellness.atl),tsb=n(wellness.tsb,ctl!=null&&atl!=null?ctl-atl:null),ramp=n(wellness.rampRate??wellness.ramp_rate);
   const wellnessSleep=(Array.isArray(fitness?.wellness)?fitness.wellness:[]).filter(r=>{const age=diffDays(signalDate,r.id);return age!=null&&age>=0&&age<=1&&n(r.sleepSecs)>7200;}).sort((a,b)=>String(b.id).localeCompare(String(a.id)))[0];
   const sleepMinutes=latestSleepMinutes(health,signalDate)??(wellnessSleep?Math.round(n(wellnessSleep.sleepSecs)/60):null);
-  const lowerGym=recentLowerGym(gym,targetDate,2);
+  // Leg work in the gym does not touch a swim.
+  const lowerGym=swim?[]:recentLowerGym(gym,targetDate,2);
   const todayCompleted=completed.filter(a=>isoDate(a.date)===targetDate);
   const hard7=completed.filter(hardOf).length;
   const tss7=completed.reduce((s,a)=>s+n(a.tss,0),0);
@@ -301,17 +334,19 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   // A beginner: low fitness, or without fitness data only a few sessions of
   // this sport. Intervals, long sessions and the load-based recovery week wait
   // until the base is there.
-  const novice=ctl!=null?ctl<15:completedAll.length<4;
+  // Fitness from riding or running does not make a swimmer: swimming is a
+  // skill, so a swimmer is new until they have swum regularly.
+  const novice=swim?completedAll.length<4:ctl!=null?ctl<15:completedAll.length<4;
 
   const plannedToday=planned.find(a=>isoDate(a.date)===targetDate)||daily?.training?.planned?.find(isSport)||null;
   const plannedInfo=plannedToday?classifyPlannedWorkout(plannedToday,sport):null;
-  const [minLen,maxLen]=sport==="run"?[20,240]:[30,360];
+  const [minLen,maxLen]=swim?[15,90]:sport==="run"?[20,240]:[30,360];
   const explicitMinutes=n(availabilityMinutes,n(preferences.availableMinutes,n(plannedInfo?.minutes,n(plannedToday?.durationHours)*60||null)));
   // No time given and nothing planned: the coach picks the length from the
   // athlete's usual session over the last three weeks (or CTL), see below.
   const autoLength=explicitMinutes==null;
   let requestedMinutes=clamp(autoLength?capacityMinutes({ctl,tsb,sleepMinutes,readiness,recoveryWeek:false,returning:false,sport,ramp}).minutes:explicitMinutes,minLen,maxLen);
-  const longMinutes=sport==="run"?90:150;
+  const longMinutes=swim?60:sport==="run"?90:150;
   const cadence=preferences.cadence||"85–95 rpm";
   const rationale=[];
   let returning=false;
@@ -351,7 +386,8 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const lastHard=completedAll.filter(hardOf).map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0).sort((a,b)=>a-b)[0];
   // The other sport tires the same legs and heart: a hard run counts before a
   // hard ride (and the other way round) for the 48 h rule and the week's quality.
-  const otherIs=run?isRide:isRun,otherHardOf=run?isHard:isHardRun;
+  // Swimming spares the legs: a hard ride or run does not ease a swim.
+  const otherIs=swim?()=>false:run?isRide:isRun,otherHardOf=run?isHard:isHardRun;
   const otherHardDays=weekActivities.filter(a=>a.completed&&otherIs(a)&&otherHardOf(a)).map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0&&d<=6);
   const lastOtherHard=otherHardDays.length?Math.min(...otherHardDays):null;
   const otherRecent=lastOtherHard!=null&&lastOtherHard<2,hardAll7=hard7+otherHardDays.length;
@@ -391,7 +427,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   else if(!autoLength&&requestedMinutes>=longMinutes&&phase!=="taper") kind="long_endurance";
   // An explicit phase picks the quality, but never 48 h after the last one or after a break.
   else if(phase==="build"&&hard7<2&&qualityOk) kind=domains.high<domains.moderate*0.35?"vo2":"threshold";
-  else if(phase==="base"&&hard7<2&&qualityOk&&domains.moderate<domains.low*0.45) kind=sport==="run"?"threshold":"sweet_spot";
+  else if(phase==="base"&&hard7<2&&qualityOk&&domains.moderate<domains.low*0.45) kind=short?"threshold":"sweet_spot";
   else if(!recoveryWeek){
     // Nothing planned and no phase set: decide from the recent rides.
     if(lastRide==null||lastRide>=7){
@@ -412,7 +448,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
       else kind="endurance";
     } else if(readiness==="green"&&hard7===0){
       // The quality system trained longest ago (by feedback), in phase order.
-      const order=sport==="run"?(phase==="build"?["threshold","vo2max","tempo"]:["threshold","tempo","vo2max"]):phase==="build"?["threshold","vo2max","sweet_spot"]:["sweet_spot","threshold","vo2max"];
+      const order=short?(phase==="build"?["threshold","vo2max","tempo"]:["threshold","tempo","vo2max"]):phase==="build"?["threshold","vo2max","sweet_spot"]:["sweet_spot","threshold","vo2max"];
       const lastTouched=sys=>Date.parse(capabilities?.[sys]?.updated_at||"")||0;
       const pick=[...order].sort((a,b)=>lastTouched(a)-lastTouched(b))[0];
       kind=pick==="vo2max"?"vo2":pick;
@@ -434,8 +470,8 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   // legs after the gym, a recovery week). Only the race and its openers keep
   // their kind.
   // An asked kind keeps its kind in a short window (2×10 min sweet spot fits 45 min).
-  if(requestedMinutes<(sport==="run"?45:55)&&kind==="long_endurance"){kind=askedKind?"endurance":"tempo";adaptations.push(L("trénink zhuštěn do dostupného času","workout condensed into the available time"));}
-  if(!askedKind&&requestedMinutes<(sport==="run"?35:50)&&["threshold","sweet_spot"].includes(kind)){kind="tempo";adaptations.push(L("krátké časové okno","short time window"));}
+  if(requestedMinutes<(swim?40:sport==="run"?45:55)&&kind==="long_endurance"){kind=askedKind?"endurance":"tempo";adaptations.push(L("trénink zhuštěn do dostupného času","workout condensed into the available time"));}
+  if(!askedKind&&requestedMinutes<(swim?25:sport==="run"?35:50)&&["threshold","sweet_spot"].includes(kind)){kind="tempo";adaptations.push(L("krátké časové okno","short time window"));}
   const quality=()=>isHardKind(kind);
   // The longest session the day allows (red, illness, a break), applied with the length below.
   let cap=null;const capAt=(minutes,text)=>{if(!cap||minutes<cap.minutes)cap={minutes,text};};
@@ -462,14 +498,14 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   } else {
     if(readiness==="red"){
       // Red is rest or a short, easy spin, whatever the plan or the free time.
-      kind="recovery";capAt(run?30:45,L("nízká připravenost","low readiness"));
+      kind="recovery";capAt(short?30:45,L("nízká připravenost","low readiness"));
       adaptations.push(L("nízká připravenost: jen krátká regenerace","low readiness: only a short recovery session"));
     } else if(illness){
       if(quality()||kind==="long_endurance")kind="endurance";
-      capAt(run?40:60,L("dech nebo teplota ve spánku nad normálem","breathing or temperature in sleep above normal"));
+      capAt(short?40:60,L("dech nebo teplota ve spánku nad normálem","breathing or temperature in sleep above normal"));
       adaptations.push(L("dech nebo teplota ve spánku jsou nad normálem: bez intenzity a krátce","breathing or temperature in sleep are above normal: no intensity and short"));
     } else if(cycleEase&&!insisted&&(quality()||kind==="long_endurance")){
-      kind="endurance";capAt(run?30:45,L("menstruace","period"));
+      kind="endurance";capAt(short?30:45,L("menstruace","period"));
       adaptations.push(L("menstruace se silným krvácením, křečemi nebo únavou: dnes lehce a krátce","period with heavy flow, cramps or fatigue: easy and short today"));
     } else if(readiness==="yellow"&&quality()){
       if(chatAsked)adaptations.push(L("střední připravenost: tvrdá část zkrácená","moderate readiness: hard part kept short"));
@@ -482,7 +518,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     if(offBreak&&!novice){
       returning=true;
       if(kind==="long_endurance")kind="endurance";
-      capAt(run?45:90,L("návrat po pauze","returning after a break"));
+      capAt(short?45:90,L("návrat po pauze","returning after a break"));
     }
   }
   // A threshold test the athlete planned (threshold-check.js): the two days
@@ -500,7 +536,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     const easy=sinceIll===0?"recovery":"endurance";
     if(kind!=="recovery"&&kind!==easy)kind=easy;
     returning=true;
-    capAt(sinceIll===0?(run?30:45):(run?40:75),L("návrat po nemoci","back after being ill"));
+    capAt(sinceIll===0?(short?30:45):(short?40:75),L("návrat po nemoci","back after being ill"));
     adaptations.push(sinceIll===0?L("první den po nemoci: jen lehce a krátce","first day after being ill: just short and easy"):L("návrat po nemoci: "+(sinceIll===1?"druhý":"třetí")+" den bez intenzity","back after being ill: day "+(sinceIll+1)+" without intensity"));
   }
   // A beginner's ride grows like a run: at most 10 % over the longest ride of
@@ -524,7 +560,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   else if(!plannedInfo?.minutes){
     // The time the athlete has is a limit, not a target: an easy day, a
     // quality session or the taper does not fill three free hours.
-    const before=requestedMinutes,cap={recovery:run?40:60,openers:run?30:45,race:run?20:30}[kind]??(isHardKind(kind)?(run?80:120):null);
+    const before=requestedMinutes,cap={recovery:short?40:60,openers:short?30:45,race:short?20:30}[kind]??(isHardKind(kind)?(short?80:120):null);
     if(phase==="taper"&&kind!=="openers"&&kind!=="race")requestedMinutes=Math.max(minLen,Math.round(requestedMinutes*.65/5)*5);
     if(cap!=null)requestedMinutes=Math.min(requestedMinutes,cap);
     if(requestedMinutes<before)rationale.push(L("Délka "+requestedMinutes+" min z dostupných "+before+" min: ","Duration "+requestedMinutes+" of the available "+before+" min: ")+(phase==="taper"?L("ladění formy zkracuje objem","tapering cuts the volume"):kind==="recovery"?L("regenerace má být krátká","recovery should be short"):L("kvalita nepotřebuje víc času","quality doesn't need more time"))+".");
@@ -540,7 +576,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     const limit=Math.max(30,Math.round(longest*1.1/5)*5);
     if(requestedMinutes>limit){rationale.push(longest?L("Nejdelší běh za poslední 2 týdny měl "+Math.round(longest)+" min, dnes proto nejvýš "+limit+" min (+10 %).","Your longest run in the last 2 weeks was "+Math.round(longest)+" min, so at most "+limit+" min today (+10 %)."):L("Za poslední 2 týdny nevidím žádný běh, začínám na "+limit+" min.","I don't see any run in the last 2 weeks, starting at "+limit+" min."));requestedMinutes=limit;if(kind==="long_endurance"&&limit<longMinutes)kind="endurance";}
   }
-  if(testDays===1&&!plannedInfo?.minutes)requestedMinutes=Math.min(requestedMinutes,run?30:60);
+  if(testDays===1&&!plannedInfo?.minutes)requestedMinutes=Math.min(requestedMinutes,short?30:60);
   const session=workoutTemplate(kind,requestedMinutes,cadence,sport);
   const capabilitySystem=kind==="long_endurance"?"endurance":kind==="vo2"?"vo2max":kind;
   const capability=capabilities?.[capabilitySystem]||null;
@@ -549,14 +585,14 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const targetDifficulty=Math.round(clamp(capabilityLevel+progressionOffset+(phase==="build"?.2:phase==="recovery"?-.6:0)-(returning||novice?1:0),1,10)*10)/10;
   const progressionAction=readiness==="red"?"deload":targetDifficulty>capabilityLevel+.1?"progress":targetDifficulty<capabilityLevel-.1?"regress":"maintain";
   const alternatives=[];
-  if(kind!=="endurance") alternatives.push(workoutTemplate("endurance",Math.min(requestedMinutes,sport==="run"?60:90),cadence,sport));
-  if(readiness!=="red"&&kind!=="recovery") alternatives.push(workoutTemplate("recovery",Math.min(requestedMinutes,sport==="run"?40:60),cadence,sport));
+  if(kind!=="endurance") alternatives.push(workoutTemplate("endurance",Math.min(requestedMinutes,short?60:90),cadence,sport));
+  if(readiness!=="red"&&kind!=="recovery") alternatives.push(workoutTemplate("recovery",Math.min(requestedMinutes,short?40:60),cadence,sport));
   if(requestedMinutes>=longMinutes&&kind!=="long_endurance"&&readiness==="green") alternatives.push(workoutTemplate("long_endurance",requestedMinutes,cadence,sport));
 
   const missing=[];
   if(sleepMinutes==null)missing.push("recent sleep duration");
   if(tsb==null)missing.push("current CTL/ATL/TSB");
-  if(!completed.length)missing.push(sport==="run"?"completed runs for the current week":"completed rides for the current week");
+  if(!completed.length)missing.push(swim?"completed swims for the current week":sport==="run"?"completed runs for the current week":"completed rides for the current week");
   if(manualReadiness==null)missing.push("subjective readiness / soreness check-in");
   if(!goal)missing.push("explicit goal/event and phase");
   if(availabilityMinutes==null&&preferences.availableMinutes==null)missing.push("explicit available training time");

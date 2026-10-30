@@ -3,9 +3,10 @@ import { availabilityOn, parseTimeWindow } from './training-availability.js';
 import { planWeekRoles, weekTargets, weekLoadsBefore, weeklyRunCap, capRunVolume, committedRunMinutes, isRunActivity, hrvWeekTrendDown, hrvSourceRows } from './week-planner.js';
 import { timeZone } from "./user-time.js";
 import { weatherKitConfigured, weatherKitWeek, weatherKitHours } from "./weatherkit.js";
+import { triathlonSplit } from "./triathlon-split.js";
 
 const shift = (date, n) => new Date(Date.parse(date + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
-export const sportOf = a => /ride|bike|cycl/i.test(a.type || '') ? 'ride' : /run/i.test(a.type || '') ? 'run' : /weight|strength|gym/i.test(a.type || '') ? 'gym' : null;
+export const sportOf = a => /ride|bike|cycl/i.test(a.type || '') ? 'ride' : /run/i.test(a.type || '') ? 'run' : /swim/i.test(a.type || '') ? 'swim' : /weight|strength|gym/i.test(a.type || '') ? 'gym' : null;
 export const sessionsOn = d => [...(d?.daily?.training?.completed || []), ...(d?.daily?.training?.planned || [])].filter(a => sportOf(a));
 export function activityHistoryEstimate(history = [], reference) {
   const recent = history.filter(d => d.date < reference && d.date >= shift(reference, -21));
@@ -20,11 +21,27 @@ export function activityHistoryEstimate(history = [], reference) {
 }
 export function environmentFor(date, sport, weather = null) {
   if (sport === 'gym') return { environment: 'indoor', reason: '' };
+  // A swim is in the pool; open water only by the athlete's choice (openWaterSwim).
+  if (sport === 'swim') return { environment: 'indoor', reason: L('Plavání je v bazénu.', 'Swims are in the pool.') };
   const month = Number(date.slice(5, 7));
   const winter = [11, 12, 1, 2].includes(month);
   const poor = weather && (Number(weather.max) < (sport === 'ride' ? 8 : 0) || Number(weather.wind) >= (sport === 'ride' ? 35 : 50) || Number(weather.rain) >= 3 || Number(weather.rainProb) >= 70 || Number(weather.code) >= 95);
   const indoor = poor || (sport === 'ride' && winter);
   return { environment: indoor ? 'indoor' : 'outdoor', reason: poor ? L('Předpověď nepřeje venkovnímu tréninku.', 'The forecast isn\'t good for training outdoors.') : indoor ? L('V zimním období preferuji indoor kolo.', 'In winter I prefer indoor riding.') : weather ? L('Podle dostupné předpovědi.', 'Based on the available forecast.') : L('Předpověď není dostupná; volba vychází z ročního období.', 'No forecast is available; the choice is based on the season.') };
+}
+// Once a week in open water by the athlete's choice (Zóny → Plavání): "season"
+// from May to September, "races" in the last 8 weeks before the main race.
+export function openWaterDue(date, openWater, daysToRace = null) {
+  if (openWater === 'season') return [5, 6, 7, 8, 9].includes(Number(date.slice(5, 7)));
+  if (openWater === 'races') return daysToRace != null && daysToRace >= 0 && daysToRace <= 56;
+  return false;
+}
+// The week's longest swim goes to open water when it is due, never on a poor-weather day
+// or one whose place the athlete chose by hand.
+export function withOpenWater(items, { start, openWater = null, daysToRace = null, weather = {} } = {}) {
+  if (!openWaterDue(start, openWater, daysToRace)) return items;
+  const swim = items.filter(x => x.sport === 'swim' && !x.chosenEnvironment && !(weather[x.date] && environmentFor(x.date, 'run', weather[x.date]).environment === 'indoor')).sort((a, b) => b.minutes - a.minutes || a.date.localeCompare(b.date))[0];
+  return swim ? items.map(x => x === swim ? { ...x, environment: 'outdoor', openWater: true, reason: L('Jednou týdně volná voda. Nikdy neplav sám, vezmi si výraznou čepici a bójku.', 'Open water once a week. Never swim alone; wear a bright cap and take a tow float.') } : x) : items;
 }
 // The reason for one day's place in the weather's detail: what decided it,
 // with its number ("High of 6°, too cold outside.", "Dry, high of 14°.").
@@ -107,10 +124,10 @@ export function capWeekTargets(targets, prefs, days = [], weather = {}) {
     let minutes;
     if (own.minutes) minutes = own.minutes;
     else {
-      minutes = Math.min(x.minutes, remaining.get(x.date) / open);
+      minutes = Math.min(x.minutes, x.maxMinutes ?? Infinity, remaining.get(x.date) / open);
       if (env.environment === 'indoor') minutes = Math.min(minutes, indoorMinutes(x.sport, x.minutes));
       minutes = Math.floor(minutes / 5) * 5;
-      const minimum = x.sport === 'run' ? 20 : 30;
+      const minimum = x.brick || x.sport === 'swim' ? 15 : x.sport === 'run' ? 20 : 30;
       if (minutes < minimum) { skipped.push({ ...x, reason: L('Na tento trénink nezbývá dost času.', 'There isn\'t enough time left for this workout.') }); continue; }
     }
     remaining.set(x.date, remaining.get(x.date) - minutes);
@@ -118,19 +135,31 @@ export function capWeekTargets(targets, prefs, days = [], weather = {}) {
   }
   return { ...targets, items, skipped };
 }
-export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null, history: suppliedHistory = null }) {
+// split: a triathlete's week (triathlon-split.js): the days take ride, run and
+// swim by its counts, and one ride day with time to spare gets the brick run.
+// A triathlete's session: the run after a ride is the brick, short and easy;
+// the discipline being learnt stays short (maxMinutes, capWeekTargets).
+export function splitItem(x, split, day = []) {
+  if (x.sport === 'run' && split.brick && day[0] === 'ride' && day.includes('run') && (x.slot || 0) === 0 && day.indexOf('run') > 0) return { ...x, brick: true, role: 'recovery', label: L('Běh po kole', 'Brick run'), minutes: split.brick.minutes, maxMinutes: split.brick.minutes, tss: Math.round((x.tss || 0) * split.brick.minutes / (x.minutes || split.brick.minutes)) };
+  const short = split.short?.[x.sport];
+  return short ? { ...x, maxMinutes: short } : x;
+}
+export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null, history: suppliedHistory = null, split = null }) {
   const days = prefs.days.map(d => [...d]);
   if (days.some(d => d.length)) return { ...prefs, days };
   const reference = today < start ? today : start;
   const history = (suppliedHistory || week.days || []).filter(d => d.date < reference && d.date >= shift(reference, -21));
-  const frequency = { ride: 0, run: 0, gym: 0 };
+  const frequency = { ride: 0, run: 0, swim: 0, gym: 0 };
   for (const d of history) for (const a of d.daily?.training?.completed || []) if(sportOf(a))frequency[sportOf(a)]++;
   const count = prefs.weeklyActivities ?? activityHistoryEstimate(history,reference).count;
   const existing = (week.days || []).filter(d => d.date >= start && d.date <= shift(start, 6)).reduce((n, d) => n + sessionsOn(d).length, 0);
-  const primary = focus?.sport === 'running' ? 'run' : focus?.sport === 'strength' ? 'gym' : 'ride';
+  const primary = focus?.sport === 'running' ? 'run' : focus?.sport === 'swimming' ? 'swim' : focus?.sport === 'strength' ? 'gym' : 'ride';
   const sports = Object.keys(frequency).filter(s=>frequency[s]>0).sort((a, b) => frequency[b] - frequency[a]);
   if (!sports.length) sports.push(primary,...(primary === 'gym' ? ['ride'] : ['gym']));
-  const selected={ride:0,run:0,gym:0};
+  const selected={ride:0,run:0,swim:0,gym:0};
+  // A triathlete: the split's counts; the brick's run is added after, on a ride day.
+  const wanted = split ? { ...split.sessions, run: Math.max(0, (split.sessions.run || 0) - (split.brick ? 1 : 0)), gym: frequency.gym > 0 && count >= 8 ? 1 : 0 } : null;
+  const tri = wanted ? Object.values(wanted).reduce((a, b) => a + b, 0) : 0;
   const candidates = [0, 1, 2, 3, 4, 5, 6].filter(i => shift(start, i) >= today && prefs.availability[i].minutes >= 20 && !sessionsOn((week.days || []).find(d => d.date === shift(start, i))).length);
   let placed = 0;
   while (placed < Math.max(0, count - existing) && candidates.length) {
@@ -139,9 +168,38 @@ export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null,
       return score(b) - score(a) || a - b;
     });
     const i = candidates.shift(), choices = prefs.availability[i].preferredSports.length ? prefs.availability[i].preferredSports : sports;
+    // A triathlete's days are chosen first and get their sports below.
+    if (split) { if (placed < tri) { days[i] = [null]; placed++; } continue; }
     const sport = [...choices].sort((a,b)=>(selected[a]+1)/(frequency[a]||1)-(selected[b]+1)/(frequency[b]||1))[0] || primary;
-    if (prefs.availability[i].minutes < (sport === 'run' ? 20 : 30)) continue;
+    if (prefs.availability[i].minutes < (sport === 'swim' ? 15 : sport === 'run' ? 20 : 30)) continue;
     days[i] = [sport]; selected[sport]++; placed++;
+  }
+  if (split) {
+    // A day with its own sports takes one of them first; then rides go on the
+    // days with the most time, runs next and the short swims on what is left,
+    // the same sport not two days in a row while another day is open.
+    const minimum = s => s === 'swim' ? 15 : s === 'run' ? 20 : 30;
+    const open = days.map((d, i) => i).filter(i => days[i][0] === null).sort((a, b) => prefs.availability[b].minutes - prefs.availability[a].minutes || a - b);
+    const left = { ...wanted };
+    for (const i of open.filter(i => prefs.availability[i].preferredSports.length)) {
+      const sport = prefs.availability[i].preferredSports.find(s => left[s] > 0 && prefs.availability[i].minutes >= minimum(s));
+      days[i] = sport ? [sport] : [];
+      if (sport) { left[sport]--; selected[sport]++; }
+    }
+    for (const sport of ['ride', 'run', 'swim', 'gym']) {
+      while (left[sport] > 0) {
+        const free = open.filter(i => days[i][0] === null && prefs.availability[i].minutes >= minimum(sport));
+        const i = free.find(i => days[i - 1]?.[0] !== sport && days[i + 1]?.[0] !== sport) ?? free[0];
+        if (i == null) break;
+        days[i] = [sport]; left[sport]--; selected[sport]++;
+      }
+    }
+    for (const i of open) if (days[i][0] === null) days[i] = [];
+    // The brick: a short run right after the ride on the ride day with the most time.
+    if (split.brick) {
+      const day = days.map((d, i) => i).filter(i => days[i].length === 1 && days[i][0] === 'ride' && prefs.availability[i].minutes >= 30 + split.brick.minutes).sort((a, b) => prefs.availability[b].minutes - prefs.availability[a].minutes)[0];
+      if (day != null) days[day] = ['ride', 'run'];
+    }
   }
   return { ...prefs, days };
 }
@@ -149,10 +207,14 @@ export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null,
 // planWeekRoles, { load } for weekTargets and apply(targets) for its sessions.
 // strain: the athlete's state (week-check.js strainOf, level 0–2): strained
 // allows one quality day and holds the load, tired allows none.
-export function weekProposal({ prefs, start, today, week = {}, fitness = {}, state = {}, weather = {}, focus = null, history = null, plan = null, health = null, strain = null }) {
-  const proposedPrefs = proposeEmptyDays({ prefs, start, today, week, focus, history });
-  const warnings = [], existing = (week.days || []).filter(d => d.date >= start && d.date <= shift(start, 6));
+// triathlon: { year, levels } for a triathlete (triathlon-split.js); the
+// proposal then carries its split, which the AI week and the coach follow.
+// openWater: the swim setting (training profile: off, races or season).
+export function weekProposal({ prefs, start, today, week = {}, fitness = {}, state = {}, weather = {}, focus = null, history = null, plan = null, health = null, strain = null, triathlon = null, openWater = null }) {
   const historyEstimate=activityHistoryEstimate(history||week.days||[],today<start?today:start);
+  const split = focus?.sport === 'triathlon' ? triathlonSplit({ ...(triathlon || {}), sessions: prefs.weeklyActivities ?? historyEstimate.count, minutes: (prefs.availability || []).reduce((n, d) => n + (Number(d?.minutes) || 0), 0) || null, daysToRace: focus.event?.daysLeft ?? null }) : null;
+  const proposedPrefs = proposeEmptyDays({ prefs, start, today, week, focus, history, split });
+  const warnings = [], existing = (week.days || []).filter(d => d.date >= start && d.date <= shift(start, 6));
   if(prefs.weeklyActivities==null&&historyEstimate.status!=='ready')warnings.push({text:historyEstimate.message});
   for (const d of existing.filter(d => d.date >= today)) {
     const sessions = sessionsOn(d), minutes = sessions.reduce((n, a) => n + (Number(a.durationHours) || 0) * 60, 0), available = availabilityOn(prefs, d.date);
@@ -163,7 +225,7 @@ export function weekProposal({ prefs, start, today, week = {}, fitness = {}, sta
   const wellness = (fitness.wellness || []).filter(w => w.id <= today).at(-1), ctl = Number(wellness?.ctl) || null;
   const loads = existing.map(d => ({ date: d.date, done: Number(d.daily?.training?.actualTss) || (d.daily?.training?.completed || []).reduce((n, a) => n + (Number(a.tss) || 0), 0), planned: (d.daily?.training?.planned || []).reduce((n, a) => n + (Number(a.tss) || 0), 0), sports: sessionsOn(d).map(sportOf) }));
   const level = strain?.level || 0;
-  const roles = planWeekRoles(proposedPrefs.days, { readiness: Number(wellness?.tsb) < -20 || level >= 2 ? 'red' : level >= 1 ? 'yellow' : 'green', ...(plan?.roles || {}) });
+  const roles = planWeekRoles(proposedPrefs.days, { readiness: Number(wellness?.tsb) < -20 || level >= 2 ? 'red' : level >= 1 ? 'yellow' : 'green', ...(split?.weak ? { avoid: split.learning, prefer: split.strong } : {}), ...(plan?.roles || {}) });
   const withPlan = t => plan?.apply ? plan.apply(t) : t;
   // Running this week so far (done, and planned still ahead or today) counts against the weekly running cap.
   const runOf = list => (list || []).filter(isRunActivity).reduce((m, a) => m + (Number(a.durationHours) || 0) * 60, 0);
@@ -172,6 +234,8 @@ export function weekProposal({ prefs, start, today, week = {}, fitness = {}, sta
   // Without fitness data the estimate keeps the same running cap: a beginner's
   // runs share the floor (60 min a week) or what the recent weeks allow.
   if (!ctl) targets = capRunVolume(withPlan(estimatedTargets(roles, start, today, loads)), weeklyRunCap(history || [], start), runCommitted);
+  if (split) targets = { ...targets, items: (targets.items || []).map(x => splitItem(x, split, proposedPrefs.days[(Date.parse(x.date + 'T12:00:00Z') - Date.parse(start + 'T12:00:00Z')) / 86400000] || [])) };
   targets = capWeekTargets(targets, proposedPrefs, existing, weather);
-  return { prefs: proposedPrefs, items: targets.items, targets, warnings, mode: existing.some(d => sessionsOn(d).length) ? 'review_and_fill' : 'fill', missingAvailability: !proposedPrefs.days.some(d => d.length) && !prefs.availability.some(d => d.minutes > 0) };
+  targets = { ...targets, items: withOpenWater(targets.items, { start, openWater: focus?.cannotSwim100m ? 'off' : openWater, daysToRace: focus?.event?.daysLeft ?? null, weather }) };
+  return { prefs: proposedPrefs, items: targets.items, targets, warnings, ...(split ? { split } : {}), mode: existing.some(d => sessionsOn(d).length) ? 'review_and_fill' : 'fill', missingAvailability: !proposedPrefs.days.some(d => d.length) && !prefs.availability.some(d => d.minutes > 0) };
 }

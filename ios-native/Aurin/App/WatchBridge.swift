@@ -391,24 +391,25 @@ extension WatchBridge: WCSessionDelegate {
         }
     }
 
-    /// A ride's or run's steps for its detail on the watch.
+    /// A ride's, run's or swim's steps for its detail on the watch.
     private func planSteps(_ request: WatchPlan.Request) async -> WatchPlan? {
         let api = AppModel.live?.api ?? APIClient()
         // As Training's session detail asks (PlannedWorkoutView): the day only for today's.
         let today = request.date == AppModel.localDate(Date())
         guard let planned = try? await api.plannedWorkout(eventId: request.eventId, date: today ? request.date : nil) else { return nil }
         let workout = planned.workout
+        let swim = workout.sport == "swim"
         var steps: [WatchPlan.Step] = []
         for block in workout.steps ?? [] {
             for (i, s) in (block.steps ?? []).enumerated() {
-                let mid = s.percentLow.flatMap { low in s.percentHigh.map { (low + $0) / 2 } } ?? s.percentHigh ?? s.percentLow
-                steps.append(WatchPlan.Step(seconds: s.durationSeconds ?? 60, zone: WatchPlan.zone(percent: mid),
-                                            label: WatchPlan.label(note: s.note, intensity: s.intensity, english: L10n.isEnglish),
+                steps.append(WatchPlan.step(seconds: s.durationSeconds, low: s.percentLow, high: s.percentHigh, note: s.note, intensity: s.intensity,
+                                            meters: s.meters, rest: s.rest == true, swim: swim, english: L10n.isEnglish,
                                             repeats: max(1, block.repeats ?? 1), first: i == 0))
             }
         }
         guard !steps.isEmpty else { return nil }
-        return WatchPlan(name: workout.name, minutes: workout.duration_minutes.map { Int($0.rounded()) }, steps: steps)
+        return WatchPlan(name: workout.name, minutes: workout.duration_minutes.map { Int($0.rounded()) }, steps: steps,
+                         openWater: swim && workout.environment == "outdoor" ? true : nil)
     }
 
     /// A set, a drink or the alarm's place sent while the iPhone was out of reach.

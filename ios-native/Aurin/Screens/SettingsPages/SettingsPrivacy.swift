@@ -16,6 +16,16 @@ struct PrivacySettingsView: View {
 
     var body: some View {
         SettingsPage(title: "Soukromí a data") {
+            // What happens to the data, in four lines (the policy says it in full).
+            SettingsGroup {
+                fact("globe.europe.africa", Palette.blue, "Uložená v EU", "Tvoje data leží v databázi Aurinu v Evropě, šifrovaná.")
+                SettingsDivider()
+                fact("nosign", Palette.amber, "Nikdy je neprodáme", "Žádné reklamy ani prodejci dat. Sdílíme je jen se službami, které připojíš.")
+                SettingsDivider()
+                fact("sparkles", Palette.indigo, "AI jen s tvým souhlasem", "Kouč a fotky jídla posílají jen to, co otázka potřebuje. OpenAI se na nich neučí.")
+                SettingsDivider()
+                fact("tray.and.arrow.down", Palette.green, "Stáhneš je, nebo smažeš", "Všechno si stáhneš nebo smažeš účet se všemi daty, přímo tady.")
+            }
             SettingsGroup(footer: "Kouč včetně fotek v chatu, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál.") {
                 SettingsToggle(title: "AI funkce", isOn: Binding(get: { ai }, set: { setAI($0) }), disabled: !aiLoaded || model.demo)
             }
@@ -59,6 +69,11 @@ struct PrivacySettingsView: View {
         } message: {
             Text("Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit.")
         }
+    }
+
+    private func fact(_ symbol: String, _ color: Color, _ title: String, _ text: String) -> some View {
+        SettingsRow(icon: SettingsIcon(systemImage: symbol, color: color), title: title, subtitle: text, chevron: false)
+            .accessibilityElement(children: .combine)
     }
 
     /// Face ID, Touch ID or the phone's code, so someone holding an unlocked

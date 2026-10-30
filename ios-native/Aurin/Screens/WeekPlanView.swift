@@ -48,6 +48,8 @@ struct WeekSessionDraft: Identifiable, Equatable {
     /// The athlete changed it with "Upravit s AI": the asked kind passes the
     /// coach's load rules (48 h, two quality days…); red and illness still hold.
     var insisted = false
+    /// The week's brick: a run straight after the day's ride, saved joined to it.
+    var brick = false
     var workout: LibraryWorkout?
     var gym: GymProposal?
     var status: Status = .waiting
@@ -295,6 +297,8 @@ struct WeekPlanView: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(picked.map { L10n.f("Klepni na den, kam dát: %@", sportLabel($0)) } ?? L10n.tr("Vyber sport a klepni na den."))
                 .font(Typo.small).foregroundStyle(Palette.secondary).padding(.top, 18)
+            // Four sports don't fit one line on a small phone: they scroll.
+            ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(WeekPlanPrefs.sports, id: \.self) { sport in
                     Button {
@@ -310,6 +314,8 @@ struct WeekPlanView: View {
                     .buttonStyle(.plain)
                 }
             }
+            }
+            .scrollClipDisabled()
             .padding(.top, 10)
 
             VStack(spacing: 8) {
@@ -470,13 +476,15 @@ struct WeekPlanView: View {
                 return !(item.date == removed.date && (item.sport == "strength" ? "gym" : item.sport) == removed.sport)
             }.map { item in
                 let sport = item.sport == "strength" ? "gym" : item.sport
-                let next = WeekSessionDraft(date: item.date, sport: sport, minutes: item.minutes ?? 60,
+                var next = WeekSessionDraft(date: item.date, sport: sport, minutes: item.minutes ?? 60,
                                             environment: sport == "gym" ? nil : item.environment ?? "outdoor",
                                             kind: item.kind, focus: item.focus, label: item.label, reason: item.reason, role: item.role)
+                next.brick = item.brick
                 if var same = previous.first(where: { $0.built && $0.date == next.date && $0.sport == next.sport && $0.minutes == next.minutes
                                                      && $0.environment == next.environment && $0.kind == next.kind }) {
                     same.reason = next.reason
                     same.note = nil
+                    same.brick = next.brick
                     return same
                 }
                 return removed == nil ? next : Self.recalculated(next, from: previous)
@@ -600,6 +608,9 @@ struct WeekPlanView: View {
                     Text([Fmt.duration(s.minutes), slot(s), s.environment.map { L10n.tr($0 == "indoor" ? "uvnitř" : "venku") }, kindLabel(s.kind)]
                         .compactMap { $0 }.joined(separator: " · "))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
+                    if s.brick {
+                        Label(L10n.tr("Brick · hned po kole"), systemImage: "link").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.amber)
+                    }
                     if case .failed(let message) = s.status {
                         Text(message).font(Typo.caption).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
                     }
@@ -744,6 +755,8 @@ struct WeekPlanView: View {
     private func save() async {
         saving = true
         defer { saving = false }
+        /// The day's last saved ride, which the brick run follows.
+        var rides: [String: String] = [:]
         for i in sessions.indices where sessions[i].status == .ready {
             let s = sessions[i]
             do {
@@ -753,7 +766,10 @@ struct WeekPlanView: View {
                     guard let draftId = gym.draftId else { throw APIError.message(L10n.tr("Trénink se nepodařilo sestavit.")) }
                     try await model.api.confirmGym(draftId: draftId, rows: gym.rows)
                 } else if let w = s.workout {
-                    try await model.api.scheduleWorkout(id: w.id, date: s.date, indoor: s.environment == "indoor")
+                    let event = try await model.api.scheduleWorkout(id: w.id, date: s.date, indoor: s.environment == "indoor")
+                    if s.sport == "ride", let event { rides[s.date] = event }
+                    // Joined, it goes to the watch with the ride as one workout.
+                    if s.brick, let event, let ride = rides[s.date] { try? await model.api.linkPlanned(eventId: event, after: ride) }
                 }
                 sessions[i].status = .saved
             } catch {

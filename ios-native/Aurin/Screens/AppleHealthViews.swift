@@ -93,7 +93,8 @@ struct AppleHealthCategoryList: View {
 struct AppleHealthSettings: View {
     @Environment(AppModel.self) private var model
     let store: SettingsStore
-    @State private var chosen: Set<HealthCategory> = AppleHealth.shared.categories
+    /// Off when this iPhone does not read Apple Health: the switches show what is read.
+    @State private var chosen: Set<HealthCategory> = AppleHealth.shared.enabled ? AppleHealth.shared.categories : []
     @State private var syncing = false
     private var health: AppleHealth { AppleHealth.shared }
 
@@ -102,7 +103,11 @@ struct AppleHealthSettings: View {
             if !health.enabled {
                 SettingsGroup {
                     Button {
-                        Task { _ = await health.connect(chosen, api: model.api); await store.load() }
+                        Task {
+                            let read = chosen.isEmpty ? health.categories : chosen
+                            if await health.connect(read, api: model.api) { chosen = read }
+                            await store.load()
+                        }
                     } label: {
                         SettingsRow(icon: SettingsIcon(systemImage: "iphone", color: Color(light: 0xE5484D, dark: 0xF2777A)),
                                     title: "Číst Apple Health v tomhle iPhonu", chevron: false)
@@ -116,9 +121,12 @@ struct AppleHealthSettings: View {
                     .disabled(health.syncing || store.demo)
             }
             .onChange(of: chosen) { _, value in
-                // Every switch off: reading stops, as Odpojit does; a switch on reads again.
+                // Every switch off: reading stops, as Odpojit does, on the server too (else the
+                // card stays connected and the switches come back on); a switch on reads again.
                 guard !value.isEmpty else {
-                    if health.enabled { health.disconnect(); Task { await store.load() } }
+                    guard health.enabled else { return }
+                    health.disconnect()
+                    Task { try? await model.api.disconnect(provider: "apple"); await store.load() }
                     return
                 }
                 // Switched off on this iPhone (another sign-in, Aurin posílá): a switch turned
