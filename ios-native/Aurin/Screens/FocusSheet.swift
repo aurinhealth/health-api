@@ -61,7 +61,7 @@ struct FocusSheet: View {
                     ChipFlow(items: Self.sports.map { $0.0 }, label: { id in Self.sports.first { $0.0 == id }?.1 ?? id },
                              isOn: { $0 == sport }, toggle: { sport = $0 })
                     if sport == "swimming" || sport == "triathlon" {
-                        SettingsGroup(footer: "Když ne, začneme krátkými délkami a technikou.") {
+                        SettingsGroup(footer: swims100 == false ? "Začneme krátkými délkami a technikou v bazénu. Pár lekcí s trenérem plavání ti pomůže nejvíc." : "Když ne, začneme krátkými délkami a technikou.") {
                             HStack(spacing: 12) {
                                 Text("Uplaveš 100 m bez zastavení?").font(.body).foregroundStyle(Palette.ink)
                                 Spacer(minLength: 8)
@@ -132,6 +132,7 @@ struct FocusSheet: View {
             sport = p["mainSport"]?.string ?? ""
             let text = p["sportGoal"]?.string ?? ""
             goal = Self.goalTexts.first { $0.value == text }?.key ?? ""
+            if case .bool(let can)? = p["swims100"] { swims100 = can }
         }
         if let r = try? await model.api.weekPlan(start: nil) {
             prefs = r.prefs
@@ -147,6 +148,8 @@ struct FocusSheet: View {
         if let text = Self.goalTexts[goal] { next["sportGoal"] = .string(text) }
         // Losing weight is also the weight goal of the calorie target, unless one is set already.
         if goal == "lose", !(next["goal"]?.string ?? "").hasPrefix("lose") { next["goal"] = .string("lose_0.5") }
+        // Can't swim 100 m yet: the coach suggests lessons, swims stay in the pool (src/athlete-focus.js).
+        if let swims100, sport == "swimming" || sport == "triathlon" { next["swims100"] = .bool(swims100) }
         do {
             try await model.api.saveProfile(next)
             // Can't swim 100 m yet: the swims start from first lengths (src/swimming-workouts.js).
