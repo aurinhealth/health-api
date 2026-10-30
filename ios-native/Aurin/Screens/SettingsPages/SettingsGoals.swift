@@ -21,7 +21,7 @@ struct GoalsSettingsView: View {
     @State private var original: JSONObject = [:]
     @State private var filled = false
 
-    static let sports = [("cycling", "cyklistika"), ("running", "běh"), ("triathlon", "triatlon"), ("strength", "silový trénink"), ("general", "všeobecná kondice")]
+    static let sports = [("cycling", "cyklistika"), ("running", "běh"), ("swimming", "plavání"), ("triathlon", "triatlon"), ("strength", "silový trénink"), ("general", "všeobecná kondice")]
 
     var body: some View {
         SettingsPage(title: "Cíle") {

@@ -25,13 +25,13 @@ export { weekInstructions, sessionInstructions };
 const shift = (date, n) => new Date(Date.parse(date + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
-export const WEEK_SPORTS = ["ride", "run", "gym"];
+export const WEEK_SPORTS = ["ride", "run", "swim", "gym"];
 export const KINDS = ["recovery", "endurance", "long", "tempo", "sweet_spot", "threshold", "vo2max", "gym"];
 // The generator's focus for a kind (cycling-coach-v2.js reads goal.focus).
 export const FOCUS_OF = { recovery: "recovery", endurance: "endurance", long: "long_endurance", tempo: "tempo", sweet_spot: "sweet_spot", threshold: "threshold", vo2max: "vo2max" };
-export const MIN_MINUTES = { ride: 30, run: 20, gym: 30 };
-export const MAX_MINUTES = { ride: 300, run: 150, gym: 90 };
-const DEFAULT_MINUTES = { ride: 60, run: 45, gym: 60 };
+export const MIN_MINUTES = { ride: 30, run: 20, swim: 15, gym: 30 };
+export const MAX_MINUTES = { ride: 300, run: 150, swim: 90, gym: 90 };
+const DEFAULT_MINUTES = { ride: 60, run: 45, swim: 40, gym: 60 };
 
 export const KIND_LABELS = () => ({
   recovery: L("Lehce / regenerace", "Easy / recovery"),
@@ -97,6 +97,8 @@ export function sanitizeWeekDays(days, { start, today, prefs = null, readiness =
     if ((perDay.get(date) || 0) >= 4) continue;
     let kind = sport === "gym" ? "gym" : KINDS.includes(raw?.kind) && raw.kind !== "gym" ? raw.kind : "endurance";
     if (sport === "run" && kind === "sweet_spot") kind = "tempo";
+    // A swim has no sweet spot or tempo set: they become threshold (CSS).
+    if (sport === "swim" && (kind === "sweet_spot" || kind === "tempo")) kind = "threshold";
     const environment = sport === "gym" ? "indoor" : raw?.environment === "indoor" ? "indoor" : "outdoor";
     let minutes = num(raw?.minutes) ?? DEFAULT_MINUTES[sport];
     minutes = Math.min(MAX_MINUTES[sport], minutes);
@@ -247,6 +249,7 @@ export function adjustByChip(session, chip) {
   else if (chip === "indoor") { out.environment = "indoor"; if (sport === "ride" || sport === "run") out.minutes = Math.min(minutes, indoorMinutes(sport, minutes)); }
   else if (chip === "outdoor") out.environment = "outdoor";
   if (sport === "run" && out.kind === "sweet_spot") out.kind = chip === "harder" ? "threshold" : "tempo";
+  if (sport === "swim" && (out.kind === "sweet_spot" || out.kind === "tempo")) out.kind = "threshold";
   return out;
 }
 

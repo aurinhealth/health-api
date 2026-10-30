@@ -313,7 +313,7 @@ struct WeekRow: View {
     }
 }
 
-/// A planned ride or run in Apple's Workout app (WorkoutKit), its steps by
+/// A planned ride, run or pool swim in Apple's Workout app (WorkoutKit), its steps by
 /// time: zone 3 and up as work, the rest as recovery, repeats as one block.
 @MainActor
 enum WorkoutOpener {
@@ -322,6 +322,7 @@ enum WorkoutOpener {
         switch sport {
         case "ride": activity = .cycling
         case "run": activity = .running
+        case "swim": activity = .swimming
         default: return nil
         }
         guard CustomWorkout.supportsActivity(activity) else { return nil }
@@ -339,7 +340,8 @@ enum WorkoutOpener {
         }
         flush()
         guard !blocks.isEmpty else { return nil }
-        let custom = CustomWorkout(activity: activity, location: .outdoor, displayName: name, blocks: blocks)
+        // A swim from the watch is in the pool; the watch asks for its length.
+        let custom = CustomWorkout(activity: activity, location: sport == "swim" ? .indoor : .outdoor, displayName: name, blocks: blocks)
         return WorkoutPlan(.custom(custom))
     }
 

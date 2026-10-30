@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Zóny: the maximum and resting heart rate first, then run and bike
+/// Zóny: the maximum and resting heart rate first, then bike, run and swim
 /// separately, thresholds, the zone preset (the same presets as Intervals.icu)
-/// and the resulting zones, the heart-rate ones also as a coloured bar.
+/// and the resulting zones, the heart-rate ones also as a coloured bar. Swim:
+/// CSS (from a 400 + 200 m test), the usual pool and open water.
 struct ZonesSettingsView: View {
     let store: SettingsStore
     @State private var hrmax = ""
@@ -17,6 +18,11 @@ struct ZonesSettingsView: View {
     @State private var powerModel = "coggan7"
     @State private var hrModel = "frielLthr"
     @State private var paceModel = "friel"
+    @State private var swimCss = ""
+    @State private var poolLength = "25"
+    @State private var openWater = "off"
+    @State private var test400 = ""
+    @State private var test200 = ""
     @State private var original: JSONObject = [:]
     @AppStorage("writeIntervals") private var writeIntervals = true
     @State private var reconnecting: ConnectTarget?
@@ -34,8 +40,9 @@ struct ZonesSettingsView: View {
             }
 
             Picker("Sport", selection: $sport) {
-                Text("Běh").tag("run")
                 Text("Kolo").tag("bike")
+                Text("Běh").tag("run")
+                Text("Plavání").tag("swim")
             }
             .pickerStyle(.segmented)
 
@@ -44,7 +51,7 @@ struct ZonesSettingsView: View {
                     Label("Zóny níže se přepočítají po uložení.", systemImage: "info.circle")
                         .font(Typo.caption).foregroundStyle(Palette.amber)
                 }
-                if sport == "run" { run(training) } else { bike(training) }
+                if sport == "run" { run(training) } else if sport == "swim" { swim(training) } else { bike(training) }
                 intervals(training)
             } else if store.demo {
                 Text("V ukázce se zóny nenačítají.").font(Typo.small).foregroundStyle(Palette.muted)
@@ -119,6 +126,71 @@ struct ZonesSettingsView: View {
         }
     }
 
+    // MARK: Swim
+
+    static let pools = [("25", "25 m"), ("50", "50 m"), ("22.86", "25 yd"), ("33.33", "33⅓ m")]
+    static let openWaterOptions = [("off", "Vypnuto"), ("races", "Před závody"), ("season", "V sezóně")]
+
+    @ViewBuilder
+    private func swim(_ t: TrainingProfileResponse) -> some View {
+        SettingsGroup(title: "Prahové hodnoty", footer: "CSS je tempo, které udržíš zhruba 30 minut. Z něj jsou plavecké zóny.") {
+            SettingsField(title: "CSS", text: $swimCss, unit: "/100 m", keyboard: .numbersAndPunctuation, placeholder: t.resolved.swimCss.map { Self.pace($0) } ?? "m:ss")
+        }
+        SettingsGroup(title: "Test 400 + 200 m", footer: "Po rozplavání 400 m naplno, pak 5 minut volně a 200 m naplno.") {
+            SettingsField(title: "400 m", text: $test400, unit: "min", keyboard: .numbersAndPunctuation, placeholder: "m:ss")
+            SettingsDivider()
+            SettingsField(title: "200 m", text: $test200, unit: "min", keyboard: .numbersAndPunctuation, placeholder: "m:ss")
+            if let css = Self.css(test400, test200) {
+                SettingsDivider()
+                Button { swimCss = Self.pace(css) } label: {
+                    HStack {
+                        Text(L10n.f("CSS %@ /100 m", Self.pace(css))).font(.body).foregroundStyle(Palette.ink)
+                        Spacer(minLength: 8)
+                        Text("Použít").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.amber)
+                    }
+                    .padding(.horizontal, 16).frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        SettingsGroup(title: "Kde plaveš") {
+            OptionListRow(title: "Obvyklý bazén", selection: $poolLength, options: Self.pools)
+            SettingsDivider()
+            OptionListRow(title: "Otevřená voda", selection: $openWater, options: Self.openWaterOptions.map { ($0.0, L10n.tr($0.1)) },
+                          footer: L10n.tr("Vypnuto: plánujeme jen bazén. Před závody: jednou týdně 6–8 týdnů před závodem. V sezóně: jednou týdně od května do září. Ve volné vodě nikdy neplav sám."))
+        }
+        if let zones = t.swimZones, !zones.isEmpty {
+            SettingsGroup(title: "Tempové zóny v plavání") {
+                ForEach(zones) { z in
+                    if z.zone > 1 { SettingsDivider() }
+                    ZoneRow(name: z.name, percent: nil, range: swimRange(z))
+                }
+            }
+        }
+    }
+
+    /// CSS from a 400 m and a 200 m time: (T400 − T200) / 2 per 100 m.
+    static func css(_ t400: String, _ t200: String) -> Double? {
+        guard let a = seconds(t400), let b = seconds(t200), a > b, b / 2 < a / 4 else { return nil }
+        let css = (a - b) / 2
+        return (60...240).contains(css) ? css.rounded() : nil
+    }
+
+    private static func seconds(_ typed: String) -> Double? {
+        let parts = typed.trimmingCharacters(in: .whitespaces).split(separator: ":")
+        guard parts.count == 2, let m = Double(parts[0]), let s = Double(parts[1]), s < 60 else { return nil }
+        return m * 60 + s
+    }
+
+    private func swimRange(_ z: TrainingProfileResponse.SwimZone) -> String {
+        switch (z.paceSlow, z.paceFast) {
+        case (let slow?, let fast?): return fast + "–" + slow
+        case (nil, let fast?): return L10n.f("pod %@", fast)
+        case (let slow?, nil): return L10n.f("nad %@", slow)
+        default: return "–"
+        }
+    }
+
     // MARK: Intervals.icu
 
     @ViewBuilder
@@ -129,7 +201,7 @@ struct ZonesSettingsView: View {
         if let result = t.intervals {
             switch result.status {
             case "ok":
-                Label(L10n.tr("Zapsáno do Intervals.icu") + ((result.updated ?? []).isEmpty ? "" : " (" + (result.updated ?? []).map { L10n.tr($0 == "Ride" ? "kolo" : "běh") }.joined(separator: ", ") + ")"), systemImage: "checkmark.circle.fill")
+                Label(L10n.tr("Zapsáno do Intervals.icu") + ((result.updated ?? []).isEmpty ? "" : " (" + (result.updated ?? []).map { L10n.tr($0 == "Ride" ? "kolo" : $0 == "Swim" ? "plavání" : "běh") }.joined(separator: ", ") + ")"), systemImage: "checkmark.circle.fill")
                     .font(Typo.small).foregroundStyle(Palette.green)
             case "needs-permission":
                 VStack(alignment: .leading, spacing: 10) {
@@ -203,6 +275,9 @@ struct ZonesSettingsView: View {
         powerModel = p["powerZoneModel"]?.string ?? "coggan7"
         hrModel = p["hrZoneModel"]?.string ?? "frielLthr"
         paceModel = p["paceZoneModel"]?.string ?? "friel"
+        swimCss = (p["swimCss"]?.number).map { Self.pace($0) } ?? ""
+        poolLength = (p["poolLength"]?.number).map { n in Self.pools.first { Double($0.0) == n }?.0 ?? "25" } ?? "25"
+        openWater = p["openWater"]?.string ?? "off"
         original = changes
     }
 
@@ -212,7 +287,9 @@ struct ZonesSettingsView: View {
             // "4:35" goes as text, the server reads m:ss.
             "runThresholdPace": runPace.trimmingCharacters(in: .whitespaces).isEmpty ? .null : .string(Self.paceForServer(runPace)),
             "runLthr": .field(runLthr),
-            "powerZoneModel": .string(powerModel), "hrZoneModel": .string(hrModel), "paceZoneModel": .string(paceModel)
+            "powerZoneModel": .string(powerModel), "hrZoneModel": .string(hrModel), "paceZoneModel": .string(paceModel),
+            "swimCss": swimCss.trimmingCharacters(in: .whitespaces).isEmpty ? .null : .string(swimCss.trimmingCharacters(in: .whitespaces)),
+            "poolLength": .number(Double(poolLength) ?? 25), "openWater": .string(openWater)
         ]
     }
 

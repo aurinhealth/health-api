@@ -761,9 +761,12 @@ struct PlannedWorkout: Decodable, Equatable {
         let hrHigh: Double?
         /// What the step is for: warmup, interval, recovery, active or cooldown.
         let intensity: String?
+        /// A swim: the length in metres (paces are then per 100 m), or a rest at the wall.
+        var meters: Double? = nil
+        var rest: Bool? = nil
 
         enum CodingKeys: String, CodingKey {
-            case durationSeconds, percentLow, percentHigh, wattsLow, wattsHigh, paceSlow, paceFast, cadence, note, hrLow, hrHigh, intensity
+            case durationSeconds, percentLow, percentHigh, wattsLow, wattsHigh, paceSlow, paceFast, cadence, note, hrLow, hrHigh, intensity, meters, rest
         }
 
         /// Lenient: the library sends paces as "4:35" text, the plan as seconds.
@@ -789,6 +792,8 @@ struct PlannedWorkout: Decodable, Equatable {
             hrLow = value(.hrLow)?.number
             hrHigh = value(.hrHigh)?.number
             intensity = value(.intensity)?.string
+            meters = value(.meters)?.number
+            if case .bool(let b)? = value(.rest) { rest = b }
         }
     }
 

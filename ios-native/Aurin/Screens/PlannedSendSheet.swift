@@ -66,6 +66,8 @@ struct PlannedSendSheet: View {
     @State private var watchPlan: WorkoutPlan?
     @State private var watchShowing = false
     @State private var sharing = false
+    /// A swim to the watch: in the pool (metres) or in open water (time).
+    @State private var openWater = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -79,6 +81,14 @@ struct PlannedSendSheet: View {
                 }
                 if destinations == nil {
                     ProgressView().frame(maxWidth: .infinity).padding(.vertical, 14)
+                }
+                if workout.sport == "swim", watchPlan != nil {
+                    Picker("Kde", selection: $openWater) {
+                        Text("Bazén").tag(false)
+                        Text("Volná voda").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.vertical, 10)
                 }
                 if let watchPlan {
                     row(icon: AnyView(symbol("applewatch")), name: "Apple Watch", status: L10n.tr("Aplikace Cvičení"), statusColor: Palette.muted,
@@ -100,11 +110,13 @@ struct PlannedSendSheet: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 22).padding(.top, 14)
+        .onChange(of: openWater) { watchPlan = WatchWorkout.plan(workout, title: session.title, openWater: openWater) }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
         .glassSheetBackground()
         .task {
-            watchPlan = WatchWorkout.plan(workout, title: session.title)
+            openWater = workout.environment == "outdoor"
+            watchPlan = WatchWorkout.plan(workout, title: session.title, openWater: openWater)
             guard let id = session.eventId else { destinations = []; return }
             destinations = (try? await model.api.plannedDestinations(eventId: id))?.destinations ?? []
         }

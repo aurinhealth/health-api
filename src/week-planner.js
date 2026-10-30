@@ -7,7 +7,7 @@ import { weekWithCalendar } from './calendar-free.js';
 // weather location, and the role of each training day (long, quality, easy,
 // recovery, gym upper/full body) so the load is spread sensibly over the week.
 
-export const PLANNER_SPORTS = ["ride", "run", "gym"];
+export const PLANNER_SPORTS = ["ride", "run", "swim", "gym"];
 // Weather only for a place the user chose: their device location (with the
 // browser's permission) or a place they searched for. Plans saved before that
 // carry the old default place without a source; it counts as not chosen.
@@ -39,7 +39,7 @@ async function ensure(db) {
 }
 
 // A day can hold several sessions, the same sport twice included (two rides),
-// up to MAX_PER_DAY; they are kept in the order ride, run, gym.
+// up to MAX_PER_DAY; they are kept in the order ride, run, swim, gym.
 export const MAX_PER_DAY = 4;
 export function sanitizeWeekPlan(input = {}) {
   const days = Array.from({ length: 7 }, (_, i) => {
@@ -62,11 +62,11 @@ export function sanitizeWeekPlan(input = {}) {
 
 // The athlete's own length or place for one plan chip, keyed "weekday|sport|slot"
 // (slot = the n-th session of that sport that day). Gym has no place to choose.
-export const SESSION_MINUTES = { gym: [30, 45, 60, 75, 90], ride: [30, 45, 60, 75, 90, 120, 150, 180, 240, 300], run: [20, 30, 45, 60, 75, 90, 120] };
+export const SESSION_MINUTES = { gym: [30, 45, 60, 75, 90], ride: [30, 45, 60, 75, 90, 120, 150, 180, 240, 300], run: [20, 30, 45, 60, 75, 90, 120], swim: [20, 30, 45, 60, 75, 90] };
 export function sanitizeSessions(raw, days) {
   const out = {};
   for (const [key, value] of Object.entries(raw && typeof raw === "object" ? raw : {})) {
-    const m = String(key).match(/^([0-6])\|(ride|run|gym)\|([0-3])$/);
+    const m = String(key).match(/^([0-6])\|(ride|run|swim|gym)\|([0-3])$/);
     if (!m || (days[m[1]] || []).filter(s => s === m[2]).length <= Number(m[3])) continue;
     const minutes = Number(value?.minutes), entry = {};
     if (Number.isInteger(minutes) && minutes >= 20 && minutes <= 360 && minutes % 5 === 0) entry.minutes = minutes;
@@ -154,7 +154,7 @@ export async function resetWeekPlan(db, date) {
 // (`quality`, still capped by readiness) and puts them on its sport's days first (`prefer`).
 export function planWeekRoles(days = [], { readiness = "green", quality = null, prefer = null } = {}) {
   const has = (i, s) => (days[i] || []).includes(s);
-  const endurance = [0, 1, 2, 3, 4, 5, 6].filter(i => has(i, "ride") || has(i, "run"));
+  const endurance = [0, 1, 2, 3, 4, 5, 6].filter(i => has(i, "ride") || has(i, "run") || has(i, "swim"));
   const role = {};
   const weekend = endurance.filter(i => i >= 5).sort((a, b) => Number(has(a, "gym")) - Number(has(b, "gym")) || b - a);
   let long = weekend[0];
@@ -271,9 +271,12 @@ const ROLE_IF = { recovery: .55, endurance: .68, long: .68, quality: .82 };
 // Running IF is pace against threshold pace: an easy run is ~0.78, not the
 // 0.68 of an easy ride, so the same load means a shorter run.
 const RUN_IF = { recovery: .7, endurance: .78, long: .78, quality: .9 };
+// Swimming IF is pace against CSS (sTSS cubes it, here squared like the rest
+// so a swim's minutes stay close to a run's); a swim stays within 75 min.
+const SWIM_IF = { recovery: .8, endurance: .88, long: .88, quality: .95 };
 const ROLE_RANGE = { recovery: [.35, .6], endurance: [.8, 1.6], long: [1.4, 2.6], quality: [1, 1.5] };
 const GYM_TSS = { gym_full: 35, gym_upper: 25 };
-const SPORT_MINUTES = { ride: [30, 300], run: [20, 150] };
+const SPORT_MINUTES = { ride: [30, 300], run: [20, 150], swim: [20, 75] };
 const round5 = v => Math.round(v / 5) * 5;
 
 // `plan` (training-plans.js planLoad) replaces the usual +5 % with the plan's
@@ -318,7 +321,7 @@ export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoad
     if (x.sport === "gym") return { date: x.date, sport: x.sport, slot: x.slot || 0, role: x.role, label: x.label, tss: GYM_TSS[x.role] || 30, minutes: (x.role === "gym_upper" ? 60 : 70) - (recovery ? 10 : 0) };
     const [lo, hi] = ROLE_RANGE[x.role] || [.8, 1.6], cap = recovery ? .85 : 1;
     const tss = Math.round(Math.max(lo * fitness * cap, Math.min(hi * fitness * cap, shares ? remaining * (x.share || 1) / shares : 0)));
-    const [min, max] = SPORT_MINUTES[x.sport] || [30, 300], intensity = (x.sport === "run" ? RUN_IF : ROLE_IF)[x.role] || .68;
+    const [min, max] = SPORT_MINUTES[x.sport] || [30, 300], intensity = (x.sport === "run" ? RUN_IF : x.sport === "swim" ? SWIM_IF : ROLE_IF)[x.role] || .68;
     const minutes = Math.max(min, Math.min(max, round5(tss / (intensity * intensity * 100) * 60)));
     return { date: x.date, sport: x.sport, slot: x.slot || 0, role: x.role, label: x.label, tss: Math.round(minutes / 60 * intensity * intensity * 100), minutes, intensity };
   });

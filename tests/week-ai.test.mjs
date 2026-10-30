@@ -12,7 +12,7 @@ test("days outside the week, before today, or with an unknown sport are dropped"
   const days = sanitizeWeekDays([
     { date: "2026-10-12", sport: "ride", minutes: 60, kind: "endurance" },
     { date: "2026-10-20", sport: "ride", minutes: 60, kind: "endurance" },
-    { date: "2026-10-14", sport: "swim", minutes: 60, kind: "endurance" },
+    { date: "2026-10-14", sport: "rowing", minutes: 60, kind: "endurance" },
     { date: "2026-10-14", sport: "run", minutes: 40, kind: "endurance" }
   ], { start, today, prefs });
   assert.deepEqual(days.map(d => d.date + " " + d.sport), ["2026-10-14 run"]);
@@ -99,7 +99,7 @@ test("days the athlete named hold exactly the sports asked for, even when the AI
 
 test("a named rest day is emptied and requests outside the week are ignored", () => {
   const out = applyRequests([{ date: "2026-10-15", sport: "run", minutes: 45 }, { date: "2026-10-14", sport: "ride", minutes: 60 }],
-    [{ date: "2026-10-15", sports: [] }, { date: "2026-10-25", sports: ["gym"] }, { date: "2026-10-14", sports: ["ride", "swim"] }], { start });
+    [{ date: "2026-10-15", sports: [] }, { date: "2026-10-25", sports: ["gym"] }, { date: "2026-10-14", sports: ["ride", "rowing"] }], { start });
   assert.deepEqual(out.map(d => d.date + " " + d.sport), ["2026-10-14 ride"]);
 });
 

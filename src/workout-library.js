@@ -9,6 +9,7 @@ import { storeLocalEvent, syncLocalWorkout, ensureLocalWorkouts } from './local-
 import { renderForEnvironment, buildWorkout, totalMinutes, step, n, clamp, zoneOf, zonesFor } from "./workout-model.js";
 import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
+import { SWIMMING_WORKOUTS, SWIMMING_WORKOUTS_EN } from "./swimming-workouts.js";
 import { getTestWorkout } from "./threshold-check.js";
 import { raceWorkout } from "./training-plans.js";
 import { explainWorkout, stepRows, focusLine, carbsPerHour } from "./workout-explanation.js";
@@ -21,13 +22,13 @@ import { isHardKind, intensityClass } from "./session-intensity.js";
 export const SYSTEMS = ["recovery", "endurance", "tempo", "sweet_spot", "threshold", "vo2max", "anaerobic", "sprint"];
 export { CYCLING_WORKOUTS, RUNNING_WORKOUTS, stepRows };
 // The catalog in the user's language; the English one is made on first use.
-const CATALOG_CS = { ride: CYCLING_WORKOUTS, run: RUNNING_WORKOUTS };
+const CATALOG_CS = { ride: CYCLING_WORKOUTS, run: RUNNING_WORKOUTS, swim: SWIMMING_WORKOUTS };
 let catalogEn = null;
-const builtIn = () => L(CATALOG_CS, catalogEn ??= { ride: CYCLING_WORKOUTS.map(workoutEn), run: RUNNING_WORKOUTS.map(workoutEn) });
+const builtIn = () => L(CATALOG_CS, catalogEn ??= { ride: CYCLING_WORKOUTS.map(workoutEn), run: RUNNING_WORKOUTS.map(workoutEn), swim: SWIMMING_WORKOUTS_EN });
 const BY_ID = new Map();
 const builtInById = () => { const key = lang(); if (!BY_ID.has(key)) BY_ID.set(key, new Map(Object.values(builtIn()).flat().map(w => [w.id, w]))); return BY_ID.get(key); };
 const now = () => new Date().toISOString();
-const sportOf = value => value === "run" ? "run" : "ride";
+const sportOf = value => value === "run" || value === "swim" ? value : "ride";
 const environmentOf = value => value === "outdoor" ? "outdoor" : "indoor";
 
 export function defaultCapabilities(sport = "ride") {
@@ -86,7 +87,7 @@ export async function getCapabilities(db, sport = "ride") {
   const rows = await db.prepare("SELECT * FROM training_capabilities WHERE user_id=? AND sport=?").bind(db.userId, sport).all();
   const training=await trainingSetup(db),defaults=defaultCapabilities(sport);
   // Cycling level for rides, running level for runs (Profile → Experience).
-  const experience=training.experienceBySport?.[sport==='run'?'run':'ride']?.level||training.experience;
+  const experience=training.experienceBySport?.[sport==='run'||sport==='swim'?sport:'ride']?.level||training.experience;
   if(experience)for(const value of Object.values(defaults))value.level=experience==='beginner'?1:experience==='experienced'?4:3;
   return { ...defaults, ...Object.fromEntries((rows.results || []).map(x => [x.system, x])) };
 }
@@ -228,7 +229,9 @@ export async function generateWorkout(db, { sport = "ride", environment = "indoo
   let kind = rec.kind === "long_endurance" ? "endurance" : rec.kind === "vo2" ? "vo2max" : rec.kind || "endurance";
   // Running has no sweet-spot band; the nearest is sub-threshold work.
   if (sport === "run" && kind === "sweet_spot") kind = "threshold";
-  const minutes = sport === "run" ? clamp(n(availabilityMinutes, n(rec.durationMinutes, 60)), 20, 240) : clamp(n(availabilityMinutes, n(rec.durationMinutes, 90)), 30, 360);
+  // The swim catalog has endurance, threshold (CSS), speed and sprints.
+  if (sport === "swim") kind = { tempo: "threshold", sweet_spot: "threshold", anaerobic: "vo2max" }[kind] || kind;
+  const minutes = sport === "swim" ? clamp(n(availabilityMinutes, n(rec.durationMinutes, 40)), 15, 90) : sport === "run" ? clamp(n(availabilityMinutes, n(rec.durationMinutes, 60)), 20, 240) : clamp(n(availabilityMinutes, n(rec.durationMinutes, 90)), 30, 360);
   const context = { readiness: coach.readiness?.status || "green", hardBikeDaysRolling7d: coach.load?.hardBikeDaysRolling7d ?? 0, phase: coach.constraints?.phase === "auto" ? "" : coach.constraints?.phase, targetDifficulty: coach.recommendation?.progression?.targetDifficulty };
   let result = await searchWorkoutLibrary(db, { sport, environment, system: kind, durationMinutes: minutes, durationTolerance: 15, limit: 12 }, context);
   if (!result.workouts.length) result = await searchWorkoutLibrary(db, { sport, environment, system: kind, durationMinutes: minutes, durationTolerance: 45, limit: 12 }, context);
@@ -236,8 +239,10 @@ export async function generateWorkout(db, { sport = "ride", environment = "indoo
   // Prefer distinct families among the alternatives so "another option" is really different.
   const seen = new Set(), distinct = [];
   for (const w of result.workouts) if (!seen.has(w.family || w.id)) { seen.add(w.family || w.id); distinct.push(w); }
-  // A beginning runner starts with run/walk when the session is easy.
+  // A beginning runner starts with run/walk when the session is easy, a
+  // beginning swimmer with first lengths and technique.
   if (sport === "run" && coach.constraints?.novice && ["endurance", "recovery"].includes(kind)) distinct.sort((a, b) => (b.family === "run-walk") - (a.family === "run-walk"));
+  if (sport === "swim" && coach.constraints?.novice && ["endurance", "recovery"].includes(kind)) distinct.sort((a, b) => (/^swim-(first|technique)$/.test(b.family) ? 1 : 0) - (/^swim-(first|technique)$/.test(a.family) ? 1 : 0));
   const pool = distinct.slice(0, 5), pick = pool[Math.abs(Math.trunc(n(variant, 0))) % pool.length];
   const plannedToday = coach.constraints?.plannedToday;
   const planned = plannedToday?.system ? { name: plannedToday.name, minutes: plannedToday.minutes, system: plannedToday.system, intensityFactor: plannedToday.intensityFactor, structure: plannedToday.structure } : null;
@@ -358,6 +363,14 @@ export function resizeStructure(structure = [], target, { sport = "ride", system
 const MAX_WORK = { ride: { tempo: 90, sweet_spot: 60, threshold: 45, vo2max: 25 }, run: { tempo: 50, threshold: 40, vo2max: 20 } };
 export function resizeWorkout(base, minutes, { maxDifficulty = null, easyOnly = false } = {}) {
   const sport = sportOf(base.sport), run = sport === "run";
+  // A swim is sets in metres: another length is the same family's level
+  // closest to it, not a stretched set.
+  if (sport === "swim") {
+    const target = Math.round(clamp(n(minutes, n(base.duration_minutes, 40)), 15, 120));
+    const off = w => Math.abs(n(w.duration_minutes, 0) - target);
+    const best = (builtIn().swim || []).filter(w => w.family === base.family && (!Number.isFinite(Number(maxDifficulty)) || n(w.difficulty, 0) <= Number(maxDifficulty) || w.id === base.id)).sort((a, b) => off(a) - off(b))[0];
+    return !best || best.id === base.id ? base : { ...best, resized_from: base.id, resize_notes: [L("stejný typ plavání v délce ", "the same kind of swim at ") + best.duration_minutes + L(" min z knihovny", " min from the library")] };
+  }
   const target = Math.round(clamp(n(minutes, n(base.duration_minutes, 60)), run ? 20 : 30, run ? 240 : 360));
   if (Math.abs(target - n(base.duration_minutes, 0)) <= 1) return base;
   const fits = w => Math.abs(n(w.duration_minutes, 0) - target) <= 2;
