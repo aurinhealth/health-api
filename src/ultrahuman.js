@@ -25,6 +25,7 @@ import { healthPointJson } from './health-point-json.js';
 import { localDate } from './user-time.js';
 import { L } from './lang.js';
 import { resolveSources } from './source-priority.js';
+import { readReadOff, readAllowed } from './source-reading.js';
 
 export const SOURCE = 'ultrahuman';
 const STATE_COOKIE = 'pfd_ultrahuman_oauth_state';
@@ -182,6 +183,8 @@ export async function syncUltrahuman(env, { days = 3, fetchImpl = fetch, today =
   try { token = await ultrahumanAccessToken(env, { fetchImpl }); }
   catch (error) { if (error.status === 401) await markConnectionBroken(env, SOURCE, error.message); return { status: 'error', message: error.message }; }
   const userId = env.USER_ID ?? env.DB.userId;
+  // Types switched off in Zdroje dat are not saved (source-reading.js).
+  const off = await readReadOff(env.DB, userId);
   let saved = 0, failed = 0, oldest = today;
   for (let i = 0; i < days; i++) {
     const date = new Date(Date.parse(today + 'T12:00:00Z') - i * 86400000).toISOString().slice(0, 10);
@@ -191,7 +194,7 @@ export async function syncUltrahuman(env, { days = 3, fetchImpl = fetch, today =
       if (error.status === 401 || error.status === 403) { await markConnectionBroken(env, SOURCE, error.message); return { status: 'error', message: error.message, saved }; }
       failed++; continue;
     }
-    const rows = ultrahumanRows(date, metrics);
+    const rows = ultrahumanRows(date, metrics).filter(r => readAllowed(off, SOURCE, r.data_type));
     if (rows.length) await env.DB.batch(rows.map(r => upsert(env.DB, userId, r)));
     saved += rows.length; oldest = date;
   }

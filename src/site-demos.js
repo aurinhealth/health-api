@@ -190,7 +190,7 @@ const strainScreen = `<div class="app glow-training">${STATUS}
 // Beside the phone: what adds up to today's strain, and where it should land.
 const strainMade = `<div class="dm pad">
 <div class="row sp"><div class="sl">What it’s made of</div><span class="mut s">target 11–14</span></div>
-<div class="tgt"><i><b class="band"></b><b class="fill"${at('400:a 1700:b 3000:c')}></b></i><span class="num"${n(0, 5.1, 400, 900, '1')}${n(5.1, 8.4, 1700, 900, '1')}${n(8.4, 13.4, 3000, 900, '1')}>13.4</span></div>
+<div class="tgt"><i><b class="band"></b><b class="fill"${at('400:a 1700:b 3000:c')}></b></i><span class="num" data-n="0,5.1,400,900,1;5.1,8.4,1700,900,1;8.4,13.4,3000,900,1">13.4</span></div>
 <div class="mi"${at('400')}><span class="sq amb">${ic('run')}</span><div><b>Morning run</b><span class="mut s">7:30 AM · 42 min · 48 TSS</span></div><span class="num">5.1</span></div>
 <div class="mi"${at('1700')}><span class="sq sand">${ic('steps')}</span><div><b>Movement through the day</b><span class="mut s"><span${n(0, 6420, 1700, 1100, 'i')}>6,420</span> steps</span></div><span class="num">3.3</span></div>
 <div class="mi plan"${at('3000')}><span class="sq dash">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">5:30 PM · in plan</span></div><span class="num faint">+5.0</span></div>
@@ -261,6 +261,54 @@ ${setRow('3', '77.5 × 8', '80', '6–8', '<i class="ip dash">H</i>', 'next')}
 <div class="row gap"><span class="pb"${at('3300:press 3600-press')}>${ic('plus')}Sets</span><span class="pb">${ic('minus')}Sets</span><span class="pb">Plates: 20 + 10 per side</span></div>
 </div>`;
 
+// One thing at a time (the review's V3): beside the phone, only the line the step talks about, larger than on
+// the screen. Readiness: HRV's line from ReadinessDetail; Training mode: the set at hand from GymSetRow.
+const readyOne = `<div class="dm pad one">
+<div class="row sp base"><b>HRV</b><span class="s grn">better than usual</span></div>
+<div class="row base one-v"><span class="num big"${n(55, 64, 300, 900, 'i')}>64</span><span class="mut">ms</span></div>
+<div class="mut">your normal 55–61 ms</div>
+${range(83, 'green', 600)}
+<div class="one-pt grn"${at('1300')}>+9 readiness points</div>
+</div>`;
+const tmOne = `<div class="dm pad one tm">
+<div class="row sp base"><b>Squat</b><span class="mut">Set 2 of 4</span></div>
+<div class="row base one-v"><span class="num big" data-tx="0|80;1100|82.5">82.5</span><span class="mut">kg</span><span class="mut one-x">×</span><span class="num big" data-tx="0|8;1900|6">6</span><i class="ip dash one-ip" data-tx="0|H;2700|F">F</i></div>
+<div class="mut" data-tx="0|20 + 10 per side;1100|25 + 5 + 1.25 per side">25 + 5 + 1.25 per side</div>
+</div>`;
+
+// The other steps whose card repeated the phone get one thing too: the sample day's numbers, larger.
+// Journal: the strongest line of JournalImpact; Sleep: the night's length and its times (SleepDetailView);
+// need for tonight (SleepNeedView); food: today's target and what training added (FoodDayView).
+const journalOne = `<div class="dm pad one">
+<div class="row sp base"><b>Alcohol</b><span class="jc"${at('300')}><i>${ic('check')}</i>Yesterday</span></div>
+<div class="row base one-v"><span class="num big rst">−<span${n(0, 17, 500, 1100, 'i')}>17</span></span><span class="mut">%</span></div>
+<div class="mut">readiness the next morning</div>
+<div class="mut s one-ft">Mornings after days with it and without it, over the last 90 days.</div>
+</div>`;
+const tickOne = `<div class="dm pad one tm">
+<div class="row sp base"><b>Squat</b><span class="mut">Set 2 of 4</span></div>
+<div class="row base one-v"><span class="num big">82.5</span><span class="mut">kg</span><span class="mut one-x">×</span><span class="num big">6</span><i class="ip dash one-ip"${at('900:f')} data-tx="0|H;900|F">H</i></div>
+<div class="one-pt rst"${at('1900')}>${ic('flame')}Failure, so next set 80 kg</div>
+</div>`;
+const sleepOne = `<div class="dm pad one">
+<div class="row sp base"><b>Last night</b><span class="pill ind"${at('1300')}>Score 82</span></div>
+<div class="row base one-v"><span class="num big"${n(400, 432, 150, 1300, 'hmc')}>7:12</span><span class="mut">asleep</span></div>
+<div class="mut">11:33 PM to 7:02 AM</div>
+<div class="one-pt ind"${at('1500')}>1:23 deep sleep</div>
+</div>`;
+const needOne = `<div class="dm pad one">
+<div class="row sp base"><b>Need for tonight</b><span class="mut">baseline 8:00</span></div>
+<div class="row base one-v"><span class="num big"${n(480, 510, 400, 1600, 'hmc')}>8:30</span><span class="mut">h</span></div>
+<div class="mut">+0:15 today’s strain · −0:15 nap</div>
+<div class="one-pt amb"${at('1800')}>+0:30 for sleep debt</div>
+</div>`;
+const foodOne = `<div class="dm pad one">
+<div class="row sp base"><b>Today’s target</b><span class="mut">training day</span></div>
+<div class="row base one-v"><span class="num big"${n(2300, 2650, 400, 1300, 'i')}>2,650</span><span class="mut">kcal</span></div>
+<div class="mut">1,380 eaten · 1,270 left</div>
+<div class="one-pt amb"${at('1500')}>+350 kcal for training</div>
+</div>`;
+
 const LETTERS = [['W', 'Warm-up', 'muted'], ['T', 'Technique', 'blue'], ['E', 'Easy', 'green'], ['M', 'Moderate', 'indigo'], ['H', 'High', 'amber'], ['F', 'Failure', 'red'], ['PR', 'Personal record', 'gold'], ['D', 'Drop set', 'pink']];
 const tmTick = `<div class="dm pad tm">
 <div class="row sp"><div class="sent h">Squat</div><span class="tag rust">${ic('flame')}To failure</span></div>
@@ -303,7 +351,7 @@ ${[['Squat', 1], ['Bench press', 1], ['Bent-over rows', 0]].map(([k, up], i) => 
 
 // ---- Food (Widgets.swift FoodWidget, FoodView.swift, BarcodeScanSheet.swift, PortionWheel chips) ----
 const foodTarget = `<div class="dm pad">
-<div class="row base"><span class="num big">1,380</span><span class="fo mut">of <span${n(2300, 2650, 1500, 1100, 'i')}>2,650</span><br>kcal</span></div>
+<div class="row base"><span class="num big">1,380</span><span class="fo mut">of 2,650<br>kcal</span></div>
 <div class="coach"><div class="ch4">${ic('spark')}Coach</div><p class="sent">Training day: 350 kcal more. 1,270 kcal left, an afternoon snack of about 360 kcal.</p></div>
 <div class="mac3">${[['Carbs', 177, 330, 'carbs'], ['Protein', 84, 150, 'protein'], ['Fat', 36, 80, 'fat']].map(([k, v, t, c]) => `<div><span class="mut s"><i style="background:var(--${c})"></i>${k}</span><span class="num md">${v}<small> / ${t} g</small></span><i class="mb"><b style="--w:${v / t * 100}%;background:var(--${c})"></b></i></div>`).join('')}</div>
 <div class="mut s alln">All nutrients ›</div>
@@ -378,6 +426,24 @@ ${[['Squat', '3×8 · 80 kg'], ['Bench press', '3×8 · 62.5 kg'], ['Bent-over r
 </div>
 </div>
 <div class="inp"><span class="cam">${ic('camera')}</span><span class="mut">Message the coach…</span><span class="snd">${ic('up')}</span></div>
+</div>`;
+
+// The coach's memory (CoachMemory.swift): a message that tells the coach something lasting, its answer with the
+// "Remembered: …" line under it (MemoryChipView), and beside the phone the list behind the chat's ⋯ menu.
+const memoryScreen = `<div class="app glow-today chat">${STATUS}
+<div class="nav c"><span class="cb">${ic('x')}</span><b>Coach</b><span class="cb">⋯</span></div>
+<div class="msgs">
+<div class="u">My left knee hurts when I run. No running for a few weeks, please.</div>
+<div class="dots"${at('500 1500-in')}><i></i><i></i><i></i><span>Coach is thinking…</span></div>
+<div class="c1"${at('1500')}><span data-type="1500,1100">Got it, no running until your knee is better. I’ll swap Saturday’s run for an easy ride and keep lunges out of your gym days.</span></div>
+<div class="mchip"${at('2900')}>${ic('check')}Remembered: left knee hurts when running<span class="mut">Back</span></div>
+</div>
+<div class="inp"><span class="cam">${ic('camera')}</span><span class="mut">Message the coach…</span><span class="snd">${ic('up')}</span></div>
+</div>`;
+const coachMemory = `<div class="dm pad one mem">
+<div class="row sp"><span class="mut">Coach</span><b>What the coach remembers</b><span></span></div>
+<div class="ml">${[['Left knee hurts when running', 3300], ['Trains in the evening after work'], ['Wants to deadlift 140 kg by spring'], ['No dairy']].map(([t, ms]) => `<div class="mi2${ms ? ' new' : ''}"${ms ? at(String(ms)) : ''}><span>${t}</span>${ic('chev')}</div>`).join('')}</div>
+<div class="madd">${ic('plus')}Add</div>
 </div>`;
 
 // Beside the phone: the confirmed workout lands in the week.
@@ -476,7 +542,7 @@ const watchFood = `<div class="aw-s" style="--gw:#163047">${wTop('', '12:20', ''
 <div class="aw-water"><span style="color:${WA.blue}">${ic('drop')}</span><div><b>1.5</b> <span class="aw-k">/ 2.6 L</span><i><b style="width:58%"></b></i></div><span class="aw-plus">+250</span></div></div>`;
 const watchFace = `<div class="aw-s aw-face"><div class="aw-date">THU<b>8</b></div><div class="aw-clock">7:12</div>
 <div class="aw-comps">${[['sun', '78', .78, WA.green], ['moon', '7:12', .89, WA.indigo], ['flame', '8.4', .6, WA.amber]].map(([icon, v, f, c]) => wRing(56, 23, 5, f, c, `<span class="aw-in" style="color:${c}">${ic(icon)}<b${v.length > 3 ? ' style="font-size:12.5px"' : ''}>${v}</b></span>`)).join('')}</div></div>`;
-// The watch section's steps: [the glow token behind the watch, title, text, screen].
+// The watch chapter's steps: [the glow token behind the watch, title, text, screen].
 export const WATCH = [
   ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness, sleep, strain and HRV, as on Today, and what’s next today in one line.', watchHome],
   ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown. Your heart rate and calories go into the same workout.', watchGym],
@@ -484,10 +550,12 @@ export const WATCH = [
   ['glow-health', 'Water in one tap.', 'What’s left to eat today, the macros, and +250 for a glass of water. Your iPhone gets it at once.', watchFood],
   ['glow-health', 'On your watch face.', 'Readiness, last night’s sleep and today’s strain sit beside the time, so you don’t even open the app.', watchFace]];
 
-export const ACTS = each({readiness: actReadiness, training: actTraining, food: actFood, sleep: actSleep, coach: actCoach});
+// Apple Watch's part opens with the watch face and its three complications.
+const actWatch = `<div class="dm wc aw-act"><div class="aw-w">${watchFace}</div></div>`;
+export const ACTS = each({readiness: actReadiness, training: actTraining, food: actFood, sleep: actSleep, coach: actCoach, watch: actWatch});
 
-export const DEMOS = each({sleepNight, sleepNeed, dial, tonight, readyParts, journal, strainMade, week, builder, gymParts, tmTable, tmTick, tmRest, tmDone, foodTarget, foodAdd, drinks, diet, coachWeek});
-export const SCREENS = each({strain: strainScreen, done: doneScreen, coach: coachScreen});
+export const DEMOS = each({sleepNight, sleepNeed, dial, tonight, readyParts, journal, strainMade, week, builder, gymParts, tmTable, tmTick, tmRest, tmDone, foodTarget, foodAdd, drinks, diet, coachWeek, coachMemory, readyOne, tmOne, journalOne, tickOne, sleepOne, needOne, foodOne});
+export const SCREENS = each({strain: strainScreen, done: doneScreen, coach: coachScreen, memory: memoryScreen});
 
 // The demos' look: the app's cards (radius 22), Instrument Serif for numbers, Newsreader for sentences.
 export const demoCss = `
@@ -595,7 +663,9 @@ html:not(.js) .tgt .fill{width:${(16.7 / 21 * 100).toFixed(1)}%}
 
 /* Training week. */
 .strip{display:grid;grid-template-columns:repeat(6,1fr);gap:2px}
-.dc{display:flex;flex-direction:column;align-items:center;gap:5px;opacity:.6;transform:scale(.92)}.dc.sel{opacity:1;transform:none}
+.dc{display:flex;flex-direction:column;align-items:center;gap:5px;transform:scale(.92)}.dc.sel{transform:none}
+/* The other days fade, but their names keep the muted colour so they stay readable (4.5:1). */
+.dc:not(.sel) .ci,.dc:not(.sel) .dn{opacity:.6}
 .wd{font-size:11.5px;font-weight:500;color:var(--muted)}.wd.today{color:var(--amber);font-weight:700}
 .ci{position:relative;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;font-size:17px;--c:var(--muted);color:var(--c);background:color-mix(in srgb,var(--muted) 14%,transparent);box-shadow:inset 0 0 0 2px var(--c);transition:.5s cubic-bezier(.16,1,.3,1);transition-property:background-color,color,box-shadow,outline-color,opacity,transform}
 .ci.ok,.ci.done{background:color-mix(in srgb,var(--green) 14%,transparent)}.ci.off{background:color-mix(in srgb,var(--amber-bar) 14%,transparent)}.ci.out{background:color-mix(in srgb,var(--blue) 14%,transparent)}
@@ -893,7 +963,27 @@ html:not(.js) .stage1{display:none}
 .js .dw-spout.wait:not(.in),html:not(.js) .dw-burst{opacity:0;transform:scale(.2)}
 .dw-burst path{fill:var(--wt);opacity:0;transform:translate(48px,8px)}.js .dw-burst.in path{animation:dw-fly 1.6s cubic-bezier(.2,.7,.4,1) var(--d) infinite}
 @keyframes dw-fly{0%{opacity:0;transform:translate(48px,10px) scale(1.1)}12%{opacity:1}40%{transform:translate(calc(48px + var(--x) * .6),calc(10px + var(--y))) scale(1)}75%{opacity:.8}100%{opacity:0;transform:translate(calc(48px + var(--x)),34px) scale(.6)}}
+/* One-thing cards: narrower than the full ones, larger type, clear of the phone. */
+.dm.one{width:300px;font-size:17px}.one .mut{font-size:15px}.one b{font-size:19px}
+.one-v{gap:8px;margin-top:10px}.one-v .num.big{font-size:72px}.one-x{font-size:28px!important}
+.one .rb{margin:16px 0 14px}.one-pt{display:inline-block;padding:6px 14px;border-radius:999px;background:color-mix(in srgb,var(--green) 12%,transparent);font-size:17px;font-weight:600}
+.one-ip{margin-left:auto;transform:scale(1.5)}
+.one-pt.rst{background:color-mix(in srgb,var(--rust) 12%,transparent);color:var(--rust-ink)}.one-pt.ind{background:color-mix(in srgb,var(--indigo) 12%,transparent);color:var(--indigo)}.one-pt.amb{background:color-mix(in srgb,var(--amber) 16%,transparent);color:var(--sec)}
+.one-pt .di{width:16px;height:16px;vertical-align:-2px;margin-right:4px}.one .rst{color:var(--rust-ink)}.one-ft{margin-top:14px}
+/* The coach's memory: the green line under an answer and the list it keeps. */
+.mchip{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:var(--green-soft);color:var(--green);font-size:13px;font-weight:500;transition:opacity .3s,transform .3s!important}
+.mchip .di{width:13px;height:13px;stroke-width:2.8}.mchip .mut{margin-left:4px}
+.js .mchip.wait:not(.in){opacity:0;transform:translateY(6px)}
+.mem .row b{font-size:15px}.mem .row .mut{font-size:15px}
+.ml{margin-top:14px;border-radius:14px;background:var(--panel2);overflow:hidden}
+.mi2{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;font-size:15px;transition:max-height .45s,padding .45s,opacity .4s,background-color 1.2s!important;max-height:60px}
+.mi2+.mi2{border-top:1px solid var(--line)}.js .mi2.new.wait:not(.in)+.mi2{border-top-color:transparent}.mi2 .di{width:13px;height:13px;color:var(--muted);stroke-width:2.6}
+.mi2.new.in{background:color-mix(in srgb,var(--green) 10%,transparent)}
+.js .mi2.new.wait:not(.in){max-height:0;padding-block:0;opacity:0}
+.madd{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:12px;padding:13px;border-radius:14px;background:var(--panel2);font-size:15px;font-weight:600}.madd .di{width:14px;height:14px;stroke-width:2.6}
 /* Apple Watch: the case and its dark screens (WatchStyle.swift: Instrument Serif numbers, a glow at the top). */
+.aw-act{place-items:center}
+.aw-w>.scr{inset:12px;border-radius:50px;overflow:hidden}
 .aw-w{position:relative;width:236px;height:286px;border-radius:62px;padding:12px;background:linear-gradient(145deg,#3b3d41,#1c1d1f);box-shadow:0 30px 60px -24px rgba(40,30,10,.55),inset 0 0 0 1.5px #55585d}
 .aw-w:after{content:"";position:absolute;right:-7px;top:62px;width:9px;height:40px;border-radius:5px;background:linear-gradient(90deg,#2a2b2e,#4a4c50)}
 .aw-w:before{content:"";position:absolute;right:-5px;top:120px;width:6px;height:46px;border-radius:3px;background:#2e2f32}

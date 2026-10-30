@@ -15,10 +15,12 @@ import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { writeIntervalsWeight, importIntervalsWeights } from "./weight-sync.js";
 import { latestStoredWeight } from './athlete-weight.js';
 import { healthScopes, hasGoogleScope, HEALTH_PERMISSIONS, googleTypeAllowed, skippedForPermission } from "./google-scopes.js";
+import { readReadOff } from "./source-reading.js";
 import { importGoogleFood } from "./google-food.js";
 import { pairSessions } from "./activity-match.js";
 import { heldMerges, mergedSpan, sourcesOf } from "./workout-merge.js";
 import { afterGoogleSync, flushGoogleSync } from "./apple-health.js";
+import { pickBuckets, BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE, HEART_RATE_HOUR_TYPE } from "./heart-rate-compaction.js";
 import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { markConnectionBroken, markConnectionOk, isGoogleAuthFailure, isIntervalsAuthFailure } from "./connection-health.js";
@@ -780,9 +782,9 @@ const GOOGLE_SYNC_CONFIGS = [
   ["steps", "steps", "interval", "google-wearables", 7],
   ["distance", "distance", "interval", "google-wearables", 7],
   ["floors", "floors", "interval", "google-wearables", 7],
-  // Heart rate is ~50k samples a day; samples don't change once synced, so the
-  // nightly run re-reads only the last 3 days (late watch syncs included)
-  // instead of a week: fewer Google pages and D1 reads every night.
+  // Heart rate is ~36k samples a day, stored as 5-minute rows; the nightly run
+  // re-reads only the last 3 days (late watch syncs included) instead of a week:
+  // fewer Google pages and D1 reads every night.
   ["heart-rate", "heart_rate", "sample", "google-wearables", 3],
   ["heart-rate-variability", "heart_rate_variability", "sample", "google-wearables", 7],
   ["oxygen-saturation", "oxygen_saturation", "sample", "google-wearables", 7],
@@ -865,8 +867,9 @@ async function googleReconcilePage(
   };
 }
 
-async function saveGooglePointsBatch(env, family, type, points) {
+async function saveGooglePointsBatch(env, family, type, points, { raw = false } = {}) {
   if (!points.length) return 0;
+  if (type === "heart-rate" && family === "google-wearables" && !raw) return saveGoogleHeartRateBuckets(env, points);
   // Settings → Synchronizace → Google Health → Stahovat hotové aktivity off.
   if (type === "exercise" && !(await readSyncPrefs(env.DB, env.USER_ID, "google")).pullActivities) return 0;
   // Workouts Aurin itself wrote to Google Health (sync-destinations.js) are already in Aurin.
@@ -941,16 +944,53 @@ async function saveGooglePointsBatch(env, family, type, points) {
   if(changed)await afterGoogleSync(env, type, points, {since:oldest});
   return points.length;
 }
+// Google heart rate arrives as a sample every few seconds (~36k a day). Written
+// one by one and deleted a week later, that was ~360k rows written a day per user
+// with the indexes. The sync stores it as the 5-minute rows the charts read
+// (heart-rate-compaction.js); only a workout's own minutes keep every sample
+// (workoutHeartRate). A bucket written again (the nightly run re-reads 3 days) is
+// joined when a page boundary split it (the sample times do not overlap), and
+// replaced only by one that spans all its samples and has more of them (late
+// samples) or another min or max: a part of the bucket from another page cut
+// never replaces the whole. Unchanged buckets are not written.
+const HR_BUCKET_MS=BUCKET_SECONDS*1000;
+async function saveGoogleHeartRateBuckets(env, points) {
+  const buckets=new Map();
+  for(const point of points){
+    const t=Date.parse(googleInfo('heart-rate',point).sample||''),v=Number(point?.heartRate?.beatsPerMinute??point?.heartRate?.bpm);
+    if(!Number.isFinite(t)||!(v>=20&&v<=250))continue;
+    const b=Math.floor(t/HR_BUCKET_MS)*HR_BUCKET_MS,x=buckets.get(b)||{sum:0,n:0,min:v,max:v,first:t,last:t};
+    x.sum+=v;x.n++;x.min=Math.min(x.min,v);x.max=Math.max(x.max,v);x.first=Math.min(x.first,t);x.last=Math.max(x.last,t);buckets.set(b,x);
+  }
+  if(!buckets.size)return 0;
+  const iso=ms=>new Date(ms).toISOString().replace('.000Z','Z');
+  const old=k=>`json_extract(health_datapoints.payload_json,'$.${k}')`,neu=k=>`json_extract(excluded.payload_json,'$.${k}')`;
+  const apart=`(${neu('first')}>${old('last')} OR ${neu('last')}<${old('first')})`,more=`(${neu('first')}<=${old('first')} AND ${neu('last')}>=${old('last')} AND (${neu('n')}>${old('n')} OR (${neu('n')}=${old('n')} AND (${neu('min')} IS NOT ${old('min')} OR ${neu('max')} IS NOT ${old('max')}))))`;
+  const avg=`ROUND((health_datapoints.value_numeric*${old('n')}+excluded.value_numeric*${neu('n')})/(${old('n')}+${neu('n')}),1)`;
+  const statements=[...buckets].map(([b,x])=>env.DB.prepare(`INSERT INTO health_datapoints (user_id,source_family,data_type,external_id,sample_time,start_time,end_time,value_numeric,value_unit,payload_json)
+    VALUES (?,'google-wearables','${HEART_RATE_BUCKET_TYPE}',?,?,?,?,?,'bpm',?)
+    ON CONFLICT (user_id,source_family,data_type,external_id) DO UPDATE SET
+      value_numeric=CASE WHEN ${apart} THEN ${avg} ELSE excluded.value_numeric END,
+      payload_json=CASE WHEN ${apart} THEN json_object('avg',${avg},'min',MIN(${old('min')},${neu('min')}),'max',MAX(${old('max')},${neu('max')}),'n',${old('n')}+${neu('n')},'first',MIN(${old('first')},${neu('first')}),'last',MAX(${old('last')},${neu('last')})) ELSE excluded.payload_json END,
+      updated_at=CURRENT_TIMESTAMP
+    WHERE ${apart} OR ${more}`)
+    .bind(env.USER_ID,'hr5:'+b/1000,iso(b),iso(b),iso(b+HR_BUCKET_MS),Math.round(x.sum/x.n*10)/10,JSON.stringify({avg:Math.round(x.sum/x.n*10)/10,min:x.min,max:x.max,n:x.n,first:x.first,last:x.last})));
+  let changed=0;
+  for(let i=0;i<statements.length;i+=50)for(const r of await env.DB.batch(statements.slice(i,i+50)))changed+=Number(r?.meta?.changes||0);
+  return changed;
+}
+
 // A workout changed in Google Health a few days later (a run that was a walk)
 // comes through: workouts are read a week back, the rest two days. The minutes
 // in heart-rate zones come with them, so today's active zone minutes and the
 // day's strain do not wait for the nightly run (Monday's week stayed at 0).
 const RECENT_EXERCISE_DAYS=7;
 async function syncGoogleRecent(env){
+  env.READ_OFF=await readReadOff(env.DB,env.USER_ID);
   const token=await googleToken(env),wanted=['sleep','daily-heart-rate-variability','daily-resting-heart-rate','steps','active-energy-burned','time-in-heart-rate-zone','exercise','weight'],configs=GOOGLE_SYNC_CONFIGS.filter(c=>wanted.includes(c[0])).map(c=>c[0]==='weight'?['weight','weight','sample','all-sources',2]:c);
   const results=await Promise.all(configs.map(async([type,filter,typeFilter,family])=>{let pageToken=null,saved=0;if(!googleTypeAllowed(env,type))return{type,saved,status:'skipped'};try{for(let i=0;i<8;i++){const page=await googleReconcilePage(token,type,filter,typeFilter,dateDaysAgo(type==='exercise'?RECENT_EXERCISE_DAYS:2),googleSourceFamily(type,family),dateDaysFromNow(1),pageToken);saved+=await saveGooglePointsBatch(env,family,type,page.dataPoints);pageToken=page.nextPageToken;if(!pageToken)break;}return{type,saved,status:pageToken?'partial':'ok'};}catch(error){return{type,saved,status:skippedForPermission(env,error)?'skipped':'error',message:error.message};}}));
   // Food and drinks other apps logged in Google Health (google-food.js).
-  results.push(await importGoogleFood(env,{token}).then(r=>({type:'food',...r}),error=>({type:'food',status:skippedForPermission(env,error)?'skipped':'error',message:error.message})));
+  if(googleTypeAllowed(env,'food'))results.push(await importGoogleFood(env,{token}).then(r=>({type:'food',...r}),error=>({type:'food',status:skippedForPermission(env,error)?'skipped':'error',message:error.message})));
   // A fresh workout's heart rate now, not with the nightly run (workoutHeartRate).
   if(googleTypeAllowed(env,'heart-rate'))results.push(await workoutHeartRate(env,token).then(saved=>({type:'workout-heart-rate',saved,status:'ok'}),error=>({type:'workout-heart-rate',status:skippedForPermission(env,error)?'skipped':'error',message:error.message})));
   // Data the user did not give permission for is not a failure.
@@ -963,10 +1003,11 @@ async function syncGoogleRecent(env){
   return result;
 }
 
-// Heart rate is read once a night (~50k samples a day), so a workout synced a
-// minute ago would show none until the morning. For workouts that ended in the
-// last 6 hours without samples, only their own minutes are read now; the
-// watch's samples may reach Google later, so it is tried again each run.
+// The nightly run stores heart rate as 5-minute rows only (saveGoogleHeartRateBuckets).
+// A workout's own minutes keep every sample, for its curve and zones: for
+// workouts that ended in the last 6 hours without samples they are read here;
+// the watch's samples may reach Google later, so it is tried again each run. A
+// workout that reaches Google later than that keeps the 5-minute rows only.
 const WORKOUT_HR_HOURS=6,WORKOUT_HR_MAX=3;
 export async function workoutHeartRate(env,token,fetchImpl=fetch){
   const since=new Date(Date.now()-WORKOUT_HR_HOURS*3600e3).toISOString().replace(/\.\d{3}Z$/,'Z');
@@ -986,7 +1027,7 @@ export async function workoutHeartRate(env,token,fetchImpl=fetch){
       const response=await fetchImpl('https://health.googleapis.com/v4/users/me/dataTypes/heart-rate/dataPoints:reconcile?'+params,{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:AbortSignal.timeout(12000)});
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error('heart-rate HTTP '+response.status+': '+JSON.stringify(data).slice(0,200));
-      saved+=await saveGooglePointsBatch(env,'google-wearables','heart-rate',data.dataPoints||[]);
+      saved+=await saveGooglePointsBatch(env,'google-wearables','heart-rate',data.dataPoints||[],{raw:true});
       pageToken=data.nextPageToken||null;
       if(!pageToken)break;
     }
@@ -1047,6 +1088,8 @@ async function processGoogleSyncPages(env) {
   while (processed < 5) {
     const state = await readGoogleSyncState(env);
     if (!state || state.status !== "running") return { status: processed ? "running" : "idle" };
+    // Types switched off in Zdroje dat are skipped (googleTypeAllowed); read only while a sync runs.
+    env.READ_OFF ??= await readReadOff(env.DB, env.USER_ID);
 
     const details = state.details || {};
     let configIndex = Number(details.config_index || 0);
@@ -1752,13 +1795,25 @@ export async function heartRateInWindows(db, userId, windows) {
   const asked = spans.map((s, i) => [s, i]).filter(([[start, end]]) => Number.isFinite(start) && Number.isFinite(end) && end > start);
   const out = windows.map(() => null);
   if (!asked.length) return out;
-  const one = `SELECT ? AS i, AVG(bpm) AS bpm, COUNT(*) AS n FROM (SELECT ${SAMPLE_BPM} AS bpm FROM health_datapoints WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate', 'heart-rate-5min', 'heart-rate-1h') AND sample_time >= ? AND sample_time <= ?) WHERE bpm BETWEEN 30 AND 240`;
+  // Per 5 minutes the samples (a workout's own) or the stored row made of more
+  // samples (pickBuckets), weighted by the samples each holds.
+  const one = `SELECT ? AS i, raw, (CAST(strftime('%s', sample_time) AS INTEGER) / ${BUCKET_SECONDS}) * ${BUCKET_SECONDS} AS bucket, SUM(bpm * w) / SUM(w) AS avg, SUM(w) AS n
+    FROM (SELECT sample_time, ${SAMPLE_BPM} AS bpm, data_type IN ('heart-rate', 'heart_rate') AS raw,
+        CASE WHEN data_type IN ('heart-rate', 'heart_rate') THEN 1 ELSE COALESCE(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.n') END, 1) END AS w
+      FROM health_datapoints WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate', '${HEART_RATE_BUCKET_TYPE}', '${HEART_RATE_HOUR_TYPE}') AND sample_time >= ? AND sample_time <= ?)
+    WHERE bpm BETWEEN 30 AND 240 GROUP BY raw, bucket`;
   // Stored times are RFC 3339 UTC without milliseconds; they compare as text.
   // One statement a window, all in one batch: D1 refuses a UNION ALL of more
   // than a few SELECTs ("too many terms in compound SELECT"), which stopped the
   // nights of two weeks from going to Intervals.icu.
   const results = await db.batch(asked.map(([[start, end], i]) => db.prepare(one).bind(i, userId, utcSecond(start), utcSecond(end))));
-  for (const result of results || []) for (const r of result?.results || []) if (Number(r.n) >= 3) out[Number(r.i)] = Math.round(Number(r.bpm));
+  for (const result of results || []) {
+    const rows = result?.results || [];
+    if (!rows.length) continue;
+    const parts = pickBuckets(rows.filter(r => Number(r.raw)), rows.filter(r => !Number(r.raw)));
+    const count = parts.reduce((s, r) => s + Number(r.n), 0);
+    if (count >= 3) out[Number(rows[0].i)] = Math.round(parts.reduce((s, r) => s + Number(r.avg) * Number(r.n), 0) / count);
+  }
   return out;
 }
 

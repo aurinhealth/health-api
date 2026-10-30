@@ -193,6 +193,16 @@ test("scheduling is idempotent per user and separate between users", async () =>
   assert.equal((await scheduleWorkoutInIntervals({}, alice, {...args,date:'2026-10-04'})).sync.status,'not_connected');
 });
 
+test("the week plan's time goes with the workout into the calendar", async () => {
+  const { raw, alice } = users();
+  const r = await scheduleWorkoutInIntervals({}, alice, { workoutId: "pfd-vo2-5x4x112-90", date: "2026-10-05", confirm: true, startTime: "18:00" });
+  assert.equal(r.status, "ok");
+  assert.equal(JSON.parse(raw.sqlite.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=1 AND data_type='planned-workout'").get().payload_json).start_date_local, "2026-10-05T18:00:00");
+  const anytime = await scheduleWorkoutInIntervals({}, alice, { workoutId: "pfd-vo2-5x4x112-90", date: "2026-10-06", confirm: true, startTime: "25:99" });
+  assert.equal(anytime.status, "ok");
+  assert.match(raw.sqlite.prepare("SELECT start_time FROM health_datapoints WHERE user_id=1 AND start_time LIKE '2026-10-06%'").get().start_time, /T00:00:00$/);
+});
+
 test("feedback changes only the reviewer's capability", async () => {
   const { alice, bob } = users();
   const result = await recordWorkoutFeedback(alice, { workoutId: "pfd-thr-3x12-90", scheduledDate: "2026-10-01", completedPercent: 100, rpe: 6 });
@@ -250,4 +260,16 @@ test("a step between two whole-number zone bands belongs to the lower one, not t
   // Whole numbers keep their band, in both sports.
   for (const zones of [CYCLING_ZONES, RUNNING_ZONES]) for (const [name, lo, hi] of zones) for (let v = lo; v <= hi; v++) assert.equal(zoneOf(v, zones), name, String(v));
   assert.equal(zoneOf(500), "sprint");
+});
+
+test("saving again with a time of day moves the workout already in the calendar", async () => {
+  const { alice } = users(), args = { workoutId: "pfd-vo2-5x4x112-90", date: "2026-10-03", confirm: true };
+  await withIntervals(async () => {
+    const first = await scheduleWorkoutInIntervals({ INTERVALS_API_KEY: "a" }, alice, args);
+    const again = await scheduleWorkoutInIntervals({ INTERVALS_API_KEY: "a" }, alice, { ...args, startTime: "18:00" });
+    assert.equal(again.status, "already_scheduled");
+    assert.equal(again.eventId, first.eventId);
+    const row = await alice.prepare("SELECT start_time FROM health_datapoints WHERE user_id=? AND external_id=?").bind(alice.userId, first.eventId).first();
+    assert.equal(String(row.start_time).slice(0, 16), "2026-10-03T18:00");
+  });
 });

@@ -170,6 +170,7 @@ import { setActivityKcal } from "./activity-edits.js";
 import { hideActivity, mergeActivities, setActivityTime, undoActivityChange } from "./activity-chat-edits.js";
 import { loadThresholdSessions } from "./threshold-check-state.js";
 import { performanceTrends, intervalsCurves, recentIntervals, swimBests } from "./performance-trends.js";
+import { saveReadOff } from "./source-reading.js";
 // The largest request body the coach route reads (POST /app/api/assistant).
 const ASSISTANT_REQUEST_CHARS=64000;
 // One photo with a message: a JPEG the app has made smaller, as a data URL.
@@ -295,7 +296,7 @@ const minute = (cron, now, test) => cron === "* * * * *" && test(now.getUTCMinut
 const every5 = (cron, now) => minute(cron, now, m => m % 5 === 0);
 const USER_JOBS = [
   // After the user's midnight (0:00–6:00 in their zone), old Google data gets
-  // thinner a step a minute: heart-rate samples older than a week become 5-minute
+  // thinner a step a minute: a workout's heart-rate samples older than a week become 5-minute
   // rows, those older than a month hourly rows, zone minutes hourly rows
   // (heart-rate-compaction.js). The hourly summary of steps and zones fills back a
   // day a minute and is checked once a night (hour-summary.js).
@@ -1322,7 +1323,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // The rules see an empty week, so they propose every day the athlete has time for.
       const strain=await weekCheckState(env,inputs,today).then(x=>({...x.strain,level:start>today?Math.max(0,x.strain.level-1):x.strain.level})).catch(()=>null);
       const rules=weekProposal({triathlon,openWater,prefs:{...prefs,days:prefs.days.map(()=>[])},state,start,today,week:inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan,strain});
-      const fallback=rules.items.map(x=>({date:x.date,sport:x.sport==='strength'?'gym':x.sport,minutes:x.minutes,environment:x.sport==='gym'?null:x.environment,kind:null,focus:ROLE_FOCUS[x.role]||null,label:x.label||null,reason:x.reason||null,role:x.role||null,slot:x.slot||0}));
+      const fallback=rules.items.map(x=>({date:x.date,sport:x.sport==='strength'?'gym':x.sport,minutes:x.minutes,environment:x.sport==='gym'?null:x.environment,kind:null,focus:ROLE_FOCUS[x.role]||null,label:x.label||null,reason:x.reason||null,role:x.role||null,slot:x.slot||0,...(x.brick?{brick:true}:{})}));
       if(state.status&&state.status!=='active')return Response.json({status:'ok',start,ai:false,summary:null,items:[],warnings:rules.warnings},{headers:{'Cache-Control':'no-store'}});
       const dates=Array.from({length:7},(_,i)=>shiftDate(start,i)),weekDays=inputs.week.days.filter(d=>dates.includes(d.date));
       const usedByDate={},existingSports={},existingSessions=[];
@@ -2189,6 +2190,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const result=await saveSourcePriority(env.DB,env.USER_ID,{night:body.night,day:body.day});
     return Response.json(result,{status:result.code||200,headers:{'Cache-Control':'no-store'}});
   }
+  // One Reads from switch under Zdroje dat → Health data (source-reading.js); GET is connections' readOff.
+  if (url.pathname === '/app/api/sources/reading' && request.method === 'POST') {
+    if (!session.signedIn) return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if (request.headers.get('Origin') !== url.origin) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    const body=await request.json().catch(()=>({}));
+    const result=await saveReadOff(env.DB,env.USER_ID,{provider:body.provider,type:body.type,on:body.on});
+    return Response.json(result,{status:result.code||200,headers:{'Cache-Control':'no-store'}});
+  }
   if (url.pathname === '/app/api/connections' && (request.method === 'POST' || request.method === 'DELETE')) {
     if (!session.signedIn) return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if (request.headers.get('Origin') !== url.origin) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
@@ -2419,7 +2428,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const [days,gym,health,fitness,insights,coaches,profiles,plans]=await Promise.all([
         cached(env,ctx,'training-days:'+start+':'+date,()=>mapLimit(dates,3,async d=>({date:d,daily:await read('/analysis/daily?date='+d)})),{ttl:120}),
-        trainingGymPlans(env,start,end).catch(()=>({})),
+        trainingGymPlans(env,start,end,{summary:true}).catch(()=>({})),
         googleHealthFor(env,ctx,date).catch(()=>({})),
         cached(env,ctx,'fitness:180',()=>api('/app/api/fitness?days=180')).catch(()=>({})),
         loadFitnessInsights(env.DB,date).catch(()=>({})),
@@ -3073,7 +3082,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
     if(url.pathname==='/app/api/workouts/schedule'&&request.method==='POST'){
       const body=await request.json().catch(()=>({})),date=String(body.date||'');
       if(!validDate(date)||date<localToday())return Response.json({status:'error',message:L('Vyber dnešní nebo budoucí datum.', 'Choose today or a future date.')},{status:400});
-      return Response.json(await scheduleWorkoutInIntervals(env,env.DB,{workoutId:String(body.workoutId||''),date,confirm:body.confirm===true,environment:body.environment}),{headers:{'Cache-Control':'no-store'}});
+      return Response.json(await scheduleWorkoutInIntervals(env,env.DB,{workoutId:String(body.workoutId||''),date,confirm:body.confirm===true,environment:body.environment,startTime:typeof body.startTime==='string'?body.startTime:null}),{headers:{'Cache-Control':'no-store'}});
     }
   }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   return null;

@@ -262,6 +262,9 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
       tss: round(num(w?.tss)),
       strain: plannedStrain(num(w?.tss)),
       exercises: gymCard ? plan.exercises.slice(0, 12) : [],
+      // Each exercise with its sets × reps · weight, and the muscles it works most (gymPlanSummary).
+      lines: gymCard && Array.isArray(plan.lines) ? plan.lines.slice(0, 30) : [],
+      muscles: gymCard && Array.isArray(plan.muscles) ? plan.muscles : [],
       description: w?.description ? String(w.description).split("\n").map(s => s.trim()).filter(Boolean).slice(0, 3).join(" ").slice(0, 240) : null,
       advice: d === date ? coachAdvice(coaches, sport) : null,
       // The calendar event, so the app opens the same detail as from the week's list.
@@ -403,6 +406,9 @@ function sessionOf(w, date, status) {
     tss: round(num(w.tss)),
     activityId: activityId && /^[a-zA-Z0-9_-]{1,80}$/.test(activityId) ? activityId : null,
     eventId: !done && /^planned:/.test(String(w.id || "")) ? String(w.id) : null,
+    // Joined to the session before or after it, done one right after the other (planned-links.js).
+    ...(!done && /^local-/.test(String(w.after ?? w.payload?.after ?? "")) ? { after: "planned:" + (w.after ?? w.payload.after) } : {}),
+    ...(!done && /^local-/.test(String(w.next ?? w.payload?.next ?? "")) ? { next: "planned:" + (w.next ?? w.payload.next) } : {}),
     // A workout from the watch opens its own detail (watch-detail.js), one from Wahoo too (wahoo-detail.js).
     ...(done && ["google-wearables", "apple-health"].includes(w.family) && w.id ? { watch: { source: w.family, id: String(w.id) } }
       : done && /^wahoo:\d+$/.test(String(w.id || "")) ? { watch: { source: "wahoo", id: String(w.id) } }
@@ -467,6 +473,9 @@ function strainBand(v) {
 // gym coach's for strength; another sport has none.
 function coachAdvice(coaches, sport) {
   const id = sport === "strength" ? "gym" : /ride|cycl/.test(String(sport || "")) ? "cycling" : null;
-  const coach = id && (coaches.coaches || []).find(c => c?.id === id && Array.isArray(c.actions) && c.actions.length);
-  return coach ? String(coach.actions[0]).slice(0, 280) : null;
+  // The gym coach's list of today's exercises ("Dnes: Dřep (3 série), …", coach-engine.js)
+  // is what the card itself shows, set by set: its other advice instead.
+  const list = a => id === "gym" && /^(Dnes|Today): /.test(String(a));
+  const coach = id && (coaches.coaches || []).find(c => c?.id === id && Array.isArray(c.actions) && c.actions.some(a => !list(a)));
+  return coach ? String(coach.actions.find(a => !list(a))).slice(0, 280) : null;
 }

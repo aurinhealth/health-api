@@ -177,10 +177,23 @@ extension APIClient {
         return try await send("/app/api/workouts/generate", method: "POST", body: body)
     }
 
-    func scheduleWorkout(id: String, date: String, indoor: Bool) async throws {
-        let _: JSONValue = try await send("/app/api/workouts/schedule", method: "POST",
-                                          body: ["workoutId": JSONValue.string(id), "date": .string(date), "confirm": .bool(true),
-                                                 "environment": .string(indoor ? "indoor" : "outdoor")])
+    /// Returns the calendar's event id ("planned:local-…"), when the server says.
+    /// time: "HH:MM" chosen in the week plan; nil for the day without a time.
+    @discardableResult
+    func scheduleWorkout(id: String, date: String, indoor: Bool, time: String? = nil) async throws -> String? {
+        var body: JSONObject = ["workoutId": .string(id), "date": .string(date), "confirm": .bool(true),
+                                "environment": .string(indoor ? "indoor" : "outdoor")]
+        if let time { body["startTime"] = .string(time) }
+        let r: JSONValue = try await send("/app/api/workouts/schedule", method: "POST", body: body)
+        guard case .object(let o) = r else { return nil }
+        return o["eventId"]?.string
+    }
+
+    /// One session right after another of the same day (after: its event id),
+    /// or done separately again (after nil). src/planned-links.js.
+    func linkPlanned(eventId: String, after: String?) async throws {
+        let _: JSONValue = try await send("/app/api/planned/link", method: "POST",
+                                          body: ["eventId": .string(eventId), "after": after.map { JSONValue.string($0) } ?? .null])
     }
 
     // MARK: Drinks
