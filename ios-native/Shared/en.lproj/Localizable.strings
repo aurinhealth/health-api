@@ -1279,6 +1279,9 @@
 "Připomeneme ti, že týden zdarma končí." = "We'll remind you that your free week is ending.";
 "Začne roční předplatné za %@. Do té doby ho zrušíš jedním klepnutím." = "Your yearly plan starts at %@. Cancel before then with one tap.";
 "App Store teď tarify nenačetl. Zkus to za chvíli znovu." = "The App Store didn't load the plans just now. Try again in a moment.";
+"App Store teď balíčky nenačetl. Zkus to za chvíli znovu." = "The App Store hasn't loaded the packs yet. Try again in a moment.";
+"App Store nákup nepotvrdil. Zkus to znovu." = "The App Store didn't confirm the purchase. Try again.";
+"Nákup proběhl, zprávy se přidají, jakmile bude spojení se serverem." = "The purchase went through. The messages will be added once Aurin can reach the server.";
 "App Store nákup nepotvrdil. Zkus Obnovit nákup." = "The App Store didn't confirm the purchase. Try Restore purchase.";
 "Obnovení nákupu bylo zrušeno." = "Restoring the purchase was cancelled.";
 "Nákupy se nepodařilo obnovit: %@" = "Couldn't restore purchases: %@";

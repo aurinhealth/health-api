@@ -1,4 +1,5 @@
 import StoreKitTest
+import StoreKit
 import XCTest
 @testable import Aurin
 
@@ -21,7 +22,7 @@ final class ProStoreTests: XCTestCase {
         var reminded: String?
         store.trialReminder = { _, price in reminded = price }
         await store.load()
-        XCTAssertEqual(Set(store.products.keys), Set(ProStore.ids))
+        XCTAssertEqual(Set(store.products.keys), Set(ProStore.ids + ProStore.packIDs))
         XCTAssertTrue(store.trialEligible, "a new Apple ID starts the yearly plan with the free week")
         let yearly = try XCTUnwrap(store.price(ProStore.yearlyID))
         XCTAssertTrue(yearly.contains("490"), yearly)
@@ -47,6 +48,22 @@ final class ProStoreTests: XCTestCase {
         XCTAssertFalse(reminded)
         await store.refresh()
         XCTAssertTrue(store.entitled)
+        _ = session
+    }
+
+    func testPackIsBoughtAndFinished() async throws {
+        let session = try makeSession()
+        let store = ProStore()
+        await store.load()
+        XCTAssertEqual(ProStore.packIDs, ["health.aurin.app.coach.messages40", "health.aurin.app.coach.messages100"])
+        XCTAssertTrue(try XCTUnwrap(store.price("health.aurin.app.coach.messages40")).contains("99"))
+        // Xcode's test purchase never reaches the server: the pack's own messages come back.
+        let left = try await store.buyPack("health.aurin.app.coach.messages100")
+        XCTAssertEqual(left, 100)
+        XCTAssertFalse(store.entitled, "a pack is not Aurin Pro")
+        var unfinished = 0
+        for await _ in Transaction.unfinished { unfinished += 1 }
+        XCTAssertEqual(unfinished, 0)
         _ = session
     }
 

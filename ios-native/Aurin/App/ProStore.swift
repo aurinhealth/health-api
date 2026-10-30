@@ -5,7 +5,11 @@ import UserNotifications
 
 /// Aurin Pro from the App Store (StoreKit 2): the subscription group "Aurin
 /// Pro" with a monthly and a yearly plan, a free week on the yearly one for
-/// whoever has not had it (Apple's introductory offer) and offer codes. Every
+/// whoever has not had it (Apple's introductory offer) and offer codes. The
+/// yearly plan can also be paid monthly for 12 months (Apple's "Monthly with
+/// 12-Month Commitment" billing plan, iOS 26.4 and later, not in every country).
+/// Packs of extra coach messages are consumables: the server adds them to the
+/// account (src/coach-packs.js) and only then is the transaction finished. Every
 /// transaction goes to the server (POST /app/api/subscription/transaction),
 /// which checks Apple's signature and unlocks AI for the account
 /// (src/app-store.js); Apple tells it about renewals, refunds and expiry
@@ -22,6 +26,9 @@ final class ProStore {
     nonisolated static let monthlyID = "health.aurin.app.pro.monthly"
     nonisolated static let yearlyID = "health.aurin.app.pro.yearly"
     nonisolated static let ids = [yearlyID, monthlyID]
+    /// Extra coach messages, by product id.
+    nonisolated static let packs: [String: Int] = ["health.aurin.app.coach.messages40": 40, "health.aurin.app.coach.messages100": 100]
+    nonisolated static var packIDs: [String] { packs.keys.sorted { (packs[$0] ?? 0) < (packs[$1] ?? 0) } }
     /// The day-5 reminder of the free week (Reminders keeps its own prefix).
     nonisolated static let trialReminderID = "aurin-trial-day5"
 
@@ -29,6 +36,13 @@ final class ProStore {
     private(set) var products: [String: Product] = [:]
     /// The yearly plan starts with the free week for this Apple ID.
     private(set) var trialEligible = false
+    /// The yearly plan paid monthly, where the App Store offers it: "149 Kč" a
+    /// month and "1 788 Kč" for the 12 months; nil elsewhere.
+    private(set) var commitment: Commitment?
+    struct Commitment: Equatable {
+        let monthly: String
+        let total: String
+    }
     /// An Aurin Pro subscription is active on this Apple ID.
     private(set) var entitled = false
     private(set) var purchasing = false
@@ -55,6 +69,8 @@ final class ProStore {
         Task {
             await load()
             await refresh()
+            // A pack the server has not heard of yet (no signal last time).
+            for await result in Transaction.unfinished { await handle(result) }
         }
     }
 
@@ -66,13 +82,14 @@ final class ProStore {
     func load() async {
         guard products.isEmpty else { return }
         do {
-            let found = try await Product.products(for: Self.ids)
+            let found = try await Product.products(for: Self.ids + Self.packIDs)
             products = Dictionary(found.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             if let yearly = products[Self.yearlyID], yearly.subscription?.introductoryOffer?.paymentMode == .freeTrial {
                 trialEligible = await yearly.subscription?.isEligibleForIntroOffer ?? false
             } else {
                 trialEligible = false
             }
+            commitment = products[Self.yearlyID].flatMap(Self.commitmentPlan)
         } catch {
             ErrorLog.add(path: "StoreKit products", status: nil, message: error.localizedDescription)
         }
@@ -102,7 +119,8 @@ final class ProStore {
         case cancelled
     }
 
-    func purchase(_ id: String) async throws -> Outcome {
+    /// monthly: the yearly plan paid monthly for 12 months (when `commitment` is there).
+    func purchase(_ id: String, monthly: Bool = false) async throws -> Outcome {
         guard let product = products[id] else {
             throw APIError.message(L10n.tr("App Store teď tarify nenačetl. Zkus to za chvíli znovu."))
         }
@@ -110,6 +128,7 @@ final class ProStore {
         defer { purchasing = false }
         var options: Set<Product.PurchaseOption> = []
         if let token = await accountUUID() { options.insert(.appAccountToken(token)) }
+        if #available(iOS 26.4, *), monthly, id == Self.yearlyID, commitment != nil { options.insert(.billingPlanType(.monthly)) }
         switch try await product.purchase(options: options) {
         case .success(let result):
             guard case .verified(let transaction) = result else {
@@ -127,6 +146,31 @@ final class ProStore {
         @unknown default:
             return .cancelled
         }
+    }
+
+    /// A pack of extra coach messages: bought, sent to the server and finished.
+    /// Returns the messages the account has now, or nil when it was not bought
+    /// (cancelled, waiting for approval); once the server has it, the pack is there.
+    func buyPack(_ id: String) async throws -> Int? {
+        guard Self.packs[id] != nil, let product = products[id] else {
+            throw APIError.message(L10n.tr("App Store teď balíčky nenačetl. Zkus to za chvíli znovu."))
+        }
+        purchasing = true
+        defer { purchasing = false }
+        var options: Set<Product.PurchaseOption> = []
+        if let token = await accountUUID() { options.insert(.appAccountToken(token)) }
+        guard case .success(let result) = try await product.purchase(options: options) else { return nil }
+        guard case .verified(let transaction) = result else {
+            throw APIError.message(L10n.tr("App Store nákup nepotvrdil. Zkus to znovu."))
+        }
+        // Xcode's StoreKit testing: the server never accepts its signature.
+        if transaction.environment == .xcode { await transaction.finish(); return Self.packs[id] }
+        guard let left = await sendPack(result) else {
+            // Kept unfinished: it goes to the server on the next start.
+            throw APIError.message(L10n.tr("Nákup proběhl, zprávy se přidají, jakmile bude spojení se serverem."))
+        }
+        await transaction.finish()
+        return left
     }
 
     /// Obnovit nákup: asks the App Store for this Apple ID's purchases (it may
@@ -158,10 +202,23 @@ final class ProStore {
         return monthly.formatted(product.priceFormatStyle.precision(.fractionLength(whole ? 0 : 2)))
     }
 
+    /// The App Store's commitment billing plan of the yearly product, if any.
+    private static func commitmentPlan(_ product: Product) -> Commitment? {
+        guard #available(iOS 26.4, *),
+              let terms = product.subscription?.pricingTerms.first(where: { $0.billingPlanType == .monthly }) else { return nil }
+        return Commitment(monthly: terms.billingDisplayPrice, total: terms.commitmentInfo.displayPrice)
+    }
+
     // MARK: - Transactions
 
     private func handle(_ result: VerificationResult<Transaction>) async {
         guard case .verified(let transaction) = result else { return }
+        if Self.packs[transaction.productID] != nil {
+            var sent = transaction.environment == .xcode
+            if !sent { sent = await sendPack(result) != nil }
+            if sent { await transaction.finish() }
+            return
+        }
         guard Self.ids.contains(transaction.productID) else { await transaction.finish(); return }
         if await send(result, transaction) { await transaction.finish() }
         if transaction.revocationDate == nil, (transaction.expirationDate ?? .distantFuture) > Date() { entitled = true }
@@ -184,6 +241,15 @@ final class ProStore {
         } catch {
             return false
         }
+    }
+
+    /// The pack to the server; the messages the account has then, nil without an answer.
+    private func sendPack(_ result: VerificationResult<Transaction>) async -> Int? {
+        guard let api else { return nil }
+        struct Saved: Decodable { let left: Int? }
+        let saved: Saved? = try? await api.send("/app/api/subscription/transaction", method: "POST",
+                                                 body: ["signedTransaction": JSONValue.string(result.jwsRepresentation)])
+        return saved.map { $0.left ?? 0 }
     }
 
     /// The account's UUID from the server (/app/api/subscription).
