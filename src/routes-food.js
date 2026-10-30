@@ -19,7 +19,7 @@ import legacyHealthApi, { googleToken } from "./index.js";
 import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
 import { dashboardProfile } from "./dashboard-shared.js";
-import { waterGoal, loadBuild, forgetWaterFrom } from "./water-goal.js";
+import { waterGoal, loadBuild } from "./water-goal.js";
 
 export async function queueFoodGoogleSafely(env,ctx,id,options){
   try{
@@ -136,13 +136,10 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
         return Response.json({status:'ok',date,entries,totalMl:entries.reduce((s,e)=>s+e.ml,0),hydrationMl:entries.reduce((s,e)=>s+e.hydrationMl,0),target},{headers:{'Cache-Control':'no-store'}});
       }
       if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-      // A drink of an earlier day makes the water Build-up count that day again (water-goal.js).
-      const today=localToday(),dayOf=async id=>(await env.DB.prepare("SELECT date FROM fluid_log WHERE user_id=? AND id=?").bind(env.DB.userId,Number(id)).first().catch(()=>null))?.date||null;
-      const recount=async dates=>{const day=dates.filter(Boolean).sort()[0];if(day&&day<today)await forgetWaterFrom(env.DB,day,today).catch(error=>console.error('Water build-up reset failed',error.message));};
-      if(request.method==='POST'&&url.searchParams.get('bulk')==='1'){const body=await request.json().catch(()=>({}));const before=await Promise.all((Array.isArray(body.ids)?body.ids:[]).slice(0,100).map(dayOf));const result=await bulkFluids(env.DB,body);await recount([...before,validDay(body.date)?body.date:null]);return Response.json({status:'ok',...result},{headers:{'Cache-Control':'no-store'}});}
-      if(request.method==='POST'){const body=await request.json().catch(()=>({}));const day=validDay(body.date)?body.date:today;const entry=await addFluid(env.DB,{date:day,ml:body.ml,kind:body.kind,at:body.at});await recount([day]);return Response.json({status:'ok',entry},{headers:{'Cache-Control':'no-store'}});}
-      if(request.method==='PATCH'){const body=await request.json().catch(()=>({}));const entry=await updateFluid(env.DB,{id:body.id,ml:body.ml,kind:body.kind,at:body.at});await recount([entry.date]);return Response.json({status:'ok',entry},{headers:{'Cache-Control':'no-store'}});}
-      if(request.method==='DELETE'){const day=await dayOf(url.searchParams.get('id'));await deleteFluid(env.DB,url.searchParams.get('id'));await recount([day]);return Response.json({status:'ok'},{headers:{'Cache-Control':'no-store'}});}
+      if(request.method==='POST'&&url.searchParams.get('bulk')==='1'){const body=await request.json().catch(()=>({}));return Response.json({status:'ok',...await bulkFluids(env.DB,body)},{headers:{'Cache-Control':'no-store'}});}
+      if(request.method==='POST'){const body=await request.json().catch(()=>({}));return Response.json({status:'ok',entry:await addFluid(env.DB,{date:validDay(body.date)?body.date:localToday(),ml:body.ml,kind:body.kind,at:body.at})},{headers:{'Cache-Control':'no-store'}});}
+      if(request.method==='PATCH'){const body=await request.json().catch(()=>({}));return Response.json({status:'ok',entry:await updateFluid(env.DB,{id:body.id,ml:body.ml,kind:body.kind,at:body.at})},{headers:{'Cache-Control':'no-store'}});}
+      if(request.method==='DELETE'){await deleteFluid(env.DB,url.searchParams.get('id'));return Response.json({status:'ok'},{headers:{'Cache-Control':'no-store'}});}
       return Response.json({message:'Method not allowed'},{status:405});
     }catch(error){return Response.json({status:'error',message:error.message},{status:error instanceof FluidInputError?400:500});}
   }

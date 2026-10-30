@@ -4,7 +4,7 @@
 // up to the Auto target. Training days add their extra on top of Custom and
 // Build-up, and a day is judged against its own goal with that extra.
 import { L } from "./lang.js";
-import { hydrationMl, dayActivityHours, hydrationTarget, drinkFromFoodEntry } from "./fluids.js";
+import { hydrationMl, activityHoursByDay, hydrationTarget, drinkFromFoodEntry } from "./fluids.js";
 import { shiftDate } from "./dashboard-shared.js";
 
 const MIN_ML = 1000, MAX_ML = 6000, STEP = 100, MAX_JUMP = 300, OVER_AVERAGE = 500, CATCH_UP_DAYS = 14;
@@ -63,47 +63,41 @@ async function ensureTable(db) {
   tableReady.add(db);
 }
 
-// Build-up's finished days are stored once each (water_build): a day reads the
-// last 14 stored rows and the drinks and training of the days not stored yet
-// (more after days without the app, at most 14). Yesterday is counted again on
-// every request and stored only the day after, so drinks and workouts that sync
-// the next morning still count. Today and later days are never judged, whatever
-// date is asked for. A new start in Cíle starts a new run (since). A drink added,
-// changed or deleted on an earlier day forgets the days from it (forgetWaterFrom).
+// Build-up's finished days are stored (water_build) so the goal does not have to
+// be worked out from the run's start each time. Every request counts the last
+// 14 finished days again in three reads (drinks, food-diary drinks, training)
+// and from the first day that changed (a drink added late, a sync, a workout
+// uploaded the next day) works the goal out again and stores those days. Today
+// and later days are never judged, whatever date is asked for. A new start in
+// Cíle starts a new run (since).
 export async function loadBuild(db, profile, date, auto, today = date) {
   const start = Number(profile?.waterStart);
   if (profile?.waterMode !== "build" || !(start > 0)) return null;
   await ensureTable(db);
-  const upto = date < today ? date : today, yesterday = shiftDate(today, -1);
-  // A run without a start day (an older save) begins two days back, so it is stored.
-  const first = profile.waterFrom || shiftDate(upto, -2), since = `${profile.waterFrom}|${start}`, cap = Number(auto?.baseMl) || MAX_ML;
-  const rows = ((await db.prepare("SELECT date,goal_ml,extra_ml,drunk_ml,logged,next_ml FROM water_build WHERE user_id=? AND since=? AND date<? ORDER BY date DESC LIMIT ?")
-    .bind(db.userId, since, upto, CATCH_UP_DAYS).all()).results || []).reverse()
+  const upto = date < today ? date : today, cap = Number(auto?.baseMl) || MAX_ML;
+  // A run without a start day (an older save) begins two days back.
+  const first = profile.waterFrom || shiftDate(upto, -2), since = `${profile.waterFrom}|${start}`;
+  const from = first > shiftDate(upto, -CATCH_UP_DAYS) ? first : shiftDate(upto, -CATCH_UP_DAYS);
+  const stored = ((await db.prepare("SELECT date,goal_ml,extra_ml,drunk_ml,logged,next_ml FROM water_build WHERE user_id=? AND since=? AND date<? ORDER BY date DESC LIMIT ?")
+    .bind(db.userId, since, upto, CATCH_UP_DAYS + 1).all()).results || [])
     .map(r => ({ date: r.date, goalMl: Number(r.goal_ml), extraMl: Number(r.extra_ml), drunkMl: Number(r.drunk_ml), logged: Boolean(r.logged), nextMl: Number(r.next_ml) }));
-  let base = rows.length ? rows.at(-1).nextMl : clamp(start, MIN_ML, Math.max(MIN_ML, cap));
-  let day = rows.length ? shiftDate(rows.at(-1).date, 1) : first;
-  if (day < shiftDate(upto, -CATCH_UP_DAYS)) day = shiftDate(upto, -CATCH_UP_DAYS);
-  if (day < upto) {
-    const drunk = await drunkByDay(db, day, upto), inserts = [];
-    for (; day < upto; day = shiftDate(day, 1)) {
-      const extraMl = hydrationTarget(await dayActivityHours(db, db.userId, day)).exerciseMl;
-      const d = { date: day, goalMl: base + extraMl, extraMl, drunkMl: drunk[day] || 0, logged: drunk[day] > 0 };
-      rows.push(d);
-      base = nextBase(base, rows.slice(-CATCH_UP_DAYS), { capMl: cap });
-      d.nextMl = base;
-      if (day < yesterday) inserts.push(db.prepare("INSERT INTO water_build(user_id,since,date,goal_ml,extra_ml,drunk_ml,logged,next_ml) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(user_id,since,date) DO NOTHING")
+  const before = stored.find(r => r.date < from);
+  let base = before ? before.nextMl : clamp(start, MIN_ML, Math.max(MIN_ML, cap));
+  if (!(from < upto)) return { baseMl: base, days: [] };
+  const [drunk, hours] = await Promise.all([drunkByDay(db, from, upto), activityHoursByDay(db, db.userId, from, upto)]);
+  const known = new Map(stored.map(r => [r.date, r])), days = [], writes = [];
+  for (let day = from; day < upto; day = shiftDate(day, 1)) {
+    const extraMl = hydrationTarget(hours[day] || {}).exerciseMl;
+    const d = { date: day, goalMl: base + extraMl, extraMl, drunkMl: drunk[day] || 0, logged: drunk[day] > 0 };
+    days.push(d);
+    base = nextBase(base, days, { capMl: cap });
+    const s = known.get(day);
+    if (!s || s.goalMl !== d.goalMl || s.extraMl !== extraMl || s.drunkMl !== d.drunkMl || s.logged !== d.logged || s.nextMl !== base)
+      writes.push(db.prepare("INSERT INTO water_build(user_id,since,date,goal_ml,extra_ml,drunk_ml,logged,next_ml) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(user_id,since,date) DO UPDATE SET goal_ml=excluded.goal_ml,extra_ml=excluded.extra_ml,drunk_ml=excluded.drunk_ml,logged=excluded.logged,next_ml=excluded.next_ml")
         .bind(db.userId, since, day, d.goalMl, extraMl, d.drunkMl, d.logged ? 1 : 0, base));
-    }
-    if (inserts.length) await db.batch(inserts);
   }
-  return { baseMl: base, days: rows.slice(-CATCH_UP_DAYS).map(({ nextMl, ...d }) => d) };
-}
-
-// A drink of an earlier day changed: that day and the ones after count again.
-export async function forgetWaterFrom(db, date, today) {
-  if (!date || date >= today) return;
-  await ensureTable(db);
-  await db.prepare("DELETE FROM water_build WHERE user_id=? AND date>=?").bind(db.userId, date).run();
+  if (writes.length) await db.batch(writes);
+  return { baseMl: base, days };
 }
 
 // Hydration ml per day from `from` to the day before `to`: the drinks logged in

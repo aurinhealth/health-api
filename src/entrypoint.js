@@ -840,6 +840,8 @@ async function waterPush(env, ctx) {
   const release = () => db.prepare('DELETE FROM push_log WHERE user_id=? AND kind=? AND local_date=?').bind(db.userId, kind, date).run().catch(() => null);
   const profile = await dashboardProfile(env).catch(() => null);
   if (profile?.waterMode !== 'build') return { sent: 0, reason: 'not-building' };
+  // Oznámení → Pití off on the phone stops this push too.
+  if ((await getAthleteState(db).catch(() => null))?.notify?.water === false) return { sent: 0, reason: 'off' };
   const devices = await listPushTokens(db);
   if (!devices.length) return { sent: 0, reason: 'no-tokens' };
   const fluids = await handleDashboardApi(new Request('https://internal/app/api/fluids?date=' + date), env, ctx, new URL('https://internal/app/api/fluids?date=' + date)).then(r => r.ok ? r.json() : null).catch(() => null);

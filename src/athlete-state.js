@@ -49,7 +49,7 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
   // Settings → Oznámení: the morning readiness and the coach's own messages, on until turned off.
   if (patch.notify && typeof patch.notify === 'object') {
     state.notify = { ...(state.notify || {}) };
-    for (const key of ['morning', 'coach']) if (typeof patch.notify[key] === 'boolean') state.notify[key] = patch.notify[key];
+    for (const key of ['morning', 'coach', 'water']) if (typeof patch.notify[key] === 'boolean') state.notify[key] = patch.notify[key];
   }
   // Kept by the coach's push (coach-push.js): the last time zone seen and the message waiting for an answer.
   if (patch.zone !== undefined) state.zone = patch.zone;

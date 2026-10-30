@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { nextBase, waterGoal, waterNudge, loadBuild, forgetWaterFrom, drunkByDay } from "../src/water-goal.js";
+import { nextBase, waterGoal, waterNudge, loadBuild, drunkByDay } from "../src/water-goal.js";
 import { ensure } from "../src/fluids.js";
 import { createD1 } from "./helpers/d1.mjs";
 import { applyEnergyBudget } from "../src/energy-budget.js";
@@ -41,25 +41,27 @@ test("the day's goal: Custom and Build-up add the training on top, Auto keeps th
   assert.equal(built.build.baseMl, 2200);
 });
 
-test("Build-up stores each finished day once, counts yesterday on every request and a day again after a late drink", async () => {
+test("Build-up counts the last 14 days again on every request and stores only what changed", async () => {
   const db = createD1(); db.userId = 1;
   await ensure(db);
+  db.sqlite.exec("CREATE TABLE food_logs (id INTEGER PRIMARY KEY, user_id INTEGER, consumed_date TEXT, consumed_at TEXT, recipe_title TEXT, note TEXT, status TEXT)");
   const drink = (date, ml) => db.prepare("INSERT INTO fluid_log(user_id,date,consumed_at,ml,kind) VALUES(1,?,?,?,'water')").bind(date, date + "T10:00", ml).run();
   await drink("2026-10-26", 1300); await drink("2026-10-27", 1500); await drink("2026-10-28", 1500);
   const profile = { waterMode: "build", waterStart: 1500, waterFrom: "2026-10-26" }, autoT = { baseMl: 3200, exerciseMl: 0 };
   assert.equal((await loadBuild(db, profile, "2026-10-29", autoT)).baseMl, 1600);
-  // Yesterday (28) is not stored yet: its drinks may still sync.
-  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM water_build").get().n, 2);
-  db.sqlite.exec("DELETE FROM fluid_log WHERE date='2026-10-28'");
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM water_build").get().n, 3);
+  // Nothing changed: nothing is written.
+  db.sqlite.exec("UPDATE water_build SET goal_ml=goal_ml");
+  const writes = db.sqlite.prepare("SELECT total_changes() AS n").get().n;
+  await loadBuild(db, profile, "2026-10-29", autoT);
+  assert.equal(db.sqlite.prepare("SELECT total_changes() AS n").get().n, writes);
+  // Tuesday's drink is deleted later (by hand, a sync or the food diary): it counts again.
+  db.sqlite.exec("DELETE FROM fluid_log WHERE date='2026-10-27'");
   assert.equal((await loadBuild(db, profile, "2026-10-29", autoT)).baseMl, 1500);
-  await drink("2026-10-28", 1500);
-  // The stored days are not read from the log again.
-  db.sqlite.exec("DELETE FROM fluid_log WHERE date<'2026-10-28'");
+  assert.equal(db.sqlite.prepare("SELECT logged FROM water_build WHERE date='2026-10-27'").get().logged, 0);
+  // A smoothie logged for Tuesday in the food diary brings it back.
+  await db.prepare("INSERT INTO food_logs(user_id,consumed_date,consumed_at,recipe_title,note) VALUES(1,'2026-10-27','2026-10-27T12:00','Water',?)").bind(JSON.stringify({ ingredients: [{ name: "Water", amount: 1500, unit: "ml" }] })).run();
   assert.equal((await loadBuild(db, profile, "2026-10-29", autoT)).baseMl, 1600);
-  // Tuesday's drinks were wrong: it counts again from the log.
-  await forgetWaterFrom(db, "2026-10-27", "2026-10-29");
-  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM water_build").get().n, 1);
-  assert.equal((await loadBuild(db, profile, "2026-10-29", autoT)).baseMl, 1500);
 });
 
 test("a future day of Food judges no day from today on and stores none of them", async () => {
@@ -67,10 +69,11 @@ test("a future day of Food judges no day from today on and stores none of them",
   await ensure(db);
   await db.prepare("INSERT INTO fluid_log(user_id,date,consumed_at,ml,kind) VALUES(1,'2026-10-29','2026-10-29T09:00',300,'water')").run();
   const profile = { waterMode: "build", waterStart: 1500, waterFrom: "2026-10-27" }, autoT = { baseMl: 3200, exerciseMl: 0 };
+  db.sqlite.exec("CREATE TABLE food_logs (id INTEGER PRIMARY KEY, user_id INTEGER, consumed_date TEXT, consumed_at TEXT, recipe_title TEXT, note TEXT, status TEXT)");
   const built = await loadBuild(db, profile, "2026-11-02", autoT, "2026-10-29");
   assert.equal(built.baseMl, 1500);
   assert.ok(built.days.every(d => d.date < "2026-10-29"));
-  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM water_build WHERE date>='2026-10-28'").get().n, 0);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM water_build WHERE date>='2026-10-29'").get().n, 0);
 });
 
 test("drinks from the food diary count for Build-up as they do in Pití", async () => {
@@ -112,4 +115,11 @@ test("Build-up shows the last 7 days and the 7 before from the stored days", () 
   const w = waterGoal({ ml: 3000, baseMl: 3000, exerciseMl: 0 }, { waterMode: "build", waterStart: 1500 }, { baseMl: 1600, days }).build.weeks;
   assert.deepEqual(w[0], { drunkMl: 1500, goalMl: 1500, met: 6, days: 6 });
   assert.deepEqual(w[1], { drunkMl: 1200, goalMl: 1500, met: 0, days: 7 });
+});
+
+test("Oznámení → Pití off is remembered for the water push", async () => {
+  const { getAthleteState, updateAthleteState } = await import("../src/athlete-state.js");
+  const db = createD1(); db.userId = 1;
+  await updateAthleteState(db, { notify: { water: false } });
+  assert.equal((await getAthleteState(db)).notify.water, false);
 });
