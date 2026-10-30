@@ -261,3 +261,15 @@ test("a step between two whole-number zone bands belongs to the lower one, not t
   for (const zones of [CYCLING_ZONES, RUNNING_ZONES]) for (const [name, lo, hi] of zones) for (let v = lo; v <= hi; v++) assert.equal(zoneOf(v, zones), name, String(v));
   assert.equal(zoneOf(500), "sprint");
 });
+
+test("saving again with a time of day moves the workout already in the calendar", async () => {
+  const { alice } = users(), args = { workoutId: "pfd-vo2-5x4x112-90", date: "2026-10-03", confirm: true };
+  await withIntervals(async () => {
+    const first = await scheduleWorkoutInIntervals({ INTERVALS_API_KEY: "a" }, alice, args);
+    const again = await scheduleWorkoutInIntervals({ INTERVALS_API_KEY: "a" }, alice, { ...args, startTime: "18:00" });
+    assert.equal(again.status, "already_scheduled");
+    assert.equal(again.eventId, first.eventId);
+    const row = await alice.prepare("SELECT start_time FROM health_datapoints WHERE user_id=? AND external_id=?").bind(alice.userId, first.eventId).first();
+    assert.equal(String(row.start_time).slice(0, 16), "2026-10-03T18:00");
+  });
+});
