@@ -9,6 +9,7 @@ import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck,settleEne
 import {energyChoices,applyEnergyChoice} from './activity-energy-choices.js';
 import { sleepSessionFromRow, joinSplitNights } from "./sleep-sessions.js";
 import { energyBaseline, MISSING_LABELS, proteinReferenceKg, trendAdjustment, TREND_REASONS } from "./energy-profile.js";
+import { dayMacros, dietSummary } from "./diet.js";
 import { d1WeightTrend } from "./strength-context.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { writeIntervalsWeight, importIntervalsWeights } from "./weight-sync.js";
@@ -219,8 +220,6 @@ const CONFIG = {
 
   // The rest-day baseline, weekly goal and target weight are personal: see
   // energyBaseline in energy-profile.js.
-  proteinGramsPerKg: 2.0,
-
   defaultRideCarbsPerHour: 90,
   preRideCarbsPerKg: 1.0,
   preRideWindowHours: 2,
@@ -1871,29 +1870,15 @@ function activityKcalPerHourFor(type, weightKg) {
   return WEIGHT_BEARING.test(type) && kg > 0 ? Math.round(base * Math.min(1.3, Math.max(0.6, kg / 88))) : base;
 }
 
+function activityIsEndurance(activity) {
+  const text = `${activity?.type || ""} ${activity?.name || ""} ${activity?.payload?.type || ""} ${activity?.payload?.name || ""}`.toLowerCase();
+  // One-word types too: AlpineSki, BackcountrySki, VirtualRow, VirtualRun.
+  return /(run|running|swim|swimming|row|rowing)\b|nordic|ski(ing)?\b|běh|plav/.test(text);
+}
+
 function activityIsStrength(activity) {
   const text = `${activity?.type || ""} ${activity?.name || ""} ${activity?.payload?.type || ""} ${activity?.payload?.name || ""}`.toLowerCase();
   return ["weight", "strength", "gym", "lifting", "bodybuilding"].some(x => text.includes(x));
-}
-
-function dailyMacroTargets(weightKg, calorieTarget, context = {}) {
-  // Macros are per kg of body weight: without a weight or a target there are none.
-  const kg = Number(weightKg);
-  const kcal = Number(calorieTarget);
-  if (!(kg > 0) || !(kcal > 0)) return null;
-  const protein = Math.round(kg * CONFIG.proteinGramsPerKg);
-  // The calories and macros must describe the same plan.  Protein stays
-  // stable for recovery; fat moves slightly with the training sequence and
-  // carbohydrates receive the remainder of the available energy.
-  let fatPerKg = 0.90; // ordinary rest day: more satiating, lower carbohydrate
-  if (context.endurance) fatPerKg = 0.70;
-  else if (context.preRide) fatPerKg = 0.70; // make room for glycogen before the ride
-  else if (context.recoveryRide) fatPerKg = 0.75;
-  else if (context.strength) fatPerKg = 0.85;
-  const fat = Math.round(kg * fatPerKg);
-  const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
-
-  return { protein_g: protein, carbs_g: carbs, fat_g: fat };
 }
 
 async function nearbyRideContext(env, date) {
@@ -1925,8 +1910,10 @@ function nutritionContext(energy) {
   const planned = energy.unmatchedPlannedWorkouts || [];
   const cycling = actual.find(activityIsCycling) || planned.find(x => x.cycling);
   const strength = actual.some(activityIsStrength) || planned.some(activityIsStrength);
-  const totalEnduranceHours = actual.filter(activityIsCycling).reduce((sum, a) => sum + Number(a.durationHours || 0), 0) +
-    planned.filter(x => x.cycling).reduce((sum, x) => sum + Number(x.durationHours || 0), 0);
+  // Runs, swims and rows are endurance days as much as rides are.
+  const enduring = x => activityIsCycling(x) || x.cycling || activityIsEndurance(x);
+  const totalEnduranceHours = actual.filter(enduring).reduce((sum, a) => sum + Number(a.durationHours || 0), 0) +
+    planned.filter(enduring).reduce((sum, x) => sum + Number(x.durationHours || 0), 0);
 
   const cyclingActivities = actual.filter(activityIsCycling);
   const latestRide = cyclingActivities.filter(a => a.end).sort((a,b) => new Date(b.end).getTime() - new Date(a.end).getTime())[0];
@@ -2157,7 +2144,9 @@ async function energyForDate(env, date) {
     ...(await nearbyRideContext(env, date))
   };
   const proteinKg = proteinReferenceKg(weight ? Number(weight.value_numeric) : null, profile?.height);
-  const macroTargets = dailyMacroTargets(proteinKg, target, context);
+  // Protein, carbs and fat by the athlete's diet (diet.js); the same split
+  // for the Food screen, Today, the coach and the meal ideas.
+  const macroTargets = dayMacros(proteinKg, target, context, profile);
 
   return {
     date,
@@ -2196,6 +2185,7 @@ async function energyForDate(env, date) {
     estimatedTDEE,
     calorieTarget: target,
     macroTargets,
+    diet: dietSummary(profile, macroTargets),
     nutritionContext: context
   };
 }
@@ -2241,13 +2231,8 @@ async function analysisDaily(
       30
     );
 
-  const protein =
-    energy.proteinReferenceKg
-      ? Math.round(
-          energy.proteinReferenceKg *
-          CONFIG.proteinGramsPerKg
-        )
-      : null;
+  // The day's protein target as the macros have it (diet.js).
+  const protein = energy.macroTargets?.protein_g ?? null;
 
   const actualRide = energy.completedActivities.find(activityIsCycling);
   const plannedRide =
@@ -2305,6 +2290,7 @@ async function analysisDaily(
       protein: protein,
       calorieBreakdown: energy.calorieBreakdown,
       macros: energy.macroTargets,
+      diet: energy.diet,
       calorieTarget: energy.calorieTarget,
       targetWeightKg: energy.energyProfile.targetWeightKg,
       missing: energy.energyProfile.missing,
@@ -2380,7 +2366,11 @@ async function analysisEnergy(
         energy.estimatedPlannedActivityCalories,
 
       suppressedPlannedWorkouts:
-        energy.suppressedPlannedWorkouts
+        energy.suppressedPlannedWorkouts,
+
+      // The day's macros by the athlete's diet (diet.js), for the meal ideas.
+      macroTargets: energy.macroTargets,
+      diet: energy.diet
     },
 
     energyProfile:

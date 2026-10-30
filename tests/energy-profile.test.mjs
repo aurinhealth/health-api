@@ -78,6 +78,7 @@ test("the profile endpoint keeps only known values", () => {
   assert.deepEqual(normalizeProfile({ displayName: "  Petr   Bouma ", sex: "x", age: 12, height: 180, activity: "couch", sportHours: "3-6", goal: "lose_0.5", targetWeight: "72.5", extra: 1 }),
     { displayName: "Petr Bouma", sex: "", birthDate: "", age: null, height: 180, hrmax: null, rhr: null, activity: "", sportHours: "3-6", goal: "lose_0.5", targetWeight: 72.5,
       sleepGoal: null, wakeTime: "", wakeTimeWeekend: "", sleepTonight: null, meals: [], kcalGoal: null, waterMode: "", waterGoal: null, waterStart: null, waterFrom: "",
+      dietEating: "everything", dietStyle: "balanced", proteinPerKg: null, netCarbLimit: null, customSet: "fat", customCarbs: null, customFatPerKg: null, nutrientTargets: {},
       mainSport: "general", sportGoal: "", eventName: "", eventDate: "", weeklyHours: null });
 });
 
@@ -141,4 +142,15 @@ test("the server works without connections", () => {
   const entry = serverSource();
   assert.doesNotMatch(entry, /status:"onboarding"/);
   assert.match(entry, /source:"loadwise",connected:false/);
+});
+
+test("the daily analysis splits the target by the athlete's diet", async () => {
+  const daily = await dailyFor({ profile: { sex: "male", age: 30, height: 180, activity: "active", goal: "lose_0.5", dietStyle: "keto", dietEating: "vegan" }, weight: 80 });
+  const m = daily.nutrition.macros;
+  assert.equal(m.carbs_g, 30);
+  assert.equal(m.fill, "fat");
+  assert.equal(daily.nutrition.protein, m.protein_g);
+  assert.equal(m.protein_g, Math.round(80 * 2.2));
+  assert.ok(Math.abs(m.protein_g * 4 + m.carbs_g * 4 + m.fat_g * 9 - daily.nutrition.calorieTarget) <= 9);
+  assert.deepEqual([daily.nutrition.diet.style, daily.nutrition.diet.eating, daily.nutrition.diet.carbsLimitG, daily.nutrition.diet.netCarbs], ["keto", "vegan", 30, false]);
 });

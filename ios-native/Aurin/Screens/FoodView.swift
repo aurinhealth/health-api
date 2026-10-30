@@ -204,7 +204,8 @@ struct MacroCells: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            cell("Sacharidy", macros.carbs, Palette.carbs, first: true)
+            // Keto: net carbs against a limit (src/diet.js).
+            cell(macros.carbs.net == true ? "Čisté sacharidy" : "Sacharidy", macros.carbs, Palette.carbs, first: true)
             Rectangle().fill(Palette.hairline).frame(width: 1)
             cell("Bílkoviny", macros.protein, Palette.protein)
             Rectangle().fill(Palette.hairline).frame(width: 1)
@@ -221,17 +222,25 @@ struct MacroCells: View {
     }
 
     private func cell(_ title: String, _ amount: FoodSnapshot.Amount, _ color: Color, first: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let limit = amount.limit == true
+        let over = limit && (amount.eaten ?? 0) > (amount.target ?? .infinity)
+        return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 5) {
                 Circle().fill(color).frame(width: 7, height: 7)
-                Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
+                Text(title).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
             }
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(Fmt.int(amount.eaten ?? 0)).font(Typo.number(28)).foregroundStyle(Palette.ink)
-                if let target = amount.target { Text("/ " + Fmt.int(target) + " g").font(Typo.number(15)).foregroundStyle(Palette.faint) }
+                if let target = amount.target {
+                    Text(verbatim: (limit ? "/ max " : "/ ") + Fmt.int(target) + " g").font(Typo.number(15)).foregroundStyle(Palette.faint)
+                }
             }
             .lineLimit(1).minimumScaleFactor(0.7)
-            ProgressLine(fraction: share(amount), color: color, height: 3)
+            // A limit ends in a tick and turns rust once it is passed.
+            ProgressLine(fraction: share(amount), color: over ? Palette.rust : color, height: 3)
+                .overlay(alignment: .trailing) {
+                    if limit { Rectangle().fill(Palette.ink).frame(width: 2, height: 9) }
+                }
                 .padding(.trailing, 14)
         }
         .padding(.vertical, 16)

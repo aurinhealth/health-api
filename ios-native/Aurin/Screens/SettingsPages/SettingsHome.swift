@@ -286,6 +286,10 @@ struct FoodDrinkSettingsView: View {
     var body: some View {
         SettingsPage(title: "Výživa") {
             SettingsGroup {
+                NavigationLink { DietSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "leaf", color: Palette.green), title: "Strava")
+                }
+                SettingsDivider()
                 NavigationLink { MealSlotsSettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "fork.knife", color: Palette.amber), title: "Jídla dne")
                 }

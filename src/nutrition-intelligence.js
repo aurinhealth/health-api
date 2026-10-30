@@ -1,4 +1,5 @@
 import { trendAdjustment } from "./energy-profile.js";
+import { refillMacros } from "./diet.js";
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const n = (v, fallback = 0) => Number.isFinite(Number(v)) ? Number(v) : fallback;
 
@@ -166,15 +167,16 @@ export function buildNutritionPlan(context, options = {}) {
 
 // ChatGPT plans meals against the number the app shows. The app's day target
 // (profile, training and the Google Health energy budget) replaces the
-// estimate above; protein and fat follow the app, carbohydrates fill the rest.
+// estimate above; protein follows the app and the macro the diet fills takes the rest.
 export function withAppTarget(plan, daily) {
   const target = Math.round(Number(daily?.nutrition?.calorieTarget));
   if (!plan || !(target > 0)) return plan;
   const m = daily.nutrition.macros || {}, own = plan.macros || {};
   const pick = (...values) => values.filter(v => v != null && v !== "").map(Number).find(v => Number.isFinite(v) && v >= 0);
   const protein = Math.round(pick(m.protein_g, m.proteinGrams, own.proteinGrams) ?? 0);
-  const fat = Math.round(pick(m.fat_g, m.fatGrams, own.fatGrams) ?? 0);
-  const carbs = Math.max(0, Math.round((target - protein * 4 - fat * 9) / 4));
+  // The diet's own split (diet.js): on keto the carbs stay and fat fills.
+  const split = refillMacros({ ...m, protein_g: protein, fat_g: Math.round(pick(m.fat_g, m.fatGrams, own.fatGrams) ?? 0), carbs_g: Math.round(pick(m.carbs_g) ?? 0) }, target);
+  const fat = split.fat_g, carbs = split.carbs_g;
   return {
     ...plan,
     calorieTarget: target,
@@ -183,6 +185,7 @@ export function withAppTarget(plan, daily) {
     // The app's target carries its own trend correction; report that one.
     adaptiveCalorieAdjustment: Number(daily.nutrition.calorieBreakdown?.trendAdjustment) || 0,
     adaptiveCalorieReason: daily.nutrition.calorieBreakdown?.trendReason || "app_target",
-    macros: { proteinGrams: protein, carbsGrams: carbs, fatGrams: fat, caloriesFromMacros: protein * 4 + carbs * 4 + fat * 9 }
+    macros: { proteinGrams: protein, carbsGrams: carbs, fatGrams: fat, caloriesFromMacros: protein * 4 + carbs * 4 + fat * 9 },
+    ...(daily.nutrition.diet ? { diet: daily.nutrition.diet } : {})
   };
 }
