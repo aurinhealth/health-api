@@ -1781,6 +1781,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           const usual=withSportDays(prefs,template.sport,chosen);
           await saveWeekPlan(env.DB,{...prefs,days:usual.days,...(body.availability?{availability:withMinutes(prefs.availability,minutesList(body.availability)),availabilityMode:'manual'}:{})});
           if(week)await saveWeekPlan(env.DB,week,today);
+          // From this week: a week changed on its own (its days, its time) takes the new days too.
+          else{const own=await getWeekPlan(env.DB,today,{calendar:false});if(own.source==='week')await saveWeekPlan(env.DB,{...own,days:withSportDays(own,template.sport,chosen).days},today);}
           if(template.sport==='gym'&&plan.perWeek&&plan.perWeek!==chosen.length)await savePlanState(env.DB,{...plan,perWeek:chosen.length});
         }
         // A gym plan's sessions a week (2–7): gym days added or left out to match.
