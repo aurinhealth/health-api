@@ -40,7 +40,9 @@ concurrency:
 jobs:
   build:
     runs-on: macos-latest
-    timeout-minutes: 60
+    # On main the run also builds for iPhone and uploads it after the App Store
+    # preview; since the preview it takes over an hour (cancelled at 60 min).
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: ios-native
