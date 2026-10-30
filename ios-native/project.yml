@@ -124,6 +124,8 @@ targets:
         # keeps sending beats while the phone is locked during Režim tréninku.
         UIBackgroundModes:
           - fetch
+          # The morning readiness push wakes the app to load Today for the widgets.
+          - remote-notification
           - bluetooth-central
           # The rest's countdown and end tones with the phone locked (GymSignals.planRest).
           - audio

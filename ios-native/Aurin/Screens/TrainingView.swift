@@ -61,6 +61,8 @@ struct TrainingView: View {
             if let commit = current.settle(undo: false) { Task { await commit() } }
         }
         .task { await model.refreshIfStale(.training) }
+        // Every planned session of the week done: the App Store rating (AurinTips.swift).
+        .reviewAfterFinishedWeek(model.training?.sessions, demo: model.demo)
         .sheet(isPresented: $addingWorkout) { ManualWorkoutSheet() }
     }
 

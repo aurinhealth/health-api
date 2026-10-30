@@ -57,6 +57,14 @@ enum BackgroundRefresh {
         return synced || !AppleHealth.shared.enabled
     }
 
+    /// The morning readiness push wakes the app (content-available): the
+    /// server already has the night, so Today for the widgets follows, and
+    /// the widgets show the morning before the app is opened.
+    static func morningPush(api: APIClient) async -> Bool {
+        guard api.hasSession else { return false }
+        return await followToday(api: api)
+    }
+
     /// The server's Today for the widgets and the reminders (water after the
     /// day's target, a workout the watch already brought), then Aktivita dne
     /// for the new data, kept for Today's card (CoachPick.stored), so it opens
