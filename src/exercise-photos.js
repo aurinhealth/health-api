@@ -107,7 +107,20 @@ const FRAMES = {
   'Plate Forward Lunge': 'TrainToSmileTV',
   'Bodyweight Alternating Lateral Lunge': 'Ambitious Athletics',
   'Bulgarian Split Squat': 'Live Lean TV Daily Exercises',
-  'Single-Leg Step-Down': 'Horton Barbell'
+  'Single-Leg Step-Down': 'Horton Barbell',
+  // 30 Oct 2026: their own video showed the trainer talking, a full-frame logo
+  // or no usable pair, so the video was swapped for a clean demonstration.
+  'Cable Decline Bench Press': 'BODYCRAFT',
+  'Machine Underhand Row': 'Corey Inman',
+  'Dumbbell Feet Elevated Glute Bridge': 'Dangerfit Personal Training',
+  'Dumbbell Lateral Lunge': 'Rehab My Patient',
+  'Kettlebell Goblet Curl': 'Atomic Athlete',
+  'Banded Eccentric Tibialis Raise': 'Practical Wellness',
+  'B-stance Back Extension': 'Block Fitness',
+  'Bent-Knee Soleus Raise': 'Elite Performance Institute',
+  'Eccentric Calf Lowers': 'Black Bear Physical Therapy',
+  'Tibialis Raise': 'The Barefoot Sprinter',
+  'Pogo Hops': 'Hockey Training Exercise Demonstrations'
 };
 
 // Start and end position photo URLs for an exercise, or an empty list.

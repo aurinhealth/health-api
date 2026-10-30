@@ -2626,8 +2626,8 @@ export const TECHNIQUE = {
   ],
   "breathing": "Výdech při tlaku, nádech dolů.",
   "video": {
-   "id": "lxHdVzwO98A",
-   "title": "How To Do Decline Cable Press"
+   "id": "FyMKV2nUT8M",
+   "title": "Cable Decline Bench Press"
   },
   "query": "cable decline bench press"
  },
@@ -3470,9 +3470,8 @@ export const TECHNIQUE = {
   ],
   "breathing": "Výdech při přitahování, nádech zpět.",
   "video": {
-   "similar": true,
-   "id": "bxI-0tHUoUA",
-   "title": "DY Rows Reverse Grip Row Machine"
+   "id": "NZI45L-_Law",
+   "title": "Machine Row Underhand Grip"
   },
   "query": "machine underhand row"
  },
@@ -4333,8 +4332,8 @@ export const TECHNIQUE = {
   ],
   "breathing": "Výdech nahoru, nádech dolů.",
   "video": {
-   "id": "JZwPjtr4pCU",
-   "title": "Dumbbell-Resisted Feet Elevated Glute Bridge Raise"
+   "id": "jA1j8AKNT2o",
+   "title": "Feet elevated weighted glute bridge"
   },
   "query": "feet elevated dumbbell glute bridge"
  },
@@ -4438,8 +4437,8 @@ export const TECHNIQUE = {
   ],
   "breathing": "Nádech dolů, výdech nahoru.",
   "video": {
-   "id": "eV9F6LrlWhA",
-   "title": "Dumbbell Lateral Lunge"
+   "id": "dGdtmVq9RNc",
+   "title": "Dumbbell Goblet Lateral Lunge"
   },
   "query": "dumbbell lateral lunge"
  },
@@ -5321,8 +5320,8 @@ export const TECHNIQUE = {
   ],
   "breathing": "Výdech nahoru, nádech dolů.",
   "video": {
-   "id": "qmGmQ9T2pRg",
-   "title": "How to do Bicep Goblet Curls"
+   "id": "Z8KoDsB2fxM",
+   "title": "Kettlebell Curl"
   },
   "query": "kettlebell goblet curl"
  },
@@ -5825,9 +5824,9 @@ export const TECHNIQUE = {
   ],
   "breathing": "Výdech při přitažení, nádech při povolení.",
   "video": {
-   "id": "CkN3sya3KiQ",
-   "title": "Banded Tibia Raises",
-   "similar": true
+   "similar": true,
+   "id": "_dSeDXD3ZT4",
+   "title": "Banded Tibialis Raise"
   },
   "query": "banded tibialis raise"
  },
@@ -6099,9 +6098,8 @@ export const TECHNIQUE = {
   ],
   "breathing": "Výdech nahoru, nádech dolů.",
   "video": {
-   "id": "WJm88qItjeE",
-   "title": "How to Target Glutes on the Back Extension Machine (Glute Focused Hyperextensions)",
-   "similar": true
+   "id": "dphsl9Ui-mE",
+   "title": "B-Stance Glute Focused Back Extension"
   },
   "query": "b stance back extension"
  },
@@ -6164,8 +6162,8 @@ export const TECHNIQUE = {
   ],
   "breathing": "Výdech nahoru, nádech dolů.",
   "video": {
-   "id": "QAMHnR4zw_0",
-   "title": "Bent-Knee Soleus Calf Raises"
+   "id": "-1s4TMcicYM",
+   "title": "Bent Knee Soleus Calf Raise"
   },
   "query": "bent knee soleus raise"
  },
@@ -6290,7 +6288,7 @@ export const TECHNIQUE = {
   ],
   "breathing": "Výdech nahoru, nádech při spouštění.",
   "video": {
-   "id": "d7ZsskaHtfg",
+   "id": "3tc0lN_bW5o",
    "title": "Eccentric Heel Drop"
   },
   "query": "eccentric calf raise"
@@ -6458,8 +6456,8 @@ export const TECHNIQUE = {
   ],
   "breathing": "Výdech nahoru, nádech dolů.",
   "video": {
-   "id": "dnxy5DhY0Ks",
-   "title": "Tibialis Raise (Against Wall)"
+   "id": "VzIcGAgBiaM",
+   "title": "Tibialis Wall Raises"
   },
   "query": "tibialis raise wall"
  },
@@ -6938,6 +6936,10 @@ export const TECHNIQUE = {
    "Dopad na paty."
   ],
   "breathing": "Dýchej volně v rytmu poskoků.",
+  "video": {
+   "id": "wa1ClvLqSHo",
+   "title": "Ankle Pogo Jumps"
+  },
   "query": "pogo hops running drill"
  }
 };

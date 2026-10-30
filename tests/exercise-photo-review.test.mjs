@@ -68,3 +68,20 @@ test("exercises without any photo show frames from their own video, credited, 16
   assert.equal(techniqueFor("Low row").photoCredit, null);
   assert.equal(techniqueFor("Landmine press").photoCredit, null);
 });
+
+// 30 Oct 2026: new clean videos for exercises whose own video gave no usable frames.
+test("exercises with a swapped video show frames from that video", () => {
+  const SWAPPED_VIDEOS = {
+    "Cable Decline Bench Press": "FyMKV2nUT8M", "Machine Underhand Row": "NZI45L-_Law",
+    "Dumbbell Feet Elevated Glute Bridge": "jA1j8AKNT2o", "Dumbbell Lateral Lunge": "dGdtmVq9RNc",
+    "Kettlebell Goblet Curl": "Z8KoDsB2fxM", "Banded Eccentric Tibialis Raise": "_dSeDXD3ZT4",
+    "B-stance Back Extension": "dphsl9Ui-mE", "Bent-Knee Soleus Raise": "-1s4TMcicYM",
+    "Eccentric Calf Lowers": "3tc0lN_bW5o", "Tibialis Raise": "VzIcGAgBiaM", "Pogo Hops": "wa1ClvLqSHo",
+  };
+  for (const [name, id] of Object.entries(SWAPPED_VIDEOS)) {
+    const t = techniqueFor(name);
+    assert.equal(t.video?.id, id, name);
+    assert.equal(t.photos.length, 2, name);
+    assert.equal(t.photoCredit, FRAME_CREDITS[name], name);
+  }
+});
