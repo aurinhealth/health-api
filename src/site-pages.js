@@ -12,6 +12,13 @@ import {scriptPolicy} from './web-security.js';
 import {SITE_ORIGIN, SERVER_HOSTS} from './app-origin.js';
 
 
+// Faint stars for the night behind Sleep, the same scatter every time.
+const STARS = (() => {
+  let seed = 3, dots = '';
+  const rnd = () => (seed = (seed * 69069 + 1) % 4294967296) / 4294967296;
+  for (let i = 0; i < 60; i++) dots += `<circle cx='${(rnd() * 400).toFixed(0)}' cy='${(rnd() * 900).toFixed(0)}' r='${(.5 + rnd() * .8).toFixed(1)}' fill='white' opacity='${(.08 + rnd() * .25).toFixed(2)}'/>`;
+  return 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='400' height='900'>${dots}</svg>`);
+})();
 const siteCss = `
 @font-face{font-family:Newsreader;src:url(/site/fonts/newsreader.woff2) format("woff2");font-display:swap}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%;overflow-x:clip;color-scheme:light;scroll-padding-top:88px}
@@ -77,7 +84,7 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .sun .rg{position:absolute;inset:0;border-radius:50%;box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--sun) 35%,transparent);transform:scale(var(--r,.6));opacity:var(--o,.6)}
 .sun .rg:nth-child(2){--r:.5;--o:.75}.sun .rg:nth-child(3){--r:.72;--o:.5}.sun .rg:nth-child(4){--r:.94;--o:.25}
 .sun .mark{position:relative;filter:drop-shadow(0 14px 22px color-mix(in srgb,var(--sun) 45%,transparent))}
-.hero::before,.final::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(70% 55% at 22% 18%,var(--glow-sunrise) 0,transparent 100%)}
+.hero::before,.final::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(70% 55% at 22% 18%,var(--glow-sunrise) 0,transparent 100%);-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
 .final::before{background:radial-gradient(60% 60% at 50% 40%,var(--glow-sunrise) 0,transparent 100%)}
 
 /* Hero: the line on the left, the app's Today on the right with three numbers floating beside it. */
@@ -142,6 +149,7 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .flip .vis .device{left:0}
 .part{position:absolute;left:-44px;width:380px;border-radius:var(--r-22);overflow:hidden;background:var(--panel);box-shadow:0 0 0 1px var(--line),var(--shadow-float);opacity:0;z-index:3}
 .flip .part{left:304px}
+.part:has(>.one){width:300px;left:-6px}.flip .part:has(>.one){left:346px}
 .part img{display:block;width:100%;height:auto}
 .part.on{opacity:1}
 .part:has(>.dm.wait:not(.in)){opacity:0!important}
@@ -168,7 +176,14 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 /* Parts: the welcome's pages, each before the chapters of its part. The title and line on one side, the
    app's cards on the other over the part's tint; the cards rise and move once the part is in view. */
 .opener{position:relative;isolation:isolate;padding:150px 0 10px}
-.opener::before{content:"";position:absolute;left:0;right:0;top:40px;height:760px;z-index:-1;pointer-events:none;background:radial-gradient(60% 50% at 30% 30%,var(--glow) 0,transparent 100%)}
+/* The tint fades out at its top and bottom, so it never ends in a straight edge across the page. */
+.opener::before{content:"";position:absolute;left:0;right:0;top:-80px;height:1000px;z-index:-1;pointer-events:none;background:radial-gradient(60% 42% at 30% 38%,var(--glow) 0,transparent 100%);-webkit-mask-image:linear-gradient(transparent,#000 200px,#000 calc(100% - 240px),transparent);mask-image:linear-gradient(transparent,#000 200px,#000 calc(100% - 240px),transparent)}
+/* Sleep's part and chapter sit under a night sky in dark mode (the paywall's night, only here): the page darkens
+   into --night and back, with faint stars. In the light look --night is the page and --stars 0, so nothing shows. */
+/* Above the chapter, so its glow runs on over the chapter's night instead of ending in an edge. */
+#a-sleep{z-index:1;background:linear-gradient(var(--bg),var(--night) 75%)}
+#spanek{isolation:isolate;background:linear-gradient(var(--night),var(--night) 60%,var(--bg))}
+#a-sleep::after,#spanek::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:var(--stars);background:url("${STARS}") top center/400px 900px;-webkit-mask-image:linear-gradient(transparent,#000 240px,#000 calc(100% - 320px),transparent);mask-image:linear-gradient(transparent,#000 240px,#000 calc(100% - 320px),transparent)}
 .ac{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:56px;align-items:center}
 .opener h2.big{font-size:clamp(var(--fs-64),7vw,var(--fs-88))}
 .opener .sub{font-family:var(--serif);font-size:var(--fs-28);line-height:1.3}
@@ -244,6 +259,8 @@ main:focus{outline:none}
 .lines path.on{stroke-width:3}.lines .in.on{stroke:var(--green)}.lines .out.on{stroke:var(--amber-bar)}
 .pk{position:absolute;left:0;top:0;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px 0 8px;border-radius:var(--r-pill);background:var(--panel);box-shadow:var(--shadow-card);font-size:var(--fs-12);font-weight:600;white-space:nowrap;offset-rotate:0deg;offset-anchor:50% 50%;opacity:0;animation:travel 4.4s linear infinite;transition:filter .4s}
 .pk .icon{width:14px;height:14px}.pk.in{color:var(--green)}.pk.out{color:var(--amber)}
+/* What a line carries is named in the panel below; on the lines it travels as dots, which never cover each other's words. */
+.pk{width:10px;height:10px;padding:0;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 22%,transparent)}.pk.out{color:var(--amber-bar)}
 .pk:not(.on){visibility:hidden}
 @keyframes travel{0%{offset-distance:0%;opacity:0}12%{opacity:1}85%{opacity:1}100%{offset-distance:100%;opacity:0}}
 .pk.tall{animation-name:travel-tall}.pk.tall.late{animation-name:travel-tall-late}
@@ -436,6 +453,7 @@ main:focus{outline:none}
   .vis{display:grid;justify-items:center;height:auto}
   .vis .device,.flip .vis .device{position:relative;left:auto;top:auto;grid-area:1/1}
   .part,.flip .part{position:relative;grid-area:2/1;align-self:start;left:auto;top:auto!important;width:380px;max-width:100%;margin-top:-170px}
+  .part:has(>.one),.flip .part:has(>.one){left:auto;width:300px;margin-top:-56px}
   .ch .rail{max-width:none;margin-top:44px}
   .mu,.connect .intro,.faq{grid-template-columns:1fr;gap:32px}
   .ac{grid-template-columns:1fr;gap:32px;justify-items:center}.opener .head{justify-self:stretch}
@@ -463,6 +481,8 @@ main:focus{outline:none}
   /* The piece rebuilds what the screen shows, so on a phone it covers the screen's lower half: the same
      numbers are not read twice in a row, one under the other. */
   .part,.flip .part{margin-top:-310px}
+  /* A one-thing card only touches the phone's lower edge: the screen above it stays whole. */
+  .part:has(>.one),.flip .part:has(>.one){margin-top:-56px}
   .svc .io{grid-template-columns:1fr;gap:8px}.svc .lbl{padding-top:0}
   .panels{padding:20px}
   .site-foot .top{grid-template-columns:1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
@@ -788,8 +808,8 @@ export function overviewPage(request) {
   // where the screenshot cannot show the step (a moving screen, or one the sample day draws wrong).
   const scenes = [
     ['pripravenost', '', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal.', 'green', 'glow-today', [
-      ['readiness-parts', 'readyParts', 70, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal. The morning notification brings the same numbers and what to do today, weighing the days before and tomorrow’s workout.', 7000],
-      ['journal-impact', 'journal', 110, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000]]],
+      ['readiness-parts', 'readyOne', 330, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal. The morning notification brings the same numbers and what to do today, weighing the days before and tomorrow’s workout.', 7000],
+      ['journal-impact', 'journalOne', 330, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000]]],
     ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
       ['html:strain', 'strainMade', 200, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000]]],
     ['trenink', '', 'A plan that adapts.', 'An activity for every day, picked for how you recovered.', 'green', 'glow-today', [
@@ -798,21 +818,22 @@ export function overviewPage(request) {
       ['builder', 'builder', 200, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and builds the workout only from the equipment your gym has.', 8500],
       ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, set their length or pick a warm-up of your own, and move them into the order you like. Then start.', 7000]]],
     ['rezim', 'Training mode', 'Log every set in a tap.', 'Weights from last time, a rest timer and your summary.', 'green', 'glow-today', [
-      ['training-mode', 'tmTable', 140, 'Your weights, ready.', 'Every set is filled in with its weight, its reps and the plates for each side of the bar. Machine taken? Swap the exercise for a similar one.', 6000],
-      ['training-set', 'tmTick', 380, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets. Miss your reps or hit failure and the next set comes lighter; breeze through and it comes heavier.', 6000],
+      ['training-mode', 'tmOne', 220, 'Your weights, ready.', 'Every set is filled in with its weight, its reps and the plates for each side of the bar. Machine taken? Swap the exercise for a similar one.', 6000],
+      ['training-set', 'tickOne', 300, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets. Miss your reps or hit failure and the next set comes lighter; breeze through and it comes heavier.', 6000],
       ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, longer after squats than after curls, and stays on your lock screen. The last seconds count down with a vibration you feel even with the phone on the bench.', 13500],
       ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume, new records and the muscles you tired when you finish, saved to Apple Health. Then say how it went.', 6000]]],
     ['vyziva', '', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
-      ['food-day', 'foodTarget', 120, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.', 7500],
+      ['food-day', 'foodOne', 220, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.', 7500],
       ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000],
       ['food-day', 'drinks', 330, 'Drink to your goal.', 'Tap a drink, or the whale itself for your usual glass. At today’s goal it blows its spout. Rather a bottle, a flower or an octopus? Pick one in Settings.', 9500]]],
     ['spanek', '', 'Every night, in detail.', 'From any watch or ring you wear.', 'indigo', 'glow-health', [
-      ['sleep', 'sleepNight', 300, 'See how you slept.', 'Deep, REM and light sleep, when you fell asleep and when you woke up.'],
-      ['sleep-need', 'sleepNeed', 150, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
+      ['sleep', 'sleepOne', 330, 'See how you slept.', 'Deep, REM and light sleep, when you fell asleep and when you woke up.'],
+      ['sleep-need', 'needOne', 220, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
       ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
       ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
     ['kouc', '', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
-      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today or what to eat before a workout, or send a photo of your trainer’s plan. When it proposes a workout or a plan for your race, confirm it and it lands in your plan.', 11500]]]];
+      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today or what to eat before a workout, or send a photo of your trainer’s plan. When it proposes a workout or a plan for your race, confirm it and it lands in your plan.', 11500],
+      ['html:memory', 'coachMemory', 140, 'It remembers you.', 'Tell it about a sore knee, your schedule or a goal and it keeps that in mind. See everything it remembers, edit it or delete it.', 7000]]]];
   // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides
   // alternate. Steps of a chapter with more than one are buttons that switch the phone's screen.
   const chapter = ([id, eyebrow, h, p, tone, glow, list], n) => {
@@ -901,12 +922,11 @@ ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style
   const flowPaths = kind => { const L = FLOW[kind]; return {
     into: services.map((x, i) => L.into(L.src(i), L.core)),
     out: senders.map((x, j) => L.out(L.core, L.dst(j)))}; };
-  // A chip can carry a shorter label than the panel (a third item). On the phone, a chip's anchor slides from
-  // where its service sits across the box (its left edge at the left column, its right edge at the right) to
-  // its middle at the mark, so chips at the edge stay inside; a chip from the first row shows once it is past
-  // the second row's names (late).
-  const travel = (d, items, cls, id, kind, x, late = false) => items.slice(0, 3).map(([name, label, short], k, all) =>
-    `<span class="pk ${cls} ${kind}${late ? ' late' : ''}" data-svc="${id}" style="offset-path:path('${d}');${kind === 'tall' ? `--a0:${cls === 'in' ? pct(x, FLOW.tall.w) : '50%'};--a1:${cls === 'in' ? '50%' : pct(x, FLOW.tall.w)};` : ''}animation-delay:${(-k * 4.4 / all.length - (id.length % 3) * .6).toFixed(2)}s">${icon(name)}${short || label}</span>`).join('');
+  // Each thing carried travels its line as a dot (its name is in the panel below). On the phone, a dot's anchor
+  // slides from where its service sits across the box to its middle at the mark, so dots at the edge stay inside;
+  // a dot from the first row shows once it is past the second row's names (late).
+  const travel = (d, items, cls, id, kind, x, late = false) => items.slice(0, 3).map((item, k, all) =>
+    `<span class="pk ${cls} ${kind}${late ? ' late' : ''}" data-svc="${id}" style="offset-path:path('${d}');${kind === 'tall' ? `--a0:${cls === 'in' ? pct(x, FLOW.tall.w) : '50%'};--a1:${cls === 'in' ? '50%' : pct(x, FLOW.tall.w)};` : ''}animation-delay:${(-k * 4.4 / all.length - (id.length % 3) * .6).toFixed(2)}s"></span>`).join('');
   const layer = kind => { const L = FLOW[kind], P = flowPaths(kind);
     return `<svg class="lines ${kind}" viewBox="0 0 ${L.w} ${L.h}" aria-hidden="true">${services.map(({id}, i) => `<path data-svc="${id}" class="in" d="${P.into[i]}"/>`).join('')}${senders.map(({id}, j) => `<path data-svc="${id}" class="out" d="${P.out[j]}"/>`).join('')}</svg>
 <div class="pks ${kind}" aria-hidden="true">${services.map(({id, reads}, i) => travel(P.into[i], reads, 'in', id, kind, L.src(i)[0], kind === 'tall' && L.src(i)[1] < 100)).join('')}${senders.map(({id, sends}, j) => travel(P.out[j], sends, 'out', id, kind, L.dst(j)[0])).join('')}</div>`; };
