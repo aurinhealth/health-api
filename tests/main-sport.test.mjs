@@ -10,6 +10,7 @@ const shiftDays = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 86400000
 import { sportFromText } from "../src/athlete-focus.js";
 import { effectiveProfile } from "../src/energy-profile.js";
 import { shiftDate } from "../src/dashboard-shared.js";
+import { weekRoleOptions } from "../src/plan-context.js";
 
 const schema = readFileSync(new URL("../staging/schema.sql", import.meta.url), "utf8");
 // 52 weeks, oldest first; `fill(i)` gives week i its sessions: { ride: [n, minutes each], ... }.
@@ -138,4 +139,34 @@ test("a support sport gets no long or quality day and a smaller share", () => {
   assert.ok(planWeekRoles(days, { mainSport: "gym" }).every(d => d.items.every(x => !["long", "quality"].includes(x.role))));
   // A main sport with no day this week changes nothing.
   assert.deepEqual(planWeekRoles(days, { mainSport: "swim" }), planWeekRoles(days));
+});
+
+test("the own long day on the support sport takes no quality day from the main sport", () => {
+  const days = [["ride"], [], ["ride"], [], ["ride"], [], ["run"]];
+  const roles = planWeekRoles(days, { mainSport: "ride", longDay: 6, quality: 3 });
+  assert.equal(roles.filter(d => d.items.some(x => x.sport === "ride" && x.role === "quality")).length, 3);
+  assert.equal(roles[6].items[0].role, "long");
+});
+
+test("a week without a plan: a chosen main sport leads, an automatic one only when it is an endurance sport", async () => {
+  const raw = createD1(); raw.sqlite.exec(schema); const db = scopedDb(raw, 1);
+  const env = { DB: db, USER_ID: 1 };
+  const profiles = (saved, suggested) => {
+    raw.sqlite.exec("DELETE FROM dashboard_profile");
+    for (const [id, p] of [[1, saved], [2, suggested]]) if (p) raw.sqlite.prepare("INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(1,?,?)").run(id, JSON.stringify(p));
+  };
+  const history = { recentCount: 20, yearCount: 120 };
+  profiles({ mainSport: "auto" }, { mainSport: "strength", trainingHistory: history });
+  assert.deepEqual(await weekRoleOptions(env, null, null, null), {});
+  profiles({ mainSport: "auto" }, { mainSport: "cycling", trainingHistory: history });
+  assert.deepEqual(await weekRoleOptions(env, null, null, null), { mainSport: "ride" });
+  profiles({ mainSport: "strength" }, { mainSport: "cycling", trainingHistory: history });
+  assert.deepEqual(await weekRoleOptions(env, null, null, null), { mainSport: "gym" });
+  profiles(null, null);
+  assert.deepEqual(await weekRoleOptions(env, null, null, null), {});
+  // A plan's week sets the roles without reading the profile.
+  let reads = 0; const prepare = raw.prepare.bind(raw);
+  raw.prepare = sql => { if (/dashboard_profile/.test(sql)) reads++; return prepare(sql); };
+  assert.deepEqual(await weekRoleOptions(env, null, { sport: "run" }, { spec: { q: [{}, {}] } }), { quality: 2, prefer: "run", mainSport: "run" });
+  assert.equal(reads, 0);
 });

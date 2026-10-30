@@ -217,7 +217,7 @@ export function planWeekRoles(days = [], { readiness = "green", quality = null, 
   if (own) long = longDay;
   if (long != null && endurance.length >= 2) role[long] = "long";
   const usual = keyDays.length >= 4 ? 2 : keyDays.length >= 2 ? 1 : 0;
-  const planned = Number.isInteger(quality) ? Math.min(quality, Math.max(0, keyDays.length - (long != null && endurance.length >= 2 ? 1 : 0))) : usual;
+  const planned = Number.isInteger(quality) ? Math.min(quality, Math.max(0, keyDays.length - (role[long] && keyDays.includes(long) ? 1 : 0))) : usual;
   const wanted = readiness === "red" ? 0 : readiness === "yellow" ? Math.min(1, planned) : planned;
   // Short days (under an hour) take quality only when no other day of the same group can;
   // the plan's own sport still comes first.
