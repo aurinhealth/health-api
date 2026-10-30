@@ -39,11 +39,11 @@ p{margin:0}
 /* The waitlist: the app is not in the App Store yet; an e-mail field with its button (store()). */
 .wl{display:inline-flex;flex-direction:column;align-items:center;max-width:100%}
 .wl .done{display:none}
-.wl .field{display:flex;align-items:center;gap:6px;height:56px;width:340px;max-width:100%;padding:0 6px 0 22px;border-radius:var(--r-pill);background:var(--panel);box-shadow:0 0 0 1px var(--line),var(--shadow-float)}
+.wl .field{display:flex;align-items:center;gap:6px;height:56px;width:420px;max-width:100%;padding:0 6px 0 22px;border-radius:var(--r-pill);background:var(--panel);box-shadow:0 0 0 1px var(--line),var(--shadow-float)}
 .wl input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:var(--fs-17);color:var(--text)}
 .wl .field:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:3px}
-.wl .go{flex:none;width:44px;height:44px;border:0;border-radius:50%;background:var(--button);display:flex;align-items:center;justify-content:center;cursor:pointer}
-.wl .go svg,.wl .done svg{width:20px;height:20px;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.wl .go{flex:none;display:flex;align-items:center;justify-content:center;gap:6px;height:44px;padding:0 16px 0 18px;border:0;border-radius:var(--r-pill);background:var(--button);color:var(--on-button);font:inherit;font-size:var(--fs-14);font-weight:600;white-space:nowrap;cursor:pointer}
+.wl .go svg,.wl .done svg{width:20px;height:20px;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}.wl .go svg{width:16px;height:16px}
 .wl .go svg{stroke:var(--on-button)}
 .wl .done{align-items:center;gap:10px;height:56px;padding:0 26px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--green) 13%,var(--panel));color:var(--green);font-size:var(--fs-17);font-weight:600}
 .wl .done svg{stroke:currentColor}
@@ -88,6 +88,8 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .hero h1{font-size:clamp(var(--fs-44),6.4vw,var(--fs-88));line-height:.98;letter-spacing:-.03em;margin-top:22px}
 /* Each word rises inside its own clipped box; the box reaches past the letters so the italic's overhang isn't cut. */
 .hero h1 .w{display:inline-block;vertical-align:top}
+/* On a laptop's short screen the headline takes less height, so the email field stays on the first screen. */
+@media (min-width:961px) and (max-height:860px){.hero h1{max-width:10.5ch;font-size:clamp(var(--fs-44),9vh,var(--fs-88))}.hero .sun{zoom:.75}}
 .hero h1 .w>span{display:inline-block}
 .hero h1 .it{font-style:italic;color:var(--green)}
 .lede{max-width:500px;margin-top:26px;font-size:var(--fs-20);color:var(--sec)}
@@ -324,11 +326,6 @@ main:focus{outline:none}
 .faq details p{padding:0 2px 22px;color:var(--sec);max-width:640px}
 
 /* A light call between the parts and the rest: one line and a secondary button down to the waitlist. */
-.mid{padding:120px 0 0;text-align:center}
-.mid p{font:400 var(--fs-28)/1.2 var(--serif);letter-spacing:-.01em}
-.ghost{display:inline-flex;align-items:center;gap:8px;height:48px;margin-top:20px;padding:0 22px;border:1px solid var(--line);border-radius:var(--r-pill);color:var(--text);font-size:var(--fs-17);font-weight:600;text-decoration:none}
-.ghost:hover{background:var(--track)}
-.ghost svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 
 /* The end: the mark, the name and the waitlist once more. */
 .final{position:relative;padding:180px 0 170px;text-align:center;overflow:clip}
@@ -418,11 +415,11 @@ main:focus{outline:none}
   /* Hero: the words first, the phone under them. */
   .hero{padding-top:120px}
   .hero .grid{grid-template-columns:1fr;text-align:center}
+  /* The mark is already in the nav: on a tablet and a phone the hero starts with the words. */
+  .hero .sun{display:none}
   .lede{margin-left:auto;margin-right:auto}
   .hero .wl{align-items:center}
   .stage{margin-top:48px}
-  /* The mark is already in the nav: the hero starts with the words and the phone. */
-  .hero .sun{display:none}
   .morning{padding-top:32px}
   /* Chapters: the words, then the phone with its piece over the lower part, then the steps. */
   .chapter{padding-top:110px}
@@ -441,7 +438,7 @@ main:focus{outline:none}
   .ac{grid-template-columns:1fr;gap:32px;justify-items:center}.opener .head{justify-self:stretch}
   .opener{padding-top:110px}.chapter.opens{padding-top:64px}
   .sun{margin:-16px auto -8px}
-  .muscles,.watch,.connect,.privacy,#faq,.mid{padding-top:110px}
+  .muscles,.watch,.connect,.privacy,#faq{padding-top:110px}
   .faq .side{position:static}
 }
 @media (max-width:560px){
@@ -501,7 +498,7 @@ const TURNSTILE = 'https://challenges.cloudflare.com';
 const WEB_ANALYTICS = 'https://static.cloudflareinsights.com';
 const turnstileScript = `<script src="${TURNSTILE}/turnstile/v0/api.js?render=explicit&onload=aurinTurnstile" async defer></script>`;
 const store = id => `<form class="wl" action="/waitlist" method="post" novalidate>
-<span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" spellcheck="false" required><button type="submit" class="go" aria-label="Join the waitlist">${ARROW}</button></span>
+<span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" spellcheck="false" required><button type="submit" class="go">Get early access${ARROW}</button></span>
 <span class="ts" data-key="${TURNSTILE_SITE_KEY}"></span>
 <span class="done" role="status">${CHECK}<span>You’re on the list</span></span>
 <button type="button" class="share">${SHARE}<span>Know someone who trains? Share Aurin</span></button>
@@ -515,7 +512,7 @@ const store = id => `<form class="wl" action="/waitlist" method="post" novalidat
 const headScript = `<script>document.documentElement.classList.add('js')</script>`;
 const siteScript = `<script>(function(){var r=document.documentElement;
 var rm=matchMedia('(prefers-reduced-motion: reduce)'),still=rm.matches,IO='IntersectionObserver' in window;if(rm.addEventListener)rm.addEventListener('change',function(e){still=e.matches;});
-if(IO){var sh=document.querySelector('.site-head'),cta=[].slice.call(document.querySelectorAll('.wl,.mid .ghost')),seen=new Set();if(sh&&cta.length){var co=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting)seen.add(e.target);else seen.delete(e.target);});sh.classList.toggle('away',!seen.size);});cta.forEach(function(el){co.observe(el);});}}
+if(IO){var sh=document.querySelector('.site-head'),cta=[].slice.call(document.querySelectorAll('.wl')),seen=new Set();if(sh&&cta.length){var co=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting)seen.add(e.target);else seen.delete(e.target);});sh.classList.toggle('away',!seen.size);});cta.forEach(function(el){co.observe(el);});}}
 if(IO){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{rootMargin:'0px 0px -8% 0px'});
 document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});}else document.querySelectorAll('.reveal').forEach(function(el){el.classList.add('in');});
 // Each chapter's stage is drawn at one size and scaled to the window.
@@ -655,7 +652,7 @@ addEventListener('keydown',function(e){if(!card.classList.contains('on'))return;
 
 // The share image (link previews on X, Facebook, LinkedIn, Slack, iMessage). The networks keep an image
 // for days by its URL, so ?v= goes up whenever og-en.jpg is rendered again (a JPEG: a tenth of the PNG's size).
-const SHARE_IMAGE = '/site/og-en.jpg?v=10';
+const SHARE_IMAGE = '/site/og-en.jpg?v=11';
 const SHARE_IMAGE_ALT = 'Aurin: A coach that knows how you slept. The Today screen with readiness 78.';
 
 function sitePage({title, description, lang, origin, path, body, czech=false, index=true, jsonLd=null, status=200}) {
@@ -962,11 +959,11 @@ ${layer('wide')}${layer('tall')}
 <div class="hero">
 <div class="wrap grid">
 <div class="copy">
-${sun(104)}
-<span class="kicker"><i></i>For iPhone · now in TestFlight</span>
+${sun(72)}
+<span class="kicker"><i></i>For iPhone · early access</span>
 <h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w${i >= SLANT ? ' it' : ''}" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
 <p class="lede">Aurin reads your sleep, HRV and workouts from the watch or ring you wear, and every morning turns them into one number, one plan and one coach.</p>
-<div class="cta">${store('top')}<p class="note">We invite people to the test version in TestFlight. Testing costs nothing.</p></div>
+<div class="cta">${store('top')}<p class="note">Free early access on iPhone. We’ll email you an invite.</p></div>
 </div>
 <div class="stage"><div class="rig">
 <div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">${day.hrv} ms</div><div class="d up">↑ ${day.hrv - day.hrvBaseline} ms above normal</div></div>
@@ -984,8 +981,6 @@ ${sun(104)}
 ${ACT_LIST.map(a => act(a) + '\n' + a[4].map(id => id === 'svaly' ? muscles : chapter(scenes.find(x => x[0] === id), scenes.findIndex(x => x[0] === id))).join('\n')).join('\n')}
 
 ${watch}
-
-<section class="mid"><div class="wrap reveal"><p>Try it on your own mornings.</p><a class="ghost" href="#join">Join the waitlist ${ARROW}</a></div></section>
 ${actNav}
 
 <section id="connections" class="connect"><div class="wrap">
