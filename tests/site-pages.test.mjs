@@ -288,3 +288,22 @@ test('the Apple Watch chapter shows the watch app on the sample morning',async()
   assert.equal((section.match(/class="aw-s[ "]/g)||[]).length,5,'one watch, five screens');
   assert.equal((section.match(/class="aw-w"/g)||[]).length,1);
 });
+
+test('the privacy policy, terms and health data policy name the operator as a sole trader, and every transfer outside the EU has its safeguard',async()=>{
+  const get=async(fn,path)=>(await fn(new Request('https://aurin.health'+path))).text();
+  const privacy=await get(privacyPage,'/privacy'),cs=await get(privacyPage,'/cs/privacy');
+  for(const html of [privacy,cs,await get(termsPage,'/terms'),await get(termsPage,'/cs/terms'),await get(healthDataPage,'/health-data')]){
+    assert.match(html,/IČO\)? ?30194202/);
+    assert.match(html,/Vrchlického 142, Sedlec, 284 03 Kutná Hora/);
+    assert.doesNotMatch(html,/private individual|soukromá osoba/);
+  }
+  for(const html of [privacy,cs]){
+    for(const party of ['Cloudflare, Inc.','OpenAI','Apple','GitHub, Inc.','Google LLC','Intervals.icu Ltd','Wahoo Fitness','Open-Meteo GmbH'])assert.ok(html.includes('<strong>'+party+'</strong> ('),party);
+    assert.match(html,/dataprivacyframework\.gov/);
+    assert.doesNotMatch(html,/otherwise the EU Standard Contractual Clauses|jinak standardními smluvními doložkami EU/);
+    assert.match(html,/iCloud Mail/);
+    assert.match(html,/GitHub Actions/);
+  }
+  const health=await get(healthDataPage,'/health-data');
+  for(const part of ['sexual activity','mood','GitHub','iCloud Mail','<strong>To collect it.</strong>','<strong>To share it.</strong>','Also send health data'])assert.ok(health.includes(part),part);
+});
