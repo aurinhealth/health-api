@@ -17,7 +17,24 @@ struct StepUpRequest: Identifiable {
 extension View {
     /// Shows "Confirm it's you" while `request` is set.
     func stepUpSheet(_ request: Binding<StepUpRequest?>) -> some View {
-        sheet(item: request) { StepUpSheet(request: $0) }
+        modifier(StepUpPresenter(request: request))
+    }
+}
+
+/// Runs the confirmed change only once the sheet has fully closed, so a change
+/// that shows a system sheet of its own (adding a passkey) is not cut short.
+private struct StepUpPresenter: ViewModifier {
+    @Binding var request: StepUpRequest?
+    @State private var afterClosing: (@MainActor () async -> Void)?
+
+    func body(content: Content) -> some View {
+        content.sheet(item: $request, onDismiss: {
+            guard let retry = afterClosing else { return }
+            afterClosing = nil
+            Task { @MainActor in await retry() }
+        }) { pending in
+            StepUpSheet(request: pending) { afterClosing = pending.retry }
+        }
     }
 }
 
@@ -26,6 +43,8 @@ extension View {
 /// sheet closes and the change goes on by itself.
 struct StepUpSheet: View {
     let request: StepUpRequest
+    /// Called once the server accepted the confirmation, before the sheet closes.
+    let onConfirmed: () -> Void
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var codeSent = false
@@ -135,10 +154,9 @@ struct StepUpSheet: View {
         }
     }
 
-    /// The sheet closes and the refused change runs again, now allowed.
+    /// The sheet closes, then the refused change runs again, now allowed (StepUpPresenter).
     private func confirmed() {
-        let retry = request.retry
+        onConfirmed()
         dismiss()
-        Task { @MainActor in await retry() }
     }
 }

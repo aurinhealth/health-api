@@ -152,3 +152,30 @@ test("the address is shown masked", () => {
   assert.equal(maskedEmail("a@x.cz"), "a•••@x.cz");
   assert.equal(maskedEmail(""), "");
 });
+
+test("codes confirming it's you never block the address's sign-in codes", async () => {
+  const { env, sent } = await setup({ EMAIL_CHANGE_CODES_PER_DAY: "1" });
+  const user = await member(env);
+  // The e-mail change codes of the day are used up; confirming has its own budget.
+  await handleAccountApi(request("/app/api/account/email/start", { body: { email: "x@example.com" }, cookie: (await stepUpCookie(user.id, user.sessionEpoch, env.SESSION_SECRET)).split(";")[0] }), env, {}, new URL(ORIGIN + "/app/api/account/email/start"), session(user));
+  assert.equal((await stepUp(env, user, "/app/api/account/step-up/start", {})).status, 200);
+  const code = codeIn(sent.at(-1));
+  // Opened again within the minute: the code already sent is still the one to type in.
+  assert.deepEqual(await (await stepUp(env, user, "/app/api/account/step-up/start", {})).json(), { status: "ok", email: "fr•••@example.com", pending: true });
+  // Wrong codes for confirming lock only confirming, never signing in with the address.
+  const wrong = code === "000000" ? "111111" : "000000";
+  for (let i = 0; i < 6; i++) await stepUp(env, user, "/app/api/account/step-up/verify", { code: wrong });
+  const before = sent.length;
+  await handleEmailLogin(request("/auth/email/start", { body: { email: "friend@example.com" } }), env, "/auth/email/start");
+  assert.equal(sent.length, before + 1, "a sign-in code still goes out at once");
+  assert.equal((await handleEmailLogin(request("/auth/email/verify", { body: { email: "friend@example.com", code: codeIn(sent.at(-1)) } }), env, "/auth/email/verify")).status, 200);
+});
+
+test("checks that need no confirmation come first", async () => {
+  const { env } = await setup();
+  const user = await member(env);
+  const call = (path, body) => handleAccountApi(request(path, { body }), env, {}, new URL(ORIGIN + path), session(user));
+  assert.equal((await call("/app/api/account/email/start", { email: "friend@example.com" })).status, 400, "the same address");
+  assert.equal((await call("/app/api/account/email/start", { email: "not-an-address" })).status, 400, "not an address");
+  assert.equal((await call("/app/api/account/delete", { confirm: "" })).status, 400, "deleting without SMAZAT");
+});

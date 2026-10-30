@@ -32,6 +32,7 @@ const MAX_REVIEW_FAILURES = 20;
 const DEFAULT_CODES_PER_DAY = 500;
 const RESERVED_SHARE = 0.2;
 const DEFAULT_CHANGE_CODES_PER_DAY = 100;
+const DEFAULT_STEP_UP_CODES_PER_DAY = 500;
 // Per caller: asking for a code, and checking one.
 export const START_LIMITS = { minute: 5, hour: 30, day: 50 };
 export const VERIFY_LIMITS = { minute: 10, hour: 30, day: 100 };
@@ -112,27 +113,35 @@ export async function sendCode(env, email, lang = "cs", { now = Date.now(), code
   const access = await emailCodeAccess(env.DB, env, email);
   if (!access) return false;
   const sent = code || await fixedReviewCode(env.DB, env, email, now) || randomCode();
-  return claimAndSend(env.DB, env, email, sent, "email-code", signInCodeEmail(lang, sent), now, { open: access === "open", known });
+  return (await claimAndSend(env.DB, env, email, sent, "email-code", signInCodeEmail(lang, sent), now, { open: access === "open", known })) === "sent";
 }
 
 // `open`: the address gets a code only because anyone may sign up, so it draws on the open share.
 // `change`: a code for moving an account to this address, which draws on its own budget only.
+// `stepUp`: a code confirming it's you (step-up.js), on its own budget too; `email` is then the
+// account's own row ("step-up:<id>") and `to` its address, so these codes, their day's limit and
+// their wrong tries never touch the address's sign-in codes.
 // `known`: the nonce of a device that signed in with the address (knownDevice); it has its own
 // day's codes instead of the address's, and the address's lock does not hold it.
-async function claimAndSend(db, env, email, code, purpose, message, now, { open = false, change = false, known = null } = {}) {
+// Returns "sent", or why not: "resend" (one went out less than a minute ago), "daily" (the day's
+// codes are used up), "locked" (too many wrong codes today) or "budget" (all codes of the day).
+async function claimAndSend(db, env, email, code, purpose, message, now, { open = false, change = false, stepUp = false, known = null, to = email } = {}) {
   const seconds = Math.floor(now / 1000), day = today(now);
   // The address's own limits are checked first, so a code it would not get spends no budget.
   const current = await db.prepare("SELECT sent_at, day, day_count, fail_day, fail_count FROM email_login_codes WHERE email=?").bind(email).first();
-  if (current && current.sent_at > seconds - RESEND_SECONDS) return false;
-  if (!known && current && ((current.day === day && current.day_count >= MAX_SENDS_PER_DAY) || (current.fail_day === day && current.fail_count >= MAX_FAILED_PER_DAY))) return false;
-  if (known && !(await allowRequest(db, "email-known-codes:" + known, { day: MAX_SENDS_PER_DAY }, now))) return false;
+  if (current && current.sent_at > seconds - RESEND_SECONDS) return "resend";
+  if (!known && current && current.fail_day === day && current.fail_count >= MAX_FAILED_PER_DAY) return "locked";
+  if (!known && current && current.day === day && current.day_count >= MAX_SENDS_PER_DAY) return "daily";
+  if (known && !(await allowRequest(db, "email-known-codes:" + known, { day: MAX_SENDS_PER_DAY }, now))) return "daily";
   // All codes together: the budget of a day, so an open sign-up cannot turn the sender into a spam
   // source. The open share is claimed first: a refusal there never takes from the shared budget.
-  if (change) {
-    if (!(await allowRequest(db, "email-codes:change:day", { day: changeCodesPerDay(env) }, now))) { console.warn("E-mail change code budget of the day is used up"); return false; }
+  if (stepUp) {
+    if (!(await allowRequest(db, "email-codes:step-up:day", { day: stepUpCodesPerDay(env) }, now))) { console.warn("Step-up code budget of the day is used up"); return "budget"; }
+  } else if (change) {
+    if (!(await allowRequest(db, "email-codes:change:day", { day: changeCodesPerDay(env) }, now))) { console.warn("E-mail change code budget of the day is used up"); return "budget"; }
   } else {
-    if (open && !(await allowRequest(db, "email-codes:open:day", { day: openCodesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day for new addresses is used up"); return false; }
-    if (!(await allowRequest(db, "email-codes:day", { day: codesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day is used up"); return false; }
+    if (open && !(await allowRequest(db, "email-codes:open:day", { day: openCodesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day for new addresses is used up"); return "budget"; }
+    if (!(await allowRequest(db, "email-codes:day", { day: codesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day is used up"); return "budget"; }
   }
   // Claimed before sending, so two quick requests never send two codes or pass the daily limit; the
   // code it replaces is read in the same transaction, to put it back if the e-mail does not go out.
@@ -145,10 +154,11 @@ async function claimAndSend(db, env, email, code, purpose, message, now, { open 
     WHERE email_login_codes.sent_at <= ? AND (email_login_codes.day IS NOT excluded.day OR email_login_codes.day_count < ?)`)
       .bind(email, hash, seconds + CODE_SECONDS, seconds, day, seconds - RESEND_SECONDS, known ? Number.MAX_SAFE_INTEGER : MAX_SENDS_PER_DAY)
   ]);
-  if (!(Number(claimed.meta?.changes) > 0)) return false;
+  // Another request claimed it a moment ago.
+  if (!(Number(claimed.meta?.changes) > 0)) return "resend";
   await db.prepare("DELETE FROM email_login_codes WHERE sent_at < ?").bind(seconds - STALE_SECONDS).run().catch(() => {});
   try {
-    await sendEmail(env, { to: email, ...message });
+    await sendEmail(env, { to, ...message });
   } catch (error) {
     // Nobody got the new code: the one before it works again, and tries on either still count.
     const previous = before.results?.[0];
@@ -156,13 +166,24 @@ async function claimAndSend(db, env, email, code, purpose, message, now, { open 
       .bind(previous?.code_hash ?? null, Number(previous?.expires_at) || 0, Number(previous?.attempts) || 0, email, hash).run().catch(() => {});
     throw error;
   }
-  return true;
+  return "sent";
+}
+
+// What the user reads when a code did not go out (claimAndSend's reason).
+export function codeRefusal(reason) {
+  if (reason === "locked") return json({ message: LOCKED_TODAY() }, 429);
+  if (reason === "daily") return json({ message: L("Kódů na dnešek už bylo moc. Zkus to zítra.", "Too many codes for today. Try again tomorrow.") }, 429);
+  if (reason === "budget") return json({ message: L("Kód teď nejde poslat. Zkus to později.", "A code can't be sent right now. Try again later.") }, 429);
+  return json({ message: L("Kód jsme poslali před chvílí. Další můžeš chtít za minutu.", "We sent a code a moment ago. You can ask for another in a minute.") }, 429);
 }
 
 export const codesPerDay = env => { const n = Number(env?.EMAIL_CODES_PER_DAY); return Number.isInteger(n) && n > 0 ? n : DEFAULT_CODES_PER_DAY; };
 // What addresses that get a code only through OPEN_SIGNUP may use of it; the rest is kept for the others.
 export const openCodesPerDay = env => { const all = codesPerDay(env); return all - Math.ceil(all * RESERVED_SHARE); };
 export const changeCodesPerDay = env => { const n = Number(env?.EMAIL_CHANGE_CODES_PER_DAY); return Number.isInteger(n) && n > 0 ? n : DEFAULT_CHANGE_CODES_PER_DAY; };
+// Codes confirming it's you go only to the account's own address, never to one typed in; their own
+// budget keeps deleting and downloading the data working when the e-mail change codes run out.
+export const stepUpCodesPerDay = env => { const n = Number(env?.EMAIL_STEP_UP_CODES_PER_DAY); return Number.isInteger(n) && n > 0 ? n : DEFAULT_STEP_UP_CODES_PER_DAY; };
 
 async function verifyCode(env, email, input, known = null) {
   const refused = await useCode(env.DB, env, email, input, "email-code", known);
@@ -195,7 +216,7 @@ async function useCode(db, env, email, input, purpose, known = null) {
     return locked ? json({ message: LOCKED_TODAY() }, 429) : json({ message: EXPIRED() }, 400);
   }
   // The fixed App Review code: tries add up over its whole life, whichever code was sent last.
-  const review = purpose === "email-code" || purpose.startsWith("step-up:") ? await reviewTriesKey(db, env, email, time) : null;
+  const review = purpose === "email-code" ? await reviewTriesKey(db, env, email, time) : null;
   if (review && !(await claimReviewTry(db, review, now))) return json({ message: REVIEW_LOCKED() }, 429);
   if (!timingSafeEqualString(row.code_hash, await codeHash(env, email, code, purpose))) {
     return json({ message: row.attempts >= MAX_ATTEMPTS ? EXPIRED() : L("Kód nesedí. Zkontroluj ho, nebo si nech poslat nový.", "That code is wrong. Check it or send a new one.") }, 400);
@@ -234,7 +255,9 @@ export const emailChangeRefusal = error => json({ message: CHANGE_REFUSED[error]
 // so only someone who reads it can move the account there; the old address is told afterwards.
 //   POST /app/api/account/email/start { email }        sends the code
 //   POST /app/api/account/email/verify { email, code } changes the address
-export async function handleEmailChange(request, env, url, session, ctx) {
+// stepUp: the "confirm it's you" check (step-up.js), asked after the address passed the checks that
+// need no confirmation, and before anything looks the address up.
+export async function handleEmailChange(request, env, url, session, ctx, stepUp = null) {
   if (url.pathname !== "/app/api/account/email/start" && url.pathname !== "/app/api/account/email/verify") return null;
   if (request.method !== "POST") return json({ message: L("Použij POST.", "Use POST.") }, 405);
   if (!session.signedIn || !session.user) return json({ message: L("Přihlášení vypršelo. Přihlas se znovu.", "Your session has expired. Sign in again.") }, 401);
@@ -246,6 +269,8 @@ export async function handleEmailChange(request, env, url, session, ctx) {
   if (url.pathname === "/app/api/account/email/start") {
     if (email === normalizeEmail(user.email)) return emailChangeRefusal("same");
     if (user.isOwner || email === normalizeEmail(env.OWNER_EMAIL)) return emailChangeRefusal("owner");
+    const unconfirmed = stepUp ? await stepUp() : null;
+    if (unconfirmed) return unconfirmed;
     // Per account and per caller, before any address is looked up, so rotating addresses runs into them.
     const time = Date.now();
     if (!(await allowRequest(db, "email-change:user:" + user.id, CHANGE_USER_LIMITS, time)) || !(await allowClient(db, request, sessionSecret(env), "email-change", time, CHANGE_CLIENT_LIMITS))) {
@@ -254,7 +279,8 @@ export async function handleEmailChange(request, env, url, session, ctx) {
     if (await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first()) return emailChangeRefusal("taken");
     const code = randomCode(), lang = requestLanguage(request);
     const sent = await claimAndSend(db, env, email, code, purpose, emailChangeCodeEmail(lang, code), time, { change: true });
-    if (!sent) return json({ message: L("Kód na tuhle adresu jsme poslali před chvílí. Další můžeš chtít za minutu.", "We sent a code to this address a moment ago. You can ask for another in a minute.") }, 429);
+    if (sent === "resend") return json({ message: L("Kód na tuhle adresu jsme poslali před chvílí. Další můžeš chtít za minutu.", "We sent a code to this address a moment ago. You can ask for another in a minute.") }, 429);
+    if (sent !== "sent") return codeRefusal(sent);
     return json({ status: "ok" });
   }
   const refused = await useCode(db, env, email, body?.code, purpose);
@@ -273,22 +299,34 @@ export async function handleEmailChange(request, env, url, session, ctx) {
 }
 
 // Confirming it's you before a sensitive change (step-up.js): a code to the account's own address.
-// It draws on the e-mail change budget and limits, so it never takes from the codes for signing in.
-// App Review's address gets the fixed review code here too: the reviewer can delete the account.
+// The code lives in the account's own row ("step-up:<id>"), with its own day's limits and wrong
+// tries and its own budget, so a stolen session asking for codes or guessing them never locks the
+// owner out of signing in by e-mail. App Review's address gets the fixed review code here too: the
+// reviewer can delete the account.
+// Returns { sent: true }, { pending: true } when a code went out less than a minute ago (still good
+// to type in), or the refusal.
+const stepUpRow = user => "step-up:" + Number(user.id);
+export const STEP_UP_VERIFY_USER_LIMITS = { minute: 5, hour: 15, day: 30 };
+
 export async function sendStepUpCode(request, env, user) {
   const db = env.RAW_DB || env.DB, email = normalizeEmail(user.email), time = Date.now();
   if (!(await allowRequest(db, "step-up:user:" + user.id, CHANGE_USER_LIMITS, time)) || !(await allowClient(db, request, sessionSecret(env), "step-up", time, CHANGE_CLIENT_LIMITS))) {
-    return json({ message: L("Příliš mnoho žádostí o kód. Zkus to později.", "Too many code requests. Try again later.") }, 429);
+    return { refused: json({ message: L("Příliš mnoho žádostí o kód. Zkus to později.", "Too many code requests. Try again later.") }, 429) };
   }
   const code = await fixedReviewCode(db, env, email, time) || randomCode();
-  const sent = await claimAndSend(db, env, email, code, "step-up:" + user.id, stepUpCodeEmail(requestLanguage(request), code), time, { change: true });
-  if (!sent) return json({ message: L("Kód jsme poslali před chvílí. Další můžeš chtít za minutu.", "We sent a code a moment ago. You can ask for another in a minute.") }, 429);
-  return null;
+  const sent = await claimAndSend(db, env, stepUpRow(user), code, "step-up:" + user.id, stepUpCodeEmail(requestLanguage(request), code), time, { stepUp: true, to: email });
+  if (sent === "sent") return { sent: true };
+  if (sent === "resend") return { pending: true };
+  return { refused: codeRefusal(sent) };
 }
 
 // The refusal, or null when the code sent by sendStepUpCode was right (and is now used up).
-export function useStepUpCode(env, user, input) {
-  return useCode(env.RAW_DB || env.DB, env, normalizeEmail(user.email), input, "step-up:" + user.id);
+export async function useStepUpCode(request, env, user, input) {
+  const db = env.RAW_DB || env.DB, time = Date.now();
+  if (!(await allowRequest(db, "step-up-verify:user:" + user.id, STEP_UP_VERIFY_USER_LIMITS, time)) || !(await allowClient(db, request, sessionSecret(env), "step-up-verify", time, VERIFY_LIMITS))) {
+    return json({ message: L("Příliš mnoho pokusů. Zkus to za chvíli.", "Too many attempts. Try again in a moment.") }, 429);
+  }
+  return useCode(db, env, stepUpRow(user), input, "step-up:" + user.id);
 }
 
 // zone: the account's time zone when someone else (an admin) made the change.

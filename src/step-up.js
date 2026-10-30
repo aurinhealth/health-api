@@ -58,11 +58,14 @@ export async function handleStepUpApi(request, env, url, session) {
   const user = session.user;
   if (url.pathname === "/app/api/account/step-up/start") {
     if (!emailConfigured(env) || !user.email) return json({ message: L("Posílání e-mailů není zapnuté.", "Sending emails isn't turned on.") }, 404);
-    return (await sendStepUpCode(request, env, user)) || json({ status: "ok", email: maskedEmail(user.email) });
+    const result = await sendStepUpCode(request, env, user);
+    if (result.refused) return result.refused;
+    // A code sent less than a minute ago (the sheet was closed and opened again) is still the one to type in.
+    return json({ status: "ok", email: maskedEmail(user.email), ...(result.pending ? { pending: true } : {}) });
   }
   if (url.pathname === "/app/api/account/step-up/verify") {
     const body = await request.json().catch(() => ({}));
-    const refused = await useStepUpCode(env, user, body?.code);
+    const refused = await useStepUpCode(request, env, user, body?.code);
     return refused || verified(env, user);
   }
   if (url.pathname === "/app/api/account/step-up/passkey/options") return stepUpPasskeyOptions(request, env, user);

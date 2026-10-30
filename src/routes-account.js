@@ -55,22 +55,16 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
     try{const result=await saveConsent(env,await request.json().catch(()=>({})));return Response.json(result,{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({message:error.message},{status:400});}
   }
-  // Confirming it's you (step-up.js), which the four routes below need first.
+  // Confirming it's you (step-up.js), which adding a passkey, changing the e-mail, the export and
+  // deleting the account ask for once their own checks have passed.
   if (url.pathname.startsWith("/app/api/account/step-up/")) return handleStepUpApi(request, env, url, session);
-  const sensitive = (url.pathname === "/app/api/passkeys/options" && request.method === "POST")
-    || (url.pathname === "/app/api/account/email/start" && request.method === "POST")
-    || (url.pathname === "/app/api/account/export" && request.method === "GET")
-    || (url.pathname === "/app/api/account/delete" && request.method === "POST");
-  if (sensitive) {
-    const refused = await requireStepUp(request, env, session);
-    if (refused) return refused;
-  }
+  const stepUp = () => requireStepUp(request, env, session);
   if (url.pathname.startsWith("/app/api/passkeys")) {
-    const passkeyApi = await handlePasskeyApi(request, env, url, session, ctx);
+    const passkeyApi = await handlePasskeyApi(request, env, url, session, ctx, stepUp);
     if (passkeyApi) return passkeyApi;
   }
   if (url.pathname.startsWith("/app/api/account/email/")) {
-    const emailChange = await handleEmailChange(request, env, url, session, ctx);
+    const emailChange = await handleEmailChange(request, env, url, session, ctx, stepUp);
     if (emailChange) return emailChange;
   }
   // Settings → Účet: every other device is signed out; this one gets a fresh cookie.
@@ -90,6 +84,7 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
   // The user's own data: download everything, or delete the account with it.
   if(url.pathname==='/app/api/account/export'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    const unconfirmed=await stepUp();if(unconfirmed)return unconfirmed;
     // NDJSON, streamed page by page (account-data.js): a large account never sits in memory whole.
     return new Response(exportAccountStream(env,session.user),{headers:{'Content-Type':'application/x-ndjson; charset=utf-8','Content-Disposition':'attachment; filename="aurin-data-'+localToday()+'.ndjson"','Cache-Control':'no-store'}});
   }
@@ -98,6 +93,7 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     const body=await request.json().catch(()=>({}));
     if(String(body.confirm||'').trim().toUpperCase()!=='SMAZAT')return Response.json({message:'Pro potvrzení napiš SMAZAT.'},{status:400});
+    const unconfirmed=await stepUp();if(unconfirmed)return unconfirmed;
     try{
       const result=await deleteAccount(await connectionEnvironment(env),session.user);
       // The session cookie goes too.
