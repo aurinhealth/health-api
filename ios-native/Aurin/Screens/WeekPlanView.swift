@@ -472,6 +472,7 @@ struct WeekPlanView: View {
     /// `removed`: the session "Odebrat z plánu" took out; it stays out and the
     /// sessions that changed around it are marked.
     private func proposeAI(correction: String? = nil, removed: WeekSessionDraft? = nil) async {
+        timesBefore = []
         working = true
         defer { working = false }
         error = nil
@@ -604,6 +605,7 @@ struct WeekPlanView: View {
             } else {
                 SecondaryButton(title: "Naplánovat znovu", systemImage: "arrow.counterclockwise") {
                     sessions = []
+                    timesBefore = []
                     summary = nil
                     check = nil
                 }
