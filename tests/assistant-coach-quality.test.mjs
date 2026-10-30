@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { assistantTask, isSimpleMessage, askCoach, coachContext, compactActivity, coachAnswerText, TRUNCATED_NOTE, strengthProgress, nutritionContext, engineSport, focusGoal, sleepNights, sleepNeedContext, localNow } from '../src/coach-assistant.js';
+import { assistantTask, isSimpleMessage, askCoach, coachContext, compactActivity, coachAnswerText, TRUNCATED_NOTE, strengthProgress, nutritionContext, engineSport, gymDay, strengthDay, focusGoal, sleepNights, sleepNeedContext, localNow } from '../src/coach-assistant.js';
 import { isFoodLogMessage } from '../src/food-chat.js';
 import { validateCoachActions, actionSafetyContext, actionsNote, COACH_ACTION_FORMAT } from '../src/coach-actions.js';
 import { explicitPreference } from '../src/athlete-state.js';
@@ -326,4 +326,27 @@ test('the coach sees how the nights went, not only how long, and the sleep debt'
   assert.ok(need.debt7dMinutes>=200);
   assert.ok(need.tonightMinutes>=420);
   assert.equal(sleepNeedContext([],{date:'2026-10-05'}),null);
+});
+
+test('a strength athlete gets a gym day from the engine; a ride or run only when asked (nález 20b)', () => {
+  const today = '2026-10-30';
+  assert.equal(gymDay({ sport: 'strength' }), true);
+  assert.equal(gymDay({ sport: 'strength' }, null, 'Můžu dnes jet na kolo?'), false);
+  assert.equal(gymDay({ sport: 'strength' }, { sport: 'run' }), false);
+  assert.equal(gymDay({ sport: 'cycling' }), false);
+  const context = coachContext({ date: today, week: { days: [] }, gym: { history: [] }, focus: { sport: 'strength' }, gymFirst: true, availabilityMinutes: 50 });
+  const rec = context.cyclingCoachV2.recommendation;
+  assert.equal(context.cyclingCoachV2.sport, 'gym');
+  assert.match(rec.session.kind, /^gym/);
+  assert.ok(rec.session.durationMinutes <= 50);
+  assert.equal(rec.decisionRule, 'strength_main_sport');
+  assert.ok(context.cyclingCoachV2.alternatives.every(a => a.onlyWhenAsked));
+  assert.ok(context.cyclingCoachV2.readiness, 'readiness stays');
+  // Red readiness: mobility; legs trained in 48 h: upper body.
+  const red = strengthDay({ readiness: { status: 'red' }, load: {}, recommendation: { session: { kind: 'recovery' } }, alternatives: [] });
+  assert.equal(red.recommendation.session.kind, 'gym_recovery');
+  const legs = strengthDay({ readiness: { status: 'green' }, load: { lowerBodyGymSignals48h: 2 }, recommendation: { session: { kind: 'threshold' } }, alternatives: [] });
+  assert.equal(legs.recommendation.session.focus, 'upper');
+  const paused = { athleteState: { paused: true }, recommendation: { session: { kind: 'rest' } } };
+  assert.equal(strengthDay(paused), paused, 'illness or injury keeps the pause');
 });

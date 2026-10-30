@@ -166,6 +166,29 @@ export function engineSport(focus,appContext=null,message=''){
   if(asked.length===1)return asked[0];
   return focus?.sport==='running'?'run':focus?.sport==='swimming'?'swim':'ride';
 }
+// A strength athlete's day is a gym day (revize doporučování 2026-10-16,
+// nález 20b): the engine keeps the readiness and the load, the gym generator
+// builds the workout. A ride or run comes only when the screen or the message asks.
+export function gymDay(focus,appContext=null,message=''){
+  if(focus?.sport!=='strength')return false;
+  const s=appContext?.sport;if(s==='ride'||s==='run')return false;
+  return !RUN_WORDS.test(message)&&!RIDE_WORDS.test(message);
+}
+// The engine's day turned into a gym day by readiness: red is mobility and
+// light strength, yellow a lighter session without sets to failure, green a
+// full one. Legs worked in the last 48 hours leave an upper-body day. The
+// endurance session stays an alternative for when the athlete asks.
+export function strengthDay(engine,availabilityMinutes=null){
+  if(!engine||engine.athleteState?.paused)return engine;
+  const status=engine.readiness?.status,legs=Number(engine.load?.lowerBodyGymSignals48h)>0,time=Number(availabilityMinutes)>0?Number(availabilityMinutes):null;
+  const focus=status==='red'?'mobility':legs?'upper':'full';
+  const session=status==='red'?{kind:'gym_recovery',name:L('Mobilita a lehká síla','Mobility and light strength'),durationMinutes:Math.min(time||30,30),focus,intensity:'RPE <= 5'}
+    :status==='yellow'?{kind:'gym',name:L('Silový trénink, lehčí','Strength training, lighter'),durationMinutes:Math.min(time||45,60),focus,intensity:'RPE <= 7, no sets to failure'}
+    :{kind:'gym',name:L('Silový trénink','Strength training'),durationMinutes:Math.min(time||60,90),focus,intensity:'RPE 7-9'};
+  const endurance=engine.recommendation?.session;
+  return {...engine,sport:'gym',recommendation:{session,adaptations:[legs?L('Nohy pracovaly v posledních 48 h: dnes horní polovina těla.','Legs worked in the last 48 h: upper body today.'):null].filter(Boolean),decisionRule:'strength_main_sport',progression:null},
+    alternatives:[...(endurance&&endurance.kind!=='rest'?[{...endurance,onlyWhenAsked:true}]:[]),...(engine.alternatives||[]).map(a=>({...a,onlyWhenAsked:true}))]};
+}
 // The engine's goal from the main event: base far out, build in the last 12
 // weeks; the final 3 weeks stay automatic (the engine has no taper phase).
 export function focusGoal(focus){
@@ -210,7 +233,7 @@ export function recoveryForCoach(r) {
   };
 }
 
-export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[],recoveryTime=null,journal=null}) {
+export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,gymFirst=false,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[],recoveryTime=null,journal=null}) {
   const strengthSince=shiftDay(date,-14);
   const strengthSets=(gym?.history||[]).filter(r=>r.workout_date>=strengthSince&&r.workout_date<=date&&/^(WORK|DROP)$/.test(String(r.type||'WORK').toUpperCase())).sort((a,b)=>String(b.workout_date).localeCompare(String(a.workout_date))).slice(0,120);
   const days = week?.days?.map(row => ({
@@ -223,11 +246,12 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
   // hard training there is said and another day offered (běh 10, S21).
   const longOrRace = x => /long|dlouh|závod|race/i.test(String(x?.name || "")) || Number(x?.durationHours) >= (/run/i.test(String(x?.type || "")) ? 1.5 : 2.5);
   days?.forEach((d, i) => { const next = days[i + 1]?.planned?.find(longOrRace); if (next) d.beforeLong = next.name || (/run/i.test(String(next.type || "")) ? "long run" : "long ride"); });
-  const cyclingCoachV2 = buildCyclingCoachV2({
+  const engine = buildCyclingCoachV2({
     date, daily, week, fitness, health, gym,
     preferences:{cadence:"85–95 rpm",...preferences},
     availabilityMinutes, goal:goal||focusGoal(focus), manualReadiness, capabilities,athleteState,sport:sport||engineSport(focus),focus,profile,checkin,upcomingTest,recoveryTime
   });
+  const cyclingCoachV2 = gymFirst ? strengthDay(engine, availabilityMinutes) : engine;
   return {
     date,...(now?{now}:{}),weekday:weekdayOf(date),
     athleteState:cyclingCoachV2.athleteState.status,statusNote:cyclingCoachV2.athleteState.note,
