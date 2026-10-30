@@ -1087,6 +1087,7 @@ function withRecoveryTime(today,training){
 // The open-water choice of a swimmer or triathlete (Zóny → Plavání); one row, only for them.
 async function swimOpenWater(env,focus){
   if(!['swimming','triathlon'].includes(focus?.sport))return null;
+  if(focus.cannotSwim100m)return 'off';
   return (await getTrainingProfile(env.DB).catch(()=>({})))?.openWater||'off';
 }
 async function profileTriathlonSplit(env,profile,history){

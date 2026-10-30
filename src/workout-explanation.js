@@ -208,6 +208,17 @@ const SWIM_HOW_EN = {
   vo2max: ["Fast but with technique: if your stroke falls apart, slow down.", "The longer rests at the wall are part of the session."],
   sprint: ["Short and all out, with full rests.", "A strong catch and quick legs, head down."]
 };
+// A swim's food and drink by its length (Precision Fuel & Hydration: up to 1 h
+// 0–30 g of carbs/h, 1–2 h 30–60 g/h, longer 60–90 g/h). Drinking in the pool
+// is a sensible reminder, not a measured need.
+function swimFueling(minutes, environment) {
+  const open = environment === "outdoor";
+  const before = L("Ráno nalačno stačí malá svačina se sacharidy (banán, rohlík s medem) půl hodiny před plaváním.", "Swimming early: a small carb snack (a banana, toast with honey) half an hour before is enough.");
+  const after = L("Po plavání jídlo se sacharidy a bílkovinami do hodiny.", "After the swim, a meal with carbs and protein within the hour.");
+  if (minutes <= 60) return [before, L("Během plavání stačí voda.", "Water is enough during the swim."), after];
+  if (minutes <= 120) return [before, open ? L("Na 1–2 h ve volné vodě: 30–60 g sacharidů za hodinu, gel v kapse neoprenu nebo od parťáka na břehu.", "For 1–2 h in open water: 30–60 g of carbs an hour, a gel in your wetsuit or from a buddy on the shore.") : L("30–60 g sacharidů za hodinu: iontový nápoj v láhvi na kraji, napij se mezi sériemi; i ve vodě se potíš.", "30–60 g of carbs an hour: a sports drink in a bottle at the side, sipped between sets; you sweat in the water too."), after];
+  return [before, L("Přes 2 h: 60–90 g sacharidů za hodinu (směs glukózy a fruktózy), každých 20–30 min kousek.", "Over 2 h: 60–90 g of carbs an hour (a glucose and fructose mix), a little every 20–30 min."), after];
+}
 function explainSwim(workout, structure, { coach, environment, thresholds, planned, system, minutes }) {
   const swimPace = n(thresholds?.swimCss);
   const how = [...(L(SWIM_HOW_CS, SWIM_HOW_EN)[system] || L(SWIM_HOW_CS, SWIM_HOW_EN).endurance)];
@@ -218,7 +229,7 @@ function explainSwim(workout, structure, { coach, environment, thresholds, plann
     why: [...(coach.rationale || []), ...readinessLines(coach)],
     how,
     environment: [...(workout.environment_notes || [])],
-    fueling: minutes > 60 ? [L("Láhev s pitím nech na kraji a napij se mezi sériemi; i ve vodě se potíš.", "Keep a bottle at the side and drink between sets; you sweat in the water too.")] : [L("Po plavání jídlo se sacharidy a bílkovinami.", "After the swim, a meal with carbs and protein.")],
+    fueling: swimFueling(minutes, environment),
     swimPace: swimPace || null, poolLength: n(thresholds?.poolLength) || null, distanceMeters: n(workout.distance_meters) || null,
     steps: swimRows(structure, { swimPace }),
     planned: planned ? { name: planned.name, minutes: planned.minutes, system: planned.system, intensityFactor: planned.intensityFactor, steps: swimRows(planned.structure || [], { swimPace }) } : null

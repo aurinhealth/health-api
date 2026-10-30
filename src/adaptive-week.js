@@ -236,6 +236,6 @@ export function weekProposal({ prefs, start, today, week = {}, fitness = {}, sta
   if (!ctl) targets = capRunVolume(withPlan(estimatedTargets(roles, start, today, loads)), weeklyRunCap(history || [], start), runCommitted);
   if (split) targets = { ...targets, items: (targets.items || []).map(x => splitItem(x, split, proposedPrefs.days[(Date.parse(x.date + 'T12:00:00Z') - Date.parse(start + 'T12:00:00Z')) / 86400000] || [])) };
   targets = capWeekTargets(targets, proposedPrefs, existing, weather);
-  targets = { ...targets, items: withOpenWater(targets.items, { start, openWater, daysToRace: focus?.event?.daysLeft ?? null, weather }) };
+  targets = { ...targets, items: withOpenWater(targets.items, { start, openWater: focus?.cannotSwim100m ? 'off' : openWater, daysToRace: focus?.event?.daysLeft ?? null, weather }) };
   return { prefs: proposedPrefs, items: targets.items, targets, warnings, ...(split ? { split } : {}), mode: existing.some(d => sessionsOn(d).length) ? 'review_and_fill' : 'fill', missingAvailability: !proposedPrefs.days.some(d => d.length) && !prefs.availability.some(d => d.minutes > 0) };
 }
