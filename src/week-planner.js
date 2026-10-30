@@ -63,7 +63,8 @@ export function sanitizeWeekPlan(input = {}) {
   return { days, location, availability: normalizeAvailability(input.availability), weeklyActivities: count, sessions: sanitizeSessions(input.sessions, days),...(['auto','manual'].includes(input.availabilityMode)?{availabilityMode:input.availabilityMode}:{}),
     ...(alternate ? { alternate, availabilityB: normalizeAvailability(input.availabilityB) } : {}),
     // The day of the long ride or run (0 = Monday); none: the day with the most free time.
-    ...(Number.isInteger(input.longDay) && input.longDay >= 0 && input.longDay <= 6 ? { longDay: input.longDay } : {}) };
+    // longDay: the athlete's own long ride or run day; null (kept, so a week can hold "none") for the plan's pick.
+    longDay: Number.isInteger(input.longDay) && input.longDay >= 0 && input.longDay <= 6 ? input.longDay : null };
 }
 const mondayOfWeek = date => { const d = new Date(date + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7); return d.toISOString().slice(0, 10); };
 // With two weeks in turn: true when the week of `date` is a week B.
@@ -145,7 +146,7 @@ export async function saveWeekPlan(db, input, date = null) {
 export function weekOverride(prefs, defaults = {}) {
   const same = key => JSON.stringify(prefs[key] ?? null) === JSON.stringify(defaults[key] ?? null);
   const own = {};
-  for (const key of ['days', 'location', 'availability', 'weeklyActivities', 'sessions', 'availabilityMode']) if (key in prefs && !same(key)) own[key] = prefs[key];
+  for (const key of ['days', 'location', 'availability', 'weeklyActivities', 'sessions', 'availabilityMode', 'longDay']) if (key in prefs && !same(key)) own[key] = prefs[key];
   if ('days' in own || 'sessions' in own) Object.assign(own, { days: prefs.days, sessions: prefs.sessions });
   // Time for a weekday set by hand is the athlete's, not the starting template's.
   if ('availability' in own && prefs.availabilityMode) own.availabilityMode = prefs.availabilityMode;
@@ -195,7 +196,7 @@ export function planWeekRoles(days = [], { readiness = "green", quality = null, 
     if (longest != null && (long == null ? endurance.length >= 3 || free(longest) >= free(next) + 30 : free(longest) >= free(long) + 30)) long = longest;
   }
   // The athlete's own long day ("Long ride", "Long run") wins when it is a ride or run day.
-  const own = Number.isInteger(longDay) && endurance.includes(longDay);
+  const own = Number.isInteger(longDay) && endurance.includes(longDay) && !avoided(longDay);
   if (own) long = longDay;
   if (long != null && endurance.length >= 2) role[long] = "long";
   const usual = endurance.length >= 4 ? 2 : endurance.length >= 2 ? 1 : 0;

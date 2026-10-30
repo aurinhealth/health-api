@@ -147,5 +147,14 @@ test("the athlete's own long day wins, with no key session the day before", asyn
   assert.notEqual(own[5].items[0].role, "quality", "no key session on Saturday");
   assert.equal(longOf(roles(2)), 5, "a day without a run is ignored");
   assert.equal(sanitizeWeekPlan({ longDay: 6 }).longDay, 6);
-  assert.equal(sanitizeWeekPlan({ longDay: 9 }).longDay, undefined);
+  assert.equal(sanitizeWeekPlan({ longDay: 9 }).longDay, null);
+  assert.equal(longOf(planWeekRoles(days, { quality: 2, avoid: "run", ...roleTime({ availability: time([0, 60, 0, 75, 0, 150, 120]), longDay: 6 }) })) === 6, false, "not on a sport still being learnt");
+});
+
+test("from next week: this week keeps its long day", async () => {
+  const { weekOverride } = await import("../src/week-planner.js");
+  const week = sanitizeWeekPlan({ days: [[], ["run"], [], ["run"], [], ["run"], ["run"]] });
+  const usual = sanitizeWeekPlan({ ...week, longDay: 6 });
+  assert.deepEqual(weekOverride(week, usual), { longDay: null });
+  assert.equal(sanitizeWeekPlan({ ...usual, ...weekOverride(week, usual) }).longDay, null);
 });

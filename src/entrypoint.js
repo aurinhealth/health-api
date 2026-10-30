@@ -1752,7 +1752,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
         const body=await request.json().catch(()=>({}));
         const current=async()=>{const plan=(await syncedPlans(env,today)).active;if(!plan)throw new Error(L('Nemáš aktivní plán.', 'You have no active plan.'));return plan;};
-        if(body.action==='stop')await stopPlan(env.DB,{gym:body.sport==='gym'});
+        if(body.action==='stop'){
+          await stopPlan(env.DB,{gym:body.sport==='gym'});
+          // The own long day belonged to the plan that ended.
+          if(body.sport!=='gym'){const prefs=await getWeekPlan(env.DB);if(Number.isInteger(prefs.longDay))await saveWeekPlan(env.DB,{...prefs,longDay:null});}
+        }
         // The answer to the plan's proposal (planProposal), and undoing it.
         else if(body.action==='proposal'||body.action==='undo'){
           const plan=await current();
@@ -1805,11 +1809,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           const prefs=await getWeekPlan(env.DB),week=body.from==='next'?await getWeekPlan(env.DB,today,{calendar:false}):null;
           const usual=withSportDays(prefs,template.sport,chosen);
           // longDay: the long ride's or run's day (0–6), null for the day with the most free time.
-          const longDay=body.longDay===undefined?prefs.longDay:Number.isInteger(body.longDay)&&chosen.includes(body.longDay)?body.longDay:null;
+          const longDay=body.longDay===undefined||!['ride','run'].includes(template.sport)?prefs.longDay:Number.isInteger(body.longDay)&&chosen.includes(body.longDay)?body.longDay:null;
           await saveWeekPlan(env.DB,{...prefs,days:usual.days,longDay,...(body.availability?{availability:withMinutes(prefs.availability,minutesList(body.availability)),availabilityMode:'manual'}:{})});
           if(week)await saveWeekPlan(env.DB,week,today);
           // From this week: a week changed on its own (its days, its time) takes the new days too.
-          else{const own=await getWeekPlan(env.DB,today,{calendar:false});if(own.source==='week')await saveWeekPlan(env.DB,{...own,days:withSportDays(own,template.sport,chosen).days},today);}
+          else{const own=await getWeekPlan(env.DB,today,{calendar:false});if(own.source==='week')await saveWeekPlan(env.DB,{...own,days:withSportDays(own,template.sport,chosen).days,longDay},today);}
           if(template.sport==='gym'&&plan.perWeek&&plan.perWeek!==chosen.length)await savePlanState(env.DB,{...plan,perWeek:chosen.length});
         }
         // A gym plan's sessions a week (2–7): gym days added or left out to match.
@@ -1830,7 +1834,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           const perWeek=template.sport==='gym'&&Number(body.perWeek)>=2&&Number(body.perWeek)<=7?Math.round(Number(body.perWeek)):null;
           const count=perWeek||(Number(body.count)>0?Number(body.count):null);
           const need=chosen&&template.sport!=='triathlon'?withSportDays(prefs,template.sport,chosen):planDays(template,prefs,template.sport==='triathlon'?null:count);
-          if(need.added.length||need.removed?.length||(chosen&&template.sport!=='triathlon'))await saveWeekPlan(env.DB,{...prefs,days:need.days});
+          // A new ride or run plan starts without an earlier plan's own long day.
+          const dropLong=template.sport!=='gym'&&Number.isInteger(prefs.longDay);
+          if(need.added.length||need.removed?.length||(chosen&&template.sport!=='triathlon')||dropLong)await saveWeekPlan(env.DB,{...prefs,days:need.days,...(dropLong?{longDay:null}:{})});
           // What the result compares with at the end: FTP, fitness and the estimate now.
           const [thresholds,ctl]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),currentCtl(env,ctx)]);
           const estimate=planPreview(template,{ctl,days:sportDays(need.days,template.sport),firstDay:when.firstDay,startDate:when.startDate,...planTimeOf(prefs),perWeek});
@@ -1892,8 +1898,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const otherTemplate=other&&getTemplate(other.templateId);
       preview.added=need.added||[];
       // The long ride's or run's day: the athlete's own, or the one the plan picks from the free time.
-      if(template.sport!=='gym'){const planned=Array.from({length:7},(_,i)=>days.includes(i)?[template.sport]:[]),roles=planWeekRoles(planned,roleTime(prefs)),auto=planWeekRoles(planned,{minutes:freeMinutes(prefs)});
-        const longOf=r=>r.findIndex(d=>d.items.some(x=>x.role==='long'));preview.long={day:longOf(roles)>=0?longOf(roles):null,auto:longOf(auto)>=0?longOf(auto):null,own:Number.isInteger(prefs.longDay)&&days.includes(prefs.longDay)};}
+      // The whole usual week with the plan's days, as planWeekRoles sees it (gym and other sports too).
+      if(['ride','run'].includes(template.sport)){const week=usualFor(prefs,today),planned=withSportDays(week,template.sport,days).days;
+        const longOf=time=>{const i=planWeekRoles(planned,time).findIndex(d=>d.items.some(x=>x.role==='long'));return i>=0?i:null;};
+        const day=longOf(roleTime(week));preview.long={day,auto:longOf({minutes:freeMinutes(week)}),own:day!=null&&day===week.longDay};}
       if(otherTemplate&&other.templateId!==template.id)preview.other={name:otherTemplate.name,sport:otherTemplate.sport,days:sportDays(prefs.days,otherTemplate.sport)};
       // A race plan: the race's estimate (a running race) or power and time (a cycling race) for ?raceKm=.
       let race=null;

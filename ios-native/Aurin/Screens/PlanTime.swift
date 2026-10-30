@@ -309,9 +309,10 @@ struct DaysAndTimeSheet: View {
                     .cardSurface(cornerRadius: 22)
                 }
                 .buttonStyle(.plain)
-                if sport != "gym" {
+                // Ride and run plans only: a swim or triathlon plan picks its own long days.
+                if ["ride", "run"].contains(sport) {
                     NavigationLink {
-                        LongDayPicker(sport: sport, days: days, time: time, auto: long?.auto, selection: $longDay)
+                        LongDayPicker(sport: sport, days: days, time: time, auto: long?.auto.flatMap { days.contains($0) ? $0 : nil }, selection: $longDay)
                     } label: { longRow }
                     .buttonStyle(.plain)
                 }
@@ -355,7 +356,7 @@ struct DaysAndTimeSheet: View {
         defer { busy = false }
         do {
             var body: JSONObject = ["action": .string("days"), "sport": .string(sport), "days": .array(days.map { .number(Double($0)) }), "from": .string(nextWeek ? "next" : "now")]
-            if sport != "gym" { body["longDay"] = longDay.map { .number(Double($0)) } ?? .null }
+            if ["ride", "run"].contains(sport) { body["longDay"] = longDay.map { .number(Double($0)) } ?? .null }
             _ = try await model.api.trainingPlanAction(body)
             await model.refreshTraining()
             dismiss()
