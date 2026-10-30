@@ -112,6 +112,16 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
         var done: Bool
         /// The calendar event, for the steps of a ride or run (WatchPlan).
         var eventId: String? = nil
+
+        /// The title without the length the server's plan already ends it with
+        /// ("Endurance with cadence drills · 60 min"), which the screens show apart.
+        var name: String {
+            guard let minutes else { return title }
+            for suffix in [" · \(minutes) min", " – \(minutes) min", " (\(minutes) min)"] where title.hasSuffix(suffix) {
+                return String(title.dropLast(suffix.count))
+            }
+            return title
+        }
     }
 
     struct Day: Codable, Equatable, Sendable {

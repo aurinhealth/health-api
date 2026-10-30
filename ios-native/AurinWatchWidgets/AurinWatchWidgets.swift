@@ -5,7 +5,7 @@ import WidgetKit
 /// small ones with the app's own ring (ten arcs over three quarters) and a
 /// word in its gap, coloured by how the value stands (readiness, sleep,
 /// strain, calories left, protein, drinks, HRV, resting HR, the workout, the
-/// alarm, Aurin through the day and the logo), and wide ones for the day,
+/// alarm and Aurin through the day), and wide ones for the day,
 /// today, the workout, food, drinks, the night and Aurin through the day.
 /// They draw the last Today the watch app got (ComplicationShelf); a tap
 /// opens the watch app on its page (widgetURL, WatchRoot.open).
@@ -23,7 +23,6 @@ struct AurinWatchWidgets: WidgetBundle {
         SmallRestingHR()
         SmallWorkout()
         SmallAlarm()
-        SmallLogo()
         WideAurin()
         WideToday()
         WideDay()
@@ -46,7 +45,6 @@ struct SmallHrv: Widget { var body: some WidgetConfiguration { SmallComplication
 struct SmallRestingHR: Widget { var body: some WidgetConfiguration { SmallComplication.configuration(.restingHR) } }
 struct SmallWorkout: Widget { var body: some WidgetConfiguration { SmallComplication.configuration(.workout) } }
 struct SmallAlarm: Widget { var body: some WidgetConfiguration { SmallComplication.configuration(.alarm) } }
-struct SmallLogo: Widget { var body: some WidgetConfiguration { SmallComplication.configuration(.logo) } }
 struct WideAurin: Widget { var body: some WidgetConfiguration { WideComplication.configuration(.aurin) } }
 struct WideToday: Widget { var body: some WidgetConfiguration { WideComplication.configuration(.today) } }
 struct WideDay: Widget { var body: some WidgetConfiguration { WideComplication.configuration(.day) } }
@@ -134,7 +132,7 @@ enum Moment {
 // MARK: - Small
 
 enum SmallMetric: String, CaseIterable {
-    case aurin, readiness, sleep, strain, calories, protein, drinks, hrv, restingHR, workout, alarm, logo
+    case aurin, readiness, sleep, strain, calories, protein, drinks, hrv, restingHR, workout, alarm
 }
 
 @MainActor
@@ -147,7 +145,7 @@ enum SmallComplication {
         }
         .configurationDisplayName(Small.name(metric))
         .description(Small.about(metric))
-        .supportedFamilies(metric == .logo ? [.accessoryCircular, .accessoryCorner] : [.accessoryCircular, .accessoryCorner, .accessoryInline])
+        .supportedFamilies([.accessoryCircular, .accessoryCorner, .accessoryInline])
     }
 }
 
@@ -165,6 +163,9 @@ struct SmallValue {
     var until: Date? = nil
     /// ↑ or ↓ against yesterday, with its own colour.
     var arrow: (text: String, color: Color)? = nil
+    /// The day's goal in the same units as `fraction` (sleep: the need ± half
+    /// an hour; strain: today's band), marked on the Day complication's steps.
+    var goal: ClosedRange<Double>? = nil
 }
 
 enum Small {
@@ -181,7 +182,6 @@ enum Small {
         case .restingHR: tr("Klidový tep", "Resting HR")
         case .workout: tr("Trénink", "Workout")
         case .alarm: tr("Budík", "Alarm")
-        case .logo: "Aurin"
         }
     }
 
@@ -190,7 +190,6 @@ enum Small {
         case .aurin: tr("Ráno připravenost, před tréninkem odpočet, večer čas jít spát.", "Readiness in the morning, the countdown before a workout, bedtime in the evening.")
         case .workout: tr("Kdy začíná dnešní trénink, odpočet poslední 3 hodiny.", "When today's workout starts, counting down in the last 3 hours.")
         case .alarm: tr("Přes den čas jít spát, v noci budík, ráno spánek.", "Bedtime during the day, the alarm at night, your sleep in the morning.")
-        case .logo: tr("Otevře Aurin.", "Opens Aurin.")
         default: tr("Z dneška v aplikaci Aurin.", "From today in Aurin.")
         }
     }
@@ -208,13 +207,12 @@ enum Small {
         case .restingHR: tr("TEP", "REST HR")
         case .workout: tr("TRÉNINK", "WORKOUT")
         case .alarm: tr("BUDÍK", "ALARM")
-        case .logo: ""
         }
     }
 
     static func symbol(_ m: SmallMetric) -> String {
         switch m {
-        case .aurin, .readiness, .logo: "sun.max.fill"
+        case .aurin, .readiness: "sun.max.fill"
         case .sleep: "moon.fill"
         case .strain: "flame.fill"
         case .calories: "fork.knife"
@@ -232,7 +230,7 @@ enum Small {
         let empty = SmallValue(fraction: 0, color: C.stale, word: word(m), text: "–", line: name(m) + " –", symbol: symbol(m))
         // Not today's yet (before the iPhone or the server sent it): yesterday
         // in grey with its day, never as if it were today.
-        if today == nil, let s, m != .logo {
+        if today == nil, let s {
             switch m {
             case .aurin, .readiness:
                 guard let r = s.readiness else { return empty }
@@ -258,14 +256,17 @@ enum Small {
                               line: name(m) + " \(r)", symbol: symbol(m))
         case .sleep:
             guard let minutes = today?.sleep?.minutes, minutes > 0 else { return empty }
-            let need = today?.sleep?.need ?? 480
-            return SmallValue(fraction: minutes / max(need, 1), color: C.sleep(minutes, need: need), word: word(m), text: Days.hm(minutes),
-                              line: name(m) + " " + Days.duration(minutes), symbol: symbol(m))
+            let need = max(today?.sleep?.need ?? 480, 31)
+            return SmallValue(fraction: minutes / need, color: C.sleep(minutes, need: need), word: word(m), text: Days.hm(minutes),
+                              line: name(m) + " " + Days.duration(minutes), symbol: symbol(m),
+                              goal: (need - 30) / need...(need + 30) / need)
         case .strain:
             guard let score = today?.strain.score else { return empty }
             let top = max(today?.strain.high ?? 14, score, 1)
+            var goal: ClosedRange<Double>? = nil
+            if let low = today?.strain.low, let high = today?.strain.high, high >= low { goal = low / top...high / top }
             return SmallValue(fraction: score / top, color: C.strain(score, low: today?.strain.low, high: today?.strain.high, at: now),
-                              word: word(m), text: Days.one(score), line: name(m) + " " + Days.one(score), symbol: symbol(m))
+                              word: word(m), text: Days.one(score), line: name(m) + " " + Days.one(score), symbol: symbol(m), goal: goal)
         case .calories:
             guard let food = today?.food, let kcal = food.kcal else { return empty }
             let target = food.target ?? 0
@@ -307,8 +308,6 @@ enum Small {
             return workout(s, at: now) ?? empty
         case .alarm:
             return alarm(s, at: now) ?? empty
-        case .logo:
-            return SmallValue(fraction: 0, color: C.amber, word: "", text: "", line: "Aurin", symbol: symbol(m))
         }
     }
 
@@ -360,16 +359,16 @@ enum Small {
             if let start = Days.at(next.time, on: key) {
                 let left = start.timeIntervalSince(now)
                 if left > 3 * 3600 {
-                    return SmallValue(fraction: 0, color: C.amber, word: word, text: next.time ?? "", line: next.title + " " + (next.time ?? ""), symbol: symbol)
+                    return SmallValue(fraction: 0, color: C.amber, word: word, text: next.time ?? "", line: next.name + " " + (next.time ?? ""), symbol: symbol)
                 }
                 if left > 0 {
                     let minutes = Int(left / 60)
                     return SmallValue(fraction: 1 - left / (3 * 3600), color: C.amber, word: word, text: Days.hm(Double(minutes)),
-                                      line: next.title + " " + tr("za ", "in ") + Days.duration(Double(minutes)), symbol: symbol, until: start)
+                                      line: next.name + " " + tr("za ", "in ") + Days.duration(Double(minutes)), symbol: symbol, until: start)
                 }
             }
             let length = next.minutes.map { "\($0)′" } ?? ""
-            return SmallValue(fraction: 0, color: C.amber, word: word, text: length, line: next.title + " " + length, symbol: symbol)
+            return SmallValue(fraction: 0, color: C.amber, word: word, text: length, line: next.name + " " + length, symbol: symbol)
         }
         if !todays.isEmpty, todays.allSatisfy(\.done), !evening {
             let added = s.date == key ? (s.strain.training ?? s.strain.score) : nil
@@ -383,7 +382,7 @@ enum Small {
         let day = Days.weekday(tomorrow)
         let length: String? = next.minutes.map { "\($0)′" }
         let text: String = next.time ?? length ?? "–"
-        var line: String = day + " " + next.title
+        var line: String = day + " " + next.name
         if let time = next.time { line += " " + time }
         return SmallValue(fraction: 0, color: C.muted, word: day.uppercased(), text: text, line: line, symbol: Days.sport(next.sport))
     }
@@ -433,33 +432,26 @@ struct SmallView: View {
         case .accessoryInline:
             Label(inlineLine, systemImage: value.symbol)
         case .accessoryCorner:
-            if metric == .logo {
-                AurinMark().padding(4)
-            } else {
-                // The name and the value along the edge, the icon in the corner.
-                Image(systemName: value.symbol)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(value.color)
-                    .widgetAccentable()
-                    .widgetLabel {
-                        Gauge(value: min(1, max(0, value.fraction))) {
-                            Text(value.word)
-                        } currentValueLabel: {
-                            Text(value.text)
-                        } minimumValueLabel: {
-                            Text(value.word)
-                        } maximumValueLabel: {
-                            valueText
-                        }
-                        .tint(value.color)
+            // The icon in the corner says what it is; the edge keeps the bar and
+            // the value at its end (a name there was cut to "W…", "RE…").
+            Image(systemName: value.symbol)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(value.color)
+                .widgetAccentable()
+                .widgetLabel {
+                    Gauge(value: min(1, max(0, value.fraction))) {
+                        Text(value.word)
+                    } currentValueLabel: {
+                        Text(value.text)
+                    } minimumValueLabel: {
+                        Text("")
+                    } maximumValueLabel: {
+                        valueText
                     }
-            }
+                    .tint(value.color)
+                }
         default:
-            if metric == .logo {
-                AurinMark()
-            } else {
-                ring
-            }
+            ring
         }
     }
 
@@ -485,7 +477,8 @@ struct SmallView: View {
                 .minimumScaleFactor(0.6)
                 .frame(maxHeight: .infinity, alignment: .bottom)
                 .padding(.horizontal, 10)
-                .padding(.bottom, 1)
+                // Clear of the round slot's edge, which cut "PROTEIN" and "WORKOUT".
+                .padding(.bottom, 4)
         }
         .overlay(alignment: .topTrailing) {
             if let arrow = value.arrow {
@@ -535,29 +528,6 @@ struct SegmentedArc: View {
             }
         }
         .padding(2)
-    }
-}
-
-/// Aurin's mark for the logo complication: the sun and its dashed arc.
-struct AurinMark: View {
-    var body: some View {
-        ZStack {
-            Circle().fill(Color(white: 0.09))
-            GeometryReader { geo in
-                let s = min(geo.size.width, geo.size.height)
-                ZStack {
-                    Circle()
-                        .trim(from: 0.5, to: 1)
-                        .stroke(C.amber, style: StrokeStyle(lineWidth: s * 0.06, lineCap: .round, dash: [s * 0.07, s * 0.08]))
-                        .frame(width: s * 0.62, height: s * 0.62)
-                        .offset(y: s * 0.06)
-                    Circle().fill(C.amber).frame(width: s * 0.3, height: s * 0.3).offset(y: s * 0.06)
-                }
-                .frame(width: geo.size.width, height: geo.size.height)
-            }
-            .widgetAccentable()
-        }
-        .accessibilityLabel("Aurin")
     }
 }
 
@@ -637,29 +607,19 @@ struct WideView: View {
         .frame(width: 46, height: 46)
     }
 
-    /// "Go hard", "Steady", "Easy" by the zone.
-    private func dayWord(_ zone: String?) -> String {
-        switch zone {
-        case "red": tr("ZLEHKA", "EASY")
-        case "yellow": tr("S MÍROU", "STEADY")
-        default: tr("NAPLNO", "GO HARD")
-        }
-    }
-
     /// Today (new): readiness, the day's word and the next workout with its countdown.
     private var todayView: some View {
         let r = Small.value(.readiness, entry.snapshot, at: entry.date)
-        var ring = r
-        if today != nil, let zone = today?.zone { ring.word = zoneWord(zone) }
         let next = today.flatMap { Small.nextToday($0, at: entry.date) }
         return HStack(spacing: 8) {
-            readinessRing(ring)
+            readinessRing(r)
             VStack(alignment: .leading, spacing: 1) {
                 if let today {
-                    head(tr("DNES · ", "TODAY · ") + dayWord(today.zone), C.zone(today.zone))
+                    // The app's word for the zone (high, moderate, low), as on Today.
+                    head(tr("DNES", "TODAY") + (today.zone.map { " · " + zoneWord($0) } ?? ""), C.zone(today.zone))
                     if let next {
-                        Text(Self.titled(next))
-                            .font(.system(size: 14, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                        Text(next.name)
+                            .font(.system(size: 13, weight: .semibold)).lineLimit(2).minimumScaleFactor(0.8)
                         startLine(next, on: today.date)
                     } else if let headline = today.headline {
                         Text(headline).font(.system(size: 13, weight: .semibold)).lineLimit(2).minimumScaleFactor(0.8)
@@ -675,17 +635,11 @@ struct WideView: View {
         }
     }
 
-    /// "Sweet spot 75′".
-    static func titled(_ s: WatchSnapshot.Session) -> String {
-        guard let minutes = s.minutes else { return s.title }
-        return s.title + " \(minutes)′"
-    }
-
-    /// The ring's word: high, moderate, low.
+    /// The zone in the app's words: high, moderate, low.
     private func zoneWord(_ zone: String) -> String {
         switch zone {
         case "red": tr("NÍZKÁ", "LOW")
-        case "yellow": tr("STŘEDNÍ", "MID")
+        case "yellow": tr("STŘEDNÍ", "MODERATE")
         default: tr("VYSOKÁ", "HIGH")
         }
     }
@@ -771,7 +725,11 @@ struct WideView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     head(v.word, v.color)
                     Text(v.text).font(.system(size: 18, weight: .bold, design: .rounded)).lineLimit(1).minimumScaleFactor(0.6)
-                    StepBar(fraction: v.fraction, color: v.color)
+                    // With a goal the steps reach past it (its top at 85 %),
+                    // so short of it, in it and over it all show.
+                    let scale = v.goal.map { 0.85 / max($0.upperBound, 0.01) } ?? 1
+                    StepBar(fraction: v.fraction * scale, color: v.color,
+                            goal: v.goal.map { $0.lowerBound * scale...$0.upperBound * scale })
                 }
                 .padding(.horizontal, 5)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -795,7 +753,7 @@ struct WideView: View {
             if !todays.isEmpty, todays.allSatisfy(\.done), !evening, let last = todays.last {
                 HStack(spacing: 4) {
                     Image(systemName: "checkmark")
-                    Text(last.title + tr(" hotovo", " done")).lineLimit(1)
+                    Text(last.name + tr(" hotovo", " done")).lineLimit(1)
                 }
                 .font(.system(size: 12, weight: .semibold)).foregroundStyle(C.green)
                 let added = today?.strain.training
@@ -808,7 +766,7 @@ struct WideView: View {
             } else if let next {
                 HStack(spacing: 4) {
                     Image(systemName: Days.sport(next.sport)).foregroundStyle(C.amber)
-                    Text(next.title).foregroundStyle(C.amber).lineLimit(1)
+                    Text(next.name).foregroundStyle(C.amber).lineLimit(1).minimumScaleFactor(0.75)
                     Spacer(minLength: 2)
                     if next.date == key, let start = Days.at(next.time, on: key), start > entry.date, start.timeIntervalSince(entry.date) <= 3 * 3600 {
                         (Text(tr("za ", "in ")) + Text(timerInterval: entry.date...start, countsDown: true, showsHours: true))
@@ -922,22 +880,19 @@ struct WideView: View {
             NightLine(now: entry.date, bed: bed, wake: wake)
                 .frame(height: 11)
                 .padding(.top, 2)
-            HStack {
-                Text(tr("teď", "now")).foregroundStyle(.white)
-                Spacer()
-                Text(alarm?.bedtime ?? "–").foregroundStyle(C.indigo)
-                Spacer()
-                Text(alarm?.wake ?? "–").foregroundStyle(C.amber)
-            }
-            .font(.system(size: 12, weight: .semibold))
+            // The times where they stand on the line; the white dot is now.
+            NightLabels(now: entry.date, bed: bed, wake: wake, bedtime: alarm?.bedtime, wakeTime: alarm?.wake)
+                .frame(height: 14)
         }
     }
 }
 
-/// Ten steps filled up to the value, the rest dim.
+/// Ten steps filled up to the value, the rest dim; the steps of the goal
+/// (by their middle) have a light edge.
 struct StepBar: View {
     let fraction: Double
     let color: Color
+    var goal: ClosedRange<Double>? = nil
 
     var body: some View {
         let filled = Int((min(1, max(0, fraction)) * 10).rounded())
@@ -946,6 +901,11 @@ struct StepBar: View {
                 RoundedRectangle(cornerRadius: 1)
                     .fill(i < filled ? color : color.opacity(0.28))
                     .widgetAccentable(i < filled)
+                    .overlay {
+                        if goal?.contains((Double(i) + 0.5) / 10) == true {
+                            RoundedRectangle(cornerRadius: 1).strokeBorder(Color.white.opacity(0.75), lineWidth: 1)
+                        }
+                    }
             }
         }
         .frame(height: 4)
@@ -976,16 +936,22 @@ struct NightLine: View {
     let bed: Date?
     let wake: Date?
 
+    /// The line's start (7:00 on the bedtime's day) and end (the wake time).
+    static func span(now: Date, bed: Date?, wake: Date?) -> (start: Date, end: Date) {
+        let start = bed.flatMap { Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: $0) } ?? now.addingTimeInterval(-12 * 3600)
+        return (start, wake ?? (bed ?? now).addingTimeInterval(8 * 3600))
+    }
+
+    /// Where `date` falls on the line, 0 to 1.
+    static func share(_ date: Date, now: Date, bed: Date?, wake: Date?) -> Double {
+        let (start, end) = span(now: now, bed: bed, wake: wake)
+        return min(1, max(0, date.timeIntervalSince(start) / max(end.timeIntervalSince(start), 1)))
+    }
+
     var body: some View {
         GeometryReader { g in
             let w = g.size.width
-            let start = bed.flatMap { Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: $0) } ?? now.addingTimeInterval(-12 * 3600)
-            let end = wake ?? (bed ?? now).addingTimeInterval(8 * 3600)
-            let span = max(end.timeIntervalSince(start), 1)
-            let x = { (d: Date) -> CGFloat in
-                let share: Double = min(1, max(0, d.timeIntervalSince(start) / span))
-                return CGFloat(share) * w
-            }
+            let x = { (d: Date) -> CGFloat in CGFloat(Self.share(d, now: now, bed: bed, wake: wake)) * w }
             let bedX = bed.map(x) ?? w * 0.6
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.white.opacity(0.18)).frame(height: 5)
@@ -998,6 +964,34 @@ struct NightLine: View {
                     .offset(x: x(now) - 4.5)
             }
             .frame(height: g.size.height)
+        }
+    }
+}
+
+/// Under the NightLine: 7:00 at its start, the bedtime where it falls on the
+/// line (kept clear of both ends) and the wake time at its end.
+struct NightLabels: View {
+    let now: Date
+    let bed: Date?
+    let wake: Date?
+    let bedtime: String?
+    let wakeTime: String?
+
+    var body: some View {
+        GeometryReader { g in
+            let w = g.size.width
+            let bedX = bed.map { CGFloat(NightLine.share($0, now: now, bed: bed, wake: wake)) * w } ?? w * 0.6
+            ZStack(alignment: .leading) {
+                Text(bed == nil ? "" : "7:00").foregroundStyle(.white)
+                Text(bedtime ?? "–").foregroundStyle(C.indigo)
+                    .fixedSize()
+                    .frame(width: 40)
+                    .position(x: min(max(bedX, 52), w - 52), y: g.size.height / 2)
+                Text(wakeTime ?? "–").foregroundStyle(C.amber)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .lineLimit(1)
         }
     }
 }
@@ -1044,7 +1038,7 @@ enum Tap {
             case .night: page = "alarm"
             case .readiness: page = "readiness"
             }
-        case .readiness, .logo: page = "readiness"
+        case .readiness: page = "readiness"
         case .sleep: page = "sleep"
         case .strain: page = "strain"
         case .hrv: page = "hrv"
