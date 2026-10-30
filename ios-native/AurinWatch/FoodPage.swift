@@ -51,7 +51,7 @@ struct FoodPage: View {
             }
             .padding(.top, 18)
             HStack(alignment: .top, spacing: 7) {
-                macro(W.tr("Sacharidy", "Carbs"), food.carbs, W.carbs)
+                macro(food.carbs.net == true ? W.tr("Čisté sacharidy", "Net carbs") : W.tr("Sacharidy", "Carbs"), food.carbs, W.carbs)
                 macro(W.tr("Bílkoviny", "Protein"), food.protein, W.protein)
                 macro(W.tr("Tuky", "Fat"), food.fat, W.fat)
             }
@@ -71,17 +71,25 @@ struct FoodPage: View {
             : W.tr("o \(W.number(-rest)) kcal víc", "\(W.number(-rest)) kcal over")
     }
 
+    /// Keto and less carbs: the carbs are a limit (mockup strava-hodinky-web 1), with a tick at
+    /// its end; past it the number and the bar turn rust, as on the iPhone's Food.
     private func macro(_ title: String, _ m: WatchSnapshot.Macro, _ color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.system(size: 9, weight: .semibold)).foregroundStyle(color).lineLimit(1)
+        let limit = m.limit == true
+        let over = limit && (m.eaten ?? 0) > (m.target ?? .infinity)
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.system(size: 9, weight: .semibold)).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.7)
             HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text(W.number(m.eaten ?? 0)).foregroundStyle(W.ink)
+                Text(W.number(m.eaten ?? 0)).foregroundStyle(over ? W.rust : W.ink)
                 Text((m.target.map { "/" + W.number($0) } ?? "") + " g").foregroundStyle(W.muted)
             }
             .font(.system(size: 11, weight: .medium).monospacedDigit())
             .lineLimit(1)
             .minimumScaleFactor(0.6)
-            Bar(fraction: fraction(m.eaten, m.target), color: color).padding(.top, 1)
+            Bar(fraction: fraction(m.eaten, m.target), color: over ? W.rust : color)
+                .overlay(alignment: .trailing) {
+                    if limit { Capsule().fill(W.ink).frame(width: 2, height: 9) }
+                }
+                .padding(.top, 1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

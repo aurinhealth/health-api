@@ -30,7 +30,7 @@ enum WatchToday {
         struct Point: Decodable { var date: String; var value: Double }
         struct Metric: Decodable { var value: Double?; var baseline: Double?; var low: Double?; var high: Double?; var series: [Point]? }
         struct Summary: Decodable { var headline: String?; var text: String? }
-        struct Macro: Decodable { var eaten: Double?; var target: Double? }
+        struct Macro: Decodable { var eaten: Double?; var target: Double?; var limit: Bool?; var net: Bool? }
         struct Water: Decodable { var ml: Double?; var target: Double? }
         struct Nutrition: Decodable { var kcal: Double?; var target: Double?; var protein: Macro?; var carbs: Macro?; var fat: Macro?; var water: Water? }
         struct PlanItem: Decodable { var kind: String?; var time: String?; var title: String?; var done: Bool? }
@@ -72,7 +72,7 @@ enum WatchToday {
             WatchSnapshot.Session(date: $0.date, time: $0.time, title: $0.title, sport: $0.sport ?? "other", minutes: $0.minutes,
                                   done: $0.status == "done", eventId: $0.eventId)
         } ?? last?.week
-        let macro = { (m: Today.Macro?) in WatchSnapshot.Macro(eaten: m?.eaten, target: m?.target) }
+        let macro = { (m: Today.Macro?) in WatchSnapshot.Macro(eaten: m?.eaten, target: m?.target, limit: m?.limit, net: m?.net) }
         let n = today.nutrition
         let food = n.map {
             WatchSnapshot.Food(kcal: $0.kcal, target: $0.target, carbs: macro($0.carbs), protein: macro($0.protein), fat: macro($0.fat),

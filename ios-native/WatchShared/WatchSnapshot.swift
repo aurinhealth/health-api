@@ -42,6 +42,10 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
     struct Macro: Codable, Equatable, Sendable {
         var eaten: Double?
         var target: Double?
+        /// Keto and less carbs on the iPhone: the target is a limit not to pass.
+        var limit: Bool? = nil
+        /// Keto: net carbs.
+        var net: Bool? = nil
     }
 
     /// The alarm from Settings → Sleep on the iPhone, for the watch's alarm.

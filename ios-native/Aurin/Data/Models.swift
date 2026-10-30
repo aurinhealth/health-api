@@ -151,6 +151,10 @@ struct TodaySnapshot: Decodable, Equatable {
     struct Macro: Decodable, Equatable {
         let eaten: Double?
         let target: Double?
+        /// Keto and less carbs: the carbs are a limit, not a target to eat up (src/diet.js).
+        var limit: Bool? = nil
+        /// Keto: net carbs (fibre is not counted).
+        var net: Bool? = nil
     }
 
     struct Water: Decodable, Equatable {

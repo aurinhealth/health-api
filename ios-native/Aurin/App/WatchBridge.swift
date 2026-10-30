@@ -229,7 +229,7 @@ final class WatchBridge: NSObject {
                                   eventId: $0.eventId)
         }
         let n = today.nutrition
-        let macro = { (m: TodaySnapshot.Macro) in WatchSnapshot.Macro(eaten: m.eaten, target: m.target) }
+        let macro = { (m: TodaySnapshot.Macro) in WatchSnapshot.Macro(eaten: m.eaten, target: m.target, limit: m.limit, net: m.net) }
         let food = WatchSnapshot.Food(kcal: n.kcal, target: n.target, carbs: macro(n.carbs), protein: macro(n.protein), fat: macro(n.fat),
                                       water: n.water.ml, waterTarget: n.water.target)
         let tonight = health?.sleep.tonight
