@@ -178,11 +178,12 @@ extension APIClient {
     }
 
     /// Returns the calendar's event id ("planned:local-…"), when the server says.
-    @discardableResult
-    func scheduleWorkout(id: String, date: String, indoor: Bool) async throws -> String? {
-        let r: JSONValue = try await send("/app/api/workouts/schedule", method: "POST",
-                                          body: ["workoutId": JSONValue.string(id), "date": .string(date), "confirm": .bool(true),
-                                                 "environment": .string(indoor ? "indoor" : "outdoor")])
+    /// time: "HH:MM" chosen in the week plan; nil for the day without a time.
+    func scheduleWorkout(id: String, date: String, indoor: Bool, time: String? = nil) async throws -> String? {
+        var body: JSONObject = ["workoutId": .string(id), "date": .string(date), "confirm": .bool(true),
+                                "environment": .string(indoor ? "indoor" : "outdoor")]
+        if let time { body["startTime"] = .string(time) }
+        let r: JSONValue = try await send("/app/api/workouts/schedule", method: "POST", body: body)
         guard case .object(let o) = r else { return nil }
         return o["eventId"]?.string
     }
