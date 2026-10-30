@@ -86,11 +86,12 @@ export function compactTraining(training){
 // the day burned, drinks and the last days' eating.
 export function nutritionContext(n,{daily=null,week=null,fluids=null,date=null}={}){
   if(!n||typeof n!=='object')return null;
-  const eaten=n.foodLog?.totals||null,target=num(n.calorieTarget),macros=n.macros||null,b=n.calorieBreakdown||{};
+  const eaten=n.foodLog?.totals||null,target=num(n.calorieTarget),macros=n.macros?{protein_g:num(n.macros.protein_g),carbs_g:num(n.macros.carbs_g),fat_g:num(n.macros.fat_g)}:null,b=n.calorieBreakdown||{};
   const left=(goal,have)=>num(goal)==null?null:Math.round(num(goal)-(num(have)||0));
   const w=daily?.weight||{},avg=x=>round(num(x),1);
   const lastDays=date?(week?.days||[]).filter(d=>d.date<date&&d.date>=shiftDay(date,-7)).map(d=>{const t=d.daily?.nutrition?.foodLog?.totals;return t&&num(t.kcal)>0?compactObject({date:d.date,eatenKcal:round(num(t.kcal)),proteinG:round(num(t.protein_g)),targetKcal:round(num(d.daily?.nutrition?.calorieTarget))}):null;}).filter(Boolean):[];
-  return compactObject({calorieTarget:target,macros,eaten,
+  // diet: what the athlete eats, the macro style (keto…), protein per kg and per meal (diet.js).
+  return compactObject({calorieTarget:target,macros,diet:n.diet||null,eaten,
     remaining:target==null&&!macros?null:compactObject({kcal:left(target,eaten?.kcal),protein_g:left(macros?.protein_g,eaten?.protein_g),carbs_g:left(macros?.carbs_g,eaten?.carbs_g),fat_g:left(macros?.fat_g,eaten?.fat_g)}),
     targetReason:typeof n.reason==='string'?n.reason.slice(0,400):null,
     minimumKcal:num(b.minTarget),deficitKcal:num(b.weightLossDeficit),

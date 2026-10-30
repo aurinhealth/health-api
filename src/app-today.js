@@ -352,7 +352,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
       target: num(nutrition.calorieTarget),
       trainingBonus: bonus,
       protein: { eaten: round(num(totals.protein_g)), target: num(macros.protein_g) },
-      carbs: { eaten: round(num(totals.carbs_g)), target: num(macros.carbs_g) },
+      carbs: { eaten: round(num(totals.carbs_g)), target: num(macros.carbs_g), ...(macros.carbs_max ? { limit: true } : {}), ...(macros.net_carbs ? { net: true } : {}) },
       fat: { eaten: round(num(totals.fat_g)), target: num(macros.fat_g) },
       water: { ml: num(fluids.hydrationMl ?? fluids.totalMl), target: num(fluids.target?.ml) }
     },

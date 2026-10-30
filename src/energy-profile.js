@@ -3,6 +3,7 @@
 // sport estimate for users whose training is not tracked by a connected source.
 import { bilingual } from "./lang.js";
 import { normalizeFocus } from "./athlete-focus.js";
+import { normalizeDiet } from "./diet.js";
 
 // Everyday movement outside sport. Sport itself comes from tracked activities
 // (Intervals.icu, Google Health) or, without them, from SPORT_HOURS.
@@ -110,6 +111,8 @@ export function normalizeProfile(p = {}) {
     sleepTonight: sleepTonight(p.sleepTonight),
     // The meals of the day the app plans (app-food.js MEALS); empty is the usual five.
     meals: mealSlots(p.meals),
+    // Settings → Nutrition → Diet (diet.js).
+    ...normalizeDiet(p),
     ...normalizeFocus(p)
   };
 }

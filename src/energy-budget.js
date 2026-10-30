@@ -1,4 +1,5 @@
 import { deviceEnergyExtra } from './app-training.js';
+import { refillMacros } from './diet.js';
 
 export function energyBudget(daily,profile,health){
   const weight=Number(daily.weight?.current??daily.nutrition?.currentWeight),age=Number(profile.age),height=Number(profile.height),active=health?.today?.activeCalories;
@@ -27,6 +28,7 @@ export function applyEnergyBudget(daily,profile,health){
   const expected=Number(daily.nutrition.calorieTarget)||0,target=Math.max(budget.target,expected);
   budget.expectedTarget=expected;budget.basis=target>budget.target?'profile':'google-health';
   daily.nutrition.energyBudget=budget;daily.nutrition.calorieTarget=target;daily.calories={...daily.calories,target};
-  const m=daily.nutrition.macros||{};m.carbs_g=Math.max(0,Math.round((target-Number(m.protein_g??m.proteinGrams??0)*4-Number(m.fat_g??m.fatGrams??0)*9)/4));daily.nutrition.macros=m;
+  // The macro the diet fills (carbs, or fat on keto and lower carb) takes the change (diet.js).
+  daily.nutrition.macros=refillMacros(daily.nutrition.macros||{},target);
   return daily;
 }

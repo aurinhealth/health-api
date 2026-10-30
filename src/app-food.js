@@ -169,13 +169,16 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
     },
     sentence: sentence({ eaten: eaten.kcal || 0, target, bonus, left, next: meals.find(m => m.suggestion) }),
     macros: {
-      carbs: { eaten: eaten.carbs, target: num(macros.carbs_g) },
+      // On keto and lower carb the carbs are a limit, on keto net carbs (diet.js).
+      carbs: { eaten: eaten.carbs, target: num(macros.carbs_g), ...(macros.carbs_max ? { limit: true } : {}), ...(macros.net_carbs ? { net: true } : {}) },
       protein: { eaten: eaten.protein, target: num(macros.protein_g) },
       fat: { eaten: eaten.fat, target: num(macros.fat_g) },
       fiber: { eaten: eaten.fiber, target: fiberTarget },
       sugar: { eaten: eaten.sugar, target: sugarLimit }
     },
     mealSlots: chosen,
+    // Settings → Nutrition → Diet as it applies today (Diet page, coach texts).
+    diet: nutrition.diet ? { ...nutrition.diet, carbsLimitG: macros.carbs_max ? num(macros.carbs_g) : null } : null,
     meals,
     water: {
       ml: num(fluids.hydrationMl ?? fluids.totalMl), target: num(fluids.target?.ml), drunkMl: num(fluids.totalMl),

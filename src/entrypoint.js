@@ -36,6 +36,7 @@ import {buildHealth} from './app-health.js';
 import {buildFood} from './app-food.js';
 import {buildFoodWeek} from './app-food-week.js';
 import {normalizeProfile} from './energy-profile.js';
+import {withoutProDiet} from './diet.js';
 import {athleteFocus} from './athlete-focus.js';
 import { loadProfiles, refreshSuggestions } from './profile-suggestions.js';
 import {syncWeights} from './weight-sync.js';
@@ -1566,7 +1567,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   {const r=await handleGymToolsApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
   {const r=await handleWorkoutTemplatesApi(request,env,url,session);if(r!==undefined)return r;}
   if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
-  if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const profile=normalizeProfile(await request.json().catch(()=>({})));await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();const suggestions=await refreshSuggestions(env,{googleToken}).catch(error=>{console.error('Profile suggestions failed',error.message);return null;});return Response.json({profile:r?JSON.parse(r.profile_json):null,suggestions});}
+  if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){let profile=normalizeProfile(await request.json().catch(()=>({})));
+    // Custom macros, own protein and own nutrient targets are Aurin Pro (diet.js); checked only when one is set.
+    if((profile.dietStyle==='custom'||profile.proteinPerKg!=null||Object.keys(profile.nutrientTargets).length)&&!await isPro(env))profile=withoutProDiet(profile);await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();const suggestions=await refreshSuggestions(env,{googleToken}).catch(error=>{console.error('Profile suggestions failed',error.message);return null;});return Response.json({profile:r?JSON.parse(r.profile_json):null,suggestions});}
   {const r=await handleTrainingEditsApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
   // "Revize dne": the coach checks one planned day in the context of the week.
   if(url.pathname==='/app/api/coach/review'&&request.method==='POST'){
@@ -2348,7 +2351,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(key){
         if(!pro&&!FREE_KEYS.includes(key))return Response.json({message:L('Vitamíny a minerály jsou v Aurin Pro.', 'Vitamins and minerals are in Aurin Pro.')},{status:403});
         const detail=buildNutrientDetail({key,today:days.at(-1).food,week:days,profile,kcalTarget,rich:(await microTop(env).catch(()=>({})))?.[key],language});
-        return detail?Response.json(detail,{headers:{'Cache-Control':'no-store'}}):Response.json({message:'Unknown nutrient'},{status:404});
+        return detail?Response.json({...detail,pro},{headers:{'Cache-Control':'no-store'}}):Response.json({message:'Unknown nutrient'},{status:404});
       }
       return Response.json({...buildNutrients({days,profile,kcalTarget,pro,language}),favorites},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
@@ -2690,7 +2693,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // nothing is eaten on a past day any more. They fit meals to the day's
       // calorie target and food log read here (before the energy budget below,
       // as /analysis/energy gives it), instead of computing the day again.
-      const known = reads.then(([d, f]) => d.ok && f.ok ? { energy: { final: { calorieTarget: d.body.calories?.target ?? null, estimatedTDEE: d.body.calories?.estimatedTDEE ?? null }, energyProfile: { missing: d.body.nutrition?.missing || [] } }, food: f.body } : null);
+      const known = reads.then(([d, f]) => d.ok && f.ok ? { energy: { final: { calorieTarget: d.body.calories?.target ?? null, estimatedTDEE: d.body.calories?.estimatedTDEE ?? null, macroTargets: d.body.nutrition?.macros ?? null, diet: d.body.nutrition?.diet ?? null }, energyProfile: { missing: d.body.nutrition?.missing || [] } }, food: f.body } : null);
       const [[{ body: daily }, { body: food }], recommendations] = await Promise.all([
         reads,
         date >= localToday() ? foodRecommend(env, recommendUrl, known).then(r => r.json()).catch(error => ({ status: "error", message: error.message })) : null
