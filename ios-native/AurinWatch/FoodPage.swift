@@ -51,7 +51,7 @@ struct FoodPage: View {
             }
             .padding(.top, 18)
             HStack(alignment: .top, spacing: 7) {
-                macro(food.carbs.net == true ? W.tr("Čisté sach.", "Net carbs") : W.tr("Sacharidy", "Carbs"), food.carbs, W.carbs)
+                macro(food.carbs.net == true ? W.tr("Sacharidy", "Net carbs") : W.tr("Sacharidy", "Carbs"), food.carbs, W.carbs)
                 macro(W.tr("Bílkoviny", "Protein"), food.protein, W.protein)
                 macro(W.tr("Tuky", "Fat"), food.fat, W.fat)
             }
@@ -72,7 +72,7 @@ struct FoodPage: View {
     }
 
     /// Keto and less carbs: the carbs are a limit (mockup strava-hodinky-web 1), with a tick at
-    /// its end; past it the number and the bar turn rust, as on the iPhone's Food.
+    /// its end (Czech keeps "Sacharidy": "Čisté sacharidy" does not fit the cell); past it the number and the bar turn rust, as on the iPhone's Food.
     private func macro(_ title: String, _ m: WatchSnapshot.Macro, _ color: Color) -> some View {
         let limit = m.limit == true
         let over = limit && (m.eaten ?? 0) > (m.target ?? .infinity)
