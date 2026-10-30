@@ -23,7 +23,8 @@ test("balanced keeps the earlier split while losing weight", () => {
 test("auto protein follows the goal, the gym and a vegan diet", () => {
   assert.equal(autoProteinPerKg({ goal: "lose_0.5" }), 2.0);
   assert.equal(autoProteinPerKg({ goal: "maintain" }), 1.6);
-  assert.equal(autoProteinPerKg({}), 1.6);
+  // No goal yet: the default deficit.
+  assert.equal(autoProteinPerKg({}), 2.0);
   assert.equal(autoProteinPerKg({ goal: "gain_0.25" }), 1.8);
   assert.equal(autoProteinPerKg({ goal: "lose_0.5", mainSport: "strength" }), 2.2);
   assert.equal(autoProteinPerKg({ goal: "maintain", mainSport: "strength", dietEating: "vegan" }), 2.0);
@@ -50,7 +51,7 @@ test("keto: a net carb limit, fat fills the calories, protein at least 1.6", () 
   assert.equal(m.carbs_g, 30);
   assert.equal(m.protein_g, 128);
   assert.equal(m.fill, "fat");
-  assert.ok(m.carbs_max && m.net_carbs);
+  assert.ok(m.carbs_max && !m.net_carbs);
   assert.ok(Math.abs(kcalOf(m) - 2400) <= 9);
   assert.equal(dayMacros(80, 2400, {}, { dietStyle: "keto", netCarbLimit: 50 }).carbs_g, 50);
   // A training day keeps the carbs; the extra energy is fat.
@@ -156,7 +157,8 @@ test("own nutrient targets: Pro only, capped by the EFSA upper limit", () => {
   assert.equal(free.target, 5);
   const pro = buildNutrients({ days: [], profile, pro: true }).items.find(i => i.key === "fe");
   assert.equal(pro.target, 25);
-  const detail = buildNutrientDetail({ key: "fe", today: {}, week: [], profile: { ...profile, dietEating: "vegan" } });
+  const detail = buildNutrientDetail({ key: "fe", today: {}, week: [], profile: { ...profile, dietEating: "vegan" }, pro: true });
+  assert.equal(buildNutrientDetail({ key: "fe", today: {}, week: [], profile }).custom, false);
   assert.deepEqual([detail.target, detail.autoTarget, detail.custom, detail.upperLimit, detail.autoBasis], [25, 19.8, true, 40, "vegan"]);
 });
 
@@ -164,10 +166,15 @@ test("the Food screen shows keto carbs as a limit and the diet", async () => {
   const { buildFood } = await import("../src/app-food.js");
   const macros = dayMacros(80, 2400, {}, { dietStyle: "keto" });
   const food = buildFood({ date: "2026-10-30", daily: { nutrition: { calorieTarget: 2400, macros, diet: dietSummary({ dietStyle: "keto" }, macros) } }, food: { entries: [] } });
-  assert.deepEqual(food.macros.carbs, { eaten: 0, target: 30, limit: true, net: true });
+  assert.deepEqual(food.macros.carbs, { eaten: 0, target: 30, limit: true });
   assert.equal(food.diet.style, "keto");
   assert.equal(food.diet.carbsLimitG, 30);
   const plain = buildFood({ date: "2026-10-30", daily: { nutrition: { calorieTarget: 2400, macros: { protein_g: 160, carbs_g: 300, fat_g: 70 } } }, food: { entries: [] } });
   assert.deepEqual(plain.macros.carbs, { eaten: 0, target: 300 });
   assert.equal(plain.diet, null);
+});
+
+test("a plant word hides only the dairy after it, never meat or fish", () => {
+  for (const meal of ["Kokosové kuře s rýží", "Coconut chicken curry", "Mandlový losos", "Peanut chicken stir-fry"]) assert.equal(fitsEating(meal, "vegetarian"), false, meal);
+  for (const meal of ["Ovesná kaše s mandlovým mlékem", "Toast with peanut butter", "Sójový jogurt s ovocem", "Coconut milk curry with tofu"]) assert.equal(fitsEating(meal, "vegan"), true, meal);
 });

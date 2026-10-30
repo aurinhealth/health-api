@@ -228,7 +228,7 @@ export async function foodRecommend(env, url, known = null) {
   // (/analysis/energy in index.js), not a second formula.
   const calorieTarget = Number(energy.final.calorieTarget);
 
-  const targets = macroTargets(refillMacros({ ...(energy.final.macroTargets || {}) }, calorieTarget));
+  const targets = macroTargets(energy.final.macroTargets ? refillMacros({ ...energy.final.macroTargets }, calorieTarget) : {});
   const diet = energy.final.diet || {};
   const calorieDelta = calorieTarget - Number(food.totals?.kcal || 0);
   const remaining = {
@@ -251,7 +251,7 @@ export async function foodRecommend(env, url, known = null) {
   const cookbook = Array.isArray(cookbookData) ? cookbookData : (cookbookData?.recipes || []);
   // What the athlete eats (vegetarian, vegan…) and, on keto or lower carb,
   // nothing over the carbs left today.
-  const suits = recipe => fitsEating(recipeText(recipe), diet.eating) && (!diet.carbsLimitG || Number(recipe.carbs_g || 0) <= remaining.carbs_g + 5);
+  const suits = recipe => fitsEating(recipeText(recipe), diet.eating) && (diet.carbsLimitG == null || Number(recipe.carbs_g || 0) <= remaining.carbs_g + 5);
   let candidates = cookbook.filter(recipe => {
     const kcal = Number(recipe.kcal);
     if (!Number.isFinite(kcal) || kcal <= 0 || !suits(recipe)) return false;
@@ -315,7 +315,7 @@ export async function foodRecommend(env, url, known = null) {
     ]
   };
   const storeAlternatives=(everyday[slots[0]?.type]||[]).filter(item=>item.kcal<=remaining.kcal*1.1&&suits({...item,title:item.name}));
-  if(slots.length&&storeAlternatives.length<2&&remaining.kcal>=180&&!['vegan'].includes(diet.eating)&&!diet.carbsLimitG)storeAlternatives.push({name:L('Bílý jogurt + ovoce', 'Plain yogurt + fruit'),kcal:180,protein_g:10,carbs_g:25,fat_g:4,reason:L('menší běžná porce', 'a smaller everyday portion')});
+  if(slots.length&&storeAlternatives.length<2&&remaining.kcal>=180&&!['vegan'].includes(diet.eating)&&diet.carbsLimitG==null)storeAlternatives.push({name:L('Bílý jogurt + ovoce', 'Plain yogurt + fruit'),kcal:180,protein_g:10,carbs_g:25,fat_g:4,reason:L('menší běžná porce', 'a smaller everyday portion')});
 
   let coaching = "";
   if (heavilyOverCalories) coaching = L("Kaloricky jsi už výrazně nad dnešním cílem. Plnohodnotné jídlo teď nedoporučuji; pokud máš hlad nebo řešíš recovery po kole, drž se malé sacharidové svačiny.", "You're already well over today's calorie goal. I don't recommend a full meal now; if you're hungry or recovering after a ride, stick to a small carb snack.");

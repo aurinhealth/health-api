@@ -76,7 +76,8 @@ const AURIN = '<span class="lg au"><svg viewBox="6 10 88 80"><path d="M6 46A36 3
 // The iPhone status bar over every screen built here.
 const STATUS = '<div class="sb"><span>9:41</span><span class="sbi"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx=".7"/><rect x="5" y="5.5" width="3" height="6.5" rx=".7"/><rect x="10" y="3" width="3" height="9" rx=".7"/><rect x="15" y="0" width="3" height="12" rx=".7"/></svg><svg viewBox="0 0 24 12"><rect x=".5" y=".5" width="20" height="11" rx="3" fill="none" stroke="currentColor"/><rect x="2" y="2" width="16" height="8" rx="1.8"/><rect x="22" y="4" width="1.5" height="4" rx=".7"/></svg></span></div>';
 
-// Settings → Nutrition → Diet (SettingsDiet.swift) over Food's macros: the style moves the targets; keto shows net carbs with a limit.
+// Settings → Nutrition → Diet (SettingsDiet.swift) over Food's macros: the style splits the sample day's
+// 2650 kcal (src/diet.js dayMacros at 80 kg); keto shows the carbs as a limit.
 const diet = `<div class="dm pad">
 <div class="sl">You eat</div>
 <div class="seg dt-eat"><span>Everything</span><span>Pescatarian</span><span class="on">Vegetarian</span><span>Vegan</span></div>
@@ -87,9 +88,9 @@ const diet = `<div class="dm pad">
 <div class="ch3"${at('5000:on 7400-on')}><b>Keto</b><span class="mono">max 30 g</span></div>
 </div>
 <div class="mac3 dt"${at('2600:s2 5000-s2 5000:s3 7400-s3')}>
-<div><span class="mut s"><i style="background:var(--carbs)"></i><span data-tx="0|Carbs;5000|Net carbs;7400|Carbs">Carbs</span></span><span class="num md"><span data-tx="0|177;5000|18;7400|177">177</span><small data-tx="0| / 330 g;2600| / 260 g;5000| / max 30 g;7400| / 330 g"> / 330 g</small></span><i class="mb"><b class="dw" style="--a:54%;--b:68%;--c:60%;background:var(--carbs)"></b><u class="dt-lim"></u></i></div>
-<div><span class="mut s"><i style="background:var(--protein)"></i>Protein</span><span class="num md">84<small data-tx="0| / 150 g;2600| / 190 g;5000| / 150 g;7400| / 150 g"> / 150 g</small></span><i class="mb"><b class="dw" style="--a:56%;--b:44%;--c:56%;background:var(--protein)"></b></i></div>
-<div><span class="mut s"><i style="background:var(--fat)"></i>Fat</span><span class="num md">36<small data-tx="0| / 80 g;2600| / 75 g;5000| / 170 g;7400| / 80 g"> / 80 g</small></span><i class="mb"><b class="dw" style="--a:45%;--b:48%;--c:21%;background:var(--fat)"></b></i></div>
+<div><span class="mut s"><i style="background:var(--carbs)"></i>Carbs</span><span class="num md"><span data-tx="0|177;5000|18;7400|177">177</span><small data-tx="0| / 330 g;2600| / 361 g;5000| / max 30 g;7400| / 330 g"> / 330 g</small></span><i class="mb"><b class="dw" style="--a:54%;--b:49%;--c:60%;background:var(--carbs)"></b><u class="dt-lim"></u></i></div>
+<div><span class="mut s"><i style="background:var(--protein)"></i>Protein</span><span class="num md">84<small data-tx="0| / 150 g;2600| / 176 g;5000| / 150 g;7400| / 150 g"> / 150 g</small></span><i class="mb"><b class="dw" style="--a:56%;--b:48%;--c:56%;background:var(--protein)"></b></i></div>
+<div><span class="mut s"><i style="background:var(--fat)"></i>Fat</span><span class="num md">36<small data-tx="0| / 80 g;2600| / 56 g;5000| / 214 g;7400| / 80 g"> / 80 g</small></span><i class="mb"><b class="dw" style="--a:45%;--b:64%;--c:17%;background:var(--fat)"></b></i></div>
 </div>
 </div>`;
 

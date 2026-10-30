@@ -307,9 +307,8 @@ struct DietStyleSheet: View {
                 }
                 .cardSurface(cornerRadius: 22)
                 if diet.style == "keto" {
-                    DietCap(text: "Limit čistých sacharidů").padding(.top, 12)
+                    DietCap(text: "Limit sacharidů").padding(.top, 12)
                     NumberStepper(title: "Za den", value: $diet.netCarbLimit, range: 20...50, step: 5, unit: "g")
-                    DietFoot(text: L10n.tr("Vláknina se nepočítá."))
                 }
             }
             .padding(20)
@@ -323,7 +322,7 @@ struct DietStyleSheet: View {
         switch id {
         case "high_protein": return L10n.tr("2,2 g/kg bílkovin")
         case "lower_carb": return L10n.tr("do 100 g sacharidů")
-        case "keto": return L10n.f("do %@ g čistých sacharidů", Fmt.int(diet.netCarbLimit))
+        case "keto": return L10n.f("do %@ g sacharidů", Fmt.int(diet.netCarbLimit))
         default: return L10n.tr("tvoje čísla")
         }
     }

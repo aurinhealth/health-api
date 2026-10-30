@@ -152,5 +152,5 @@ test("the daily analysis splits the target by the athlete's diet", async () => {
   assert.equal(daily.nutrition.protein, m.protein_g);
   assert.equal(m.protein_g, Math.round(80 * 2.2));
   assert.ok(Math.abs(m.protein_g * 4 + m.carbs_g * 4 + m.fat_g * 9 - daily.nutrition.calorieTarget) <= 9);
-  assert.deepEqual([daily.nutrition.diet.style, daily.nutrition.diet.eating, daily.nutrition.diet.carbsLimitG, daily.nutrition.diet.netCarbs], ["keto", "vegan", 30, true]);
+  assert.deepEqual([daily.nutrition.diet.style, daily.nutrition.diet.eating, daily.nutrition.diet.carbsLimitG, daily.nutrition.diet.netCarbs], ["keto", "vegan", 30, false]);
 });

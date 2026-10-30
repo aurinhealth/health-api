@@ -61,7 +61,8 @@ export function withoutProDiet(profile) {
 // muscle), +0.2 when the main sport is the gym, +0.2 on a vegan diet
 // (less leucine, lower digestibility of plant protein).
 export function autoProteinPerKg(profile = {}) {
-  const goal = String(profile.goal || "");
+  // No goal yet: the calories default to losing 0.5 kg a week (energy-profile.js), so does the protein.
+  const goal = String(profile.goal || "lose_0.5");
   let perKg = goal.startsWith("lose") ? 2.0 : goal.startsWith("gain") ? 1.8 : 1.6;
   if (profile.mainSport === "strength") perKg += 0.2;
   if (profile.dietEating === "vegan") perKg += 0.2;
@@ -102,7 +103,9 @@ export function dayMacros(kg, kcal, context = {}, profile = {}) {
         : d.customCarbs ?? 200;
     carbs = Math.max(0, Math.min(wanted, Math.floor((rest - floor * 9) / 4)));
     fat = Math.max(floor, Math.round((rest - carbs * 4) / 9));
-    fill = "fat"; carbsMax = d.dietStyle !== "custom"; net = d.dietStyle === "keto";
+    // Logged carbs are counted as they come (EU labels leave fibre out, the
+    // USDA catalogue counts it in), so keto is not shown as net carbs.
+    fill = "fat"; carbsMax = d.dietStyle !== "custom";
   } else {
     const fatPerKg = d.dietStyle === "custom" ? d.customFatPerKg ?? 0.9 : d.dietStyle === "high_protein" ? 0.7 : balancedFatPerKg(context);
     fat = Math.max(floor, Math.round(kg * fatPerKg));
@@ -149,7 +152,7 @@ export function dietSummary(profile = {}, macros = null) {
 // Whether a meal (its name and ingredients, Czech or English) suits what
 // the athlete eats. Plant versions ("sójový jogurt", "oat milk", "peanut
 // butter") are taken out first, so they never count as dairy.
-const PLANT = /(sójov|rostlinn|ovesn|mandlov|kokosov|rýžov|arašídov|\bsoya?\b|\boat\b|\balmond\b|\bcoconut\b|\brice\b|\bplant\b|\bvegan\b|\bpeanut\b|\bnut\b)\p{L}*\s+\S+/giu;
+const PLANT = /(sójov|rostlinn|ovesn|mandlov|kokosov|rýžov|arašídov|kešu|\bsoya?\b|\boat\b|\balmond\b|\bcoconut\b|\brice\b|\bplant\b|\bvegan\b|\bpeanut\b|\bnut\b|\bcashew\b)\p{L}*\s+(mlék|mléč|jogurt|sýr|smetan|másl|tvaroh|milk|yogh?urt|cheese|cream|butter)\p{L}*/giu;
 const MEAT = /maso|masem|kuř|krůt|hověz|vepř|šunk|slanin|klobás|párk|salám|kachn|jehně|telecí|zvěřin|játr|hamburg|\b(chicken|turkey|beef|pork|ham|bacon|sausages?|salami|duck|lamb|veal|steak|liver|prosciutto|chorizo|pepperoni|meat)\b/iu;
 const FISH = /\bryb(?!íz)|tuňák|losos|tresk|sardin|makrel|krevet|pstruh|ančovič|\b(fish|tuna|salmon|cod|sardines?|mackerel|shrimps?|prawns?|trout|anchov\w*|seafood)\b/iu;
 const ANIMAL = /mlék|mléč|sýr|jogurt|skyr|tvaroh|cottage|smetan|másl|vejc|vajíč|vaječ|\bmed(em|u)?\b|medov|mozzarell|parmaz|ricott|mascarpon|\b(milk|cheese|yogh?urt|quark|cream|butter|eggs?|honey|whey|feta|kefir)\b/iu;

@@ -3317,12 +3317,11 @@
 "Dnes s touto stravou · %@ kcal" = "Today with this diet · %@ kcal";
 "Dnes s touto stravou" = "Today with this diet";
 "Sacharidy podle tréninku" = "Carbs follow your training";
-"Limit čistých sacharidů" = "Net carb limit";
+"Limit sacharidů" = "Carb limit";
 "Za den" = "A day";
-"Vláknina se nepočítá." = "Fibre is not counted.";
 "2,2 g/kg bílkovin" = "2.2 g/kg protein";
 "do 100 g sacharidů" = "up to 100 g carbs";
-"do %@ g čistých sacharidů" = "up to %@ g net carbs";
+"do %@ g sacharidů" = "up to %@ g carbs";
 "tvoje čísla" = "your own numbers";
 "Nebo nastav vlastní" = "Or set your own";
 "Vlastní g/kg" = "Your own g/kg";

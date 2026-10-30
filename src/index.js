@@ -1817,7 +1817,8 @@ function activityKcalPerHourFor(type, weightKg) {
 
 function activityIsEndurance(activity) {
   const text = `${activity?.type || ""} ${activity?.name || ""} ${activity?.payload?.type || ""} ${activity?.payload?.name || ""}`.toLowerCase();
-  return /(run|running|swim|swimming|rowing)\b|\brow\b|\bnordic|\bski(ing)?\b|běh|plav/.test(text);
+  // One-word types too: AlpineSki, BackcountrySki, VirtualRow, VirtualRun.
+  return /(run|running|swim|swimming|row|rowing)\b|nordic|ski(ing)?\b|běh|plav/.test(text);
 }
 
 function activityIsStrength(activity) {

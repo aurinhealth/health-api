@@ -161,10 +161,10 @@ export function nutrientCoach(items, days, language) {
 
 // One nutrient: today's amount, the 7-day average against the target, the
 // meals it came from today and foods rich in it (top.json of the micro build).
-export function buildNutrientDetail({ key, today, week = [], profile = {}, kcalTarget = null, rich = [], language }) {
+export function buildNutrientDetail({ key, today, week = [], profile = {}, kcalTarget = null, rich = [], pro = false, language }) {
   const def = BY_KEY.get(key);
   if (!def) return null;
-  const targets = targetsFor(profile, kcalTarget), target = targets[key];
+  const targets = targetsFor(profile, kcalTarget, { own: pro }), target = targets[key];
   const sum = food => eatenEntries(food).reduce((s, e) => s + (entryNutrients(e)[key] || 0), 0);
   const eaten = fmt(sum(today));
   const avg = week.length ? week.reduce((s, d) => s + sum(d.food), 0) / week.length : null;
