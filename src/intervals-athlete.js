@@ -68,10 +68,10 @@ export async function athleteThresholds(env, fetchImpl = intervalsReads(env)) {
   // Max and resting heart rate typed in Nastavení → Tep a aktivita beat
   // Intervals.icu; the values calibrated from the activities and the wellness
   // (refreshed once a day) only fill what nothing else has.
-  let personal = null, own = null;
+  let personal = null, own = null, suggested = null;
   if (env.DB) {
     if (!out.maxHr || !profile.restHr) { try { await refreshSuggestions(env, { fetchImpl }); } catch (error) { console.error("Profile suggestions not refreshed", error.message); } }
-    try { ({ saved: own, effective: personal } = await loadProfiles(env.DB, env.USER_ID)); } catch (error) { console.error("Profile unavailable", error.message); }
+    try { ({ saved: own, suggested, effective: personal } = await loadProfiles(env.DB, env.USER_ID)); } catch (error) { console.error("Profile unavailable", error.message); }
   }
   if (!profile.maxHr && n(own?.hrmax)) { out.maxHr = n(own.hrmax); out.runMaxHr = null; }
   if (!out.maxHr && n(personal?.hrmax)) out.maxHr = n(personal.hrmax);
@@ -81,7 +81,9 @@ export async function athleteThresholds(env, fetchImpl = intervalsReads(env)) {
   out.paceZones = paceZones(profile, out.runThresholdPace);
   if (profile.swimCss) { out.swimCss = profile.swimCss; out.swimCssSource = "manual"; }
   out.swimZones = swimZones(out.swimCss);
-  out.poolLength = profile.poolLength || null;
+  // A pool chosen by hand, else the one of the last pool swim (training-history.js, in the suggestions row read above).
+  out.poolLength = profile.poolLength || n(suggested?.trainingHistory?.poolLength) || null;
+  out.poolLengthSource = profile.poolLength ? "manual" : out.poolLength ? "auto" : null;
   out.openWater = profile.openWater || "off";
   // Running LTHR only – the cycling LTHR is usually lower and would mislead.
   const runModel = ["frielLthr", "frielRun", "custom"].includes(profile.hrZoneModel || "frielLthr") ? "frielRun" : profile.hrZoneModel;
