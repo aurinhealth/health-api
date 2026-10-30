@@ -293,7 +293,7 @@ struct GymBuilderView: View {
                 focus = preset
             }
         }
-        .task { if !model.demo { await MuscleModelStore.shared.load(api: model.api) } }
+        .task { await MuscleModelStore.shared.load(api: model.demo ? nil : model.api) }
         .sheet(item: Binding(get: { replacing.map { Named(name: $0) } }, set: { replacing = $0?.name })) { item in
             AlternativesSheet(date: isoDay, exercise: item.name, inPlan: proposal?.exercises.map(\.name) ?? [], footnote: nil,
                               choose: { _ in }, chooseAlternative: { alt in replace(item.name, with: alt) })

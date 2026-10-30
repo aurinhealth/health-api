@@ -585,8 +585,8 @@ struct GymPreferencesGroup: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             SettingsDivider()
+            // Open with Ne too: cardio added during a workout starts with it.
             SettingsPicker(title: "Druh kardia", selection: $cardioType, options: cardioOptions)
-                .disabled(cardio == "none")
             SettingsDivider()
             routineLink(.stretching)
         }

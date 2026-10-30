@@ -1,11 +1,11 @@
 // Zones from Loadwise to Intervals.icu: after the athlete saves their training
 // zones (Nastavení → Tréninkové zóny) the thresholds and zone bounds go to the
-// Ride and Run sport settings, so the calendar, the watch and the coach count
+// Ride, Run and Swim sport settings, so the calendar, the watch and the coach count
 // with the same numbers. With the OAuth connection this needs the
 // SETTINGS:WRITE scope (intervals-oauth.js); older connections only granted
 // SETTINGS:READ and have to be connected again.
 import { intervalsAuthorization } from "./intervals-auth.js";
-import { POWER_ZONE_MODELS, PACE_ZONE_MODELS } from "./training-zones.js";
+import { POWER_ZONE_MODELS, PACE_ZONE_MODELS, swimZoneBounds } from "./training-zones.js";
 import { intervalsReads } from "./intervals-reads.js";
 
 // Intervals.icu shows "Z1" itself: send "Regenerace", not "Z1 Regenerace".
@@ -30,7 +30,8 @@ function hrBounds(zones, maxHr) {
   return tops.every(v => Number(v) > 0) && tops.every((v, i) => i === 0 || v > tops[i - 1]) ? tops.map(Math.round) : null;
 }
 
-// The two sport settings to write, from athleteThresholds() (intervals-athlete.js).
+// The sport settings to write, from athleteThresholds() (intervals-athlete.js).
+// Swim goes only when the athlete set a CSS in Aurin.
 // Thresholds go only when the athlete set them in Loadwise: the others came
 // from Intervals.icu in the first place.
 export function intervalsSportSettings(t) {
@@ -55,11 +56,23 @@ export function intervalsSportSettings(t) {
   if (profile.runLthr) run.lthr = profile.runLthr;
   const runHr = hrBounds(t.runHrZones, t.runMaxHr || t.maxHr);
   if (runHr) { run.hr_zones = runHr; run.hr_zone_names = t.runHrZones.map(z => bare(z.name)); }
-  return { Ride: ride, Run: run };
+  if (!profile.swimCss) return { Ride: ride, Run: run };
+  // CSS as speed (m/s) and Swim Smooth's zones as % of it, pace per 100 m.
+  const swim = {
+    threshold_pace: Math.round(100 / profile.swimCss * 1000) / 1000,
+    pace_zones: [...swimZoneBounds(profile.swimCss), OPEN],
+    pace_zone_names: (t.swimZones || []).map(z => bare(z.name)),
+    pace_units: "SECS_100M",
+    // Swim load from pace (sTSS = IF³ × hours × 100), never from wrist heart
+    // rate, which is unreliable in water (PLOS ONE 2020, PMC7161966).
+    pace_load_type: "SWIM",
+    load_order: "PACE_HR_POWER"
+  };
+  return { Ride: ride, Run: run, Swim: swim };
 }
 
-// Writes both sport settings. Returns { status: "ok" | "needs-permission" |
-// "not-connected" | "error", updated: ["Ride", "Run"], message }.
+// Writes the sport settings. Returns { status: "ok" | "needs-permission" |
+// "not-connected" | "error", updated: ["Ride", "Run", "Swim"], message }.
 export async function writeIntervalsZones(env, thresholds, fetchImpl = intervalsReads(env)) {
   if (!env.INTERVALS_API_KEY) return { status: "not-connected", updated: [] };
   const headers = { Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json" };

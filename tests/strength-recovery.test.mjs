@@ -42,3 +42,15 @@ test("recovery baseline averages the 4 weeks before the latest value, for start-
   assert.equal(out["heart-rate-variability"][0].value, 80);
   assert.equal(out["heart-rate-variability"][0].baseline, undefined);
 });
+
+test("recovery reads the 5-minute heart rate, not a workout's own newest sample", async () => {
+  const db = createD1();
+  await db.prepare("CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, source_family TEXT NOT NULL, data_type TEXT NOT NULL, external_id TEXT, sample_time TEXT, start_time TEXT, end_time TEXT, value_numeric REAL, value_unit TEXT, payload_json TEXT)").run();
+  const add = (type, sample, value) => db.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, sample_time, value_numeric, value_unit, payload_json) VALUES (1,'google-wearables',?,?,?,'bpm','{}')").bind(type, sample, value).run();
+  await add("heart-rate", "2026-10-01T17:30:00Z", 172); // a workout's sample
+  await add("heart-rate-5min", "2026-10-01T21:00:00Z", 58);
+  await add("heart-rate-1h", "2026-10-01T22:00:00Z", 55);
+  const out = await d1Recovery({ DB: db, USER_ID: 1 }, "2026-09-25", "2026-10-02");
+  assert.deepEqual(Object.keys(out), ["heart-rate"]);
+  assert.equal(out["heart-rate"][0].value, 58);
+});

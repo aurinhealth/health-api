@@ -20,7 +20,7 @@ Food values come from:
 - **Cookbook**: recipes with their nutrition values (`cookbook.js`).
 - **World catalogue** (`world-foods.js`): about 3.4 million foods from the
   kCalori release (Open Food Facts ODbL, USDA FoodData Central, Fineli, Ciqual,
-  CoFID), read only from the R2 bucket `loadwise-food-catalog` (Eastern Europe), listed after saved and
+  CoFID), read only from the R2 bucket `aurin-food-catalog` (Eastern Europe), listed after saved and
   shared foods. Built with `scripts/build-world-foods.mjs <foods.sqlite> <out>`
   and uploaded with `scripts/upload-world-foods.mjs <out>/<version>`; the
   upload writes `current.json` last, so a new version switches over at once.

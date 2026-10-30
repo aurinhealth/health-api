@@ -100,3 +100,25 @@ test("an evening nap from the band stays when the watch's night wins the day", a
   assert.equal(role(raw, "google-wearables", "gnap"), "duplicate");
   assert.equal(await resolveSources(db, 1, { since: day(30), now: NOW }), 0);
 });
+
+// D1 rows read (2026-10-30): the 30-day history read ~60 k zone-minute rows on
+// every Google sync. It is read only when a key has two sources, and the sync
+// keeps it an hour.
+test("the history behind the home source is read only when two sources meet, and kept an hour for the sync", async () => {
+  const { raw } = setup();
+  fitbitEveryDay(raw);
+  let reads = 0;
+  const counted = scopedDb({ ...raw, prepare: sql => { if (/SUM\(value_numeric\) \/ 60\.0/.test(sql)) reads++; return raw.prepare(sql); } }, 1);
+  await resolveSources(counted, 1, { types: ["time-in-heart-rate-zone"], since: day(2), now: NOW, cacheHistory: true });
+  assert.equal(reads, 0, "Google alone: nothing to choose between");
+  insert(raw, "apple-health", "time-in-heart-rate-zone", "az" + day(1), { start: day(1) + "T00:00:00Z", end: day(1) + "T02:00:00Z", value: 120 });
+  await resolveSources(counted, 1, { types: ["time-in-heart-rate-zone"], since: day(2), now: NOW, cacheHistory: true });
+  assert.equal(reads, 1);
+  assert.equal(role(raw, "apple-health", "az" + day(1)), "duplicate", "the Fitbit is the home source of the day");
+  await resolveSources(counted, 1, { types: ["time-in-heart-rate-zone"], since: day(2), now: NOW + 60000, cacheHistory: true });
+  assert.equal(reads, 1, "the next sync within the hour reuses it");
+  await resolveSources(counted, 1, { types: ["time-in-heart-rate-zone"], since: day(2), now: NOW + 2 * 3600000, cacheHistory: true });
+  assert.equal(reads, 2);
+  await resolveSources(counted, 1, { types: ["time-in-heart-rate-zone"], since: day(2), now: NOW + 2 * 3600000 });
+  assert.equal(reads, 3, "other callers read it fresh");
+});

@@ -524,7 +524,7 @@ const watchFood = `<div class="aw-s" style="--gw:#163047">${wTop('', '12:20', ''
 <div class="aw-water"><span style="color:${WA.blue}">${ic('drop')}</span><div><b>1.5</b> <span class="aw-k">/ 2.6 L</span><i><b style="width:58%"></b></i></div><span class="aw-plus">+250</span></div></div>`;
 const watchFace = `<div class="aw-s aw-face"><div class="aw-date">THU<b>8</b></div><div class="aw-clock">7:12</div>
 <div class="aw-comps">${[['sun', '78', .78, WA.green], ['moon', '7:12', .89, WA.indigo], ['flame', '8.4', .6, WA.amber]].map(([icon, v, f, c]) => wRing(56, 23, 5, f, c, `<span class="aw-in" style="color:${c}">${ic(icon)}<b${v.length > 3 ? ' style="font-size:12.5px"' : ''}>${v}</b></span>`)).join('')}</div></div>`;
-// The watch section's steps: [the glow token behind the watch, title, text, screen].
+// The watch chapter's steps: [the glow token behind the watch, title, text, screen].
 export const WATCH = [
   ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness, sleep, strain and HRV, as on Today, and what’s next today in one line.', watchHome],
   ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown. Your heart rate and calories go into the same workout.', watchGym],
@@ -532,7 +532,9 @@ export const WATCH = [
   ['glow-health', 'Water in one tap.', 'What’s left to eat today, the macros, and +250 for a glass of water. Your iPhone gets it at once.', watchFood],
   ['glow-health', 'On your watch face.', 'Readiness, last night’s sleep and today’s strain sit beside the time, so you don’t even open the app.', watchFace]];
 
-export const ACTS = each({readiness: actReadiness, training: actTraining, food: actFood, sleep: actSleep, coach: actCoach});
+// Apple Watch's part opens with the watch face and its three complications.
+const actWatch = `<div class="dm wc aw-act"><div class="aw-w">${watchFace}</div></div>`;
+export const ACTS = each({readiness: actReadiness, training: actTraining, food: actFood, sleep: actSleep, coach: actCoach, watch: actWatch});
 
 export const DEMOS = each({sleepNight, sleepNeed, dial, tonight, readyParts, journal, strainMade, week, builder, gymParts, tmTable, tmTick, tmRest, tmDone, foodTarget, foodAdd, drinks, coachWeek, coachMemory, readyOne, tmOne, journalOne, tickOne, sleepOne, needOne, foodOne});
 export const SCREENS = each({strain: strainScreen, done: doneScreen, coach: coachScreen, memory: memoryScreen});
@@ -961,6 +963,8 @@ html:not(.js) .stage1{display:none}
 .js .mi2.new.wait:not(.in){max-height:0;padding-block:0;opacity:0}
 .madd{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:12px;padding:13px;border-radius:14px;background:var(--panel2);font-size:15px;font-weight:600}.madd .di{width:14px;height:14px;stroke-width:2.6}
 /* Apple Watch: the case and its dark screens (WatchStyle.swift: Instrument Serif numbers, a glow at the top). */
+.aw-act{place-items:center}
+.aw-w>.scr{inset:12px;border-radius:50px;overflow:hidden}
 .aw-w{position:relative;width:236px;height:286px;border-radius:62px;padding:12px;background:linear-gradient(145deg,#3b3d41,#1c1d1f);box-shadow:0 30px 60px -24px rgba(40,30,10,.55),inset 0 0 0 1.5px #55585d}
 .aw-w:after{content:"";position:absolute;right:-7px;top:62px;width:9px;height:40px;border-radius:5px;background:linear-gradient(90deg,#2a2b2e,#4a4c50)}
 .aw-w:before{content:"";position:absolute;right:-5px;top:120px;width:6px;height:46px;border-radius:3px;background:#2e2f32}

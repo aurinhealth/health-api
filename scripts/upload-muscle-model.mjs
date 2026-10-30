@@ -13,7 +13,7 @@ if (!file || !key) { console.error("Usage: node scripts/upload-muscle-model.mjs 
 if (readFileSync(file).subarray(0, 4).toString() !== "AURM") throw new Error(`${file} is not a model from build-muscle-model.mjs`);
 const gz = file + ".gz";
 writeFileSync(gz, gzipSync(readFileSync(file), { level: 9 }));
-const r = spawnSync("npx", ["--yes", "wrangler@4.147.0", "r2", "object", "put", `loadwise-food-catalog/${key}`, "--file", gz, "--remote", "--content-type", "application/octet-stream"],
+const r = spawnSync("npx", ["--yes", "wrangler@4.147.0", "r2", "object", "put", `aurin-food-catalog/${key}`, "--file", gz, "--remote", "--content-type", "application/octet-stream"],
   { stdio: "inherit", shell: process.platform === "win32" });
 if (r.status !== 0) throw new Error("Upload failed");
 console.log(`Done: ${key}`);

@@ -586,6 +586,7 @@ struct RecoveryTimeContent: View {
         switch kind {
         case "ride": return ("bicycle", Palette.amber)
         case "run": return ("figure.run", Palette.amber)
+        case "swim": return ("figure.pool.swim", Palette.amber)
         case "walk": return ("figure.walk", Palette.amber)
         case "gym": return ("dumbbell.fill", Palette.amber)
         case "sleep": return ("moon.fill", Palette.indigo)

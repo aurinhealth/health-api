@@ -46,6 +46,10 @@ import { localDate, zonedTime } from "./user-time.js";
 const HOUR = 3600000, DAY = 86400000;
 export const RESTED_BELOW = 1.75, MAX_HOURS = 96, FATIGUED_HOURS = 24, FULL = 6, WINDOW_DAYS = 7;
 const RIDE_SHARE = 0.7;
+// Swimming carries no body weight: less muscle damage than the same load running.
+const SWIM_SHARE = 0.6;
+// Body-map groups of fitness-insights.js → this catalogue's muscles.
+const FROM_BODY_MAP = { hips: "glutes", lats: "back", upper_back: "back", front_delts: "shoulders" };
 // When each body part was last trained and how often this week: 4 weeks of sets.
 const HISTORY_DAYS = 28;
 // A gym day without a known time counts as done at 18:00.
@@ -143,10 +147,10 @@ export function fatigueDoses({ sets = [], activities = [], now }) {
   }
   activities.forEach((a, i) => {
     const kind = a.kind || activityKind(a);
-    if (!["ride", "run", "walk"].includes(kind) || !Number.isFinite(a.end) || a.end > now) return;
+    if (!["ride", "run", "swim", "walk"].includes(kind) || !Number.isFinite(a.end) || a.end > now) return;
     const key = "activity:" + i, source = { key, kind, date: localDate(new Date(a.end)), at: a.end, distance: a.distance, minutes: a.minutes, muscles: {} };
     for (const e of muscleEvents({ activities: [{ ...a, date: source.date }] })) {
-      const muscle = e.muscle === "hips" ? "glutes" : e.muscle, dose = e.load / SET_LOAD * (kind === "ride" ? RIDE_SHARE : 1);
+      const muscle = FROM_BODY_MAP[e.muscle] || e.muscle, dose = e.load / SET_LOAD * (kind === "ride" ? RIDE_SHARE : kind === "swim" ? SWIM_SHARE : 1);
       doses.push({ at: a.end, muscle, dose, failure: false, estimated: true, source: key });
       source.muscles[muscle] = (source.muscles[muscle] || 0) + dose;
     }
@@ -177,7 +181,7 @@ function dayText(date, today) {
 const LEGS = new Set(["quads", "hamstrings", "glutes", "calves", "adductors", "abductors"]);
 export function sourceTitle(s) {
   if (s.kind === "gym") return L("Posilovna, ", "Gym, ") + gymPart(s);
-  const name = { ride: L("Jízda", "Ride"), run: L("Běh", "Run"), walk: L("Chůze", "Walk") }[s.kind];
+  const name = { ride: L("Jízda", "Ride"), run: L("Běh", "Run"), swim: L("Plavání", "Swim"), walk: L("Chůze", "Walk") }[s.kind];
   const km = Number(s.distance) / 1000;
   if (km >= 0.5) {
     const value = isImperial() ? Number(s.distance) / M_PER_MILE : km;

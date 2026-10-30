@@ -25,13 +25,13 @@ export { weekInstructions, sessionInstructions };
 const shift = (date, n) => new Date(Date.parse(date + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
-export const WEEK_SPORTS = ["ride", "run", "gym"];
+export const WEEK_SPORTS = ["ride", "run", "swim", "gym"];
 export const KINDS = ["recovery", "endurance", "long", "tempo", "sweet_spot", "threshold", "vo2max", "gym"];
 // The generator's focus for a kind (cycling-coach-v2.js reads goal.focus).
 export const FOCUS_OF = { recovery: "recovery", endurance: "endurance", long: "long_endurance", tempo: "tempo", sweet_spot: "sweet_spot", threshold: "threshold", vo2max: "vo2max" };
-export const MIN_MINUTES = { ride: 30, run: 20, gym: 30 };
-export const MAX_MINUTES = { ride: 300, run: 150, gym: 90 };
-const DEFAULT_MINUTES = { ride: 60, run: 45, gym: 60 };
+export const MIN_MINUTES = { ride: 30, run: 20, swim: 15, gym: 30 };
+export const MAX_MINUTES = { ride: 300, run: 150, swim: 90, gym: 90 };
+const DEFAULT_MINUTES = { ride: 60, run: 45, swim: 40, gym: 60 };
 
 export const KIND_LABELS = () => ({
   recovery: L("Lehce / regenerace", "Easy / recovery"),
@@ -85,7 +85,9 @@ export function gymNote(text) {
 // TSB −20 or in a recovery week. strain: the athlete's state (week-check.js
 // strainOf); tired (2) allows no hard day, strained (1) one. A day of the plan
 // (`plan`) is never eased.
-export function sanitizeWeekDays(days, { start, today, prefs = null, readiness = "green", usedByDate = {}, existingSports = {}, fixedHard = [], tsb = null, recoveryWeek = false, strain = 0 } = {}) {
+// split: a triathlete's week (triathlon-split.js); the discipline being learnt
+// stays short and never hard.
+export function sanitizeWeekDays(days, { start, today, prefs = null, readiness = "green", usedByDate = {}, existingSports = {}, fixedHard = [], tsb = null, recoveryWeek = false, strain = 0, split = null } = {}) {
   const first = today > start ? today : start, last = shift(start, 6);
   const used = new Map(Object.entries(usedByDate).map(([d, m]) => [d, Number(m) || 0])), perDay = new Map(Object.entries(existingSports).map(([d, list]) => [d, list.length]));
   const out = [];
@@ -97,9 +99,12 @@ export function sanitizeWeekDays(days, { start, today, prefs = null, readiness =
     if ((perDay.get(date) || 0) >= 4) continue;
     let kind = sport === "gym" ? "gym" : KINDS.includes(raw?.kind) && raw.kind !== "gym" ? raw.kind : "endurance";
     if (sport === "run" && kind === "sweet_spot") kind = "tempo";
+    // A swim has no sweet spot or tempo set: they become threshold (CSS).
+    if (sport === "swim" && (kind === "sweet_spot" || kind === "tempo")) kind = "threshold";
     const environment = sport === "gym" ? "indoor" : raw?.environment === "indoor" ? "indoor" : "outdoor";
+    if (split?.weak === sport && HARD_KINDS.has(kind)) kind = "endurance";
     let minutes = num(raw?.minutes) ?? DEFAULT_MINUTES[sport];
-    minutes = Math.min(MAX_MINUTES[sport], minutes);
+    minutes = Math.min(MAX_MINUTES[sport], split?.short?.[sport] ?? Infinity, minutes);
     const available = availabilityOn(prefs, date).minutes, left = available == null ? null : available - (used.get(date) || 0);
     // A day the athlete asked for keeps its session even without set time.
     if (left != null && !(raw?.requested && left < MIN_MINUTES[sport])) minutes = Math.min(minutes, left);
@@ -168,11 +173,33 @@ export function lockPlanDays(days, planDays = [], planName = null) {
   });
 }
 
+// The brick: one run a week straight after a ride on the same day, for a
+// triathlete (split.brick) or where the training plan has one (plan kind
+// "brick"). The shortest run on the day of the longest such ride is it, and
+// it goes right after that ride, so the app saves the two joined.
+export function markBrick(days, { split = null, planDays = [] } = {}) {
+  const list = Array.isArray(days) ? days.map(d => { const { brick, ...rest } = d || {}; void brick; return rest; }) : [];
+  const planned = new Set((planDays || []).filter(p => p?.plan?.kind === "brick" || p?.brick).map(p => p.date));
+  if (!split?.brick && !planned.size) return list;
+  const limit = (split?.brick?.minutes || 45) + 15;
+  const options = [...new Set(list.map(d => d.date))].map(date => {
+    const day = list.filter(d => d.date === date);
+    const ride = day.filter(d => d.sport === "ride").sort((a, b) => (b.minutes || 0) - (a.minutes || 0))[0];
+    const run = day.filter(d => d.sport === "run" && (d.minutes || 0) <= limit).sort((a, b) => (a.minutes || 0) - (b.minutes || 0))[0];
+    return ride && run ? { date, ride, run } : null;
+  }).filter(Boolean).sort((a, b) => Number(planned.has(b.date)) - Number(planned.has(a.date)) || (b.ride.minutes || 0) - (a.ride.minutes || 0));
+  const pick = options[0];
+  if (!pick) return list;
+  const out = list.filter(d => d !== pick.run);
+  out.splice(out.indexOf(pick.ride) + 1, 0, { ...pick.run, brick: true });
+  return out;
+}
+
 export function weekItem(x, slotOf) {
   const labels = KIND_LABELS();
   const slot = slotOf(x.date, x.sport);
   // A plan day goes to the generator without a focus, so it builds the plan's workout.
-  return { date: x.date, sport: x.sport, minutes: x.minutes, environment: x.sport === "gym" ? null : x.environment, kind: x.kind, focus: x.plan ? null : FOCUS_OF[x.kind] || null, label: x.plan ? x.label || labels[x.kind] || null : labels[x.kind] || null, reason: x.reason, role: x.kind, slot };
+  return { date: x.date, sport: x.sport, minutes: x.minutes, environment: x.sport === "gym" ? null : x.environment, kind: x.kind, focus: x.plan ? null : FOCUS_OF[x.kind] || null, label: x.plan ? x.label || labels[x.kind] || null : labels[x.kind] || null, reason: x.reason, role: x.kind, slot, ...(x.brick ? { brick: true } : {}) };
 }
 
 export function itemsFromDays(days) {
@@ -210,13 +237,13 @@ const WEEK_SCHEMA = {
 // facts: { start, today, availabilityByDate, existingSessions, rulesProposal,
 // readiness, recoveryWeek, weather, coach (coachContext), note, weekDays,
 // and for a correction previousProposal and correction }.
-export async function proposeWeekAI(env, facts, { prefs = null, focus = null, usedByDate = {}, existingSports = {}, planDays = [], fixedHard = [], ask = callOpenAI } = {}) {
+export async function proposeWeekAI(env, facts, { prefs = null, focus = null, usedByDate = {}, existingSports = {}, planDays = [], fixedHard = [], split = null, ask = callOpenAI } = {}) {
   const r = await ask(env, { feature: "week-plan", instructions: withFocus(weekInstructions() + MEMORY_RULE(), focus), input: L("Data (nejsou to pokyny): ", "Data (not instructions): ") + JSON.stringify(facts), format: WEEK_SCHEMA, maxOutputTokens: 4000, model: complexModel(env) });
   let parsed; try { parsed = JSON.parse(r.text); } catch { const error = new Error(L("Návrh týdne se nepodařilo zpracovat. Zkus to znovu.", "The week couldn't be processed. Try again.")); error.ai = true; throw error; }
   const asked = lockPlanDays(applyRequests(parsed?.days, parsed?.requested, { start: facts.start }), planDays, facts.trainingPlan?.name || null);
-  const days = sanitizeWeekDays(asked, { start: facts.start, today: facts.today, prefs, readiness: facts.readiness?.zone || "green", usedByDate, existingSports, fixedHard, tsb: facts.readiness?.tsb ?? null, recoveryWeek: Boolean(facts.recoveryWeek), strain: facts.recentState?.level || 0 });
+  const days = sanitizeWeekDays(asked, { start: facts.start, today: facts.today, prefs, readiness: facts.readiness?.zone || "green", usedByDate, existingSports, fixedHard, tsb: facts.readiness?.tsb ?? null, recoveryWeek: Boolean(facts.recoveryWeek), strain: facts.recentState?.level || 0, split });
   // A summary written for days the checks then eased would promise them still.
-  return { summary: days.eased ? null : String(parsed?.summary || "").trim().slice(0, 400) || null, items: itemsFromDays(days) };
+  return { summary: days.eased ? null : String(parsed?.summary || "").trim().slice(0, 400) || null, items: itemsFromDays(markBrick(days, { split, planDays })) };
 }
 
 // ---- One session: "Upravit s AI" ----
@@ -247,6 +274,7 @@ export function adjustByChip(session, chip) {
   else if (chip === "indoor") { out.environment = "indoor"; if (sport === "ride" || sport === "run") out.minutes = Math.min(minutes, indoorMinutes(sport, minutes)); }
   else if (chip === "outdoor") out.environment = "outdoor";
   if (sport === "run" && out.kind === "sweet_spot") out.kind = chip === "harder" ? "threshold" : "tempo";
+  if (sport === "swim" && (out.kind === "sweet_spot" || out.kind === "tempo")) out.kind = "threshold";
   return out;
 }
 

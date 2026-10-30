@@ -43,10 +43,12 @@ struct FocusSheet: View {
     @State private var loading = true
     @State private var saving = false
     @State private var error: String?
+    /// "Uplaveš 100 m bez zastavení?" for swimming and triathlon: nil until answered.
+    @State private var swims100: Bool?
     private let monday = WeekPlanView.monday()
 
     /// The chips, mapped to the profile's mainSport (src/athlete-focus.js).
-    static let sports = [("cycling", "Kolo"), ("running", "Běh"), ("strength", "Posilovna"), ("general", "Obecná kondice")]
+    static let sports = [("cycling", "Kolo"), ("running", "Běh"), ("swimming", "Plavání"), ("triathlon", "Triatlon"), ("strength", "Posilovna"), ("general", "Obecná kondice")]
     /// The goal rows, kept as the profile's sportGoal in the athlete's words.
     static let goals = [("fitness", "Zlepšit kondici"), ("race", "Závod"), ("lose", "Zhubnout")]
     static let goalTexts = ["fitness": "zlepšit kondici", "race": "závod", "lose": "zhubnout"]
@@ -58,6 +60,20 @@ struct FocusSheet: View {
                     Text("Zaměření").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                     ChipFlow(items: Self.sports.map { $0.0 }, label: { id in Self.sports.first { $0.0 == id }?.1 ?? id },
                              isOn: { $0 == sport }, toggle: { sport = $0 })
+                    if sport == "swimming" || sport == "triathlon" {
+                        SettingsGroup(footer: swims100 == false ? "Začneme krátkými délkami a technikou v bazénu. Pár lekcí s trenérem plavání ti pomůže nejvíc." : "Když ne, začneme krátkými délkami a technikou.") {
+                            HStack(spacing: 12) {
+                                Text("Uplaveš 100 m bez zastavení?").font(.body).foregroundStyle(Palette.ink)
+                                Spacer(minLength: 8)
+                                Picker("Uplaveš 100 m bez zastavení?", selection: $swims100) {
+                                    Text("Ano").tag(Bool?.some(true))
+                                    Text("Ne").tag(Bool?.some(false))
+                                }
+                                .pickerStyle(.segmented).fixedSize()
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 10)
+                        }
+                    }
 
                     SectionLabel(text: "Kdy máš čas").padding(.top, 10)
                     VStack(spacing: 0) {
@@ -116,6 +132,7 @@ struct FocusSheet: View {
             sport = p["mainSport"]?.string ?? ""
             let text = p["sportGoal"]?.string ?? ""
             goal = Self.goalTexts.first { $0.value == text }?.key ?? ""
+            if case .bool(let can)? = p["swims100"] { swims100 = can }
         }
         if let r = try? await model.api.weekPlan(start: nil) {
             prefs = r.prefs
@@ -131,8 +148,14 @@ struct FocusSheet: View {
         if let text = Self.goalTexts[goal] { next["sportGoal"] = .string(text) }
         // Losing weight is also the weight goal of the calorie target, unless one is set already.
         if goal == "lose", !(next["goal"]?.string ?? "").hasPrefix("lose") { next["goal"] = .string("lose_0.5") }
+        // Can't swim 100 m yet: the coach suggests lessons, swims stay in the pool (src/athlete-focus.js).
+        if let swims100, sport == "swimming" || sport == "triathlon" { next["swims100"] = .bool(swims100) }
         do {
             try await model.api.saveProfile(next)
+            // Can't swim 100 m yet: the swims start from first lengths (src/swimming-workouts.js).
+            if swims100 != nil, sport == "swimming" || sport == "triathlon" {
+                _ = try await model.api.saveGymPreferences(["experienceBySport": .object(["swim": .string(swims100 == false ? "beginner" : "auto")])])
+            }
             if prefs != nil {
                 let days = WeekPlanPrefs.days(prefs).map { Array($0.prefix(WeekPlanPrefs.maxPerDay)) }
                 let body = WeekPlanPrefs.edited(prefs, minutes: minutes, days: days, weeklyActivities: WeekPlanPrefs.weeklyActivities(prefs))
