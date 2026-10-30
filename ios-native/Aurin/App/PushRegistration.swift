@@ -362,7 +362,7 @@ struct CoachChatRef: Identifiable {
 /// open while the coach thinks (up to three minutes) even when the app is
 /// suspended, and the server sends his answer as a push
 /// (POST /app/api/assistant/push-reply).
-final class CoachReplyUpload: NSObject, URLSessionDelegate, @unchecked Sendable {
+final class CoachReplyUpload: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     static let shared = CoachReplyUpload()
     static let identifier = (Bundle.main.bundleIdentifier ?? "aurin") + ".coach-reply"
     private let lock = NSLock()
@@ -374,6 +374,9 @@ final class CoachReplyUpload: NSObject, URLSessionDelegate, @unchecked Sendable 
         config.httpCookieAcceptPolicy = .always
         config.httpShouldSetCookies = true
         config.timeoutIntervalForRequest = 200
+        // A reply that has not left within the hour is not sent days later
+        // (a background upload otherwise waits up to a week for signal).
+        config.timeoutIntervalForResource = Self.resourceLimit
         config.sessionSendsLaunchEvents = true
         return URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }()
@@ -383,9 +386,35 @@ final class CoachReplyUpload: NSObject, URLSessionDelegate, @unchecked Sendable 
         if let chatId { payload["chatId"] = .number(Double(chatId)) }
         guard let request = try? api.pushReplyRequest(), let data = try? JSONEncoder().encode(payload) else { return }
         // A background upload goes from a file.
-        let file = FileManager.default.temporaryDirectory.appendingPathComponent("coach-reply-\(UUID().uuidString).json")
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(Self.filePrefix + UUID().uuidString + ".json")
         guard (try? data.write(to: file)) != nil else { return }
-        session.uploadTask(with: request, fromFile: file).resume()
+        let task = session.uploadTask(with: request, fromFile: file)
+        // The file goes once the upload ends (didCompleteWithError).
+        task.taskDescription = file.lastPathComponent
+        task.resume()
+    }
+
+    private static let filePrefix = "coach-reply-"
+    static let resourceLimit: TimeInterval = 3600
+
+    /// The user's words leave the phone once they are sent, sent or not.
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+        guard let name = task.taskDescription, name.hasPrefix(Self.filePrefix) else { return }
+        try? FileManager.default.removeItem(at: FileManager.default.temporaryDirectory.appendingPathComponent(name))
+    }
+
+    /// Replies left behind (the app ended before the upload did). olderThan:
+    /// at launch, only files past the upload's own time limit, so one still
+    /// on its way is not taken from under it; signing out takes all of them.
+    static func sweep(olderThan age: TimeInterval = 0) {
+        let dir = FileManager.default.temporaryDirectory
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return }
+        let cutoff = Date().addingTimeInterval(-age)
+        for name in names where name.hasPrefix(filePrefix) {
+            let url = dir.appendingPathComponent(name)
+            let modified = (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date) ?? .distantPast
+            if age == 0 || modified < cutoff { try? FileManager.default.removeItem(at: url) }
+        }
     }
 
     /// iOS relaunched the app for the session's events: done once they are delivered.

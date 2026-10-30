@@ -2059,6 +2059,11 @@
 "Zapamatováno: %@" = "Remembered: %@";
 "Zapomenuto: %@" = "Forgotten: %@";
 "Upraveno: %@" = "Changed: %@";
+"Ponecháno" = "Kept";
+"Zapomenout tohle?" = "Forget this?";
+"Přepsat tohle?" = "Update this?";
+"Zapomenout" = "Forget";
+"Přepsat" = "Update";
 "Už neplatí" = "No longer true";
 "Pořád platí" = "Still true";
 
