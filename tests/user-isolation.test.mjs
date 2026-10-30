@@ -26,6 +26,9 @@ const allowed = [/FROM workout_shares WHERE id=\?"$/, /^"DELETE FROM push_tokens
   /FROM users u WHERE u\.disabled = 0 AND EXISTS \(SELECT 1 FROM push_tokens t WHERE t\.user_id = u\.id\) ORDER BY u\.id"$/,
   // The owner's morning report sums AI cost over all accounts (ops-report.js).
   /^"SELECT 1 FROM sqlite_master WHERE type='table' AND name='ai_usage'"$/, /FROM ai_usage a LEFT JOIN users u ON u\.id = a\.user_id/,
+  // ... and counts accounts, subscriptions and AI against what Pro brings in (accountStats).
+  /FROM ai_usage WHERE day >= \? AND day <= \? AND model NOT IN \('pending', 'carried-over'\) GROUP BY user_id/, /FROM ai_usage a JOIN users u ON u\.id = a\.user_id WHERE a\.day >= \?/,
+  /FROM subscriptions WHERE plan = 'ai'/,
   // The owner lists and decides every user's food corrections (food-suggestions.js);
   // the route refuses anyone else.
   /FROM food_suggestions s WHERE s\.status=\?/, /^"SELECT status, COUNT\(\*\) AS n FROM food_suggestions WHERE kind=\? GROUP BY status"$/,

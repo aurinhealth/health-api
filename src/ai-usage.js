@@ -12,6 +12,7 @@
 import { L } from './lang.js';
 import { localToday } from "./user-time.js";
 import { isReviewAccount, REVIEW_AI_MONTHLY_LIMIT_USD } from "./app-review.js";
+import { aiLimitShare } from "./ai-limit-share.js";
 import { addAiSpend } from "./ai-total.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -30,16 +31,17 @@ export function usageCost(model, usage, webSearches = 0) {
   return Math.round((((n(usage.input_tokens) || 0) - cached) * i + cached * c + (n(usage.output_tokens) || 0) * o + (n(webSearches) || 0) * WEB_SEARCH_USD * 1e6) / 1e6 * 1e5) / 1e5;
 }
 
-export function aiDailyLimitUsd(env) {
+// share: the part of the limits the account gets (aiLimitShare, ai-limit-share.js).
+export function aiDailyLimitUsd(env, share = 1) {
   if (env.USER_IS_OWNER === true) return null;
   const limit = n(env.AI_DAILY_LIMIT_USD);
-  return limit != null && limit >= 0 ? limit : null;
+  return limit != null && limit >= 0 ? limit * share : null;
 }
 
 export const DEFAULT_AI_MONTHLY_LIMIT_USD = 5;
-export function aiMonthlyLimitUsd(env) {
+export function aiMonthlyLimitUsd(env, share = 1) {
   if (env.USER_IS_OWNER === true) return null;
-  const limit = n(env.AI_MONTHLY_LIMIT_USD), base = limit != null && limit >= 0 ? limit : DEFAULT_AI_MONTHLY_LIMIT_USD;
+  const limit = n(env.AI_MONTHLY_LIMIT_USD), base = (limit != null && limit >= 0 ? limit : DEFAULT_AI_MONTHLY_LIMIT_USD) * share;
   // The App Review demo account gets a small fixed budget (app-review.js).
   return isReviewAccount(env) ? Math.min(base, REVIEW_AI_MONTHLY_LIMIT_USD) : base;
 }
@@ -81,8 +83,8 @@ export async function aiSpentThisMonth(env, { exceptId = 0 } = {}) {
 }
 
 export async function aiAllowance(env) {
-  const [spentUsd, monthSpentUsd] = await Promise.all([aiSpentToday(env), aiSpentThisMonth(env)]);
-  return { spentUsd, limitUsd: aiDailyLimitUsd(env), monthSpentUsd, monthLimitUsd: aiMonthlyLimitUsd(env) };
+  const [spentUsd, monthSpentUsd, share] = await Promise.all([aiSpentToday(env), aiSpentThisMonth(env), aiLimitShare(env)]);
+  return { spentUsd, limitUsd: aiDailyLimitUsd(env, share), monthSpentUsd, monthLimitUsd: aiMonthlyLimitUsd(env, share) };
 }
 
 // Throws before a model call once this month's or today's spending reached its
@@ -90,7 +92,8 @@ export async function aiAllowance(env) {
 // call's own slot, whose reservation does not count against itself.
 export async function assertAiAllowance(env, feature = null, { exceptId = 0 } = {}) {
   if (!tracked(env)) return;
-  const monthLimit = aiMonthlyLimitUsd(env), dayLimit = feature === COACH_CHAT_FEATURE ? null : aiDailyLimitUsd(env);
+  const share = await aiLimitShare(env);
+  const monthLimit = aiMonthlyLimitUsd(env, share), dayLimit = feature === COACH_CHAT_FEATURE ? null : aiDailyLimitUsd(env, share);
   if (monthLimit == null && dayLimit == null) return;
   if (monthLimit === 0 || dayLimit === 0) throw limitError(L("AI funkce nejsou pro tento účet zapnuté.", "AI features aren't enabled for this account."));
   // A failed read of the log does not cost the user the answer.
