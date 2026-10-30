@@ -177,9 +177,56 @@ export function retryingDb(db) {
   };
 }
 
+// One request that only reads asks D1 the same thing many times: the coach's
+// three weeks read the profile and the latest weight for every day (about 190
+// of a coach card's 420 queries were repeats). With `memo`, an identical read
+// of these tables (same SQL, same values) gets the first answer again, within
+// this request only. Any other statement through this database (a write, a
+// batch) forgets them all, so a request still sees its own writes. Tables that
+// other users' requests or the sync jobs change while a request waits for them
+// (sync status, connection secrets, AI slots) are never kept.
+const MEMO_TABLES = new Set(["health_datapoints", "food_logs", "dashboard_profile", "strength_sets", "gym_plans", "gym_plan_cancellations", "readiness_locks", "cycle_settings", "athlete_state", "user_setup"]);
+const KNOWN_TABLES = new Set([...Object.keys(PERSONAL_TABLES), ...MEMO_TABLES]);
+export function memoizableSql(sql) {
+  if (!readOnlySql(sql)) return false;
+  const code = String(sql).replace(/'(?:''|[^'])*'|--[^\n]*|\/\*[\s\S]*?\*\//g, " ").toLowerCase();
+  const from = [...code.matchAll(/\b(?:from|join)\s+([a-z_][a-z_0-9]*)/g)].map(m => m[1]);
+  const tables = (code.match(/[a-z_][a-z_0-9]*/g) || []).filter(w => KNOWN_TABLES.has(w));
+  return from.length > 0 && from.every(t => MEMO_TABLES.has(t)) && tables.every(t => MEMO_TABLES.has(t));
+}
+const plainValue = v => v === null || ["string", "number", "boolean"].includes(typeof v);
+function memoStatement(statement, sql, memo, values = []) {
+  const keep = memoizableSql(sql) && values.every(plainValue);
+  const forget = async (kind, args) => {
+    memo.clear();
+    try { return await statement[kind](...args); } finally { memo.clear(); }
+  };
+  const read = (kind, args) => {
+    // CREATE … IF NOT EXISTS changes no rows (handlers run it on every request).
+    if (!keep) return readOnlySql(sql) || IDEMPOTENT_SCHEMA.test(sql) ? statement[kind](...args) : forget(kind, args);
+    const key = JSON.stringify([kind, sql, values, args]);
+    let pending = memo.get(key);
+    if (!pending) {
+      pending = statement[kind](...args);
+      memo.set(key, pending);
+      pending.catch(() => { if (memo.get(key) === pending) memo.delete(key); });
+    }
+    // A copy each time: callers change the rows they get.
+    return pending.then(value => structuredClone(value));
+  };
+  return {
+    [REAL]: statement?.[REAL] || statement,
+    bind: (...next) => memoStatement(statement.bind(...next), sql, memo, next),
+    run: (...args) => read("run", args),
+    first: (...args) => read("first", args),
+    all: (...args) => read("all", args),
+    raw: (...args) => read("raw", args)
+  };
+}
+
 // A D1 facade that refuses statements touching personal tables unless they
 // mention user_id, so a missed WHERE clause fails instead of leaking data.
-export function scopedDb(db, userId) {
+export function scopedDb(db, userId, { memo = false } = {}) {
   if (!db) return db;
   const id = Number(userId);
   if (!Number.isInteger(id) || id <= 0) throw new Error("A user id is required for database access");
@@ -192,21 +239,30 @@ export function scopedDb(db, userId) {
       throw new Error("Unscoped query on personal data: " + sql.replace(/\s+/g, " ").slice(0, 120));
     }
   };
+  const reads = memo ? new Map() : null;
   return {
     userId: id,
-    prepare(query) { check(query); const statement = db.prepare(query); return retriedStatement(IDEMPOTENT_SCHEMA.test(query) ? schemaStatement(statement, String(query), schemaDone) : statement, query); },
-    batch(statements) { return withD1Retry(() => db.batch(statements.map(s => s?.[REAL] || s)), { read: false }); },
-    exec(query) { check(query); return db.exec(query); },
+    prepare(query) {
+      check(query);
+      const statement = db.prepare(query);
+      const retried = retriedStatement(IDEMPOTENT_SCHEMA.test(query) ? schemaStatement(statement, String(query), schemaDone) : statement, query);
+      return reads ? memoStatement(retried, String(query), reads) : retried;
+    },
+    async batch(statements) {
+      reads?.clear();
+      try { return await withD1Retry(() => db.batch(statements.map(s => s?.[REAL] || s)), { read: false }); } finally { reads?.clear(); }
+    },
+    exec(query) { check(query); reads?.clear(); return db.exec(query); },
     dump() { throw new Error("dump is not available on a user-scoped database"); }
   };
 }
 
 // The env every handler sees for one user: scoped DB, identity, and no access
 // to the owner's legacy global credentials unless this is the owner.
-export function userEnv(env, user) {
+export function userEnv(env, user, { memo = false } = {}) {
   // CONSENT_REQUIRED: AI for this user runs only with their consent (consent.js).
   const data = env.USER_DATA_DB || env.FOOD_CATALOG_DB ? routedUserDb(env.DB, env.USER_DATA_DB || env.DB, PERSONAL_TABLES, env.FOOD_CATALOG_DB || env.DB) : env.DB;
-  const scoped = { ...env, DB: scopedDb(data, user.id), RAW_DB: retryingDb(env.DB), USER_ID: user.id, USER_EMAIL: user.email, USER_ROLE: user.role, USER_IS_OWNER: user.isOwner === true, CONSENT_REQUIRED: true };
+  const scoped = { ...env, DB: scopedDb(data, user.id, { memo }), RAW_DB: retryingDb(env.DB), USER_ID: user.id, USER_EMAIL: user.email, USER_ROLE: user.role, USER_IS_OWNER: user.isOwner === true, CONSENT_REQUIRED: true };
   if (!scoped.USER_IS_OWNER) {
     delete scoped.GOOGLE_REFRESH_TOKEN;
     delete scoped.INTERVALS_API_KEY;

@@ -482,7 +482,8 @@ const worker = {
       user = await ownerUser(env.DB, env);
     }
     if (user) {
-      try { env = await connectionEnvironment(await userDataEnvironment(rawEnv, user, prefetched && user.id === Number(principal.userId) ? prefetched : null)); }
+      // A GET only reads: repeated identical reads within it are asked once (tenancy.js memoizableSql).
+      try { env = await connectionEnvironment(await userDataEnvironment(rawEnv, user, prefetched && user.id === Number(principal.userId) ? prefetched : null, { memo: request.method === "GET" })); }
       catch (error) {
         if (error instanceof UserDataUnavailable || error instanceof FoodCatalogUnavailable) return Response.json({status:'storage_unavailable',message:error instanceof FoodCatalogUnavailable?error.message:withLang(request.headers.get('X-Interface-Language')||/(?:^|;\s*)lw-lang=(cs|en)/.exec(request.headers.get('cookie')||'')?.[1],()=>L('Tvoje data jsou teď nedostupná. Zkus to za chvíli.', 'Your data is unavailable right now. Try again in a moment.'))},{status:503,headers:{'Retry-After':'30','Cache-Control':'no-store'}});
         throw error;
