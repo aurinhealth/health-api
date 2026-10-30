@@ -22,6 +22,10 @@ struct WeekSession: Decodable, Hashable, Identifiable {
     let eventId: String?
     /// On a done session: the plan it fulfils, for undoing a pairing.
     var plannedId: String? = nil
+    /// A session joined to another of the day, one right after the other
+    /// (a brick): the event it follows, and the one that follows it.
+    var after: String? = nil
+    var next: String? = nil
     /// A workout from the watch (Apple Health, Google Health): its detail
     /// (GET /app/api/activity-detail/watch).
     var watch: WatchRef? = nil
