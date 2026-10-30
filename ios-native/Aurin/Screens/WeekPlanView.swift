@@ -50,6 +50,8 @@ struct WeekSessionDraft: Identifiable, Equatable {
     var insisted = false
     /// The week's brick: a run straight after the day's ride, saved joined to it.
     var brick = false
+    /// The time of day it goes to the calendar with ("HH:MM"); nil is any time.
+    var time: String? = nil
     var workout: LibraryWorkout?
     var gym: GymProposal?
     var status: Status = .waiting
@@ -142,6 +144,11 @@ struct WeekPlanView: View {
     @State private var working = false
     @State private var saving = false
     @State private var error: String?
+    /// "Přesně": the session whose exact time is being picked.
+    @State private var exactFor: UUID?
+    /// The sessions "Upravit sám" set aside: their times come back on the rebuilt week.
+    @State private var timesBefore: [WeekSessionDraft] = []
+    @State private var exactTime = Date()
     /// "Kontrola týdne" of the built week (WeekCheck.swift); `checkApplied`
     /// once "Upravit" changed the sessions.
     @State private var check: WeekCheck?
@@ -210,6 +217,7 @@ struct WeekPlanView: View {
         .onChange(of: sessions) { _, _ in keep(weekStart) }
         .onChange(of: check) { _, _ in keep(weekStart) }
         .onDisappear { keep(weekStart) }
+        .sheet(isPresented: Binding(get: { exactFor != nil }, set: { if !$0 { exactFor = nil } })) { exactSheet }
     }
 
     // MARK: The unsaved week
@@ -418,6 +426,8 @@ struct WeekPlanView: View {
                 }
                 return Self.recalculated(next, from: previous)
             }
+            sessions = Self.keepingTimes(sessions, from: previous ?? timesBefore)
+            timesBefore = []
             if sessions.isEmpty { error = L10n.tr("Na zvolené dny nezbývá dost času na trénink. Přidej čas nahoře.") }
             await buildAll()
             await runCheck()
@@ -462,6 +472,7 @@ struct WeekPlanView: View {
     /// `removed`: the session "Odebrat z plánu" took out; it stays out and the
     /// sessions that changed around it are marked.
     private func proposeAI(correction: String? = nil, removed: WeekSessionDraft? = nil) async {
+        timesBefore = []
         working = true
         defer { working = false }
         error = nil
@@ -489,6 +500,7 @@ struct WeekPlanView: View {
                 }
                 return removed == nil ? next : Self.recalculated(next, from: previous)
             }
+            sessions = Self.keepingTimes(sessions, from: previous)
             if sessions.isEmpty { error = L10n.tr("Na tento týden nevyšel žádný trénink.") }
             if correction != nil && removed == nil { self.correction = "" }
             await buildAll()
@@ -563,6 +575,10 @@ struct WeekPlanView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(session.status == .waiting || session.status == .building)
+                    // The time chip sits over the card, outside the link.
+                    .overlay(alignment: .trailing) {
+                        if timeable(session) { timeChip(session).padding(.trailing, 48) }
+                    }
                     }
                 }
             }
@@ -589,6 +605,7 @@ struct WeekPlanView: View {
             } else {
                 SecondaryButton(title: "Naplánovat znovu", systemImage: "arrow.counterclockwise") {
                     sessions = []
+                    timesBefore = []
                     summary = nil
                     check = nil
                 }
@@ -605,7 +622,7 @@ struct WeekPlanView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(Fmt.capitalized(Fmt.dayHeading(s.date))).font(Typo.caption).foregroundStyle(Palette.muted)
                     Text(s.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2)
-                    Text([Fmt.duration(s.minutes), slot(s), s.environment.map { L10n.tr($0 == "indoor" ? "uvnitř" : "venku") }, kindLabel(s.kind)]
+                    Text([Fmt.duration(s.minutes), timeable(s) ? nil : slot(s), s.environment.map { L10n.tr($0 == "indoor" ? "uvnitř" : "venku") }, kindLabel(s.kind)]
                         .compactMap { $0 }.joined(separator: " · "))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                     if s.brick {
@@ -625,14 +642,104 @@ struct WeekPlanView: View {
                     }
                 }
                 Spacer(minLength: 4)
+                if timeable(s) { chipLabel(s).hidden().accessibilityHidden(true) }
+                Group {
                 switch s.status {
                 case .waiting, .building: ProgressView()
                 case .saved: Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.green)
                 case .failed: Image(systemName: "exclamationmark.circle").foregroundStyle(Palette.rust)
                 case .ready: Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                 }
+                }
+                .frame(width: 22)
             }
         }
+    }
+
+    /// A ride, run or swim still to save gets a time of day (mockup B).
+    private func timeable(_ s: WeekSessionDraft) -> Bool {
+        ["ride", "run", "swim"].contains(s.sport) && s.status != .saved
+    }
+
+    /// The brick run starts when the day's ride ends, +5 min to change
+    /// (src/planned-links.js followingTime); nil while the ride has no time.
+    private func brickTime(_ s: WeekSessionDraft) -> String? {
+        guard s.brick, let index = sessions.firstIndex(where: { $0.id == s.id }),
+              let ride = sessions[..<index].last(where: { $0.date == s.date && $0.sport == "ride" }),
+              let time = ride.time, let h = Int(time.prefix(2)), let m = Int(time.suffix(2)) else { return nil }
+        let end = min(23 * 60 + 59, h * 60 + m + ride.minutes + 5)
+        return String(format: "%02d:%02d", end / 60, end % 60)
+    }
+
+    /// The chip's face; the row keeps a hidden copy of it, so the space it
+    /// leaves grows with the text size.
+    private func chipLabel(_ s: WeekSessionDraft) -> some View {
+        let shown = s.brick ? brickTime(s) : s.time
+        return HStack(spacing: 4) {
+            Image(systemName: "clock").scaledFont(11, weight: .medium, cap: .denseCap)
+            Text(verbatim: shown.map { ClockText.format($0) } ?? L10n.tr("Kdykoli")).font(Typo.caption.weight(.medium))
+        }
+        .lineLimit(1)
+        .fixedSize()
+        .foregroundStyle(s.brick ? Palette.amber : Palette.ink)
+        .padding(.horizontal, 10).frame(minHeight: 28)
+        .background(Palette.track, in: Capsule())
+    }
+
+    private func timeChip(_ s: WeekSessionDraft) -> some View {
+        let label = chipLabel(s)
+        return Group {
+            if s.brick {
+                // Follows the ride; "Hned po sobě, nebo zvlášť" in Trénink changes it.
+                label.accessibilityLabel(L10n.tr("Brick · hned po kole"))
+            } else {
+                Menu {
+                    ForEach(MovePlannedSheet.Slot.allCases) { slot in
+                        Button {
+                            if slot == .exact {
+                                exactTime = Self.date(s.time) ?? Calendar.current.date(bySettingHour: 18, minute: 0, second: 0, of: Date()) ?? Date()
+                                exactFor = s.id
+                            } else {
+                                setTime(s.id, slot.clock)
+                            }
+                        } label: {
+                            let current = slot == .exact ? s.time != nil && !MovePlannedSheet.Slot.allCases.contains { $0.clock == s.time } : slot.clock == s.time
+                            if current { Label(L10n.tr(slot.label), systemImage: "checkmark") } else { Text(verbatim: L10n.tr(slot.label) + (slot.clock.map { " · " + ClockText.format($0) } ?? "")) }
+                        }
+                    }
+                } label: { label }
+                .accessibilityLabel(L10n.tr("Čas"))
+                // Fixed while the week saves: the time already went out.
+                .disabled(saving || working)
+            }
+        }
+    }
+
+    private func setTime(_ id: UUID, _ time: String?) {
+        guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
+        sessions[i].time = time
+    }
+
+    private static func date(_ time: String?) -> Date? {
+        guard let time, time.count == 5, let h = Int(time.prefix(2)), let m = Int(time.suffix(2)) else { return nil }
+        return Calendar.current.date(bySettingHour: h, minute: m, second: 0, of: Date())
+    }
+
+    /// "Přesně": the wheel for one session's time.
+    private var exactSheet: some View {
+        VStack(spacing: 16) {
+            DatePicker(L10n.tr("Přesný čas"), selection: $exactTime, displayedComponents: .hourAndMinute)
+                .datePickerStyle(.wheel).labelsHidden()
+                .environment(\.locale, Fmt.locale)
+            PrimaryButton(title: "Uložit", systemImage: "checkmark", busy: false) {
+                let c = Calendar.current.dateComponents([.hour, .minute], from: exactTime)
+                if let id = exactFor { setTime(id, String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)) }
+                exactFor = nil
+            }
+        }
+        .padding(24)
+        .presentationDetents([.height(320)])
+        .glassSheetBackground()
     }
 
     /// "18:30–19:15": the session's time in the day's free time, when the
@@ -687,6 +794,19 @@ struct WeekPlanView: View {
         next.recalculated = true
         next.previous = previous.first { $0.date == next.date && $0.sport == next.sport }?.line
         return next
+    }
+
+    /// A recalculated week keeps the times the athlete gave: a new session takes
+    /// the time of the one it replaced (same day and sport), each time once.
+    private static func keepingTimes(_ list: [WeekSessionDraft], from previous: [WeekSessionDraft]) -> [WeekSessionDraft] {
+        var left = previous.filter { $0.time != nil }
+        left.removeAll { old in list.contains { $0.id == old.id } }
+        return list.map { s in
+            guard s.time == nil, !s.brick, let k = left.firstIndex(where: { $0.date == s.date && $0.sport == s.sport }) else { return s }
+            var s = s
+            s.time = left.remove(at: k).time
+            return s
+        }
     }
 
     /// One at a time: the server builds each session from the whole week.
@@ -746,6 +866,7 @@ struct WeekPlanView: View {
             if next[w].count < WeekPlanPrefs.maxPerDay { next[w].append(s.sport) }
         }
         days = next
+        timesBefore = sessions.filter { $0.status != .saved }
         sessions = []
         summary = nil
         check = nil
@@ -766,10 +887,13 @@ struct WeekPlanView: View {
                     guard let draftId = gym.draftId else { throw APIError.message(L10n.tr("Trénink se nepodařilo sestavit.")) }
                     try await model.api.confirmGym(draftId: draftId, rows: gym.rows)
                 } else if let w = s.workout {
-                    let event = try await model.api.scheduleWorkout(id: w.id, date: s.date, indoor: s.environment == "indoor")
+                    // The brick run gets no time of its own: joining it to the
+                    // saved ride sets it from the ride's real length (planned-links.js).
+                    let event = try await model.api.scheduleWorkout(id: w.id, date: s.date, indoor: s.environment == "indoor",
+                                                                    time: s.brick ? nil : s.time)
                     if s.sport == "ride", let event { rides[s.date] = event }
                     // Joined, it goes to the watch with the ride as one workout.
-                    if s.brick, let event, let ride = rides[s.date] { try? await model.api.linkPlanned(eventId: event, after: ride) }
+                    if s.brick, let event, let ride = rides[s.date] { try await model.api.linkPlanned(eventId: event, after: ride) }
                 }
                 sessions[i].status = .saved
             } catch {

@@ -17,7 +17,9 @@ export const themeTokens = `
   /* Soft glow behind each section's card, in the tint of the app tab it shows. */
   --glow-today:#DCEBE2;--glow-health:#E3E6F3;--glow-training:#F3E3C6;--glow-food:#F2E4D0;
   /* The welcome before the sign-in (WelcomePages.swift): its sunrise and coach tints, the logo's sun, the plate loader. */
-  --glow-sunrise:#F7DFC2;--glow-coach:#E6E1F3;--sun:#E09A55;--metal:#BDB7AC;
+  --glow-sunrise:#F7DFC2;--glow-coach:#E6E1F3;
+  /* The night sky behind Sleep: only in dark mode, so in the light look it is the page itself and no stars. */
+  --night:#F3EFE8;--stars:0;--sun:#E09A55;--metal:#BDB7AC;
   --plate-25:#C98A7C;--plate-25-line:#A86A5C;--plate-20:#7E8DB5;--plate-20-line:#5F6F98;--plate-15:#B39A5E;--plate-15-line:#937A40;
   --plate-10:#8AA58C;--plate-10-line:#6A866D;--plate-5:#AEB2B9;--plate-5-line:#8E939B;--plate-2-5:#85817B;--plate-2-5-line:#66625C;--plate-1-25:#A8A39B;--plate-1-25-line:#88837B;
   /* Type scale of the site's own text (DESIGN.md): nothing outside it. Headlines grow fluidly from one step to the
@@ -48,7 +50,7 @@ export const darkTokens = `
   --button:#F4F2EE;--on-button:#0A0B0C;--frame:#2E3132;
   --aurora-lilac:#34325A;--device-hi:#8E8A84;--device-mid:#55524E;--device-lo:#34322F;
   --glow-today:#1D3B33;--glow-health:#22253A;--glow-training:#3A2A17;--glow-food:#352818;
-  --glow-sunrise:#3A2A17;--glow-coach:#2A2740;--sun:#F2B46B;--metal:#5E615F;
+  --glow-sunrise:#3A2A17;--glow-coach:#2A2740;--night:#181B33;--stars:1;--sun:#F2B46B;--metal:#5E615F;
   --plate-25-line:#E2AFA3;--plate-20-line:#AAB7DA;--plate-15-line:#D8C08A;--plate-10-line:#B5CDB6;--plate-5-line:#D2D5DA;--plate-2-5-line:#AFAAA2;--plate-1-25-line:#CBC6BE;
   --shadow-card:0 0 0 1px var(--line);
   --shadow-float:0 0 0 1px rgba(236,234,230,.08),0 30px 70px -28px rgba(0,0,0,.8);

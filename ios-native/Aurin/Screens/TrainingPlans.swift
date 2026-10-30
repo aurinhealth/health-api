@@ -68,6 +68,9 @@ struct TrainingPlans: Decodable, Equatable {
         var target: Int? = nil
         /// The race: its estimate and goal, or a cycling race's power and time.
         var race: PlanRace? = nil
+        /// A gym plan: its sessions this week and the split ("Tlaky / tahy / nohy").
+        var perWeek: Int? = nil
+        var split: String? = nil
         let template: Template
 
         func done(_ week: Int) -> Int? { completion?[String(week)] }
@@ -103,6 +106,52 @@ struct PlanPreview: Decodable, Equatable {
         let sessions: Int
         let minutes: Int
         let tss: Int
+        /// The free time limited the week.
+        var capped: Bool? = nil
+        /// Shift work: a week B.
+        var weekB: Bool? = nil
+    }
+    /// The free time the plan works with: minutes per weekday (null: no
+    /// limit), week B with shift work, the range that suits the plan.
+    struct Time: Decodable, Equatable {
+        let days: [Int?]
+        var total: Int? = nil
+        var daysB: [Int?]? = nil
+        var totalB: Int? = nil
+        /// A Monday of a week A.
+        var alternate: String? = nil
+        var suits: [Int]? = nil
+        var short: Bool? = nil
+        var note: String? = nil
+    }
+    /// A gym plan: sessions a week (2–7), the split and each day's part and time.
+    struct Gym: Decodable, Equatable {
+        struct Day: Decodable, Equatable, Identifiable {
+            var id: Int { day }
+            let day: Int
+            let part: String?
+            let label: String
+            let minutes: Int
+        }
+        let perWeek: Int
+        let usual: Int
+        let split: String
+        let days: [Day]
+        var short: Bool? = nil
+        var noRest: Bool? = nil
+        var note: String? = nil
+    }
+    /// The long ride's or run's day: the plan's now, the automatic one, and whether it is the athlete's own.
+    struct Long: Decodable, Equatable {
+        var day: Int? = nil
+        var auto: Int? = nil
+        let own: Bool
+    }
+    /// The other running plan that shares the free time.
+    struct Other: Decodable, Equatable {
+        let name: String
+        let sport: String
+        let days: [Int]
     }
     struct Totals: Decodable, Equatable {
         let sessions: Int
@@ -117,6 +166,12 @@ struct PlanPreview: Decodable, Equatable {
     let totals: Totals
     var raceDate: String? = nil
     var race: PlanRace? = nil
+    var time: Time? = nil
+    var gym: Gym? = nil
+    /// Days the plan adds to the usual week (shown dashed until chosen).
+    var added: [Int]? = nil
+    var other: Other? = nil
+    var long: Long? = nil
 }
 
 /// A race plan's race (src/race-estimate.js): a running race's estimate now,
@@ -213,8 +268,10 @@ extension APIClient {
         try await send("/app/api/plans", method: "POST", body: body)
     }
 
-    func trainingPlanPreview(templateId: String? = nil, startDate: String? = nil, days: [Int]? = nil, raceDate: String? = nil, raceKm: Double? = nil, targetSeconds: Int? = nil) async throws -> PlanPreview {
+    func trainingPlanPreview(templateId: String? = nil, startDate: String? = nil, days: [Int]? = nil, raceDate: String? = nil, raceKm: Double? = nil, targetSeconds: Int? = nil, count: Int? = nil, perWeek: Int? = nil) async throws -> PlanPreview {
         var query = templateId == nil ? ["active=1"] : ["templateId=" + templateId!]
+        if let count { query.append("count=" + String(count)) }
+        if let perWeek { query.append("perWeek=" + String(perWeek)) }
         if let startDate { query.append("startDate=" + startDate) }
         if let days, !days.isEmpty { query.append("days=" + days.map(String.init).joined(separator: ",")) }
         if let raceDate { query.append("raceDate=" + raceDate) }
@@ -612,15 +669,10 @@ struct TrainingPlansSheet: View {
     var body: some View {
         NavigationStack {
             SettingsPage(title: "Tréninkové plány") {
-                Picker("Sport", selection: $sport) {
-                    // The library's order (Kolo, Běh, Plavání, triatlon, Posilovna).
-                    Text("Kolo").tag("ride")
-                    Text("Běh").tag("run")
-                    Text("Plavání").tag("swim")
-                    Text(verbatim: "Tri").tag("triathlon")
-                    Text("Posilovna").tag("gym")
+                // The sports as tiles in the library's order (Kolo, Běh, Plavání, triatlon, Posilovna).
+                HStack(spacing: 6) {
+                    ForEach(Self.sports.indices, id: \.self) { i in sportTile(Self.sports[i]) }
                 }
-                .pickerStyle(.segmented)
                 let list = plans.templates.filter { $0.sport == sport }
                 let raced = list.filter { $0.race != nil }, open = list.filter { $0.race == nil }
                 // Plans with a race date apart from the others.
@@ -652,6 +704,32 @@ struct TrainingPlansSheet: View {
         }
     }
 
+    /// Ride, run, swim, triathlon, gym: the sport order everywhere in the app.
+    static let sports: [(id: String, symbol: String, color: Color)] = [
+        ("ride", "bicycle", Palette.amberBar), ("run", "figure.run", Palette.rust), ("swim", "figure.pool.swim", Palette.blue),
+        ("triathlon", "figure.open.water.swim", Palette.green), ("gym", "dumbbell.fill", Palette.indigo)
+    ]
+
+    private func sportTile(_ item: (id: String, symbol: String, color: Color)) -> some View {
+        let on = sport == item.id
+        let title = item.id == "triathlon" ? "Tri" : L10n.tr(["ride": "Kolo", "run": "Běh", "swim": "Plavání", "gym": "Posilovna"][item.id] ?? "")
+        return Button { withAnimation(.snappy) { sport = item.id } } label: {
+            VStack(spacing: 6) {
+                Image(systemName: item.symbol).scaledFont(15, weight: .semibold, cap: .denseCap)
+                    .foregroundStyle(on ? Palette.onAccent : item.color)
+                    .frame(width: 32, height: 32)
+                    .background(on ? item.color : item.color.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                Text(verbatim: title).font(.caption2.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity).padding(.vertical, 10).padding(.horizontal, 2)
+            .cardSurface(cornerRadius: 18)
+            .overlay { if on { RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(item.color, lineWidth: 1.5) } }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
     private func row(_ template: TrainingPlans.Template) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
@@ -680,6 +758,12 @@ struct PlanDetailView: View {
     @State private var confirmStop = false
     /// The gym days of the week (0 = Monday), from the usual week until changed.
     @State var days: [Int] = []
+    /// The days picked by hand; until then they follow the sessions a week.
+    @State private var ownDays = false
+    /// Sessions a week (2–7), the split and each day's part and time.
+    @State var gymPreview: PlanPreview? = nil
+    @State private var perWeekChoice: Int?
+    @State private var editingDays = false
 
     private var isActive: Bool { active?.templateId == template.id }
     /// The most sessions a week ("3× týdně" leads each week's keys).
@@ -695,11 +779,30 @@ struct PlanDetailView: View {
             }
             HStack(alignment: .top, spacing: 28) {
                 stat(String(template.weeksCount), L10n.plural("týdnů", template.weeksCount))
-                if perWeek > 0 { stat("\(perWeek)×", L10n.tr("týdně")) }
+                if let n = gymPreview?.gym?.perWeek ?? (perWeek > 0 ? perWeek : nil) { stat("\(n)×", L10n.tr("týdně")) }
                 if tests > 0 { stat(String(tests), L10n.plural("testů síly", tests)) }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 4)
+            if let gym = gymPreview?.gym {
+                GymWeekCard(gym: gym) { n in
+                    perWeekChoice = n
+                    if isActive { Task { await setPerWeek(n) } } else { ownDays = false }
+                }
+                if isActive {
+                    Button { editingDays = true } label: {
+                        HStack(spacing: 12) {
+                            Text("Dny a čas").font(.body).foregroundStyle(Palette.ink)
+                            Spacer()
+                            Text(verbatim: gym.days.map { weekdays[$0.day] }.joined(separator: " ")).font(.body).foregroundStyle(Palette.muted).lineLimit(1)
+                            Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
+                        }
+                        .padding(.horizontal, 16).frame(minHeight: 52)
+                        .cardSurface(cornerRadius: 22)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
             SettingsGroup {
                 ForEach(Array(template.weeks.enumerated()), id: \.element.id) { index, week in
                     if index > 0 { SettingsDivider() }
@@ -720,20 +823,8 @@ struct PlanDetailView: View {
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionLabel(text: "Dny v posilovně")
-                    HStack(spacing: 6) {
-                        ForEach(0..<7, id: \.self) { i in
-                            let on = days.contains(i)
-                            Button { toggle(i) } label: {
-                                Text(weekdays[i]).font(.footnote.weight(.semibold))
-                                    .foregroundStyle(on ? Palette.onAccent : Palette.muted)
-                                    .frame(maxWidth: .infinity, minHeight: 38)
-                                    .background(on ? Palette.amberBar : Palette.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityAddTraits(on ? .isSelected : [])
-                        }
-                    }
-                    if consecutive {
+                    PlanDayChips(days: days, added: ownDays ? [] : gymPreview?.added ?? [], toggle: toggle)
+                    if consecutive, (gymPreview?.gym?.perWeek ?? 3) <= 3 {
                         Text("Mezi silovými tréninky nech den volna: dva dny po sobě plán počítá jako jeden.")
                             .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
@@ -741,6 +832,7 @@ struct PlanDetailView: View {
                 PrimaryButton(title: L10n.tr(active == nil ? "Začít plán" : "Začít tento plán"), systemImage: "flag", busy: busy) {
                     var body: JSONObject = ["action": .string("start"), "templateId": .string(template.id)]
                     if !days.isEmpty { body["days"] = .array(days.map { .number(Double($0)) }) }
+                    if let n = perWeekChoice ?? gymPreview?.gym?.perWeek { body["perWeek"] = .number(Double(n)) }
                     Task { await act(body) }
                 }
                 .disabled(busy || model.demo)
@@ -750,9 +842,31 @@ struct PlanDetailView: View {
         .confirmationDialog("Ukončit plán?", isPresented: $confirmStop, titleVisibility: .visible) {
             Button("Ukončit plán", role: .destructive) { Task { await act(["action": .string("stop"), "sport": .string(template.sport)]) } }
         }
-        .task {
-            guard days.isEmpty, !isActive, !model.demo else { return }
-            if let preview = try? await model.api.trainingPlanPreview(templateId: template.id) { days = preview.days }
+        .sheet(isPresented: $editingDays, onDismiss: { Task { await loadGym() } }) {
+            DaysAndTimeSheet(sport: "gym", range: 2...7, initial: gymPreview?.gym?.days.map(\.day) ?? days, time: gymPreview?.time)
+        }
+        .task(id: [perWeekChoice ?? 0] + (ownDays ? days : [])) {
+            guard !model.demo else { return }
+            await loadGym()
+        }
+    }
+
+    private func loadGym() async {
+        guard let preview = try? await model.api.trainingPlanPreview(templateId: template.id, days: ownDays ? days : nil, perWeek: perWeekChoice) else { return }
+        gymPreview = preview
+        if !ownDays && !isActive { days = preview.days }
+    }
+
+    private func setPerWeek(_ n: Int) async {
+        busy = true
+        defer { busy = false }
+        do {
+            _ = try await model.api.trainingPlanAction(["action": .string("perWeek"), "perWeek": .number(Double(n))])
+            await model.refreshTraining()
+            error = nil
+            await loadGym()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 
@@ -760,7 +874,10 @@ struct PlanDetailView: View {
     private var consecutive: Bool { days.contains { days.contains(($0 + 1) % 7) } }
 
     private func toggle(_ i: Int) {
+        ownDays = true
         if days.contains(i) { if days.count > 1 { days.removeAll { $0 == i } } } else { days = (days + [i]).sorted() }
+        // A gym day is a session: the days picked are the sessions a week.
+        perWeekChoice = min(7, max(2, days.count))
     }
 
     private func stat(_ value: String, _ label: String) -> some View {

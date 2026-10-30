@@ -18,6 +18,8 @@ enum W {
     static let indigo = Color(hex: 0xA5A1FF)
     static let pink = Color(hex: 0xF59BB0)
     static let red = Color(hex: 0xFF6B5B)
+    /// Palette.rust (dark): a carbs limit passed.
+    static let rust = Color(hex: 0xF0907A)
     /// The iPhone's dark macro and water colours (Shared/Palette.swift).
     static let carbs = Color(hex: 0xFFC274)
     static let protein = Color(hex: 0x83C7FF)

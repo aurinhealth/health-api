@@ -21,6 +21,7 @@ import { healthPointJson } from './health-point-json.js';
 import { localDate } from './user-time.js';
 import { L } from './lang.js';
 import { resolveSources } from './source-priority.js';
+import { readReadOff, readAllowed } from './source-reading.js';
 
 export const SOURCE = 'whoop';
 const STATE_COOKIE = 'pfd_whoop_oauth_state';
@@ -207,7 +208,9 @@ export async function syncWhoop(env, { days = 3, fetchImpl = fetch, now = Date.n
     if (error.status === 401 || error.status === 403) await markConnectionBroken(env, SOURCE, error.message);
     return { status: 'error', message: error.message };
   }
-  const rows = whoopRows(sleeps, recoveries);
+  // Types switched off in Zdroje dat are not saved (source-reading.js).
+  const off = await readReadOff(env.DB, userId);
+  const rows = whoopRows(sleeps, recoveries).filter(r => readAllowed(off, SOURCE, r.data_type));
   for (let i = 0; i < rows.length; i += 50) await env.DB.batch(rows.slice(i, i + 50).map(r => upsert(env.DB, userId, r)));
   const replaced = rows.length ? await resolveSources(env.DB, userId, { part: 'night', since: start.slice(0, 10), now }) : 0;
   await markConnectionOk(env, SOURCE);

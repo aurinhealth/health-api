@@ -3031,7 +3031,7 @@
 "Co mi říká můj klidový tep?" = "What does my resting heart rate tell me?";
 "Jak klidový tep snížit?" = "How can I lower my resting heart rate?";
 "Co znamená můj dech ve spánku?" = "What does my breathing in sleep mean?";
-"Může to být začínající nemoc?" = "Could it be the start of an illness?";
+"Co ji ovlivňuje?" = "What affects it?";
 "Co znamená teplota zápěstí?" = "What does my wrist temperature mean?";
 "Je můj kyslík v krvi v pořádku?" = "Is my blood oxygen all right?";
 "Co ho ovlivňuje?" = "What affects it?";
@@ -3311,7 +3311,51 @@
 "Posledních 7 dní" = "Last 7 days";
 "7 dní předtím" = "7 days before";
 "%@ z %@ denně · splněno %@ z %@ dní" = "%@ of %@ a day · %@ of %@ days met";
+"bez omezení" = "no limit";
+"Každý týden stejně" = "Same every week";
+"Dva týdny po sobě" = "Two weeks in turn";
+"Týden A" = "Week A";
+"Týden B" = "Week B";
+"Tento týden je týden B" = "This week is week B";
+"Čas je strop. Plán využije tolik, kolik dovolí tvoje kondice, a k víc času se dopracuje postupně." = "The time is a ceiling. The plan uses as much as your fitness allows and works up to more time step by step.";
+"Volný čas" = "Free time";
+"Platí jen pro tento týden. Klíčové tréninky zůstanou, lehké se zkrátí nebo vypadnou." = "For this week only. The key sessions stay; the easy ones get shorter or drop out.";
+"Zpět na obvyklý týden" = "Back to the usual week";
+"Méně dní tento týden" = "Fewer days this week";
+"Dny a čas" = "Days and time";
+"Tento plán má %@ dní týdně." = "This plan has %@ days a week.";
+"Od tohoto týdne" = "From this week";
+"Od příštího týdne" = "From next week";
+"navrženo" = "suggested";
+"Tréninků týdně" = "Sessions a week";
+"%@× týdně" = "%@× a week";
+"Délka tréninku podle volného času toho dne, nejvýš 90 minut." = "Each session as long as that day's free time, up to 90 minutes.";
+"Běhů týdně" = "Runs a week";
+"Jízd týdně" = "Rides a week";
+"Čárkované dny plán přidal podle volného času. Klepnutím je změníš." = "The plan added the dashed days from your free time. Tap to change them.";
+"Tvůj čas" = "Your time";
+"Volný čas sdílí s plánem %@ (%@)." = "Shares the free time with %@ (%@).";
+"Úpravy" = "Adjust";
+"dva týdny" = "two weeks";
+"podle odhadu" = "from the estimate";
+"Dlouhý běh" = "Long run";
+"Dlouhá jízda" = "Long ride";
+"teď %@, nejvíc volného času" = "now %@, the most free time";
+"Nabízím jen tvoje dny běhu. Den před dlouhým během plán nedá klíčový trénink." = "Only your run days are offered. The plan keeps a key session off the day before the long run.";
+"Nabízím jen tvoje dny na kole. Den před dlouhou jízdou plán nedá klíčový trénink." = "Only your ride days are offered. The plan keeps a key session off the day before the long ride.";
+"%@ má %@: dlouhý trénink se do toho vejde, dokud dni nepřidáš víc času." = "%@ has %@: the long session stays within it until you give that day more time.";
 
+/* Why this workout in the gym day (GymWhyCard.swift) */
+"Proč tenhle trénink" = "Why this workout";
+"%@, podle tvého sportu" = "%@, from your sport";
+"Nové cviky" = "New exercises";
+"Jiné než %@" = "Different from %@";
+"Bolest" = "Pain";
+"První trénink" = "First workout";
+"Nová varianta" = "New variant";
+"Výskoky" = "Jumps";
+"Odlehčený týden" = "Deload week";
+"Šetřím nohy" = "Legs spared";
 /* Swimming */
 "%@ pauza" = "%@ rest";
 "Bazén" = "Pool";
@@ -3349,6 +3393,13 @@
 "Kolo %@×, běh %@× a plavání %@× týdně. Dny rozdělím podle času, který v týdnu máš." = "Riding %@×, running %@× and swimming %@× a week. I'll spread the days by the time you have in the week.";
 "Odhad: %@." = "Estimate: %@.";
 "Odhad času z tvých prahových hodnot, bez depa." = "Estimated from your thresholds, without transitions.";
+"Plavání týdně" = "Swims a week";
+
+/* Zdroje dat → Zdravotní data (SettingsHealthData.swift) */
+"Čte z" = "Reads from";
+"Posílá do" = "Sends to";
+"Vypnuté Aurin přestane číst. Co už má, zůstane." = "Off: Aurin stops reading it. What it already has stays.";
+"v tomhle iPhonu" = "on this iPhone";
 "Hned po sobě" = "Back to back";
 "Zvlášť" = "Separately";
 "Jak" = "How";

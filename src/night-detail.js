@@ -4,6 +4,7 @@
 // only the signed-in user's rows.
 import { sleepSessionFromRow, joinSplitNights } from "./sleep-sessions.js";
 import { localDateTime } from "./user-time.js";
+import { pickBuckets } from "./heart-rate-compaction.js";
 
 const n = v => v != null && v !== "" && Number.isFinite(Number(v)) ? Number(v) : null;
 const ms = v => new Date(v).getTime();
@@ -107,10 +108,10 @@ export async function nightDetail(db, { date }) {
   };
 }
 
-// Heart rate in 5-minute buckets within the given nights: the raw samples, and
-// for nights older than a week the 5-minute rows they were compacted into, a
-// point an hour after a month (heart-rate-compaction.js). A raw bucket wins over a
-// compacted one.
+// Heart rate in 5-minute buckets within the given nights: the 5-minute rows the
+// Google sync stores (index.js), a point an hour after a month
+// (heart-rate-compaction.js), and raw samples where some are kept (a workout's,
+// older nights' from before): per 5 minutes the one made of more samples.
 async function heartRateBuckets(db, nights) {
   const within = nights.map(() => "(sample_time>=? AND sample_time<?)").join(" OR ");
   // The outer range keeps the scan on the index; the windows pick the nights in it.
@@ -120,15 +121,13 @@ async function heartRateBuckets(db, nights) {
     db.prepare(`SELECT (CAST(strftime('%s', sample_time) AS INTEGER) / 300) * 300 AS bucket,
         AVG(CAST(json_extract(payload_json, '$.heartRate.beatsPerMinute') AS REAL)) AS avg,
         MIN(CAST(json_extract(payload_json, '$.heartRate.beatsPerMinute') AS REAL)) AS min,
-        MAX(CAST(json_extract(payload_json, '$.heartRate.beatsPerMinute') AS REAL)) AS max
+        MAX(CAST(json_extract(payload_json, '$.heartRate.beatsPerMinute') AS REAL)) AS max, COUNT(*) AS n
       FROM health_datapoints WHERE user_id=? AND data_type='heart-rate' AND sample_time>=? AND sample_time<? AND (${within})
       GROUP BY bucket ORDER BY bucket`).bind(...args).all().then(r => r.results || []).catch(() => []),
     db.prepare(`SELECT CAST(strftime('%s', sample_time) AS INTEGER) AS bucket, value_numeric AS avg,
-        json_extract(payload_json, '$.min') AS min, json_extract(payload_json, '$.max') AS max
+        json_extract(payload_json, '$.min') AS min, json_extract(payload_json, '$.max') AS max, json_extract(payload_json, '$.n') AS n
       FROM health_datapoints WHERE user_id=? AND data_type IN ('heart-rate-5min','heart-rate-1h') AND sample_time>=? AND sample_time<? AND (${within})
       ORDER BY sample_time`).bind(...args).all().then(r => r.results || []).catch(() => [])
   ]);
-  const buckets = new Map(compact.map(r => [n(r.bucket), r]));
-  for (const r of raw) buckets.set(n(r.bucket), r);
-  return [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([, r]) => r);
+  return pickBuckets(raw, compact).map(({ n: _count, ...r }) => r);
 }

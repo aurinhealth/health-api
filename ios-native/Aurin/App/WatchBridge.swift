@@ -226,10 +226,10 @@ final class WatchBridge: NSObject {
                                           planned: today.strain.planned, nextTitle: next?.title, nextTime: next?.time)
         let week = training?.sessions?.filter { $0.status != "missed" }.map {
             WatchSnapshot.Session(date: $0.date, time: $0.time, title: $0.title, sport: $0.sport, minutes: $0.minutes, done: $0.status == "done",
-                                  eventId: $0.eventId)
+                                  eventId: $0.eventId, after: $0.after, next: $0.next)
         }
         let n = today.nutrition
-        let macro = { (m: TodaySnapshot.Macro) in WatchSnapshot.Macro(eaten: m.eaten, target: m.target) }
+        let macro = { (m: TodaySnapshot.Macro) in WatchSnapshot.Macro(eaten: m.eaten, target: m.target, limit: m.limit) }
         let food = WatchSnapshot.Food(kcal: n.kcal, target: n.target, carbs: macro(n.carbs), protein: macro(n.protein), fat: macro(n.fat),
                                       water: n.water.ml, waterTarget: n.water.target)
         let tonight = health?.sleep.tonight
@@ -407,9 +407,10 @@ extension WatchBridge: WCSessionDelegate {
                                             repeats: max(1, block.repeats ?? 1), first: i == 0))
             }
         }
-        guard !steps.isEmpty else { return nil }
+        // Without steps too: a brick's steady leg goes to the watch as one multisport workout.
         return WatchPlan(name: workout.name, minutes: workout.duration_minutes.map { Int($0.rounded()) }, steps: steps,
-                         openWater: swim && workout.environment == "outdoor" ? true : nil)
+                         openWater: swim && workout.environment == "outdoor" ? true : nil,
+                         indoor: !swim && workout.environment == "indoor" ? true : nil)
     }
 
     /// A set, a drink or the alarm's place sent while the iPhone was out of reach.

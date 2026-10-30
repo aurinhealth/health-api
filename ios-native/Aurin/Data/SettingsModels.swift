@@ -13,6 +13,10 @@ struct ConnectionsResponse: Decodable, Equatable {
     let providers: [Provider]
     /// Which device the night and the day come from (src/source-priority.js).
     var priority: SourcePriority? = nil
+    /// Health data → a type → Reads from: the types switched off per service, and
+    /// the types each service can give (src/source-reading.js; HealthCategory raw values).
+    var readOff: [String: [String]]? = nil
+    var readTypes: [String: [String]]? = nil
 
     struct Provider: Decodable, Equatable, Identifiable {
         let id: String

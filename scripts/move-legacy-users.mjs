@@ -3,7 +3,8 @@
 // (health-data), which has no EU jurisdiction. This moves each such account
 // to a user data database in the EU, the way a new account starts:
 //
-//   1. copy the account's rows of every personal table to the chosen shard,
+//   1. copy the account's rows of every personal table a shard holds (not
+//      CENTRAL_PERSONAL_TABLES) to the chosen shard,
 //   2. point the account's route at the shard (from then on the Worker reads
 //      and writes there),
 //   3. copy the rows whose key the shard lacks (what the app wrote in
@@ -27,6 +28,7 @@ import { parseConfig, shardPlan } from './provision-user-shards.mjs';
 import { cloudflareD1 } from './food-catalog-tools.mjs';
 import { USER_ROUTES_SQL, routeBinding } from '../src/user-data-shards.js';
 import { PERSONAL_TABLES } from '../src/tenancy.js';
+import { shardTableNames } from '../src/user-data-routing.js';
 
 // D1 takes at most 100 bound parameters per statement.
 const MAX_PARAMS = 99;
@@ -37,6 +39,12 @@ const name = value => {
   if (!/^[a-z_][a-z0-9_]*$/i.test(value)) throw new Error('Unexpected identifier');
   return value;
 };
+
+// Literal names (more tables than D1 takes parameters) of the personal tables
+// a shard holds, as the router reads them. The rest (sign-in, consents,
+// connections, subscriptions, push) stay in the central database, the food
+// contributions in the food catalogue.
+const SHARD_TABLE_LIST = `(${shardTableNames(PERSONAL_TABLES).map(t => `'${name(t)}'`).join(',')})`;
 
 async function rows(api, db, sql, params = []) {
   return (await api.query(db, sql, params)).results || [];
@@ -69,8 +77,7 @@ async function tableInfo(api, db, table) {
 }
 
 export async function personalTables(api, core, shard) {
-  // Literal names: more tables than D1 takes parameters.
-  const list = `(${Object.keys(PERSONAL_TABLES).map(t => `'${name(t)}'`).join(',')})`;
+  const list = SHARD_TABLE_LIST;
   const central = await rows(api, core, `SELECT name, sql FROM sqlite_master WHERE type='table' AND name IN ${list} ORDER BY name`);
   const indexes = await rows(api, core, `SELECT tbl_name, sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL AND tbl_name IN ${list}`);
   const there = new Set((await rows(api, shard, `SELECT name FROM sqlite_master WHERE type='table' AND name IN ${list}`)).map(r => r.name));
@@ -229,23 +236,25 @@ function settled(log, userId, database, result) {
 }
 
 // Accounts already routed to a shard that still have personal rows in the
-// central database (a move cut off after the switch).
+// central database (a move cut off after the switch). One indexed probe per
+// account and table, not a scan of every row.
 async function leftoverAccounts(api, core, plan, ids) {
-  const list = `(${Object.keys(PERSONAL_TABLES).map(t => `'${name(t)}'`).join(',')})`;
+  const list = SHARD_TABLE_LIST;
   const present = (await rows(api, core, `SELECT name FROM sqlite_master WHERE type='table' AND name IN ${list}`)).map(r => r.name);
-  const users = new Set();
-  for (const table of present) {
-    for (const row of await rows(api, core, `SELECT DISTINCT user_id FROM ${name(table)}`)) users.add(Number(row.user_id));
-  }
-  const routes = new Map((await rows(api, core, USER_ROUTES_SQL)).map(r => [Number(r.user_id), r]));
+  const routes = (await rows(api, core, USER_ROUTES_SQL)).map(r => ({ ...r, user_id: Number(r.user_id) }))
+    .filter(r => r.shard_key !== 'legacy' && Number.isSafeInteger(r.user_id)).sort((x, y) => x.user_id - y.user_id);
   const found = [];
-  for (const userId of [...users].sort((x, y) => x - y)) {
-    const route = routes.get(userId);
-    if (!route || route.shard_key === 'legacy' || !Number.isSafeInteger(userId)) continue;
+  for (const route of routes) {
     let binding;
     try { binding = routeBinding(route); } catch { continue; }
     const target = plan.shards.find(s => s.key === route.shard_key && s.binding === binding);
-    if (target && ids[target.name] && ids[target.name] !== core) found.push({ userId, target, shard: ids[target.name] });
+    if (!target || !ids[target.name] || ids[target.name] === core) continue;
+    for (const table of present) {
+      if ((await rows(api, core, `SELECT 1 AS hit FROM ${name(table)} WHERE user_id=? LIMIT 1`, [route.user_id])).length) {
+        found.push({ userId: route.user_id, target, shard: ids[target.name] });
+        break;
+      }
+    }
   }
   return found;
 }

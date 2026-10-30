@@ -18,6 +18,10 @@ let forcedJwksAt = 0;
 // traded for a refresh token, which deleting the account revokes (App Store rule 5.1.1(v)).
 // The body must be JSON, so another site cannot post a form here to sign someone in.
 const APP_BUNDLE_ID = "health.aurin.app";
+// The Loadwise app signed in with Apple for a while before the rename (#477); a refresh token it
+// got belongs to this client, and Apple revokes a token only for the client it was issued to.
+const LEGACY_APP_BUNDLE_ID = "eu.petrfitnessdata.loadwise.native";
+const REVOKE_TIMEOUT_MS = 5000;
 export const appBundleId = env => String(env?.APPLE_APP_BUNDLE_ID || APP_BUNDLE_ID).trim();
 const canRevoke = env => Boolean(env?.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY);
 const appJson = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -68,16 +72,25 @@ async function exchangeAppCode(env, code, fetchImpl, client = appBundleId(env)) 
 export async function revokeApple(env, fetchImpl = fetch) {
   if (!env?.APPLE_REFRESH_TOKEN) return "none";
   if (!canRevoke(env)) return "failed";
-  try {
-    const response = await fetchImpl(APPLE + "/auth/revoke", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ client_id: appBundleId(env), client_secret: await appleClientSecret(env, undefined, appBundleId(env)), token: env.APPLE_REFRESH_TOKEN, token_type_hint: "refresh_token" })
-    });
-    return response.ok ? "revoked" : "failed";
-  } catch {
-    return "failed";
+  // Apple answers 200 also for a token it does not know for that client (RFC 7009), so a 200
+  // proves nothing about the client that issued it: every client is asked, and the token counts
+  // as revoked only when none refused or failed.
+  let revoked = true;
+  for (const client of [...new Set([appBundleId(env), LEGACY_APP_BUNDLE_ID])]) {
+    try {
+      const response = await fetchImpl(APPLE + "/auth/revoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ client_id: client, client_secret: await appleClientSecret(env, undefined, client), token: env.APPLE_REFRESH_TOKEN, token_type_hint: "refresh_token" }),
+        signal: AbortSignal.timeout(REVOKE_TIMEOUT_MS)
+      });
+      if (!response.ok) { revoked = false; console.warn("Apple revoke refused", client, response.status); }
+    } catch (error) {
+      revoked = false;
+      console.warn("Apple revoke failed", client, error.message);
+    }
   }
+  return revoked ? "revoked" : "failed";
 }
 
 function cleanName(value) {
