@@ -77,8 +77,22 @@ struct HealthPauseSheet: View {
     }
 
     private func point(_ text: LocalizedStringKey, mark: Mark) -> some View {
-        let symbol = switch mark { case .stop, .deleted: "xmark"; case .kept: "checkmark"; case .note: "info.circle" }
-        let color = switch mark { case .stop, .note: Palette.muted; case .deleted: Palette.rust; case .kept: Palette.green }
+        let symbol: String
+        let color: Color
+        switch mark {
+        case .stop:
+            symbol = "xmark"
+            color = Palette.muted
+        case .deleted:
+            symbol = "xmark"
+            color = Palette.rust
+        case .kept:
+            symbol = "checkmark"
+            color = Palette.green
+        case .note:
+            symbol = "info.circle"
+            color = Palette.muted
+        }
         return HStack(alignment: .firstTextBaseline, spacing: 10) {
             Image(systemName: symbol).font(.footnote.weight(.semibold)).foregroundStyle(color).frame(width: 16)
             Text(text).font(.body).foregroundStyle(mark == .note ? Palette.secondary : Palette.ink)

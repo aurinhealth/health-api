@@ -12,7 +12,7 @@ function database() {
   const db = createD1();
   db.sqlite.exec("CREATE TABLE IF NOT EXISTS d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TEXT)");
   db.sqlite.exec(sql("staging/schema.sql"));
-  for (const m of ["0013_cookbook_and_consents", "0021_session_epoch", "0032_health_pauses"]) db.sqlite.exec(sql(`migrations/${m}.sql`));
+  for (const m of ["0013_cookbook_and_consents", "0019_sync_destinations", "0021_session_epoch", "0032_health_pauses"]) db.sqlite.exec(sql(`migrations/${m}.sql`));
   for (const [id, email] of [[3, "a@example.com"], [4, "b@example.com"]]) {
     db.sqlite.prepare("INSERT INTO users (id, email) VALUES (?, ?)").run(id, email);
     db.sqlite.prepare("INSERT INTO user_consents VALUES (?, 'health', '2026-10-11', '2026-10-12T08:00:00Z', NULL)").run(id);
@@ -21,6 +21,9 @@ function database() {
     db.sqlite.prepare("INSERT INTO dashboard_profile (user_id, id, profile_json) VALUES (?, 1, '{\"sex\":\"female\",\"height\":170,\"rhr\":50,\"goal\":\"maintain\"}')").run(id);
     db.sqlite.prepare("INSERT INTO dashboard_profile (user_id, id, profile_json) VALUES (?, 2, '{\"ftp\":250}')").run(id);
     db.sqlite.prepare("INSERT INTO connection_credentials (user_id, provider, encrypted, updated_at) VALUES (?, 'intervals', 'secret', '2026-10-01')").run(id);
+    db.sqlite.prepare("CREATE TABLE IF NOT EXISTS journal_settings (user_id INTEGER NOT NULL PRIMARY KEY, settings_json TEXT NOT NULL, findings_json TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
+    db.sqlite.prepare("INSERT INTO journal_settings (user_id, settings_json, findings_json) VALUES (?, '{\"enabled\":true,\"shareSensitive\":true,\"sensitiveAt\":\"2026-10-30\",\"appleSex\":true,\"appleSexAt\":\"2026-10-30\"}', '[1]')").run(id);
+    db.sqlite.prepare("INSERT INTO sync_preferences (user_id, destination, health_json) VALUES (?, 'intervals', '\"all\"')").run(id);
     db.sqlite.prepare("INSERT INTO sync_status (user_id, sync_name, status) VALUES (?, 'read_off', 'ok'), (?, 'apple_health', 'ok'), (?, 'initial_google', 'done')").run(id, id, id);
   }
   return db;
@@ -49,6 +52,10 @@ test("pausing withdraws both consents, deletes this user's health data and keeps
   const profiles = db.sqlite.prepare("SELECT id, profile_json FROM dashboard_profile WHERE user_id = 3").all();
   assert.deepEqual(profiles.map(r => r.id), [1]);
   assert.deepEqual(JSON.parse(profiles[0].profile_json), { sex: "female", goal: "maintain" });
+  const journal = db.sqlite.prepare("SELECT settings_json, findings_json FROM journal_settings WHERE user_id = 3").get();
+  assert.deepEqual(JSON.parse(journal.settings_json), { enabled: true, shareSensitive: false, sensitiveAt: null, appleSex: false, appleSexAt: null }, "the journal's own consents go too, its settings stay");
+  assert.equal(journal.findings_json, null);
+  assert.equal(db.sqlite.prepare("SELECT health_json FROM sync_preferences WHERE user_id = 3").get().health_json, "[]");
   assert.equal(count(db, "health_datapoints", 4), 1, "nobody else's data");
   assert.equal(count(db, "dashboard_profile", 4), 2);
   assert.equal(await healthPaused(db, 4), false);

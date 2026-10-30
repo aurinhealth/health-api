@@ -60,7 +60,11 @@ async function cleanSettings(db, userId) {
     // it is settings (goals, meals, diet, sleep goal).
     db.prepare("UPDATE dashboard_profile SET profile_json = json_remove(profile_json, '$.height', '$.hrmax', '$.rhr', '$.targetWeight') WHERE user_id = ? AND id = 1 AND json_valid(profile_json)").bind(id),
     db.prepare("DELETE FROM sync_status WHERE user_id = ? AND sync_name NOT IN ('read_off', 'apple_health')").bind(id),
-    db.prepare('UPDATE journal_settings SET findings_json = NULL WHERE user_id = ?').bind(id)
+    // The journal's own consents (sensitive items for the coach, sexual activity
+    // from Apple Health; journal-store.js) go with the health consent.
+    db.prepare("UPDATE journal_settings SET findings_json = NULL, settings_json = json_set(settings_json, '$.shareSensitive', json('false'), '$.sensitiveAt', NULL, '$.appleSex', json('false'), '$.appleSexAt', NULL) WHERE user_id = ? AND json_valid(settings_json)").bind(id),
+    // So does sending health data to Intervals.icu (sync-destinations.js): off until turned on again.
+    db.prepare("UPDATE sync_preferences SET health_json = '[]' WHERE user_id = ? AND destination = 'intervals'").bind(id)
   ];
   for (const step of steps) await step.run().catch(error => { if (!missingTable(error)) throw error; });
 }
