@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import {
   readSyncPrefs, saveSyncPrefs, normalizeSyncPrefs, allowedWellness, syncOverview, sendActivity, retrySend, activitySends,
-  normalizeActivity, googleExercise, googleMissingScopes, retrySyncSends, sentByLoadwise
+  normalizeActivity, googleExercise, googleMissingScopes, retrySyncSends, sentByAurin
 } from "../src/sync-destinations.js";
 import { EXTRA_SCOPES, HEALTH_SCOPES } from "../src/google-scopes.js";
 import { storeLocalEvent, syncLocalWorkout } from "../src/local-workouts.js";
@@ -88,8 +88,8 @@ test("Intervals.icu gets the activity as a manual one, recorded; a retry updates
   // Before a first send Intervals.icu is asked whether the day already has this activity (a lost answer).
   assert.deepEqual([calls[0].method, calls[0].url], ["GET", "https://intervals.icu/api/v1/athlete/0/activities?oldest=2026-10-10&newest=2026-10-11"]);
   assert.equal(calls[1].url, "https://intervals.icu/api/v1/athlete/0/activities/manual");
-  assert.deepEqual(calls[1].body, { start_date_local: "2026-10-10T18:05:00", type: "WeightTraining", name: "Push", moving_time: 3720, elapsed_time: 3720, description: "Bench 4 × 8", external_id: "loadwise:7:gym:2026-10-10", icu_rpe: 7 });
-  assert.equal(sentByLoadwise({ external_id: calls[1].body.external_id }), true);
+  assert.deepEqual(calls[1].body, { start_date_local: "2026-10-10T18:05:00", type: "WeightTraining", name: "Push", moving_time: 3720, elapsed_time: 3720, description: "Bench 4 × 8", external_id: "aurin:7:gym:2026-10-10", icu_rpe: 7 });
+  assert.equal(sentByAurin({ external_id: calls[1].body.external_id }), true);
   // The same activity again (edited): PUT on the known id, no lookup, no second copy.
   await sendActivity(env, { ...activity, name: "Push A" }, { fetchImpl });
   assert.deepEqual([calls[2].method, calls[2].url], ["PUT", "https://intervals.icu/api/v1/activity/i777"]);
@@ -108,7 +108,8 @@ test("Intervals.icu: a first send without an answer is 'unknown'; the retry find
   assert.match(result.sends[0].message, /už tam může být|may already be there/);
   assert.deepEqual(lost.calls.map(c => c.method), ["GET", "POST"]);
   assert.deepEqual((await activitySends(env, activity.key)).map(s => [s.status, s.remoteId]), [["unknown", null]]);
-  // The cron tries again: the lookup finds the copy Intervals.icu made, so it is updated, never posted again.
+  // The cron tries again: the lookup finds the copy Intervals.icu made, so it is updated, never posted again;
+  // also one sent before 2026-11 under its loadwise:… id.
   d.sqlite.exec("UPDATE sync_sends SET updated_at = datetime('now', '-10 minutes')");
   const found = recorder((url, opts) => (opts.method || "GET") === "GET" ? Response.json([{ id: 4242, external_id: "loadwise:7:gym:2026-10-10" }, { id: 1, external_id: null }]) : Response.json({ id: 4242 }));
   assert.deepEqual(await retrySyncSends(env, { fetchImpl: found.fetchImpl }), [{ destination: "intervals", status: "sent", remoteId: "4242" }]);

@@ -10,8 +10,8 @@
 //   again to where it went (Intervals.icu, Google Health); the app replaces
 //   its own Apple Health copy (the same sync identifier).
 // - Google Health and Apple Health: only the app that recorded a workout may
-//   change it, so the change stays in Loadwise. The stored row is rewritten
-//   and marked (loadwiseType), and the syncs keep the mark (KEEP_TYPE_SQL).
+//   change it, so the change stays in Aurin. The stored row is rewritten
+//   and marked (aurinType), and the syncs keep the mark (KEEP_TYPE_SQL).
 import { L } from './lang.js';
 import { intervalsAuthorization } from './intervals-auth.js';
 import { sendActivity } from './sync-destinations.js';
@@ -125,39 +125,56 @@ export const watchType = exerciseType => {
 /** GET /app/api/activity/types: the list in the user's language. */
 export const activityTypes = () => ACTIVITY_TYPES.map(([type, cs, en, group]) => ({ type, name: L(cs, en), group }));
 
+// Aurin's marks on a stored activity: aurinType, aurinKcal, aurinKcalDevice and
+// aurinMerge. Rows from before 2026-11 were renamed from loadwise… (migration
+// 0032); one written by the old version while that migration ran is still read.
+export const mark = (payload, name) => payload?.['aurin' + name] ?? payload?.['loadwise' + name];
+const LEGACY_MARKS = ['Type', 'Kcal', 'KcalDevice', 'Merge'];
+// The payload with its marks under their new names only.
+export function renameMarks(payload) {
+  for (const name of LEGACY_MARKS) {
+    if (payload['loadwise' + name] === undefined) continue;
+    if (payload['aurin' + name] === undefined) payload['aurin' + name] = payload['loadwise' + name];
+    delete payload['loadwise' + name];
+  }
+  return payload;
+}
+
 // Every sync that writes an activity or exercise row (Intervals.icu, Google
 // Health, Apple Health, Wahoo) keeps a type the user chose and calories set in Aurin
 // (activity-edits.js): use in place of `payload_json = excluded.payload_json`.
+const OLD = name => `COALESCE(json_extract(health_datapoints.payload_json, '$.aurin${name}'), json_extract(health_datapoints.payload_json, '$.loadwise${name}'))`;
+const TYPE = OLD('Type');
 const TYPED = `CASE
   WHEN json_valid(health_datapoints.payload_json) AND json_valid(excluded.payload_json)
-    AND json_extract(health_datapoints.payload_json, '$.loadwiseType') IS NOT NULL
+    AND ${TYPE} IS NOT NULL
     AND json_type(excluded.payload_json, '$.exercise') = 'object'
   THEN json_set(excluded.payload_json,
-    '$.loadwiseType', json_extract(health_datapoints.payload_json, '$.loadwiseType'),
-    '$.exercise.exerciseType', json_extract(health_datapoints.payload_json, '$.loadwiseType'),
+    '$.aurinType', ${TYPE},
+    '$.exercise.exerciseType', ${TYPE},
     '$.exercise.displayName', json_extract(health_datapoints.payload_json, '$.exercise.displayName'))
   -- A Wahoo activity (Intervals.icu's shape): the type sits at the top.
   WHEN json_valid(health_datapoints.payload_json) AND json_valid(excluded.payload_json)
-    AND json_extract(health_datapoints.payload_json, '$.loadwiseType') IS NOT NULL
+    AND ${TYPE} IS NOT NULL
   THEN json_set(excluded.payload_json,
-    '$.loadwiseType', json_extract(health_datapoints.payload_json, '$.loadwiseType'),
-    '$.type', json_extract(health_datapoints.payload_json, '$.loadwiseType'))
+    '$.aurinType', ${TYPE},
+    '$.type', ${TYPE})
   ELSE excluded.payload_json END`;
-const KCAL = "json_extract(health_datapoints.payload_json, '$.loadwiseKcal')";
-const DEVICE = "json_extract(health_datapoints.payload_json, '$.loadwiseKcalDevice')";
+const KCAL = OLD('Kcal');
+const DEVICE = OLD('KcalDevice');
 const KEEP_KCAL = `CASE
   WHEN json_valid(health_datapoints.payload_json) AND json_valid(excluded.payload_json) AND ${KCAL} IS NOT NULL
   THEN CASE WHEN json_type(excluded.payload_json, '$.exercise.metricsSummary') = 'object'
-    THEN json_set(${TYPED}, '$.loadwiseKcal', ${KCAL}, '$.loadwiseKcalDevice', ${DEVICE}, '$.exercise.metricsSummary.caloriesKcal', ${KCAL})
+    THEN json_set(${TYPED}, '$.aurinKcal', ${KCAL}, '$.aurinKcalDevice', ${DEVICE}, '$.exercise.metricsSummary.caloriesKcal', ${KCAL})
     WHEN json_type(excluded.payload_json, '$.exercise') = 'object'
-    THEN json_set(${TYPED}, '$.loadwiseKcal', ${KCAL}, '$.loadwiseKcalDevice', ${DEVICE}, '$.exercise.metricsSummary', json_object('caloriesKcal', ${KCAL}))
-    ELSE json_replace(json_set(${TYPED}, '$.loadwiseKcal', ${KCAL}, '$.loadwiseKcalDevice', ${DEVICE}, '$.calories', ${KCAL}), '$.calories_kcal', ${KCAL}) END
+    THEN json_set(${TYPED}, '$.aurinKcal', ${KCAL}, '$.aurinKcalDevice', ${DEVICE}, '$.exercise.metricsSummary', json_object('caloriesKcal', ${KCAL}))
+    ELSE json_replace(json_set(${TYPED}, '$.aurinKcal', ${KCAL}, '$.aurinKcalDevice', ${DEVICE}, '$.calories', ${KCAL}), '$.calories_kcal', ${KCAL}) END
   ELSE ${TYPED} END`;
 // Two records merged into one (workout-merge.js) stay merged too.
-const MERGE = "json_extract(health_datapoints.payload_json, '$.loadwiseMerge')";
+const MERGE = OLD('Merge');
 export const KEEP_TYPE_SQL = `payload_json = CASE
-  WHEN json_valid(health_datapoints.payload_json) AND json_valid(excluded.payload_json) AND json_type(health_datapoints.payload_json, '$.loadwiseMerge') = 'object'
-  THEN json_set(${KEEP_KCAL}, '$.loadwiseMerge', json(${MERGE}))
+  WHEN json_valid(health_datapoints.payload_json) AND json_valid(excluded.payload_json) AND json_type(${MERGE}) = 'object'
+  THEN json_set(${KEEP_KCAL}, '$.aurinMerge', json(${MERGE}))
   ELSE ${KEEP_KCAL} END`;
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
@@ -236,8 +253,9 @@ export async function changeActivityType(env, { id, type } = {}, { fetchImpl = f
     if (!response.ok) throw fail(L('Intervals.icu změnu nepřijalo (HTTP ', 'Intervals.icu didn\'t accept the change (HTTP ') + response.status + ').', 502);
     payload.type = entry[0];
     // Intervals.icu has it as a Workout: the next sync keeps Aurin's type (KEEP_TYPE_SQL).
-    if (AURIN_ONLY.has(entry[0])) payload.loadwiseType = entry[0];
-    else delete payload.loadwiseType;
+    renameMarks(payload);
+    if (AURIN_ONLY.has(entry[0])) payload.aurinType = entry[0];
+    else delete payload.aurinType;
     await env.DB.prepare('UPDATE health_datapoints SET payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(JSON.stringify(payload), row.id, env.USER_ID).run();
     return { status: 'ok', type: entry[0], sent: ['intervals'], kept: [] };
   }
@@ -246,15 +264,15 @@ export async function changeActivityType(env, { id, type } = {}, { fetchImpl = f
   // the next Wahoo sync keeps it (KEEP_TYPE_SQL).
   if (row.source_family === 'wahoo') {
     payload.type = entry[0];
-    payload.loadwiseType = entry[0];
+    renameMarks(payload).aurinType = entry[0];
     await env.DB.prepare('UPDATE health_datapoints SET payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(JSON.stringify(payload), row.id, env.USER_ID).run();
     return { status: 'ok', type: entry[0], sent: [], kept: ['wahoo'] };
   }
-  // A watch session from Google Health or Apple Health: kept in Loadwise only.
+  // A watch session from Google Health or Apple Health: kept in Aurin only.
   payload.exercise = payload.exercise && typeof payload.exercise === 'object' ? payload.exercise : {};
   payload.exercise.exerciseType = entry[0];
   payload.exercise.displayName = L(entry[1], entry[2]);
-  payload.loadwiseType = entry[0];
+  renameMarks(payload).aurinType = entry[0];
   await env.DB.prepare('UPDATE health_datapoints SET payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(JSON.stringify(payload), row.id, env.USER_ID).run();
   return { status: 'ok', type: entry[0], sent: [], kept: [row.source_family === 'apple-health' ? 'apple' : 'google'] };
 }

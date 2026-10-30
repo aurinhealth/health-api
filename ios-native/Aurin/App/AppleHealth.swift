@@ -615,7 +615,7 @@ final class HealthReader: @unchecked Sendable {
     }
 
     /// Not what Aurin wrote itself from its own records (AppleHealthExport,
-    /// marked with a loadwise: sync identifier): the server has it already.
+    /// marked with an aurin: sync identifier): the server has it already.
     /// A workout recorded live in Režim tréninku (LiveWorkout) has no such
     /// mark and is read like a watch's, so its calories and heart rate count.
     private var notOurs: NSPredicate {

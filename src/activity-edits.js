@@ -3,7 +3,7 @@
 //
 // Calories: the source keeps its number; the stored row gets the user's
 // (Intervals.icu `calories`, Google/Apple Health `metricsSummary.caloriesKcal`)
-// with the marks loadwiseKcal and loadwiseKcalDevice (what the device said),
+// with the marks aurinKcal and aurinKcalDevice (what the device said),
 // and the syncs keep them (activity-type.js KEEP_TYPE_SQL). The calorie check
 // (activity-energy-check.js) leaves such an activity alone.
 //
@@ -17,6 +17,8 @@
 // Hidden rows are record_role 'duplicate' with matched_activity_id 'deleted':
 // every list skips them and the activity matching leaves them (index.js).
 import { L } from './lang.js';
+import { mark, renameMarks } from './activity-type.js';
+import { ownExternalId } from './sync-destinations.js';
 import { intervalsAuthorization } from './intervals-auth.js';
 import { cancelGymPlan } from './gym-plan-store.js';
 
@@ -40,7 +42,7 @@ const isWatch = row => row.source_family === 'google-wearables' || row.source_fa
 
 // What the source said the activity burned.
 export function deviceKcal(row, payload = parse(row.payload_json)) {
-  if (payload.loadwiseKcalDevice != null) return Number(payload.loadwiseKcalDevice);
+  if (mark(payload, 'KcalDevice') != null) return Number(mark(payload, 'KcalDevice'));
   const v = isWatch(row) ? payload.exercise?.metricsSummary?.caloriesKcal : payload.calories_kcal ?? payload.calories ?? payload.icu_calories;
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
@@ -48,13 +50,13 @@ export function deviceKcal(row, payload = parse(row.payload_json)) {
 
 function withKcal(row, payload, kcal) {
   const device = deviceKcal(row, payload);
-  const next = { ...payload };
+  const next = renameMarks({ ...payload });
   if (kcal == null) {
-    delete next.loadwiseKcal; delete next.loadwiseKcalDevice;
+    delete next.aurinKcal; delete next.aurinKcalDevice;
     kcal = device;
   } else {
-    next.loadwiseKcal = kcal;
-    next.loadwiseKcalDevice = device;
+    next.aurinKcal = kcal;
+    next.aurinKcalDevice = device;
   }
   if (isWatch(row)) {
     next.exercise = { ...(next.exercise || {}) };
@@ -117,7 +119,7 @@ export async function deleteOptions(env, id) {
   if (row.source_family === 'intervals') {
     const p = parse(row.payload_json), remote = String(p.id || row.external_id);
     if (stravaStub(row, p)) return { kind: 'watch', source: 'strava' };
-    return { kind: /^loadwise:/.test(String(p.external_id || '')) || await sentByApp(env, remote) ? 'app' : 'intervals' };
+    return { kind: ownExternalId(p.external_id) || await sentByApp(env, remote) ? 'app' : 'intervals' };
   }
   // A Wahoo ride stays in Wahoo; here it is only hidden, like a watch's record.
   if (row.source_family === 'wahoo') return { kind: 'watch', source: 'wahoo' };
@@ -157,7 +159,7 @@ export async function deleteActivity(env, { id, everywhere = false } = {}, { fet
 
   if (row.source_family === 'intervals' && !stravaStub(row, payload)) {
     const remote = String(payload.id || row.external_id);
-    const own = /^loadwise:/.test(String(payload.external_id || '')) || await sentByApp(env, remote);
+    const own = ownExternalId(payload.external_id) || await sentByApp(env, remote);
     if (own || everywhere) {
       await deleteInIntervals(env, remote, fetchImpl);
       await env.DB.prepare('DELETE FROM health_datapoints WHERE id = ? AND user_id = ?').bind(row.id, env.USER_ID).run();
@@ -165,7 +167,7 @@ export async function deleteActivity(env, { id, everywhere = false } = {}, { fet
     }
   }
   // Merged with another device's record (workout-merge.js): that one goes too.
-  const merged = typeof payload.loadwiseMerge?.with === 'string' ? payload.loadwiseMerge.with : null;
+  const merged = typeof mark(payload, 'Merge')?.with === 'string' ? mark(payload, 'Merge').with : null;
   const at = merged ? merged.indexOf(':') : -1;
   await env.DB.batch([hide(env, row), ...(at > 0 ? [env.DB.prepare(`UPDATE health_datapoints SET record_role = 'duplicate', matched_activity_id = ?, match_confidence = NULL, updated_at = CURRENT_TIMESTAMP
     WHERE user_id = ? AND source_family = ? AND data_type = 'exercise' AND external_id = ?`).bind(DELETED, env.USER_ID, merged.slice(0, at), merged.slice(at + 1))] : [])]);

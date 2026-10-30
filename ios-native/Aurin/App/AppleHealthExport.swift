@@ -9,7 +9,7 @@ import Observation
 /// there as its effort (iOS 18). iOS asks for write permission only for the
 /// types switched on.
 ///
-/// Each sample carries a sync identifier (loadwise:…) and a version, so a
+/// Each sample carries a sync identifier (aurin:…) and a version, so a
 /// newer value of the same day or workout replaces the older one in Apple
 /// Health instead of adding a second. The reading side (AppleHealth.swift)
 /// skips what Aurin wrote, so nothing comes back as a second copy.
@@ -108,8 +108,21 @@ final class AppleHealthExport {
 
     private func version() -> NSNumber { NSNumber(value: Int(Date().timeIntervalSince1970 * 1000)) }
 
+    /// Aurin's sync identifier: a newer version of the same one replaces a copy.
+    /// Before 2026-11 it began with "loadwise:"; such a copy is taken away when its
+    /// item is written again (removeLegacy), so nothing counts twice.
+    nonisolated static let syncPrefix = "aurin:"
+    nonisolated static let legacySyncPrefix = "loadwise:"
+
     private func metadata(_ id: String) -> [String: Any] {
-        [HKMetadataKeySyncIdentifier: "loadwise:" + id, HKMetadataKeySyncVersion: version()]
+        [HKMetadataKeySyncIdentifier: Self.syncPrefix + id, HKMetadataKeySyncVersion: version()]
+    }
+
+    /// Deletes the copies written under the old identifiers of these items (only Aurin's own).
+    private func removeLegacy(_ type: HKObjectType, ids: [String]) async {
+        guard !ids.isEmpty else { return }
+        let predicate = HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeySyncIdentifier, allowedValues: ids.map { Self.legacySyncPrefix + $0 })
+        _ = try? await store.deleteObjects(of: type, predicate: predicate)
     }
 
     // MARK: Workouts
@@ -146,6 +159,7 @@ final class AppleHealthExport {
                     if let error { continuation.resume(throwing: error) } else { continuation.resume() }
                 }
             }
+            await removeLegacy(.workoutType(), ids: ["workout:" + activity.key])
             return nil
         } catch {
             return error.localizedDescription
@@ -157,7 +171,7 @@ final class AppleHealthExport {
     /// a newer version replaces the old one.
     func changeWorkoutType(key: String, type: String) async {
         guard isAvailable, prefs.pushActivities, allowed(HKObjectType.workoutType()) else { return }
-        let predicate = HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeySyncIdentifier, allowedValues: ["loadwise:workout:" + key])
+        let predicate = HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeySyncIdentifier, allowedValues: [Self.syncPrefix, Self.legacySyncPrefix].map { $0 + "workout:" + key })
         let found: HKWorkout? = await withCheckedContinuation { continuation in
             let query = HKSampleQuery(sampleType: .workoutType(), predicate: predicate, limit: 1, sortDescriptors: nil) { _, samples, _ in
                 continuation.resume(returning: samples?.first as? HKWorkout)
@@ -175,6 +189,7 @@ final class AppleHealthExport {
             try await builder.addMetadata(meta)
             try await builder.endCollection(at: old.endDate)
             _ = try await builder.finishWorkout()
+            await removeLegacy(.workoutType(), ids: ["workout:" + key])
         } catch {
             // The old copy stays; the type is right in the app.
         }
@@ -342,7 +357,12 @@ final class AppleHealthExport {
     }
 
     private func save(_ objects: [HKObject]) async -> Bool {
-        await withCheckedContinuation { continuation in
+        // The same items written before 2026-11 under "loadwise:" go first.
+        for (type, list) in Dictionary(grouping: objects, by: { $0.sampleTypeKey }) {
+            let ids = list.compactMap { ($0.metadata?[HKMetadataKeySyncIdentifier] as? String)?.dropPrefix(Self.syncPrefix) }
+            if let type { await removeLegacy(type, ids: ids) }
+        }
+        return await withCheckedContinuation { continuation in
             store.save(objects) { ok, error in
                 if let error { print("Apple Health write failed", error.localizedDescription) }
                 continuation.resume(returning: ok)
@@ -364,4 +384,14 @@ final class AppleHealthExport {
     private static func noon(_ date: String) -> Date {
         dayStart(date).addingTimeInterval(12 * 3600)
     }
+}
+
+private extension HKObject {
+    /// The object's type, to group the deletes by (nil for anything not a sample).
+    var sampleTypeKey: HKSampleType? { (self as? HKSample)?.sampleType }
+}
+
+private extension String {
+    /// The rest after `prefix`, nil without it.
+    func dropPrefix(_ prefix: String) -> String? { hasPrefix(prefix) ? String(dropFirst(prefix.count)) : nil }
 }

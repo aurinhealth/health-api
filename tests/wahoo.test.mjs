@@ -204,7 +204,7 @@ test("a type and calories changed in Aurin stay after the next Wahoo sync", asyn
   name = "Evening";
   await syncWahoo(e, { days: 5, fetchImpl, now: NOW });
   const p = JSON.parse(rows(raw, "source_family='wahoo'")[0].payload_json);
-  assert.deepEqual([p.type, p.loadwiseType, p.calories, p.loadwiseKcal, p.loadwiseKcalDevice, p.name], ["Walk", "Walk", 250, 250, 812, "Evening"]);
+  assert.deepEqual([p.type, p.aurinType, p.calories, p.aurinKcal, p.aurinKcalDevice, p.name], ["Walk", "Walk", 250, 250, 812, "Evening"]);
 });
 
 test("the same ride from Wahoo and Intervals.icu counts once; Wahoo's ride stands over the watch's", async () => {

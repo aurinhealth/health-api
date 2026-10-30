@@ -3,7 +3,7 @@ import { intervalsTypeOf } from './activity-type.js';
 import { intervalsAuthorization } from './intervals-auth.js';
 import { localDateTime, zonedTime, zoneOffsetMs } from './user-time.js';
 import { grantedExtras, hasGoogleScope, HEALTH_PERMISSIONS } from './google-scopes.js';
-// Synchronizace: where Loadwise sends what the user records, chosen per
+// Synchronizace: where Aurin sends what the user records, chosen per
 // destination in the app (Settings → Synchronizace): Apple Health (written by
 // the iPhone, which keeps its part of the preferences here too), Google
 // Health, Intervals.icu and Wahoo (sent from here). Only destinations the
@@ -203,7 +203,7 @@ export function intervalsActivity(userId, activity) {
     moving_time: activity.minutes * 60,
     elapsed_time: activity.minutes * 60,
     description: activity.notes || undefined,
-    external_id: 'loadwise:' + userId + ':' + activity.key
+    external_id: EXTERNAL_PREFIX + userId + ':' + activity.key
   };
   if (activity.rpe) body.icu_rpe = activity.rpe;
   if (activity.distance) body.distance = activity.distance;
@@ -227,7 +227,9 @@ async function intervalsActivityId(headers, body, fetchImpl) {
   const response = await fetchImpl('https://intervals.icu/api/v1/athlete/0/activities?oldest=' + day + '&newest=' + next, { headers, signal: AbortSignal.timeout(15000) });
   if (!response.ok) throw new Error('Intervals.icu HTTP ' + response.status);
   const list = await response.json().catch(() => []);
-  const match = (Array.isArray(list) ? list : []).find(a => a?.external_id === body.external_id);
+  // Sent before 2026-11: under its old external_id (sentByAurin).
+  const ids = [body.external_id, body.external_id.replace(/^aurin:/, 'loadwise:')];
+  const match = (Array.isArray(list) ? list : []).find(a => ids.includes(a?.external_id));
   return match?.id == null ? null : String(match.id);
 }
 
@@ -432,4 +434,8 @@ export async function sentIntervalsIds(db, userId) {
     return new Set(rows.map(r => String(r.remote_id)));
   } catch { return new Set(); }
 }
-export const sentByLoadwise = activity => /^loadwise:/.test(String(activity?.external_id || ''));
+// Aurin's own records at Intervals.icu carry external_id "aurin:<user>:<key>";
+// ones sent before 2026-11 keep their "loadwise:…" (renaming them there would make copies).
+export const EXTERNAL_PREFIX = 'aurin:';
+export const ownExternalId = id => /^(aurin|loadwise):/.test(String(id || ''));
+export const sentByAurin = activity => ownExternalId(activity?.external_id);

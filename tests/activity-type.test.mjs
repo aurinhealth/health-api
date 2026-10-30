@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
-import { changeActivityType, KEEP_TYPE_SQL, groupOfType, activityTypes } from "../src/activity-type.js";
+import { changeActivityType, KEEP_TYPE_SQL, groupOfType, activityTypes, mark, renameMarks } from "../src/activity-type.js";
+import { readFileSync } from "node:fs";
 import { buildCalendar } from "../src/app-calendar.js";
 
 const schema = db => db.sqlite.exec(`CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY, user_id INTEGER, source_family TEXT, data_type TEXT, external_id TEXT, start_time TEXT, end_time TEXT, sample_time TEXT, value_numeric REAL, value_unit TEXT, payload_json TEXT, record_role TEXT, updated_at TEXT, UNIQUE (user_id, source_family, data_type, external_id))`);
@@ -83,4 +84,24 @@ test("a gym session gets the chosen type in the calendar", async () => {
   const a = cal.days[0].activities[0];
   assert.equal(a.sport, "run");
   assert.equal(a.type, "Run");
+});
+
+// Marks written as loadwise… before 2026-11: migration 0032 renames them, and a row the old
+// version writes while it runs is still read and kept by the next sync under the new name.
+test("a mark under its old name is read, kept by the next sync and renamed", async () => {
+  assert.equal(mark({ loadwiseKcal: 300 }, "Kcal"), 300);
+  assert.equal(mark({ aurinKcal: 310, loadwiseKcal: 300 }, "Kcal"), 310);
+  assert.deepEqual(renameMarks({ loadwiseType: "Walk", loadwiseMerge: { with: "x" }, a: 1 }), { aurinType: "Walk", aurinMerge: { with: "x" }, a: 1 });
+
+  const DB = createD1(); schema(DB);
+  await upsert(DB, { ...run, loadwiseType: "Walk", loadwiseKcal: 300, loadwiseKcalDevice: 251, loadwiseMerge: { with: "apple-health:a1" } });
+  await upsert(DB, { ...run, exercise: { ...run.exercise, metricsSummary: { caloriesKcal: 255 } } });
+  const kept = JSON.parse(DB.sqlite.prepare("SELECT payload_json FROM health_datapoints").get().payload_json);
+  assert.deepEqual([kept.aurinType, kept.exercise.exerciseType, kept.aurinKcal, kept.exercise.metricsSummary.caloriesKcal, kept.aurinMerge.with], ["Walk", "Walk", 300, 300, "apple-health:a1"]);
+
+  const old = createD1(); schema(old);
+  await upsert(old, { ...run, loadwiseType: "Walk", loadwiseKcal: 300, loadwiseKcalDevice: 251 });
+  old.sqlite.exec(readFileSync(new URL("../migrations/0032_aurin_marks.sql", import.meta.url), "utf8"));
+  const renamed = JSON.parse(old.sqlite.prepare("SELECT payload_json FROM health_datapoints").get().payload_json);
+  assert.deepEqual([renamed.aurinType, renamed.aurinKcal, renamed.aurinKcalDevice, renamed.loadwiseType], ["Walk", 300, 251, undefined]);
 });

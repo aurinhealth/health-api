@@ -1,5 +1,5 @@
 import { L } from './lang.js';
-import { KEEP_TYPE_SQL, watchType } from "./activity-type.js";
+import { KEEP_TYPE_SQL, watchType, mark } from "./activity-type.js";
 import { healthPointJson } from './health-point-json.js';
 import {localExportIndex} from './local-workouts.js';
 import {hasRecentActivityData} from './onboarding.js';
@@ -27,7 +27,7 @@ import { markConnectionBroken, markConnectionOk, isGoogleAuthFailure, isInterval
 import { manualPairs } from "./manual-pairs.js";
 import { matchPlannedWorkouts } from "./plan-match.js";
 export { matchPlannedWorkouts };
-import { readSyncPrefs, healthAllowed, sentIntervalsIds, sentByLoadwise } from "./sync-destinations.js";
+import { readSyncPrefs, healthAllowed, sentIntervalsIds, sentByAurin } from "./sync-destinations.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -1291,7 +1291,7 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays,del
 
   for (const sourceActivity of activities) {
     const id = String(sourceActivity.id);
-    if (sentByLoadwise(sourceActivity) || sentHere.has(id)) continue;
+    if (sentByAurin(sourceActivity) || sentHere.has(id)) continue;
     let a = sourceActivity;
     if (sourceActivity?._note && !sourceActivity.name && !sourceActivity.type) {
       const existing = existingById.get("activity:"+id);
@@ -1557,7 +1557,7 @@ export async function matchActivities(env, { days = null } = {}) {
   // A merged copy written again under a new id (workout-merge.js heldMerges):
   // the kept record points to the new one, so deleting it takes both.
   for (const { row, with: copy } of merges.moved) updates.push(env.DB.prepare(
-    `UPDATE health_datapoints SET payload_json = json_set(payload_json, '$.loadwiseMerge.with', ?), updated_at = CURRENT_TIMESTAMP
+    `UPDATE health_datapoints SET payload_json = json_set(payload_json, '$.aurinMerge.with', ?), updated_at = CURRENT_TIMESTAMP
      WHERE user_id = ? AND source_family = ? AND data_type = ? AND external_id = ?`
   ).bind(copy, env.USER_ID, row.source_family, row.data_type, row.external_id));
   for (let i = 0; i < updates.length; i += 50) await env.DB.batch(updates.slice(i, i + 50));
@@ -2044,7 +2044,7 @@ async function energyForDate(env, date) {
     })
     .sort((a, b) => new Date(a.start || 0).getTime() - new Date(b.start || 0).getTime());
   // Calories the user set in Aurin (activity-edits.js) are not checked again.
-  const edited=a=>a.payload?.loadwiseKcal!=null;
+  const edited=a=>mark(a.payload,'Kcal')!=null;
   const walking=completed.filter(a=>/^(Walk|Walking)$/i.test(a.type||'')&&!edited(a));
   if(walking.length){
     const telemetry=(await env.DB.prepare("SELECT start_time,end_time,value_numeric FROM health_datapoints WHERE user_id=? AND source_family IN ('google-wearables','apple-health') AND data_type='active-energy-burned' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,dayStart,dayEnd).all().catch(()=>({results:[]}))).results||[];

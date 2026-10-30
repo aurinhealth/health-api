@@ -41,7 +41,7 @@ test("watch workouts nobody else brought go to Intervals.icu once", async () => 
   assert.equal(posts[0].distance, 10012);
   assert.equal(posts[0].average_heartrate, 142);
   assert.equal(posts[0].calories, 610);
-  assert.equal(posts[0].external_id, "loadwise:7:apple:RUN1");
+  assert.equal(posts[0].external_id, "aurin:7:apple:RUN1");
   assert.deepEqual((await forwardWatchWorkouts(env, { now: NOW, fetchImpl })).sent, []);
   assert.equal(posts.length, 1);
   assert.equal((await forwardWatchWorkouts({ ...env, CONNECTED_PROVIDERS: ["google"] }, { now: NOW, fetchImpl })).status, "skipped");

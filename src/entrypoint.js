@@ -2330,7 +2330,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(body.provider==='whoop'){await disconnectWhoop(env);await bumpCacheVersion(env.DB);return Response.json({status:'ok',message:L('Připojení je odebrané a data z WHOOPu smazaná.', 'The connection has been removed and the WHOOP data deleted.')},{headers:{'Cache-Control':'no-store'}});}
       if(body.provider==='ultrahuman'){await disconnectUltrahuman(env);await bumpCacheVersion(env.DB);return Response.json({status:'ok',message:L('Připojení je odebrané a data z prstenu smazaná.', 'The connection has been removed and the ring\'s data deleted.')},{headers:{'Cache-Control':'no-store'}});}
       if(!['google','intervals'].includes(body.provider)) return Response.json({message:L('Neznámé připojení.', 'Unknown connection.')},{status:400});
-      // Loadwise also gives up its access at Google. The owner's token can be the shared Worker secret, which stays.
+      // Aurin also gives up its access at Google. The owner's token can be the shared Worker secret, which stays.
       if(body.provider==='google'&&!env.USER_IS_OWNER) await revokeGoogle(env);
       if(body.provider==='intervals'){await disconnectIntervalsApp(env);await deleteConnectionSecret(env,'intervals_athlete');}
       await deleteConnectionSecret(env,body.provider);
