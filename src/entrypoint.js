@@ -292,7 +292,7 @@ const minute = (cron, now, test) => cron === "* * * * *" && test(now.getUTCMinut
 const every5 = (cron, now) => minute(cron, now, m => m % 5 === 0);
 const USER_JOBS = [
   // After the user's midnight (0:00–6:00 in their zone), old Google data gets
-  // thinner a step a minute: heart-rate samples older than a week become 5-minute
+  // thinner a step a minute: a workout's heart-rate samples older than a week become 5-minute
   // rows, those older than a month hourly rows, zone minutes hourly rows
   // (heart-rate-compaction.js). The hourly summary of steps and zones fills back a
   // day a minute and is checked once a night (hour-summary.js).

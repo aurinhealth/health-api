@@ -107,10 +107,10 @@ export async function nightDetail(db, { date }) {
   };
 }
 
-// Heart rate in 5-minute buckets within the given nights: the raw samples, and
-// for nights older than a week the 5-minute rows they were compacted into, a
-// point an hour after a month (heart-rate-compaction.js). A raw bucket wins over a
-// compacted one.
+// Heart rate in 5-minute buckets within the given nights: the 5-minute rows the
+// Google sync stores (index.js), a point an hour after a month
+// (heart-rate-compaction.js), and raw samples where some are kept (a workout's,
+// older nights' from before). A raw bucket wins over a stored one.
 async function heartRateBuckets(db, nights) {
   const within = nights.map(() => "(sample_time>=? AND sample_time<?)").join(" OR ");
   // The outer range keeps the scan on the index; the windows pick the nights in it.

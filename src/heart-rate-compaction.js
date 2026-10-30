@@ -1,9 +1,11 @@
 import { dayStartUtc, localToday } from './user-time.js';
 
-// Google Health heart rate arrives as a sample every few seconds (~50k rows a
-// day). The last HEART_RATE_RAW_DAYS keep every sample; older samples become one
-// row per 5 minutes (average, minimum, maximum, count), the step the night chart
-// already draws in, and after HEART_RATE_FIVE_MIN_DAYS one row per hour. History
+// Google Health heart rate arrives as a sample every few seconds (~36k a day).
+// The sync stores it as one row per 5 minutes (average, minimum, maximum, count),
+// the step the night chart draws in (index.js); only a workout's own minutes keep
+// every sample, for HEART_RATE_RAW_DAYS (and the samples stored before that
+// change). Older samples become 5-minute rows here, and after
+// HEART_RATE_FIVE_MIN_DAYS the 5-minute rows become one row per hour. History
 // stays, the database stops growing with every user's samples (Petr chose a week
 // of samples on 2026-10-30). Google's zone minutes (a row a minute) become a row
 // per hour and zone after ZONE_MINUTE_DAYS, once nothing reads them by the minute
@@ -22,11 +24,12 @@ const bpm = "CAST(COALESCE(value_numeric, json_extract(payload_json, '$.heartRat
 const bucket = `(CAST(strftime('%s', sample_time) AS INTEGER) / ${BUCKET_SECONDS}) * ${BUCKET_SECONDS}`;
 const iso = seconds => `strftime('%Y-%m-%dT%H:%M:%SZ', ${seconds}, 'unixepoch')`;
 
+// Midnight of the user's day `days` back, in their time zone.
+const cutoffFor = (now, days) => dayStartUtc(new Date(Date.parse(localToday(new Date(now)) + 'T12:00:00Z') - days * 86400000).toISOString().slice(0, 10)) + 'Z';
+
 // Compacts the oldest six hours of raw samples past the cutoff, in one
 // transaction: the 5-minute rows are written and the samples deleted together.
 // Returns the window it compacted, or null when nothing is left to do.
-// Midnight of the user's day `days` back, in their time zone.
-const cutoffFor = (now, days) => dayStartUtc(new Date(Date.parse(localToday(new Date(now)) + 'T12:00:00Z') - days * 86400000).toISOString().slice(0, 10)) + 'Z';
 
 export async function compactHeartRate(db, userId, { now = Date.now() } = {}) {
   const cutoff = cutoffFor(now, HEART_RATE_RAW_DAYS);
@@ -36,20 +39,14 @@ export async function compactHeartRate(db, userId, { now = Date.now() } = {}) {
   const from = new Date(Math.floor(first / WINDOW_MS) * WINDOW_MS).toISOString().replace('.000Z', 'Z');
   const to = new Date(Math.min(Date.parse(from) + WINDOW_MS, Date.parse(cutoff))).toISOString().replace('.000Z', 'Z');
   const window = "source_family = 'google-wearables' AND data_type = 'heart-rate' AND sample_time >= ? AND sample_time < ?";
-  // A bucket already compacted (a late sample) is merged into, weighted by count.
+  // A bucket the sync already wrote (it stores 5-minute rows, index.js) holds
+  // these samples too: it stays as it is.
   const [, deleted] = await db.batch([
     db.prepare(`INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, start_time, end_time, value_numeric, value_unit, payload_json)
       SELECT user_id, source_family, '${HEART_RATE_BUCKET_TYPE}', 'hr5:' || b, ${iso('b')}, ${iso('b')}, ${iso(`b + ${BUCKET_SECONDS}`)}, ROUND(avg, 1), 'bpm', json_object('avg', ROUND(avg, 1), 'min', mn, 'max', mx, 'n', n)
       FROM (SELECT user_id, source_family, ${bucket} AS b, AVG(${bpm}) AS avg, MIN(${bpm}) AS mn, MAX(${bpm}) AS mx, COUNT(*) AS n
         FROM health_datapoints WHERE user_id = ? AND ${window} AND ${bpm} BETWEEN 20 AND 250 GROUP BY b) WHERE true
-      ON CONFLICT (user_id, source_family, data_type, external_id) DO UPDATE SET
-        value_numeric = ROUND((health_datapoints.value_numeric * json_extract(health_datapoints.payload_json, '$.n') + excluded.value_numeric * json_extract(excluded.payload_json, '$.n')) / (json_extract(health_datapoints.payload_json, '$.n') + json_extract(excluded.payload_json, '$.n')), 1),
-        payload_json = json_object(
-          'avg', ROUND((health_datapoints.value_numeric * json_extract(health_datapoints.payload_json, '$.n') + excluded.value_numeric * json_extract(excluded.payload_json, '$.n')) / (json_extract(health_datapoints.payload_json, '$.n') + json_extract(excluded.payload_json, '$.n')), 1),
-          'min', MIN(json_extract(health_datapoints.payload_json, '$.min'), json_extract(excluded.payload_json, '$.min')),
-          'max', MAX(json_extract(health_datapoints.payload_json, '$.max'), json_extract(excluded.payload_json, '$.max')),
-          'n', json_extract(health_datapoints.payload_json, '$.n') + json_extract(excluded.payload_json, '$.n')),
-        updated_at = CURRENT_TIMESTAMP`).bind(userId, from, to),
+      ON CONFLICT (user_id, source_family, data_type, external_id) DO NOTHING`).bind(userId, from, to),
     db.prepare(`DELETE FROM health_datapoints WHERE user_id = ? AND ${window}`).bind(userId, from, to)
   ]);
   return { from, to, deleted: Number(deleted?.meta?.changes || 0) };

@@ -1,9 +1,9 @@
 import { activityTelemetryEnergy } from './activity-energy-check.js';
 
 // A workout typed in afterwards (Zapsat trénink): the heart rate the watch
-// recorded between its start and end, and the calories. Google Health keeps
-// every sample for a week, 5-minute rows to a month and hourly rows after
-// (heart-rate-compaction.js);
+// recorded between its start and end, and the calories. Aurin stores Google's
+// heart rate as 5-minute rows (every sample only within a workout, for a week),
+// hourly rows after a month (heart-rate-compaction.js);
 // the phone reads Apple Health itself and sends what it found.
 const bpm = "CAST(COALESCE(value_numeric, json_extract(payload_json, '$.heartRate.beatsPerMinute')) AS REAL)";
 const iso = ms => new Date(ms).toISOString().replace('.000Z', 'Z');
@@ -20,7 +20,9 @@ export async function heartRateWindow(db, userId, { start, end, weightKg = null,
     db.prepare(`SELECT start_time,end_time,value_numeric FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='active-energy-burned'
       AND end_time>? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time`).bind(...between).all().then(r => r.results || []).catch(() => [])
   ]);
-  const parts = [...(Number(raw?.n) > 0 ? [raw] : []), ...buckets].map(r => ({ avg: Number(r.avg), max: Number(r.max), n: Number(r.n) || 1 })).filter(r => r.avg > 20 && r.avg < 250);
+  // The samples when there are any (a workout's own minutes), else the 5-minute
+  // rows, which hold the same samples: both together would count them twice.
+  const parts = (Number(raw?.n) > 0 ? [raw] : buckets).map(r => ({ avg: Number(r.avg), max: Number(r.max), n: Number(r.n) || 1 })).filter(r => r.avg > 20 && r.avg < 250);
   const count = parts.reduce((s, r) => s + r.n, 0);
   const avgHr = count ? Math.round(parts.reduce((s, r) => s + r.avg * r.n, 0) / count) : null;
   const maxHr = parts.length ? Math.round(Math.max(...parts.map(r => r.max || r.avg))) : null;

@@ -866,8 +866,9 @@ async function googleReconcilePage(
   };
 }
 
-async function saveGooglePointsBatch(env, family, type, points) {
+async function saveGooglePointsBatch(env, family, type, points, { raw = false } = {}) {
   if (!points.length) return 0;
+  if (type === "heart-rate" && family === "google-wearables" && !raw) return saveGoogleHeartRateBuckets(env, points);
   // Settings → Synchronizace → Google Health → Stahovat hotové aktivity off.
   if (type === "exercise" && !(await readSyncPrefs(env.DB, env.USER_ID, "google")).pullActivities) return 0;
   // Workouts Aurin itself wrote to Google Health (sync-destinations.js) are already in Aurin.
@@ -942,6 +943,41 @@ async function saveGooglePointsBatch(env, family, type, points) {
   if(changed)await afterGoogleSync(env, type, points, {since:oldest});
   return points.length;
 }
+// Google heart rate arrives as a sample every few seconds (~36k a day). Written
+// one by one and deleted a week later, that was ~360k rows written a day per user
+// with the indexes. The sync stores it as the 5-minute rows the charts read
+// (heart-rate-compaction.js); only a workout's own minutes keep every sample
+// (workoutHeartRate). A bucket written again (the nightly run re-reads 3 days) is
+// replaced when the new one has more samples (or as many, with other values),
+// and joined when a page boundary split it (the sample times do not overlap).
+// Unchanged buckets are not written.
+const HR_BUCKET_MS=300000;
+async function saveGoogleHeartRateBuckets(env, points) {
+  const buckets=new Map();
+  for(const point of points){
+    const t=Date.parse(googleInfo('heart-rate',point).sample||''),v=Number(point?.heartRate?.beatsPerMinute??point?.heartRate?.bpm);
+    if(!Number.isFinite(t)||!(v>=20&&v<=250))continue;
+    const b=Math.floor(t/HR_BUCKET_MS)*HR_BUCKET_MS,x=buckets.get(b)||{sum:0,n:0,min:v,max:v,first:t,last:t};
+    x.sum+=v;x.n++;x.min=Math.min(x.min,v);x.max=Math.max(x.max,v);x.first=Math.min(x.first,t);x.last=Math.max(x.last,t);buckets.set(b,x);
+  }
+  if(!buckets.size)return 0;
+  const iso=ms=>new Date(ms).toISOString().replace('.000Z','Z');
+  const old=k=>`json_extract(health_datapoints.payload_json,'$.${k}')`,neu=k=>`json_extract(excluded.payload_json,'$.${k}')`;
+  const apart=`(${neu('first')}>${old('last')} OR ${neu('last')}<${old('first')})`,more=`(${neu('n')}>${old('n')} OR (${neu('n')}=${old('n')} AND (excluded.value_numeric IS NOT health_datapoints.value_numeric OR ${neu('min')} IS NOT ${old('min')} OR ${neu('max')} IS NOT ${old('max')})))`;
+  const avg=`ROUND((health_datapoints.value_numeric*${old('n')}+excluded.value_numeric*${neu('n')})/(${old('n')}+${neu('n')}),1)`;
+  const statements=[...buckets].map(([b,x])=>env.DB.prepare(`INSERT INTO health_datapoints (user_id,source_family,data_type,external_id,sample_time,start_time,end_time,value_numeric,value_unit,payload_json)
+    VALUES (?,'google-wearables','heart-rate-5min',?,?,?,?,?,'bpm',?)
+    ON CONFLICT (user_id,source_family,data_type,external_id) DO UPDATE SET
+      value_numeric=CASE WHEN ${apart} THEN ${avg} ELSE excluded.value_numeric END,
+      payload_json=CASE WHEN ${apart} THEN json_object('avg',${avg},'min',MIN(${old('min')},${neu('min')}),'max',MAX(${old('max')},${neu('max')}),'n',${old('n')}+${neu('n')},'first',MIN(${old('first')},${neu('first')}),'last',MAX(${old('last')},${neu('last')})) ELSE excluded.payload_json END,
+      updated_at=CURRENT_TIMESTAMP
+    WHERE ${apart} OR ${more}`)
+    .bind(env.USER_ID,'hr5:'+b/1000,iso(b),iso(b),iso(b+HR_BUCKET_MS),Math.round(x.sum/x.n*10)/10,JSON.stringify({avg:Math.round(x.sum/x.n*10)/10,min:x.min,max:x.max,n:x.n,first:x.first,last:x.last})));
+  let changed=0;
+  for(let i=0;i<statements.length;i+=50)for(const r of await env.DB.batch(statements.slice(i,i+50)))changed+=Number(r?.meta?.changes||0);
+  return changed;
+}
+
 // A workout changed in Google Health a few days later (a run that was a walk)
 // comes through: workouts are read a week back, the rest two days. The minutes
 // in heart-rate zones come with them, so today's active zone minutes and the
@@ -987,7 +1023,7 @@ export async function workoutHeartRate(env,token,fetchImpl=fetch){
       const response=await fetchImpl('https://health.googleapis.com/v4/users/me/dataTypes/heart-rate/dataPoints:reconcile?'+params,{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:AbortSignal.timeout(12000)});
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error('heart-rate HTTP '+response.status+': '+JSON.stringify(data).slice(0,200));
-      saved+=await saveGooglePointsBatch(env,'google-wearables','heart-rate',data.dataPoints||[]);
+      saved+=await saveGooglePointsBatch(env,'google-wearables','heart-rate',data.dataPoints||[],{raw:true});
       pageToken=data.nextPageToken||null;
       if(!pageToken)break;
     }
