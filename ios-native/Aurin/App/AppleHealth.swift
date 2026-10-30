@@ -88,6 +88,12 @@ enum HealthCategory: String, CaseIterable, Identifiable {
         }
     }
 
+    /// What a source switched off under Zdroje dat → Zdravotní data is left out
+    /// of: workouts only (their heart rate is Tep's), the rest all its types.
+    var hiddenTypes: [HKSampleType] {
+        self == .workouts ? [HKObjectType.workoutType()] : types.compactMap { $0 as? HKSampleType }
+    }
+
     /// New samples of these wake the app to sync (HKObserverQuery).
     var observed: [HKSampleType] {
         switch self {
@@ -170,6 +176,9 @@ final class AppleHealth {
         defaults.set(true, forKey: Self.journalAddedKey)
         categories = chosen
         lastSync = defaults.object(forKey: Self.lastSyncKey) as? Date
+        if let data = defaults.data(forKey: Self.hiddenKey) {
+            hidden = (try? JSONDecoder().decode([String: [String: Double]].self, from: data)) ?? [:]
+        }
     }
 
     /// The iOS permission sheet for these categories, then the history.
@@ -253,6 +262,35 @@ final class AppleHealth {
         } else {
             _ = await connect(chosen, api: api)
         }
+    }
+
+    // MARK: Single sources (Zdroje dat → Zdravotní data)
+
+    /// An app or device that wrote a type into Apple Health.
+    struct Source: Identifiable, Hashable {
+        let id: String
+        let name: String
+    }
+
+    /// Per type, the sources switched off (bundle identifier → when): their data
+    /// from then on is not read; what came before stays.
+    private(set) var hidden: [String: [String: Double]] = [:]
+    private static let hiddenKey = "appleHealth.hiddenSources"
+
+    /// The apps and devices with data of this type, Aurin itself left out.
+    func sources(for category: HealthCategory) async -> [Source] {
+        await reader.sources(category.hiddenTypes)
+    }
+
+    func isShown(_ source: String, in category: HealthCategory) -> Bool {
+        hidden[category.rawValue]?[source] == nil
+    }
+
+    func setShown(_ source: String, in category: HealthCategory, _ on: Bool) {
+        var list = hidden[category.rawValue] ?? [:]
+        list[source] = on ? nil : Date().timeIntervalSince1970
+        hidden[category.rawValue] = list.isEmpty ? nil : list
+        if let data = try? JSONEncoder().encode(hidden) { UserDefaults.standard.set(data, forKey: Self.hiddenKey) }
     }
 
     private func setCategories(_ chosen: Set<HealthCategory>) {
@@ -365,6 +403,7 @@ final class AppleHealth {
         // one and a day more (late watch data), at most a month.
         let days: Int? = lastSync.map { min(30, max(2, Int(started.timeIntervalSince($0) / 86400) + 2)) }
         do {
+            await reader.hide(hidden, in: categories)
             guard let uploads = await reader.collect(categories, days: days, now: started) else { return SyncOutcome(ok: false, changed: false) }
             var changed = false
             for upload in uploads {
@@ -486,6 +525,54 @@ final class HealthReader: @unchecked Sendable {
     let store = HKHealthStore()
     /// A query found Apple Health closed (the iPhone locked) during collect.
     private let closed = ClosedFlag()
+    /// By type identifier: the switched-off sources' samples from their time on (hide).
+    private var hiddenPredicates: [String: NSPredicate] = [:]
+    private let hiddenLock = NSLock()
+
+    private func hiddenPredicate(_ type: HKSampleType) -> NSPredicate? {
+        hiddenLock.lock(); defer { hiddenLock.unlock() }
+        return hiddenPredicates[type.identifier]
+    }
+
+    /// Before a collect: each switched-off source left out of its types from the
+    /// moment it was switched off. Nothing is asked when none is off.
+    func hide(_ hidden: [String: [String: Double]], in categories: Set<HealthCategory>) async {
+        var out: [String: NSPredicate] = [:]
+        for category in categories {
+            guard let off = hidden[category.rawValue], !off.isEmpty else { continue }
+            for type in category.hiddenTypes {
+                let found = await sourceSet(type).filter { off[$0.bundleIdentifier] != nil }
+                guard !found.isEmpty else { continue }
+                let parts = found.map { source in
+                    NSCompoundPredicate(andPredicateWithSubpredicates: [
+                        HKQuery.predicateForObjects(from: source),
+                        HKQuery.predicateForSamples(withStart: Date(timeIntervalSince1970: off[source.bundleIdentifier] ?? 0), end: nil, options: .strictStartDate)
+                    ])
+                }
+                let left = NSCompoundPredicate(notPredicateWithSubpredicate: NSCompoundPredicate(orPredicateWithSubpredicates: parts))
+                out[type.identifier] = out[type.identifier].map { NSCompoundPredicate(andPredicateWithSubpredicates: [$0, left]) } ?? left
+            }
+        }
+        hiddenLock.lock(); hiddenPredicates = out; hiddenLock.unlock()
+    }
+
+    private func sourceSet(_ type: HKSampleType) async -> Set<HKSource> {
+        await withCheckedContinuation { continuation in
+            store.execute(HKSourceQuery(sampleType: type, samplePredicate: nil) { _, sources, _ in
+                continuation.resume(returning: sources ?? [])
+            })
+        }
+    }
+
+    /// The apps and devices with data of these types, Aurin itself left out.
+    func sources(_ types: [HKSampleType]) async -> [AppleHealth.Source] {
+        var seen: [String: String] = [:]
+        let own = HKSource.default().bundleIdentifier
+        for type in types {
+            for source in await sourceSet(type) where source.bundleIdentifier != own { seen[source.bundleIdentifier] = source.name }
+        }
+        return seen.map { AppleHealth.Source(id: $0.key, name: $0.value) }.sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
+    }
 
     private final class ClosedFlag: @unchecked Sendable {
         private let lock = NSLock()
@@ -776,6 +863,7 @@ final class HealthReader: @unchecked Sendable {
         await withCheckedContinuation { continuation in
             var predicate: NSPredicate = HKQuery.predicateForSamples(withStart: from, end: to, options: [])
             if let extra { predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [predicate, extra]) }
+            if let hidden = hiddenPredicate(type) { predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [predicate, hidden]) }
             let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
             let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { [closed] _, samples, error in
                 closed.note(error)
@@ -787,7 +875,7 @@ final class HealthReader: @unchecked Sendable {
 
     private func statistics(_ type: HKQuantityType, options: HKStatisticsOptions, from: Date, to: Date, step: DateComponents, predicate extra: NSPredicate? = nil) async -> [HKStatistics] {
         let range = HKQuery.predicateForSamples(withStart: from, end: to, options: [])
-        let predicate = extra.map { NSCompoundPredicate(andPredicateWithSubpredicates: [range, $0]) } ?? range
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [range, extra, hiddenPredicate(type)].compactMap { $0 })
         return await withCheckedContinuation { continuation in
             let query = HKStatisticsCollectionQuery(quantityType: type, quantitySamplePredicate: predicate,
                                                     options: options, anchorDate: calendar.startOfDay(for: from), intervalComponents: step)
