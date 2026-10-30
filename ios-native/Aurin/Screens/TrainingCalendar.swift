@@ -11,6 +11,9 @@ struct TrainingCalendarCard: View {
     var onPick: (String) -> Void = { _ in }
     /// A day chosen in the pinned bar (its arrows and "Dnes").
     var jump: DayJump? = nil
+    /// Today's workouts still to do have their own card under the calendar (TodaySessions):
+    /// today's list then shows only what was done, and no row when nothing was.
+    var plannedTodayBelow = false
     @State private var selected: String?
     @State private var centered: String?
     @State private var expanded = false
@@ -33,6 +36,7 @@ struct TrainingCalendarCard: View {
     }
 
     private var day: String { selected ?? today }
+    private var hidePlanned: Bool { plannedTodayBelow && day == today }
     /// How far the strip (and the pinned bar's arrow) goes ahead.
     static let daysAhead = 30
     private var stripDays: [String] { ISODay.range(ISODay.shift(today, -60), ISODay.shift(today, Self.daysAhead)) }
@@ -53,8 +57,8 @@ struct TrainingCalendarCard: View {
             }
             handle
             // An empty day shows no row at all, only the strip.
-            if model.calendar[day].map({ !$0.activities.isEmpty }) ?? true {
-                CalendarDayList(date: day, today: today, day: model.calendar[day])
+            if model.calendar[day].map({ !CalendarDayList.shown($0.activities, hidePlanned: hidePlanned).isEmpty }) ?? true {
+                CalendarDayList(date: day, today: today, day: model.calendar[day], hidePlanned: hidePlanned)
                     .daySlide(date: day)
                     .padding(.top, 6)
             }
@@ -364,6 +368,8 @@ struct CalendarDayList: View {
     let date: String
     let today: String
     let day: CalendarDay?
+    /// Today's planned workouts are in the card below (TrainingCalendarCard.plannedTodayBelow).
+    var hidePlanned = false
     /// A watch session (no Intervals.icu detail) opened in its summary.
     @State private var watch: CalendarActivity?
     /// Two records of one workout: the merge sheet, and the answer being sent.
@@ -380,7 +386,7 @@ struct CalendarDayList: View {
                 }
             }
             .padding(.bottom, 4)
-            if let list = day?.activities, !list.isEmpty {
+            if let list = day.map({ Self.shown($0.activities, hidePlanned: hidePlanned) }), !list.isEmpty {
                 ForEach(Array(list.enumerated()), id: \.element.id) { index, activity in
                     if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
                     if let route = Self.route(activity) {
@@ -407,6 +413,10 @@ struct CalendarDayList: View {
         .sheet(item: Binding(get: { merging.map { Proposed(proposal: $0) } }, set: { merging = $0?.proposal })) {
             MergeWorkoutsSheet(proposal: $0.proposal)
         }
+    }
+
+    static func shown(_ list: [CalendarActivity], hidePlanned: Bool) -> [CalendarActivity] {
+        hidePlanned ? list.filter { $0.status != "planned" } : list
     }
 
     private struct Proposed: Identifiable {

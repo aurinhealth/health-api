@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { gymPlanSummary } from "../src/plan-context.js";
 import { adherenceOf, buildTraining, daySessions, eventPlan, formZone, isoWeek, plannedStrain, weekStart } from "../src/app-training.js";
 
 const DATE = "2026-10-08"; // Thursday, week 41
@@ -72,6 +73,27 @@ test("After today's ride the next session is the one planned for Saturday", () =
   assert.equal(t.strain.target, t.days[3].planned);
 });
 
+test("A gym plan's rows: work sets per exercise, reps, the heaviest weight and the main muscles", () => {
+  const rows = [
+    ["WARMUP", "Standing Dumbbell Press", "1", "8", "8"],
+    ["WORK", "Standing Dumbbell Press", "1", "14", "8–10"], ["WORK", "Standing Dumbbell Press", "2", "16", "8–10"],
+    ["DROP", "Standing Dumbbell Press", "3", "10", "12"],
+    ["WORK", "Close-grip lat pulldown", "1", "", "10"],
+    ["WORK", "Dumbbell lunge", "1", "12", "10", "", "", "", "", "", "", "", "", "L"], ["WORK", "Dumbbell lunge", "1", "12", "10", "", "", "", "", "", "", "", "", "P"]
+  ];
+  const { lines, muscles } = gymPlanSummary(rows);
+  assert.deepEqual(lines, [
+    { name: "Standing Dumbbell Press", sets: 2, reps: "8–10", kg: 16 },
+    { name: "Close-grip lat pulldown", sets: 1, reps: "10", kg: null },
+    { name: "Dumbbell lunge", sets: 1, reps: "10", kg: 12 }
+  ]);
+  assert.equal(muscles[0], "Ramena");
+  const gym = { [day(4)]: { name: "Celé tělo", exercises: ["Dřep"], lines: [{ name: "Dřep", sets: 3, reps: "8", kg: 80 }], muscles: ["Přední stehna"] } };
+  const t = buildTraining({ ...input, gym, days: days.filter(d => d.date !== DATE && d.date !== day(2)) });
+  assert.deepEqual(t.next.lines, [{ name: "Dřep", sets: 3, reps: "8", kg: 80 }]);
+  assert.deepEqual(t.next.muscles, ["Přední stehna"]);
+});
+
 test("A saved gym plan is a session with its exercises", () => {
   const t = buildTraining({ ...input, days: days.filter(d => d.date !== DATE && d.date !== day(2)) });
   assert.equal(t.next.date, day(4));
@@ -90,6 +112,11 @@ test("Every workout left today is listed: the gym plan and a ride, each with its
   assert.equal(t.todaySessions[0].advice, "Třetí den posilovny: méně sérií.");
   assert.equal(t.todaySessions[1].advice, "Drž vytrvalostní tempo.");
   assert.equal(t.next.sport, "strength");
+  // The gym coach's list of today's exercises is the card's own rows: its other advice instead, or none.
+  const listed = { coaches: [{ id: "gym", actions: ["Dnes: Dřep (3 série), Přítahy (3 série).", "Třetí den posilovny: méně sérií."] }] };
+  assert.equal(buildTraining({ ...input, days: both, coaches: listed, gym: { [DATE]: { name: "Celé tělo", exercises: ["Dřep"] } } }).todaySessions[0].advice, "Třetí den posilovny: méně sérií.");
+  const onlyList = { coaches: [{ id: "gym", actions: ["Today: Squat (3 sets)."] }] };
+  assert.equal(buildTraining({ ...input, days: both, coaches: onlyList, gym: { [DATE]: { name: "Celé tělo", exercises: ["Dřep"] } } }).todaySessions[0].advice, null);
   // A gym plan without a strength event on the calendar is a card of its own, before the ride.
   const rideOnly = days.map(d => d.date === DATE ? { ...d, daily: { training: { planned: [later], completed: [], matched: [] } } } : d);
   const r = buildTraining({ ...input, days: rideOnly, coaches, gym: { [DATE]: { name: "Celé tělo", exercises: ["Dřep"] } } });

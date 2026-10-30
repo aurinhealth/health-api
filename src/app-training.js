@@ -262,6 +262,9 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
       tss: round(num(w?.tss)),
       strain: plannedStrain(num(w?.tss)),
       exercises: gymCard ? plan.exercises.slice(0, 12) : [],
+      // Each exercise with its sets × reps · weight, and the muscles it works most (gymPlanSummary).
+      lines: gymCard && Array.isArray(plan.lines) ? plan.lines.slice(0, 12) : [],
+      muscles: gymCard && Array.isArray(plan.muscles) ? plan.muscles : [],
       description: w?.description ? String(w.description).split("\n").map(s => s.trim()).filter(Boolean).slice(0, 3).join(" ").slice(0, 240) : null,
       advice: d === date ? coachAdvice(coaches, sport) : null,
       // The calendar event, so the app opens the same detail as from the week's list.
@@ -467,6 +470,9 @@ function strainBand(v) {
 // gym coach's for strength; another sport has none.
 function coachAdvice(coaches, sport) {
   const id = sport === "strength" ? "gym" : /ride|cycl/.test(String(sport || "")) ? "cycling" : null;
-  const coach = id && (coaches.coaches || []).find(c => c?.id === id && Array.isArray(c.actions) && c.actions.length);
-  return coach ? String(coach.actions[0]).slice(0, 280) : null;
+  // The gym coach's list of today's exercises ("Dnes: Dřep (3 série), …", coach-engine.js)
+  // is what the card itself shows, set by set: its other advice instead.
+  const list = a => id === "gym" && /^(Dnes|Today): /.test(String(a));
+  const coach = id && (coaches.coaches || []).find(c => c?.id === id && Array.isArray(c.actions) && c.actions.some(a => !list(a)));
+  return coach ? String(coach.actions.find(a => !list(a))).slice(0, 280) : null;
 }

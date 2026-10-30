@@ -52,10 +52,20 @@ struct TrainingSnapshot: Decodable, Equatable {
         let tss: Double?
         let strain: Double?
         let exercises: [String]
+        /// A gym plan's exercises with sets × reps · weight, and the muscles it works most (older servers: nil).
+        let lines: [Line]?
+        let muscles: [String]?
         let description: String?
         let advice: String?
         /// "planned:<id>": the calendar event, to open the same detail as Tréninky týdne.
         let eventId: String?
+
+        struct Line: Decodable, Equatable {
+            let name: String
+            let sets: Int
+            let reps: String?
+            let kg: Double?
+        }
     }
 
     struct Phase: Decodable, Equatable, Identifiable {

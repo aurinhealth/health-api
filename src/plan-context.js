@@ -16,6 +16,8 @@ import { ensureGymPlans } from "./gym-plan-store.js";
 import { localToday } from "./user-time.js";
 import { mondayOfDate, shiftDate } from "./dashboard-shared.js";
 import { gymCompliance } from "./plan-compliance.js";
+import { setMuscles } from "./muscle-fatigue.js";
+import { muscleLabel } from "./gym-catalog.js";
 
 // The athlete's weight in kg from a stored weight row, or null.
 export const weightKg=row=>Number(row?.value_numeric)>30?Number(row.value_numeric):null;
@@ -106,6 +108,32 @@ export async function planningHistory(env,date,days=84){
 
 // Saved gym plans per day (not cancelled): the name and the exercises in order;
 // unpaired: the user unpaired it from that day's lifting session (manual-pairs.js).
+// The Training card's look at a gym plan, from the rows already read: each
+// exercise's work sets (by sides a set is its L and P rows), the planned reps
+// and the heaviest planned weight, and the muscles the work sets work most.
+export function gymPlanSummary(rows){
+  const by=new Map(),dose=new Map();
+  for(const x of rows){
+    const type=String(x?.[0]||'').toUpperCase();
+    if(type==='WARMUP'||type==='DROP')continue;
+    const name=String(x[1]).slice(0,80);
+    if(!by.has(name))by.set(name,{name,numbers:new Set(),rows:0,reps:'',kg:null,sides:false});
+    const e=by.get(name),kg=Number(String(x[3]??'').replace(',','.'));
+    e.rows++;e.numbers.add(String(x[2]??''));
+    if(x[13]==='L'||x[13]==='P')e.sides=true;
+    if(!e.reps&&x[4])e.reps=String(x[4]).slice(0,12);
+    if(String(x[3]??'')!==''&&Number.isFinite(kg)&&kg>0&&!(e.kg>=kg))e.kg=kg;
+  }
+  const lines=[...by.values()].map(e=>{
+    const sets=e.sides?e.numbers.size:e.rows;
+    const main=Object.entries(setMuscles(e.name)).find(([,share])=>share===1)?.[0];
+    if(main)dose.set(main,(dose.get(main)||0)+sets);
+    return {name:e.name,sets,reps:e.reps||null,kg:e.kg};
+  });
+  const muscles=[...dose.entries()].sort((a,b)=>b[1]-a[1]).slice(0,3).map(([id])=>muscleLabel(id));
+  return {lines,muscles};
+}
+
 export async function trainingGymPlans(env,from,to){
   await ensureGymPlans(env.DB);
   const [plans,cancelled,unpaired]=await Promise.all([
@@ -120,7 +148,7 @@ export async function trainingGymPlans(env,from,to){
     const rows=(Array.isArray(v)?v.slice(7):[]).filter(x=>x?.[1]);
     // done: sets per exercise that were ticked off (Hotovo) or have reps written in.
     const isDone=x=>['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))||Number(x?.[6])>0,count=list=>list.reduce((m,x)=>{const n=String(x[1]).slice(0,80);m[n]=(m[n]||0)+1;return m;},{});
-    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))],sets:rows.length,logged:rows.filter(isDone).length,compliance:gymCompliance(rows.map(x=>({type:String(x[0]||'WORK'),exercise:String(x[1]).slice(0,80),plannedKg:x[3],plannedReps:x[4],actualKg:x[5],actualReps:x[6],completed:['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))})))?.percent??null,setsBy:count(rows),done:count(rows.filter(isDone)),...(types[r.workout_date]?{type:types[r.workout_date]}:{}),...(unpaired.has(r.workout_date)?{unpaired:true}:{})};
+    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))],...gymPlanSummary(rows),sets:rows.length,logged:rows.filter(isDone).length,compliance:gymCompliance(rows.map(x=>({type:String(x[0]||'WORK'),exercise:String(x[1]).slice(0,80),plannedKg:x[3],plannedReps:x[4],actualKg:x[5],actualReps:x[6],completed:['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))})))?.percent??null,setsBy:count(rows),done:count(rows.filter(isDone)),...(types[r.workout_date]?{type:types[r.workout_date]}:{}),...(unpaired.has(r.workout_date)?{unpaired:true}:{})};
   }
   return out;
 }
