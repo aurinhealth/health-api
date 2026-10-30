@@ -4,7 +4,8 @@ import { createD1 } from "./helpers/d1.mjs";
 import { grantAiConsent } from "./helpers/consent.mjs";
 import { scopedDb, mayCreateAccount, signInEmailUser, SignupLimited, NEW_ACCOUNT_LIMITS } from "../src/tenancy.js";
 import { callOpenAI } from "../src/coach-assistant.js";
-import { aiSpendToday } from "../src/ai-total.js";
+import { groupBrakeUsd } from "../src/ai-total.js";
+import { groupOfSubscription } from "../src/ai-limit-share.js";
 import { ensureStoreColumns } from "../src/app-store.js";
 import { aiSpentToday } from "../src/ai-usage.js";
 import { claimCoachMessage, recordCoachMessage, coachAllowance } from "../src/coach-allowance.js";
@@ -22,65 +23,100 @@ const envFor = (db, id, extra = {}) => ({ DB: scopedDb(db, id), RAW_DB: db, USER
 const ask = env => callOpenAI(env, { feature: "food-lookup", instructions: "x", input: "y" });
 const future = new Date(Date.now() + 30 * 86400000).toISOString();
 
-// ---- NET-03: a part of the day's brake is kept for paying accounts ----
+// ---- NET-03: each group of accounts has its own daily brake ----
 
-async function twoAccounts() {
-  const db = grantAiConsent(createD1(), 7, 8);
+const BRAKES = { paid: { perAccount: 0.5, min: 1 }, gift: { perAccount: 0.5, min: 1 }, trial: { perAccount: 0.25, min: 0.5 }, testflight: { perAccount: 0.375, min: 0.5, max: 1 }, free: { usd: 1 }, system: { usd: 1 } };
+
+// 7: no purchase; 8: paid Pro; 9: the free week; 10: TestFlight; 11: an offer code (the pilot's discount).
+async function accounts() {
+  const db = grantAiConsent(createD1(), 7, 8, 9, 10, 11);
   await ensureStoreColumns(db);
-  // 8 pays for Pro (Production, not the free week); 7 does not.
-  db.sqlite.prepare("INSERT INTO subscriptions (user_id, plan, valid_until, store_environment, free_trial) VALUES (8, 'ai', ?, 'Production', 0)").run(future);
+  const sub = db.sqlite.prepare("INSERT INTO subscriptions (user_id, plan, valid_until, store_environment, free_trial, offer_type) VALUES (?, 'ai', ?, ?, ?, ?)");
+  sub.run(8, future, "Production", 0, null);
+  sub.run(9, future, "Production", 1, 1);
+  sub.run(10, future, "Sandbox", 0, null);
+  sub.run(11, future, "Production", 0, 3);
   return db;
 }
+const groupRow = (db, grp) => db.sqlite.prepare("SELECT cost_usd, brake_usd FROM ai_spend_groups WHERE grp = ?").get(grp);
 
-test("past their part of the brake unpaid accounts wait, paying ones carry on to the whole brake", async () => {
-  const db = await twoAccounts();
+test("an account's subscription decides its group", () => {
+  const sub = (environment, free_trial = 0, offer_type = null, valid_until = future) => ({ plan: "ai", valid_until, store_environment: environment, free_trial, offer_type });
+  assert.equal(groupOfSubscription(null), "free");
+  assert.equal(groupOfSubscription(sub("Production")), "paid");
+  assert.equal(groupOfSubscription(sub("Production", 0, 3)), "gift");
+  assert.equal(groupOfSubscription(sub("Production", 0, 2)), "gift");
+  assert.equal(groupOfSubscription(sub("Production", 1, 1)), "trial");
+  assert.equal(groupOfSubscription(sub("Sandbox")), "testflight");
+  assert.equal(groupOfSubscription(sub("Production", 0, null, new Date(Date.now() - 1000).toISOString())), "free");
+});
+
+test("a group that used up its brake waits; the other groups go on", async () => {
+  const db = await accounts();
   await withOpenAI(async calls => {
-    const limits = { AI_TOTAL_DAILY_LIMIT_USD: "3", AI_TOTAL_DAILY_UNPAID_LIMIT_USD: "1" };
+    const limits = { AI_GROUP_BRAKES: BRAKES };
     await ask(envFor(db, 7, limits));
     await ask(envFor(db, 7, limits));
-    assert.deepEqual(await aiSpendToday(db), { all: 1.4, unpaid: 1.4 });
-    await assert.rejects(ask(envFor(db, 7, limits)), error => error.limit === true && error.status === 429);
+    await assert.rejects(ask(envFor(db, 7, limits)), error => error.limit === true && error.status === 429, "no purchase: the fixed 1 USD is used up");
     assert.equal(calls(), 2);
-    // The paying account still has the rest of the brake.
-    await ask(envFor(db, 8, limits));
-    await ask(envFor(db, 8, limits));
-    assert.deepEqual(await aiSpendToday(db), { all: 2.8, unpaid: 1.4 });
-    await ask(envFor(db, 8, limits));
-    await assert.rejects(ask(envFor(db, 8, limits)), error => error.status === 429, "the whole brake holds the paying ones too");
+    for (const id of [8, 9, 10, 11]) await ask(envFor(db, id, limits));
+    assert.equal(calls(), 6, "free accounts made in bulk never stop the others");
+    assert.deepEqual({ ...groupRow(db, "free") }, { cost_usd: 1.4, brake_usd: 1 });
   });
 });
 
-test("the free week counts as unpaid; the owner is never held", async () => {
-  const db = await twoAccounts();
-  db.sqlite.prepare("UPDATE subscriptions SET free_trial = 1 WHERE user_id = 8").run();
-  await withOpenAI(async calls => {
-    const limits = { AI_TOTAL_DAILY_LIMIT_USD: "30", AI_TOTAL_DAILY_UNPAID_LIMIT_USD: "0.5" };
-    await ask(envFor(db, 8, limits));
-    await assert.rejects(ask(envFor(db, 8, limits)), error => error.status === 429);
-    await ask(envFor(db, 7, { ...limits, USER_IS_OWNER: true }));
-    assert.equal(calls(), 2);
-    assert.deepEqual(await aiSpendToday(db), { all: 1.4, unpaid: 0.7 }, "the owner's cost is not the unpaid accounts'");
-  });
+test("a group's brake grows with its accounts, within its least and most", async () => {
+  const db = await accounts(), sub = db.sqlite.prepare("INSERT INTO subscriptions (user_id, plan, valid_until, store_environment, free_trial) VALUES (?, 'ai', ?, ?, ?)");
+  for (let id = 20; id < 24; id++) sub.run(id, future, "Production", 0);
+  for (let id = 30; id < 40; id++) sub.run(id, future, "Sandbox", 0);
+  const env = { AI_GROUP_BRAKES: JSON.stringify(BRAKES) };
+  assert.equal(await groupBrakeUsd(db, env, "paid"), 2.5, "5 paying accounts × 0.5");
+  assert.equal(await groupBrakeUsd(db, env, "gift"), 1, "one offer code × 0.5 is below the least");
+  assert.equal(await groupBrakeUsd(db, env, "testflight"), 1, "11 testers × 0.375 is above the most");
+  assert.equal(await groupBrakeUsd(db, env, "free"), 1);
+  assert.equal(await groupBrakeUsd(db, {}, "free"), null);
 });
 
-test("the owner hears once a day that the unpaid part is used up", async () => {
-  const db = await twoAccounts(), mail = mailer();
+test("the brake is counted once when the group's day starts", async () => {
+  const db = await accounts();
   await withOpenAI(async () => {
-    const env = envFor(db, 7, { AI_TOTAL_DAILY_UNPAID_LIMIT_USD: "1", OWNER_EMAIL: "owner@example.com", ...mail });
+    const limits = { AI_GROUP_BRAKES: BRAKES };
+    await ask(envFor(db, 8, limits));
+    db.sqlite.prepare("INSERT INTO subscriptions (user_id, plan, valid_until, store_environment, free_trial) VALUES (50, 'ai', ?, 'Production', 0)").run(future);
+    await ask(envFor(db, 8, limits));
+    assert.equal(groupRow(db, "paid").brake_usd, 1, "a new subscriber the same day does not change today's brake");
+  });
+});
+
+test("the owner is held live like a paying account, on the test server only by the day's brake", async () => {
+  const db = await accounts();
+  await withOpenAI(async calls => {
+    const limits = { AI_GROUP_BRAKES: { gift: { usd: 0.5 } } };
+    await ask(envFor(db, 1, { ...limits, USER_IS_OWNER: true }));
+    await assert.rejects(ask(envFor(db, 1, { ...limits, USER_IS_OWNER: true })), error => error.status === 429, "live: the owner's group (with the pilot and gifts) has its brake");
+    await ask(envFor(db, 1, { ...limits, USER_IS_OWNER: true, ENVIRONMENT: "staging" }));
+    assert.equal(calls(), 2);
+  });
+});
+
+test("the owner hears once a day that a group passed half of its brake", async () => {
+  const db = await accounts(), mail = mailer();
+  await withOpenAI(async () => {
+    const env = envFor(db, 7, { AI_GROUP_BRAKES: { free: { usd: 2 } }, OWNER_EMAIL: "owner@example.com", ...mail });
     await ask(env);
     assert.equal(mail.sent.length, 0);
     await ask(env);
     assert.equal(mail.sent.length, 1);
-    assert.equal(mail.sent[0].to, "owner@example.com");
-    await assert.rejects(ask(env), error => error.status === 429);
+    assert.match(mail.sent[0].subject, /bez nákupu/);
+    await ask(env);
     assert.equal(mail.sent.length, 1);
   });
 });
 
-test("an older day table gets the unpaid columns", async () => {
+test("an offer code is stored with the purchase", async () => {
   const db = createD1();
-  db.sqlite.exec("CREATE TABLE ai_spend_days (day TEXT PRIMARY KEY, cost_usd REAL NOT NULL DEFAULT 0, alerted INTEGER NOT NULL DEFAULT 0); INSERT INTO ai_spend_days (day, cost_usd) VALUES ('2026-10-30', 4)");
-  assert.deepEqual(await aiSpendToday(db, new Date("2026-10-30T12:00:00Z")), { all: 4, unpaid: 0 });
+  await ensureStoreColumns(db);
+  assert.ok(db.sqlite.prepare("SELECT name FROM pragma_table_info('subscriptions') WHERE name = 'offer_type'").get());
 });
 
 // ---- NET-04: the limits count days in the account's zone, not the request's ----

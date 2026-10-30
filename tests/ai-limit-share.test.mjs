@@ -40,12 +40,13 @@ test("the free week, a TestFlight (Sandbox) purchase and an expired one stay at 
   }
 });
 
-test("unset share: everyone has the whole limits; the owner has none", async () => {
+test("unset share: everyone has the whole limits; the owner has a paying account's, none on the test server", async () => {
   assert.equal(await aiLimitShare(await account({ AI_UNPAID_LIMIT_SHARE: "" })), 1);
   assert.equal(await aiLimitShare(await account({ AI_UNPAID_LIMIT_SHARE: "nonsense" })), 1);
   const owner = await account({ USER_IS_OWNER: true });
   assert.equal(await aiLimitShare(owner), 1);
-  assert.equal(await coachAllowance(owner), null);
+  assert.equal((await coachAllowance(owner)).limit, 30);
+  assert.equal(await coachAllowance(await account({ USER_IS_OWNER: true, ENVIRONMENT: "staging" })), null);
 });
 
 test("the halved month stops AI at 3 USD", async () => {

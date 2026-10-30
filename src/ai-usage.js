@@ -6,7 +6,9 @@
 // (default 5 USD a month), set high as an emergency brake. AI_DAILY_LIMIT_USD
 // guards the AI around the coach (food, plans, reviews) against abuse (a script,
 // a loop); the coach chat is not in it, its messages get their own allowance.
-// 0 in either turns AI off for everyone but the owner. The owner is never limited. The App Review
+// 0 in either turns AI off for everyone but the owner. The owner has a paying
+// account's limits on the live server and none on the test server, where the
+// coach evaluation runs as the owner (the day's brake caps it there). The App Review
 // account (APP_REVIEW_EMAIL) never gets more than REVIEW_AI_MONTHLY_LIMIT_USD.
 // The messages name no amount: the user is told when it resets, not what it costs.
 // Days and months are the account's own (limitToday, user-time.js), not the
@@ -16,6 +18,7 @@ import { limitToday } from "./user-time.js";
 import { isReviewAccount, REVIEW_AI_MONTHLY_LIMIT_USD } from "./app-review.js";
 import { aiLimitShare } from "./ai-limit-share.js";
 import { addAiSpend } from "./ai-total.js";
+import { isStaging } from "./staging.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
@@ -33,16 +36,19 @@ export function usageCost(model, usage, webSearches = 0) {
   return Math.round((((n(usage.input_tokens) || 0) - cached) * i + cached * c + (n(usage.output_tokens) || 0) * o + (n(webSearches) || 0) * WEB_SEARCH_USD * 1e6) / 1e6 * 1e5) / 1e5;
 }
 
+// The owner on the test server: no limits of an account.
+export const ownerUnlimited = env => env?.USER_IS_OWNER === true && isStaging(env);
+
 // share: the part of the limits the account gets (aiLimitShare, ai-limit-share.js).
 export function aiDailyLimitUsd(env, share = 1) {
-  if (env.USER_IS_OWNER === true) return null;
+  if (ownerUnlimited(env)) return null;
   const limit = n(env.AI_DAILY_LIMIT_USD);
   return limit != null && limit >= 0 ? limit * share : null;
 }
 
 export const DEFAULT_AI_MONTHLY_LIMIT_USD = 5;
 export function aiMonthlyLimitUsd(env, share = 1) {
-  if (env.USER_IS_OWNER === true) return null;
+  if (ownerUnlimited(env)) return null;
   const limit = n(env.AI_MONTHLY_LIMIT_USD), base = (limit != null && limit >= 0 ? limit : DEFAULT_AI_MONTHLY_LIMIT_USD) * share;
   // The App Review demo account gets a small fixed budget (app-review.js).
   return isReviewAccount(env) ? Math.min(base, REVIEW_AI_MONTHLY_LIMIT_USD) : base;

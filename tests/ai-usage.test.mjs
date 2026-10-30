@@ -75,7 +75,7 @@ test("the limit messages name no amount", async () => {
   });
 });
 
-test("a daily limit, when set, stops the next call once it is spent; the owner has none", async () => {
+test("a daily limit, when set, stops the next call once it is spent; the owner has none on the test server", async () => {
   const db = grantAiConsent(createD1(), 7, 8);
   await withOpenAI(async calls => {
     const env = envFor(db, { AI_DAILY_LIMIT_USD: "1" });
@@ -85,8 +85,8 @@ test("a daily limit, when set, stops the next call once it is spent; the owner h
     assert.equal(calls(), 2);
     // Another user has their own budget.
     await callOpenAI({ ...env, DB: scopedDb(db, 8), USER_ID: 8 }, { instructions: "x", input: "y" });
-    // The owner is never stopped.
-    const owner = { ...env, USER_IS_OWNER: true };
+    // The owner on the test server is never stopped (live: a paying account's limits).
+    const owner = { ...env, USER_IS_OWNER: true, ENVIRONMENT: "staging" };
     await callOpenAI(owner, { instructions: "x", input: "y" });
     assert.equal(calls(), 4);
     assert.equal(aiDailyLimitUsd(owner), null);
@@ -123,7 +123,8 @@ test("the monthly limit stops AI for the rest of the month and counts only this 
     assert.equal(calls(), 1);
   });
   assert.equal(aiMonthlyLimitUsd({ AI_MONTHLY_LIMIT_USD: "12" }), 12);
-  assert.equal(aiMonthlyLimitUsd({ USER_IS_OWNER: true }), null);
+  assert.equal(aiMonthlyLimitUsd({ USER_IS_OWNER: true, ENVIRONMENT: "staging" }), null);
+  assert.equal(aiMonthlyLimitUsd({ USER_IS_OWNER: true }), 5, "live, the owner has a paying account's limit");
 });
 
 

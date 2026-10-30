@@ -10,6 +10,7 @@ import { accountCapacity } from "./tenancy.js";
 import { aiMonthlyLimitUsd, ensureAiUsage } from "./ai-usage.js";
 import { ensureStoreColumns } from "./app-store.js";
 import { unpaidLimitShare } from "./ai-limit-share.js";
+import { GROUP_NAMES, aiSpendByGroup } from "./ai-total.js";
 import { MANY_QUERIES, MANY_ROWS, SLOW_REQUEST_MS, slowness, timed } from "./request-timing.js";
 
 const scope = new AsyncLocalStorage();
@@ -132,7 +133,7 @@ export function accountsReport(stats, limits = {}) {
   const lines = [`Účty a AI (bez tebe)
 - Účtů: ${stats.accounts}, nových za 7 dní ${stats.newWeek}, AI za 7 dní použilo ${stats.aiUsersWeek}
 - Platí: ${paid} (měsíčně ${stats.paidMonthly}, ročně ${stats.paidYearly}), ve zkušebním týdnu ${stats.trial}, nákupy z TestFlightu ${stats.sandbox}
-- AI včera všichni dohromady ${usd(stats.totalYesterdayUsd)}${totalLimit != null ? ` z denní brzdy ${usd(totalLimit)}` : ""}
+- AI včera všichni dohromady ${usd(stats.totalYesterdayUsd)}${totalLimit != null ? ` z denní brzdy ${usd(totalLimit)}` : ""}${stats.groups?.length ? `\n- AI včera podle skupin: ${stats.groups.map(g => `${GROUP_NAMES[g.grp] || g.grp} ${usd(Number(g.cost_usd) || 0)}${g.brake_usd != null ? ` z ${usd(Number(g.brake_usd))}` : ""}`).join(", ")}` : ""}
 - AI za 7 dní ${usd(stats.weekUsd)} (${usd(perUser)} na uživatele s AI), za měsíc zatím ${usd(stats.monthUsd)}, do konce měsíce asi ${usd(projected)}
 - Pro vydělá asi ${usd(revenue)} za měsíc${monthly != null ? ` · strop na účet ${usd(monthly)}, bez placení ${usd(monthly * unpaidShare)}` : ""}`];
   const proposals = [];
@@ -140,6 +141,7 @@ export function accountsReport(stats, limits = {}) {
   if (stats.aiUsersWeek >= 3 && stats.nearCap.length / stats.aiUsersWeek >= 0.2) proposals.push(`U stropu je ${stats.nearCap.length} z ${stats.aiUsersWeek} lidí s AI. Strop je nejspíš moc nízko: zvedni AI_MONTHLY_LIMIT_USD o 2 USD.`);
   if (paid > 0 && projected > revenue) proposals.push(`AI tento měsíc vyjde asi na ${usd(projected)}, víc, než Pro vydělá (${usd(revenue)} za ${paid} platících). Sniž COACH_WEEKLY_MESSAGES z 30 na 25, nebo strop na účet.`);
   if (totalLimit != null && stats.totalYesterdayUsd >= totalLimit * 0.7) proposals.push(`Včera padlo ${pct(stats.totalYesterdayUsd, totalLimit)} % denní brzdy pro všechny. Než AI vypne všem, zvedni AI_TOTAL_DAILY_LIMIT_USD na ${usd(Math.ceil(totalLimit * 1.5))}${totalAlert != null ? ` a AI_TOTAL_DAILY_ALERT_USD na ${usd(Math.ceil(totalAlert * 1.5))}` : ""}.`);
+  for (const g of stats.groups || []) if (g.brake_usd != null && Number(g.cost_usd) >= Number(g.brake_usd) * 0.7) proposals.push(`Skupina „${GROUP_NAMES[g.grp] || g.grp}“ včera vyčerpala ${pct(Number(g.cost_usd), Number(g.brake_usd))} % své denní pojistky. Jestli jde o běžné používání, zvedni její hodnotu v AI_GROUP_BRAKES; jestli ne (hromadné účty, chyba), nech ji, pojistka ji zastaví.`);
   if (stats.accounts >= TESTER_CAP - 2) proposals.push(`Účtů je ${stats.accounts} z ${TESTER_CAP} testerů v TestFlightu. Rozhodni, jestli limit 20 zvedneš, nebo přestaneš schvalovat zájemce.`);
   lines.push(proposals.length ? `Návrhy\n${proposals.map(p => `- ${p}`).join("\n")}` : "Návrhy\n- Limity stačí, není potřeba nic měnit.");
   return lines.join("\n\n");
@@ -157,7 +159,8 @@ export async function accountStats(env, date, { now = Date.now() } = {}) {
   const ids = new Set(users.map(u => Number(u.id)));
   const subs = (await db.prepare("SELECT user_id, plan, valid_until, product_id, store_environment, free_trial FROM subscriptions WHERE plan = 'ai'").all()).results || [];
   const total = await db.prepare("SELECT cost_usd FROM ai_spend_days WHERE day = ?").bind(date).first().catch(() => null);
-  const stats = { totalYesterdayUsd: Number(total?.cost_usd) || 0, accounts: users.length, newWeek: users.filter(u => String(u.created_at || "").slice(0, 10) >= weekFrom).length, aiUsersWeek: 0, paidMonthly: 0, paidYearly: 0, trial: 0, sandbox: 0, weekUsd: 0, monthUsd: 0, monthDay: d, monthDays, nearCap: [] };
+  const groups = await aiSpendByGroup(db, date).catch(() => []);
+  const stats = { groups, totalYesterdayUsd: Number(total?.cost_usd) || 0, accounts: users.length, newWeek: users.filter(u => String(u.created_at || "").slice(0, 10) >= weekFrom).length, aiUsersWeek: 0, paidMonthly: 0, paidYearly: 0, trial: 0, sandbox: 0, weekUsd: 0, monthUsd: 0, monthDay: d, monthDays, nearCap: [] };
   const paid = new Set();
   for (const sub of subs) {
     if (!ids.has(Number(sub.user_id)) || !(Date.parse(sub.valid_until) > now)) continue;

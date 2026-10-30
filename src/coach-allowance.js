@@ -10,12 +10,14 @@
 //   COACH_EXTRA_MESSAGES more, so it does not stop mid-thought.
 // - A new account of someone who deleted their account this week starts with
 //   the messages the deleted one used (coach_carryover, ai-limit-memory.js).
-// The owner has no allowance. The numbers are Worker settings (wrangler.jsonc).
+// The owner has one on the live server, none on the test server (ownerUnlimited,
+// ai-usage.js). The numbers are Worker settings (wrangler.jsonc).
 import { L } from './lang.js';
 import { limitToday } from './user-time.js';
 import { aiLimitShare } from './ai-limit-share.js';
 import { mondayOfDate, shiftDate } from './dashboard-shared.js';
 import { sessionOf } from './activity-match.js';
+import { ownerUnlimited } from './ai-usage.js';
 
 const n = (value, fallback) => { const v = Number(value); return value !== undefined && value !== null && value !== '' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : fallback; };
 export const coachWeeklyMessages = env => n(env.COACH_WEEKLY_MESSAGES, 30);
@@ -29,7 +31,7 @@ const RUNNING_MINUTES = 30;
 // The app says how many are left from 75 % on: 7 of 30, 4 of 15.
 export const nearAt = limit => Math.floor(limit / 4 + 0.25);
 
-const tracked = env => Boolean(env?.DB && Number(env.USER_ID) > 0) && env.USER_IS_OWNER !== true;
+const tracked = env => Boolean(env?.DB && Number(env.USER_ID) > 0) && !ownerUnlimited(env);
 const sqlTime = text => Date.parse(String(text || '').replace(' ', 'T') + 'Z');
 
 // kind: 'message' (counts), 'workout' (a conversation after a workout: its
