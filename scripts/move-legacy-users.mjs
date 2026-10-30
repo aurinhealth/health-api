@@ -236,23 +236,25 @@ function settled(log, userId, database, result) {
 }
 
 // Accounts already routed to a shard that still have personal rows in the
-// central database (a move cut off after the switch).
+// central database (a move cut off after the switch). One indexed probe per
+// account and table, not a scan of every row.
 async function leftoverAccounts(api, core, plan, ids) {
   const list = SHARD_TABLE_LIST;
   const present = (await rows(api, core, `SELECT name FROM sqlite_master WHERE type='table' AND name IN ${list}`)).map(r => r.name);
-  const users = new Set();
-  for (const table of present) {
-    for (const row of await rows(api, core, `SELECT DISTINCT user_id FROM ${name(table)}`)) users.add(Number(row.user_id));
-  }
-  const routes = new Map((await rows(api, core, USER_ROUTES_SQL)).map(r => [Number(r.user_id), r]));
+  const routes = (await rows(api, core, USER_ROUTES_SQL)).map(r => ({ ...r, user_id: Number(r.user_id) }))
+    .filter(r => r.shard_key !== 'legacy' && Number.isSafeInteger(r.user_id)).sort((x, y) => x.user_id - y.user_id);
   const found = [];
-  for (const userId of [...users].sort((x, y) => x - y)) {
-    const route = routes.get(userId);
-    if (!route || route.shard_key === 'legacy' || !Number.isSafeInteger(userId)) continue;
+  for (const route of routes) {
     let binding;
     try { binding = routeBinding(route); } catch { continue; }
     const target = plan.shards.find(s => s.key === route.shard_key && s.binding === binding);
-    if (target && ids[target.name] && ids[target.name] !== core) found.push({ userId, target, shard: ids[target.name] });
+    if (!target || !ids[target.name] || ids[target.name] === core) continue;
+    for (const table of present) {
+      if ((await rows(api, core, `SELECT 1 AS hit FROM ${name(table)} WHERE user_id=? LIMIT 1`, [route.user_id])).length) {
+        found.push({ userId: route.user_id, target, shard: ids[target.name] });
+        break;
+      }
+    }
   }
   return found;
 }
