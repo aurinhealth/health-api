@@ -173,11 +173,33 @@ export function lockPlanDays(days, planDays = [], planName = null) {
   });
 }
 
+// The brick: one run a week straight after a ride on the same day, for a
+// triathlete (split.brick) or where the training plan has one (plan kind
+// "brick"). The shortest run on the day of the longest such ride is it, and
+// it goes right after that ride, so the app saves the two joined.
+export function markBrick(days, { split = null, planDays = [] } = {}) {
+  const list = Array.isArray(days) ? days.map(d => { const { brick, ...rest } = d || {}; void brick; return rest; }) : [];
+  const planned = new Set((planDays || []).filter(p => p?.plan?.kind === "brick" || p?.brick).map(p => p.date));
+  if (!split?.brick && !planned.size) return list;
+  const limit = (split?.brick?.minutes || 45) + 15;
+  const options = [...new Set(list.map(d => d.date))].map(date => {
+    const day = list.filter(d => d.date === date);
+    const ride = day.filter(d => d.sport === "ride").sort((a, b) => (b.minutes || 0) - (a.minutes || 0))[0];
+    const run = day.filter(d => d.sport === "run" && (d.minutes || 0) <= limit).sort((a, b) => (a.minutes || 0) - (b.minutes || 0))[0];
+    return ride && run ? { date, ride, run } : null;
+  }).filter(Boolean).sort((a, b) => Number(planned.has(b.date)) - Number(planned.has(a.date)) || (b.ride.minutes || 0) - (a.ride.minutes || 0));
+  const pick = options[0];
+  if (!pick) return list;
+  const out = list.filter(d => d !== pick.run);
+  out.splice(out.indexOf(pick.ride) + 1, 0, { ...pick.run, brick: true });
+  return out;
+}
+
 export function weekItem(x, slotOf) {
   const labels = KIND_LABELS();
   const slot = slotOf(x.date, x.sport);
   // A plan day goes to the generator without a focus, so it builds the plan's workout.
-  return { date: x.date, sport: x.sport, minutes: x.minutes, environment: x.sport === "gym" ? null : x.environment, kind: x.kind, focus: x.plan ? null : FOCUS_OF[x.kind] || null, label: x.plan ? x.label || labels[x.kind] || null : labels[x.kind] || null, reason: x.reason, role: x.kind, slot };
+  return { date: x.date, sport: x.sport, minutes: x.minutes, environment: x.sport === "gym" ? null : x.environment, kind: x.kind, focus: x.plan ? null : FOCUS_OF[x.kind] || null, label: x.plan ? x.label || labels[x.kind] || null : labels[x.kind] || null, reason: x.reason, role: x.kind, slot, ...(x.brick ? { brick: true } : {}) };
 }
 
 export function itemsFromDays(days) {
@@ -221,7 +243,7 @@ export async function proposeWeekAI(env, facts, { prefs = null, focus = null, us
   const asked = lockPlanDays(applyRequests(parsed?.days, parsed?.requested, { start: facts.start }), planDays, facts.trainingPlan?.name || null);
   const days = sanitizeWeekDays(asked, { start: facts.start, today: facts.today, prefs, readiness: facts.readiness?.zone || "green", usedByDate, existingSports, fixedHard, tsb: facts.readiness?.tsb ?? null, recoveryWeek: Boolean(facts.recoveryWeek), strain: facts.recentState?.level || 0, split });
   // A summary written for days the checks then eased would promise them still.
-  return { summary: days.eased ? null : String(parsed?.summary || "").trim().slice(0, 400) || null, items: itemsFromDays(days) };
+  return { summary: days.eased ? null : String(parsed?.summary || "").trim().slice(0, 400) || null, items: itemsFromDays(markBrick(days, { split, planDays })) };
 }
 
 // ---- One session: "Upravit s AI" ----
