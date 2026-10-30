@@ -241,7 +241,7 @@ struct JournalSettingsView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                SettingsGroup(title: "AI kouč", footer: "Sex, konopí a léky kouč nevidí, dokud tohle nezapneš.") {
+                SettingsGroup(title: "AI kouč", footer: "Náladu, konopí a léky kouč nevidí, dokud tohle nezapneš. Sex nevidí nikdy.") {
                     SettingsToggle(title: "Citlivé položky", isOn: Binding(get: { shareSensitive }, set: { on in
                         if on { askingConsent = true; return }
                         shareSensitive = false
@@ -289,7 +289,7 @@ struct JournalSensitiveConsentSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Kouč vidí citlivé položky").font(Typo.sentence(26, relativeTo: .title)).foregroundStyle(Palette.ink)
-                Text("Tvoje odpovědi o sexu, konopí a lécích pomohou kouči vysvětlit tvou regeneraci.")
+                Text("Tvoje odpovědi o náladě, konopí a lécích pomohou kouči vysvětlit tvou regeneraci.")
                     .font(Typo.sentence(17)).foregroundStyle(Palette.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 6)
@@ -300,9 +300,9 @@ struct JournalSensitiveConsentSheet: View {
                 point("Včerejší odpovědi u těchto položek a jak působí na připravenost")
                 point("Starší záznamy", included: false)
                 section("Které položky")
-                Text("Sex, Konopí a všechno v Lécích").font(.body).foregroundStyle(Palette.secondary)
+                Text("Nálada, Konopí a všechno v Lécích. Sex kouč neuvidí nikdy.").font(.body).foregroundStyle(Palette.secondary)
                     .fixedSize(horizontal: false, vertical: true).padding(.vertical, 5)
-                Text("Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich předáním AI kouči (OpenAI). Kdykoli ho vypneš a kouč je přestane dostávat.")
+                Text("Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich předáním AI kouči (OpenAI, USA). Kdykoli ho vypneš a kouč je přestane dostávat.")
                     .font(Typo.caption).foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 16)

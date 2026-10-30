@@ -2123,7 +2123,8 @@
 "Tréninky, plán, zóny a váhu." = "Workouts, plan, zones and weight.";
 "Tréninky naplánované i odcvičené v Aurinu a kalorický cíl." = "Workouts planned and done in Aurin and your calorie target.";
 "Posílat i zdravotní data" = "Also send health data";
-"Spánek, tep, HRV, kroky, váhu a tělesný tuk z Apple Health a Google Health." = "Sleep, heart rate, HRV, steps, weight and body fat from Apple Health and Google Health.";
+"Spánek, tep, HRV, okysličení krve, dech, VO₂max, tělesný tuk, kroky, váhu a tréninky z Apple Watch. Intervals.icu je samostatná firma a zachází s nimi podle svých zásad." = "Sleep, heart rate, HRV, blood oxygen, breathing, VO₂ max, body fat, steps, weight and your Apple Watch workouts. Intervals.icu is a separate company and handles them under its own privacy policy.";
+"Tréninky z Apple Health" = "Workouts from Apple Health";
 "Spánek, klidový tep, HRV, VO₂max a teplotu z prstenu." = "Sleep, resting heart rate, HRV, VO₂max and temperature from the ring.";
 
 /* Deník, the habit journal (JournalViews.swift, JournalEditor.swift, JournalImpact.swift) */
@@ -2636,16 +2637,16 @@
 "Sledovat deník" = "Keep a journal";
 "Ptát se ráno" = "Ask in the morning";
 "Citlivé položky" = "Sensitive items";
-"Sex, konopí a léky kouč nevidí, dokud tohle nezapneš." = "Sex, cannabis and medication stay out of what the coach sees unless you turn this on.";
+"Náladu, konopí a léky kouč nevidí, dokud tohle nezapneš. Sex nevidí nikdy." = "Mood, cannabis and medication stay out of what the coach sees unless you turn this on. Sex never reaches the coach.";
 "Kouč vidí citlivé položky" = "The coach sees sensitive items";
-"Tvoje odpovědi o sexu, konopí a lécích pomohou kouči vysvětlit tvou regeneraci." = "Your answers about sex, cannabis and medication help the coach explain your recovery.";
+"Tvoje odpovědi o náladě, konopí a lécích pomohou kouči vysvětlit tvou regeneraci." = "Your answers about mood, cannabis and medication help the coach explain your recovery.";
 "Rady, které počítají s léky, které bereš" = "Advice that accounts for the medication you take";
 "Jasnější důvod, proč se připravenost změnila" = "A clearer reason why your readiness moved";
 "Včerejší odpovědi u těchto položek a jak působí na připravenost" = "Yesterday's answers for these items and what they did to your readiness";
 "Starší záznamy" = "Older entries";
 "Které položky" = "Which items";
-"Sex, Konopí a všechno v Lécích" = "Sex, Cannabis and everything under Medication";
-"Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich předáním AI kouči (OpenAI). Kdykoli ho vypneš a kouč je přestane dostávat." = "This is health data (GDPR Art. 9). By turning it on you explicitly agree that it is shared with the AI coach (OpenAI). You can turn it off any time and the coach stops getting it.";
+"Nálada, Konopí a všechno v Lécích. Sex kouč neuvidí nikdy." = "Mood, Cannabis and everything under Medication. The coach never sees Sex.";
+"Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich předáním AI kouči (OpenAI, USA). Kdykoli ho vypneš a kouč je přestane dostávat." = "This is health data (GDPR Art. 9). By turning it on you explicitly agree that it is shared with the AI coach (OpenAI, USA). You can turn it off any time and the coach stops getting it.";
 "Pokračovat v tréninku" = "Resume workout";
 "Přejít na cvik" = "Go to this exercise";
 "Tep se měří" = "Heart rate measured";

@@ -12,7 +12,7 @@
 // GET  /app/api/journal/impact?metric= Co na tebe působí: readiness, hrv, sleep or rhr
 // GET  /app/api/journal/item?key=&metric=  one item in detail
 // `mornings(from, to)` loads the morning metrics (entrypoint.js journalMornings).
-import { CATEGORIES, categoryTitle, itemView, unitText, NOT_RANKED, PARTS, partTitle, usualPart, partOfTime, moodText, isSensitive } from "./journal-catalog.js";
+import { CATEGORIES, categoryTitle, itemView, unitText, NOT_RANKED, PARTS, partTitle, usualPart, partOfTime, moodText, isSensitive, NEVER_TO_AI } from "./journal-catalog.js";
 import { getJournalSettings, saveJournalSettings, getJournalFindings, saveJournalFindings, journalItems, findItem, pinnedItems, setPinned, saveCustomItem, listJournalEntries, saveJournalEntry, autoDays, sickDays, setJournalOptions, setFixed, withFixed, MOOD } from "./journal-store.js";
 import { dayState, rankImpacts, newDiscovery, itemDetail, thresholdOf, levelTime, METRICS, WINDOW_DAYS, DISCOVERY_PERCENT, MIN_DAYS, shiftDay } from "./journal-impact.js";
 import { getAthleteState } from "./athlete-state.js";
@@ -215,14 +215,15 @@ function journalDiscoveryView(settings) {
 
 // What the AI coach gets: the readiness findings (top 6 by size) and
 // yesterday's answers. Read only from what is stored; never computed here.
-// The sensitive items (sex, cannabis, medication) only with the consent.
+// The sensitive items (mood, cannabis, medication) only with the consent;
+// sex never, neither as an answer nor as a finding.
 export async function journalForCoach(db, date) {
   const settings = await getJournalSettings(db);
   if (!settings.enabled) return null;
   const findings = await getJournalFindings(db);
   const yesterday = shiftDay(date, -1);
   const { entries, auto } = await journalDayData(db, yesterday, yesterday, settings);
-  const shown = item => item && (settings.shareSensitive || !isSensitive(item));
+  const shown = item => item && !NEVER_TO_AI.has(item.key) && (settings.shareSensitive || !isSensitive(item));
   const answers = pinnedItems(settings).filter(shown).map(i => journalItemOnDay(i, entries.get(yesterday)?.get(i.key), auto[yesterday]?.[i.key])).filter(v => v.answered)
     .map(v => ({ item: v.name, answer: v.type === "yesno" ? (v.answer ? "yes" : "no") : v.value || (v.answer ? "yes" : "no") }));
   const top = (findings?.ranked || []).filter(r => Math.abs(r.effect) >= 3 && shown(findItem(settings, r.key))).sort((a, b) => Math.abs(b.effect) - Math.abs(a.effect)).slice(0, 6)

@@ -514,7 +514,7 @@ struct SetupFlowView: View {
         guard health.isAvailable, !health.enabled, !appleWorking else { return }
         appleWorking = true
         do {
-            try await AppleHealthProfile.requestAccess(Set(HealthCategory.allCases))
+            try await AppleHealthProfile.requestAccess(HealthCategory.defaults)
         } catch {
             appleWorking = false
             health.message = error.localizedDescription
@@ -523,7 +523,7 @@ struct SetupFlowView: View {
         appleWorking = false
         appleRead = false
         let api = model.api
-        Task { _ = await health.connect(Set(HealthCategory.allCases), api: api) }
+        Task { _ = await health.connect(HealthCategory.defaults, api: api) }
     }
 
     /// "O tobě" opens: sex, year of birth, height and weight from Apple Health

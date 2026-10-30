@@ -126,6 +126,7 @@ enum SyncApp {
         case "vo2max": return "VO₂max"
         case "nutrition": return L10n.tr("Jídlo a kalorie")
         case "water": return L10n.tr("Voda")
+        case "workouts": return L10n.tr("Tréninky z Apple Health")
         default: return type
         }
     }

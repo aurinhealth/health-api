@@ -29,14 +29,15 @@ export const DESTINATIONS = ['apple', 'google', 'intervals', 'wahoo'];
 const SERVER_DESTINATIONS = ['google', 'intervals', 'wahoo'];
 
 // The health data each destination accepts. Intervals.icu: what
-// wellness-sync.js (and weight-sync.js for weight) really writes there.
+// wellness-sync.js (and weight-sync.js for weight) really writes there, and
+// workouts: Apple Health's workouts watch-forward.js copies there.
 // Apple Health: what the iPhone writes from the app's own entries. Google
 // Health: weight (weight-sync.js, with the weight-writing permission) and
 // the food log (food-google-sync.js).
 export const HEALTH_TYPES = {
   apple: ['weight', 'nutrition', 'water'],
   google: ['weight', 'nutrition'],
-  intervals: ['weight', 'bodyFat', 'restingHR', 'hrv', 'sleep', 'steps', 'spO2', 'respiration', 'vo2max'],
+  intervals: ['weight', 'bodyFat', 'restingHR', 'hrv', 'sleep', 'steps', 'spO2', 'respiration', 'vo2max', 'workouts'],
   wahoo: []
 };
 

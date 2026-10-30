@@ -45,6 +45,10 @@ enum HealthCategory: String, CaseIterable, Identifiable {
         }
     }
 
+    /// What a new connection reads: everything but Deník, which is only
+    /// read when chosen (GDPR art. 25).
+    static var defaults: Set<HealthCategory> { Set(allCases).subtracting([.journal]) }
+
     /// The categories saved before the split (Srdce, Pohyb, Jídlo a pití)
     /// read as the ones that replaced them.
     static func saved(_ raw: String) -> [HealthCategory] {
@@ -155,7 +159,7 @@ final class AppleHealth {
 
     private static let enabledKey = "appleHealth.enabled"
     private static let categoriesKey = "appleHealth.categories"
-    private static let journalAddedKey = "appleHealth.journalAdded"
+    private static let journalOffKey = "appleHealth.journalOff"
     /// Each server has its own last sync, so the days spent on the other one
     /// (Nastavení → Testování → Server) are sent again after switching back.
     private static var lastSyncKey: String { ServerChoice.current == .live ? "appleHealth.lastSync" : "appleHealth.lastSync.staging" }
@@ -166,14 +170,15 @@ final class AppleHealth {
         let defaults = UserDefaults.standard
         enabled = defaults.bool(forKey: Self.enabledKey)
         let saved = (defaults.string(forKey: Self.categoriesKey) ?? "").split(separator: ",").flatMap { HealthCategory.saved(String($0)) }
-        var chosen = saved.isEmpty ? Set(HealthCategory.allCases) : Set(saved)
-        // Deník came in an update: on once for everyone who reads Apple Health,
-        // iOS asks for its types in the app (askNewTypes) and they can untick it.
-        if !saved.isEmpty, !defaults.bool(forKey: Self.journalAddedKey) {
-            chosen.insert(.journal)
+        var chosen = saved.isEmpty ? HealthCategory.defaults : Set(saved)
+        // Deník is read only when chosen (GDPR art. 25): an update once turned
+        // it on for everyone, so it goes off once; Zdroje dat → Apple Health
+        // turns it back on.
+        if !saved.isEmpty, !defaults.bool(forKey: Self.journalOffKey) {
+            chosen.remove(.journal)
             defaults.set(chosen.map(\.rawValue).sorted().joined(separator: ","), forKey: Self.categoriesKey)
         }
-        defaults.set(true, forKey: Self.journalAddedKey)
+        defaults.set(true, forKey: Self.journalOffKey)
         categories = chosen
         lastSync = defaults.object(forKey: Self.lastSyncKey) as? Date
         if let data = defaults.data(forKey: Self.hiddenKey) {

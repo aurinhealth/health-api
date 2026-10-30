@@ -232,7 +232,7 @@ struct ServiceConnectSheet: View {
                         Toggle(isOn: $sendHealth) {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("Posílat i zdravotní data").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                                Text("Spánek, tep, HRV, kroky, váhu a tělesný tuk z Apple Health a Google Health.")
+                                Text("Spánek, tep, HRV, okysličení krve, dech, VO₂max, tělesný tuk, kroky, váhu a tréninky z Apple Watch. Intervals.icu je samostatná firma a zachází s nimi podle svých zásad.")
                                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                             }
                         }
