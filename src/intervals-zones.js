@@ -62,7 +62,11 @@ export function intervalsSportSettings(t) {
     threshold_pace: Math.round(100 / profile.swimCss * 1000) / 1000,
     pace_zones: [...swimZoneBounds(profile.swimCss), OPEN],
     pace_zone_names: (t.swimZones || []).map(z => bare(z.name)),
-    pace_units: "SECS_100M"
+    pace_units: "SECS_100M",
+    // Swim load from pace (sTSS = IF³ × hours × 100), never from wrist heart
+    // rate, which is unreliable in water (PLOS ONE 2020, PMC7161966).
+    pace_load_type: "SWIM",
+    load_order: "PACE_HR_POWER"
   };
   return { Ride: ride, Run: run, Swim: swim };
 }

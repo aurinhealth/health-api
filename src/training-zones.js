@@ -295,3 +295,13 @@ for (const table of [FTP_METHODS, PACE_METHODS, POWER_ZONE_MODELS, HR_ZONE_MODEL
   if (names) Object.defineProperty(item, 'names', { get: () => names.map(zoneText), enumerable: true });
   if (inputs) Object.defineProperty(item, 'inputs', { get: () => inputs.map(([key, text]) => [key, zoneText(text)]), enumerable: true });
 }
+
+// A swim's load from its pace (TrainingPeaks sTSS): IF = speed / threshold
+// speed, cubed because water resistance climbs steeply with speed; rests are
+// not in the moving time. thresholdSpeed in m/s (Intervals.icu threshold_pace).
+export function swimTss({ meters, seconds, thresholdSpeed }) {
+  const m = Number(meters), s = Number(seconds), t = Number(thresholdSpeed);
+  if (!(m > 0 && s > 0 && t > 0)) return null;
+  const intensity = Math.min(1.3, m / s / t);
+  return Math.round(intensity ** 3 * s / 3600 * 100);
+}
