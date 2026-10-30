@@ -798,6 +798,8 @@ struct PlannedWorkoutView: View {
     @State private var confirmDelete = false
     @State private var rating = false
     @State private var ratingClosed = 0
+    /// A ride, run or swim: the sports with sections, a place and a send sheet.
+    static func endurance(_ sport: String) -> Bool { ["ride", "run", "swim"].contains(sport) }
     /// The time of day set here (Čas): .some(nil) after "Bez času".
     @State private var timeSet: String??
     @State private var pickingTime = false
@@ -834,7 +836,7 @@ struct PlannedWorkoutView: View {
                 if ratable {
                     FeedbackRow(session: session, workoutId: libraryId, reload: ratingClosed) { rating = true }.padding(.top, 16)
                 }
-                if let blocks = plan?.workout.steps, !WorkoutProfile.segments(blocks).isEmpty, session.sport == "ride" || session.sport == "run" {
+                if let blocks = plan?.workout.steps, !WorkoutProfile.segments(blocks).isEmpty, Self.endurance(session.sport) {
                     Card { WorkoutProfile(blocks: blocks, sport: session.sport) }.padding(.top, 16)
                 }
                 if let description = plan?.workout.description, !description.isEmpty {
@@ -848,10 +850,10 @@ struct PlannedWorkoutView: View {
                         }
                     }
                     .padding(.top, 10)
-                    if let workout = plan?.workout, session.sport == "ride" || session.sport == "run", !model.demo {
+                    if let workout = plan?.workout, Self.endurance(session.sport), !model.demo {
                         SendToButton(workout: workout, session: session).padding(.top, 18)
                     }
-                    if let id = session.eventId, session.sport == "ride" || session.sport == "run" {
+                    if let id = session.eventId, Self.endurance(session.sport) {
                         PlannedTemplateButtons(eventId: id, date: session.date).padding(.top, 10)
                     }
                 }
@@ -876,10 +878,10 @@ struct PlannedWorkoutView: View {
                     } else {
                         Button { moving = true } label: { action("Přesunout na jiný den", filled: false) }
                     }
-                    if session.sport == "ride" || session.sport == "run" {
+                    if Self.endurance(session.sport) {
                         HStack(spacing: 10) {
-                            Button { Task { await environment(indoor: true) } } label: { action("Uvnitř", filled: false) }
-                            Button { Task { await environment(indoor: false) } } label: { action("Venku", filled: false) }
+                            Button { Task { await environment(indoor: true) } } label: { action(session.sport == "swim" ? "Bazén" : "Uvnitř", filled: false) }
+                            Button { Task { await environment(indoor: false) } } label: { action(session.sport == "swim" ? "Volná voda" : "Venku", filled: false) }
                         }
                     }
                     Button(role: .destructive) { confirmDelete = true } label: {
@@ -1068,6 +1070,16 @@ struct StepBlockRow: View {
 
     private func describe(_ s: PlannedWorkout.Step) -> String {
         var parts: [String] = []
+        if s.rest == true {
+            return [L10n.f("%@ pauza", Fmt.int(s.durationSeconds) + " s"), s.note].compactMap { $0 }.joined(separator: " · ")
+        }
+        // A swim: metres, the pace per 100 m.
+        if let m = s.meters {
+            parts.append(Fmt.int(m) + " m")
+            if let slow = s.paceSlow, let fast = s.paceFast { parts.append(ZonesSettingsView.pace(fast) + "–" + ZonesSettingsView.pace(slow) + " /100 m") }
+            if let note = s.note { parts.append(note) }
+            return parts.joined(separator: " · ")
+        }
         if let d = s.durationSeconds { parts.append(d >= 60 ? Fmt.duration(Int(d / 60)) : Fmt.int(d) + " s") }
         if let lo = s.wattsLow, let hi = s.wattsHigh { parts.append(Fmt.int(lo) + "–" + Fmt.int(hi) + " W") }
         else if let lo = s.percentLow, let hi = s.percentHigh { parts.append(Fmt.int(lo) + "–" + Fmt.int(hi) + Fmt.percentSign) }

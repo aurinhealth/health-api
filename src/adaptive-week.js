@@ -5,7 +5,7 @@ import { timeZone } from "./user-time.js";
 import { weatherKitConfigured, weatherKitWeek, weatherKitHours } from "./weatherkit.js";
 
 const shift = (date, n) => new Date(Date.parse(date + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
-export const sportOf = a => /ride|bike|cycl/i.test(a.type || '') ? 'ride' : /run/i.test(a.type || '') ? 'run' : /weight|strength|gym/i.test(a.type || '') ? 'gym' : null;
+export const sportOf = a => /ride|bike|cycl/i.test(a.type || '') ? 'ride' : /run/i.test(a.type || '') ? 'run' : /swim/i.test(a.type || '') ? 'swim' : /weight|strength|gym/i.test(a.type || '') ? 'gym' : null;
 export const sessionsOn = d => [...(d?.daily?.training?.completed || []), ...(d?.daily?.training?.planned || [])].filter(a => sportOf(a));
 export function activityHistoryEstimate(history = [], reference) {
   const recent = history.filter(d => d.date < reference && d.date >= shift(reference, -21));
@@ -20,6 +20,8 @@ export function activityHistoryEstimate(history = [], reference) {
 }
 export function environmentFor(date, sport, weather = null) {
   if (sport === 'gym') return { environment: 'indoor', reason: '' };
+  // A swim is in the pool; open water only by the athlete's choice (openWaterSwim).
+  if (sport === 'swim') return { environment: 'indoor', reason: L('Plavání je v bazénu.', 'Swims are in the pool.') };
   const month = Number(date.slice(5, 7));
   const winter = [11, 12, 1, 2].includes(month);
   const poor = weather && (Number(weather.max) < (sport === 'ride' ? 8 : 0) || Number(weather.wind) >= (sport === 'ride' ? 35 : 50) || Number(weather.rain) >= 3 || Number(weather.rainProb) >= 70 || Number(weather.code) >= 95);
@@ -123,14 +125,14 @@ export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null,
   if (days.some(d => d.length)) return { ...prefs, days };
   const reference = today < start ? today : start;
   const history = (suppliedHistory || week.days || []).filter(d => d.date < reference && d.date >= shift(reference, -21));
-  const frequency = { ride: 0, run: 0, gym: 0 };
+  const frequency = { ride: 0, run: 0, swim: 0, gym: 0 };
   for (const d of history) for (const a of d.daily?.training?.completed || []) if(sportOf(a))frequency[sportOf(a)]++;
   const count = prefs.weeklyActivities ?? activityHistoryEstimate(history,reference).count;
   const existing = (week.days || []).filter(d => d.date >= start && d.date <= shift(start, 6)).reduce((n, d) => n + sessionsOn(d).length, 0);
-  const primary = focus?.sport === 'running' ? 'run' : focus?.sport === 'strength' ? 'gym' : 'ride';
+  const primary = focus?.sport === 'running' ? 'run' : focus?.sport === 'swimming' ? 'swim' : focus?.sport === 'strength' ? 'gym' : 'ride';
   const sports = Object.keys(frequency).filter(s=>frequency[s]>0).sort((a, b) => frequency[b] - frequency[a]);
   if (!sports.length) sports.push(primary,...(primary === 'gym' ? ['ride'] : ['gym']));
-  const selected={ride:0,run:0,gym:0};
+  const selected={ride:0,run:0,swim:0,gym:0};
   const candidates = [0, 1, 2, 3, 4, 5, 6].filter(i => shift(start, i) >= today && prefs.availability[i].minutes >= 20 && !sessionsOn((week.days || []).find(d => d.date === shift(start, i))).length);
   let placed = 0;
   while (placed < Math.max(0, count - existing) && candidates.length) {
@@ -140,7 +142,7 @@ export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null,
     });
     const i = candidates.shift(), choices = prefs.availability[i].preferredSports.length ? prefs.availability[i].preferredSports : sports;
     const sport = [...choices].sort((a,b)=>(selected[a]+1)/(frequency[a]||1)-(selected[b]+1)/(frequency[b]||1))[0] || primary;
-    if (prefs.availability[i].minutes < (sport === 'run' ? 20 : 30)) continue;
+    if (prefs.availability[i].minutes < (sport === 'swim' ? 15 : sport === 'run' ? 20 : 30)) continue;
     days[i] = [sport]; selected[sport]++; placed++;
   }
   return { ...prefs, days };

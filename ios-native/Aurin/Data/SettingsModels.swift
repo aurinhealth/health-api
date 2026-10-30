@@ -108,6 +108,8 @@ struct TrainingProfileResponse: Decodable, Equatable {
     let hrZones: [HRZone]
     let paceZones: [PaceZone]
     let runHrZones: [HRZone]?
+    /// The swim zones around CSS (src/training-zones.js swimZones); absent from older servers.
+    let swimZones: [SwimZone]?
     let powerZoneModels: [Model]
     let hrZoneModels: [Model]
     let paceZoneModels: [Model]
@@ -129,6 +131,20 @@ struct TrainingProfileResponse: Decodable, Equatable {
         let runThresholdPace: Double?
         let runPaceSource: String?
         let runLthr: Double?
+        /// CSS, seconds per 100 m.
+        let swimCss: Double?
+        let poolLength: Double?
+        /// "off", "races" or "season".
+        let openWater: String?
+    }
+
+    struct SwimZone: Decodable, Equatable, Identifiable {
+        let zone: Int
+        let name: String
+        /// "1:58" per 100 m; nil at an open end or without a CSS.
+        let paceSlow: String?
+        let paceFast: String?
+        var id: Int { zone }
     }
 
     struct PowerZone: Decodable, Equatable, Identifiable {

@@ -33,7 +33,9 @@ const SECONDARY = { push: { triceps: .5, front_delts: .4 }, horizontal_push: { f
 const CARDIO = {
   ride: { quads: 1, hips: .6, hamstrings: .4, calves: .35 },
   run: { calves: 1, quads: .8, hamstrings: .7, hips: .6 },
-  walk: { calves: .4, quads: .25, hips: .2 }
+  walk: { calves: .4, quads: .25, hips: .2 },
+  // Swimming pulls with the lats and shoulders; the legs barely work.
+  swim: { lats: 1, upper_back: .6, front_delts: .5, triceps: .4 }
 };
 
 // Which body-map groups an exercise loads, with weights.
@@ -54,6 +56,7 @@ export function activityKind(a) {
   if (/ride|cycl|bike/.test(t)) return "ride";
   if (/run/.test(t)) return "run";
   if (/walk|hike/.test(t)) return "walk";
+  if (/swim/.test(t)) return "swim";
   return null;
 }
 
@@ -181,11 +184,15 @@ export function strengthRecords(sets, today, recentDays = 14) {
   return list.sort((a, b) => (b.recent.length - a.recent.length) || ((b.e1rm?.value || 0) - (a.e1rm?.value || 0)));
 }
 
+// Swims in a pool: the watch measures their lengths exactly; open water only by GPS.
+const poolSwims = activities => activities.filter(a => activityKind(a) === "swim" && !/open.?water/i.test(String(a.type || a.payload?.type || "")));
+
 // Cardio records from activity summaries (no streams needed).
 export function cardioRecords(activities) {
   const best = (list, value, minimum = 0) => list.map(a => ({ a, v: value(a) })).filter(x => Number.isFinite(x.v) && x.v > minimum).sort((x, y) => y.v - x.v)[0] || null;
   const field = (a, k) => n(a[k] ?? a.payload?.[k], NaN);
   const rides = activities.filter(a => activityKind(a) === "ride"), runs = activities.filter(a => activityKind(a) === "run");
+  const pool = poolSwims(activities), swims = activities.filter(a => activityKind(a) === "swim");
   const pack = (x, unit, format) => x ? { value: format(x.v), unit, date: iso(x.a.date || x.a.start), name: x.a.name || (x.a.payload || {}).name || null } : null;
   const fastest = best(runs.filter(a => field(a, "distance") >= 5000), a => field(a, "distance") / field(a, "moving_time"));
   return {
@@ -194,8 +201,12 @@ export function cardioRecords(activities) {
     bestRidePower: pack(best(rides.filter(a => field(a, "moving_time") >= 1200), a => field(a, "icu_weighted_avg_watts")), "W", Math.round),
     longestRideTime: pack(best(rides, a => field(a, "moving_time") / 3600), "h", v => round(v, 1)),
     longestRun: pack(best(runs, a => field(a, "distance") / 1000), "km", v => round(v, 1)),
-    fastestRun5k: fastest ? { value: Math.round(1000 / fastest.v), unit: "s/km", date: iso(fastest.a.date || fastest.a.start), name: fastest.a.name || null } : null
+    fastestRun5k: fastest ? { value: Math.round(1000 / fastest.v), unit: "s/km", date: iso(fastest.a.date || fastest.a.start), name: fastest.a.name || null } : null,
+    longestSwim: pack(best(swims, a => field(a, "distance")), "m", Math.round),
+    swimPace400: swimPace(best(pool.filter(a => field(a, "distance") >= 400), a => field(a, "distance") / field(a, "moving_time"))),
+    swimPace1500: swimPace(best(pool.filter(a => field(a, "distance") >= 1500), a => field(a, "distance") / field(a, "moving_time")))
   };
+  function swimPace(x) { return x ? { value: Math.round(100 / x.v), unit: "s/100m", date: iso(x.a.date || x.a.start), name: x.a.name || null } : null; }
 }
 
 // ---- Records over a period ----------------------------------------------------
@@ -233,8 +244,9 @@ function settingChange(points, { start, end, kind }) {
 export function recordTrends({ sets = [], activities = [], today }) {
   const field = (a, k) => n(a[k] ?? a.payload?.[k], NaN), dateOf = a => iso(a.date || a.start);
   const rides = activities.filter(a => activityKind(a) === "ride"), runs = activities.filter(a => activityKind(a) === "run");
+  const swims = activities.filter(a => activityKind(a) === "swim"), pool = poolSwims(activities);
   const lifts = sets.map(x => ({ exercise: normalizeExerciseName(x.exercise), kg: n(x.actual_kg), reps: n(x.actual_reps), date: iso(x.workout_date || x.date) })).filter(x => x.exercise && x.date && x.kg > 0 && x.reps > 0);
-  const periods = recordPeriods(today, [...lifts.map(x => x.date), ...rides.map(dateOf), ...runs.map(dateOf)]);
+  const periods = recordPeriods(today, [...lifts.map(x => x.date), ...rides.map(dateOf), ...runs.map(dateOf), ...swims.map(dateOf)]);
   const each = fn => Object.fromEntries(Object.entries(periods).map(([k, p]) => [k, fn(p)]));
   const higher = (a, b) => a > b, lower = (a, b) => a < b;
   const byExercise = new Map();
@@ -255,7 +267,9 @@ export function recordTrends({ sets = [], activities = [], today }) {
     longestRideTime: metric(series(rides, a => Math.round(field(a, "moving_time") / 60)), "min", higher),
     mostElevation: metric(series(rides, a => Math.round(field(a, "total_elevation_gain"))), "m", higher),
     bestRidePower: metric(series(rides.filter(a => field(a, "moving_time") >= 1200), a => Math.round(field(a, "icu_weighted_avg_watts"))), "W", higher),
-    longestRun: metric(series(runs, a => round(field(a, "distance") / 1000, 1)), "km", higher)
+    longestRun: metric(series(runs, a => round(field(a, "distance") / 1000, 1)), "km", higher),
+    swimPace: metric(series(pool.filter(a => field(a, "distance") >= 400), a => Math.round(field(a, "moving_time") / (field(a, "distance") / 100))), "s/100m", lower),
+    longestSwim: metric(series(swims, a => Math.round(field(a, "distance"))), "m", higher)
   };
   return { periods, defaultPeriod: "1m", strength, cardio };
 }

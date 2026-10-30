@@ -1,9 +1,10 @@
 // The athlete's thresholds for turning % targets into watts (and later pace).
 // FTP priority: the value the athlete set in the app, then the Intervals.icu
 // sport settings, then the FTP of the latest synced ride. Zones follow the
-// athlete's chosen models. Running uses threshold pace (s/km) the same way.
+// athlete's chosen models. Running uses threshold pace (s/km) the same way,
+// swimming its CSS (s/100 m).
 import { getTrainingProfile } from "./training-profile.js";
-import { powerZones, hrZones, paceZones } from "./training-zones.js";
+import { powerZones, hrZones, paceZones, swimZones } from "./training-zones.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { loadProfiles, refreshSuggestions } from "./profile-suggestions.js";
 import { intervalsReads } from "./intervals-reads.js";
@@ -27,7 +28,7 @@ function hrModelFor(model, lthr, maxHr, restHr) {
 }
 
 export async function athleteThresholds(env, fetchImpl = intervalsReads(env)) {
-  const out = { ftp: null, indoorFtp: null, lthr: null, maxHr: null, runThresholdPace: null, runPaceSource: null, intervalsRunPace: null, runLthr: null, runMaxHr: null, source: null, intervalsFtp: null, latestRideFtp: null };
+  const out = { ftp: null, indoorFtp: null, lthr: null, maxHr: null, runThresholdPace: null, runPaceSource: null, intervalsRunPace: null, runLthr: null, runMaxHr: null, swimCss: null, swimCssSource: null, source: null, intervalsFtp: null, latestRideFtp: null };
   if (env.INTERVALS_API_KEY) {
     try {
       const response = await fetchImpl("https://intervals.icu/api/v1/athlete/0", { headers: { Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json" } });
@@ -36,6 +37,10 @@ export async function athleteThresholds(env, fetchImpl = intervalsReads(env)) {
         const settings = Array.isArray(athlete?.sportSettings) ? athlete.sportSettings : [];
         const ride = settings.find(s => (s.types || []).includes("Ride")) || settings.find(s => (s.types || []).some(t => /ride/i.test(t)));
         const run = settings.find(s => (s.types || []).includes("Run"));
+        const swim = settings.find(s => (s.types || []).includes("Swim"));
+        // Intervals.icu stores swim threshold pace as speed (m/s) too.
+        const swimSpeed = n(swim?.threshold_pace), css = swimSpeed ? (swimSpeed < 5 ? 100 / swimSpeed : swimSpeed) : null;
+        if (css >= 60 && css <= 240) { out.swimCss = Math.round(css); out.swimCssSource = "intervals-settings"; }
         if (ride) { out.ftp = n(ride.ftp); out.indoorFtp = n(ride.indoor_ftp); out.lthr = n(ride.lthr); out.maxHr = n(ride.max_hr); }
         if (run) {
           // Intervals.icu stores threshold pace as speed (m/s); accept s/km too.
@@ -74,6 +79,10 @@ export async function athleteThresholds(env, fetchImpl = intervalsReads(env)) {
   if (profile.runThresholdPace) { out.runThresholdPace = profile.runThresholdPace; out.runPaceSource = "manual"; }
   if (profile.runLthr) out.runLthr = profile.runLthr;
   out.paceZones = paceZones(profile, out.runThresholdPace);
+  if (profile.swimCss) { out.swimCss = profile.swimCss; out.swimCssSource = "manual"; }
+  out.swimZones = swimZones(out.swimCss);
+  out.poolLength = profile.poolLength || null;
+  out.openWater = profile.openWater || "off";
   // Running LTHR only – the cycling LTHR is usually lower and would mislead.
   const runModel = ["frielLthr", "frielRun", "custom"].includes(profile.hrZoneModel || "frielLthr") ? "frielRun" : profile.hrZoneModel;
   out.runHrModel = hrModelFor(runModel, out.runLthr, out.runMaxHr || out.maxHr, out.restHr);

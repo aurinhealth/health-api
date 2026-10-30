@@ -6,12 +6,13 @@ import { L } from './lang.js';
 const SPORTS = {
   cycling: { label: "cyklistika", role: "cyklistiky a silové přípravy" },
   running: { label: "běh", role: "běhu a silové přípravy" },
+  swimming: { label: "plavání", role: "plavání a silové přípravy" },
   triathlon: { label: "triatlon", role: "triatlonu a silové přípravy" },
   strength: { label: "silový trénink", role: "silového tréninku a kondice" },
   general: { label: "všeobecná kondice", role: "kondice (vytrvalost i síla)" }
 };
-const SPORT_LABEL_EN = { cycling: "cycling", running: "running", triathlon: "triathlon", strength: "strength training", general: "general fitness" };
-const SPORT_ROLE_EN = { cycling: "cycling and strength preparation", running: "running and strength preparation", triathlon: "triathlon and strength preparation", strength: "strength training and conditioning", general: "fitness (endurance and strength)" };
+const SPORT_LABEL_EN = { cycling: "cycling", running: "running", swimming: "swimming", triathlon: "triathlon", strength: "strength training", general: "general fitness" };
+const SPORT_ROLE_EN = { cycling: "cycling and strength preparation", running: "running and strength preparation", swimming: "swimming and strength preparation", triathlon: "triathlon and strength preparation", strength: "strength training and conditioning", general: "fitness (endurance and strength)" };
 export const MAIN_SPORTS = Object.fromEntries(Object.entries(SPORTS).map(([k, v]) => [k, v.label]));
 
 const text = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
@@ -48,7 +49,7 @@ export function withFocus(instructions, focus) {
   // The role line of a Czech or an English prompt (each is its own version, not a translation).
   // The in-app coach keeps the rest of its scope (A3 of the 2026-10-16 review):
   // the other sports, nutrition, sleep and recovery are still its questions.
-  const scope = /^(?:Jsi|You are) [^.]*Aurin[^.]*\./.test(instructions) ? L(" Radíš i s ostatními sporty v aplikaci Aurin (kolo, běh, posilovna), se sportovní výživou, spánkem a regenerací.", " You also advise on the other sports in the Aurin app (ride, run, gym), sports nutrition, sleep and recovery.") : "";
+  const scope = /^(?:Jsi|You are) [^.]*Aurin[^.]*\./.test(instructions) ? L(" Radíš i s ostatními sporty v aplikaci Aurin (kolo, běh, plavání, posilovna), se sportovní výživou, spánkem a regenerací.", " You also advise on the other sports in the Aurin app (ride, run, swim, gym), sports nutrition, sleep and recovery.") : "";
   let out = focus.sport ? instructions.replace(/^(?:Jsi|You are) [^.]*\./, L(`Jsi profesionální trenér ${SPORTS[focus.sport].role}.`, `You are a professional coach for ${SPORT_ROLE_EN[focus.sport]}.`) + scope) : instructions;
   const lines = [], weeks = focus.event?.daysLeft != null ? Math.floor(focus.event.daysLeft / 7) : null;
   if (focus.sportLabel) lines.push(L(`Hlavní sport: ${focus.sportLabel}; ostatní sporty ber jako doplněk k němu.`, `Main sport: ${focus.sportLabel}; treat the other sports as a complement to it.`));

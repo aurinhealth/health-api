@@ -11,7 +11,7 @@ import SwiftUI
 /// The week plan's object as the server sends it: the editor reads a few keys
 /// and changes them, every other key goes back as it came.
 enum WeekPlanPrefs {
-    static let sports = ["ride", "run", "gym"]
+    static let sports = ["ride", "run", "swim", "gym"]
     /// The most sessions on one day (src/week-planner.js MAX_PER_DAY).
     static let maxPerDay = 4
 

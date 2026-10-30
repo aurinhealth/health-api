@@ -295,6 +295,8 @@ struct WeekPlanView: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(picked.map { L10n.f("Klepni na den, kam dát: %@", sportLabel($0)) } ?? L10n.tr("Vyber sport a klepni na den."))
                 .font(Typo.small).foregroundStyle(Palette.secondary).padding(.top, 18)
+            // Four sports don't fit one line on a small phone: they scroll.
+            ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(WeekPlanPrefs.sports, id: \.self) { sport in
                     Button {
@@ -310,6 +312,8 @@ struct WeekPlanView: View {
                     .buttonStyle(.plain)
                 }
             }
+            }
+            .scrollClipDisabled()
             .padding(.top, 10)
 
             VStack(spacing: 8) {

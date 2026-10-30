@@ -19,6 +19,7 @@ import { exerciseMuscles } from '../src/fitness-insights.js';
 import { internalHeaders } from '../src/internal-auth.js';
 import { exercisePreferences } from '../src/exercise-feedback.js';
 import { searchWorkoutLibrary, parseWorkoutSearchFilters, stepRows } from '../src/workout-library.js';
+import { athleteSteps } from '../src/workout-explanation.js';
 import { fewMatches } from '../src/ai-workout-compose.js';
 import { systemOf } from '../src/training-plans.js';
 import { isHardKind } from '../src/session-intensity.js';
@@ -56,7 +57,7 @@ async function api(minutes) {
     buildStrengthContext: async (_env, date) => ({ status: 'ok', date, strength: { recentCompletedSets: [] }, cycling: { recentActivities: [], plannedWorkouts: [] }, recovery: {} }),
     ensureCurrentWorkoutSafeToReplace: async () => ({ status: 'ok' }), nutritionFor: async () => ({}),
     handleWorkoutTemplatesApi: async () => undefined,
-    searchWorkoutLibrary, parseWorkoutSearchFilters, fewMatches, stepRows, systemOf, reconcileWorkoutLibraryCompletions: async () => {}, rideFtpFor: t => ({ ftp: t.ftp, estimated: false }), explainWorkout: () => ({ title: '' })
+    searchWorkoutLibrary, parseWorkoutSearchFilters, fewMatches, stepRows, athleteSteps, systemOf, reconcileWorkoutLibraryCompletions: async () => {}, rideFtpFor: t => ({ ftp: t.ftp, estimated: false }), explainWorkout: () => ({ title: '' })
   });
   vm.runInContext(slice(coachInbox, 'async function ensureCoachInboxTable(', '\n// Earlier proposals of the assistant'), context);
   for (const text of routeModules) vm.runInContext(text.replace(/^import .*$/gm, '').replace(/^export /gm, ''), context);

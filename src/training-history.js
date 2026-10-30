@@ -9,7 +9,7 @@ export const TRAINING_REFERENCES=[
   {name:'ACSM: postupná progrese silového tréninku podle zkušeností',url:'https://doi.org/10.1249/MSS.0b013e3181915670'}
 ];
 export const EXPERIENCE_LEVELS=['beginner','regular','experienced'];
-export const EXPERIENCE_SPORTS=['strength','ride','run'];
+export const EXPERIENCE_SPORTS=['strength','ride','run','swim'];
 const EXPERIENCE_DAYS=730;
 // Per-sport experience (gym, cycling, running) from up to two years of history.
 // It counts months with training (>=4 sessions of that sport), never how recent
@@ -51,7 +51,9 @@ export function sportExperience({activities=[],strengthSets=[],weightKg=null,ftp
   const km={};for(const a of of('run'))km[a.date.slice(0,7)]=(km[a.date.slice(0,7)]||0)+(a.distanceKm||0);
   if(Object.values(km).some(v=>v>30*52/12))run=max(run,'regular');
   const own={strength,ride,run},out={};
-  for(const sport of EXPERIENCE_SPORTS){const other=Math.max(...EXPERIENCE_SPORTS.filter(s=>s!==sport).map(s=>rank(own[s])));out[sport]=EXPERIENCE_LEVELS[Math.max(rank(own[sport]),Math.min(other,rank(own[sport])+1))];}
+  for(const sport of Object.keys(own)){const other=Math.max(...Object.keys(own).filter(s=>s!==sport).map(s=>rank(own[s])));out[sport]=EXPERIENCE_LEVELS[Math.max(rank(own[sport]),Math.min(other,rank(own[sport])+1))];}
+  // Swimming is technique: fitness from the other sports doesn't make a swimmer.
+  out.swim=byMonths(months('swim'));
   return out;
 }
 export async function trainingHistory(db,userId=db.userId,{now=Date.now()}={}){

@@ -116,8 +116,9 @@ export async function ensureShareTable(db) {
 // paces (the library's step rows) and the length at the athlete's pace.
 function workoutFields(template, thresholds = null) {
   if (ENDURANCE_SPORTS.includes(template.sport)) {
-    const pace = thresholds?.runThresholdPace || null, structure = enduranceStructure(template, { thresholdPace: pace });
-    const steps = template.sport === "run" ? stepRows(structure, { sport: "run", thresholdPace: pace }) : stepRows(structure, { ftp: thresholds ? rideFtpFor(thresholds, "outdoor").ftp : null });
+    const pace = thresholds?.runThresholdPace || null, structure = enduranceStructure(template, { thresholdPace: pace, swimCss: thresholds?.swimCss });
+    const steps = template.sport === "swim" ? stepRows(structure, { sport: "swim", swimPace: thresholds?.swimCss || null })
+      : template.sport === "run" ? stepRows(structure, { sport: "run", thresholdPace: pace }) : stepRows(structure, { ftp: thresholds ? rideFtpFor(thresholds, "outdoor").ftp : null });
     return { minutes: Math.round(totalMinutes(structure)), exercises: [], blocks: template.blocks || [], steps, muscles: {}, groups: [] };
   }
   return {
@@ -155,7 +156,7 @@ async function senderName(env, user) {
   return text(String(profile?.displayName || user?.name || "").split(" ")[0], 40) || null;
 }
 
-const athleteView = t => ({ ftp: t?.ftp || null, runThresholdPace: t?.runThresholdPace || null });
+const athleteView = t => ({ ftp: t?.ftp || null, runThresholdPace: t?.runThresholdPace || null, swimCss: t?.swimCss || null });
 
 const json = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
@@ -222,7 +223,7 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
       const date = String(body.date || "");
       if (!DATE.test(date) || date < localToday()) throw new Error(L("Vyber dnešní nebo budoucí datum.", "Choose today or a future date."));
       const template = cleanEnduranceTemplate(JSON.parse(row.template_json)), thresholds = await thresholdsOf(env);
-      const structure = enduranceStructure(template, { thresholdPace: thresholds?.runThresholdPace });
+      const structure = enduranceStructure(template, { thresholdPace: thresholds?.runThresholdPace, swimCss: thresholds?.swimCss });
       const copy = await plannedCopy(env.DB, env.USER_ID, row, structure);
       const result = await scheduleWorkoutInIntervals(env, env.DB, { workoutId: "own-" + copy, date, confirm: true, environment: body.environment === "outdoor" ? "outdoor" : "indoor" });
       return json(result);
@@ -234,19 +235,20 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
       let structure = [];
       try { structure = JSON.parse(w?.structure_json || "[]"); } catch { /* none */ }
       if (!w || !structure.length) return json({ message: L("Trénink nemá úseky, které by šly uložit.", "The workout has no sections to save.") }, 404);
-      return json({ status: "ok", template: templateFromStructure(w.sport === "run" ? "run" : "ride", w.name, structure) });
+      return json({ status: "ok", template: templateFromStructure(ENDURANCE_SPORTS.includes(w.sport) ? w.sport : "ride", w.name, structure) });
     }
     // "Send to" → Zwift, MyWhoosh: the planned ride as a .zwo file.
     if (path === "/app/api/my-workouts/from-planned.zwo" && request.method === "GET") {
       const w = await plannedWorkout(env, String(url.searchParams.get("id") || ""));
       let structure = [];
       try { structure = JSON.parse(w?.structure_json || "[]"); } catch { /* none */ }
-      if (!w || w.sport === "run" || !structure.length) return json({ message: L("Tenhle trénink jako soubor pro Zwift nejde.", "This workout can't be made into a Zwift file.") }, 404);
+      if (!w || (w.sport && w.sport !== "ride") || !structure.length) return json({ message: L("Tenhle trénink jako soubor pro Zwift nejde.", "This workout can't be made into a Zwift file.") }, 404);
       const template = templateFromStructure("ride", w.name, structure);
       return new Response(zwoFile(template), { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "no-store" } });
     }
     // A ride or run put together from the athlete's words; nothing is saved.
     if (path === "/app/api/my-workouts/describe" && request.method === "POST") {
+      if (body.sport === "swim") throw new Error(L("Plavecký trénink zatím poskládej po úsecích.", "Build a swim workout section by section for now."));
       const sport = body.sport === "run" ? "run" : "ride", words = text(body.text, 400);
       if (!words) throw new Error(L("Popiš, jaký trénink chceš.", "Describe the workout you want."));
       if (!env.OPENAI_API_KEY) return json({ message: L("AI teď není dostupná. Zkus to později.", "AI isn't available right now. Try again later.") }, 503);
@@ -373,7 +375,7 @@ export function shareUrl(env, id) { return new URL("/t/" + id, env?.APP_ORIGIN |
 // ----- The public page of a link (anyone, no sign-in) -----
 
 const escapeHtml = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const SPORT_LABEL = { gym: ["Posilovna", "Gym"], ride: ["Kolo", "Ride"], run: ["Běh", "Run"] };
+const SPORT_LABEL = { gym: ["Posilovna", "Gym"], ride: ["Kolo", "Ride"], run: ["Běh", "Run"], swim: ["Plavání", "Swim"] };
 
 // /t/<id> and /t/<id>/og.png; null for any other path.
 export async function publicSharePage(request, db, url, env = {}) {
@@ -422,7 +424,7 @@ export async function publicSharePage(request, db, url, env = {}) {
 ${muscles.length ? `<div class="bars">${muscles.map((name, i) => `<div><i class="c${i}"></i><span>${escapeHtml(name)}</span></div>`).join("")}</div>` : ""}
 ${endurance ? intervalGraph(template) : ""}
 <ol class="card">${list}</ol>
-<p class="note">${endurance ? t(share.sport === "run" ? "Tempo ti aplikace přepočte podle tvého prahového tempa." : "Watty ti aplikace přepočte podle tvého FTP.", share.sport === "run" ? "The app turns the paces into yours from your threshold pace." : "The app turns the watts into yours from your FTP.") : t("Váhy ti aplikace navrhne podle tvých vlastních tréninků a toho, jak jsi odpočatý.", "The app suggests the weights from your own workouts and how rested you are.")}</p>
+<p class="note">${endurance ? t(share.sport === "swim" ? "Tempo na 100 m ti aplikace přepočte podle tvého CSS." : share.sport === "run" ? "Tempo ti aplikace přepočte podle tvého prahového tempa." : "Watty ti aplikace přepočte podle tvého FTP.", share.sport === "swim" ? "The app turns the paces per 100 m into yours from your CSS." : share.sport === "run" ? "The app turns the paces into yours from your threshold pace." : "The app turns the watts into yours from your FTP.") : t("Váhy ti aplikace navrhne podle tvých vlastních tréninků a toho, jak jsi odpočatý.", "The app suggests the weights from your own workouts and how rested you are.")}</p>
 <a class="button" id="open" href="loadwise://open/share/${share.id}">${t("Otevřít v Aurinu", "Open in Aurin")}</a>
 <p class="note" id="noapp" hidden>${store ? `<a href="${store}">${t("Stáhni si Aurin z App Store", "Get Aurin on the App Store")}</a>` : t("Aurin bude brzy v App Store.", "Aurin is coming soon to the App Store.")}</p>${share.sport === "ride" ? `
 <a class="button ghost" href="/t/${share.id}/workout.zwo">${t("Stáhnout .zwo pro Zwift", "Download .zwo for Zwift")}</a>` : ""}`;
