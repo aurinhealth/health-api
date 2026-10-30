@@ -248,8 +248,7 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
     }
     // A ride or run put together from the athlete's words; nothing is saved.
     if (path === "/app/api/my-workouts/describe" && request.method === "POST") {
-      if (body.sport === "swim") throw new Error(L("Plavecký trénink zatím poskládej po úsecích.", "Build a swim workout section by section for now."));
-      const sport = body.sport === "run" ? "run" : "ride", words = text(body.text, 400);
+      const sport = ENDURANCE_SPORTS.includes(body.sport) ? body.sport : "ride", words = text(body.text, 400);
       if (!words) throw new Error(L("Popiš, jaký trénink chceš.", "Describe the workout you want."));
       if (!env.OPENAI_API_KEY) return json({ message: L("AI teď není dostupná. Zkus to později.", "AI isn't available right now. Try again later.") }, 503);
       return json({ status: "ok", template: await describeWorkout(env, sport, words, await thresholdsOf(env)) });
@@ -327,15 +326,25 @@ const STEP_SCHEMA = { type: "object", additionalProperties: false, required: ["l
   label: { type: "string" }, seconds: { type: ["integer", "null"] }, km: { type: ["number", "null"] },
   low: { type: "integer" }, high: { type: "integer" }, cadence: { type: ["integer", "null"] }
 } };
-const DESCRIBE_SCHEMA = { type: "json_schema", name: "endurance_workout", strict: true, schema: { type: "object", additionalProperties: false, required: ["name", "blocks"], properties: {
+// A swim step: metres at % of CSS, or a rest at the wall in seconds.
+const SWIM_STEP_SCHEMA = { type: "object", additionalProperties: false, required: ["label", "meters", "seconds", "rest", "low", "high"], properties: {
+  label: { type: "string" }, meters: { type: ["integer", "null"] }, seconds: { type: ["integer", "null"] }, rest: { type: "boolean" },
+  low: { type: "integer" }, high: { type: "integer" }
+} };
+const describeSchema = step => ({ type: "json_schema", name: "endurance_workout", strict: true, schema: { type: "object", additionalProperties: false, required: ["name", "blocks"], properties: {
   name: { type: "string" },
-  blocks: { type: "array", items: { type: "object", additionalProperties: false, required: ["repeats", "steps"], properties: { repeats: { type: "integer" }, steps: { type: "array", items: STEP_SCHEMA } } } }
-} } };
+  blocks: { type: "array", items: { type: "object", additionalProperties: false, required: ["repeats", "steps"], properties: { repeats: { type: "integer" }, steps: { type: "array", items: step } } } }
+} } });
+const DESCRIBE_SCHEMA = describeSchema(STEP_SCHEMA), SWIM_DESCRIBE_SCHEMA = describeSchema(SWIM_STEP_SCHEMA);
 
 
 // The athlete's thresholds go along, so "3×10 at 280 W" or "4:10/km" turn into
 // the right % instead of a guess.
 export function describeInput(sport, words, thresholds) {
+  if (sport === "swim") {
+    const css = Number(thresholds?.swimCss) > 0 ? Math.round(thresholds.swimCss) : null;
+    return JSON.stringify({ sport, language: lang(), threshold: css ? { css: Math.floor(css / 60) + ":" + String(css % 60).padStart(2, "0") + "/100m", cssSeconds: css } : null, poolLengthMeters: Number(thresholds?.poolLength) || 25, description: words });
+  }
   const pace = Number(thresholds?.runThresholdPace) > 0 ? Math.round(thresholds.runThresholdPace) : null;
   const threshold = sport === "run" ? (pace ? { thresholdPace: Math.floor(pace / 60) + ":" + String(pace % 60).padStart(2, "0") + "/km", thresholdPaceSeconds: pace } : null)
     : Number(thresholds?.ftp) > 0 ? { ftpWatts: Math.round(thresholds.ftp) } : null;
@@ -343,11 +352,20 @@ export function describeInput(sport, words, thresholds) {
 }
 
 async function describeWorkout(env, sport, words, thresholds = null) {
-  const r = await callOpenAI(env, { feature: "workout-describe", instructions: describeInstructions(sport), input: describeInput(sport, words, thresholds), format: DESCRIBE_SCHEMA, maxOutputTokens: 3000, model: lightModel(env) });
+  const r = await callOpenAI(env, { feature: "workout-describe", instructions: describeInstructions(sport), input: describeInput(sport, words, thresholds), format: sport === "swim" ? SWIM_DESCRIBE_SCHEMA : DESCRIBE_SCHEMA, maxOutputTokens: 3000, model: lightModel(env) });
   let data;
   try { data = JSON.parse(r.text); } catch { throw new Error(L("Trénink se nepodařilo sestavit, zkus ho popsat jinak.", "The workout couldn't be built; try describing it differently.")); }
-  const blocks = (data.blocks || []).map(b => ({ repeats: b.repeats, steps: (b.steps || []).map(st => ({ label: st.label, low: st.low, high: st.high, cadence: st.cadence, ...(sport === "run" && st.km ? { km: st.km } : { seconds: st.seconds }) })) }));
-  return cleanEnduranceTemplate({ sport, name: data.name, blocks });
+  return describedTemplate(sport, data, thresholds);
+}
+
+// The AI's answer as an own workout; a swim's lengths end at the wall of the athlete's pool.
+export function describedTemplate(sport, data, thresholds = null) {
+  const pool = Number(thresholds?.poolLength) || 25;
+  const swimStep = st => st.rest ? { label: st.label, rest: true, seconds: st.seconds }
+    : { label: st.label, low: st.low, high: st.high, meters: Math.max(pool, Math.round(Math.round((Number(st.meters) || pool) / pool) * pool)) };
+  const blocks = (data?.blocks || []).map(b => ({ repeats: b.repeats, steps: (b.steps || []).map(st => sport === "swim" ? swimStep(st)
+    : { label: st.label, low: st.low, high: st.high, cadence: st.cadence, ...(sport === "run" && st.km ? { km: st.km } : { seconds: st.seconds }) }) }));
+  return cleanEnduranceTemplate({ sport, name: data?.name, blocks });
 }
 
 // The planned workout behind an event id ("planned:<id>"), as /app/api/workouts/planned reads it.

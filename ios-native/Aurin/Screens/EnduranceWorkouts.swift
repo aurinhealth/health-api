@@ -100,19 +100,17 @@ struct EnduranceEditorSheet: View {
                     TextField(sport == "swim" ? "Název, třeba Práh 8×100" : sport == "run" ? "Název, třeba Kilometrovky" : "Název, třeba Sweet spot 3×15", text: $name)
                 }
 
-                if sport != "swim" {
-                    Section {
-                        TextField(sport == "run" ? "Třeba „rozběh 2 km, 6× 1 km rychle s 2 min klusem, vyklusání“" : "Třeba „hodina, rozjetí, 5× 4 min VO2max se 4 min volně, vyjetí“", text: $wish, axis: .vertical)
-                            .lineLimit(2...4)
-                        Button { Task { await describe() } } label: {
-                            Label(busy == "describe" ? "Sestavuji…" : "Sestavit", systemImage: "sparkles").font(Typo.bodyStrong)
-                        }
-                        .disabled(wish.trimmingCharacters(in: .whitespaces).isEmpty || busy != nil || model.demo)
-                    } header: {
-                        Text("Popsat slovy")
-                    } footer: {
-                        Text("AI trénink poskládá z úseků, pak ho upravíš jako ručně.")
+                Section {
+                    TextField(sport == "swim" ? "Třeba „rozplavání 300 m, 8× 100 m na prahu s 20 s pauzou, vyplavání 200 m“" : sport == "run" ? "Třeba „rozběh 2 km, 6× 1 km rychle s 2 min klusem, vyklusání“" : "Třeba „hodina, rozjetí, 5× 4 min VO2max se 4 min volně, vyjetí“", text: $wish, axis: .vertical)
+                        .lineLimit(2...4)
+                    Button { Task { await describe() } } label: {
+                        Label(busy == "describe" ? "Sestavuji…" : "Sestavit", systemImage: "sparkles").font(Typo.bodyStrong)
                     }
+                    .disabled(wish.trimmingCharacters(in: .whitespaces).isEmpty || busy != nil || model.demo)
+                } header: {
+                    Text("Popsat slovy")
+                } footer: {
+                    Text("AI trénink poskládá z úseků, pak ho upravíš jako ručně.")
                 }
 
                 if !blocks.isEmpty {
