@@ -293,8 +293,8 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
   const planItems = [
     ...[...done, ...open].map(s => easy(s, {
       kind: "workout",
-      // ride, run or strength: the app opens the gym session for strength.
-      sport: s.sport === "strength" ? "strength" : ["run", "ride"].includes(s.sport) ? s.sport : "other",
+      // ride, run, swim or strength: the app opens the gym session for strength.
+      sport: s.sport === "strength" ? "strength" : ["run", "ride", "swim"].includes(s.sport) ? s.sport : "other",
       time: s.status === "done" ? s.time : null,
       title: s.title,
       detail: detailOf(s),

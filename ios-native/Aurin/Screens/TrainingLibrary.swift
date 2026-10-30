@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Knihovna
 
 /// One library for all sports. Opened from the widget it shows the sports as
-/// panels; a sport opens on its own screen: for ride and run the workouts with
+/// panels; a sport opens on its own screen: for ride, run and swim the workouts with
 /// filters (where, the length with its ± tolerance and own presets, the type,
 /// the difficulty), for the gym the AI builder and the exercises.
 struct TrainingLibraryView: View {
@@ -91,6 +91,7 @@ struct LibrarySport: Identifiable {
     static let all = [
         LibrarySport(id: "ride", label: "Kolo", symbol: "bicycle", color: Palette.amberBar),
         LibrarySport(id: "run", label: "Běh", symbol: "figure.run", color: Palette.rust),
+        LibrarySport(id: "swim", label: "Plavání", symbol: "figure.pool.swim", color: Palette.blue),
         LibrarySport(id: "gym", label: "Posilovna", symbol: "dumbbell.fill", color: Palette.indigo)
     ]
 
@@ -179,8 +180,10 @@ struct WorkoutLibrarySection: View {
     @AppStorage("libraryIndoor") private var indoor = true
     @AppStorage("libraryPresetsRide") private var presetsRide = "60,90,120,180"
     @AppStorage("libraryPresetsRun") private var presetsRun = "30,45,60,90"
+    @AppStorage("libraryPresetsSwim") private var presetsSwim = "30,45,60"
     @AppStorage("libraryToleranceRide") private var toleranceRide = 15
     @AppStorage("libraryToleranceRun") private var toleranceRun = 10
+    @AppStorage("libraryToleranceSwim") private var toleranceSwim = 10
     @State private var minutes: Int? = nil
     @State private var slider: Double = 60
     /// While the finger is on the slider (the time above follows it).
@@ -219,18 +222,22 @@ struct WorkoutLibrarySection: View {
         }
     }
 
-    private var range: ClosedRange<Double> { sport == "run" ? 20...150 : 30...300 }
-    private var step: Double { sport == "run" ? 5 : 15 }
+    private var range: ClosedRange<Double> { sport == "swim" ? 15...90 : sport == "run" ? 20...150 : 30...300 }
+    private var step: Double { sport == "ride" ? 15 : 5 }
     private var presets: [Int] {
-        (sport == "run" ? presetsRun : presetsRide).split(separator: ",").compactMap { Int($0) }.sorted()
+        (sport == "swim" ? presetsSwim : sport == "run" ? presetsRun : presetsRide).split(separator: ",").compactMap { Int($0) }.sorted()
     }
-    private var tolerance: Binding<Int> { sport == "run" ? $toleranceRun : $toleranceRide }
+    private var tolerance: Binding<Int> { sport == "swim" ? $toleranceSwim : sport == "run" ? $toleranceRun : $toleranceRide }
+    /// A swim has no tempo or sweet spot (src/swimming-workouts.js).
+    private var systems: [(String, String)] {
+        sport == "swim" ? LibraryWorkout.systems.filter { ["recovery", "endurance", "threshold", "vo2max", "sprint"].contains($0.0) } : LibraryWorkout.systems
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Picker("Kde", selection: $indoor) {
-                Text(sport == "run" ? "Pás" : "Trenažér").tag(true)
-                Text("Venku").tag(false)
+                Text(sport == "swim" ? "Bazén" : sport == "run" ? "Pás" : "Trenažér").tag(true)
+                Text(sport == "swim" ? "Volná voda" : "Venku").tag(false)
             }
             .pickerStyle(.segmented)
             .padding(.top, 16)
@@ -238,7 +245,7 @@ struct WorkoutLibrarySection: View {
             coachPick
             lengthFilter
             SectionLabel(text: "Typ").padding(.top, 20)
-            ChipFlow(items: [""] + LibraryWorkout.systems.map { $0.0 }, label: { $0.isEmpty ? "Doporučený" : LibraryWorkout.systemLabel($0) },
+            ChipFlow(items: [""] + systems.map { $0.0 }, label: { $0.isEmpty ? "Doporučený" : LibraryWorkout.systemLabel($0) },
                      isOn: { ($0.isEmpty && system == nil) || $0 == system }, toggle: { system = $0.isEmpty ? nil : $0 })
                 .padding(.top, 8)
             SectionLabel(text: "Obtížnost").padding(.top, 20)
@@ -269,7 +276,7 @@ struct WorkoutLibrarySection: View {
                 .opacity(loading ? 0.5 : 1)
             }
         }
-        .onAppear { slider = Double(presets.first ?? (sport == "run" ? 45 : 90)) }
+        .onAppear { slider = Double(presets.first ?? (sport == "ride" ? 90 : 45)) }
         .task(id: "\(minutes ?? 0)|\(tolerance.wrappedValue)|\(system ?? "")|\(indoor)|\(level.rawValue)") { await load() }
         .sheet(item: $open) { w in LibraryWorkoutSheet(workout: w, sport: sport, indoor: indoor) }
     }
@@ -429,12 +436,12 @@ struct WorkoutLibrarySection: View {
 
     private func addPreset(_ value: Int) {
         let next = Array(Set(presets + [value])).sorted().prefix(8).map(String.init).joined(separator: ",")
-        if sport == "run" { presetsRun = next } else { presetsRide = next }
+        if sport == "swim" { presetsSwim = next } else if sport == "run" { presetsRun = next } else { presetsRide = next }
     }
 
     private func removePreset(_ value: Int) {
         let next = presets.filter { $0 != value }.map(String.init).joined(separator: ",")
-        if sport == "run" { presetsRun = next } else { presetsRide = next }
+        if sport == "swim" { presetsSwim = next } else if sport == "run" { presetsRun = next } else { presetsRide = next }
     }
 
     private func load() async {
@@ -533,6 +540,7 @@ struct LibraryWorkoutSheet: View {
                 }
                 HStack(spacing: 18) {
                     if let d = workout.duration_minutes { meta("Délka", Fmt.duration(Int(d))) }
+                    if let m = workout.distance_meters, m > 0 { meta("Vzdálenost", Fmt.int(m) + " m") }
                     if let l = workout.target_load { meta("Zátěž", Fmt.int(l) + " TSS") }
                     if let level = workout.difficultyLabel { meta("Obtížnost", level) }
                 }
@@ -559,7 +567,7 @@ struct LibraryWorkoutSheet: View {
                     }
                 }
                 list("Proč se dnes hodí", workout.reasons?.map(Fmt.capitalized), "checkmark.circle", Palette.green)
-                list(sport == "run" ? "Jak ho běžet" : "Jak ho jet", workout.guide?.how, "figure." + (sport == "run" ? "run" : "outdoor.cycle"), Palette.amber)
+                list(sport == "swim" ? "Jak ho plavat" : sport == "run" ? "Jak ho běžet" : "Jak ho jet", workout.guide?.how, sport == "swim" ? "figure.pool.swim" : "figure." + (sport == "run" ? "run" : "outdoor.cycle"), Palette.amber)
                 list("Jídlo a pití", workout.guide?.fueling, "fork.knife", Palette.brown)
                 list("Kde", workout.guide?.environment, "map", Palette.indigo)
                 if let source = workout.source_name { Text(L10n.f("Zdroj: %@", source)).font(Typo.caption).foregroundStyle(Palette.faint) }

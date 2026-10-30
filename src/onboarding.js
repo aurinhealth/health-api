@@ -31,7 +31,7 @@ export function mergeExperience(old={},input={}){
 export function experienceChoices(saved={}){
   const raw=saved.experienceBySport&&typeof saved.experienceBySport==='object'?saved.experienceBySport:{};
   const pick=v=>EXPERIENCE_LEVELS.includes(v)?v:'auto';
-  return {strength:pick(raw.strength??saved.experience),ride:pick(raw.ride),run:pick(raw.run)};
+  return {strength:pick(raw.strength??saved.experience),ride:pick(raw.ride),run:pick(raw.run),swim:pick(raw.swim)};
 }
 
 // Places to train: several gyms and a home gym, each with its own stations,

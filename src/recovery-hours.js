@@ -1,4 +1,4 @@
-// Regenerace of one ride, run or walk (recovery-time.js has the model): kept
+// Regenerace of one ride, run, swim or walk (recovery-time.js has the model): kept
 // apart from the muscle model so the activity details can read it without
 // loading the gym catalog.
 import { activityKind } from "./fitness-insights.js";
@@ -6,7 +6,7 @@ import { activityKind } from "./fitness-insights.js";
 export const MAX_HOURS = 96;
 const HOURS_PER_TSS = 24 / 150;
 // TSS per minute of a session without one: a moderate effort of each sport.
-const TSS_PER_MINUTE = { ride: 0.75, run: 0.9, walk: 0.3 };
+const TSS_PER_MINUTE = { ride: 0.75, run: 0.9, swim: 0.7, walk: 0.3 };
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 export const intensityOf = a => { const raw = n(a?.intensityFactor ?? a?.icu_intensity ?? a?.payload?.icu_intensity); return raw > 0 ? (raw > 3 ? raw / 100 : raw) : null; };
 
@@ -30,7 +30,7 @@ export function sessionRecoveryHours({ kind, tss = null, minutes = null, intensi
 // hours, or null for a short easy one and for the gym.
 export function activityRecoveryHours(activity = {}) {
   const kind = activityKind(activity);
-  if (!["ride", "run", "walk"].includes(kind)) return null;
+  if (!["ride", "run", "swim", "walk"].includes(kind)) return null;
   const r = sessionRecoveryHours({ kind, tss: activity.icu_training_load, minutes: n(activity.moving_time) / 60, intensity: intensityOf(activity) });
   return r.hours || null;
 }
