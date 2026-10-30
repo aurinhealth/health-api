@@ -1154,7 +1154,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <ul>
 <li><strong>Cloudflare, Inc.</strong> (USA), our processor: certified under the EU–US Data Privacy Framework, and the EU Standard Contractual Clauses in its Data Processing Addendum. Aurin’s database and backups are stored in the EU.</li>
 <li><strong>OpenAI</strong> (USA), our processor: our contract is with OpenAI Ireland Ltd, and data that goes on to OpenAI in the USA is covered by the EU Standard Contractual Clauses in OpenAI’s Data Processing Addendum.</li>
-<li><strong>Apple</strong> (Apple Distribution International Ltd., Ireland, and Apple Inc., USA): our processor for notifications and Apple Weather, and a separate controller for the App Store and TestFlight. Apple Inc. is certified under the EU–US Data Privacy Framework.</li>
+<li><strong>Apple</strong> (Apple Distribution International Ltd., Ireland, and Apple Inc., USA): our processor for notifications and Apple Weather, and a separate controller for the App Store and TestFlight. For people in the EU our counterpart is Apple Distribution International Ltd. in Ireland, and data that goes on to Apple Inc. in the USA is covered by the EU Standard Contractual Clauses.</li>
 <li><strong>GitHub, Inc.</strong> (USA), our processor for the backup: certified under the EU–US Data Privacy Framework, and the EU Standard Contractual Clauses in its Data Protection Agreement.</li>
 <li><strong>Google LLC</strong> (USA), for Google Health and YouTube a separate controller you choose to use: certified under the EU–US Data Privacy Framework.</li>
 <li><strong>Intervals.icu Ltd</strong> (United Kingdom, servers in Germany and Finland), a separate controller: the European Commission’s adequacy decision for the United Kingdom.</li>
@@ -1276,7 +1276,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <ul>
 <li><strong>Cloudflare, Inc.</strong> (USA), náš zpracovatel: certifikace v rámci EU–USA pro ochranu údajů (Data Privacy Framework) a standardní smluvní doložky EU v jeho dodatku o zpracování údajů. Databáze Aurinu i zálohy jsou uložené v EU.</li>
 <li><strong>OpenAI</strong> (USA), náš zpracovatel: smlouvu máme s OpenAI Ireland Ltd a data, která jdou dál k OpenAI do USA, chrání standardní smluvní doložky EU v dodatku OpenAI o zpracování údajů.</li>
-<li><strong>Apple</strong> (Apple Distribution International Ltd., Irsko, a Apple Inc., USA): pro oznámení a Apple Weather náš zpracovatel, pro App Store a TestFlight samostatný správce. Apple Inc. je certifikovaný v rámci Data Privacy Framework.</li>
+<li><strong>Apple</strong> (Apple Distribution International Ltd., Irsko, a Apple Inc., USA): pro oznámení a Apple Weather náš zpracovatel, pro App Store a TestFlight samostatný správce. Pro lidi v EU je naším protějškem Apple Distribution International Ltd. v Irsku a data, která jdou dál k Apple Inc. do USA, chrání standardní smluvní doložky EU.</li>
 <li><strong>GitHub, Inc.</strong> (USA), náš zpracovatel pro zálohu: certifikace v rámci Data Privacy Framework a standardní smluvní doložky EU v jeho smlouvě o ochraně údajů.</li>
 <li><strong>Google LLC</strong> (USA), pro Google Health a YouTube samostatný správce, kterého se rozhodneš používat: certifikace v rámci Data Privacy Framework.</li>
 <li><strong>Intervals.icu Ltd</strong> (Spojené království, servery v Německu a Finsku), samostatný správce: rozhodnutí Evropské komise o odpovídající ochraně pro Spojené království.</li>
