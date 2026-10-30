@@ -1056,6 +1056,8 @@ struct TrainingModeView: View {
             day = DemoData.gym; history = DemoGymHistory.history; loading = false; startAtFirstOpen(); restoreMinimized()
             // The sample day has sets done: under way, as a real one opened again (below), without a recording.
             if let day, day.exercises.contains(where: { $0.sets.contains(where: \.done) }) { startTapped = true }
+            // The figure of Celkem dnes from the app's own copy (a build without it keeps the flat one).
+            Task { await MuscleModelStore.shared.load(api: nil) }
             return
         }
         loading = true
