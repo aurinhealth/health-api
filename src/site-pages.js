@@ -43,10 +43,12 @@ p{margin:0}
 .wl input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:var(--fs-17);color:var(--text)}
 .wl .field:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:3px}
 .wl .go{flex:none;display:flex;align-items:center;justify-content:center;gap:6px;height:44px;padding:0 16px 0 18px;border:0;border-radius:var(--r-pill);background:var(--button);color:var(--on-button);font:inherit;font-size:var(--fs-14);font-weight:600;white-space:nowrap;cursor:pointer}
-.wl .go svg,.wl .done svg{width:20px;height:20px;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}.wl .go svg{width:16px;height:16px}
-.wl .go svg{stroke:var(--on-button)}
+.wl .go svg,.wl .done svg{fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.wl .go svg{width:16px;height:16px;stroke:var(--on-button)}
+/* On the smallest phones the button drops its arrow so the address keeps room. */
+@media (max-width:360px){.wl .field{padding-left:16px}.wl .go{padding:0 14px}.wl .go svg{display:none}}
 .wl .done{align-items:center;gap:10px;height:56px;padding:0 26px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--green) 13%,var(--panel));color:var(--green);font-size:var(--fs-17);font-weight:600}
-.wl .done svg{stroke:currentColor}
+.wl .done svg{width:20px;height:20px;stroke:currentColor}
 .wl .err{margin-top:10px;font-size:var(--fs-14);color:var(--rust-ink)}.wl .err:empty{display:none}
 .wl.sent .field{display:none}.wl.sent .done{display:inline-flex}
 /* After joining: pass Aurin on (the phone's own sharing, or the link copied). Nothing about it is stored. */
@@ -89,7 +91,7 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 /* Each word rises inside its own clipped box; the box reaches past the letters so the italic's overhang isn't cut. */
 .hero h1 .w{display:inline-block;vertical-align:top}
 /* On a laptop's short screen the headline takes less height, so the email field stays on the first screen. */
-@media (min-width:961px) and (max-height:860px){.hero h1{max-width:10.5ch;font-size:clamp(var(--fs-44),9vh,var(--fs-88))}.hero .sun{zoom:.75}}
+@media (min-width:961px) and (max-height:860px){.hero h1{max-width:10.5ch;font-size:clamp(var(--fs-44),min(6.4vw,9vh),var(--fs-88))}.hero .sun{zoom:.75}}
 .hero h1 .w>span{display:inline-block}
 .hero h1 .it{font-style:italic;color:var(--green)}
 .lede{max-width:500px;margin-top:26px;font-size:var(--fs-20);color:var(--sec)}
@@ -325,8 +327,6 @@ main:focus{outline:none}
 .faq details[open] summary::after{transform:translateY(5px) rotate(-135deg)}
 .faq details p{padding:0 2px 22px;color:var(--sec);max-width:640px}
 
-/* A light call between the parts and the rest: one line and a secondary button down to the waitlist. */
-
 /* The end: the mark, the name and the waitlist once more. */
 .final{position:relative;padding:180px 0 170px;text-align:center;overflow:clip}
 .final .wrap{position:relative;z-index:1}
@@ -486,7 +486,7 @@ const mark = width => `<svg class="mark" viewBox="6 10 88 80" width="${width}" h
 const sun = size => `<div class="sun" aria-hidden="true" style="--s:${size}px"><i class="halo"></i><i class="rg"></i><i class="rg"></i><i class="rg"></i>${mark(size)}</div>`;
 // The welcome's lock (WelcomeLock in WelcomePages.swift): a soft paper lock with the logo whose shackle clicks shut.
 const LOCK = `<div class="lock" aria-hidden="true"><i class="halo"></i><svg class="shackle" viewBox="0 0 62 58"><defs><linearGradient id="lk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--sand)"/><stop offset="1" stop-color="color-mix(in srgb,var(--brown) 60%,transparent)"/></linearGradient></defs><path d="M5.5 58V31a25.5 25.5 0 0 1 51 0v27" fill="none" stroke="url(#lk)" stroke-width="11" stroke-linecap="round"/></svg><span class="body">${mark(46)}</span></div>`;
-// "Join the waitlist": the button opens an e-mail field; the address waits for the owner, who
+// The waitlist: an e-mail field with a "Get early access" button; the address waits for the owner, who
 // invites people into TestFlight from the app (src/testflight-waitlist.js).
 const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
 const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
@@ -699,7 +699,7 @@ ${headScript}
 <header class="site-head"><nav class="pill-nav" aria-label="Main">
 <a class="logo" href="/">${mark(30)}<span translate="no">Aurin</span></a>
 <div class="links"><a href="/#a-readiness">Readiness</a><a href="/#a-training">Training</a><a href="/#a-food">Nutrition</a><a href="/#a-sleep">Sleep</a><a href="/#a-coach">Coach</a></div>
-<a class="nav-cta" href="/#join">Join the waitlist</a>
+<a class="nav-cta" href="/#join">Get early access</a>
 </nav></header>
 ${body}
 <footer class="site-foot"><div class="wrap">
@@ -963,7 +963,7 @@ ${sun(72)}
 <span class="kicker"><i></i>For iPhone · early access</span>
 <h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w${i >= SLANT ? ' it' : ''}" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
 <p class="lede">Aurin reads your sleep, HRV and workouts from the watch or ring you wear, and every morning turns them into one number, one plan and one coach.</p>
-<div class="cta">${store('top')}<p class="note">Free early access on iPhone. We’ll email you an invite.</p></div>
+<div class="cta">${store('top')}<p class="note">Free early access on iPhone through TestFlight.</p></div>
 </div>
 <div class="stage"><div class="rig">
 <div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">${day.hrv} ms</div><div class="d up">↑ ${day.hrv - day.hrvBaseline} ms above normal</div></div>
