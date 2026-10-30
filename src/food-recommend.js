@@ -1,14 +1,10 @@
 import { L } from './lang.js';
 import legacy from "./index.js";
 import { getCookbook } from "./cookbook.js";
+import { refillMacros, fitsEating } from "./diet.js";
 import { completedMealTypes, nextUnloggedMeals } from "./nutrition-next.js";
 import { localToday, localHour } from "./user-time.js";
 
-const PROTEIN_PER_KG = 2.0;
-const FAT_PER_KG = 0.8;
-const ENDURANCE_CARB_PER_KG = 5.0;
-const TRAINING_CARB_PER_KG = 4.0;
-const REST_CARB_PER_KG = 3.0;
 const ENDURANCE_RIDE_KCAL_H = 500;
 const INTENSE_RIDE_KCAL_H = 600;
 
@@ -132,15 +128,17 @@ async function loadTrainingContext(env, date) {
   };
 }
 
-function macroTargets(weightKg, calorieTarget, context) {
-  const kg = Number(weightKg);
-  if (!(kg > 0)) return { protein_g: 0, carbs_g: 0, fat_g: 0 };
-  const protein = Math.round(kg * PROTEIN_PER_KG);
-  const fat = Math.round(kg * FAT_PER_KG);
-  const carbPerKg = context.endurance ? ENDURANCE_CARB_PER_KG : context.training ? TRAINING_CARB_PER_KG : REST_CARB_PER_KG;
-  const floorCarbs = Math.round(kg * carbPerKg);
-  const derivedCarbs = Math.round(Math.max(0, (Number(calorieTarget) - protein * 4 - fat * 9) / 4));
-  return { protein_g: protein, carbs_g: Math.max(floorCarbs, derivedCarbs), fat_g: fat };
+// The day's macros as the Food screen shows them (index.js dayMacros, with
+// the athlete's diet): the meals are fitted to the same numbers.
+function macroTargets(macros) {
+  const n = v => Math.max(0, Math.round(Number(v) || 0));
+  return { protein_g: n(macros?.protein_g), carbs_g: n(macros?.carbs_g), fat_g: n(macros?.fat_g) };
+}
+
+// A recipe's title and ingredients, for the diet's check.
+function recipeText(recipe) {
+  const items = Array.isArray(recipe?.ingredients) ? recipe.ingredients.map(i => typeof i === "string" ? i : `${i?.name || ""} ${i?.item || ""}`) : [];
+  return [recipe?.title, recipe?.name, ...items].filter(Boolean).join(" ");
 }
 
 function recipeMinutes(recipe) {
@@ -214,12 +212,7 @@ export async function foodRecommend(env, url, known = null) {
   // The training context and the weight don't depend on the target: they are
   // read while the target is still being worked out.
   const contextRead = loadTrainingContext(env, date);
-  const weightRead = env.DB.prepare(`
-    SELECT value_numeric FROM health_datapoints
-    WHERE user_id = ? AND data_type = 'weight' AND value_numeric IS NOT NULL
-    ORDER BY sample_time DESC, id DESC LIMIT 1
-  `).bind(env.USER_ID).first();
-  contextRead.catch(() => {}); weightRead.catch(() => {});
+  contextRead.catch(() => {});
   const day = await known;
   const [energy, food] = day ? [day.energy, day.food] : await Promise.all([
     legacy.fetch(new Request(new URL(`/analysis/energy?date=${encodeURIComponent(date)}`, url).toString()), env),
@@ -235,9 +228,8 @@ export async function foodRecommend(env, url, known = null) {
   // (/analysis/energy in index.js), not a second formula.
   const calorieTarget = Number(energy.final.calorieTarget);
 
-  const weightRow = await weightRead;
-  const currentWeight = weightRow ? Number(weightRow.value_numeric) : null;
-  const targets = macroTargets(currentWeight, calorieTarget, context);
+  const targets = macroTargets(energy.final.macroTargets ? refillMacros({ ...energy.final.macroTargets }, calorieTarget) : {});
+  const diet = energy.final.diet || {};
   const calorieDelta = calorieTarget - Number(food.totals?.kcal || 0);
   const remaining = {
     kcal: Math.max(0, calorieDelta),
@@ -257,9 +249,12 @@ export async function foodRecommend(env, url, known = null) {
 
   const cookbookData = await getCookbook();
   const cookbook = Array.isArray(cookbookData) ? cookbookData : (cookbookData?.recipes || []);
+  // What the athlete eats (vegetarian, vegan…) and, on keto or lower carb,
+  // nothing over the carbs left today.
+  const suits = recipe => fitsEating(recipeText(recipe), diet.eating) && (diet.carbsLimitG == null || Number(recipe.carbs_g || 0) <= remaining.carbs_g + 5);
   let candidates = cookbook.filter(recipe => {
     const kcal = Number(recipe.kcal);
-    if (!Number.isFinite(kcal) || kcal <= 0) return false;
+    if (!Number.isFinite(kcal) || kcal <= 0 || !suits(recipe)) return false;
     if (category && String(recipe.category || "").toLowerCase() !== category) return false;
     if (maxMinutes && recipeMinutes(recipe) > maxMinutes) return false;
     if (heavilyOverCalories && kcal > 150) return false;
@@ -284,7 +279,7 @@ export async function foodRecommend(env, url, known = null) {
     const share=Object.fromEntries(Object.entries(remaining).map(([key,value])=>[key,value/Math.max(1,slots.length)]));
     const filtered=cookbook.filter(recipe=>{
       const kcal=Number(recipe.kcal);
-      return Number.isFinite(kcal)&&kcal>0&&categories[meal.type].includes(recipe.category)&&(!maxMinutes||recipeMinutes(recipe)<=maxMinutes)&&(!overCalories||kcal<=(heavilyOverCalories?150:250));
+      return Number.isFinite(kcal)&&kcal>0&&suits(recipe)&&categories[meal.type].includes(recipe.category)&&(!maxMinutes||recipeMinutes(recipe)<=maxMinutes)&&(!overCalories||kcal<=(heavilyOverCalories?150:250));
     });
     const recommendations=filtered.map(recipe=>({recipe,score:scoreRecipe(recipe,share,targets,context,maxMinutes)}))
       .sort((a,b)=>b.score-a.score).slice(0,3).map(({recipe,score})=>({
@@ -296,23 +291,31 @@ export async function foodRecommend(env, url, known = null) {
   const everyday={
     BREAKFAST:[
       {name:L('Ovesné vločky + skyr + banán', 'Oats + skyr + banana'),kcal:480,protein_g:29,carbs_g:72,fat_g:8,reason:L('běžná snídaně', 'an everyday breakfast')},
-      {name:L('Vejce + pečivo + zelenina', 'Eggs + bread + vegetables'),kcal:420,protein_g:24,carbs_g:40,fat_g:18,reason:L('snídaně s bílkovinami', 'a breakfast with protein')}
+      {name:L('Vejce + pečivo + zelenina', 'Eggs + bread + vegetables'),kcal:420,protein_g:24,carbs_g:40,fat_g:18,reason:L('snídaně s bílkovinami', 'a breakfast with protein')},
+      {name:L('Ovesné vločky + sójový jogurt + ovoce', 'Oats + soy yogurt + fruit'),kcal:430,protein_g:20,carbs_g:62,fat_g:10,reason:L('rostlinná snídaně', 'a plant-based breakfast')},
+      {name:L('Míchaná vejce + avokádo', 'Scrambled eggs + avocado'),kcal:420,protein_g:21,carbs_g:6,fat_g:34,reason:L('snídaně s málo sacharidy', 'a low-carb breakfast')}
     ],
     LUNCH:[
       {name:L('Kuřecí maso + rýže + zelenina', 'Chicken + rice + vegetables'),kcal:550,protein_g:42,carbs_g:65,fat_g:10,reason:L('běžný oběd', 'an everyday lunch')},
-      {name:L('Tuňák + těstoviny + zelenina', 'Tuna + pasta + vegetables'),kcal:520,protein_g:38,carbs_g:65,fat_g:9,reason:L('rychlý oběd', 'a quick lunch')}
+      {name:L('Tuňák + těstoviny + zelenina', 'Tuna + pasta + vegetables'),kcal:520,protein_g:38,carbs_g:65,fat_g:9,reason:L('rychlý oběd', 'a quick lunch')},
+      {name:L('Čočka + rýže + zelenina', 'Lentils + rice + vegetables'),kcal:540,protein_g:26,carbs_g:85,fat_g:8,reason:L('rostlinný oběd', 'a plant-based lunch')},
+      {name:L('Losos + zelenina + olivový olej', 'Salmon + vegetables + olive oil'),kcal:560,protein_g:38,carbs_g:10,fat_g:40,reason:L('oběd s málo sacharidy', 'a low-carb lunch')}
     ],
     SNACK:[
       {name:L('Skyr + banán', 'Skyr + banana'),kcal:250,protein_g:22,carbs_g:35,fat_g:1,reason:L('rychlá svačina', 'a quick snack')},
-      {name:L('Cottage + pečivo', 'Cottage cheese + bread'),kcal:350,protein_g:28,carbs_g:35,fat_g:10,reason:L('svačina s bílkovinami', 'a snack with protein')}
+      {name:L('Cottage + pečivo', 'Cottage cheese + bread'),kcal:350,protein_g:28,carbs_g:35,fat_g:10,reason:L('svačina s bílkovinami', 'a snack with protein')},
+      {name:L('Hummus + zelenina', 'Hummus + vegetables'),kcal:240,protein_g:9,carbs_g:20,fat_g:13,reason:L('rostlinná svačina', 'a plant-based snack')},
+      {name:L('Ořechy + sýr', 'Nuts + cheese'),kcal:300,protein_g:14,carbs_g:5,fat_g:25,reason:L('svačina s málo sacharidy', 'a low-carb snack')}
     ],
     DINNER:[
       {name:L('Kuřecí maso + rýže + zelenina', 'Chicken + rice + vegetables'),kcal:550,protein_g:42,carbs_g:65,fat_g:10,reason:L('běžná večeře', 'an everyday dinner')},
-      {name:L('Cottage + pečivo + zelenina', 'Cottage cheese + bread + vegetables'),kcal:380,protein_g:30,carbs_g:40,fat_g:10,reason:L('jednoduchá večeře', 'a simple dinner')}
+      {name:L('Cottage + pečivo + zelenina', 'Cottage cheese + bread + vegetables'),kcal:380,protein_g:30,carbs_g:40,fat_g:10,reason:L('jednoduchá večeře', 'a simple dinner')},
+      {name:L('Tofu + rýže + zelenina', 'Tofu + rice + vegetables'),kcal:520,protein_g:28,carbs_g:65,fat_g:15,reason:L('rostlinná večeře', 'a plant-based dinner')},
+      {name:L('Kuřecí stehno + brokolice + máslo', 'Chicken thigh + broccoli + butter'),kcal:540,protein_g:40,carbs_g:9,fat_g:38,reason:L('večeře s málo sacharidy', 'a low-carb dinner')}
     ]
   };
-  const storeAlternatives=(everyday[slots[0]?.type]||[]).filter(item=>item.kcal<=remaining.kcal*1.1);
-  if(slots.length&&storeAlternatives.length<2&&remaining.kcal>=180)storeAlternatives.push({name:L('Bílý jogurt + ovoce', 'Plain yogurt + fruit'),kcal:180,protein_g:10,carbs_g:25,fat_g:4,reason:L('menší běžná porce', 'a smaller everyday portion')});
+  const storeAlternatives=(everyday[slots[0]?.type]||[]).filter(item=>item.kcal<=remaining.kcal*1.1&&suits({...item,title:item.name}));
+  if(slots.length&&storeAlternatives.length<2&&remaining.kcal>=180&&!['vegan'].includes(diet.eating)&&diet.carbsLimitG==null)storeAlternatives.push({name:L('Bílý jogurt + ovoce', 'Plain yogurt + fruit'),kcal:180,protein_g:10,carbs_g:25,fat_g:4,reason:L('menší běžná porce', 'a smaller everyday portion')});
 
   let coaching = "";
   if (heavilyOverCalories) coaching = L("Kaloricky jsi už výrazně nad dnešním cílem. Plnohodnotné jídlo teď nedoporučuji; pokud máš hlad nebo řešíš recovery po kole, drž se malé sacharidové svačiny.", "You're already well over today's calorie goal. I don't recommend a full meal now; if you're hungry or recovering after a ride, stick to a small carb snack.");

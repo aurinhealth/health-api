@@ -3,6 +3,7 @@
 // sport estimate for users whose training is not tracked by a connected source.
 import { bilingual } from "./lang.js";
 import { normalizeFocus } from "./athlete-focus.js";
+import { normalizeDiet } from "./diet.js";
 
 // Everyday movement outside sport. Sport itself comes from tracked activities
 // (Intervals.icu, Google Health) or, without them, from SPORT_HOURS.
@@ -117,6 +118,8 @@ export function normalizeProfile(p = {}) {
     waterGoal: inRange(p.waterGoal, 500, 6000),
     waterStart: inRange(p.waterStart, 500, 6000),
     waterFrom: /^\d{4}-\d{2}-\d{2}$/.test(String(p.waterFrom || "")) ? String(p.waterFrom) : "",
+    // Settings → Nutrition → Diet (diet.js).
+    ...normalizeDiet(p),
     ...normalizeFocus(p)
   };
 }

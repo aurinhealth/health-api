@@ -137,21 +137,24 @@ function foodFacts(d) {
   const facts = {
     kcalEaten: num(d.kcal), kcalTarget: num(d.target), trainingBonus: num(d.trainingBonus),
     protein: pair(m.protein), carbs: pair(m.carbs), fat: pair(m.fat), fiber: pair(m.fiber),
+    // What the athlete eats and how (keto, vegan…), and the protein a meal should bring.
+    diet: d.diet || null,
     meals,
     waterMl: num(d.water?.ml), waterTargetMl: num(d.water?.target),
     hour: num(d.hour), minimumKcal: num(d.minimumKcal),
     weight: d.goal && typeof d.goal === "object" ? Object.fromEntries(Object.entries(d.goal).map(([k, v]) => [k, num(v)]).filter(([, v]) => v != null)) : null,
     ruleBasedSentence: d.sentence || null
   };
-  const g = (label, x) => x.target != null && { label, value: Math.round(x.eaten || 0) + "/" + Math.round(x.target) + " g" };
+  const carbsLabel = m.carbs?.net ? L("Čisté sacharidy", "Net carbs") : L("Sacharidy", "Carbs");
+  const g = (label, x, limit) => x.target != null && { label, value: Math.round(x.eaten || 0) + "/" + (limit ? "max " : "") + Math.round(x.target) + " g" };
   const basis = [
     facts.kcalTarget != null && { label: L("Energie", "Energy"), value: Math.round(facts.kcalEaten || 0) + "/" + Math.round(facts.kcalTarget) + " kcal" },
-    g(L("Bílkoviny", "Protein"), facts.protein), g(L("Sacharidy", "Carbs"), facts.carbs), g(L("Tuky", "Fat"), facts.fat),
+    g(L("Bílkoviny", "Protein"), facts.protein), g(carbsLabel, facts.carbs, m.carbs?.limit), g(L("Tuky", "Fat"), facts.fat),
     facts.trainingBonus > 50 && { label: L("Tréninkový den", "Training day"), value: "+" + Math.round(facts.trainingBonus) + " kcal" },
     facts.waterTargetMl != null && { label: L("Pití", "Drinks"), value: Math.round(facts.waterMl || 0) + "/" + Math.round(facts.waterTargetMl) + " ml" }
   ].filter(Boolean);
   const chip = (label, x) => x.target != null && label + " " + Math.round(x.eaten || 0) + "/" + Math.round(x.target) + " g";
-  const chips = [chip(L("Bílkoviny", "Protein"), facts.protein), chip(L("Sacharidy", "Carbs"), facts.carbs)].filter(Boolean);
+  const chips = [chip(L("Bílkoviny", "Protein"), facts.protein), chip(carbsLabel, facts.carbs)].filter(Boolean);
   const logged = meals.reduce((s, x) => s + x.logged, 0);
   return {
     facts, basis, chips,

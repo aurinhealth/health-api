@@ -76,6 +76,24 @@ const AURIN = '<span class="lg au"><svg viewBox="6 10 88 80"><path d="M6 46A36 3
 // The iPhone status bar over every screen built here.
 const STATUS = '<div class="sb"><span>9:41</span><span class="sbi"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx=".7"/><rect x="5" y="5.5" width="3" height="6.5" rx=".7"/><rect x="10" y="3" width="3" height="9" rx=".7"/><rect x="15" y="0" width="3" height="12" rx=".7"/></svg><svg viewBox="0 0 24 12"><rect x=".5" y=".5" width="20" height="11" rx="3" fill="none" stroke="currentColor"/><rect x="2" y="2" width="16" height="8" rx="1.8"/><rect x="22" y="4" width="1.5" height="4" rx=".7"/></svg></span></div>';
 
+// Settings → Nutrition → Diet (SettingsDiet.swift) over Food's macros: the style splits the sample day's
+// 2650 kcal (src/diet.js dayMacros at 80 kg); keto shows the carbs as a limit.
+const diet = `<div class="dm pad">
+<div class="sl">You eat</div>
+<div class="seg dt-eat"><span>Everything</span><span>Pescatarian</span><span class="on">Vegetarian</span><span>Vegan</span></div>
+<div class="sl">Style</div>
+<div class="chips3">
+<div class="ch3 on"${at('2600-on 7400:on')}><b>Balanced</b><span class="mono">330 g carbs</span></div>
+<div class="ch3"${at('2600:on 5000-on')}><b>High protein</b><span class="mono">2.2 g/kg</span></div>
+<div class="ch3"${at('5000:on 7400-on')}><b>Keto</b><span class="mono">max 30 g</span></div>
+</div>
+<div class="mac3 dt"${at('2600:s2 5000-s2 5000:s3 7400-s3')}>
+<div><span class="mut s"><i style="background:var(--carbs)"></i>Carbs</span><span class="num md"><span data-tx="0|177;5000|18;7400|177">177</span><small data-tx="0| / 330 g;2600| / 361 g;5000| / max 30 g;7400| / 330 g"> / 330 g</small></span><i class="mb"><b class="dw" style="--a:54%;--b:49%;--c:60%;background:var(--carbs)"></b><u class="dt-lim"></u></i></div>
+<div><span class="mut s"><i style="background:var(--protein)"></i>Protein</span><span class="num md">84<small data-tx="0| / 150 g;2600| / 176 g;5000| / 150 g;7400| / 150 g"> / 150 g</small></span><i class="mb"><b class="dw" style="--a:56%;--b:48%;--c:56%;background:var(--protein)"></b></i></div>
+<div><span class="mut s"><i style="background:var(--fat)"></i>Fat</span><span class="num md">36<small data-tx="0| / 80 g;2600| / 56 g;5000| / 214 g;7400| / 80 g"> / 80 g</small></span><i class="mb"><b class="dw" style="--a:45%;--b:64%;--c:17%;background:var(--fat)"></b></i></div>
+</div>
+</div>`;
+
 // ---- Sleep (SleepPlanner.swift, HealthDetails.swift) ----
 // The night: stages in the app's indigo shades, the stages through the night one row each (Hypnogram), the
 // length counting up. NIGHT is the sample night's segments (DemoData.night): stage, start, end in minutes.
@@ -536,7 +554,7 @@ export const WATCH = [
 const actWatch = `<div class="dm wc aw-act"><div class="aw-w">${watchFace}</div></div>`;
 export const ACTS = each({readiness: actReadiness, training: actTraining, food: actFood, sleep: actSleep, coach: actCoach, watch: actWatch});
 
-export const DEMOS = each({sleepNight, sleepNeed, dial, tonight, readyParts, journal, strainMade, week, builder, gymParts, tmTable, tmTick, tmRest, tmDone, foodTarget, foodAdd, drinks, coachWeek, coachMemory, readyOne, tmOne, journalOne, tickOne, sleepOne, needOne, foodOne});
+export const DEMOS = each({sleepNight, sleepNeed, dial, tonight, readyParts, journal, strainMade, week, builder, gymParts, tmTable, tmTick, tmRest, tmDone, foodTarget, foodAdd, drinks, diet, coachWeek, coachMemory, readyOne, tmOne, journalOne, tickOne, sleepOne, needOne, foodOne});
 export const SCREENS = each({strain: strainScreen, done: doneScreen, coach: coachScreen, memory: memoryScreen});
 
 // The demos' look: the app's cards (radius 22), Instrument Serif for numbers, Newsreader for sentences.
@@ -758,6 +776,7 @@ html:not(.js) .stage1{display:none}
 .kbar b{display:block;height:100%;width:var(--w);background:var(--amber-bar);border-radius:9px;transition:width 1.1s cubic-bezier(.16,1,.3,1)!important}
 .js .kbar b{opacity:1!important;transform:none!important}.kbar b.t,html:not(.js) .kbar b{width:${(1380 / 2650 * 100).toFixed(1)}%}
 .mac{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.mac>div{display:flex;flex-direction:column;gap:3px}.mac .num.md{font-size:19px}.mac small{font-family:var(--num);font-size:12px;color:var(--muted)}
+.dt .dw{width:var(--a);transition:width .6s}.dt.s2 .dw{width:var(--b)}.dt.s3 .dw{width:var(--c)}.dt .mb{position:relative;overflow:visible}.dt-lim{position:absolute;right:0;top:-3px;width:2px;height:9px;border-radius:1px;background:var(--text);opacity:0;transition:opacity .4s}.dt.s3 .dt-lim{opacity:1}.dt-eat span{font-size:12px}
 .mb{display:block;height:3px;margin-top:4px;border-radius:3px;background:var(--track);overflow:hidden}.mb b{display:block;height:100%;width:var(--w)}
 .coach{margin-top:14px;padding:12px 14px;border-radius:16px;background:var(--bg)}.ch4{display:flex;align-items:center;gap:6px;color:var(--indigo);font-weight:500;font-size:13.5px}
 .coach .sent{margin-top:4px;font-size:17px;line-height:1.3;min-height:3.9em}
