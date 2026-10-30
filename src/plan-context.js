@@ -7,8 +7,9 @@ import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { getCapabilities } from "./workout-library.js";
 import { athleteThresholds } from "./intervals-athlete.js";
 import { latestStoredWeight } from "./athlete-weight.js";
-import { getWeekPlan, planWeekRoles, roleTime } from "./week-planner.js";
+import { getWeekPlan, planWeekRoles, roleTime, planRoleOptions } from "./week-planner.js";
 import { getAthleteState } from "./athlete-state.js";
+import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { reviewPlan, planWeek, planQuality, planLoad, applyPlan, activePlan, planSports } from "./training-plans.js";
 import { weekWeather, dayHours } from "./adaptive-week.js";
 import { weatherKitConfigured, weatherKitDetail } from "./weatherkit.js";
@@ -25,7 +26,9 @@ export const weightKg=row=>Number(row?.value_numeric)>30?Number(row.value_numeri
 // days and what load the week planner makes, and its sessions on the chips.
 export async function planForWeek(env,ctx,start){
   const today=localToday();
-  let plan=await syncedPlans(env,today).then(p=>p.active).catch(()=>null);
+  // The profile's main sport is read alongside, for a week without a plan.
+  const [synced,profileRoles]=await Promise.all([syncedPlans(env,today).then(p=>p.active).catch(()=>null),mainSportRoles(env)]);
+  let plan=synced;
   // Once a week: a past week's key sessions not done, the plan proposes what next (reviewPlan).
   const thisMonday=mondayOfDate(today);
   if(plan&&!plan.pauseFrom&&!(plan.reviewed>=thisMonday)){
@@ -34,12 +37,19 @@ export async function planForWeek(env,ctx,start){
     plan=(await reviewPlan(env.DB,plan,thisMonday,{keyDates,doneDates:await planSportDates(env,plan.sport,last,thisMonday).catch(()=>[])}).catch(()=>({plan}))).plan;
   }
   const pw=plan&&!plan.pauseFrom?planWeek(plan,start):null;
-  if(!pw)return {plan:null,pw:null,roles:{},load:null,apply:t=>t};
+  if(!pw)return {plan:null,pw:null,roles:profileRoles,load:null,apply:t=>t};
   // A triathlon plan: the capabilities of each of its sports.
   const tri=plan.sport==='triathlon',capabilitiesOf=()=>tri?Promise.all(planSports(plan.sport).map(s=>getCapabilities(env.DB,s).catch(()=>({})))).then(list=>Object.fromEntries(planSports(plan.sport).map((s,i)=>[s,list[i]]))):getCapabilities(env.DB,plan.sport).catch(()=>({}));
   const [thresholds,capabilities,weight]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),capabilitiesOf(),plan.sport==='ride'||tri?latestStoredWeight(env.DB).catch(()=>null):null]);
   const options={thresholdPace:thresholds.runThresholdPace,hasPower:Number(thresholds.ftp)>0,shifts:capabilities,ftp:Number(thresholds.ftp)||null,weight:weightKg(weight),swimCss:thresholds.swimCss||null};
-  return {plan,pw,roles:{quality:planQuality(pw),prefer:tri?'ride':plan.sport},load:planLoad(pw),apply:t=>applyPlan(t,plan,start,options)};
+  return {plan,pw,roles:planRoleOptions(plan,planQuality(pw)),load:planLoad(pw),apply:t=>applyPlan(t,plan,start,options)};
+}
+// Without a plan the main sport of the profile (chosen, or the automatic one)
+// leads the week; the other endurance sports support it (week-planner.js).
+async function mainSportRoles(env){
+  const profile=await loadEffectiveProfile(env.DB,env.USER_ID).catch(()=>null);
+  const mainSport={cycling:'ride',running:'run',swimming:'swim',strength:'gym'}[profile?.mainSport];
+  return mainSport?{mainSport}:{};
 }
 // The endurance and the gym plan with the athlete's status applied: sick,
 // injured or on a break pauses them, back to training moves them on
@@ -63,7 +73,7 @@ export async function planSportMinutes(env,sport,from,to){
 export async function planKeyDates(env,plan,monday){
   const pw=planWeek(plan,monday),prefs=pw?await getWeekPlan(env.DB,monday).catch(()=>null):null;
   if(!prefs?.days)return [];
-  const roles=planWeekRoles(prefs.days,{quality:planQuality(pw),prefer:plan.sport==='triathlon'?'ride':plan.sport,...roleTime(prefs)});
+  const roles=planWeekRoles(prefs.days,{...planRoleOptions(plan,planQuality(pw)),...roleTime(prefs)});
   return roles.map((d,i)=>d.items.some(x=>planSports(plan.sport).includes(x.sport)&&['quality','long'].includes(x.role))?shiftDate(monday,i):null).filter(Boolean);
 }
 
