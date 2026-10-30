@@ -18,7 +18,7 @@
 import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie, knownDevice, knownDeviceCookie, heldKnownDevice } from "./dashboard-auth.js";
 import { allowClient, allowRequest } from "./ip-rate-limit.js";
 import { normalizeEmail, emailCodeAccess, signInEmailUser, changeUserEmail } from "./tenancy.js";
-import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail } from "./email-sender.js";
+import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail, stepUpCodeEmail } from "./email-sender.js";
 import { siteLang } from "./site-pages.js";
 import { reviewCodeActive } from "./app-review.js";
 import { L } from "./lang.js";
@@ -195,7 +195,7 @@ async function useCode(db, env, email, input, purpose, known = null) {
     return locked ? json({ message: LOCKED_TODAY() }, 429) : json({ message: EXPIRED() }, 400);
   }
   // The fixed App Review code: tries add up over its whole life, whichever code was sent last.
-  const review = purpose === "email-code" ? await reviewTriesKey(db, env, email, time) : null;
+  const review = purpose === "email-code" || purpose.startsWith("step-up:") ? await reviewTriesKey(db, env, email, time) : null;
   if (review && !(await claimReviewTry(db, review, now))) return json({ message: REVIEW_LOCKED() }, 429);
   if (!timingSafeEqualString(row.code_hash, await codeHash(env, email, code, purpose))) {
     return json({ message: row.attempts >= MAX_ATTEMPTS ? EXPIRED() : L("Kód nesedí. Zkontroluj ho, nebo si nech poslat nový.", "That code is wrong. Check it or send a new one.") }, 400);
@@ -270,6 +270,25 @@ export async function handleEmailChange(request, env, url, session, ctx) {
   const device = known ? await knownDeviceCookie(db, env, user.id) : null;
   if (device) response.headers.append("Set-Cookie", device);
   return response;
+}
+
+// Confirming it's you before a sensitive change (step-up.js): a code to the account's own address.
+// It draws on the e-mail change budget and limits, so it never takes from the codes for signing in.
+// App Review's address gets the fixed review code here too: the reviewer can delete the account.
+export async function sendStepUpCode(request, env, user) {
+  const db = env.RAW_DB || env.DB, email = normalizeEmail(user.email), time = Date.now();
+  if (!(await allowRequest(db, "step-up:user:" + user.id, CHANGE_USER_LIMITS, time)) || !(await allowClient(db, request, sessionSecret(env), "step-up", time, CHANGE_CLIENT_LIMITS))) {
+    return json({ message: L("Příliš mnoho žádostí o kód. Zkus to později.", "Too many code requests. Try again later.") }, 429);
+  }
+  const code = await fixedReviewCode(db, env, email, time) || randomCode();
+  const sent = await claimAndSend(db, env, email, code, "step-up:" + user.id, stepUpCodeEmail(requestLanguage(request), code), time, { change: true });
+  if (!sent) return json({ message: L("Kód jsme poslali před chvílí. Další můžeš chtít za minutu.", "We sent a code a moment ago. You can ask for another in a minute.") }, 429);
+  return null;
+}
+
+// The refusal, or null when the code sent by sendStepUpCode was right (and is now used up).
+export function useStepUpCode(env, user, input) {
+  return useCode(env.RAW_DB || env.DB, env, normalizeEmail(user.email), input, "step-up:" + user.id);
 }
 
 // zone: the account's time zone when someone else (an admin) made the change.

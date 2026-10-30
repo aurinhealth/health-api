@@ -1,4 +1,3 @@
-import LocalAuthentication
 import SwiftUI
 import UserNotifications
 
@@ -12,6 +11,7 @@ struct PrivacySettingsView: View {
     @State private var exportURL: URL?
     @State private var exporting = false
     @State private var confirmDelete = false
+    @State private var stepUp: StepUpRequest?
     @State private var error: String?
 
     var body: some View {
@@ -62,28 +62,19 @@ struct PrivacySettingsView: View {
             ai = (try? await model.api.aiAllowed()) ?? false
             aiLoaded = true
         }
-        // One question with a red button, then Face ID or the phone's code (delete()).
+        // One question with a red button, then "Confirm it's you" when the server asks for it (delete()).
         .confirmationDialog("Smazat účet?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Smazat účet", role: .destructive) { Task { await delete() } }
             Button("Zrušit", role: .cancel) {}
         } message: {
             Text("Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit.")
         }
+        .stepUpSheet($stepUp)
     }
 
     private func fact(_ symbol: String, _ color: Color, _ title: String, _ text: String) -> some View {
         SettingsRow(icon: SettingsIcon(systemImage: symbol, color: color), title: title, subtitle: text, chevron: false)
             .accessibilityElement(children: .combine)
-    }
-
-    /// Face ID, Touch ID or the phone's code, so someone holding an unlocked
-    /// phone cannot delete the account in two taps. A phone with no code set
-    /// has nothing to ask; the question before is the confirmation then.
-    private static func ownerConfirms() async -> Bool {
-        let context = LAContext()
-        var unavailable: NSError?
-        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &unavailable) else { return true }
-        return (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: L10n.tr("Smazat účet Aurin"))) ?? false
     }
 
     /// The policy on aurin.health, in Czech while the app speaks Czech.
@@ -94,7 +85,14 @@ struct PrivacySettingsView: View {
     private func export() async {
         exporting = true
         defer { exporting = false }
-        do { exportURL = try await model.api.exportData() } catch { self.error = error.localizedDescription }
+        do {
+            exportURL = try await model.api.exportData()
+            error = nil
+        } catch APIError.stepUpRequired(_, let info) {
+            stepUp = StepUpRequest(info: info, reason: L10n.tr("Stažení všech dat potřebuje krátké ověření.")) { await export() }
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
     /// Only a change by the user is saved (not the value loaded from the server).
@@ -106,8 +104,10 @@ struct PrivacySettingsView: View {
         }
     }
 
+    /// The server asks to confirm it's you (a passkey or a code to the e-mail)
+    /// unless that happened a moment ago, so neither someone holding an unlocked
+    /// phone nor someone with a copied sign-in deletes the account in two taps.
     private func delete() async {
-        guard await Self.ownerConfirms() else { return }
         do {
             let passkey = await model.api.passkeyHandle()
             try await model.api.deleteAccount()
@@ -116,6 +116,8 @@ struct PrivacySettingsView: View {
             PasskeyService.remember(false)
             AvatarStore.remove()
             model.signOut()
+        } catch APIError.stepUpRequired(_, let info) {
+            stepUp = StepUpRequest(info: info, reason: L10n.tr("Smazání účtu potřebuje krátké ověření."), destructive: true) { await delete() }
         } catch {
             self.error = error.localizedDescription
         }

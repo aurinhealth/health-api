@@ -135,6 +135,35 @@ export async function handlePasskeyLogin(request, env, pathname) {
   return signedInResponse(user.id, env, { status: "ok", email: user.email });
 }
 
+// Confirming it's you with one of the account's own passkeys (step-up.js): the options for the
+// signed-in user, then the signed answer. True when it was the user's passkey and it verified.
+export async function stepUpPasskeyOptions(request, env, user) {
+  const db = env.RAW_DB || env.DB, { rpId } = relyingParty(request);
+  const rows = (await db.prepare("SELECT id, transports FROM user_passkeys WHERE user_id = ?").bind(user.id).all()).results || [];
+  if (!rows.length) return json({ message: L("Účet nemá žádný přístupový klíč.", "This account has no passkey.") }, 400);
+  const challenge = await issueChallenge(db, "step-up", { userId: user.id });
+  if (!challenge) return json({ message: L("Zkus to za pár minut.", "Try again in a few minutes.") }, 429);
+  return json({ challenge, rpId, timeout: CHALLENGE_SECONDS * 1000, userVerification: "required", allowCredentials: rows.map(row => ({ type: "public-key", id: row.id, transports: parseTransports(row.transports) })) });
+}
+
+export async function verifyStepUpPasskey(request, env, user, credential) {
+  const db = env.RAW_DB || env.DB, { origin, rpId } = relyingParty(request);
+  const issued = await takeChallenge(db, clientDataChallenge(credential), "step-up");
+  if (!issued || Number(issued.user_id) !== user.id || typeof credential?.id !== "string" || credential.id.length > 1400) return false;
+  // Only a passkey of this very account counts.
+  const stored = await db.prepare("SELECT id, user_handle, public_key, alg, sign_count FROM user_passkeys WHERE id = ? AND user_id = ?").bind(credential.id, user.id).first();
+  if (!stored || credential.response?.userHandle !== stored.user_handle) return false;
+  let result;
+  try { result = await verifyAuthentication(credential, { challenge: issued.challenge, origin, rpId, stored: { publicKey: JSON.parse(stored.public_key), alg: stored.alg, signCount: stored.sign_count } }); }
+  catch (error) {
+    if (!(error instanceof WebAuthnError)) throw error;
+    console.warn("Passkey step-up refused", error.message);
+    return false;
+  }
+  await db.prepare("UPDATE user_passkeys SET sign_count = MAX(sign_count, ?), backed_up = ?, last_used_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?").bind(result.signCount, result.backedUp ? 1 : 0, stored.id, user.id).run();
+  return true;
+}
+
 // Settings → Account. Needs the browser session (an API key cannot add passkeys).
 export async function handlePasskeyApi(request, env, url, session, ctx) {
   if (url.pathname !== "/app/api/passkeys" && url.pathname !== "/app/api/passkeys/options") return null;

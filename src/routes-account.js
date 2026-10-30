@@ -14,6 +14,7 @@ import { aiAllowance } from "./ai-usage.js";
 import { exportAccountStream, deleteAccount } from "./account-data.js";
 import { listPasskeys, handlePasskeyApi } from "./passkeys.js";
 import { handleEmailChange } from "./email-login.js";
+import { requireStepUp, handleStepUpApi } from "./step-up.js";
 import { emailConfigured } from "./email-sender.js";
 import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
@@ -53,6 +54,16 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     try{const result=await saveConsent(env,await request.json().catch(()=>({})));return Response.json(result,{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({message:error.message},{status:400});}
+  }
+  // Confirming it's you (step-up.js), which the four routes below need first.
+  if (url.pathname.startsWith("/app/api/account/step-up/")) return handleStepUpApi(request, env, url, session);
+  const sensitive = (url.pathname === "/app/api/passkeys/options" && request.method === "POST")
+    || (url.pathname === "/app/api/account/email/start" && request.method === "POST")
+    || (url.pathname === "/app/api/account/export" && request.method === "GET")
+    || (url.pathname === "/app/api/account/delete" && request.method === "POST");
+  if (sensitive) {
+    const refused = await requireStepUp(request, env, session);
+    if (refused) return refused;
   }
   if (url.pathname.startsWith("/app/api/passkeys")) {
     const passkeyApi = await handlePasskeyApi(request, env, url, session, ctx);

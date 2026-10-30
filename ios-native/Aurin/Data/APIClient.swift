@@ -15,6 +15,8 @@ enum APIError: LocalizedError, Equatable {
     case unknownPasskey(String)
     /// The account has no invite to Aurin (not_invited, src/apple-login.js, src/google-login.js).
     case notInvited(String)
+    /// A sensitive change needs "Confirm it's you" first (403 step_up_required, src/step-up.js).
+    case stepUpRequired(String, StepUpInfo)
 
     var errorDescription: String? {
         switch self {
@@ -26,6 +28,7 @@ enum APIError: LocalizedError, Equatable {
         case .coachAllowanceUsed(let text, _): return text
         case .unknownPasskey(let text): return text
         case .notInvited(let text): return text
+        case .stepUpRequired(let text, _): return text
         }
     }
 }
@@ -258,7 +261,7 @@ final class APIClient: @unchecked Sendable {
         return url
     }
 
-    /// Deletes the account and everything in it (confirmed in Soukromí a data with Face ID or the code).
+    /// Deletes the account and everything in it (after "Confirm it's you" in Soukromí a data, src/step-up.js).
     func deleteAccount() async throws {
         let _: JSONValue = try await send("/app/api/account/delete", method: "POST", body: ["confirm": JSONValue.string("SMAZAT")])
         signOut()
@@ -821,6 +824,11 @@ final class APIClient: @unchecked Sendable {
             if json?["status"] as? String == "coach_allowance_used" {
                 struct Used: Decodable { let coachAllowance: CoachAllowance? }
                 throw APIError.coachAllowanceUsed(message ?? L10n.tr("Zprávy koučovi na tento týden jsou vyčerpané."), (try? decoder.decode(Used.self, from: data))?.coachAllowance)
+            }
+            if json?["status"] as? String == "step_up_required" {
+                struct Required: Decodable { let stepUp: StepUpInfo }
+                let info = (try? decoder.decode(Required.self, from: data))?.stepUp ?? StepUpInfo(passkey: false, email: nil)
+                throw APIError.stepUpRequired(message ?? L10n.tr("Nejdřív potvrď, že jsi to ty."), info)
             }
             if http.statusCode == 402 {
                 onSubscriptionRequired?()
