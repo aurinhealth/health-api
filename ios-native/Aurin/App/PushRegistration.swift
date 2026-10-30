@@ -155,6 +155,9 @@ enum PushRegistration {
         UserDefaults.standard.object(forKey: coachKey) as? Bool ?? true
     }
 
+    /// Oznámení → Pití also stops the server's water push (Build-up, src/water-goal.js).
+    static var waterOn: Bool { Reminders.isOn(Reminders.waterKey) }
+
     /// The APNs service the token belongs to. project.yml signs every build
     /// with aps-environment production (TestFlight, App Store); a build signed
     /// for development would send "development" here.
@@ -166,7 +169,7 @@ enum PushRegistration {
         guard api.hasSession else { return }
         await sendChoices(api: api)
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-        if (morningOn || coachOn) && (status == .authorized || status == .provisional) {
+        if (morningOn || coachOn || waterOn) && (status == .authorized || status == .provisional) {
             UIApplication.shared.registerForRemoteNotifications()
         } else {
             await unregister(api: api)
@@ -176,7 +179,7 @@ enum PushRegistration {
     /// iOS gave the token (AppDelegate): sent to the server when it is new.
     static func received(_ deviceToken: Data, api: APIClient) async {
         let token = deviceToken.map { String(format: "%02x", $0) }.joined()
-        guard morningOn || coachOn, api.hasSession, !token.isEmpty,
+        guard morningOn || coachOn || waterOn, api.hasSession, !token.isEmpty,
               UserDefaults.standard.string(forKey: sentKey) != token else { return }
         do {
             try await api.registerPushToken(token, environment: environment)
@@ -214,10 +217,10 @@ enum PushRegistration {
 
     /// The server sends only the pushes whose switch is on; told when a switch changed.
     private static func sendChoices(api: APIClient) async {
-        let choices = "\(morningOn),\(coachOn)"
+        let choices = "\(morningOn),\(coachOn),\(waterOn)"
         guard UserDefaults.standard.string(forKey: sentChoicesKey) != choices else { return }
         do {
-            try await api.setPushChoices(morning: morningOn, coach: coachOn)
+            try await api.setPushChoices(morning: morningOn, coach: coachOn, water: waterOn)
             UserDefaults.standard.set(choices, forKey: sentChoicesKey)
         } catch {
             // Told on the next refresh.

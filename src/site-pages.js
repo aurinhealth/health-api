@@ -820,7 +820,7 @@ export function overviewPage(request) {
     ['vyziva', '', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
       ['food-day', 'foodOne', 220, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.', 7500],
       ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000],
-      ['food-day', 'drinks', 330, 'Drink to your goal.', 'Tap a drink, or the whale itself for your usual glass. At today’s goal it blows its spout. Rather a bottle, a flower or an octopus? Pick one in Settings.', 9500]]],
+      ['food-day', 'drinks', 330, 'Drink to your goal.', 'Tap a drink, or the whale itself for your usual glass. At today’s goal it blows its spout. Keep Aurin’s goal, set your own, or build up to it day by day. Rather a bottle, a flower or an octopus? Pick one in Settings.', 9500]]],
     ['spanek', '', 'Every night, in detail.', 'From any watch or ring you wear.', 'indigo', 'glow-health', [
       ['sleep', 'sleepOne', 330, 'See how you slept.', 'Deep, REM and light sleep, when you fell asleep and when you woke up.'],
       ['sleep-need', 'needOne', 220, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],

@@ -32,9 +32,9 @@ extension APIClient {
     }
 
     /// Settings → Oznámení: which of the server's pushes the phone wants
-    /// (the morning readiness, the coach's own messages).
-    func setPushChoices(morning: Bool, coach: Bool) async throws {
-        let _: JSONValue = try await send("/app/api/athlete-state", method: "POST", body: ["notify": JSONValue.object(["morning": .bool(morning), "coach": .bool(coach)])])
+    /// (the morning readiness, the coach's own messages, the water Build-up nudge).
+    func setPushChoices(morning: Bool, coach: Bool, water: Bool) async throws {
+        let _: JSONValue = try await send("/app/api/athlete-state", method: "POST", body: ["notify": JSONValue.object(["morning": .bool(morning), "coach": .bool(coach), "water": .bool(water)])])
     }
 }
 
