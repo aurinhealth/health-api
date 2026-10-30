@@ -146,6 +146,8 @@ struct WeekPlanView: View {
     @State private var error: String?
     /// "Přesně": the session whose exact time is being picked.
     @State private var exactFor: UUID?
+    /// The sessions "Upravit sám" set aside: their times come back on the rebuilt week.
+    @State private var timesBefore: [WeekSessionDraft] = []
     @State private var exactTime = Date()
     /// "Kontrola týdne" of the built week (WeekCheck.swift); `checkApplied`
     /// once "Upravit" changed the sessions.
@@ -424,6 +426,8 @@ struct WeekPlanView: View {
                 }
                 return Self.recalculated(next, from: previous)
             }
+            sessions = Self.keepingTimes(sessions, from: previous ?? timesBefore)
+            timesBefore = []
             if sessions.isEmpty { error = L10n.tr("Na zvolené dny nezbývá dost času na trénink. Přidej čas nahoře.") }
             await buildAll()
             await runCheck()
@@ -495,6 +499,7 @@ struct WeekPlanView: View {
                 }
                 return removed == nil ? next : Self.recalculated(next, from: previous)
             }
+            sessions = Self.keepingTimes(sessions, from: previous)
             if sessions.isEmpty { error = L10n.tr("Na tento týden nevyšel žádný trénink.") }
             if correction != nil && removed == nil { self.correction = "" }
             await buildAll()
@@ -635,7 +640,7 @@ struct WeekPlanView: View {
                     }
                 }
                 Spacer(minLength: 4)
-                if timeable(s) { Color.clear.frame(width: 84, height: 1) }
+                if timeable(s) { chipLabel(s).hidden().accessibilityHidden(true) }
                 Group {
                 switch s.status {
                 case .waiting, .building: ProgressView()
@@ -664,15 +669,23 @@ struct WeekPlanView: View {
         return String(format: "%02d:%02d", end / 60, end % 60)
     }
 
-    private func timeChip(_ s: WeekSessionDraft) -> some View {
+    /// The chip's face; the row keeps a hidden copy of it, so the space it
+    /// leaves grows with the text size.
+    private func chipLabel(_ s: WeekSessionDraft) -> some View {
         let shown = s.brick ? brickTime(s) : s.time
-        let label = HStack(spacing: 4) {
+        return HStack(spacing: 4) {
             Image(systemName: "clock").scaledFont(11, weight: .medium, cap: .denseCap)
             Text(verbatim: shown.map { ClockText.format($0) } ?? L10n.tr("Kdykoli")).font(Typo.caption.weight(.medium))
         }
+        .lineLimit(1)
+        .fixedSize()
         .foregroundStyle(s.brick ? Palette.amber : Palette.ink)
-        .padding(.horizontal, 10).frame(height: 28)
+        .padding(.horizontal, 10).frame(minHeight: 28)
         .background(Palette.track, in: Capsule())
+    }
+
+    private func timeChip(_ s: WeekSessionDraft) -> some View {
+        let label = chipLabel(s)
         return Group {
             if s.brick {
                 // Follows the ride; "Hned po sobě, nebo zvlášť" in Trénink changes it.
@@ -781,6 +794,19 @@ struct WeekPlanView: View {
         return next
     }
 
+    /// A recalculated week keeps the times the athlete gave: a new session takes
+    /// the time of the one it replaced (same day and sport), each time once.
+    private static func keepingTimes(_ list: [WeekSessionDraft], from previous: [WeekSessionDraft]) -> [WeekSessionDraft] {
+        var left = previous.filter { $0.time != nil }
+        left.removeAll { old in list.contains { $0.id == old.id } }
+        return list.map { s in
+            guard s.time == nil, !s.brick, let k = left.firstIndex(where: { $0.date == s.date && $0.sport == s.sport }) else { return s }
+            var s = s
+            s.time = left.remove(at: k).time
+            return s
+        }
+    }
+
     /// One at a time: the server builds each session from the whole week.
     private func buildAll() async {
         for i in sessions.indices where !sessions[i].built {
@@ -838,6 +864,7 @@ struct WeekPlanView: View {
             if next[w].count < WeekPlanPrefs.maxPerDay { next[w].append(s.sport) }
         }
         days = next
+        timesBefore = sessions.filter { $0.status != .saved }
         sessions = []
         summary = nil
         check = nil
