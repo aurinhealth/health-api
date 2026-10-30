@@ -107,5 +107,31 @@ test("the plan routes take the time, the days and the gym sessions a week", asyn
   for (const action of ["freeTime", "weekTime", "days", "perWeek"]) assert.ok(source.includes(`body.action==='${action}'`), action);
   assert.ok(source.includes("searchParams.get('perWeek')") && source.includes("searchParams.get('count')"));
   const gateway = readFileSync(new URL("../src/strength-gateway.js", import.meta.url), "utf8");
-  assert.ok(gateway.includes("trainingBudget(prefs, context.date, 90)"), "a plan day up to 90 minutes");
+  assert.ok(gateway.includes("trainingBudget(prefs, context.date)") && gateway.includes("Math.min(90, free)"), "a plan day up to 90 minutes, the usual length without a set time");
+});
+
+test("review fixes: the plan's sport keeps its key days, two weekdays get no long day for equal time", () => {
+  // A ride plan: quality stays on ride days even when the run day has more time.
+  const days = [[], ["ride"], ["run"], ["ride"], [], ["ride"], []];
+  const roles = planWeekRoles(days, { quality: 2, prefer: "ride", minutes: [0, 45, 90, 45, 0, 180, 0] });
+  const q = roles.flatMap(d => d.items.filter(x => x.role === "quality").map(x => x.sport));
+  assert.ok(q.length >= 1 && q.every(s => s === "ride"), "quality only on rides: " + q);
+  // Two weekdays with the same time: one quality, one easy, no long.
+  const two = planWeekRoles([[], ["ride"], [], ["ride"], [], [], []], { minutes: [0, 60, 0, 60, 0, 0, 0] });
+  assert.ok(!two.some(d => d.items.some(x => x.role === "long")));
+  assert.ok(planWeekRoles([[], ["ride"], [], ["ride"], [], [], []], { minutes: [0, 60, 0, 150, 0, 0, 0] })[3].items[0].role === "long", "clearly longer: long");
+});
+
+test("review fixes: a lighter gym phase stays lighter, the home plan stays bodyweight, a day with no time counts", () => {
+  const muscle = getTemplate("gym-muscle");
+  const recovery = muscle.weeks.findIndex(w => w.phase === "recovery"), start = monday;
+  const date = day(start, recovery * 7);
+  const days = [["gym"], [], ["gym"], [], ["gym"], [], []];
+  const phase = gymPhaseFor({ templateId: "gym-muscle", startDate: start, perWeek: 3 }, date, days);
+  assert.equal(phase.sets, muscle.weeks[recovery].gym.sets, "recovery sets unchanged");
+  const pull = gymPartSlots([["Bodyweight squat"], ["Push-up"]], "pull", "bodyweight").flat();
+  assert.ok(pull.length && !pull.some(n => /cable|DB|machine|Low row/i.test(n)), "no equipment: " + pull);
+  const gym = planPreview(getTemplate("gym-muscle"), { days: [0, 2, 4], startDate: start, availability: time([0, 60, 60, 60, 60, 60, 60]) });
+  assert.equal(gym.gym.days[0].minutes, 0);
+  assert.equal(gym.gym.short, true);
 });

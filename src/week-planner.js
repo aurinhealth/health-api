@@ -129,6 +129,11 @@ export async function saveWeekPlan(db, input, date = null) {
     await db.prepare('INSERT INTO week_plan_overrides(user_id,week_start,prefs_json) VALUES(?,?,?) ON CONFLICT(user_id,week_start) DO UPDATE SET prefs_json=excluded.prefs_json').bind(db.userId, weekStartOf(date), JSON.stringify(own)).run();
     return { ...prefs, source: 'week' };
   }
+  // The usual week read on a week B carries B's time: saved as the usual week, it stays B's.
+  if (input?.weekB === true && prefs.alternate) {
+    const stored = await getWeekPlan(db);
+    Object.assign(prefs, { availabilityB: prefs.availability, availability: stored.availability });
+  }
   await db.prepare("INSERT INTO week_plan_preferences(user_id,prefs_json,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET prefs_json=excluded.prefs_json,updated_at=CURRENT_TIMESTAMP").bind(db.userId, JSON.stringify(prefs)).run();
   return prefs;
 }
@@ -183,15 +188,18 @@ export function planWeekRoles(days = [], { readiness = "green", quality = null, 
   // A clearly longer weekday (30 minutes more than the weekend's day) takes the long session.
   if (timed && endurance.length >= 2) {
     const longest = endurance.filter(i => !avoided(i)).sort((a, b) => free(b) - free(a) || Number(b >= 5) - Number(a >= 5) || b - a)[0];
-    if (longest != null && (long == null || free(longest) >= free(long) + 30)) long = longest;
+    // With no weekend day, a weekday is the long day only when it is clearly the longest.
+    const next = long ?? endurance.filter(i => i !== longest).sort((a, b) => free(b) - free(a))[0];
+    if (longest != null && (long == null ? endurance.length >= 3 || free(longest) >= free(next) + 30 : free(longest) >= free(long) + 30)) long = longest;
   }
   if (long != null && endurance.length >= 2) role[long] = "long";
   const usual = endurance.length >= 4 ? 2 : endurance.length >= 2 ? 1 : 0;
   const planned = Number.isInteger(quality) ? Math.min(quality, Math.max(0, endurance.length - (long != null && endurance.length >= 2 ? 1 : 0))) : usual;
   const wanted = readiness === "red" ? 0 : readiness === "yellow" ? Math.min(1, planned) : planned;
-  const preferred = prefer ? [...endurance.filter(i => (days[i] || []).find(s => s !== "gym") === prefer), ...endurance.filter(i => (days[i] || []).find(s => s !== "gym") !== prefer)] : endurance;
-  // Short days (under an hour) take quality only when no other day can.
-  const picks = timed ? [...preferred.filter(i => free(i) >= 60), ...preferred.filter(i => free(i) < 60)] : preferred;
+  // Short days (under an hour) take quality only when no other day of the same group can;
+  // the plan's own sport still comes first.
+  const byTime = list => timed ? [...list.filter(i => free(i) >= 60), ...list.filter(i => free(i) < 60)] : list;
+  const picks = prefer ? [...byTime(endurance.filter(i => main(i) === prefer)), ...byTime(endurance.filter(i => main(i) !== prefer))] : byTime(endurance);
   const qualityDays = [];
   for (const gap of [2, 1]) {
     for (const i of picks) {

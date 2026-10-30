@@ -1612,7 +1612,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // The recovery model's readiness of the reviewed day, or today's for a day ahead (the inputs are already loaded and cached).
       const readinessDate=date<localToday()?date:localToday();
       const readiness=dayReadiness({date:readinessDate,fitness:inputs.fitness,health:inputs.health,profile:inputs.profile,checkin:readinessDate===date?inputs.checkin:await readinessCheckin(env.DB,readinessDate).catch(()=>null)});
-      const input=buildReviewInput({date,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,gymRows,roles:prefs?planWeekRoles(prefs.days):[],feedback,coachNotes:notes.map(r=>({date:r.date,text:r.text})),readiness});
+      const input=buildReviewInput({date,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,gymRows,roles:prefs?planWeekRoles(prefs.days,{minutes:freeMinutes(prefs)}):[],feedback,coachNotes:notes.map(r=>({date:r.date,text:r.text})),readiness});
       const state=await getAthleteState(env.DB);Object.assign(input,{athleteState:state.status,statusNote:state.note,preferenceMemory:state.memories,availability:availabilityOn(prefs,date),...(inputs.cycle?{cycle:inputs.cycle}:{}),...(inputs.upcomingTest?{upcomingTest:inputs.upcomingTest}:{})});
       const reviews=[await reviewDay(env,input,null,inputs.focus).catch(error=>({model:lightModel(env),error:error.message}))];
       return Response.json({status:'ok',date,reviews},{headers:{'Cache-Control':'no-store'}});
@@ -1872,20 +1872,21 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try{
       const today=localToday(),raceDate=url.searchParams.get('raceDate'),startDate=url.searchParams.get('startDate');
       // ?active=1: the running plan's weeks (its start, its days).
-      const running=url.searchParams.get('active')==='1'?(await syncedPlans(env,today)).active:null;
+      const plans=await syncedPlans(env,today).catch(()=>({})),running=url.searchParams.get('active')==='1'?plans.active:null;
       const template=getTemplate(running?running.templateId:String(url.searchParams.get('templateId')||''));
       if(!template)throw new Error(L('Neznámý plán.', 'Unknown plan.'));
       const when=running?{startDate:running.startDate,firstDay:running.firstDay||null,firstWeek:1,raceDate:running.raceDate}:planStart(template,{today,raceDate:template.race&&raceDate?raceDate:null,startDate:!template.race&&startDate?startDate:null});
       const prefs=await getWeekPlan(env.DB),chosen=chosenDays(url.searchParams.get('days')?.split(','));
       // ?count=: rides or runs a week; ?perWeek=: gym sessions a week (2–7).
-      const gymPlan=template.sport==='gym'?(running||(await syncedPlans(env,today)).gym):null;
-      const perWeek=template.sport==='gym'?(Number(url.searchParams.get('perWeek'))||gymPlan?.perWeek||null):null;
+      // Only the same plan, already running, brings its own number of sessions.
+      const gymPlan=template.sport==='gym'?(running||plans.gym):null;
+      const perWeek=template.sport==='gym'?(Number(url.searchParams.get('perWeek'))||(gymPlan?.templateId===template.id?gymPlan.perWeek:null)||null):null;
       const own=template.sport!=='triathlon'&&chosen,need=own?{days:null,added:[]}:planDays(template,prefs,template.sport==='triathlon'?null:perWeek||Number(url.searchParams.get('count'))||null);
       const days=own||sportDays(need.days,template.sport);
       const preview=planPreview(template,{ctl:await currentCtl(env,ctx),days,firstDay:when.firstDay,startDate:when.startDate,...planTimeOf(prefs),perWeek});
       // Days the plan adds to the usual week (shown dashed) and the other plan
       // that shares the free time (a gym plan next to a ride or run plan).
-      const plans=await syncedPlans(env,today).catch(()=>({})),other=template.sport==='gym'?plans.active:plans.gym;
+      const other=template.sport==='gym'?plans.active:plans.gym;
       const otherTemplate=other&&getTemplate(other.templateId);
       preview.added=need.added||[];
       if(otherTemplate&&other.templateId!==template.id)preview.other={name:otherTemplate.name,sport:otherTemplate.sport,days:sportDays(prefs.days,otherTemplate.sport)};
