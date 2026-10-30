@@ -5,7 +5,7 @@ import UserNotifications
 /// The morning readiness push (src/push.js readinessMessage) comes with
 /// mutable-content and `readiness: {score, zone}`: before iOS shows it, this
 /// extension draws the readiness ring with its score, coloured by the zone
-/// like Today's dial, and attaches it, so the notification shows it on the
+/// like Today's dial, on the welcome screen's sunrise, and attaches it, so the notification shows it on the
 /// right (and large when opened). Any other push, or a failed drawing, passes
 /// through unchanged.
 final class NotificationService: UNNotificationServiceExtension {
@@ -53,8 +53,16 @@ enum ReadinessRing {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { context in
-            UIColor(red: 0x0F / 255, green: 0x14 / 255, blue: 0x19 / 255, alpha: 1).setFill()
+            // The welcome screen's sunrise: a warm glow rising from the bottom
+            // of the night (AurinMorning/MorningViewController.swift Sunrise).
+            UIColor(red: 0x0A / 255, green: 0x0B / 255, blue: 0x0C / 255, alpha: 1).setFill()
             context.fill(CGRect(x: 0, y: 0, width: side, height: side))
+            let glow = [(0xE0, 0x9A, 0x55), (0x8A, 0x4A, 0x20), (0x24, 0x17, 0x0E), (0x0A, 0x0B, 0x0C)]
+                .map { UIColor(red: CGFloat($0.0) / 255, green: CGFloat($0.1) / 255, blue: CGFloat($0.2) / 255, alpha: 1).cgColor }
+            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: glow as CFArray, locations: [0, 0.3, 0.62, 1]) {
+                context.cgContext.drawRadialGradient(gradient, startCenter: CGPoint(x: side / 2, y: side * 1.15), startRadius: 0,
+                                                     endCenter: CGPoint(x: side / 2, y: side * 1.15), endRadius: side * 1.1, options: [])
+            }
             let center = CGPoint(x: side / 2, y: side / 2), radius: CGFloat = 112, width: CGFloat = 22
             let track = UIBezierPath(arcCenter: center, radius: radius, startAngle: 0, endAngle: .pi * 2, clockwise: true)
             track.lineWidth = width

@@ -264,8 +264,9 @@ export async function sendMorningReadiness(env, { readiness, details = null, now
     const message = text ? null : readinessMessage(full);
     const alert = text || message.alert;
     // It also wakes the app, which loads Today for the widgets, so they show
-    // the morning before the app is opened (ios-native AppDelegate).
-    const extra = message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone } }, mutable: true, wake: true } : {};
+    // the morning before the app is opened (ios-native AppDelegate). Its
+    // category lets the app show the morning in full when it is held down.
+    const extra = message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone } }, mutable: true, wake: true, category: "MORNING_READINESS" } : {};
     let sent = 0, removed = 0;
     for (const device of devices) {
       const result = await sendPush(env, device, alert, { fetchImpl, now: now.getTime(), ...extra }).catch(error => ({ ok: false, error: error.message }));
