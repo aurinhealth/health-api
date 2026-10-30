@@ -62,6 +62,12 @@ struct PrivacySettingsView: View {
             ai = (try? await model.api.aiAllowed()) ?? false
             aiLoaded = true
         }
+        // Shared or not, the export does not stay on the phone after the page.
+        .onDisappear {
+            guard exportURL != nil else { return }
+            exportURL = nil
+            APIClient.removeExports()
+        }
         // One question with a red button, then Face ID or the phone's code (delete()).
         .confirmationDialog("Smazat účet?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Smazat účet", role: .destructive) { Task { await delete() } }
