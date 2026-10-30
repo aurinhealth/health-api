@@ -79,7 +79,7 @@ struct TrainingPage: View {
     }
 
     @ViewBuilder private func content(_ day: String) -> some View {
-        let planned = sessions.filter { $0.date == day && !$0.done }
+        let planned = Self.joined(sessions.filter { $0.date == day && !$0.done })
         let done = sessions.filter { $0.date == day && $0.done }
         let gym = day == today ? store.gym : preview
         let gymPlanned = gym.map { !$0.exercises.isEmpty } ?? false
@@ -91,9 +91,11 @@ struct TrainingPage: View {
                 if index == pick {
                     pickedCard(session, day: day, gym: gym)
                 } else {
+                    // A brick's second leg stays right under the first (mockup plavani-triatlon 6).
+                    let follows = index > 0 && session.after != nil && session.after == planned[index - 1].eventId
                     Button { chosen[day] = index } label: { foldedCard(session) }
                         .buttonStyle(.plain)
-                        .padding(.top, 6)
+                        .padding(.top, follows ? 2 : 6)
                 }
             }
         } else if let main = planned.first, main.sport != "strength", main.eventId != nil {
@@ -179,7 +181,12 @@ struct TrainingPage: View {
     private func foldedCard(_ s: WatchSnapshot.Session) -> some View {
         HStack(spacing: 6) {
             Image(systemName: W.sportSymbol(s.sport)).font(.system(size: 13)).foregroundStyle(W.amber)
-            Text(Self.name(s)).font(.system(size: 13, weight: .semibold)).foregroundStyle(W.ink).lineLimit(1)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(Self.name(s)).font(.system(size: 13, weight: .semibold)).foregroundStyle(W.ink).lineLimit(1)
+                if let after = afterText(s) {
+                    Text(after).font(.system(size: 10, weight: .semibold)).foregroundStyle(W.amber).lineLimit(1)
+                }
+            }
             Spacer(minLength: 4)
             if let minutes = s.minutes { Text("\(minutes) min").font(.system(size: 11)).foregroundStyle(W.muted) }
         }
@@ -215,6 +222,17 @@ struct TrainingPage: View {
                     .lineLimit(2).minimumScaleFactor(0.75)
             }
             .padding(.top, 3)
+            if let leg = nextLeg(s) {
+                HStack(spacing: 4) {
+                    Image(systemName: W.sportSymbol(s.sport))
+                    Image(systemName: "arrow.right").font(.system(size: 9, weight: .bold)).foregroundStyle(W.muted)
+                    Image(systemName: W.sportSymbol(leg.sport))
+                    Text(W.tr("hned po sobě", "back to back")).font(.system(size: 10, weight: .semibold)).foregroundStyle(W.muted)
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(W.amber)
+                .padding(.top, 3)
+            }
             Group {
                 if let plan {
                     PlanBars(plan: plan)
@@ -224,9 +242,9 @@ struct TrainingPage: View {
             }
             .frame(height: 26)
             .padding(.top, 7)
-            if s.date == today, let plan, WorkoutOpener.workout(plan, sport: s.sport, name: Self.name(s)) != nil {
+            if s.date == today, let workout = startable(s, plan: plan) {
                 Button {
-                    Task { await WorkoutOpener.open(plan, sport: s.sport, name: Self.name(s)) }
+                    Task { try? await workout.openInWorkoutApp() }
                 } label: {
                     Label(W.tr("Otevřít ve Cvičení", "Open in Workout"), systemImage: "play.fill")
                         .font(.system(size: 14, weight: .semibold)).foregroundStyle(.black)
@@ -241,13 +259,58 @@ struct TrainingPage: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
         .overlay { if picked { RoundedRectangle(cornerRadius: 14).stroke(W.amber, lineWidth: 1.5) } }
-        .onAppear { plans.load(s) }
+        .onAppear {
+            plans.load(s)
+            if let leg = nextLeg(s) { plans.load(leg) }
+        }
+    }
+
+    /// What Open in Workout starts: a brick of steady legs as one multisport
+    /// workout (as the iPhone sends it, WatchWorkout.multisport), else the leg itself.
+    private func startable(_ s: WatchSnapshot.Session, plan: WatchPlan?) -> WorkoutPlan? {
+        guard let plan else { return nil }
+        if let leg = nextLeg(s), let legPlan = leg.eventId.flatMap({ plans.plans[$0] }), plan.steady, legPlan.steady,
+           let multi = WorkoutOpener.multisport([(s.sport, plan), (leg.sport, legPlan)], name: Self.name(s) + " + " + Self.name(leg).lowercased()) {
+            return multi
+        }
+        return WorkoutOpener.workout(plan, sport: s.sport, name: Self.name(s))
+    }
+
+    /// The not yet done leg that follows this one right after (a brick).
+    private func nextLeg(_ s: WatchSnapshot.Session) -> WatchSnapshot.Session? {
+        guard let next = s.next else { return nil }
+        return sessions.first { $0.eventId == next && !$0.done }
+    }
+
+    /// "Hned po kole" / "Right after the ride": a brick's second leg.
+    private func afterText(_ s: WatchSnapshot.Session) -> String? {
+        guard let after = s.after, let leg = sessions.first(where: { $0.eventId == after }) else { return nil }
+        switch leg.sport {
+        case "ride": return W.tr("Hned po kole", "Right after the ride")
+        case "run": return W.tr("Hned po běhu", "Right after the run")
+        case "swim": return W.tr("Hned po plavání", "Right after the swim")
+        default: return nil
+        }
+    }
+
+    /// A brick's second leg right after its first, the rest in the server's order.
+    static func joined(_ list: [WatchSnapshot.Session]) -> [WatchSnapshot.Session] {
+        var rest = list
+        var out: [WatchSnapshot.Session] = []
+        while !rest.isEmpty {
+            let s = rest.removeFirst()
+            out.append(s)
+            if let next = s.next, let i = rest.firstIndex(where: { $0.eventId == next }) { out.append(rest.remove(at: i)) }
+        }
+        return out
     }
 
     /// "dnes · 17:30", "sobota · 9:00"; the length too unless the card shows it apart.
     private func subtitle(_ s: WatchSnapshot.Session, day: String, length: Bool = true) -> String {
         let name = day == today ? W.tr("Dnes", "Today") : day == tomorrow ? W.tr("Zítra", "Tomorrow") : W.dayName(day).capitalized
-        return name + (s.time.map { " · " + W.clockText($0) } ?? "") + (length ? s.minutes.map { " · \($0) min" } ?? "" : "")
+        // A brick's second leg starts when the first ends, not at a time of its own.
+        let when = afterText(s).map { " · " + $0.lowercased() } ?? s.time.map { " · " + W.clockText($0) } ?? ""
+        return name + when + (length ? s.minutes.map { " · \($0) min" } ?? "" : "")
     }
 
     static func name(_ s: WatchSnapshot.Session) -> String { s.name }
@@ -355,6 +418,21 @@ enum WorkoutOpener {
         guard !blocks.isEmpty else { return nil }
         let custom = CustomWorkout(activity: activity, location: location, displayName: name, blocks: blocks)
         return WorkoutPlan(.custom(custom))
+    }
+
+    /// A brick as one multisport workout: the Workout app times each leg and
+    /// the change; it carries no steps, so only steady legs go this way.
+    static func multisport(_ legs: [(sport: String, plan: WatchPlan)], name: String) -> WorkoutPlan? {
+        let activities: [SwimBikeRunWorkout.Activity] = legs.compactMap { leg in
+            switch leg.sport {
+            case "swim": return .swimming(leg.plan.openWater == true ? .openWater : .pool)
+            case "run": return .running(.outdoor)
+            case "ride": return .cycling(.outdoor)
+            default: return nil
+            }
+        }
+        guard activities.count == legs.count, activities.count >= 2, SwimBikeRunWorkout.supportsActivityOrdering(activities) else { return nil }
+        return WorkoutPlan(.swimBikeRun(SwimBikeRunWorkout(activities: activities, displayName: String(name.prefix(60)))))
     }
 
     static func open(_ plan: WatchPlan, sport: String, name: String) async {

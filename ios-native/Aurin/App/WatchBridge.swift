@@ -226,7 +226,7 @@ final class WatchBridge: NSObject {
                                           planned: today.strain.planned, nextTitle: next?.title, nextTime: next?.time)
         let week = training?.sessions?.filter { $0.status != "missed" }.map {
             WatchSnapshot.Session(date: $0.date, time: $0.time, title: $0.title, sport: $0.sport, minutes: $0.minutes, done: $0.status == "done",
-                                  eventId: $0.eventId)
+                                  eventId: $0.eventId, after: $0.after, next: $0.next)
         }
         let n = today.nutrition
         let macro = { (m: TodaySnapshot.Macro) in WatchSnapshot.Macro(eaten: m.eaten, target: m.target, limit: m.limit, net: m.net) }

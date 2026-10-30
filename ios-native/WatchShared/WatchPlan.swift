@@ -33,6 +33,10 @@ struct WatchPlan: Codable, Equatable, Sendable {
         var date: String
     }
 
+    /// No repeats and no hard steps (zone 4 and up): a leg a multisport workout
+    /// loses nothing of (WatchWorkout.steady on the iPhone).
+    var steady: Bool { !steps.contains { $0.repeats > 1 || $0.zone >= 4 } }
+
     /// Steps in the order they are ridden, the repeats unrolled.
     var ridden: [Step] {
         var out: [Step] = []
