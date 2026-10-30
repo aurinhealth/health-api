@@ -158,3 +158,12 @@ test("from next week: this week keeps its long day", async () => {
   assert.deepEqual(weekOverride(week, usual), { longDay: null });
   assert.equal(sanitizeWeekPlan({ ...usual, ...weekOverride(week, usual) }).longDay, null);
 });
+
+test("a Monday long day: the Sunday before it gets no key session", async () => {
+  const { roleTime } = await import("../src/week-planner.js");
+  const days = [["run"], [], ["run"], [], ["run"], [], ["run"]];
+  const roles = planWeekRoles(days, { quality: 2, ...roleTime({ availability: time([150, 0, 45, 0, 45, 0, 90]), longDay: 0 }) });
+  assert.equal(roles[0].items[0].role, "long");
+  assert.notEqual(roles[6].items[0].role, "quality", "Sunday is the day before next Monday's long run");
+  assert.ok(roles.some(d => d.items.some(x => x.role === "quality")), "quality still somewhere");
+});

@@ -196,6 +196,8 @@ export function planWeekRoles(days = [], { readiness = "green", quality = null, 
     if (longest != null && (long == null ? endurance.length >= 3 || free(longest) >= free(next) + 30 : free(longest) >= free(long) + 30)) long = longest;
   }
   // The athlete's own long day ("Long ride", "Long run") wins when it is a ride or run day.
+  // The day before it gets no key session; for a Monday that is this week's Sunday,
+  // the day before next week's long day (the own long day is the same every week).
   const own = Number.isInteger(longDay) && endurance.includes(longDay) && !avoided(longDay);
   if (own) long = longDay;
   if (long != null && endurance.length >= 2) role[long] = "long";
@@ -210,7 +212,7 @@ export function planWeekRoles(days = [], { readiness = "green", quality = null, 
   for (const gap of [2, 1]) {
     for (const i of picks) {
       if (qualityDays.length >= wanted || role[i] || avoided(i)) continue;
-      const far = qualityDays.every(q => Math.abs(q - i) >= 2) && (role[long] !== "long" || Math.abs(long - i) >= gap) && !(own && i === long - 1);
+      const far = qualityDays.every(q => Math.abs(q - i) >= 2) && (role[long] !== "long" || Math.abs(long - i) >= gap) && !(own && i === (long + 6) % 7);
       if (far) { qualityDays.push(i); role[i] = "quality"; }
     }
   }
