@@ -348,12 +348,56 @@ export function resizeStructure(structure = [], target, { sport = "ride", system
 // is resized and the workout gets the id "<id>~<minutes>". When even the
 // shortest sensible main set does not fit, a shorter level of the same family
 // from the library is resized instead.
-export function resizeWorkout(base, minutes) {
+//
+// A longer hard session can take more work instead of only easy riding: on a
+// green day the level of the same family with the most work whose difficulty
+// stays within `maxDifficulty` (the coach's target for the day) and whose work
+// stays under MAX_WORK. A yellow or red day (`easyOnly`) adds easy riding only.
+// Anaerobic and sprint sessions never grow their work.
+// Threshold stays within the 45 hard minutes ai-workout-pick.js allows on a green day.
+const MAX_WORK = { ride: { tempo: 90, sweet_spot: 60, threshold: 45, vo2max: 25 }, run: { tempo: 50, threshold: 40, vo2max: 20 } };
+export function resizeWorkout(base, minutes, { maxDifficulty = null, easyOnly = false } = {}) {
   const sport = sportOf(base.sport), run = sport === "run";
   const target = Math.round(clamp(n(minutes, n(base.duration_minutes, 60)), run ? 20 : 30, run ? 240 : 360));
   if (Math.abs(target - n(base.duration_minutes, 0)) <= 1) return base;
   const fits = w => Math.abs(n(w.duration_minutes, 0) - target) <= 2;
   const library = builtIn()[sport] || [];
+  const longer = target > n(base.duration_minutes, 0), cap = MAX_WORK[sport][base.primary_system];
+  if (longer && cap && base.family && !easyOnly && Number.isFinite(Number(maxDifficulty))) {
+    const more = moreWork(base, target, { library, fits, cap, maxDifficulty: Number(maxDifficulty) });
+    if (more) return more;
+  }
+  const kept = resizeLength(base, target, { library, fits });
+  return longer && cap && easyOnly && n(kept.duration_minutes, 0) > n(base.duration_minutes, 0)
+    ? { ...kept, resize_notes: [...(kept.resize_notes || []), L("střední připravenost: navíc jen lehká jízda, úseky zůstávají", "moderate readiness: the extra time is easy riding only, the efforts stay")] }
+    : kept;
+}
+
+// The same family's level with the most work at the new length, within the
+// difficulty and the work cap; null when none gives more work than the base.
+function moreWork(base, target, { library, fits, cap, maxDifficulty }) {
+  const prefix = id => String(id).replace(/-\d+$/, "");
+  const levels = new Map();
+  for (const w of library) {
+    if (w.family !== base.family || prefix(w.id) === prefix(base.id) || n(w.work_minutes, 0) <= n(base.work_minutes, 0) || n(w.work_minutes, 0) > cap) continue;
+    const at = fits(w) ? w : null, key = prefix(w.id);
+    if (at) levels.set(key, at);
+    else if (!levels.has(key) && n(w.duration_minutes, 0) < target) levels.set(key, null);
+  }
+  let best = null;
+  for (const [key, at] of levels) {
+    const w = at || library.filter(x => prefix(x.id) === key && n(x.duration_minutes, 0) < target).sort((a, b) => n(b.duration_minutes, 0) - n(a.duration_minutes, 0))[0];
+    if (!w) continue;
+    const r = at || resizeOwn(w, target);
+    if (!fits(r) || n(r.difficulty, 10) > maxDifficulty) continue;
+    if (!best || n(r.work_minutes, 0) > n(best.work_minutes, 0) || n(r.work_minutes, 0) === n(best.work_minutes, 0) && n(r.difficulty, 0) < n(best.difficulty, 0)) best = r;
+  }
+  if (!best) return null;
+  const name = String(best.name).replace(/ · \d+ min$/, "");
+  return { ...best, resized_from: base.id, resize_notes: [L("delší hlavní série v rámci dnešní obtížnosti: ", "a longer main set within today's difficulty: ") + name + L(" místo ", " instead of ") + String(base.name).replace(/ · \d+ min$/, "")] };
+}
+
+function resizeLength(base, target, { library, fits }) {
   const prefix = String(base.id).replace(/-\d+$/, "");
   const sibling = library.find(w => w.family === base.family && w.id !== base.id && String(w.id).replace(/-\d+$/, "") === prefix && fits(w));
   if (sibling) return { ...sibling, resize_notes: [(["recovery", "endurance"].includes(base.primary_system) ? L("stejný typ jízdy", "same type of ride") : L("stejná hlavní série", "same main set")) + L(" v délce ", " at ") + sibling.duration_minutes + L(" min z knihovny", " min from the library")] };
@@ -395,13 +439,16 @@ async function resizeGenerated(db, { sport, environment, date, coach, thresholds
   sport = sportOf(sport);
   const base = await getWorkout(db, String(workoutId).replace(/~\d+$/, ""));
   if (!base) return { status: "empty", message: L("Původní trénink jsem nenašel – vygeneruj nový.", "I couldn't find the original workout – generate a new one.") };
-  let resized = resizeWorkout(base, resizeTo);
+  const context = { readiness: coach.readiness?.status || "green", hardBikeDaysRolling7d: coach.load?.hardBikeDaysRolling7d ?? 0, targetDifficulty: coach.recommendation?.progression?.targetDifficulty };
+  const capabilities = await getCapabilities(db, sport);
+  // A longer hard session takes more work only on a green day, up to the day's target difficulty.
+  const green = context.readiness === "green", level = n(context.targetDifficulty, n(capabilities?.[base.primary_system]?.level, null));
+  const how = { easyOnly: !green, maxDifficulty: green ? level : null };
+  let resized = resizeWorkout(base, resizeTo, how);
   // Outdoor rendering can lengthen the warm-up; correct once so the ridden length
   // matches, unless the correction lands further away.
   const ridden = w => renderForEnvironment(w, environmentOf(environment)).duration_minutes, drift = ridden(resized) - Math.round(resizeTo);
-  if (Math.abs(drift) >= 2) { const corrected = resizeWorkout(base, Math.round(resizeTo) - drift); if (Math.abs(ridden(corrected) - Math.round(resizeTo)) < Math.abs(drift)) resized = corrected; }
-  const context = { readiness: coach.readiness?.status || "green", hardBikeDaysRolling7d: coach.load?.hardBikeDaysRolling7d ?? 0, targetDifficulty: coach.recommendation?.progression?.targetDifficulty };
-  const capabilities = await getCapabilities(db, sport);
+  if (Math.abs(drift) >= 2) { const corrected = resizeWorkout(base, Math.round(resizeTo) - drift, how); if (Math.abs(ridden(corrected) - Math.round(resizeTo)) < Math.abs(drift)) resized = corrected; }
   const [ranked] = rankWorkoutCandidates([resized], { environment: environmentOf(environment) }, context, capabilities);
   const pick = renderForEnvironment({ ...resized, ...ranked, resize_notes: resized.resize_notes }, environmentOf(environment));
   const plannedToday = coach.constraints?.plannedToday;
