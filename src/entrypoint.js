@@ -169,6 +169,7 @@ import { setActivityKcal } from "./activity-edits.js";
 import { hideActivity, mergeActivities, setActivityTime, undoActivityChange } from "./activity-chat-edits.js";
 import { loadThresholdSessions } from "./threshold-check-state.js";
 import { performanceTrends, intervalsCurves, recentIntervals, swimBests } from "./performance-trends.js";
+import { saveReadOff } from "./source-reading.js";
 // The largest request body the coach route reads (POST /app/api/assistant).
 const ASSISTANT_REQUEST_CHARS=64000;
 // One photo with a message: a JPEG the app has made smaller, as a data URL.
@@ -2184,6 +2185,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if (request.headers.get('Origin') !== url.origin) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     const body=await request.json().catch(()=>({}));
     const result=await saveSourcePriority(env.DB,env.USER_ID,{night:body.night,day:body.day});
+    return Response.json(result,{status:result.code||200,headers:{'Cache-Control':'no-store'}});
+  }
+  // One Reads from switch under Zdroje dat → Health data (source-reading.js); GET is connections' readOff.
+  if (url.pathname === '/app/api/sources/reading' && request.method === 'POST') {
+    if (!session.signedIn) return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if (request.headers.get('Origin') !== url.origin) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    const body=await request.json().catch(()=>({}));
+    const result=await saveReadOff(env.DB,env.USER_ID,{provider:body.provider,type:body.type,on:body.on});
     return Response.json(result,{status:result.code||200,headers:{'Cache-Control':'no-store'}});
   }
   if (url.pathname === '/app/api/connections' && (request.method === 'POST' || request.method === 'DELETE')) {

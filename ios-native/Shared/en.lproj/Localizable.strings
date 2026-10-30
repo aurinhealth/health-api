@@ -3337,6 +3337,12 @@
 "Kolo %@×, běh %@× a plavání %@× týdně. Dny rozdělím podle času, který v týdnu máš." = "Riding %@×, running %@× and swimming %@× a week. I'll spread the days by the time you have in the week.";
 "Odhad: %@." = "Estimate: %@.";
 "Odhad času z tvých prahových hodnot, bez depa." = "Estimated from your thresholds, without transitions.";
+
+/* Zdroje dat → Zdravotní data (SettingsHealthData.swift) */
+"Čte z" = "Reads from";
+"Posílá do" = "Sends to";
+"Vypnuté Aurin přestane číst. Co už má, zůstane." = "Off: Aurin stops reading it. What it already has stays.";
+"v tomhle iPhonu" = "on this iPhone";
 "Hned po sobě" = "Back to back";
 "Zvlášť" = "Separately";
 "Jak" = "How";
