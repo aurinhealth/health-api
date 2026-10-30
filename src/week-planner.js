@@ -195,9 +195,8 @@ export function planWeekRoles(days = [], { readiness = "green", quality = null, 
     const next = long ?? endurance.filter(i => i !== longest).sort((a, b) => free(b) - free(a))[0];
     if (longest != null && (long == null ? endurance.length >= 3 || free(longest) >= free(next) + 30 : free(longest) >= free(long) + 30)) long = longest;
   }
-  // The athlete's own long day ("Long ride", "Long run") wins when it is a ride or run day.
-  // The day before it gets no key session; for a Monday that is this week's Sunday,
-  // the day before next week's long day (the own long day is the same every week).
+  // The athlete's own long day ("Long ride", "Long run") wins when it is a ride or run day;
+  // the day before it gets no key session.
   const own = Number.isInteger(longDay) && endurance.includes(longDay) && !avoided(longDay);
   if (own) long = longDay;
   if (long != null && endurance.length >= 2) role[long] = "long";
@@ -208,15 +207,18 @@ export function planWeekRoles(days = [], { readiness = "green", quality = null, 
   // the plan's own sport still comes first.
   const byTime = list => timed ? [...list.filter(i => free(i) >= 60), ...list.filter(i => free(i) < 60)] : list;
   const picks = prefer ? [...byTime(endurance.filter(i => main(i) === prefer)), ...byTime(endurance.filter(i => main(i) !== prefer))] : byTime(endurance);
+  // Days apart around the week: the usual week repeats, so Sunday is the day
+  // before next Monday (a Monday long day, a Sunday quality day).
+  const apart = (a, b) => Math.min(Math.abs(a - b), 7 - Math.abs(a - b)), before = i => (i + 6) % 7;
   const qualityDays = [];
   for (const gap of [2, 1]) {
     for (const i of picks) {
       if (qualityDays.length >= wanted || role[i] || avoided(i)) continue;
-      const far = qualityDays.every(q => Math.abs(q - i) >= 2) && (role[long] !== "long" || Math.abs(long - i) >= gap) && !(own && i === (long + 6) % 7);
+      const far = qualityDays.every(q => apart(q, i) >= 2) && (role[long] !== "long" || apart(long, i) >= gap) && !(own && i === before(long));
       if (far) { qualityDays.push(i); role[i] = "quality"; }
     }
   }
-  for (const i of endurance) if (!role[i]) role[i] = role[i - 1] === "quality" || role[i - 1] === "long" ? "recovery" : "endurance";
+  for (const i of endurance) if (!role[i]) role[i] = ["quality", "long"].includes(role[before(i)]) ? "recovery" : "endurance";
   return Array.from({ length: 7 }, (_, i) => {
     const items = [];
     const sports = (days[i] || []).filter(s => s !== "gym");
@@ -228,7 +230,7 @@ export function planWeekRoles(days = [], { readiness = "green", quality = null, 
     });
     for (const _ of (days[i] || []).filter(s => s === "gym")) {
       // Legs stay fresh for intervals; a long easy ride the next day tolerates leg work.
-      const hardSoon = ["quality", "long"].includes(role[i]) || role[i + 1] === "quality";
+      const hardSoon = ["quality", "long"].includes(role[i]) || role[(i + 1) % 7] === "quality";
       const r = hardSoon ? "gym_upper" : "gym_full";
       items.push({ sport: "gym", slot: slot("gym"), role: r, label: ROLE_LABELS[r], share: SHARE[r], focus: null });
     }
