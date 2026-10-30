@@ -29,6 +29,20 @@ export function environmentFor(date, sport, weather = null) {
   const indoor = poor || (sport === 'ride' && winter);
   return { environment: indoor ? 'indoor' : 'outdoor', reason: poor ? L('Předpověď nepřeje venkovnímu tréninku.', 'The forecast isn\'t good for training outdoors.') : indoor ? L('V zimním období preferuji indoor kolo.', 'In winter I prefer indoor riding.') : weather ? L('Podle dostupné předpovědi.', 'Based on the available forecast.') : L('Předpověď není dostupná; volba vychází z ročního období.', 'No forecast is available; the choice is based on the season.') };
 }
+// Once a week in open water by the athlete's choice (Zóny → Plavání): "season"
+// from May to September, "races" in the last 8 weeks before the main race.
+export function openWaterDue(date, openWater, daysToRace = null) {
+  if (openWater === 'season') return [5, 6, 7, 8, 9].includes(Number(date.slice(5, 7)));
+  if (openWater === 'races') return daysToRace != null && daysToRace >= 0 && daysToRace <= 56;
+  return false;
+}
+// The week's longest swim goes to open water when it is due, never on a poor-weather day
+// or one whose place the athlete chose by hand.
+export function withOpenWater(items, { start, openWater = null, daysToRace = null, weather = {} } = {}) {
+  if (!openWaterDue(start, openWater, daysToRace)) return items;
+  const swim = items.filter(x => x.sport === 'swim' && !x.chosenEnvironment && !(weather[x.date] && environmentFor(x.date, 'run', weather[x.date]).environment === 'indoor')).sort((a, b) => b.minutes - a.minutes || a.date.localeCompare(b.date))[0];
+  return swim ? items.map(x => x === swim ? { ...x, environment: 'outdoor', openWater: true, reason: L('Jednou týdně volná voda. Nikdy neplav sám, vezmi si výraznou čepici a bójku.', 'Open water once a week. Never swim alone; wear a bright cap and take a tow float.') } : x) : items;
+}
 // The reason for one day's place in the weather's detail: what decided it,
 // with its number ("High of 6°, too cold outside.", "Dry, high of 14°.").
 export function weatherReason(date, sport, weather) {
@@ -195,7 +209,8 @@ export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null,
 // allows one quality day and holds the load, tired allows none.
 // triathlon: { year, levels } for a triathlete (triathlon-split.js); the
 // proposal then carries its split, which the AI week and the coach follow.
-export function weekProposal({ prefs, start, today, week = {}, fitness = {}, state = {}, weather = {}, focus = null, history = null, plan = null, health = null, strain = null, triathlon = null }) {
+// openWater: the swim setting (training profile: off, races or season).
+export function weekProposal({ prefs, start, today, week = {}, fitness = {}, state = {}, weather = {}, focus = null, history = null, plan = null, health = null, strain = null, triathlon = null, openWater = null }) {
   const historyEstimate=activityHistoryEstimate(history||week.days||[],today<start?today:start);
   const split = focus?.sport === 'triathlon' ? triathlonSplit({ ...(triathlon || {}), sessions: prefs.weeklyActivities ?? historyEstimate.count, minutes: (prefs.availability || []).reduce((n, d) => n + (Number(d?.minutes) || 0), 0) || null, daysToRace: focus.event?.daysLeft ?? null }) : null;
   const proposedPrefs = proposeEmptyDays({ prefs, start, today, week, focus, history, split });
@@ -221,5 +236,6 @@ export function weekProposal({ prefs, start, today, week = {}, fitness = {}, sta
   if (!ctl) targets = capRunVolume(withPlan(estimatedTargets(roles, start, today, loads)), weeklyRunCap(history || [], start), runCommitted);
   if (split) targets = { ...targets, items: (targets.items || []).map(x => splitItem(x, split, proposedPrefs.days[(Date.parse(x.date + 'T12:00:00Z') - Date.parse(start + 'T12:00:00Z')) / 86400000] || [])) };
   targets = capWeekTargets(targets, proposedPrefs, existing, weather);
+  targets = { ...targets, items: withOpenWater(targets.items, { start, openWater, daysToRace: focus?.event?.daysLeft ?? null, weather }) };
   return { prefs: proposedPrefs, items: targets.items, targets, warnings, ...(split ? { split } : {}), mode: existing.some(d => sessionsOn(d).length) ? 'review_and_fill' : 'fill', missingAvailability: !proposedPrefs.days.some(d => d.length) && !prefs.availability.some(d => d.minutes > 0) };
 }

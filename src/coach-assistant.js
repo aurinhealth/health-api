@@ -128,7 +128,8 @@ export function thresholdsContext(t){
   const indoor=rideFtpFor(t,'indoor');
   return compactObject({ftp:t.ftp,ftpSource:t.source,indoorFtp:indoor.ftp,indoorFtpEstimated:t.ftp?indoor.estimated:null,lthr:t.lthr,maxHr:t.maxHr,restHr:t.restHr,
     runThresholdPace:t.runThresholdPace,runThresholdPaceText:paceText(t.runThresholdPace),runLthr:t.runLthr,
-    powerZones:t.ftp?t.powerZones:null,hrZones:(t.hrZones||[]).some(z=>z.bpmHigh!=null)?t.hrZones:null,paceZones:t.runThresholdPace?t.paceZones:null});
+    powerZones:t.ftp?t.powerZones:null,hrZones:(t.hrZones||[]).some(z=>z.bpmHigh!=null)?t.hrZones:null,paceZones:t.runThresholdPace?t.paceZones:null,
+    swimCss:t.swimCss,swimZones:t.swimCss?t.swimZones:null,poolLength:t.poolLength,openWater:t.openWater||null});
 }
 export function athleteProfileContext(profile,weightKg=null){
   const out=compactObject({weightKg:round(num(weightKg),1),sex:['male','female'].includes(profile?.sex)?profile.sex:null,age:num(profile?.age),heightCm:num(profile?.height)});
