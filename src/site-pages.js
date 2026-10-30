@@ -736,7 +736,7 @@ function pageLang(request, czech = false) {
 // secured, and what happens on disconnecting and deleting; the support page is the help on managing and
 // deleting data. Keep both in step with the code: scopes in google-scopes.js, the wellness copy in
 // wellness-sync.js, the download and deletion in account-data.js.
-const UPDATED = {cs: '30. října 2026', en: '30 October 2026'};
+const UPDATED = {cs: '29. října 2026', en: '29 October 2026'};
 // The controller's address for questions and data requests (privacy policy and support page).
 const CONTACT_EMAIL = 'support@aurin.health';
 const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
@@ -1139,7 +1139,6 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <h2>How long we keep data and how to delete it</h2>
 <ul>
 <li>We keep your data while you have an account. An account nobody has signed in to for two years is deleted automatically with all its data.</li>
-<li>Detailed heart rate is kept in full for 7 days. After that we keep it as 5-minute averages, and after 30 days as hourly averages. Minutes in heart-rate zones are kept per hour after 35 days.</li>
 <li><strong>Disconnecting a service</strong> in Settings stops Aurin from reading from and writing to it and removes the stored access; for Google, Aurin also gives up its access at Google. Data imported so far stays in your account until you delete it or the account.</li>
 <li><strong>Deleting your account</strong> in Settings → Privacy &amp; data immediately deletes your account and permanently deletes all its data in Aurin (for a large account, the rest within minutes): profile, food, workouts, sleep and health data, connections, passkeys and assistant history. The record of your consents is deleted with it. Aurin also gives up its access to your Google Account and clears its copy on the device you use. Database backups are overwritten within 30 days.</li>
 <li>So that deleting an account and signing up again does not reset the AI features’ usage limits, we keep after deletion only keyed hashes of your e-mail address and of the Apple or Google account you signed in with, together with how much of the limits you used this week and this month. A new account with the same e-mail, Apple or Google account continues from there. This record is deleted once that week and month are over, within at most about five weeks.</li>
@@ -1249,7 +1248,6 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <h2>Jak dlouho data uchováváme a jak je smazat</h2>
 <ul>
 <li>Data uchováváme, dokud máš účet. Účet, do kterého se nikdo dva roky nepřihlásil, automaticky smažeme i se všemi daty.</li>
-<li>Podrobný tep uchováváme celý 7 dní. Potom z něj necháváme průměry po 5 minutách a po 30 dnech průměry po hodinách. Minuty v zónách tepu po 35 dnech uchováváme po hodinách.</li>
 <li><strong>Odpojení služby</strong> v Nastavení zastaví čtení i zápis do ní a smaže uložený přístup; u Googlu se Aurin vzdá přístupu i přímo u Googlu. Data, která se do té doby načetla, zůstanou v tvém účtu, dokud je nesmažeš, nebo nesmažeš účet.</li>
 <li><strong>Smazání účtu</strong> v Nastavení → Soukromí a data okamžitě smaže tvůj účet a natrvalo všechna data v Aurinu (u velkého účtu zbytek do několika minut): profil, jídla, tréninky, spánek a zdravotní data, připojení služeb, přístupové klíče i historii asistenta. Smaže se i záznam o tvých souhlasech. Aurin se zároveň vzdá přístupu k tvému účtu Google a smaže svou kopii v zařízení, ve kterém účet mažeš. Zálohy databáze se přepíšou do 30 dní.</li>
 <li>Aby smazání účtu a nová registrace nevynulovaly limity používání AI funkcí, ponecháme po smazání jen otisky tvého e-mailu a účtu Apple nebo Google, přes který ses přihlašoval, vytvořené tajným klíčem, a kolik z limitů jsi využil tento týden a měsíc. Nový účet se stejným e-mailem, účtem Apple nebo Google na to naváže. Tento záznam se smaže, jakmile ten týden i měsíc skončí, nejpozději zhruba do pěti týdnů.</li>
