@@ -110,6 +110,14 @@ export function normalizeProfile(p = {}) {
     sleepTonight: sleepTonight(p.sleepTonight),
     // The meals of the day the app plans (app-food.js MEALS); empty is the usual five.
     meals: mealSlots(p.meals),
+    // Own daily goals (Cíle): calories instead of the computed target; water as
+    // Custom (waterGoal) or Build-up (waterStart, waterStep, waterFrom), water-goal.js.
+    kcalGoal: inRange(p.kcalGoal, 1000, 6000),
+    waterMode: ["custom", "build"].includes(p.waterMode) ? p.waterMode : "",
+    waterGoal: inRange(p.waterGoal, 500, 6000),
+    waterStart: inRange(p.waterStart, 500, 6000),
+    waterStep: ["100", "250", "500"].includes(String(p.waterStep)) ? String(p.waterStep) : "auto",
+    waterFrom: /^\d{4}-\d{2}-\d{2}$/.test(String(p.waterFrom || "")) ? String(p.waterFrom) : "",
     ...normalizeFocus(p)
   };
 }

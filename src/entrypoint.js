@@ -136,6 +136,7 @@ import { handleSupportReport } from "./support-report.js";
 import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
 import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, pushConfigured, listPushTokens, sendPush, deletePushToken, MORNING_READINESS } from "./push.js";
 import { coachNudge, swapOffer, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
+import { waterNudge } from "./water-goal.js";
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
 import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, L } from "./lang.js";
 import { appUpdateRequired } from "./app-version.js";
@@ -311,6 +312,8 @@ const USER_JOBS = [
   // whatever they connected (push: chosen by push_tokens, not by a service; no sync runs
   // for them). At most one a local day (push_log).
   { name: "coach-push", providers: [], push: true, due: every5, run: (scoped, ctx) => coachPush(scoped, ctx) },
+  // Water Build-up: one push at 14:00 and one at 18:00 when the day is behind (water-goal.js).
+  { name: "water-push", providers: [], push: true, due: every5, run: (scoped, ctx) => waterPush(scoped, ctx) },
   { name: "google-food", providers: ["google"], due: every5, run: async scoped => { await backfillFoodGoogle(scoped.DB); await processFoodGoogle(scoped, { token: googleToken }); } },
   { name: "intervals-exports", providers: ["intervals"], due: every5, run: scoped => retryWorkoutExports(scoped) },
   // Done activities whose send to Google Health or Intervals.icu did not go through (sync-destinations.js).
@@ -816,6 +819,32 @@ async function coachPush(env, ctx) {
   }
   if (!sent) await db.prepare('DELETE FROM push_log WHERE user_id=? AND kind=? AND local_date=?').bind(db.userId, COACH_PUSH, date).run();
   return { sent, kind: nudge.kind };
+}
+
+// The water Build-up push: only for athletes who chose Build-up, at most at 14:00
+// and 18:00 local, each once a day (push_log), and only when the day is behind.
+async function waterPush(env, ctx) {
+  if (!pushConfigured(env) || !env.DB) return { sent: 0, reason: 'not-configured' };
+  const db = env.DB, now = new Date(), hour = localHour(now), date = localToday(now);
+  if (hour !== 14 && hour !== 18) return { sent: 0, reason: 'off' };
+  const devices = await listPushTokens(db);
+  if (!devices.length) return { sent: 0, reason: 'no-tokens' };
+  const profile = await dashboardProfile(env).catch(() => null);
+  if (profile?.waterMode !== 'build') return { sent: 0, reason: 'not-building' };
+  const kind = 'water-' + hour;
+  const claimed = await db.prepare('INSERT INTO push_log(user_id,kind,local_date) VALUES(?,?,?) ON CONFLICT(user_id,kind,local_date) DO NOTHING').bind(db.userId, kind, date).run().then(r => Boolean(Number(r?.meta?.changes)));
+  if (!claimed) return { sent: 0, reason: 'already-sent' };
+  const fluids = await handleDashboardApi(new Request('https://internal/app/api/fluids?date=' + date), env, ctx, new URL('https://internal/app/api/fluids?date=' + date)).then(r => r.ok ? r.json() : null).catch(() => null);
+  const nudge = waterNudge({ hour, drunkMl: fluids?.hydrationMl, goalMl: fluids?.target?.ml });
+  if (!nudge) return { sent: 0, reason: 'on-track' };
+  let sent = 0;
+  for (const device of devices) {
+    const result = await sendPush(env, device, nudge).catch(error => ({ ok: false, error: error.message }));
+    if (result.ok) sent++;
+    else if (result.gone) await deletePushToken(db, device.token);
+    else console.error('Water push not delivered', result.status || '', result.reason || result.error || '');
+  }
+  return { sent };
 }
 
 // The ride and run sessions planned on `days` (/app/api/week days), with the

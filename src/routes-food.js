@@ -19,6 +19,7 @@ import legacyHealthApi, { googleToken } from "./index.js";
 import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
 import { dashboardProfile } from "./dashboard-shared.js";
+import { waterGoal, loadBuild } from "./water-goal.js";
 
 export async function queueFoodGoogleSafely(env,ctx,id,options){
   try{
@@ -128,7 +129,8 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
         const [logged,fromFood,weight,profile,hours]=await Promise.all([listFluids(env.DB,date),foodDrinks(env.DB,env.USER_ID,date),
           env.DB.prepare("SELECT value_numeric FROM health_datapoints WHERE user_id=? AND data_type='weight' AND value_numeric IS NOT NULL AND COALESCE(sample_time,start_time,end_time)<=? ORDER BY COALESCE(sample_time,start_time,end_time) DESC LIMIT 1").bind(env.USER_ID,date+'T23:59:59').first().catch(()=>null),
           dashboardProfile(env).catch(()=>null),dayActivityHours(env.DB,env.USER_ID,date)]);
-        const target=hydrationTarget({weightKg:weight?.value_numeric,sex:profile?.sex,...hours});
+        const auto=hydrationTarget({weightKg:weight?.value_numeric,sex:profile?.sex,...hours});
+        const target=waterGoal(auto,profile||{},await loadBuild(env.DB,profile,date,auto.baseMl).catch(error=>{console.error('Water build-up unavailable',error.message);return null;}));
         // Drinks from the food diary are listed with the logged ones and counted (alcohol not).
         const entries=[...logged,...fromFood].sort((a,b)=>String(a.consumedAt).localeCompare(String(b.consumedAt))).map(e=>({...e,hydrationMl:hydrationMl(e.ml,e.kind)}));
         return Response.json({status:'ok',date,entries,totalMl:entries.reduce((s,e)=>s+e.ml,0),hydrationMl:entries.reduce((s,e)=>s+e.hydrationMl,0),target},{headers:{'Cache-Control':'no-store'}});

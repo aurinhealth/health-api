@@ -3299,3 +3299,17 @@
 "Kilogramy" = "Kilograms";
 "Unce" = "Ounces";
 "Libry" = "Pounds";
+"Postupně" = "Build-up";
+"Aurin dnes doporučuje %@ kcal" = "Aurin recommends %@ kcal today";
+"Aurin dnes doporučuje %@" = "Aurin recommends %@ today";
+"Začít na" = "Start at";
+"Každý týden" = "Each week";
+"Splněno na 95 % a víc: + 0,25 l. Na 80 %: + 0,1 l. Na 60 %: zůstává. Méně: − 0,25 l." = "Met 95 % or more: + 0.25 l. 80 %: + 0.1 l. 60 %: stays. Less: − 0.25 l.";
+"Splněno na 80 % a víc: o krok výš. Na 60 %: zůstává. Méně: o krok níž." = "Met 80 % or more: one step up. 60 %: stays. Less: one step down.";
+"Jak to šlo" = "How it went";
+"Minulý týden" = "Last week";
+"Týden předtím" = "Week before";
+"%@ z %@ denně" = "%@ of %@ a day";
+"+ 0,1 l" = "+ 0.1 l";
+"+ 0,25 l" = "+ 0.25 l";
+"+ 0,5 l" = "+ 0.5 l";

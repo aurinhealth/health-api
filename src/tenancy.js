@@ -105,6 +105,8 @@ export const PERSONAL_TABLES = {
   // The app's push device tokens and the once-a-day guard of the pushes (push.js).
   push_tokens: { pk: ["user_id", "token"] },
   push_log: { pk: ["user_id", "kind", "local_date"] },
+  // The finished weeks of the water Build-up (water-goal.js).
+  water_build: { pk: ["user_id", "since", "week"] },
   activity_undo: { pk: ["user_id", "token"] },
   // Moje tréninky and Od přátel, and the links the athlete shared (workout-templates.js).
   saved_workouts: { pk: ["user_id", "id"] },

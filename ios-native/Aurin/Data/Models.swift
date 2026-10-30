@@ -156,11 +156,32 @@ struct TodaySnapshot: Decodable, Equatable {
     struct Water: Decodable, Equatable {
         let ml: Double?
         let target: Double?
+        /// The target from body weight and training, also while an own goal is set.
+        var autoTarget: Double? = nil
+        /// "auto", "custom" or "build" (Cíle → Pití, src/water-goal.js).
+        var mode: String? = nil
+        var build: WaterBuild? = nil
+    }
+
+    /// Build-up: this week's goal without training, and the last finished weeks.
+    struct WaterBuild: Decodable, Equatable {
+        let weekMl: Double
+        let step: String
+        let weeks: [Week]
+
+        struct Week: Decodable, Equatable {
+            let week: String
+            let targetMl: Double
+            let avgMl: Double
+            let percent: Double
+        }
     }
 
     struct Nutrition: Decodable, Equatable {
         let kcal: Double?
         let target: Double?
+        /// The computed target, also while an own goal (kcalGoal) replaces it.
+        var autoTarget: Double? = nil
         let trainingBonus: Double?
         let protein: Macro
         let carbs: Macro
