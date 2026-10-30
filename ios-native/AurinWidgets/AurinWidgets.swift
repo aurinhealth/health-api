@@ -72,6 +72,16 @@ enum W {
         }
     }
 
+    /// The readiness zone in a word: "dobrá", "střední", "nízká".
+    static func zoneWord(_ zone: String?) -> String? {
+        switch zone {
+        case "green": return L10n.tr("dobrá")
+        case "yellow": return L10n.tr("střední")
+        case "red": return L10n.tr("nízká")
+        default: return nil
+        }
+    }
+
     static func hm(_ minutes: Double?) -> String {
         guard let m = minutes else { return "–" }
         let total = Int(m.rounded())
@@ -99,6 +109,69 @@ enum W {
     /// The widget's water buttons: a glass and a bottle, 250/500 ml or 8/16 fl oz.
     static var glass: Int { Units.imperial ? Units.roundedMl(fluidOunces: 8) : 250 }
     static var bottle: Int { Units.imperial ? Units.roundedMl(fluidOunces: 16) : 500 }
+}
+
+/// Today's dial in small: the zone's ring and the number in the app's serif.
+/// Both take the tint on a tinted Home Screen.
+struct WidgetRing: View {
+    let score: Int?
+    let zone: String?
+    var lineWidth: CGFloat = 9
+    var fontSize: CGFloat = 40
+    var track: Color = W.muted.opacity(0.18)
+    var ink: Color = W.ink
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(track, lineWidth: lineWidth)
+            Circle().trim(from: 0, to: CGFloat(min(100, max(0, score ?? 0))) / 100)
+                .stroke(W.zoneColor(zone), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .widgetAccentable()
+            Text(score.map(String.init) ?? "–").font(W.number(fontSize)).foregroundStyle(ink)
+                .minimumScaleFactor(0.5).lineLimit(1).padding(lineWidth)
+                .widgetAccentable()
+        }
+        .padding(lineWidth / 2)
+    }
+}
+
+/// The last days as a line over the usual range (a soft band), the newest
+/// day as a dot.
+struct WidgetTrend: View {
+    let values: [Double]
+    var low: Double? = nil
+    var high: Double? = nil
+    var color: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            let all = values + [low, high].compactMap { $0 }
+            let lo = (all.min() ?? 0) - 2, hi = (all.max() ?? 1) + 2
+            let y: (Double) -> CGFloat = { geo.size.height * CGFloat(1 - ($0 - lo) / max(1, hi - lo)) }
+            let x: (Int) -> CGFloat = { geo.size.width * CGFloat($0) / CGFloat(max(1, values.count - 1)) }
+            ZStack(alignment: .topLeading) {
+                if let low, let high {
+                    RoundedRectangle(cornerRadius: 3).fill(color.opacity(0.12))
+                        .frame(width: geo.size.width, height: max(2, y(low) - y(high)))
+                        .offset(y: y(high))
+                }
+                Path { path in
+                    for (i, v) in values.enumerated() {
+                        let point = CGPoint(x: x(i), y: y(v))
+                        if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
+                    }
+                }
+                .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                .widgetAccentable()
+                if let last = values.last {
+                    Circle().fill(color).frame(width: 7, height: 7)
+                        .position(x: x(values.count - 1), y: y(last))
+                        .widgetAccentable()
+                }
+            }
+        }
+    }
 }
 
 /// Without a saved snapshot (not signed in yet, or the App Group is missing).
@@ -137,6 +210,8 @@ struct ReadinessWidget: Widget {
 
 struct ReadinessWidgetView: View {
     @Environment(\.widgetFamily) private var family
+    /// False in StandBy: one big ring without the card.
+    @Environment(\.showsWidgetContainerBackground) private var card
     let entry: SnapshotEntry
 
     var body: some View {
@@ -156,21 +231,22 @@ struct ReadinessWidgetView: View {
                     if let bed = s.bedtime { Text(L10n.f("Do postele %@", ClockText.format(bed))).font(.caption) }
                 }
             default:
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 5) {
-                        Circle().fill(W.zoneColor(s.zone)).frame(width: 7, height: 7)
-                        Text(L10n.tr("Připravenost")).font(.caption.weight(.medium)).foregroundStyle(W.muted)
+                // Today's dial (Petr's yes on the mockup, 2026-10-30): the ring, its word and the night.
+                VStack(spacing: card ? 4 : 8) {
+                    WidgetRing(score: s.readiness, zone: s.zone, lineWidth: card ? 9 : 14, fontSize: card ? 40 : 62,
+                               track: card ? W.muted.opacity(0.18) : Color.white.opacity(0.12), ink: card ? W.ink : .white)
+                    if card {
+                        if let word = W.zoneWord(s.zone) {
+                            Text(word.capitalized(with: L10n.locale)).font(.caption.weight(.semibold)).foregroundStyle(W.zoneColor(s.zone)).widgetAccentable()
+                        }
+                        Text(L10n.f("Spánek %@ · námaha %@", W.hm(s.sleepMinutes), W.decimal(s.strain)))
+                            .font(.caption2).foregroundStyle(W.muted).lineLimit(1).minimumScaleFactor(0.7)
+                    } else {
+                        Text(L10n.tr("Připravenost") + (W.zoneWord(s.zone).map { " · " + $0 } ?? ""))
+                            .font(.subheadline.weight(.medium)).foregroundStyle(W.zoneColor(s.zone)).widgetAccentable()
                     }
-                    Text(s.readiness.map(String.init) ?? "–").font(W.number(54)).foregroundStyle(W.ink).minimumScaleFactor(0.6)
-                    Spacer(minLength: 0)
-                    HStack {
-                        Label(W.hm(s.sleepMinutes), systemImage: "moon.fill").foregroundStyle(W.indigo)
-                        Spacer()
-                        Label(W.decimal(s.strain), systemImage: "flame.fill").foregroundStyle(W.amber)
-                    }
-                    .font(.caption2.weight(.semibold))
-                    .labelStyle(.titleAndIcon)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else {
             EmptyWidgetView()

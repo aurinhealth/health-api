@@ -42,6 +42,9 @@ struct WidgetSnapshot: Codable, Equatable {
     var nextSport: String? = nil
     var nextMinutes: Int? = nil
     var weekZones: [String: String]? = nil
+    /// The last seven days of HRV and resting heart rate, oldest first (the trend line).
+    var hrvSeries: [Double]? = nil
+    var restingSeries: [Double]? = nil
 
     static func load() -> WidgetSnapshot? {
         guard let data = UserDefaults(suiteName: group)?.data(forKey: key) else { return nil }
@@ -95,7 +98,8 @@ struct WidgetSnapshot: Codable, Equatable {
                                        strain: 8.4, strainPlanned: 14, hrv: 58, kcal: 1240, kcalTarget: 2650, waterMl: 1200, waterTarget: 2800,
                                        protein: 64, proteinTarget: 150, carbs: 140, carbsTarget: 320, fat: 38, fatTarget: 80,
                                        steps: 6400, stepsGoal: 10000, bedtime: "22:45", nextTitle: "Celé tělo", nextTime: "17:30",
-                                       hrvLow: 48, hrvHigh: 66, restingHR: 52, restingLow: 49, restingHigh: 56, nextSport: "strength", nextMinutes: 60)
+                                       hrvLow: 48, hrvHigh: 66, restingHR: 52, restingLow: 49, restingHigh: 56, nextSport: "strength", nextMinutes: 60,
+                                       hrvSeries: [51, 55, 49, 60, 57, 53, 58], restingSeries: [53, 52, 54, 51, 52, 53, 52])
 }
 
 /// The week for the large widget: Monday to Sunday's training time, how many
@@ -106,6 +110,21 @@ struct WidgetWeek: Codable, Equatable {
     struct Day: Codable, Equatable {
         var date: String
         var minutes: Double
+        /// What the plan still has that day (a dashed bar).
+        var planned: Double = 0
+
+        init(date: String, minutes: Double, planned: Double = 0) {
+            self.date = date
+            self.minutes = minutes
+            self.planned = planned
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            date = try c.decode(String.self, forKey: .date)
+            minutes = try c.decode(Double.self, forKey: .minutes)
+            planned = try c.decodeIfPresent(Double.self, forKey: .planned) ?? 0
+        }
     }
 
     struct Session: Codable, Equatable {
@@ -146,8 +165,8 @@ struct WidgetWeek: Codable, Equatable {
     }
 
     static let sample = WidgetWeek(
-        days: [("2026-10-05", 60), ("2026-10-06", 45), ("2026-10-07", 90), ("2026-10-08", 0), ("2026-10-09", 75), ("2026-10-10", 120), ("2026-10-11", 0)]
-            .map { Day(date: $0.0, minutes: $0.1) },
+        days: [("2026-10-05", 60, 0), ("2026-10-06", 45, 0), ("2026-10-07", 90, 0), ("2026-10-08", 0, 75), ("2026-10-09", 75, 0), ("2026-10-10", 0, 60), ("2026-10-11", 0, 120)]
+            .map { Day(date: $0.0, minutes: Double($0.1), planned: Double($0.2)) },
         minutes: 390, done: 5, planned: 6,
         next: [Session(title: "Sweet spot 2×15", sport: "ride", date: "2026-10-08", time: "17:30"),
                Session(title: "Horní část těla", sport: "strength", date: "2026-10-10", time: nil),

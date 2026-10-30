@@ -19,7 +19,9 @@ enum WidgetBridge {
                                       hrvLow: today.hrv?.low, hrvHigh: today.hrv?.high,
                                       restingHR: today.restingHR?.value, restingLow: today.restingHR?.low, restingHigh: today.restingHR?.high,
                                       nextSport: next?.sport, nextMinutes: next?.session?.minutes,
-                                      weekZones: today.week.map { days in Dictionary(days.compactMap { d in d.zone.map { (d.date, $0) } }, uniquingKeysWith: { a, _ in a }) })
+                                      weekZones: today.week.map { days in Dictionary(days.compactMap { d in d.zone.map { (d.date, $0) } }, uniquingKeysWith: { a, _ in a }) },
+                                      hrvSeries: today.hrv.map { Array($0.series.suffix(7).map(\.value)) },
+                                      restingSeries: today.restingHR.map { Array($0.series.suffix(7).map(\.value)) })
         // The same day again (a refresh with nothing new) leaves the widgets
         // alone: reloads are budgeted, and the time saved is never shown.
         var saved = WidgetSnapshot.load()
@@ -40,7 +42,8 @@ enum WidgetBridge {
         let sessions = training.sessions ?? []
         let monday = AppModel.monday(of: training.date)
         let days = (0..<7).compactMap { AppModel.shift(monday, by: $0) }.map { date in
-            WidgetWeek.Day(date: date, minutes: Double(sessions.filter { $0.date == date && $0.status == "done" }.compactMap(\.minutes).reduce(0, +)))
+            WidgetWeek.Day(date: date, minutes: Double(sessions.filter { $0.date == date && $0.status == "done" }.compactMap(\.minutes).reduce(0, +)),
+                           planned: Double(sessions.filter { $0.date == date && $0.status == "planned" }.compactMap(\.minutes).reduce(0, +)))
         }
         let ahead = sessions.filter { $0.status == "planned" && $0.date >= training.date }
             .sorted { ($0.date, $0.time ?? "99") < ($1.date, $1.time ?? "99") }

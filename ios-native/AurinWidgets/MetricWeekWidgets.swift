@@ -103,11 +103,23 @@ extension WidgetMetric {
         }
     }
 
+    /// The last seven days and the usual range, for HRV and resting heart rate.
+    func trend(_ s: WidgetSnapshot) -> (values: [Double], low: Double?, high: Double?)? {
+        let picked: (series: [Double]?, low: Double?, high: Double?)
+        switch self {
+        case .hrv: picked = (s.hrvSeries, s.hrvLow, s.hrvHigh)
+        case .restingHR: picked = (s.restingSeries, s.restingLow, s.restingHigh)
+        default: return nil
+        }
+        guard let values = picked.series, values.count >= 2 else { return nil }
+        return (values, picked.low, picked.high)
+    }
+
     /// The number, its unit and the line under it.
     func value(_ s: WidgetSnapshot) -> (number: String, unit: String, note: String?) {
         switch self {
         case .readiness:
-            return (s.readiness.map(String.init) ?? "–", "", Self.zoneWord(s.zone))
+            return (s.readiness.map(String.init) ?? "–", "", W.zoneWord(s.zone))
         case .sleep:
             return (W.hm(s.sleepMinutes), "h", s.sleepIndex.map { L10n.f("index %@", String($0)) })
         case .hrv:
@@ -124,15 +136,6 @@ extension WidgetMetric {
             let litres = !Units.imperial
             let shown: (Double?) -> String = { ml in litres ? W.decimal((ml ?? 0) / 1000) : W.int(Units.volume(ml ?? 0)) }
             return (shown(s.waterMl), litres ? "l" : Units.volumeUnit, s.waterTarget.map { L10n.f("cíl %@", shown($0)) })
-        }
-    }
-
-    private static func zoneWord(_ zone: String?) -> String? {
-        switch zone {
-        case "green": return L10n.tr("dobrá")
-        case "yellow": return L10n.tr("střední")
-        case "red": return L10n.tr("nízká")
-        default: return nil
         }
     }
 
@@ -161,17 +164,27 @@ struct MetricWidgetView: View {
                     if let note = v.note { Text(note).font(.caption) }
                 }
             default:
+                let trend = entry.metric.trend(s)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 5) {
                         Circle().fill(entry.metric.color).frame(width: 7, height: 7)
                         Text(entry.metric.title).font(.caption.weight(.medium)).foregroundStyle(W.muted)
                     }
-                    Spacer(minLength: 0)
+                    if trend == nil { Spacer(minLength: 0) }
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(v.number).font(W.number(50)).foregroundStyle(W.ink).minimumScaleFactor(0.5).lineLimit(1)
+                        Text(v.number).font(W.number(trend == nil ? 50 : 42)).foregroundStyle(W.ink).minimumScaleFactor(0.5).lineLimit(1)
+                            .widgetAccentable()
                         if !v.unit.isEmpty { Text(v.unit).font(.caption).foregroundStyle(W.muted) }
                     }
-                    if let note = v.note { Text(note).font(.caption2).foregroundStyle(W.muted).lineLimit(1) }
+                    // HRV and resting heart rate: the week's line over the usual range.
+                    if let trend {
+                        Spacer(minLength: 4)
+                        WidgetTrend(values: trend.values, low: trend.low, high: trend.high, color: entry.metric.color)
+                            .frame(height: 30)
+                        if let note = v.note { Text(note + " · " + L10n.tr("7 dní")).font(.caption2).foregroundStyle(W.muted).lineLimit(1).padding(.top, 4) }
+                    } else if let note = v.note {
+                        Text(note).font(.caption2).foregroundStyle(W.muted).lineLimit(1)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             }
@@ -188,11 +201,14 @@ struct WeekEntry: TimelineEntry {
     let week: WidgetWeek?
     let zones: [String: String]
     let today: String
+    var readiness: Int? = nil
+    var zone: String? = nil
 }
 
 struct WeekProvider: TimelineProvider {
     func placeholder(in context: Context) -> WeekEntry {
-        WeekEntry(date: Date(), week: .sample, zones: WidgetSnapshot.sample.weekZones ?? [:], today: "2026-10-08")
+        WeekEntry(date: Date(), week: .sample, zones: ["2026-10-05": "green", "2026-10-06": "yellow", "2026-10-07": "green", "2026-10-09": "green"],
+                  today: "2026-10-08", readiness: 78, zone: "green")
     }
 
     func getSnapshot(in context: Context, completion: @escaping (WeekEntry) -> Void) {
@@ -212,7 +228,8 @@ struct WeekProvider: TimelineProvider {
     private func entry(_ date: Date) -> WeekEntry {
         let today = PendingDrinks.localDate(date)
         let week = WidgetWeek.load().flatMap { $0.covers(today) ? $0 : nil }
-        return WeekEntry(date: date, week: week, zones: WidgetSnapshot.load()?.weekZones ?? [:], today: today)
+        let snapshot = WidgetSnapshot.load()?.current(today: today)
+        return WeekEntry(date: date, week: week, zones: snapshot?.weekZones ?? [:], today: today, readiness: snapshot?.readiness, zone: snapshot?.zone)
     }
 }
 
@@ -235,17 +252,28 @@ struct WeekWidgetView: View {
     var body: some View {
         if let week = entry.week {
             VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Text(L10n.tr("Tento týden")).font(.subheadline.weight(.semibold)).foregroundStyle(W.ink)
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(L10n.tr("Tento týden")).font(.subheadline.weight(.semibold)).foregroundStyle(W.ink)
+                        Text(summary(week)).font(.caption).foregroundStyle(W.muted)
+                    }
                     Spacer()
-                    Text(summary(week)).font(.caption).foregroundStyle(W.muted)
+                    // Today's readiness as a word and number, not a second ring
+                    // beside the small Připravenost widget.
+                    if let score = entry.readiness {
+                        Text((W.zoneWord(entry.zone).map { $0.capitalized(with: L10n.locale) + " · " } ?? "") + String(score))
+                            .font(.caption.weight(.semibold)).foregroundStyle(W.zoneColor(entry.zone))
+                            .padding(.horizontal, 9).padding(.vertical, 4)
+                            .background(W.zoneColor(entry.zone).opacity(0.14), in: Capsule())
+                            .widgetAccentable()
+                    }
                 }
-                bars(week).padding(.top, 12)
-                Divider().padding(.vertical, 12)
+                bars(week).padding(.top, 14)
+                Divider().padding(.top, 12).padding(.bottom, 4)
                 if week.next.isEmpty {
                     Text(L10n.tr("Na zbytek týdne nic naplánovaného.")).font(.caption).foregroundStyle(W.muted)
                 } else {
-                    VStack(spacing: 9) {
+                    VStack(spacing: 7) {
                         ForEach(Array(week.next.enumerated()), id: \.offset) { _, session in row(session) }
                     }
                 }
@@ -257,29 +285,40 @@ struct WeekWidgetView: View {
     }
 
     private func summary(_ week: WidgetWeek) -> String {
-        let time = W.hm(week.minutes)
+        let time = W.hm(week.minutes) + " h"
         guard week.planned > 0 else { return time }
         return time + " · " + L10n.f("%@ z %@ splněno", String(week.done), String(week.planned))
     }
 
+    /// Done training as solid bars in the day's readiness colour, what the
+    /// plan still has as dashed ones; today's letter in a dark dot.
     private func bars(_ week: WidgetWeek) -> some View {
-        let most = max(60, week.days.map(\.minutes).max() ?? 0)
+        let most = max(60, week.days.map { max($0.minutes, $0.planned) }.max() ?? 0)
         return HStack(alignment: .bottom, spacing: 8) {
             ForEach(week.days, id: \.date) { day in
-                VStack(spacing: 4) {
+                VStack(spacing: 5) {
                     if day.minutes > 0 {
-                        Text(W.int(day.minutes)).font(.caption2).foregroundStyle(W.muted).lineLimit(1).minimumScaleFactor(0.7)
+                        RoundedRectangle(cornerRadius: 5).fill(color(day))
+                            .frame(height: max(5, 112 * day.minutes / most))
+                            .widgetAccentable()
+                    } else if day.planned > 0 {
+                        RoundedRectangle(cornerRadius: 5)
+                            .strokeBorder(W.amber.opacity(0.8), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                            .background(RoundedRectangle(cornerRadius: 5).fill(W.amber.opacity(0.07)))
+                            .frame(height: 112 * day.planned / most)
+                    } else {
+                        RoundedRectangle(cornerRadius: 3).fill(W.muted.opacity(0.18)).frame(height: 5)
                     }
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(day.minutes > 0 ? color(day) : W.muted.opacity(0.18))
-                        .frame(height: max(5, 96 * day.minutes / most))
-                    Text(weekday(day.date)).font(.caption2.weight(day.date == entry.today ? .bold : .regular))
-                        .foregroundStyle(day.date == entry.today ? W.ink : W.muted)
+                    let today = day.date == entry.today
+                    Text(weekday(day.date)).font(.caption2.weight(today ? .bold : .medium))
+                        .foregroundStyle(today ? Palette.onButton : W.muted)
+                        .frame(width: 20, height: 20)
+                        .background(Circle().fill(today ? Palette.button : .clear))
                 }
                 .frame(maxWidth: .infinity)
             }
         }
-        .frame(height: 136, alignment: .bottom)
+        .frame(height: 140, alignment: .bottom)
     }
 
     /// The day's readiness zone, else the training colour.
@@ -288,9 +327,11 @@ struct WeekWidgetView: View {
     }
 
     private func row(_ session: WidgetWeek.Session) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: Self.symbol(session.sport)).font(.caption).foregroundStyle(W.amber).frame(width: 18)
-            Text(session.title).font(.subheadline).foregroundStyle(W.ink).lineLimit(1)
+        HStack(spacing: 10) {
+            Image(systemName: Self.symbol(session.sport)).font(.caption).foregroundStyle(W.amber)
+                .frame(width: 26, height: 26)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Palette.amberSoft))
+            Text(session.title).font(.subheadline.weight(.medium)).foregroundStyle(W.ink).lineLimit(1)
             Spacer(minLength: 6)
             Text(when(session)).font(.caption).foregroundStyle(W.muted).lineLimit(1)
         }
@@ -341,10 +382,19 @@ struct NextWorkoutWidget: Widget {
 }
 
 struct NextWorkoutWidgetView: View {
+    /// False in StandBy: the name big, without the card.
+    @Environment(\.showsWidgetContainerBackground) private var card
     let entry: SnapshotEntry
 
     var body: some View {
-        if let s = entry.snapshot {
+        if let s = entry.snapshot, !card {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(s.nextTitle == nil ? L10n.tr("Další trénink") : detail(s)).font(.subheadline).foregroundStyle(.white.opacity(0.6))
+                Text(s.nextTitle ?? L10n.tr("Dnes už nic")).font(W.number(40)).foregroundStyle(.white)
+                    .lineLimit(3).minimumScaleFactor(0.6).widgetAccentable()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        } else if let s = entry.snapshot {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
                     Image(systemName: WeekWidgetView.symbol(s.nextSport)).font(.caption2).foregroundStyle(W.amber)
