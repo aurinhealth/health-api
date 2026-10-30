@@ -142,6 +142,9 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .flip .vis .device{left:0}
 .part{position:absolute;left:-44px;width:380px;border-radius:var(--r-22);overflow:hidden;background:var(--panel);box-shadow:0 0 0 1px var(--line),var(--shadow-float);opacity:0;z-index:3}
 .flip .part{left:304px}
+/* The watch chapter: one watch, larger, its screens taking turns like the phone's. */
+.vis .wdev{position:absolute;left:150px;top:140px;zoom:1.45}
+.flip .vis .wdev{left:110px}
 .part img{display:block;width:100%;height:auto}
 .part.on{opacity:1}
 .part:has(>.dm.wait:not(.in)){opacity:0!important}
@@ -181,13 +184,13 @@ main:focus{outline:none}
 .acts-nav{position:fixed;left:50%;bottom:18px;z-index:19;display:flex;align-items:center;gap:14px;padding:10px 18px 10px 16px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--panel) 86%,transparent);-webkit-backdrop-filter:saturate(1.4) blur(18px);backdrop-filter:saturate(1.4) blur(18px);box-shadow:0 0 0 1px var(--line),var(--shadow-float);transform:translate(-50%,24px);opacity:0;pointer-events:none;transition:opacity .4s,transform .5s cubic-bezier(.16,1,.3,1)}
 .acts-nav.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 .an-t{min-width:76px;font-size:var(--fs-14);font-weight:600}
-.an-l{position:relative;width:136px;height:12px}
+.an-l{position:relative;width:160px;height:12px}
 .an-l::before,.an-fill{content:"";position:absolute;left:0;right:0;top:5px;height:2px;border-radius:2px;background:var(--track)}
-.an-fill{right:auto;width:calc(var(--i,0) * 25%);background:linear-gradient(90deg,color-mix(in srgb,var(--sun) 40%,transparent),var(--sun));transition:width .45s cubic-bezier(.16,1,.3,1)}
-.an-l a{position:absolute;left:calc(var(--k) * 25%);top:0;width:12px;height:12px;margin-left:-6px;border-radius:50%}
+.an-fill{right:auto;width:calc(var(--i,0) * 20%);background:linear-gradient(90deg,color-mix(in srgb,var(--sun) 40%,transparent),var(--sun));transition:width .45s cubic-bezier(.16,1,.3,1)}
+.an-l a{position:absolute;left:calc(var(--k) * 20%);top:0;width:12px;height:12px;margin-left:-6px;border-radius:50%}
 .an-l a::after{content:"";position:absolute;left:3px;top:3px;width:6px;height:6px;border-radius:50%;background:color-mix(in srgb,var(--text) 18%,transparent);transition:background .3s}
 .an-l a.done::after{background:var(--sun)}
-.an-dot{position:absolute;left:calc(var(--i,0) * 25%);top:0;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:var(--sun);box-shadow:0 0 0 2px var(--panel),0 0 10px var(--sun);pointer-events:none;transition:left .45s cubic-bezier(.16,1,.3,1)}
+.an-dot{position:absolute;left:calc(var(--i,0) * 20%);top:0;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:var(--sun);box-shadow:0 0 0 2px var(--panel),0 0 10px var(--sun);pointer-events:none;transition:left .45s cubic-bezier(.16,1,.3,1)}
 
 /* Muscles: the app's 3D figure (Muscle3D.swift). The model is licensed and stays out of the page: the
    figure is drawn ahead from 72 sides (scripts/render-muscles-site.html), and a map per side says which
@@ -221,15 +224,6 @@ main:focus{outline:none}
 
 /* Connections: a row of the services the app connects; picking one says what Aurin reads from it and
    what it sends back. They take turns until one is picked. */
-/* Apple Watch: the watches in a row that wraps, each over a glow in its part's colour. */
-.watch{padding:150px 0 0}
-.watch .intro{max-width:620px}.watch .intro .sub{margin-top:16px}
-.aw-list{display:flex;flex-wrap:wrap;justify-content:center;gap:56px 28px;margin:56px 0 0;padding:0;list-style:none}
-.aw-list li{position:relative;display:flex;flex-direction:column;align-items:center;width:340px;text-align:center}
-.aw-list li:before{content:"";position:absolute;top:-20px;width:320px;height:320px;border-radius:50%;background:radial-gradient(var(--g) 0,transparent 68%);pointer-events:none}
-.aw-list .aw-w{margin-bottom:28px}
-.aw-list h3{font:400 var(--fs-28)/1.1 var(--serif);letter-spacing:-.01em}.aw-list p{max-width:340px;margin-top:8px;color:var(--muted);font-size:var(--fs-17)}
-.aw-note{margin-top:40px;text-align:center;color:var(--muted);font-size:var(--fs-14)}
 .connect{padding:150px 0 0}
 .connect .intro{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:end}
 .connect .intro .sub{margin:0}
@@ -434,14 +428,15 @@ main:focus{outline:none}
   .vis .device,.flip .vis .device{left:59px;top:0}
   /* The phone, then its piece under it, over the phone's lowest quarter only: the pieces share one grid cell. */
   .vis{display:grid;justify-items:center;height:auto}
-  .vis .device,.flip .vis .device{position:relative;left:auto;top:auto;grid-area:1/1}
+  .vis .device,.flip .vis .device,.vis .wdev,.flip .vis .wdev{position:relative;left:auto;top:auto;grid-area:1/1}
+  .vis .wdev{zoom:1.2;margin:40px 0}
   .part,.flip .part{position:relative;grid-area:2/1;align-self:start;left:auto;top:auto!important;width:380px;max-width:100%;margin-top:-170px}
   .ch .rail{max-width:none;margin-top:44px}
   .mu,.connect .intro,.faq{grid-template-columns:1fr;gap:32px}
   .ac{grid-template-columns:1fr;gap:32px;justify-items:center}.opener .head{justify-self:stretch}
   .opener{padding-top:110px}.chapter.opens{padding-top:64px}
   .sun{margin:-16px auto -8px}
-  .muscles,.watch,.connect,.privacy,#faq,.mid{padding-top:110px}
+  .muscles,.connect,.privacy,#faq,.mid{padding-top:110px}
   .faq .side{position:static}
 }
 @media (max-width:560px){
@@ -553,8 +548,8 @@ document.querySelectorAll('.opener').forEach(function(a){var c=a.querySelector('
  new IntersectionObserver(function(es){var on=es[0].isIntersecting;a.classList.toggle('on',on);if(on&&!a._played){a._played=true;D.play(c);}},{threshold:.3}).observe(c);});
 // The pill at the bottom: shown from the first part to the end of the last one, its dot on the part in view.
 // On a phone the pill steps aside while reading downwards and comes back on the way up.
-var an=document.querySelector('.acts-nav');if(an){var acts=[].slice.call(document.querySelectorAll('.opener')),endEl=document.getElementById('kouc'),dots=[].slice.call(an.querySelectorAll('a')),title=an.querySelector('.an-t'),ticking=false,lastY=scrollY,down=false,narrow=matchMedia('(max-width:560px)');
- function where(){ticking=false;var mid=innerHeight*.5,i=-1,y=scrollY;if(Math.abs(y-lastY)>8){down=y>lastY;lastY=y;}acts.forEach(function(a,k){if(a.getBoundingClientRect().top<mid)i=k;});
+var an=document.querySelector('.acts-nav');if(an){var acts=[].slice.call(document.querySelectorAll('.opener')),endEl=document.getElementById('hodinky'),dots=[].slice.call(an.querySelectorAll('a')),title=an.querySelector('.an-t'),ticking=false,lastY=scrollY,down=false,narrow=matchMedia('(max-width:560px)');
+ function where(){ticking=false;var mid=innerHeight*.5,i=-1,y=scrollY;if(Math.abs(y-lastY)>8){down=y>lastY;lastY=y;}acts.forEach(function(a,k){if(a.getBoundingClientRect().top<innerHeight*.8)i=k;});
   var shown=i>=0&&endEl.getBoundingClientRect().bottom>mid&&!(narrow.matches&&down)&&!covers();an.classList.toggle('on',shown);if(i<0)i=0;
   an.style.setProperty('--i',i);title.textContent=dots[i].getAttribute('aria-label');dots.forEach(function(d,k){d.classList.toggle('done',k<=i);});}
  // The pill steps aside while a live demo card passes under it, so it never hides the demo's last rows.
@@ -701,14 +696,14 @@ ${headScript}
 <a class="skip" href="#main">Skip to content</a>
 <header class="site-head"><nav class="pill-nav" aria-label="Main">
 <a class="logo" href="/">${mark(30)}<span translate="no">Aurin</span></a>
-<div class="links"><a href="/#a-readiness">Readiness</a><a href="/#a-training">Training</a><a href="/#a-food">Nutrition</a><a href="/#a-sleep">Sleep</a><a href="/#a-coach">Coach</a></div>
+<div class="links"><a href="/#a-readiness">Readiness</a><a href="/#a-training">Training</a><a href="/#a-food">Nutrition</a><a href="/#a-sleep">Sleep</a><a href="/#a-coach">Coach</a><a href="/#a-watch">Watch</a></div>
 <a class="nav-cta" href="/#join">Join the waitlist</a>
 </nav></header>
 ${body}
 <footer class="site-foot"><div class="wrap">
 <div class="top">
 <div class="brand">${mark(40)}<p>Train for how you feel today.</p></div>
-<nav aria-label="Aurin"><h3 translate="no">Aurin</h3><ul><li><a href="/#a-readiness">Readiness</a></li><li><a href="/#a-training">Training</a></li><li><a href="/#a-food">Nutrition</a></li><li><a href="/#a-sleep">Sleep</a></li><li><a href="/#a-coach">Coach</a></li><li><a href="/#connections">Connections</a></li></ul></nav>
+<nav aria-label="Aurin"><h3 translate="no">Aurin</h3><ul><li><a href="/#a-readiness">Readiness</a></li><li><a href="/#a-training">Training</a></li><li><a href="/#a-food">Nutrition</a></li><li><a href="/#a-sleep">Sleep</a></li><li><a href="/#a-coach">Coach</a></li><li><a href="/#a-watch">Apple Watch</a></li><li><a href="/#connections">Connections</a></li></ul></nav>
 <nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li></ul></nav>
 <nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/cs/privacy" hreflang="cs">Soukromí</a> · <a href="/cs/terms" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
@@ -812,11 +807,15 @@ export function overviewPage(request) {
       ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
       ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
     ['kouc', '', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
-      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today or what to eat before a workout, or send a photo of your trainer’s plan. When it proposes a workout or a plan for your race, confirm it and it lands in your plan.', 11500]]]];
+      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today or what to eat before a workout, or send a photo of your trainer’s plan. When it proposes a workout or a plan for your race, confirm it and it lands in your plan.', 11500]]],
+    ['hodinky', '', 'Aurin on your wrist.', 'Today’s readiness when you raise your wrist, your gym sets without your phone, water in one tap.', 'green', 'glow-today',
+      WATCH.map(([, title, text], i) => [`watch:${i}`, '', 0, title, text, 6000])]];
   // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides
   // alternate. Steps of a chapter with more than one are buttons that switch the phone's screen.
   const chapter = ([id, eyebrow, h, p, tone, glow, list], n) => {
     const multi = list.length > 1;
+    // The watch chapter shows the watch app's screens on one watch, with no piece beside it.
+    const watch = list[0][0].startsWith('watch:');
     const subs = p.split('<span class="free">').map((t, j) => `<p class="sub${j ? ' free' : ''}">${t.replace('</span>', '')}</p>`).join('');
     const body = ([, , , title, text], i) => `${multi ? `<span class="n">0${i + 1}</span>` : ''}<span class="tt">${title}</span><span class="tx">${text}</span>`;
     const steps = list.map((x, i) => `<li class="step${i === 0 ? ' on' : ''}" style="--dur:${x[5] || 6500}ms" data-dur="${x[5] || 6500}">${multi
@@ -825,8 +824,9 @@ export function overviewPage(request) {
     return `<section id="${id}" class="chapter${n % 2 ? ' flip' : ''}${multi ? ' multi' : ''}${eyebrow ? '' : ' opens'}" style="--tone:var(--${tone});--glow:var(--${glow})"><div class="wrap ch">
 <div class="head reveal">${eyebrow ? `<div class="eyebrow">${eyebrow}</div>` : ''}<h3 class="big">${h}</h3>${subs}</div>
 <div class="vis-wrap"><div class="vis"><div class="glow"></div>
-<div class="device"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}"${screen.startsWith('html:') ? ' aria-hidden="true"' : ''}>${screen.startsWith('html:') ? SCREENS[screen.slice(5)] : shot(screen)}</div>`).join('')}</div></div></div>
-${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style="top:${top}px"${demo === 'dial' ? '' : ' aria-hidden="true"'}>${DEMOS[demo]}</div>`).join('')}
+${watch ? `<div class="wdev"><div class="aw-w">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}" aria-hidden="true">${WATCH[+screen.slice(6)][3]}</div>`).join('')}</div></div>`
+  : `<div class="device"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}"${screen.startsWith('html:') ? ' aria-hidden="true"' : ''}>${screen.startsWith('html:') ? SCREENS[screen.slice(5)] : shot(screen)}</div>`).join('')}</div></div></div>`}
+${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style="top:${top}px"${demo === 'dial' ? '' : ' aria-hidden="true"'}>${DEMOS[demo]}</div>`).join('')}
 </div></div>
 <div class="rail"><ol class="steps">${steps}</ol>${multi ? `<button type="button" class="hold"><svg class="icon pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg><svg class="icon play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5z"/></svg><span>Pause</span></button>` : ''}</div>
 </div></section>`;
@@ -839,7 +839,8 @@ ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style
     ['training', 'Training', 'Workouts built around your fatigue, muscles and equipment.', 'glow-training', ['trenink', 'posilovna', 'rezim', 'svaly']],
     ['food', 'Nutrition', 'Snap your plate or scan a barcode. AI fills in the values.', 'glow-food', ['vyziva']],
     ['sleep', 'Sleep', 'A bedtime from your alarm and the sleep you need tonight.', 'glow-health', ['spanek']],
-    ['coach', 'Coach', 'Ask anything. It knows your sleep, training and food.', 'glow-coach', ['kouc']]];
+    ['coach', 'Coach', 'Ask anything. It knows your sleep, training and food.', 'glow-coach', ['kouc']],
+    ['watch', 'Apple Watch', 'Your morning, your sets and your water, without taking out your phone.', 'glow-today', ['hodinky']]];
   const act = ([id, title, line, glow]) => `<section id="a-${id}" class="opener" style="--glow:var(--${glow})"><div class="wrap ac">
 <div class="head reveal"><h2 class="big">${title}</h2><p class="sub">${line}</p></div>
 <div class="cards" aria-hidden="true">${ACTS[id]}</div>
@@ -855,13 +856,6 @@ ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style
 <div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><p class="hint">Drag to turn · tap a muscle</p><button type="button" class="bubble"><span class="txt"><span class="vh">Muscle: </span><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
 </div></section>
 <div class="muscle-card" role="dialog" aria-modal="true" aria-labelledby="mc-name"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3 id="mc-name"></h3><p class="state"></p></div></div>`;
-
-  // Apple Watch: the watch app's screens (built in site-demos.js, CI takes no watch screenshots), one per thing it does.
-  const watch = `<section id="apple-watch" class="watch"><div class="wrap">
-<div class="intro reveal"><div class="eyebrow">Apple Watch</div><h2 class="big">Aurin on your wrist.</h2><p class="sub">Today’s readiness when you raise your wrist, your gym sets without your phone, water in one tap.</p></div>
-<ul class="aw-list">${WATCH.map(([tone, title, text, screen]) => `<li class="reveal" style="--g:var(--${tone})"><div class="aw-w" aria-hidden="true">${screen}</div><h3>${title}</h3><p>${text}</p></li>`).join('')}</ul>
-<p class="aw-note">Comes with the iPhone app. Sets, water and your workout sync both ways.</p>
-</div></section>`;
 
   // Connections: what Aurin reads from each service and what it sends back, as the app's connect
   // sheet says it (SettingsConnectFlow.swift, SyncViews.swift). Each logo is the app's own file.
@@ -983,7 +977,6 @@ ${sun(104)}
 
 ${ACT_LIST.map(a => act(a) + '\n' + a[4].map(id => id === 'svaly' ? muscles : chapter(scenes.find(x => x[0] === id), scenes.findIndex(x => x[0] === id))).join('\n')).join('\n')}
 
-${watch}
 
 <section class="mid"><div class="wrap reveal"><p>Try it on your own mornings.</p><a class="ghost" href="#join">Join the waitlist ${ARROW}</a></div></section>
 ${actNav}
