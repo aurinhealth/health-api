@@ -139,6 +139,12 @@ struct PlanPreview: Decodable, Equatable {
         var noRest: Bool? = nil
         var note: String? = nil
     }
+    /// The long ride's or run's day: the plan's now, the automatic one, and whether it is the athlete's own.
+    struct Long: Decodable, Equatable {
+        var day: Int? = nil
+        var auto: Int? = nil
+        let own: Bool
+    }
     /// The other running plan that shares the free time.
     struct Other: Decodable, Equatable {
         let name: String
@@ -163,6 +169,7 @@ struct PlanPreview: Decodable, Equatable {
     /// Days the plan adds to the usual week (shown dashed until chosen).
     var added: [Int]? = nil
     var other: Other? = nil
+    var long: Long? = nil
 }
 
 /// A race plan's race (src/race-estimate.js): a running race's estimate now,

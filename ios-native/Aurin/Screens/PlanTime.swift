@@ -265,8 +265,12 @@ struct DaysAndTimeSheet: View {
     let range: ClosedRange<Int>
     let initial: [Int]
     let time: PlanPreview.Time?
+    /// The long ride's or run's day: own or picked from the free time.
+    var long: PlanPreview.Long? = nil
     @State private var days: [Int] = []
     @State private var nextWeek = true
+    /// The own long day; nil: automatic (the day with the most free time).
+    @State private var longDay: Int?
     @State private var busy = false
     @State private var error: String?
 
@@ -297,29 +301,104 @@ struct DaysAndTimeSheet: View {
                     .cardSurface(cornerRadius: 22)
                 }
                 .buttonStyle(.plain)
+                if sport != "gym" {
+                    NavigationLink {
+                        LongDayPicker(sport: sport, days: days, time: time, auto: long?.auto, selection: $longDay)
+                    } label: { longRow }
+                    .buttonStyle(.plain)
+                }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
                 PrimaryButton(title: L10n.tr("Uložit"), busy: busy) { Task { await save() } }
                     .disabled(busy || model.demo || !range.contains(days.count))
             }
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } } }
         }
-        .onAppear { if days.isEmpty { days = initial } }
+        .onAppear {
+            if days.isEmpty { days = initial }
+            if long?.own == true { longDay = long?.day }
+        }
+    }
+
+    /// "Long run · Automatic, now Saturday" or the chosen day.
+    private var longRow: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: L10n.tr(sport == "run" ? "Dlouhý běh" : "Dlouhá jízda")).font(.body).foregroundStyle(Palette.ink)
+                if longDay == nil, let auto = long?.auto, days.contains(auto) {
+                    Text(verbatim: L10n.f("teď %@, nejvíc volného času", FreeTime.weekdayNames[auto])).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(2)
+                }
+            }
+            Spacer(minLength: 8)
+            Text(verbatim: longDay.map { FreeTime.weekdayNames[$0] } ?? L10n.tr("Automaticky")).font(.body).foregroundStyle(Palette.muted).lineLimit(1)
+            Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
+        }
+        .padding(.horizontal, 16).frame(minHeight: 56)
+        .cardSurface(cornerRadius: 22)
     }
 
     private func toggle(_ i: Int) {
         if days.contains(i) { if days.count > 1 { days.removeAll { $0 == i } } } else { days = (days + [i]).sorted() }
+        // A long day that is no longer a training day goes back to automatic.
+        if let d = longDay, !days.contains(d) { longDay = nil }
     }
 
     private func save() async {
         busy = true
         defer { busy = false }
         do {
-            _ = try await model.api.trainingPlanAction(["action": .string("days"), "sport": .string(sport), "days": .array(days.map { .number(Double($0)) }), "from": .string(nextWeek ? "next" : "now")])
+            var body: JSONObject = ["action": .string("days"), "sport": .string(sport), "days": .array(days.map { .number(Double($0)) }), "from": .string(nextWeek ? "next" : "now")]
+            if sport != "gym" { body["longDay"] = longDay.map { .number(Double($0)) } ?? .null }
+            _ = try await model.api.trainingPlanAction(body)
             await model.refreshTraining()
             dismiss()
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+/// "Dlouhý běh": automatic (the day with the most free time) or one of the plan's days.
+struct LongDayPicker: View {
+    let sport: String
+    let days: [Int]
+    let time: PlanPreview.Time?
+    let auto: Int?
+    @Binding var selection: Int?
+
+    var body: some View {
+        SettingsPage(title: sport == "run" ? "Dlouhý běh" : "Dlouhá jízda") {
+            Text(sport == "run" ? "Nabízím jen tvoje dny běhu. Den před dlouhým během plán nedá klíčový trénink." : "Nabízím jen tvoje dny na kole. Den před dlouhou jízdou plán nedá klíčový trénink.")
+                .font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            SettingsGroup {
+                row(nil, title: L10n.tr("Automaticky"), subtitle: auto.map { L10n.f("teď %@, nejvíc volného času", FreeTime.weekdayNames[$0]) }, value: nil)
+                ForEach(days, id: \.self) { d in
+                    SettingsDivider()
+                    row(d, title: FreeTime.weekdayNames[d], subtitle: nil, value: time.map { FreeTime.label($0.days.indices.contains(d) ? $0.days[d] : nil) })
+                }
+            }
+            if let d = selection, let minutes = time?.days.indices.contains(d) == true ? time?.days[d] : nil, minutes > 0 {
+                Text(verbatim: L10n.f("%@ má %@: dlouhý trénink se do toho vejde, dokud dni nepřidáš víc času.", FreeTime.weekdayNames[d], planDuration(minutes)))
+                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 4)
+            }
+        }
+    }
+
+    private func row(_ day: Int?, title: String, subtitle: String?, value: String?) -> some View {
+        Button { selection = day } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: title).font(.body).foregroundStyle(Palette.ink)
+                    if let subtitle { Text(verbatim: subtitle).font(Typo.caption).foregroundStyle(Palette.muted) }
+                }
+                Spacer(minLength: 8)
+                if let value { Text(verbatim: value).font(.body).foregroundStyle(Palette.muted) }
+                Image(systemName: "checkmark").scaledFont(14, weight: .semibold).foregroundStyle(Palette.amber)
+                    .opacity(selection == day ? 1 : 0)
+            }
+            .padding(.horizontal, 16).frame(minHeight: 50).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selection == day ? .isSelected : [])
     }
 }
 

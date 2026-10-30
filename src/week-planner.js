@@ -61,7 +61,9 @@ export function sanitizeWeekPlan(input = {}) {
   // (`alternate` is a Monday of a week A).
   const alternate = validDay(input.alternate) ? mondayOfWeek(input.alternate) : null;
   return { days, location, availability: normalizeAvailability(input.availability), weeklyActivities: count, sessions: sanitizeSessions(input.sessions, days),...(['auto','manual'].includes(input.availabilityMode)?{availabilityMode:input.availabilityMode}:{}),
-    ...(alternate ? { alternate, availabilityB: normalizeAvailability(input.availabilityB) } : {}) };
+    ...(alternate ? { alternate, availabilityB: normalizeAvailability(input.availabilityB) } : {}),
+    // The day of the long ride or run (0 = Monday); none: the day with the most free time.
+    ...(Number.isInteger(input.longDay) && input.longDay >= 0 && input.longDay <= 6 ? { longDay: input.longDay } : {}) };
 }
 const mondayOfWeek = date => { const d = new Date(date + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7); return d.toISOString().slice(0, 10); };
 // With two weeks in turn: true when the week of `date` is a week B.
@@ -168,7 +170,7 @@ export async function resetWeekPlan(db, date) {
 // (`quality`, still capped by readiness) and puts them on its sport's days first (`prefer`).
 // With the free time of every endurance day known (`minutes`, Monday first),
 // the long session goes to the longest day and quality to days with an hour or more.
-export function planWeekRoles(days = [], { readiness = "green", quality = null, prefer = null, minutes = null } = {}) {
+export function planWeekRoles(days = [], { readiness = "green", quality = null, prefer = null, minutes = null, longDay = null } = {}) {
   const has = (i, s) => (days[i] || []).includes(s);
   const endurance = [0, 1, 2, 3, 4, 5, 6].filter(i => has(i, "ride") || has(i, "run"));
   const role = {};
@@ -182,6 +184,9 @@ export function planWeekRoles(days = [], { readiness = "green", quality = null, 
     const longest = [...endurance].sort((a, b) => free(b) - free(a) || Number(b >= 5) - Number(a >= 5) || b - a)[0];
     if (long == null || free(longest) >= free(long) + 30) long = longest;
   }
+  // The athlete's own long day ("Long ride", "Long run") wins when it is a ride or run day.
+  const own = Number.isInteger(longDay) && endurance.includes(longDay);
+  if (own) long = longDay;
   if (long != null && endurance.length >= 2) role[long] = "long";
   const usual = endurance.length >= 4 ? 2 : endurance.length >= 2 ? 1 : 0;
   const planned = Number.isInteger(quality) ? Math.min(quality, Math.max(0, endurance.length - (long != null && endurance.length >= 2 ? 1 : 0))) : usual;
@@ -193,7 +198,7 @@ export function planWeekRoles(days = [], { readiness = "green", quality = null, 
   for (const gap of [2, 1]) {
     for (const i of picks) {
       if (qualityDays.length >= wanted || role[i]) continue;
-      const far = qualityDays.every(q => Math.abs(q - i) >= 2) && (role[long] !== "long" || Math.abs(long - i) >= gap);
+      const far = qualityDays.every(q => Math.abs(q - i) >= 2) && (role[long] !== "long" || Math.abs(long - i) >= gap) && !(own && i === long - 1);
       if (far) { qualityDays.push(i); role[i] = "quality"; }
     }
   }
@@ -219,13 +224,15 @@ export function planWeekRoles(days = [], { readiness = "green", quality = null, 
 
 // The free time per weekday (Monday first) for planWeekRoles.
 export const freeMinutes = prefs => (prefs?.availability || []).map(a => a?.minutes ?? null);
+// What planWeekRoles takes from the week plan: the free time and the own long day.
+export const roleTime = prefs => ({ minutes: freeMinutes(prefs), longDay: Number.isInteger(prefs?.longDay) ? prefs.longDay : null });
 
 // Role of one sport on one date, for the generator.
 export function roleFor(prefs, date, sport, options = {}) {
   const d = new Date(String(date) + "T12:00:00Z");
   if (Number.isNaN(d.getTime())) return null;
   const weekday = (d.getUTCDay() + 6) % 7;
-  return planWeekRoles(prefs?.days || [], { minutes: freeMinutes(prefs), ...options })[weekday].items.find(x => x.sport === sport) || null;
+  return planWeekRoles(prefs?.days || [], { ...roleTime(prefs), ...options })[weekday].items.find(x => x.sport === sport) || null;
 }
 
 // ---- One recovery week for the whole app -----------------------------------

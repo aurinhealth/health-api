@@ -1,6 +1,6 @@
 import { L } from './lang.js';
 import { availabilityOn, parseTimeWindow } from './training-availability.js';
-import { planWeekRoles, freeMinutes, weekTargets, weekLoadsBefore, weeklyRunCap, capRunVolume, committedRunMinutes, isRunActivity, hrvWeekTrendDown, hrvSourceRows } from './week-planner.js';
+import { planWeekRoles, roleTime, weekTargets, weekLoadsBefore, weeklyRunCap, capRunVolume, committedRunMinutes, isRunActivity, hrvWeekTrendDown, hrvSourceRows } from './week-planner.js';
 import { timeZone } from "./user-time.js";
 import { weatherKitConfigured, weatherKitWeek, weatherKitHours } from "./weatherkit.js";
 
@@ -163,7 +163,7 @@ export function weekProposal({ prefs, start, today, week = {}, fitness = {}, sta
   const wellness = (fitness.wellness || []).filter(w => w.id <= today).at(-1), ctl = Number(wellness?.ctl) || null;
   const loads = existing.map(d => ({ date: d.date, done: Number(d.daily?.training?.actualTss) || (d.daily?.training?.completed || []).reduce((n, a) => n + (Number(a.tss) || 0), 0), planned: (d.daily?.training?.planned || []).reduce((n, a) => n + (Number(a.tss) || 0), 0), sports: sessionsOn(d).map(sportOf) }));
   const level = strain?.level || 0;
-  const roles = planWeekRoles(proposedPrefs.days, { readiness: Number(wellness?.tsb) < -20 || level >= 2 ? 'red' : level >= 1 ? 'yellow' : 'green', ...(plan?.roles || {}), minutes: freeMinutes(proposedPrefs) });
+  const roles = planWeekRoles(proposedPrefs.days, { readiness: Number(wellness?.tsb) < -20 || level >= 2 ? 'red' : level >= 1 ? 'yellow' : 'green', ...(plan?.roles || {}), ...roleTime(proposedPrefs) });
   const withPlan = t => plan?.apply ? plan.apply(t) : t;
   // Running this week so far (done, and planned still ahead or today) counts against the weekly running cap.
   const runOf = list => (list || []).filter(isRunActivity).reduce((m, a) => m + (Number(a.durationHours) || 0) * 60, 0);

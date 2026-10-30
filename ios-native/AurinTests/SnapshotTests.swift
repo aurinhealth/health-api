@@ -834,7 +834,9 @@ final class SnapshotTests: XCTestCase {
         try render("plan-free-time", height: 900) { FreeTimeSheet(time: time, planDays: [1, 3, 5, 6]).environment(model) }
         let weekWithTime = try decoder.decode(PlanWeekDetail.self, from: Data(weekJSON.replacingOccurrences(of: #""weekDays":null,"#, with: #""weekDays":null,"time":{"days":[45,60,0,45,0,120,180],"own":true,"weekB":false},"#).utf8))
         try render("plan-time-this-week", height: 900) { TimeThisWeekSheet(week: weekWithTime, planDays: [1, 3, 5, 6], usual: 4).environment(model) }
-        try render("plan-days-and-time", height: 600) { DaysAndTimeSheet(sport: "ride", range: 3...6, initial: [1, 3, 5, 6], time: time).environment(model) }
+        let long = try decoder.decode(PlanPreview.Long.self, from: Data(#"{"day":5,"auto":5,"own":false}"#.utf8))
+        try render("plan-days-and-time", height: 700) { DaysAndTimeSheet(sport: "ride", range: 3...6, initial: [1, 3, 5, 6], time: time, long: long).environment(model) }
+        try render("plan-long-day", height: 600) { NavigationStack { LongDayPicker(sport: "run", days: [1, 3, 5, 6], time: time, auto: 5, selection: .constant(6)) } }
         try render("plan-time-short", height: 120) { PlanTimeNote(text: L10n.tr("Na tento plán je času málo. Klíčové jízdy zůstanou, lehké se zkrátí a odhad cíle bude opatrnější.")).padding(16) }
         // The "Úpravy" tiles must fit: an iPhone SE in both languages, and the largest text (one tile a row).
         let language = L10n.language

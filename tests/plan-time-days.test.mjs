@@ -109,3 +109,17 @@ test("the plan routes take the time, the days and the gym sessions a week", asyn
   const gateway = readFileSync(new URL("../src/strength-gateway.js", import.meta.url), "utf8");
   assert.ok(gateway.includes("trainingBudget(prefs, context.date, 90)"), "a plan day up to 90 minutes");
 });
+
+test("the athlete's own long day wins, with no key session the day before", async () => {
+  const { roleTime } = await import("../src/week-planner.js");
+  const days = [[], ["run"], [], ["run"], [], ["run"], ["run"]];
+  const roles = longDay => planWeekRoles(days, { quality: 2, ...roleTime({ availability: time([0, 60, 0, 75, 0, 150, 120]), longDay }) });
+  const longOf = r => r.findIndex(d => d.items.some(x => x.role === "long"));
+  assert.equal(longOf(roles(undefined)), 5, "automatic: Saturday has the most time");
+  const own = roles(6);
+  assert.equal(longOf(own), 6, "Sunday chosen");
+  assert.notEqual(own[5].items[0].role, "quality", "no key session on Saturday");
+  assert.equal(longOf(roles(2)), 5, "a day without a run is ignored");
+  assert.equal(sanitizeWeekPlan({ longDay: 6 }).longDay, 6);
+  assert.equal(sanitizeWeekPlan({ longDay: 9 }).longDay, undefined);
+});
