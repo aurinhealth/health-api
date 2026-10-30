@@ -1,7 +1,6 @@
 import { signText, userSessionCookie, sessionSecret, sessionEpochOf, timingSafeEqualString } from "./dashboard-auth.js";
-import { scriptPolicy } from "./web-security.js";
 import { ensureTenancy, signInGoogleUser } from "./tenancy.js";
-import { appOrigin } from "./app-origin.js";
+import { appOrigin, SITE_ORIGIN } from "./app-origin.js";
 import { L } from "./lang.js";
 
 // "Sign in with Google" for the iPhone app. Only identity scopes are requested;
@@ -16,13 +15,17 @@ const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 
 // The iPhone app (ios-native/) signs in through Safari: Google refuses
 // embedded browsers. It opens /auth/google?app=<challenge> in Safari;
-// the callback sends Safari back to loadwise://auth with a short-lived token,
-// and the app trades that token plus the verifier behind the challenge for
-// its own session at /auth/app/session. Another app grabbing the loadwise://
-// link gets nothing without the verifier. A token works once, and only while
-// the user's session epoch is the one it was issued under, so "sign out
-// everywhere" also ends a token not yet traded.
-const APP_RETURN_URL = "loadwise://auth";
+// the callback sends Safari on to https://aurin.health/auth/app/return with a
+// short-lived token, and the app trades that token plus the verifier behind the
+// challenge for its own session at /auth/app/session. Only the Aurin app can
+// catch that https address in its browser sheet: iOS hands it only to an app
+// with aurin.health among its associated domains (apple-app-site-association.js).
+// Always aurin.health, the test server too, because
+// that is the app's associated domain; the app trades the token with the server
+// it started on. A token works once, and only while the user's session epoch is
+// the one it was issued under, so "sign out everywhere" also ends a token not yet traded.
+export const APP_RETURN_PATH = "/auth/app/return";
+const APP_RETURN_URL = SITE_ORIGIN + APP_RETURN_PATH;
 const APP_HANDOFF_SECONDS = 300;
 export const APP_CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
 
@@ -34,6 +37,7 @@ export async function handleGoogleLogin(request, env, pathname) {
   if (pathname === "/auth/google" && request.method === "GET") return startLogin(googleClientEnv(env), request);
   if (pathname === "/auth/google/callback" && request.method === "GET") return finishLogin(request, googleClientEnv(env));
   if (pathname === "/auth/app/session" && request.method === "POST") return finishAppLogin(request, googleClientEnv(env));
+  if (pathname === APP_RETURN_PATH && (request.method === "GET" || request.method === "HEAD")) return page(...RETURN_PAGE());
   return null;
 }
 
@@ -46,6 +50,9 @@ function googleClientEnv(env) {
 function configured(env) {
   return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.SESSION_SECRET && env.OWNER_EMAIL && env.DB);
 }
+// Seen only when the app's browser sheet did not catch the return address: an
+// older version of the app, or the address opened somewhere else. It never shows the token.
+const RETURN_PAGE = () => [L("Pokračuj v aplikaci", "Continue in the app"), L("Přihlášení pokračuje v aplikaci Aurin. Pokud se nic nestane, aktualizuj Aurin na nejnovější verzi a zkus to znovu.", "Sign-in continues in the Aurin app. If nothing happens, update Aurin to the latest version and try again."), 200];
 const APP_ONLY = () => [L("Přihlášení selhalo", "Sign-in failed"), L("Přihlášení přes Google je jen v aplikaci Aurin pro iPhone.", "Sign in with Google works only in the Aurin iPhone app."), 400];
 
 async function startLogin(env, request) {
@@ -71,7 +78,7 @@ async function finishLogin(request, env, fetchImpl = fetch) {
   const url = new URL(request.url);
   const match = (request.headers.get("Cookie") || "").match(new RegExp("(?:^|;\\s*)" + STATE_COOKIE + "=([^;]+)"));
   const [expectedState, nonce, verifier, app] = (match?.[1] || "").split(".");
-  // Every failure goes back to the iPhone app as loadwise://auth?error=…,
+  // Every failure goes back to the iPhone app as …/auth/app/return?error=…,
   // so its browser sheet closes and the app says what happened.
   if (!APP_CHALLENGE.test(app || "")) return page(...APP_ONLY());
   const fail = reason => appError(reason);
@@ -99,7 +106,7 @@ async function finishLogin(request, env, fetchImpl = fetch) {
     return fail("not_invited");
   }
 
-  return appReturnPage(await appHandoffToken(user.id, app, sessionSecret(env), await sessionEpochOf(env.DB, user.id)));
+  return appReturn("token", await appHandoffToken(user.id, app, sessionSecret(env), await sessionEpochOf(env.DB, user.id)));
 }
 export { finishLogin as _finishLoginForTest };
 
@@ -108,23 +115,15 @@ async function appHandoffToken(uid, challenge, secret, epoch) {
   return payload + "." + await signText("app-handoff." + payload, secret);
 }
 
-// A failed sign-in started by the app: back to it with a code it explains
-// (cancelled, not_invited, expired, failed, unavailable). A redirect, not a page,
-// so ASWebAuthenticationSession sees the loadwise:// address and closes.
-function appError(code) {
-  const headers = new Headers({ Location: APP_RETURN_URL + "?error=" + encodeURIComponent(code), "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+// Back to the app's browser sheet, which closes on this address: the handoff
+// token, or for a failed sign-in a code the app explains (cancelled,
+// not_invited, expired, failed, unavailable).
+function appReturn(name, value) {
+  const headers = new Headers({ Location: APP_RETURN_URL + "?" + name + "=" + encodeURIComponent(value), "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
   headers.append("Set-Cookie", STATE_COOKIE + "=; Max-Age=0; Path=/auth/google; Secure; HttpOnly; SameSite=Lax");
   return new Response(null, { status: 302, headers });
 }
-
-// Safari asks before opening another app, so the page keeps a button for it.
-const OPEN_APP_SCRIPT = "<script>location.href=document.getElementById(\"open\").href</script>";
-function appReturnPage(token) {
-  const link = APP_RETURN_URL + "?token=" + encodeURIComponent(token);
-  const headers = new Headers({ "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "Referrer-Policy": "no-referrer", "Content-Security-Policy": scriptPolicy(OPEN_APP_SCRIPT) });
-  headers.append("Set-Cookie", STATE_COOKIE + "=; Max-Age=0; Path=/auth/google; Secure; HttpOnly; SameSite=Lax");
-  return new Response("<!doctype html><html lang=\"" + L("cs", "en") + "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Aurin</title></head><body style=\"font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5\"><h1>" + L("Přihlášení hotovo", "Signed in") + "</h1><p>" + L("Vrať se do aplikace Aurin.", "Go back to the Aurin app.") + "</p><p><a id=\"open\" href=\"" + esc(link) + "\" style=\"display:inline-block;padding:12px 18px;border-radius:10px;background:#9ec5ff;color:#0a0d12;text-decoration:none;font-weight:600\">" + L("Otevřít aplikaci", "Open the app") + "</a></p>" + OPEN_APP_SCRIPT + "</body></html>", { status: 200, headers });
-}
+const appError = code => appReturn("error", code);
 
 // The app's web view trades the handoff token and its verifier for a session.
 // JSON only, so another site cannot post a token from a hidden form.
@@ -198,7 +197,7 @@ async function googleJwks(fetchImpl, kid) {
 export function _resetJwksCacheForTest() { cachedJwks = null; cachedJwksAt = 0; forcedJwksAt = 0; }
 
 function page(title, message, status) {
-  return new Response("<!doctype html><html lang=\"" + L("cs", "en") + "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Aurin</title></head><body style=\"font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5\"><h1>" + esc(title) + "</h1><p>" + esc(message) + "</p><p><a href=\"/app\" style=\"color:#9ec5ff\">" + L("Zpět na přihlášení", "Back to sign-in") + "</a></p></body></html>", { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "Referrer-Policy": "no-referrer" } });
+  return new Response("<!doctype html><html lang=\"" + L("cs", "en") + "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Aurin</title></head><body style=\"font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5\"><h1>" + esc(title) + "</h1><p>" + esc(message) + "</p><p><a href=\"/app\" style=\"color:#9ec5ff\">" + L("Zpět na přihlášení", "Back to sign-in") + "</a></p></body></html>", { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex" } });
 }
 function esc(value) { return String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c])); }
 function randomToken() { return base64url(crypto.getRandomValues(new Uint8Array(24))); }

@@ -6,7 +6,9 @@ import UIKit
 // Google refuses sign-in inside an app's own web view, so the app uses the
 // same handoff as the Capacitor app (src/google-login.js):
 // 1. open /auth/google?app=<challenge> in a system browser sheet,
-// 2. the server answers with loadwise://auth?token=<short-lived token>,
+// 2. the server answers with https://aurin.health/auth/app/return?token=<short-lived token>,
+//    which only this app can catch: iOS hands an https callback only to an app
+//    with aurin.health among its associated domains (project.yml),
 // 3. the app trades the token plus the verifier behind the challenge for the
 //    session cookie at POST /auth/app/session.
 // The cookie lands in HTTPCookieStorage.shared, which URLSession sends with
@@ -26,7 +28,7 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         var start = URLComponents(url: api.baseURL.appending(path: "auth/google"), resolvingAgainstBaseURL: false)!
         start.queryItems = [URLQueryItem(name: "app", value: challenge)]
 
-        let callback = try await openBrowser(start.url!)
+        let callback = try await openBrowser(start.url!, callback: Self.signInCallback)
         let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
         if let error = items.first(where: { $0.name == "error" })?.value { throw Self.signInError(error) }
         guard let token = items.first(where: { $0.name == "token" })?.value else {
@@ -35,7 +37,11 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         try await api.exchangeHandoff(token: token, verifier: verifier)
     }
 
-    /// loadwise://auth?error=<code> from a failed Google sign-in (src/google-login.js).
+    /// Always aurin.health, the test server too: it is the app's associated
+    /// domain, and the token is still traded with the server the sign-in started on.
+    static let signInCallback = ASWebAuthenticationSession.Callback.https(host: "aurin.health", path: "/auth/app/return")
+
+    /// …/auth/app/return?error=<code> from a failed Google sign-in (src/google-login.js).
     static func signInError(_ code: String) -> Error {
         switch code {
         case "cancelled": return APIError.message(L10n.tr("Přihlášení přes Google bylo zrušeno."))
@@ -53,13 +59,13 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         // The ticket again as a header: without it the server lets nobody in, so a
         // ticket link sent to someone else expires (src/native-connect.js).
         let ticket = URLComponents(url: link, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "ticket" })?.value
-        let callback = try await openBrowser(link, headers: ticket.map { ["X-Aurin-Connect": $0] } ?? [:])
+        let callback = try await openBrowser(link, callback: .customScheme("loadwise"), headers: ticket.map { ["X-Aurin-Connect": $0] } ?? [:])
         return URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "event" })?.value ?? "unknown"
     }
 
-    private func openBrowser(_ url: URL, headers: [String: String] = [:]) async throws -> URL {
+    private func openBrowser(_ url: URL, callback: ASWebAuthenticationSession.Callback, headers: [String: String] = [:]) async throws -> URL {
         try await withCheckedThrowingContinuation { continuation in
-            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "loadwise") { callback, error in
+            let session = ASWebAuthenticationSession(url: url, callback: callback) { callback, error in
                 if let callback {
                     continuation.resume(returning: callback)
                 } else if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {

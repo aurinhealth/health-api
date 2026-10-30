@@ -67,6 +67,8 @@ targets:
         # for this app (src/apple-app-site-association.js, APPLE_TEAM_ID).
         # aurin.health is the server the app talks to (APIClient.server).
         # applinks: a shared workout's link (/t/<id>) opens the app.
+        # webcredentials also lets only this app catch Google sign-in's return
+        # address, https://aurin.health/auth/app/return (Data/Auth.swift).
         com.apple.developer.associated-domains:
           - webcredentials:aurin.health
           - applinks:aurin.health
