@@ -360,3 +360,24 @@ test("a stranger's wrong codes lock out only devices that never signed in with t
   const forged = "aurin_known=" + "a".repeat(24) + ".bad";
   assert.equal((await at(later + 120_000, () => verify(env, "owner@example.com", "123456", { ip: "192.0.2.9", cookie: forged }))).status, 429);
 });
+
+test("signing out everywhere ends the device's exemption", async () => {
+  const { env, sent } = await setup();
+  const t0 = Date.parse("2026-10-07T08:00:00Z");
+  await at(t0, () => start(env, "owner@example.com", { ip: "192.0.2.1" }));
+  const first = await at(t0 + 1000, () => verify(env, "owner@example.com", codeIn(sent.at(-1)), { ip: "192.0.2.1" }));
+  const cookie = first.headers.getSetCookie().find(c => c.startsWith("aurin_known=")).split(";")[0];
+  let caller = 0;
+  for (let round = 0; round < 5; round++) {
+    const time = t0 + 120_000 + round * 61_000;
+    await sendCode(env, "owner@example.com", "cs", { now: time });
+    const wrong = codeIn(sent.at(-1)) === "000000" ? "111111" : "000000";
+    for (let i = 0; i < 4; i++) await at(time + 1000, () => verify(env, "owner@example.com", wrong, { ip: "198.51.100." + (++caller) }));
+  }
+  env.DB.sqlite.prepare("UPDATE users SET session_epoch = session_epoch + 1 WHERE email = 'owner@example.com'").run();
+  const later = t0 + 10 * 61_000;
+  const before = sent.length;
+  await at(later, () => start(env, "owner@example.com", { ip: "192.0.2.1", cookie }));
+  assert.equal(sent.length, before, "no code past the daily limit any more");
+  assert.equal((await at(later + 1000, () => verify(env, "owner@example.com", "123456", { ip: "192.0.2.1", cookie }))).status, 429);
+});

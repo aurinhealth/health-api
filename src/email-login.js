@@ -46,21 +46,29 @@ const LOCKED_TODAY = () => L("Na tenhle e-mail bylo zadáno příliš mnoho špa
 const REVIEW_LOCKED = () => L("Na tenhle e-mail bylo zadáno příliš mnoho špatných kódů.", "Too many wrong codes were entered for this email.");
 const today = now => new Date(now).toISOString().slice(0, 10);
 
-// The device a code was used on: "<nonce>.<signature of the address and the nonce>".
+// The device a code was used on: "<nonce>.<signature of the account, the address and the nonce>".
+// The signature covers the account's id and session epoch, so signing out everywhere, an e-mail
+// change, blocking or deleting the account ends the device's exemption, and an address that later
+// belongs to someone else never matches an older cookie.
 export const KNOWN_COOKIE = "aurin_known";
 const KNOWN_SECONDS = 365 * 24 * 60 * 60;
 const MAX_KNOWN_TRIES_PER_DAY = 20;
-const knownSignature = (env, email, nonce) => signText("known-device:" + email + ":" + nonce, sessionSecret(env));
+const knownOwner = (db, email) => db.prepare("SELECT id, session_epoch FROM users WHERE email=?").bind(email).first().catch(() => null);
+const knownSignature = (env, email, nonce, owner) => signText("known-device:" + owner.id + ":" + (Number(owner.session_epoch) || 0) + ":" + email + ":" + nonce, sessionSecret(env));
 async function knownCookie(env, email) {
+  const owner = await knownOwner(env.DB, email);
+  if (!owner) return null;
   const nonce = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(16).padStart(2, "0")).join("");
-  return KNOWN_COOKIE + "=" + nonce + "." + await knownSignature(env, email, nonce) + "; Path=/auth/email; Max-Age=" + KNOWN_SECONDS + "; HttpOnly; Secure; SameSite=Lax";
+  return KNOWN_COOKIE + "=" + nonce + "." + await knownSignature(env, email, nonce, owner) + "; Path=/auth/email; Max-Age=" + KNOWN_SECONDS + "; HttpOnly; Secure; SameSite=Lax";
 }
 // The nonce when the request comes from a device that signed in with this address, else null.
 export async function knownDevice(request, env, email) {
   const value = String(request.headers.get("Cookie") || "").split(/;\s*/).find(c => c.startsWith(KNOWN_COOKIE + "="))?.slice(KNOWN_COOKIE.length + 1) || "";
   const [nonce, signature] = value.split(".");
   if (!/^[0-9a-f]{24}$/.test(nonce || "") || !signature) return null;
-  return timingSafeEqualString(signature, await knownSignature(env, email, nonce)) ? nonce : null;
+  const owner = await knownOwner(env.DB, email);
+  if (!owner) return null;
+  return timingSafeEqualString(signature, await knownSignature(env, email, nonce, owner)) ? nonce : null;
 }
 
 const json = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -186,7 +194,8 @@ async function verifyCode(env, email, input, known = null) {
   if (!user) return json({ message: L("Tento e-mail nemá do Aurinu přístup.", "This email doesn't have access to Aurin.") }, 403);
   // This device signed in with the address: a stranger's wrong codes no longer lock it out.
   const response = await signedInResponse(user.id, env, { status: "ok", created: user.created });
-  response.headers.append("Set-Cookie", await knownCookie(env, email));
+  const device = await knownCookie(env, email);
+  if (device) response.headers.append("Set-Cookie", device);
   return response;
 }
 
