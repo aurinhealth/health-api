@@ -14,6 +14,8 @@
 // source is the device worn longest over the 30 days (hours with heart rate).
 // The user can name the source for either part instead; it then wins wherever
 // it has data, and the automatic rule fills the rest.
+import { wearFromSummary, rebuildHourSummary } from './hour-summary.js';
+
 const PRIORITY = 'source_priority';
 export const MARK = 'source-priority';
 // Markers of the rules this replaces (apple-health.js, ultrahuman.js): rows they
@@ -78,6 +80,8 @@ export async function saveSourcePriority(db, userId, input = {}, { now = Date.no
   // Nights are a row a day, so their whole history follows; hours only the last three months.
   const changed = (next.night !== current.night ? await resolveSources(db, userId, { part: 'night', since: addDays(today, -400), now }) : 0)
     + (next.day !== current.day ? await resolveSources(db, userId, { part: 'day', since: addDays(today, -92), now }) : 0);
+  // Steps, energy and zones that count changed with the day's choice.
+  if (next.day !== current.day) await rebuildHourSummary(db, userId, addDays(today, -92)).catch(error => console.error('Hour summary rebuild failed', error.message));
   return { status: 'ok', priority: next, changed };
 }
 
@@ -88,8 +92,9 @@ async function history(db, userId, from, to) {
       AND end_time >= ? AND end_time < ? AND (julianday(end_time) - julianday(start_time)) * 24 >= 3 GROUP BY 1, 2`).bind(userId, from, to).all(),
     // Hours with heart rate: Apple Watch's from the phone, Google's from its zone minutes (every minute worn).
     db.prepare(`SELECT source_family f, sample_time d, MAX(value_numeric) h FROM health_datapoints WHERE user_id = ? AND data_type = '${WEAR_TYPE}' AND sample_time >= ? AND sample_time < ? GROUP BY 1, 2`).bind(userId, from, to).all(),
-    db.prepare(`SELECT source_family f, substr(start_time,1,10) d, SUM(value_numeric) / 60.0 h FROM health_datapoints WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = 'time-in-heart-rate-zone'
-      AND start_time >= ? AND start_time < ? GROUP BY 1, 2`).bind(userId, from, to).all()
+    // From the hourly summary once it reaches back far enough (~60 k zone minutes a month otherwise).
+    wearFromSummary(db, userId, from, to).catch(() => null).then(rows => rows ? { results: rows } : db.prepare(`SELECT source_family f, substr(start_time,1,10) d, SUM(value_numeric) / 60.0 h FROM health_datapoints WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = 'time-in-heart-rate-zone'
+      AND start_time >= ? AND start_time < ? GROUP BY 1, 2`).bind(userId, from, to).all())
   ]);
   const night = new Map(), wear = new Map();
   const add = (map, f, d, v) => { if (!map.has(f)) map.set(f, new Map()); map.get(f).set(d, Math.min(24, (map.get(f).get(d) || 0) + v)); };

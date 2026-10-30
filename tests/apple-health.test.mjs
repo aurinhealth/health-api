@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { appleRow, saveAppleHealth, disconnectAppleHealth, appleHealthStatus, afterGoogleSync, appleBodyTooLarge, MAX_BODY_BYTES } from "../src/apple-health.js";
+import { appleRow, saveAppleHealth, disconnectAppleHealth, appleHealthStatus, afterGoogleSync, flushGoogleSync, appleBodyTooLarge, MAX_BODY_BYTES } from "../src/apple-health.js";
 import { googleDashboard } from "../src/google-dashboard.js";
 import { sleepSessionFromRow } from "../src/sleep-sessions.js";
 import { averageRestingHeartRate } from "../src/profile-suggestions.js";
@@ -128,6 +128,7 @@ test("Google rows of the days Apple covers become duplicates; disconnecting keep
   // A later Google sync writes a new row for a covered day.
   google(raw, "steps", "2026-10-09", 120, "late");
   await afterGoogleSync({ DB: db, USER_ID: 1 }, "steps", [{}]);
+  await flushGoogleSync({ DB: db, USER_ID: 1 });
   assert.equal(role("late"), "duplicate");
 
   await disconnectAppleHealth(db, 1);
@@ -136,6 +137,7 @@ test("Google rows of the days Apple covers become duplicates; disconnecting keep
   // Nothing new replaces Google once disconnected.
   google(raw, "steps", "2026-10-09", 130, "after");
   await afterGoogleSync({ DB: db, USER_ID: 1 }, "steps", [{}]);
+  await flushGoogleSync({ DB: db, USER_ID: 1 });
   assert.equal(role("after"), "primary");
   assert.equal((await appleHealthStatus(db, 1)).connected, false);
   assert.equal((await connectionStatus({ DB: db, USER_ID: 1 })).providers.some(p => p.id === "apple"), false);

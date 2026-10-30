@@ -2,7 +2,8 @@ import { activityTelemetryEnergy } from './activity-energy-check.js';
 
 // A workout typed in afterwards (Zapsat trénink): the heart rate the watch
 // recorded between its start and end, and the calories. Google Health keeps
-// every sample for two weeks and 5-minute rows after (heart-rate-compaction.js);
+// every sample for a week, 5-minute rows to a month and hourly rows after
+// (heart-rate-compaction.js);
 // the phone reads Apple Health itself and sends what it found.
 const bpm = "CAST(COALESCE(value_numeric, json_extract(payload_json, '$.heartRate.beatsPerMinute')) AS REAL)";
 const iso = ms => new Date(ms).toISOString().replace('.000Z', 'Z');
@@ -15,7 +16,7 @@ export async function heartRateWindow(db, userId, { start, end, weightKg = null,
     db.prepare(`SELECT AVG(${bpm}) AS avg, MAX(${bpm}) AS max, COUNT(*) AS n FROM health_datapoints
       WHERE user_id=? AND data_type='heart-rate' AND sample_time>=? AND sample_time<? AND ${bpm} BETWEEN 20 AND 250`).bind(...between).first().catch(() => null),
     db.prepare(`SELECT value_numeric AS avg, json_extract(payload_json, '$.max') AS max, json_extract(payload_json, '$.n') AS n FROM health_datapoints
-      WHERE user_id=? AND data_type='heart-rate-5min' AND sample_time>=? AND sample_time<?`).bind(...between).all().then(r => r.results || []).catch(() => []),
+      WHERE user_id=? AND data_type IN ('heart-rate-5min','heart-rate-1h') AND sample_time>=? AND sample_time<?`).bind(...between).all().then(r => r.results || []).catch(() => []),
     db.prepare(`SELECT start_time,end_time,value_numeric FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='active-energy-burned'
       AND end_time>? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time`).bind(...between).all().then(r => r.results || []).catch(() => [])
   ]);

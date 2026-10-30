@@ -95,11 +95,11 @@ test('choosing the source again runs only after a Google page changed a row', as
   points[1].info.value = 50;
   await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', points);
   assert.deepEqual(afterSync, ['steps', 'steps']);
-  // It starts at the oldest day a row changed, not 35 days back.
+  // It starts at the oldest hour a row changed, not 35 days back.
   points[0].info = { sample: '2026-10-08T09:00:00Z', start: null, end: null, value: 7, unit: 'steps' };
   points[2].info = { sample: '2026-10-09T09:00:00Z', start: null, end: null, value: 8, unit: 'steps' };
   await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', points);
-  assert.deepEqual(sinces, ['2026-10-10', '2026-10-10', '2026-10-08']);
+  assert.deepEqual(sinces, ['2026-10-10', '2026-10-10', '2026-10-08T09']);
 });
 
 test('Intervals weight import skips identical weights and retains corrections', async () => {
