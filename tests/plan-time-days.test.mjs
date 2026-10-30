@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { getTemplate, planDays, planPreview, gymPhaseFor, gymSessions, gymPickDays, gymPart, gymPartSlots, planSummary } from "../src/training-plans.js";
-import { sanitizeWeekPlan, isWeekB, usualFor, freeMinutes, planWeekRoles } from "../src/week-planner.js";
+import { sanitizeWeekPlan, isWeekB, usualFor, freeMinutes, planWeekRoles, roleTime } from "../src/week-planner.js";
 
 const monday = "2026-10-12";
 const day = (m, n) => new Date(Date.parse(m + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
@@ -157,4 +157,19 @@ test("from next week: this week keeps its long day", async () => {
   const usual = sanitizeWeekPlan({ ...week, longDay: 6 });
   assert.deepEqual(weekOverride(week, usual), { longDay: null });
   assert.equal(sanitizeWeekPlan({ ...usual, ...weekOverride(week, usual) }).longDay, null);
+});
+
+test("around the week: Sunday is the day before Monday", () => {
+  const days = [["run"], [], ["run"], [], ["run"], [], ["run"]];
+  const at = (minutes, longDay) => planWeekRoles(days, { quality: 2, ...roleTime({ availability: time(minutes), longDay }) }).map(d => d.items[0]?.role);
+  // An own Monday long day, and one picked by time: Sunday gets no key session.
+  for (const roles of [at([150, 0, 45, 0, 45, 0, 90], 0), at([150, 0, 45, 0, 45, 0, 90], null)]) {
+    assert.equal(roles[0], "long");
+    assert.notEqual(roles[6], "quality", "Sunday is the day before next Monday's long run");
+    assert.ok(roles.includes("quality"), "quality still somewhere");
+  }
+  // A Sunday long day: Monday is easy, not quality.
+  const sunday = at([60, 0, 60, 0, 60, 0, 150], 6);
+  assert.equal(sunday[6], "long");
+  assert.equal(sunday[0], "recovery");
 });
