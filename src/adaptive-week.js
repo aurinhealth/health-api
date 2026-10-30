@@ -20,6 +20,8 @@ export function activityHistoryEstimate(history = [], reference) {
 }
 export function environmentFor(date, sport, weather = null) {
   if (sport === 'gym') return { environment: 'indoor', reason: '' };
+  // A swim is in the pool; open water only by the athlete's choice (openWaterSwim).
+  if (sport === 'swim') return { environment: 'indoor', reason: L('Plavání je v bazénu.', 'Swims are in the pool.') };
   const month = Number(date.slice(5, 7));
   const winter = [11, 12, 1, 2].includes(month);
   const poor = weather && (Number(weather.max) < (sport === 'ride' ? 8 : 0) || Number(weather.wind) >= (sport === 'ride' ? 35 : 50) || Number(weather.rain) >= 3 || Number(weather.rainProb) >= 70 || Number(weather.code) >= 95);
