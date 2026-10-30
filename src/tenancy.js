@@ -122,7 +122,9 @@ export const PERSONAL_TABLES = {
   // The app's own settings, kept for a new install (app-settings.js).
   app_settings: {},
   // The profile photo (profile-photo.js).
-  profile_photos: {}
+  profile_photos: {},
+  // One row a week of training per sport (training-history.js trainingWeeks).
+  training_weeks: { pk: ["user_id", "week"] }
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 

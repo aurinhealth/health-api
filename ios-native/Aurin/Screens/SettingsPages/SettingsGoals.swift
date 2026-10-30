@@ -167,9 +167,10 @@ struct GoalsSettingsView: View {
         history["weeklyHours"]?.number.flatMap { $0 >= 1 ? $0 : nil }
     }
 
-    /// "automaticky · běh": the sport of the recent activities.
+    /// "automaticky · běh": the sport of the main race or goal, else of the last year of training.
     private var sportOptions: [(String, String)] {
-        let recent = (history["recentCount"]?.number ?? 0) > 0 ? store.suggestions["mainSport"]?.string ?? history["mainSport"]?.string : nil
+        let trained = (history["recentCount"]?.number ?? 0) > 0 || (history["yearCount"]?.number ?? 0) > 0
+        let recent = store.suggestions["autoMainSport"]?.string ?? (trained ? store.suggestions["mainSport"]?.string ?? history["mainSport"]?.string : nil)
         let label = recent.flatMap { id in Self.sports.first { $0.0 == id }?.1 }
         return [("auto", label.map { L10n.tr("automaticky") + " · " + L10n.tr($0) } ?? L10n.tr("automaticky"))] + Self.sports
     }

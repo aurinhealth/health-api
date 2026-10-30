@@ -16,6 +16,35 @@ const SPORT_LABEL_EN = { cycling: "cycling", running: "running", swimming: "swim
 const SPORT_ROLE_EN = { cycling: "cycling and strength preparation", running: "running and strength preparation", swimming: "swimming and strength preparation", triathlon: "triathlon and strength preparation", strength: "strength training and conditioning", general: "fitness (endurance and strength)" };
 export const MAIN_SPORTS = Object.fromEntries(Object.entries(SPORTS).map(([k, v]) => [k, v.label]));
 
+// The sport a goal or a race names, in Czech or English ("Gran Fondo",
+// "půlmaraton", "Ironman 70.3"). The gym next to an endurance sport is its
+// preparation; ride and run together name no single sport.
+const WORD = re => new RegExp("(?<![\\p{L}])(?:" + re + ")", "iu");
+const NAMES = {
+  triathlon: WORD("triatl|triathl|ironman|70\\.3"),
+  cycling: WORD("kol(?:o|a|e|u|ech)(?![\\p{L}])|cyklist|cyklo|bike|biking|ride|riding|cycling|cyclist|gran ?fondo|granfondo|mtb|gravel|silni[cč]|ftp|[eé]tap"),
+  running: WORD("b[eě]h|b[eě][zž]|run|marat[oó]n|p[uů]lmarat|half ?marathon|\\d+ ?km b|trail|parkrun"),
+  swimming: WORD("plav|swim|baz[eé]n|open ?water|voln[aá] voda|p[rř]eplav"),
+  strength: WORD("posil|silov|s[ií]l[ayu]|strength|gym|powerlift|bench|d[rř]ep|mrtv[ýy]|deadlift|hypertrof|sval|muscle|kulturist|bodybuild|crossfit")
+};
+export function sportFromText(value) {
+  const t = String(value || "");
+  if (!t.trim()) return null;
+  if (NAMES.triathlon.test(t)) return "triathlon";
+  const endurance = ["cycling", "running", "swimming"].filter(k => NAMES[k].test(t));
+  if (endurance.length === 1) return endurance[0];
+  if (!endurance.length && NAMES.strength.test(t)) return "strength";
+  return null;
+}
+
+// The regular sports that support the main one: everything but the main
+// sport (for triathlon its three sports; general fitness has none).
+const OWN_KINDS = { cycling: ["ride"], running: ["run"], strength: ["strength"], triathlon: ["ride", "run", "swim"], swimming: ["swim"] };
+export function supportSports(mainSport, regular = []) {
+  if (!OWN_KINDS[mainSport]) return [];
+  return (regular || []).filter(k => !OWN_KINDS[mainSport].includes(k));
+}
+
 const text = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 
 // The settings fields as stored in the profile.

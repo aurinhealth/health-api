@@ -35,7 +35,7 @@ import { buildShareMilestones, intervalsRecord } from './share-milestone.js';
 import {buildHealth} from './app-health.js';
 import {buildFood} from './app-food.js';
 import {buildFoodWeek} from './app-food-week.js';
-import {normalizeProfile} from './energy-profile.js';
+import {normalizeProfile,effectiveProfile} from './energy-profile.js';
 import {athleteFocus} from './athlete-focus.js';
 import { splitFacts, triathlonSplit } from './triathlon-split.js';
 import { getTrainingProfile } from './training-profile.js';
@@ -1638,7 +1638,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   {const r=await handleGymToolsApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
   {const r=await handleWorkoutTemplatesApi(request,env,url,session);if(r!==undefined)return r;}
   if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
-  if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const profile=normalizeProfile(await request.json().catch(()=>({})));if(profile.waterMode==='build'&&!profile.waterFrom)profile.waterFrom=localToday();await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();const suggestions=await refreshSuggestions(env,{googleToken}).catch(error=>{console.error('Profile suggestions failed',error.message);return null;});const profile=r?JSON.parse(r.profile_json):null;return Response.json({profile,suggestions:suggestions&&{...suggestions,triathlonSplit:await profileTriathlonSplit(env,profile,suggestions.trainingHistory).catch(()=>null)}});}
+  if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const profile=normalizeProfile(await request.json().catch(()=>({})));if(profile.waterMode==='build'&&!profile.waterFrom)profile.waterFrom=localToday();await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();const suggestions=await refreshSuggestions(env,{googleToken}).catch(error=>{console.error('Profile suggestions failed',error.message);return null;});const profile=r?JSON.parse(r.profile_json):null;
+    // What "auto" resolves to with the saved goal and race (Settings shows it next to "automaticky").
+    if(suggestions)suggestions.autoMainSport=effectiveProfile({...(profile||{}),mainSport:'auto'},suggestions).mainSport;
+    return Response.json({profile,suggestions:suggestions&&{...suggestions,triathlonSplit:await profileTriathlonSplit(env,profile,suggestions.trainingHistory).catch(()=>null)}});}
   {const r=await handleTrainingEditsApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
   // "Revize dne": the coach checks one planned day in the context of the week.
   if(url.pathname==='/app/api/coach/review'&&request.method==='POST'){
