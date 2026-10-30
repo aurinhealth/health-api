@@ -47,7 +47,9 @@ const PUBLIC_PATHS = new Set([
   // Wahoo's webhook: checked against WAHOO_WEBHOOK_TOKEN (wahoo.js).
   "/webhooks/wahoo",
   // Intervals.icu's webhooks: checked against INTERVALS_WEBHOOK_SECRET (intervals-webhook.js).
-  "/webhooks/intervals"
+  "/webhooks/intervals",
+  // App Store Server Notifications: Apple signs every notification, checked in app-store.js.
+  "/webhooks/app-store"
 ]);
 const PUBLIC_PREFIXES = ["/.well-known/", "/oauth/", "/t/"];
 
