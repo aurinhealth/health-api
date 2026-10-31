@@ -1161,7 +1161,6 @@
 "max %@" = "max %@";
 "klid %@" = "rest %@";
 "fotka, jméno, věk a výška" = "photo, name, age and height";
-"Přidat propojení" = "Add integration";
 "Zatím není nic propojené." = "Nothing is connected yet.";
 "Synchronizovat vše" = "Sync everything";
 "Sloučit stejné záznamy" = "Merge duplicate records";
@@ -1358,7 +1357,10 @@
 "Neuromuskulární" = "Neuromuscular";
 "Pod prahem" = "Below threshold";
 "Nad prahem" = "Above threshold";
-"Můžeš připojit" = "You can connect";
+"Přidat zdroj" = "Add a source";
+"spánek, regenerace, HRV a zátěž" = "sleep, recovery, HRV and strain";
+"spánek, HRV, teplota a pohyb" = "sleep, HRV, temperature and movement";
+"jízdy a trénink na trenažeru" = "rides and indoor training";
 "přes Intervals" = "via Intervals";
 "propojeno" = "connected";
 "spánek, tréninky, srdce, pohyb" = "sleep, workouts, heart, movement";
