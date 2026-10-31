@@ -325,6 +325,19 @@ final class AppleHealth {
         await reader.sources(category.hiddenTypes)
     }
 
+    /// The apps and devices that wrote this type in the last `days` days and
+    /// are read: none while Apple Health or the type is off, none switched off.
+    func sending(_ category: HealthCategory, days: Int) async -> [Source] {
+        guard enabled, categories.contains(category) else { return [] }
+        let since = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
+        return await reader.sources(category.hiddenTypes, since: since).filter { isShown($0.id, in: category) }
+    }
+
+    /// When each app or device last wrote this type.
+    func lastWritten(_ category: HealthCategory) async -> [String: Date] {
+        await reader.latest(category.hiddenTypes)
+    }
+
     func isShown(_ source: String, in category: HealthCategory) -> Bool {
         hidden[category.rawValue]?[source] == nil
     }
@@ -604,25 +617,48 @@ final class HealthReader: @unchecked Sendable {
         hiddenLock.lock(); hiddenPredicates = out; hiddenFood = categories.contains(.food) ? hidden[HealthCategory.food.rawValue] ?? [:] : [:]; hiddenLock.unlock()
     }
 
-    private func sourceSet(_ type: HKSampleType) async -> Set<HKSource> {
-        await withCheckedContinuation { continuation in
-            store.execute(HKSourceQuery(sampleType: type, samplePredicate: nil) { _, sources, _ in
+    private func sourceSet(_ type: HKSampleType, since: Date? = nil) async -> Set<HKSource> {
+        let predicate = since.map { HKQuery.predicateForSamples(withStart: $0, end: nil, options: []) }
+        return await withCheckedContinuation { continuation in
+            store.execute(HKSourceQuery(sampleType: type, samplePredicate: predicate) { _, sources, _ in
                 continuation.resume(returning: sources ?? [])
             })
         }
     }
 
-    /// The apps and devices with data of these types, Aurin itself left out.
-    func sources(_ types: [HKSampleType]) async -> [AppleHealth.Source] {
+    /// The apps and devices with data of these types (since a date: only those
+    /// that wrote some since), Aurin itself left out.
+    func sources(_ types: [HKSampleType], since: Date? = nil) async -> [AppleHealth.Source] {
         var seen: [String: String] = [:]
         let own = HKSource.default().bundleIdentifier
         // All types asked at once: Food alone has a dozen.
         let found = await withTaskGroup(of: Set<HKSource>.self) { group in
-            for type in types { group.addTask { await self.sourceSet(type) } }
+            for type in types { group.addTask { await self.sourceSet(type, since: since) } }
             return await group.reduce(into: Set<HKSource>()) { $0.formUnion($1) }
         }
         for source in found where source.bundleIdentifier != own { seen[source.bundleIdentifier] = source.name }
         return seen.map { AppleHealth.Source(id: $0.key, name: $0.value) }.sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
+    }
+
+    /// When each app or device last wrote one of these types (bundle identifier → date).
+    func latest(_ types: [HKSampleType]) async -> [String: Date] {
+        let own = HKSource.default().bundleIdentifier
+        var pairs: [(HKSampleType, HKSource)] = []
+        for type in types { for source in await sourceSet(type) where source.bundleIdentifier != own { pairs.append((type, source)) } }
+        // A few at a time: Food alone has a dozen types.
+        let found = await concurrently(pairs) { pair -> (String, Date?) in
+            let date: Date? = await withCheckedContinuation { continuation in
+                let query = HKSampleQuery(sampleType: pair.0, predicate: HKQuery.predicateForObjects(from: pair.1), limit: 1,
+                                          sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]) { _, samples, _ in
+                    continuation.resume(returning: samples?.first?.endDate)
+                }
+                self.store.execute(query)
+            }
+            return (pair.1.bundleIdentifier, date)
+        }
+        var out: [String: Date] = [:]
+        for (id, date) in found { if let date { out[id] = max(out[id] ?? date, date) } }
+        return out
     }
 
     private final class ClosedFlag: @unchecked Sendable {

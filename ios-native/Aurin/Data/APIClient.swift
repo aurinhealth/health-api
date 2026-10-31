@@ -657,6 +657,11 @@ final class APIClient: @unchecked Sendable {
                                           body: ["provider": JSONValue.string(provider), "type": .string(type), "on": .bool(on)])
     }
 
+    /// The types each service the server reads sent in the last week (src/source-sending.js).
+    func sourcesSending() async throws -> SourcesSending {
+        try await get("/app/api/sources/sending")
+    }
+
     func saveSourcePriority(_ priority: SourcePriority) async throws {
         let _: JSONValue = try await send("/app/api/sources/priority", method: "POST", body: priority)
     }

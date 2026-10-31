@@ -174,6 +174,7 @@ import { hideActivity, mergeActivities, setActivityTime, undoActivityChange } fr
 import { loadThresholdSessions } from "./threshold-check-state.js";
 import { performanceTrends, intervalsCurves, recentIntervals, swimBests } from "./performance-trends.js";
 import { saveReadOff } from "./source-reading.js";
+import { readSending } from "./source-sending.js";
 // The largest request body the coach route reads (POST /app/api/assistant).
 const ASSISTANT_REQUEST_CHARS=64000;
 // One photo with a message: a JPEG the app has made smaller, as a data URL.
@@ -2325,6 +2326,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     return Response.json(result,{status:result.code||200,headers:{'Cache-Control':'no-store'}});
   }
   // One Reads from switch under Zdroje dat → Health data (source-reading.js); GET is connections' readOff.
+  // Which services sent each type in the last week: the counts under Zdroje dat → Health data (source-sending.js).
+  if (url.pathname === '/app/api/sources/sending' && request.method === 'GET') {
+    if (!session.signedIn) return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    return Response.json(await readSending(env.DB,env.USER_ID),{headers:{'Cache-Control':'no-store'}});
+  }
   if (url.pathname === '/app/api/sources/reading' && request.method === 'POST') {
     if (!session.signedIn) return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if (request.headers.get('Origin') !== url.origin) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
