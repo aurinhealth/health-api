@@ -46,10 +46,11 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
   }
   // "Still true": the coach asks again in two weeks.
   if (patch.keep != null && state.memoryMeta[patch.keep]?.check) state.memoryMeta[patch.keep].check = shiftDate(date, CHECK_DAYS);
-  // Settings → Oznámení: the morning readiness and the coach's own messages, on until turned off.
+  // Settings → Oznámení: the morning readiness, the coach's own messages, the
+  // water push and hiding the values in them (push.js hidesValues), on until turned off.
   if (patch.notify && typeof patch.notify === 'object') {
     state.notify = { ...(state.notify || {}) };
-    for (const key of ['morning', 'coach', 'water']) if (typeof patch.notify[key] === 'boolean') state.notify[key] = patch.notify[key];
+    for (const key of ['morning', 'coach', 'water', 'private']) if (typeof patch.notify[key] === 'boolean') state.notify[key] = patch.notify[key];
   }
   // Kept by the coach's push (coach-push.js): the last time zone seen and the message waiting for an answer.
   if (patch.zone !== undefined) state.zone = patch.zone;

@@ -803,7 +803,7 @@ export function overviewPage(request) {
   // where the screenshot cannot show the step (a moving screen, or one the sample day draws wrong).
   const scenes = [
     ['pripravenost', '', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal.', 'green', 'glow-today', [
-      ['readiness-parts', 'readyOne', 330, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal. The morning notification brings the same numbers and what to do today, weighing the days before and tomorrow’s workout.', 7000],
+      ['readiness-parts', 'readyOne', 330, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal. The morning notification brings the same numbers and what to do today, weighing the days before and tomorrow’s workout, and keeps them off your lock screen.', 7000],
       ['journal-impact', 'journalOne', 330, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000]]],
     ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
       ['html:strain', 'strainMade', 200, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000]]],

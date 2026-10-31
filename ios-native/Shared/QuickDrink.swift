@@ -65,6 +65,8 @@ enum PendingDrinks {
 struct AddWaterIntent: AppIntent {
     static let title: LocalizedStringResource = "Zapsat vodu"
     static let description = IntentDescription("Zapíše vodu do dnešního pití.")
+    /// On a locked phone (Siri, the Lock Screen's controls) Face ID or the passcode first.
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     /// Millilitres; the title names no unit because an intent's texts are fixed at build time.
     @Parameter(title: "Množství")
