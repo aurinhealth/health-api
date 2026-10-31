@@ -1249,8 +1249,13 @@ async function removeIntervalsActivities(env, externalIds) {
     const ids = externalIds.slice(i, i + 50), marks = ids.map(() => "?").join(",");
     statements.push(
       env.DB.prepare(`DELETE FROM health_datapoints WHERE user_id = ? AND source_family = 'intervals' AND data_type = 'activity' AND external_id IN (${marks})`).bind(env.USER_ID, ...ids),
+      // Only workouts pair with an activity (matchActivities), so the copies are
+      // looked for among them: by source and type the index finds them, where
+      // matched_activity_id alone went through every row the user has (1.37 M
+      // rows read for one removal on 2026-10-30).
       env.DB.prepare(`UPDATE health_datapoints SET record_role = 'primary', matched_activity_id = NULL, match_confidence = NULL, updated_at = CURRENT_TIMESTAMP
-        WHERE user_id = ? AND matched_activity_id IN (${marks})`).bind(env.USER_ID, ...ids.map(id => "intervals:" + id))
+        WHERE user_id = ? AND source_family IN ('intervals','local','wahoo','google-wearables','apple-health') AND data_type IN ('activity','exercise')
+          AND matched_activity_id IN (${marks})`).bind(env.USER_ID, ...ids.map(id => "intervals:" + id))
     );
   }
   if (statements.length) await env.DB.batch(statements);
