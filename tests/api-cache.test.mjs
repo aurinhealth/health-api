@@ -52,7 +52,7 @@ test("a failed workout read is not cached as a fitness of 0: the next request re
     .run("run" + i, "2026-10-" + String(i).padStart(2, "0") + "T06:00:00Z", "2026-10-" + String(i).padStart(2, "0") + "T07:00:00Z", run);
   let calls = 0;
   // As the route answers: an error when a read fails (the callers fall back to {} for that request).
-  const route = async () => { calls++; try { return { status: "ok", source: "loadwise", connected: false, days: 42, wellness: await ownFitness(env, "2026-09-09", "2026-10-20") }; } catch (error) { return { status: "error", message: error.message }; } };
+  const route = async () => { calls++; try { return { status: "ok", source: "aurin", connected: false, days: 42, wellness: await ownFitness(env, "2026-09-09", "2026-10-20") }; } catch (error) { return { status: "error", message: error.message }; } };
   state.failing = 1;
   assert.deepEqual(await cached(env, null, "fitness:42", route, { store }), { status: "error", message: "D1_ERROR: overloaded" });
   assert.equal(map.size, 0);
@@ -69,7 +69,7 @@ test("a new user's empty fitness is an answer and stays cached", async () => {
   // coach_reflections is created with the first note: before that it has no rows, it is not a failure.
   raw.sqlite.exec("DROP TABLE coach_reflections");
   let calls = 0;
-  const route = async () => { calls++; return { status: "ok", source: "loadwise", connected: false, days: 42, wellness: await ownFitness(env, "2026-09-09", "2026-10-20") }; };
+  const route = async () => { calls++; return { status: "ok", source: "aurin", connected: false, days: 42, wellness: await ownFitness(env, "2026-09-09", "2026-10-20") }; };
   const first = await cached(env, null, "fitness:42", route, { store });
   assert.ok(first.wellness.length > 0 && first.wellness.every(r => r.ctl === 0 && r.load === 0));
   assert.deepEqual(await cached(env, null, "fitness:42", route, { store }), first);

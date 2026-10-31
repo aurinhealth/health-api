@@ -4,6 +4,8 @@ export const SITE_ORIGIN = "https://aurin.health";
 export const SERVER_HOSTS = new Set(["aurin.health"]);
 // Where the iPhone app's browser sheet comes back after signing in with Google (google-login.js).
 export const APP_RETURN_PATH = "/auth/app/return";
+// … and after connecting a service on its own page (connect-return.js).
+export const APP_CONNECTED_PATH = "/auth/app/connected";
 
 export function appOrigin(env, request) {
   if (env?.APP_ORIGIN) return env.APP_ORIGIN;

@@ -7,19 +7,19 @@ import XCTest
 final class DeviceDataTests: XCTestCase {
     func testLinksCarryOnlyRealDaysSportsAndMuscles() {
         let today = AppModel.localDate(Date())
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/gym/2026-10-30")!), .gym("2026-10-30"))
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/gym/2026-10-30%26x%3Dy")!), .gym(today))
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/gym/..%2F..%2FLibrary%2Foutbox")!), .gym(today))
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/journal/2026-10-29")!), .journal("2026-10-29"))
-        if case .journal(let day)? = AppRoute(url: URL(string: "loadwise://open/journal/2026-1o-29")!) {
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/gym/2026-10-30")!), .gym("2026-10-30"))
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/gym/2026-10-30%26x%3Dy")!), .gym(today))
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/gym/..%2F..%2FLibrary%2Foutbox")!), .gym(today))
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/journal/2026-10-29")!), .journal("2026-10-29"))
+        if case .journal(let day)? = AppRoute(url: URL(string: "aurin://open/journal/2026-1o-29")!) {
             XCTAssertTrue(AppRoute.isDay(day))
         } else {
             XCTFail("the journal opens on yesterday")
         }
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/library/run")!), .workoutLibrary("run"))
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/library/nope")!), .library)
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/muscle/upper_back")!), .muscle("upper_back"))
-        XCTAssertNil(AppRoute(url: URL(string: "loadwise://open/muscle/quads%26id%3Dx")!))
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/library/run")!), .workoutLibrary("run"))
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/library/nope")!), .library)
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/muscle/upper_back")!), .muscle("upper_back"))
+        XCTAssertNil(AppRoute(url: URL(string: "aurin://open/muscle/quads%26id%3Dx")!))
         XCTAssertFalse(AppRoute.isDay("2026-10-3"))
         XCTAssertFalse(AppRoute.isDay("2026/10/30"))
     }

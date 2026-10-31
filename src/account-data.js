@@ -20,7 +20,7 @@ const missingTable = error => /no such table/i.test(String(error?.message || err
 // nothing is gathered in memory: each table is read in keyset pages of
 // EXPORT_PAGE_ROWS (by rowid) and every page is written out before the next is
 // read. The stream pulls, so a slow download does not pile pages up either.
-export const EXPORT_FORMAT = "loadwise-export";
+export const EXPORT_FORMAT = "aurin-export";
 export const EXPORT_VERSION = 2;
 const EXPORT_PAGE_ROWS = 5000;
 const EXPORT_TABLES = Object.keys(PERSONAL_TABLES).filter(table => !SECRET_TABLES.has(table));

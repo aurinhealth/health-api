@@ -96,12 +96,12 @@ extension WidgetMetric {
 
     var link: String {
         switch self {
-        case .readiness: return "loadwise://open/readiness"
-        case .sleep: return "loadwise://open/sleep"
-        case .hrv: return "loadwise://open/hrv"
-        case .restingHR: return "loadwise://open/metric/restingHR"
-        case .steps: return "loadwise://open/steps"
-        case .kcalLeft, .water: return "loadwise://open/food"
+        case .readiness: return "aurin://open/readiness"
+        case .sleep: return "aurin://open/sleep"
+        case .hrv: return "aurin://open/hrv"
+        case .restingHR: return "aurin://open/metric/restingHR"
+        case .steps: return "aurin://open/steps"
+        case .kcalLeft, .water: return "aurin://open/food"
         }
     }
 
@@ -241,7 +241,7 @@ struct WeekWidget: Widget {
             WeekWidgetView(entry: entry)
                 // Redacted on the Lock Screen and in StandBy while the phone is locked.
                 .privacySensitive()
-                .widgetURL(URL(string: "loadwise://open/training"))
+                .widgetURL(URL(string: "aurin://open/training"))
                 .widgetCard()
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Týden")))
@@ -378,7 +378,7 @@ struct NextWorkoutWidget: Widget {
             NextWorkoutWidgetView(entry: entry)
                 // Redacted on the Lock Screen and in StandBy while the phone is locked.
                 .privacySensitive()
-                .widgetURL(URL(string: "loadwise://open/training"))
+                .widgetURL(URL(string: "aurin://open/training"))
                 .widgetCard()
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Další trénink")))

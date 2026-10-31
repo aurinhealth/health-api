@@ -68,7 +68,7 @@ enum AppRoute: Hashable {
     /// The running plan, from "Otevřít plán" under a plan the coach started.
     case trainingPlan
 
-    /// The tab a deep link (loadwise://open/sleep) opens the route on.
+    /// The tab a deep link (aurin://open/sleep) opens the route on.
     var tab: AppTab {
         switch self {
         case .readiness, .sleep, .metric, .weight, .cycle: return .health
@@ -86,10 +86,14 @@ enum AppRoute: Hashable {
         }
     }
 
+    /// The app's own link schemes: aurin, and loadwise from before 2026-11
+    /// (calendar events and links written by older versions still use it).
+    static let schemes: Set<String> = ["aurin", "loadwise"]
+
     /// Hosts of shared workout links.
     static let linkHosts: Set<String> = ["aurin.health", "www.aurin.health"]
 
-    /// loadwise://open/<name>: the home-screen widgets link here. A shared
+    /// aurin://open/<name>: the home-screen widgets link here. A shared
     /// workout's link opens here too, as a universal link or from its web page.
     init?(url: URL) {
         let parts = url.pathComponents.filter { $0 != "/" }
@@ -98,7 +102,7 @@ enum AppRoute: Hashable {
             self = .sharedWorkout(parts[1])
             return
         }
-        guard url.scheme == "loadwise", url.host() == "open" else { return nil }
+        guard Self.schemes.contains(url.scheme ?? ""), url.host() == "open" else { return nil }
         switch parts.first {
         case "readiness": self = .readiness
         case "sleep": self = .sleep
@@ -148,10 +152,10 @@ enum AppRoute: Hashable {
     }
 }
 
-/// A whole tab opened by a deep link (loadwise://open/food).
+/// A whole tab opened by a deep link (aurin://open/food).
 enum TabLink {
     static func tab(_ url: URL) -> AppTab? {
-        guard url.scheme == "loadwise", url.host() == "open" else { return nil }
+        guard AppRoute.schemes.contains(url.scheme ?? ""), url.host() == "open" else { return nil }
         switch url.pathComponents.filter({ $0 != "/" }).first {
         case "today": return .today
         case "training": return .training

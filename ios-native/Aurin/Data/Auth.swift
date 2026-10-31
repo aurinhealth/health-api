@@ -40,6 +40,7 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
     }
 
     static let signInReturnPath = "/auth/app/return"
+    static let connectedPath = "/auth/app/connected"
 
     /// The address the browser sheet closes on: https on the server's own host,
     /// or loadwise:// for a server from before 2026-11.
@@ -70,13 +71,17 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
     }
 
     /// Connects Google or Intervals.icu: the provider's page in the browser
-    /// sheet, back at loadwise://connected?event=… (src/connect-return.js).
+    /// sheet, back at https://<server>/auth/app/connected?event=…, which only
+    /// this app can catch, like the sign-in (src/connect-return.js).
     func connect(provider: String) async throws -> String {
-        let link = try await api.connectLink(provider: provider)
+        let https = await Self.returnsOverHttps(api.baseURL, path: Self.connectedPath)
+        let link = try await api.connectLink(provider: provider, https: https)
         // The ticket again as a header: without it the server lets nobody in, so a
         // ticket link sent to someone else expires (src/native-connect.js).
         let ticket = URLComponents(url: link, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "ticket" })?.value
-        let callback = try await openBrowser(link, callback: .customScheme("loadwise"), headers: ticket.map { ["X-Aurin-Connect": $0] } ?? [:])
+        // X-Aurin-Return: where to come back if the ticket has run out.
+        let headers = (ticket.map { ["X-Aurin-Connect": $0] } ?? [:]).merging(https ? ["X-Aurin-Return": "https"] : [:]) { a, _ in a }
+        let callback = try await openBrowser(link, callback: Self.callback(api.baseURL, path: Self.connectedPath, https: https), headers: headers)
         return URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "event" })?.value ?? "unknown"
     }
 

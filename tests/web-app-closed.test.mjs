@@ -49,7 +49,7 @@ test("the iPhone app keeps working with the same session", async () => {
 
 test("connecting a service from the iPhone app still goes through the browser", async () => {
   const Cookie = await cookie();
-  for (const path of ["/auth/app/connect?ticket=x", "/oauth/google?return=native", "/oauth/google/callback?code=x", "/oauth/intervals/callback?code=x"]) {
+  for (const path of ["/auth/app/connect?ticket=x", "/oauth/google?return=app", "/oauth/google/callback?code=x", "/oauth/intervals/callback?code=x"]) {
     assert.equal(await closedToBrowser(new Request(BASE + path, { headers: { Cookie } }), env), null, path);
   }
 });

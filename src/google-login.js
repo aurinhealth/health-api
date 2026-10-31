@@ -38,7 +38,7 @@ export async function handleGoogleLogin(request, env, pathname) {
   if (pathname === "/auth/google" && request.method === "GET") return startLogin(googleClientEnv(env), request);
   if (pathname === "/auth/google/callback" && request.method === "GET") return finishLogin(request, googleClientEnv(env));
   if (pathname === "/auth/app/session" && request.method === "POST") return finishAppLogin(request, googleClientEnv(env));
-  if (pathname === APP_RETURN_PATH && (request.method === "GET" || request.method === "HEAD")) return page(request, RETURN_PAGE, 200);
+  if (pathname === APP_RETURN_PATH && (request.method === "GET" || request.method === "HEAD")) return appPage(request, RETURN_PAGE, 200);
   return null;
 }
 
@@ -59,7 +59,7 @@ const APP_ONLY = { cs: ["Přihlášení selhalo", "Přihlášení přes Google j
 
 async function startLogin(env, request) {
   const app = new URL(request.url).searchParams.get("app") || "";
-  if (!APP_CHALLENGE.test(app)) return page(request, APP_ONLY, 400);
+  if (!APP_CHALLENGE.test(app)) return appPage(request, APP_ONLY, 400);
   const back = new URL(request.url).searchParams.get("return") === "https" ? "https" : "";
   if (!configured(env)) return appReturn(back ? appReturnUrl(env, request) : LEGACY_RETURN_URL, "error", "unavailable");
   const state = randomToken(), nonce = randomToken(), verifier = randomToken() + randomToken();
@@ -83,7 +83,7 @@ async function finishLogin(request, env, fetchImpl = fetch) {
   const [expectedState, nonce, verifier, app, back] = (match?.[1] || "").split(".");
   // Every failure goes back to the iPhone app as …/auth/app/return?error=…,
   // so its browser sheet closes and the app says what happened.
-  if (!APP_CHALLENGE.test(app || "")) return page(request, APP_ONLY, 400);
+  if (!APP_CHALLENGE.test(app || "")) return appPage(request, APP_ONLY, 400);
   const returnUrl = back === "https" ? appReturnUrl(env, request) : LEGACY_RETURN_URL;
   const fail = reason => appReturn(returnUrl, "error", reason);
   if (!configured(env)) return fail("unavailable");
@@ -217,7 +217,8 @@ export function _resetJwksCacheForTest() { cachedJwks = null; cachedJwksAt = 0; 
 // like the app. HEAD gets the headers alone.
 const english = request => !/^(cs|sk)\b/i.test(request.headers.get("Accept-Language") || "");
 const PAGE_STYLE = "font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5";
-function page(request, text, status) {
+// A short page in the browser sheet, in the phone's language; empty for HEAD (the app's check).
+export function appPage(request, text, status) {
   const en = english(request), [title, message] = en ? text.en : text.cs;
   const init = { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex" } };
   if (request.method === "HEAD") return new Response(null, init);

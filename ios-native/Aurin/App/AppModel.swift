@@ -128,7 +128,7 @@ final class AppModel {
     /// The day food and drinks are written to.
     var writeDay: String { writesToday ? Self.localDate(Date()) : shownDay }
     /// The open tab and each tab's navigation stack, so cards, widgets and
-    /// links (loadwise://open/sleep) can open any detail.
+    /// links (aurin://open/sleep) can open any detail.
     var tab: AppTab = .today
     var paths: [AppTab: [AppRoute]] = [:]
     /// After the first sign-in: the profile setup has not been done yet.
@@ -229,7 +229,7 @@ final class AppModel {
         // "-open readiness" (the website's screenshots) opens a detail as its link
         // would, without the system's "Open in Aurin?" question that simctl openurl brings.
         if let i = args.firstIndex(of: "-open"), i + 1 < args.count,
-           let url = URL(string: "loadwise://open/\(args[i + 1])") {
+           let url = URL(string: "aurin://open/\(args[i + 1])") {
             handle(url)
         }
         // The network back: what waited goes out and the screens load again.

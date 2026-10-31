@@ -38,7 +38,7 @@ enum APIError: LocalizedError, Equatable {
 /// this run of the app and SessionKeychain keeps in the Keychain.
 final class APIClient: @unchecked Sendable {
     static let sessionCookie = "pfd_session"
-    /// The version of the server's API this app reads, sent as X-Loadwise-Api.
+    /// The version of the server's API this app reads, sent as X-Aurin-Api.
     /// Raise it together with MIN_APP_API in src/app-version.js when a server
     /// change breaks what installed apps expect; older apps then ask for an update.
     static let apiLevel = 1
@@ -637,9 +637,12 @@ final class APIClient: @unchecked Sendable {
 
     /// A short-lived link that opens the provider's consent in the browser
     /// sheet, signed in as this user (src/native-connect.js).
-    func connectLink(provider: String) async throws -> URL {
+    /// https: the browser sheet waits for the server's own https return (Auth.connect).
+    func connectLink(provider: String, https: Bool) async throws -> URL {
         struct Response: Decodable { let url: String }
-        let r: Response = try await send("/app/api/connect/start", method: "POST", body: ["provider": JSONValue.string(provider)])
+        var body = ["provider": JSONValue.string(provider)]
+        if https { body["return"] = .string("https") }
+        let r: Response = try await send("/app/api/connect/start", method: "POST", body: body)
         guard let url = URL(string: r.url) else { throw APIError.message(L10n.tr("Odkaz na připojení je neplatný.")) }
         return url
     }
@@ -806,7 +809,7 @@ final class APIClient: @unchecked Sendable {
         request.setValue(TimeZone.current.identifier, forHTTPHeaderField: "X-Time-Zone")
         request.setValue(L10n.language, forHTTPHeaderField: "X-Interface-Language")
         request.setValue(Units.imperial ? "imperial" : "metric", forHTTPHeaderField: "X-Units")
-        request.setValue(String(Self.apiLevel), forHTTPHeaderField: "X-Loadwise-Api")
+        request.setValue(String(Self.apiLevel), forHTTPHeaderField: "X-Aurin-Api")
         // Writes with the session cookie must come from the site's own origin.
         if method != "GET" && (path.hasPrefix("/app/") || path.hasPrefix("/auth/")) {
             request.setValue(baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")), forHTTPHeaderField: "Origin")

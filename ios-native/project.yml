@@ -67,9 +67,10 @@ targets:
         # for this app (src/apple-app-site-association.js, APPLE_TEAM_ID).
         # aurin.health is the server the app talks to (APIClient.server).
         # applinks: a shared workout's link (/t/<id>) opens the app.
-        # webcredentials also lets only this app catch Google sign-in's return
-        # address, https://<server>/auth/app/return (Data/Auth.swift), on the test
-        # server too (both serve the file; the deploy checks it).
+        # webcredentials also lets only this app catch the return addresses of
+        # Google sign-in and of connecting a service, https://<server>/auth/app/…
+        # (Data/Auth.swift), on the test server too (both serve the file; the
+        # deploy checks it).
         com.apple.developer.associated-domains:
           - webcredentials:aurin.health
           - webcredentials:staging.aurin.health
@@ -115,10 +116,12 @@ targets:
         # iOS 26 AlarmKit: the alarm from Nastavení → Spánek rings like the Clock's.
         NSAlarmKitUsageDescription: Aurin tě vzbudí v čase budíku, podle kterého počítá večerku.
         NSFaceIDUsageDescription: Aurin se zeptá na Face ID, než smaže tvůj účet.
-        # loadwise://open/sleep: the widgets open a screen of the app.
+        # aurin://open/sleep: the widgets open a screen of the app. loadwise is the
+        # scheme from before 2026-11: calendar events written by older versions link to it.
         CFBundleURLTypes:
           - CFBundleURLName: health.aurin.app
             CFBundleURLSchemes:
+              - aurin
               - loadwise
         # Posilovna naživo and Režim tréninku on the lock screen and in the Dynamic Island (App/GymLiveActivity.swift).
         NSSupportsLiveActivities: true

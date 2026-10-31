@@ -1,4 +1,4 @@
-// Loadwise lives in the iPhone app (ios-native/), which sends X-Loadwise-Api with
+// Aurin lives in the iPhone app (ios-native/), which sends X-Aurin-Api with
 // every request. A browser cannot sign in, and a session cookie it still holds
 // cannot read or change anything; the old web address /app leads to the
 // overview page.
@@ -6,10 +6,10 @@
 // in with Google (/auth/google?app=…, back at /auth/app/return) and to connect Google Health or
 // Intervals.icu (/auth/app/connect, /oauth/…), the owner's API key, GitHub
 // Actions and the cron jobs.
-import { APP_API_HEADER } from "./app-version.js";
+import { appApiLevel } from "./app-version.js";
 import { verifyDashboardSession, sessionSecret } from "./dashboard-auth.js";
 import { APP_CHALLENGE } from "./google-login.js";
-import { APP_RETURN_PATH } from "./app-origin.js";
+import { APP_RETURN_PATH, APP_CONNECTED_PATH } from "./app-origin.js";
 import { siteLang } from "./site-pages.js";
 
 const OPEN_PATHS = new Set([
@@ -21,6 +21,7 @@ const OPEN_PATHS = new Set([
   "/app/logout",
   "/auth/google/callback",
   APP_RETURN_PATH,
+  APP_CONNECTED_PATH,
   "/auth/app/connect"
 ]);
 // /t/<id>: a workout shared with a link (workout-templates.js).
@@ -39,7 +40,7 @@ export function webAppClosed(app) {
 export async function closedToBrowser(request, env) {
   const url = new URL(request.url), path = url.pathname;
   if (path === "/app" || path === "/app/") return new Response(null, { status: 301, headers: { Location: "/", "Cache-Control": "public, max-age=3600" } });
-  if (request.headers.has(APP_API_HEADER)) return null;
+  if (appApiLevel(request) !== null) return null;
   if (path === "/auth/google") return APP_CHALLENGE.test(url.searchParams.get("app") || "") ? null : closed(request);
   if (OPEN_PATHS.has(path) || OPEN_PREFIXES.some(prefix => path.startsWith(prefix))) return null;
   // Passkeys, e-mail codes and Sign in with Apple in the browser.

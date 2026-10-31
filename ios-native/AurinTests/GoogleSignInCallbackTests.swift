@@ -10,7 +10,7 @@ final class GoogleSignInCallbackTests: XCTestCase {
         let callback = AuthService.callback(try XCTUnwrap(URL(string: "https://aurin.health")), path: AuthService.signInReturnPath, https: true)
         XCTAssertTrue(callback.matchesURL(try XCTUnwrap(URL(string: "https://aurin.health/auth/app/return?token=abc.def"))))
         XCTAssertTrue(callback.matchesURL(try XCTUnwrap(URL(string: "https://aurin.health/auth/app/return?error=cancelled"))))
-        XCTAssertFalse(callback.matchesURL(try XCTUnwrap(URL(string: "loadwise://auth?token=abc.def"))))
+        XCTAssertFalse(callback.matchesURL(try XCTUnwrap(URL(string: "aurin://auth?token=abc.def"))))
         XCTAssertFalse(callback.matchesURL(try XCTUnwrap(URL(string: "https://aurin.health/auth/google/callback?code=x"))))
         XCTAssertFalse(callback.matchesURL(try XCTUnwrap(URL(string: "https://evil.example/auth/app/return?token=abc.def"))))
     }
@@ -21,5 +21,11 @@ final class GoogleSignInCallbackTests: XCTestCase {
         XCTAssertFalse(staging.matchesURL(try XCTUnwrap(URL(string: "https://aurin.health/auth/app/return?token=abc.def"))))
         let older = AuthService.callback(try XCTUnwrap(URL(string: "https://aurin.health")), path: AuthService.signInReturnPath, https: false)
         XCTAssertTrue(older.matchesURL(try XCTUnwrap(URL(string: "loadwise://auth?token=abc.def"))))
+    }
+
+    func testConnectingAServiceClosesOnTheConnectedAddress() throws {
+        let callback = AuthService.callback(try XCTUnwrap(URL(string: "https://aurin.health")), path: AuthService.connectedPath, https: true)
+        XCTAssertTrue(callback.matchesURL(try XCTUnwrap(URL(string: "https://aurin.health/auth/app/connected?event=whoop"))))
+        XCTAssertFalse(callback.matchesURL(try XCTUnwrap(URL(string: "https://aurin.health/auth/app/return?token=abc.def"))))
     }
 }
