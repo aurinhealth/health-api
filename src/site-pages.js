@@ -1540,7 +1540,7 @@ export function healthDataPage(request) {
 <p><strong>To collect it.</strong> We collect and process consumer health data only after you consent in the app, before any of it is synced. Sexual activity and cycle tracking each take a consent of their own when you turn them on (Settings → Journal → Sexual activity, Settings → Cycle).</p>
 <p><strong>To share it.</strong> Sharing consumer health data takes a separate consent from the one to collect it, for each recipient, and none is given in advance:</p>
 <ul>
-<li><strong>OpenAI</strong>, for the AI features: a checkbox of its own (“Allow AI”). Your mood, cannabis and medication go to the coach only after a further consent (Settings → Journal → Sensitive items), and your cycle only after “Coach knows my cycle”. Sexual activity never goes to AI.</li>
+<li><strong>OpenAI</strong>, for the AI features: a checkbox of its own (“Allow AI”). Your mood, anxiety, cannabis, CBD and medication go to the coach only after a further consent (Settings → Journal → Sensitive items), and your cycle only after “Coach knows my cycle”. Sexual activity never goes to AI.</li>
 <li><strong>Intervals.icu</strong>: your health data and Apple Watch workouts go there only after you turn on “Also send health data” when you connect it, or later in Settings → Sync.</li>
 <li><strong>Google Health</strong>: before you connect it, Aurin shows what it writes there (the food log and, with the permissions you tick on Google’s consent screen, your weight and workouts) and asks for your consent.</li>
 <li><strong>Apple Health</strong> stays on your iPhone: Aurin writes to it only the types you turn on and iOS asks you about each one.</li>
