@@ -8,7 +8,7 @@ const entry = serverSource();
 test("the server routes, cache and Settings know the passkeys", () => {
   assert.match(entry, /handlePasskeyLogin\(request, rawEnv, url\.pathname\)/);
   assert.match(entry, /handleEmailLogin\(request, rawEnv, url\.pathname, ctx\)/);
-  assert.match(entry, /handlePasskeyApi\(request, env, url, session, ctx\)/);
+  assert.match(entry, /handlePasskeyApi\(request, env, url, session, ctx, stepUp\)/);
   assert.match(entry, /passkeys\$\|passkeys\\\/options\$\)\/;/);
   assert.match(entry, /apple,passkeys,emailLogin:emailConfigured\(env\)[,}]/);
   assert.match(entry, /privacyPage\(request, \{ apple: true, email: emailConfigured\(env\), open: openSignup\(env\) \}\)/);
@@ -24,7 +24,8 @@ test("the privacy policy and support page describe only the sign-in methods that
   const all = await privacyPage(visit("/privacy"), { apple: true, email: true }).text();
   assert.match(all, /When you sign in with Apple/);
   assert.match(all, /<strong>Codes sent by email\.<\/strong>/);
-  assert.match(all, /Its Email Service sends the sign-in codes/);
+  assert.match(all, /Its Email Service sends the sign-in and confirmation codes/);
+  assert.match(all, /a code sent to your current address \(or one of your passkeys\) confirms it’s you/);
   assert.match(all, /You sign in with Apple, Google, a passkey or a one-time code sent to your email,/);
   const cs = await privacyPage(new Request("https://aurin.health/cs/privacy"), { email: true }).text();
   assert.match(cs, /<strong>Přístupové klíče \(passkeys\)\.<\/strong>/);

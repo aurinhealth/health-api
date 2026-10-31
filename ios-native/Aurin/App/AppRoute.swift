@@ -115,8 +115,10 @@ enum AppRoute: Hashable {
         case "zones": self = .zones
         case "steps": self = .steps
         case "strain": self = .strain
-        case "library": self = parts.count > 1 ? .workoutLibrary(parts[1]) : .library
-        case "gym": self = .gym(parts.count > 1 ? parts[1] : AppModel.localDate(Date()))
+        // What a link carries is checked here: a day is yyyy-MM-dd, a sport and
+        // a muscle come from their lists, so nothing else reaches a request or a file name.
+        case "library": self = parts.count > 1 && LibrarySport.find(parts[1]) != nil ? .workoutLibrary(parts[1]) : .library
+        case "gym": self = .gym(parts.count > 1 && Self.isDay(parts[1]) ? parts[1] : AppModel.localDate(Date()))
         case "sleep-settings": self = .sleepSettings
         case "gym-builder": self = .gymBuilder
         case "exercises": self = .exerciseLibrary
@@ -124,14 +126,24 @@ enum AppRoute: Hashable {
         case "day-review": self = .dayReview
         case "records": self = .insights
         case "muscles": self = .muscles
-        case "muscle" where parts.count > 1: self = .muscle(parts[1])
+        case "muscle" where parts.count > 1: guard Self.isMuscleId(parts[1]) else { return nil }; self = .muscle(parts[1])
         case "cycle": self = .cycle
-        case "journal": self = .journal(parts.count > 1 ? parts[1] : AppModel.shift(AppModel.localDate(Date()), by: -1) ?? AppModel.localDate(Date()))
+        case "journal": self = .journal(parts.count > 1 && Self.isDay(parts[1]) ? parts[1] : AppModel.shift(AppModel.localDate(Date()), by: -1) ?? AppModel.localDate(Date()))
         case "my-workouts": self = .myWorkouts
         case "friend-workouts": self = .friendWorkouts
         case "share" where parts.count > 1 && Self.isShareId(parts[1]): self = .sharedWorkout(parts[1])
         default: return nil
         }
+    }
+
+    /// A day as the server writes it: "2026-10-30".
+    static func isDay(_ text: String) -> Bool {
+        text.count == 10 && text.enumerated().allSatisfy { i, c in i == 4 || i == 7 ? c == "-" : c.isASCII && c.isNumber }
+    }
+
+    /// A muscle's id in /app/api/muscles: lower-case letters and underscores (upper_back).
+    static func isMuscleId(_ id: String) -> Bool {
+        !id.isEmpty && id.count <= 40 && id.allSatisfy { $0.isASCII && ($0.isLowercase || $0.isNumber || $0 == "_") }
     }
 
     /// A link's id: ten letters and digits (src/workout-templates.js).

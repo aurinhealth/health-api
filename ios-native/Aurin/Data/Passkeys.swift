@@ -119,6 +119,37 @@ final class PasskeyService: NSObject, ASAuthorizationControllerDelegate, ASAutho
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: options.rpId)
         let request = provider.createCredentialAssertionRequest(challenge: challenge)
         request.userVerificationPreference = .required
+        let (assertion, credential) = try await signedAssertion(request)
+        do {
+            _ = try await api.verifyPasskeyLogin(credential: credential)
+        } catch APIError.unknownPasskey(let message) {
+            // A passkey of a deleted account (or one removed in Settings on
+            // another device): the Passwords app drops it, so it is not offered again.
+            Self.reportUnknown(rpId: options.rpId, credentialID: assertion.credentialID)
+            throw APIError.unknownPasskey(message)
+        }
+        Self.remember(true)
+        // The other passkeys of this account the server no longer knows go too.
+        _ = try? await api.passkeys()
+    }
+
+    /// "Confirm it's you" with one of the signed-in account's passkeys
+    /// (src/step-up.js): the server then allows the sensitive change for a while.
+    /// Throws CancellationError when the user closed the sheet.
+    func confirm(api: APIClient) async throws {
+        let options = try await api.stepUpPasskeyOptions()
+        guard let challenge = Self.decode(options.challenge) else { throw APIError.message(L10n.tr("Přístupový klíč se nepodařilo ověřit. Zkus to znovu.")) }
+        let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: options.rpId)
+        let request = provider.createCredentialAssertionRequest(challenge: challenge)
+        request.userVerificationPreference = .required
+        // Only this account's passkeys, so the sheet never offers another account's.
+        request.allowedCredentials = options.allowCredentials.compactMap { Self.decode($0.id) }.map { ASAuthorizationPlatformPublicKeyCredentialDescriptor(credentialID: $0) }
+        let (_, credential) = try await signedAssertion(request)
+        try await api.verifyStepUpPasskey(credential: credential)
+    }
+
+    /// Runs an assertion and turns it into the JSON the server reads.
+    private func signedAssertion(_ request: ASAuthorizationPlatformPublicKeyCredentialAssertionRequest) async throws -> (ASAuthorizationPlatformPublicKeyCredentialAssertion, JSONObject) {
         let authorization = try await perform(request)
         guard let assertion = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialAssertion else {
             throw APIError.message(L10n.tr("Přístupový klíč se nepodařilo ověřit. Zkus to znovu."))
@@ -136,17 +167,7 @@ final class PasskeyService: NSObject, ASAuthorizationControllerDelegate, ASAutho
                 "userHandle": userHandle
             ])
         ]
-        do {
-            _ = try await api.verifyPasskeyLogin(credential: credential)
-        } catch APIError.unknownPasskey(let message) {
-            // A passkey of a deleted account (or one removed in Settings on
-            // another device): the Passwords app drops it, so it is not offered again.
-            Self.reportUnknown(rpId: options.rpId, credentialID: assertion.credentialID)
-            throw APIError.unknownPasskey(message)
-        }
-        Self.remember(true)
-        // The other passkeys of this account the server no longer knows go too.
-        _ = try? await api.passkeys()
+        return (assertion, credential)
     }
 
     /// Adds a passkey for the signed-in account ("Příště přes Face ID").

@@ -199,6 +199,8 @@ struct ReadinessWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "readiness", provider: SnapshotProvider()) { entry in
             ReadinessWidgetView(entry: entry)
+                // Redacted on the Lock Screen and in StandBy while the phone is locked.
+                .privacySensitive()
                 .widgetURL(URL(string: "aurin://open/readiness"))
                 .widgetCard()
         }
@@ -260,6 +262,8 @@ struct SleepWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "sleep", provider: SnapshotProvider()) { entry in
             SleepWidgetView(entry: entry)
+                // Redacted on the Lock Screen and in StandBy while the phone is locked.
+                .privacySensitive()
                 .widgetURL(URL(string: "aurin://open/sleep"))
                 .widgetCard()
         }
@@ -303,6 +307,8 @@ struct DayWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "day", provider: SnapshotProvider()) { entry in
             DayWidgetView(entry: entry)
+                // Redacted on the Lock Screen and in StandBy while the phone is locked.
+                .privacySensitive()
                 .widgetURL(URL(string: "aurin://open/today"))
                 .widgetCard()
         }
@@ -361,6 +367,8 @@ struct FoodWaterWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "food", provider: SnapshotProvider()) { entry in
             FoodWaterWidgetView(entry: entry)
+                // Redacted on the Lock Screen and in StandBy while the phone is locked.
+                .privacySensitive()
                 .widgetURL(URL(string: "aurin://open/food"))
                 .widgetCard()
         }

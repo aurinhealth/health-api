@@ -60,6 +60,8 @@ struct MetricWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: "metric", intent: MetricWidgetIntent.self, provider: MetricProvider()) { entry in
             MetricWidgetView(entry: entry)
+                // Redacted on the Lock Screen and in StandBy while the phone is locked.
+                .privacySensitive()
                 .widgetURL(URL(string: entry.metric.link))
                 .widgetCard()
         }
@@ -237,6 +239,8 @@ struct WeekWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "week", provider: WeekProvider()) { entry in
             WeekWidgetView(entry: entry)
+                // Redacted on the Lock Screen and in StandBy while the phone is locked.
+                .privacySensitive()
                 .widgetURL(URL(string: "aurin://open/training"))
                 .widgetCard()
         }
@@ -372,6 +376,8 @@ struct NextWorkoutWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "next", provider: SnapshotProvider()) { entry in
             NextWorkoutWidgetView(entry: entry)
+                // Redacted on the Lock Screen and in StandBy while the phone is locked.
+                .privacySensitive()
                 .widgetURL(URL(string: "aurin://open/training"))
                 .widgetCard()
         }
