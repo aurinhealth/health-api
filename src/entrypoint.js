@@ -61,6 +61,7 @@ import { loadRecoveryValidation } from "./recovery-validation.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { getStrengthHistory, parseStrengthPlan } from "./strength-history.js";
 import { explainWorkout, athleteSteps } from "./workout-explanation.js";
+import { libraryBricks } from "./brick-workouts.js";
 import { aiWorkoutPick } from "./ai-workout-pick.js";
 import { composeWorkout, poorFit, fewMatches, composeKey, libraryKind, COMPOSE_VARIANTS } from "./ai-workout-compose.js";
 import { rankOptions, dayChoice, recentKinds, pickState, savePick, undoSkip, lessKinds, setLess, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "./coach-pick.js";
@@ -3094,6 +3095,11 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       const coachKind=coach.recommendation?.session?.kind;if(!filters.system&&coachKind)filters.preferredSystem=coachKind==='long_endurance'?'endurance':coachKind==='vo2'?'vo2max':coachKind;
       return {date,coach,context,filters,autoDuration};
     };
+    // Knihovna → Tri: the bricks (brick-workouts.js), their steps in the athlete's watts and paces.
+    if(url.pathname==='/app/api/workouts/bricks'&&request.method==='GET'){
+      const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({}));
+      return Response.json({status:'ok',bricks:await libraryBricks(env.DB,{environment:url.searchParams.get('environment')==='outdoor'?'outdoor':'indoor',thresholds})},{headers:{'Cache-Control':'no-store'}});
+    }
     if(url.pathname==='/app/api/workouts/search'&&request.method==='GET'){
       await cached(env,ctx,'reconcile:'+localToday(),async()=>{await reconcileWorkoutLibraryCompletions(env,ctx,internalAuth);return {done:true};});
       const {date,coach,context,filters,autoDuration}=await libraryDay(url.searchParams);

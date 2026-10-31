@@ -187,6 +187,12 @@ extension APIClient {
     /// Returns the calendar's event id ("planned:local-…"), when the server says.
     /// time: "HH:MM" chosen in the week plan; nil for the day without a time.
     @discardableResult
+    /// Knihovna → Tri: the bricks, their steps for the trainer or outside.
+    func libraryBricks(indoor: Bool) async throws -> [LibraryBrick] {
+        let r: BricksResponse = try await get("/app/api/workouts/bricks?environment=" + (indoor ? "indoor" : "outdoor"))
+        return r.bricks
+    }
+
     func scheduleWorkout(id: String, date: String, indoor: Bool, time: String? = nil) async throws -> String? {
         var body: JSONObject = ["workoutId": .string(id), "date": .string(date), "confirm": .bool(true),
                                 "environment": .string(indoor ? "indoor" : "outdoor")]

@@ -23,7 +23,7 @@ struct TrainingLibraryView: View {
                 Text(sport?.label ?? "Knihovna tréninků").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
 
                 if let sport {
-                    if sport.id == "gym" { GymLibrarySection() } else { WorkoutLibrarySection(sport: sport.id) }
+                    if sport.id == "gym" { GymLibrarySection() } else if sport.id == "tri" { BrickLibrarySection() } else { WorkoutLibrarySection(sport: sport.id) }
                 } else {
                     HStack(spacing: 10) {
                         ForEach(LibrarySport.all) { LibrarySportPanel(sport: $0) }
@@ -92,8 +92,12 @@ struct LibrarySport: Identifiable {
         LibrarySport(id: "ride", label: "Kolo", symbol: "bicycle", color: Palette.amberBar),
         LibrarySport(id: "run", label: "Běh", symbol: "figure.run", color: Palette.rust),
         LibrarySport(id: "swim", label: "Plavání", symbol: "figure.pool.swim", color: Palette.blue),
+        // Bricks, two sports one right after the other (BrickLibrarySection).
+        LibrarySport(id: "tri", label: "Tri", symbol: "figure.open.water.swim", color: Palette.green),
         LibrarySport(id: "gym", label: "Posilovna", symbol: "dumbbell.fill", color: Palette.indigo)
     ]
+    /// The sports of one workout (Moje tréninky → +): not the bricks.
+    static var single: [LibrarySport] { all.filter { $0.id != "tri" } }
 
     static func find(_ id: String) -> LibrarySport? { all.first { $0.id == id } }
 }
@@ -169,6 +173,191 @@ struct GymLibrarySection: View {
             ExerciseCatalog()
         }
         .task { if model.musclesStale { await model.loadMuscles() } }
+    }
+}
+
+// MARK: Tri
+
+/// Knihovna → Tri: bricks, two sports one right after the other
+/// (GET /app/api/workouts/bricks, src/brick-workouts.js).
+struct BrickLibrarySection: View {
+    @Environment(AppModel.self) private var model
+    @State private var bricks: [LibraryBrick] = []
+    @State private var indoor = true
+    @State private var loading = true
+    @State private var error: String?
+    @State private var open: LibraryBrick?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Picker("Kde", selection: $indoor) {
+                Text("Trenažér").tag(true)
+                Text("Venku").tag(false)
+            }
+            .pickerStyle(.segmented)
+            .padding(.top, 18)
+            SectionLabel(text: "Bricky").padding(.top, 22)
+            if let error {
+                Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 10)
+            } else if loading && bricks.isEmpty {
+                ProgressView().frame(maxWidth: .infinity).padding(.top, 30)
+            } else {
+                Card(padding: 0) {
+                    VStack(spacing: 0) {
+                        ForEach(Array(bricks.enumerated()), id: \.element.id) { index, brick in
+                            if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1).padding(.leading, 16) }
+                            Button { open = brick } label: { row(brick) }.buttonStyle(.plain)
+                        }
+                    }
+                }
+                .padding(.top, 10)
+                Label("Do Apple Watch jako jeden multisport trénink.", systemImage: "applewatch")
+                    .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 12)
+            }
+        }
+        .task(id: indoor) { await load() }
+        .sheet(item: $open) { LibraryBrickSheet(brick: $0, indoor: indoor) }
+    }
+
+    private func row(_ brick: LibraryBrick) -> some View {
+        HStack(spacing: 12) {
+            HStack(spacing: -8) {
+                ForEach(Array(brick.legs.enumerated()), id: \.offset) { _, leg in
+                    let s = LibrarySport.find(leg.sport)
+                    Image(systemName: s?.symbol ?? "figure.mixed.cardio")
+                        .scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.onAccent)
+                        .frame(width: 30, height: 30)
+                        .background(s?.color ?? Palette.green, in: Circle())
+                        .overlay { Circle().stroke(Palette.card, lineWidth: 2.5) }
+                }
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(verbatim: brick.name).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                Text(verbatim: brick.legs.map { L10n.tr(LibrarySport.find($0.sport)?.label ?? $0.sport) + " " + Fmt.duration($0.minutes) }.joined(separator: " + "))
+                    .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(2)
+                legBar(brick).padding(.top, 4)
+            }
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
+        }
+        .padding(14)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Each leg's share of the brick's time, in its sport's colour.
+    private func legBar(_ brick: LibraryBrick) -> some View {
+        GeometryReader { geo in
+            HStack(spacing: 2) {
+                ForEach(Array(brick.legs.enumerated()), id: \.offset) { _, leg in
+                    Capsule().fill(LibrarySport.find(leg.sport)?.color ?? Palette.green)
+                        .frame(width: max(4, (geo.size.width - 2) * CGFloat(leg.minutes) / CGFloat(max(1, brick.minutes))))
+                }
+            }
+        }
+        .frame(width: 150, height: 5)
+    }
+
+    private func load() async {
+        guard !model.demo else { loading = false; return }
+        loading = true
+        defer { loading = false }
+        do {
+            bricks = try await model.api.libraryBricks(indoor: indoor)
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+/// A brick: its legs with their steps, planned on a day as two workouts, the
+/// second joined right after the first (planned-links.js).
+struct LibraryBrickSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let brick: LibraryBrick
+    let indoor: Bool
+    @State private var date = Date()
+    @State private var saving = false
+    @State private var done = false
+    @State private var error: String?
+
+    var body: some View {
+        PageScroll {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(verbatim: brick.name).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Spacer()
+                    Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
+                }
+                Text(verbatim: Fmt.duration(brick.minutes)).font(Typo.small).foregroundStyle(Palette.muted)
+                Text(verbatim: brick.note).font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+                ForEach(Array(brick.legs.enumerated()), id: \.offset) { index, leg in
+                    if index > 0 {
+                        Label("Hned potom", systemImage: "link").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.amber)
+                    }
+                    let s = LibrarySport.find(leg.sport)
+                    Card {
+                        HStack(spacing: 10) {
+                            Image(systemName: s?.symbol ?? "figure.mixed.cardio").scaledFont(13, weight: .semibold, cap: .denseCap)
+                                .foregroundStyle(Palette.onAccent).frame(width: 28, height: 28)
+                                .background(s?.color ?? Palette.green, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                            Text(L10n.tr(s?.label ?? leg.sport)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                            Spacer()
+                            Text(verbatim: [Fmt.duration(leg.minutes), leg.meters.map { Fmt.int($0) + " m" }].compactMap { $0 }.joined(separator: " · "))
+                                .font(Typo.small).foregroundStyle(Palette.muted)
+                        }
+                        if !leg.steps.isEmpty {
+                            WorkoutProfile(blocks: leg.steps, sport: leg.sport).padding(.top, 8)
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(Array(leg.steps.enumerated()), id: \.offset) { _, block in StepBlockRow(block: block) }
+                            }
+                            .padding(.top, 8)
+                        }
+                    }
+                }
+                Card {
+                    DatePicker("Den", selection: $date, in: Calendar.current.startOfDay(for: Date())..., displayedComponents: .date)
+                        .environment(\.locale, Fmt.locale)
+                    if done {
+                        Label("Naplánováno, najdeš ho v týdnu i v Intervals.icu.", systemImage: "checkmark.circle.fill")
+                            .font(Typo.bodyStrong).foregroundStyle(Palette.green)
+                    } else {
+                        PrimaryButton(title: saving ? "Plánuji…" : "Naplánovat", systemImage: "calendar.badge.plus", busy: saving) { Task { await schedule() } }
+                            .disabled(saving || model.demo)
+                    }
+                    if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+                }
+                Text("Spojený brick pošlete z dne v týdnu do Apple Watch jako jeden multisport trénink.")
+                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(24)
+        }
+        .presentationDetents([.large])
+        .presentationBackground(Palette.background)
+    }
+
+    /// Both legs on the day, the second joined right after the first.
+    private func schedule() async {
+        saving = true
+        defer { saving = false }
+        do {
+            let day = AppModel.localDate(date)
+            var previous: String?
+            for leg in brick.legs {
+                let event = try await model.api.scheduleWorkout(id: leg.workoutId, date: day, indoor: leg.sport == "swim" || indoor)
+                if let event, let previous { try await model.api.linkPlanned(eventId: event, after: previous) }
+                previous = event
+            }
+            done = true
+            error = nil
+            async let training: Void = model.refreshTraining()
+            await model.refresh()
+            await training
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 }
 
