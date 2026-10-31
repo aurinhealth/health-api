@@ -18,8 +18,8 @@ Watch section) in the same pull request. Before touching the site, read
 
 ## TestFlight notes
 
-A pull request that changes `ios-native/` carries a `## TestFlight` section in its description (Czech,
-then English; "Nic k otestování" when nothing changes for a tester). CI fails without it. Format in
+A pull request that changes `ios-native/` carries a `## TestFlight` section in its description (English
+first, then Czech; "Nic k otestování" when nothing changes for a tester). CI fails without it. Format in
 [docs/testflight-notes.md](docs/testflight-notes.md).
 
 ## AI prompt texts are private
