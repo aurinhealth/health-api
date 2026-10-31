@@ -291,18 +291,34 @@ test('the Apple Watch chapter shows the watch app on the sample morning',async()
 
 test('the privacy policy, terms and health data policy name the operator as a sole trader, and every transfer outside the EU has its safeguard',async()=>{
   const get=async(fn,path)=>(await fn(new Request('https://aurin.health'+path))).text();
-  const privacy=await get(privacyPage,'/privacy'),cs=await get(privacyPage,'/cs/privacy');
-  for(const html of [privacy,cs,await get(termsPage,'/terms'),await get(termsPage,'/cs/terms'),await get(healthDataPage,'/health-data')]){
-    assert.match(html,/IČO\)? ?30194202/);
+  const [privacy,cs,terms,termsCs,health]=await Promise.all([get(privacyPage,'/privacy'),get(privacyPage,'/cs/privacy'),get(termsPage,'/terms'),get(termsPage,'/cs/terms'),get(healthDataPage,'/health-data')]);
+  // § 435 of the Civil Code: name, registered office and IČO on every page that speaks for the operator, and in the footer.
+  for(const html of [privacy,cs,terms,termsCs,health]){
+    assert.match(html,/IČO\)? 30194202/);
     assert.match(html,/Vrchlického 142, Sedlec, 284 03 Kutná Hora/);
+    assert.match(html,/© 2026 Aurin · run by Petr Bouma, IČO 30194202, Vrchlického 142, 284 03 Kutná Hora, Czech Republic/);
     assert.doesNotMatch(html,/private individual|soukromá osoba/);
   }
+  assert.match(readFileSync(new URL('../public/llms.txt',import.meta.url),'utf8'),/IČO 30194202/);
+  const transfers=html=>html.slice(html.search(/<strong>(Transfers outside the EU|Předávání mimo EU)\.<\/strong>/),html.indexOf('dataprivacyframework.gov/list'));
   for(const html of [privacy,cs]){
-    for(const party of ['Cloudflare, Inc.','OpenAI','Apple','GitHub, Inc.','Google LLC','Intervals.icu Ltd','Wahoo Fitness','Open-Meteo GmbH'])assert.ok(html.includes('<strong>'+party+'</strong> ('),party);
-    assert.match(html,/dataprivacyframework\.gov/);
+    const list=transfers(html);
+    for(const [party,safeguard] of [['Cloudflare, Inc.',/Data Privacy Framework/],['OpenAI',/OpenAI Ireland Ltd/],['Apple',/Apple Distribution International Ltd\./],['GitHub, Inc.',/Data Privacy Framework/],['Google LLC',/Data Privacy Framework/],['Intervals.icu Ltd',/(United Kingdom|Spojené království)/],['Wahoo Fitness',/49/],['Open-Meteo GmbH',/(Switzerland|Švýcarsko)/],['WHOOP',/(India|Indie)/]]){
+      const item=list.match(new RegExp('<li><strong>'+party.replace(/\./g,'\\.')+'</strong>[^\n]*</li>'))?.[0];
+      assert.ok(item,party);
+      assert.match(item,safeguard,party);
+    }
+    // Apple is not on the Data Privacy Framework list: its transfers rely on the clauses.
+    assert.doesNotMatch(list,/Apple Inc\. is certified|Apple Inc\. je certifikovaný/);
     assert.doesNotMatch(html,/otherwise the EU Standard Contractual Clauses|jinak standardními smluvními doložkami EU/);
     assert.match(html,/GitHub Actions/);
   }
-  const health=await get(healthDataPage,'/health-data');
-  for(const part of ['sexual activity','mood','GitHub','<strong>To collect it.</strong>','<strong>To share it.</strong>','Also send health data'])assert.ok(health.includes(part),part);
+  // The consumer health data page says what the privacy policy and the app do.
+  assert.match(health,/deletes your account and all its data immediately; database backups are overwritten within 30 days/);
+  assert.match(privacy,/Database backups are overwritten within 30 days/);
+  assert.match(health,/<li><strong>Intervals\.icu<\/strong>: when you connect it, Aurin first shows what it writes there: the workouts you plan and finish in Aurin and your calorie target/);
+  assert.match(health,/only after you also turn on “Also send health data”/);
+  assert.match(health,/<li><strong>Wahoo<\/strong>: when you connect it, Aurin first shows that it sends there only the rides and runs you plan/);
+  assert.match(health,/sexual activity on a day[^<]*kept only in Aurin’s database and its backups, never goes to AI or any connected service/);
+  for(const part of ['<strong>To collect it.</strong>','<strong>To share it.</strong>','mood and anxiety','GitHub, which runs the weekly database backup'])assert.ok(health.includes(part),part);
 });

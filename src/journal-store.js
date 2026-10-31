@@ -14,7 +14,7 @@ import { drinkFromFoodEntry, hydrationMl, hydrationTarget } from "./fluids.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { localDateTime } from "./user-time.js";
-import { JOURNAL } from "./apple-health.js";
+import { JOURNAL, deleteSexualActivity } from "./apple-health.js";
 import { L } from "./lang.js";
 
 export const MOOD = "mood";
@@ -109,6 +109,8 @@ export async function setJournalOptions(db, options) {
   if (typeof options?.appleSex === "boolean") {
     next.appleSexAt = options.appleSex ? (settings.appleSex && settings.appleSexAt) || new Date().toISOString() : null;
     next.appleSex = options.appleSex;
+    // Withdrawn: what Apple Health gave goes now, not at the next sync.
+    if (!options.appleSex) await deleteSexualActivity(db, db.userId).run();
   }
   if (typeof options?.shareSensitive === "boolean") {
     next.sensitiveAt = options.shareSensitive ? (settings.shareSensitive && settings.sensitiveAt) || new Date().toISOString() : null;
