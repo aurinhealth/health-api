@@ -9,7 +9,7 @@
 // recovery model, sleep, strain, activities and the profile suggestions read
 // them without knowing the source (WEARABLE_FAMILIES).
 //
-// The same data often reaches Loadwise twice: Google Health on an iPhone
+// The same data often reaches Aurin twice: Google Health on an iPhone
 // imports Apple Health. Where Apple Health sent a data type for a day, the
 // Google Health rows of that type and day become record_role 'duplicate'
 // (marked matched_activity_id 'apple-health', which keeps them out of the
@@ -446,7 +446,7 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
   return { status: "ok", saved, changed, skipped: input.length - rows.length, removed, replaced, ...(body.food ? { food: food.saved } : {}) };
 }
 
-// Disconnecting: like the other services, the data Loadwise already has stays
+// Disconnecting: like the other services, the data Aurin already has stays
 // (and keeps replacing the Google copies of those days); nothing new comes.
 export async function disconnectAppleHealth(db, userId) {
   await writeStatus(db, userId, "disconnected", {});

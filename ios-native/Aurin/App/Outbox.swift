@@ -414,7 +414,7 @@ final class NetworkWatch: @unchecked Sendable {
             self.connected = now
             if back { Task { @MainActor in await onBack() } }
         }
-        monitor.start(queue: DispatchQueue(label: "loadwise.network"))
+        monitor.start(queue: DispatchQueue(label: "aurin.network"))
     }
 
     deinit { monitor.cancel() }

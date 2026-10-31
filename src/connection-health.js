@@ -1,4 +1,4 @@
-// Whether a connected service still accepts Loadwise's access. A connection
+// Whether a connected service still accepts Aurin's access. A connection
 // counts as connected while its key is stored; when a sync finds the access
 // revoked or expired (Google invalid_grant, Intervals.icu 401/403), the
 // provider is marked broken here until the next successful call or a reconnect,

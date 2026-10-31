@@ -36,6 +36,7 @@ on:
       - "public/**"
       - "wrangler.jsonc"
       - "migrations/**"
+      - "after-deploy/**"
       - "staging/**"
       - "food-migrations/**"
       - "scripts/*food-catalog*.mjs"
@@ -293,6 +294,13 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/verify-user-shards.mjs ${{ env.STAGING_FLAG }}
+
+      # Once the new version answers: data changes the previous one could undo meanwhile.
+      - name: Apply after-deploy data changes
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/provision-user-shards.mjs ${{ env.STAGING_FLAG }} --after-deploy
 
       - name: Activate user data routing
         env:

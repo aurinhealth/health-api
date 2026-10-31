@@ -1,4 +1,4 @@
-// Zones from Loadwise to Intervals.icu: after the athlete saves their training
+// Zones from Aurin to Intervals.icu: after the athlete saves their training
 // zones (Nastavení → Tréninkové zóny) the thresholds and zone bounds go to the
 // Ride, Run and Swim sport settings, so the calendar, the watch and the coach count
 // with the same numbers. With the OAuth connection this needs the
@@ -32,7 +32,7 @@ function hrBounds(zones, maxHr) {
 
 // The sport settings to write, from athleteThresholds() (intervals-athlete.js).
 // Swim goes only when the athlete set a CSS in Aurin.
-// Thresholds go only when the athlete set them in Loadwise: the others came
+// Thresholds go only when the athlete set them in Aurin: the others came
 // from Intervals.icu in the first place.
 export function intervalsSportSettings(t) {
   const profile = t.profile || {};

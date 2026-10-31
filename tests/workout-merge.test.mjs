@@ -121,7 +121,7 @@ test("a merged copy written to Apple Health again under a new id stays merged (P
   await legacy.fetch(new Request("https://internal/sync/match", { method: "POST" }), env, { waitUntil() {} });
   assert.deepEqual(live().map(r => r.external_id), ["apple:AAA"]);
   const kept = live()[0];
-  assert.equal(JSON.parse(kept.payload_json).loadwiseMerge.with, "apple-health:apple:NEW");
+  assert.equal(JSON.parse(kept.payload_json).aurinMerge.with, "apple-health:apple:NEW");
   // A workout from another device at another time is left alone.
   insert({ ...google("apple:RUN"), start_time: "2026-10-17T20:06:00Z", end_time: "2026-10-17T20:31:00Z" });
   await legacy.fetch(new Request("https://internal/sync/match", { method: "POST" }), env, { waitUntil() {} });
