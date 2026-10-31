@@ -243,6 +243,9 @@ extension AppModel {
         // The next account's purchases carry its own appAccountToken.
         ProStore.shared.forgetAccount()
         AccountCaches.forget()
+        // Files the account left in tmp: its data export and replies to the coach.
+        APIClient.removeExports()
+        CoachReplyUpload.sweep()
         if expired {
             // The writes wait for the next sign-in, which shows whether it is the same account.
             writes.forgetSent()

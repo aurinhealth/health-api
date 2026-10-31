@@ -15,6 +15,8 @@ enum APIError: LocalizedError, Equatable {
     case unknownPasskey(String)
     /// The account has no invite to Aurin (not_invited, src/apple-login.js, src/google-login.js).
     case notInvited(String)
+    /// A sensitive change needs "Confirm it's you" first (403 step_up_required, src/step-up.js).
+    case stepUpRequired(String, StepUpInfo)
 
     var errorDescription: String? {
         switch self {
@@ -26,6 +28,7 @@ enum APIError: LocalizedError, Equatable {
         case .coachAllowanceUsed(let text, _): return text
         case .unknownPasskey(let text): return text
         case .notInvited(let text): return text
+        case .stepUpRequired(let text, _): return text
         }
     }
 }
@@ -252,13 +255,27 @@ final class APIClient: @unchecked Sendable {
             try check(response, data)
             throw APIError.message(L10n.f("Server odpověděl chybou %@.", String(status)))
         }
-        let url = FileManager.default.temporaryDirectory.appending(path: "aurin-data-" + Self.localToday() + ".ndjson")
+        let url = FileManager.default.temporaryDirectory.appending(path: Self.exportPrefix + Self.localToday() + ".ndjson")
         try? FileManager.default.removeItem(at: url)
         try FileManager.default.moveItem(at: downloaded, to: url)
+        // Readable only while the phone is unlocked; it goes when Soukromí a data closes (removeExports).
+        try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: url.path)
         return url
     }
 
-    /// Deletes the account and everything in it (confirmed in Soukromí a data with Face ID or the code).
+    private static let exportPrefix = "aurin-data-"
+
+    /// The exported account leaves the phone: when Soukromí a data closes, on
+    /// signing out or deleting the account, and at launch (one left by an app that ended).
+    static func removeExports() {
+        let dir = FileManager.default.temporaryDirectory
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return }
+        for name in names where name.hasPrefix(exportPrefix) && name.hasSuffix(".ndjson") {
+            try? FileManager.default.removeItem(at: dir.appending(path: name))
+        }
+    }
+
+    /// Deletes the account and everything in it (after "Confirm it's you" in Soukromí a data, src/step-up.js).
     func deleteAccount() async throws {
         let _: JSONValue = try await send("/app/api/account/delete", method: "POST", body: ["confirm": JSONValue.string("SMAZAT")])
         signOut()
@@ -821,6 +838,11 @@ final class APIClient: @unchecked Sendable {
             if json?["status"] as? String == "coach_allowance_used" {
                 struct Used: Decodable { let coachAllowance: CoachAllowance? }
                 throw APIError.coachAllowanceUsed(message ?? L10n.tr("Zprávy koučovi na tento týden jsou vyčerpané."), (try? decoder.decode(Used.self, from: data))?.coachAllowance)
+            }
+            if json?["status"] as? String == "step_up_required" {
+                struct Required: Decodable { let stepUp: StepUpInfo }
+                let info = (try? decoder.decode(Required.self, from: data))?.stepUp ?? StepUpInfo(passkey: false, email: nil)
+                throw APIError.stepUpRequired(message ?? L10n.tr("Nejdřív potvrď, že jsi to ty."), info)
             }
             if http.statusCode == 402 {
                 onSubscriptionRequired?()

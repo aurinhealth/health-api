@@ -10,15 +10,20 @@ import UserNotificationsUI
 /// the subtitle as chips and the day's plan from the body. Every text comes
 /// from the push, already in the user's language. The buttons under it are
 /// the category's (PushRegistration.swift).
+///
+/// With the values hidden (Settings → Oznámení → Skrýt zdravotní údaje) it
+/// shows only what the banner says: iOS gives an extension no sure way to tell
+/// a locked phone, so the numbers wait for the app.
 final class MorningViewController: UIViewController, UNNotificationContentExtension {
     private var host: UIHostingController<MorningView>?
 
     func didReceive(_ notification: UNNotification) {
         let content = notification.request.content
         let readiness = content.userInfo["readiness"] as? [String: Any]
+        let text = NotificationText.shown(content)
         let view = MorningView(morning: Morning(score: (readiness?["score"] as? NSNumber)?.intValue,
                                                 zone: readiness?["zone"] as? String,
-                                                title: content.title, subtitle: content.subtitle, body: content.body))
+                                                title: text.title, subtitle: text.subtitle, body: text.body))
         if let host {
             host.rootView = view
             return
