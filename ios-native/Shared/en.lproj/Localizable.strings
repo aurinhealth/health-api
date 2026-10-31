@@ -531,7 +531,7 @@
 "Bez zaznamenané aktivity, jen běžný pohyb." = "No recorded activity, just everyday movement.";
 "Aktivní minuty v zónách" = "Active zone minutes";
 "tento týden" = "this week";
-"doporučení WHO 150 min týdně · lehká aktivita %@" = "WHO recommends 150 min a week · light activity %@";
+"lehká aktivita %@ · WHO 150 min týdně" = "light activity %@ · WHO 150 min a week";
 "doporučení splněno" = "recommendation met";
 "chybí %@ min" = "%@ min to go";
 "Čas v zónách zatím není k dispozici. Počítá se z celodenního tepu z Google Health nebo Apple Health." = "Time in zones isn't available yet. It's worked out from all-day heart rate in Google Health or Apple Health.";
@@ -3211,15 +3211,10 @@
 "Režim tréninku v iPhonu spustí posilovnu i na hodinkách. Hodinky měří tep a kalorie a trénink uloží do Zdraví jednou." = "Training mode on your iPhone starts the gym on your watch too. The watch measures heart rate and calories and saves the workout to Health once.";
 
 /* Charts: what a line or a scale stands for */
-"potřeba %@" = "need %@";
-"obvykle %@" = "usually %@";
+"potřeba" = "need";
+"obvykle" = "usual";
 "6 týdnů" = "6 weeks";
 "před půl rokem" = "6 months ago";
-"%@+ vysoká" = "%@+ high";
-"%@ střední" = "%@ moderate";
-"pod %@ nízká" = "below %@ low";
-"prům. %@" = "avg %@";
-"%@ cíl" = "%@ goal";
 
 /* The welcome before the sign-in (WelcomePages.swift, LoginView.swift) */
 "Pojďme na to" = "Get started";

@@ -340,7 +340,7 @@ struct WeightDetailContent: View {
                     let goal = w.goal.map { Units.weight($0) }
                     let all = raw + [goal].compactMap { $0 }
                     let lo = (all.min() ?? 70) - 0.5, hi = (all.max() ?? 90) + 0.5
-                    let goalTick = goal.map { [ScaleTick(value: $0, text: L10n.f("%@ cíl", Fmt.int($0)), color: Palette.green, line: false)] } ?? []
+                    let goalTick = goal.map { [ScaleTick(value: $0, text: Fmt.int($0), color: Palette.green, line: false, name: L10n.tr("cíl"))] } ?? []
                     VStack(spacing: 6) {
                         TrendDotsChart(raw: raw, trend: smoothed(raw), goal: goal, lo: lo, hi: hi, height: 160,
                                        scale: scaleTicks(lo, hi, extra: goalTick))

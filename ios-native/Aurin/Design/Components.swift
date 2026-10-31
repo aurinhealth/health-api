@@ -126,13 +126,13 @@ struct RangeBar: View {
             track
             if let edges {
                 GeometryReader { geo in
-                    Text(verbatim: edges.low).position(x: geo.size.width / 3, y: 6)
-                    Text(verbatim: edges.high).position(x: geo.size.width * 2 / 3, y: 6)
+                    Text(verbatim: edges.low).position(x: geo.size.width / 3, y: 7)
+                    Text(verbatim: edges.high).position(x: geo.size.width * 2 / 3, y: 7)
                 }
-                .scaledFont(9, cap: .denseCap)
+                .scaledFont(chartText, cap: .denseCap)
                 .foregroundStyle(Palette.faint)
                 .lineLimit(1)
-                .frame(height: 12)
+                .frame(height: 14)
                 .accessibilityHidden(true)
             }
         }
