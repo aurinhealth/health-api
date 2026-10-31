@@ -38,8 +38,8 @@ struct GymSessionView: View {
         let sameExercise: Bool
         var letter: String?
     }
-    /// 40, 41 and 42 mm (up to 224 pt high): smaller tiles, so the set with
-    /// its time, heart rate and Set done fits without scrolling.
+    /// 40, 41 and 42 mm (up to 224 pt high): smaller rows, so the set, Set
+    /// done and the Time and Heart tiles fit without scrolling.
     static let small = WKInterfaceDevice.current().screenBounds.height < 230
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -144,21 +144,18 @@ struct GymSessionView: View {
         let e = gym.exercises.firstIndex { $0.lifts.contains { $0.row == lift.row } } ?? exercise
         let ex = gym.exercises[e]
         return ScrollView {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(ex.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(W.ink)
+            // Sized to the screen so the set, Set done and the Time and Heart
+            // tiles under it show without scrolling; Volume and Calories below.
+            VStack(alignment: .leading, spacing: 3) {
+                Text(ex.title).font(.system(size: Self.small ? 14 : 16, weight: .semibold)).foregroundStyle(W.ink)
                     .lineLimit(1).minimumScaleFactor(0.7)
                 // − set 2/4 +: one set fewer or one more of this exercise (mockup 20).
                 HStack(spacing: 4) {
                     roundButton("minus") { store.change(.removeSet, exercise: e) }
                         .accessibilityLabel(W.tr("O sérii méně", "One set fewer"))
-                    // The set, and under it the time and heart rate: no extra row,
-                    // so Set done stays on the screen down to the 41 mm watch.
-                    VStack(spacing: 0) {
-                        Text(label(lift, in: ex)).font(.system(size: 12, weight: .medium)).foregroundStyle(W.secondary)
-                        liveLine
-                    }
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                    .frame(maxWidth: .infinity)
+                    Text(label(lift, in: ex)).font(.system(size: 12, weight: .medium)).foregroundStyle(W.secondary)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .frame(maxWidth: .infinity)
                     roundButton("plus") { store.change(.addSet, exercise: e) }
                         .accessibilityLabel(W.tr("O sérii víc", "One set more"))
                 }
@@ -175,13 +172,16 @@ struct GymSessionView: View {
                 Button {
                     done(lift, in: gym)
                 } label: {
+                    // Lower than the system's prominent button, which left no room for the tiles.
                     Text(W.tr("Série hotová", "Set done"))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
+                        .frame(height: Self.small ? 30 : 38)
+                        .background(W.ink, in: Capsule())
+                        .contentShape(Capsule())
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(W.ink)
+                .buttonStyle(.plain)
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 5), GridItem(.flexible(), spacing: 5)], spacing: 5) {
                     // The time runs on its own, without drawing the whole set again each second.
                     timeCell
@@ -216,7 +216,7 @@ struct GymSessionView: View {
     private func roundButton(_ symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol).font(.system(size: 12, weight: .bold)).foregroundStyle(W.ink)
-                .frame(width: 28, height: 28)
+                .frame(width: Self.small ? 24 : 26, height: Self.small ? 24 : 26)
                 .background(W.tile, in: Circle())
         }
         .buttonStyle(.plain)
@@ -225,11 +225,11 @@ struct GymSessionView: View {
     private func tile(_ value: String, unit: String, field: Field, value number: Binding<Double>, step: Double, top: Double) -> some View {
         let on = focus == field
         return VStack(spacing: 0) {
-            Text(value).font(W.serif(Self.small ? 28 : 34)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.6)
+            Text(value).font(W.serif(Self.small ? 22 : 28)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.6)
             Text(unit).font(.system(size: 10)).foregroundStyle(W.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, Self.small ? 2 : 4)
+        .padding(.vertical, Self.small ? 1 : 2)
         .background(on ? W.green.opacity(0.18) : W.tile, in: RoundedRectangle(cornerRadius: 12))
         .overlay { RoundedRectangle(cornerRadius: 12).stroke(on ? W.green : .clear, lineWidth: 2) }
         .focusable(true)
@@ -276,12 +276,12 @@ struct GymSessionView: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(W.tr("Čas", "Time")).font(.system(size: 10)).foregroundStyle(W.secondary)
             clock
-            .font(.system(size: 17, weight: .semibold).monospacedDigit()).foregroundStyle(W.ink)
+            .font(.system(size: Self.small ? 15 : 17, weight: .semibold).monospacedDigit()).foregroundStyle(W.ink)
             .lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 7)
-        .padding(.vertical, 4)
+        .padding(.vertical, Self.small ? 2 : 3)
         .background(W.tile, in: RoundedRectangle(cornerRadius: 10))
     }
 
@@ -289,14 +289,14 @@ struct GymSessionView: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title).font(.system(size: 10)).foregroundStyle(W.secondary)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(value).font(.system(size: 17, weight: .semibold)).foregroundStyle(color)
+                Text(value).font(.system(size: Self.small ? 15 : 17, weight: .semibold)).foregroundStyle(color)
                 if let unit, value != "–" { Text(unit).font(.system(size: 9)).foregroundStyle(W.secondary) }
             }
             .lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 7)
-        .padding(.vertical, 4)
+        .padding(.vertical, Self.small ? 2 : 3)
         .background(W.tile, in: RoundedRectangle(cornerRadius: 10))
     }
 
