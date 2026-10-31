@@ -36,6 +36,7 @@ on:
       - "public/**"
       - "wrangler.jsonc"
       - "migrations/**"
+      - "after-deploy/**"
       - "staging/**"
       - "food-migrations/**"
       - "scripts/*food-catalog*.mjs"
@@ -279,11 +280,27 @@ jobs:
           done
           echo "Database upgrade did not finish in time"; exit 1
 
+      # Google sign-in returns to https://$HOST/auth/app/return, which iOS hands to the
+      # app only when this file names it (APPLE_TEAM_ID, src/apple-app-site-association.js).
+      - name: Check the app's associated domain file
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS --fail "https://$HOST/.well-known/apple-app-site-association" -o aasa.json || { echo "apple-app-site-association is not served on $HOST: set APPLE_TEAM_ID"; exit 1; }
+          node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const apps=JSON.parse(s).webcredentials?.apps||[];if(!apps.some(a=>/^[A-Z0-9]{10}\.health\.aurin\.app$/.test(a))){console.error("No webcredentials entry for health.aurin.app");process.exit(1)}console.log("Associated domain ready")})' < aasa.json
+
       - name: Verify independent user databases
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/verify-user-shards.mjs ${{ env.STAGING_FLAG }}
+
+      # Once the new version answers: data changes the previous one could undo meanwhile.
+      - name: Apply after-deploy data changes
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/provision-user-shards.mjs ${{ env.STAGING_FLAG }} --after-deploy
 
       - name: Activate user data routing
         env:

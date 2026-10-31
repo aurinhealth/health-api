@@ -159,6 +159,17 @@ final class GymStore: ObservableObject {
         })
     }
 
+    /// The rest Training mode on the iPhone started, moved or skipped.
+    @Published var phoneRest: WatchGym.Rest?
+
+    /// The rest here to Training mode on the iPhone (only while in reach).
+    func sendRest(_ rest: WatchGym.Rest) {
+        let session = WCSession.default
+        guard WCSession.isSupported(), session.activationState == .activated, session.isReachable,
+              let data = rest.encoded() else { return }
+        session.sendMessage([WatchGym.restKey: data], replyHandler: { _ in }, errorHandler: { _ in })
+    }
+
     /// Training mode on the iPhone opened the gym here (WatchAppDelegate).
     @Published var openedFromPhone = false
     /// Training mode on the iPhone finished: the session here ends and saves.
@@ -168,6 +179,13 @@ final class GymStore: ObservableObject {
         guard !GymWorkout.shared.running else { return }
         load()
         openedFromPhone = true
+    }
+
+    /// Opened by the iPhone before the watch's connection was up (a cold
+    /// launch): the plan is asked for again once it is, not left spinning.
+    func loadIfWaiting() {
+        guard openedFromPhone, !loading, gym == nil || gym?.date != day else { return }
+        load()
     }
 
     @Published private(set) var changing = false

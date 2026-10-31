@@ -254,7 +254,7 @@ struct MusclesWidget: View {
             Rectangle().fill(Palette.hairline).frame(height: 1)
             MuscleRingsRow(data: data)
             if let title = data.readyTitle {
-                Button { if linked { model.push(.gymBuilder) } } label: {
+                Button { if linked { model.push(.gymQuick) } } label: {
                     Label(L10n.f("Trénink: %@", title.lowercased()), systemImage: "sparkles")
                         .font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 44)
@@ -375,7 +375,7 @@ struct MusclesView: View {
             Text("Všechny svaly jsou odpočaté").font(Typo.sentence(20)).foregroundStyle(Palette.ink).padding(.top, 18)
         }
         if let title = data.readyTitle {
-            PrimaryButton(title: L10n.f("Trénink: %@", title.lowercased()), systemImage: "sparkles") { model.push(.gymBuilder) }
+            PrimaryButton(title: L10n.f("Trénink: %@", title.lowercased()), systemImage: "sparkles") { model.push(.gymQuick) }
                 .padding(.top, 18)
         }
     }

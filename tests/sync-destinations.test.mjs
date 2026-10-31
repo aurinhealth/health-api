@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import {
   readSyncPrefs, saveSyncPrefs, normalizeSyncPrefs, allowedWellness, syncOverview, sendActivity, retrySend, activitySends,
-  normalizeActivity, googleExercise, googleMissingScopes, retrySyncSends, sentByLoadwise
+  normalizeActivity, googleExercise, googleMissingScopes, retrySyncSends, sentByAurin
 } from "../src/sync-destinations.js";
 import { EXTRA_SCOPES, HEALTH_SCOPES } from "../src/google-scopes.js";
 import { storeLocalEvent, syncLocalWorkout } from "../src/local-workouts.js";
@@ -23,9 +23,9 @@ function recorder(reply) {
   return { calls, fetchImpl };
 }
 
-test("without a choice everything keeps today's behaviour", async () => {
+test("without a choice the plan and activities keep going; health data to Intervals.icu waits for a yes", async () => {
   const d = db({ migrate: false });
-  assert.deepEqual(await readSyncPrefs(d, 7, "intervals"), { pushPlanned: true, pushActivities: true, pullActivities: true, health: "all", stored: false });
+  assert.deepEqual(await readSyncPrefs(d, 7, "intervals"), { pushPlanned: true, pushActivities: true, pullActivities: true, health: [], stored: false });
   assert.deepEqual(await readSyncPrefs(d, 7, "apple"), { pushPlanned: false, pushActivities: false, pullActivities: false, health: [], stored: false });
   // Writing workouts to Google needs a permission nobody has yet: off until chosen.
   assert.equal((await readSyncPrefs(d, 7, "google")).pushActivities, false);
@@ -36,7 +36,7 @@ test("preferences are saved per user and destination, cleaned up", async () => {
   const saved = await saveSyncPrefs(d, 7, "intervals", { pushPlanned: false, health: ["hrv", "sleep", "nonsense", "hrv"] });
   assert.deepEqual(saved, { pushPlanned: false, pushActivities: true, pullActivities: true, health: ["hrv", "sleep"] });
   assert.deepEqual(await readSyncPrefs(d, 7, "intervals"), { ...saved, stored: true });
-  assert.equal((await readSyncPrefs(d, 8, "intervals")).health, "all");
+  assert.deepEqual((await readSyncPrefs(d, 8, "intervals")).health, []);
   // A partial update keeps the rest; "all" again.
   assert.deepEqual(await saveSyncPrefs(d, 7, "intervals", { health: "all" }), { ...saved, health: "all" });
   // Apple Health has no plans.
@@ -44,6 +44,20 @@ test("preferences are saved per user and destination, cleaned up", async () => {
   await assert.rejects(saveSyncPrefs(d, 7, "garmin", {}), /Neznámá|Unknown/);
   // Strava is no destination any more.
   await assert.rejects(saveSyncPrefs(d, 7, "strava", {}), /Neznámá|Unknown/);
+});
+
+test("a health list chosen before Apple Health's workouts were a choice keeps sending them; an empty one does not", async () => {
+  const d = db();
+  const row = (user, health, at) => d.sqlite.prepare("INSERT INTO sync_preferences (user_id, destination, push_planned, push_activities, pull_activities, health_json, updated_at) VALUES (?, 'intervals', 1, 1, 1, ?, ?)").run(user, JSON.stringify(health), at);
+  row(7, ["hrv"], "2026-10-20 08:00:00");
+  row(8, [], "2026-10-20 08:00:00");
+  row(9, ["hrv"], "2026-11-02T08:00:00.000Z");
+  assert.deepEqual((await readSyncPrefs(d, 7, "intervals")).health, ["hrv", "workouts"]);
+  assert.deepEqual((await readSyncPrefs(d, 8, "intervals")).health, []);
+  assert.deepEqual((await readSyncPrefs(d, 9, "intervals")).health, ["hrv"]);
+  // Saved again, the list is the athlete's own from then on.
+  await saveSyncPrefs(d, 7, "intervals", { health: ["hrv"] });
+  assert.deepEqual((await readSyncPrefs(d, 7, "intervals")).health, ["hrv"]);
 });
 
 test("the wellness push sends only the chosen health data", () => {
@@ -88,8 +102,8 @@ test("Intervals.icu gets the activity as a manual one, recorded; a retry updates
   // Before a first send Intervals.icu is asked whether the day already has this activity (a lost answer).
   assert.deepEqual([calls[0].method, calls[0].url], ["GET", "https://intervals.icu/api/v1/athlete/0/activities?oldest=2026-10-10&newest=2026-10-11"]);
   assert.equal(calls[1].url, "https://intervals.icu/api/v1/athlete/0/activities/manual");
-  assert.deepEqual(calls[1].body, { start_date_local: "2026-10-10T18:05:00", type: "WeightTraining", name: "Push", moving_time: 3720, elapsed_time: 3720, description: "Bench 4 × 8", external_id: "loadwise:7:gym:2026-10-10", icu_rpe: 7 });
-  assert.equal(sentByLoadwise({ external_id: calls[1].body.external_id }), true);
+  assert.deepEqual(calls[1].body, { start_date_local: "2026-10-10T18:05:00", type: "WeightTraining", name: "Push", moving_time: 3720, elapsed_time: 3720, description: "Bench 4 × 8", external_id: "aurin:7:gym:2026-10-10", icu_rpe: 7 });
+  assert.equal(sentByAurin({ external_id: calls[1].body.external_id }), true);
   // The same activity again (edited): PUT on the known id, no lookup, no second copy.
   await sendActivity(env, { ...activity, name: "Push A" }, { fetchImpl });
   assert.deepEqual([calls[2].method, calls[2].url], ["PUT", "https://intervals.icu/api/v1/activity/i777"]);
@@ -108,7 +122,8 @@ test("Intervals.icu: a first send without an answer is 'unknown'; the retry find
   assert.match(result.sends[0].message, /už tam může být|may already be there/);
   assert.deepEqual(lost.calls.map(c => c.method), ["GET", "POST"]);
   assert.deepEqual((await activitySends(env, activity.key)).map(s => [s.status, s.remoteId]), [["unknown", null]]);
-  // The cron tries again: the lookup finds the copy Intervals.icu made, so it is updated, never posted again.
+  // The cron tries again: the lookup finds the copy Intervals.icu made, so it is updated, never posted again;
+  // also one sent before 2026-11 under its loadwise:… id.
   d.sqlite.exec("UPDATE sync_sends SET updated_at = datetime('now', '-10 minutes')");
   const found = recorder((url, opts) => (opts.method || "GET") === "GET" ? Response.json([{ id: 4242, external_id: "loadwise:7:gym:2026-10-10" }, { id: 1, external_id: null }]) : Response.json({ id: 4242 }));
   assert.deepEqual(await retrySyncSends(env, { fetchImpl: found.fetchImpl }), [{ destination: "intervals", status: "sent", remoteId: "4242" }]);

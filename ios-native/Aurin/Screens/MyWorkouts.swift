@@ -318,7 +318,8 @@ struct WorkoutEditorSheet: View {
 
 /// A friend's link (aurin.health/t/<id>): who sends it, the exercises
 /// with their sets, Naplánovat on the sender's day (changeable) and keeping it
-/// in Moje tréninky. Opening it puts it in Od přátel.
+/// in Moje tréninky. Opening it only shows it: Naplánovat puts it in Od přátel,
+/// so a link opened by a web page or a message adds nothing by itself.
 struct SharedWorkoutView: View {
     @Environment(AppModel.self) private var model
     let id: String
@@ -326,6 +327,7 @@ struct SharedWorkoutView: View {
     @State private var received: SavedWorkout?
     @State private var planning: SavedWorkout?
     @State private var error: String?
+    @State private var saveError: String?
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: share?.name) {
@@ -368,9 +370,10 @@ struct SharedWorkoutView: View {
         }
         Text(share.sport == "run" ? "Tempa se ti spočítají podle tvého prahového tempa." : "Watty se ti spočítají podle tvého FTP.")
             .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
-        if let received {
-            PrimaryButton(title: L10n.tr("Naplánovat"), systemImage: "calendar.badge.plus") { planning = received }
+        if !share.own {
+            PrimaryButton(title: L10n.tr("Naplánovat"), systemImage: "calendar.badge.plus") { Task { await planEndurance() } }
                 .padding(.top, 22)
+            if let saveError { Text(saveError).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 8) }
         }
     }
 
@@ -400,6 +403,8 @@ struct SharedWorkoutView: View {
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                 }
                 .buttonStyle(.plain)
+                // Planning it keeps it in Od přátel, as before.
+                .simultaneousGesture(TapGesture().onEnded { if !share.own { Task { _ = try? await receive() } } })
                 .padding(.top, 22)
     }
 
@@ -412,11 +417,26 @@ struct SharedWorkoutView: View {
     private func load() async {
         guard share == nil else { return }
         do {
-            let found = try await model.api.sharedWorkout(id: id)
-            share = found
-            if !found.own { received = try? await model.api.receiveShare(id: id) }
+            share = try await model.api.sharedWorkout(id: id)
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+
+    /// The copy in Od přátel, made on the first Naplánovat.
+    private func receive() async throws -> SavedWorkout? {
+        if let received { return received }
+        received = try await model.api.receiveShare(id: id)
+        return received
+    }
+
+    /// An endurance workout is planned from its copy in Od přátel (SavedEnduranceSheet).
+    private func planEndurance() async {
+        do {
+            saveError = nil
+            if let saved = try await receive() { planning = saved }
+        } catch {
+            saveError = L10n.f("Trénink se nepodařilo uložit: %@", error.localizedDescription)
         }
     }
 }

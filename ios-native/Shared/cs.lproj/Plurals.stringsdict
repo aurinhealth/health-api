@@ -617,6 +617,46 @@
 			<string>%lld sérií</string>
 		</dict>
 	</dict>
+	<key>%lld testerů</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld testeři</string>
+			<key>many</key>
+			<string>%lld testerů</string>
+			<key>one</key>
+			<string>%lld tester</string>
+			<key>other</key>
+			<string>%lld testerů</string>
+		</dict>
+	</dict>
+	<key>%lld účtů</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld účty</string>
+			<key>many</key>
+			<string>%lld účtů</string>
+			<key>one</key>
+			<string>%lld účet</string>
+			<key>other</key>
+			<string>%lld účtů</string>
+		</dict>
+	</dict>
 	<key>%lld–%lld dní</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

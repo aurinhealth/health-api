@@ -108,8 +108,15 @@ extension APIClient {
     /// dates, and the rows of those built so far), so the days follow on from
     /// each other instead of repeating one session.
     func previewGym(date: String, minutes: Int, focus: String?, muscles: [String], fromWeek: Bool = false,
-                    gymDays: [String] = [], weekSessions: [(date: String, rows: [[JSONValue]])] = []) async throws -> GymProposal {
+                    gymDays: [String] = [], weekSessions: [(date: String, rows: [[JSONValue]])] = [],
+                    autoLength: Bool = false, usualMinutes: Int? = nil) async throws -> GymProposal {
         var body: JSONObject = ["date": .string(date), "durationMinutes": .number(Double(minutes)), "preview": .bool(true), "userInitiated": .bool(true)]
+        // The quick workout from Svaly: the server takes the usual length, capped by the day's free time.
+        if autoLength {
+            body["durationMinutes"] = nil
+            body["autoLength"] = .bool(true)
+            if let usualMinutes { body["usualMinutes"] = .number(Double(usualMinutes)) }
+        }
         if !gymDays.isEmpty { body["gymDays"] = .array(gymDays.map { .string($0) }) }
         if !weekSessions.isEmpty {
             body["weekSessions"] = .array(weekSessions.map { .object(["date": .string($0.date), "rows": .array($0.rows.map { .array($0) })]) })
@@ -118,7 +125,7 @@ extension APIClient {
         else if let focus { body["focus"] = .string(focus); if fromWeek { body["focusSource"] = .string("week") } }
         let r: GymPreviewResponse = try await send("/app/api/gym/generate", method: "POST", body: body)
         guard let plan = r.plan else { throw APIError.message(r.message ?? L10n.tr("Trénink se nepodařilo sestavit.")) }
-        return GymProposal(draftId: r.draftId, planName: plan.planName ?? "Silový trénink", rationale: plan.rationale, rows: plan.rows, muscles: r.muscles ?? [:])
+        return GymProposal(draftId: r.draftId, planName: plan.planName ?? "Silový trénink", rationale: plan.rationale, rows: plan.rows, muscles: r.muscles ?? [:], minutes: r.minutes)
     }
 
     /// The AI changes the proposal by the athlete's words ("bez dřepů, víc ramen").

@@ -844,7 +844,7 @@ struct LibraryWorkoutSheet: View {
 
 // MARK: - Exercises
 
-/// "Knihovna cviků" on its own screen (deep link loadwise://open/exercises).
+/// "Knihovna cviků" on its own screen (deep link aurin://open/exercises).
 struct ExerciseLibraryView: View {
     /// Opened on one muscle (Svaly → Cviky: …), a BodyFigure id.
     var muscle: String? = nil

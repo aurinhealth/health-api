@@ -90,8 +90,9 @@ test("the window runs from the latest workout, and a workout not yet synced coun
   assert.equal((await coachAllowance(env, TODAY)).used, 4, "a new conversation an hour after the latest one is a workout conversation");
 });
 
-test("the owner has no allowance", async () => {
-  const env = envOf({ USER_IS_OWNER: true });
+test("the owner has a paying account's allowance live, none on the test server", async () => {
+  assert.equal((await coachAllowance(envOf({ USER_IS_OWNER: true }), TODAY)).limit, 30);
+  const env = envOf({ USER_IS_OWNER: true, ENVIRONMENT: "staging" });
   assert.equal(await coachAllowance(env, TODAY), null);
   assert.equal(await claimCoachMessage(env, 1, { today: TODAY }), null);
   assert.equal(await recordCoachMessage(env, 1, null, { today: TODAY }), null);

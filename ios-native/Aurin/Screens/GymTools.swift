@@ -226,6 +226,9 @@ struct GymBuilderView: View {
     /// A saved or received workout to plan (Moje tréninky, a friend's link)
     /// instead of one the AI puts together.
     var template: TemplatePlanRequest? = nil
+    /// From Svaly: the proposal straight away, its length the usual one
+    /// (capped by the day's free time); day, length and focus change on it.
+    var quick = false
     @State private var day: Date = Date()
     @State private var minutes = 60
     @State private var focus = "auto"
@@ -245,6 +248,10 @@ struct GymBuilderView: View {
     @State private var technique: String?
     /// "Kde budeš cvičit?" before the first workout of an account without places.
     @State private var askPlace = false
+    /// The length was picked on the proposal, so the server no longer chooses it.
+    @State private var lengthPicked = false
+    /// "Změnit zadání" on the quick path: the full form from then on.
+    @State private var showForm = false
 
     private var isoDay: String { AppModel.localDate(day) }
 
@@ -272,7 +279,9 @@ struct GymBuilderView: View {
                     .font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
-                if let proposal { result(proposal) } else if let template { templateForm(template) } else { form }
+                if let proposal { result(proposal) } else if let template { templateForm(template) }
+                else if quick && !showForm && error == nil { CoachThinking(text: L10n.tr("Kouč sestavuje trénink…")).padding(.top, 18) }
+                else { form }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
             }
         }
@@ -285,13 +294,19 @@ struct GymBuilderView: View {
                 await EquipmentView.pendingSave?.value
                 if let fresh = try? await model.api.gymEquipment() { equipment = fresh }
             }
-            if !model.demo, catalog.isEmpty { catalog = (try? await model.api.gymExercises()) ?? [] }
             if template == nil, model.musclesStale { await model.loadMuscles() }
             // What is rested today picks the focus, until the athlete picks one.
             if template == nil, proposal == nil, focus == "auto", !focusPreset, let preset = model.muscles?.focus {
                 focusPreset = true
                 focus = preset
             }
+            // From Svaly the choice is already made: build it straight away.
+            if quick, proposal == nil, !showForm, busy == nil {
+                if model.demo { showForm = true } else if needsPlace { askPlace = true } else { await preview() }
+                // It failed: the full form, with the error under it, takes over.
+                if proposal == nil, !askPlace { showForm = true }
+            }
+            if !model.demo, catalog.isEmpty { catalog = (try? await model.api.gymExercises()) ?? [] }
         }
         .task { await MuscleModelStore.shared.load(api: model.demo ? nil : model.api) }
         .sheet(item: Binding(get: { replacing.map { Named(name: $0) } }, set: { replacing = $0?.name })) { item in
@@ -309,7 +324,7 @@ struct GymBuilderView: View {
             ForEach(starterPlaces.places) { place in
                 Button(place.name) { Task { await choosePlace(place.id) } }
             }
-            Button("Zrušit", role: .cancel) {}
+            Button("Zrušit", role: .cancel) { showForm = true }
         } message: {
             Text("Trénink složím jen z vybavení, které tam je. Místa a stroje upravíš ve Vybavení.")
         }
@@ -458,10 +473,48 @@ struct GymBuilderView: View {
 
     // MARK: Proposal
 
+    /// Day · length · focus on the proposal: a new choice builds it again.
+    private var setupChips: some View {
+        let today = AppModel.localDate(earliest)
+        let days = (0..<7).compactMap { Calendar.current.date(byAdding: .day, value: $0, to: earliest) }
+        return HStack(spacing: 8) {
+            Menu {
+                ForEach(days, id: \.self) { d in
+                    let iso = AppModel.localDate(d)
+                    Button { day = d; Task { await preview() } } label: {
+                        if iso == isoDay { Label(Fmt.capitalized(Fmt.relativeDay(iso, today: today)), systemImage: "checkmark") }
+                        else { Text(Fmt.capitalized(Fmt.relativeDay(iso, today: today))) }
+                    }
+                }
+            } label: { SetupChip(text: Fmt.capitalized(Fmt.relativeDay(isoDay, today: today))) }
+            Menu {
+                ForEach(GymLength.choices, id: \.self) { m in
+                    Button { minutes = m; lengthPicked = true; Task { await preview() } } label: {
+                        if m == minutes { Label("\(m) min", systemImage: "checkmark") } else { Text("\(m) min") }
+                    }
+                }
+            } label: { SetupChip(text: "\(minutes) min") }
+            Menu {
+                ForEach(["auto", "upper", "lower"], id: \.self) { f in
+                    Button { focus = f; muscles = []; Task { await preview() } } label: {
+                        if f == focus { Label(GymLength.focusTitle(f), systemImage: "checkmark") } else { Text(GymLength.focusTitle(f)) }
+                    }
+                }
+                // Single muscles are picked on the figure, in the full form.
+                Button { focus = "muscles"; showForm = true; proposal = nil; answer = nil } label: { Text(GymLength.focusTitle("muscles")) }
+            } label: { SetupChip(text: GymLength.focusTitle(focus)) }
+        }
+        .disabled(busy != nil)
+    }
+
     private func result(_ p: GymProposal) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(Fmt.capitalized(Fmt.relativeDay(isoDay, today: AppModel.localDate(Date()))) + " · \(minutes) min")
-                .font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 6)
+            if template == nil && !saved {
+                setupChips.padding(.top, 14)
+            } else {
+                Text(Fmt.capitalized(Fmt.relativeDay(isoDay, today: AppModel.localDate(Date()))) + " · \(minutes) min")
+                    .font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 6)
+            }
             Card {
                 WidgetHeader(title: "Co procvičíš", color: Palette.amberBar)
                 BodyMap(load: p.load, height: 240)
@@ -524,7 +577,7 @@ struct GymBuilderView: View {
                 if template == nil {
                     HStack(spacing: 10) {
                         SecondaryButton(title: "Jiný návrh", systemImage: "arrow.clockwise") { Task { await preview() } }
-                        SecondaryButton(title: "Změnit zadání", systemImage: "slider.horizontal.3") { proposal = nil; answer = nil }
+                        SecondaryButton(title: "Změnit zadání", systemImage: "slider.horizontal.3") { showForm = true; proposal = nil; answer = nil }
                     }
                     .disabled(busy != nil)
                     .padding(.top, 10)
@@ -666,10 +719,13 @@ struct GymBuilderView: View {
 
     private func preview() async {
         await run("preview") {
+            let auto = quick && !showForm && !lengthPicked
             var next = try await model.api.previewGym(date: isoDay, minutes: minutes,
                                                       focus: focus == "upper" || focus == "lower" ? focus : nil,
-                                                      muscles: focus == "muscles" ? BodyFigure.muscles.map { $0.id }.filter(muscles.contains) : [])
+                                                      muscles: focus == "muscles" ? BodyFigure.muscles.map { $0.id }.filter(muscles.contains) : [],
+                                                      autoLength: auto, usualMinutes: auto ? GymLength.usual : nil)
             next.groupSupersets()
+            if auto, let settled = next.minutes { minutes = settled }
             proposal = next
             answer = nil
             wish = ""
@@ -721,6 +777,7 @@ struct GymBuilderView: View {
         await run("confirm") {
             try await model.api.confirmGym(draftId: id, rows: p.rows)
             saved = true
+            if template == nil { GymLength.remember(minutes) }
             async let training: Void = model.refreshTraining()
             await model.refresh()
             await training
@@ -1137,5 +1194,49 @@ enum LiftWeight {
     /// In the phone region's decimal mark, never grouped ("1250", typed back in a field).
     private static func text(_ value: Double) -> String {
         value.formatted(.number.precision(.fractionLength(0...2)).grouping(.never).locale(Fmt.locale))
+    }
+}
+
+/// A chip on the proposal that opens its menu: "Today ⌄", "60 min ⌄".
+private struct SetupChip: View {
+    let text: String
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(verbatim: text).lineLimit(1)
+            Image(systemName: "chevron.down").scaledFont(10, weight: .bold)
+        }
+        .font(Typo.small.weight(.medium)).foregroundStyle(Palette.ink)
+        .padding(.horizontal, 14).frame(height: 34)
+        .background(Palette.track, in: Capsule())
+        .contentShape(Capsule())
+    }
+}
+
+/// The gym lengths the athlete saved last, kept on the phone: the usual one
+/// starts the quick workout from Svaly (the server caps it by the day's free time).
+enum GymLength {
+    static let choices = [30, 45, 60, 75, 90, 120]
+    private static let key = "gym.recentMinutes"
+
+    /// The most frequent of the last five saved lengths (a tie goes to the latest), nil before the first.
+    static var usual: Int? {
+        let recent = UserDefaults.standard.array(forKey: key) as? [Int] ?? []
+        guard !recent.isEmpty else { return nil }
+        let counts = Dictionary(recent.map { ($0, 1) }, uniquingKeysWith: +)
+        return recent.reversed().max { counts[$0, default: 0] < counts[$1, default: 0] }
+    }
+
+    static func remember(_ minutes: Int) {
+        let recent = (UserDefaults.standard.array(forKey: key) as? [Int] ?? []) + [minutes]
+        UserDefaults.standard.set(Array(recent.suffix(5)), forKey: key)
+    }
+
+    static func focusTitle(_ focus: String) -> String {
+        switch focus {
+        case "upper": return L10n.tr("Horní část těla")
+        case "lower": return L10n.tr("Nohy")
+        case "muscles": return L10n.tr("Partie")
+        default: return L10n.tr("Celé tělo")
+        }
     }
 }

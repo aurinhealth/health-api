@@ -8,7 +8,7 @@
 // is never overwritten, while today's steps can grow through the day.
 //
 // Settings → Synchronizace → Intervals.icu → Zdravotní data limits the fields
-// (sync-destinations.js); without a choice everything goes, as before.
+// (sync-destinations.js); without a choice nothing goes.
 
 import { heartRateInWindows } from "./index.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
@@ -102,7 +102,9 @@ const auth = env => ({ Authorization: intervalsAuthorization(env.INTERVALS_API_K
 export async function syncWellnessToIntervals(env, { sleepSessions = async () => [], fetchImpl = intervalsReads(env), now = Date.now() } = {}) {
   if (!(env.CONNECTED_PROVIDERS || []).includes("intervals")) return { status: "skipped" };
   const prefs = await readSyncPrefs(env.DB, env.USER_ID, "intervals");
-  if (prefs.health !== "all" && !prefs.health.some(type => type !== "weight")) return { status: "skipped", reason: "off" };
+  // Weight goes through weight-sync.js and workouts through watch-forward.js:
+  // a list of only those has nothing for the wellness push.
+  if (prefs.health !== "all" && !prefs.health.some(type => type !== "weight" && type !== "workouts")) return { status: "skipped", reason: "off" };
   const newest = localDate(new Date(now).toISOString()), oldest = localDate(new Date(now - (WELLNESS_SYNC_DAYS - 1) * 86400000).toISOString());
   const google = await googleWellness(env.DB, env.USER_ID, oldest, await sleepSessions(oldest, newest));
   const response = await fetchImpl(`https://intervals.icu/api/v1/athlete/0/wellness?oldest=${oldest}&newest=${newest}`, { headers: auth(env) });

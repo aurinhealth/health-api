@@ -56,6 +56,30 @@ struct WatchGym: Codable, Equatable, Sendable {
         var letter: String
     }
 
+    /// The rest between sets, the same on both devices: started by Set done
+    /// on either, moved by −15 s / +15 s, ended by Skip (end nil). Sent only
+    /// while in reach: an old rest is no use later.
+    struct Rest: Codable, Equatable, Sendable {
+        var date: String
+        var end: Date?
+        var total: Int
+        /// The exercise the rest leads to, by its sheet name.
+        var exercise: String?
+
+        func encoded() -> Data? { try? JSONEncoder().encode(self) }
+        static func decode(_ data: Data) -> Rest? { try? JSONDecoder().decode(Rest.self, from: data) }
+
+        /// The same rest within a second (an echo of one just received).
+        func same(_ other: Rest?) -> Bool {
+            guard let other, other.date == date else { return false }
+            switch (end, other.end) {
+            case (nil, nil): return true
+            case let (a?, b?): return abs(a.timeIntervalSince(b)) < 1
+            default: return false
+            }
+        }
+    }
+
     /// A change of the plan from the watch (the menu under ≡); the iPhone
     /// writes it into the sheet and answers with the new plan.
     struct Change: Codable, Equatable, Sendable {
@@ -92,11 +116,16 @@ struct WatchGym: Codable, Equatable, Sendable {
     static let doneKey = "gymDone"
     static let ratedKey = "gymRated"
     static let changeKey = "gymChange"
-    /// Watch → iPhone every few seconds of the gym: the heart rate and calories
-    /// (Live) for Training mode, which then leaves Apple Health to the watch.
+    /// Watch → iPhone at the start and every few seconds of the gym: the heart
+    /// rate and calories (Live) for Training mode, which then leaves Apple
+    /// Health to the watch. Started on the watch, it opens Training mode there.
     static let liveKey = "gymLive"
     /// iPhone → watch: Training mode finished, the watch ends and saves the workout.
     static let endKey = "gymEnd"
+    /// Watch → iPhone: the gym finished on the watch, Training mode ends too.
+    static let watchEndKey = "gymWatchEnd"
+    /// Both ways: the rest between sets (Rest).
+    static let restKey = "gymRest"
 
     struct Live: Codable, Equatable, Sendable {
         var start: Date

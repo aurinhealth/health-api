@@ -122,10 +122,10 @@ import { handleIntervalsOAuth, disconnectIntervalsApp } from "./intervals-oauth.
 import { handleIntervalsWebhook } from "./intervals-webhook.js";
 import { handleAppStoreNotification } from "./app-store.js";
 import { intervalsChanged, intervalsReads } from "./intervals-reads.js";
-import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman, FIRST_IMPORT_DAYS } from "./ultrahuman.js";
-import { handleWhoopOAuth, disconnectWhoop, syncWhoop, FIRST_IMPORT_DAYS as WHOOP_FIRST_DAYS } from "./whoop.js";
+import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman } from "./ultrahuman.js";
+import { handleWhoopOAuth, disconnectWhoop, syncWhoop } from "./whoop.js";
 import { wahooDetail } from "./wahoo-detail.js";
-import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, wahooRideExpected, readWahooTokens, FIRST_IMPORT_DAYS as WAHOO_FIRST_DAYS } from "./wahoo.js";
+import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, wahooRideExpected, readWahooTokens } from "./wahoo.js";
 import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed } from "./sync-destinations.js";
 import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, usersWithAccount, usersWithPushTokens, openSignup } from "./tenancy.js";
 import { userDataEnvironment, prefetchUserData, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
@@ -138,7 +138,7 @@ import { needsAIAccess } from "./ai-routes.js";
 import { clearConnectionHealth, connectionProblems, withoutBrokenConnections } from "./connection-health.js";
 import { handleSupportReport } from "./support-report.js";
 import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
-import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, pushConfigured, listPushTokens, sendPush, deletePushToken, MORNING_READINESS } from "./push.js";
+import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, pushConfigured, listPushTokens, sendPush, deletePushToken, MORNING_READINESS, hidesValues } from "./push.js";
 import { coachNudge, swapOffer, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
 import { waterNudge } from "./water-goal.js";
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
@@ -158,6 +158,8 @@ import { heatAdvice } from "./heat-advice.js";
 import { ownFitness, watchOnlyFitness, fitnessDays } from "./own-fitness.js";
 import { handleStrengthAutomation, handleAdminApi } from "./routes-admin.js";
 import { handleAccountApi } from "./routes-account.js";
+import { pausedRefusal, finishHealthPauses } from "./health-pause.js";
+import { firstImport } from "./first-imports.js";
 import { handleSyncApi } from "./routes-sync.js";
 import { handleGymToolsApi, handleGymPlanApi } from "./routes-gym.js";
 import { handleTrainingEditsApi, handleThresholdApi } from "./routes-training.js";
@@ -173,6 +175,7 @@ import { hideActivity, mergeActivities, setActivityTime, undoActivityChange } fr
 import { loadThresholdSessions } from "./threshold-check-state.js";
 import { performanceTrends, intervalsCurves, recentIntervals, swimBests } from "./performance-trends.js";
 import { saveReadOff } from "./source-reading.js";
+import { readSending } from "./source-sending.js";
 // The largest request body the coach route reads (POST /app/api/assistant).
 const ASSISTANT_REQUEST_CHARS=64000;
 // One photo with a message: a JPEG the app has made smaller, as a data URL.
@@ -433,6 +436,8 @@ const worker = {
     await ensureTenancy(env.DB, env);
     useCookbookDatabase(env.DB);
     // Data of deleted accounts that the delete request had no time for.
+    // The rest of paused health data, and the last pass after a pause (health-pause.js).
+    if (controller.cron === "* * * * *") await finishHealthPauses(env.DB, env.USER_DATA_ROUTING === 'true' || env.FOOD_CATALOG_ROUTING === 'true' ? { databaseForUser: id => deletionDatabase(env, id) } : {}).catch(error => console.error("Health data deletion failed", error.message));
     if (controller.cron === "* * * * *") await finishAccountDeletions(env.DB, env.USER_DATA_ROUTING === 'true' || env.FOOD_CATALOG_ROUTING === 'true' ? { databaseForUser: id => deletionDatabase(env, id) } : {}).catch(error => console.error("Account deletion failed", error.message));
     // Accounts unused for two years go with their data (privacy policy). Tried
     // every ten minutes between 2:00 and 3:00 UTC, as a cron minute can be missed.
@@ -530,6 +535,8 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // Routes only the old web dashboard used: the owner's (owner-only-routes.js).
     const ownerOnly = ownerOnlyRefusal(url.pathname, { signedIn, user });
     if (ownerOnly) return ownerOnly;
+    // Health data paused (health-pause.js): only the account, consent, Pro and settings answer.
+    if (signedIn && user.healthPaused && !user.isOwner) { const paused = pausedRefusal(request.method, url.pathname); if (paused) return paused; }
     if(signedIn&&needsAIAccess(request.method,url.pathname)){
       try{await assertAIAccess(env);}catch(error){return error.consent?Response.json({status:'ai_consent_required',message:error.message},{status:403}):Response.json({status:'subscription_required',message:error.message},{status:402});}
     }
@@ -567,12 +574,12 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (intervalsOAuth) {if(url.pathname==="/oauth/intervals/callback"&&intervalsOAuth.status===302){await clearConnectionHealth(env,'intervals');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name IN ('initial_intervals','intervals_history')").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return intervalsOAuth;}
     // A new Ultrahuman connection imports the ring's last two months (readiness's baseline).
     const ultrahumanOAuth = await handleUltrahumanOAuth(request, env, url.pathname);
-    if (ultrahumanOAuth) {if(url.pathname==="/oauth/ultrahuman/callback"&&env.ULTRAHUMAN_TOKEN)ctx.waitUntil(syncUltrahuman(env,{days:FIRST_IMPORT_DAYS}).then(()=>bumpCacheVersion(env.DB)).catch(error=>console.error("Ultrahuman first import failed",error.message)));return ultrahumanOAuth;}
+    if (ultrahumanOAuth) {if(url.pathname==="/oauth/ultrahuman/callback")firstImport(env,ctx,"ultrahuman");return ultrahumanOAuth;}
     const whoopOAuth = await handleWhoopOAuth(request, env, url.pathname);
-    if (whoopOAuth) {if(url.pathname==="/oauth/whoop/callback"&&env.WHOOP_TOKEN)ctx.waitUntil(syncWhoop(env,{days:WHOOP_FIRST_DAYS}).then(()=>bumpCacheVersion(env.DB)).catch(error=>console.error("WHOOP first import failed",error.message)));return whoopOAuth;}
+    if (whoopOAuth) {if(url.pathname==="/oauth/whoop/callback")firstImport(env,ctx,"whoop");return whoopOAuth;}
     // A new Wahoo connection brings its done workouts and sends the plans ahead.
     const wahooOAuth = await handleWahooOAuth(request, env, url.pathname);
-    if (wahooOAuth) {if(url.pathname==="/oauth/wahoo/callback"&&env.WAHOO_TOKEN)ctx.waitUntil(syncWahoo(env,{days:WAHOO_FIRST_DAYS}).then(()=>matchActivities(env,{days:WAHOO_FIRST_DAYS+1})).then(()=>retryWahooExports(env)).then(()=>bumpCacheVersion(env.DB)).catch(error=>console.error("Wahoo first import failed",error.message)));return wahooOAuth;}
+    if (wahooOAuth) {if(url.pathname==="/oauth/wahoo/callback")firstImport(env,ctx,"wahoo");return wahooOAuth;}
     if (url.pathname === "/app/logout" && request.method === "POST") return handleDashboardLogout();
     const nativeConnect = await handleNativeConnect(request, rawEnv, url, { user, signedIn });
     if (nativeConnect) return nativeConnect;
@@ -761,7 +768,7 @@ async function morningPush(env, ctx, options = {}) {
   // Each check in the window leaves why no push went out (sync_status
   // morning_push): "started" left alone means the run was cut off.
   await morningPushNote(env, { reason: 'started' });
-  const result = await sendMorningReadiness(env, { readiness: async date => withState(await todayReadiness(env, ctx, date, options)), details: async date => withState(await todayReadiness(env, ctx, date, { ...options, plan: true })) })
+  const result = await sendMorningReadiness(env, { readiness: async date => withState(await todayReadiness(env, ctx, date, options)), details: async date => withState(await todayReadiness(env, ctx, date, { ...options, plan: true })), hide: hidesValues(state) })
     .catch(async error => { await morningPushNote(env, { reason: 'error', message: String(error?.message || error).slice(0, 200) }); throw error; });
   await morningPushNote(env, result);
   return result;
@@ -815,9 +822,11 @@ async function coachPush(env, ctx) {
   // "Vyměnit" answers this one (/app/api/coach/nudge).
   // Today shows the same offer until it is answered (/app/api/coach/check-in).
   if (nudge.swap) await updateAthleteState(db, { nudge: { ...nudge.swap, title: nudge.title, day: date, status: 'pending' } });
+  // Settings → Oznámení → Skrýt zdravotní údaje: the texts only in `private` (push.js hidesValues).
+  const hide = hidesValues(state) ? (nudge.swap ? 'swap' : 'coach') : null;
   let sent = 0;
   for (const device of devices) {
-    const result = await sendPush(env, device, { title: nudge.title, body: nudge.body }, { category: nudge.swap ? COACH_SWAP_CATEGORY : COACH_REPLY_CATEGORY, data: { coach: { kind: nudge.kind, date } } }).catch(error => ({ ok: false, error: error.message }));
+    const result = await sendPush(env, device, { title: nudge.title, body: nudge.body }, { category: nudge.swap ? COACH_SWAP_CATEGORY : COACH_REPLY_CATEGORY, data: { coach: { kind: nudge.kind, date } }, hide }).catch(error => ({ ok: false, error: error.message }));
     if (result.ok) sent++;
     else if (result.gone) await deletePushToken(db, device.token);
     else console.error('Coach push not delivered', result.status || '', result.reason || result.error || '');
@@ -844,7 +853,8 @@ async function waterPush(env, ctx) {
   const profile = await dashboardProfile(env).catch(() => null);
   if (profile?.waterMode !== 'build') return { sent: 0, reason: 'not-building' };
   // Oznámení → Pití off on the phone stops this push too.
-  if ((await getAthleteState(db).catch(() => null))?.notify?.water === false) return { sent: 0, reason: 'off' };
+  const state = await getAthleteState(db).catch(() => null);
+  if (state?.notify?.water === false) return { sent: 0, reason: 'off' };
   const devices = await listPushTokens(db);
   if (!devices.length) return { sent: 0, reason: 'no-tokens' };
   const fluids = await handleDashboardApi(new Request('https://internal/app/api/fluids?date=' + date), env, ctx, new URL('https://internal/app/api/fluids?date=' + date)).then(r => r.ok ? r.json() : null).catch(() => null);
@@ -853,7 +863,7 @@ async function waterPush(env, ctx) {
   if (!nudge) return { sent: 0, reason: 'on-track' };
   let sent = 0;
   for (const device of devices) {
-    const result = await sendPush(env, device, nudge).catch(error => ({ ok: false, error: error.message }));
+    const result = await sendPush(env, device, nudge, { hide: hidesValues(state) ? 'water' : null }).catch(error => ({ ok: false, error: error.message }));
     if (result.ok) sent++;
     else if (result.gone) await deletePushToken(db, device.token);
     else console.error('Water push not delivered', result.status || '', result.reason || result.error || '');
@@ -2108,10 +2118,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const dropped=(Array.isArray(answer.actions)?answer.actions.length:0)-actions.length;
       if(dropped>0)answer.answer=String(answer.answer||'').trimEnd()+L('\n\n'+(dropped===1?'Jeden návrh':'Některé návrhy')+' neprošl'+(dropped===1?'':'y')+' kontrolou aplikace (den, délka, sport nebo stav), proto tu chybí. Napiš, co upravit, a připravím nový.','\n\n'+(dropped===1?'One proposal':'Some proposals')+' didn\'t pass the app\'s checks (day, length, sport or status), so '+(dropped===1?'it is':'they are')+' missing here. Tell me what to change and I\'ll prepare a new one.');
       await saveMemory();
-      // What the answer says no longer holds is forgotten or rewritten; the app shows it with Zpět.
+      // What the answer says no longer holds is only proposed: the athlete confirms
+      // it under the answer (Forget / Update), so text from the data the coach
+      // reads (an activity name from a connected service) cannot change the memory.
       const changes=memoryChanges(answer.memory,athleteState.memories);
-      for(const text of changes.forgotten)await updateAthleteState(env.DB,{forget:text}).catch(error=>console.error('Memory forget failed',error.message));
-      for(const u of changes.updated)await updateAthleteState(env.DB,{edit:u}).catch(error=>console.error('Memory edit failed',error.message));
       // The chat keeps a one-line summary of the proposals, so later turns can refer to them.
       const note=actionsNote(actions),chatId=await remember(answer.answer+(note?'\n\n'+note:''));
       const coachAllowance=await recordCoachMessage(env,chatId,claim).catch(error=>{console.error('Coach message not counted',error.message);return null;});
@@ -2123,7 +2133,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const messageId=actions.length?await lastAnswerId(env.DB,chatId).catch(()=>null):null;
       for(const action of actions){const own=action.type==='workout'?quick:null,draft={kind:'coach_action',action,chatId,...(messageId?{messageId}:{}),...(own?{quick:own}:{})};const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling',message,JSON.stringify(draft)).run();const options=own?quickOptions(action,own):null;proposals.push({...action,draftId:ins.meta?.last_row_id,...(options?{quick:options}:{})});}
       delete answer.memory;
-      return {...answer,chatId,actions:proposals,coachAllowance,memorySaved:memory,memoryChanges:{saved:memory||null,...changes},costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
+      return {...answer,chatId,actions:proposals,coachAllowance,memorySaved:memory,memoryChanges:{saved:memory||null,forgotten:[],updated:[]},memoryProposals:changes,costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
     };
     // A message whose answer failed goes back to the allowance, unless part of
     // the answer already reached the chat.
@@ -2153,15 +2163,18 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const opening=pushOpening(body.title,body.body);
       chatId=opening?await startChatWithCoach(env.DB,body.title,opening):null;
     }
+    const stateRead=getAthleteState(env.DB).catch(()=>null);
     const askUrl=new URL('/app/api/assistant',url.origin);
     const response=await handleDashboardApi(new Request(askUrl,{method:'POST',headers:{Origin:url.origin,'Content-Type':'application/json'},body:JSON.stringify({message:text,chatId,mode:'coach',appContext:{view:'today',date:localToday()}})}),env,ctx,askUrl,session).catch(error=>{console.error('Push reply failed',error.message);return null;});
     const result=response?await response.json().catch(()=>null):null;
     const answered=response?.ok&&result?.answer;
     if(answered&&result.chatId)chatId=result.chatId;
     const push=answered?replyPush(result,chatId):failedReplyPush(result?.message,chatId);
+    // Settings → Oznámení → Skrýt zdravotní údaje (push.js hidesValues), read while the coach answered.
+    const hide=answered&&hidesValues(await stateRead)?'reply':null;
     let sent=0;
     for(const device of await listPushTokens(env.DB)){
-      const r=await sendPush(env,device,push.alert,{category:push.category,data:push.data}).catch(error=>({ok:false,error:error.message}));
+      const r=await sendPush(env,device,push.alert,{category:push.category,data:push.data,hide}).catch(error=>({ok:false,error:error.message}));
       if(r.ok)sent++;else if(r.gone)await deletePushToken(env.DB,device.token);else console.error('Coach reply push not delivered',r.status||'',r.reason||r.error||'');
     }
     return Response.json({status:answered?'ok':'error',chatId,sent},{headers:{'Cache-Control':'no-store'}});
@@ -2314,6 +2327,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     return Response.json(result,{status:result.code||200,headers:{'Cache-Control':'no-store'}});
   }
   // One Reads from switch under Zdroje dat → Health data (source-reading.js); GET is connections' readOff.
+  // Which services sent each type in the last week: the counts under Zdroje dat → Health data (source-sending.js).
+  if (url.pathname === '/app/api/sources/sending' && request.method === 'GET') {
+    if (!session.signedIn) return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    return Response.json(await readSending(env.DB,env.USER_ID),{headers:{'Cache-Control':'no-store'}});
+  }
   if (url.pathname === '/app/api/sources/reading' && request.method === 'POST') {
     if (!session.signedIn) return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if (request.headers.get('Origin') !== url.origin) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
@@ -2331,7 +2349,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(body.provider==='whoop'){await disconnectWhoop(env);await bumpCacheVersion(env.DB);return Response.json({status:'ok',message:L('Připojení je odebrané a data z WHOOPu smazaná.', 'The connection has been removed and the WHOOP data deleted.')},{headers:{'Cache-Control':'no-store'}});}
       if(body.provider==='ultrahuman'){await disconnectUltrahuman(env);await bumpCacheVersion(env.DB);return Response.json({status:'ok',message:L('Připojení je odebrané a data z prstenu smazaná.', 'The connection has been removed and the ring\'s data deleted.')},{headers:{'Cache-Control':'no-store'}});}
       if(!['google','intervals'].includes(body.provider)) return Response.json({message:L('Neznámé připojení.', 'Unknown connection.')},{status:400});
-      // Loadwise also gives up its access at Google. The owner's token can be the shared Worker secret, which stays.
+      // Aurin also gives up its access at Google. The owner's token can be the shared Worker secret, which stays.
       if(body.provider==='google'&&!env.USER_IS_OWNER) await revokeGoogle(env);
       if(body.provider==='intervals'){await disconnectIntervalsApp(env);await deleteConnectionSecret(env,'intervals_athlete');}
       await deleteConnectionSecret(env,body.provider);
@@ -2722,7 +2740,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const apiKey = String(env.INTERVALS_API_KEY || "");
       // Without Intervals.icu the load comes from the watch's workouts and the gym (training-load.js);
       // a failed read answers with an error below, which the callers' cache does not keep.
-      if (!apiKey) return Response.json({status:"ok",source:"loadwise",connected:false,days,wellness:await ownFitness(env,from,to)},{headers:{"Cache-Control":"no-store"}});
+      if (!apiKey) return Response.json({status:"ok",source:"aurin",connected:false,days,wellness:await ownFitness(env,from,to)},{headers:{"Cache-Control":"no-store"}});
       const auth = intervalsAuthorization(apiKey);
       const target = "https://intervals.icu/api/v1/athlete/0/wellness?oldest="+encodeURIComponent(from)+"&newest="+encodeURIComponent(to);
       const response = await intervalsReads(env,ctx)(target,{headers:{Authorization:auth,Accept:"application/json"}});
@@ -2790,6 +2808,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try {
       assertTrainingAllowed(await getAthleteState(env.DB));
       const prefs=await getWeekPlan(env.DB,day);
+      // "Workout: upper body" from Svaly: the athlete's usual length, but no
+      // longer than the free time saved for the day (a guessed 'auto' week
+      // does not cap it, and under 30 minutes the tap itself is the choice).
+      if (body?.autoLength === true) {
+        const usual = Math.round(Number(body.usualMinutes)) || 60;
+        const free = prefs?.availabilityMode === 'auto' ? null : Number(availabilityOn(prefs, day).minutes);
+        body.durationMinutes = Math.max(30, Math.min(120, free >= 30 ? Math.min(usual, free) : usual));
+      }
+      delete body.autoLength; delete body.usualMinutes;
       if (body?.durationMinutes == null) {
         const chip = targetFor(await computeWeekTargets(env, ctx, mondayOfDate(day), prefs).catch(() => null), day, "gym");
         if (chip) { body.durationMinutes = chip.minutes; if (chip.role === "gym_upper" && !body?.focus && !body?.focusMuscles && !body?.forceProtectLegs) { body.focus = "upper"; body.focusSource = "week"; } }
@@ -2810,6 +2837,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const draft={kind:'gym_preview',plan:data.plan,minutes:body.durationMinutes||60,startTime:body.startTime||null};
       const saved=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'gym',L('Návrh z týdenního plánu', 'Proposal from the week plan'),JSON.stringify(draft)).run();
       data.draftId=saved.meta?.last_row_id;
+      data.minutes=draft.minutes;
       data.muscles=Object.fromEntries([...new Set(data.plan.rows.map(r=>r?.[1]).filter(Boolean))].map(name=>[name,exerciseMuscles(name)]));
     }
     return Response.json(data,{status:response.status,headers:{"Cache-Control":"no-store"}});

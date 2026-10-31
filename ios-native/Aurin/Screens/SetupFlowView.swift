@@ -66,8 +66,11 @@ struct SetupFlowView: View {
                         CircleButton(systemImage: "chevron.left", label: "Zpět") { withAnimation { index -= 1 } }
                     }
                     Spacer()
-                    // Without the consent the app cannot be used: the way out is signing out.
-                    if page == .consent {
+                    // Without the consent the app cannot be used: the way out is signing out,
+                    // or back to the paused screen when health data was paused (HealthPausedView).
+                    if page == .consent && model.resumingHealth {
+                        Button("Zrušit") { model.resumingHealth = false; model.needsSetup = false }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                    } else if page == .consent {
                         Button("Odhlásit") { Task { await model.logout() } }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                     }
                 }
@@ -142,7 +145,7 @@ struct SetupFlowView: View {
         ("Odkud", "Ze služeb, které připojíš (Apple Health, Google Health, Intervals.icu), a z toho, co zadáš sám."),
         ("K čemu", "Jen k přehledům, výpočtům a plánům v Aurinu. Data neprodáváme a nepoužíváme k reklamě."),
         ("AI", "Když použiješ AI funkci (asistent, rozpoznání jídla z fotky, hodnocení tréninku a týdne), pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI v USA."),
-        ("Odvolání", "Smazáním účtu v Nastavení → Účet, kde si předtím můžeš stáhnout všechna svoje data.")
+        ("Odvolání", "Pozastavením zdravotních dat, nebo smazáním účtu v Nastavení → Soukromí a data, kde si předtím můžeš stáhnout všechna svoje data.")
     ]
 
     @ViewBuilder
@@ -446,6 +449,13 @@ struct SetupFlowView: View {
     private func load() async {
         guard !loaded else { return }
         loaded = true
+        // Health data paused: only the consent again; the profile and the services stay as they were.
+        if model.resumingHealth {
+            consentFirst = true
+            consentOnly = true
+            ready = true
+            return
+        }
         let api = model.api
         // All three at once, and the page shows when all have answered, so the
         // services do not pop in one after another.
@@ -514,7 +524,7 @@ struct SetupFlowView: View {
         guard health.isAvailable, !health.enabled, !appleWorking else { return }
         appleWorking = true
         do {
-            try await AppleHealthProfile.requestAccess(Set(HealthCategory.allCases))
+            try await AppleHealthProfile.requestAccess(HealthCategory.defaults)
         } catch {
             appleWorking = false
             health.message = error.localizedDescription
@@ -523,7 +533,7 @@ struct SetupFlowView: View {
         appleWorking = false
         appleRead = false
         let api = model.api
-        Task { _ = await health.connect(Set(HealthCategory.allCases), api: api) }
+        Task { _ = await health.connect(HealthCategory.defaults, api: api) }
     }
 
     /// "O tobě" opens: sex, year of birth, height and weight from Apple Health

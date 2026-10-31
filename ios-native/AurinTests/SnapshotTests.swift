@@ -388,16 +388,16 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testDeepLinks() {
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/sleep")!), .sleep)
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/heart")!), .metric(.hrv))
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/metric/temperature")!), .metric(.temperature))
-        XCTAssertNil(AppRoute(url: URL(string: "loadwise://open/metric/nope")!))
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/gym/2026-10-08")!), .gym("2026-10-08"))
-        XCTAssertNil(AppRoute(url: URL(string: "loadwise://open/food")!))
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/sleep")!), .sleep)
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/heart")!), .metric(.hrv))
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/metric/temperature")!), .metric(.temperature))
+        XCTAssertNil(AppRoute(url: URL(string: "aurin://open/metric/nope")!))
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/gym/2026-10-08")!), .gym("2026-10-08"))
+        XCTAssertNil(AppRoute(url: URL(string: "aurin://open/food")!))
         XCTAssertNil(AppRoute(url: URL(string: "https://open/sleep")!))
-        XCTAssertEqual(TabLink.tab(URL(string: "loadwise://open/food")!), .food)
+        XCTAssertEqual(TabLink.tab(URL(string: "aurin://open/food")!), .food)
         let model = AppModel(demo: true)
-        model.handle(URL(string: "loadwise://open/sleep")!)
+        model.handle(URL(string: "aurin://open/sleep")!)
         XCTAssertEqual(model.tab, .health)
         XCTAssertEqual(model.paths[.health], [.sleep])
     }
@@ -472,8 +472,8 @@ final class SnapshotTests: XCTestCase {
         XCTAssertFalse(ExerciseCatalog.works(press, "calves"))
         XCTAssertEqual(EquipmentView.summary(home), "Domácí posilovna · 2 věci")
         XCTAssertEqual(EquipmentView.kg(2.5), "2,5 kg")
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/vo2max")!), .vo2max)
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/library/run")!), .workoutLibrary("run"))
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/vo2max")!), .vo2max)
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/library/run")!), .workoutLibrary("run"))
     }
 
     func testRoundTwoScreens() throws {
@@ -590,8 +590,8 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testRoundFourLogic() {
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/library")!), .library)
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/library/gym")!), .workoutLibrary("gym"))
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/library")!), .library)
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/library/gym")!), .workoutLibrary("gym"))
         let presets = DrinkPrefs.presets(favorites: ["water", "coffee", "tea"], saved: { $0 == "tea" ? [300, 400, 500] : nil })
         XCTAssertEqual(presets.map(\.id), ["water.250", "water.500", "coffee.200", "tea.300", "tea.400"])
         XCTAssertEqual(DrinkPrefs.presets(favorites: DrinkKind.all.map(\.id), saved: { _ in nil }).count, 8, "at most eight choices")
@@ -696,8 +696,8 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(ZoneStyle.status(weeks[3]), "chybí 54 min")
         XCTAssertEqual(ZoneStyle.status(weeks[0]), "doporučení splněno")
         XCTAssertEqual(DemoData.training.activeCalories?.days?.count, 27)
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/zones")!), .zones)
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/active-energy")!), .activeEnergy)
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/zones")!), .zones)
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/active-energy")!), .activeEnergy)
         let weather = try XCTUnwrap(DemoData.today.weather)
         XCTAssertEqual(weather.place, "Praha")
         XCTAssertTrue(AppleWeather.credited(weather))

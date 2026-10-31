@@ -8,6 +8,7 @@ import { emailChangeRefusal, notifyOldAddress } from "./email-login.js";
 import { L, storedLanguage } from "./lang.js";
 import { localToday, storedTimeZone } from "./user-time.js";
 import { listWaitlist, decideWaitlist } from "./testflight-waitlist.js";
+import { aiSpendingReport } from "./ai-total.js";
 
 export async function handleAdminApi(request, env, url, session, ctx) {
   const user = session.user;
@@ -22,6 +23,11 @@ export async function handleAdminApi(request, env, url, session, ctx) {
         if (request.method === "GET") return Response.json({status:"ok",...await listWaitlist(db, env)},{headers:{"Cache-Control":"no-store"}});
         return Response.json(await decideWaitlist(db, env, await request.json().catch(() => ({}))),{headers:{"Cache-Control":"no-store"}});
       } catch (error) { return Response.json({status:"error",message:error.message},{status:error.status||500}); }
+    }
+    // Nastavení → Správa → Útraty AI (ai-total.js): today's spending by group against its brake.
+    if (url.pathname === "/app/api/admin/ai-spending" && request.method === "GET") {
+      if (!user.isOwner) return Response.json({status:"error",message:L("Jen pro majitele aplikace.", "The app owner only.")},{status:403});
+      return Response.json({status:"ok",...await aiSpendingReport(env)},{headers:{"Cache-Control":"no-store"}});
     }
     if (url.pathname === "/app/api/admin/users" && request.method === "GET") return Response.json({status:"ok",...await listUsersAndInvites(db)},{headers:{"Cache-Control":"no-store"}});
     const body = await request.json().catch(() => ({}));

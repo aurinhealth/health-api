@@ -69,21 +69,31 @@ test('JSON key order is ignored at every depth, but array order and values are r
   assert.equal((await point({ payload: { ...b, z: [...b.z].reverse() } }).run()).meta.changes, 1);
 });
 
-test('125 repeated Google samples stay batched and perform no INSERT or UPDATE', async () => {
+test('125 repeated Google samples stay batched; unchanged ones are not even sent as an upsert', async () => {
   const { raw, env, context } = setup();
   const points = Array.from({ length: 125 }, (_, i) => ({ name: 'sample-' + i, info: { sample: '2026-10-10', start: null, end: null, value: i, unit: 'steps' } }));
+  // D1 bills an upsert that changes nothing as a row written: count the upserts sent.
   const batches = [], originalBatch = raw.batch.bind(raw);
-  raw.batch = async statements => { const results = await originalBatch(statements); batches.push({ size: statements.length, changes: results.reduce((n, r) => n + r.meta.changes, 0) }); return results; };
+  raw.batch = async statements => { const results = await originalBatch(statements); const writes = statements.filter(st => /^\s*INSERT/i.test(st.sql ?? st.query ?? '')); batches.push({ size: statements.length, writes: writes.length, changes: results.reduce((n, r) => n + Number(r.meta?.changes || 0), 0) }); return results; };
+  const upserts = () => batches.reduce((n, b) => n + b.writes, 0);
   assert.equal(await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', points), 125);
-  assert.deepEqual(batches.map(b => b.size), [50, 50, 25]);
+  assert.deepEqual(batches.map(b => b.size), [2, 50, 50, 25], 'one read of 125 ids, then the writes');
   assert.equal(batches.reduce((n, b) => n + b.changes, 0), 125);
   batches.length = 0;
-  await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', points);
+  assert.equal(await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', points), 125);
+  assert.equal(upserts(), 0);
   assert.equal(batches.reduce((n, b) => n + b.changes, 0), 0);
   points[2].info.value = 1000;
   batches.length = 0;
   await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', points);
+  assert.equal(upserts(), 1, 'only the changed point');
   assert.equal(batches.reduce((n, b) => n + b.changes, 0), 1);
+  points[4].info.unit = null;
+  points[5].info = { ...points[5].info, start: '2026-10-10T05:00:00Z' };
+  batches.length = 0;
+  await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', points);
+  assert.equal(upserts(), 2);
+  assert.equal(batches.reduce((n, b) => n + b.changes, 0), 2);
 });
 
 test('choosing the source again runs only after a Google page changed a row', async () => {

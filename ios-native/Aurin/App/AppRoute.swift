@@ -31,6 +31,8 @@ enum AppRoute: Hashable {
     case planned(WeekSession)
     case sleepSettings
     case gymBuilder
+    /// "Trénink: horní část těla" from Svaly: the proposal straight away, its length the usual one.
+    case gymQuick
     case exerciseLibrary
     /// The library with the choice of sports; .workoutLibrary opens one sport.
     case library
@@ -68,7 +70,7 @@ enum AppRoute: Hashable {
     /// The running plan, from "Otevřít plán" under a plan the coach started.
     case trainingPlan
 
-    /// The tab a deep link (loadwise://open/sleep) opens the route on.
+    /// The tab a deep link (aurin://open/sleep) opens the route on.
     var tab: AppTab {
         switch self {
         case .readiness, .sleep, .metric, .weight, .cycle: return .health
@@ -81,15 +83,19 @@ enum AppRoute: Hashable {
     /// planned): switching tabs keeps it open instead of going back.
     var keepsPlace: Bool {
         switch self {
-        case .gym, .gymSession, .gymBuilder, .trainingMode, .liveGym, .planTemplate: return true
+        case .gym, .gymSession, .gymBuilder, .gymQuick, .trainingMode, .liveGym, .planTemplate: return true
         default: return false
         }
     }
 
+    /// The app's own link schemes: aurin, and loadwise from before 2026-11
+    /// (calendar events and links written by older versions still use it).
+    static let schemes: Set<String> = ["aurin", "loadwise"]
+
     /// Hosts of shared workout links.
     static let linkHosts: Set<String> = ["aurin.health", "www.aurin.health"]
 
-    /// loadwise://open/<name>: the home-screen widgets link here. A shared
+    /// aurin://open/<name>: the home-screen widgets link here. A shared
     /// workout's link opens here too, as a universal link or from its web page.
     init?(url: URL) {
         let parts = url.pathComponents.filter { $0 != "/" }
@@ -98,7 +104,7 @@ enum AppRoute: Hashable {
             self = .sharedWorkout(parts[1])
             return
         }
-        guard url.scheme == "loadwise", url.host() == "open" else { return nil }
+        guard Self.schemes.contains(url.scheme ?? ""), url.host() == "open" else { return nil }
         switch parts.first {
         case "readiness": self = .readiness
         case "sleep": self = .sleep
@@ -111,8 +117,10 @@ enum AppRoute: Hashable {
         case "zones": self = .zones
         case "steps": self = .steps
         case "strain": self = .strain
-        case "library": self = parts.count > 1 ? .workoutLibrary(parts[1]) : .library
-        case "gym": self = .gym(parts.count > 1 ? parts[1] : AppModel.localDate(Date()))
+        // What a link carries is checked here: a day is yyyy-MM-dd, a sport and
+        // a muscle come from their lists, so nothing else reaches a request or a file name.
+        case "library": self = parts.count > 1 && LibrarySport.find(parts[1]) != nil ? .workoutLibrary(parts[1]) : .library
+        case "gym": self = .gym(parts.count > 1 && Self.isDay(parts[1]) ? parts[1] : AppModel.localDate(Date()))
         case "sleep-settings": self = .sleepSettings
         case "gym-builder": self = .gymBuilder
         case "exercises": self = .exerciseLibrary
@@ -120,14 +128,24 @@ enum AppRoute: Hashable {
         case "day-review": self = .dayReview
         case "records": self = .insights
         case "muscles": self = .muscles
-        case "muscle" where parts.count > 1: self = .muscle(parts[1])
+        case "muscle" where parts.count > 1: guard Self.isMuscleId(parts[1]) else { return nil }; self = .muscle(parts[1])
         case "cycle": self = .cycle
-        case "journal": self = .journal(parts.count > 1 ? parts[1] : AppModel.shift(AppModel.localDate(Date()), by: -1) ?? AppModel.localDate(Date()))
+        case "journal": self = .journal(parts.count > 1 && Self.isDay(parts[1]) ? parts[1] : AppModel.shift(AppModel.localDate(Date()), by: -1) ?? AppModel.localDate(Date()))
         case "my-workouts": self = .myWorkouts
         case "friend-workouts": self = .friendWorkouts
         case "share" where parts.count > 1 && Self.isShareId(parts[1]): self = .sharedWorkout(parts[1])
         default: return nil
         }
+    }
+
+    /// A day as the server writes it: "2026-10-30".
+    static func isDay(_ text: String) -> Bool {
+        text.count == 10 && text.enumerated().allSatisfy { i, c in i == 4 || i == 7 ? c == "-" : c.isASCII && c.isNumber }
+    }
+
+    /// A muscle's id in /app/api/muscles: lower-case letters and underscores (upper_back).
+    static func isMuscleId(_ id: String) -> Bool {
+        !id.isEmpty && id.count <= 40 && id.allSatisfy { $0.isASCII && ($0.isLowercase || $0.isNumber || $0 == "_") }
     }
 
     /// A link's id: ten letters and digits (src/workout-templates.js).
@@ -136,10 +154,10 @@ enum AppRoute: Hashable {
     }
 }
 
-/// A whole tab opened by a deep link (loadwise://open/food).
+/// A whole tab opened by a deep link (aurin://open/food).
 enum TabLink {
     static func tab(_ url: URL) -> AppTab? {
-        guard url.scheme == "loadwise", url.host() == "open" else { return nil }
+        guard AppRoute.schemes.contains(url.scheme ?? ""), url.host() == "open" else { return nil }
         switch url.pathComponents.filter({ $0 != "/" }).first {
         case "today": return .today
         case "training": return .training
@@ -183,6 +201,7 @@ struct RouteScreen: View {
         case .planned(let session): PlannedWorkoutView(session: session)
         case .sleepSettings: SleepSettingsView(route: true)
         case .gymBuilder: GymBuilderView(date: AppModel.localDate(Date()))
+        case .gymQuick: GymBuilderView(date: AppModel.localDate(Date()), quick: true)
         case .exerciseLibrary: ExerciseLibraryView()
         case .library: TrainingLibraryView()
         case .workoutLibrary(let sport): TrainingLibraryView(sport: sport)

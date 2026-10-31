@@ -1017,65 +1017,21 @@ struct CoachCycleRow: View {
 /// What sharing the cycle with the AI coach brings, what the coach sees
 /// (src/cycle-model.js cycleForCoach) and the explicit consent (GDPR art. 9).
 struct CoachCycleConsentSheet: View {
-    @Environment(\.dismiss) private var dismiss
     let isOn: Bool
     let accept: () -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Kouč ví o cyklu").font(Typo.sentence(26, relativeTo: .title)).foregroundStyle(Palette.ink)
-                Text("Kouč pak plánuje a vysvětluje trénink i podle toho, kde v cyklu jsi.")
-                    .font(Typo.sentence(17)).foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 6)
-                section("Co tím získáš")
-                point("Trénink, který sedí na to, jak se zrovna cítíš")
-                point("Srozumitelnější vysvětlení, proč ti kouč co radí")
-                point("Ohled na menstruaci při plánování dalších dní")
-                section("Co kouč uvidí")
-                point("Kde v cyklu dnes jsi a co sis zapsala")
-                point("Starší záznamy ani přesná data", included: false)
-                Text("Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich předáním AI kouči. Kdykoli ho vypneš a kouč je přestane dostávat.")
-                    .font(Typo.caption).foregroundStyle(Palette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 16)
-                if !isOn {
-                    Button {
-                        accept()
-                        dismiss()
-                    } label: {
-                        Text("Zapnout").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                            .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 18)
-                }
-                Button { dismiss() } label: {
-                    Text(isOn ? "Zavřít" : "Teď ne").font(Typo.body).foregroundStyle(Palette.ink)
-                        .frame(maxWidth: .infinity).frame(height: 46)
-                        .overlay { Capsule().stroke(Palette.ink.opacity(0.18)) }
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 10)
-            }
-            .padding(24)
+        ConsentSheet(title: "Kouč ví o cyklu",
+                     lead: "Kouč pak plánuje a vysvětluje trénink i podle toho, kde v cyklu jsi.",
+                     legal: "Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich předáním AI kouči. Kdykoli ho vypneš a kouč je přestane dostávat.",
+                     isOn: isOn, accept: accept) {
+            ConsentSection("Co tím získáš")
+            ConsentPoint("Trénink, který sedí na to, jak se zrovna cítíš")
+            ConsentPoint("Srozumitelnější vysvětlení, proč ti kouč co radí")
+            ConsentPoint("Ohled na menstruaci při plánování dalších dní")
+            ConsentSection("Co kouč uvidí")
+            ConsentPoint("Kde v cyklu dnes jsi a co sis zapsala")
+            ConsentPoint("Starší záznamy ani přesná data", included: false)
         }
-        .presentationDetents([.large])
-        .presentationBackground(Palette.background)
-    }
-
-    private func section(_ title: LocalizedStringKey) -> some View {
-        Text(title).font(Typo.caption).textCase(.uppercase).tracking(1.2).foregroundStyle(Palette.muted)
-            .padding(.top, 18).padding(.bottom, 4)
-    }
-
-    private func point(_ text: LocalizedStringKey, included: Bool = true) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Image(systemName: included ? "checkmark" : "xmark").font(.footnote.weight(.semibold))
-                .foregroundStyle(included ? Palette.green : Palette.muted)
-            Text(text).font(.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.vertical, 5)
     }
 }

@@ -226,3 +226,21 @@ test('a harder kind asked in "Upravit s AI" is ridden; one the coach eases says 
   assert.equal(insisted.data.system, 'vo2max');
   assert.equal(insisted.data.eased, undefined);
 });
+
+test('the quick gym from Svaly takes the usual length, capped by the day\'s free time', async () => {
+  const app = await api(45);
+  const capped = await app.post('/app/api/gym/generate', { date: today, preview: true, userInitiated: true, autoLength: true, usualMinutes: 75, focus: 'upper' });
+  assert.equal(capped.status, 200, capped.data.message);
+  assert.equal(capped.data.minutes, 45);
+  assert.equal(capped.data.plan.timing.requestedMinutes, 45);
+  await setBudget(app.db, 150);
+  const usual = await app.post('/app/api/gym/generate', { date: today, preview: true, userInitiated: true, autoLength: true, usualMinutes: 60, focus: 'upper' });
+  assert.equal(usual.data.minutes, 60);
+  const none = await app.post('/app/api/gym/generate', { date: today, preview: true, userInitiated: true, autoLength: true, focus: 'upper' });
+  assert.equal(none.data.minutes, 60);
+  // A rest day (0 min) does not block the athlete's own tap.
+  await setBudget(app.db, 0);
+  const rest = await app.post('/app/api/gym/generate', { date: today, preview: true, userInitiated: true, autoLength: true, usualMinutes: 45, focus: 'upper' });
+  assert.equal(rest.status, 200, rest.data.message);
+  assert.equal(rest.data.minutes, 45);
+});

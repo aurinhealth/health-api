@@ -1,30 +1,36 @@
 import { L } from './lang.js';
 // Provider credentials per user (the Google, Intervals.icu and Ultrahuman keys, and the
 // app's Apple sign-in token that deleting the account revokes), AES-GCM
-// encrypted with CONNECTION_KEY. Each row starts with "v2." and is bound to its
-// user and provider, so a row copied to another account does not decrypt. The
+// encrypted with CONNECTION_KEY. Each row starts with "v2." or "v3." and is bound to its
+// user and provider, so a row copied to another account does not decrypt. v3 is the
+// same key derived under the app's name, v2 under its old one. Both are read; rows are
+// still written as v2 (WRITE_VERSION), so the version before this one, still running
+// during a deploy or after a rollback, reads every row. A later release, once this one
+// is everywhere, writes v3 and saves each v2 row again; when
+// SELECT count(*) FROM connection_credentials WHERE encrypted LIKE 'v2.%' is 0, v2 goes. The
 // older rows encrypted with a key from STRENGTH_API_KEY were all moved over
 // (none left on 2026-10-26), so that key guards nobody's keys any more.
 // Changing or removing CONNECTION_KEY later disconnects everyone (each user
 // connects again).
-const V2 = 'v2.';
+const V2 = 'v2.', V3 = 'v3.', WRITE_VERSION = V2;
 async function table(env){await env.DB.prepare('CREATE TABLE IF NOT EXISTS connection_credentials (user_id INTEGER NOT NULL, provider TEXT NOT NULL, encrypted TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (user_id, provider))').run();}
 // A value shorter than this is a paste mistake, not a key; it is not used.
 let shortKeyReported=false;
 function hasConnectionKey(env){const value=String(env.CONNECTION_KEY||'');if(value&&value.length<32&&!shortKeyReported){shortKeyReported=true;console.error('CONNECTION_KEY is shorter than 32 characters and is ignored');}return value.length>=32;}
-async function connectionKey(env){if(!hasConnectionKey(env))throw new Error(L('Chybí zabezpečení propojení.', 'Connection security is missing.'));const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(env.CONNECTION_KEY),'HKDF',false,['deriveKey']);return crypto.subtle.deriveKey({name:'HKDF',hash:'SHA-256',salt:new Uint8Array(32),info:new TextEncoder().encode('loadwise connection credentials')},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);}
+async function connectionKey(env,version=V3){if(!hasConnectionKey(env))throw new Error(L('Chybí zabezpečení propojení.', 'Connection security is missing.'));const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(env.CONNECTION_KEY),'HKDF',false,['deriveKey']);return crypto.subtle.deriveKey({name:'HKDF',hash:'SHA-256',salt:new Uint8Array(32),info:new TextEncoder().encode((version===V2?'loadwise':'aurin')+' connection credentials')},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);}
 const enc=bytes=>btoa(String.fromCharCode(...new Uint8Array(bytes)));
 const dec=text=>Uint8Array.from(atob(text),c=>c.charCodeAt(0));
 const boundTo=(uid,provider)=>new TextEncoder().encode(Number(uid)+':'+provider);
 function userId(env){const id=Number(env.USER_ID);if(!Number.isInteger(id)||id<=0)throw new Error(L('Připojení vyžaduje přihlášeného uživatele.', 'Connecting requires a signed-in user.'));return id;}
 async function encryptSecret(env,uid,provider,value){
   const iv=crypto.getRandomValues(new Uint8Array(12)),plain=new TextEncoder().encode(value);
-  return V2+enc(iv)+'.'+enc(await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:boundTo(uid,provider)},await connectionKey(env),plain));
+  return WRITE_VERSION+enc(iv)+'.'+enc(await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:boundTo(uid,provider)},await connectionKey(env,WRITE_VERSION),plain));
 }
 async function decryptSecret(env,uid,provider,stored){
-  if(!stored.startsWith(V2))throw new Error('Connection key in the old format');
-  const [iv,cipher]=stored.slice(V2.length).split('.');
-  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:dec(iv),additionalData:boundTo(uid,provider)},await connectionKey(env),dec(cipher));
+  const version=stored.startsWith(V3)?V3:stored.startsWith(V2)?V2:null;
+  if(!version)throw new Error('Connection key in the old format');
+  const [iv,cipher]=stored.slice(version.length).split('.');
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:dec(iv),additionalData:boundTo(uid,provider)},await connectionKey(env,version),dec(cipher));
   return new TextDecoder().decode(plain);
 }
 // The account at the service a webhook names (the Intervals.icu athlete id, the
