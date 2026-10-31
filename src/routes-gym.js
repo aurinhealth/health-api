@@ -26,6 +26,8 @@ import { sideBalance, lastSideChoice } from "./gym-sides.js";
 import { localToday } from "./user-time.js";
 import { shiftDate } from "./dashboard-shared.js";
 import { ensureCoachInboxTable } from "./coach-inbox.js";
+import { syncGymActivity, removeGymActivity } from "./gym-session-activity.js";
+import { matchActivities } from "./index.js";
 
 // The main sport: the profile's, else the one the training history shows.
 async function mainSportOf(env,training){
@@ -224,6 +226,7 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
         await deleteStrengthEvents();
         await discardGymPlan(env.DB,date);
         if(logged)await removeManualSets(env.DB,date,0,logged);
+        await removeGymActivity(env,date);
         return Response.json({status:'ok',date,discarded:true,message:L('Trénink je zahozený.', 'The workout is discarded.')},{headers:{'Cache-Control':'no-store'}});
       }
       if(body.action==='cancel'){
@@ -276,6 +279,13 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       // history.  The UI can then be safely reloaded after every autosave.
       const storedValues = Array.isArray(body?.fullValues) ? body.fullValues : values;
       await env.DB.prepare(`INSERT INTO gym_plans(user_id,workout_date,values_json,updated_at) VALUES(?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id,workout_date) DO UPDATE SET values_json=excluded.values_json,updated_at=CURRENT_TIMESTAMP`).bind(env.USER_ID,date,JSON.stringify(storedValues)).run();
+      // The session as a done activity with its length and calories, even when
+      // the watch caught only a part of it (gym-session-activity.js).
+      if(sets.length>1){
+        const name=String(storedValues?.[2]?.[3]||'').slice(0,120);
+        const wrote=await syncGymActivity(env,date,{name}).catch(error=>{console.error('Gym activity failed',error?.message);return false;});
+        if(wrote){const job=matchActivities(env,{days:2}).then(()=>bumpCacheVersion(env.DB)).catch(error=>console.error('Activity matching failed',error?.message));if(ctx?.waitUntil)ctx.waitUntil(job);else await job;}
+      }
       const history=await getStrengthHistory(env.DB,500);
       return Response.json({status:"ok",storage:"d1",values:storedValues,history,historySaved:historyResult,message:sets.length?L("Workout uložen do interní databáze.", "Workout saved to the app database."):L("Změny plánu jsou uložené; dokončené série označ Hotovo.", "Plan changes are saved; mark completed sets as Done.")},{headers:{"Cache-Control":"no-store"}});
       } catch(error) {
