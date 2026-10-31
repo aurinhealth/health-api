@@ -130,6 +130,14 @@ test("an invited account can sign in, an uninvited one cannot", async () => {
   assert.ok(await e.DB.prepare("SELECT id FROM users WHERE email='friend@example.com' AND role='user'").first());
 });
 
+test("a network that opened too many accounts today hears so, not that Google is down", async () => {
+  _resetJwksCacheForTest();
+  const e = { ...freshEnv(), OPEN_SIGNUP: "true" };
+  const signIn = async n => _finishLoginForTest(new Request(callback("code=c1&state=s1"), { headers: { Cookie: appCookie, "CF-Connecting-IP": "203.0.113.5" } }), e, googleFetch(await idToken({ sub: "g" + n, email: `new${n}@example.com` })));
+  for (let n = 0; n < 3; n++) assert.match((await signIn(n)).headers.get("Location"), /\/auth\/app\/return\?token=/);
+  assert.equal((await signIn(9)).headers.get("Location"), "https://aurin.health/auth/app/return?error=too_many");
+});
+
 test("state mismatch is rejected before contacting Google", async () => {
   let called = false;
   const response = await _finishLoginForTest(callback("code=c1&state=other"), env, async () => { called = true; });
