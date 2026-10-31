@@ -3,7 +3,7 @@
 // share the app's session cookie, so:
 // 1. the app asks POST /app/api/connect/start for a short-lived signed ticket,
 // 2. the sheet opens /auth/app/connect?ticket=…, which signs the browser in as
-//    the same user and continues to /oauth/<provider>?return=native. Only the
+//    the same user and continues to /oauth/<provider>. Only the
 //    app's own sheet gets through: it sends the ticket again in the
 //    X-Aurin-Connect header (iOS 17.4+, the app's minimum), which a link opened
 //    anywhere else cannot. A ticket link sent by another user would otherwise
@@ -11,11 +11,12 @@
 //    account (pentest 2026-10-25, L4), so such a link only expires. A browser
 //    already signed in as the ticket's user also continues. Each ticket works once,
 // 3. the provider's callback ends at https://<server>/auth/app/connected?event=…,
-//    which closes the sheet (connect-return.js). A build from before 2026-11
-//    (no X-Aurin-Api header) gets loadwise://connected, which it waits for.
+//    which closes the sheet (connect-return.js), when the app asked for it
+//    (return: "https", kept in the ticket). A build from before 2026-11 gets
+//    loadwise://connected, which it waits for.
 import { signText, userSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
 import { L, lang } from "./lang.js";
-import { connectReturnUrl } from "./connect-return.js";
+import { connectReturnCookie, connectReturnUrl } from "./connect-return.js";
 import { APP_CONNECTED_PATH } from "./app-origin.js";
 import { appPage } from "./google-login.js";
 
@@ -56,7 +57,9 @@ async function useTicket(db, ticket) {
 }
 
 const CONNECTED_PAGE = { cs: ["Pokračuj v aplikaci", "Vrať se do aplikace Aurin. Pokud se nic nestane, aktualizuj Aurin na nejnovější verzi."], en: ["Continue in the app", "Go back to the Aurin app. If nothing happens, update Aurin to the latest version."] };
-const expired = (env, back = "app") => new Response(null, { status: 302, headers: { Location: connectReturnUrl(back, "expired", env), "Cache-Control": "no-store" } });
+// A ticket that can't be read says nothing of its return: the app's sheet tells (Auth.swift).
+const sheetReturn = request => request.headers.get("X-Aurin-Return") === "https" ? "app" : "native";
+const expired = (env, back) => new Response(null, { status: 302, headers: { Location: connectReturnUrl(back, "expired", env), "Cache-Control": "no-store" } });
 
 // The app's language rides along from /app/api/connect/start (hl=en|cs): the
 // browser's own language can differ from the one chosen in Aurin.
@@ -66,10 +69,12 @@ const pageLang = (url, request) => ["en", "cs"].includes(url.searchParams.get("h
 async function continueToProvider(env, ticket, hl) {
   if (!(await useTicket(env.DB, ticket))) return expired(env, ticket.back);
   // Google's data policy: the app showed its own disclosure right before this (consent=1).
-  const next = { google: "/oauth/google?consent=1&return=" + ticket.back, "google-extra": "/oauth/google?consent=1&extra=1&return=" + ticket.back, ultrahuman: "/oauth/ultrahuman?return=" + ticket.back, whoop: "/oauth/whoop?return=" + ticket.back, wahoo: "/oauth/wahoo?return=" + ticket.back }[ticket.provider] || "/oauth/intervals?return=" + ticket.back;
+  const next = { google: "/oauth/google?consent=1", "google-extra": "/oauth/google?consent=1&extra=1", ultrahuman: "/oauth/ultrahuman", whoop: "/oauth/whoop", wahoo: "/oauth/wahoo" }[ticket.provider] || "/oauth/intervals";
   // Google shows its consent page in the app's language (hl).
   const location = ticket.provider.startsWith("google") ? next + "&hl=" + hl : next;
+  // Where the provider's callback returns, from the signed ticket only (connect-return.js).
   const headers = new Headers({ Location: location, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+  headers.append("Set-Cookie", connectReturnCookie(ticket.back));
   headers.append("Set-Cookie", await userSessionCookie(env.DB, ticket.uid, sessionSecret(env)));
   return new Response(null, { status: 303, headers });
 }
@@ -86,7 +91,7 @@ export async function handleNativeConnect(request, env, url, { user, signedIn })
   if (url.pathname === "/auth/app/connect" && request.method === "GET") {
     const ticketText = url.searchParams.get("ticket");
     const ticket = await readConnectTicket(ticketText, sessionSecret(env));
-    if (!ticket) return expired(env);
+    if (!ticket) return expired(env, sheetReturn(request));
     const hl = pageLang(url, request);
     // Already signed in here as the ticket's user: nothing to confirm.
     if (signedIn && Number(user?.id) === ticket.uid) return continueToProvider(env, ticket, hl);

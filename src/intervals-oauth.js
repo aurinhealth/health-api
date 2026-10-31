@@ -41,7 +41,7 @@ export async function handleIntervalsOAuth(request, env, pathname, fetchImpl = f
   const url = new URL(request.url), code = url.searchParams.get("code"), state = url.searchParams.get("state");
   const m = (request.headers.get("Cookie") || "").match(new RegExp("(?:^|;\\s*)" + STATE_COOKIE + "=([^;]+)"));
   const [expected, to, uid, verifier] = decodeURIComponent(m?.[1] || "").split(".");
-  if (!state || state !== expected || !verifier) return back(connectReturnUrl("settings", "intervals-failed", env));
+  if (!state || state !== expected || !verifier) return back(connectReturnUrl(to || connectReturn(request), "intervals-failed", env));
   // Started by another account than the one signed in now: its keys are not stored here.
   if (!startedBy(uid, env)) return back(connectReturnUrl(to, "intervals-failed", env));
   if (url.searchParams.get("error") || !code) return back(connectReturnUrl(to, "intervals-cancelled", env));

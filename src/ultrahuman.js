@@ -83,7 +83,7 @@ export async function handleUltrahumanOAuth(request, env, pathname, fetchImpl = 
   const url = new URL(request.url), code = url.searchParams.get('code'), state = url.searchParams.get('state');
   const m = (request.headers.get('Cookie') || '').match(new RegExp('(?:^|;\\s*)' + STATE_COOKIE + '=([^;]+)'));
   const [expected, to, uid] = decodeURIComponent(m?.[1] || '').split('.');
-  if (!state || state !== expected) return back(connectReturnUrl('settings', 'ultrahuman-failed', env));
+  if (!state || state !== expected) return back(connectReturnUrl(to || connectReturn(request), 'ultrahuman-failed', env));
   // Started by another account than the one signed in now: its keys are not stored here.
   if (!startedBy(uid, env)) return back(connectReturnUrl(to, 'ultrahuman-failed', env));
   if (url.searchParams.get('error') || !code) return back(connectReturnUrl(to, 'ultrahuman-cancelled', env));

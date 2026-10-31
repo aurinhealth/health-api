@@ -4,15 +4,19 @@ import { appOrigin, APP_CONNECTED_PATH } from "./app-origin.js";
 // the iPhone app's browser sheet, which closes on https://<server>/auth/app/connected?event=….
 // iOS hands that address only to the Aurin app (its associated domain), on the test server too.
 // Builds from before 2026-11 wait for loadwise://connected instead; they start with
-// return=native (native-connect.js) and get that until they are gone; so does a
-// new build that found no https return page on the server.
+// no return: "https" when asking for a ticket (native-connect.js) and get that until
+// they are gone; so does a new build that found no https return page on the server.
 const EVENTS = new Set(["expired", "google", "google-cancelled", "intervals", "intervals-cancelled", "intervals-failed", "ultrahuman", "ultrahuman-cancelled", "ultrahuman-failed", "whoop", "whoop-cancelled", "whoop-failed", "wahoo", "wahoo-cancelled", "wahoo-failed"]);
 
-// Only the iPhone app starts a connection: return=app, or return=native from an
-// older build; kept with the OAuth state.
+// Only the iPhone app starts a connection, through its signed ticket, which sets this
+// cookie on the way to the provider (native-connect.js): "native" for loadwise://, else
+// https. A link cannot choose it; the OAuth state keeps it.
+const RETURN_COOKIE = "aurin_connect_return";
 export function connectReturn(request) {
-  return new URL(request.url).searchParams.get("return") === "native" ? "native" : "app";
+  const m = (request.headers.get("Cookie") || "").match(new RegExp("(?:^|;\\s*)" + RETURN_COOKIE + "=([^;]+)"));
+  return m?.[1] === "native" ? "native" : "app";
 }
+export const connectReturnCookie = back => RETURN_COOKIE + "=" + (back === "native" ? "native" : "app") + "; Max-Age=600; Path=/oauth; Secure; HttpOnly; SameSite=Lax";
 
 // The OAuth state cookie: the state, where to return and the user who started, so the
 // callback stores the keys only for that user, even when the browser was signed in to

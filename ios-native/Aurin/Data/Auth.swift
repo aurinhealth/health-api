@@ -79,7 +79,9 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         // The ticket again as a header: without it the server lets nobody in, so a
         // ticket link sent to someone else expires (src/native-connect.js).
         let ticket = URLComponents(url: link, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "ticket" })?.value
-        let callback = try await openBrowser(link, callback: Self.callback(api.baseURL, path: Self.connectedPath, https: https), headers: ticket.map { ["X-Aurin-Connect": $0] } ?? [:])
+        // X-Aurin-Return: where to come back if the ticket has run out.
+        let headers = (ticket.map { ["X-Aurin-Connect": $0] } ?? [:]).merging(https ? ["X-Aurin-Return": "https"] : [:]) { a, _ in a }
+        let callback = try await openBrowser(link, callback: Self.callback(api.baseURL, path: Self.connectedPath, https: https), headers: headers)
         return URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "event" })?.value ?? "unknown"
     }
 
