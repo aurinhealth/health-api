@@ -156,6 +156,9 @@ test("the owner sees today's spending by group against its brake, yesterday and 
   db.sqlite.prepare("INSERT INTO ai_spend_days (day, cost_usd) VALUES (?, 2.5)").run(yesterday);
   const report = await aiSpendingReport({ RAW_DB: db, AI_GROUP_BRAKES: BRAKES });
   assert.equal(report.today, 1.4);
+  const counted = async owner => Object.fromEntries((await aiSpendingReport({ RAW_DB: db, AI_GROUP_BRAKES: BRAKES, OWNER_EMAIL: owner })).groups.map(g => [g.group, g.accounts]));
+  assert.deepEqual([(await counted(" U7@example.com ")).gift, (await counted(" U7@example.com ")).free], [2, 0], "the owner without a purchase counts in gift, not free");
+  assert.deepEqual([(await counted("u8@example.com")).gift, (await counted("u8@example.com")).paid], [2, 0], "the owner with a purchase counts once, in gift");
   assert.equal(report.yesterday, 2.5);
   assert.equal(report.month, yesterday.slice(0, 7) === today.slice(0, 7) ? 3.9 : 1.4);
   assert.equal(report.resetsAt.slice(11), "00:00:00.000Z");

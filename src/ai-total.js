@@ -53,15 +53,19 @@ export function groupBrakes(env) {
 // Accounts by group now: the subscriptions with Pro, and the accounts without a
 // purchase older than NEW_ACCOUNT_DAYS ("free"; the new ones get a fixed brake,
 // so they are not counted). Throws when a read fails.
-async function accountsByGroup(db, now = Date.now()) {
-  const until = new Date(now).toISOString();
-  const [subs, free] = await Promise.all([
-    db.prepare("SELECT plan, valid_until, store_environment, free_trial, offer_type FROM subscriptions WHERE plan = 'ai' AND valid_until > ?").bind(until).all().then(r => r.results || []),
-    db.prepare("SELECT COUNT(*) AS n FROM users u WHERE u.disabled = 0 AND u.created_at <= ? AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = u.id AND s.plan = 'ai' AND s.valid_until > ?)").bind(newAccountSince(now), until).first()
+async function accountsByGroup(db, now = Date.now(), owner = "") {
+  // The owner is in "gift" whatever the subscription says (aiGroup), so counted there.
+  const until = new Date(now).toISOString(), isOwner = id => `EXISTS (SELECT 1 FROM users o WHERE o.id = ${id} AND lower(trim(o.email)) = ?)`;
+  const notOwner = id => owner ? ` AND NOT ${isOwner(id)}` : "", ownerBind = owner ? [owner] : [];
+  const [subs, free, owners] = await Promise.all([
+    db.prepare(`SELECT s.plan, s.valid_until, s.store_environment, s.free_trial, s.offer_type FROM subscriptions s WHERE s.plan = 'ai' AND s.valid_until > ?${notOwner("s.user_id")}`).bind(until, ...ownerBind).all().then(r => r.results || []),
+    db.prepare(`SELECT COUNT(*) AS n FROM users u WHERE u.disabled = 0 AND u.created_at <= ?${notOwner("u.id")} AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = u.id AND s.plan = 'ai' AND s.valid_until > ?)`).bind(newAccountSince(now), ...ownerBind, until).first(),
+    owner ? db.prepare("SELECT COUNT(*) AS n FROM users u WHERE u.disabled = 0 AND lower(trim(u.email)) = ?").bind(owner).first() : null
   ]);
   const counts = Object.fromEntries(AI_GROUPS.map(group => [group, 0]));
   for (const row of subs) counts[groupOfSubscription(row, now)]++;
   counts.free = Number(free?.n) || 0;
+  counts.gift += Number(owners?.n) || 0;
   return counts;
 }
 
@@ -85,7 +89,7 @@ export async function groupBrakeUsd(db, env, group, now = Date.now()) {
   const brake = groupBrakes(env)[group];
   if (!growing(brake)) return { usd: brakeFor(brake), counted: true };
   try {
-    return { usd: brakeFor(brake, (await accountsByGroup(db, now))[group] || 0), counted: true };
+    return { usd: brakeFor(brake, (await accountsByGroup(db, now, String(env?.OWNER_EMAIL || "").trim().toLowerCase()))[group] || 0), counted: true };
   } catch (error) {
     console.error("Accounts by group not read", error?.message || error);
     const last = await db.prepare("SELECT brake_usd FROM ai_spend_groups WHERE grp = ? AND day < ? AND brake_usd IS NOT NULL ORDER BY day DESC LIMIT 1").bind(group, utcDay(new Date(now))).first().catch(() => null);
@@ -187,7 +191,7 @@ export async function aiSpendingReport(env, now = new Date()) {
   const [days, groups, counts] = await Promise.all([
     db.prepare("SELECT day, cost_usd FROM ai_spend_days WHERE day >= ? AND day <= ?").bind(yesterday < monthStart ? yesterday : monthStart, today).all().then(r => r.results || []),
     db.prepare("SELECT grp, cost_usd, brake_usd FROM ai_spend_groups WHERE day = ?").bind(today).all().then(r => r.results || []),
-    accountsByGroup(db, now.getTime()).catch(error => { console.error("Accounts by group not read", error?.message || error); return {}; })
+    accountsByGroup(db, now.getTime(), String(env?.OWNER_EMAIL || "").trim().toLowerCase()).catch(error => { console.error("Accounts by group not read", error?.message || error); return {}; })
   ]);
   const spentOn = day => rounded(days.find(row => row.day === day)?.cost_usd);
   const brakes = groupBrakes(env), byGroup = Object.fromEntries(groups.map(row => [row.grp, row]));
