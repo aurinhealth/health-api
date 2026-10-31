@@ -12,6 +12,7 @@ struct HealthPauseSheet: View {
     @State private var exportURL: URL?
     @State private var exporting = false
     @State private var pausing = false
+    @State private var stepUp: StepUpRequest?
     @State private var error: String?
 
     var body: some View {
@@ -67,6 +68,13 @@ struct HealthPauseSheet: View {
         .presentationDetents([.large])
         .presentationBackground(Palette.background)
         .interactiveDismissDisabled(pausing)
+        // Shared or not, the export does not stay on the phone after the sheet.
+        .onDisappear {
+            guard exportURL != nil else { return }
+            exportURL = nil
+            APIClient.removeExports()
+        }
+        .stepUpSheet($stepUp)
     }
 
     private enum Mark { case stop, deleted, kept, note }
@@ -110,17 +118,30 @@ struct HealthPauseSheet: View {
     private func export() async {
         exporting = true
         defer { exporting = false }
-        do { exportURL = try await model.api.exportData(); error = nil } catch { self.error = error.localizedDescription }
+        do {
+            exportURL = try await model.api.exportData()
+            error = nil
+        } catch APIError.stepUpRequired(_, let info) {
+            stepUp = StepUpRequest(info: info, reason: L10n.tr("Stažení všech dat potřebuje krátké ověření.")) { await export() }
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
-    private func pause() async {
-        guard await PrivacySettingsView.ownerConfirms(L10n.tr("Pozastavit zdravotní data")) else { return }
+    /// The phone's owner first, then "Confirm it's you" when the server asks for
+    /// it (as deleting the account, PrivacySettingsView.delete).
+    private func pause(ownerConfirmed: Bool = false) async {
+        if !ownerConfirmed {
+            guard await PrivacySettingsView.ownerConfirms(L10n.tr("Pozastavit zdravotní data")) else { return }
+        }
         pausing = true
         defer { pausing = false }
         do {
             try await model.pauseHealthData()
             dismiss()
             paused()
+        } catch APIError.stepUpRequired(_, let info) {
+            stepUp = StepUpRequest(info: info, reason: L10n.tr("Pozastavení zdravotních dat potřebuje krátké ověření."), destructive: true) { await pause(ownerConfirmed: true) }
         } catch {
             self.error = error.localizedDescription
         }

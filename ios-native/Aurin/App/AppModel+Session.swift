@@ -248,6 +248,9 @@ extension AppModel {
         scope = AccountScope()
         dropRefresh()
         AccountCaches.forget()
+        // Files the account left in tmp: its data export and replies to the coach.
+        APIClient.removeExports()
+        CoachReplyUpload.sweep()
         Reminders.cancelAll()
         WidgetBridge.clear()
         clearScreens()

@@ -6,7 +6,7 @@ web app (`/app/api/today` for the Today screen), so the numbers match.
 ## What it does now
 
 - Sign-in with Apple, with Google via Safari (the handoff
-  `/auth/google?app=…` → `loadwise://auth` → `POST /auth/app/session`) or
+  `/auth/google?app=…` → `https://aurin.health/auth/app/return` → `POST /auth/app/session`) or
   with a code sent to the e-mail. After the first e-mail sign-in the app
   offers a passkey ("Příště přes Face ID", Data/Passkeys.swift); the sign-in
   screen then has "Přihlásit přes passkey". Passkeys need the
