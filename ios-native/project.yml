@@ -68,10 +68,12 @@ targets:
         # aurin.health is the server the app talks to (APIClient.server).
         # applinks: a shared workout's link (/t/<id>) opens the app.
         # webcredentials also lets only this app catch the return addresses of
-        # Google sign-in and of connecting a service, https://aurin.health/auth/app/…
-        # (Data/Auth.swift).
+        # Google sign-in and of connecting a service, https://<server>/auth/app/…
+        # (Data/Auth.swift), on the test server too (both serve the file; the
+        # deploy checks it).
         com.apple.developer.associated-domains:
           - webcredentials:aurin.health
+          - webcredentials:staging.aurin.health
           - applinks:aurin.health
         # Push notifications (App/PushRegistration.swift, src/push.js): the
         # morning readiness. One entitlements file serves every build, and

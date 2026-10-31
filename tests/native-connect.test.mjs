@@ -28,7 +28,7 @@ test("the app gets a ticket link only when signed in, from its own origin, for a
   const start = (body, { signedIn = true, from = origin } = {}) => handleNativeConnect(
     new Request(origin + "/app/api/connect/start", { method: "POST", headers: { Origin: from, "Content-Type": "application/json" }, body: JSON.stringify(body) }),
     env, new URL(origin + "/app/api/connect/start"), { user: signedIn ? { id: 3 } : null, signedIn });
-  const ok = await start({ provider: "google" });
+  const ok = await start({ provider: "google", return: "https" });
   assert.equal(ok.status, 200);
   const link = new URL((await ok.json()).url);
   assert.equal(link.pathname, "/auth/app/connect");
@@ -89,29 +89,37 @@ test("the app's own sheet, which repeats the ticket in a header, skips the confi
   assert.match(direct.headers.get("Set-Cookie"), /HttpOnly; Secure/);
 });
 
-// The app's browser sheet closes on https://aurin.health/auth/app/connected, which only the Aurin app
-// can catch; a build from before 2026-11 (no X-Aurin-Api header) still gets loadwise://connected.
-test("a connection returns to the app over https, an older build to its old address", async () => {
+// The app's browser sheet closes on https://<server>/auth/app/connected, which only the Aurin app
+// can catch, when it asks for it (return: "https" once the server answers that page); otherwise, as a
+// build from before 2026-11, it still gets loadwise://connected.
+test("a connection returns to the app over https when it asks, otherwise to its old address", async () => {
   assert.equal(connectReturn(new Request(origin + "/oauth/intervals?return=app")), "app");
   assert.equal(connectReturn(new Request(origin + "/oauth/intervals")), "app");
   assert.equal(connectReturn(new Request(origin + "/oauth/intervals?return=native")), "native");
   assert.equal(connectReturnUrl("app", "intervals"), "https://aurin.health/auth/app/connected?event=intervals");
   assert.equal(connectReturnUrl("settings", "weird"), "https://aurin.health/auth/app/connected?event=unknown");
   assert.equal(connectReturnUrl("native", "intervals"), "loadwise://connected?event=intervals");
+  assert.equal(connectReturnUrl("app", "whoop", { APP_ORIGIN: "https://staging.aurin.health" }), "https://staging.aurin.health/auth/app/connected?event=whoop");
 
   const cenv = connectEnv();
-  const start = headers => handleNativeConnect(new Request(origin + "/app/api/connect/start", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json", ...headers }, body: JSON.stringify({ provider: "intervals" }) }), cenv, new URL(origin + "/app/api/connect/start"), { user: { id: 3 }, signedIn: true });
-  const continued = async headers => {
-    const link = new URL((await (await start(headers)).json()).url);
+  const start = body => handleNativeConnect(new Request(origin + "/app/api/connect/start", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ provider: "intervals", ...body }) }), cenv, new URL(origin + "/app/api/connect/start"), { user: { id: 3 }, signedIn: true });
+  const continued = async body => {
+    const link = new URL((await (await start(body)).json()).url);
     const ticket = link.searchParams.get("ticket");
     return (await handleNativeConnect(new Request(link, { headers: { "X-Aurin-Connect": ticket } }), cenv, link, { user: null, signedIn: false })).headers.get("Location");
   };
-  assert.equal(await continued({ "X-Aurin-Api": "1" }), "/oauth/intervals?return=app");
-  assert.equal(await continued({ "X-Loadwise-Api": "1" }), "/oauth/intervals?return=native");
+  assert.equal(await continued({ return: "https" }), "/oauth/intervals?return=app");
+  assert.equal(await continued({}), "/oauth/intervals?return=native");
 
-  const page = await handleNativeConnect(new Request(origin + "/auth/app/connected?event=google"), cenv, new URL(origin + "/auth/app/connected?event=google"), {});
+  const at = (lang, method = "GET") => handleNativeConnect(new Request(origin + "/auth/app/connected?event=google", { method, headers: lang ? { "Accept-Language": lang } : {} }), cenv, new URL(origin + "/auth/app/connected?event=google"), {});
+  const page = await at();
   assert.equal(page.status, 200);
   assert.equal(page.headers.get("cache-control"), "no-store");
+  assert.match(await page.text(), /<html lang="en">.*Continue in the app/s);
+  assert.match(await (await at("cs-CZ")).text(), /Pokračuj v aplikaci/);
+  const head = await at(null, "HEAD");
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), "");
   assert.equal(isPublicPath("/auth/app/connected"), true);
 });
 

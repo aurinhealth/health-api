@@ -620,9 +620,12 @@ final class APIClient: @unchecked Sendable {
 
     /// A short-lived link that opens the provider's consent in the browser
     /// sheet, signed in as this user (src/native-connect.js).
-    func connectLink(provider: String) async throws -> URL {
+    /// https: the browser sheet waits for the server's own https return (Auth.connect).
+    func connectLink(provider: String, https: Bool) async throws -> URL {
         struct Response: Decodable { let url: String }
-        let r: Response = try await send("/app/api/connect/start", method: "POST", body: ["provider": JSONValue.string(provider)])
+        var body = ["provider": JSONValue.string(provider)]
+        if https { body["return"] = .string("https") }
+        let r: Response = try await send("/app/api/connect/start", method: "POST", body: body)
         guard let url = URL(string: r.url) else { throw APIError.message(L10n.tr("Odkaz na připojení je neplatný.")) }
         return url
     }

@@ -5,10 +5,11 @@ import UIKit
 
 // Google refuses sign-in inside an app's own web view, so the app uses the
 // same handoff as the Capacitor app (src/google-login.js):
-// 1. open /auth/google?app=<challenge> in a system browser sheet,
-// 2. the server answers with https://aurin.health/auth/app/return?token=<short-lived token>,
+// 1. open /auth/google?app=<challenge>&return=https in a system browser sheet,
+// 2. the server answers with https://<its host>/auth/app/return?token=<short-lived token>,
 //    which only this app can catch: iOS hands an https callback only to an app
-//    with aurin.health among its associated domains (project.yml),
+//    with that host among its associated domains (project.yml). A server from
+//    before 2026-11 answers with loadwise://auth instead (returnsOverHttps),
 // 3. the app trades the token plus the verifier behind the challenge for the
 //    session cookie at POST /auth/app/session.
 // The cookie lands in HTTPCookieStorage.shared, which URLSession sends with
@@ -25,10 +26,11 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
     func signIn() async throws {
         let verifier = Self.randomVerifier()
         let challenge = Self.challenge(for: verifier)
+        let https = await Self.returnsOverHttps(api.baseURL, path: Self.signInReturnPath)
         var start = URLComponents(url: api.baseURL.appending(path: "auth/google"), resolvingAgainstBaseURL: false)!
-        start.queryItems = [URLQueryItem(name: "app", value: challenge)]
+        start.queryItems = [URLQueryItem(name: "app", value: challenge)] + (https ? [URLQueryItem(name: "return", value: "https")] : [])
 
-        let callback = try await openBrowser(start.url!, callback: Self.signInCallback)
+        let callback = try await openBrowser(start.url!, callback: Self.callback(api.baseURL, path: Self.signInReturnPath, https: https))
         let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
         if let error = items.first(where: { $0.name == "error" })?.value { throw Self.signInError(error) }
         guard let token = items.first(where: { $0.name == "token" })?.value else {
@@ -37,9 +39,25 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         try await api.exchangeHandoff(token: token, verifier: verifier)
     }
 
-    /// Always aurin.health, the test server too: it is the app's associated
-    /// domain, and the token is still traded with the server the sign-in started on.
-    static let signInCallback = ASWebAuthenticationSession.Callback.https(host: "aurin.health", path: "/auth/app/return")
+    static let signInReturnPath = "/auth/app/return"
+    static let connectedPath = "/auth/app/connected"
+
+    /// The address the browser sheet closes on: https on the server's own host,
+    /// or loadwise:// for a server from before 2026-11.
+    static func callback(_ server: URL, path: String, https: Bool) -> ASWebAuthenticationSession.Callback {
+        guard https, let host = server.host() else { return .customScheme("loadwise") }
+        return .https(host: host, path: path)
+    }
+
+    /// Whether the server returns over https: it answers the return page itself
+    /// (an older one sends a browser away from /auth/…). Remove with the
+    /// loadwise:// fallback once every server has it.
+    static func returnsOverHttps(_ server: URL, path: String) async -> Bool {
+        var request = URLRequest(url: server.appending(path: String(path.dropFirst())), cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
+        request.httpMethod = "HEAD"
+        guard let answer = try? await URLSession.shared.data(for: request), let http = answer.1 as? HTTPURLResponse else { return false }
+        return http.statusCode == 200 && http.url?.path() == path
+    }
 
     /// …/auth/app/return?error=<code> from a failed Google sign-in (src/google-login.js).
     static func signInError(_ code: String) -> Error {
@@ -53,14 +71,15 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
     }
 
     /// Connects Google or Intervals.icu: the provider's page in the browser
-    /// sheet, back at https://aurin.health/auth/app/connected?event=…, which only
+    /// sheet, back at https://<server>/auth/app/connected?event=…, which only
     /// this app can catch, like the sign-in (src/connect-return.js).
     func connect(provider: String) async throws -> String {
-        let link = try await api.connectLink(provider: provider)
+        let https = await Self.returnsOverHttps(api.baseURL, path: Self.connectedPath)
+        let link = try await api.connectLink(provider: provider, https: https)
         // The ticket again as a header: without it the server lets nobody in, so a
         // ticket link sent to someone else expires (src/native-connect.js).
         let ticket = URLComponents(url: link, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "ticket" })?.value
-        let callback = try await openBrowser(link, callback: .https(host: "aurin.health", path: "/auth/app/connected"), headers: ticket.map { ["X-Aurin-Connect": $0] } ?? [:])
+        let callback = try await openBrowser(link, callback: Self.callback(api.baseURL, path: Self.connectedPath, https: https), headers: ticket.map { ["X-Aurin-Connect": $0] } ?? [:])
         return URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "event" })?.value ?? "unknown"
     }
 

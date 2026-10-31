@@ -77,7 +77,7 @@ async function tokenRequest(env, params, fetchImpl) {
 
 export async function handleWahooOAuth(request, env, pathname, fetchImpl = fetch) {
   if (pathname === '/oauth/wahoo' && request.method === 'GET') {
-    if (!wahooConfigured(env)) return back(connectReturnUrl(connectReturn(request), 'wahoo-failed'));
+    if (!wahooConfigured(env)) return back(connectReturnUrl(connectReturn(request), 'wahoo-failed', env));
     const state = crypto.randomUUID();
     const u = new URL(AUTHORIZE);
     u.searchParams.set('client_id', String(env.WAHOO_CLIENT_ID).trim());
@@ -91,13 +91,13 @@ export async function handleWahooOAuth(request, env, pathname, fetchImpl = fetch
   const url = new URL(request.url), code = url.searchParams.get('code'), state = url.searchParams.get('state');
   const m = (request.headers.get('Cookie') || '').match(new RegExp('(?:^|;\\s*)' + STATE_COOKIE + '=([^;]+)'));
   const [expected, to, uid] = decodeURIComponent(m?.[1] || '').split('.');
-  if (!state || state !== expected) return back(connectReturnUrl('settings', 'wahoo-failed'));
+  if (!state || state !== expected) return back(connectReturnUrl('settings', 'wahoo-failed', env));
   // Started by another account than the one signed in now: its keys are not stored here.
-  if (!startedBy(uid, env)) return back(connectReturnUrl(to, 'wahoo-failed'));
-  if (url.searchParams.get('error') || !code) return back(connectReturnUrl(to, 'wahoo-cancelled'));
-  if (!wahooConfigured(env)) return back(connectReturnUrl(to, 'wahoo-failed'));
+  if (!startedBy(uid, env)) return back(connectReturnUrl(to, 'wahoo-failed', env));
+  if (url.searchParams.get('error') || !code) return back(connectReturnUrl(to, 'wahoo-cancelled', env));
+  if (!wahooConfigured(env)) return back(connectReturnUrl(to, 'wahoo-failed', env));
   const data = await tokenRequest(env, { grant_type: 'authorization_code', code, redirect_uri: redirectUri(env, request) }, fetchImpl);
-  if (!data) { console.error('Wahoo OAuth token exchange failed'); return back(connectReturnUrl(to, 'wahoo-failed')); }
+  if (!data) { console.error('Wahoo OAuth token exchange failed'); return back(connectReturnUrl(to, 'wahoo-failed', env)); }
   // The Wahoo user id: the webhook says whose workout it brings by it.
   const user = await fetchImpl(API + '/v1/user', { headers: { Authorization: 'Bearer ' + data.access_token, Accept: 'application/json' }, signal: AbortSignal.timeout(15000) })
     .then(r => r.ok ? r.json() : null).catch(() => null);
@@ -105,7 +105,7 @@ export async function handleWahooOAuth(request, env, pathname, fetchImpl = fetch
   await saveConnectionSecret(env, SOURCE, text);
   await clearConnectionHealth(env, SOURCE);
   env.WAHOO_TOKEN = text;
-  return back(connectReturnUrl(to, 'wahoo'));
+  return back(connectReturnUrl(to, 'wahoo', env));
 }
 
 // A valid access token, refreshed (and the new pair saved) when it is about to run out.

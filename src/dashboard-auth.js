@@ -1,6 +1,7 @@
 import { L } from './lang.js';
 import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { bumpSessionEpoch } from "./tenancy.js";
+import { APP_RETURN_PATH, APP_CONNECTED_PATH } from "./app-origin.js";
 
 const SESSION_COOKIE = "pfd_session";
 export const SESSION_SECONDS = 30 * 24 * 60 * 60;
@@ -33,8 +34,8 @@ const PUBLIC_PATHS = new Set([
   "/auth/google",
   "/auth/google/callback",
   "/auth/app/session",
-  "/auth/app/return",
-  "/auth/app/connected",
+  APP_RETURN_PATH,
+  APP_CONNECTED_PATH,
   "/auth/app/connect",
   "/auth/app/apple",
   "/auth/passkey/options",
