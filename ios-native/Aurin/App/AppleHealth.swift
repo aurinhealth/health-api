@@ -45,6 +45,10 @@ enum HealthCategory: String, CaseIterable, Identifiable {
         }
     }
 
+    /// What a new connection reads: everything but Deník, which is only
+    /// read when chosen (GDPR art. 25).
+    static var defaults: Set<HealthCategory> { Set(allCases).subtracting([.journal]) }
+
     /// The categories saved before the split (Srdce, Pohyb, Jídlo a pití)
     /// read as the ones that replaced them.
     static func saved(_ raw: String) -> [HealthCategory] {
@@ -155,7 +159,7 @@ final class AppleHealth {
 
     private static let enabledKey = "appleHealth.enabled"
     private static let categoriesKey = "appleHealth.categories"
-    private static let journalAddedKey = "appleHealth.journalAdded"
+    private static let journalOffKey = "appleHealth.journalOff"
     /// Each server has its own last sync, so the days spent on the other one
     /// (Nastavení → Testování → Server) are sent again after switching back.
     private static var lastSyncKey: String { ServerChoice.current == .live ? "appleHealth.lastSync" : "appleHealth.lastSync.staging" }
@@ -166,14 +170,15 @@ final class AppleHealth {
         let defaults = UserDefaults.standard
         enabled = defaults.bool(forKey: Self.enabledKey)
         let saved = (defaults.string(forKey: Self.categoriesKey) ?? "").split(separator: ",").flatMap { HealthCategory.saved(String($0)) }
-        var chosen = saved.isEmpty ? Set(HealthCategory.allCases) : Set(saved)
-        // Deník came in an update: on once for everyone who reads Apple Health,
-        // iOS asks for its types in the app (askNewTypes) and they can untick it.
-        if !saved.isEmpty, !defaults.bool(forKey: Self.journalAddedKey) {
-            chosen.insert(.journal)
+        var chosen = saved.isEmpty ? HealthCategory.defaults : Set(saved)
+        // Deník is read only when chosen (GDPR art. 25): an update once turned
+        // it on for everyone, so it goes off once; Zdroje dat → Apple Health
+        // turns it back on.
+        if !saved.isEmpty, !defaults.bool(forKey: Self.journalOffKey) {
+            chosen.remove(.journal)
             defaults.set(chosen.map(\.rawValue).sorted().joined(separator: ","), forKey: Self.categoriesKey)
         }
-        defaults.set(true, forKey: Self.journalAddedKey)
+        defaults.set(true, forKey: Self.journalOffKey)
         categories = chosen
         lastSync = defaults.object(forKey: Self.lastSyncKey) as? Date
         if let data = defaults.data(forKey: Self.hiddenKey) {
@@ -203,6 +208,15 @@ final class AppleHealth {
         // A category added to the ones watched already gets its observer too.
         await restartObservers(api: api)
         return await sync(api: api, force: true)
+    }
+
+    /// Sexual activity just allowed (Nastavení → Deník): HealthKit asks for it
+    /// (HealthReader.askNewTypes) and this sync reads its last 90 days, not
+    /// only the days since the last sync.
+    func readSexHistory(api: APIClient) async {
+        JournalSwitch.sexHistory(true)
+        guard enabled else { return }
+        _ = await sync(api: api, force: true)
     }
 
     /// After switching the server: that server's last sync.
@@ -405,6 +419,7 @@ final class AppleHealth {
         // The first sync takes the history; later ones the days since the last
         // one and a day more (late watch data), at most a month.
         let days: Int? = lastSync.map { min(30, max(2, Int(started.timeIntervalSince($0) / 86400) + 2)) }
+        let sexHistory = JournalSwitch.wantsSexHistory
         do {
             await reader.hide(hidden, in: categories)
             guard let uploads = await reader.collect(categories, days: days, now: started) else { return SyncOutcome(ok: false, changed: false) }
@@ -419,6 +434,7 @@ final class AppleHealth {
             guard round == generation else { return SyncOutcome(ok: false, changed: changed) }
             lastSync = started
             UserDefaults.standard.set(started, forKey: Self.lastSyncKey)
+            if sexHistory { JournalSwitch.sexHistory(false) }
             message = nil
             return SyncOutcome(ok: true, changed: changed)
         } catch {
@@ -607,9 +623,11 @@ final class HealthReader: @unchecked Sendable {
         try await store.requestAuthorization(toShare: share, read: read)
     }
 
-    /// Asks for the categories' types iOS has not asked about yet; true when it did.
+    /// Asks for the categories' types iOS has not asked about yet (and sexual
+    /// activity once its consent is on); true when it did.
     func askNewTypes(_ categories: Set<HealthCategory>) async -> Bool {
-        let read = categories.reduce(into: Set<HKObjectType>()) { $0.formUnion($1.types) }
+        var read = categories.reduce(into: Set<HKObjectType>()) { $0.formUnion($1.types) }
+        if JournalSwitch.tracksSex { read.insert(HKCategoryType(.sexualActivity)) }
         guard (try? await store.statusForAuthorizationRequest(toShare: [], read: read)) == .shouldRequest else { return false }
         return (try? await store.requestAuthorization(toShare: [], read: read)) != nil
     }
@@ -661,6 +679,10 @@ final class HealthReader: @unchecked Sendable {
         async let breathingRecords = categories.contains(.breathing) ? breathing(from: from90, to: now) : nothing
         async let bodyRecords = categories.contains(.body) ? body(from: from365, to: now) : nothing
         async let journalRecords = categories.contains(.journal) ? journal(from: from90, to: now) : nothing
+        // Its own consent (Nastavení → Deník), with or without the rest of Deník.
+        // Just allowed: its last 90 days, whenever the last sync was.
+        let sexFrom = JournalSwitch.wantsSexHistory ? calendar.startOfDay(for: calendar.date(byAdding: .day, value: -89, to: now) ?? now) : from90
+        async let sexRecords = JournalSwitch.tracksSex ? sexualActivity(from: sexFrom, to: now) : nothing
         let readFood = categories.contains(.food) || categories.contains(.water)
         async let foodRead: AppleHealthUpload.Food? = readFood
             ? foodUpload(from: from30, to: now, meals: categories.contains(.food), drinks: categories.contains(.water)) : nil
@@ -682,7 +704,7 @@ final class HealthReader: @unchecked Sendable {
         rest += await restingRecords + hrvRecords
         rest += await heartRecords + breathingRecords
         rest += await bodyRecords
-        rest += await journalRecords
+        rest += await journalRecords + sexRecords
         let food = await foodRead
 
         if closed.get() { return nil }
@@ -701,8 +723,8 @@ final class HealthReader: @unchecked Sendable {
     // MARK: Deník
 
     /// What fills in journal items (src/journal-store.js autoDays): mindful
-    /// minutes, time in daylight, noise in sleep, symptoms, sexual activity and
-    /// yoga or stretching workouts.
+    /// minutes, time in daylight, noise in sleep, symptoms and yoga or
+    /// stretching workouts; sexual activity has its own consent (sexualActivity).
     static let symptoms: [(HKCategoryTypeIdentifier, String)] = [
         (.headache, "headache"), (.runnyNose, "runny-nose"), (.generalizedBodyAche, "body-ache"),
         (.abdominalCramps, "stomach"), (.nausea, "stomach"), (.diarrhea, "stomach"), (.vomiting, "stomach"), (.bloating, "stomach"), (.heartburn, "stomach")
@@ -710,14 +732,25 @@ final class HealthReader: @unchecked Sendable {
 
     static var journalTypes: Set<HKObjectType> {
         var out: Set<HKObjectType> = [HKCategoryType(.mindfulSession), HKQuantityType(.timeInDaylight), HKQuantityType(.environmentalAudioExposure),
-                                      HKCategoryType(.sleepAnalysis), HKCategoryType(.sexualActivity), HKObjectType.workoutType()]
+                                      HKCategoryType(.sleepAnalysis), HKObjectType.workoutType()]
         for (id, _) in symptoms { out.insert(HKCategoryType(id)) }
         return out
     }
 
+    /// Sexual activity, one value a day (daily-sexual-activity), only with its
+    /// own consent (JournalSwitch.tracksSex).
+    private func sexualActivity(from: Date, to: Date) async -> [AppleRecord] {
+        var byDay: [String: Double] = [:]
+        for s in await samples(HKCategoryType(.sexualActivity), from: from, to: to) { byDay[day(s.startDate), default: 0] += 1 }
+        let last = day(to), type = "daily-sexual-activity"
+        return byDay.compactMap { date, value in
+            date <= last ? AppleRecord(type: type, id: "journal:sexual-activity:" + date, date: date, value: value) : nil
+        }
+    }
+
     /// One value a day per kind: daily-mindful-minutes, daily-daylight-minutes
     /// (and before 10:00), daily-night-noise (the loudest reading while asleep,
-    /// on the day of waking up), daily-symptom-*, daily-sexual-activity,
+    /// on the day of waking up), daily-symptom-*,
     /// daily-yoga-minutes, daily-stretching-minutes and daily-time-zone-change.
     private func journal(from: Date, to: Date) async -> [AppleRecord] {
         var sums: [String: [String: Double]] = [:]
@@ -725,7 +758,6 @@ final class HealthReader: @unchecked Sendable {
 
         async let mindfulRead = samples(HKCategoryType(.mindfulSession), from: from, to: to)
         async let daylightRead = samples(HKQuantityType(.timeInDaylight), from: from, to: to)
-        async let sexRead = samples(HKCategoryType(.sexualActivity), from: from, to: to)
         async let workoutRead = samples(HKObjectType.workoutType(), from: from, to: to, predicate: notOurs)
         async let sleepRead = samples(HKCategoryType(.sleepAnalysis), from: from.addingTimeInterval(-9 * 3600), to: to)
         async let noiseRead = samples(HKQuantityType(.environmentalAudioExposure), from: from.addingTimeInterval(-9 * 3600), to: to)
@@ -736,7 +768,6 @@ final class HealthReader: @unchecked Sendable {
             add("daily-daylight-minutes", date, minutes)
             add("daily-morning-daylight-minutes", date, calendar.component(.hour, from: s.startDate) < 10 ? minutes : 0)
         }
-        for s in await sexRead { add("daily-sexual-activity", day(s.startDate), 1) }
         for w in await workoutRead.compactMap({ $0 as? HKWorkout }) {
             switch w.workoutActivityType {
             case .yoga, .mindAndBody: add("daily-yoga-minutes", day(w.startDate), w.duration / 60)

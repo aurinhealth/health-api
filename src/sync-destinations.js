@@ -29,14 +29,15 @@ export const DESTINATIONS = ['apple', 'google', 'intervals', 'wahoo'];
 const SERVER_DESTINATIONS = ['google', 'intervals', 'wahoo'];
 
 // The health data each destination accepts. Intervals.icu: what
-// wellness-sync.js (and weight-sync.js for weight) really writes there.
+// wellness-sync.js (and weight-sync.js for weight) really writes there, and
+// workouts: Apple Health's workouts watch-forward.js copies there.
 // Apple Health: what the iPhone writes from the app's own entries. Google
 // Health: weight (weight-sync.js, with the weight-writing permission) and
 // the food log (food-google-sync.js).
 export const HEALTH_TYPES = {
   apple: ['weight', 'nutrition', 'water'],
   google: ['weight', 'nutrition'],
-  intervals: ['weight', 'bodyFat', 'restingHR', 'hrv', 'sleep', 'steps', 'spO2', 'respiration', 'vo2max'],
+  intervals: ['weight', 'bodyFat', 'restingHR', 'hrv', 'sleep', 'steps', 'spO2', 'respiration', 'vo2max', 'workouts'],
   wahoo: []
 };
 
@@ -50,16 +51,17 @@ export const SUPPORTS = {
   wahoo: { pushPlanned: true, pushActivities: false, pullActivities: true, health: false }
 };
 
-// Before this screen: Intervals.icu got the plan, the wellness and the
-// weight, activities came from it, and a manual workout was promised there
-// ("pošle do Intervals.icu"). Google Health got the food log and, with the
+// Before this screen: Intervals.icu got the plan and activities came from
+// it, and a manual workout was promised there ("pošle do Intervals.icu").
+// Health data (wellness, weight) goes to Intervals.icu, a third party, only
+// once the athlete turns it on (the connect sheet or Synchronizace). Google Health got the food log and, with the
 // permission, the weight, and its workouts came in; writing workouts there
 // needs a permission nobody has yet, so it starts off. Apple Health got
 // nothing.
 const DEFAULTS = {
   apple: { pushPlanned: false, pushActivities: false, pullActivities: false, health: [] },
   google: { pushPlanned: false, pushActivities: false, pullActivities: true, health: 'all' },
-  intervals: { pushPlanned: true, pushActivities: true, pullActivities: true, health: 'all' },
+  intervals: { pushPlanned: true, pushActivities: true, pullActivities: true, health: [] },
   // Whoever connects Wahoo wants the plan on the head unit and the rides back.
   wahoo: { pushPlanned: true, pushActivities: false, pullActivities: true, health: [] }
 };
@@ -90,9 +92,16 @@ export function normalizeSyncPrefs(destination, input = {}, base = defaultSyncPr
   return out;
 }
 
+// Apple Health's workouts went to Intervals.icu with no choice of their own
+// until they became one (watch-forward.js). A list saved before then that
+// sends some health data keeps them; an empty one, or none, does not.
+const WORKOUTS_CHOICE = Date.parse('2026-10-31T00:00:00Z');
+const savedAt = text => Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(String(text)) ? text : `${String(text).replace(' ', 'T')}Z`);
+
 const fromRow = (destination, row) => {
   let health = [];
   try { health = JSON.parse(row.health_json || '[]'); } catch { health = []; }
+  if (destination === 'intervals' && Array.isArray(health) && health.length && !health.includes('workouts') && savedAt(row.updated_at) < WORKOUTS_CHOICE) health = [...health, 'workouts'];
   return normalizeSyncPrefs(destination, { pushPlanned: Boolean(row.push_planned), pushActivities: Boolean(row.push_activities), pullActivities: Boolean(row.pull_activities), health });
 };
 
@@ -100,7 +109,7 @@ const fromRow = (destination, row) => {
 // table yet, e.g. before the migration ran).
 export async function readSyncPrefs(db, userId, destination) {
   try {
-    const row = await db.prepare('SELECT push_planned, push_activities, pull_activities, health_json FROM sync_preferences WHERE user_id = ? AND destination = ?').bind(userId, destination).first();
+    const row = await db.prepare('SELECT push_planned, push_activities, pull_activities, health_json, updated_at FROM sync_preferences WHERE user_id = ? AND destination = ?').bind(userId, destination).first();
     return row ? { ...fromRow(destination, row), stored: true } : { ...defaultSyncPrefs(destination), stored: false };
   } catch (error) {
     if (!/no such table/i.test(error.message)) console.error('Sync preferences read failed', error.message);

@@ -23,9 +23,9 @@ function recorder(reply) {
   return { calls, fetchImpl };
 }
 
-test("without a choice everything keeps today's behaviour", async () => {
+test("without a choice the plan and activities keep going; health data to Intervals.icu waits for a yes", async () => {
   const d = db({ migrate: false });
-  assert.deepEqual(await readSyncPrefs(d, 7, "intervals"), { pushPlanned: true, pushActivities: true, pullActivities: true, health: "all", stored: false });
+  assert.deepEqual(await readSyncPrefs(d, 7, "intervals"), { pushPlanned: true, pushActivities: true, pullActivities: true, health: [], stored: false });
   assert.deepEqual(await readSyncPrefs(d, 7, "apple"), { pushPlanned: false, pushActivities: false, pullActivities: false, health: [], stored: false });
   // Writing workouts to Google needs a permission nobody has yet: off until chosen.
   assert.equal((await readSyncPrefs(d, 7, "google")).pushActivities, false);
@@ -36,7 +36,7 @@ test("preferences are saved per user and destination, cleaned up", async () => {
   const saved = await saveSyncPrefs(d, 7, "intervals", { pushPlanned: false, health: ["hrv", "sleep", "nonsense", "hrv"] });
   assert.deepEqual(saved, { pushPlanned: false, pushActivities: true, pullActivities: true, health: ["hrv", "sleep"] });
   assert.deepEqual(await readSyncPrefs(d, 7, "intervals"), { ...saved, stored: true });
-  assert.equal((await readSyncPrefs(d, 8, "intervals")).health, "all");
+  assert.deepEqual((await readSyncPrefs(d, 8, "intervals")).health, []);
   // A partial update keeps the rest; "all" again.
   assert.deepEqual(await saveSyncPrefs(d, 7, "intervals", { health: "all" }), { ...saved, health: "all" });
   // Apple Health has no plans.
@@ -44,6 +44,20 @@ test("preferences are saved per user and destination, cleaned up", async () => {
   await assert.rejects(saveSyncPrefs(d, 7, "garmin", {}), /Neznámá|Unknown/);
   // Strava is no destination any more.
   await assert.rejects(saveSyncPrefs(d, 7, "strava", {}), /Neznámá|Unknown/);
+});
+
+test("a health list chosen before Apple Health's workouts were a choice keeps sending them; an empty one does not", async () => {
+  const d = db();
+  const row = (user, health, at) => d.sqlite.prepare("INSERT INTO sync_preferences (user_id, destination, push_planned, push_activities, pull_activities, health_json, updated_at) VALUES (?, 'intervals', 1, 1, 1, ?, ?)").run(user, JSON.stringify(health), at);
+  row(7, ["hrv"], "2026-10-20 08:00:00");
+  row(8, [], "2026-10-20 08:00:00");
+  row(9, ["hrv"], "2026-11-02T08:00:00.000Z");
+  assert.deepEqual((await readSyncPrefs(d, 7, "intervals")).health, ["hrv", "workouts"]);
+  assert.deepEqual((await readSyncPrefs(d, 8, "intervals")).health, []);
+  assert.deepEqual((await readSyncPrefs(d, 9, "intervals")).health, ["hrv"]);
+  // Saved again, the list is the athlete's own from then on.
+  await saveSyncPrefs(d, 7, "intervals", { health: ["hrv"] });
+  assert.deepEqual((await readSyncPrefs(d, 7, "intervals")).health, ["hrv"]);
 });
 
 test("the wellness push sends only the chosen health data", () => {
