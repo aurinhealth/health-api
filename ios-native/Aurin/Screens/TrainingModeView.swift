@@ -95,6 +95,8 @@ struct TrainingModeView: View {
             // The Live Activity follows the heart rate from here: read in this
             // screen's body, every beat redrew the whole workout.
             HeartRateWatch(live: live) { syncActivity(quiet: true) }
+            // The Apple Watch's gym, 1:1 (its own view: the chain below is long enough).
+            WatchGymHooks(live: live, restEnd: restEnd, sendRest: sendRest, received: receiveRest, ended: finishIfEndedOnWatch)
             VStack(alignment: .leading, spacing: 0) {
                 header
                 if let day, !finishedSession, let exercise = current(day) { tools(day, exercise) }
@@ -180,28 +182,10 @@ struct TrainingModeView: View {
                 if !live.running { HeartRateSensor.shared.disconnect() }
             }
         }
-        .onChange(of: restEnd) { _, end in
-            Task { await Reminders.restEnds(at: end) }
-            syncActivity()
-            sendRest(end)
-        }
-        // The rest started, moved or skipped on the watch: the same here.
-        .onReceive(NotificationCenter.default.publisher(for: .watchRest)) { note in
-            guard let rest = note.object as? WatchGym.Rest, rest.date == date, !model.demo, !finishedSession else { return }
-            watchRest = rest
-            if let name = rest.exercise, let at = day?.exercises.firstIndex(where: { $0.name == name }) { index = at }
-            if let end = rest.end, end > Date() {
-                restTotal = max(1, rest.total)
-                restStart = end.addingTimeInterval(-TimeInterval(restTotal))
-                restEnd = end
-            } else {
-                restEnd = nil
-            }
-        }
+        .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) }; syncActivity() }
         .onChange(of: day) { _, _ in syncActivity() }
         .onChange(of: index) { _, _ in syncActivity() }
         .onChange(of: finishedSession) { _, _ in syncActivity() }
-        .onChange(of: live.endedOnWatch) { _, _ in finishIfEndedOnWatch() }
         // Back from the lock screen after the rest ran out: straight to the set.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, let end = restEnd, end <= Date() { restEnd = nil }
@@ -1028,6 +1012,20 @@ struct TrainingModeView: View {
         if reps == was.reps ?? wasCarry?.reps ?? "" { reps = set.reps ?? carry?.reps ?? "" }
     }
 
+    /// The rest started, moved or skipped on the watch: the same here.
+    private func receiveRest(_ rest: WatchGym.Rest) {
+        guard rest.date == date, !model.demo, !finishedSession else { return }
+        watchRest = rest
+        if let name = rest.exercise, let at = day?.exercises.firstIndex(where: { $0.name == name }) { index = at }
+        guard let end = rest.end, end > Date() else {
+            restEnd = nil
+            return
+        }
+        restTotal = max(1, rest.total)
+        restStart = end.addingTimeInterval(-TimeInterval(restTotal))
+        restEnd = end
+    }
+
     /// The rest to the watch's gym, unless it came from there.
     private func sendRest(_ end: Date?) {
         guard !model.demo, live.running || startTapped else { return }
@@ -1598,4 +1596,24 @@ struct TrailingIcon: LabelStyle {
 
 extension Array {
     subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
+}
+
+/// Training mode and the Apple Watch's gym: the rest sent and taken both
+/// ways, and a Finish on the watch.
+struct WatchGymHooks: View {
+    let live: LiveWorkout
+    let restEnd: Date?
+    let sendRest: (Date?) -> Void
+    let received: (WatchGym.Rest) -> Void
+    let ended: () -> Void
+
+    var body: some View {
+        Color.clear.frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+            .onChange(of: restEnd) { _, end in sendRest(end) }
+            .onChange(of: live.endedOnWatch) { _, _ in ended() }
+            .onReceive(NotificationCenter.default.publisher(for: .watchRest)) { note in
+                if let rest = note.object as? WatchGym.Rest { received(rest) }
+            }
+    }
 }
