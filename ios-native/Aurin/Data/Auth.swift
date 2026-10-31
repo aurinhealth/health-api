@@ -5,8 +5,11 @@ import UIKit
 
 // Google refuses sign-in inside an app's own web view, so the app uses the
 // same handoff as the Capacitor app (src/google-login.js):
-// 1. open /auth/google?app=<challenge> in a system browser sheet,
-// 2. the server answers with loadwise://auth?token=<short-lived token>,
+// 1. open /auth/google?app=<challenge>&return=https in a system browser sheet,
+// 2. the server answers with https://<its host>/auth/app/return?token=<short-lived token>,
+//    which only this app can catch: iOS hands an https callback only to an app
+//    with that host among its associated domains (project.yml). A server from
+//    before 2026-11 answers with loadwise://auth instead (returnsOverHttps),
 // 3. the app trades the token plus the verifier behind the challenge for the
 //    session cookie at POST /auth/app/session.
 // The cookie lands in HTTPCookieStorage.shared, which URLSession sends with
@@ -23,10 +26,11 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
     func signIn() async throws {
         let verifier = Self.randomVerifier()
         let challenge = Self.challenge(for: verifier)
+        let https = await Self.returnsOverHttps(api.baseURL, path: Self.signInReturnPath)
         var start = URLComponents(url: api.baseURL.appending(path: "auth/google"), resolvingAgainstBaseURL: false)!
-        start.queryItems = [URLQueryItem(name: "app", value: challenge)]
+        start.queryItems = [URLQueryItem(name: "app", value: challenge)] + (https ? [URLQueryItem(name: "return", value: "https")] : [])
 
-        let callback = try await openBrowser(start.url!)
+        let callback = try await openBrowser(start.url!, callback: Self.callback(api.baseURL, path: Self.signInReturnPath, https: https))
         let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
         if let error = items.first(where: { $0.name == "error" })?.value { throw Self.signInError(error) }
         guard let token = items.first(where: { $0.name == "token" })?.value else {
@@ -35,7 +39,26 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         try await api.exchangeHandoff(token: token, verifier: verifier)
     }
 
-    /// loadwise://auth?error=<code> from a failed Google sign-in (src/google-login.js).
+    static let signInReturnPath = "/auth/app/return"
+
+    /// The address the browser sheet closes on: https on the server's own host,
+    /// or loadwise:// for a server from before 2026-11.
+    static func callback(_ server: URL, path: String, https: Bool) -> ASWebAuthenticationSession.Callback {
+        guard https, let host = server.host() else { return .customScheme("loadwise") }
+        return .https(host: host, path: path)
+    }
+
+    /// Whether the server returns over https: it answers the return page itself
+    /// (an older one sends a browser away from /auth/…). Remove with the
+    /// loadwise:// fallback once every server has it.
+    static func returnsOverHttps(_ server: URL, path: String) async -> Bool {
+        var request = URLRequest(url: server.appending(path: String(path.dropFirst())), cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
+        request.httpMethod = "HEAD"
+        guard let answer = try? await URLSession.shared.data(for: request), let http = answer.1 as? HTTPURLResponse else { return false }
+        return http.statusCode == 200 && http.url?.path() == path
+    }
+
+    /// …/auth/app/return?error=<code> from a failed Google sign-in (src/google-login.js).
     static func signInError(_ code: String) -> Error {
         switch code {
         case "cancelled": return APIError.message(L10n.tr("Přihlášení přes Google bylo zrušeno."))
@@ -53,13 +76,13 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         // The ticket again as a header: without it the server lets nobody in, so a
         // ticket link sent to someone else expires (src/native-connect.js).
         let ticket = URLComponents(url: link, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "ticket" })?.value
-        let callback = try await openBrowser(link, headers: ticket.map { ["X-Aurin-Connect": $0] } ?? [:])
+        let callback = try await openBrowser(link, callback: .customScheme("loadwise"), headers: ticket.map { ["X-Aurin-Connect": $0] } ?? [:])
         return URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "event" })?.value ?? "unknown"
     }
 
-    private func openBrowser(_ url: URL, headers: [String: String] = [:]) async throws -> URL {
+    private func openBrowser(_ url: URL, callback: ASWebAuthenticationSession.Callback, headers: [String: String] = [:]) async throws -> URL {
         try await withCheckedThrowingContinuation { continuation in
-            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "loadwise") { callback, error in
+            let session = ASWebAuthenticationSession(url: url, callback: callback) { callback, error in
                 if let callback {
                     continuation.resume(returning: callback)
                 } else if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {

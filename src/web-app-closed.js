@@ -3,12 +3,13 @@
 // cannot read or change anything; the old web address /app leads to the
 // overview page.
 // Still open: the public pages, the browser sheets the iPhone app opens to sign
-// in with Google (/auth/google?app=…) and to connect Google Health or
+// in with Google (/auth/google?app=…, back at /auth/app/return) and to connect Google Health or
 // Intervals.icu (/auth/app/connect, /oauth/…), the owner's API key, GitHub
 // Actions and the cron jobs.
 import { APP_API_HEADER } from "./app-version.js";
 import { verifyDashboardSession, sessionSecret } from "./dashboard-auth.js";
 import { APP_CHALLENGE } from "./google-login.js";
+import { APP_RETURN_PATH } from "./app-origin.js";
 import { siteLang } from "./site-pages.js";
 
 const OPEN_PATHS = new Set([
@@ -19,6 +20,7 @@ const OPEN_PATHS = new Set([
   "/logo.svg",
   "/app/logout",
   "/auth/google/callback",
+  APP_RETURN_PATH,
   "/auth/app/connect"
 ]);
 // /t/<id>: a workout shared with a link (workout-templates.js).
