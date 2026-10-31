@@ -503,6 +503,7 @@
 "Přihlášení e-mailem" = "Sign in with email";
 "Přihlášení přes Google bylo zrušeno." = "Google sign-in was cancelled.";
 "Přihlášení přes Google teď nejde. Zkus to později nebo se přihlas e-mailem." = "Google sign-in isn't available right now. Try again later or sign in with email.";
+"Z této sítě dnes vzniklo příliš mnoho nových účtů. Zkus to prosím zítra." = "Too many new accounts were created from this network today. Please try again tomorrow.";
 "Přihlášení se nepodařilo dokončit. Zkus to znovu." = "Couldn't finish signing in. Try again.";
 "Přihlášení se nepodařilo." = "Sign-in failed.";
 "Přihlášení vypršelo. Přihlas se znovu." = "Your session expired. Please sign in again.";
@@ -2801,6 +2802,7 @@
 "Platící" = "Paying";
 "Pilot, dárky a ty" = "Pilot, gifts and you";
 "Bez nákupu" = "No purchase";
+"Nové účty" = "New accounts";
 "Úlohy serveru" = "Server jobs";
 "Schválit" = "Approve";
 "Na míru od AI" = "Made for you by AI";

@@ -18,7 +18,7 @@ import { limitToday } from "./user-time.js";
 import { isReviewAccount, REVIEW_AI_MONTHLY_LIMIT_USD } from "./app-review.js";
 import { aiLimitShare } from "./ai-limit-share.js";
 import { addAiSpend } from "./ai-total.js";
-import { isStaging } from "./staging.js";
+import { ownerUnlimited } from "./staging.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
@@ -36,8 +36,7 @@ export function usageCost(model, usage, webSearches = 0) {
   return Math.round((((n(usage.input_tokens) || 0) - cached) * i + cached * c + (n(usage.output_tokens) || 0) * o + (n(webSearches) || 0) * WEB_SEARCH_USD * 1e6) / 1e6 * 1e5) / 1e5;
 }
 
-// The owner on the test server: no limits of an account.
-export const ownerUnlimited = env => env?.USER_IS_OWNER === true && isStaging(env);
+export { ownerUnlimited };
 
 // share: the part of the limits the account gets (aiLimitShare, ai-limit-share.js).
 export function aiDailyLimitUsd(env, share = 1) {

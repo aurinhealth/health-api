@@ -178,7 +178,7 @@ export async function signInAppleUser(db, env, { sub, email, name = null, reques
     if (row && await db.prepare("SELECT 1 AS linked FROM user_identities WHERE provider = 'apple' AND user_id = ?").bind(row.id).first()) return null;
     if (!row) {
       if (!(await mayCreateAccount(db, env, address, { request }))) return null;
-      const made = await createAccount(db, env, address, name);
+      const made = await createAccount(db, env, address, name, { request });
       if (!made) return null;
       row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(address).first();
       if (made === "created" && row) await inheritAiLimits(db, env, row.id, { email: address, appleSub: String(sub) });

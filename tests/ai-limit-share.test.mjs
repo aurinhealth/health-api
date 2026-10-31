@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { aiLimitShare, paidPro } from "../src/ai-limit-share.js";
+import { aiLimitShare, aiGroup } from "../src/ai-limit-share.js";
 import { aiAllowance, assertAiAllowance, ensureAiUsage } from "../src/ai-usage.js";
 import { coachAllowance } from "../src/coach-allowance.js";
 import { ensureStoreColumns } from "../src/app-store.js";
@@ -28,7 +28,7 @@ test("without a purchase (the pilot) every limit is half: 15 messages, 0.5 USD a
 
 test("a paid Production subscription gets the whole limits", async () => {
   const env = await account({ plan: "ai" });
-  assert.equal(await paidPro(env), true);
+  assert.equal(await aiGroup(env), "paid");
   assert.equal((await coachAllowance(env)).limit, 30);
   const allowance = await aiAllowance(env);
   assert.deepEqual([allowance.limitUsd, allowance.monthLimitUsd], [1, 6]);

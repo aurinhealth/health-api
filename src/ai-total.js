@@ -6,31 +6,35 @@
 // there it holds the owner too: it caps what testing costs (wrangler.jsonc env.staging).
 //
 // AI_GROUP_BRAKES: each group of accounts (aiGroup, ai-limit-share.js: paid,
-// gift, trial, testflight, free, system) has a brake of its own for the day, so
-// one group (free accounts made in bulk, a bug in one feature) never stops the
-// AI of another. A group's brake is a fixed {"usd": 5}, or grows with the
+// gift, trial, testflight, free, new, system) has a brake of its own for the
+// day, so one group (accounts made in bulk, a bug in one feature) never stops
+// the AI of another. A group's brake is a fixed {"usd": 5}, or grows with the
 // accounts in it, {"perAccount": 0.5, "min": 10, "max": 20}: what a usual day costs is a
 // small part of it (5 USD a month is about 0.17 a day), so only a spike or a bug
-// reaches it. The accounts are counted once a day, when the group's day starts.
+// reaches it. The accounts are counted once a day, when the group's day starts;
+// a count that fails is not kept, so the next call counts again.
 // The account's own limits (ai-usage.js) stay the real cap on what AI costs.
 // The owner hears once a day of a group that passes AI_GROUP_ALERT_SHARE of its
 // brake (half by default). Unset or not a number is off.
 import { L } from "./lang.js";
 import { emailConfigured, sendEmail } from "./email-sender.js";
-import { isStaging } from "./staging.js";
-import { aiGroup, groupOfSubscription, AI_GROUPS } from "./ai-limit-share.js";
+import { isStaging, ownerUnlimited } from "./staging.js";
+import { aiGroup, groupOfSubscription, newAccountSince, AI_GROUPS } from "./ai-limit-share.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const utcDay = (now = new Date()) => now.toISOString().slice(0, 10);
 const central = env => env?.RAW_DB || null;
 const rounded = v => Math.round(Number(v || 0) * 1e5) / 1e5;
-const ownerUnlimited = env => env?.USER_IS_OWNER === true && isStaging(env);
 
-export const GROUP_NAMES = { paid: "platící", gift: "pilot, dárky a ty", trial: "týden zdarma", testflight: "TestFlight", free: "bez nákupu", system: "úlohy serveru" };
+export const GROUP_NAMES = { paid: "platící", gift: "pilot, dárky a ty", trial: "týden zdarma", testflight: "TestFlight", free: "bez nákupu", new: "nové účty", system: "úlohy serveru" };
 
+// The tables are made once per database and isolate, not on every model call.
+const ready = new WeakSet();
 export async function ensureAiSpendDays(db) {
+  if (ready.has(db)) return;
   await db.prepare("CREATE TABLE IF NOT EXISTS ai_spend_days (day TEXT PRIMARY KEY, cost_usd REAL NOT NULL DEFAULT 0, alerted INTEGER NOT NULL DEFAULT 0)").run();
   await db.prepare("CREATE TABLE IF NOT EXISTS ai_spend_groups (day TEXT NOT NULL, grp TEXT NOT NULL, cost_usd REAL NOT NULL DEFAULT 0, brake_usd REAL, alerted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, grp))").run();
+  ready.add(db);
 }
 
 export async function aiSpentTodayAll(db, now = new Date()) {
@@ -46,31 +50,47 @@ export function groupBrakes(env) {
   return value && typeof value === "object" ? value : {};
 }
 
-// Accounts with Pro now, by group (one read of the subscriptions with Pro).
+// Accounts by group now: the subscriptions with Pro, and the accounts without a
+// purchase older than NEW_ACCOUNT_DAYS ("free"; the new ones get a fixed brake,
+// so they are not counted). Throws when a read fails.
 async function accountsByGroup(db, now = Date.now()) {
-  const rows = (await db.prepare("SELECT plan, valid_until, store_environment, free_trial, offer_type FROM subscriptions WHERE plan = 'ai' AND valid_until > ?").bind(new Date(now).toISOString()).all()).results || [];
+  const until = new Date(now).toISOString();
+  const [subs, free] = await Promise.all([
+    db.prepare("SELECT plan, valid_until, store_environment, free_trial, offer_type FROM subscriptions WHERE plan = 'ai' AND valid_until > ?").bind(until).all().then(r => r.results || []),
+    db.prepare("SELECT COUNT(*) AS n FROM users u WHERE u.disabled = 0 AND u.created_at <= ? AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = u.id AND s.plan = 'ai' AND s.valid_until > ?)").bind(newAccountSince(now), until).first()
+  ]);
   const counts = Object.fromEntries(AI_GROUPS.map(group => [group, 0]));
-  for (const row of rows) counts[groupOfSubscription(row, now)]++;
+  for (const row of subs) counts[groupOfSubscription(row, now)]++;
+  counts.free = Number(free?.n) || 0;
   return counts;
 }
 
-// A group's brake for today in USD, or null when it has none.
-export async function groupBrakeUsd(db, env, group, now = Date.now()) {
-  const brake = groupBrakes(env)[group];
-  if (!brake || typeof brake !== "object") return null;
-  if (n(brake.usd) != null) return Math.max(0, n(brake.usd));
-  if (n(brake.perAccount) == null) return n(brake.min);
-  const count = (await accountsByGroup(db, now).catch(error => { console.error("Accounts by group not read", error?.message || error); return {}; }))[group] || 0;
-  return brakeFor(brake, count);
-}
+// A brake that grows with the accounts grows with them: it needs them counted.
+const growing = brake => Boolean(brake && typeof brake === "object" && n(brake.usd) == null && n(brake.perAccount) != null);
 
-// A brake that grows with the accounts: perAccount each, at least min, at most max.
-function brakeFor(brake, count) {
+// A group's brake in USD for this many accounts, or null when it has none: a
+// fixed usd, or perAccount each, at least min, at most max.
+function brakeFor(brake, count = 0) {
   if (!brake || typeof brake !== "object") return null;
   if (n(brake.usd) != null) return Math.max(0, n(brake.usd));
   if (n(brake.perAccount) == null) return n(brake.min);
   const grown = Math.max(n(brake.min) || 0, rounded(n(brake.perAccount) * count));
   return n(brake.max) != null ? Math.min(n(brake.max), grown) : grown;
+}
+
+// A group's brake for today. counted: false when its accounts could not be
+// counted; the brake is then the group's last stored one (or its least) and is
+// not kept for the day, so the next call counts again.
+export async function groupBrakeUsd(db, env, group, now = Date.now()) {
+  const brake = groupBrakes(env)[group];
+  if (!growing(brake)) return { usd: brakeFor(brake), counted: true };
+  try {
+    return { usd: brakeFor(brake, (await accountsByGroup(db, now))[group] || 0), counted: true };
+  } catch (error) {
+    console.error("Accounts by group not read", error?.message || error);
+    const last = await db.prepare("SELECT brake_usd FROM ai_spend_groups WHERE grp = ? AND day < ? AND brake_usd IS NOT NULL ORDER BY day DESC LIMIT 1").bind(group, utcDay(new Date(now))).first().catch(() => null);
+    return { usd: last?.brake_usd != null ? Number(last.brake_usd) : brakeFor(brake, 0), counted: false };
+  }
 }
 
 // The group's day: what it spent and its brake. The first call of a day counts
@@ -80,8 +100,8 @@ async function groupDay(db, env, group, now) {
   const read = () => db.prepare("SELECT cost_usd, brake_usd FROM ai_spend_groups WHERE day = ? AND grp = ?").bind(day, group).first();
   let row = await read();
   if (!row || row.brake_usd == null) {
-    const brake = await groupBrakeUsd(db, env, group, now.getTime());
-    if (brake == null) return { spent: rounded(row?.cost_usd), brake: null };
+    const { usd: brake, counted } = await groupBrakeUsd(db, env, group, now.getTime());
+    if (brake == null || !counted) return { spent: rounded(row?.cost_usd), brake };
     await db.prepare("INSERT INTO ai_spend_groups (day, grp, brake_usd) VALUES (?, ?, ?) ON CONFLICT(day, grp) DO UPDATE SET brake_usd = COALESCE(brake_usd, excluded.brake_usd)").bind(day, group, brake).run();
     row = await read();
   }
@@ -177,8 +197,8 @@ export async function aiSpendingReport(env, now = new Date()) {
     month: rounded(days.filter(row => row.day >= monthStart).reduce((sum, row) => sum + Number(row.cost_usd || 0), 0)),
     resetsAt: next.toISOString(),
     groups: AI_GROUPS.filter(group => brakes[group] || byGroup[group]).map(group => {
-      const row = byGroup[group], brake = brakes[group], growing = brake && n(brake.usd) == null && n(brake.perAccount) != null;
-      return { group, spent: rounded(row?.cost_usd), brake: row?.brake_usd != null ? Number(row.brake_usd) : brakeFor(brake, counts[group] || 0), accounts: growing ? counts[group] || 0 : null };
+      const row = byGroup[group], brake = brakes[group];
+      return { group, spent: rounded(row?.cost_usd), brake: row?.brake_usd != null ? Number(row.brake_usd) : brakeFor(brake, counts[group] || 0), accounts: growing(brake) ? counts[group] ?? null : null };
     })
   };
 }

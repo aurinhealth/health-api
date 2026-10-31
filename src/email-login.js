@@ -17,7 +17,7 @@
 // account asks for at most 2 a minute, 5 an hour and 10 a day, one caller for 5, 20 and 30.
 import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie, knownDevice, knownDeviceCookie, heldKnownDevice } from "./dashboard-auth.js";
 import { allowClient, allowRequest } from "./ip-rate-limit.js";
-import { normalizeEmail, emailCodeAccess, signInEmailUser, changeUserEmail, SignupLimited } from "./tenancy.js";
+import { normalizeEmail, emailCodeAccess, signInEmailUser, changeUserEmail, SignupLimited, signupOpenFor } from "./tenancy.js";
 import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail } from "./email-sender.js";
 import { siteLang } from "./site-pages.js";
 import { reviewCodeActive } from "./app-review.js";
@@ -65,6 +65,10 @@ export async function handleEmailLogin(request, env, pathname, ctx) {
   if (email.length > 254 || !EMAIL_PATTERN.test(email)) return json({ message: L("Zadej platný e-mail.", "Enter a valid email.") }, 400);
   if (pathname === "/auth/email/start") {
     if (!(await allowClient(env.DB, request, sessionSecret(env), "email", Date.now(), START_LIMITS))) return json({ message: TOO_MANY() }, 429);
+    // A new address from a network that opened its new accounts for today: told now,
+    // not after the code (NEW_ACCOUNT_LIMITS, tenancy.js). Callers are held by
+    // START_LIMITS above, so this cannot be used to try many addresses.
+    if (!(await signupOpenFor(env.DB, env, email, request))) return json({ message: new SignupLimited().message }, 429);
     const known = await knownDevice(request, env, email);
     // Whether a code goes out (and how long that takes) stays out of the answer.
     const work = sendCode(env, email, requestLanguage(request), { known }).catch(error => console.error("Sign-in code e-mail failed", error?.code || error?.message));
@@ -169,7 +173,14 @@ async function verifyCode(env, email, input, known = null, request = null) {
   if (refused) return refused;
   let user;
   try { user = await signInEmailUser(env.DB, env, email, { request }); }
-  catch (error) { if (error instanceof SignupLimited) return json({ message: error.message }, 429); throw error; }
+  catch (error) {
+    if (!(error instanceof SignupLimited)) throw error;
+    // The network filled up while the code was on its way: the code works again,
+    // so it is not lost along with the sign-in.
+    await env.DB.prepare("UPDATE email_login_codes SET code_hash = ?, attempts = MAX(attempts - 1, 0) WHERE email = ? AND code_hash IS NULL")
+      .bind(await codeHash(env, email, String(input || "").replace(/[\s-]/g, ""), "email-code"), email).run().catch(() => {});
+    return json({ message: error.message }, 429);
+  }
   if (!user) return json({ message: L("Tento e-mail nemá do Aurinu přístup.", "This email doesn't have access to Aurin.") }, 403);
   // This device signed in with the address: a stranger's wrong codes no longer lock it out.
   const response = await signedInResponse(user.id, env, { status: "ok", created: user.created });

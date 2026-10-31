@@ -9,7 +9,7 @@ import { emailConfigured, sendEmail } from "./email-sender.js";
 import { accountCapacity } from "./tenancy.js";
 import { aiMonthlyLimitUsd, ensureAiUsage } from "./ai-usage.js";
 import { ensureStoreColumns } from "./app-store.js";
-import { unpaidLimitShare } from "./ai-limit-share.js";
+import { unpaidLimitShare, groupOfSubscription } from "./ai-limit-share.js";
 import { GROUP_NAMES, aiSpendByGroup } from "./ai-total.js";
 import { MANY_QUERIES, MANY_ROWS, SLOW_REQUEST_MS, slowness, timed } from "./request-timing.js";
 
@@ -118,7 +118,7 @@ export const NET_USD_PER_MONTH = { monthly: 5.9, yearly: 3.7 };
 export const TESTER_CAP = 20;
 const pct = (a, b) => b > 0 ? Math.round(a / b * 100) : 0;
 
-// stats: { accounts, newWeek, aiUsersWeek, paidMonthly, paidYearly, trial, sandbox,
+// stats: { accounts, newWeek, aiUsersWeek, paidMonthly, paidYearly, gift, trial, sandbox,
 // weekUsd, monthUsd, monthDay, monthDays, totalYesterdayUsd, nearCap: [{ email, cost, limit }] }
 // (accountStats). Every morning: the numbers, what to watch and a proposal
 // for each, so a limit is raised before people hit it. limits: the Worker
@@ -132,7 +132,7 @@ export function accountsReport(stats, limits = {}) {
   const perUser = stats.aiUsersWeek ? stats.weekUsd / stats.aiUsersWeek : 0;
   const lines = [`Účty a AI (bez tebe)
 - Účtů: ${stats.accounts}, nových za 7 dní ${stats.newWeek}, AI za 7 dní použilo ${stats.aiUsersWeek}
-- Platí: ${paid} (měsíčně ${stats.paidMonthly}, ročně ${stats.paidYearly}), ve zkušebním týdnu ${stats.trial}, nákupy z TestFlightu ${stats.sandbox}
+- Platí: ${paid} (měsíčně ${stats.paidMonthly}, ročně ${stats.paidYearly}), pilot a dárky ${stats.gift || 0}, ve zkušebním týdnu ${stats.trial}, nákupy z TestFlightu ${stats.sandbox}
 - AI včera všichni dohromady ${usd(stats.totalYesterdayUsd)}${totalLimit != null ? ` z denní brzdy ${usd(totalLimit)}` : ""}${stats.groups?.length ? `\n- AI včera podle skupin: ${stats.groups.map(g => `${GROUP_NAMES[g.grp] || g.grp} ${usd(Number(g.cost_usd) || 0)}${g.brake_usd != null ? ` z ${usd(Number(g.brake_usd))}` : ""}`).join(", ")}` : ""}
 - AI za 7 dní ${usd(stats.weekUsd)} (${usd(perUser)} na uživatele s AI), za měsíc zatím ${usd(stats.monthUsd)}, do konce měsíce asi ${usd(projected)}
 - Pro vydělá asi ${usd(revenue)} za měsíc${monthly != null ? ` · strop na účet ${usd(monthly)}, bez placení ${usd(monthly * unpaidShare)}` : ""}`];
@@ -157,16 +157,19 @@ export async function accountStats(env, date, { now = Date.now() } = {}) {
   const [y, m, d] = date.split("-").map(Number), monthDays = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const users = (await db.prepare("SELECT id, email, created_at FROM users WHERE lower(email) <> ?").bind(owner).all()).results || [];
   const ids = new Set(users.map(u => Number(u.id)));
-  const subs = (await db.prepare("SELECT user_id, plan, valid_until, product_id, store_environment, free_trial FROM subscriptions WHERE plan = 'ai'").all()).results || [];
+  const subs = (await db.prepare("SELECT user_id, plan, valid_until, product_id, store_environment, free_trial, offer_type FROM subscriptions WHERE plan = 'ai'").all()).results || [];
   const total = await db.prepare("SELECT cost_usd FROM ai_spend_days WHERE day = ?").bind(date).first().catch(() => null);
   const groups = await aiSpendByGroup(db, date).catch(() => []);
-  const stats = { groups, totalYesterdayUsd: Number(total?.cost_usd) || 0, accounts: users.length, newWeek: users.filter(u => String(u.created_at || "").slice(0, 10) >= weekFrom).length, aiUsersWeek: 0, paidMonthly: 0, paidYearly: 0, trial: 0, sandbox: 0, weekUsd: 0, monthUsd: 0, monthDay: d, monthDays, nearCap: [] };
-  const paid = new Set();
+  const stats = { groups, totalYesterdayUsd: Number(total?.cost_usd) || 0, accounts: users.length, newWeek: users.filter(u => String(u.created_at || "").slice(0, 10) >= weekFrom).length, aiUsersWeek: 0, paidMonthly: 0, paidYearly: 0, gift: 0, trial: 0, sandbox: 0, weekUsd: 0, monthUsd: 0, monthDay: d, monthDays, nearCap: [] };
+  // whole: the accounts with a paying account's limits (paid, and gifts and offer codes, which bring in nothing).
+  const whole = new Set();
   for (const sub of subs) {
-    if (!ids.has(Number(sub.user_id)) || !(Date.parse(sub.valid_until) > now)) continue;
-    if (sub.store_environment !== "Production") stats.sandbox++;
-    else if (Number(sub.free_trial) === 1) stats.trial++;
-    else { paid.add(Number(sub.user_id)); if (String(sub.product_id || "").endsWith(".yearly")) stats.paidYearly++; else stats.paidMonthly++; }
+    if (!ids.has(Number(sub.user_id))) continue;
+    const group = groupOfSubscription(sub, now);
+    if (group === "testflight") stats.sandbox++;
+    else if (group === "trial") stats.trial++;
+    else if (group === "gift") { stats.gift++; whole.add(Number(sub.user_id)); }
+    else if (group === "paid") { whole.add(Number(sub.user_id)); if (String(sub.product_id || "").endsWith(".yearly")) stats.paidYearly++; else stats.paidMonthly++; }
   }
   const spend = (await db.prepare("SELECT user_id, SUM(cost_usd) AS week FROM ai_usage WHERE day >= ? AND day <= ? AND model NOT IN ('pending', 'carried-over') GROUP BY user_id").bind(weekFrom, date).all()).results || [];
   // counted: what the account's limit sees (with what a deleted account of the same person carried over).
@@ -180,7 +183,7 @@ export async function accountStats(env, date, { now = Date.now() } = {}) {
     if (!ids.has(Number(row.user_id))) continue;
     const counted = Number(row.counted) || 0;
     stats.monthUsd += Number(row.cost) || 0;
-    const limit = full == null ? null : paid.has(Number(row.user_id)) ? full : full * share;
+    const limit = full == null ? null : whole.has(Number(row.user_id)) ? full : full * share;
     if (limit && counted >= limit * 0.8) stats.nearCap.push({ email: row.email, cost: counted, limit });
   }
   return stats;

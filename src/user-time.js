@@ -120,7 +120,8 @@ export async function rememberTimeZone(db, userId, value) {
 // back and forth across the date line would reach the next day's limits early.
 // The limits therefore follow a zone of the account that changes at most once in
 // LIMIT_ZONE_HOURS: someone who flies lives on the new zone's days within a day.
-// One read per account and isolate, one write when the zone changes.
+// One primary-key read per AI request once the zone is settled (none in the
+// LIMIT_ZONE_HOURS after a switch), one write when the zone changes.
 export const LIMIT_ZONE_HOURS = 20;
 const limitZones = new Map();
 async function ensureLimitZone(db) {
@@ -132,8 +133,12 @@ async function ensureLimitZone(db) {
 export async function limitTimeZone(db, userId, wanted = timeZone(), now = Date.now()) {
   const zone = validTimeZone(wanted) || DEFAULT_TIME_ZONE;
   if (!db || !(Number(userId) > 0)) return zone;
-  const settled = held => Boolean(held) && (held.zone === zone || now - held.at < LIMIT_ZONE_HOURS * 3600000);
-  if (settled(limitZones.get(userId))) return limitZones.get(userId).zone;
+  const locked = held => Boolean(held) && now - held.at < LIMIT_ZONE_HOURS * 3600000;
+  const settled = held => locked(held) || (Boolean(held) && held.zone === zone);
+  // The isolate's copy answers only while no switch can happen anywhere (the
+  // database's limit_zone_at is less than LIMIT_ZONE_HOURS old); after that the
+  // database decides, so two isolates never count the account's days in two zones.
+  if (locked(limitZones.get(userId))) return limitZones.get(userId).zone;
   const read = async () => {
     const select = () => db.prepare("SELECT limit_zone, limit_zone_at FROM user_time_zone WHERE user_id=?").bind(userId).first();
     let row;
@@ -162,8 +167,12 @@ export async function limitTimeZone(db, userId, wanted = timeZone(), now = Date.
 }
 
 // Today in the zone the account's AI limits count in (limitTimeZone).
+// The zone is looked up once per request (env), however many limits ask.
+const requestZones = new WeakMap();
 export async function limitToday(env, at = new Date()) {
-  const zone = await limitTimeZone(env?.DB, env?.USER_ID, timeZone(), at.getTime());
+  const lookup = () => limitTimeZone(env?.DB, env?.USER_ID, timeZone(), at.getTime());
+  if (env && typeof env === "object" && !requestZones.has(env)) requestZones.set(env, lookup());
+  const zone = await (env && typeof env === "object" ? requestZones.get(env) : lookup());
   return current.run(zone, () => localToday(at));
 }
 

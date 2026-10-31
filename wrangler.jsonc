@@ -101,14 +101,16 @@
     "AI_TOTAL_DAILY_ALERT_USD": "10",
     // Each group of accounts has its own daily brake, so one never stops another's AI
     // (src/ai-total.js): per account in the group (paying ones 0.5 USD, the free week
-    // half, TestFlight 75 % up to 20) or fixed where accounts cost nothing to make.
+    // half, TestFlight 75 % up to 20, accounts without a purchase older than a week half,
+    // up to 30) or fixed where accounts cost nothing to make (new accounts, the server).
     // The owner hears once a day when a group passes half of its brake.
     "AI_GROUP_BRAKES": {
       "paid": { "perAccount": 0.5, "min": 10 },
       "gift": { "perAccount": 0.5, "min": 10 },
       "trial": { "perAccount": 0.25, "min": 5 },
       "testflight": { "perAccount": 0.375, "min": 5, "max": 20 },
-      "free": { "usd": 5 },
+      "free": { "perAccount": 0.25, "min": 5, "max": 30 },
+      "new": { "usd": 5 },
       "system": { "usd": 5 }
     },
     // The weekly allowance of messages to the coach (src/coach-allowance.js): per week,
@@ -181,7 +183,7 @@
         // Testing costs at most 1 USD of AI a day, the owner included (src/ai-total.js).
         "AI_TOTAL_DAILY_ALERT_USD": "1",
         "AI_TOTAL_DAILY_LIMIT_USD": "1",
-        "AI_GROUP_BRAKES": { "paid": { "usd": 0.5 }, "gift": { "usd": 1 }, "trial": { "usd": 0.5 }, "testflight": { "usd": 0.5 }, "free": { "usd": 0.5 }, "system": { "usd": 0.5 } },
+        "AI_GROUP_BRAKES": { "paid": { "usd": 0.5 }, "gift": { "usd": 1 }, "trial": { "usd": 0.5 }, "testflight": { "usd": 0.5 }, "free": { "usd": 0.5 }, "new": { "usd": 0.5 }, "system": { "usd": 0.5 } },
         "COACH_WEEKLY_MESSAGES": "30",
         "COACH_EXTRA_MESSAGES": "2",
         "COACH_WORKOUT_CHAT_MESSAGES": "5",

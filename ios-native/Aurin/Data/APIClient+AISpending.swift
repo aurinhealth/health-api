@@ -13,7 +13,7 @@ struct AISpending: Decodable {
     let groups: [Group]
 
     struct Group: Decodable, Identifiable, Equatable {
-        /// paid, gift, trial, testflight, free or system.
+        /// paid, gift, trial, testflight, free, new or system.
         let group: String
         let spent: Double
         /// USD; nil when the group has no brake.

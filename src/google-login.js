@@ -95,7 +95,7 @@ async function finishLogin(request, env, fetchImpl = fetch) {
   await ensureTenancy(env.DB, env, { request });
   let user;
   try { user = await signInGoogleUser(env.DB, env, { sub: claims.sub, email: claims.email, name: claims.name, request }); }
-  catch (error) { if (error instanceof SignupLimited) return fail("unavailable"); throw error; }
+  catch (error) { if (error instanceof SignupLimited) return fail("too_many"); throw error; }
   if (!user) {
     console.warn("Google login denied for an account without an invitation");
     return fail("not_invited");
@@ -111,7 +111,7 @@ async function appHandoffToken(uid, challenge, secret, epoch) {
 }
 
 // A failed sign-in started by the app: back to it with a code it explains
-// (cancelled, not_invited, expired, failed, unavailable). A redirect, not a page,
+// (cancelled, not_invited, expired, failed, unavailable, too_many). A redirect, not a page,
 // so ASWebAuthenticationSession sees the loadwise:// address and closes.
 function appError(code) {
   const headers = new Headers({ Location: APP_RETURN_URL + "?error=" + encodeURIComponent(code), "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
