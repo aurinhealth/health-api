@@ -227,7 +227,7 @@ const builder = `<div class="dm pad bld">
 <div class="btn"${at('2000:press 2300-press 2300:busy')}><span class="sp1"></span>${ic('spark')}<span data-tx="0|Suggest a workout;2300|Building…">Suggest a workout</span></div>
 </div>
 <div class="stage2"${at('3900:in')}>
-<div class="sent h">Upper body</div><span class="mut s">Today · 60 min</span>
+<div class="sent h">Upper body</div><div class="sch">${['Today', '60 min', 'Upper body'].map(t => `<span>${t}<i></i></span>`).join('')}</div>
 <div class="sl">Exercises</div>
 <div class="ss">${EX.map(([nm, mu, sets, ss], i) => `<div class="ex${ss ? ' sup' : ''}"${at(String(4200 + i * 260))}><span class="num ix">${i + 1}</span><div><b>${nm}</b><span class="mut s">${mu}</span></div><span class="s sec">${sets}</span></div>`).join('')}</div>
 <div class="btn dark"${at('5900')}>${ic('check')}Save to plan</div>
@@ -706,6 +706,8 @@ html:not(.js) .tgt .fill{width:${(16.7 / 21 * 100).toFixed(1)}%}
 .btn.busy .sp1{display:block}.btn.busy>.di{display:none}.btn.press.js{transform:scale(.96)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .bld{display:grid;min-height:420px}
+/* Day · length · focus on the proposal (GymTools.swift SetupChip): each opens a menu and builds it again. */
+.sch{display:flex;gap:6px;margin-top:6px}.sch span{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:99px;background:var(--track);font-size:12px;font-weight:500}.sch i{width:5px;height:5px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-1px) rotate(45deg)}
 /* Both stages share one cell, so the box is as tall as the longer one: the workout with its Save button. */
 .stage1,.stage2{grid-area:1/1}
 .stage1{transition:opacity .4s}.stage1.gone{opacity:0!important;pointer-events:none}

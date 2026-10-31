@@ -16,6 +16,8 @@ final class SettingsStore {
     /// Health data → Reads from: the types switched off per service and what each can give.
     private(set) var readOff: [String: [String]] = [:]
     private(set) var readTypes: [String: [String]] = [:]
+    /// Per service the server reads, the types it sent in the last week (nil until loaded).
+    private(set) var sending: [String: [String]]?
     private(set) var sync: SyncStatus?
     private(set) var loaded = false
     /// The profile really came from the server. The server replaces the whole
@@ -175,6 +177,17 @@ final class SettingsStore {
             readTypes = response.readTypes ?? [:]
         }
         if let status = try? await api.syncStatus() { sync = status }
+    }
+
+    /// Loaded when Zdroje dat opens; the server works it out at most once an hour.
+    func loadSending() async {
+        guard !demo else { return }
+        if let response = try? await api.sourcesSending() { sending = response.sending ?? [:] }
+    }
+
+    /// Whether a service sent data of this type in the last week.
+    func sent(_ provider: String, _ type: String) -> Bool {
+        sending?[provider]?.contains(type) == true
     }
 
     /// Whether a service gives this type at all, and whether Aurin reads it now.

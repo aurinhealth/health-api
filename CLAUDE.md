@@ -2,70 +2,31 @@
 
 ## The website follows the app
 
-The public overview on aurin.health (`overviewPage` in `src/site-pages.js`) describes what the
-iPhone app (`ios-native/`) does today. A pull request that adds, removes or renames something a user
+The public overview on aurin.health (`overviewPage` in `src/site-pages.js`, English only) describes what
+the iPhone app (`ios-native/`) does today. A pull request that adds, removes or renames something a user
 sees in the app (a screen or section, a number on Today, a connection, sign-in, the coach, pricing or
-availability) updates the overview in the same pull request. The site is in English only:
+availability) updates the overview, its screenshots and live demos (`src/site-demos.js`, incl. the Apple
+Watch section) in the same pull request. Before touching the site, read
+[docs/website-follows-app.md](docs/website-follows-app.md) (screenshots, demos, hero, legal pages).
 
-- Each section of the overview matches a part of the app. Its phones show the app's own screens: the
-  English, light-mode screenshots of the sample day that CI takes (`ios-native.yml`: `screens/site/` and
-  the smoke test's `smoke/4-…` walk through the app, in the Aurin-screens artifact), saved as
-  `public/site/app/*.webp` (`scripts/site-screens.mjs` turns the unzipped artifact into them; the same shots in dark
-  mode become `*-dark.webp` for the site's dark look, `DARK_SITE`). The same screens
-  make the overview as images for Reddit or the App Store (`scripts/render-overview.mjs`). Beside each phone stands a live demo (`src/site-demos.js`): a piece of the
-  app rebuilt in HTML that moves (the dial turns, the rest timer counts down, the coach answers), following
-  the app's own view and the sample day. Where a screenshot can't show a step, the phone's screen is built
-  there too (strain, the finished workout, the coach). When a view a demo copies changes in the app, change
-  the demo in the same pull request. The Apple Watch section (`WATCH` in `src/site-demos.js`) rebuilds the watch app's screens in HTML, since CI takes no watch screenshots; change it with the watch views. The hero shows Today; below it one chapter per app area, whose steps
-  take turns on the phone. The muscles show the app's 3D figure, rendered ahead by
-  `scripts/render-muscles-site.mjs` (the licensed model never goes on the website). When a screen
-  they show changes, take them again; the numbers around the hero phone follow the sample day
-  (`DemoData.swift`, `tests/site-pages.test.mjs`).
-- The site shows only the sample day, never anyone's real data (the "From a real day" cards were dropped on
-  2026-10-29).
-- Colours come from the light palette in `ios-native/Shared/Palette.swift`.
-- After changing the hero, render the share image `public/site/og-en.jpg` (1200×630) again.
-- The privacy policy and the terms also have a Czech version (`/cs/privacy`, `/cs/terms`; the old `?lang=cs` redirects there; linked from the page and the
-  footer) that says the same as the English one; change both together.
-- The privacy, terms and support pages are legal texts that Google verification reads: change them only
-  when the way data is handled changes. The Google Health disclosure stays word for word
-  (`googleDisclosure` in `src/site-pages.js`, `tests/site-pages.test.mjs`) and names every optional Google
-  permission the app asks for. It goes on the overview only while Google verifies the app (`GOOGLE_DISCLOSURE_ON_HOME`); verification was submitted on 2026-10-25.
-- The app and the site are only Aurin on aurin.health. petrfitnessdata.eu (the old address) only redirects
-  there; the bundle IDs `eu.petrfitnessdata.*` cannot change and are never shown as a name.
-
-The "Website copy" workflow flags app pull requests that leave the overview untouched.
+- The site shows only the sample day, never anyone's real data.
+- The privacy, terms and support pages are legal texts for Google verification: change them only when
+  data handling changes; Czech and English versions change together; the Google Health disclosure stays
+  word for word.
+- The app and the site are only Aurin on aurin.health. petrfitnessdata.eu only redirects there; the
+  bundle IDs `eu.petrfitnessdata.*` cannot change and are never shown as a name.
 
 ## TestFlight notes
 
-Every build in TestFlight gets "What to Test" from the descriptions of the pull requests it contains
-(`.github/scripts/testflight_notes.py`), in Czech for the app's Czech TestFlight information and in English
-for English (U.S.). A pull request that changes `ios-native/` therefore carries this section in its
-description, written for a tester in Czech and then the same points in English, without PR numbers, file or
-type names:
-
-```
-## TestFlight
-**Co je nového**
-- What changed, as the user sees it in the app (one line each).
-**Co otestovat**
-- Concrete steps in the app: where to tap and what should happen.
-**What's new**
-- The same lines in English.
-**What to test**
-- The same steps in English.
-```
-
-When nothing changes for a tester (a refactor, a build fix), the section says "Nic k otestování" (both
-languages then get a stock line). The
-"TestFlight notes" workflow fails a pull request without a usable section; editing the description re-runs it.
+A pull request that changes `ios-native/` carries a `## TestFlight` section in its description (Czech,
+then English; "Nic k otestování" when nothing changes for a tester). CI fails without it. Format in
+[docs/testflight-notes.md](docs/testflight-notes.md).
 
 ## AI prompt texts are private
 
-The texts the server sends to the AI models (the coach, food lookup and photos, week planning, gym, reviews)
-live in the private repository `shaarkyn/aurin-prompts`, checked out to `src/private` (gitignored):
-`git clone https://github.com/shaarkyn/aurin-prompts src/private`. The modules in `src/` import them from
-`./private/<same file name>`; CI checks the repository out with the `PROMPTS_REPO_TOKEN` secret before tests and
-the deploy. Change prompt texts with a pull request to `aurin-prompts`, never back in this public repository. A
-change that needs both repositories merges `aurin-prompts` first; a change to `aurin-prompts` alone goes live by
-running "Deploy Cloudflare Worker" on `main` (workflow_dispatch).
+The texts the server sends to the AI models live in the private repository `shaarkyn/aurin-prompts`,
+checked out to `src/private` (gitignored): `git clone https://github.com/shaarkyn/aurin-prompts src/private`.
+Modules in `src/` import them from `./private/<same file name>`. Change prompt texts only with a pull
+request to `aurin-prompts`, never in this public repository. A change that needs both repositories merges
+`aurin-prompts` first; an `aurin-prompts`-only change goes live by running "Deploy Cloudflare Worker" on
+`main` (workflow_dispatch).

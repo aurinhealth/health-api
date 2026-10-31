@@ -94,8 +94,15 @@ struct InsightsView: View {
         return list.filter { key, _ in (cardio[key] ?? nil)?.change?.values.contains { $0?.value != nil } == true }
     }
 
+    /// The sports with records. Plavání stays once there is any record, even
+    /// before the first pool swim, so a swimmer sees where it will be (Petr 2026-10-30).
     private func sports(_ insights: FitnessInsights) -> [Sport] {
-        Sport.allCases.filter { $0 == .gym ? !lifts(insights).isEmpty : !metrics(insights, $0).isEmpty }
+        let found = Sport.allCases.filter { $0 == .gym ? !lifts(insights).isEmpty : $0 == .swim ? hasSwim(insights) : !metrics(insights, $0).isEmpty }
+        return found.isEmpty || found.contains(.swim) ? found : Sport.allCases.filter { $0 == .swim || found.contains($0) }
+    }
+
+    private func hasSwim(_ insights: FitnessInsights) -> Bool {
+        !metrics(insights, .swim).isEmpty || !(insights.estimates?.swim?.best ?? []).isEmpty
     }
 
     @ViewBuilder
@@ -114,6 +121,8 @@ struct InsightsView: View {
             Text("Rekordy tu uvidíš po prvních trénincích.").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 20)
         } else if current == .gym {
             gym(insights)
+        } else if current == .swim && !hasSwim(insights) {
+            swimEmpty
         } else {
             focusCard(insights)
             if current == .run { runEstimates(insights) } else if current == .ride { rideEstimates(insights) } else { swimBests(insights) }
@@ -309,6 +318,27 @@ struct InsightsView: View {
                 }
             }
             .padding(.top, 8)
+        }
+    }
+
+    /// Plavání before the first pool swim: the rows it will fill, empty.
+    private var swimEmpty: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionLabel(text: "Nejlepší časy").padding(.top, 24)
+            Card {
+                ForEach(Array(["100 m", "200 m", "400 m", "Nejdelší plavání"].enumerated()), id: \.offset) { index, title in
+                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                    HStack {
+                        Text(L10n.tr(title)).font(Typo.body).foregroundStyle(Palette.ink)
+                        Spacer(minLength: 8)
+                        Text(verbatim: "–").font(Typo.number(20)).foregroundStyle(Palette.faint)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+            .padding(.top, 8)
+            Text("Zatím žádné plavání v bazénu. První plavání z Apple Watch nebo Garminu sem doplní časy.")
+                .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 8).fixedSize(horizontal: false, vertical: true)
         }
     }
 

@@ -174,6 +174,7 @@ import { hideActivity, mergeActivities, setActivityTime, undoActivityChange } fr
 import { loadThresholdSessions } from "./threshold-check-state.js";
 import { performanceTrends, intervalsCurves, recentIntervals, swimBests } from "./performance-trends.js";
 import { saveReadOff } from "./source-reading.js";
+import { readSending } from "./source-sending.js";
 // The largest request body the coach route reads (POST /app/api/assistant).
 const ASSISTANT_REQUEST_CHARS=64000;
 // One photo with a message: a JPEG the app has made smaller, as a data URL.
@@ -2326,6 +2327,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     return Response.json(result,{status:result.code||200,headers:{'Cache-Control':'no-store'}});
   }
   // One Reads from switch under Zdroje dat → Health data (source-reading.js); GET is connections' readOff.
+  // Which services sent each type in the last week: the counts under Zdroje dat → Health data (source-sending.js).
+  if (url.pathname === '/app/api/sources/sending' && request.method === 'GET') {
+    if (!session.signedIn) return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    return Response.json(await readSending(env.DB,env.USER_ID),{headers:{'Cache-Control':'no-store'}});
+  }
   if (url.pathname === '/app/api/sources/reading' && request.method === 'POST') {
     if (!session.signedIn) return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if (request.headers.get('Origin') !== url.origin) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
@@ -2802,6 +2808,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try {
       assertTrainingAllowed(await getAthleteState(env.DB));
       const prefs=await getWeekPlan(env.DB,day);
+      // "Workout: upper body" from Svaly: the athlete's usual length, but no
+      // longer than the free time saved for the day (a guessed 'auto' week
+      // does not cap it, and under 30 minutes the tap itself is the choice).
+      if (body?.autoLength === true) {
+        const usual = Math.round(Number(body.usualMinutes)) || 60;
+        const free = prefs?.availabilityMode === 'auto' ? null : Number(availabilityOn(prefs, day).minutes);
+        body.durationMinutes = Math.max(30, Math.min(120, free >= 30 ? Math.min(usual, free) : usual));
+      }
+      delete body.autoLength; delete body.usualMinutes;
       if (body?.durationMinutes == null) {
         const chip = targetFor(await computeWeekTargets(env, ctx, mondayOfDate(day), prefs).catch(() => null), day, "gym");
         if (chip) { body.durationMinutes = chip.minutes; if (chip.role === "gym_upper" && !body?.focus && !body?.focusMuscles && !body?.forceProtectLegs) { body.focus = "upper"; body.focusSource = "week"; } }
@@ -2822,6 +2837,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const draft={kind:'gym_preview',plan:data.plan,minutes:body.durationMinutes||60,startTime:body.startTime||null};
       const saved=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'gym',L('Návrh z týdenního plánu', 'Proposal from the week plan'),JSON.stringify(draft)).run();
       data.draftId=saved.meta?.last_row_id;
+      data.minutes=draft.minutes;
       data.muscles=Object.fromEntries([...new Set(data.plan.rows.map(r=>r?.[1]).filter(Boolean))].map(name=>[name,exerciseMuscles(name)]));
     }
     return Response.json(data,{status:response.status,headers:{"Cache-Control":"no-store"}});
@@ -2876,7 +2892,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // nothing is eaten on a past day any more. They fit meals to the day's
       // calorie target and food log read here (before the energy budget below,
       // as /analysis/energy gives it), instead of computing the day again.
-      const known = reads.then(([d, f]) => d.ok && f.ok ? { energy: { final: { calorieTarget: Number(profile?.kcalGoal) > 0 ? Number(profile.kcalGoal) : d.body.calories?.target ?? null, estimatedTDEE: d.body.calories?.estimatedTDEE ?? null, macroTargets: d.body.nutrition?.macros ?? null, diet: d.body.nutrition?.diet ?? null }, energyProfile: { missing: d.body.nutrition?.missing || [] } }, food: f.body } : null);
+      const known = lite ? null : reads.then(([d, f]) => d.ok && f.ok ? { energy: { final: { calorieTarget: Number(profile?.kcalGoal) > 0 ? Number(profile.kcalGoal) : d.body.calories?.target ?? null, estimatedTDEE: d.body.calories?.estimatedTDEE ?? null, macroTargets: d.body.nutrition?.macros ?? null, diet: d.body.nutrition?.diet ?? null }, energyProfile: { missing: d.body.nutrition?.missing || [] } }, food: f.body } : null);
       const dayOf = daily => ({
         date,
         gymCancelled:cancelledGym.has(date),

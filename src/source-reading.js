@@ -8,7 +8,7 @@
 const NAME = 'read_off';
 
 // The app's types (HealthCategory in AppleHealth.swift) by the data types each service writes.
-const TYPES = {
+export const TYPES = {
   sleep: ['sleep', 'daily-sleep-temperature-derivations', 'daily-skin-temperature-deviation'],
   heart: ['heart-rate', 'time-in-heart-rate-zone', 'daily-heart-rate-zones', 'daily-vo2-max'],
   hrv: ['heart-rate-variability', 'daily-heart-rate-variability'],

@@ -26,6 +26,10 @@ final class GymWorkout: NSObject, ObservableObject {
     private var lastLive = Date.distantPast
 
     func begin() async {
+        // The iPhone hears of the start at once (Training mode opens there),
+        // not only with the first heart rate.
+        // Only with a HealthKit workout here: the iPhone then leaves Apple Health to it.
+        defer { if session != nil { sendLive(force: true) } }
         guard session == nil, HKHealthStore.isHealthDataAvailable() else {
             if start == nil { start = Date() }
             return
@@ -145,13 +149,27 @@ final class GymWorkout: NSObject, ObservableObject {
 
     /// Every few seconds to Training mode on the iPhone, which then shows these
     /// and leaves Apple Health to this workout (WatchGym.Live).
-    private func sendLive() {
-        guard let start, Date().timeIntervalSince(lastLive) >= 5, WCSession.isSupported() else { return }
+    private func sendLive(force: Bool = false) {
+        guard let start, force || Date().timeIntervalSince(lastLive) >= 5, WCSession.isSupported() else { return }
         let session = WCSession.default
         guard session.activationState == .activated, session.isReachable,
               let data = WatchGym.Live(start: start, heartRate: heartRate, calories: calories).encoded() else { return }
         lastLive = Date()
         session.sendMessage([WatchGym.liveKey: data], replyHandler: { _ in }, errorHandler: { _ in })
+    }
+
+    /// Finished here (the summary's Finish): Training mode on the iPhone ends
+    /// too, queued for when the iPhone is out of reach.
+    func endOnPhone() {
+        guard WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated else { return }
+        let message: [String: Any] = [WatchGym.watchEndKey: true]
+        if session.isReachable {
+            session.sendMessage(message, replyHandler: { _ in }, errorHandler: { _ in WCSession.default.transferUserInfo(message) })
+        } else {
+            session.transferUserInfo(message)
+        }
     }
 
     /// The system ended the session (another workout started, an error): the

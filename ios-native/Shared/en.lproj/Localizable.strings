@@ -3479,6 +3479,8 @@
 "Začneme krátkými délkami a technikou v bazénu. Pár lekcí s trenérem plavání ti pomůže nejvíc." = "We start with short lengths and technique in the pool. A few lessons with a swimming coach will help you most.";
 "Dny plavání" = "Swimming days";
 "Nejlepší časy za 12 měsíců" = "Best times in the last 12 months";
+"Nejlepší časy" = "Best times";
+"Zatím žádné plavání v bazénu. První plavání z Apple Watch nebo Garminu sem doplní časy." = "No pool swims yet. Your first swim from Apple Watch or Garmin fills these in.";
 "Třeba „rozplavání 300 m, 8× 100 m na prahu s 20 s pauzou, vyplavání 200 m“" = "E.g. “300 m warm-up, 8× 100 m at threshold with 20 s rest, 200 m cool-down”";
 "Kolo %@×, běh %@× a plavání %@× týdně. Dny rozdělím podle času, který v týdnu máš." = "Riding %@×, running %@× and swimming %@× a week. I'll spread the days by the time you have in the week.";
 "Odhad: %@." = "Estimate: %@.";
@@ -3543,3 +3545,4 @@
 "Změna e-mailu potřebuje krátké ověření." = "Changing the email needs a quick check.";
 "Nový způsob přihlášení potřebuje krátké ověření." = "Adding a new way to sign in needs a quick check.";
 "Nejdřív potvrď, že jsi to ty." = "Confirm it's you first.";
+"Žádná data za 7 dní" = "No data in 7 days";
