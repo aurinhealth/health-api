@@ -8,6 +8,8 @@ import { healthPointJson } from '../src/health-point-json.js';
 import { importIntervalsWeights } from '../src/weight-sync.js';
 import { KEEP_TYPE_SQL } from '../src/activity-type.js';
 import { BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE } from '../src/heart-rate-compaction.js';
+import { closedDay } from '../src/api-cache.js';
+import { localDate, localToday } from '../src/user-time.js';
 
 const source = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
 const schema = readFileSync(new URL('../staging/schema.sql', import.meta.url), 'utf8');
@@ -17,14 +19,14 @@ function setup() {
   const raw = createD1();
   raw.sqlite.exec(schema);
   const env = { DB: scopedDb(raw, 1), USER_ID: 1 };
-  const afterSync = [], sinces = [];
-  const context = vm.createContext({ healthPointJson, BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE, KEEP_TYPE_SQL, crypto, googleInfo: (_type, p) => p.info, afterGoogleSync: async (_env, type, _points, opts) => { afterSync.push(type); sinces.push(opts?.since); return 0; } });
+  const afterSync = [], sinces = [], bumps = [];
+  const context = vm.createContext({ closedDay, localDate, localToday, bumpCacheVersion: async () => { bumps.push(1); }, healthPointJson, BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE, KEEP_TYPE_SQL, crypto, googleInfo: (_type, p) => p.info, afterGoogleSync: async (_env, type, _points, opts) => { afterSync.push(type); sinces.push(opts?.since); return 0; } });
   for (const [start, end] of [
     ['function pointStatement(', '// GOOGLE NUTRITION API'],
     ['async function saveGooglePointsBatch(', 'async function syncGoogleRecent(']
   ]) vm.runInContext(source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start))), context);
   const point = (values = {}, user = env) => context.pointStatement(user, 'google-wearables', 'steps', values.payload ?? { steps: { count: 12 } }, values.value ?? 12, values.unit ?? 'steps', values.sample ?? '2026-10-10T12:00:00Z', values.start ?? null, values.end ?? null, 'sample-1');
-  return { raw, env, context, point, afterSync, sinces };
+  return { raw, env, context, point, afterSync, sinces, bumps };
 }
 
 test('identical samples write zero rows and preserve update time and activity matching', async () => {
@@ -111,6 +113,23 @@ test('choosing the source again runs only after a Google page changed a row', as
   points[2].info = { sample: '2026-10-09T09:00:00Z', start: null, end: null, value: 8, unit: 'steps' };
   await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', points);
   assert.deepEqual(sinces, ['2026-10-10', '2026-10-10', '2026-10-08T09']);
+});
+
+test('a changed row on a closed day makes the cached days outdated; today and yesterday do not', async () => {
+  const { env, context, bumps } = setup();
+  const day = n => new Date(Date.parse(localToday() + 'T12:00:00Z') - n * 86400000).toISOString().slice(0, 10);
+  const points = [{ name: 'today', info: { sample: day(0) + 'T09:00:00Z', start: null, end: null, value: 1, unit: 'steps' } }, { name: 'yesterday', info: { sample: day(1), start: null, end: null, value: 1, unit: 'steps' } }];
+  await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', points);
+  assert.equal(bumps.length, 0);
+  // Unchanged rows of an old day: nothing is written, nothing outdated.
+  const old = [{ name: 'old', info: { sample: day(5), start: null, end: null, value: 3, unit: 'steps' } }];
+  await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', old);
+  assert.equal(bumps.length, 1);
+  await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', old);
+  assert.equal(bumps.length, 1);
+  old[0].info = { sample: day(3) + 'T10:00:00Z', start: null, end: null, value: 4, unit: 'steps' };
+  await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', old);
+  assert.equal(bumps.length, 2);
 });
 
 test('Intervals weight import skips identical weights and retains corrections', async () => {

@@ -22,6 +22,7 @@ import { heldMerges, mergedSpan, sourcesOf } from "./workout-merge.js";
 import { afterGoogleSync, flushGoogleSync } from "./apple-health.js";
 import { pickBuckets, BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE, HEART_RATE_HOUR_TYPE } from "./heart-rate-compaction.js";
 import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
+import { bumpCacheVersion, closedDay } from "./api-cache.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { markConnectionBroken, markConnectionOk, isGoogleAuthFailure, isIntervalsAuthFailure } from "./connection-health.js";
 import { manualPairs } from "./manual-pairs.js";
@@ -963,6 +964,9 @@ async function saveGooglePointsBatch(env, family, type, points, { raw = false } 
   // Only when a row changed: the recent sync reads the same two days every
   // 5 minutes, and choosing the source again read ~1 B rows a day for nothing.
   if(changed)await afterGoogleSync(env, type, points, {since:oldest});
+  // A changed row on a closed day (a late upload, the nightly look back): the
+  // days kept in the cache (api-cache.js closedDay) are read again.
+  if(changed&&oldest&&closedDay(/T\d{2}$/.test(oldest)?localDate(oldest+':00:00Z'):oldest,localToday()))await bumpCacheVersion(env.DB);
   return points.length;
 }
 // Google heart rate arrives as a sample every few seconds (~36k a day). Written
