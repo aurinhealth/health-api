@@ -57,14 +57,16 @@ struct GymSessionView: View {
             }
             .toolbar {
                 if !summary, workout.pausedAt == nil, restEnd.map({ $0 > now }) != true, store.gym?.allDone != true {
-                    ToolbarItem(placement: .topBarLeading) {
+                    // In the cover's own corner: at .topBarLeading the cover's ✕
+                    // took its place (and closed the screen with the workout running).
+                    ToolbarItem(placement: .cancellationAction) {
                         Button { workout.pause() } label: { Image(systemName: "pause.fill") }
                             .accessibilityLabel(W.tr("Pauza", "Pause"))
                     }
                 }
                 if !summary, restEnd.map({ $0 > now }) == true {
                     // The coach during the rest: it knows the workout is on.
-                    ToolbarItem(placement: .topBarLeading) {
+                    ToolbarItem(placement: .cancellationAction) {
                         Button { coachOpen = true } label: { Image(systemName: "bubble.left.and.text.bubble.right") }
                             .accessibilityLabel(W.tr("Kouč", "Coach"))
                     }
@@ -140,6 +142,7 @@ struct GymSessionView: View {
         let ex = gym.exercises[e]
         return ScrollView {
             VStack(alignment: .leading, spacing: 6) {
+                statusLine
                 Text(ex.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(W.ink)
                     .lineLimit(1).minimumScaleFactor(0.7)
                 // − set 2/4 +: one set fewer or one more of this exercise (mockup 20).
@@ -236,16 +239,36 @@ struct GymSessionView: View {
         }
     }
 
+    /// The time and the heart rate at a glance, on the set and in the rest.
+    private var statusLine: some View {
+        HStack(spacing: 8) {
+            clock.font(.system(size: 13, weight: .semibold).monospacedDigit()).foregroundStyle(W.ink)
+            HStack(spacing: 3) {
+                Image(systemName: "heart.fill").font(.system(size: 10))
+                Text(workout.heartRate.map { W.number($0) } ?? "–")
+                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
+            }
+            .foregroundStyle(W.pink)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(W.tr("Tep", "Heart rate"))
+            Spacer(minLength: 0)
+        }
+        .lineLimit(1)
+    }
+
+    /// The workout's time, running on its own.
+    @ViewBuilder private var clock: some View {
+        if let start = workout.clockStart {
+            Text(timerInterval: start...Date.distantFuture, countsDown: false)
+        } else {
+            Text("0:00")
+        }
+    }
+
     private var timeCell: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(W.tr("Čas", "Time")).font(.system(size: 10)).foregroundStyle(W.secondary)
-            Group {
-                if let start = workout.clockStart {
-                    Text(timerInterval: start...Date.distantFuture, countsDown: false)
-                } else {
-                    Text("0:00")
-                }
-            }
+            clock
             .font(.system(size: 17, weight: .semibold).monospacedDigit()).foregroundStyle(W.ink)
             .lineLimit(1).minimumScaleFactor(0.7)
         }
@@ -344,6 +367,7 @@ struct GymSessionView: View {
         let lift = gym.flatMap { currentLift(in: $0) }
         return ScrollView {
             VStack(spacing: 6) {
+                statusLine
                 HStack(spacing: 8) {
                     ZStack {
                         Circle().stroke(W.track, lineWidth: 5)
