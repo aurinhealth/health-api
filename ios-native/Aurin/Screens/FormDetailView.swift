@@ -59,7 +59,10 @@ struct FormDetailContent: View {
                 HStack(alignment: .bottom, spacing: 16) {
                     Text(Fmt.decimal(vo2.value, digits: vo2.value.rounded() == vo2.value ? 0 : 1)).font(Typo.number(56)).foregroundStyle(Palette.ink)
                     let values = vo2.series.map(\.value)
-                    LineChart(values: values, color: Palette.green, lo: (values.min() ?? 40) - 1, hi: (values.max() ?? 50) + 1, fill: true, height: 56)
+                    VStack(spacing: 6) {
+                        LineChart(values: values, color: Palette.green, lo: (values.min() ?? 40) - 1, hi: (values.max() ?? 50) + 1, fill: true, height: 56)
+                        ChartSpan(start: L10n.tr("před půl rokem"))
+                    }
                 }
                 .padding(.top, 10)
             }
@@ -98,22 +101,22 @@ struct WeeklyLoadChart: View {
 
     var body: some View {
         let values = weeks.map { max($0.load, $0.planned ?? 0) }
+        let top = max(values.max() ?? 1, 1)
         VStack(alignment: .leading, spacing: 10) {
+            Text("TSS za týden").font(Typo.caption).foregroundStyle(Palette.muted)
             BarChart(values: values,
                      styles: weeks.indices.map { i in
                          i == weeks.count - 1 && (weeks[i].planned ?? 0) > weeks[i].load ? BarStyle(fill: Palette.amberBar, dashed: true) : BarStyle(fill: i == weeks.count - 1 ? Palette.amberBar : Palette.amberBar.opacity(0.55))
                      },
-                     hi: max(values.max() ?? 1, 1),
+                     hi: top,
                      labels: weeks.map { String($0.week) },
                      highlighted: weeks.count - 1,
                      spacing: 8,
-                     height: 96)
-            HStack(spacing: 14) {
-                Text("TSS za týden").font(Typo.caption).foregroundStyle(Palette.muted)
-                if let current = weeks.last {
-                    Text(current.planned.flatMap { $0 > current.load ? L10n.f("tento týden %@ z %@", Fmt.int(current.load), Fmt.int($0)) : nil } ?? L10n.f("tento týden %@", Fmt.int(current.load)))
-                        .font(Typo.caption).foregroundStyle(Palette.faint)
-                }
+                     height: 96,
+                     scale: scaleTicks(0, top, count: 3))
+            if let current = weeks.last {
+                Text(current.planned.flatMap { $0 > current.load ? L10n.f("tento týden %@ z %@", Fmt.int(current.load), Fmt.int($0)) : nil } ?? L10n.f("tento týden %@", Fmt.int(current.load)))
+                    .font(Typo.caption).foregroundStyle(Palette.faint)
             }
         }
     }

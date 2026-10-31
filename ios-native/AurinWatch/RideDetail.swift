@@ -173,7 +173,7 @@ struct RideDetail: View {
             Spacer()
             Text("\(total)")
         }
-        .font(.system(size: 9))
+        .font(.system(size: 10))
         .foregroundStyle(W.muted)
     }
 
