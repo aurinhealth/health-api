@@ -207,11 +207,17 @@ struct SettingsSectionTiles: View {
 }
 
 /// Deník: on or off (the Zdraví card, the morning sheet and the coach's view
-/// of it), the morning questions, and what it follows.
+/// of it), the morning questions, what it follows, and whether the coach sees
+/// the sensitive items (with their own consent, GDPR art. 9).
 struct JournalSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var enabled = JournalSwitch.isOn
     @State private var askMorning = true
+    @State private var shareSensitive = false
+    @State private var askingConsent = false
+    @State private var appleSex = JournalSwitch.tracksSex
+    @State private var askingSexConsent = false
+    @State private var failure: String?
     @State private var tracked: Int?
     @State private var tracking = false
 
@@ -238,9 +244,34 @@ struct JournalSettingsView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                SettingsGroup(title: "Apple Health", footer: "Vyplní v deníku Sex. Zůstane v Aurinu a do AI nejde.") {
+                    SettingsToggle(title: "Sexuální aktivita", isOn: Binding(get: { appleSex }, set: { on in
+                        if on { askingSexConsent = true; return }
+                        // Off stops reading at once; the server deletes what it has.
+                        appleSex = false
+                        JournalSwitch.remember(appleSex: false)
+                        Task { await setAppleSex(false) }
+                    }))
+                }
+                SettingsGroup(title: "AI kouč", footer: "Náladu, úzkost, konopí, CBD a léky kouč nevidí, dokud tohle nezapneš. Sex nevidí nikdy.") {
+                    SettingsToggle(title: "Citlivé položky", isOn: Binding(get: { shareSensitive }, set: { on in
+                        if on { askingConsent = true; return }
+                        shareSensitive = false
+                        Task { if !(await save(["shareSensitive": .bool(false)])) { await load() } }
+                    }))
+                }
             }
+            if let failure { Text(failure).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true) }
         }
         .sheet(isPresented: $tracking, onDismiss: { Task { await load() } }) { JournalEditorView() }
+        .sheet(isPresented: $askingConsent) {
+            JournalSensitiveConsentSheet {
+                Task { if await save(["shareSensitive": .bool(true)]) { shareSensitive = true } }
+            }
+        }
+        .sheet(isPresented: $askingSexConsent) {
+            AppleSexConsentSheet { Task { await setAppleSex(true) } }
+        }
         .task { await load() }
     }
 
@@ -252,13 +283,80 @@ struct JournalSettingsView: View {
         guard let catalog = try? await model.api.journalCatalog() else { return }
         enabled = catalog.enabled ?? true
         askMorning = catalog.askMorning ?? true
+        shareSensitive = catalog.shareSensitive ?? false
+        appleSex = catalog.appleSex ?? false
         tracked = catalog.pinned.count
         JournalSwitch.remember(catalog.enabled)
     }
 
-    private func save(_ body: JSONObject) async {
-        guard !model.demo else { return }
-        try? await model.api.setJournalOptions(body)
+    /// Whether the server stored it; if not, the reason is shown under the switches.
+    @discardableResult
+    private func save(_ body: JSONObject) async -> Bool {
+        guard !model.demo else { return true }
+        do {
+            try await model.api.setJournalOptions(body)
+            failure = nil
+            return true
+        } catch {
+            failure = error.localizedDescription
+            return false
+        }
+    }
+
+    /// The phone reads and sends sexual activity only once the server holds
+    /// the consent (it decides what it keeps, src/apple-health.js). Turned
+    /// on, the last 90 days are read again; turned off and not saved, the
+    /// switch shows what the server still has.
+    private func setAppleSex(_ on: Bool) async {
+        guard await save(["appleSex": .bool(on)]) else {
+            if !on { await load() }
+            return
+        }
+        appleSex = on
+        JournalSwitch.remember(appleSex: on)
+        if on, !model.demo { await AppleHealth.shared.readSexHistory(api: model.api) }
+    }
+}
+
+/// What the coach gets from the sensitive journal items (src/routes-journal.js
+/// journalForCoach) and the explicit consent (GDPR art. 9), like the cycle's.
+struct JournalSensitiveConsentSheet: View {
+    let accept: () -> Void
+
+    var body: some View {
+        ConsentSheet(title: "Kouč vidí citlivé položky",
+                     lead: "Tvoje odpovědi o náladě, úzkosti, konopí, CBD a lécích pomohou kouči vysvětlit tvou regeneraci.",
+                     legal: "Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich předáním AI kouči (OpenAI, USA). Kdykoli ho vypneš a kouč je přestane dostávat.",
+                     accept: accept) {
+            ConsentSection("Co tím získáš")
+            ConsentPoint("Rady, které počítají s léky, které bereš")
+            ConsentPoint("Jasnější důvod, proč se připravenost změnila")
+            ConsentSection("Co kouč uvidí")
+            ConsentPoint("Včerejší odpovědi u těchto položek a jak působí na připravenost")
+            ConsentPoint("Starší záznamy", included: false)
+            ConsentSection("Které položky")
+            Text("Nálada, Úzkost, Konopí, CBD a všechno v Lécích. Sex kouč neuvidí nikdy.").font(.body).foregroundStyle(Palette.secondary)
+                .fixedSize(horizontal: false, vertical: true).padding(.vertical, 5)
+        }
+    }
+}
+
+/// Sexual activity from Apple Health (HealthReader.sexualActivity): what it
+/// fills in and its own explicit consent (sex life, GDPR art. 9). It never
+/// goes to the AI coach (src/journal-catalog.js NEVER_TO_AI).
+struct AppleSexConsentSheet: View {
+    let accept: () -> Void
+
+    var body: some View {
+        ConsentSheet(title: "Sexuální aktivita z Apple Health",
+                     lead: "Vyplní v deníku položku Sex a ukáže, jak působí na tvou připravenost.",
+                     legal: "Jde o údaj o sexuálním životě (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jeho zpracováním. Kdykoli ho vypneš a uložené údaje smažeme.",
+                     accept: accept) {
+            ConsentPoint("Jedna hodnota za den: ano, nebo ne")
+                .padding(.top, 14)
+            ConsentPoint("Zůstane v Aurinu")
+            ConsentPoint("Do AI kouče nejde nikdy", included: false)
+        }
     }
 }
 

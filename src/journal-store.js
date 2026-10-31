@@ -14,7 +14,7 @@ import { drinkFromFoodEntry, hydrationMl, hydrationTarget } from "./fluids.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { localDateTime } from "./user-time.js";
-import { JOURNAL } from "./apple-health.js";
+import { JOURNAL, deleteSexualActivity } from "./apple-health.js";
 import { L } from "./lang.js";
 
 export const MOOD = "mood";
@@ -45,6 +45,14 @@ function normalizeSettings(raw) {
     // Deník is on for everyone until they turn it off (Nastavení → Deník).
     enabled: s.enabled !== false,
     askMorning: s.askMorning !== false,
+    // The AI coach sees the sensitive items (journal-catalog.js isSensitive)
+    // only after the consent sheet; sensitiveAt is when it was given.
+    shareSensitive: s.shareSensitive === true,
+    sensitiveAt: s.shareSensitive === true && typeof s.sensitiveAt === "string" ? s.sensitiveAt : null,
+    // Sexual activity from Apple Health fills in Sex only after its own
+    // consent (sex life, GDPR art. 9); appleSexAt is when it was given.
+    appleSex: s.appleSex === true,
+    appleSexAt: s.appleSex === true && typeof s.appleSexAt === "string" ? s.appleSexAt : null,
     // "Vždy ne" / "Vždy ano": the answer filled in every day from `since` on
     // where the day's data says nothing.
     fixed: Object.fromEntries(Object.entries(s.fixed && typeof s.fixed === "object" ? s.fixed : {})
@@ -92,12 +100,22 @@ export function pinnedItems(settings) {
   return settings.pinned.map(k => findItem(settings, k)).filter(Boolean);
 }
 
-// {enabled, askMorning}: Nastavení → Deník.
+// {enabled, askMorning, shareSensitive, appleSex}: Nastavení → Deník.
 export async function setJournalOptions(db, options) {
   const settings = await getJournalSettings(db);
   const next = { ...settings };
   if (typeof options?.enabled === "boolean") next.enabled = options.enabled;
   if (typeof options?.askMorning === "boolean") next.askMorning = options.askMorning;
+  if (typeof options?.appleSex === "boolean") {
+    next.appleSexAt = options.appleSex ? (settings.appleSex && settings.appleSexAt) || new Date().toISOString() : null;
+    next.appleSex = options.appleSex;
+    // Withdrawn: what Apple Health gave goes now, not at the next sync.
+    if (!options.appleSex) await deleteSexualActivity(db, db.userId).run();
+  }
+  if (typeof options?.shareSensitive === "boolean") {
+    next.sensitiveAt = options.shareSensitive ? (settings.shareSensitive && settings.sensitiveAt) || new Date().toISOString() : null;
+    next.shareSensitive = options.shareSensitive;
+  }
   return saveJournalSettings(db, next);
 }
 

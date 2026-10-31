@@ -55,6 +55,7 @@ const DAILY = {
 };
 // One value a day for Deník (journal-store.js autoDays); the night's noise
 // on the day of waking up, the time-zone change in hours (+ east, − west).
+export const SEXUAL_ACTIVITY = "daily-sexual-activity";
 export const JOURNAL = {
   "daily-mindful-minutes": ["dailyMindfulMinutes", "minutes", "min", 0, 1440],
   "daily-daylight-minutes": ["dailyDaylightMinutes", "minutes", "min", 0, 1440],
@@ -338,18 +339,43 @@ export const appleBodyTooLarge = request => Number(request.headers.get("Content-
 // Apple rows of that type in the window it did not send were deleted on the phone.
 // A window with none of its type sent, or one that would delete most of what
 // it holds, deletes nothing.
+// Settings → Journal → Sexual activity (journal-store.js setJournalOptions):
+// one row by key. No journal yet means no consent.
+async function appleSexConsent(db, userId) {
+  try {
+    const row = await db.prepare("SELECT json_extract(settings_json, '$.appleSex') AS consent FROM journal_settings WHERE user_id = ?").bind(userId).first();
+    return row?.consent === 1 || row?.consent === true;
+  } catch {
+    return false;
+  }
+}
+
+// Deletes the sexual activity stored from Apple Health (consent withdrawn).
+export const deleteSexualActivity = (db, userId) =>
+  db.prepare(`DELETE FROM health_datapoints WHERE user_id = ? AND source_family = '${SOURCE}' AND data_type = ?`).bind(userId, SEXUAL_ACTIVITY);
+
 export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() } = {}) {
   const input = Array.isArray(body.records) ? body.records : [];
   if (input.length > MAX_RECORDS) return { status: "error", code: 413, message: "Too many records in one request." };
-  const rows = input.map(r => appleRow(r, now)).filter(Boolean);
+  // Sexual activity only with its own consent in Nastavení → Deník, as the
+  // server stored it (not what the app says); otherwise it is not kept and
+  // what came before goes.
+  const keepSex = await appleSexConsent(db, userId);
+  const rows = input.map(r => appleRow(r, now)).filter(row => row && (keepSex || row.data_type !== SEXUAL_ACTIVITY));
   const statements = rows.map(row => upsert(db, userId, row));
+  if (!keepSex) statements.push(deleteSexualActivity(db, userId));
   // Rows really written: the upsert leaves a row that did not change alone.
   let changed = 0;
   const written = [];
   // 200 statements a round trip: a first sync of 1500 records is 8 batches, not 30.
   for (let i = 0; i < statements.length; i += 200) {
     const results = await db.batch(statements.slice(i, i + 200)) || [];
-    results.forEach((result, j) => { const n = Number(result?.meta?.changes || 0); changed += n; if (n) written.push(rows[i + j]); });
+    results.forEach((result, j) => {
+      const n = Number(result?.meta?.changes || 0);
+      changed += n;
+      // The last statement may be the sexual-activity delete, which has no row.
+      if (n && rows[i + j]) written.push(rows[i + j]);
+    });
   }
 
   let removed = 0;

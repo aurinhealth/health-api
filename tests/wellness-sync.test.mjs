@@ -54,6 +54,10 @@ test("one pass writes to Intervals.icu, remembers, and does not repeat", async (
   };
   const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "k", CONNECTED_PROVIDERS: ["google", "intervals"] };
   const deps = { fetchImpl, sleepSessions: async () => sleep, now: Date.parse("2026-10-02T10:00:00Z") };
+  // Nothing goes to Intervals.icu until the athlete turns health data on.
+  assert.deepEqual(await syncWellnessToIntervals(env, deps), { status: "skipped", reason: "off" });
+  assert.deepEqual(puts, []);
+  await saveSyncPrefs(d, 7, "intervals", { health: "all" });
   await syncWellnessToIntervals(env, deps);
   assert.deepEqual(puts, [{ id: "2026-10-01", restingHR: 51, spO2: 96.2, respiration: 14.4, vo2max: 52.3, steps: 8000, sleepSecs: 24720, avgSleepingHR: 52 }]);
   puts.length = 0;
@@ -72,8 +76,10 @@ test("Synchronizace: only the chosen health data goes to Intervals.icu", async (
   const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "k", CONNECTED_PROVIDERS: ["google", "intervals"] };
   await syncWellnessToIntervals(env, { fetchImpl, sleepSessions: async () => sleep, now: Date.parse("2026-10-02T10:00:00Z") });
   assert.deepEqual(puts, [{ id: "2026-10-01", restingHR: 51, sleepSecs: 24720, avgSleepingHR: 52 }]);
-  // Nothing but weight chosen: the wellness pass does not run at all.
+  // Nothing but weight and workouts chosen (their own passes): the wellness pass does not run at all.
   await saveSyncPrefs(d, 7, "intervals", { health: ["weight"] });
+  assert.equal((await syncWellnessToIntervals(env, { fetchImpl, sleepSessions: async () => sleep })).reason, "off");
+  await saveSyncPrefs(d, 7, "intervals", { health: ["workouts", "weight"] });
   assert.equal((await syncWellnessToIntervals(env, { fetchImpl, sleepSessions: async () => sleep })).reason, "off");
 });
 

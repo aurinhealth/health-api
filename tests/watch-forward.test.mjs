@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { forwardWatchWorkouts, watchActivity } from "../src/watch-forward.js";
+import { saveSyncPrefs } from "../src/sync-destinations.js";
 
 const NOW = Date.parse("2026-10-16T12:00:00Z");
 function db() {
@@ -34,6 +35,10 @@ test("watch workouts nobody else brought go to Intervals.icu once", async () => 
     return Response.json([]);
   };
   const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "Bearer t", CONNECTED_PROVIDERS: ["intervals"] };
+  // Apple Health's workouts are health data: nothing goes until they are turned on.
+  assert.deepEqual(await forwardWatchWorkouts(env, { now: NOW, fetchImpl }), { status: "skipped", reason: "off" });
+  assert.equal(posts.length, 0);
+  await saveSyncPrefs(d, 7, "intervals", { health: ["workouts"] });
   const first = await forwardWatchWorkouts(env, { now: NOW, fetchImpl });
   assert.deepEqual(first.sent, [{ key: "apple:RUN1", status: "sent" }]);
   assert.equal(posts.length, 1);
