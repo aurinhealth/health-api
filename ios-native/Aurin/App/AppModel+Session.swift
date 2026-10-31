@@ -180,7 +180,7 @@ extension AppModel {
     }
 
     /// What follows the account and has no sense for the next one.
-    private func forgetAccountData() {
+    func forgetAccountData() {
         cycle = nil
         cycleHealthSynced = false
         Reminders.forgetPill()
@@ -239,15 +239,31 @@ extension AppModel {
         }
     }
 
-    private func clearLocal(expired: Bool) {
+    /// What the screens, caches, widgets, the watch and the reminders hold of the
+    /// account's data (signing out, pausing health data: AppModel+HealthPause).
+    func forgetShownData() {
         // What is still loading belongs to this sign-in: it stops, and what
         // comes back anyway is dropped (stillSignedIn, SnapshotCache.generation).
         scope.end()
         scope = AccountScope()
         dropRefresh()
+        AccountCaches.forget()
+        Reminders.cancelAll()
+        WidgetBridge.clear()
+        clearScreens()
+        paths = [:]
+        tab = .today
+        selectedDate = nil
+        athleteStatus = nil
+        muscleFatigue = nil
+        musclesAt = nil
+        pastStrain = [:]
+    }
+
+    private func clearLocal(expired: Bool) {
+        forgetShownData()
         // The next account's purchases carry its own appAccountToken.
         ProStore.shared.forgetAccount()
-        AccountCaches.forget()
         if expired {
             // The writes wait for the next sign-in, which shows whether it is the same account.
             writes.forgetSent()
@@ -264,28 +280,20 @@ extension AppModel {
             // The photo stays for this account's next sign-in (AvatarStore.keep).
         }
         notice = nil
-        Reminders.cancelAll()
         // The next sign-in sends the push token again for its own account.
         PushRegistration.forget()
-        WidgetBridge.clear()
         UserDefaults.standard.removeObject(forKey: Self.setupDoneKey)
         UserDefaults.standard.removeObject(forKey: Self.accountInitialKey)
         needsSetup = false
+        // The next sign-in asks the server whether its health data is paused.
         resumingHealth = false
-        notePaused(false)
+        healthPaused = false
+        UserDefaults.standard.removeObject(forKey: Self.healthPausedKey)
         passkeyOffer = false
         PasskeyOfferLater.forget()
         FirstDays.forget()
-        paths = [:]
-        tab = .today
         offline = false
         demo = false
-        clearScreens()
-        selectedDate = nil
-        athleteStatus = nil
-        muscleFatigue = nil
-        musclesAt = nil
-        pastStrain = [:]
         phase = .signedOut
     }
 }

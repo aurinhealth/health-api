@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb, findUser, PERSONAL_TABLES } from "../src/tenancy.js";
 import { consentStatus, saveConsent } from "../src/consent.js";
-import { pauseHealthData, resumeBlocked, finishHealthPauses, pausedRefusal, healthPaused, KEPT_TABLES, PAUSE_DELETE_ORDER, LAST_PASS_MINUTES } from "../src/health-pause.js";
+import { pauseHealthData, resumeHealth, resumeDone, resumeFailed, finishHealthPauses, pausedRefusal, healthPaused, KEPT_TABLES, PAUSE_DELETE_ORDER, LAST_PASS_MINUTES } from "../src/health-pause.js";
 import { serverSource } from "./helpers/server-source.mjs";
 
 const sql = name => readFileSync(new URL("../" + name, import.meta.url), "utf8");
@@ -82,25 +82,65 @@ test("the session knows a paused account; a paused account reaches only the acco
   }
 });
 
+const late = db => db.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, value_numeric, payload_json) VALUES (3, 'google', 'steps', 'late', '2026-10-01T08:00:00Z', 10, '{}')").run();
+const entries = db => db.sqlite.prepare("SELECT COUNT(*) AS n FROM health_pauses").get().n;
+
 test("turning health data back on runs the last pass first, then the consent is given again", async () => {
   const db = database();
   await pauseHealthData(envOf(db), user);
   // A sync that was running at that moment wrote one more row.
-  db.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, value_numeric, payload_json) VALUES (3, 'google', 'steps', 'late', '2026-10-01T08:00:00Z', 10, '{}')").run();
-  assert.equal(await resumeBlocked(envOf(db)), null);
+  late(db);
+  assert.deepEqual(await resumeHealth(envOf(db)), { held: true });
   assert.equal(count(db, "health_datapoints"), 0);
-  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM health_pauses").get().n, 0);
+  assert.equal(entries(db), 1, "the entry stays until the consent is saved");
   const { consent } = await saveConsent(envOf(db), { health: true });
+  await resumeDone(envOf(db));
+  assert.equal(entries(db), 0);
   assert.equal(consent.paused, false);
   assert.equal(consent.needed, false);
   assert.equal((await findUser(db, 3, {})).healthPaused, false);
+});
+
+test("a consent that is not saved keeps the pause entry and its last pass", async () => {
+  const db = database();
+  const now = new Date("2026-10-30T20:00:00Z");
+  await pauseHealthData(envOf(db), user, { now });
+  assert.deepEqual(await resumeHealth(envOf(db), { now }), { held: true });
+  await resumeFailed(envOf(db), now);
+  assert.equal(entries(db), 1);
+  late(db);
+  assert.deepEqual(await finishHealthPauses(db, { now: () => now }), [{ userId: 3, done: true }], "the cron runs the pass at once");
+  assert.equal(count(db, "health_datapoints"), 0);
+});
+
+test("no deletion runs while health data is turned on again, and turning it on waits for a running deletion", async () => {
+  const db = database();
+  const now = new Date("2026-10-30T20:00:00Z");
+  await pauseHealthData(envOf(db), user, { now });
+  // Turning it on holds the entry: the cron leaves it alone, however due.
+  assert.deepEqual(await resumeHealth(envOf(db), { now }), { held: true });
+  const due = () => new Date(now.getTime() + (LAST_PASS_MINUTES + 1) * 60000);
+  db.sqlite.prepare("UPDATE health_pauses SET retry_after = '2026-10-30 19:00:00'").run();
+  assert.equal(await finishHealthPauses(db, { now: () => now }), null);
+  await saveConsent(envOf(db), { health: true });
+  late(db);
+  await resumeDone(envOf(db));
+  assert.equal(await finishHealthPauses(db, { now: due }), null);
+  assert.equal(count(db, "health_datapoints"), 1, "newly imported data stays");
+
+  // A deletion holding the entry: turning it on is refused until it is done.
+  await pauseHealthData(envOf(db), user, { now });
+  db.sqlite.prepare("UPDATE health_pauses SET busy_until = '2026-10-30 20:01:00'").run();
+  assert.match((await resumeHealth(envOf(db), { now })).blocked, /deleted|mažou/);
+  // Its lease runs out (a crashed holder): it can go on.
+  assert.deepEqual(await resumeHealth(envOf(db), { now: new Date("2026-10-30T20:02:00Z") }), { held: true });
 });
 
 test("the cron finishes the deletion and the last pass, and drops an entry whose consent was given again", async () => {
   const db = database();
   const now = new Date("2026-10-30T20:00:00Z");
   await pauseHealthData(envOf(db), user, { now });
-  db.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, value_numeric, payload_json) VALUES (3, 'google', 'steps', 'late', '2026-10-01T08:00:00Z', 10, '{}')").run();
+  late(db);
   assert.equal(await finishHealthPauses(db, { now: () => now }), null, "not before the last pass is due");
   const later = () => new Date(now.getTime() + (LAST_PASS_MINUTES + 1) * 60000);
   assert.deepEqual(await finishHealthPauses(db, { now: later }), [{ userId: 3, done: true }]);
@@ -113,16 +153,26 @@ test("the cron finishes the deletion and the last pass, and drops an entry whose
   assert.equal(count(db, "health_datapoints", 4), 1);
 });
 
-test("a large account is deleted in chunks, the rest by the cron", async () => {
+test("a large account is deleted in chunks; the cron goes on in the next minute within one chunk budget per run", async () => {
   const db = database();
-  const insert = db.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, value_numeric, payload_json) VALUES (3, 'google', 'heart-rate', ?, '2026-10-01T07:00:00Z', 60, '{}')");
-  for (let i = 0; i < 30; i++) insert.run("hr-" + i);
-  const result = await pauseHealthData(envOf(db), user, { budgetMs: -1, chunkRows: 10 });
+  const insert = db.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, value_numeric, payload_json) VALUES (?, 'google', 'heart-rate', ?, '2026-10-01T07:00:00Z', 60, '{}')");
+  for (let i = 0; i < 30; i++) { insert.run(3, "hr-" + i); insert.run(4, "hr-" + i); }
+  const now = new Date("2026-10-30T20:00:00Z");
+  const result = await pauseHealthData(envOf(db), user, { budgetMs: -1, chunkRows: 10, now });
   assert.equal(result.pending, true);
   assert.ok(count(db, "health_datapoints") > 0);
-  const later = () => new Date(Date.now() + (LAST_PASS_MINUTES + 1) * 60000);
-  for (let i = 0; i < 10 && count(db, "health_datapoints"); i++) await finishHealthPauses(db, { now: later, chunkRows: 10 });
+  await pauseHealthData({ ...envOf(db), DB: scopedDb(db, 4), USER_ID: 4 }, { id: 4, isOwner: false }, { budgetMs: -1, chunkRows: 10, now });
+  // The next minute, not the last pass's: one account, at most maxChunks deleting statements.
+  const deletes = [];
+  const prepare = db.prepare.bind(db);
+  db.prepare = sql => { if (/^DELETE FROM \w+ WHERE rowid IN/.test(sql)) deletes.push(sql); return prepare(sql); };
+  const run = await finishHealthPauses(db, { now: () => new Date(now.getTime() + 60000), chunkRows: 10, maxChunks: 1 });
+  assert.equal(run.length, 1);
+  assert.ok(deletes.length <= PAUSE_DELETE_ORDER.length + 1, `${deletes.length} statements`);
+  db.prepare = prepare;
+  for (let i = 0; i < 20 && (count(db, "health_datapoints") || count(db, "health_datapoints", 4)); i++) await finishHealthPauses(db, { now: () => new Date(now.getTime() + 60000), chunkRows: 10 });
   assert.equal(count(db, "health_datapoints"), 0);
+  assert.equal(count(db, "health_datapoints", 4), 0);
 });
 
 test("the server wires the pause: the gate before every route, the route, resuming and the cron", () => {
@@ -132,7 +182,11 @@ test("the server wires the pause: the gate before every route, the route, resumi
   assert.ok(source.indexOf("pausedRefusal(request.method") < source.indexOf("needsAIAccess(request.method"), "before the AI");
   assert.match(source, /url\.pathname==='\/app\/api\/health-pause'&&request\.method==='POST'/);
   assert.match(source, /toUpperCase\(\)!=='PAUSE'/);
-  assert.match(source, /resumeBlocked\(env\)/);
+  // The entry is let go only after the consent is saved.
+  assert.ok(source.indexOf("resumeHealth(env)") < source.indexOf("saveConsent(env,body)") && source.indexOf("saveConsent(env,body)") < source.indexOf("resumeDone(env)"));
+  assert.match(source, /resumeFailed\(env\)/);
   assert.match(source, /reimportAfterPause\(env,ctx\)/);
   assert.match(source, /finishHealthPauses\(env\.DB/);
+  // The same imports as connecting a service (first-imports.js).
+  for (const provider of ["ultrahuman", "whoop", "wahoo"]) assert.match(source, new RegExp(`firstImport\\(env,ctx,"${provider}"\\)`));
 });

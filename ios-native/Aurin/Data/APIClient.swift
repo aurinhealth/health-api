@@ -46,6 +46,10 @@ final class APIClient: @unchecked Sendable {
     /// Called on the first 426: AppModel swaps the screens for the update notice.
     var onUpdateRequired: (@Sendable () -> Void)?
 
+    /// 403 health_paused (src/health-pause.js): health data was paused, also on
+    /// another device; AppModel shows the paused screen and stops Apple Health.
+    var onHealthPaused: (@Sendable () -> Void)?
+
     /// A client made without an address follows Nastavení → Testování → Server,
     /// also when it is switched while the client lives (AppDelegate's, Apple Health's).
     private let fixedBaseURL: URL?
@@ -709,6 +713,7 @@ final class APIClient: @unchecked Sendable {
                 onUpdateRequired?()
                 throw OutboxRefusal.outdated(message)
             }
+            if json?["status"] as? String == "health_paused" { onHealthPaused?() }
             // A timeout or too many requests at the server: later, as with a server error.
             if (400..<500).contains(http.statusCode), ![408, 429].contains(http.statusCode) { throw OutboxRefusal.rejected(message) }
             throw OutboxRefusal.retry(message)
@@ -815,6 +820,7 @@ final class APIClient: @unchecked Sendable {
                 onUpdateRequired?()
                 throw APIError.updateRequired(message ?? L10n.tr("Tahle verze Aurinu už není podporovaná. Nainstaluj novější verzi."))
             }
+            if json?["status"] as? String == "health_paused" { onHealthPaused?() }
             if json?["status"] as? String == "ai_consent_required" {
                 throw APIError.aiConsentRequired(message ?? L10n.tr("AI funkce potřebují tvůj souhlas."))
             }

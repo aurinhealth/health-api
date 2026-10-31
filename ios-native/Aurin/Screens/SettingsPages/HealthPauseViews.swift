@@ -30,7 +30,7 @@ struct HealthPauseSheet: View {
                 section("Zůstane")
                 point("Účet, přihlášení, Pro, nastavení a připojené služby (pozastavené)", mark: .kept)
                 point("Pro se dál obnovuje. Pokud chceš, zruš ho v App Store.", mark: .note)
-                Text("Když to znovu zapneš, dáš nový souhlas a Aurin načte historii z Apple Health a Googlu. Co jsi zadal ručně, se vrátí jen ze staženého souboru.")
+                Text("Když to znovu zapneš, dáš nový souhlas a Aurin načte historii z Apple Health a Googlu. Co jsi zadal jen v Aurinu, se nevrátí; stažený soubor ti zůstane jako kopie.")
                     .font(Typo.caption).foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 16)

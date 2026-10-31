@@ -248,6 +248,9 @@ final class AppModel {
         api.onSubscriptionRequired = { [weak self] in
             Task { @MainActor in if let self { Paywall.present(self) } }
         }
+        api.onHealthPaused = { [weak self] in
+            Task { @MainActor in if let self, !self.demo, self.phase == .signedIn { self.notePaused(true) } }
+        }
         if !demo {
             connectWrites()
             Self.live = self

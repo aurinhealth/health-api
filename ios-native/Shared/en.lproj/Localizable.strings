@@ -3501,7 +3501,7 @@
 "Zůstane" = "Stays";
 "Účet, přihlášení, Pro, nastavení a připojené služby (pozastavené)" = "Your account, sign-in, Pro, settings and connections (paused)";
 "Pro se dál obnovuje. Pokud chceš, zruš ho v App Store." = "Pro keeps renewing. Cancel it in the App Store if you want.";
-"Když to znovu zapneš, dáš nový souhlas a Aurin načte historii z Apple Health a Googlu. Co jsi zadal ručně, se vrátí jen ze staženého souboru." = "Turning it back on asks for consent again and reads your history from Apple Health and Google. What you entered by hand only comes back from your download.";
+"Když to znovu zapneš, dáš nový souhlas a Aurin načte historii z Apple Health a Googlu. Co jsi zadal jen v Aurinu, se nevrátí; stažený soubor ti zůstane jako kopie." = "Turning it back on asks for consent again and reads your history from Apple Health and Google. What you entered only in Aurin doesn't come back; your download keeps a copy.";
 "Nejdřív stáhnout moje data" = "Download my data first";
 "Pozastavit a smazat" = "Pause and delete";
 "Zdravotní data jsou pozastavená" = "Health data is paused";

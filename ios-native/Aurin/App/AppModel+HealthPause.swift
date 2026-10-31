@@ -13,13 +13,18 @@ extension AppModel {
         notePaused(true)
     }
 
-    /// What the server says; a pause is applied on this phone once.
+    /// What the server says (or a 403 health_paused): a pause is applied on this
+    /// phone once; turned on again here or on another device, Apple Health reads
+    /// its history again.
     func notePaused(_ paused: Bool) {
+        let was = healthPaused
         UserDefaults.standard.set(paused, forKey: Self.healthPausedKey)
-        guard paused else { healthPaused = false; return }
-        // Paused at an earlier start: forgotten then already.
-        if !healthPaused { forgetHealthOnPhone() }
-        healthPaused = true
+        if paused, !was { forgetHealthOnPhone() }
+        healthPaused = paused
+        if !paused, was {
+            let client = api
+            Task { await AppleHealth.shared.resumeAfterHealthPause(api: client) }
+        }
     }
 
     /// "Zapnout znovu": the consent page of the setup (SetupFlowView).
@@ -28,37 +33,20 @@ extension AppModel {
         needsSetup = true
     }
 
-    /// The consent was given again (SetupFlowView → finishSetup).
-    /// Apple Health reads its history meanwhile; Today waits for it as at any start.
+    /// The consent was given again (SetupFlowView → finishSetup). Apple Health
+    /// reads its history meanwhile; Today waits for it as at any start.
     func healthResumed() {
         resumingHealth = false
         notePaused(false)
-        let client = api
-        Task { await AppleHealth.shared.resumeAfterHealthPause(api: client) }
     }
 
-    /// The health data this phone keeps for the screens, the widgets, the watch
-    /// and the writes waiting for signal; the account and the settings stay.
+    /// The health data this phone keeps for the screens, the widgets, the watch,
+    /// the writes waiting for signal and the cycle; the account and the settings stay.
     private func forgetHealthOnPhone() {
-        scope.end()
-        scope = AccountScope()
-        dropRefresh()
-        AccountCaches.forget()
+        forgetShownData()
         writes.clear()
         AppleHealth.shared.pauseForHealthData()
-        cycle = nil
-        cycleHealthSynced = false
-        Reminders.forgetPill()
-        Reminders.cancelAll()
-        WidgetBridge.clear()
-        clearScreens()
-        paths = [:]
-        tab = .today
-        selectedDate = nil
-        athleteStatus = nil
-        muscleFatigue = nil
-        musclesAt = nil
-        pastStrain = [:]
+        forgetAccountData()
         syncStatus = nil
     }
 }

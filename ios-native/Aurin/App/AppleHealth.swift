@@ -239,8 +239,10 @@ final class AppleHealth {
         let wasOn = enabled
         let waiting = UserDefaults.standard.string(forKey: Self.resumeKey)
         disconnect()
-        // The sources one account switched off are not the next one's.
+        // The sources one account switched off are not the next one's, nor is
+        // the reading it paused with its health data (resumeAfterHealthPause).
         hidden = [:]
+        UserDefaults.standard.removeObject(forKey: Self.healthPausedKey)
         UserDefaults.standard.removeObject(forKey: Self.hiddenKey)
         // Off already (a second sign-out): the account that read it still gets it back.
         if wasOn, let email { UserDefaults.standard.set(Self.fingerprint(email), forKey: Self.resumeKey) }

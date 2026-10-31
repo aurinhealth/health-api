@@ -20,19 +20,14 @@ import { localToday } from "./user-time.js";
 import { internalTester } from "./staging.js";
 import { appSettings, saveAppSettings } from "./app-settings.js";
 import { profilePhoto, saveProfilePhoto, removeProfilePhoto } from "./profile-photo.js";
-import { healthPaused, pauseHealthData, resumeBlocked } from "./health-pause.js";
-import { syncUltrahuman, FIRST_IMPORT_DAYS as ULTRAHUMAN_FIRST_DAYS } from "./ultrahuman.js";
-import { syncWhoop, FIRST_IMPORT_DAYS as WHOOP_FIRST_DAYS } from "./whoop.js";
-import { syncWahoo, FIRST_IMPORT_DAYS as WAHOO_FIRST_DAYS } from "./wahoo.js";
+import { healthPaused, pauseHealthData, resumeHealth, resumeDone, resumeFailed } from "./health-pause.js";
+import { firstImport, FIRST_IMPORT_PROVIDERS } from "./first-imports.js";
 
 // Health data turned on again after a pause (health-pause.js): every connected
 // service brings its history in again, as when it was connected.
 function reimportAfterPause(env,ctx){
-  const first=(name,run)=>ctx.waitUntil(run().then(()=>bumpCacheVersion(env.DB)).catch(error=>console.error(name+" import after pause failed",error.message)));
-  first("Google and Intervals.icu",()=>initialImport(env,ctx,{force:true}));
-  if(env.ULTRAHUMAN_TOKEN)first("Ultrahuman",()=>syncUltrahuman(env,{days:ULTRAHUMAN_FIRST_DAYS}));
-  if(env.WHOOP_TOKEN)first("WHOOP",()=>syncWhoop(env,{days:WHOOP_FIRST_DAYS}));
-  if(env.WAHOO_TOKEN)first("Wahoo",()=>syncWahoo(env,{days:WAHOO_FIRST_DAYS}));
+  ctx.waitUntil(initialImport(env,ctx,{force:true}).then(()=>bumpCacheVersion(env.DB)).catch(error=>console.error("Google and Intervals.icu import after pause failed",error.message)));
+  for(const provider of FIRST_IMPORT_PROVIDERS)firstImport(env,ctx,provider);
 }
 
 export async function handleAccountApi(request,env,ctx,url,session,internalAuth){
@@ -68,13 +63,15 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
     const body=await request.json().catch(()=>({}));
     // Turning paused health data back on: the deletion finishes first (health-pause.js).
     const resuming=body?.health===true&&!session.user?.isOwner&&await healthPaused(env.RAW_DB||env.DB,env.USER_ID);
-    if(resuming){const blocked=await resumeBlocked(env);if(blocked)return Response.json({status:'health_deleting',message:blocked},{status:409,headers:{'Retry-After':'60','Cache-Control':'no-store'}});}
-    try{
-      const result=await saveConsent(env,body);
-      if(resuming){await bumpCacheVersion(env.DB);reimportAfterPause(env,ctx);}
-      return Response.json(result,{headers:{'Cache-Control':'no-store'}});
-    }
-    catch(error){return Response.json({message:error.message},{status:400});}
+    // The pause entry stays held until the consent is saved, so no deletion runs meanwhile.
+    const lock=resuming?await resumeHealth(env):null;
+    if(lock?.blocked)return Response.json({status:'health_deleting',message:lock.blocked},{status:409,headers:{'Retry-After':'60','Cache-Control':'no-store'}});
+    let result;
+    try{result=await saveConsent(env,body);}
+    catch(error){if(lock?.held)await resumeFailed(env);return Response.json({message:error.message},{status:400});}
+    if(lock?.held)await resumeDone(env);
+    if(resuming){await bumpCacheVersion(env.DB);reimportAfterPause(env,ctx);}
+    return Response.json(result,{headers:{'Cache-Control':'no-store'}});
   }
   // Settings → Privacy and data → Pause health data: the consent is withdrawn and
   // the health data deleted; the account stays (health-pause.js).
