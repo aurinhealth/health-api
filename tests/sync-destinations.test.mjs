@@ -46,6 +46,20 @@ test("preferences are saved per user and destination, cleaned up", async () => {
   await assert.rejects(saveSyncPrefs(d, 7, "strava", {}), /Neznámá|Unknown/);
 });
 
+test("a health list chosen before Apple Health's workouts were a choice keeps sending them; an empty one does not", async () => {
+  const d = db();
+  const row = (user, health, at) => d.sqlite.prepare("INSERT INTO sync_preferences (user_id, destination, push_planned, push_activities, pull_activities, health_json, updated_at) VALUES (?, 'intervals', 1, 1, 1, ?, ?)").run(user, JSON.stringify(health), at);
+  row(7, ["hrv"], "2026-10-20 08:00:00");
+  row(8, [], "2026-10-20 08:00:00");
+  row(9, ["hrv"], "2026-11-02T08:00:00.000Z");
+  assert.deepEqual((await readSyncPrefs(d, 7, "intervals")).health, ["hrv", "workouts"]);
+  assert.deepEqual((await readSyncPrefs(d, 8, "intervals")).health, []);
+  assert.deepEqual((await readSyncPrefs(d, 9, "intervals")).health, ["hrv"]);
+  // Saved again, the list is the athlete's own from then on.
+  await saveSyncPrefs(d, 7, "intervals", { health: ["hrv"] });
+  assert.deepEqual((await readSyncPrefs(d, 7, "intervals")).health, ["hrv"]);
+});
+
 test("the wellness push sends only the chosen health data", () => {
   const updates = { "2026-10-01": { restingHR: 51, hrv: 64, steps: 8000, sleepSecs: 24000, avgSleepingHR: 52, spO2: 96 } };
   assert.deepEqual(allowedWellness(updates, { health: "all" }), updates);

@@ -124,6 +124,8 @@ struct ServiceConnectSheet: View {
     @State private var sendHealth = false
     @State private var busy = false
     @State private var error: String?
+    /// Connected, but turning the health data on did not save.
+    @State private var healthError: String?
 
     enum Phase { case intro, done }
 
@@ -285,6 +287,10 @@ struct ServiceConnectSheet: View {
                 .multilineTextAlignment(.center).padding(.top, 22)
             Text("Data se začínají stahovat. Můžeš zatím pokračovat.")
                 .font(Typo.small).foregroundStyle(Palette.muted).multilineTextAlignment(.center).padding(.top, 8)
+            if let healthError {
+                Text(healthError).font(Typo.small).foregroundStyle(Palette.rust).multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true).padding(.top, 10)
+            }
             DownloadBar().padding(.horizontal, 40).padding(.top, 22)
             Spacer()
             PrimaryButton(title: L10n.tr("Hotovo")) { dismiss() }
@@ -312,7 +318,11 @@ struct ServiceConnectSheet: View {
 
     private func finished() async {
         // Off: whatever Synchronizace already has stays as it was.
-        if service.healthOptIn, sendHealth { try? await model.api.sendAllHealth(to: target.id) }
+        if service.healthOptIn, sendHealth {
+            do { try await model.api.sendAllHealth(to: target.id) } catch {
+                healthError = L10n.f("Zdravotní data se nepodařilo zapnout. Zapneš je v Nastavení → Zdroje dat → %@ → Zdravotní data.", service.name)
+            }
+        }
         withAnimation { phase = .done }
         await connected()
     }

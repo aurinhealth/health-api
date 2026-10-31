@@ -210,6 +210,15 @@ final class AppleHealth {
         return await sync(api: api, force: true)
     }
 
+    /// Sexual activity just allowed (Nastavení → Deník): HealthKit asks for it
+    /// (HealthReader.askNewTypes) and this sync reads its last 90 days, not
+    /// only the days since the last sync.
+    func readSexHistory(api: APIClient) async {
+        JournalSwitch.sexHistory(true)
+        guard enabled else { return }
+        _ = await sync(api: api, force: true)
+    }
+
     /// After switching the server: that server's last sync.
     func serverChanged() {
         lastSync = UserDefaults.standard.object(forKey: Self.lastSyncKey) as? Date
@@ -410,6 +419,7 @@ final class AppleHealth {
         // The first sync takes the history; later ones the days since the last
         // one and a day more (late watch data), at most a month.
         let days: Int? = lastSync.map { min(30, max(2, Int(started.timeIntervalSince($0) / 86400) + 2)) }
+        let sexHistory = JournalSwitch.wantsSexHistory
         do {
             await reader.hide(hidden, in: categories)
             guard let uploads = await reader.collect(categories, days: days, now: started) else { return SyncOutcome(ok: false, changed: false) }
@@ -424,6 +434,7 @@ final class AppleHealth {
             guard round == generation else { return SyncOutcome(ok: false, changed: changed) }
             lastSync = started
             UserDefaults.standard.set(started, forKey: Self.lastSyncKey)
+            if sexHistory { JournalSwitch.sexHistory(false) }
             message = nil
             return SyncOutcome(ok: true, changed: changed)
         } catch {
@@ -451,9 +462,6 @@ struct AppleHealthUpload: Encodable {
     var records: [AppleRecord]
     var windows: [String: Window]? = nil
     var categories: [String]
-    /// Sexual activity's consent: without it the server keeps none and
-    /// deletes what it had (src/apple-health.js saveAppleHealth).
-    var sexualActivity = JournalSwitch.tracksSex
     /// Food and water other apps logged, every one from these days (src/apple-food.js).
     var food: Food? = nil
 
@@ -672,7 +680,9 @@ final class HealthReader: @unchecked Sendable {
         async let bodyRecords = categories.contains(.body) ? body(from: from365, to: now) : nothing
         async let journalRecords = categories.contains(.journal) ? journal(from: from90, to: now) : nothing
         // Its own consent (Nastavení → Deník), with or without the rest of Deník.
-        async let sexRecords = JournalSwitch.tracksSex ? sexualActivity(from: from90, to: now) : nothing
+        // Just allowed: its last 90 days, whenever the last sync was.
+        let sexFrom = JournalSwitch.wantsSexHistory ? calendar.startOfDay(for: calendar.date(byAdding: .day, value: -89, to: now) ?? now) : from90
+        async let sexRecords = JournalSwitch.tracksSex ? sexualActivity(from: sexFrom, to: now) : nothing
         let readFood = categories.contains(.food) || categories.contains(.water)
         async let foodRead: AppleHealthUpload.Food? = readFood
             ? foodUpload(from: from30, to: now, meals: categories.contains(.food), drinks: categories.contains(.water)) : nil
@@ -740,7 +750,7 @@ final class HealthReader: @unchecked Sendable {
 
     /// One value a day per kind: daily-mindful-minutes, daily-daylight-minutes
     /// (and before 10:00), daily-night-noise (the loudest reading while asleep,
-    /// on the day of waking up), daily-symptom-*, daily-sexual-activity,
+    /// on the day of waking up), daily-symptom-*,
     /// daily-yoga-minutes, daily-stretching-minutes and daily-time-zone-change.
     private func journal(from: Date, to: Date) async -> [AppleRecord] {
         var sums: [String: [String: Double]] = [:]
