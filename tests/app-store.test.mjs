@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { createHash, createPrivateKey, sign, X509Certificate } from "node:crypto";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { APPLE_ROOT_CA_G3, verifyAppStoreJws, saveAppTransaction, handleAppStoreNotification, appAccountToken, storePurchase } from "../src/app-store.js";
+import { APPLE_ROOT_CA_G3, verifyAppStoreJws, saveAppTransaction, saveAppInstall, handleAppStoreNotification, appAccountToken, storePurchase } from "../src/app-store.js";
 import { subscriptionStatus } from "../src/subscription.js";
 import { handleAccountApi } from "../src/routes-account.js";
 
@@ -209,4 +209,26 @@ test("the routes: the token comes with the status, a transaction needs the app's
   assert.equal((await post({ Origin: "https://aurin.health" })).status, 400);
   const signedOut = await handleAccountApi(new Request("https://aurin.health/app/api/subscription/transaction", { method: "POST", headers: { Origin: "https://aurin.health" }, body: "{}" }), env, {}, url("/app/api/subscription/transaction"), { signedIn: false });
   assert.equal(signedOut.status, 401);
+});
+
+test("a TestFlight build (Apple's AppTransaction says Sandbox) puts the account with TestFlight; the App Store build takes it out", async () => {
+  const { raw, user } = setup();
+  const app = (extra = {}) => ({ bundleId: "health.aurin.app", receiptType: "Sandbox", appTransactionId: "7", signedDate: now, ...extra });
+  const env = user(1);
+  assert.deepEqual(await saveAppInstall(env, { signedAppTransaction: jws(app()) }, { roots }), { status: "ok", testflight: true });
+  assert.equal(row(raw, 1).testflight, 1);
+  assert.equal(row(raw, 1).plan, "free");
+  const token = await appAccountToken(env);
+  assert.deepEqual(await saveAppInstall(env, { signedAppTransaction: jws(app({ receiptType: "Production" })) }, { roots }), { status: "ok", testflight: false });
+  assert.equal(row(raw, 1).testflight, 0);
+  assert.equal(row(raw, 1).app_account_token, token, "the rest of the row stays");
+  await assert.rejects(saveAppInstall(env, { signedAppTransaction: jws(app({ receiptType: "Xcode" })) }, { roots }), { status: 400 });
+  await assert.rejects(saveAppInstall(env, { signedAppTransaction: jws(app({ bundleId: "health.aurin.other" })) }, { roots }), { status: 400 });
+  await assert.rejects(saveAppInstall(env, { signedAppTransaction: "x.y.z" }, { roots }), { status: 400 });
+  // Apple's root in the route: the test chain is refused there; the app's origin is needed.
+  const url = new URL("https://aurin.health/app/api/subscription/install"), session = { signedIn: true, user: { id: 1 } };
+  const post = (headers, who = session) => handleAccountApi(new Request(url, { method: "POST", headers, body: JSON.stringify({ signedAppTransaction: jws(app()) }) }), env, {}, url, who);
+  assert.equal((await post({})).status, 403);
+  assert.equal((await post({ Origin: "https://aurin.health" })).status, 400);
+  assert.equal((await post({ Origin: "https://aurin.health" }, { signedIn: false })).status, 401);
 });

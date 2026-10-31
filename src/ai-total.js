@@ -20,6 +20,7 @@ import { L } from "./lang.js";
 import { emailConfigured, sendEmail } from "./email-sender.js";
 import { isStaging, ownerUnlimited } from "./staging.js";
 import { aiGroup, groupOfSubscription, newAccountSince, AI_GROUPS } from "./ai-limit-share.js";
+import { ensureStoreColumns } from "./app-store.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const utcDay = (now = new Date()) => now.toISOString().slice(0, 10);
@@ -54,12 +55,21 @@ export function groupBrakes(env) {
 // purchase older than NEW_ACCOUNT_DAYS ("free"; the new ones get a fixed brake,
 // so they are not counted). Throws when a read fails.
 async function accountsByGroup(db, now = Date.now(), owner = "") {
+  try { return await countAccounts(db, now, owner); } catch (error) {
+    if (!/no such (column|table)|has no column/i.test(String(error?.message || error))) throw error;
+    await ensureStoreColumns(db);
+    return countAccounts(db, now, owner);
+  }
+}
+// A row that puts the account in a group of its own: Pro now, or a TestFlight build.
+const GROUPED = "((s.plan = 'ai' AND s.valid_until > ?) OR s.testflight = 1)";
+async function countAccounts(db, now, owner) {
   // The owner is in "gift" whatever the subscription says (aiGroup), so counted there.
   const until = new Date(now).toISOString(), isOwner = id => `EXISTS (SELECT 1 FROM users o WHERE o.id = ${id} AND lower(trim(o.email)) = ?)`;
   const notOwner = id => owner ? ` AND NOT ${isOwner(id)}` : "", ownerBind = owner ? [owner] : [];
   const [subs, free, owners] = await Promise.all([
-    db.prepare(`SELECT s.plan, s.valid_until, s.store_environment, s.free_trial, s.offer_type FROM subscriptions s WHERE s.plan = 'ai' AND s.valid_until > ?${notOwner("s.user_id")}`).bind(until, ...ownerBind).all().then(r => r.results || []),
-    db.prepare(`SELECT COUNT(*) AS n FROM users u WHERE u.disabled = 0 AND u.created_at <= ?${notOwner("u.id")} AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = u.id AND s.plan = 'ai' AND s.valid_until > ?)`).bind(newAccountSince(now), ...ownerBind, until).first(),
+    db.prepare(`SELECT s.plan, s.valid_until, s.store_environment, s.free_trial, s.offer_type, s.testflight FROM subscriptions s WHERE ${GROUPED}${notOwner("s.user_id")}`).bind(until, ...ownerBind).all().then(r => r.results || []),
+    db.prepare(`SELECT COUNT(*) AS n FROM users u WHERE u.disabled = 0 AND u.created_at <= ?${notOwner("u.id")} AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = u.id AND ${GROUPED})`).bind(newAccountSince(now), ...ownerBind, until).first(),
     owner ? db.prepare("SELECT COUNT(*) AS n FROM users u WHERE u.disabled = 0 AND lower(trim(u.email)) = ?").bind(owner).first() : null
   ]);
   const counts = Object.fromEntries(AI_GROUPS.map(group => [group, 0]));
