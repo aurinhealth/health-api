@@ -3,7 +3,7 @@ name: TestFlight notes
 # An app pull request carries a "## TestFlight" section in its description:
 # "Co je nového" and "Co otestovat" for the testers in Czech, the same under
 # "What's new" and "What to test" in English, or "Nic k otestování". ios-testflight.yml turns these sections into "What to Test"
-# (see "TestFlight notes" in CLAUDE.md). Editing the description re-runs it.
+# (see docs/testflight-notes.md). Editing the description re-runs it.
 on:
   pull_request:
     types: [opened, edited, reopened, synchronize, ready_for_review]

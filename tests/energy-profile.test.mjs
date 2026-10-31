@@ -141,7 +141,7 @@ test("without Google Health a manual weight is stored here and feeds the target"
 test("the server works without connections", () => {
   const entry = serverSource();
   assert.doesNotMatch(entry, /status:"onboarding"/);
-  assert.match(entry, /source:"loadwise",connected:false/);
+  assert.match(entry, /source:"aurin",connected:false/);
 });
 
 test("the daily analysis splits the target by the athlete's diet", async () => {

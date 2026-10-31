@@ -21,7 +21,7 @@ final class MuscleTests: XCTestCase {
         let sample = DemoData.muscles
         XCTAssertEqual(sample.tired.prefix(3).map(\.id), ["glutes", "hamstrings", "quads"])
         XCTAssertEqual(sample.recent?.first?.title, "Běh 14 km")
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/muscles")!), .muscles)
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/muscles")!), .muscles)
         XCTAssertEqual(sample.muscles?.first { $0.id == "glutes" }?.from?.first?.sets, 4)
         XCTAssertNil(sample.figureColors["biceps"])
         XCTAssertNotNil(sample.figureColors["glutes"])

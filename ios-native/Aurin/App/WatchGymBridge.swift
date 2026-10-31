@@ -5,6 +5,8 @@ extension Notification.Name {
     /// The watch changed the day's gym (a set done, a set or an exercise added,
     /// removed or swapped): Training mode takes the new sheet (object: WatchBridge.GymChange).
     static let watchGym = Notification.Name("watchGym")
+    /// The watch started, moved or ended the rest (object: WatchGym.Rest).
+    static let watchRest = Notification.Name("watchRest")
 }
 
 /// The gym on the Apple Watch (AurinWatch/Gym*.swift), both ways: the day's
@@ -90,6 +92,9 @@ extension WatchBridge {
     func applyGym(_ done: WatchGym.Done) async {
         guard var day = await gymDay(done.date) else { return }
         day.complete(row: done.row, kg: GymCoach.kgText(done.kg), reps: String(done.reps), rpe: "")
+        // The start in the sheet, as a set ticked in Training mode marks it: an
+        // iPhone app closed by iOS meanwhile goes on from it, not from a new Start.
+        if day.startedAt == nil { day.markStarted(LiveWorkout.shared.start ?? Date()) }
         await save(day, date: done.date)
     }
 
@@ -164,6 +169,13 @@ extension WatchBridge {
             session.sendMessage([WatchGym.replyKey: data], replyHandler: nil, errorHandler: nil)
         }
         sendContext()
+    }
+
+    /// The rest in Training mode, to the watch's gym (only while in reach).
+    func sendRest(_ rest: WatchGym.Rest) {
+        guard let session = WCSession.isSupported() ? WCSession.default : nil, session.activationState == .activated,
+              session.isPaired, session.isWatchAppInstalled, session.isReachable, let data = rest.encoded() else { return }
+        session.sendMessage([WatchGym.restKey: data], replyHandler: nil, errorHandler: nil)
     }
 
     /// Today's gym for the application context, next to the snapshot.

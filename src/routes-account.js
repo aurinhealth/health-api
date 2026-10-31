@@ -14,12 +14,22 @@ import { aiAllowance } from "./ai-usage.js";
 import { exportAccountStream, deleteAccount } from "./account-data.js";
 import { listPasskeys, handlePasskeyApi } from "./passkeys.js";
 import { handleEmailChange } from "./email-login.js";
+import { requireStepUp, handleStepUpApi } from "./step-up.js";
 import { emailConfigured } from "./email-sender.js";
 import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
 import { internalTester } from "./staging.js";
 import { appSettings, saveAppSettings } from "./app-settings.js";
 import { profilePhoto, saveProfilePhoto, removeProfilePhoto } from "./profile-photo.js";
+import { healthPaused, pauseHealthData, resumeHealth, resumeDone, resumeFailed } from "./health-pause.js";
+import { firstImport, FIRST_IMPORT_PROVIDERS } from "./first-imports.js";
+
+// Health data turned on again after a pause (health-pause.js): every connected
+// service brings its history in again, as when it was connected.
+function reimportAfterPause(env,ctx){
+  ctx.waitUntil(initialImport(env,ctx,{force:true}).then(()=>bumpCacheVersion(env.DB)).catch(error=>console.error("Google and Intervals.icu import after pause failed",error.message)));
+  for(const provider of FIRST_IMPORT_PROVIDERS)firstImport(env,ctx,provider);
+}
 
 export async function handleAccountApi(request,env,ctx,url,session,internalAuth){
   if (url.pathname === "/app/api/me" && request.method === "GET") {
@@ -51,15 +61,41 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
   if(url.pathname==='/app/api/consent'&&request.method==='POST'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-    try{const result=await saveConsent(env,await request.json().catch(()=>({})));return Response.json(result,{headers:{'Cache-Control':'no-store'}});}
+    const body=await request.json().catch(()=>({}));
+    // Turning paused health data back on: the deletion finishes first (health-pause.js).
+    const resuming=body?.health===true&&!session.user?.isOwner&&await healthPaused(env.RAW_DB||env.DB,env.USER_ID);
+    // The pause entry stays held until the consent is saved, so no deletion runs meanwhile.
+    const lock=resuming?await resumeHealth(env):null;
+    if(lock?.blocked)return Response.json({status:'health_deleting',message:lock.blocked},{status:409,headers:{'Retry-After':'60','Cache-Control':'no-store'}});
+    let result;
+    try{result=await saveConsent(env,body);}
+    catch(error){if(lock?.held)await resumeFailed(env);return Response.json({message:error.message},{status:400});}
+    if(lock?.held)await resumeDone(env);
+    if(resuming){await bumpCacheVersion(env.DB);reimportAfterPause(env,ctx);}
+    return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+  }
+  // Confirming it's you (step-up.js), which adding a passkey, changing the e-mail, the export, pausing health data and
+  // deleting the account ask for once their own checks have passed.
+  if (url.pathname.startsWith("/app/api/account/step-up/")) return handleStepUpApi(request, env, url, session);
+  const stepUp = () => requireStepUp(request, env, session);
+  // Settings → Privacy and data → Pause health data: the consent is withdrawn and
+  // the health data deleted; the account stays (health-pause.js).
+  if(url.pathname==='/app/api/health-pause'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    const body=await request.json().catch(()=>({}));
+    if(String(body.confirm||'').trim().toUpperCase()!=='PAUSE')return Response.json({message:L('Potvrzení chybí.', 'The confirmation is missing.')},{status:400});
+    // It deletes data for good, so as with the export and deleting the account (step-up.js).
+    const unconfirmed=await stepUp();if(unconfirmed)return unconfirmed;
+    try{const result=await pauseHealthData(env,session.user);await bumpCacheVersion(env.DB);return Response.json({...result,consent:await consentStatus(env)},{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({message:error.message},{status:400});}
   }
   if (url.pathname.startsWith("/app/api/passkeys")) {
-    const passkeyApi = await handlePasskeyApi(request, env, url, session, ctx);
+    const passkeyApi = await handlePasskeyApi(request, env, url, session, ctx, stepUp);
     if (passkeyApi) return passkeyApi;
   }
   if (url.pathname.startsWith("/app/api/account/email/")) {
-    const emailChange = await handleEmailChange(request, env, url, session, ctx);
+    const emailChange = await handleEmailChange(request, env, url, session, ctx, stepUp);
     if (emailChange) return emailChange;
   }
   // Settings → Účet: every other device is signed out; this one gets a fresh cookie.
@@ -79,6 +115,7 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
   // The user's own data: download everything, or delete the account with it.
   if(url.pathname==='/app/api/account/export'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    const unconfirmed=await stepUp();if(unconfirmed)return unconfirmed;
     // NDJSON, streamed page by page (account-data.js): a large account never sits in memory whole.
     return new Response(exportAccountStream(env,session.user),{headers:{'Content-Type':'application/x-ndjson; charset=utf-8','Content-Disposition':'attachment; filename="aurin-data-'+localToday()+'.ndjson"','Cache-Control':'no-store'}});
   }
@@ -87,6 +124,7 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     const body=await request.json().catch(()=>({}));
     if(String(body.confirm||'').trim().toUpperCase()!=='SMAZAT')return Response.json({message:'Pro potvrzení napiš SMAZAT.'},{status:400});
+    const unconfirmed=await stepUp();if(unconfirmed)return unconfirmed;
     try{
       const result=await deleteAccount(await connectionEnvironment(env),session.user);
       // The session cookie goes too.

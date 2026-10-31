@@ -69,7 +69,7 @@ async function tokenRequest(env, params, fetchImpl) {
 
 export async function handleUltrahumanOAuth(request, env, pathname, fetchImpl = fetch) {
   if (pathname === '/oauth/ultrahuman' && request.method === 'GET') {
-    if (!ultrahumanConfigured(env)) return back(connectReturnUrl(connectReturn(request), 'ultrahuman-failed'));
+    if (!ultrahumanConfigured(env)) return back(connectReturnUrl(connectReturn(request), 'ultrahuman-failed', env));
     const state = crypto.randomUUID();
     const u = new URL(AUTHORIZE);
     u.searchParams.set('client_id', String(env.ULTRAHUMAN_CLIENT_ID).trim());
@@ -83,18 +83,18 @@ export async function handleUltrahumanOAuth(request, env, pathname, fetchImpl = 
   const url = new URL(request.url), code = url.searchParams.get('code'), state = url.searchParams.get('state');
   const m = (request.headers.get('Cookie') || '').match(new RegExp('(?:^|;\\s*)' + STATE_COOKIE + '=([^;]+)'));
   const [expected, to, uid] = decodeURIComponent(m?.[1] || '').split('.');
-  if (!state || state !== expected) return back(connectReturnUrl('settings', 'ultrahuman-failed'));
+  if (!state || state !== expected) return back(connectReturnUrl(to || connectReturn(request), 'ultrahuman-failed', env));
   // Started by another account than the one signed in now: its keys are not stored here.
-  if (!startedBy(uid, env)) return back(connectReturnUrl(to, 'ultrahuman-failed'));
-  if (url.searchParams.get('error') || !code) return back(connectReturnUrl(to, 'ultrahuman-cancelled'));
-  if (!ultrahumanConfigured(env)) return back(connectReturnUrl(to, 'ultrahuman-failed'));
+  if (!startedBy(uid, env)) return back(connectReturnUrl(to, 'ultrahuman-failed', env));
+  if (url.searchParams.get('error') || !code) return back(connectReturnUrl(to, 'ultrahuman-cancelled', env));
+  if (!ultrahumanConfigured(env)) return back(connectReturnUrl(to, 'ultrahuman-failed', env));
   const data = await tokenRequest(env, { grant_type: 'authorization_code', code, redirect_uri: redirectUri(env, request) }, fetchImpl);
-  if (!data) { console.error('Ultrahuman OAuth token exchange failed'); return back(connectReturnUrl(to, 'ultrahuman-failed')); }
+  if (!data) { console.error('Ultrahuman OAuth token exchange failed'); return back(connectReturnUrl(to, 'ultrahuman-failed', env)); }
   const text = tokensText(data);
   await saveConnectionSecret(env, SOURCE, text);
   await clearConnectionHealth(env, SOURCE);
   env.ULTRAHUMAN_TOKEN = text;
-  return back(connectReturnUrl(to, 'ultrahuman'));
+  return back(connectReturnUrl(to, 'ultrahuman', env));
 }
 
 // A valid access token, refreshed (and saved) when it is about to run out.

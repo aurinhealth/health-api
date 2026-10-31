@@ -13,7 +13,8 @@ struct WaterControl: ControlWidget {
         StaticControlConfiguration(kind: AurinControls.water, provider: Provider()) { value in
             ControlWidgetButton(action: AddWaterIntent()) {
                 Label(L10n.tr("Voda"), systemImage: "waterbottle.fill")
-                Text(verbatim: value)
+                // Redacted in Control Center and on the Lock Screen while the phone is locked.
+                Text(verbatim: value).privacySensitive()
             }
         }
         .displayName(LocalizedStringResource("Voda", table: "Controls"))

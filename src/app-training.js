@@ -3,7 +3,7 @@
 // phase of the preparation, form (fitness, fatigue), VO2max, time in heart-rate
 // zones, the weeks' load, the acute:chronic workload ratio and monotony.
 // Pure: GET /app/api/training loads the inputs.
-import { groupOfType, typeName } from "./activity-type.js";
+import { groupOfType, typeName, mark } from "./activity-type.js";
 import { mergeWellnessRows, strainScore, dayStrainParts } from "./recovery-model.js";
 import { sessionLoad } from "./training-load.js";
 import { athleteFocus } from "./athlete-focus.js";
@@ -417,7 +417,7 @@ function sessionOf(w, date, status) {
     ...(done ? distanceAndPower(w) : {}),
     // Who recorded a watch workout (workout-merge.js sourcesOf): two after a merge.
     ...(done && Array.isArray(w.sources) && w.sources.length ? { sources: w.sources } : {}),
-    ...(done && w.payload?.loadwiseMerge?.energy ? { mergeEnergy: String(w.payload.loadwiseMerge.energy) } : {})
+    ...(done && mark(w.payload, "Merge")?.energy ? { mergeEnergy: String(mark(w.payload, "Merge").energy) } : {})
   };
 }
 
@@ -444,7 +444,7 @@ function energyOf(w) {
   const kcal = round(num(w.energyCheck?.reported ?? w.reportedCalories ?? w.calories));
   if (!(kcal > 0)) return {};
   // Set in Aurin by hand or by the coach (activity-edits.js); the device's number stays known.
-  if (w.payload?.loadwiseKcal != null) return { kcal, kcalEdited: true, ...(num(w.payload.loadwiseKcalDevice) > 0 ? { kcalDevice: round(num(w.payload.loadwiseKcalDevice)) } : {}) };
+  if (mark(w.payload, "Kcal") != null) return { kcal, kcalEdited: true, ...(num(mark(w.payload, "KcalDevice")) > 0 ? { kcalDevice: round(num(mark(w.payload, "KcalDevice"))) } : {}) };
   const c = w.energyCheck;
   if (c?.status !== "review") return { kcal };
   const out = { kcal, kcalEstimate: { value: round(num(w.autoCaloriesForPlanning ?? w.caloriesForPlanning ?? c.estimated)), low: c.low, high: c.high, reason: c.reason || null } };

@@ -402,7 +402,9 @@ const timeoutFor=maxOutputTokens=>maxOutputTokens>TASK_LIMITS.planning?TASK_TIME
 
 // What the athlete reads when OpenAI refuses a request ("AI 429: …").
 export function aiFailureText(status){return 'AI '+status+': '+(status===429?L('AI je teď přetížená. Zkus to za chvíli.', 'The AI is busy right now. Try again in a moment.'):status>=500?L('AI služba není dostupná.', 'The AI service isn\'t available.'):L('AI požadavek se nepodařil.', 'The AI request failed.'));}
-export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null, reasoningEffort = 'low',onText=null,feature=null,timeoutMs=null }) {
+// slotWaitMs: how long to wait for a free AI slot (claimAiSlot); a text that can
+// fall back to its own words waits briefly instead of the full 90 s.
+export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null, reasoningEffort = 'low',onText=null,feature=null,timeoutMs=null,slotWaitMs=undefined }) {
   await assertAIAccess(env);
   // All users together under the day's emergency brake (ai-total.js).
   await assertAiTotal(env);
@@ -411,7 +413,7 @@ export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5
   // the slot held: the calls running beside this one count at their reservation.
   await assertAiAllowance(env,feature);
   const reserveUsd=estimateAiCostUsd(model||env.OPENAI_MODEL||'gpt-6-sol',{instructions,input,maxOutputTokens,tools});
-  const release=await claimAiSlot(env,{feature,reserveUsd});
+  const release=await claimAiSlot(env,{feature,reserveUsd,...(slotWaitMs!=null?{waitMs:slotWaitMs}:{})});
   try{
     await assertAiAllowance(env,feature,{exceptId:release.id});
     return await openAIResponse(env,{instructions,input,maxOutputTokens,tools,format,model,reasoningEffort,onText,feature,timeoutMs,slotId:release.id});

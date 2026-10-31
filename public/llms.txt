@@ -2,7 +2,7 @@
 
 > Aurin is an iPhone app for training, recovery and nutrition. Every morning it turns sleep, HRV, resting heart rate and workouts into one readiness number, a plan for the day that adapts to it, and an AI coach that knows your data. It is in free testing through Apple's TestFlight; join the waitlist at https://aurin.health.
 
-Aurin reads data from Apple Health, Google Health, Intervals.icu, the Ultrahuman Ring, WHOOP and Wahoo, and sends planned and finished workouts, weight and food back. It is made by Petr Bouma in the Czech Republic. Aurin is not a medical device.
+Aurin reads data from Apple Health, Google Health, Intervals.icu, the Ultrahuman Ring, WHOOP and Wahoo, and sends planned and finished workouts, weight and food back. It is made by Petr Bouma, a sole trader in the Czech Republic (IČO 30194202, Vrchlického 142, Sedlec, 284 03 Kutná Hora). Aurin is not a medical device.
 
 ## Pages
 

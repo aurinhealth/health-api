@@ -113,6 +113,10 @@ struct JournalCatalog: Decodable, Equatable {
     let pinned: [String]
     var enabled: Bool? = nil
     var askMorning: Bool? = nil
+    /// The coach sees mood, anxiety, cannabis, CBD and medication (src/journal-catalog.js isSensitive).
+    var shareSensitive: Bool? = nil
+    /// Sexual activity from Apple Health, with its own consent.
+    var appleSex: Bool? = nil
 }
 
 /// The Today card: the questions about yesterday in the morning.
@@ -168,8 +172,21 @@ struct JournalToday: Decodable, Equatable {
 /// Whether Deník is on, kept on the phone so Zdraví knows before loading.
 enum JournalSwitch {
     static let key = "journal.enabled"
+    static let sexKey = "journal.appleSex"
     static var isOn: Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
     static func remember(_ on: Bool?) { if let on { UserDefaults.standard.set(on, forKey: key) } }
+
+    /// Sexual activity from Apple Health is on with its own consent
+    /// (Nastavení → Deník): only then it is asked for, read and sent
+    /// (AppleHealth, src/apple-health.js). Off at first, and for whoever had
+    /// it before the consent existed.
+    static var tracksSex: Bool { isOn && UserDefaults.standard.bool(forKey: sexKey) }
+    static func remember(appleSex: Bool?) { if let appleSex { UserDefaults.standard.set(appleSex, forKey: sexKey) } }
+
+    /// Just turned on: the next sync reads its last 90 days (AppleHealth.readSexHistory).
+    static let sexHistoryKey = "journal.appleSexHistory"
+    static var wantsSexHistory: Bool { UserDefaults.standard.bool(forKey: sexHistoryKey) }
+    static func sexHistory(_ wanted: Bool) { UserDefaults.standard.set(wanted, forKey: sexHistoryKey) }
 }
 
 /// GET /app/api/journal/impact?metric=: Co na tebe působí.
@@ -273,7 +290,9 @@ extension APIClient {
     }
 
     func journalCatalog() async throws -> JournalCatalog {
-        try await get("/app/api/journal/catalog")
+        let catalog: JournalCatalog = try await get("/app/api/journal/catalog")
+        JournalSwitch.remember(appleSex: catalog.appleSex ?? false)
+        return catalog
     }
 
     func setJournalPinned(_ keys: [String]) async throws {

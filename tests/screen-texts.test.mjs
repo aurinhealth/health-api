@@ -6,7 +6,7 @@ import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { withLang } from "../src/lang.js";
-import { screenText, screenFacts, MAX_PER_DAY, markScreenTextsStale } from "../src/screen-texts.js";
+import { screenText, screenFacts, MAX_PER_DAY, SLOT_WAIT_MS, markScreenTextsStale } from "../src/screen-texts.js";
 
 const today = (extra = {}) => ({
   date: "2026-10-11",
@@ -63,6 +63,21 @@ test("the AI is asked once per day state; the same state answers from the cache"
   // Another screen has its own text.
   await screenText(env, { screen: "food", load: async () => ({ kcal: 0, target: 2600, macros: {}, meals: [] }), ask });
   assert.equal(asked, 2);
+});
+
+test("busy AI slots: the screen gives its own words at once and asks again next time", async () => {
+  const env = owner();
+  let asked = 0, seen = null, busy = true;
+  const ask = async (_env, req) => { asked++; seen = req; if (busy) throw Object.assign(new Error("Other AI requests are still running."), { busy: true }); return { text: JSON.stringify({ text: "Spal jsi 6 h 40.", advice: "" }) }; };
+  const first = await screenText(env, { screen: "today", load: async () => today(), ask });
+  assert.equal(first.source, "rules");
+  assert.equal(seen.slotWaitMs, SLOT_WAIT_MS);
+  assert.ok(SLOT_WAIT_MS <= 5000);
+  // Not marked as failed: the next opening asks the AI again.
+  busy = false;
+  const second = await screenText(env, { screen: "today", load: async () => today(), ask });
+  assert.equal(asked, 2);
+  assert.equal(second.source, "ai");
 });
 
 test("a new day state asks again, at most a few times a day", async () => {

@@ -34,14 +34,14 @@ test("calories set in Aurin stay through the next sync and the source keeps its 
   assert.deepEqual(result, { status: "ok", id: "i196923325", kcal: 520, device: 574, edited: true });
   sync(ride);
   assert.equal(stored("i196923325").calories, 520);
-  assert.equal(stored("i196923325").loadwiseKcalDevice, 574);
+  assert.equal(stored("i196923325").aurinKcalDevice, 574);
   await setActivityKcal(env, { id: "g-walk", kcal: 70 });
   sync(walk);
   assert.equal(stored("g-walk").exercise.metricsSummary.caloriesKcal, 70);
   // Back to the device's number.
   await setActivityKcal(env, { id: "g-walk", kcal: null });
   assert.equal(stored("g-walk").exercise.metricsSummary.caloriesKcal, 175);
-  assert.equal(stored("g-walk").loadwiseKcal, undefined);
+  assert.equal(stored("g-walk").aurinKcal, undefined);
   await assert.rejects(setActivityKcal(env, { id: "g-walk", kcal: 99999 }), /6000/);
 });
 

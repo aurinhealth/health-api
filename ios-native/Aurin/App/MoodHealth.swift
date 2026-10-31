@@ -30,9 +30,11 @@ enum MoodHealth {
         // Today now, another day in its evening.
         let when = date == AppModel.localDate(Date()) ? Date() : dayStart(date).addingTimeInterval(20 * 3600)
         let mood = HKStateOfMind(date: when, kind: .dailyMood, valence: valence(level), labels: hkLabels(labels), associations: [],
-                                 metadata: [HKMetadataKeySyncIdentifier: "loadwise:mood:" + date,
+                                 metadata: [HKMetadataKeySyncIdentifier: AppleHealthExport.syncPrefix + "mood:" + date,
                                             HKMetadataKeySyncVersion: NSNumber(value: Int(Date().timeIntervalSince1970 * 1000))])
-        do { try await store.save(mood) } catch { print("Apple Health mood failed", error.localizedDescription) }
+        do { try await store.save(mood) } catch { print("Apple Health mood failed", error.localizedDescription); return }
+        // Saved: the day's mood written before 2026-11 under the old prefix goes, so the day keeps one.
+        await AppleHealthExport.removeLegacy(type, ids: ["mood:" + date], from: store)
     }
 
     /// The newest mood of `date` logged outside Aurin: its level (1–5) and labels bits.
@@ -44,7 +46,10 @@ enum MoodHealth {
             let query = HKSampleQuery(sampleType: .stateOfMindType(), predicate: predicate, limit: HKObjectQueryNoLimit,
                                       sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { _, samples, _ in
                 let others = (samples ?? []).compactMap { $0 as? HKStateOfMind }
-                    .filter { !(($0.metadata?[HKMetadataKeySyncIdentifier] as? String)?.hasPrefix("loadwise:") ?? false) }
+                    .filter { sample in
+                        let id = sample.metadata?[HKMetadataKeySyncIdentifier] as? String ?? ""
+                        return !id.hasPrefix(AppleHealthExport.syncPrefix) && !id.hasPrefix(AppleHealthExport.legacySyncPrefix)
+                    }
                 continuation.resume(returning: others.first)
             }
             store.execute(query)

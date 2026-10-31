@@ -74,7 +74,7 @@ test("OAuth asks for the ring's data and saves the tokens", async () => {
   const { db } = setup();
   const e = env(db, undefined, { APP_ORIGIN: "https://aurin.health" });
   delete e.ULTRAHUMAN_TOKEN;
-  const start = await handleUltrahumanOAuth(new Request("https://aurin.health/oauth/ultrahuman?return=native"), e, "/oauth/ultrahuman");
+  const start = await handleUltrahumanOAuth(new Request("https://aurin.health/oauth/ultrahuman?return=app"), e, "/oauth/ultrahuman");
   const to = new URL(start.headers.get("Location"));
   assert.equal(to.origin + to.pathname, "https://auth.ultrahuman.com/authorise");
   assert.equal(to.searchParams.get("scope"), "ring_data profile");
@@ -82,7 +82,7 @@ test("OAuth asks for the ring's data and saves the tokens", async () => {
   const cookie = start.headers.get("Set-Cookie").split(";")[0];
   const { calls, fetchImpl } = api(url => url.includes("/oauth/token") ? Response.json({ access_token: "acc", refresh_token: "ref", expires_in: 3600 }) : null);
   const done = await handleUltrahumanOAuth(new Request("https://aurin.health/oauth/ultrahuman/callback?code=c&state=" + to.searchParams.get("state"), { headers: { Cookie: cookie } }), e, "/oauth/ultrahuman/callback", fetchImpl);
-  assert.equal(done.headers.get("Location"), "loadwise://connected?event=ultrahuman");
+  assert.equal(done.headers.get("Location"), "https://aurin.health/auth/app/connected?event=ultrahuman");
   assert.match(calls[0].body, /grant_type=authorization_code/);
   assert.match(calls[0].body, /redirect_uri=https%3A%2F%2Faurin.health%2Foauth%2Fultrahuman%2Fcallback/);
   assert.equal(JSON.parse(e.ULTRAHUMAN_TOKEN).refresh_token, "ref");

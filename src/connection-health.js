@@ -1,4 +1,4 @@
-// Whether a connected service still accepts Loadwise's access. A connection
+// Whether a connected service still accepts Aurin's access. A connection
 // counts as connected while its key is stored; when a sync finds the access
 // revoked or expired (Google invalid_grant, Intervals.icu 401/403), the
 // provider is marked broken here until the next successful call or a reconnect,
@@ -7,14 +7,30 @@
 // with the account) as sync_name 'connection_<provider>'.
 import { L } from "./lang.js";
 import { recordOpsEvent } from "./ops-report.js";
+import { transientD1Error, D1_RETRY_DELAYS_MS } from "./d1-retry.js";
 
 export const HEALTH_PROVIDERS = ["google", "intervals", "ultrahuman", "whoop", "wahoo"];
 const name = provider => "connection_" + provider;
 
+const ensured = new WeakSet();
 async function ensure(db) {
-  await db.prepare("CREATE TABLE IF NOT EXISTS sync_status (user_id INTEGER NOT NULL,sync_name TEXT NOT NULL,status TEXT,started_at TEXT,finished_at TEXT,details_json TEXT,updated_at TEXT,PRIMARY KEY(user_id,sync_name))").run();
+  if (ensured.has(db)) return;
+  await write(db.prepare("CREATE TABLE IF NOT EXISTS sync_status (user_id INTEGER NOT NULL,sync_name TEXT NOT NULL,status TEXT,started_at TEXT,finished_at TEXT,details_json TEXT,updated_at TEXT,PRIMARY KEY(user_id,sync_name))"));
+  ensured.add(db);
 }
 const userOf = env => env?.USER_ID ?? env?.DB?.userId;
+// The status upserts write the same row with the same values however often
+// they run, so a D1 blip (a reset, a lost connection) is tried again like a
+// read; it showed as a failed Google Health sync once on 2026-10-30.
+async function write(statement, delays = D1_RETRY_DELAYS_MS) {
+  for (let attempt = 0; ; attempt++) {
+    try { return await statement.run(); }
+    catch (error) {
+      if (attempt >= delays.length || !transientD1Error(error, { read: true })) throw error;
+      await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+    }
+  }
+}
 const parse = text => { try { return JSON.parse(text || "{}") || {}; } catch { return {}; } };
 
 // A refused credential, not an outage: only these ask the user to reconnect.
@@ -33,8 +49,8 @@ export async function markConnectionBroken(env, provider, message) {
     const now = new Date().toISOString();
     const row = await env.DB.prepare("SELECT status,details_json FROM sync_status WHERE user_id=? AND sync_name=?").bind(userOf(env), name(provider)).first();
     const details = { ...parse(row?.details_json), lastError: String(message || "").slice(0, 300), lastErrorAt: now };
-    await env.DB.prepare("INSERT INTO sync_status(user_id,sync_name,status,started_at,finished_at,details_json,updated_at) VALUES(?,?,'broken',NULL,?,?,datetime('now')) ON CONFLICT(user_id,sync_name) DO UPDATE SET status='broken',finished_at=excluded.finished_at,details_json=excluded.details_json,updated_at=excluded.updated_at")
-      .bind(userOf(env), name(provider), now, JSON.stringify(details)).run();
+    await write(env.DB.prepare("INSERT INTO sync_status(user_id,sync_name,status,started_at,finished_at,details_json,updated_at) VALUES(?,?,'broken',NULL,?,?,datetime('now')) ON CONFLICT(user_id,sync_name) DO UPDATE SET status='broken',finished_at=excluded.finished_at,details_json=excluded.details_json,updated_at=excluded.updated_at")
+      .bind(userOf(env), name(provider), now, JSON.stringify(details)));
     // Counted once per break, for the owner's morning e-mail.
     if (row?.status !== "broken") await recordOpsEvent(env.RAW_DB, "broken", provider, message);
   } catch (error) { console.error("Connection health write failed", provider, error.message); }
@@ -47,8 +63,8 @@ export async function markConnectionOk(env, provider) {
   try {
     await ensure(env.DB);
     const now = new Date().toISOString();
-    await env.DB.prepare("INSERT INTO sync_status(user_id,sync_name,status,started_at,finished_at,details_json,updated_at) VALUES(?,?,'ok',NULL,?,?,datetime('now')) ON CONFLICT(user_id,sync_name) DO UPDATE SET status='ok',finished_at=excluded.finished_at,details_json=json_set(COALESCE(sync_status.details_json,'{}'),'$.lastSuccessAt',excluded.finished_at),updated_at=excluded.updated_at WHERE sync_status.status!='ok' OR sync_status.updated_at IS NULL OR sync_status.updated_at<datetime('now','-10 minutes')")
-      .bind(userOf(env), name(provider), now, JSON.stringify({ lastSuccessAt: now })).run();
+    await write(env.DB.prepare("INSERT INTO sync_status(user_id,sync_name,status,started_at,finished_at,details_json,updated_at) VALUES(?,?,'ok',NULL,?,?,datetime('now')) ON CONFLICT(user_id,sync_name) DO UPDATE SET status='ok',finished_at=excluded.finished_at,details_json=json_set(COALESCE(sync_status.details_json,'{}'),'$.lastSuccessAt',excluded.finished_at),updated_at=excluded.updated_at WHERE sync_status.status!='ok' OR sync_status.updated_at IS NULL OR sync_status.updated_at<datetime('now','-10 minutes')")
+      .bind(userOf(env), name(provider), now, JSON.stringify({ lastSuccessAt: now })));
   } catch (error) { console.error("Connection health write failed", provider, error.message); }
 }
 
