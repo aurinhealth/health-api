@@ -258,6 +258,9 @@
 "Kopírovat na den" = "Copy to day";
 "Kopírovat na jiný den" = "Copy to another day";
 "Kouč" = "Coach";
+"Skrýt zdravotní údaje" = "Hide health details";
+"Celé oznámení uvidíš po otevření" = "Open a notification to see all of it";
+"Dej si sklenici vody." = "Have a glass of water.";
 "Kouč den nezhodnotil." = "The coach couldn't review the day.";
 "Kouč používá AI" = "The coach uses AI";
 "Kouč přemýšlí…" = "Coach is thinking…";
@@ -2059,6 +2062,11 @@
 "Zapamatováno: %@" = "Remembered: %@";
 "Zapomenuto: %@" = "Forgotten: %@";
 "Upraveno: %@" = "Changed: %@";
+"Ponecháno" = "Kept";
+"Zapomenout tohle?" = "Forget this?";
+"Přepsat tohle?" = "Update this?";
+"Zapomenout" = "Forget";
+"Přepsat" = "Update";
 "Už neplatí" = "No longer true";
 "Pořád platí" = "Still true";
 
@@ -3466,3 +3474,14 @@
 "S intervaly: dva tréninky hned po sobě" = "With intervals: two workouts back to back";
 "Jeden trénink: %@" = "One workout: %@";
 "přes Apple Health" = "via Apple Health";
+"Potvrď, že jsi to ty" = "Confirm it's you";
+"Zadej kód" = "Enter the code";
+"Smazat přes Face ID" = "Delete with Face ID";
+"Pokračovat přes Face ID" = "Continue with Face ID";
+"Poslat mi radši kód e-mailem" = "Email me a code instead";
+"Poslat kód na %@" = "Send code to %@";
+"Stažení všech dat potřebuje krátké ověření." = "Downloading all your data needs a quick check.";
+"Smazání účtu potřebuje krátké ověření." = "Deleting the account needs a quick check.";
+"Změna e-mailu potřebuje krátké ověření." = "Changing the email needs a quick check.";
+"Nový způsob přihlášení potřebuje krátké ověření." = "Adding a new way to sign in needs a quick check.";
+"Nejdřív potvrď, že jsi to ty." = "Confirm it's you first.";

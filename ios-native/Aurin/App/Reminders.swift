@@ -112,7 +112,8 @@ enum Reminders {
                 let remind = (at - offset + 1440) % 1440
                 // A bedtime after midnight (00:40) reminds at 00:10 tonight, which is "earlier" than now.
                 add(&planned, "bedtime", at: remind, title: offset >= 60 ? L10n.tr("Za hodinu do postele") : L10n.f("Za %@ min do postele", String(offset)),
-                    body: L10n.f("Na dnešní noc potřebuješ %@. Jdi spát do %@.", Fmt.duration(need), ClockText.format(bed)), afterMidnight: remind < 6 * 60)
+                    body: hidesValues ? L10n.tr("Dobrý spánek je základ regenerace.")
+                        : L10n.f("Na dnešní noc potřebuješ %@. Jdi spát do %@.", Fmt.duration(need), ClockText.format(bed)), afterMidnight: remind < 6 * 60)
             }
         }
         // Today's workouts not done yet (on the chosen days): an hour before
@@ -139,7 +140,8 @@ enum Reminders {
                                    mode: UserDefaults.standard.string(forKey: waterModeKey) ?? "every",
                                    every: minute(waterEveryKey, 3 * 60), count: minute(waterCountKey, 4))
             for at in times {
-                add(&planned, "water.\(at)", at: at, title: L10n.tr("Napij se"), body: L10n.f("Dnešní cíl je %@ vody.", amount))
+                add(&planned, "water.\(at)", at: at, title: L10n.tr("Napij se"),
+                    body: hidesValues ? L10n.tr("Dej si sklenici vody.") : L10n.f("Dnešní cíl je %@ vody.", amount))
             }
         }
         // Each chosen meal at its time, on the chosen days.
@@ -184,7 +186,7 @@ enum Reminders {
                 guard let number = pillNumber(on: date, packStart: pill.packStart, active: pill.active) else { continue }
                 if number == 0 && !pill.inPause { continue }
                 addOnce(&planned, "pill.\(offset)", day: day, at: pill.minute, title: L10n.tr("Čas na prášek"),
-                        body: number == 0 ? L10n.tr("Pauza mezi baleními") : L10n.f("%@. prášek z %@", String(number), String(pill.active)),
+                        body: hidesValues ? "" : number == 0 ? L10n.tr("Pauza mezi baleními") : L10n.f("%@. prášek z %@", String(number), String(pill.active)),
                         category: pillCategory, info: ["date": date])
             }
         }
@@ -293,6 +295,10 @@ enum Reminders {
         planned.append(UNNotificationRequest(identifier: prefix + id, content: content, trigger: trigger))
     }
 
+    /// Settings → Oznámení → Skrýt zdravotní údaje: the night's need, the
+    /// water target and the pill's number stay out of the reminders.
+    private static var hidesValues: Bool { PushRegistration.hideValuesOn }
+
     // MARK: - The pill
 
     /// The notification's category with "Vzato" and "Za 30 minut"
@@ -304,7 +310,7 @@ enum Reminders {
 
     static var pillNotificationCategory: UNNotificationCategory {
         UNNotificationCategory(identifier: pillCategory, actions: [
-            UNNotificationAction(identifier: pillTakenAction, title: L10n.tr("Vzato"), options: []),
+            UNNotificationAction(identifier: pillTakenAction, title: L10n.tr("Vzato"), options: [.authenticationRequired]),
             UNNotificationAction(identifier: pillSnoozeAction, title: L10n.tr("Za 30 minut"), options: [])
         ], intentIdentifiers: [], options: [])
     }

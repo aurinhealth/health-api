@@ -213,6 +213,7 @@ targets:
     platform: iOS
     sources:
       - path: AurinMorning
+      - path: Shared/NotificationText.swift
       - path: Aurin/Resources/Fonts/InstrumentSerif-Regular.ttf
         buildPhase: resources
     settings:
