@@ -38,6 +38,15 @@ final class LiveWorkout: NSObject {
     /// rate and calories show here, and the watch saves the one workout.
     private(set) var onWatch = false
     var running: Bool { start != nil }
+    /// The gym started on the watch: the day whose Training mode opens here
+    /// (RootView opens it and clears this).
+    var openFromWatch: String?
+    /// The gym finished on the watch: Training mode finishes too (TrainingModeView).
+    private(set) var endedOnWatch = false
+    /// The watch's workout this one follows; one closed here is not taken up
+    /// again by its next reading.
+    @ObservationIgnored private var watchStart: Date?
+    @ObservationIgnored private var closedWatchStart: Date?
     /// Seconds the workout stood between Dokončit and Pokračovat v tréninku:
     /// not counted on the clock nor in Apple Health (a pause in the workout).
     private(set) var paused: TimeInterval = 0
@@ -194,9 +203,37 @@ final class LiveWorkout: NSObject {
         let share: Set<HKSampleType> = [HKObjectType.workoutType(), HKQuantityType(.activeEnergyBurned), HKQuantityType(.heartRate)]
         let read: Set<HKObjectType> = [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned)]
         try? await store.requestAuthorization(toShare: share, read: read)
+        // The watch records this gym: no second workout here, and the watch is open already.
+        guard !onWatch else { tick(); return }
+        if watchFirst {
+            // The watch opens first and records; a second workout here at the
+            // same time can make the system end the watch's, and with it its
+            // heart rate. Only when the watch doesn't answer does this one start.
+            tick()
+            openOnWatch()
+            Task { await sessionUnlessWatch(at: begun) }
+            return
+        }
         if #available(iOS 26.0, *) { await startSession(at: begun) }
         tick()
         openOnWatch()
+    }
+
+    /// Settings → Apple Watch → Open on the watch, with the watch paired and the app on it.
+    private var watchFirst: Bool {
+        let state = WatchBridge.shared.watchState
+        return WatchBridge.settings.openOnWatch && state.paired && state.installed
+    }
+
+    /// The watch's first reading (WatchGym.Live) within 20 s, else this
+    /// iPhone records the workout itself.
+    private func sessionUnlessWatch(at begun: Date) async {
+        for _ in 0..<20 {
+            try? await Task.sleep(for: .seconds(1))
+            guard start == begun, !onWatch else { return }
+        }
+        guard start == begun, !onWatch, session == nil else { return }
+        if #available(iOS 26.0, *) { await startSession(at: begun) }
     }
 
     /// Settings → Apple Watch → Open on the watch: the watch app starts the gym
@@ -212,13 +249,29 @@ final class LiveWorkout: NSObject {
     /// A reading from the watch's workout (WatchBridge): the watch measures,
     /// and Apple Health gets the watch's workout instead of this one.
     func watch(_ live: WatchGym.Live) {
-        guard start != nil else { return }
+        if start == nil {
+            // Started on the watch: Training mode starts here too, from the
+            // watch's start, unless this workout was closed here already.
+            guard live.start != closedWatchStart, Date().timeIntervalSince(live.start) < 4 * 3600 else { return }
+            onWatch = true
+            watchStart = live.start
+            openFromWatch = AppModel.localDate(live.start)
+            let weight = AppModel.live?.today?.weight?.latest
+            Task { await begin(since: live.start, weightKg: weight) }
+        }
+        watchStart = live.start
         onWatch = true
         if sensor.liveBpm == nil, let bpm = live.heartRate, bpm > 0 {
             note(bpm)
             heartSource = "Apple Watch"
         }
         if live.calories > 0 { kcal = live.calories; liveKcal = true }
+    }
+
+    /// The gym finished on the watch (its summary's Finish).
+    func watchEnded() {
+        guard running, onWatch else { return }
+        endedOnWatch = true
     }
 
     /// Ends the clock. On iOS 26 the workout goes to Apple Health; returns
@@ -307,7 +360,11 @@ final class LiveWorkout: NSObject {
             session.end()
         }
         session = nil; builder = nil; liveKcal = false
+        if onWatch { closedWatchStart = watchStart }
         onWatch = false
+        watchStart = nil
+        endedOnWatch = false
+        openFromWatch = nil
         start = nil
         paused = 0
         carried = nil
@@ -351,7 +408,10 @@ final class LiveWorkout: NSObject {
         }
         if sensor.liveBpm == nil {
             let latest = await latestHeartRate(since: Date().addingTimeInterval(-120))
-            if builder == nil, let latest { note(latest.bpm) }
+            // Also with the live session when it brings no beat (AirPods without
+            // a heart sensor): the newest beat Apple Health has, e.g. synced from the watch.
+            let quiet = trail.last.map { Date().timeIntervalSince($0.date) > 30 } ?? true
+            if let latest, builder == nil || quiet { note(latest.bpm) }
             // The live session's beats come from a device iOS reads (AirPods, the watch).
             // AirPods leave no name on the beats: the headphones playing now say it.
             if heartRate != nil { heartSource = latest?.source ?? (builder != nil ? Self.heartHeadphones() : nil) }

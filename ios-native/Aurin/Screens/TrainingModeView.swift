@@ -29,6 +29,8 @@ struct TrainingModeView: View {
     @State private var restEnd: Date?
     @State private var restTotal = 90
     @State private var restStart: Date?
+    /// The rest the watch sent last: not sent back to it.
+    @State private var watchRest: WatchGym.Rest?
     @State private var catalog: [GymCatalogExercise] = []
     @State private var dumbbells: [Double] = []
     @State private var editing = false
@@ -93,6 +95,8 @@ struct TrainingModeView: View {
             // The Live Activity follows the heart rate from here: read in this
             // screen's body, every beat redrew the whole workout.
             HeartRateWatch(live: live) { syncActivity(quiet: true) }
+            // The Apple Watch's gym, 1:1 (its own view: the chain below is long enough).
+            WatchGymHooks(live: live, restEnd: restEnd, sendRest: sendRest, received: receiveRest, ended: finishIfEndedOnWatch)
             VStack(alignment: .leading, spacing: 0) {
                 header
                 if let day, !finishedSession, let exercise = current(day) { tools(day, exercise) }
@@ -146,7 +150,7 @@ struct TrainingModeView: View {
             .padding(.top, 12)
         }
         .navBarVisibility(.hidden)
-        .task { await load() }
+        .task { await load(); finishIfEndedOnWatch() }
         // A set or a change from the Apple Watch (WatchGymBridge.swift).
         .onReceive(NotificationCenter.default.publisher(for: .watchGym)) { note in
             guard let change = note.object as? WatchBridge.GymChange, change.date == date else { return }
@@ -1008,6 +1012,29 @@ struct TrainingModeView: View {
         if reps == was.reps ?? wasCarry?.reps ?? "" { reps = set.reps ?? carry?.reps ?? "" }
     }
 
+    /// The rest started, moved or skipped on the watch: the same here.
+    private func receiveRest(_ rest: WatchGym.Rest) {
+        guard rest.date == date, !model.demo, !finishedSession else { return }
+        watchRest = rest
+        if let name = rest.exercise, let at = day?.exercises.firstIndex(where: { $0.name == name }) { index = at }
+        guard let end = rest.end, end > Date() else {
+            restEnd = nil
+            return
+        }
+        restTotal = max(1, rest.total)
+        restStart = end.addingTimeInterval(-TimeInterval(restTotal))
+        restEnd = end
+    }
+
+    /// The rest to the watch's gym, unless it came from there.
+    private func sendRest(_ end: Date?) {
+        guard !model.demo, live.running || startTapped else { return }
+        let rest = WatchGym.Rest(date: date, end: end, total: restTotal, exercise: day?.exercises[safe: index]?.name)
+        guard !rest.same(watchRest) else { return }
+        watchRest = nil
+        WatchBridge.shared.sendRest(rest)
+    }
+
     private func move(_ by: Int) {
         guard let count = day?.exercises.count else { return }
         index = min(max(0, index + by), count - 1)
@@ -1308,6 +1335,13 @@ struct TrainingModeView: View {
         }
     }
 
+    /// Finished on the Apple Watch (its summary): finished here too, with the
+    /// summary and the rating, as with Dokončit.
+    private func finishIfEndedOnWatch() {
+        guard live.endedOnWatch, live.running, !finishedSession, !saving, day != nil else { return }
+        Task { await finish() }
+    }
+
     /// The sets are saved as they are ticked: the week shows the session done,
     /// then the rating.
     private func finish() async {
@@ -1562,4 +1596,24 @@ struct TrailingIcon: LabelStyle {
 
 extension Array {
     subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
+}
+
+/// Training mode and the Apple Watch's gym: the rest sent and taken both
+/// ways, and a Finish on the watch.
+struct WatchGymHooks: View {
+    let live: LiveWorkout
+    let restEnd: Date?
+    let sendRest: (Date?) -> Void
+    let received: (WatchGym.Rest) -> Void
+    let ended: () -> Void
+
+    var body: some View {
+        Color.clear.frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+            .onChange(of: restEnd) { _, end in sendRest(end) }
+            .onChange(of: live.endedOnWatch) { _, _ in ended() }
+            .onReceive(NotificationCenter.default.publisher(for: .watchRest)) { note in
+                if let rest = note.object as? WatchGym.Rest { received(rest) }
+            }
+    }
 }

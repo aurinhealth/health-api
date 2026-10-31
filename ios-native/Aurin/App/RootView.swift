@@ -308,6 +308,13 @@ struct RootView: View {
             }
             // Back in the app: new data, and what waited for signal (and water
             // added from the widget) goes out.
+            // The gym started on the Apple Watch: Training mode opens here too.
+            .onChange(of: LiveWorkout.shared.openFromWatch, initial: true) { _, date in
+                guard let date else { return }
+                LiveWorkout.shared.openFromWatch = nil
+                guard !model.demo, !model.immersive else { return }
+                model.open(.trainingMode(date))
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background, !model.demo {
                     BackgroundRefresh.schedule()
