@@ -292,15 +292,29 @@ struct TrainingModeView: View {
     /// Under the header: sound and vibration, the heart rate, the coach and the plan.
     private func tools(_ day: GymDay, _ exercise: GymExercise) -> some View {
         HStack(spacing: 8) {
-            GymSignalsMenu()
-            HeartSourceButton(live: live) { sensors = true }
-            Spacer(minLength: 4)
+            // Coach and Plan keep their words; the left chips drop theirs
+            // (first Vibrace, then Bez tepu) when the row is too narrow, e.g.
+            // with larger text, so nothing wraps or ends in "…". Coach stays
+            // outside ViewThatFits: a switch must not close its open chat.
+            ViewThatFits(in: .horizontal) {
+                signalsAndHeart(compactSignals: false, compactHeart: false)
+                signalsAndHeart(compactSignals: true, compactHeart: false)
+                signalsAndHeart(compactSignals: true, compactHeart: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             CoachPill(subject: .workout(day, exercise: exercise, resting: restEnd != nil, restSeconds: restTotal, date: date), height: 34)
-            Button { editing = true } label: { ToolChip(systemImage: "list.bullet", title: L10n.tr("Plán")) }
+            Button { editing = true } label: { ToolChip(systemImage: "list.bullet", title: L10n.tr("Plán")).fixedSize() }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.tr("Upravit plán"))
         }
         .padding(.top, 12)
+    }
+
+    private func signalsAndHeart(compactSignals: Bool, compactHeart: Bool) -> some View {
+        HStack(spacing: 8) {
+            GymSignalsMenu(compact: compactSignals).fixedSize()
+            HeartSourceButton(live: live, compact: compactHeart) { sensors = true }.fixedSize()
+        }
     }
 
     private func title(_ day: GymDay) -> String {
