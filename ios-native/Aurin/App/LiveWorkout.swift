@@ -205,9 +205,35 @@ final class LiveWorkout: NSObject {
         try? await store.requestAuthorization(toShare: share, read: read)
         // The watch records this gym: no second workout here, and the watch is open already.
         guard !onWatch else { tick(); return }
+        if watchFirst {
+            // The watch opens first and records; a second workout here at the
+            // same time can make the system end the watch's, and with it its
+            // heart rate. Only when the watch doesn't answer does this one start.
+            tick()
+            openOnWatch()
+            Task { await sessionUnlessWatch(at: begun) }
+            return
+        }
         if #available(iOS 26.0, *) { await startSession(at: begun) }
         tick()
         openOnWatch()
+    }
+
+    /// Settings → Apple Watch → Open on the watch, with the watch paired and the app on it.
+    private var watchFirst: Bool {
+        let state = WatchBridge.shared.watchState
+        return WatchBridge.settings.openOnWatch && state.paired && state.installed
+    }
+
+    /// The watch's first reading (WatchGym.Live) within 20 s, else this
+    /// iPhone records the workout itself.
+    private func sessionUnlessWatch(at begun: Date) async {
+        for _ in 0..<20 {
+            try? await Task.sleep(for: .seconds(1))
+            guard start == begun, !onWatch else { return }
+        }
+        guard start == begun, !onWatch, session == nil else { return }
+        if #available(iOS 26.0, *) { await startSession(at: begun) }
     }
 
     /// Settings → Apple Watch → Open on the watch: the watch app starts the gym
@@ -382,7 +408,10 @@ final class LiveWorkout: NSObject {
         }
         if sensor.liveBpm == nil {
             let latest = await latestHeartRate(since: Date().addingTimeInterval(-120))
-            if builder == nil, let latest { note(latest.bpm) }
+            // Also with the live session when it brings no beat (AirPods without
+            // a heart sensor): the newest beat Apple Health has, e.g. synced from the watch.
+            let quiet = trail.last.map { Date().timeIntervalSince($0.date) > 30 } ?? true
+            if let latest, builder == nil || quiet { note(latest.bpm) }
             // The live session's beats come from a device iOS reads (AirPods, the watch).
             // AirPods leave no name on the beats: the headphones playing now say it.
             if heartRate != nil { heartSource = latest?.source ?? (builder != nil ? Self.heartHeadphones() : nil) }
