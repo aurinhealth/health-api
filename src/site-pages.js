@@ -727,7 +727,7 @@ ${body}
 <nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li></ul></nav>
 <nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/cs/privacy" hreflang="cs">Soukromí</a> · <a href="/cs/terms" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
-<div class="base"><span>© 2026 Aurin · run by Petr Bouma, Czech Republic</span><span>Aurin is not a medical device.</span></div>
+<div class="base"><span>© 2026 Aurin · run by ${OPERATOR.short}</span><span>Aurin is not a medical device.</span></div>
 </div></footer>
 ${demoScript}
 ${siteScript}
@@ -758,7 +758,9 @@ const CONTACT_EMAIL = 'support@aurin.health';
 // name, registered office and IČO (§ 435 of the Czech Civil Code), as in the Trade Licensing Register.
 const OPERATOR = {
   en: 'Petr Bouma, a sole trader in the Czech Republic (Company ID (IČO) 30194202, registered office Vrchlického 142, Sedlec, 284 03 Kutná Hora, registered in the Czech Trade Licensing Register)',
-  cs: 'Petr Bouma, fyzická osoba podnikající v České republice (IČO 30194202, sídlo Vrchlického 142, Sedlec, 284 03 Kutná Hora, zapsán v živnostenském rejstříku)'
+  cs: 'Petr Bouma, fyzická osoba podnikající v České republice (IČO 30194202, sídlo Vrchlického 142, Sedlec, 284 03 Kutná Hora, zapsán v živnostenském rejstříku)',
+  // The footer of every page (the website is English only).
+  short: 'Petr Bouma, IČO 30194202, Vrchlického 142, 284 03 Kutná Hora, Czech Republic'
 };
 const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
 const HEALTH_POLICY = 'https://developers.google.com/health/policies/health-api-developer-user-data-policy';
@@ -1150,16 +1152,17 @@ export function privacyPage(request, {apple = false, email = false, open = false
 </ul>
 <p>When you scan a barcode or a food label without AI, or pick a photo with a barcode, the image is processed on your device. Exercise photos are loaded from GitHub (the Free Exercise DB), and where an exercise has none, a still from its video is loaded from YouTube; these services see only your IP address and which image is loaded. Exercise videos are embedded from YouTube in privacy-enhanced mode, and YouTube receives more data only when you play a video.</p>
 <p><strong>Food database.</strong> Food search uses a catalogue stored with Aurin (your searches are not sent anywhere else), made from open data: Open Food Facts (© Open Food Facts contributors, <a href="https://opendatacommons.org/licenses/odbl/1-0/">ODbL 1.0</a>), USDA FoodData Central (public domain), Fineli by THL (CC BY 4.0), Ciqual by Anses (Licence Ouverte / CC BY 4.0) and CoFID by Public Health England (Open Government Licence 3.0). The catalogue as a database is available under the ODbL; values are as the sources give them and are not checked against every label.</p>
-<p><strong>Transfers outside the EU.</strong> Some recipients are outside the European Union. For each of them, this is the safeguard the GDPR requires (Chapter V):</p>
+<p><strong>Transfers outside the EU.</strong> Some of the services above are outside the European Union. These are the safeguards the GDPR requires for them (Chapter V):</p>
 <ul>
 <li><strong>Cloudflare, Inc.</strong> (USA), our processor: certified under the EU–US Data Privacy Framework, and the EU Standard Contractual Clauses in its Data Processing Addendum. Aurin’s database and backups are stored in the EU.</li>
 <li><strong>OpenAI</strong> (USA), our processor: our contract is with OpenAI Ireland Ltd, and data that goes on to OpenAI in the USA is covered by the EU Standard Contractual Clauses in OpenAI’s Data Processing Addendum.</li>
 <li><strong>Apple</strong> (Apple Distribution International Ltd., Ireland, and Apple Inc., USA): our processor for notifications and Apple Weather, and a separate controller for the App Store and TestFlight. For people in the EU our counterpart is Apple Distribution International Ltd. in Ireland, and data that goes on to Apple Inc. in the USA is covered by the EU Standard Contractual Clauses.</li>
-<li><strong>GitHub, Inc.</strong> (USA), our processor for the backup: certified under the EU–US Data Privacy Framework, and the EU Standard Contractual Clauses in its Data Protection Agreement.</li>
+<li><strong>GitHub, Inc.</strong> (USA), our processor for the backup and the host of the exercise photos: certified under the EU–US Data Privacy Framework, and the EU Standard Contractual Clauses in its Data Protection Agreement.</li>
 <li><strong>Google LLC</strong> (USA), for Google Health and YouTube a separate controller you choose to use: certified under the EU–US Data Privacy Framework.</li>
 <li><strong>Intervals.icu Ltd</strong> (United Kingdom, servers in Germany and Finland), a separate controller: the European Commission’s adequacy decision for the United Kingdom.</li>
 <li><strong>Wahoo Fitness</strong> (USA), a separate controller: it gets only the rides and runs you plan, because you connected Wahoo to have them on your device (Article 49(1)(b) GDPR).</li>
 <li><strong>Open-Meteo GmbH</strong> (Switzerland): the European Commission’s adequacy decision for Switzerland.</li>
+<li><strong>WHOOP</strong> (USA) and <strong>Ultrahuman</strong> (India) are services you connect so that Aurin can read your data from them. Aurin sends them only its requests for that data, with the access you granted, and none of your data.</li>
 </ul>
 <p>You can ask for a copy of these safeguards at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. The companies certified under the Data Privacy Framework are listed at <a href="https://www.dataprivacyframework.gov/list">dataprivacyframework.gov</a>.</p>
 <h2>Storage and security</h2>
@@ -1272,16 +1275,17 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 </ul>
 <p>Když skenuješ čárový kód nebo etiketu bez AI, nebo vybereš fotku s kódem, obrázek se zpracuje přímo ve tvém zařízení. Fotky cviků se načítají z GitHubu (Free Exercise DB), a kde cvik žádnou nemá, načte se náhled jeho videa z YouTube; tyto služby vidí jen tvou IP adresu a který obrázek se načítá. Videa cviků jsou vložená z YouTube v režimu se zvýšenou ochranou soukromí a YouTube dostane víc dat, až když video spustíš.</p>
 <p><strong>Databáze potravin.</strong> Hledání potravin používá katalog uložený u Aurinu (co hledáš, se nikam dál neposílá), sestavený z otevřených dat: Open Food Facts (© přispěvatelé Open Food Facts, <a href="https://opendatacommons.org/licenses/odbl/1-0/">ODbL 1.0</a>), USDA FoodData Central (volné dílo), Fineli od THL (CC BY 4.0), Ciqual od Anses (Licence Ouverte / CC BY 4.0) a CoFID od Public Health England (Open Government Licence 3.0). Katalog jako databáze je k dispozici pod licencí ODbL; hodnoty jsou převzaté ze zdrojů a nejsou ověřené proti každé etiketě.</p>
-<p><strong>Předávání mimo EU.</strong> Někteří příjemci jsou mimo Evropskou unii. U každého z nich je to tato záruka, kterou vyžaduje GDPR (kapitola V):</p>
+<p><strong>Předávání mimo EU.</strong> Některé z výše uvedených služeb jsou mimo Evropskou unii. Pro ně platí tyto záruky, které vyžaduje GDPR (kapitola V):</p>
 <ul>
 <li><strong>Cloudflare, Inc.</strong> (USA), náš zpracovatel: certifikace v rámci EU–USA pro ochranu údajů (Data Privacy Framework) a standardní smluvní doložky EU v jeho dodatku o zpracování údajů. Databáze Aurinu i zálohy jsou uložené v EU.</li>
 <li><strong>OpenAI</strong> (USA), náš zpracovatel: smlouvu máme s OpenAI Ireland Ltd a data, která jdou dál k OpenAI do USA, chrání standardní smluvní doložky EU v dodatku OpenAI o zpracování údajů.</li>
 <li><strong>Apple</strong> (Apple Distribution International Ltd., Irsko, a Apple Inc., USA): pro oznámení a Apple Weather náš zpracovatel, pro App Store a TestFlight samostatný správce. Pro lidi v EU je naším protějškem Apple Distribution International Ltd. v Irsku a data, která jdou dál k Apple Inc. do USA, chrání standardní smluvní doložky EU.</li>
-<li><strong>GitHub, Inc.</strong> (USA), náš zpracovatel pro zálohu: certifikace v rámci Data Privacy Framework a standardní smluvní doložky EU v jeho smlouvě o ochraně údajů.</li>
+<li><strong>GitHub, Inc.</strong> (USA), náš zpracovatel pro zálohu a úložiště fotek cviků: certifikace v rámci Data Privacy Framework a standardní smluvní doložky EU v jeho smlouvě o ochraně údajů.</li>
 <li><strong>Google LLC</strong> (USA), pro Google Health a YouTube samostatný správce, kterého se rozhodneš používat: certifikace v rámci Data Privacy Framework.</li>
 <li><strong>Intervals.icu Ltd</strong> (Spojené království, servery v Německu a Finsku), samostatný správce: rozhodnutí Evropské komise o odpovídající ochraně pro Spojené království.</li>
 <li><strong>Wahoo Fitness</strong> (USA), samostatný správce: dostane jen jízdy a běhy, které naplánuješ, protože sis Wahoo připojil, abys je měl ve svém zařízení (čl. 49 odst. 1 písm. b) GDPR).</li>
 <li><strong>Open-Meteo GmbH</strong> (Švýcarsko): rozhodnutí Evropské komise o odpovídající ochraně pro Švýcarsko.</li>
+<li><strong>WHOOP</strong> (USA) a <strong>Ultrahuman</strong> (Indie) jsou služby, které připojíš, aby z nich Aurin mohl číst tvoje data. Aurin jim posílá jen své žádosti o tato data s přístupem, který jsi udělil, a žádná tvoje data.</li>
 </ul>
 <p>Kopii těchto záruk si můžeš vyžádat na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. Firmy certifikované v rámci Data Privacy Framework jsou na seznamu na <a href="https://www.dataprivacyframework.gov/list">dataprivacyframework.gov</a>.</p>
 <h2>Uložení a zabezpečení</h2>
@@ -1526,8 +1530,8 @@ export function healthDataPage(request) {
 <li>Workouts and how they went, training load, readiness and recovery estimates, soreness, pain, illness or injury status you report.</li>
 <li>Body measurements: weight, height, body fat, age and sex.</li>
 <li>Food, drinks and nutrition targets, including photos of food you choose to send.</li>
-<li>Your journal: the entries you tick off (such as sauna, a late meal, alcohol, cannabis, medication or breathing exercises) and your mood and, if you turn on the Journal in Apple Health, symptoms, mindful minutes, time in daylight, noise while you sleep and your mood (State of Mind) from Apple Health.</li>
-<li>Only if you turn it on with its own consent (Settings → Journal → Sexual activity): whether you had sexual activity on a day, from Apple Health, one value a day. It stays in Aurin and never goes to AI.</li>
+<li>Your journal: the entries you tick off (such as sauna, a late meal, alcohol, cannabis, CBD, medication or breathing exercises), your mood and anxiety and, if you turn on the Journal in Apple Health, symptoms, mindful minutes, time in daylight, noise while you sleep and your mood (State of Mind) from Apple Health.</li>
+<li>Only if you turn it on with its own consent (Settings → Journal → Sexual activity): whether you had sexual activity on a day, from Apple Health, one value a day. It is kept only in Aurin’s database and its backups, never goes to AI or any connected service, and turning the switch off deletes it.</li>
 <li>Only if you turn cycle tracking on: periods, their strength, symptoms, contraception, life stage, hormone therapy and the pills you mark as taken.</li>
 <li>What you write to the AI coach and the photos you send it.</li>
 <li>What you put in a problem report from Settings → Help, including its screenshot, which can show health data.</li>
@@ -1541,7 +1545,8 @@ export function healthDataPage(request) {
 <p><strong>To share it.</strong> Sharing consumer health data takes a separate consent from the one to collect it, for each recipient, and none is given in advance:</p>
 <ul>
 <li><strong>OpenAI</strong>, for the AI features: a checkbox of its own (“Allow AI”). Your mood, anxiety, cannabis, CBD and medication go to the coach only after a further consent (Settings → Journal → Sensitive items), and your cycle only after “Coach knows my cycle”. Sexual activity never goes to AI.</li>
-<li><strong>Intervals.icu</strong>: your health data and Apple Watch workouts go there only after you turn on “Also send health data” when you connect it, or later in Settings → Sync.</li>
+<li><strong>Intervals.icu</strong>: when you connect it, Aurin first shows what it writes there: the workouts you plan and finish in Aurin and your calorie target, with notes on your nutrition. Connecting it is your consent to that. Your health data (sleep, heart rate, HRV, blood oxygen, breathing, VO2 max, body fat, steps and weight) and your Apple Watch workouts go there only after you also turn on “Also send health data” on that screen, or later in Settings → Sync.</li>
+<li><strong>Wahoo</strong>: when you connect it, Aurin first shows that it sends there only the rides and runs you plan in Aurin, for your ELEMNT and KICKR. Connecting it is your consent to that.</li>
 <li><strong>Google Health</strong>: before you connect it, Aurin shows what it writes there (the food log and, with the permissions you tick on Google’s consent screen, your weight and workouts) and asks for your consent.</li>
 <li><strong>Apple Health</strong> stays on your iPhone: Aurin writes to it only the types you turn on and iOS asks you about each one.</li>
 </ul>
@@ -1557,7 +1562,7 @@ export function healthDataPage(request) {
 <ul>
 <li><strong>Know and access:</strong> confirm whether we collect, share or sell your consumer health data, see a list of the third parties we share it with, and download a copy of all your data in <strong>Settings → Privacy &amp; data → Download my data</strong>.</li>
 <li><strong>Withdraw consent:</strong> turn off the AI features, the sensitive journal items, sexual activity, cycle tracking or health data for Intervals.icu in the app, disconnect a service in <strong>Settings → Data sources</strong>, or withdraw consent entirely by deleting your account.</li>
-<li><strong>Delete:</strong> <strong>Settings → Privacy &amp; data → Delete account</strong> deletes your account and all its data immediately. Data Aurin copied to Intervals.icu, Google Health or Apple Health stays there; you can delete it in those services.</li>
+<li><strong>Delete:</strong> <strong>Settings → Privacy &amp; data → Delete account</strong> deletes your account and all its data immediately; database backups are overwritten within 30 days. Data Aurin copied to Intervals.icu, Google Health or Apple Health stays there; you can delete it in those services.</li>
 </ul>
 <p>You can also e-mail any request to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. We may ask you to confirm the request from the e-mail address of your account, and we answer within 45 days.</p>
 <h2>Appeals</h2>
