@@ -182,6 +182,9 @@ test("the server wires the pause: the gate before every route, the route, resumi
   assert.ok(source.indexOf("pausedRefusal(request.method") < source.indexOf("needsAIAccess(request.method"), "before the AI");
   assert.match(source, /url\.pathname==='\/app\/api\/health-pause'&&request\.method==='POST'/);
   assert.match(source, /toUpperCase\(\)!=='PAUSE'/);
+  // It deletes for good, so it asks "Confirm it's you" before pausing (step-up.js).
+  const route = source.slice(source.indexOf("url.pathname==='/app/api/health-pause'"));
+  assert.ok(route.indexOf("await stepUp()") > 0 && route.indexOf("await stepUp()") < route.indexOf("pauseHealthData(env,session.user)"), "step-up before the pause");
   // The entry is let go only after the consent is saved.
   assert.ok(source.indexOf("resumeHealth(env)") < source.indexOf("saveConsent(env,body)") && source.indexOf("saveConsent(env,body)") < source.indexOf("resumeDone(env)"));
   assert.match(source, /resumeFailed\(env\)/);
