@@ -3,7 +3,7 @@
 import { initialImport } from "./account-sync.js";
 import { onboardingStatus, completeOnboarding } from "./onboarding.js";
 import { subscriptionStatus } from "./subscription.js";
-import { appAccountToken, saveAppTransaction, storePurchase } from "./app-store.js";
+import { appAccountToken, saveAppInstall, saveAppTransaction, storePurchase } from "./app-store.js";
 import { coachAllowance } from "./coach-allowance.js";
 import { consentStatus, saveConsent } from "./consent.js";
 import { missingProviders, connectionEnvironment, deleteConnectionSecret } from "./connection-secrets.js";
@@ -142,6 +142,13 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     try{return Response.json(await saveAppTransaction(env,await request.json().catch(()=>({}))),{headers:{'Cache-Control':'no-store'}});}
+    catch(error){if(error.status)return Response.json({status:'error',message:error.message},{status:error.status});throw error;}
+  }
+  // Apple's signed AppTransaction: a TestFlight build or the App Store one (ai-limit-share.js groups).
+  if(url.pathname==='/app/api/subscription/install'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{return Response.json(await saveAppInstall(env,await request.json().catch(()=>({}))),{headers:{'Cache-Control':'no-store'}});}
     catch(error){if(error.status)return Response.json({status:'error',message:error.message},{status:error.status});throw error;}
   }
   if(url.pathname==='/app/api/onboarding'){

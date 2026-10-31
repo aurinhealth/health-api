@@ -144,6 +144,8 @@ extension AppModel {
         await checkSetup()
         // The morning readiness push for this account (PushRegistration.swift).
         await PushRegistration.refresh(api: api)
+        // A TestFlight build or the App Store one, for this account's AI limits (ProStore.swift).
+        await ProStore.shared.reportInstall()
     }
 
     /// Signed in, but not yet known whether to the account this phone kept things

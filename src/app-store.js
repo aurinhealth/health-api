@@ -147,7 +147,9 @@ export async function verifyAppStoreJws(jws, { roots = [APPLE_ROOT_CA_G3] } = {}
 // free promotional one), which gets the reduced AI limits (ai-limit-share.js).
 // offer_type: Apple's offerType of the transaction (2 promotional, 3 offer code:
 // the pilot's discount or a gift), whose AI spending is counted apart.
-const COLUMNS = ['app_account_token TEXT', 'original_transaction_id TEXT', 'product_id TEXT', 'store_environment TEXT', 'store_signed_at INTEGER', 'auto_renew INTEGER', 'updated_at TEXT', 'free_trial INTEGER', 'offer_type INTEGER'];
+// testflight: 1 while the app the account last used is a TestFlight build
+// (Apple's signed AppTransaction says Sandbox), its AI counted with TestFlight's.
+const COLUMNS = ['app_account_token TEXT', 'original_transaction_id TEXT', 'product_id TEXT', 'store_environment TEXT', 'store_signed_at INTEGER', 'auto_renew INTEGER', 'updated_at TEXT', 'free_trial INTEGER', 'offer_type INTEGER', 'testflight INTEGER'];
 // The columns are added the first time a statement misses them, so a request
 // costs no schema statements once they are there.
 export async function ensureStoreColumns(db) {
@@ -229,6 +231,20 @@ export async function saveAppTransaction(env, body, options = {}) {
   if (holder && Number(holder.user_id) !== Number(env.USER_ID)) throw refuse(L('Tento nákup patří jinému účtu Aurin.', 'This purchase belongs to another Aurin account.'), 409);
   const saved = await write(env.DB, env.USER_ID, tx, null, null);
   return { status: 'ok', plan: saved.plan, validUntil: saved.validUntil, productId: tx.productId, environment: tx.environment };
+}
+
+// POST /app/api/subscription/install {signedAppTransaction}: the app's
+// AppTransaction, signed by Apple, says whether this install came from
+// TestFlight (receiptType Sandbox) or the App Store (Production). A TestFlight
+// tester without a test purchase is then counted with TestFlight, not with the
+// accounts without a purchase. Written only when it changes.
+export async function saveAppInstall(env, body, options = {}) {
+  const app = await verifyAppStoreJws(body?.signedAppTransaction, options);
+  if (app.bundleId !== bundleId(env)) throw refuse(L('Doklad patří jiné aplikaci.', 'The record belongs to another app.'));
+  if (!ENVIRONMENTS.has(app.receiptType)) throw refuse(L('Doklad z neznámého prostředí.', 'Record from an unknown environment.'));
+  const testflight = app.receiptType === 'Sandbox' ? 1 : 0;
+  await withColumns(env.DB, () => env.DB.prepare("INSERT INTO subscriptions(user_id,plan,testflight) VALUES(?,'free',?) ON CONFLICT(user_id) DO UPDATE SET testflight=excluded.testflight WHERE subscriptions.testflight IS NOT excluded.testflight").bind(env.USER_ID, testflight).run());
+  return { status: 'ok', testflight: testflight === 1 };
 }
 
 // POST /webhooks/app-store: App Store Server Notifications V2 ({signedPayload}).

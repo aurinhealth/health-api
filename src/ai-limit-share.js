@@ -19,7 +19,8 @@ export const unpaidLimitShare = env => {
 // - "gift": Pro through an offer code or a promotional offer (the pilot's
 //   discount, a gift) and the owner: whole limits, counted apart;
 // - "trial": the free week (Apple's introductory offer, or a free promotional one);
-// - "testflight": a Sandbox purchase (TestFlight testers);
+// - "testflight": a Sandbox purchase, or no purchase in a TestFlight build
+//   (subscriptions.testflight, app-store.js saveAppInstall): the testers;
 // - "free": no purchase, an account older than NEW_ACCOUNT_DAYS (everyone of
 //   the pilot until the paywall is on);
 // - "new": no purchase, an account made in the last NEW_ACCOUNT_DAYS (open
@@ -31,14 +32,14 @@ export const NEW_ACCOUNT_DAYS = 7;
 export const newAccountSince = (now = Date.now()) => new Date(now - NEW_ACCOUNT_DAYS * 864e5).toISOString().replace("T", " ").slice(0, 19);
 const OFFER_CODE = 3, PROMOTIONAL = 2;
 export function groupOfSubscription(row, now = Date.now()) {
-  if (!(row?.plan === "ai" && row.valid_until && Date.parse(row.valid_until) > now)) return "free";
+  if (!(row?.plan === "ai" && row.valid_until && Date.parse(row.valid_until) > now)) return Number(row?.testflight) === 1 ? "testflight" : "free";
   if (row.store_environment !== "Production") return "testflight";
   if (Number(row.free_trial) === 1) return "trial";
   return [OFFER_CODE, PROMOTIONAL].includes(Number(row.offer_type)) ? "gift" : "paid";
 }
 
 async function subscriptionRow(env) {
-  const read = () => env.DB.prepare("SELECT plan, valid_until, store_environment, free_trial, offer_type FROM subscriptions WHERE user_id = ?").bind(env.USER_ID).first();
+  const read = () => env.DB.prepare("SELECT plan, valid_until, store_environment, free_trial, offer_type, testflight FROM subscriptions WHERE user_id = ?").bind(env.USER_ID).first();
   try { return await read(); } catch (error) {
     if (!/no such (column|table)|has no column/i.test(String(error?.message || error))) throw error;
     await ensureStoreColumns(env.DB);

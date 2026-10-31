@@ -57,6 +57,10 @@ test("an account's subscription decides its group", () => {
   assert.equal(groupOfSubscription(sub("Production", 0, 2)), "gift");
   assert.equal(groupOfSubscription(sub("Production", 1, 1)), "trial");
   assert.equal(groupOfSubscription(sub("Sandbox")), "testflight");
+  assert.equal(groupOfSubscription({ plan: "free", testflight: 1 }), "testflight", "a TestFlight build without a test purchase");
+  assert.equal(groupOfSubscription({ plan: "free", testflight: 0 }), "free");
+  assert.equal(groupOfSubscription(sub("Production", 0, null), Date.now()), "paid");
+  assert.equal(groupOfSubscription({ ...sub("Production"), testflight: 1 }), "paid", "a real purchase wins");
   assert.equal(groupOfSubscription(sub("Production", 0, null, new Date(Date.now() - 1000).toISOString())), "free");
 });
 
@@ -158,6 +162,10 @@ test("the owner sees today's spending by group against its brake, yesterday and 
   assert.equal(report.today, 1.4);
   const counted = async owner => Object.fromEntries((await aiSpendingReport({ RAW_DB: db, AI_GROUP_BRAKES: BRAKES, OWNER_EMAIL: owner })).groups.map(g => [g.group, g.accounts]));
   assert.deepEqual([(await counted(" U7@example.com ")).gift, (await counted(" U7@example.com ")).free], [2, 0], "the owner without a purchase counts in gift, not free");
+  db.sqlite.prepare("UPDATE subscriptions SET testflight = 0").run();
+  db.sqlite.prepare("INSERT INTO subscriptions (user_id, plan, testflight) VALUES (7, 'free', 1)").run();
+  assert.deepEqual([(await counted("")).testflight, (await counted("")).free], [2, 0], "a TestFlight build without a purchase counts in testflight, not free");
+  db.sqlite.prepare("DELETE FROM subscriptions WHERE user_id = 7").run();
   assert.deepEqual([(await counted("u8@example.com")).gift, (await counted("u8@example.com")).paid], [2, 0], "the owner with a purchase counts once, in gift");
   assert.equal(report.yesterday, 2.5);
   assert.equal(report.month, yesterday.slice(0, 7) === today.slice(0, 7) ? 3.9 : 1.4);

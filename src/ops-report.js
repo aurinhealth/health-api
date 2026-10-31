@@ -157,7 +157,7 @@ export async function accountStats(env, date, { now = Date.now() } = {}) {
   const [y, m, d] = date.split("-").map(Number), monthDays = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const users = (await db.prepare("SELECT id, email, created_at FROM users WHERE lower(email) <> ?").bind(owner).all()).results || [];
   const ids = new Set(users.map(u => Number(u.id)));
-  const subs = (await db.prepare("SELECT user_id, plan, valid_until, product_id, store_environment, free_trial, offer_type FROM subscriptions WHERE plan = 'ai'").all()).results || [];
+  const subs = (await db.prepare("SELECT user_id, plan, valid_until, product_id, store_environment, free_trial, offer_type, testflight FROM subscriptions WHERE plan = 'ai' OR testflight = 1").all()).results || [];
   const total = await db.prepare("SELECT cost_usd FROM ai_spend_days WHERE day = ?").bind(date).first().catch(() => null);
   const groups = await aiSpendByGroup(db, date).catch(() => []);
   const stats = { groups, totalYesterdayUsd: Number(total?.cost_usd) || 0, accounts: users.length, newWeek: users.filter(u => String(u.created_at || "").slice(0, 10) >= weekFrom).length, aiUsersWeek: 0, paidMonthly: 0, paidYearly: 0, gift: 0, trial: 0, sandbox: 0, weekUsd: 0, monthUsd: 0, monthDay: d, monthDays, nearCap: [] };

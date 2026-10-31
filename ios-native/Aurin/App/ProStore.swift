@@ -55,12 +55,42 @@ final class ProStore {
         Task {
             await load()
             await refresh()
+            await reportInstall()
         }
     }
 
-    /// Signed out or another account: the next purchase asks for its token again.
+    /// Signed out or another account: the next purchase asks for its token again,
+    /// and the next account hears where this app came from.
     func forgetAccount() {
         accountToken = nil
+        UserDefaults.standard.removeObject(forKey: Self.installSentKey)
+    }
+
+    // MARK: - Where the app came from
+
+    /// What reportInstall last told the server: the build and its environment.
+    nonisolated static let installSentKey = "proStore.installSent"
+
+    /// Tells the server whether this app is a TestFlight build or the App
+    /// Store one (POST /app/api/subscription/install), with the AppTransaction
+    /// Apple signed: a tester without a test purchase then counts with
+    /// TestFlight for AI (src/ai-limit-share.js). Once per build and account;
+    /// a failure tries again at the next start or sign-in.
+    func reportInstall() async {
+        guard let api, let result = try? await AppTransaction.shared, case .verified(let app) = result else { return }
+        // Xcode signs with its own key, which the server never accepts.
+        guard app.environment == .sandbox || app.environment == .production else { return }
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+        let sent = "\(build)|\(app.environment.rawValue)"
+        let defaults = UserDefaults.standard
+        guard defaults.string(forKey: Self.installSentKey) != sent else { return }
+        do {
+            let _: JSONValue = try await api.send("/app/api/subscription/install", method: "POST",
+                                                  body: ["signedAppTransaction": JSONValue.string(result.jwsRepresentation)])
+            defaults.set(sent, forKey: Self.installSentKey)
+        } catch {
+            // Signed out or no signal: the next start or sign-in tries again.
+        }
     }
 
     func load() async {
