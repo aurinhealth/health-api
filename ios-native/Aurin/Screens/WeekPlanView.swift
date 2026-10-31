@@ -7,11 +7,11 @@ import SwiftUI
 // "Zapisovat tréninky" also puts them into the iPhone calendar (CalendarTime).
 
 private func sportLabel(_ sport: String) -> String {
-    ["ride": "Kolo", "run": "Běh", "gym": "Posilovna", "strength": "Posilovna", "walk": "Chůze", "swim": "Plavání", "stretch": "Protažení"][sport].map { L10n.tr($0) } ?? Fmt.capitalized(sport)
+    ["ride": "Kolo", "run": "Běh", "gym": "Posilovna", "strength": "Posilovna", "walk": "Chůze", "swim": "Plavání", "stretch": "Protažení", "brick": "Brick"][sport].map { L10n.tr($0) } ?? Fmt.capitalized(sport)
 }
 
 private func sportSymbol(_ sport: String) -> String {
-    ["ride": "bicycle", "run": "figure.run", "gym": "dumbbell.fill", "strength": "dumbbell.fill", "walk": "figure.walk", "swim": "figure.pool.swim", "stretch": "figure.flexibility"][sport] ?? "figure.mixed.cardio"
+    ["ride": "bicycle", "run": "figure.run", "gym": "dumbbell.fill", "strength": "dumbbell.fill", "walk": "figure.walk", "swim": "figure.pool.swim", "stretch": "figure.flexibility", "brick": "link"][sport] ?? "figure.mixed.cardio"
 }
 
 /// The session kinds of src/week-ai.js KINDS.
@@ -112,6 +112,7 @@ struct WeekSessionDraft: Identifiable, Equatable {
 struct WeekPlanDraft {
     var mode: String
     var days: [[String]]
+    var bricks: Set<Int> = []
     var sessions: [WeekSessionDraft]
     var summary: String?
     var notice: String?
@@ -132,6 +133,8 @@ struct WeekPlanView: View {
     @State private var plan: WeekPlanResponse?
     /// "Rozvrhnu sám": the sports on each weekday, Monday first.
     @State private var days: [[String]] = Array(repeating: [], count: 7)
+    /// The weekdays whose run goes right after the ride (chip "Brick").
+    @State private var bricks: Set<Int> = []
     @State private var picked: String?
     @State private var note = ""
     /// "Opravit návrh": what the AI should fix in its proposal.
@@ -229,7 +232,7 @@ struct WeekPlanView: View {
         if sessions.isEmpty || sessions.allSatisfy({ $0.status == .saved }) {
             WeekPlanDraftMemory.drafts[week] = nil
         } else {
-            WeekPlanDraftMemory.drafts[week] = WeekPlanDraft(mode: mode, days: days, sessions: sessions, summary: summary, notice: notice,
+            WeekPlanDraftMemory.drafts[week] = WeekPlanDraft(mode: mode, days: days, bricks: bricks, sessions: sessions, summary: summary, notice: notice,
                                                              warnings: warnings, check: check, checkApplied: checkApplied)
         }
     }
@@ -240,6 +243,7 @@ struct WeekPlanView: View {
         guard let d = WeekPlanDraftMemory.drafts[weekStart] else { return }
         mode = d.mode
         days = d.days
+        bricks = d.bricks
         sessions = d.sessions.map { s in
             var s = s
             if s.status == .building { s.status = .waiting }
@@ -308,7 +312,7 @@ struct WeekPlanView: View {
             // Four sports don't fit one line on a small phone: they scroll.
             ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(WeekPlanPrefs.sports, id: \.self) { sport in
+                ForEach(Self.pickable, id: \.self) { sport in
                     Button {
                         picked = picked == sport ? nil : sport
                     } label: {
@@ -325,6 +329,10 @@ struct WeekPlanView: View {
             }
             .scrollClipDisabled()
             .padding(.top, 10)
+            if picked == "brick" {
+                Text("Brick: běh hned po kole, do hodinek jako jeden trénink.")
+                    .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 8).fixedSize(horizontal: false, vertical: true)
+            }
 
             VStack(spacing: 8) {
                 ForEach(0..<7, id: \.self) { w in dayRow(w) }
@@ -345,8 +353,8 @@ struct WeekPlanView: View {
         let past = date(w) < today
         let minutes = dayMinutes(w)
         return Button {
-            guard let sport = picked, !past, days[w].count < WeekPlanPrefs.maxPerDay else { return }
-            withAnimation(.snappy) { days[w].append(sport) }
+            guard let sport = picked, !past else { return }
+            withAnimation(.snappy) { add(sport, to: w) }
         } label: {
             Card(padding: 12) {
                 HStack(alignment: .center, spacing: 10) {
@@ -362,7 +370,10 @@ struct WeekPlanView: View {
                     } else {
                         ScrollView(.horizontal) {
                             HStack(spacing: 6) {
-                                ForEach(Array(days[w].enumerated()), id: \.offset) { k, sport in
+                                if liveBricks.contains(w) {
+                                    brickChip(removable: !past) { withAnimation(.snappy) { removeBrick(w) } }
+                                }
+                                ForEach(Array(days[w].enumerated()).filter { !brickPart(w, $0.offset) }, id: \.offset) { k, sport in
                                     chip(sport, removable: !past) { withAnimation(.snappy) { _ = days[w].remove(at: k) } }
                                 }
                             }
@@ -376,6 +387,59 @@ struct WeekPlanView: View {
         }
         .buttonStyle(.plain)
         .disabled(past || working)
+    }
+
+    /// The chips to pick: the sports, and Brick after Swim (Ride, Run, Swim, Brick, Gym).
+    private static let pickable = ["ride", "run", "swim", "brick", "gym"]
+
+    /// The brick days that still hold a ride and a run.
+    private var liveBricks: Set<Int> {
+        bricks.filter { days[$0].contains("ride") && days[$0].contains("run") }
+    }
+
+    /// The day's first ride and first run make its brick, shown as one chip.
+    private func brickPart(_ w: Int, _ k: Int) -> Bool {
+        liveBricks.contains(w) && (days[w].firstIndex(of: "ride") == k || days[w].firstIndex(of: "run") == k)
+    }
+
+    /// A sport goes on the day; a brick adds the ride and the run it needs.
+    private func add(_ sport: String, to w: Int) {
+        guard sport == "brick" else {
+            if days[w].count < WeekPlanPrefs.maxPerDay { days[w].append(sport) }
+            return
+        }
+        guard !liveBricks.contains(w) else { return }
+        let missing = ["ride", "run"].filter { !days[w].contains($0) }
+        guard days[w].count + missing.count <= WeekPlanPrefs.maxPerDay else { return }
+        days[w].append(contentsOf: missing)
+        bricks.insert(w)
+    }
+
+    private func removeBrick(_ w: Int) {
+        for sport in ["ride", "run"] { if let k = days[w].firstIndex(of: sport) { days[w].remove(at: k) } }
+        bricks.remove(w)
+    }
+
+    private func brickChip(removable: Bool, remove: @escaping () -> Void) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: sportSymbol("ride")).scaledFont(11, weight: .semibold)
+            Text(sportLabel("ride")).font(Typo.caption.weight(.semibold))
+            Image(systemName: "link").scaledFont(10, weight: .semibold)
+            Image(systemName: sportSymbol("run")).scaledFont(11, weight: .semibold)
+            Text(sportLabel("run")).font(Typo.caption.weight(.semibold))
+            if removable {
+                Button(action: remove) {
+                    Image(systemName: "xmark").scaledFont(9, weight: .bold).padding(3)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.tr("Odebrat brick"))
+            }
+        }
+        .foregroundStyle(Palette.amber)
+        .padding(.leading, 9).padding(.trailing, removable ? 5 : 9).frame(height: 28)
+        .background(Palette.amberSoft, in: Capsule())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(L10n.tr("Brick · hned po kole"))
     }
 
     private func chip(_ sport: String, removable: Bool, remove: @escaping () -> Void) -> some View {
@@ -407,6 +471,7 @@ struct WeekPlanView: View {
         do {
             var object = WeekPlanPrefs.object(prefs)
             object["days"] = WeekPlanPrefs.daysValue(days)
+            object["bricks"] = .array(liveBricks.sorted().map { .number(Double($0)) })
             object["sessions"] = .object([:])
             object["source"] = nil
             try await model.api.saveWeekPlan(start: weekStart, prefs: .object(object))
@@ -920,7 +985,10 @@ struct WeekPlanView: View {
             let p = try await model.api.weekPlan(start: start)
             guard start == weekStart else { return }
             plan = p
-            if sessions.isEmpty { days = WeekPlanPrefs.days(p.prefs) }
+            if sessions.isEmpty {
+                days = WeekPlanPrefs.days(p.prefs)
+                bricks = WeekPlanPrefs.bricks(p.prefs)
+            }
             error = nil
         } catch {
             guard start == weekStart else { return }
