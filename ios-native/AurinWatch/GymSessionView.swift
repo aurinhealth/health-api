@@ -38,6 +38,9 @@ struct GymSessionView: View {
         let sameExercise: Bool
         var letter: String?
     }
+    /// 40, 41 and 42 mm (up to 224 pt high): smaller tiles, so the set with
+    /// its time, heart rate and Set done fits without scrolling.
+    static let small = WKInterfaceDevice.current().screenBounds.height < 230
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -142,16 +145,20 @@ struct GymSessionView: View {
         let ex = gym.exercises[e]
         return ScrollView {
             VStack(alignment: .leading, spacing: 6) {
-                statusLine
                 Text(ex.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(W.ink)
                     .lineLimit(1).minimumScaleFactor(0.7)
                 // − set 2/4 +: one set fewer or one more of this exercise (mockup 20).
                 HStack(spacing: 4) {
                     roundButton("minus") { store.change(.removeSet, exercise: e) }
                         .accessibilityLabel(W.tr("O sérii méně", "One set fewer"))
-                    Text(label(lift, in: ex)).font(.system(size: 12, weight: .medium)).foregroundStyle(W.secondary)
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity)
+                    // The set, and under it the time and heart rate: no extra row,
+                    // so Set done stays on the screen down to the 41 mm watch.
+                    VStack(spacing: 0) {
+                        Text(label(lift, in: ex)).font(.system(size: 12, weight: .medium)).foregroundStyle(W.secondary)
+                        liveLine
+                    }
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .frame(maxWidth: .infinity)
                     roundButton("plus") { store.change(.addSet, exercise: e) }
                         .accessibilityLabel(W.tr("O sérii víc", "One set more"))
                 }
@@ -218,11 +225,11 @@ struct GymSessionView: View {
     private func tile(_ value: String, unit: String, field: Field, value number: Binding<Double>, step: Double, top: Double) -> some View {
         let on = focus == field
         return VStack(spacing: 0) {
-            Text(value).font(W.serif(34)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.6)
+            Text(value).font(W.serif(Self.small ? 28 : 34)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.6)
             Text(unit).font(.system(size: 10)).foregroundStyle(W.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 4)
+        .padding(.vertical, Self.small ? 2 : 4)
         .background(on ? W.green.opacity(0.18) : W.tile, in: RoundedRectangle(cornerRadius: 12))
         .overlay { RoundedRectangle(cornerRadius: 12).stroke(on ? W.green : .clear, lineWidth: 2) }
         .focusable(true)
@@ -239,21 +246,21 @@ struct GymSessionView: View {
         }
     }
 
-    /// The time and the heart rate at a glance, on the set and in the rest.
-    private var statusLine: some View {
-        HStack(spacing: 8) {
-            clock.font(.system(size: 13, weight: .semibold).monospacedDigit()).foregroundStyle(W.ink)
-            HStack(spacing: 3) {
-                Image(systemName: "heart.fill").font(.system(size: 10))
+    /// The workout's time and heart rate in one short line, inside rows the
+    /// set and the rest already have (no row of its own on a small screen).
+    private var liveLine: some View {
+        HStack(spacing: 5) {
+            clock.foregroundStyle(W.ink)
+            HStack(spacing: 2) {
+                Image(systemName: "heart.fill").font(.system(size: 9))
                 Text(workout.heartRate.map { W.number($0) } ?? "–")
-                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
             }
             .foregroundStyle(W.pink)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(W.tr("Tep", "Heart rate"))
-            Spacer(minLength: 0)
         }
-        .lineLimit(1)
+        .font(.system(size: 12, weight: .semibold).monospacedDigit())
+        .lineLimit(1).minimumScaleFactor(0.7)
     }
 
     /// The workout's time, running on its own.
@@ -367,7 +374,6 @@ struct GymSessionView: View {
         let lift = gym.flatMap { currentLift(in: $0) }
         return ScrollView {
             VStack(spacing: 6) {
-                statusLine
                 HStack(spacing: 8) {
                     ZStack {
                         Circle().stroke(W.track, lineWidth: 5)
@@ -385,6 +391,7 @@ struct GymSessionView: View {
                                 .lineLimit(1).minimumScaleFactor(0.7)
                             Text(GymText.weight(lift.kg ?? 0) + " × \(lift.reps ?? 0)").font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
+                            liveLine
                             if let hint = hint {
                                 Text(hint.text).font(.system(size: 10, weight: .semibold)).foregroundStyle(hint.color)
                                     .lineLimit(1).minimumScaleFactor(0.7)
