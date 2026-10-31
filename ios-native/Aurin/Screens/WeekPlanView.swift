@@ -10,6 +10,12 @@ private func sportLabel(_ sport: String) -> String {
     ["ride": "Kolo", "run": "Běh", "gym": "Posilovna", "strength": "Posilovna", "walk": "Chůze", "swim": "Plavání", "stretch": "Protažení", "brick": "Brick"][sport].map { L10n.tr($0) } ?? Fmt.capitalized(sport)
 }
 
+/// The sport's colour, as on the sport tiles in Tréninkové plány (TrainingPlansSheet.sports).
+private func sportColor(_ sport: String) -> Color {
+    let id = sport == "strength" ? "gym" : sport == "tri" ? "triathlon" : sport
+    return TrainingPlansSheet.sports.first { $0.id == id }?.color ?? Palette.amber
+}
+
 private func sportSymbol(_ sport: String) -> String {
     ["ride": "bicycle", "run": "figure.run", "gym": "dumbbell.fill", "strength": "dumbbell.fill", "walk": "figure.walk", "swim": "figure.pool.swim", "stretch": "figure.flexibility", "brick": "link"][sport] ?? "figure.mixed.cardio"
 }
@@ -316,12 +322,16 @@ struct WeekPlanView: View {
                     Button {
                         picked = picked == sport ? nil : sport
                     } label: {
-                        Label(sportLabel(sport), systemImage: sportSymbol(sport))
+                        let on = picked == sport
+                        Label {
+                            Text(sportLabel(sport)).foregroundStyle(on ? Palette.onAccent : Palette.ink)
+                        } icon: {
+                            Image(systemName: sportSymbol(sport)).foregroundStyle(on ? Palette.onAccent : sportColor(sport))
+                        }
                             .font(Typo.small.weight(.semibold))
-                            .foregroundStyle(picked == sport ? Palette.onButton : Palette.ink)
                             .padding(.horizontal, 12).frame(height: 36)
-                            .background(picked == sport ? Palette.button : Palette.card, in: Capsule())
-                            .overlay { Capsule().stroke(Palette.hairline, lineWidth: picked == sport ? 0 : 1) }
+                            .background(on ? sportColor(sport) : Palette.card, in: Capsule())
+                            .overlay { Capsule().stroke(Palette.hairline, lineWidth: on ? 0 : 1) }
                     }
                     .buttonStyle(.plain)
                 }
@@ -454,9 +464,9 @@ struct WeekPlanView: View {
                 .accessibilityLabel(L10n.f("Odebrat %@", sportLabel(sport)))
             }
         }
-        .foregroundStyle(Palette.amber)
+        .foregroundStyle(sportColor(sport))
         .padding(.leading, 9).padding(.trailing, removable ? 5 : 9).frame(height: 28)
-        .background(Palette.amberSoft, in: Capsule())
+        .background(sportColor(sport).opacity(0.16), in: Capsule())
     }
 
     /// The layout becomes this week's own plan, the rules give each sport its
@@ -682,8 +692,8 @@ struct WeekPlanView: View {
     private func row(_ s: WeekSessionDraft) -> some View {
         Card(padding: 14) {
             HStack(alignment: .center, spacing: 12) {
-                Image(systemName: sportSymbol(s.sport)).scaledFont(17, cap: .denseCap).foregroundStyle(Palette.amber)
-                    .frame(width: 38, height: 38).background(Palette.amberSoft, in: Circle())
+                Image(systemName: sportSymbol(s.sport)).scaledFont(17, cap: .denseCap).foregroundStyle(sportColor(s.sport))
+                    .frame(width: 38, height: 38).background(sportColor(s.sport).opacity(0.16), in: Circle())
                 VStack(alignment: .leading, spacing: 3) {
                     Text(Fmt.capitalized(Fmt.dayHeading(s.date))).font(Typo.caption).foregroundStyle(Palette.muted)
                     Text(s.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2)

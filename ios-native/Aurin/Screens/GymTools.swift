@@ -73,26 +73,18 @@ struct ToolTile: View {
     }
 }
 
-/// Training → "Knihovna tréninků": one wide widget; a tap opens the library
-/// with the choice of sports.
+/// Training → "Knihovna tréninků": one wide widget with a tile like the tools
+/// below it (a symbol, so it needs no change when a sport is added); a tap
+/// opens the library with the choice of sports.
 struct LibraryWidget: View {
-    static let sports: [(id: String, symbol: String, color: Color)] = [
-        ("ride", "bicycle", Palette.amberBar), ("run", "figure.run", Palette.rust), ("gym", "dumbbell.fill", Palette.indigo)
-    ]
-
     var body: some View {
         RouteLink(route: .library) {
             HStack(spacing: 14) {
-                HStack(spacing: -8) {
-                    ForEach(Self.sports.indices, id: \.self) { i in
-                        Image(systemName: Self.sports[i].symbol)
-                            .scaledFont(14, weight: .semibold, cap: .denseCap)
-                            .foregroundStyle(Palette.onAccent)
-                            .frame(width: 34, height: 34)
-                            .background(Self.sports[i].color, in: Circle())
-                            .overlay { Circle().stroke(Palette.card, lineWidth: 2.5) }
-                    }
-                }
+                Image(systemName: "books.vertical.fill")
+                    .scaledFont(16, weight: .semibold, cap: .denseCap)
+                    .foregroundStyle(Palette.onAccent)
+                    .frame(width: 34, height: 34)
+                    .background(Palette.blue, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 Text("Knihovna tréninků").font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.85)
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
