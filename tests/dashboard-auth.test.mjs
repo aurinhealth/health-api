@@ -17,7 +17,7 @@ test("personal data routes are not public", () => {
 });
 
 test("static pages, Google login and self-authenticating routes stay public", () => {
-  for (const path of ["/", "/app/logout", "/auth/google", "/auth/app/apple", "/.well-known/apple-app-site-association", "/oauth/google/callback", "/automation/strength"]) {
+  for (const path of ["/", "/app/logout", "/auth/google", "/auth/app/apple", "/.well-known/apple-app-site-association", "/oauth/google/callback", "/automation/strength", "/webhooks/wahoo", "/webhooks/intervals", "/webhooks/app-store"]) {
     assert.equal(isPublicPath(path), true, path);
   }
   // The old web app and its browser sign-in are gone.

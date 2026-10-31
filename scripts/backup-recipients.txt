@@ -1,0 +1,5 @@
+# age public keys the weekly database backup is encrypted to
+# (scripts/backup-databases.mjs). One key per line, only the public half
+# (age1…). The private key stays offline with the owner and never goes into
+# this repository, GitHub secrets or Cloudflare.
+age1ruggm93rc3xj07ez05tczuyl8p57puq3emt059fjteq8rqnh8vgsmytdq6
