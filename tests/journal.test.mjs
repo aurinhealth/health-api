@@ -447,3 +447,58 @@ test("the mood is pinned, belongs to the evening and reads as a word with its la
   assert.equal(withLang("en", () => moodText(1, 0)), "Very unpleasant");
   assert.equal(moodText(null, 0), null);
 });
+
+test("the coach sees mood, anxiety, cannabis, CBD and medication only after the consent, and sex never", async () => {
+  const db = scopedDb(createD1(), 12);
+  const now = localToday(), d = shiftDay(now, -1);
+  await setJournalOptions(db, {});
+  const request = (path, body) => new Request("https://aurin.health" + path, { method: "POST", headers: { Origin: "https://aurin.health" }, body: JSON.stringify(body) });
+  const call = (path, body) => handleJournalApi(request(path, body), { DB: db }, {}, new URL("https://aurin.health" + path), { signedIn: true });
+  await call("/app/api/journal/pinned", { pinned: ["sauna", "sex", "cannabis", "painkillers", "mood", "anxiety", "cbd"] });
+  const settings = await getJournalSettings(db);
+  for (const key of ["sauna", "sex", "cannabis", "painkillers", "anxiety", "cbd"]) await saveJournalEntry(db, settings, { date: d, key, answer: 1 });
+  await saveJournalEntry(db, settings, { date: d, key: "mood", answer: 1, amount: 4 });
+  assert.equal(settings.shareSensitive, false);
+  assert.deepEqual((await journalForCoach(db, now)).yesterday.answers.map(a => a.item), ["Sauna"]);
+  const on = await (await call("/app/api/journal/options", { shareSensitive: true })).json();
+  assert.equal(on.shareSensitive, true);
+  const consent = (await getJournalSettings(db)).sensitiveAt;
+  assert.ok(consent);
+  const shared = (await journalForCoach(db, now)).yesterday.answers.map(a => a.item);
+  assert.equal(shared.length, 6);
+  assert.ok(!shared.includes("Sex"));
+  // Another option leaves the consent as it was; turning it off forgets it.
+  await setJournalOptions(db, { askMorning: false });
+  assert.equal((await getJournalSettings(db)).sensitiveAt, consent);
+  await setJournalOptions(db, { shareSensitive: false });
+  assert.deepEqual([(await getJournalSettings(db)).shareSensitive, (await getJournalSettings(db)).sensitiveAt], [false, null]);
+  assert.deepEqual((await journalForCoach(db, now)).yesterday.answers.map(a => a.item), ["Sauna"]);
+});
+
+test("a finding about sex never reaches the coach, pinned or not", async () => {
+  const raw = createD1(), db = scopedDb(raw, 13);
+  const now = localToday();
+  await setJournalOptions(db, { shareSensitive: true });
+  await saveJournalEntry(db, await getJournalSettings(db), { date: shiftDay(now, -1), key: "sauna", answer: 1 });
+  raw.sqlite.prepare("UPDATE journal_settings SET findings_json=? WHERE user_id=13").run(JSON.stringify({ date: now, ranked: [{ key: "sex", effect: 6, yes: 8, no: 30 }, { key: "sauna", effect: 5, yes: 9, no: 29 }] }));
+  assert.deepEqual((await journalForCoach(db, now)).findings.map(f => f.item), ["Sauna"]);
+});
+
+test("sexual activity from Apple Health has its own consent, kept with its time; withdrawn, its days go", async () => {
+  const raw = createD1(), db = scopedDb(raw, 14);
+  raw.sqlite.exec("CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY, user_id INTEGER, source_family TEXT, data_type TEXT, external_id TEXT, sample_time TEXT, value_numeric REAL)");
+  const sex = () => raw.sqlite.prepare("SELECT COUNT(*) AS n FROM health_datapoints WHERE data_type='daily-sexual-activity'").get().n;
+  assert.deepEqual([(await getJournalSettings(db)).appleSex, (await getJournalSettings(db)).appleSexAt], [false, null]);
+  await setJournalOptions(db, { appleSex: true });
+  const at = (await getJournalSettings(db)).appleSexAt;
+  assert.ok(at);
+  await setJournalOptions(db, { shareSensitive: true });
+  assert.equal((await getJournalSettings(db)).appleSexAt, at);
+  assert.equal((await journalCatalog(db)).appleSex, true);
+  for (const user of [14, 15]) raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,sample_time,value_numeric) VALUES(?,'apple-health','daily-sexual-activity','d1','2026-10-15',1)").run(user);
+  await setJournalOptions(db, { appleSex: false });
+  assert.deepEqual([(await getJournalSettings(db)).appleSex, (await getJournalSettings(db)).appleSexAt], [false, null]);
+  // Only this athlete's.
+  assert.equal(sex(), 1);
+});
+

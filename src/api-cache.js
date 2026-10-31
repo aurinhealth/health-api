@@ -6,6 +6,18 @@
 // by itself (Intervals.icu, Google Health).
 
 export const CACHE_TTL_SECONDS = 600;
+
+// A closed day: two or more days back (today and yesterday still get late
+// watch syncs). Its analysis and food are kept for CLOSED_DAY_TTL_SECONDS
+// under the same version: whatever changes such a day bumps the version (the
+// user's own changes, Apple Health, Intervals.icu, Wahoo, and a Google sync
+// that changed a row of a closed day: index.js saveGooglePointsBatch).
+export const CLOSED_DAY_TTL_SECONDS = 6 * 3600;
+export function closedDay(day, today) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(day || "")) || !/^\d{4}-\d{2}-\d{2}$/.test(String(today || ""))) return false;
+  const limit = new Date(Date.parse(today + "T12:00:00Z") - 2 * 86400000).toISOString().slice(0, 10);
+  return day <= limit;
+}
 // The same entry being computed in this isolate: Today's coach cards ask for
 // the same coach inputs at the same moment, and each used to compute them
 // (some 400 database reads each) before the first one was kept.

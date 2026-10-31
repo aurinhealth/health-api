@@ -84,6 +84,17 @@ struct RootView: View {
         switch model.phase {
         case .signedOut:
             LoginView().dynamicTypeSize(Self.textSizes)
+        case .signedIn where model.healthPaused && !model.demo:
+            // Health data paused (AppModel+HealthPause): the paused screen; its
+            // "Zapnout znovu" opens the consent of the setup.
+            HealthPausedView()
+                .dynamicTypeSize(Self.textSizes)
+                .fullScreenCover(isPresented: Binding(get: { model.needsSetup }, set: { model.needsSetup = $0 })) { SetupFlowView().dynamicTypeSize(Self.textSizes) }
+                .task {
+                    async let setup: Void = model.checkSetup()
+                    async let account: Void = model.loadAccountInitial()
+                    _ = await (setup, account)
+                }
         case .signedIn:
             ZStack(alignment: .bottom) {
                 // A tab once opened stays built behind the open one, so coming
@@ -297,6 +308,13 @@ struct RootView: View {
             }
             // Back in the app: new data, and what waited for signal (and water
             // added from the widget) goes out.
+            // The gym started on the Apple Watch: Training mode opens here too.
+            .onChange(of: LiveWorkout.shared.openFromWatch, initial: true) { _, date in
+                guard let date else { return }
+                LiveWorkout.shared.openFromWatch = nil
+                guard !model.demo, !model.immersive else { return }
+                model.open(.trainingMode(date))
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background, !model.demo {
                     BackgroundRefresh.schedule()

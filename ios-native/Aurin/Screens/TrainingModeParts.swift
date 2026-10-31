@@ -511,6 +511,8 @@ struct ZoneMinutesCard: View {
 /// sensors (Nastavení → Snímač tepu) over the workout.
 struct HeartSourceButton: View {
     let live: LiveWorkout
+    /// Without "Bez tepu", when the row is too narrow (the crossed heart stays).
+    var compact = false
     var action: () -> Void
     private var sensor: HeartRateSensor { HeartRateSensor.shared }
 
@@ -526,7 +528,7 @@ struct HeartSourceButton: View {
                     .foregroundStyle(on ? Palette.rust : Palette.faint)
                 if let bpm {
                     Text(verbatim: "\(Int(bpm.rounded()))").font(Typo.number(18)).monospacedDigit().foregroundStyle(Palette.ink)
-                } else if !on {
+                } else if !on && !compact {
                     // The crossed heart alone didn't say what it was.
                     Text("Bez tepu").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
                 }

@@ -74,8 +74,7 @@ export function mergedPayload(parts) {
     moving_time: sum([a.movingSec, b.movingSec]), elapsed_time: Math.round((ms(end) - ms(a.start)) / 1000),
     distance: sum([a.distanceM, b.distanceM]), calories: sum([a.kcal, b.kcal]),
     average_heartrate: avgHr, max_heartrate: Math.max(a.maxHr || 0, b.maxHr || 0) || null,
-    icu_training_load: sum([a.tss, b.tss]), total_elevation_gain: sum([a.elevationM, b.elevationM]),
-    loadwiseMerged: [a.id, b.id]
+    icu_training_load: sum([a.tss, b.tss]), total_elevation_gain: sum([a.elevationM, b.elevationM])
   };
   for (const key of Object.keys(payload)) if (payload[key] == null) delete payload[key];
   return { payload, start: a.start, end };

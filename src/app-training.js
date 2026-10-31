@@ -3,7 +3,7 @@
 // phase of the preparation, form (fitness, fatigue), VO2max, time in heart-rate
 // zones, the weeks' load, the acute:chronic workload ratio and monotony.
 // Pure: GET /app/api/training loads the inputs.
-import { groupOfType, typeName } from "./activity-type.js";
+import { groupOfType, typeName, mark } from "./activity-type.js";
 import { mergeWellnessRows, strainScore, dayStrainParts } from "./recovery-model.js";
 import { sessionLoad } from "./training-load.js";
 import { athleteFocus } from "./athlete-focus.js";
@@ -154,6 +154,17 @@ export function daySessions(d, date, training = {}, gymDay = null) {
   const gymLogged = gymPlan?.logged > 0 ? 1 : 0;
   const matchedIds = new Set(matchedPlans.map(m => m.planned.id).filter(Boolean));
   const planOf = new Map(matchedPlans.map(m => [String(m.actualId ?? ""), m.planned]));
+  // A strength plan the pairing missed (the app's own planned:local-… copy
+  // has no time, a gym session logged in Aurin is a local activity) is done by
+  // the day's first strength session no plan took, today too: otherwise a
+  // cancelled or missing gym plan leaves it hanging as still to do. No
+  // plannedId: there is no pairing on record to undo.
+  const implicit = new Set();
+  if (!gymUnpaired && d <= date) {
+    const spare = completed.find(a => sportOf(a) === "strength" && !pairedIds.has(String(a.id ?? "")));
+    const open = planned.find(w => sportOf(w) === "strength" && !matchedIds.has(w.id));
+    if (spare && open) { planOf.set(String(spare.id ?? ""), open); implicit.add(String(spare.id ?? "")); pairedIds.add(String(spare.id ?? "")); if (open.id) matchedIds.add(open.id); }
+  }
   const sessions = [];
   for (const a of completed) {
     // A Strava stub has neither name nor sport: the plan it was paired with names it.
@@ -164,8 +175,8 @@ export function daySessions(d, date, training = {}, gymDay = null) {
     const fit = plan ? adherenceOf(a, plan, gymSets) : gymSets ? adherenceOf(a, {}, gymSets) : { adherence: "offplan" };
     // pairedGym: it fulfils the gym plan saved in the app, which the app can
     // unpair (gym:<date>); unpaired: it was, and opens as an activity of its own.
-    const gymMark = gymSets && !plan ? { pairedGym: true } : gymUnpaired && session.sport === "strength" ? { unpaired: true } : {};
-    sessions.push({ ...(plan?.id ? { ...session, plannedId: String(plan.id) } : session), ...fit, ...gymMark });
+    const gymMark = gymSets && (!plan || implicit.has(String(a.id ?? ""))) ? { pairedGym: true } : gymUnpaired && session.sport === "strength" ? { unpaired: true } : {};
+    sessions.push({ ...(plan?.id && !implicit.has(String(a.id ?? "")) ? { ...session, plannedId: String(plan.id) } : session), ...fit, ...gymMark });
   }
   // On a past day a plan counts as done by an activity of its sport that no other
   // plan took (pairing can miss one), or by a stub without a sport; a walk does
@@ -278,7 +289,9 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     // planned:local-… strength event, as daySessions) is done with it.
     const gymDone = d === date && (gym[d]?.logged > 0 || (!gym[d]?.unpaired && (todayTraining.completed || []).some(a => /weight|strength|gym/i.test(String(a?.type || "")))));
     const appCopy = w => isStrength(w) && /^(planned:)?local-/.test(String(w?.id ?? ""));
-    const planned = (d === date ? remaining : byDate.get(d)?.training?.planned || []).filter(w => w && !(d === date && gym[d]?.logged > 0 && appCopy(w)));
+    // A strength session done today (a cancelled gym plan too) does the day's
+    // strength plan the pairing missed, as daySessions.
+    const planned = (d === date ? remaining : byDate.get(d)?.training?.planned || []).filter(w => w && !(d === date && (gym[d]?.logged > 0 ? appCopy(w) : gymDone && isStrength(w))));
     const plan = gymDone ? null : gym[d];
     const gymAt = plan?.exercises?.length ? planned.findIndex(isStrength) : -1;
     const list = planned.map((w, i) => sessionOf(d, w, i === gymAt ? plan : null));
@@ -417,7 +430,7 @@ function sessionOf(w, date, status) {
     ...(done ? distanceAndPower(w) : {}),
     // Who recorded a watch workout (workout-merge.js sourcesOf): two after a merge.
     ...(done && Array.isArray(w.sources) && w.sources.length ? { sources: w.sources } : {}),
-    ...(done && w.payload?.loadwiseMerge?.energy ? { mergeEnergy: String(w.payload.loadwiseMerge.energy) } : {})
+    ...(done && mark(w.payload, "Merge")?.energy ? { mergeEnergy: String(mark(w.payload, "Merge").energy) } : {})
   };
 }
 
@@ -444,7 +457,7 @@ function energyOf(w) {
   const kcal = round(num(w.energyCheck?.reported ?? w.reportedCalories ?? w.calories));
   if (!(kcal > 0)) return {};
   // Set in Aurin by hand or by the coach (activity-edits.js); the device's number stays known.
-  if (w.payload?.loadwiseKcal != null) return { kcal, kcalEdited: true, ...(num(w.payload.loadwiseKcalDevice) > 0 ? { kcalDevice: round(num(w.payload.loadwiseKcalDevice)) } : {}) };
+  if (mark(w.payload, "Kcal") != null) return { kcal, kcalEdited: true, ...(num(mark(w.payload, "KcalDevice")) > 0 ? { kcalDevice: round(num(mark(w.payload, "KcalDevice"))) } : {}) };
   const c = w.energyCheck;
   if (c?.status !== "review") return { kcal };
   const out = { kcal, kcalEstimate: { value: round(num(w.autoCaloriesForPlanning ?? w.caloriesForPlanning ?? c.estimated)), low: c.low, high: c.high, reason: c.reason || null } };

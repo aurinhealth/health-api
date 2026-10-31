@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb, PERSONAL_TABLES } from "../src/tenancy.js";
-import { apnsJwt, pkcs8FromP8, sendPush, sendMorningReadiness, handlePushToken, savePushToken, listPushTokens, readinessMessage, hasLastNight, sendFoodApproved, foodApprovedMessage, inMorningWindow, pushConfigured, APNS_TOPIC, _resetPushForTest } from "../src/push.js";
+import { apnsJwt, pkcs8FromP8, sendPush, sendMorningReadiness, handlePushToken, savePushToken, listPushTokens, readinessMessage, hasLastNight, sendFoodApproved, foodApprovedMessage, inMorningWindow, pushConfigured, APNS_TOPIC, _resetPushForTest, hidesValues, privateAlert } from "../src/push.js";
 import { withLang } from "../src/lang.js";
 import { withTimeZone } from "../src/user-time.js";
 
@@ -152,6 +152,49 @@ test("the token endpoint wants a signed-in user, the site's origin and a real to
   assert.equal((await handlePushToken(request("POST", {}), env, { signedIn: true, origin: ORIGIN })).status, 400);
   assert.equal((await handlePushToken(new Request(ORIGIN + "/app/api/push/token"), env, { signedIn: true, origin: ORIGIN })).status, 405);
   assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM push_tokens").get().n, 0);
+});
+
+test("hidden values: the banner says only that the morning is in, the numbers wait in private", async () => {
+  _resetPushForTest();
+  const { env } = setup();
+  await savePushToken(env.DB, TOKEN_A);
+  const { calls, fetchImpl } = fakeApns();
+  const result = await sendMorningReadiness(env, { readiness: () => ({ score: 72, zone: "green" }), now: MORNING, fetchImpl, hide: true });
+  assert.equal(result.sent, 1);
+  const body = calls[0].body;
+  assert.deepEqual(body.aps.alert, privateAlert("morning"));
+  assert.doesNotMatch(JSON.stringify(body.aps), /72/);
+  // No ring on the banner: the service extension draws it only from a top-level readiness.
+  assert.equal(body.readiness, undefined);
+  assert.deepEqual(body.private, { title: "Připravenost 72 · Dnes klidně naplno", body: "Nic naplánováno. Dobrý den na těžší trénink.", readiness: { score: 72, zone: "green" } });
+  assert.equal(body.aps.category, "MORNING_READINESS");
+  assert.equal(body.aps["content-available"], 1);
+});
+
+test("values are hidden once the app has sent the switch on; builds without it keep the full texts", () => {
+  assert.equal(hidesValues(null), false);
+  assert.equal(hidesValues({ notify: { morning: true } }), false);
+  assert.equal(hidesValues({ notify: { private: false } }), false);
+  assert.equal(hidesValues({ notify: { private: true } }), true);
+  for (const kind of ["morning", "coach", "swap", "reply", "water"]) assert.doesNotMatch(JSON.stringify(privateAlert(kind)), /\d/);
+});
+
+test("a hidden push sends the stock text and keeps its own in private", async () => {
+  _resetPushForTest();
+  const { env } = setup();
+  const { calls, fetchImpl } = fakeApns();
+  const device = { token: TOKEN_A, environment: "production" };
+  await sendPush(env, device, { title: "Kouč", body: "Zítra místo prahu 40 min sweet spot." }, { fetchImpl, category: "COACH_ACTION", data: { coach: { kind: "reply", chatId: 7, draftId: 41 } }, hide: "reply" });
+  assert.deepEqual(calls[0].body.aps.alert, { title: "Kouč", body: "Kouč odpověděl." });
+  assert.equal(calls[0].body.aps.category, "COACH_ACTION");
+  assert.deepEqual(calls[0].body.coach, { kind: "reply", chatId: 7, draftId: 41 });
+  assert.deepEqual(calls[0].body.private, { title: "Kouč", body: "Zítra místo prahu 40 min sweet spot." });
+  await sendPush(env, device, { title: "Pití", body: "Zatím 0,8 l." }, { fetchImpl, hide: "water" });
+  assert.deepEqual(calls[1].body.aps.alert, { title: "Pití", body: "Čas na sklenici vody." });
+  // Without hide the push goes as it came.
+  await sendPush(env, device, { title: "Pití", body: "Zatím 0,8 l." }, { fetchImpl });
+  assert.deepEqual(calls[2].body.aps.alert, { title: "Pití", body: "Zatím 0,8 l." });
+  assert.equal(calls[2].body.private, undefined);
 });
 
 test("the morning push goes out once a local day, between 5:00 and 11:00", async () => {

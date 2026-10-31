@@ -1,6 +1,7 @@
 import { L } from './lang.js';
 import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { bumpSessionEpoch } from "./tenancy.js";
+import { APP_RETURN_PATH, APP_CONNECTED_PATH } from "./app-origin.js";
 
 const SESSION_COOKIE = "pfd_session";
 export const SESSION_SECONDS = 30 * 24 * 60 * 60;
@@ -33,6 +34,8 @@ const PUBLIC_PATHS = new Set([
   "/auth/google",
   "/auth/google/callback",
   "/auth/app/session",
+  APP_RETURN_PATH,
+  APP_CONNECTED_PATH,
   "/auth/app/connect",
   "/auth/app/apple",
   "/auth/passkey/options",
@@ -47,7 +50,9 @@ const PUBLIC_PATHS = new Set([
   // Wahoo's webhook: checked against WAHOO_WEBHOOK_TOKEN (wahoo.js).
   "/webhooks/wahoo",
   // Intervals.icu's webhooks: checked against INTERVALS_WEBHOOK_SECRET (intervals-webhook.js).
-  "/webhooks/intervals"
+  "/webhooks/intervals",
+  // App Store Server Notifications: Apple signs every notification, checked in app-store.js.
+  "/webhooks/app-store"
 ]);
 const PUBLIC_PREFIXES = ["/.well-known/", "/oauth/", "/t/"];
 
@@ -154,9 +159,37 @@ export async function userSessionCookie(db, uid, secret) {
   return sessionCookie(uid, Math.floor(Date.now() / 1000) + SESSION_SECONDS, secret, await sessionEpochOf(db, uid));
 }
 
-// A JSON answer that also signs the user in (passkey and e-mail code sign-in).
+// A JSON answer that also signs the user in (passkey, e-mail code and Apple sign-in). The sign-in
+// itself proved who the user is, so the step-up check (step-up.js) is not asked for again for a while.
 export async function signedInResponse(userId, env, body = { status: "ok" }) {
-  return Response.json(body, { headers: { "Cache-Control": "no-store", "Set-Cookie": await userSessionCookie(env.DB, userId, sessionSecret(env)) } });
+  const secret = sessionSecret(env), epoch = await sessionEpochOf(env.DB, userId);
+  const response = Response.json(body, { headers: { "Cache-Control": "no-store", "Set-Cookie": await sessionCookie(userId, Math.floor(Date.now() / 1000) + SESSION_SECONDS, secret, epoch) } });
+  response.headers.append("Set-Cookie", await stepUpCookie(userId, epoch, secret));
+  return response;
+}
+
+// Proof that the user confirmed who they are a moment ago (a sign-in, a passkey or a code sent to
+// the account's e-mail; step-up.js), which changing the e-mail, adding a passkey, downloading the
+// data and deleting the account ask for. "<expiry>.<signature of the account, its session epoch and
+// the expiry>": it lasts STEP_UP_SECONDS and ends sooner when the epoch moves on.
+export const STEP_UP_COOKIE = "aurin_stepup";
+export const STEP_UP_SECONDS = 10 * 60;
+const stepUpSignature = (secret, uid, epoch, exp) => dashboardHmac("step-up:" + Number(uid) + ":" + (Number(epoch) || 0) + ":" + exp, secret);
+
+export async function stepUpCookie(uid, epoch, secret, now = Math.floor(Date.now() / 1000)) {
+  const exp = now + STEP_UP_SECONDS;
+  return STEP_UP_COOKIE + "=" + exp + "." + await stepUpSignature(secret, uid, epoch, exp) + "; Path=/; Max-Age=" + STEP_UP_SECONDS + "; HttpOnly; Secure; SameSite=Strict";
+}
+
+export async function hasStepUp(request, secret, uid, epoch, now = Math.floor(Date.now() / 1000)) {
+  if (!secret) return false;
+  const values = String(request.headers.get("Cookie") || "").split(/;\s*/).filter(c => c.startsWith(STEP_UP_COOKIE + "=")).slice(0, 3);
+  for (const value of values) {
+    const [exp, signature] = value.slice(STEP_UP_COOKIE.length + 1).split(".");
+    if (!/^\d{1,12}$/.test(exp || "") || Number(exp) <= now || Number(exp) > now + STEP_UP_SECONDS) continue;
+    if (timingSafeEqualString(String(signature || ""), await stepUpSignature(secret, uid, epoch, exp))) return true;
+  }
+  return false;
 }
 
 // Moves the user's epoch on (every other device is signed out) and keeps the

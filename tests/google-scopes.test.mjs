@@ -34,7 +34,7 @@ test("connecting asks for everything on one Google page and keeps what was grant
 test("Google's consent screen comes only after the app's own disclosure and consent", async () => {
   // Google Health data policy: the disclosure and consent in the app come right before Google's.
   // A visit without it (a bookmark, an old link) never reaches Google.
-  for (const path of ["/oauth/google", "/oauth/google?extra=1", "/oauth/google?return=native"]) {
+  for (const path of ["/oauth/google", "/oauth/google?extra=1", "/oauth/google?return=app"]) {
     const response = await handleGoogleOAuth(new Request("https://aurin.health" + path), google, "/oauth/google");
     assert.equal(response.status, 400);
     assert.equal(response.headers.get("Location"), null);
@@ -53,7 +53,7 @@ test("a Google Health connection started by one account is not stored for anothe
     assert.equal(exchanged, false, "the code is never exchanged");
     // The account that started gets it.
     const same = await handleGoogleOAuth(new Request("https://aurin.health/oauth/google/callback?code=c&state=" + state, { headers: { Cookie: cookie } }), { ...google, DB: db, USER_ID: 11, CONNECTION_KEY: "x".repeat(32) }, "/oauth/google/callback");
-    assert.equal(same.headers.get("Location"), "loadwise://connected?event=google");
+    assert.equal(same.headers.get("Location"), "https://aurin.health/auth/app/connected?event=google");
   } finally { globalThis.fetch = real; }
   assert.deepEqual(db.sqlite.prepare("SELECT DISTINCT user_id FROM connection_credentials").all().map(r => r.user_id), [11]);
 });

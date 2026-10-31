@@ -144,6 +144,16 @@ export function splitItem(x, split, day = []) {
   const short = split.short?.[x.sport];
   return short ? { ...x, maxMinutes: short } : x;
 }
+// The athlete's own brick (week plan chip "Brick", prefs.bricks): the day's
+// first run goes right after the ride, short and easy, for anyone, not only a
+// triathlete. Its length: the split's brick, else BRICK_MINUTES.
+export const BRICK_MINUTES = 15;
+export function ownBrick(x, bricks, start, split = null) {
+  const weekday = Math.round((Date.parse(x.date + 'T12:00:00Z') - Date.parse(start + 'T12:00:00Z')) / 86400000);
+  if (x.sport !== 'run' || x.brick || (x.slot || 0) !== 0 || !bricks.includes(weekday)) return x;
+  const minutes = split?.brick?.minutes || BRICK_MINUTES;
+  return { ...x, brick: true, role: 'recovery', label: L('Běh po kole', 'Brick run'), minutes, maxMinutes: minutes, tss: Math.round((x.tss || 0) * minutes / (x.minutes || minutes)) };
+}
 export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null, history: suppliedHistory = null, split = null }) {
   const days = prefs.days.map(d => [...d]);
   if (days.some(d => d.length)) return { ...prefs, days };
@@ -235,6 +245,7 @@ export function weekProposal({ prefs, start, today, week = {}, fitness = {}, sta
   // runs share the floor (60 min a week) or what the recent weeks allow.
   if (!ctl) targets = capRunVolume(withPlan(estimatedTargets(roles, start, today, loads)), weeklyRunCap(history || [], start), runCommitted);
   if (split) targets = { ...targets, items: (targets.items || []).map(x => splitItem(x, split, proposedPrefs.days[(Date.parse(x.date + 'T12:00:00Z') - Date.parse(start + 'T12:00:00Z')) / 86400000] || [])) };
+  if (proposedPrefs.bricks?.length) targets = { ...targets, items: (targets.items || []).map(x => ownBrick(x, proposedPrefs.bricks, start, split)) };
   targets = capWeekTargets(targets, proposedPrefs, existing, weather);
   targets = { ...targets, items: withOpenWater(targets.items, { start, openWater: focus?.cannotSwim100m ? 'off' : openWater, daysToRace: focus?.event?.daysLeft ?? null, weather }) };
   return { prefs: proposedPrefs, items: targets.items, targets, warnings, ...(split ? { split } : {}), mode: existing.some(d => sessionsOn(d).length) ? 'review_and_fill' : 'fill', missingAvailability: !proposedPrefs.days.some(d => d.length) && !prefs.availability.some(d => d.minutes > 0) };

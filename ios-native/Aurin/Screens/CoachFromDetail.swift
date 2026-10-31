@@ -192,6 +192,8 @@ struct CoachPill: View {
             Button { open = true } label: {
                 Label("Kouč", systemImage: "sparkles")
                     .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.green)
+                    // Never wraps to two lines or shortens with "…" beside other chips.
+                    .lineLimit(1).fixedSize()
                     .padding(.horizontal, 12).frame(height: height)
                     .background(Palette.greenSoft, in: Capsule())
             }

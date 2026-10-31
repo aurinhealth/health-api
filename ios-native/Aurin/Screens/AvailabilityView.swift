@@ -72,6 +72,12 @@ enum WeekPlanPrefs {
         object(prefs)["source"]?.string
     }
 
+    /// The weekdays whose run goes right after the ride (chip "Brick", prefs.bricks).
+    static func bricks(_ prefs: JSONValue?) -> Set<Int> {
+        guard case .array(let list)? = object(prefs)["bricks"] else { return [] }
+        return Set(list.compactMap { $0.number.map { Int($0) } }.filter { (0..<7).contains($0) })
+    }
+
     static func daysValue(_ days: [[String]]) -> JSONValue {
         .array(days.map { .array($0.map { .string($0) }) })
     }

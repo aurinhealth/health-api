@@ -126,6 +126,7 @@ enum SyncApp {
         case "vo2max": return "VO₂max"
         case "nutrition": return L10n.tr("Jídlo a kalorie")
         case "water": return L10n.tr("Voda")
+        case "workouts": return L10n.tr("Tréninky z Apple Health")
         default: return type
         }
     }
@@ -200,6 +201,12 @@ extension APIClient {
 
     func saveSyncPrefs(_ destination: String, _ prefs: SyncPrefs) async throws -> SyncPrefsSaved {
         try await send("/app/api/sync/prefs/" + destination, method: "PUT", body: prefs)
+    }
+
+    /// Every health type to the destination, the rest of its preferences kept
+    /// (the Intervals.icu connect sheet's "Posílat i zdravotní data").
+    func sendAllHealth(to destination: String) async throws {
+        let _: SyncPrefsSaved = try await send("/app/api/sync/prefs/" + destination, method: "PUT", body: ["health": JSONValue.string("all")])
     }
 
     func sendActivity(_ activity: ActivityToSync) async throws -> SyncActivityResult {

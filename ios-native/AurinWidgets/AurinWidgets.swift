@@ -4,7 +4,7 @@ import WidgetKit
 
 // Home-screen and lock-screen widgets. They show what the app saved after its
 // last refresh (WidgetSnapshot); a tap opens the matching screen in the app
-// (loadwise://open/...).
+// (aurin://open/...).
 
 @main
 struct AurinWidgetBundle: WidgetBundle {
@@ -199,7 +199,9 @@ struct ReadinessWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "readiness", provider: SnapshotProvider()) { entry in
             ReadinessWidgetView(entry: entry)
-                .widgetURL(URL(string: "loadwise://open/readiness"))
+                // Redacted on the Lock Screen and in StandBy while the phone is locked.
+                .privacySensitive()
+                .widgetURL(URL(string: "aurin://open/readiness"))
                 .widgetCard()
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Připravenost")))
@@ -260,7 +262,9 @@ struct SleepWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "sleep", provider: SnapshotProvider()) { entry in
             SleepWidgetView(entry: entry)
-                .widgetURL(URL(string: "loadwise://open/sleep"))
+                // Redacted on the Lock Screen and in StandBy while the phone is locked.
+                .privacySensitive()
+                .widgetURL(URL(string: "aurin://open/sleep"))
                 .widgetCard()
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Spánek")))
@@ -303,7 +307,9 @@ struct DayWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "day", provider: SnapshotProvider()) { entry in
             DayWidgetView(entry: entry)
-                .widgetURL(URL(string: "loadwise://open/today"))
+                // Redacted on the Lock Screen and in StandBy while the phone is locked.
+                .privacySensitive()
+                .widgetURL(URL(string: "aurin://open/today"))
                 .widgetCard()
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Můj den")))
@@ -318,7 +324,7 @@ struct DayWidgetView: View {
     var body: some View {
         if let s = entry.snapshot {
             HStack(alignment: .top, spacing: 14) {
-                Link(destination: URL(string: "loadwise://open/readiness")!) {
+                Link(destination: URL(string: "aurin://open/readiness")!) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.tr("Připravenost")).font(.caption.weight(.medium)).foregroundStyle(W.muted)
                         Text(s.readiness.map(String.init) ?? "–").font(W.number(50)).foregroundStyle(W.ink)
@@ -330,12 +336,12 @@ struct DayWidgetView: View {
                     }
                 }
                 VStack(alignment: .leading, spacing: 7) {
-                    Link(destination: URL(string: "loadwise://open/sleep")!) { row("moon.fill", W.indigo, "Spánek", W.hm(s.sleepMinutes)) }
-                    Link(destination: URL(string: "loadwise://open/training")!) { row("flame.fill", W.amber, "Námaha", W.decimal(s.strain) + (s.strainPlanned.map { " / " + W.decimal($0) } ?? "")) }
-                    Link(destination: URL(string: "loadwise://open/food")!) { row("fork.knife", W.rust, "Jídlo", W.int(s.kcal) + (s.kcalTarget.map { " / " + W.int($0) } ?? "") + " kcal") }
-                    Link(destination: URL(string: "loadwise://open/food")!) { row("drop.fill", W.blue, "Pití", W.water(s.waterMl, s.waterTarget)) }
+                    Link(destination: URL(string: "aurin://open/sleep")!) { row("moon.fill", W.indigo, "Spánek", W.hm(s.sleepMinutes)) }
+                    Link(destination: URL(string: "aurin://open/training")!) { row("flame.fill", W.amber, "Námaha", W.decimal(s.strain) + (s.strainPlanned.map { " / " + W.decimal($0) } ?? "")) }
+                    Link(destination: URL(string: "aurin://open/food")!) { row("fork.knife", W.rust, "Jídlo", W.int(s.kcal) + (s.kcalTarget.map { " / " + W.int($0) } ?? "") + " kcal") }
+                    Link(destination: URL(string: "aurin://open/food")!) { row("drop.fill", W.blue, "Pití", W.water(s.waterMl, s.waterTarget)) }
                     if let bed = s.bedtime {
-                        Link(destination: URL(string: "loadwise://open/sleep-settings")!) { row("alarm", W.indigo, "Do postele", ClockText.format(bed)) }
+                        Link(destination: URL(string: "aurin://open/sleep-settings")!) { row("alarm", W.indigo, "Do postele", ClockText.format(bed)) }
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -361,7 +367,9 @@ struct FoodWaterWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "food", provider: SnapshotProvider()) { entry in
             FoodWaterWidgetView(entry: entry)
-                .widgetURL(URL(string: "loadwise://open/food"))
+                // Redacted on the Lock Screen and in StandBy while the phone is locked.
+                .privacySensitive()
+                .widgetURL(URL(string: "aurin://open/food"))
                 .widgetCard()
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Jídlo a pití")))

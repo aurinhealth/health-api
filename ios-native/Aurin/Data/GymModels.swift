@@ -122,6 +122,8 @@ struct GymProposal: Equatable {
     var rationale: String?
     var rows: [[JSONValue]]
     var muscles: [String: [String: Double]]
+    /// The length the server settled on, when it chose it (autoLength).
+    var minutes: Int? = nil
 
     /// The exercises in order with their work sets, "3 × 8–10 · 40 kg".
     var exercises: [(name: String, sets: Int, reps: String, kg: String)] {
@@ -210,6 +212,8 @@ struct GymPreviewResponse: Decodable {
     let plan: Plan?
     let muscles: [String: [String: Double]]?
     let message: String?
+    /// The length the server settled on (the usual one capped by the day's free time).
+    let minutes: Int?
 
     struct Plan: Decodable, Equatable {
         let planName: String?
@@ -343,6 +347,27 @@ struct GeneratedWorkout: Decodable {
         let focus: String?
         let why: String?
     }
+}
+
+/// Knihovna → Tri: a brick, two legs one right after the other (src/brick-workouts.js).
+struct LibraryBrick: Decodable, Identifiable {
+    let id: String
+    let name: String
+    let note: String
+    let minutes: Int
+    let legs: [Leg]
+
+    struct Leg: Decodable {
+        let sport: String
+        let workoutId: String
+        let minutes: Int
+        var meters: Double? = nil
+        let steps: [PlannedWorkout.Block]
+    }
+}
+
+struct BricksResponse: Decodable {
+    let bricks: [LibraryBrick]
 }
 
 struct WorkoutSearchResponse: Decodable {

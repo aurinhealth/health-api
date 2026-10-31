@@ -55,7 +55,7 @@ enum WatchAPI {
         request.setValue(TimeZone.current.identifier, forHTTPHeaderField: "X-Time-Zone")
         request.setValue(session.language, forHTTPHeaderField: "X-Interface-Language")
         request.setValue(session.imperial ? "imperial" : "metric", forHTTPHeaderField: "X-Units")
-        request.setValue(String(session.apiLevel), forHTTPHeaderField: "X-Loadwise-Api")
+        request.setValue(String(session.apiLevel), forHTTPHeaderField: "X-Aurin-Api")
         // Writes with the session cookie must come from the site's own origin.
         if method != "GET" { request.setValue(session.server, forHTTPHeaderField: "Origin") }
         return request

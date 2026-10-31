@@ -1,5 +1,5 @@
 import { L } from './lang.js';
-import { KEEP_TYPE_SQL, watchType } from "./activity-type.js";
+import { KEEP_TYPE_SQL, watchType, mark } from "./activity-type.js";
 import { healthPointJson } from './health-point-json.js';
 import {localExportIndex} from './local-workouts.js';
 import {hasRecentActivityData} from './onboarding.js';
@@ -22,12 +22,13 @@ import { heldMerges, mergedSpan, sourcesOf } from "./workout-merge.js";
 import { afterGoogleSync, flushGoogleSync } from "./apple-health.js";
 import { pickBuckets, BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE, HEART_RATE_HOUR_TYPE } from "./heart-rate-compaction.js";
 import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
+import { bumpCacheVersion, closedDay } from "./api-cache.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { markConnectionBroken, markConnectionOk, isGoogleAuthFailure, isIntervalsAuthFailure } from "./connection-health.js";
 import { manualPairs } from "./manual-pairs.js";
 import { matchPlannedWorkouts } from "./plan-match.js";
 export { matchPlannedWorkouts };
-import { readSyncPrefs, healthAllowed, sentIntervalsIds, sentByLoadwise } from "./sync-destinations.js";
+import { readSyncPrefs, healthAllowed, sentIntervalsIds, sentByAurin } from "./sync-destinations.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -876,10 +877,31 @@ async function saveGooglePointsBatch(env, family, type, points, { raw = false } 
   if (type === "exercise" && env.GOOGLE_CLIENT_ID) points = points.filter(p => p?.dataSource?.application?.googleWebClientId !== env.GOOGLE_CLIENT_ID);
   if (!points.length) return 0;
 
-  const statements = points.map(point => {
+  // The recent sync reads the same two days every 5 minutes. D1 bills an upsert
+  // that changes nothing as a row written (~250k a day per user, measured on
+  // 2026-10-31 with ~140 rows really changed an hour), so the stored rows are
+  // read first, ~90 ids a query on the unique index, and only new or changed
+  // points are written.
+  const rows = points.map(point => {
     const i = googleInfo(type, point);
-    const fallbackId = point?.name || `${type}:${i.sample || i.start || crypto.randomUUID()}`;
+    return { point, i, id: point?.name || `${type}:${i.sample || i.start || crypto.randomUUID()}`, payload: healthPointJson(point) };
+  });
+  const stored = new Map();
+  const ids = [...new Set(rows.map(r => r.id))];
+  const reads = [];
+  for (let k = 0; k < ids.length; k += 90) reads.push(env.DB.prepare(`SELECT external_id, sample_time, start_time, end_time, value_numeric, value_unit, payload_json FROM health_datapoints
+    WHERE user_id = ? AND source_family = ? AND data_type = ? AND external_id IN (${ids.slice(k, k + 90).map(() => '?').join(',')})`).bind(env.USER_ID, family, type, ...ids.slice(k, k + 90)));
+  for (let k = 0; k < reads.length; k += 50) for (const result of await env.DB.batch(reads.slice(k, k + 50))) for (const row of result?.results || []) stored.set(row.external_id, row);
+  // As the upsert's own check (IS NOT): a number stored from a numeric string is equal.
+  const same = (a, b) => (a ?? null) === (b ?? null) || (typeof a === 'number' && b !== '' && b != null && Number(b) === a);
+  const changedRows = rows.filter(({ id, i, payload }) => {
+    const old = stored.get(id);
+    return !old || !(same(old.sample_time, i.sample) && same(old.start_time, i.start) && same(old.end_time, i.end)
+      && same(old.value_numeric, i.value) && same(old.value_unit, i.unit) && old.payload_json === payload);
+  });
+  if (!changedRows.length) return points.length;
 
+  const statements = changedRows.map(({ i, id: fallbackId, payload }) => {
     return env.DB.prepare(
       `INSERT INTO health_datapoints (
         user_id,
@@ -919,7 +941,7 @@ async function saveGooglePointsBatch(env, family, type, points, { raw = false } 
       i.end,
       i.value,
       i.unit,
-      healthPointJson(point)
+      payload
     );
   });
 
@@ -932,7 +954,7 @@ async function saveGooglePointsBatch(env, family, type, points, { raw = false } 
       const rows=Number(result?.meta?.changes||0);
       if(!rows)return;
       changed+=rows;
-      const info=googleInfo(type,points[i+j]);
+      const info=changedRows[i+j].i;
       // The hour, so the summary after the sync rebuilds only the hours written.
       const day=String(info.sample||info.start||info.end||'').slice(0,13);
       if(/^\d{4}-\d{2}-\d{2}(T\d{2})?$/.test(day)&&(!oldest||day<oldest))oldest=day;
@@ -942,6 +964,9 @@ async function saveGooglePointsBatch(env, family, type, points, { raw = false } 
   // Only when a row changed: the recent sync reads the same two days every
   // 5 minutes, and choosing the source again read ~1 B rows a day for nothing.
   if(changed)await afterGoogleSync(env, type, points, {since:oldest});
+  // A changed row on a closed day (a late upload, the nightly look back): the
+  // days kept in the cache (api-cache.js closedDay) are read again.
+  if(changed&&oldest&&closedDay(/T\d{2}$/.test(oldest)?localDate(oldest+':00:00Z'):oldest,localToday()))await bumpCacheVersion(env.DB);
   return points.length;
 }
 // Google heart rate arrives as a sample every few seconds (~36k a day). Written
@@ -1249,8 +1274,13 @@ async function removeIntervalsActivities(env, externalIds) {
     const ids = externalIds.slice(i, i + 50), marks = ids.map(() => "?").join(",");
     statements.push(
       env.DB.prepare(`DELETE FROM health_datapoints WHERE user_id = ? AND source_family = 'intervals' AND data_type = 'activity' AND external_id IN (${marks})`).bind(env.USER_ID, ...ids),
+      // Only workouts pair with an activity (matchActivities), so the copies are
+      // looked for among them: by source and type the index finds them, where
+      // matched_activity_id alone went through every row the user has (1.37 M
+      // rows read for one removal on 2026-10-30).
       env.DB.prepare(`UPDATE health_datapoints SET record_role = 'primary', matched_activity_id = NULL, match_confidence = NULL, updated_at = CURRENT_TIMESTAMP
-        WHERE user_id = ? AND matched_activity_id IN (${marks})`).bind(env.USER_ID, ...ids.map(id => "intervals:" + id))
+        WHERE user_id = ? AND source_family IN ('intervals','local','wahoo','google-wearables','apple-health') AND data_type IN ('activity','exercise')
+          AND matched_activity_id IN (${marks})`).bind(env.USER_ID, ...ids.map(id => "intervals:" + id))
     );
   }
   if (statements.length) await env.DB.batch(statements);
@@ -1291,7 +1321,7 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays,del
 
   for (const sourceActivity of activities) {
     const id = String(sourceActivity.id);
-    if (sentByLoadwise(sourceActivity) || sentHere.has(id)) continue;
+    if (sentByAurin(sourceActivity) || sentHere.has(id)) continue;
     let a = sourceActivity;
     if (sourceActivity?._note && !sourceActivity.name && !sourceActivity.type) {
       const existing = existingById.get("activity:"+id);
@@ -1557,7 +1587,8 @@ export async function matchActivities(env, { days = null } = {}) {
   // A merged copy written again under a new id (workout-merge.js heldMerges):
   // the kept record points to the new one, so deleting it takes both.
   for (const { row, with: copy } of merges.moved) updates.push(env.DB.prepare(
-    `UPDATE health_datapoints SET payload_json = json_set(payload_json, '$.loadwiseMerge.with', ?), updated_at = CURRENT_TIMESTAMP
+    // A mark still under the old name (activity-type.js mark) moves over whole.
+    `UPDATE health_datapoints SET payload_json = json_remove(json_set(payload_json, '$.aurinMerge', json_set(COALESCE(json_extract(payload_json, '$.aurinMerge'), json_extract(payload_json, '$.loadwiseMerge'), '{}'), '$.with', ?)), '$.loadwiseMerge'), updated_at = CURRENT_TIMESTAMP
      WHERE user_id = ? AND source_family = ? AND data_type = ? AND external_id = ?`
   ).bind(copy, env.USER_ID, row.source_family, row.data_type, row.external_id));
   for (let i = 0; i < updates.length; i += 50) await env.DB.batch(updates.slice(i, i + 50));
@@ -2044,7 +2075,7 @@ async function energyForDate(env, date) {
     })
     .sort((a, b) => new Date(a.start || 0).getTime() - new Date(b.start || 0).getTime());
   // Calories the user set in Aurin (activity-edits.js) are not checked again.
-  const edited=a=>a.payload?.loadwiseKcal!=null;
+  const edited=a=>mark(a.payload,'Kcal')!=null;
   const walking=completed.filter(a=>/^(Walk|Walking)$/i.test(a.type||'')&&!edited(a));
   if(walking.length){
     const telemetry=(await env.DB.prepare("SELECT start_time,end_time,value_numeric FROM health_datapoints WHERE user_id=? AND source_family IN ('google-wearables','apple-health') AND data_type='active-energy-burned' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,dayStart,dayEnd).all().catch(()=>({results:[]}))).results||[];

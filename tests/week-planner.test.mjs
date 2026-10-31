@@ -121,3 +121,14 @@ test('a day may hold the same sport twice; the second session stays easy and get
   // One planned ride covers the first ride chip only.
   assert.deepEqual(targets.items.filter(x => x.date === '2026-10-05').map(x => [x.sport, x.slot]), [['ride', 1], ['gym', 0]]);
 });
+
+test("own bricks: kept only on days with a ride and a run, and they travel with the days", async () => {
+  const days = [["ride", "run"], ["run"], [], [], [], ["ride", "run", "swim"], []];
+  assert.deepEqual(sanitizeWeekPlan({ days, bricks: [0, 1, 5, 5, 9, "x"] }).bricks, [0, 5]);
+  assert.deepEqual(sanitizeWeekPlan({ days }).bricks, []);
+  const { weekOverride } = await import("../src/week-planner.js");
+  const usual = sanitizeWeekPlan({ days });
+  const own = weekOverride(sanitizeWeekPlan({ days, bricks: [5] }), usual);
+  assert.deepEqual(own.bricks, [5]);
+  assert.deepEqual(own.days, usual.days, "the bricks go with the days they are keyed by");
+});
