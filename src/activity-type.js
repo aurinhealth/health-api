@@ -127,7 +127,7 @@ export const activityTypes = () => ACTIVITY_TYPES.map(([type, cs, en, group]) =>
 
 // Aurin's marks on a stored activity: aurinType, aurinKcal, aurinKcalDevice and
 // aurinMerge. Rows from before 2026-11 were renamed from loadwise… (migration
-// 0032, run again once the new version is live: after-deploy/). Until then a mark
+// 0033, run again once the new version is live: after-deploy/). Until then a mark
 // the old version wrote during the deploy is still read here, not in KEEP_TYPE_SQL.
 export const mark = (payload, name) => payload?.['aurin' + name] ?? payload?.['loadwise' + name];
 const LEGACY_MARKS = ['Type', 'Kcal', 'KcalDevice', 'Merge'];

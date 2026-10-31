@@ -1,4 +1,4 @@
--- Migration 0032 once more, after the new version is live: a mark the previous version
+-- Migration 0033 once more, after the new version is live: a mark the previous version
 -- wrote under the old name while the deploy ran (activity-type.js mark). Runs once per
 -- database (schema_meta); later deploys read no rows.
 UPDATE health_datapoints
