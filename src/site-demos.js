@@ -53,6 +53,7 @@ const P = {
   alarm: '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2 2M4 5l3-2M20 5l-3-2"/>',
   chat: '<path d="M4 5h11v8H8l-4 3ZM15 9h5v8l-3-2h-6v-2"/>',
   menu: '<path d="M6 8h12M6 12h12M6 16h12"/>',
+  pause: '<path d="M9 6v12M15 6v12"/>',
 };
 const ic = (name, cls = '') => `<svg class="di${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true">${P[name]}</svg>`;
 const at = spec => ` data-at="${spec}"`;
@@ -528,14 +529,19 @@ const watchHome = `<div class="aw-s" style="--gw:#163A2E">${wTop(wBtn('alarm', W
 <div class="aw-hero"><span class="aw-n" style="font-size:58px">78</span><span class="aw-side"><span class="aw-k">Readiness</span><span class="aw-pill" style="color:${WA.green}">high</span></span></div>
 <div class="aw-g">${[['Sleep', '7:12', '', 28, WA.amber, '89%'], ['Strain', '8.4', '', 14, WA.amber, 'of 11–14'], ['HRV', '64', 'ms', 76, WA.green, 'high']].map(([k, v, u, pos, c, note]) => `<div><span class="aw-k">${k}</span><span class="aw-n aw-v">${v}${u ? `<small>${u}</small>` : ''}</span>${wRange(pos, c)}<b style="color:${c}">${note}</b></div>`).join('')}</div>
 <div class="aw-next"><span style="color:${WA.amber}">${ic('gym')}</span>Strength training · 45′ at 5:30 PM</div></div>`;
-const watchGym = `<div class="aw-s" style="--gw:#3A2A17">${wTop('', '5:41', `<span class="aw-ib">${ic('menu')}</span>`)}
+const watchGym = `<div class="aw-s" style="--gw:#3A2A17">${wTop(wBtn('pause', WA.ink), '5:41', `<span class="aw-ib">${ic('menu')}</span>`)}
 <div class="aw-ex"><b>Squat</b><span><i class="aw-ib aw-sm">${ic('minus')}</i>set 2/4<i class="aw-ib aw-sm">${ic('plus')}</i></span></div>
 <div class="aw-two"><div class="aw-box on"><span class="aw-n">80</span><span class="aw-k">kg</span></div><div class="aw-box"><span class="aw-n">8</span><span class="aw-k">reps</span></div></div>
 <div class="aw-done">Set done</div>
-<div class="aw-two aw-tiles"><div><span class="aw-k">Time</span><b>12:40</b></div><div><span class="aw-k">Heart</span><b style="color:${WA.red}">128 <small>bpm</small></b></div></div></div>`;
-const watchRest = `<div class="aw-s" style="--gw:#3A2A17">${wTop(`<b style="color:${WA.amber}">Rest</b>`, '5:42', '')}
-<span class="aw-rest"><svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="50" stroke="#2A2C2E" stroke-width="9"/><circle cx="60" cy="60" r="50" stroke="${WA.amber}" stroke-width="9" stroke-linecap="round" pathLength="100" stroke-dasharray="56 100" transform="rotate(-90 60 60)"/></svg><span class="aw-n">1:24</span></span>
-<div class="aw-c"><span class="aw-k">Next · </span>Squat 80 kg × 8</div></div>`;
+<div class="aw-two aw-tiles"><div><span class="aw-k">Time</span><b>12:40</b></div><div><span class="aw-k">Heart</span><b style="color:${WA.red}">128 <small>bpm</small></b></div></div>
+<div class="aw-two aw-tiles"><div><span class="aw-k">Volume</span><b style="color:${WA.indigo}">1.9 <small>t</small></b></div><div><span class="aw-k">Calories</span><b style="color:${WA.amber}">86 <small>kcal</small></b></div></div></div>`;
+// The rest (GymSessionView.rest): the countdown beside the next set with the workout's time and heart rate,
+// how the set just done went (the next weight follows it), −15 s, Skip and +15 s under it; the coach in the corner the pause takes during a set.
+const watchRest = `<div class="aw-s" style="--gw:#3A2A17">${wTop(wBtn('chat', WA.amber), '5:42', `<span class="aw-ib">${ic('menu')}</span>`)}
+<div class="aw-rrow"><span class="aw-rr"><svg viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="25.5" stroke="#2A2C2E" stroke-width="5"/><circle cx="28" cy="28" r="25.5" stroke="${WA.amber}" stroke-width="5" stroke-linecap="round" pathLength="100" stroke-dasharray="56 100" transform="rotate(-90 28 28)"/></svg><span class="aw-n">1:24</span></span>
+<div><span class="aw-k">Next · Squat</span><b class="aw-nx">80 kg × 8</b><span class="aw-live">12:58 <span style="color:#F59BB0">${ic('heart')} 112</span></span></div></div>
+<div class="aw-rate">${[['Easy', WA.green], ['Medium', WA.amber, 1], ['Hard', '#F0907A'], ['Failure', '#FF6B5B']].map(([k, c, on]) => `<span style="${on ? `background:${c};color:#000` : `color:${c}`}">${k}</span>`).join('')}</div>
+<div class="aw-btns"><span>−15 s</span><span>Skip</span><span>+15 s</span></div></div>`;
 const watchFood = `<div class="aw-s" style="--gw:#163047">${wTop('', '12:20', '')}
 <div class="aw-food">${wRing(70, 29, 7, .52, WA.amber, `<span class="aw-in"><span class="aw-n">1,380</span><small>OF 2,650</small></span>`)}<div><b style="color:${WA.amber}">Food</b><span class="aw-news">1,270 kcal left</span><span class="aw-k">lunch logged 12:30</span></div></div>
 <div class="aw-mac">${[['Carbs', 177, 330, '#FFC274'], ['Protein', 84, 150, '#83C7FF'], ['Fat', 36, 80, '#B3A1FF']].map(([k, v, t, c]) => `<div><b style="color:${c}">${k}</b>${v}/${t} g<i><b style="width:${Math.round(v / t * 100)}%;background:${c}"></b></i></div>`).join('')}</div>
@@ -1011,8 +1017,11 @@ html:not(.js) .stage1{display:none}
 .aw-box.on{background:#16352B;box-shadow:inset 0 0 0 2px #8FE6C4}
 .aw-done{display:grid;place-items:center;height:34px;margin-top:7px;border-radius:17px;background:#F4F2EE;color:#0A0B0C;font-size:14px;font-weight:700}
 .aw-tiles>div{padding:5px 9px;border-radius:12px;background:rgba(255,255,255,.07)}.aw-tiles b{display:block;font-size:17px}.aw-tiles small{font-size:10px}
-.aw-rest{position:relative;display:grid;place-items:center;width:150px;height:150px;margin:4px auto 0}.aw-rest svg{position:absolute;inset:0;fill:none}.aw-rest .aw-n{font-size:40px}
-.aw-c{margin-top:6px;text-align:center;font-weight:500}
+.aw-rrow{display:flex;align-items:center;gap:8px;margin-top:14px}.aw-rr{position:relative;display:grid;place-items:center;flex:none;width:56px;height:56px}.aw-rr svg{position:absolute;inset:0;fill:none}.aw-rr .aw-n{font-size:20px}
+.aw-rrow>div{display:flex;flex-direction:column;min-width:0}.aw-rrow .aw-k{font-size:10px}.aw-nx{font-size:15px}.aw-live{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}.aw-live .di{width:9px;height:9px;fill:currentColor;stroke:none}
+.aw-rate{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:10px}.aw-rate span{display:grid;place-items:center;height:36px;border-radius:12px;background:rgba(255,255,255,.09);font-size:14px;font-weight:600}
+.aw-btns{display:flex;gap:4px;margin-top:8px}.aw-btns span{flex:1;display:grid;place-items:center;height:32px;border-radius:16px;background:rgba(255,255,255,.12);font-size:12px;font-weight:600}
+
 .aw-ring{position:relative;display:grid;place-items:center;flex:none}.aw-ring>svg{position:absolute;inset:0;fill:none}
 .aw-in{display:flex;flex-direction:column;align-items:center;line-height:1}.aw-in small{font-size:7.5px;color:#9AA39F;margin-top:2px}
 .aw-food{display:flex;align-items:center;gap:9px;margin-top:2px}.aw-food .aw-in .aw-n{font-size:16px}.aw-food>div{display:flex;flex-direction:column}

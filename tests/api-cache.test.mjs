@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cached } from "../src/api-cache.js";
+import { cached, closedDay } from "../src/api-cache.js";
 
 function setup() {
   const map = new Map();
@@ -156,4 +156,14 @@ test("the version is read once per request until the request bumps it", async ()
   // Another request (another database object) reads its own.
   assert.equal((await cacheVersion({ ...db })).version, 5);
   assert.equal(reads, 3);
+});
+
+test("a closed day is two or more days back: today and yesterday still get late syncs", () => {
+  assert.equal(closedDay("2026-10-31", "2026-10-31"), false);
+  assert.equal(closedDay("2026-10-30", "2026-10-31"), false);
+  assert.equal(closedDay("2026-10-29", "2026-10-31"), true);
+  assert.equal(closedDay("2026-09-30", "2026-10-01"), false);
+  assert.equal(closedDay("2026-09-29", "2026-10-01"), true);
+  assert.equal(closedDay("2026-11-02", "2026-10-31"), false);
+  assert.equal(closedDay("", "2026-10-31"), false);
 });

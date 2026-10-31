@@ -59,9 +59,11 @@ struct GymSessionView: View {
         return nil
     }
 
+    /// A lifting session done that day shows as done even when the day's plan
+    /// was cancelled: the workout happened, the cancellation is only the plan's.
     private var showsDone: Bool {
-        if day?.cancelled == true { return false }
-        return doneMode || doneSession != nil
+        if doneSession != nil { return true }
+        return doneMode && day?.cancelled != true
     }
 
     /// Done: every set ticked, or a past day with sets ticked.
