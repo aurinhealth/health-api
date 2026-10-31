@@ -36,8 +36,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // Crashes from MetricKit for "Nahlásit problém" (CrashReports.swift).
         CrashReports.shared.start()
         let center = UNUserNotificationCenter.current()
-        center.setNotificationCategories([Reminders.pillNotificationCategory, CoachPush.category, CoachPush.replyCategory, CoachPush.actionCategory,
-                                          MorningPush.category])
+        center.setNotificationCategories(Set(Reminders.pillNotificationCategories + [CoachPush.category, CoachPush.replyCategory, CoachPush.actionCategory,
+                                                                                    MorningPush.category]))
         center.delegate = self
         return true
     }
@@ -67,7 +67,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                                             withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         let content = notification.request.content
         let options: UNNotificationPresentationOptions
-        if content.categoryIdentifier == Reminders.pillCategory {
+        if Reminders.isPill(content.categoryIdentifier) {
             options = [.banner, .sound, .list]
         } else {
             // The server's pushes (the morning readiness, the coach), also while the
@@ -108,15 +108,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             FoodPush.shared.product = product
             return
         }
-        guard content.categoryIdentifier == Reminders.pillCategory else { return }
+        guard Reminders.isPill(content.categoryIdentifier) else { return }
         let date = content.userInfo["date"] as? String ?? AppModel.localDate(Date())
-        switch response.actionIdentifier {
-        case Reminders.pillTakenAction:
+        if Reminders.isPillTaken(response.actionIdentifier) {
             _ = try? await api.saveCycleDay(["date": .string(date), "pill": .string(AppModel.clockNow())])
-        case Reminders.pillSnoozeAction:
+        } else if Reminders.isPillSnooze(response.actionIdentifier) {
             await Reminders.snoozePill(date: date, title: content.title, body: content.body)
-        default:
-            break
         }
     }
 

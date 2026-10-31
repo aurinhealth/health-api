@@ -18,7 +18,7 @@ test("with CONNECTION_KEY, connection keys are encrypted with it and bound to th
   const alice = { DB, CONNECTION_KEY, USER_ID: 1 };
   await saveConnectionSecret(alice, "google", "alice-google-token");
   await saveConnectionSecret(alice, "intervals", "alice-intervals-key");
-  assert.ok(stored(DB).every(row => row.encrypted.startsWith("v3.") && !row.encrypted.includes("alice")));
+  assert.ok(stored(DB).every(row => row.encrypted.startsWith("v2.") && !row.encrypted.includes("alice")));
   // Readable without the owner API key.
   const resolved = await connectionEnvironment(alice);
   assert.equal(resolved.GOOGLE_REFRESH_TOKEN, "alice-google-token");
@@ -33,20 +33,28 @@ test("with CONNECTION_KEY, connection keys are encrypted with it and bound to th
   assert.ok(errors.mock.callCount() >= 4);
 });
 
-// v2: the same CONNECTION_KEY, derived under the app's old name before 2026-11.
-test("a v2 key is still read and saved again as v3 the first time it loads", async () => {
+// v2 and v3: the same CONNECTION_KEY, derived under the app's old name and under Aurin.
+// Rows are still written as v2, which the version before this one reads (rollback, deploy).
+async function sealed(version, name, value) {
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(CONNECTION_KEY), "HKDF", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey({ name: "HKDF", hash: "SHA-256", salt: new Uint8Array(32), info: new TextEncoder().encode(name + " connection credentials") }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt"]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: new TextEncoder().encode("4:intervals") }, key, new TextEncoder().encode(value));
+  return version + "." + Buffer.from(iv).toString("base64") + "." + Buffer.from(cipher).toString("base64");
+}
+test("v2 and v3 keys are both read, and loading them rewrites nothing", async () => {
   const DB = createD1();
   await saveConnectionSecret({ DB, CONNECTION_KEY, USER_ID: 4 }, "intervals", "placeholder");
-  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(CONNECTION_KEY), "HKDF", false, ["deriveKey"]);
-  const key = await crypto.subtle.deriveKey({ name: "HKDF", hash: "SHA-256", salt: new Uint8Array(32), info: new TextEncoder().encode("loadwise connection credentials") }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt"]);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: new TextEncoder().encode("4:intervals") }, key, new TextEncoder().encode("old-intervals-key"));
-  const v2 = "v2." + Buffer.from(iv).toString("base64") + "." + Buffer.from(cipher).toString("base64");
-  DB.sqlite.prepare("UPDATE connection_credentials SET encrypted = ? WHERE user_id = 4").run(v2);
-  assert.equal((await connectionEnvironment({ DB, CONNECTION_KEY, USER_ID: 4 })).INTERVALS_API_KEY, "old-intervals-key");
-  const [row] = stored(DB);
-  assert.match(row.encrypted, /^v3\./);
-  assert.equal((await connectionEnvironment({ DB, CONNECTION_KEY, USER_ID: 4 })).INTERVALS_API_KEY, "old-intervals-key");
+  for (const [version, name] of [["v2", "loadwise"], ["v3", "aurin"]]) {
+    const value = await sealed(version, name, version + "-intervals-key");
+    DB.sqlite.prepare("UPDATE connection_credentials SET encrypted = ? WHERE user_id = 4").run(value);
+    assert.equal((await connectionEnvironment({ DB, CONNECTION_KEY, USER_ID: 4 })).INTERVALS_API_KEY, version + "-intervals-key");
+    assert.equal(stored(DB)[0].encrypted, value);
+  }
+  // A v3 row under the wrong name does not open.
+  DB.sqlite.prepare("UPDATE connection_credentials SET encrypted = ? WHERE user_id = 4").run((await sealed("v3", "loadwise", "x")));
+  const errors = console.error; console.error = () => {};
+  try { assert.equal((await connectionEnvironment({ DB, CONNECTION_KEY, USER_ID: 4 })).INTERVALS_API_KEY, undefined); } finally { console.error = errors; }
 });
 
 test("a key in the old format (encrypted with the owner API key) no longer opens", async t => {

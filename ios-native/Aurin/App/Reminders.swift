@@ -305,12 +305,19 @@ enum Reminders {
     static let pillSnoozeAction = "aurin.pill.snooze"
     private static let pillKey = "cycle.pill"
 
-    static var pillNotificationCategory: UNNotificationCategory {
-        UNNotificationCategory(identifier: pillCategory, actions: [
-            UNNotificationAction(identifier: pillTakenAction, title: L10n.tr("Vzato"), options: []),
-            UNNotificationAction(identifier: pillSnoozeAction, title: L10n.tr("Za 30 minut"), options: [])
-        ], intentIdentifiers: [], options: [])
+    /// The category under both prefixes: a pill reminder planned or shown before
+    /// 2026-11 (legacyPrefix) keeps its buttons.
+    static var pillNotificationCategories: [UNNotificationCategory] {
+        [prefix, legacyPrefix].map { at in
+            UNNotificationCategory(identifier: at + "pill", actions: [
+                UNNotificationAction(identifier: at + "pill.taken", title: L10n.tr("Vzato"), options: []),
+                UNNotificationAction(identifier: at + "pill.snooze", title: L10n.tr("Za 30 minut"), options: [])
+            ], intentIdentifiers: [], options: [])
+        }
     }
+    static func isPill(_ category: String) -> Bool { category == pillCategory || category == legacyPrefix + "pill" }
+    static func isPillTaken(_ action: String) -> Bool { action == pillTakenAction || action == legacyPrefix + "pill.taken" }
+    static func isPillSnooze(_ action: String) -> Bool { action == pillSnoozeAction || action == legacyPrefix + "pill.snooze" }
 
     struct StoredPill: Codable, Equatable {
         var on: Bool

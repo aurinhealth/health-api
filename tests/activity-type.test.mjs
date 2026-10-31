@@ -86,22 +86,37 @@ test("a gym session gets the chosen type in the calendar", async () => {
   assert.equal(a.type, "Run");
 });
 
-// Marks written as loadwise… before 2026-11: migration 0032 renames them, and a row the old
-// version writes while it runs is still read and kept by the next sync under the new name.
-test("a mark under its old name is read, kept by the next sync and renamed", async () => {
+// Marks written as loadwise… before 2026-11: migration 0032 renames them, and again once the
+// new version is live (after-deploy/), for a row the old version wrote while the deploy ran.
+// Until then the app reads the old mark; the sync's SQL reads only the new one.
+test("a mark under its old name is read, renamed after the deploy and then kept by the sync", async () => {
   assert.equal(mark({ loadwiseKcal: 300 }, "Kcal"), 300);
   assert.equal(mark({ aurinKcal: 310, loadwiseKcal: 300 }, "Kcal"), 310);
   assert.deepEqual(renameMarks({ loadwiseType: "Walk", loadwiseMerge: { with: "x" }, a: 1 }), { aurinType: "Walk", aurinMerge: { with: "x" }, a: 1 });
 
-  const DB = createD1(); schema(DB);
-  await upsert(DB, { ...run, loadwiseType: "Walk", loadwiseKcal: 300, loadwiseKcalDevice: 251, loadwiseMerge: { with: "apple-health:a1" } });
-  await upsert(DB, { ...run, exercise: { ...run.exercise, metricsSummary: { caloriesKcal: 255 } } });
-  const kept = JSON.parse(DB.sqlite.prepare("SELECT payload_json FROM health_datapoints").get().payload_json);
-  assert.deepEqual([kept.aurinType, kept.exercise.exerciseType, kept.aurinKcal, kept.exercise.metricsSummary.caloriesKcal, kept.aurinMerge.with], ["Walk", "Walk", 300, 300, "apple-health:a1"]);
-
   const old = createD1(); schema(old);
-  await upsert(old, { ...run, loadwiseType: "Walk", loadwiseKcal: 300, loadwiseKcalDevice: 251 });
+  old.sqlite.exec("CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)");
+  await upsert(old, { ...run, loadwiseType: "Walk", loadwiseKcal: 300, loadwiseKcalDevice: 251, loadwiseMerge: { with: "apple-health:a1" } });
   old.sqlite.exec(readFileSync(new URL("../migrations/0032_aurin_marks.sql", import.meta.url), "utf8"));
   const renamed = JSON.parse(old.sqlite.prepare("SELECT payload_json FROM health_datapoints").get().payload_json);
-  assert.deepEqual([renamed.aurinType, renamed.aurinKcal, renamed.aurinKcalDevice, renamed.loadwiseType], ["Walk", 300, 251, undefined]);
+  assert.deepEqual([renamed.aurinType, renamed.aurinKcal, renamed.aurinKcalDevice, renamed.aurinMerge.with, renamed.loadwiseType], ["Walk", 300, 251, "apple-health:a1", undefined]);
+  await upsert(old, { ...run, exercise: { ...run.exercise, metricsSummary: { caloriesKcal: 255 } } });
+  const kept = JSON.parse(old.sqlite.prepare("SELECT payload_json FROM health_datapoints").get().payload_json);
+  assert.deepEqual([kept.aurinType, kept.exercise.exerciseType, kept.aurinKcal, kept.exercise.metricsSummary.caloriesKcal, kept.aurinMerge.with], ["Walk", "Walk", 300, 300, "apple-health:a1"]);
+
+  // After the deploy: renamed once, then the file reads nothing (schema_meta).
+  const afterDeploy = readFileSync(new URL("../after-deploy/0032_aurin_marks.sql", import.meta.url), "utf8");
+  old.sqlite.prepare("UPDATE health_datapoints SET payload_json = replace(payload_json, '\"aurinKcal\":', '\"loadwiseKcal\":')").run();
+  old.sqlite.exec(afterDeploy);
+  assert.equal(JSON.parse(old.sqlite.prepare("SELECT payload_json FROM health_datapoints").get().payload_json).aurinKcal, 300);
+  old.sqlite.prepare("UPDATE health_datapoints SET payload_json = replace(payload_json, '\"aurinKcal\":', '\"loadwiseKcal\":')").run();
+  old.sqlite.exec(afterDeploy);
+  assert.equal(JSON.parse(old.sqlite.prepare("SELECT payload_json FROM health_datapoints").get().payload_json).loadwiseKcal, 300);
+});
+
+test("a merge mark that is not an object does not stop the sync", async () => {
+  const DB = createD1(); schema(DB);
+  await upsert(DB, { ...run, aurinMerge: "text" });
+  await upsert(DB, { ...run, exercise: { ...run.exercise, metricsSummary: { caloriesKcal: 255 } } });
+  assert.equal(JSON.parse(DB.sqlite.prepare("SELECT payload_json FROM health_datapoints").get().payload_json).exercise.metricsSummary.caloriesKcal, 255);
 });

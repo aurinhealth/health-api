@@ -127,7 +127,8 @@ export const activityTypes = () => ACTIVITY_TYPES.map(([type, cs, en, group]) =>
 
 // Aurin's marks on a stored activity: aurinType, aurinKcal, aurinKcalDevice and
 // aurinMerge. Rows from before 2026-11 were renamed from loadwise… (migration
-// 0032); one written by the old version while that migration ran is still read.
+// 0032, run again once the new version is live: after-deploy/). Until then a mark
+// the old version wrote during the deploy is still read here, not in KEEP_TYPE_SQL.
 export const mark = (payload, name) => payload?.['aurin' + name] ?? payload?.['loadwise' + name];
 const LEGACY_MARKS = ['Type', 'Kcal', 'KcalDevice', 'Merge'];
 // The payload with its marks under their new names only.
@@ -143,7 +144,7 @@ export function renameMarks(payload) {
 // Every sync that writes an activity or exercise row (Intervals.icu, Google
 // Health, Apple Health, Wahoo) keeps a type the user chose and calories set in Aurin
 // (activity-edits.js): use in place of `payload_json = excluded.payload_json`.
-const OLD = name => `COALESCE(json_extract(health_datapoints.payload_json, '$.aurin${name}'), json_extract(health_datapoints.payload_json, '$.loadwise${name}'))`;
+const OLD = name => `json_extract(health_datapoints.payload_json, '$.aurin${name}')`;
 const TYPE = OLD('Type');
 const TYPED = `CASE
   WHEN json_valid(health_datapoints.payload_json) AND json_valid(excluded.payload_json)
@@ -173,7 +174,7 @@ const KEEP_KCAL = `CASE
 // Two records merged into one (workout-merge.js) stay merged too.
 const MERGE = OLD('Merge');
 export const KEEP_TYPE_SQL = `payload_json = CASE
-  WHEN json_valid(health_datapoints.payload_json) AND json_valid(excluded.payload_json) AND json_type(${MERGE}) = 'object'
+  WHEN json_valid(health_datapoints.payload_json) AND json_valid(excluded.payload_json) AND json_type(health_datapoints.payload_json, '$.aurinMerge') = 'object'
   THEN json_set(${KEEP_KCAL}, '$.aurinMerge', json(${MERGE}))
   ELSE ${KEEP_KCAL} END`;
 

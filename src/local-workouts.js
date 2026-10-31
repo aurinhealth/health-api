@@ -20,7 +20,7 @@ export async function storeLocalEvent(db,event,{key=event.external_id,id=null}={
   if(id&&!existing)throw new Error(L('Trénink nebyl nalezen.', 'The workout wasn\'t found.'));
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(db.userId+':'+key));
   id=existing?.id||'local-'+Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('').slice(0,40);
-  // A workout sent before 2026-11 keeps its loadwise:… id, which Intervals.icu knows it by.
+  // A workout sent before 2026-11 keeps its old id (LEGACY_EXTERNAL_PREFIX), which Intervals.icu knows it by.
   const payload={...event,id,external_id:(existing&&JSON.parse(existing.event_json||'{}').external_id)||EXTERNAL_PREFIX+db.userId+':'+id};
   await db.batch([
     db.prepare("INSERT INTO local_workouts(user_id,id,event_key,event_json) VALUES(?,?,?,?) ON CONFLICT(user_id,id) DO UPDATE SET event_key=excluded.event_key,event_json=excluded.event_json,status='scheduled',revision=local_workouts.revision+1,updated_at=CURRENT_TIMESTAMP").bind(db.userId,id,key,JSON.stringify(payload)),

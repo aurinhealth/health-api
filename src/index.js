@@ -1557,7 +1557,8 @@ export async function matchActivities(env, { days = null } = {}) {
   // A merged copy written again under a new id (workout-merge.js heldMerges):
   // the kept record points to the new one, so deleting it takes both.
   for (const { row, with: copy } of merges.moved) updates.push(env.DB.prepare(
-    `UPDATE health_datapoints SET payload_json = json_set(payload_json, '$.aurinMerge.with', ?), updated_at = CURRENT_TIMESTAMP
+    // A mark still under the old name (activity-type.js mark) moves over whole.
+    `UPDATE health_datapoints SET payload_json = json_remove(json_set(payload_json, '$.aurinMerge', json_set(COALESCE(json_extract(payload_json, '$.aurinMerge'), json_extract(payload_json, '$.loadwiseMerge'), '{}'), '$.with', ?)), '$.loadwiseMerge'), updated_at = CURRENT_TIMESTAMP
      WHERE user_id = ? AND source_family = ? AND data_type = ? AND external_id = ?`
   ).bind(copy, env.USER_ID, row.source_family, row.data_type, row.external_id));
   for (let i = 0; i < updates.length; i += 50) await env.DB.batch(updates.slice(i, i + 50));

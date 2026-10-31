@@ -228,7 +228,7 @@ async function intervalsActivityId(headers, body, fetchImpl) {
   if (!response.ok) throw new Error('Intervals.icu HTTP ' + response.status);
   const list = await response.json().catch(() => []);
   // Sent before 2026-11: under its old external_id (sentByAurin).
-  const ids = [body.external_id, body.external_id.replace(/^aurin:/, 'loadwise:')];
+  const ids = [body.external_id, LEGACY_EXTERNAL_PREFIX + body.external_id.slice(EXTERNAL_PREFIX.length)];
   const match = (Array.isArray(list) ? list : []).find(a => ids.includes(a?.external_id));
   return match?.id == null ? null : String(match.id);
 }
@@ -436,6 +436,6 @@ export async function sentIntervalsIds(db, userId) {
 }
 // Aurin's own records at Intervals.icu carry external_id "aurin:<user>:<key>";
 // ones sent before 2026-11 keep their "loadwise:…" (renaming them there would make copies).
-export const EXTERNAL_PREFIX = 'aurin:';
-export const ownExternalId = id => /^(aurin|loadwise):/.test(String(id || ''));
+export const EXTERNAL_PREFIX = 'aurin:', LEGACY_EXTERNAL_PREFIX = 'loadwise:';
+export const ownExternalId = id => [EXTERNAL_PREFIX, LEGACY_EXTERNAL_PREFIX].some(prefix => String(id || '').startsWith(prefix));
 export const sentByAurin = activity => ownExternalId(activity?.external_id);

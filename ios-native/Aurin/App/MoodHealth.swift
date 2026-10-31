@@ -32,10 +32,9 @@ enum MoodHealth {
         let mood = HKStateOfMind(date: when, kind: .dailyMood, valence: valence(level), labels: hkLabels(labels), associations: [],
                                  metadata: [HKMetadataKeySyncIdentifier: AppleHealthExport.syncPrefix + "mood:" + date,
                                             HKMetadataKeySyncVersion: NSNumber(value: Int(Date().timeIntervalSince1970 * 1000))])
-        // The day's mood written before 2026-11 under "loadwise:" goes, so the day keeps one.
-        _ = try? await store.deleteObjects(of: type, predicate: HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeySyncIdentifier,
-                                                                                            allowedValues: [AppleHealthExport.legacySyncPrefix + "mood:" + date]))
-        do { try await store.save(mood) } catch { print("Apple Health mood failed", error.localizedDescription) }
+        do { try await store.save(mood) } catch { print("Apple Health mood failed", error.localizedDescription); return }
+        // Saved: the day's mood written before 2026-11 under the old prefix goes, so the day keeps one.
+        await AppleHealthExport.removeLegacy(type, ids: ["mood:" + date], from: store)
     }
 
     /// The newest mood of `date` logged outside Aurin: its level (1–5) and labels bits.

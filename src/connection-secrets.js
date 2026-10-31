@@ -1,16 +1,18 @@
 import { L } from './lang.js';
 // Provider credentials per user (the Google, Intervals.icu and Ultrahuman keys, and the
 // app's Apple sign-in token that deleting the account revokes), AES-GCM
-// encrypted with CONNECTION_KEY. Each row starts with "v3." and is bound to its
-// user and provider, so a row copied to another account does not decrypt. A "v2."
-// row (before 2026-11: the same key, derived under the app's old name) is read and
-// saved again as v3 the first time its user's keys load; once none is left
-// (SELECT count(*) FROM connection_credentials WHERE encrypted LIKE 'v2.%'), v2 can go. The
+// encrypted with CONNECTION_KEY. Each row starts with "v2." or "v3." and is bound to its
+// user and provider, so a row copied to another account does not decrypt. v3 is the
+// same key derived under the app's name, v2 under its old one. Both are read; rows are
+// still written as v2 (WRITE_VERSION), so the version before this one, still running
+// during a deploy or after a rollback, reads every row. A later release, once this one
+// is everywhere, writes v3 and saves each v2 row again; when
+// SELECT count(*) FROM connection_credentials WHERE encrypted LIKE 'v2.%' is 0, v2 goes. The
 // older rows encrypted with a key from STRENGTH_API_KEY were all moved over
 // (none left on 2026-10-26), so that key guards nobody's keys any more.
 // Changing or removing CONNECTION_KEY later disconnects everyone (each user
 // connects again).
-const V2 = 'v2.', V3 = 'v3.';
+const V2 = 'v2.', V3 = 'v3.', WRITE_VERSION = V2;
 async function table(env){await env.DB.prepare('CREATE TABLE IF NOT EXISTS connection_credentials (user_id INTEGER NOT NULL, provider TEXT NOT NULL, encrypted TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (user_id, provider))').run();}
 // A value shorter than this is a paste mistake, not a key; it is not used.
 let shortKeyReported=false;
@@ -22,7 +24,7 @@ const boundTo=(uid,provider)=>new TextEncoder().encode(Number(uid)+':'+provider)
 function userId(env){const id=Number(env.USER_ID);if(!Number.isInteger(id)||id<=0)throw new Error(L('Připojení vyžaduje přihlášeného uživatele.', 'Connecting requires a signed-in user.'));return id;}
 async function encryptSecret(env,uid,provider,value){
   const iv=crypto.getRandomValues(new Uint8Array(12)),plain=new TextEncoder().encode(value);
-  return V3+enc(iv)+'.'+enc(await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:boundTo(uid,provider)},await connectionKey(env),plain));
+  return WRITE_VERSION+enc(iv)+'.'+enc(await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:boundTo(uid,provider)},await connectionKey(env,WRITE_VERSION),plain));
 }
 async function decryptSecret(env,uid,provider,stored){
   const version=stored.startsWith(V3)?V3:stored.startsWith(V2)?V2:null;
@@ -107,8 +109,6 @@ export async function connectionEnvironment(env){
     let plain;
     try{plain=await decryptSecret(env,uid,row.provider,row.encrypted);}
     catch(error){console.error('Connection key unreadable',uid,row.provider,error.message);continue;}
-    // A v2 row saved again as v3, once; a newer value saved meanwhile is left alone.
-    if(row.encrypted.startsWith(V2))await env.DB.prepare('UPDATE connection_credentials SET encrypted=? WHERE user_id=? AND provider=? AND encrypted=?').bind(await encryptSecret(env,uid,row.provider,plain),uid,row.provider,row.encrypted).run().catch(error=>console.error('Connection key not re-encrypted',uid,row.provider,error.message));
     if(row.provider==='google')resolved.GOOGLE_REFRESH_TOKEN=plain;if(row.provider==='intervals')resolved.INTERVALS_API_KEY=plain;if(row.provider==='intervals_athlete')resolved.INTERVALS_ATHLETE_ID=plain;if(row.provider==='google_scopes')resolved.GOOGLE_SCOPES=plain.split(/\s+/).filter(Boolean);if(row.provider==='apple')resolved.APPLE_REFRESH_TOKEN=plain;if(row.provider==='ultrahuman')resolved.ULTRAHUMAN_TOKEN=plain;if(row.provider==='whoop')resolved.WHOOP_TOKEN=plain;if(row.provider==='wahoo')resolved.WAHOO_TOKEN=plain;
   }
   if(resolved.GOOGLE_REFRESH_TOKEN)resolved.CONNECTED_PROVIDERS.push('google');if(resolved.INTERVALS_API_KEY)resolved.CONNECTED_PROVIDERS.push('intervals');if(resolved.ULTRAHUMAN_TOKEN)resolved.CONNECTED_PROVIDERS.push('ultrahuman');if(resolved.WHOOP_TOKEN)resolved.CONNECTED_PROVIDERS.push('whoop');if(resolved.WAHOO_TOKEN)resolved.CONNECTED_PROVIDERS.push('wahoo');return resolved;
