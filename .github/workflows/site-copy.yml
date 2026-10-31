@@ -2,7 +2,7 @@ name: Website copy
 
 # A reminder, never a failure: an app change that does not touch the website
 # gets a warning, so the overview on aurin.health keeps describing what
-# the app does (see "The website follows the app" in CLAUDE.md).
+# the app does (see docs/website-follows-app.md).
 on:
   pull_request:
     branches:
