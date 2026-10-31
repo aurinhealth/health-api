@@ -1163,11 +1163,12 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   const start=monday(date),weeks=[shiftDate(start,-7),start,shiftDate(start,7)];
   const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));
   const json=r=>r.json().catch(()=>({}));
-  // The three weeks are the heavy part (every day's analysis, food and
-  // recommendations). One week at a time, cached and shared by every day of
-  // that week, so the database is never asked for all of them at once; the
-  // rest loads alongside them.
-  const weeksLoading=(async()=>{const out=[];for(const w of weeks)out.push(await cached(env,ctx,'week:'+w,()=>internal('/app/api/week?start='+w).then(json)));return out;})();
+  // The three weeks are the heavy part (every day's analysis). One week at a
+  // time, cached and shared by every day of that week, so the database is never
+  // asked for all of them at once; the rest loads alongside them. lite: each
+  // day's analysis with its food totals and targets, without the full food log
+  // and meal recommendations (nothing of the coach read them; 2026-10-31).
+  const weeksLoading=(async()=>{const out=[];for(const w of weeks)out.push(await cached(env,ctx,'week-lite:'+w,()=>internal('/app/api/week?lite=1&start='+w).then(json)));return out;})();
   // Drinks of the day, for the coach's food advice (coach-assistant.js nutritionContext).
   const extras=Promise.all([dashboardProfile(env),internal('/app/api/fluids?date='+date).then(json).catch(()=>null),readinessCheckin(env.DB,date).catch(()=>null),
     date===localToday()?loadTrainingDoses(env.DB).catch(()=>null):null]);
@@ -2834,10 +2835,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       ? requestedStart
       : userWeekStart();
     const dates = Array.from({length:7}, (_, i) => shiftDate(start, i));
+    // lite=1, for the coach's inputs: each day's analysis only, which already
+    // has the day's food totals and targets (daily.nutrition); the full food
+    // log and the meal recommendations are for the Food screens, and the coach
+    // read neither (loadCoachInputs).
+    const lite = url.searchParams.get("lite") === "1";
     // Seven days of analysis, food and recommendations are the slowest read of
     // the app; it is cached for two minutes and dropped by any change the user
     // makes (the cache version), so a new ride still shows up soon.
-    const week = await cached(env, ctx, 'week-api:' + start, async () => {
+    const week = await cached(env, ctx, (lite ? 'week-api-lite:' : 'week-api:') + start, async () => {
     await ensureGymPlans(env.DB);
     const cancelledGym=new Set((await env.DB.prepare('SELECT workout_date FROM gym_plan_cancellations WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,start,dates[6]).all()).results.map(r=>r.workout_date));
     // Gym plans saved for the week (generated, confirmed or built by hand), so a
@@ -2857,32 +2863,32 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       recommendUrl.searchParams.set("date", date);
       const read = () => Promise.all([
         app.fetch(new Request(dailyUrl, {method:"GET",headers:internalAuth}), env, ctx),
-        app.fetch(new Request(foodUrl, {method:"GET",headers:internalAuth}), env, ctx)
+        ...(lite ? [] : [app.fetch(new Request(foodUrl, {method:"GET",headers:internalAuth}), env, ctx)])
       ].map(async response => { const r = await response; return { ok: r.ok, body: await r.json() }; }));
       // A closed day (two or more days back) is read once and kept for hours
       // under the cache version (api-cache.js closedDay): the coach's three
       // weeks and the Week screen no longer analyse the past days every 10
       // minutes. A failed read is not kept.
       const reads = closedDay(date, localToday())
-        ? cached(env, ctx, 'closed-day:' + date, () => read().then(parts => parts.every(p => p.ok) ? parts : { status: 'error', parts }), { ttl: CLOSED_DAY_TTL_SECONDS }).then(v => Array.isArray(v) ? v : v.parts)
+        ? cached(env, ctx, (lite ? 'closed-daily:' : 'closed-day:') + date, () => read().then(parts => parts.every(p => p.ok) ? parts : { status: 'error', parts }), { ttl: CLOSED_DAY_TTL_SECONDS }).then(v => Array.isArray(v) ? v : v.parts)
         : read();
       // Meal recommendations (the costliest part) only for today and later:
       // nothing is eaten on a past day any more. They fit meals to the day's
       // calorie target and food log read here (before the energy budget below,
       // as /analysis/energy gives it), instead of computing the day again.
       const known = reads.then(([d, f]) => d.ok && f.ok ? { energy: { final: { calorieTarget: Number(profile?.kcalGoal) > 0 ? Number(profile.kcalGoal) : d.body.calories?.target ?? null, estimatedTDEE: d.body.calories?.estimatedTDEE ?? null, macroTargets: d.body.nutrition?.macros ?? null, diet: d.body.nutrition?.diet ?? null }, energyProfile: { missing: d.body.nutrition?.missing || [] } }, food: f.body } : null);
+      const dayOf = daily => ({
+        date,
+        gymCancelled:cancelledGym.has(date),
+        gymPlan:cancelledGym.has(date)?null:gymPlans.get(date)||null,
+        daily: applyEnergyBudget(daily, profile, {today: health?.wellness?.find(w => w.id === date) || {}})
+      });
+      if (lite) return dayOf((await reads)[0].body);
       const [[{ body: daily }, { body: food }], recommendations] = await Promise.all([
         reads,
         date >= localToday() ? foodRecommend(env, recommendUrl, known).then(r => r.json()).catch(error => ({ status: "error", message: error.message })) : null
       ]);
-      return {
-        date,
-        gymCancelled:cancelledGym.has(date),
-        gymPlan:cancelledGym.has(date)?null:gymPlans.get(date)||null,
-        daily: applyEnergyBudget(daily, profile, {today: health?.wellness?.find(w => w.id === date) || {}}),
-        food,
-        recommendations
-      };
+      return { ...dayOf(daily), food, recommendations };
     });
     return {status:"ok",start,end:dates[6],days};
     }, { ttl: 120 });
