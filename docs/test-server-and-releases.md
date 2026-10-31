@@ -63,7 +63,7 @@ through, so a workflow edited on a branch gets none of them:
 `PROMPTS_REPO_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` stay repository secrets: the pull requests' tests need
 the prompts on every branch, and the account ID opens nothing. The repository's account ID is the live
 account's; the `staging` environment overrides it with the test account's. The prompts token should be a fine-grained
-token that can only read `shaarkyn/aurin-prompts`.
+token that can only read `aurinhealth/aurin-prompts`.
 
 A Vydat run asks for one approval (the deploy). A pull request that changes `ios-testflight.yml` asks twice,
 for the upload and, once it is done, for "What to Test"; rejecting skips the upload. An approval not given
