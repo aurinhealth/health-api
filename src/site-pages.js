@@ -871,7 +871,7 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
     ['food', 'Nutrition', 'Snap your plate or scan a barcode. AI fills in the values.', 'glow-food', ['vyziva']],
     ['sleep', 'Sleep', 'A bedtime from your alarm and the sleep you need tonight.', 'glow-health', ['spanek']],
     ['coach', 'Coach', 'Ask anything. It knows your sleep, training and food.', 'glow-coach', ['kouc']],
-    ['watch', 'Apple Watch', 'Your morning, your sets and your water, without taking out your phone.', 'glow-today', ['hodinky']]];
+    ['watch', 'Apple Watch', 'Your morning, your sets and your water, without taking out your phone. Comes with the iPhone app, on any Apple Watch with watchOS 10 or later.', 'glow-today', ['hodinky']]];
   const act = ([id, title, line, glow]) => `<section id="a-${id}" class="opener" style="--glow:var(--${glow})"><div class="wrap ac">
 <div class="head reveal"><h2 class="big">${title}</h2><p class="sub">${line}</p></div>
 <div class="cards" aria-hidden="true">${ACTS[id]}</div>
