@@ -217,6 +217,7 @@ struct JournalSettingsView: View {
     @State private var askingConsent = false
     @State private var appleSex = JournalSwitch.tracksSex
     @State private var askingSexConsent = false
+    @State private var failure: String?
     @State private var tracked: Int?
     @State private var tracking = false
 
@@ -246,33 +247,30 @@ struct JournalSettingsView: View {
                 SettingsGroup(title: "Apple Health", footer: "Vyplní v deníku Sex. Zůstane v Aurinu a do AI nejde.") {
                     SettingsToggle(title: "Sexuální aktivita", isOn: Binding(get: { appleSex }, set: { on in
                         if on { askingSexConsent = true; return }
+                        // Off stops reading at once; the server deletes what it has.
                         appleSex = false
                         JournalSwitch.remember(appleSex: false)
-                        Task { await save(["appleSex": .bool(false)]) }
+                        Task { await setAppleSex(false) }
                     }))
                 }
-                SettingsGroup(title: "AI kouč", footer: "Náladu, konopí a léky kouč nevidí, dokud tohle nezapneš. Sex nevidí nikdy.") {
+                SettingsGroup(title: "AI kouč", footer: "Náladu, úzkost, konopí, CBD a léky kouč nevidí, dokud tohle nezapneš. Sex nevidí nikdy.") {
                     SettingsToggle(title: "Citlivé položky", isOn: Binding(get: { shareSensitive }, set: { on in
                         if on { askingConsent = true; return }
                         shareSensitive = false
-                        Task { await save(["shareSensitive": .bool(false)]) }
+                        Task { if !(await save(["shareSensitive": .bool(false)])) { await load() } }
                     }))
                 }
             }
+            if let failure { Text(failure).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true) }
         }
         .sheet(isPresented: $tracking, onDismiss: { Task { await load() } }) { JournalEditorView() }
         .sheet(isPresented: $askingConsent) {
             JournalSensitiveConsentSheet {
-                shareSensitive = true
-                Task { await save(["shareSensitive": .bool(true)]) }
+                Task { if await save(["shareSensitive": .bool(true)]) { shareSensitive = true } }
             }
         }
         .sheet(isPresented: $askingSexConsent) {
-            AppleSexConsentSheet {
-                appleSex = true
-                JournalSwitch.remember(appleSex: true)
-                Task { await save(["appleSex": .bool(true)]) }
-            }
+            AppleSexConsentSheet { Task { await setAppleSex(true) } }
         }
         .task { await load() }
     }
@@ -291,130 +289,74 @@ struct JournalSettingsView: View {
         JournalSwitch.remember(catalog.enabled)
     }
 
-    private func save(_ body: JSONObject) async {
-        guard !model.demo else { return }
-        try? await model.api.setJournalOptions(body)
+    /// Whether the server stored it; if not, the reason is shown under the switches.
+    @discardableResult
+    private func save(_ body: JSONObject) async -> Bool {
+        guard !model.demo else { return true }
+        do {
+            try await model.api.setJournalOptions(body)
+            failure = nil
+            return true
+        } catch {
+            failure = error.localizedDescription
+            return false
+        }
+    }
+
+    /// The phone reads and sends sexual activity only once the server holds
+    /// the consent (it decides what it keeps, src/apple-health.js). Turned
+    /// on, the last 90 days are read again; turned off and not saved, the
+    /// switch shows what the server still has.
+    private func setAppleSex(_ on: Bool) async {
+        guard await save(["appleSex": .bool(on)]) else {
+            if !on { await load() }
+            return
+        }
+        appleSex = on
+        JournalSwitch.remember(appleSex: on)
+        if on, !model.demo { await AppleHealth.shared.readSexHistory(api: model.api) }
     }
 }
 
 /// What the coach gets from the sensitive journal items (src/routes-journal.js
 /// journalForCoach) and the explicit consent (GDPR art. 9), like the cycle's.
 struct JournalSensitiveConsentSheet: View {
-    @Environment(\.dismiss) private var dismiss
     let accept: () -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Kouč vidí citlivé položky").font(Typo.sentence(26, relativeTo: .title)).foregroundStyle(Palette.ink)
-                Text("Tvoje odpovědi o náladě, konopí a lécích pomohou kouči vysvětlit tvou regeneraci.")
-                    .font(Typo.sentence(17)).foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 6)
-                section("Co tím získáš")
-                point("Rady, které počítají s léky, které bereš")
-                point("Jasnější důvod, proč se připravenost změnila")
-                section("Co kouč uvidí")
-                point("Včerejší odpovědi u těchto položek a jak působí na připravenost")
-                point("Starší záznamy", included: false)
-                section("Které položky")
-                Text("Nálada, Konopí a všechno v Lécích. Sex kouč neuvidí nikdy.").font(.body).foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true).padding(.vertical, 5)
-                Text("Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich předáním AI kouči (OpenAI, USA). Kdykoli ho vypneš a kouč je přestane dostávat.")
-                    .font(Typo.caption).foregroundStyle(Palette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 16)
-                Button {
-                    accept()
-                    dismiss()
-                } label: {
-                    Text("Zapnout").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                        .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 18)
-                Button { dismiss() } label: {
-                    Text("Teď ne").font(Typo.body).foregroundStyle(Palette.ink)
-                        .frame(maxWidth: .infinity).frame(height: 46)
-                        .overlay { Capsule().stroke(Palette.ink.opacity(0.18)) }
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 10)
-            }
-            .padding(24)
+        ConsentSheet(title: "Kouč vidí citlivé položky",
+                     lead: "Tvoje odpovědi o náladě, úzkosti, konopí, CBD a lécích pomohou kouči vysvětlit tvou regeneraci.",
+                     legal: "Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich předáním AI kouči (OpenAI, USA). Kdykoli ho vypneš a kouč je přestane dostávat.",
+                     accept: accept) {
+            ConsentSection("Co tím získáš")
+            ConsentPoint("Rady, které počítají s léky, které bereš")
+            ConsentPoint("Jasnější důvod, proč se připravenost změnila")
+            ConsentSection("Co kouč uvidí")
+            ConsentPoint("Včerejší odpovědi u těchto položek a jak působí na připravenost")
+            ConsentPoint("Starší záznamy", included: false)
+            ConsentSection("Které položky")
+            Text("Nálada, Úzkost, Konopí, CBD a všechno v Lécích. Sex kouč neuvidí nikdy.").font(.body).foregroundStyle(Palette.secondary)
+                .fixedSize(horizontal: false, vertical: true).padding(.vertical, 5)
         }
-        .presentationDetents([.large])
-        .presentationBackground(Palette.background)
-    }
-
-    private func section(_ title: LocalizedStringKey) -> some View {
-        Text(title).font(Typo.caption).textCase(.uppercase).tracking(1.2).foregroundStyle(Palette.muted)
-            .padding(.top, 18).padding(.bottom, 4)
-    }
-
-    private func point(_ text: LocalizedStringKey, included: Bool = true) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Image(systemName: included ? "checkmark" : "xmark").font(.footnote.weight(.semibold))
-                .foregroundStyle(included ? Palette.green : Palette.muted)
-            Text(text).font(.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.vertical, 5)
     }
 }
 
-/// Sexual activity from Apple Health (HealthReader.journal): what it fills
-/// in and its own explicit consent (sex life, GDPR art. 9). It never goes to
-/// the AI coach (src/journal-catalog.js NEVER_TO_AI).
+/// Sexual activity from Apple Health (HealthReader.sexualActivity): what it
+/// fills in and its own explicit consent (sex life, GDPR art. 9). It never
+/// goes to the AI coach (src/journal-catalog.js NEVER_TO_AI).
 struct AppleSexConsentSheet: View {
-    @Environment(\.dismiss) private var dismiss
     let accept: () -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Sexuální aktivita z Apple Health").font(Typo.sentence(26, relativeTo: .title)).foregroundStyle(Palette.ink)
-                Text("Vyplní v deníku položku Sex a ukáže, jak působí na tvou připravenost.")
-                    .font(Typo.sentence(17)).foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 6)
-                point("Jedna hodnota za den: ano, nebo ne")
-                    .padding(.top, 14)
-                point("Zůstane v Aurinu")
-                point("Do AI kouče nejde nikdy", included: false)
-                Text("Jde o údaj o sexuálním životě (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jeho zpracováním. Kdykoli ho vypneš a uložené údaje smažeme.")
-                    .font(Typo.caption).foregroundStyle(Palette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 16)
-                Button {
-                    accept()
-                    dismiss()
-                } label: {
-                    Text("Zapnout").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                        .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 18)
-                Button { dismiss() } label: {
-                    Text("Teď ne").font(Typo.body).foregroundStyle(Palette.ink)
-                        .frame(maxWidth: .infinity).frame(height: 46)
-                        .overlay { Capsule().stroke(Palette.ink.opacity(0.18)) }
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 10)
-            }
-            .padding(24)
+        ConsentSheet(title: "Sexuální aktivita z Apple Health",
+                     lead: "Vyplní v deníku položku Sex a ukáže, jak působí na tvou připravenost.",
+                     legal: "Jde o údaj o sexuálním životě (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jeho zpracováním. Kdykoli ho vypneš a uložené údaje smažeme.",
+                     accept: accept) {
+            ConsentPoint("Jedna hodnota za den: ano, nebo ne")
+                .padding(.top, 14)
+            ConsentPoint("Zůstane v Aurinu")
+            ConsentPoint("Do AI kouče nejde nikdy", included: false)
         }
-        .presentationDetents([.large])
-        .presentationBackground(Palette.background)
-    }
-
-    private func point(_ text: LocalizedStringKey, included: Bool = true) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Image(systemName: included ? "checkmark" : "xmark").font(.footnote.weight(.semibold))
-                .foregroundStyle(included ? Palette.green : Palette.muted)
-            Text(text).font(.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.vertical, 5)
     }
 }
 

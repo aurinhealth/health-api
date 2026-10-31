@@ -76,8 +76,10 @@ test("Synchronizace: only the chosen health data goes to Intervals.icu", async (
   const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "k", CONNECTED_PROVIDERS: ["google", "intervals"] };
   await syncWellnessToIntervals(env, { fetchImpl, sleepSessions: async () => sleep, now: Date.parse("2026-10-02T10:00:00Z") });
   assert.deepEqual(puts, [{ id: "2026-10-01", restingHR: 51, sleepSecs: 24720, avgSleepingHR: 52 }]);
-  // Nothing but weight chosen: the wellness pass does not run at all.
+  // Nothing but weight and workouts chosen (their own passes): the wellness pass does not run at all.
   await saveSyncPrefs(d, 7, "intervals", { health: ["weight"] });
+  assert.equal((await syncWellnessToIntervals(env, { fetchImpl, sleepSessions: async () => sleep })).reason, "off");
+  await saveSyncPrefs(d, 7, "intervals", { health: ["workouts", "weight"] });
   assert.equal((await syncWellnessToIntervals(env, { fetchImpl, sleepSessions: async () => sleep })).reason, "off");
 });
 

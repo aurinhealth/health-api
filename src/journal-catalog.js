@@ -44,9 +44,10 @@ const y = (key, cs, en, cat, icon, extra = {}) => ({ key, cs, en, cat, type: "ye
 const amount = (key, cs, en, cat, icon, unit, step, usual, max, extra = {}) => ({ key, cs, en, cat, type: "amount", icon, unit, step, usual, max, ...extra });
 
 // Items the AI coach sees only with the athlete's explicit consent
-// (Nastavení → Deník → Citlivé položky, GDPR art. 9): the mood, cannabis and
-// every medication. Sex (sex life) never goes to the AI, consent or not.
-const SENSITIVE_KEYS = new Set(["mood", "cannabis"]);
+// (Nastavení → Deník → Citlivé položky, GDPR art. 9): the mood, anxiety,
+// cannabis, CBD and every medication. Sex (sex life) never goes to the AI,
+// consent or not.
+const SENSITIVE_KEYS = new Set(["mood", "anxiety", "cannabis", "cbd"]);
 export const NEVER_TO_AI = new Set(["sex"]);
 export const isSensitive = item => Boolean(item && (SENSITIVE_KEYS.has(item.key) || item.cat === "meds"));
 

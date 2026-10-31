@@ -25,6 +25,8 @@ enum HealthDataSources {
         case (.sleep, _): return ["sleep"]
         case (.steps, _): return ["steps"]
         case (.breathing, _): return ["spO2", "respiration"]
+        // Apple Health's workouts (src/watch-forward.js), next to the app's own.
+        case (.workouts, "intervals"): return ["workouts"]
         default: return []
         }
     }
@@ -233,8 +235,28 @@ struct HealthDataTypeView: View {
     // MARK: Sending
 
     private func sendBinding(_ id: String, sync: SyncSettingsStore) -> Binding<Bool> {
-        if type == .workouts { return SyncSendGroup.binding(id, \.pushActivities, sync: sync) }
         let types = HealthDataSources.sent(type, to: id)
+        if type == .workouts, types.isEmpty { return SyncSendGroup.binding(id, \.pushActivities, sync: sync) }
+        if type == .workouts {
+            // Intervals.icu: the app's workouts and Apple Health's go together.
+            return Binding(
+                get: { guard let d = sync.destination(id) else { return false }
+                       return d.prefs.pushActivities && types.allSatisfy(d.prefs.health.allows) },
+                set: { on in
+                    guard let d = sync.destination(id) else { return }
+                    var prefs = d.prefs
+                    prefs.pushActivities = on
+                    var chosen: [String]
+                    switch d.prefs.health {
+                    case .all: chosen = d.healthTypes
+                    case .some(let list): chosen = list
+                    }
+                    chosen.removeAll { types.contains($0) }
+                    if on { chosen += types.filter(d.healthTypes.contains) }
+                    prefs.health = .some(d.healthTypes.filter(chosen.contains))
+                    Task { [prefs] in await sync.save(id, prefs) }
+                })
+        }
         return Binding(
             get: { guard let d = sync.destination(id) else { return false }
                    return types.filter(d.healthTypes.contains).allSatisfy(d.prefs.health.allows) },

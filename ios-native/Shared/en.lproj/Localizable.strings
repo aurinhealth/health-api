@@ -2645,15 +2645,15 @@
 "Zůstane v Aurinu" = "It stays in Aurin";
 "Do AI kouče nejde nikdy" = "It never goes to the AI coach";
 "Jde o údaj o sexuálním životě (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jeho zpracováním. Kdykoli ho vypneš a uložené údaje smažeme." = "This is sex life data (GDPR Art. 9). By turning it on you explicitly consent to it being processed. Turn it off any time and we delete what is stored.";
-"Náladu, konopí a léky kouč nevidí, dokud tohle nezapneš. Sex nevidí nikdy." = "Mood, cannabis and medication stay out of what the coach sees unless you turn this on. Sex never reaches the coach.";
+"Náladu, úzkost, konopí, CBD a léky kouč nevidí, dokud tohle nezapneš. Sex nevidí nikdy." = "Mood, anxiety, cannabis, CBD and medication stay out of what the coach sees unless you turn this on. Sex never reaches the coach.";
 "Kouč vidí citlivé položky" = "The coach sees sensitive items";
-"Tvoje odpovědi o náladě, konopí a lécích pomohou kouči vysvětlit tvou regeneraci." = "Your answers about mood, cannabis and medication help the coach explain your recovery.";
+"Tvoje odpovědi o náladě, úzkosti, konopí, CBD a lécích pomohou kouči vysvětlit tvou regeneraci." = "Your answers about mood, anxiety, cannabis, CBD and medication help the coach explain your recovery.";
 "Rady, které počítají s léky, které bereš" = "Advice that accounts for the medication you take";
 "Jasnější důvod, proč se připravenost změnila" = "A clearer reason why your readiness moved";
 "Včerejší odpovědi u těchto položek a jak působí na připravenost" = "Yesterday's answers for these items and what they did to your readiness";
 "Starší záznamy" = "Older entries";
 "Které položky" = "Which items";
-"Nálada, Konopí a všechno v Lécích. Sex kouč neuvidí nikdy." = "Mood, Cannabis and everything under Medication. The coach never sees Sex.";
+"Nálada, Úzkost, Konopí, CBD a všechno v Lécích. Sex kouč neuvidí nikdy." = "Mood, Anxiety, Cannabis, CBD and everything under Medication. The coach never sees Sex.";
 "Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich předáním AI kouči (OpenAI, USA). Kdykoli ho vypneš a kouč je přestane dostávat." = "This is health data (GDPR Art. 9). By turning it on you explicitly agree that it is shared with the AI coach (OpenAI, USA). You can turn it off any time and the coach stops getting it.";
 "Pokračovat v tréninku" = "Resume workout";
 "Přejít na cvik" = "Go to this exercise";
@@ -3488,3 +3488,4 @@
 "S intervaly: dva tréninky hned po sobě" = "With intervals: two workouts back to back";
 "Jeden trénink: %@" = "One workout: %@";
 "přes Apple Health" = "via Apple Health";
+"Zdravotní data se nepodařilo zapnout. Zapneš je v Nastavení → Zdroje dat → %@ → Zdravotní data." = "The health data could not be turned on. Turn it on in Settings → Data sources → %@ → Health data.";

@@ -113,7 +113,7 @@ struct JournalCatalog: Decodable, Equatable {
     let pinned: [String]
     var enabled: Bool? = nil
     var askMorning: Bool? = nil
-    /// The coach sees sex, cannabis and medication (src/journal-catalog.js isSensitive).
+    /// The coach sees mood, anxiety, cannabis, CBD and medication (src/journal-catalog.js isSensitive).
     var shareSensitive: Bool? = nil
     /// Sexual activity from Apple Health, with its own consent.
     var appleSex: Bool? = nil
@@ -182,6 +182,11 @@ enum JournalSwitch {
     /// it before the consent existed.
     static var tracksSex: Bool { isOn && UserDefaults.standard.bool(forKey: sexKey) }
     static func remember(appleSex: Bool?) { if let appleSex { UserDefaults.standard.set(appleSex, forKey: sexKey) } }
+
+    /// Just turned on: the next sync reads its last 90 days (AppleHealth.readSexHistory).
+    static let sexHistoryKey = "journal.appleSexHistory"
+    static var wantsSexHistory: Bool { UserDefaults.standard.bool(forKey: sexHistoryKey) }
+    static func sexHistory(_ wanted: Bool) { UserDefaults.standard.set(wanted, forKey: sexHistoryKey) }
 }
 
 /// GET /app/api/journal/impact?metric=: Co na tebe působí.
