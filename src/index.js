@@ -876,10 +876,31 @@ async function saveGooglePointsBatch(env, family, type, points, { raw = false } 
   if (type === "exercise" && env.GOOGLE_CLIENT_ID) points = points.filter(p => p?.dataSource?.application?.googleWebClientId !== env.GOOGLE_CLIENT_ID);
   if (!points.length) return 0;
 
-  const statements = points.map(point => {
+  // The recent sync reads the same two days every 5 minutes. D1 bills an upsert
+  // that changes nothing as a row written (~250k a day per user, measured on
+  // 2026-10-31 with ~140 rows really changed an hour), so the stored rows are
+  // read first, ~90 ids a query on the unique index, and only new or changed
+  // points are written.
+  const rows = points.map(point => {
     const i = googleInfo(type, point);
-    const fallbackId = point?.name || `${type}:${i.sample || i.start || crypto.randomUUID()}`;
+    return { point, i, id: point?.name || `${type}:${i.sample || i.start || crypto.randomUUID()}`, payload: healthPointJson(point) };
+  });
+  const stored = new Map();
+  const ids = [...new Set(rows.map(r => r.id))];
+  const reads = [];
+  for (let k = 0; k < ids.length; k += 90) reads.push(env.DB.prepare(`SELECT external_id, sample_time, start_time, end_time, value_numeric, value_unit, payload_json FROM health_datapoints
+    WHERE user_id = ? AND source_family = ? AND data_type = ? AND external_id IN (${ids.slice(k, k + 90).map(() => '?').join(',')})`).bind(env.USER_ID, family, type, ...ids.slice(k, k + 90)));
+  for (let k = 0; k < reads.length; k += 50) for (const result of await env.DB.batch(reads.slice(k, k + 50))) for (const row of result?.results || []) stored.set(row.external_id, row);
+  // As the upsert's own check (IS NOT): a number stored from a numeric string is equal.
+  const same = (a, b) => (a ?? null) === (b ?? null) || (typeof a === 'number' && b !== '' && b != null && Number(b) === a);
+  const changedRows = rows.filter(({ id, i, payload }) => {
+    const old = stored.get(id);
+    return !old || !(same(old.sample_time, i.sample) && same(old.start_time, i.start) && same(old.end_time, i.end)
+      && same(old.value_numeric, i.value) && same(old.value_unit, i.unit) && old.payload_json === payload);
+  });
+  if (!changedRows.length) return points.length;
 
+  const statements = changedRows.map(({ i, id: fallbackId, payload }) => {
     return env.DB.prepare(
       `INSERT INTO health_datapoints (
         user_id,
@@ -919,7 +940,7 @@ async function saveGooglePointsBatch(env, family, type, points, { raw = false } 
       i.end,
       i.value,
       i.unit,
-      healthPointJson(point)
+      payload
     );
   });
 
@@ -932,7 +953,7 @@ async function saveGooglePointsBatch(env, family, type, points, { raw = false } 
       const rows=Number(result?.meta?.changes||0);
       if(!rows)return;
       changed+=rows;
-      const info=googleInfo(type,points[i+j]);
+      const info=changedRows[i+j].i;
       // The hour, so the summary after the sync rebuilds only the hours written.
       const day=String(info.sample||info.start||info.end||'').slice(0,13);
       if(/^\d{4}-\d{2}-\d{2}(T\d{2})?$/.test(day)&&(!oldest||day<oldest))oldest=day;
