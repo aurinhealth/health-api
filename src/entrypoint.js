@@ -2801,6 +2801,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try {
       assertTrainingAllowed(await getAthleteState(env.DB));
       const prefs=await getWeekPlan(env.DB,day);
+      // "Workout: upper body" from Svaly: the athlete's usual length, but no
+      // longer than the free time saved for the day (a guessed 'auto' week
+      // does not cap it, and under 30 minutes the tap itself is the choice).
+      if (body?.autoLength === true) {
+        const usual = Math.round(Number(body.usualMinutes)) || 60;
+        const free = prefs?.availabilityMode === 'auto' ? null : Number(availabilityOn(prefs, day).minutes);
+        body.durationMinutes = Math.max(30, Math.min(120, free >= 30 ? Math.min(usual, free) : usual));
+      }
+      delete body.autoLength; delete body.usualMinutes;
       if (body?.durationMinutes == null) {
         const chip = targetFor(await computeWeekTargets(env, ctx, mondayOfDate(day), prefs).catch(() => null), day, "gym");
         if (chip) { body.durationMinutes = chip.minutes; if (chip.role === "gym_upper" && !body?.focus && !body?.focusMuscles && !body?.forceProtectLegs) { body.focus = "upper"; body.focusSource = "week"; } }
@@ -2821,6 +2830,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const draft={kind:'gym_preview',plan:data.plan,minutes:body.durationMinutes||60,startTime:body.startTime||null};
       const saved=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'gym',L('Návrh z týdenního plánu', 'Proposal from the week plan'),JSON.stringify(draft)).run();
       data.draftId=saved.meta?.last_row_id;
+      data.minutes=draft.minutes;
       data.muscles=Object.fromEntries([...new Set(data.plan.rows.map(r=>r?.[1]).filter(Boolean))].map(name=>[name,exerciseMuscles(name)]));
     }
     return Response.json(data,{status:response.status,headers:{"Cache-Control":"no-store"}});
