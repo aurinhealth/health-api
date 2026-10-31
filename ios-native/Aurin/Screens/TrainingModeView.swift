@@ -146,7 +146,7 @@ struct TrainingModeView: View {
             .padding(.top, 12)
         }
         .navBarVisibility(.hidden)
-        .task { await load() }
+        .task { await load(); finishIfEndedOnWatch() }
         // A set or a change from the Apple Watch (WatchGymBridge.swift).
         .onReceive(NotificationCenter.default.publisher(for: .watchGym)) { note in
             guard let change = note.object as? WatchBridge.GymChange, change.date == date else { return }
@@ -182,6 +182,7 @@ struct TrainingModeView: View {
         .onChange(of: day) { _, _ in syncActivity() }
         .onChange(of: index) { _, _ in syncActivity() }
         .onChange(of: finishedSession) { _, _ in syncActivity() }
+        .onChange(of: live.endedOnWatch) { _, _ in finishIfEndedOnWatch() }
         // Back from the lock screen after the rest ran out: straight to the set.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, let end = restEnd, end <= Date() { restEnd = nil }
@@ -1306,6 +1307,13 @@ struct TrainingModeView: View {
         } catch {
             self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
         }
+    }
+
+    /// Finished on the Apple Watch (its summary): finished here too, with the
+    /// summary and the rating, as with Dokončit.
+    private func finishIfEndedOnWatch() {
+        guard live.endedOnWatch, live.running, !finishedSession, !saving, day != nil else { return }
+        Task { await finish() }
     }
 
     /// The sets are saved as they are ticked: the week shows the session done,

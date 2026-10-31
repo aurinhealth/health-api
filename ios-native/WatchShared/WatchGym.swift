@@ -92,11 +92,14 @@ struct WatchGym: Codable, Equatable, Sendable {
     static let doneKey = "gymDone"
     static let ratedKey = "gymRated"
     static let changeKey = "gymChange"
-    /// Watch → iPhone every few seconds of the gym: the heart rate and calories
-    /// (Live) for Training mode, which then leaves Apple Health to the watch.
+    /// Watch → iPhone at the start and every few seconds of the gym: the heart
+    /// rate and calories (Live) for Training mode, which then leaves Apple
+    /// Health to the watch. Started on the watch, it opens Training mode there.
     static let liveKey = "gymLive"
     /// iPhone → watch: Training mode finished, the watch ends and saves the workout.
     static let endKey = "gymEnd"
+    /// Watch → iPhone: the gym finished on the watch, Training mode ends too.
+    static let watchEndKey = "gymWatchEnd"
 
     struct Live: Codable, Equatable, Sendable {
         var start: Date

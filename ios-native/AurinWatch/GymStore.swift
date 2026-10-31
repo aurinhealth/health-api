@@ -170,6 +170,13 @@ final class GymStore: ObservableObject {
         openedFromPhone = true
     }
 
+    /// Opened by the iPhone before the watch's connection was up (a cold
+    /// launch): the plan is asked for again once it is, not left spinning.
+    func loadIfWaiting() {
+        guard openedFromPhone, !loading, gym == nil || gym?.date != day else { return }
+        load()
+    }
+
     @Published private(set) var changing = false
     /// A change the iPhone did not take (out of reach): the screen says so once.
     @Published var failedChange = false

@@ -231,6 +231,7 @@ extension WatchStore: WCSessionDelegate {
             if let gym { GymStore.shared.received(gym) }
             if let data { WatchStore.shared.receive(data) } else if !empty { WatchStore.shared.receive(nil) }
             WatchStore.shared.ask()
+            GymStore.shared.loadIfWaiting()
         }
     }
 
@@ -274,6 +275,9 @@ extension WatchStore: WCSessionDelegate {
 
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
         guard session.isReachable else { return }
-        Task { @MainActor in WatchStore.shared.ask() }
+        Task { @MainActor in
+            WatchStore.shared.ask()
+            GymStore.shared.loadIfWaiting()
+        }
     }
 }

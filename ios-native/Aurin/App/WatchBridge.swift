@@ -304,6 +304,7 @@ extension WatchBridge: WCSessionDelegate {
         let alarmSnoozed = message[WatchSnapshot.alarmSnoozedKey] as? Date
         let coach = (message[WatchCoach.askKey] as? Data).flatMap(WatchCoach.Ask.decode)
         let live = (message[WatchGym.liveKey] as? Data).flatMap(WatchGym.Live.decode)
+        let gymEnded = message[WatchGym.watchEndKey] as? Bool == true
         let plan = (message[WatchPlan.requestKey] as? Data).flatMap { try? JSONDecoder().decode(WatchPlan.Request.self, from: $0) }
         Task { @MainActor in
             if let plan {
@@ -313,6 +314,11 @@ extension WatchBridge: WCSessionDelegate {
             }
             if let live {
                 LiveWorkout.shared.watch(live)
+                replyHandler(["ok": true])
+                return
+            }
+            if gymEnded {
+                LiveWorkout.shared.watchEnded()
                 replyHandler(["ok": true])
                 return
             }
@@ -422,8 +428,10 @@ extension WatchBridge: WCSessionDelegate {
         let onWatch = userInfo[WatchSnapshot.alarmOnWatchKey] as? Bool
         let alarmStopped = userInfo[WatchSnapshot.alarmStoppedKey] as? Bool == true
         let alarmSnoozed = userInfo[WatchSnapshot.alarmSnoozedKey] as? Date
+        let gymEnded = userInfo[WatchGym.watchEndKey] as? Bool == true
         Task { @MainActor in
             if let done { await applyGym(done) }
+            if gymEnded { LiveWorkout.shared.watchEnded() }
             if let rated { await applyGym(rated) }
             if let water { await addWater(ml: water, kind: drinkKind) }
             if let onWatch { await alarmOnWatch(onWatch) }

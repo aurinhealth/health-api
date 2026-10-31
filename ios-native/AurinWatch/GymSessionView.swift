@@ -107,7 +107,7 @@ struct GymSessionView: View {
             // Finished in Training mode on the iPhone: saved here, as one workout.
             guard ended else { return }
             store.endedOnPhone = false
-            finish()
+            end(onPhone: true)
         }
         .onReceive(tick) { date in
             // Only the rest counts down; the set screen stays still between taps.
@@ -458,10 +458,16 @@ struct GymSessionView: View {
         restEnd = next > Date() ? next : nil
     }
 
-    private func finish() {
+    private func finish() { end(onPhone: false) }
+
+    /// Finished here (the summary) or in Training mode on the iPhone; finished
+    /// here, the iPhone hears of it.
+    private func end(onPhone: Bool) {
         let save = (store.gym?.setsDone ?? 0) > 0
         Task {
             await workout.finish(save: save)
+            // After the end here, so the iPhone's answer (gymEnd) finds nothing running.
+            if !onPhone { workout.endOnPhone() }
             store.openedFromPhone = false
             dismiss()
         }
