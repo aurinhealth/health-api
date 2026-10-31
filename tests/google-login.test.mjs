@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { scriptPolicy } from "../src/web-security.js";
 import { handleGoogleLogin, verifyGoogleIdToken, _finishLoginForTest, _resetJwksCacheForTest } from "../src/google-login.js";
 import { resolvePrincipal, isPublicPath } from "../src/dashboard-auth.js";
 import { createD1 } from "./helpers/d1.mjs";
@@ -25,9 +26,9 @@ function googleFetch(token) {
     ? Response.json({ keys: [jwk] })
     : Response.json(token ? { id_token: token } : { error: "invalid_grant" }, { status: token ? 200 : 400 });
 }
-// Google sign-in serves only the iPhone app: /auth/google?app=<43-character challenge>.
-const challenge = "c".repeat(43), appCookie = "pfd_google_login=s1.n1.verifier." + challenge;
-const start = (e, query = "?app=" + challenge) => handleGoogleLogin(new Request("https://aurin.health/auth/google" + query), e, "/auth/google");
+// Google sign-in serves only the iPhone app: /auth/google?app=<43-character challenge>&return=https.
+const challenge = "c".repeat(43), appCookie = "pfd_google_login=s1.n1.verifier." + challenge + ".https";
+const start = (e, query = "?app=" + challenge) => handleGoogleLogin(new Request("https://aurin.health/auth/google" + query + (query.includes("app=") ? "&return=https" : "")), e, "/auth/google");
 const callback = (query, cookie = appCookie) => new Request("https://aurin.health/auth/google/callback?" + query, { headers: { Cookie: cookie } });
 
 test("a client id pasted with spaces still reaches Google intact", async () => {
@@ -44,19 +45,42 @@ test("Google login routes are public", () => {
   assert.equal(isPublicPath("/auth/app/return"), true);
 });
 
-// The app's browser sheet closes on https://aurin.health/auth/app/return, an address only
-// an app with aurin.health among its associated domains can catch, on the test server too.
-test("sign-in returns to aurin.health, and the return page never shows the token", async () => {
+// The app's browser sheet closes on https://<host>/auth/app/return, an address only an app
+// with that host among its associated domains can catch; the test server returns to its own host.
+test("sign-in returns to the server it started on, and the return page never shows the token", async () => {
   const staging = { ...freshEnv(), APP_ORIGIN: "https://staging.aurin.health" };
   const failed = await _finishLoginForTest(new Request("https://staging.aurin.health/auth/google/callback?error=access_denied&state=s1", { headers: { Cookie: appCookie } }), staging, googleFetch());
-  assert.equal(failed.headers.get("Location"), "https://aurin.health/auth/app/return?error=cancelled");
+  assert.equal(failed.headers.get("Location"), "https://staging.aurin.health/auth/app/return?error=cancelled");
   const shown = await handleGoogleLogin(new Request("https://aurin.health/auth/app/return?token=secret-token"), env, "/auth/app/return");
   assert.equal(shown.status, 200);
   assert.equal(shown.headers.get("cache-control"), "no-store");
   assert.equal(shown.headers.get("Referrer-Policy"), "no-referrer");
   const html = await shown.text();
-  assert.match(html, /aktualizuj Aurin|update Aurin/);
-  assert.doesNotMatch(html, /secret-token|loadwise:/);
+  assert.match(html, /lang="en".*update Aurin/);
+  assert.doesNotMatch(html, /secret-token|loadwise:|href=/);
+  const czech = await handleGoogleLogin(new Request("https://aurin.health/auth/app/return", { headers: { "Accept-Language": "cs-CZ,cs;q=0.9" } }), env, "/auth/app/return");
+  assert.match(await czech.text(), /lang="cs".*aktualizuj Aurin/);
+  // The app's HEAD asks whether this server returns over https: headers, no body.
+  const head = await handleGoogleLogin(new Request("https://aurin.health/auth/app/return", { method: "HEAD" }), env, "/auth/app/return");
+  assert.equal(head.status, 200);
+  assert.equal(head.body, null);
+});
+
+// A build from before 2026-11 asks for no return and still gets loadwise://auth.
+test("an older build's sign-in still returns to loadwise://auth", async () => {
+  _resetJwksCacheForTest();
+  const e = freshEnv();
+  const begin = await handleGoogleLogin(new Request("https://aurin.health/auth/google?app=" + challenge), e, "/auth/google");
+  const cookie = begin.headers.get("Set-Cookie").split(";")[0];
+  assert.equal(cookie.split("=")[1].split(".")[4], "");
+  const state = new URL(begin.headers.get("Location")).searchParams.get("state"), nonce = cookie.split("=")[1].split(".")[1];
+  const back = await _finishLoginForTest(callback("code=c1&state=" + state, cookie), e, googleFetch(await idToken({ nonce })));
+  assert.equal(back.status, 200);
+  const html = await back.text();
+  assert.match(html, /loadwise:\/\/auth\?token=/);
+  assert.equal(back.headers.get("Content-Security-Policy"), scriptPolicy(html));
+  const failed = await _finishLoginForTest(callback("error=access_denied&state=s1", "pfd_google_login=s1.n1.verifier." + challenge), e, googleFetch());
+  assert.equal(failed.headers.get("Location"), "loadwise://auth?error=cancelled");
 });
 
 test("login start requests only identity scopes with state, nonce and PKCE", async () => {

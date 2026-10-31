@@ -9,6 +9,7 @@
 import { appApiLevel } from "./app-version.js";
 import { verifyDashboardSession, sessionSecret } from "./dashboard-auth.js";
 import { APP_CHALLENGE } from "./google-login.js";
+import { APP_RETURN_PATH, APP_CONNECTED_PATH } from "./app-origin.js";
 import { siteLang } from "./site-pages.js";
 
 const OPEN_PATHS = new Set([
@@ -19,8 +20,8 @@ const OPEN_PATHS = new Set([
   "/logo.svg",
   "/app/logout",
   "/auth/google/callback",
-  "/auth/app/return",
-  "/auth/app/connected",
+  APP_RETURN_PATH,
+  APP_CONNECTED_PATH,
   "/auth/app/connect"
 ]);
 // /t/<id>: a workout shared with a link (workout-templates.js).
