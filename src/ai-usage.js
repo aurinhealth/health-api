@@ -139,7 +139,7 @@ export async function claimAiSlot(env, { waitMs = AI_SLOT_WAIT_MS, pollMs = 800,
     await pause(Math.min(pollMs, Math.max(0, deadline - Date.now())));
     claimed = await claim();
   }
-  if (!claimed) throw limitError(L("Ještě běží jiné dotazy na AI. Zkus to za chvíli.", "Other AI requests are still running. Try again in a moment."));
+  if (!claimed) throw Object.assign(limitError(L("Ještě běží jiné dotazy na AI. Zkus to za chvíli.", "Other AI requests are still running. Try again in a moment.")), { busy: true });
   const release = () => env.DB.prepare("DELETE FROM ai_usage WHERE id = ? AND user_id = ? AND model = 'pending'").bind(claimed.id, env.USER_ID).run().catch(error => console.error("AI slot not released", error?.message || error));
   release.id = claimed.id;
   return release;
