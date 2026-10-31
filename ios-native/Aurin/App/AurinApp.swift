@@ -32,6 +32,11 @@ struct AurinApp: App {
                 // A gym Live Activity left from before the app closed has no screen behind it.
                 .task {
                     GymLiveActivity.endOrphans()
+                    // Files an app that ended left in tmp: the data export, replies to the coach.
+                    Task.detached(priority: .utility) {
+                        APIClient.removeExports()
+                        CoachReplyUpload.sweep(olderThan: 2 * CoachReplyUpload.resourceLimit)
+                    }
                     // Read before any sign-in, so the offer waits for the next start.
                     _ = PasskeyOfferLater.due
                 }

@@ -28,6 +28,20 @@ const MAX_TOKENS_PER_USER = 10;
 const TOKEN = /^[0-9a-f]{64,200}$/i;
 const ENVIRONMENTS = new Set(["production", "development"]);
 
+// Settings → Oznámení → Skrýt zdravotní údaje: the banner, the lock screen
+// and the notification held down say only what came; the push's own texts
+// travel in `private` for the app (when opened) and the watch. The app sends
+// the switch (on until turned off) with its push choices; a build from before
+// it never sends one and keeps the full texts, which it alone can show.
+export const hidesValues = state => state?.notify?.private === true;
+export function privateAlert(kind) {
+  if (kind === "morning") return { title: L("Připravenost", "Readiness"), body: L("Dnešní připravenost je spočítaná.", "Today's readiness is in.") };
+  if (kind === "swap") return { title: L("Kouč", "Coach"), body: L("Kouč navrhuje změnu v plánu.", "Your coach suggests a change to your plan.") };
+  if (kind === "reply") return { title: L("Kouč", "Coach"), body: L("Kouč odpověděl.", "Your coach replied.") };
+  if (kind === "water") return { title: L("Pití", "Water"), body: L("Čas na sklenici vody.", "Time for a glass of water.") };
+  return { title: L("Kouč", "Coach"), body: L("Kouč ti napsal.", "Your coach sent you a message.") };
+}
+
 export const pushConfigured = env => Boolean(env && env.APNS_KEY_P8 && env.APNS_KEY_ID && env.APPLE_TEAM_ID);
 export const inMorningWindow = hour => Number.isFinite(hour) && hour >= MORNING_FROM_HOUR && hour < MORNING_TO_HOUR;
 
@@ -129,9 +143,16 @@ const DEAD_TOKEN = new Set(["BadDeviceToken", "Unregistered", "DeviceTokenNotFor
 // alert: a text, or {title, subtitle, body}; category names the phone's buttons
 // for it (the coach's "Vyměnit" / "Nechat"), data rides along for them;
 // mutable lets the app's notification extension add an image (the ring);
-// wake also wakes the app in the background (content-available).
-export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Date.now(), category = null, data = null, mutable = false, wake = false, topic = APNS_TOPIC } = {}) {
+// wake also wakes the app in the background (content-available). hide (a
+// privateAlert kind, when hidesValues) sends privateAlert(hide) and moves the
+// alert and the morning's score into `private`, so no ring is drawn either.
+export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Date.now(), category = null, data = null, mutable = false, wake = false, topic = APNS_TOPIC, hide = null } = {}) {
   if (!pushConfigured(env)) return { ok: false, skipped: true };
+  if (hide && alert && typeof alert === "object") {
+    const { readiness, ...rest } = data || {};
+    data = { ...rest, private: { ...alert, ...(readiness ? { readiness } : {}) } };
+    alert = privateAlert(hide);
+  }
   const jwt = await apnsJwt(env, now);
   const response = await fetchImpl(`https://${apnsHost(env, device.environment)}/3/device/${device.token}`, {
     method: "POST",
@@ -229,7 +250,8 @@ export function hasLastNight(records, now = new Date()) {
 // the night hasn't arrived when yesterday had one). readiness(date) computes it
 // (entrypoint.js: as /app/api/today does) and runs only when everything else
 // allows a push; details(date) the push's numbers and plan, once it goes out.
-export async function sendMorningReadiness(env, { readiness, details = null, now = new Date(), fetchImpl = fetch } = {}) {
+// hide: the numbers go in `private`, the banner says only that the morning is in (hidesValues).
+export async function sendMorningReadiness(env, { readiness, details = null, now = new Date(), fetchImpl = fetch, hide = false } = {}) {
   if (!pushConfigured(env) || !env.DB) return { sent: 0, reason: "not-configured" };
   const db = env.DB;
   const [language, zone] = await Promise.all([storedLanguage(db, db.userId ?? env.USER_ID), storedTimeZone(db, db.userId ?? env.USER_ID)]);
@@ -266,7 +288,8 @@ export async function sendMorningReadiness(env, { readiness, details = null, now
     // It also wakes the app, which loads Today for the widgets, so they show
     // the morning before the app is opened (ios-native AppDelegate). Its
     // category lets the app show the morning in full when it is held down.
-    const extra = message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone } }, mutable: true, wake: true, category: "MORNING_READINESS" } : {};
+    // Hidden, the score and the texts wait in `private` (sendPush): no ring on the banner.
+    const extra = message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone } }, mutable: true, wake: true, category: "MORNING_READINESS", hide: hide ? "morning" : null } : {};
     let sent = 0, removed = 0;
     for (const device of devices) {
       const result = await sendPush(env, device, alert, { fetchImpl, now: now.getTime(), ...extra }).catch(error => ({ ok: false, error: error.message }));

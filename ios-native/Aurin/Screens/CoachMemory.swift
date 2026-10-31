@@ -144,10 +144,10 @@ struct MemoryChipView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: chip.undone ? "arrow.uturn.backward" : symbol)
+            Image(systemName: chip.undone ? "arrow.uturn.backward" : chip.kept ? "checkmark" : symbol)
                 .scaledFont(12, weight: .bold)
             Text(label).font(.footnote.weight(.medium)).lineLimit(2)
-            if !chip.undone {
+            if !chip.undone && !chip.kept {
                 Button(action: undo) {
                     Text("Zpět").font(.footnote.weight(.medium)).foregroundStyle(Palette.muted)
                 }
@@ -155,9 +155,9 @@ struct MemoryChipView: View {
                 .padding(.leading, 4)
             }
         }
-        .foregroundStyle(chip.undone ? Palette.muted : Palette.green)
+        .foregroundStyle(chip.undone || chip.kept ? Palette.muted : Palette.green)
         .padding(.horizontal, 12).padding(.vertical, 7)
-        .background((chip.undone ? Palette.card : Palette.greenSoft), in: Capsule())
+        .background((chip.undone || chip.kept ? Palette.card : Palette.greenSoft), in: Capsule())
     }
 
     private var symbol: String {
@@ -170,10 +170,52 @@ struct MemoryChipView: View {
 
     private var label: String {
         if chip.undone { return L10n.tr("Vráceno") }
+        if chip.kept { return L10n.tr("Ponecháno") }
         switch chip.kind {
         case .saved: return chip.showsText ? L10n.f("Zapamatováno: %@", chip.text) : L10n.tr("Zapamatováno")
         case .forgotten: return L10n.f("Zapomenuto: %@", chip.text)
         case .updated: return L10n.f("Upraveno: %@", chip.text)
         }
+    }
+}
+
+/// "Zapomenout tohle?" or "Přepsat tohle?" under an answer: the coach proposes,
+/// the memory changes only when the athlete confirms.
+struct MemoryProposalCard: View {
+    let chip: CoachMemoryChip
+    var decide: (Bool) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 7) {
+                Image(systemName: chip.kind == .updated ? "pencil" : "xmark").scaledFont(12, weight: .bold)
+                Text(chip.kind == .updated ? "Přepsat tohle?" : "Zapomenout tohle?").font(.subheadline.weight(.semibold))
+            }
+            if chip.kind == .updated, let from = chip.from {
+                Text(verbatim: from).font(Typo.caption).foregroundStyle(Palette.muted).strikethrough()
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(verbatim: chip.text).font(Typo.caption).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(verbatim: chip.text).font(Typo.caption).foregroundStyle(Palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 8) {
+                Button { decide(true) } label: {
+                    Text(chip.kind == .updated ? "Přepsat" : "Zapomenout").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
+                        .padding(.horizontal, 16).frame(height: 34).background(Palette.button, in: Capsule())
+                }
+                Button { decide(false) } label: {
+                    Text("Nechat").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 16).frame(height: 34).overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 2)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Palette.ink.opacity(0.1), lineWidth: 1) }
     }
 }
