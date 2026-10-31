@@ -2,6 +2,8 @@
 // host (the test server, local runs).
 export const SITE_ORIGIN = "https://aurin.health";
 export const SERVER_HOSTS = new Set(["aurin.health"]);
+// Where the iPhone app's browser sheet comes back after signing in with Google (google-login.js).
+export const APP_RETURN_PATH = "/auth/app/return";
 
 export function appOrigin(env, request) {
   if (env?.APP_ORIGIN) return env.APP_ORIGIN;
