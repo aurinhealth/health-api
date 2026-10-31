@@ -18,7 +18,7 @@ import { connectionStatus } from "./connections.js";
 import { saveSourcePriority } from "./source-priority.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, backfillConnectionAccounts } from "./connection-secrets.js";
 import { withIntervalsSleep, intervalsWellness } from './intervals-sleep.js';
-import { cached, bumpCacheVersion, FOOD_WRITE, UNCHANGED_HEADER } from './api-cache.js';
+import { cached, bumpCacheVersion, FOOD_WRITE, UNCHANGED_HEADER, closedDay, CLOSED_DAY_TTL_SECONDS } from './api-cache.js';
 import { manualPairs } from './manual-pairs.js';
 import { activityDetail, rideIntervals } from './activity-detail.js';
 import { watchDetail, withWatch } from './watch-detail.js';
@@ -2855,10 +2855,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       foodUrl.searchParams.set("date", date);
       const recommendUrl = new URL("/food/recommend", request.url);
       recommendUrl.searchParams.set("date", date);
-      const reads = Promise.all([
+      const read = () => Promise.all([
         app.fetch(new Request(dailyUrl, {method:"GET",headers:internalAuth}), env, ctx),
         app.fetch(new Request(foodUrl, {method:"GET",headers:internalAuth}), env, ctx)
       ].map(async response => { const r = await response; return { ok: r.ok, body: await r.json() }; }));
+      // A closed day (two or more days back) is read once and kept for hours
+      // under the cache version (api-cache.js closedDay): the coach's three
+      // weeks and the Week screen no longer analyse the past days every 10
+      // minutes. A failed read is not kept.
+      const reads = closedDay(date, localToday())
+        ? cached(env, ctx, 'closed-day:' + date, () => read().then(parts => parts.every(p => p.ok) ? parts : { status: 'error', parts }), { ttl: CLOSED_DAY_TTL_SECONDS }).then(v => Array.isArray(v) ? v : v.parts)
+        : read();
       // Meal recommendations (the costliest part) only for today and later:
       // nothing is eaten on a past day any more. They fit meals to the day's
       // calorie target and food log read here (before the energy budget below,
