@@ -239,13 +239,39 @@ final class AppleHealth {
         let wasOn = enabled
         let waiting = UserDefaults.standard.string(forKey: Self.resumeKey)
         disconnect()
-        // The sources one account switched off are not the next one's.
+        // The sources one account switched off are not the next one's, nor is
+        // the reading it paused with its health data (resumeAfterHealthPause).
         hidden = [:]
+        UserDefaults.standard.removeObject(forKey: Self.healthPausedKey)
         UserDefaults.standard.removeObject(forKey: Self.hiddenKey)
         // Off already (a second sign-out): the account that read it still gets it back.
         if wasOn, let email { UserDefaults.standard.set(Self.fingerprint(email), forKey: Self.resumeKey) }
         else if let waiting { UserDefaults.standard.set(waiting, forKey: Self.resumeKey) }
     }
+
+    /// Health data paused in Settings → Soukromí a data (AppModel+HealthPause):
+    /// reading stops, and turning it back on reads the whole history again,
+    /// as the server deleted it (resumeAfterHealthPause).
+    func pauseForHealthData() {
+        let wasOn = enabled
+        disconnect()
+        lastSync = nil
+        UserDefaults.standard.removeObject(forKey: Self.lastSyncKey)
+        if wasOn { UserDefaults.standard.set(true, forKey: Self.healthPausedKey) }
+    }
+
+    /// Health data on again: with the permissions iOS kept, from the start.
+    func resumeAfterHealthPause(api: APIClient) async {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: Self.healthPausedKey) else { return }
+        defaults.removeObject(forKey: Self.healthPausedKey)
+        enabled = true
+        defaults.set(true, forKey: Self.enabledKey)
+        start(api: api)
+        await sync(api: api, force: true)
+    }
+
+    private static let healthPausedKey = "appleHealth.readBeforePause"
 
     /// After a sign-in to the account that read Apple Health before signing
     /// out: on again with the permissions iOS kept, and the days in between.

@@ -18,6 +18,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         // Every launch asks for the token again; it is sent only when it changed.
         let client = self.api
+        // Health data paused (also on another device) answers 403 health_paused:
+        // Apple Health stops; the app notes the pause when it opens (checkSetup).
+        client.onHealthPaused = {
+            Task { @MainActor in
+                if let model = AppModel.live, model.phase == .signedIn { model.notePaused(true) } else { AppleHealth.shared.pauseForHealthData() }
+            }
+        }
         Task { @MainActor in await PushRegistration.refresh(api: client) }
         // Syncing without the app being opened (BackgroundRefresh.swift); not
         // with the sample data of "-demo".

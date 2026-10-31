@@ -133,6 +133,11 @@ final class AppModel {
     var paths: [AppTab: [AppRoute]] = [:]
     /// After the first sign-in: the profile setup has not been done yet.
     var needsSetup = false
+    /// Health data paused in Settings → Soukromí a data (AppModel+HealthPause):
+    /// the app shows only the paused screen, also before the server answers.
+    var healthPaused = UserDefaults.standard.bool(forKey: AppModel.healthPausedKey)
+    /// "Zapnout znovu" on the paused screen: the setup shows only the consent.
+    var resumingHealth = false
     /// The "Příště přes Face ID" sheet, the next time the app opens after the
     /// first e-mail sign-in on this phone (PasskeyOfferLater, RootView).
     var passkeyOffer = false
@@ -242,6 +247,9 @@ final class AppModel {
         }
         api.onSubscriptionRequired = { [weak self] in
             Task { @MainActor in if let self { Paywall.present(self) } }
+        }
+        api.onHealthPaused = { [weak self] in
+            Task { @MainActor in if let self, !self.demo, self.phase == .signedIn { self.notePaused(true) } }
         }
         if !demo {
             connectWrites()

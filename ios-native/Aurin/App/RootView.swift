@@ -84,6 +84,17 @@ struct RootView: View {
         switch model.phase {
         case .signedOut:
             LoginView().dynamicTypeSize(Self.textSizes)
+        case .signedIn where model.healthPaused && !model.demo:
+            // Health data paused (AppModel+HealthPause): the paused screen; its
+            // "Zapnout znovu" opens the consent of the setup.
+            HealthPausedView()
+                .dynamicTypeSize(Self.textSizes)
+                .fullScreenCover(isPresented: Binding(get: { model.needsSetup }, set: { model.needsSetup = $0 })) { SetupFlowView().dynamicTypeSize(Self.textSizes) }
+                .task {
+                    async let setup: Void = model.checkSetup()
+                    async let account: Void = model.loadAccountInitial()
+                    _ = await (setup, account)
+                }
         case .signedIn:
             ZStack(alignment: .bottom) {
                 // A tab once opened stays built behind the open one, so coming
