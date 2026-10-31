@@ -44,7 +44,7 @@ test("AI consent can be given and taken back; the withdrawal is kept", async () 
 test("health consent cannot be refused here, and AI needs it first", async () => {
   const { env } = setup();
   await assert.rejects(saveConsent(env, { ai: true }), /Nejdřív/);
-  await assert.rejects(saveConsent(env, { health: false }), /smazáním účtu/);
+  await assert.rejects(saveConsent(env, { health: false }), /Soukromí a data/);
   await assert.rejects(saveConsent(env, {}), /Chybí/);
 });
 

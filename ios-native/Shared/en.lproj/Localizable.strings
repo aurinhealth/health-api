@@ -506,6 +506,7 @@
 "Přihlášení e-mailem" = "Sign in with email";
 "Přihlášení přes Google bylo zrušeno." = "Google sign-in was cancelled.";
 "Přihlášení přes Google teď nejde. Zkus to později nebo se přihlas e-mailem." = "Google sign-in isn't available right now. Try again later or sign in with email.";
+"Z této sítě dnes vzniklo příliš mnoho nových účtů. Zkus to prosím zítra." = "Too many new accounts were created from this network today. Please try again tomorrow.";
 "Přihlášení se nepodařilo dokončit. Zkus to znovu." = "Couldn't finish signing in. Try again.";
 "Přihlášení se nepodařilo." = "Sign-in failed.";
 "Přihlášení vypršelo. Přihlas se znovu." = "Your session expired. Please sign in again.";
@@ -2820,6 +2821,19 @@
 "Uživatel %d" = "User %d";
 "návrhy %d, schválené %d" = "%d sent, %d approved";
 "Zamítnout" = "Reject";
+
+/* Nastavení → Správa → Útraty AI (AISpendingView.swift) */
+"Útraty AI" = "AI spending";
+"%@ dnes" = "%@ today";
+"Včera %@ · %@ %@" = "Yesterday %@ · %@ %@";
+"pevná" = "fixed";
+"Stojí do %@" = "Stopped until %@";
+"Den začíná znovu v %@" = "Day resets at %@";
+"Platící" = "Paying";
+"Pilot, dárky a ty" = "Pilot, gifts and you";
+"Bez nákupu" = "No purchase";
+"Nové účty" = "New accounts";
+"Úlohy serveru" = "Server jobs";
 "Schválit" = "Approve";
 "Na míru od AI" = "Made for you by AI";
 "Skládám trénink podle tvého výběru…" = "Building a workout to your choice…";
@@ -3496,6 +3510,26 @@
 "S intervaly: dva tréninky hned po sobě" = "With intervals: two workouts back to back";
 "Jeden trénink: %@" = "One workout: %@";
 "přes Apple Health" = "via Apple Health";
+"Stáhneš, pozastavíš, nebo smažeš" = "Download, pause or delete";
+"Všechno si stáhneš, zdravotní data pozastavíš, nebo smažeš účet, přímo tady." = "Download everything, pause your health data or delete the account, right here.";
+"Odvolá souhlas a smaže tvoje zdravotní data. Účet a Pro zůstanou." = "Withdraws your consent and deletes your health data. Your account and Pro stay.";
+"Pozastavit zdravotní data" = "Pause health data";
+"Aurin přestane tvoje zdravotní data používat a smaže, co z nich uchovává." = "Aurin stops using your health data and deletes what it keeps.";
+"Zastaví se" = "Stops";
+"Čtení z Apple Health, Googlu a dalších služeb" = "Reading Apple Health, Google and other services";
+"Posílání do Intervals.icu, AI kouči a v oznámeních" = "Sending to Intervals.icu, the AI coach and notifications";
+"Hned se smaže" = "Deleted now";
+"Spánek, tep, HRV, váha, jídlo, tréninky, deník a cyklus" = "Sleep, heart rate, HRV, weight, food, workouts, journal and cycle";
+"Zůstane" = "Stays";
+"Účet, přihlášení, Pro, nastavení a připojené služby (pozastavené)" = "Your account, sign-in, Pro, settings and connections (paused)";
+"Pro se dál obnovuje. Pokud chceš, zruš ho v App Store." = "Pro keeps renewing. Cancel it in the App Store if you want.";
+"Když to znovu zapneš, dáš nový souhlas a Aurin načte historii z Apple Health a Googlu. Co jsi zadal jen v Aurinu, se nevrátí; stažený soubor ti zůstane jako kopie." = "Turning it back on asks for consent again and reads your history from Apple Health and Google. What you entered only in Aurin doesn't come back; your download keeps a copy.";
+"Nejdřív stáhnout moje data" = "Download my data first";
+"Pozastavit a smazat" = "Pause and delete";
+"Zdravotní data jsou pozastavená" = "Health data is paused";
+"Aurin tvoje zdravotní data nečte ani neuchovává. Zapnout je můžeš kdykoli." = "Aurin isn't reading or keeping any of your health data. Turn it back on any time.";
+"Zapnout znovu" = "Turn back on";
+"Pozastavením zdravotních dat, nebo smazáním účtu v Nastavení → Soukromí a data, kde si předtím můžeš stáhnout všechna svoje data." = "Pause your health data or delete your account in Settings → Privacy & data, where you can first download all your data.";
 "Zdravotní data se nepodařilo zapnout. Zapneš je v Nastavení → Zdroje dat → %@ → Zdravotní data." = "The health data could not be turned on. Turn it on in Settings → Data sources → %@ → Health data.";
 "Potvrď, že jsi to ty" = "Confirm it's you";
 "Zadej kód" = "Enter the code";
@@ -3505,6 +3539,7 @@
 "Poslat kód na %@" = "Send code to %@";
 "Stažení všech dat potřebuje krátké ověření." = "Downloading all your data needs a quick check.";
 "Smazání účtu potřebuje krátké ověření." = "Deleting the account needs a quick check.";
+"Pozastavení zdravotních dat potřebuje krátké ověření." = "Pausing health data needs a quick check.";
 "Změna e-mailu potřebuje krátké ověření." = "Changing the email needs a quick check.";
 "Nový způsob přihlášení potřebuje krátké ověření." = "Adding a new way to sign in needs a quick check.";
 "Nejdřív potvrď, že jsi to ty." = "Confirm it's you first.";

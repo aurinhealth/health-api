@@ -1,6 +1,6 @@
 // Confirming it's you before the changes someone with a stolen session could use to take the
-// account over or carry its data off: changing the e-mail, adding a passkey, downloading the data
-// and deleting the account. The session alone is not enough for them; the user also shows, within
+// account over or carry its data off: changing the e-mail, adding a passkey, downloading the data,
+// pausing health data and deleting the account. The session alone is not enough for them; the user also shows, within
 // the last STEP_UP_SECONDS, a passkey of the account or a code sent to its e-mail (or has just
 // signed in). The proof is the signed STEP_UP_COOKIE (dashboard-auth.js), so nothing is stored.
 //   POST /app/api/account/step-up/start             sends the code to the account's e-mail

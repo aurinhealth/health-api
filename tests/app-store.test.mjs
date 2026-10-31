@@ -42,6 +42,14 @@ function setup() {
 }
 const row = (raw, id) => raw.sqlite.prepare("SELECT * FROM subscriptions WHERE user_id=?").get(id);
 
+test("an offer code (the pilot's discount, a gift) is kept with the subscription; a free promotional offer is a free week", async () => {
+  const { raw, user } = setup();
+  await saveAppTransaction(user(1), { signedTransaction: jws(transaction({ offerType: 3, environment: "Production", offerDiscountType: "PAY_UP_FRONT" })) }, { roots });
+  assert.deepEqual([row(raw, 1).free_trial, row(raw, 1).offer_type], [0, 3]);
+  await saveAppTransaction(user(2), { signedTransaction: jws(transaction({ originalTransactionId: "3000000000", offerType: 2, offerDiscountType: "FREE_TRIAL" })) }, { roots });
+  assert.deepEqual([row(raw, 2).free_trial, row(raw, 2).offer_type], [1, 2]);
+});
+
 test("Apple's root is pinned by its SHA-256", () => {
   assert.equal(APPLE_ROOT_CA_G3, "63343abfb89a6a03ebb57e9b3f5fa7be7c4f5c756f3017b3a8c488c3653e9179");
 });
@@ -74,6 +82,7 @@ test("the app's transaction unlocks Pro for the account until it expires", async
   assert.equal(saved.plan, "ai");
   assert.equal(Date.parse(saved.validUntil), now + 7 * DAY);
   assert.equal(row(raw, 1).original_transaction_id, "2000000000");
+  assert.deepEqual([row(raw, 1).free_trial, row(raw, 1).offer_type], [1, 1], "the free week, Apple's introductory offer");
   const purchase = await storePurchase(env);
   assert.equal(purchase.active, true);
   assert.equal(purchase.productId, "health.aurin.app.pro.yearly");

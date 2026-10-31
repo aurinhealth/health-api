@@ -66,6 +66,8 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         case "not_invited": return APIError.notInvited(L10n.tr("Tento Google účet nemá do Aurinu pozvánku. Aurin je teď jen pro pozvané."))
         case "expired": return APIError.message(L10n.tr("Přihlášení se přerušilo. Zkus to znovu."))
         case "unavailable": return APIError.message(L10n.tr("Přihlášení přes Google teď nejde. Zkus to později nebo se přihlas e-mailem."))
+        // Too many new accounts from this network today (src/tenancy.js); e-mail would be held the same way.
+        case "too_many": return APIError.message(L10n.tr("Z této sítě dnes vzniklo příliš mnoho nových účtů. Zkus to prosím zítra."))
         default: return APIError.message(L10n.tr("Google přihlášení se nepodařilo ověřit. Zkus to znovu."))
         }
     }
