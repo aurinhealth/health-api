@@ -7,8 +7,9 @@ import WidgetKit
 /// clock, heart rate and kcal, the rest counting down with the next set (+30 s,
 /// Přeskočit pauzu), then the set with Série hotová; in the Dynamic Island the
 /// rest's countdown, or during the set "×8" by the dumbbell and "80 kg" (or
-/// "2/4"). The buttons run in the app (GymActivityInbox). Once the rest's end
-/// passes, the activity is stale and shows the set.
+/// "2/4"); beside another app's activity "80" over "×8". The buttons run in
+/// the app (GymActivityInbox). Once the rest's end passes, the activity is
+/// stale and shows the set.
 struct GymActivityWidget: Widget {
     var body: some WidgetConfiguration {
         // From iOS 18 the same activity also shows in the watch's Smart Stack.
@@ -73,8 +74,20 @@ struct GymActivityWidget: Widget {
                         .frame(maxWidth: 58, alignment: .trailing)
                 }
             } minimal: {
+                // Shown when another app's Live Activity shares the island (music, a call…):
+                // the set's weight over its reps, "80" over "×8", not just the dumbbell.
                 if resting, let start = context.state.restStart, let end = context.state.restEnd {
                     GymRestTimer(start: start, end: end, size: 14).frame(maxWidth: 36)
+                } else if let reps = context.state.reps {
+                    VStack(spacing: -1) {
+                        if let weight = context.state.weight {
+                            Text(weight.components(separatedBy: " ").first ?? weight)
+                                .font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
+                        }
+                        Text("×" + reps).font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.amberBar)
+                    }
+                    .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+                    .frame(maxWidth: 34)
                 } else {
                     Image(systemName: "dumbbell.fill").font(.system(size: 12)).foregroundStyle(Palette.amberBar)
                 }
