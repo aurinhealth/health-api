@@ -114,6 +114,19 @@ struct GymSessionView: View {
             store.endedOnPhone = false
             end(onPhone: true)
         }
+        // The rest the same as in Training mode on the iPhone, both ways.
+        .onChange(of: restEnd) { _, end in sendRest(end) }
+        .onChange(of: store.phoneRest) { _, rest in
+            guard let rest, let gym = store.gym, rest.date == gym.date, !summary else { return }
+            if let name = rest.exercise, let at = gym.exercises.firstIndex(where: { $0.name == name }) { exercise = at }
+            now = Date()
+            if let end = rest.end, end > now {
+                restTotal = Double(max(1, rest.total))
+                restEnd = end
+            } else {
+                restEnd = nil
+            }
+        }
         .onReceive(tick) { date in
             // Only the rest counts down; the set screen stays still between taps.
             guard restEnd != nil else { return }
@@ -480,6 +493,16 @@ struct GymSessionView: View {
         rated = current
         WKInterfaceDevice.current().play(.click)
         store.rate(row: current.row, letter: current.letter ?? current.before ?? "M", next: Self.nextKg(current.kg, current.letter))
+    }
+
+    /// The rest to Training mode on the iPhone, unless it came from there.
+    private func sendRest(_ end: Date?) {
+        guard let gym = store.gym else { return }
+        let rest = WatchGym.Rest(date: gym.date, end: end, total: Int(restTotal.rounded()),
+                                 exercise: gym.exercises.indices.contains(exercise) ? gym.exercises[exercise].name : nil)
+        guard !rest.same(store.phoneRest) else { return }
+        store.phoneRest = nil
+        store.sendRest(rest)
     }
 
     private func shift(_ seconds: Double) {

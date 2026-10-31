@@ -29,6 +29,8 @@ struct TrainingModeView: View {
     @State private var restEnd: Date?
     @State private var restTotal = 90
     @State private var restStart: Date?
+    /// The rest the watch sent last: not sent back to it.
+    @State private var watchRest: WatchGym.Rest?
     @State private var catalog: [GymCatalogExercise] = []
     @State private var dumbbells: [Double] = []
     @State private var editing = false
@@ -178,7 +180,24 @@ struct TrainingModeView: View {
                 if !live.running { HeartRateSensor.shared.disconnect() }
             }
         }
-        .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) }; syncActivity() }
+        .onChange(of: restEnd) { _, end in
+            Task { await Reminders.restEnds(at: end) }
+            syncActivity()
+            sendRest(end)
+        }
+        // The rest started, moved or skipped on the watch: the same here.
+        .onReceive(NotificationCenter.default.publisher(for: .watchRest)) { note in
+            guard let rest = note.object as? WatchGym.Rest, rest.date == date, !model.demo, !finishedSession else { return }
+            watchRest = rest
+            if let name = rest.exercise, let at = day?.exercises.firstIndex(where: { $0.name == name }) { index = at }
+            if let end = rest.end, end > Date() {
+                restTotal = max(1, rest.total)
+                restStart = end.addingTimeInterval(-TimeInterval(restTotal))
+                restEnd = end
+            } else {
+                restEnd = nil
+            }
+        }
         .onChange(of: day) { _, _ in syncActivity() }
         .onChange(of: index) { _, _ in syncActivity() }
         .onChange(of: finishedSession) { _, _ in syncActivity() }
@@ -1007,6 +1026,15 @@ struct TrainingModeView: View {
             kg = LiftWeight.shown(set.kg ?? carry?.kg ?? set.plannedKg) ?? ""
         }
         if reps == was.reps ?? wasCarry?.reps ?? "" { reps = set.reps ?? carry?.reps ?? "" }
+    }
+
+    /// The rest to the watch's gym, unless it came from there.
+    private func sendRest(_ end: Date?) {
+        guard !model.demo, live.running || startTapped else { return }
+        let rest = WatchGym.Rest(date: date, end: end, total: restTotal, exercise: day?.exercises[safe: index]?.name)
+        guard !rest.same(watchRest) else { return }
+        watchRest = nil
+        WatchBridge.shared.sendRest(rest)
     }
 
     private func move(_ by: Int) {

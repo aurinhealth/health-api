@@ -305,6 +305,7 @@ extension WatchBridge: WCSessionDelegate {
         let coach = (message[WatchCoach.askKey] as? Data).flatMap(WatchCoach.Ask.decode)
         let live = (message[WatchGym.liveKey] as? Data).flatMap(WatchGym.Live.decode)
         let gymEnded = message[WatchGym.watchEndKey] as? Bool == true
+        let rest = (message[WatchGym.restKey] as? Data).flatMap(WatchGym.Rest.decode)
         let plan = (message[WatchPlan.requestKey] as? Data).flatMap { try? JSONDecoder().decode(WatchPlan.Request.self, from: $0) }
         Task { @MainActor in
             if let plan {
@@ -319,6 +320,11 @@ extension WatchBridge: WCSessionDelegate {
             }
             if gymEnded {
                 LiveWorkout.shared.watchEnded()
+                replyHandler(["ok": true])
+                return
+            }
+            if let rest {
+                NotificationCenter.default.post(name: .watchRest, object: rest)
                 replyHandler(["ok": true])
                 return
             }
