@@ -24,7 +24,10 @@ struct GymSessionView: View {
     @State private var coachOpen = false
     /// The set just done, rated during the rest that follows it.
     @State private var rated: Rated?
-    @FocusState private var focus: Field?
+    /// The tile the crown turns: the weight, or the reps after a tap on them.
+    @State private var selected: Field = .kg
+    /// The crown is on the tiles (not scrolling the screen).
+    @FocusState private var crown: Bool
 
     private enum Field { case kg, reps }
 
@@ -187,7 +190,7 @@ struct GymSessionView: View {
             }
         }
         // The crown starts on the weight, also when the tiles come back after a rest.
-        .defaultFocus($focus, .kg)
+        .defaultFocus($crown, true)
         .onAppear { load(lift) }
         .onChange(of: lift.row) { _, _ in load(lift) }
     }
@@ -210,15 +213,22 @@ struct GymSessionView: View {
                     .accessibilityLabel(W.tr("O sérii víc", "One set more"))
             }
             .disabled(store.changing)
+            // One crown for both tiles, turning the one tapped last. A focusable
+            // tile each (build 380) left the reps out of reach: a tap never
+            // moved the crown off the weight.
+            // Detents: the value moves only by whole steps (0.5 kg or 1 lb, one rep),
+            // never through the in-between values the plain rotation shows.
+            // `kg` holds the weight as shown, in pounds with imperial units.
             HStack(spacing: 6) {
-                // Detents: the value moves only by whole steps (0.5 kg or 1 lb, one rep),
-                // never through the in-between values the plain rotation shows.
-                // `kg` holds the weight as shown, in pounds with imperial units.
-                tile(GymText.kg(kg), unit: W.weightUnit, field: .kg, value: $kg, step: W.weightStep, top: W.imperial ? 1100 : 500, small: fit.small)
-                    .digitalCrownRotation(detent: $kg, from: 0, through: W.imperial ? 1100 : 500, by: W.weightStep, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
+                tile(GymText.kg(kg), unit: W.weightUnit, field: .kg, value: $kg, step: W.weightStep, top: Self.topKg, small: fit.small)
                 tile("\(Int(reps))", unit: W.tr("opak.", "reps"), field: .reps, value: $reps, step: 1, top: 100, small: fit.small)
-                    .digitalCrownRotation(detent: $reps, from: 0, through: 100, by: 1, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
             }
+            .focusable(true)
+            .focused($crown)
+            .focusEffectDisabled()
+            .digitalCrownRotation(detent: crownValue, from: 0, through: selected == .kg ? Self.topKg : 100,
+                                  by: selected == .kg ? W.weightStep : 1, sensitivity: selected == .kg ? .medium : .low,
+                                  isContinuous: false, isHapticFeedbackEnabled: true)
             Button {
                 done(lift, in: gym)
             } label: {
@@ -268,8 +278,16 @@ struct GymSessionView: View {
         .buttonStyle(.plain)
     }
 
+    private static var topKg: Double { W.imperial ? 1100 : 500 }
+
+    /// What the crown turns: the selected tile's value.
+    private var crownValue: Binding<Double> {
+        Binding(get: { selected == .kg ? kg : reps },
+                set: { if selected == .kg { kg = $0 } else { reps = $0 } })
+    }
+
     private func tile(_ value: String, unit: String, field: Field, value number: Binding<Double>, step: Double, top: Double, small: Bool) -> some View {
-        let on = focus == field
+        let on = selected == field
         return VStack(spacing: 0) {
             Text(value).font(W.serif(small ? 22 : 28)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.6)
             Text(unit).font(.system(size: 10)).foregroundStyle(W.secondary)
@@ -278,10 +296,11 @@ struct GymSessionView: View {
         .padding(.vertical, small ? 1 : 2)
         .background(on ? W.green.opacity(0.18) : W.tile, in: RoundedRectangle(cornerRadius: 12))
         .overlay { RoundedRectangle(cornerRadius: 12).stroke(on ? W.green : .clear, lineWidth: 2) }
-        .focusable(true)
-        .focused($focus, equals: field)
-        .focusEffectDisabled()
-        .onTapGesture { focus = field }
+        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .onTapGesture {
+            selected = field
+            crown = true
+        }
         // VoiceOver: one element that a swipe up or down changes, as the crown does.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(field == .kg ? W.tr("Váha", "Weight") : W.tr("Opakování", "Reps"))
@@ -370,7 +389,9 @@ struct GymSessionView: View {
         row = lift.row
         kg = W.weight(lift.kg ?? 0)
         reps = Double(lift.reps ?? 8)
-        if focus == nil { focus = .kg }
+        // Each new set starts on the weight.
+        selected = .kg
+        crown = true
     }
 
     private func done(_ lift: WatchGym.Lift, in gym: WatchGym) {
