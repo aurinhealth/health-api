@@ -906,6 +906,12 @@ struct ExerciseCatalog: View {
             .scrollIndicators(.hidden)
             .padding(.top, 12)
 
+            // The rested muscles shown: a workout of them, the proposal straight away.
+            if rested, model.muscles?.restedFocus.isEmpty == false {
+                PrimaryButton(title: L10n.tr("Sestavit z odpočatých"), systemImage: "sparkles") { model.push(.gymRested) }
+                    .padding(.top, 12)
+            }
+
             PillToggle(title: "Jen s mým vybavením", subtitle: EquipmentView.summary(equipment), isOn: $mine)
                 .padding(.top, 12)
 
@@ -976,8 +982,11 @@ struct ExerciseCatalog: View {
     }
 
     /// The tired muscle behind the exercise's main muscle, nil when it is rested.
-    private func tired(_ ex: GymCatalogExercise) -> MuscleFatigue.Muscle? {
-        guard let data = model.muscles, let main = (ex.muscles ?? [:]).max(by: { $0.value < $1.value }), main.value >= 0.5 else { return nil }
+    private func tired(_ ex: GymCatalogExercise) -> MuscleFatigue.Muscle? { Self.tired(ex, model.muscles) }
+
+    /// The exercise's main muscle when it is not rested yet (Odpočaté leaves it out).
+    static func tired(_ ex: GymCatalogExercise, _ data: MuscleFatigue?) -> MuscleFatigue.Muscle? {
+        guard let data, let main = (ex.muscles ?? [:]).max(by: { $0.value < $1.value }), main.value >= 0.5 else { return nil }
         return data.tired(body: main.key)
     }
 

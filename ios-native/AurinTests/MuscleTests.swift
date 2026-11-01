@@ -27,6 +27,19 @@ final class MuscleTests: XCTestCase {
         XCTAssertNotNil(sample.figureColors["glutes"])
     }
 
+    func testRestedFocusLeavesTheTiredOut() {
+        let sample = DemoData.muscles
+        let focus = sample.restedFocus
+        XCTAssertFalse(focus.isEmpty)
+        XCTAssertLessThanOrEqual(focus.count, 5, "the server takes 1 to 5 muscles")
+        XCTAssertEqual(Set(focus).count, focus.count)
+        for id in focus {
+            XCTAssertNil(sample.tired(body: id), id)
+            XCTAssertTrue(BodyFigure.muscles.contains { $0.id == id }, id)
+        }
+        XCTAssertFalse(focus.contains("hips"), "the glutes are tired in the sample")
+    }
+
     func testFigurePathsStayInTheFigure() {
         for part in MuscleFigure.front + MuscleFigure.back + [(id: "skin", path: MuscleFigure.skin)] {
             let box = SVGPath.parse(part.path).boundingRect

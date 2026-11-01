@@ -139,8 +139,37 @@ extension GymDay {
             let value = letter(offset + 1) ?? "ABCDEFGHIJ".map(String.init).first { !used.contains($0) } ?? "A"
             mark(offset, value)
             mark(offset + 1, value)
+            write(list, rest)
+            evenSuperset(value)
+            return
         }
         write(list, rest)
+    }
+
+    /// The whole exercise out, its done sets too (Plan's swipe or Odebrat
+    /// cvik): added by mistake, it leaves nothing behind.
+    mutating func deleteExercise(at offset: Int) {
+        var (list, rest) = blocks
+        guard list.indices.contains(offset) else { return }
+        list.remove(at: offset)
+        // Its superset partner left alone is no superset any more.
+        func letter(_ i: Int) -> String? { ExerciseOrder.letter(list[i].first { $0.count > 12 }?[12].string) }
+        for i in list.indices {
+            guard let own = letter(i), list.indices.filter({ letter($0) == own }).count == 1 else { continue }
+            for r in list[i].indices where list[i][r].count > 12 { list[i][r][12] = .string("") }
+        }
+        write(list, rest)
+        balanceWarmups()
+    }
+
+    /// A superset goes round by round, so its exercises get the same number
+    /// of work sets: the shorter ones take sets up to the longest.
+    mutating func evenSuperset(_ letter: String) {
+        let group = exercises.indices.filter { ExerciseOrder.letter(exercises[$0].superset) == letter }
+        let most = group.map { exercises[$0].workCount }.max() ?? 0
+        for i in group {
+            for _ in 0..<max(0, most - exercises[i].workCount) { addSet(at: i) }
+        }
     }
 
     /// Joins the exercise with another one into a superset: the other moves
@@ -153,7 +182,6 @@ extension GymDay {
         moveExercise(from: other, to: offset + 1)
         toggleSuperset(at: other < offset ? offset - 1 : offset)
     }
-
 }
 
 struct GymTechnique: Decodable, Equatable {
