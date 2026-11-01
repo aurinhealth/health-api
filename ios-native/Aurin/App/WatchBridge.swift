@@ -143,7 +143,9 @@ final class WatchBridge: NSObject {
         Task { await updateAlarmBackup(alarm) }
         if let gym = gymContext { context[WatchGym.replyKey] = gym }
         guard !context.isEmpty else { return }
-        context[WatchSettings.contextKey] = Self.settings.encoded()
+        var settings = Self.settings
+        (settings.restSets, settings.restExercises) = Self.restSettings
+        context[WatchSettings.contextKey] = settings.encoded()
         if let signIn = Self.signIn()?.encoded() { context[WatchSession.contextKey] = signIn }
         try? session.updateApplicationContext(context)
         lastSent = Date()
@@ -302,6 +304,7 @@ extension WatchBridge: WCSessionDelegate {
         let rated = (message[WatchGym.ratedKey] as? Data).flatMap(WatchGym.Rated.decode)
         let change = (message[WatchGym.changeKey] as? Data).flatMap(WatchGym.Change.decode)
         let options = (message[WatchGym.optionsKey] as? Data).flatMap(WatchGym.OptionsRequest.decode)
+        let sheet = (message[WatchGym.sheetKey] as? Data).flatMap(WatchGym.Sheet.decode)
         let water = message[WatchSnapshot.waterKey] as? Int
         let drinkKind = message[WatchSnapshot.drinkKindKey] as? String ?? "water"
         let alarmChange = (message[WatchSnapshot.AlarmChange.key] as? Data).flatMap(WatchSnapshot.AlarmChange.decode)
@@ -363,6 +366,11 @@ extension WatchBridge: WCSessionDelegate {
             }
             if let water {
                 await addWater(ml: water, kind: drinkKind)
+                replyHandler(["ok": true])
+                return
+            }
+            if let sheet {
+                await applyGym(sheet: sheet)
                 replyHandler(["ok": true])
                 return
             }

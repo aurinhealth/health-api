@@ -113,7 +113,7 @@ struct GymSessionView: View {
             .alert(W.tr("iPhone je mimo dosah", "iPhone out of reach"), isPresented: $store.failedChange) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text(W.tr("Změnu plánu udělá iPhone. Měj ho u sebe a zkus to znovu.", "Your iPhone makes plan changes. Keep it close and try again."))
+                Text(W.tr("Tuhle změnu udělá iPhone. Měj ho u sebe a zkus to znovu.", "Your iPhone makes this change. Keep it close and try again."))
             }
         }
         .task {
@@ -615,6 +615,7 @@ struct GymSessionView: View {
     /// here, the iPhone hears of it.
     private func end(onPhone: Bool) {
         let save = (store.gym?.setsDone ?? 0) > 0
+        if !onPhone { store.finished(at: Date()) }
         Task {
             await workout.finish(save: save)
             // After the end here, so the iPhone's answer (gymEnd) finds nothing running.

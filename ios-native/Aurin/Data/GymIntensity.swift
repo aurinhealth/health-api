@@ -1,28 +1,7 @@
 import SwiftUI
 
-/// How hard a set is meant to be or was, as one letter (column 14 of the gym
-/// sheet, src/gym-intensity.js). The letters are the same in every language;
-/// the names under them follow the app's.
-enum GymIntensity {
-    static let letters = ["W", "T", "E", "M", "H", "F", "PR", "D"]
-
-    /// The letter in a cell, or nil.
-    static func letter(_ value: String?) -> String? {
-        let v = (value ?? "").trimmingCharacters(in: .whitespaces).uppercased()
-        return letters.contains(v) ? v : nil
-    }
-
-    /// The RPE the letter is saved as for the next weights (src/gym-intensity.js).
-    static func rpe(_ letter: String) -> String? {
-        ["T": "5", "E": "6", "M": "7.5", "H": "9", "F": "10", "PR": "9", "D": "10"][letter]
-    }
-
-    /// A set saved before the letters ("Jak to šlo?", RPE 6–10).
-    static func from(rpe: String?) -> String? {
-        guard let n = LiftWeight.number(rpe ?? ""), n > 0 else { return nil }
-        return n >= 10 ? "F" : n >= 8 ? "H" : n >= 7 ? "M" : n >= 6 ? "E" : "T"
-    }
-
+/// The names, hints and colours of the letters (WatchShared/GymSheet.swift).
+extension GymIntensity {
     static func name(_ letter: String) -> String {
         switch letter {
         case "W": return L10n.tr("Rozcvička")
@@ -60,13 +39,6 @@ enum GymIntensity {
         case "PR": return Palette.gold
         default: return Palette.pink
         }
-    }
-
-    /// A drop set's weight: about a fifth lighter, to the half kilo.
-    static func dropKg(_ kg: String?) -> String {
-        guard let value = LiftWeight.number(kg ?? ""), value > 0 else { return "" }
-        let drop = (value * 0.8 * 2).rounded() / 2
-        return drop.rounded() == drop ? String(Int(drop)) : String(drop)
     }
 }
 

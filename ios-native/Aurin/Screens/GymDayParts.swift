@@ -23,6 +23,14 @@ enum GymCardio {
         }
     }
 
+    /// "Bez limitu" or "12 min".
+    static func length(_ minutes: Int) -> String {
+        minutes > 0 ? "\(minutes) min" : L10n.tr("Bez limitu")
+    }
+
+    /// The favourite times before anyone chose them (src/stretching.js CARDIO_FAVOURITES).
+    static let favourites = [10, 15, 20]
+
     static func symbol(_ id: String) -> String {
         switch id {
         case "treadmill": return "figure.run"
@@ -57,6 +65,7 @@ struct GymDayParts: Codable, Equatable {
     var cardio: [String: Choice]
     var routines: [String: Routine]? = nil
 
+    /// The machine and the minutes; 0 minutes = no limit (a stopwatch).
     struct Choice: Codable, Equatable {
         var type: String
         var minutes: Int
@@ -72,16 +81,19 @@ struct GymDayParts: Codable, Equatable {
     static let storageKey = "gym.day.parts"
 
     /// The plan's parts: the cardio the setup chose is on, the other one off, and
-    /// the warm-up and the stretching off when Posilovna turned them off.
+    /// the warm-up and the stretching off when Posilovna turned them off. The
+    /// cardio runs as long as Nastavení → Posilovna → Délka kardia says (no limit
+    /// by default, also for a plan made before it).
     static func defaults(_ day: GymDay) -> GymDayParts {
         let plan = day.cardio
         let type = plan?.type ?? "exercise_bike"
+        let length = max(0, plan?.length ?? 0)
         var off: [GymDayPart] = day.routinesOff.compactMap { $0 == "warmup" ? .warmup : $0 == "stretching" ? .stretching : nil }
         if plan?.start == nil { off.append(.cardioStart) }
         if plan?.end == nil { off.append(.cardioEnd) }
         return GymDayParts(order: GymDayPart.allCases, off: off,
-                           cardio: [GymDayPart.cardioStart.rawValue: Choice(type: type, minutes: plan?.start ?? 10),
-                                    GymDayPart.cardioEnd.rawValue: Choice(type: type, minutes: plan?.end ?? 10)])
+                           cardio: [GymDayPart.cardioStart.rawValue: Choice(type: type, minutes: length),
+                                    GymDayPart.cardioEnd.rawValue: Choice(type: type, minutes: length)])
     }
 
     /// The day's saved choices, else the plan's.
@@ -116,7 +128,7 @@ struct GymDayParts: Codable, Equatable {
     func isOn(_ part: GymDayPart) -> Bool { part == .exercises || !off.contains(part) }
 
     func choice(_ part: GymDayPart) -> Choice {
-        cardio[part.rawValue] ?? Choice(type: "exercise_bike", minutes: 10)
+        cardio[part.rawValue] ?? Choice(type: "exercise_bike", minutes: 0)
     }
 
     /// The parts the day has (the warm-up and the stretching only when the plan made them).
@@ -152,19 +164,19 @@ struct GymDayParts: Codable, Equatable {
         case .cardioStart, .cardioEnd:
             let c = choice(part)
             let item = GymStretching.Item(id: part == .cardioStart ? "cardio-start" : "cardio-end", name: GymCardio.name(c.type),
-                                          seconds: c.minutes * 60, sides: false,
+                                          seconds: max(0, c.minutes) * 60, sides: false,
                                           steps: [L10n.tr("Tempo, při kterém ještě zvládneš mluvit.")])
-            return GymStretching(minutes: c.minutes, items: [item])
+            return GymStretching(minutes: max(0, c.minutes), items: [item])
         }
     }
 
     func minutes(_ part: GymDayPart, day: GymDay) -> Int { routine(part, day: day)?.minutes ?? 0 }
 
-    /// "Automaticky · 6 min", "Legs · 7 min", "Rotoped · 10 min".
+    /// "Automaticky · 6 min", "Legs · 7 min", "Rotoped · 10 min", "Rotoped · Bez limitu".
     func subtitle(_ part: GymDayPart, day: GymDay) -> String {
         if part.isCardio {
             let c = choice(part)
-            return GymCardio.name(c.type) + " · \(c.minutes) min"
+            return GymCardio.name(c.type) + " · " + GymCardio.length(c.minutes)
         }
         let name = routine(part, day: day)?.name?.nilIfBlank ?? L10n.tr("Automaticky")
         return name + " · \(minutes(part, day: day)) min"
@@ -327,14 +339,17 @@ struct GymPartsCard: View {
     private func color(_ part: GymDayPart) -> Color { part == .exercises ? Palette.amberBar : part.kind.color }
 }
 
-/// Kardio: the machine (the active place's, and the jump rope) and the minutes.
+/// Kardio: the machine (the active place's, and the jump rope) and the time:
+/// no limit (a stopwatch) or 1–60 min, the favourite times as chips.
 struct GymCardioSheet: View {
     let choice: GymDayParts.Choice
     let options: [GymPreferences.CardioOption]
     var onDone: (GymDayParts.Choice) -> Void
+    @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var type = "exercise_bike"
-    @State private var minutes = 10
+    @State private var minutes = 0
+    @State private var favourites = GymCardio.favourites
 
     var body: some View {
         NavigationStack {
@@ -359,14 +374,11 @@ struct GymCardioSheet: View {
                         }
                     }
                     .cardSurface(cornerRadius: 22)
-                    Stepper(value: $minutes, in: 5...60, step: 5) {
-                        HStack {
-                            Text("Délka").font(.body).foregroundStyle(Palette.ink)
-                            Spacer()
-                            Text(verbatim: "\(minutes) min").font(Typo.bodyStrong).foregroundStyle(Palette.ink).monospacedDigit()
-                        }
+                    VStack(alignment: .leading, spacing: 12) {
+                        CardioLengthSlider(minutes: $minutes, title: "Délka")
+                        CardioTimeChips(favourites: favourites, minutes: $minutes)
                     }
-                    .padding(.horizontal, 16).frame(minHeight: 52)
+                    .padding(16)
                     .cardSurface(cornerRadius: 22)
                 }
                 .padding(20)
@@ -382,7 +394,11 @@ struct GymCardioSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
-        .onAppear { type = choice.type; minutes = choice.minutes }
+        .onAppear { type = choice.type; minutes = max(0, min(60, choice.minutes)) }
+        .task {
+            guard !model.demo, let saved = try? await model.api.gymPreferences().cardioFavourites else { return }
+            favourites = saved
+        }
     }
 
     /// The place's machines (all of them in the sample day or until they load), the chosen one kept.

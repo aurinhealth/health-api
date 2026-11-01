@@ -16,6 +16,41 @@ struct FoodSnapshot: Decodable, Equatable {
     var nutrients: [NutrientItem]? = nil
     /// Nastavení → Výživa → Strava as it applies today (src/diet.js).
     var diet: Diet? = nil
+    /// The day's target in its parts: base, workouts done and planned
+    /// (targetParts in src/app-food.js). None with an own calorie goal.
+    var targetParts: TargetParts? = nil
+
+    struct TargetParts: Decodable, Equatable {
+        let base: Double
+        let workouts: Double
+        let planned: Double
+        /// The share of a workout's burn the target takes (0.7).
+        var coverage: Double? = nil
+        var lines: Lines? = nil
+        var items: [Item]? = nil
+
+        /// The base line by line; they add up to `base`.
+        struct Lines: Decodable, Equatable {
+            let restingBurn: Double
+            let movement: Double
+            /// The weight goal (negative when losing weight).
+            let goal: Double
+            /// What the safe minimum holds the base up by.
+            let minimum: Double
+            /// What the watch measured above a usual day.
+            let moreActive: Double
+        }
+
+        /// One workout: "done" or "planned", what it burns and what it adds.
+        struct Item: Decodable, Equatable {
+            let kind: String
+            var type: String? = nil
+            var name: String? = nil
+            var minutes: Double? = nil
+            let kcal: Double
+            let counted: Double
+        }
+    }
 
     struct Amount: Decodable, Equatable {
         let eaten: Double?
