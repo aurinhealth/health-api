@@ -583,7 +583,11 @@ struct TrainingModeView: View {
                             Image(systemName: "dumbbell").scaledFont(15, cap: .denseCap).foregroundStyle(Palette.secondary)
                                 .frame(width: 34, height: 34).background(Palette.track, in: Circle())
                             VStack(alignment: .leading, spacing: 1) {
-                                Text("Další").font(Typo.caption).foregroundStyle(Palette.muted)
+                                HStack(spacing: 8) {
+                                    // "Next", not the "More" the shared Další key reads in English.
+                                    Text(verbatim: L10n.isEnglish ? "Next" : "Další").font(Typo.caption).foregroundStyle(Palette.muted)
+                                    if let letter = ExerciseOrder.letter(next.superset) { GymTag.superset(letter) }
+                                }
                                 Text(next.name)
                                     .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
                                 Text(nextLoad(next)).font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(1)
@@ -670,7 +674,10 @@ struct TrainingModeView: View {
             if let restStart { LiveHeartRecovery(live: live, since: restStart) }
             if let set {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Teď").font(Typo.caption).foregroundStyle(Palette.muted)
+                    HStack(spacing: 8) {
+                        Text("Teď").font(Typo.caption).foregroundStyle(Palette.muted)
+                        if let letter = ExerciseOrder.letter(exercise.superset) { GymTag.superset(letter) }
+                    }
                     HStack(alignment: .firstTextBaseline) {
                         Text(nowLine(exercise, set))
                             .font(.body.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
