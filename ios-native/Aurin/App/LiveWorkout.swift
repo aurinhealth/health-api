@@ -225,10 +225,10 @@ final class LiveWorkout: NSObject {
         return WatchBridge.settings.openOnWatch && state.paired && state.installed
     }
 
-    /// The watch's first reading (WatchGym.Live) within 20 s, else this
+    /// The watch's first reading (WatchGym.Live) within 30 s, else this
     /// iPhone records the workout itself.
     private func sessionUnlessWatch(at begun: Date) async {
-        for _ in 0..<20 {
+        for _ in 0..<30 {
             try? await Task.sleep(for: .seconds(1))
             guard start == begun, !onWatch else { return }
         }
@@ -243,7 +243,20 @@ final class LiveWorkout: NSObject {
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .traditionalStrengthTraining
         configuration.locationType = .indoor
-        store.startWatchApp(with: configuration) { _, _ in }
+        store.startWatchApp(with: configuration) { ok, _ in
+            guard !ok else { return }
+            // Not launched (the watch asleep or locked): once more a little later.
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(3))
+                guard LiveWorkout.shared.running, !LiveWorkout.shared.onWatch else { return }
+                let again = HKWorkoutConfiguration()
+                again.activityType = .traditionalStrengthTraining
+                again.locationType = .indoor
+                HKHealthStore().startWatchApp(with: again) { _, _ in }
+            }
+        }
+        // A watch app already running opens the gym at once.
+        WatchBridge.shared.openWatchGym()
     }
 
     /// A reading from the watch's workout (WatchBridge): the watch measures,
@@ -260,6 +273,15 @@ final class LiveWorkout: NSObject {
             Task { await begin(since: live.start, weightKg: weight) }
         }
         watchStart = live.start
+        if !onWatch, #available(iOS 26.0, *) {
+            if let session = session as? HKWorkoutSession {
+                // This iPhone started its own workout before it heard of the watch's:
+                // it goes, so the system doesn't end the watch's and its heart rate.
+                (builder as? HKLiveWorkoutBuilder)?.discardWorkout()
+                session.end()
+                self.session = nil; builder = nil
+            }
+        }
         onWatch = true
         if sensor.liveBpm == nil, let bpm = live.heartRate, bpm > 0 {
             note(bpm)
