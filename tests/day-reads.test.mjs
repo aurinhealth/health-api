@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
-import { readDaysTogether, dayRows, dayCalories } from "../src/day-reads.js";
+import { readDaysTogether, readDay } from "../src/day-reads.js";
 
 const schema = readFileSync(new URL("../staging/schema.sql", import.meta.url), "utf8");
 const shift = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
@@ -54,63 +54,73 @@ test("a week read together gives every day exactly the rows of its own queries",
   const done = readDaysTogether(db, USER, START, END, dayStart);
   for (let k = 0; k < 7; k++) {
     const d = shift(START, k), next = shift(d, 1);
-    assert.deepEqual(await dayCalories(db, USER, d, next), await OWN.calories(raw, d), "calories " + d);
-    assert.deepEqual(await dayRows(db, USER, "planned", d, next), { results: (await OWN.planned(raw, d, next)).results }, "planned " + d);
+    assert.deepEqual((await readDay(db, USER, "calories", d, next)).results, [await OWN.calories(raw, d)].filter(Boolean), "calories " + d);
+    assert.deepEqual((await readDay(db, USER, "planned", d, next)).results, (await OWN.planned(raw, d, next)).results, "planned " + d);
     // nearbyRideContext: the two days after the next.
-    assert.deepEqual(await dayRows(db, USER, "planned", next, shift(d, 3)), { results: (await OWN.planned(raw, next, shift(d, 3))).results }, "ride context " + d);
-    assert.deepEqual(await dayRows(db, USER, "activities", d, next), { results: (await OWN.activities(raw, d, next)).results }, "activities " + d);
-    assert.deepEqual(await dayRows(db, USER, "exercises", dayStart(d), dayStart(next)), { results: (await OWN.exercises(raw, dayStart(d), dayStart(next))).results }, "exercises " + d);
-    assert.deepEqual(await dayRows(db, USER, "food", d), { results: (await OWN.food(raw, d)).results }, "food " + d);
+    assert.deepEqual((await readDay(db, USER, "planned", next, shift(d, 3))).results, (await OWN.planned(raw, next, shift(d, 3))).results, "ride context " + d);
+    assert.deepEqual((await readDay(db, USER, "activities", d, next)).results, (await OWN.activities(raw, d, next)).results, "activities " + d);
+    assert.deepEqual((await readDay(db, USER, "exercises", dayStart(d), dayStart(next))).results, (await OWN.exercises(raw, dayStart(d), dayStart(next))).results, "exercises " + d);
+    assert.deepEqual((await readDay(db, USER, "food", d)).results, (await OWN.food(raw, d)).results, "food " + d);
   }
   // One read per kind for the whole week.
   assert.equal(db.log.length, 5);
+  // Without a week, each day asks its own query and gets the same rows.
   done();
-  assert.equal(await dayRows(db, USER, "food", START), null, "after the week the day asks for its own");
+  db.log.length = 0;
+  for (let k = 0; k < 7; k++) {
+    const d = shift(START, k), next = shift(d, 1);
+    assert.deepEqual((await readDay(db, USER, "calories", d, next)).results, [await OWN.calories(raw, d)].filter(Boolean));
+    assert.deepEqual((await readDay(db, USER, "activities", d, next)).results, (await OWN.activities(raw, d, next)).results);
+    assert.deepEqual((await readDay(db, USER, "food", d)).results, (await OWN.food(raw, d)).results);
+  }
+  assert.equal(db.log.length, 21);
 });
 
-test("a day outside the week, another user or a wrong kind is not served", async () => {
-  const db = seeded();
+// The day's own query (not the week's): one more query in the log.
+const ownQuery = async (db, ...args) => { const before = db.log.length; const r = await readDay(db, ...args); return { own: db.log.length - before === 1 && !/UNION ALL|consumed_date >=/.test(db.log.at(-1)), r }; };
+
+test("a day outside the week or another user asks its own query", async () => {
+  const raw = seeded(), db = counted(raw);
   const done = readDaysTogether(db, USER, START, END, dayStart);
-  assert.equal(await dayRows(db, USER, "food", shift(START, -1)), null);
-  assert.equal(await dayRows(db, USER, "food", END), null);
-  assert.equal(await dayRows(db, USER, "activities", shift(END, -1), shift(END, 1)), null);
-  // Planned workouts reach two days past the week (nearbyRideContext of the last day), not three.
-  assert.notEqual(await dayRows(db, USER, "planned", shift(END, 1), shift(END, 2)), null);
-  assert.equal(await dayRows(db, USER, "planned", shift(END, 2), shift(END, 3)), null);
-  assert.equal(await dayCalories(db, USER, END, shift(END, 1)), undefined);
-  assert.equal(await dayRows(db, USER + 1, "food", START), null);
-  assert.equal(await dayRows(db, USER, "calories", START, END), null);
-  assert.equal(await dayRows(db, USER, "steps", START, END), null);
-  assert.equal(await dayRows(db, USER, "food", "not a date"), null);
+  await readDay(db, USER, "food", START); await readDay(db, USER, "activities", START, shift(START, 1)); await readDay(db, USER, "planned", START, shift(START, 1)); await readDay(db, USER, "calories", START, shift(START, 1));
+  for (const args of [[USER, "food", shift(START, -1)], [USER, "food", END], [USER, "activities", shift(END, -1), shift(END, 1)],
+    [USER, "planned", shift(END, 2), shift(END, 3)], [USER, "calories", END, shift(END, 1)], [USER, "calories", START, shift(START, 2)], [USER + 1, "food", START]]) {
+    const { own, r } = await ownQuery(db, ...args);
+    assert.ok(own, JSON.stringify(args));
+    assert.ok(Array.isArray(r.results));
+  }
+  // Planned workouts reach two days past the week (nearbyRideContext of the last day).
+  assert.equal((await ownQuery(db, USER, "planned", shift(END, 1), shift(END, 2))).own, false);
+  await assert.rejects(readDay(db, USER, "steps", START, END));
   done();
 });
 
 test("a failed week read leaves each day to its own query, and is asked again", async () => {
   const raw = seeded();
   let fail = true;
-  const db = { prepare: sql => { const s = raw.prepare(sql); return { bind: (...v) => ({ all: () => fail ? Promise.reject(new Error("D1 reset")) : s.bind(...v).all() }) }; } };
+  const db = { prepare: sql => { const s = raw.prepare(sql); return { bind: (...v) => ({ all: () => fail && /consumed_date >=/.test(sql) ? Promise.reject(new Error("D1 reset")) : s.bind(...v).all() }) }; } };
   const done = readDaysTogether(db, USER, START, END, dayStart);
-  assert.equal(await dayRows(db, USER, "food", START), null);
+  assert.deepEqual((await readDay(db, USER, "food", START)).results, (await OWN.food(raw, START)).results);
   fail = false;
-  assert.deepEqual(await dayRows(db, USER, "food", START), { results: (await OWN.food(raw, START)).results });
+  assert.deepEqual((await readDay(db, USER, "food", shift(START, 1))).results, (await OWN.food(raw, shift(START, 1))).results);
   done();
 });
 
 test("rows handed out are copies", async () => {
   const db = seeded();
   const done = readDaysTogether(db, USER, START, END, dayStart);
-  const first = await dayRows(db, USER, "activities", START, shift(START, 1));
+  const first = await readDay(db, USER, "activities", START, shift(START, 1));
   first.results[0].payload_json = "changed";
   first.results.pop();
-  const again = await dayRows(db, USER, "activities", START, shift(START, 1));
-  assert.deepEqual(again, { results: (await OWN.activities(db, START, shift(START, 1))).results });
+  const again = await readDay(db, USER, "activities", START, shift(START, 1));
+  assert.deepEqual(again.results, (await OWN.activities(db, START, shift(START, 1))).results);
   done();
 });
 
 test("a bad week or time zone reads nothing together", async () => {
-  const db = seeded();
+  const raw = seeded(), db = counted(raw);
   for (const done of [readDaysTogether(db, USER, END, START, dayStart), readDaysTogether(db, USER, "x", END, dayStart), readDaysTogether(db, USER, START, END, () => { throw new Error("zone"); }), readDaysTogether(null, USER, START, END, dayStart)]) {
-    assert.equal(await dayRows(db, USER, "food", START), null);
+    assert.equal((await ownQuery(db, USER, "food", START)).own, true);
     done();
   }
 });
