@@ -29,7 +29,7 @@ final class GymSwapTests: XCTestCase {
     func testWithoutAnEstimateTheWeightsAreEmpty() {
         var d = day([row("WORK", "Cable fly", "1", "20"), row("DROP", "Cable fly", "1", "16")])
         d.replace(exercise: "Cable fly", with: "Machine chest press")
-        XCTAssertEqual(d.exercises[0].sets.map(\.plannedKg), ["", ""])
+        XCTAssertEqual(d.exercises[0].sets.map { $0.plannedKg ?? "" }, ["", ""])
     }
 
     func testDoneSetsKeepTheirExercise() {
