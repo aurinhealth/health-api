@@ -524,6 +524,9 @@ struct GymExerciseSearch: View {
     var title = "Přidat cvik"
     /// Over the title: "Místo cviku Cable rear delt fly".
     var eyebrow: String? = nil
+    /// "Vybrat jiný cvik": the exercises already in the workout are left out,
+    /// a swap to one of them would join its sets to the other one's.
+    var hideUsed = false
     let pick: (String) -> Void
     @State private var query = ""
     @State private var muscle: String?
@@ -544,7 +547,7 @@ struct GymExerciseSearch: View {
             return words.allSatisfy { folded.contains($0) }
         }
         var out: [Item] = []
-        var seen = Set<String>()
+        var seen: Set<String> = hideUsed ? used : []
         for exercise in history.recent(before: date) {
             guard !seen.contains(exercise.name), matches(exercise.name),
                   let last = exercise.sessions.first(where: { $0.date < date }) else { continue }

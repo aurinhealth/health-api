@@ -252,14 +252,22 @@ struct GymDay: Decodable, Equatable {
 
     /// Swaps an exercise for another in the sets not done yet.
     /// With kg (the load estimated for the new exercise) its sets take it;
-    /// a warm-up's weight is left empty.
+    /// a drop set a fifth less than the row before it (as D adds one), a
+    /// warm-up's weight is left empty.
     mutating func replace(exercise: String, with name: String, kg: String? = nil) {
+        var before = kg ?? ""
         for index in values.indices where index >= Self.firstSetRow {
             guard values[index].count > 1, values[index][1].string == exercise else { continue }
             if values[index].count > 8, Self.isDone(values[index][8].string) { continue }
             values[index][1] = .string(name)
-            let warmup = (cell(values[index], 0) ?? "").uppercased() == "WARMUP"
-            set(row: index, column: 3, warmup ? "" : kg ?? "")
+            let type = (cell(values[index], 0) ?? "").uppercased()
+            if type == "DROP" {
+                before = GymIntensity.dropKg(before)
+                set(row: index, column: 3, before)
+            } else {
+                before = kg ?? ""
+                set(row: index, column: 3, type == "WARMUP" ? "" : before)
+            }
         }
     }
 

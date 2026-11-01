@@ -37,8 +37,8 @@ enum GymSessionMath {
 
     /// Short of the plan's reps, or to failure on a lighter plan (F on M):
     /// the weight the estimated max allows for the plan's reps and letter, to
-    /// the nearest 2.5 kg. Well over the reps, or far easier than planned (E on
-    /// H): one 2.5 kg step up, but never when the athlete rated the set harder
+    /// the nearest 2.5 kg. Well over the reps, or easier than planned (E on M
+    /// or H): one 2.5 kg step up (more when far too light), but never when the athlete rated the set harder
     /// than the next one is planned (15 reps at M before an E set): the letter
     /// says more than the reps. Otherwise nil: the next set copies this one.
     static func adjustment(_ set: GymSet, after before: GymSet) -> Adjustment? {
@@ -56,8 +56,16 @@ enum GymSessionMath {
             guard fits < kg, fits > 0 else { return nil }
             return Adjustment(kg: GymCoach.kgText(fits), lighter: true)
         }
-        if reserve >= planned, done >= Double(range.hi + 2) || (done >= Double(range.hi) && reserve >= planned + 2) {
-            return Adjustment(kg: GymCoach.kgText(GymCoach.roundLoad(kg + GymCoach.step)), lighter: false)
+        // Rated easy (E or T) before a set planned at M or harder: the weight
+        // was too light, also on a first try of an exercise, where the plan's
+        // weight is only a guess or there is none.
+        let easy = reserve >= 4 && planned <= 2.5
+        if reserve >= planned, done >= Double(range.hi + 2) || (done >= Double(range.hi) && (reserve >= planned + 2 || easy)) {
+            // At least one step; far too light, the weight the estimated max
+            // allows for the top of the range, by at most a quarter more.
+            let best = kg * (1 + (done + reserve) / 30)
+            let fits = GymCoach.roundLoad(min(best / (1 + (Double(range.hi) + planned) / 30), kg * 1.25))
+            return Adjustment(kg: GymCoach.kgText(max(GymCoach.roundLoad(kg + GymCoach.step), fits)), lighter: false)
         }
         return nil
     }
