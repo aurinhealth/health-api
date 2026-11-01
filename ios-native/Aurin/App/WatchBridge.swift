@@ -312,6 +312,7 @@ extension WatchBridge: WCSessionDelegate {
         let live = (message[WatchGym.liveKey] as? Data).flatMap(WatchGym.Live.decode)
         let gymEnded = message[WatchGym.watchEndKey] as? Bool == true
         let rest = (message[WatchGym.restKey] as? Data).flatMap(WatchGym.Rest.decode)
+        let draft = (message[WatchGym.draftKey] as? Data).flatMap(WatchGym.Draft.decode)
         let plan = (message[WatchPlan.requestKey] as? Data).flatMap { try? JSONDecoder().decode(WatchPlan.Request.self, from: $0) }
         Task { @MainActor in
             if let plan {
@@ -331,6 +332,11 @@ extension WatchBridge: WCSessionDelegate {
             }
             if let rest {
                 NotificationCenter.default.post(name: .watchRest, object: rest)
+                replyHandler(["ok": true])
+                return
+            }
+            if let draft {
+                NotificationCenter.default.post(name: .watchDraft, object: draft)
                 replyHandler(["ok": true])
                 return
             }

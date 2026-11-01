@@ -193,6 +193,15 @@ struct GymSessionView: View {
         .defaultFocus($crown, true)
         .onAppear { load(lift) }
         .onChange(of: lift.row) { _, _ in load(lift) }
+        // The weight and reps the same on the iPhone at once, both ways.
+        .onChange(of: kg) { _, _ in sendDraft(gym) }
+        .onChange(of: reps) { _, _ in sendDraft(gym) }
+        .onChange(of: store.phoneDraft) { _, draft in
+            guard let draft, draft.date == gym.date, draft.row == row else { return }
+            let shown = W.weight(draft.kg)
+            if abs(shown - kg) >= 0.05 { kg = shown }
+            if Double(draft.reps) != reps { reps = Double(draft.reps) }
+        }
     }
 
     private func setStack(_ gym: WatchGym, _ lift: WatchGym.Lift, _ ex: WatchGym.Exercise, _ e: Int, _ fit: Fit) -> some View {
@@ -221,7 +230,7 @@ struct GymSessionView: View {
             // `kg` holds the weight as shown, in pounds with imperial units.
             HStack(spacing: 6) {
                 tile(GymText.kg(kg), unit: W.weightUnit, field: .kg, value: $kg, step: W.weightStep, top: Self.topKg, small: fit.small)
-                tile("\(Int(reps))", unit: W.tr("opak.", "reps"), field: .reps, value: $reps, step: 1, top: 100, small: fit.small)
+                tile("\(Int(reps))", unit: Self.repsUnit(lift.plannedReps), field: .reps, value: $reps, step: 1, top: 100, small: fit.small)
             }
             .focusable(true)
             .focused($crown)
@@ -279,6 +288,15 @@ struct GymSessionView: View {
     }
 
     private static var topKg: Double { W.imperial ? 1100 : 500 }
+
+    /// "reps", or with the plan's range as the iPhone shows it: "8–12 reps".
+    static func repsUnit(_ planned: String?) -> String {
+        let unit = W.tr("opak.", "reps")
+        guard let planned = planned?.trimmingCharacters(in: .whitespaces), !planned.isEmpty else { return unit }
+        let range = planned.replacingOccurrences(of: "-", with: "–").replacingOccurrences(of: " ", with: "")
+        guard range.contains("–") else { return unit }
+        return range + " " + unit
+    }
 
     /// What the crown turns: the selected tile's value.
     private var crownValue: Binding<Double> {
@@ -382,6 +400,12 @@ struct GymSessionView: View {
         .padding(.horizontal, 7)
         .padding(.vertical, small ? 2 : 3)
         .background(W.tile, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    /// The set at hand as it is now, to the iPhone; not what came from it.
+    private func sendDraft(_ gym: WatchGym) {
+        guard let row else { return }
+        store.sendDraft(WatchGym.Draft(date: gym.date, row: row, kg: W.kg(kg), reps: Int(reps)))
     }
 
     private func load(_ lift: WatchGym.Lift) {

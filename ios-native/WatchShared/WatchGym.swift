@@ -80,6 +80,26 @@ struct WatchGym: Codable, Equatable, Sendable {
         }
     }
 
+    /// The weight and reps of the set at hand while they are being set, before
+    /// Set done: the other device shows the same at once. Sent only while in
+    /// reach (an old draft is no use later).
+    struct Draft: Codable, Equatable, Sendable {
+        var date: String
+        var row: Int
+        /// In kg.
+        var kg: Double
+        var reps: Int
+
+        func encoded() -> Data? { try? JSONEncoder().encode(self) }
+        static func decode(_ data: Data) -> Draft? { try? JSONDecoder().decode(Draft.self, from: data) }
+
+        /// The same set at the same numbers (an echo of one just received).
+        func same(_ other: Draft?) -> Bool {
+            guard let other else { return false }
+            return other.date == date && other.row == row && abs(other.kg - kg) < 0.05 && other.reps == reps
+        }
+    }
+
     /// A change of the plan from the watch (the menu under ≡); the iPhone
     /// writes it into the sheet and answers with the new plan.
     struct Change: Codable, Equatable, Sendable {
@@ -125,6 +145,8 @@ struct WatchGym: Codable, Equatable, Sendable {
     /// Training mode started on the iPhone: a watch app that is running opens the gym
     /// (besides HKHealthStore.startWatchApp, which fails quietly with the watch locked or asleep).
     static let openKey = "gymOpen"
+    /// WatchGym.Draft, both ways.
+    static let draftKey = "gymDraft"
     /// Watch → iPhone: the gym finished on the watch, Training mode ends too.
     static let watchEndKey = "gymWatchEnd"
     /// Both ways: the rest between sets (Rest).
