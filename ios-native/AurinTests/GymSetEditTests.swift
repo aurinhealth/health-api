@@ -82,6 +82,21 @@ final class GymSetEditTests: XCTestCase {
         XCTAssertEqual(e.exercises.map(\.name), ["Row"])
     }
 
+    func testDeletingAnExerciseTakesItsDoneSetsToo() {
+        var d = day([row("WORK", "Standing Dumbbell Press", "1", "17,5", done: true), row("WORK", "Row", "1", "40")])
+        d.deleteExercise(at: 0)
+        XCTAssertEqual(d.exercises.map(\.name), ["Row"])
+        d.deleteExercise(at: 0)
+        XCTAssertTrue(d.exercises.isEmpty)
+        // A superset partner left alone is no superset any more.
+        var p = day([row("WORK", "Curl", "1", "12"), row("WORK", "Dips", "1", ""), row("WORK", "Row", "1", "40")])
+        p.toggleSuperset(at: 0)
+        XCTAssertNotNil(ExerciseOrder.letter(p.exercises[1].superset))
+        p.deleteExercise(at: 0)
+        XCTAssertEqual(p.exercises.map(\.name), ["Dips", "Row"])
+        XCTAssertNil(ExerciseOrder.letter(p.exercises[0].superset))
+    }
+
     func testWarmupsFollowTheOrder() {
         var d = day([row("WARMUP", "Leg press", "1", "60"), row("WARMUP", "Leg press", "2", "95"), row("WARMUP", "Leg press", "3", "115"),
                      row("WORK", "Leg press", "1", "145"),
