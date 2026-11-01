@@ -626,6 +626,7 @@
 "Server odpověděl chybou %@." = "The server returned error %@.";
 "Sestavit posilovnu" = "Build a gym workout";
 "Sestavit trénink" = "Build workout";
+"Sestavit z odpočatých" = "Build workout from rested";
 "Sestavuji…" = "Building…";
 "Seznam" = "List";
 "Silový trénink" = "Strength training";
