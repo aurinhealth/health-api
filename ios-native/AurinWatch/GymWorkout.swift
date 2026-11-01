@@ -33,7 +33,7 @@ final class GymWorkout: NSObject, ObservableObject {
         // The iPhone hears of the start at once (Training mode opens there),
         // not only with the first heart rate.
         // Only with a HealthKit workout here: the iPhone then leaves Apple Health to it.
-        defer { if session != nil { sendLive(force: true) } }
+        defer { if session != nil { announceUntilHeard() } }
         guard session == nil, HKHealthStore.isHealthDataAvailable() else {
             if start == nil { start = Date() }
             return
@@ -138,6 +138,14 @@ final class GymWorkout: NSObject, ObservableObject {
         pausedAt = nil
         pausedTotal = 0
         noHealth = false
+        announced = false
+        if queued, WCSession.isSupported() {
+            // A start still waiting for the iPhone would open a workout that is over.
+            for transfer in WCSession.default.outstandingUserInfoTransfers where transfer.userInfo[WatchGym.liveKey] != nil {
+                transfer.cancel()
+            }
+        }
+        queued = false
     }
 
     /// What the builder measured so far, read off its statistics.
@@ -158,13 +166,49 @@ final class GymWorkout: NSObject, ObservableObject {
 
     /// Every few seconds to Training mode on the iPhone, which then shows these
     /// and leaves Apple Health to this workout (WatchGym.Live).
+    /// Until the iPhone has heard of this workout once, each try goes out (no
+    /// 5 s wait), and when it is out of reach the start is queued for it: an
+    /// iPhone that hears nothing starts a workout of its own after a while,
+    /// and the system then ends this one, with its heart rate.
     private func sendLive(force: Bool = false) {
-        guard let start, force || Date().timeIntervalSince(lastLive) >= 5, WCSession.isSupported() else { return }
+        guard let start, force || !announced || Date().timeIntervalSince(lastLive) >= 5, WCSession.isSupported() else { return }
         let session = WCSession.default
-        guard session.activationState == .activated, session.isReachable,
+        guard session.activationState == .activated,
               let data = WatchGym.Live(start: start, heartRate: heartRate, calories: calories).encoded() else { return }
+        guard session.isReachable else {
+            if !queued {
+                queued = true
+                session.transferUserInfo([WatchGym.liveKey: data])
+            }
+            return
+        }
         lastLive = Date()
-        session.sendMessage([WatchGym.liveKey: data], replyHandler: { _ in }, errorHandler: { _ in })
+        session.sendMessage([WatchGym.liveKey: data], replyHandler: { _ in
+            Task { @MainActor in GymWorkout.shared.announced = true }
+        }, errorHandler: { _ in })
+    }
+
+    /// The iPhone heard of this workout (a reply to a live message).
+    private var announced = false
+    /// The start went to the iPhone's queue while it was out of reach.
+    private var queued = false
+
+    /// The watch's connection came up (often after the workout started on a
+    /// cold launch) or a few seconds passed: the start goes to the iPhone now.
+    func announce() {
+        guard session != nil, !announced else { return }
+        sendLive(force: true)
+    }
+
+    /// Tries every 2 s for the first 30 s, until the iPhone answers.
+    private func announceUntilHeard() {
+        Task { @MainActor [weak self] in
+            for _ in 0..<15 {
+                guard let self, self.session != nil, !self.announced else { return }
+                self.announce()
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
     }
 
     /// Finished here (the summary's Finish): Training mode on the iPhone ends

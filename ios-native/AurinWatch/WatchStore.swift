@@ -232,6 +232,8 @@ extension WatchStore: WCSessionDelegate {
             if let data { WatchStore.shared.receive(data) } else if !empty { WatchStore.shared.receive(nil) }
             WatchStore.shared.ask()
             GymStore.shared.loadIfWaiting()
+            // A gym workout started before the connection was up: the iPhone hears of it now.
+            GymWorkout.shared.announce()
         }
     }
 
@@ -280,6 +282,7 @@ extension WatchStore: WCSessionDelegate {
         Task { @MainActor in
             WatchStore.shared.ask()
             GymStore.shared.loadIfWaiting()
+            GymWorkout.shared.announce()
         }
     }
 }

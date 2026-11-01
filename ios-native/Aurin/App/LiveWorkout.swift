@@ -225,10 +225,10 @@ final class LiveWorkout: NSObject {
         return WatchBridge.settings.openOnWatch && state.paired && state.installed
     }
 
-    /// The watch's first reading (WatchGym.Live) within 20 s, else this
+    /// The watch's first reading (WatchGym.Live) within 30 s, else this
     /// iPhone records the workout itself.
     private func sessionUnlessWatch(at begun: Date) async {
-        for _ in 0..<20 {
+        for _ in 0..<30 {
             try? await Task.sleep(for: .seconds(1))
             guard start == begun, !onWatch else { return }
         }
@@ -260,6 +260,15 @@ final class LiveWorkout: NSObject {
             Task { await begin(since: live.start, weightKg: weight) }
         }
         watchStart = live.start
+        if !onWatch, #available(iOS 26.0, *) {
+            if let session = session as? HKWorkoutSession {
+                // This iPhone started its own workout before it heard of the watch's:
+                // it goes, so the system doesn't end the watch's and its heart rate.
+                (builder as? HKLiveWorkoutBuilder)?.discardWorkout()
+                session.end()
+                self.session = nil; builder = nil
+            }
+        }
         onWatch = true
         if sensor.liveBpm == nil, let bpm = live.heartRate, bpm > 0 {
             note(bpm)

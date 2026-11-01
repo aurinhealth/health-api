@@ -435,7 +435,10 @@ extension WatchBridge: WCSessionDelegate {
         let alarmStopped = userInfo[WatchSnapshot.alarmStoppedKey] as? Bool == true
         let alarmSnoozed = userInfo[WatchSnapshot.alarmSnoozedKey] as? Date
         let gymEnded = userInfo[WatchGym.watchEndKey] as? Bool == true
+        // The watch's gym workout, started while this iPhone was out of reach.
+        let live = (userInfo[WatchGym.liveKey] as? Data).flatMap(WatchGym.Live.decode)
         Task { @MainActor in
+            if let live, !gymEnded { LiveWorkout.shared.watch(live) }
             if let done { await applyGym(done) }
             if gymEnded { LiveWorkout.shared.watchEnded() }
             if let rated { await applyGym(rated) }
