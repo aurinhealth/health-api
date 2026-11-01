@@ -3195,7 +3195,8 @@
 "Odeslat do" = "Send to";
 "Odeslat znovu" = "Send again";
 "Aplikace Cvičení" = "Workout app";
-"soubor .zwo" = ".zwo file";
+"Exportovat do" = "Export to";
+"Exportovat jako %@" = "Export as %@";
 "Připoj Wahoo nebo Intervals.icu v Nastavení." = "Connect Wahoo or Intervals.icu in Settings.";
 "Odesláno · %@" = "Sent · %@";
 "Odesílá se" = "Sending";

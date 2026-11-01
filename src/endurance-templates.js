@@ -153,14 +153,19 @@ export function zoneName(sport, percent) {
   return entry ? entry[0] : percent < 50 ? "Z1" : "Z5+";
 }
 
-// Zwift's .zwo for a ride from the link page: every section as a steady
-// block at the middle of its range, in fractions of FTP.
+// Zwift's .zwo for a ride or a run: every section as a steady block at the
+// middle of its range. A ride in fractions of FTP; a run in fractions of the
+// pace Zwift calls 10 km pace (pace="2"), which stands for threshold pace.
+// A run section by distance becomes minutes at 5:00/km at 100 %.
 export function zwoFile(template) {
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]);
+  const run = template.sport === "run";
   const steps = [];
   for (const b of template.blocks) for (let i = 0; i < b.repeats; i++) for (const s of b.steps) {
-    const cadence = s.cadence ? ` Cadence="${s.cadence}"` : "";
-    steps.push(`    <SteadyState Duration="${s.seconds}" Power="${((s.low + s.high) / 200).toFixed(3)}"${cadence}/>`);
+    const mid = (s.low + s.high) / 2;
+    const seconds = s.seconds ?? Math.round((s.km || 0) * DEFAULT_PACE * 100 / mid);
+    const extra = run ? ' pace="2"' : s.cadence ? ` Cadence="${s.cadence}"` : "";
+    steps.push(`    <SteadyState Duration="${seconds}" Power="${(mid / 100).toFixed(3)}"${extra}/>`);
   }
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<workout_file>\n  <author>Aurin</author>\n  <name>${esc(template.name)}</name>\n  <description></description>\n  <sportType>bike</sportType>\n  <tags/>\n  <workout>\n${steps.join("\n")}\n  </workout>\n</workout_file>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<workout_file>\n  <author>Aurin</author>\n  <name>${esc(template.name)}</name>\n  <description></description>\n  <sportType>${run ? "run" : "bike"}</sportType>\n  <tags/>\n  <workout>\n${steps.join("\n")}\n  </workout>\n</workout_file>\n`;
 }
