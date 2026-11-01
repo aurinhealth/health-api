@@ -236,7 +236,7 @@ struct GymSessionView: View {
                 HStack(spacing: 5) {
                     // The time runs on its own, without drawing the whole set again each second.
                     timeCell(small: fit.small)
-                    cell(W.tr("Tep", "Heart"), workout.heartRate.map { W.number($0) } ?? "–", "bpm", W.pink, small: fit.small)
+                    heartCell(small: fit.small)
                 }
             }
         }
@@ -329,6 +329,25 @@ struct GymSessionView: View {
         .padding(.horizontal, 7)
         .padding(.vertical, small ? 2 : 3)
         .background(W.tile, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    /// The heart rate, or what to allow when Apple Health keeps the workout from running.
+    @ViewBuilder private func heartCell(small: Bool) -> some View {
+        if workout.noHealth, workout.heartRate == nil {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(W.tr("Tep", "Heart")).font(.system(size: 10)).foregroundStyle(W.secondary)
+                Text(W.tr("Povol ve Zdraví", "Allow in Health")).font(.system(size: 12, weight: .semibold)).foregroundStyle(W.pink)
+                    .lineLimit(2).minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 7)
+            .padding(.vertical, small ? 2 : 3)
+            .background(W.tile, in: RoundedRectangle(cornerRadius: 10))
+            .accessibilityElement(children: .combine)
+            .accessibilityHint(W.tr("Na hodinkách: Nastavení, Soukromí a zabezpečení, Zdraví, Aurin.", "On the watch: Settings, Privacy & Security, Health, Aurin."))
+        } else {
+            cell(W.tr("Tep", "Heart"), workout.heartRate.map { W.number($0) } ?? "–", "bpm", W.pink, small: small)
+        }
     }
 
     private func cell(_ title: String, _ value: String, _ unit: String?, _ color: Color, small: Bool) -> some View {

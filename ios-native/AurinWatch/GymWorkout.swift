@@ -17,6 +17,10 @@ final class GymWorkout: NSObject, ObservableObject {
     /// Paused (mockup 7): since when, and how long the pauses before took.
     @Published private(set) var pausedAt: Date?
     @Published private(set) var pausedTotal: TimeInterval = 0
+    /// Apple Health didn't let the workout run (no permission for workouts or
+    /// the heart rate, or the session failed): no heart rate will come, and the
+    /// set screen says what to allow instead of a bare dash.
+    @Published private(set) var noHealth = false
 
     private let store = HKHealthStore()
     private var session: HKWorkoutSession?
@@ -37,10 +41,14 @@ final class GymWorkout: NSObject, ObservableObject {
         let share: Set<HKSampleType> = [HKObjectType.workoutType(), HKQuantityType(.activeEnergyBurned), HKQuantityType(.heartRate)]
         let read: Set<HKObjectType> = [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned), HKObjectType.workoutType()]
         try? await store.requestAuthorization(toShare: share, read: read)
+        // Without leave to save workouts the session doesn't run: said on the set screen.
+        // (A denied heart rate can't be told apart from none yet; the session still tries.)
+        noHealth = store.authorizationStatus(for: HKObjectType.workoutType()) != .sharingAuthorized
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .traditionalStrengthTraining
         configuration.locationType = .indoor
         guard let session = try? HKWorkoutSession(healthStore: store, configuration: configuration) else {
+            noHealth = true
             start = Date()
             return
         }
@@ -129,6 +137,7 @@ final class GymWorkout: NSObject, ObservableObject {
         maxHeartRate = nil
         pausedAt = nil
         pausedTotal = 0
+        noHealth = false
     }
 
     /// What the builder measured so far, read off its statistics.
@@ -174,8 +183,9 @@ final class GymWorkout: NSObject, ObservableObject {
 
     /// The system ended the session (another workout started, an error): the
     /// gym goes on with its clock, the next workout starts from here.
-    fileprivate func lost(_ ended: ObjectIdentifier) {
+    fileprivate func lost(_ ended: ObjectIdentifier, failed: Bool = false) {
         guard let session, ObjectIdentifier(session) == ended else { return }
+        if failed { noHealth = true }
         let builder = self.builder
         self.session = nil
         self.builder = nil
@@ -197,7 +207,7 @@ extension GymWorkout: HKWorkoutSessionDelegate {
 
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
         let id = ObjectIdentifier(workoutSession)
-        Task { @MainActor in GymWorkout.shared.lost(id) }
+        Task { @MainActor in GymWorkout.shared.lost(id, failed: true) }
     }
 }
 
