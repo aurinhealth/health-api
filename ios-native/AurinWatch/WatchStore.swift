@@ -234,6 +234,8 @@ extension WatchStore: WCSessionDelegate {
             GymStore.shared.loadIfWaiting()
             // A gym workout started before the connection was up: the iPhone hears of it now.
             GymWorkout.shared.announce()
+            // Sets saved here alone go to the iPhone now.
+            GymStore.shared.sync()
         }
     }
 
@@ -287,6 +289,7 @@ extension WatchStore: WCSessionDelegate {
             WatchStore.shared.ask()
             GymStore.shared.loadIfWaiting()
             GymWorkout.shared.announce()
+            GymStore.shared.sync()
         }
     }
 }
