@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import StoreKit
+import UIKit
 import UserNotifications
 
 /// Aurin Pro from the App Store (StoreKit 2): the subscription group "Aurin
@@ -140,7 +141,16 @@ final class ProStore {
         defer { purchasing = false }
         var options: Set<Product.PurchaseOption> = []
         if let token = await accountUUID() { options.insert(.appAccountToken(token)) }
-        switch try await product.purchase(options: options) {
+        // The purchase sheet is shown over the app's window. Without a scene to
+        // anchor it, StoreKit logs "Could not find a UI anchor" and the purchase
+        // can wait forever (seen in the simulator right after the app starts).
+        let result: Product.PurchaseResult
+        if let scene = Self.anchorScene() {
+            result = try await product.purchase(confirmIn: scene, options: options)
+        } else {
+            result = try await product.purchase(options: options)
+        }
+        switch result {
         case .success(let result):
             guard case .verified(let transaction) = result else {
                 throw APIError.message(L10n.tr("App Store nákup nepotvrdil. Zkus Obnovit nákup."))
@@ -157,6 +167,16 @@ final class ProStore {
         @unknown default:
             return .cancelled
         }
+    }
+
+    /// The window scene the purchase sheet appears over: the one in front,
+    /// else any scene with a window.
+    static func anchorScene() -> UIWindowScene? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        return scenes.first { $0.activationState == .foregroundActive && $0.keyWindow != nil }
+            ?? scenes.first { $0.activationState == .foregroundActive }
+            ?? scenes.first { !$0.windows.isEmpty }
+            ?? scenes.first
     }
 
     /// Obnovit nákup: asks the App Store for this Apple ID's purchases (it may
