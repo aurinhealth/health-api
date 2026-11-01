@@ -129,13 +129,16 @@ final class SettingsStore {
         }
     }
 
-    func saveTraining(_ changes: JSONObject, writeIntervals: Bool) async -> Bool {
+    /// `wahooAgain`: write Wahoo even without a changed FTP or zones (after it refused the last write).
+    func saveTraining(_ changes: JSONObject, writeIntervals: Bool, writeWahoo: Bool = true, wahooAgain: Bool = false) async -> Bool {
         guard !demo else { return true }
         saving = true
         defer { saving = false }
         var next = training?.profile ?? [:]
         next.merge(changes) { $1 }
         next["writeIntervals"] = .bool(writeIntervals)
+        next["writeWahoo"] = .bool(writeWahoo)
+        if wahooAgain { next["wahooAgain"] = .bool(true) }
         do {
             training = try await api.saveTrainingProfile(next)
             errorMessage = nil

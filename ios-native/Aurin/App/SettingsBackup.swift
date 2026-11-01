@@ -14,7 +14,7 @@ enum SettingsBackup {
         "restSets", "restExercises", GymSignals.vibrationKey, GymSignals.soundKey, GymSignals.countdownKey,
         GymDayParts.storageKey,
         "libraryIndoor", "libraryPresetsRide", "libraryPresetsRun", "libraryToleranceRide", "libraryToleranceRun",
-        "writeIntervals", "weekPlan.mode", "calendarMode", "favoriteActivityTypes",
+        "writeIntervals", "writeWahoo", "weekPlan.mode", "calendarMode", "favoriteActivityTypes",
         "plusMenu.items", "plusMenu.layout", QuickAction.storageKey,
         "foodListOrder", DrinkPrefs.favoritesKey, DrinkFigureKind.storageKey, DrinkFigureKind.animateKey,
         JournalSwitch.key, DeviceLocation.followKey, StoredIcons.key,

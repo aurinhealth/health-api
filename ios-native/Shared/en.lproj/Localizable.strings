@@ -3557,3 +3557,9 @@
 "Nový způsob přihlášení potřebuje krátké ověření." = "Adding a new way to sign in needs a quick check.";
 "Nejdřív potvrď, že jsi to ty." = "Confirm it's you first.";
 "Žádná data za 7 dní" = "No data in 7 days";
+
+"Zapisovat do Wahoo" = "Write to Wahoo";
+"FTP a výkonové zóny se po uložení pošlou do Wahoo" = "FTP and power zones are sent to Wahoo after saving";
+"Zapsáno do Wahoo" = "Written to Wahoo";
+"Wahoo zápis odmítlo. Připoj ho znovu a ulož zóny ještě jednou." = "Wahoo refused the write. Connect it again, then save the zones again.";
+"Do Wahoo se nepodařilo zapsat." = "Couldn't write to Wahoo.";

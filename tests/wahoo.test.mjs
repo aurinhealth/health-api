@@ -361,7 +361,7 @@ test("a connection made before power_zones_write is asked to connect again, and 
   assert.equal(health(), "broken");
 });
 
-test("saving zones writes Wahoo only when the FTP or the power zones change", async () => {
+test("saving zones writes Wahoo only when the FTP or the power zones change and Write to Wahoo is on", async () => {
   const { db } = setup();
   const { handleThresholdApi } = await import("../src/routes-training.js");
   const seen = [], real = globalThis.fetch;
@@ -377,13 +377,23 @@ test("saving zones writes Wahoo only when the FTP or the power zones change", as
       const response = await handleThresholdApi(new Request(url, { method: "POST", headers: { Origin: url.origin }, body: JSON.stringify({ writeIntervals: false, ...body }) }), env(db), { waitUntil: p => waits.push(p) }, url, { signedIn: true }, false);
       assert.equal(response.status, 200);
       await Promise.all(waits);
+      return response.json();
     };
     await save({ ftp: 250 });
     assert.ok(seen.includes("POST /v1/power_zones"), seen.join(", "));
     seen.length = 0;
     await save({ ftp: 250, runThresholdPace: 270 });
     assert.deepEqual(seen, [], "a saved pace sends nothing to Wahoo");
-    await save({ ftp: 250, runThresholdPace: 270, powerZoneModel: "five" });
+    const changed = await save({ ftp: 250, runThresholdPace: 270, powerZoneModel: "five" });
     assert.ok(seen.includes("POST /v1/power_zones"));
+    assert.deepEqual([changed.wahoo, changed.wahooConnected], [{ status: "ok" }, true]);
+    // "Write to Wahoo" off: a changed FTP stays in Aurin.
+    seen.length = 0;
+    const off = await save({ ftp: 260, powerZoneModel: "five", writeWahoo: false });
+    assert.deepEqual([seen, off.wahoo], [[], null]);
+    // Saved again after Wahoo refused: written without a change.
+    const again = await save({ ftp: 260, powerZoneModel: "five", wahooAgain: true });
+    assert.ok(seen.includes("POST /v1/power_zones"));
+    assert.equal(again.wahoo.status, "ok");
   } finally { globalThis.fetch = real; }
 });
