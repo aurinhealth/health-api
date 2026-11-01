@@ -237,13 +237,13 @@ const builder = `<div class="dm pad bld">
 // Upravit pořadí (GymDayParts.swift GymPartsCard) swaps the switches for arrows that move a part up or down.
 const part = (id, icon, color, title, sub, toggle) => `<div class="pt ${id}"><span class="ib ${color}">${ic(icon)}</span><div><b>${title}</b><span class="mut s">${sub}</span></div><span class="gpr">${toggle === null ? '' : `<span class="tg${toggle ? ' on' : ''}"${toggle === 'flip' ? at('1200:on') : ''}><i></i></span>`}<span class="gar"><i>${ic('chup')}</i><i>${ic('chdown')}</i></span></span></div>`;
 const gymParts = `<div class="dm pad">
-<div class="row sp"><b class="sent md2"><span${n(58, 68, 1200, 700, 'i')}>68</span> min in total</b><span class="mut s"><span${n(13, 23, 1200, 700, 'i')}>23</span> min extra</span></div>
-<div class="tbar"><i class="w" style="flex:5"></i><i class="c"${at('1200:on')}></i><i class="l" style="flex:45"></i><i class="sx" style="flex:8"></i></div>
-<div class="tl s mut">Warm-up 5 · <span class="tc"${at('1200:on')}>Cardio 10 · </span>Lifting 45 · Stretching 8 min</div>
+<div class="row sp"><b class="sent md2">58 min in total</b><span class="mut s">13 min extra</span></div>
+<div class="tbar"><i class="w" style="flex:5"></i><i class="l" style="flex:45"></i><i class="sx" style="flex:8"></i></div>
+<div class="tl s mut">Warm-up 5 · Lifting 45 · Stretching 8 min</div>
 <div class="row sp"><span class="sl">Today’s workout</span><span class="s gro" data-tx="0|Reorder;2600|Done;4600|Reorder">Reorder</span></div>
 <div class="gparts"${at('2600:reo 3500:swap 4600-reo')}>
 ${part('p1', 'run', 'amb', 'Warm-up', 'Automatic · 5 min', true)}
-${part('p2', 'bike', 'rust', 'Cardio', 'Exercise bike · 10 min', 'flip')}
+${part('p2', 'bike', 'rust', 'Cardio', 'Exercise bike · No limit', 'flip')}
 ${part('p3', 'gym', 'amb2', 'Exercises', '5 exercises · 45 min', null)}
 ${part('p4', 'flex', 'ind', 'Stretching', 'Automatic · 8 min', true)}
 </div>
@@ -736,9 +736,7 @@ html:not(.js) .stage1{display:none}
 .ex.sup{padding-left:10px}.ex.sup::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:3px;background:var(--indigo)}
 .md2{font-size:20px}
 .tbar{display:flex;gap:4px;height:8px;margin:10px 0 6px}.tbar i{border-radius:9px;transition:flex .6s,opacity .4s}
-.tbar .w{background:var(--amber)}.tbar .l{background:color-mix(in srgb,var(--text) 85%,transparent)}.tbar .c{background:var(--rust)}.tbar .sx{background:var(--indigo)}
-.tbar .c{flex:0;opacity:0}.tbar .c.on,html:not(.js) .tbar .c{flex:10;opacity:1}
-.js .tl .tc:not(.on){display:none}
+.tbar .w{background:var(--amber)}.tbar .l{background:color-mix(in srgb,var(--text) 85%,transparent)}.tbar .sx{background:var(--indigo)}
 .gparts{position:relative;padding:4px 8px;border-radius:20px;background:var(--bg)}
 .pt{display:grid;grid-template-columns:32px 1fr auto;align-items:center;gap:10px;min-height:54px;border-top:1px solid var(--line);background:var(--bg);transition:transform .6s cubic-bezier(.16,1,.3,1),box-shadow .3s,opacity .3s}
 .pt:first-child{border-top:0}.pt b{display:block;font-size:14px;font-weight:500}
