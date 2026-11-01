@@ -790,7 +790,7 @@
 "Vláknina" = "Fiber";
 "Voda" = "Water";
 "Volno" = "Day off";
-"Volno místo %@ (%@)" = "Rest instead of %@ (%@)";
+"Odstranit %@ (%@)" = "Remove %@ (%@)";
 "Volno, žádná aktivita." = "Rest day, no activity.";
 "Vrátit běžný týden" = "Back to usual week";
 "Vstávám" = "I'm up";
