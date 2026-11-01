@@ -122,6 +122,9 @@ struct WatchGym: Codable, Equatable, Sendable {
     static let liveKey = "gymLive"
     /// iPhone → watch: Training mode finished, the watch ends and saves the workout.
     static let endKey = "gymEnd"
+    /// Training mode started on the iPhone: a watch app that is running opens the gym
+    /// (besides HKHealthStore.startWatchApp, which fails quietly with the watch locked or asleep).
+    static let openKey = "gymOpen"
     /// Watch → iPhone: the gym finished on the watch, Training mode ends too.
     static let watchEndKey = "gymWatchEnd"
     /// Both ways: the rest between sets (Rest).

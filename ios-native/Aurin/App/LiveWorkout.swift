@@ -243,7 +243,20 @@ final class LiveWorkout: NSObject {
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .traditionalStrengthTraining
         configuration.locationType = .indoor
-        store.startWatchApp(with: configuration) { _, _ in }
+        store.startWatchApp(with: configuration) { ok, _ in
+            guard !ok else { return }
+            // Not launched (the watch asleep or locked): once more a little later.
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(3))
+                guard LiveWorkout.shared.running, !LiveWorkout.shared.onWatch else { return }
+                let again = HKWorkoutConfiguration()
+                again.activityType = .traditionalStrengthTraining
+                again.locationType = .indoor
+                HKHealthStore().startWatchApp(with: again) { _, _ in }
+            }
+        }
+        // A watch app already running opens the gym at once.
+        WatchBridge.shared.openWatchGym()
     }
 
     /// A reading from the watch's workout (WatchBridge): the watch measures,

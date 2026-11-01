@@ -149,6 +149,12 @@ final class WatchBridge: NSObject {
         lastSent = Date()
     }
 
+    /// Training mode started here: a watch app that is running opens the gym too.
+    func openWatchGym() {
+        guard let session, session.activationState == .activated, session.isWatchAppInstalled, session.isReachable else { return }
+        session.sendMessage([WatchGym.openKey: true], replyHandler: nil, errorHandler: nil)
+    }
+
     /// Training mode finished on the iPhone: the watch ends its workout and saves it.
     func endWatchGym() {
         guard let session, session.activationState == .activated, session.isWatchAppInstalled else { return }
