@@ -313,6 +313,9 @@ struct RootView: View {
                 guard let date else { return }
                 LiveWorkout.shared.openFromWatch = nil
                 guard !model.demo, !model.immersive else { return }
+                // Training mode for that day is on the screen already (opened, not started):
+                // it stays as it is and runs with the watch, instead of opening over itself.
+                guard !model.paths.values.contains(where: { $0.last == .trainingMode(date) }) else { return }
                 model.open(.trainingMode(date))
             }
             .onChange(of: scenePhase) { _, phase in

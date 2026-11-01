@@ -11,7 +11,7 @@ struct GymRestSettingsView: View {
 
     /// The rest after a work set: the length chosen, else the plan's for the exercise.
     static func between(_ set: GymSet, setting: Int) -> Int {
-        setting >= 0 ? setting : set.plannedRest ?? 90
+        set.rest(setting: setting)
     }
 
     /// The rest before the next exercise: the length chosen, else the rest the

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildFood, entryTime, mealOf } from "../src/app-food.js";
+import { buildFood, entryTime, mealOf, targetParts } from "../src/app-food.js";
 
 const DATE = "2026-10-08";
 const entry = (id, title, at, kcal, note = {}) => ({ id, recipe_title: title, consumed_at: at, kcal, protein_g: kcal / 20, carbs_g: kcal / 8, fat_g: kcal / 40, note: JSON.stringify(note) });
@@ -118,4 +118,40 @@ test("Food tells the coach's text the hour, the safe minimum and the weight goal
   assert.equal(facts.facts.minimumKcal, 1900);
   assert.equal(facts.facts.weight.targetWeightKg, 80);
   assert.notEqual(screenFacts("food", { ...f, hour: 19 }).fingerprint, facts.fingerprint);
+});
+
+test("Food: the target in its parts (base, workouts done, planned)", () => {
+  const n = { calorieTarget: 2719, calorieBreakdown: { baselineRestTDEE: 2060, sportDailyAverage: 370, restIntakeTarget: 1810, trainingCoverage: 0.7, activityAdjustment: 770, minTarget: 1600,
+    workouts: [{ kind: "done", type: "Ride", name: "Morning ride", minutes: 70, kcal: 457 }, { kind: "planned", type: "WeightTraining", name: "Upper body", minutes: 45, kcal: 313 }] } };
+  const p = targetParts(n);
+  assert.deepEqual([p.base, p.workouts, p.planned], [2180, 320, 219]);
+  assert.equal(p.base + p.workouts + p.planned, 2719, "the parts add up to the target");
+  assert.deepEqual(p.lines, { restingBurn: 2060, movement: 370, goal: -250, minimum: 0, moreActive: 0 });
+  assert.deepEqual(p.items.map(i => [i.kind, i.counted]), [["done", 320], ["planned", 219]]);
+
+  // A day gone by: a plan not done is no part; what the day measured stays in the base.
+  const past = targetParts(n, { past: true });
+  assert.equal(past.planned, 0);
+  assert.equal(past.base + past.workouts, 2719);
+  assert.equal(past.lines.moreActive, 219);
+
+  // The watch measured a busier day (energy budget): the extra is in the base.
+  const busy = targetParts({ ...n, calorieTarget: 3000 });
+  assert.equal(busy.lines.moreActive, 281);
+  assert.equal(busy.base + busy.workouts + busy.planned, 3000);
+
+  // Held at the safe minimum: training that does not lift the target adds nothing.
+  const low = targetParts({ calorieTarget: 1800, calorieBreakdown: { baselineRestTDEE: 1700, sportDailyAverage: 0, restIntakeTarget: 1300, minTarget: 1800, activityAdjustment: 300,
+    workouts: [{ kind: "done", type: "Run", minutes: 30, kcal: 300 }] } });
+  assert.deepEqual([low.base, low.workouts, low.planned], [1800, 0, 0]);
+  assert.equal(low.lines.minimum, 500);
+  assert.equal(low.lines.restingBurn + low.lines.movement + low.lines.goal + low.lines.minimum + low.lines.moreActive, low.base);
+
+  // Two workouts share the part; the last one takes the rounding.
+  const two = targetParts({ calorieTarget: 2500, calorieBreakdown: { baselineRestTDEE: 2000, sportDailyAverage: 0, restIntakeTarget: 2000, activityAdjustment: 715,
+    workouts: [{ kind: "done", kcal: 333 }, { kind: "done", kcal: 382 }] } });
+  assert.equal(two.items.reduce((s, i) => s + i.counted, 0), two.workouts);
+
+  assert.equal(targetParts({ ...n, ownTarget: true }), null, "an own goal has no parts");
+  assert.equal(targetParts({}), null);
 });

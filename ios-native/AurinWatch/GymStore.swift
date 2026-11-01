@@ -3,19 +3,39 @@ import WatchConnectivity
 
 /// The day's gym on the watch: the plan from the iPhone (App/WatchGymBridge.swift),
 /// the sets done here, and where the session stands, kept so a relaunch goes on.
+/// With the iPhone out of reach the watch goes on alone: it loads the day's
+/// sheet from the server, writes sets and plan changes into it with the same
+/// code as the iPhone (WatchShared/GymSheet.swift) and saves it to the server
+/// itself; once the iPhone is in reach again it hands it the sheet and the
+/// iPhone writes again.
 @MainActor
 final class GymStore: ObservableObject {
     static let shared = GymStore()
     private static let savedKey = "watchGym"
+    private static let aloneKey = "watchGymAlone"
+    private static let unsentKey = "watchGymUnsent"
 
     @Published private(set) var gym: WatchGym?
     @Published private(set) var loading = false
     @Published private(set) var failed = false
 
+    /// The watch has written the day's sheet itself since the iPhone last took it.
+    private var alone = false {
+        didSet { UserDefaults.standard.set(alone, forKey: Self.aloneKey) }
+    }
+    /// The newest sheet has not reached the server yet (no internet).
+    private var unsent = false {
+        didSet { UserDefaults.standard.set(unsent, forKey: Self.unsentKey) }
+    }
+    private var uploading = false
+
     init() {
-        if let data = UserDefaults.standard.data(forKey: Self.savedKey), let saved = WatchGym.decode(data),
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: Self.savedKey), let saved = WatchGym.decode(data),
            saved.date == WatchStore.localDate(Date()) {
             gym = saved
+            alone = defaults.bool(forKey: Self.aloneKey)
+            unsent = defaults.bool(forKey: Self.unsentKey)
         }
     }
 
@@ -27,67 +47,124 @@ final class GymStore: ObservableObject {
         return gym.date
     }
 
-    /// The plan from the iPhone; a session in progress keeps what was done here.
+    private var phone: WCSession? {
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return nil }
+        return WCSession.default
+    }
+
+    /// The iPhone can take a set or a change now (not while the watch is alone).
+    private var phoneWrites: Bool { !alone && phone?.isReachable == true }
+
+    /// The plan: from the iPhone in reach, else from the server; a session in
+    /// progress keeps what was done here, and a day the watch writes alone stays its own.
     func load() {
         let date = day
-        let session = WCSession.default
-        guard WCSession.isSupported(), session.activationState == .activated, session.isReachable else {
-            failed = gym == nil
+        if alone, gym?.date == date {
+            sync()
+            return
+        }
+        guard let session = phone, session.isReachable else {
+            Task { await fromServer(date) }
             return
         }
         loading = true
         session.sendMessage([WatchGym.requestKey: date], replyHandler: { reply in
             let data = reply[WatchGym.replyKey] as? Data
-            Task { @MainActor in GymStore.shared.received(data) }
-        }, errorHandler: { _ in
             Task { @MainActor in
-                GymStore.shared.loading = false
-                GymStore.shared.failed = GymStore.shared.gym == nil
+                if let data { GymStore.shared.received(data) } else { await GymStore.shared.fromServer(date) }
             }
+        }, errorHandler: { _ in
+            Task { @MainActor in await GymStore.shared.fromServer(date) }
         })
+    }
+
+    /// The day's sheet from the server with the watch's own sign-in.
+    private func fromServer(_ date: String) async {
+        loading = true
+        defer { loading = false }
+        guard let sheet = await WatchAPI.gymSheet(date: date) else {
+            failed = gym == nil
+            return
+        }
+        take(built(sheet, date: date))
+    }
+
+    private func built(_ sheet: GymDay, date: String) -> WatchGym {
+        let settings = WatchStore.shared.settings
+        return WatchGym(sheet, date: date, restSets: settings.restSets, restExercises: settings.restExercises)
     }
 
     /// Another day's plan (the Training page shows tomorrow or a day tapped
     /// in its row), not kept: only today's is worked on.
     func preview(date: String) async -> WatchGym? {
         if let gym, gym.date == date { return gym }
-        let session = WCSession.default
-        guard WCSession.isSupported(), session.activationState == .activated, session.isReachable else { return nil }
-        return await withCheckedContinuation { continuation in
+        guard let session = phone, session.isReachable else {
+            return await WatchAPI.gymSheet(date: date).map { built($0, date: date) }
+        }
+        let fromPhone: WatchGym? = await withCheckedContinuation { continuation in
             session.sendMessage([WatchGym.requestKey: date], replyHandler: { reply in
                 continuation.resume(returning: (reply[WatchGym.replyKey] as? Data).flatMap(WatchGym.decode))
             }, errorHandler: { _ in
                 continuation.resume(returning: nil)
             })
         }
+        if let fromPhone { return fromPhone }
+        return await WatchAPI.gymSheet(date: date).map { built($0, date: date) }
     }
 
     /// A plan from the iPhone: the answer to load or to a change, or sent on
     /// its own when the iPhone saved the day (WatchStore forwards it).
     func received(_ data: Data?) {
         loading = false
-        guard let data, var fresh = WatchGym.decode(data) else {
+        guard let data, let fresh = WatchGym.decode(data) else {
             failed = gym == nil
             return
         }
+        // The watch writes the day alone: the iPhone's copy is older until it takes the watch's.
+        if alone, gym?.date == fresh.date { return }
+        take(fresh)
+    }
+
+    /// A plan from the iPhone or the server; sets done here that it does not
+    /// have yet stay done, in the plan and in its sheet.
+    private func take(_ plan: WatchGym) {
+        var fresh = plan
         failed = false
-        // Sets done on the watch that the iPhone has not written yet stay done.
         guard fresh.date == day else { return }
         if let gym, gym.date == fresh.date {
+            var sheet = fresh.sheet.map { GymDay(date: fresh.date, values: $0, cancelled: nil) }
             for e in fresh.exercises.indices {
                 for l in fresh.exercises[e].lifts.indices {
                     let row = fresh.exercises[e].lifts[l].row
                     if let mine = gym.lift(row: row), mine.done, !fresh.exercises[e].lifts[l].done {
                         fresh.exercises[e].lifts[l] = mine
+                        if let kg = mine.kg, let reps = mine.reps {
+                            sheet?.apply(WatchGym.Done(date: fresh.date, row: row, kg: kg, reps: reps), start: GymWorkout.shared.start ?? Date())
+                        }
                     }
                 }
             }
+            fresh.sheet = sheet?.values
+        } else {
+            // Another day: whatever the watch wrote alone belonged to the one before.
+            alone = false
+            unsent = false
         }
         gym = fresh
         save()
     }
 
-    /// A set done: kept here and sent to the iPhone, which saves it in the day's sheet.
+    /// The sheet of the day, changed as on the iPhone and kept with the plan.
+    private func editSheet(_ change: (inout GymDay) -> Void) {
+        guard var gym, let values = gym.sheet else { return }
+        var sheet = GymDay(date: gym.date, values: values, cancelled: nil)
+        change(&sheet)
+        gym.sheet = sheet.values
+        self.gym = gym
+    }
+
+    /// A set done: kept here and sent to the iPhone, which saves it in the
+    /// day's sheet; out of its reach the watch saves the sheet itself.
     func complete(row: Int, kg: Double, reps: Int) {
         guard var gym else { return }
         gym.update(row: row) { $0.kg = kg; $0.reps = reps; $0.done = true }
@@ -96,19 +173,11 @@ final class GymStore: ObservableObject {
             gym.update(row: next.lift.row) { $0.kg = kg; $0.reps = reps }
         }
         self.gym = gym
+        let done = WatchGym.Done(date: gym.date, row: row, kg: kg, reps: reps)
+        editSheet { $0.apply(done, start: GymWorkout.shared.start ?? Date()) }
         save()
-        guard let data = WatchGym.Done(date: gym.date, row: row, kg: kg, reps: reps).encoded() else { return }
-        let session = WCSession.default
-        guard WCSession.isSupported(), session.activationState == .activated else { return }
-        let message = [WatchGym.doneKey: data]
-        if session.isReachable {
-            session.sendMessage(message, replyHandler: { _ in }, errorHandler: { _ in
-                // Out of reach after all: queued until the iPhone takes it.
-                WCSession.default.transferUserInfo(message)
-            })
-        } else {
-            session.transferUserInfo(message)
-        }
+        guard let data = done.encoded() else { return }
+        write([WatchGym.doneKey: data])
     }
 
     /// How a set went (mockup 8B), tapped during the rest: the next set of
@@ -121,27 +190,104 @@ final class GymStore: ObservableObject {
         }
         gym.update(row: row) { $0.intensity = letter }
         self.gym = gym
+        editSheet { $0.setIntensity(row: row, letter) }
         save()
         guard let data = WatchGym.Rated(date: gym.date, row: row, letter: letter).encoded() else { return }
-        let session = WCSession.default
-        guard WCSession.isSupported(), session.activationState == .activated else { return }
-        let message = [WatchGym.ratedKey: data]
-        if session.isReachable {
-            session.sendMessage(message, replyHandler: { _ in }, errorHandler: { _ in
-                WCSession.default.transferUserInfo(message)
-            })
-        } else {
-            session.transferUserInfo(message)
+        write([WatchGym.ratedKey: data])
+    }
+
+    /// A set or its letter to the iPhone while it writes the day; else (out of
+    /// reach, or it did not answer) the watch saves the sheet itself. A plan
+    /// from an older iPhone, without its sheet, waits in the iPhone's queue as before.
+    private func write(_ message: [String: Any]) {
+        guard gym?.sheet != nil else {
+            guard let session = phone else { return }
+            if session.isReachable {
+                session.sendMessage(message, replyHandler: { _ in }, errorHandler: { _ in WCSession.default.transferUserInfo(message) })
+            } else {
+                session.transferUserInfo(message)
+            }
+            return
+        }
+        guard phoneWrites, let session = phone else {
+            goAlone()
+            return
+        }
+        session.sendMessage(message, replyHandler: { _ in }, errorHandler: { _ in
+            Task { @MainActor in GymStore.shared.goAlone() }
+        })
+    }
+
+    /// The watch writes the day itself from now on: what still waits in the
+    /// iPhone's queue is in the sheet already, so it is taken back, and the
+    /// sheet goes to the server.
+    private func goAlone() {
+        alone = true
+        unsent = true
+        if let session = phone {
+            for transfer in session.outstandingUserInfoTransfers
+            where transfer.userInfo[WatchGym.doneKey] != nil || transfer.userInfo[WatchGym.ratedKey] != nil {
+                transfer.cancel()
+            }
+        }
+        upload()
+        handBack()
+    }
+
+    /// What the watch wrote alone goes on its way: to the server when it has
+    /// not yet, to the iPhone when it is in reach (its connection came up).
+    func sync() {
+        sync()
+    }
+
+    /// The newest sheet to the server, one save at a time; tried again with
+    /// the next set, the next load, and the end of the workout.
+    private func upload() {
+        guard alone, unsent, !uploading else { return }
+        uploading = true
+        Task { @MainActor in
+            defer { GymStore.shared.uploading = false }
+            while GymStore.shared.unsent, let gym = GymStore.shared.gym, let values = gym.sheet {
+                guard await WatchAPI.saveGym(GymDay(date: gym.date, values: values, cancelled: nil), date: gym.date) else { return }
+                if GymStore.shared.gym?.sheet == values { GymStore.shared.unsent = false }
+            }
         }
     }
 
+    /// The iPhone in reach again: it takes the sheet the watch wrote alone
+    /// (saving it to the server too) and writes the day again from then on.
+    private func handBack() {
+        guard alone, let session = phone, session.isReachable, let gym, let values = gym.sheet,
+              let data = WatchGym.Sheet(date: gym.date, values: values).encoded() else { return }
+        session.sendMessage([WatchGym.sheetKey: data], replyHandler: { _ in
+            Task { @MainActor in
+                let store = GymStore.shared
+                // Changed here meanwhile: the next hand-back takes that.
+                guard store.gym?.sheet == values else { store.handBack(); return }
+                store.alone = false
+                store.unsent = false
+            }
+        }, errorHandler: { _ in })
+    }
+
+    /// The workout finished here: alone, the end goes into the sheet (the
+    /// iPhone writes it in Training mode otherwise) and the sheet is saved.
+    func finished(at end: Date) {
+        guard alone else { return }
+        editSheet { $0.markFinished(end) }
+        save()
+        unsent = true
+        sync()
+    }
+
     /// A change from the menu (a set or an exercise added, removed or
-    /// swapped); the iPhone writes it into the sheet and answers with the new plan.
+    /// swapped): the iPhone writes it into the sheet and answers with the new
+    /// plan; out of its reach the watch changes the sheet itself.
     func change(_ kind: WatchGym.Change.Kind, exercise: Int, option: WatchGym.Option? = nil, to: Int? = nil) {
-        guard let gym, let data = WatchGym.Change(date: gym.date, kind: kind, exercise: exercise, option: option, to: to).encoded() else { return }
-        let session = WCSession.default
-        guard WCSession.isSupported(), session.activationState == .activated, session.isReachable else {
-            failedChange = true
+        guard let gym else { return }
+        let change = WatchGym.Change(date: gym.date, kind: kind, exercise: exercise, option: option, to: to)
+        guard phoneWrites, let session = phone, let data = change.encoded() else {
+            changeHere(change)
             return
         }
         changing = true
@@ -154,19 +300,53 @@ final class GymStore: ObservableObject {
         }, errorHandler: { _ in
             Task { @MainActor in
                 GymStore.shared.changing = false
-                GymStore.shared.failedChange = true
+                GymStore.shared.changeHere(change)
             }
         })
+    }
+
+    /// The change made here in the sheet, with the plan built again from it;
+    /// sets typed but not done keep their numbers.
+    private func changeHere(_ change: WatchGym.Change) {
+        guard let old = gym, let values = old.sheet else {
+            failedChange = true
+            return
+        }
+        var sheet = GymDay(date: old.date, values: values, cancelled: nil)
+        sheet.apply(change)
+        var fresh = WatchGym(sheet, date: old.date, restSets: WatchStore.shared.settings.restSets, restExercises: old.restExercises)
+        for e in fresh.exercises.indices {
+            for l in fresh.exercises[e].lifts.indices where !fresh.exercises[e].lifts[l].done {
+                let lift = fresh.exercises[e].lifts[l]
+                // The same set of the same exercise as before the change.
+                if let before = old.exercises.first(where: { $0.name == fresh.exercises[e].name })?.lifts
+                    .first(where: { $0.number == lift.number && $0.side == lift.side && $0.warmup == lift.warmup && $0.drop == lift.drop && !$0.done }) {
+                    fresh.exercises[e].lifts[l].kg = before.kg ?? lift.kg
+                    fresh.exercises[e].lifts[l].reps = before.reps ?? lift.reps
+                }
+            }
+        }
+        gym = fresh
+        save()
+        goAlone()
     }
 
     /// The rest Training mode on the iPhone started, moved or skipped.
     @Published var phoneRest: WatchGym.Rest?
 
+    /// The weight and reps Training mode on the iPhone is at for a set.
+    @Published var phoneDraft: WatchGym.Draft?
+
+    /// The weight and reps being set here, to Training mode on the iPhone (only while in reach).
+    func sendDraft(_ draft: WatchGym.Draft) {
+        guard !draft.same(phoneDraft), let session = phone, session.isReachable,
+              let data = draft.encoded() else { return }
+        session.sendMessage([WatchGym.draftKey: data], replyHandler: { _ in }, errorHandler: { _ in })
+    }
+
     /// The rest here to Training mode on the iPhone (only while in reach).
     func sendRest(_ rest: WatchGym.Rest) {
-        let session = WCSession.default
-        guard WCSession.isSupported(), session.activationState == .activated, session.isReachable,
-              let data = rest.encoded() else { return }
+        guard let session = phone, session.isReachable, let data = rest.encoded() else { return }
         session.sendMessage([WatchGym.restKey: data], replyHandler: { _ in }, errorHandler: { _ in })
     }
 
@@ -189,22 +369,29 @@ final class GymStore: ObservableObject {
     }
 
     @Published private(set) var changing = false
-    /// A change the iPhone did not take (out of reach): the screen says so once.
+    /// A change neither the iPhone nor the watch could make (a plan from an
+    /// older iPhone, without its sheet, and the iPhone out of reach).
     @Published var failedChange = false
 
-    /// Exercises to swap in or to add, from the iPhone.
+    /// Exercises to swap in or to add: from the iPhone in reach, else from the server.
     func options(exercise: String?, query: String?) async -> [WatchGym.Option] {
-        guard let gym, let data = WatchGym.OptionsRequest(date: gym.date, exercise: exercise, query: query).encoded() else { return [] }
-        let session = WCSession.default
-        guard WCSession.isSupported(), session.activationState == .activated, session.isReachable else { return [] }
-        return await withCheckedContinuation { continuation in
-            session.sendMessage([WatchGym.optionsKey: data], replyHandler: { reply in
-                let list = (reply[WatchGym.optionsKey] as? Data).flatMap { try? JSONDecoder().decode([WatchGym.Option].self, from: $0) }
-                continuation.resume(returning: list ?? [])
-            }, errorHandler: { _ in
-                continuation.resume(returning: [])
-            })
+        guard let gym else { return [] }
+        let inPlan = gym.exercises.map(\.name)
+        if phoneWrites, let session = phone, let data = WatchGym.OptionsRequest(date: gym.date, exercise: exercise, query: query).encoded() {
+            let list: [WatchGym.Option]? = await withCheckedContinuation { continuation in
+                session.sendMessage([WatchGym.optionsKey: data], replyHandler: { reply in
+                    continuation.resume(returning: (reply[WatchGym.optionsKey] as? Data).flatMap { try? JSONDecoder().decode([WatchGym.Option].self, from: $0) })
+                }, errorHandler: { _ in
+                    continuation.resume(returning: nil)
+                })
+            }
+            if let list { return list }
         }
+        if let query = query?.trimmingCharacters(in: .whitespaces), !query.isEmpty {
+            return await WatchAPI.gymSearch(query, inPlan: inPlan)
+        }
+        guard let name = exercise ?? inPlan.last else { return [] }
+        return await WatchAPI.gymAlternatives(date: gym.date, exercise: name, inPlan: inPlan)
     }
 
     /// Weight or reps changed before the set is done.
@@ -220,6 +407,8 @@ final class GymStore: ObservableObject {
         guard !GymWorkout.shared.running else { return }
         gym = nil
         failed = false
+        alone = false
+        unsent = false
         UserDefaults.standard.removeObject(forKey: Self.savedKey)
     }
 
