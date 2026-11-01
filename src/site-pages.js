@@ -826,7 +826,7 @@ export function overviewPage(request) {
       ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, longer after squats than after curls, and stays on your lock screen. The last seconds count down with a vibration you feel even with the phone on the bench.', 13500],
       ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume, new records and the muscles you tired when you finish, saved to Apple Health. Then say how it went.', 6000]]],
     ['vyziva', '', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
-      ['food-day', 'foodOne', 220, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.', 7500],
+      ['food-day', 'foodOne', 220, 'A target that moves.', 'Train harder and you get more to eat. See what makes up the target: your base, the workouts done and the ones still planned. The coach says what that means for your next meal.', 7500],
       ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000],
       ['food-day', 'drinks', 330, 'Drink to your goal.', 'Tap a drink, or the whale itself for your usual glass. At today’s goal it blows its spout. Keep Aurin’s goal, set your own, or build up to it day by day. Rather a bottle, a flower or an octopus? Pick one in Settings.', 9500],
       ['food-day', 'diet', 120, 'Eat your way.', 'Everything, vegetarian or vegan; balanced, high protein, lower carb or keto. Your protein, carbs and nutrients follow, or set your own.', 8000]]],
