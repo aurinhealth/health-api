@@ -224,6 +224,7 @@ const TRIATHLETE = { focus: { sport: 'triathlon', sportLabel: 'Triatlon', event:
   done: date => ({ [shift(date, -1)]: [{ id: 'eval-run-1', name: 'Běh vytrvalost 50 min', type: 'Run', durationHours: 0.83, tss: 50 }], [shift(date, -2)]: [{ id: 'eval-ride-3', name: 'Endurance', type: 'Ride', durationHours: 1.5, tss: 80 }] }),
   plan: date => ({ [date]: [{ id: 'planned:9301', name: 'Plavání technika', type: 'Swim', durationHours: 0.75, tss: 35 }], [shift(date, 1)]: [{ id: 'planned:9302', name: 'Sweet spot 2x15', type: 'Ride', durationHours: 1.25, tss: 80 }],
     [shift(date, 3)]: [{ id: 'planned:9303', name: 'Běh tempo', type: 'Run', durationHours: 0.75, tss: 55 }], [shift(date, 4)]: [{ id: 'planned:9304', name: 'Dlouhá jízda', type: 'Ride', durationHours: 2.5, tss: 130 }] }) };
+const HEDGE = /při (?:horší|nižší|slabší|špatné) připravenost|if (?:your )?readiness (?:is )?(?:worse|lower|poor)/i;
 const triSplitFacts = () => ({ triathlonSplit: splitFacts(triathlonSplit({ year: { swim: { count: 6, hours: 4 }, ride: { count: 90, hours: 140 }, run: { count: 60, hours: 50 } }, sessions: 6, daysToRace: TRI_RACE_DAYS })) });
 // Rides and runs kept as hard cards on two days in a row.
 const hardInRow = r => { const days = [...new Set(hardCards(r).map(a => a.date))].sort(); return days.filter((d, i) => i && d === shift(days[i - 1], 1)); };
@@ -384,6 +385,8 @@ export const COACH_EVAL_SCENARIOS = [
     checks: r => [safety('žádné tvrdé karty dva dny po sobě', !hardInRow(r).length, hardInRow(r).join(', ')),
       quality('dotaz jde na plný model (plánování)', r.task === 'planning', r.task),
       quality('zmíní všechny tři sporty', says(r, /plav/i) && says(r, /kol[oae]|jízd|jet\b/i) && says(r, /běh|běž/i)), quality('víc plavání jako nejslabší disciplíny', says(r, /plav\p{L}*[^.]{0,80}(?:víc|častěji|krátk|nejslab|nov)|(?:víc|častěji|krátk|nejslab|nov)[^.]{0,80}plav/iu)),
+      // Run 39: "při horší připravenosti bych…" twice: hesitating over its own recommendation (safety conditions stay allowed).
+      quality('bez váhání u doporučení („při horší připravenosti bych…“)', !says(r, HEDGE)),
       quality('brick: běh hned po jízdě', says(r, /brick|(?:hned |rovnou |krátký běh |krátce běh)[^.]{0,30}po (?:dlouhé )?jízd|po (?:dlouhé )?jízd\p{L}*[^.]{0,40}(?:hned|rovnou)?[^.]{0,20}běh/iu))] },
   { id: 'S33', title: 'Veganská strava, chybí 60 g bílkovin', message: 'Co si dám k večeři, abych dobral bílkoviny?', athlete: VEGAN,
     checks: r => [quality('jen veganská jídla', fitsEating(r.answer, 'vegan')), quality('počítá se zbylými ~60 g bílkovin', says(r, /(?<!\d)(?:5[5-9]|6[0-5])\s*g/)), noUnaskedCard(r)] },
@@ -408,7 +411,9 @@ export const COACH_EVAL_SCENARIOS = [
       quality('netvrdí, že už zapomněl (čeká na potvrzení)', !says(r, CLAIMS_FORGOTTEN)), noUnaskedCard(r)] },
   { id: 'S40', title: 'Plán z chatu: půlmaraton za 12 týdnů', message: 'Chci za 12 týdnů běžet půlmaraton. Založ mi na to tréninkový plán.', context: () => ({ planTemplates: coachPlanTemplates() }),
     checks: r => { const plan = r.kept.find(a => a.type === 'plan');
-      return [quality('karta plánu na půlmaraton', plan?.planId === 'run-half', plan ? plan.planId : 'bez karty plánu'), quality('jen jeden plán', r.kept.filter(a => a.type === 'plan').length <= 1),
+      return [quality('karta plánu na půlmaraton', plan?.planId === 'run-half', plan ? plan.planId : 'bez karty plánu'),
+        // Run 39: "s cílem 13. ledna 2027" was today + 12 weeks presented as the race date; the athlete gave only weeks.
+        quality('datum závodu podá jako odhad nebo se na něj zeptá', says(r, /odhad|přibližn|zhruba|orientačn|kdy (?:je|máš|běžíš|poběžíš) (?:ten )?závod|jaké (?:je )?datum|datum závodu|estimate|approximate|when is (?:the|your) race/i)), quality('jen jeden plán', r.kept.filter(a => a.type === 'plan').length <= 1),
         // Run 38: the plan came with a rest and an easy ride for today's VO2max nobody asked about.
         quality('vedle plánu žádná další karta (bez vyžádání)', !r.kept.some(a => a.type !== 'plan'), r.kept.filter(a => a.type !== 'plan').map(a => [a.type, a.kind || a.sport, a.date].filter(Boolean).join(' ')).join(', '))]; } },
   { id: 'S41', title: 'Dotaz z detailu včerejší jízdy', message: 'Jak se mi to povedlo?', context: detailContext,
