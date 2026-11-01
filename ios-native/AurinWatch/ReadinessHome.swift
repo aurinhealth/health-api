@@ -59,10 +59,21 @@ struct ReadinessHome: View {
         // The name beside the number, above the pill: over the number it
         // slid under the alarm button, which hangs over the page.
         HStack(alignment: .lastTextBaseline, spacing: 8) {
-            Text(s.readiness.map { String($0) } ?? "–")
-                .font(W.serif(58))
-                .foregroundStyle(W.ink)
+            if s.readiness == nil, let days = learning {
+                // A new athlete: the day of the 14 readiness needs ("5/14"),
+                // as "Učím se tvůj normál" on the iPhone.
+                HStack(alignment: .lastTextBaseline, spacing: 0) {
+                    Text(String(days)).foregroundStyle(W.ink)
+                    Text(verbatim: "/14").foregroundStyle(W.secondary)
+                }
+                .font(W.serif(46))
                 .lineLimit(1)
+            } else {
+                Text(s.readiness.map { String($0) } ?? "–")
+                    .font(W.serif(58))
+                    .foregroundStyle(W.ink)
+                    .lineLimit(1)
+            }
             VStack(alignment: .leading, spacing: 4) {
                 Text(W.tr("Připravenost", "Readiness"))
                     .font(.system(size: 12, weight: .medium))
@@ -84,8 +95,12 @@ struct ReadinessHome: View {
         .contentShape(Rectangle())
     }
 
-    /// The iPhone's words for the zone (TodayView's pill).
+    private var learning: Int? { s.learningDays.map { min(14, max(1, $0)) } }
+
+    /// The iPhone's words for the zone (TodayView's pill); while readiness
+    /// learns a new athlete's normal, "učím se".
     private var pill: (text: String, color: Color)? {
+        if s.readiness == nil, learning != nil { return (W.tr("učím se", "learning"), W.amber) }
         guard s.readiness != nil else { return nil }
         switch s.zone {
         case "green": return (W.tr("vysoká", "high"), W.green)
