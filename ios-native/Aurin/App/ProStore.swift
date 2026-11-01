@@ -40,6 +40,10 @@ final class ProStore {
     @ObservationIgnored private var updates: Task<Void, Never>?
     @ObservationIgnored private var accountToken: UUID?
 
+    /// The app is the host of the unit tests (AurinTests), not used on a phone.
+    /// The smoke test (AurinUITests) runs the app on its own, without this.
+    nonisolated static let hostsUnitTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+
     init(trialEligible: Bool = false) {
         self.trialEligible = trialEligible
     }
@@ -48,6 +52,11 @@ final class ProStore {
     /// in the App Store, purchases approved by a parent) and loads the plans.
     /// No api with the sample data: purchases from Aurin.storekit stay on the phone.
     func start(api: APIClient?) {
+        // The unit tests run inside the app: its own App Store calls at launch
+        // (the plans, what is active, AppTransaction) would go to the real App
+        // Store, which has no account in the simulator, and StoreKit makes the
+        // tests' purchases from Aurin.storekit wait behind them, sometimes forever.
+        guard !Self.hostsUnitTests else { return }
         self.api = api
         guard updates == nil else { return }
         updates = Task { [weak self] in
@@ -78,7 +87,7 @@ final class ProStore {
     /// TestFlight for AI (src/ai-limit-share.js). Once per build and account;
     /// a failure tries again at the next start or sign-in.
     func reportInstall() async {
-        guard let api, let result = try? await AppTransaction.shared, case .verified(let app) = result else { return }
+        guard !Self.hostsUnitTests, let api, let result = try? await AppTransaction.shared, case .verified(let app) = result else { return }
         // Xcode signs with its own key, which the server never accepts.
         guard app.environment == .sandbox || app.environment == .production else { return }
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
