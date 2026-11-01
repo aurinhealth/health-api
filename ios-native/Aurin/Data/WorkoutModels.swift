@@ -310,6 +310,22 @@ struct GymDay: Decodable, Equatable {
         write(list, rest)
     }
 
+    /// The whole exercise out, its done sets too (Plan's swipe or Odebrat
+    /// cvik): added by mistake, it leaves nothing behind.
+    mutating func deleteExercise(at offset: Int) {
+        var (list, rest) = blocks
+        guard list.indices.contains(offset) else { return }
+        list.remove(at: offset)
+        // Its superset partner left alone is no superset any more.
+        func letter(_ i: Int) -> String? { ExerciseOrder.letter(list[i].first { $0.count > 12 }?[12].string) }
+        for i in list.indices {
+            guard let own = letter(i), list.indices.filter({ letter($0) == own }).count == 1 else { continue }
+            for r in list[i].indices where list[i][r].count > 12 { list[i][r][12] = .string("") }
+        }
+        write(list, rest)
+        balanceWarmups()
+    }
+
     private func sided(_ rows: [[JSONValue]]) -> Bool {
         rows.contains { ["L", "P"].contains(cell($0, 13) ?? "") }
     }

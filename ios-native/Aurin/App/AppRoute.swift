@@ -33,6 +33,8 @@ enum AppRoute: Hashable {
     case gymBuilder
     /// "Trénink: horní část těla" from Svaly: the proposal straight away, its length the usual one.
     case gymQuick
+    /// "Sestavit z odpočatých" under the Odpočaté chip: the proposal straight away, only rested muscles.
+    case gymRested
     case exerciseLibrary
     /// The library with the choice of sports; .workoutLibrary opens one sport.
     case library
@@ -83,7 +85,7 @@ enum AppRoute: Hashable {
     /// planned): switching tabs keeps it open instead of going back.
     var keepsPlace: Bool {
         switch self {
-        case .gym, .gymSession, .gymBuilder, .gymQuick, .trainingMode, .liveGym, .planTemplate: return true
+        case .gym, .gymSession, .gymBuilder, .gymQuick, .gymRested, .trainingMode, .liveGym, .planTemplate: return true
         default: return false
         }
     }
@@ -202,6 +204,7 @@ struct RouteScreen: View {
         case .sleepSettings: SleepSettingsView(route: true)
         case .gymBuilder: GymBuilderView(date: AppModel.localDate(Date()))
         case .gymQuick: GymBuilderView(date: AppModel.localDate(Date()), quick: true)
+        case .gymRested: GymBuilderView(date: AppModel.localDate(Date()), quick: true, rested: true)
         case .exerciseLibrary: ExerciseLibraryView()
         case .library: TrainingLibraryView()
         case .workoutLibrary(let sport): TrainingLibraryView(sport: sport)
