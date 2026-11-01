@@ -307,7 +307,7 @@ const foodOne = `<div class="dm pad one">
 <div class="row sp base"><b>Today’s target</b><span class="mut">training day</span></div>
 <div class="row base one-v"><span class="num big"${n(2300, 2650, 400, 1300, 'i')}>2,650</span><span class="mut">kcal</span></div>
 <div class="mut">1,380 eaten · 1,270 left</div>
-<div class="one-pt amb"${at('1500')}>+350 kcal for training</div>
+<div class="tparts"${at('1500')}><i class="tbar"><b style="flex:2300;background:var(--brown)"></b><b style="flex:200;background:var(--green)"></b><b style="flex:150;background:repeating-linear-gradient(135deg,var(--amber) 0 3px,transparent 3px 6px)"></b></i><span class="mut s">Base 2,300 · <span class="grn">+200 done</span> · <span class="amb">+150 planned</span></span></div>
 </div>`;
 
 const LETTERS = [['W', 'Warm-up', 'muted'], ['T', 'Technique', 'blue'], ['E', 'Easy', 'green'], ['M', 'Moderate', 'indigo'], ['H', 'High', 'amber'], ['F', 'Failure', 'red'], ['PR', 'Personal record', 'gold'], ['D', 'Drop set', 'pink']];
@@ -352,7 +352,9 @@ ${[['Squat', 1], ['Bench press', 1], ['Bent-over rows', 0]].map(([k, up], i) => 
 
 // ---- Food (Widgets.swift FoodWidget, FoodView.swift, BarcodeScanSheet.swift, PortionWheel chips) ----
 const foodTarget = `<div class="dm pad">
-<div class="row base"><span class="num big">1,380</span><span class="fo mut">of 2,650<br>kcal</span></div>
+<div class="row base"><span class="num big">1,380</span><span class="fo mut">of 2,650<br>kcal ›</span></div>
+<i class="tbar" style="margin-top:14px"><b style="flex:2300;background:var(--brown)"></b><b style="flex:200;background:var(--green)"></b><b style="flex:150;background:repeating-linear-gradient(135deg,var(--amber) 0 3px,transparent 3px 6px)"></b></i>
+<div class="tp3">${[['Base', '2,300', 'brown'], ['Workouts', '+200', 'green'], ['Planned', '+150', 'amber']].map(([k, v, c], i) => `<div><span class="mut s"><i style="${i === 2 ? `border:1.5px solid var(--${c})` : `background:var(--${c})`}"></i>${k}</span><span class="num md">${v}</span></div>`).join('')}</div>
 <div class="coach"><div class="ch4">${ic('spark')}Coach</div><p class="sent">Training day: 350 kcal more. 1,270 kcal left, an afternoon snack of about 360 kcal.</p></div>
 <div class="mac3">${[['Carbs', 177, 330, 'carbs'], ['Protein', 84, 150, 'protein'], ['Fat', 36, 80, 'fat']].map(([k, v, t, c]) => `<div><span class="mut s"><i style="background:var(--${c})"></i>${k}</span><span class="num md">${v}<small> / ${t} g</small></span><i class="mb"><b style="--w:${v / t * 100}%;background:var(--${c})"></b></i></div>`).join('')}</div>
 <div class="mut s alln">All nutrients ›</div>
@@ -650,7 +652,7 @@ export const demoCss = `
 .pr2{display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:10px;padding:8px 0 4px;border-top:1px solid var(--line)}.pr2 b{display:block;font-size:14px}.pr2 .num.md{font-size:20px}.pr2 .rb{grid-column:1;margin:6px 0}.pr2 .nd{padding:14px 16px;border-radius:16px;background:var(--panel2,color-mix(in srgb,var(--text) 3%,transparent))}.nt{font-weight:500;font-size:15px}.nr{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);padding:3px 0}
 .ndd{margin-top:10px;padding-top:12px;border-top:1px solid var(--line)}.num.amb{color:var(--amber)}.nd .kbar{margin-top:8px}.nd .kbar b{width:0}.nd .kbar b.in,html:not(.js) .nd .kbar b{width:var(--w)}
 .pr3{padding:10px 0 12px;border-top:1px solid var(--line)}.pr3:first-of-type{border-top:0}.pr3 b{font-weight:500;font-size:15px}.pr3 .num.md{font-size:20px}.pr3 .rb{margin:10px 0 8px}
-.fo{font-size:12.5px;line-height:1.3;margin-left:10px}.mac3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.mac3>div{display:flex;flex-direction:column;gap:3px}.mac3 .mut i{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:middle}.mac3 small{font-family:var(--num);font-size:12px;color:var(--muted)}.alln{margin-top:12px}
+.fo{font-size:12.5px;line-height:1.3;margin-left:10px}.mac3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.mac3>div{display:flex;flex-direction:column;gap:3px}.mac3 .mut i{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:middle}.mac3 small{font-family:var(--num);font-size:12px;color:var(--muted)}.alln{margin-top:12px}.tp3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}.tp3>div{display:flex;flex-direction:column;gap:2px}.tp3 .mut i{display:inline-block;box-sizing:border-box;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle}.tparts{margin-top:10px;display:flex;flex-direction:column;gap:6px}.tbar{display:flex;gap:2px;height:5px;border-radius:3px;overflow:hidden}.tbar b{display:block}
 .pts{grid-column:2;margin:0}
 .pts{display:table;margin-left:auto;padding:3px 10px;border-radius:999px;background:color-mix(in srgb,var(--text) 6%,transparent);font-size:12px;font-weight:500}
 .jt{display:flex;flex-wrap:wrap;gap:6px}

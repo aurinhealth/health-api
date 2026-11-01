@@ -106,6 +106,7 @@ struct FoodContent: View {
     var scan: () -> Void = {}
     @Environment(\.tabActions) private var actions
     @State private var editing = false
+    @State private var showingParts = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -138,10 +139,24 @@ struct FoodContent: View {
         HStack(alignment: .lastTextBaseline, spacing: 12) {
             Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
             if let target = food.target {
-                Text(L10n.f("z %@\nkcal", Fmt.int(target))).font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
+                // With its parts the target opens where the numbers come from.
+                Text(L10n.f("z %@\nkcal", Fmt.int(target)) + (food.targetParts != nil ? " ›" : ""))
+                    .font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
+                    .onTapGesture { if food.targetParts != nil { showingParts = true } }
             }
         }
         .padding(.top, 30)
+        // The target's parts: the base, the workouts done and the planned ones.
+        if let parts = food.targetParts {
+            Button { showingParts = true } label: { TargetPartsRow(parts: parts) }
+                .buttonStyle(.plain)
+                .padding(.top, 20)
+                .sheet(isPresented: $showingParts) {
+                    let today = AppModel.localDate(Date())
+                    TargetPartsSheet(parts: parts, target: food.target ?? parts.base + parts.workouts + parts.planned,
+                                     isToday: food.date == today, past: food.date < today)
+                }
+        }
         // An earlier day shows only its data; a day ahead keeps its sentence.
         let day = page.map(\.selectedDate) ?? model.selectedDate
         if day.map({ $0 > AppModel.localDate(Date()) }) ?? true {

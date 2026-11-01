@@ -2099,23 +2099,29 @@ async function energyForDate(env, date) {
   const isCompleteDay = date < nowDate;
   const observed = google?.value_numeric != null ? Number(google.value_numeric) : null;
 
+  // What each workout of the day burns: a completed one by its own number (or
+  // its length), a plan still ahead by its length.  The Food screen shows them
+  // as the parts of the target (targetParts in app-food.js).
+  const workoutCalories = [];
+  let activityAdjustment = 0;
+  for (const a of completed) {
+    const rate = CONFIG.activityKcalPerHour[a.type] ? activityKcalPerHourFor(a.type, weight?.value_numeric) : (a.payload && a.payload.category === "Ride" ? CONFIG.activityKcalPerHour.Ride : 400);
+    const actual = Number(a.caloriesForPlanning??a.calories), kcal = actual > 0 ? actual : (a.durationHours || 0) * rate;
+    activityAdjustment += kcal;
+    workoutCalories.push({ kind: "done", id: a.id ?? null, type: a.type || null, name: a.name || null, minutes: Math.round((a.durationHours || 0) * 60), kcal: Math.round(kcal) });
+  }
+  for (const w of unmatchedPlanned) {
+    if (!w.durationHours) continue;
+    const type = w.type === "Ride" || w.cycling ? "Ride" : w.type;
+    const rate = type === "Ride" || w.cycling ? cyclingKcalPerHour(w) : activityKcalPerHourFor(type, weight?.value_numeric);
+    activityAdjustment += w.durationHours * rate;
+    workoutCalories.push({ kind: "planned", id: w.id ?? null, type: type || null, name: w.name || null, minutes: Math.round(w.durationHours * 60), kcal: Math.round(w.durationHours * rate) });
+  }
+
   let estimatedTDEE = null;
   if (isCompleteDay && observed != null && observed > 1000) {
     estimatedTDEE = Math.round(observed);
   } else if (baseline.ready) {
-    let activityAdjustment = 0;
-    for (const a of completed) {
-      const rate = CONFIG.activityKcalPerHour[a.type] ? activityKcalPerHourFor(a.type, weight?.value_numeric) : (a.payload && a.payload.category === "Ride" ? CONFIG.activityKcalPerHour.Ride : 400);
-      const actual = Number(a.caloriesForPlanning??a.calories);
-      activityAdjustment += actual > 0 ? actual : (a.durationHours || 0) * rate;
-    }
-    for (const w of unmatchedPlanned) {
-      if (w.durationHours) {
-        const type = w.type === "Ride" || w.cycling ? "Ride" : w.type;
-        const rate = type === "Ride" || w.cycling ? cyclingKcalPerHour(w) : activityKcalPerHourFor(type, weight?.value_numeric);
-        activityAdjustment += w.durationHours * rate;
-      }
-    }
     estimatedTDEE = Math.round(baseline.baselineRestTDEE + baseline.sportDaily + activityAdjustment);
   }
 
@@ -2172,7 +2178,8 @@ async function energyForDate(env, date) {
       floorApplied: floorGapKcal > 0,
       floorGapKcal,
       trendAdjustment: trend.adjustment,
-      trendReason: trend.reason
+      trendReason: trend.reason,
+      workouts: workoutCalories
     },
     proteinReferenceKg: proteinKg,
     energyProfile: { ready: baseline.ready, source: baseline.source, missing: baseline.missing, targetWeightKg: baseline.targetWeightKg ?? null, floor: baseline.floor ?? null },
