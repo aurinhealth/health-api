@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {existsSync,readFileSync} from 'node:fs';
+import {existsSync,readFileSync,readdirSync,statSync} from 'node:fs';
 import worker from '../src/entrypoint.js';
 import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME} from '../src/site-pages.js';
 
@@ -321,4 +321,10 @@ test('the privacy policy, terms and health data policy name the operator as a so
   assert.match(health,/<li><strong>Wahoo<\/strong>: when you connect it, Aurin first shows that it sends there only the rides and runs you plan/);
   assert.match(health,/sexual activity on a day[^<]*kept only in Aurin’s database and its backups, never goes to AI or any connected service/);
   for(const part of ['<strong>To collect it.</strong>','<strong>To share it.</strong>','mood and anxiety','GitHub, which runs the weekly database backup'])assert.ok(health.includes(part),part);
+});
+
+test('app screens on the site are real shots, not an empty screen', () => {
+  const dir = new URL('../public/site/app/', import.meta.url);
+  for (const f of readdirSync(dir).filter(f => f.endsWith('.webp')))
+    assert.ok(statSync(new URL(f, dir)).size > 8000, `${f} looks blank (a shot taken before the screen drew)`);
 });

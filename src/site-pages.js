@@ -871,7 +871,7 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
     ['food', 'Nutrition', 'Snap your plate or scan a barcode. AI fills in the values.', 'glow-food', ['vyziva']],
     ['sleep', 'Sleep', 'A bedtime from your alarm and the sleep you need tonight.', 'glow-health', ['spanek']],
     ['coach', 'Coach', 'Ask anything. It knows your sleep, training and food.', 'glow-coach', ['kouc']],
-    ['watch', 'Apple Watch', 'Your morning, your sets and your water, without taking out your phone.', 'glow-today', ['hodinky']]];
+    ['watch', 'Apple Watch', 'Your morning, your sets and your water, without taking out your phone. Comes with the iPhone app, on any Apple Watch with watchOS 10 or later.', 'glow-today', ['hodinky']]];
   const act = ([id, title, line, glow]) => `<section id="a-${id}" class="opener" style="--glow:var(--${glow})"><div class="wrap ac">
 <div class="head reveal"><h2 class="big">${title}</h2><p class="sub">${line}</p></div>
 <div class="cards" aria-hidden="true">${ACTS[id]}</div>
@@ -954,7 +954,7 @@ ${layer('wide')}${layer('tall')}
   const faq = [
     ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit, Pixel Watch or Garmin. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
     ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
-    ['What does it cost?', 'Nothing during testing. After the release, the coach, food from a photo, reviews, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: CZK 199 a month or CZK 1,490 a year with the first week free, in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.'],
+    ['What does it cost?', 'Nothing during testing. After the release, the coach, food from a photo, reviews, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: $6.99 a month or $59.99 a year with the first week free, shown in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from, and under Health data see for each type where Aurin reads it from and sends it to, with a switch for each.'],
     ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
     ['Where is my data and who sees it?', 'In Aurin’s database in Europe, encrypted. We never sell it or use it for ads. AI features get only what a question needs, and only once you allow them. <a href="/privacy">More in the privacy policy</a>.'],
