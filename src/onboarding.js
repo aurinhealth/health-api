@@ -1,5 +1,5 @@
 import {METAGYM_KUTNA_HORA,OTHER_STATION_IDS} from './gym-equipment.js';
-import {cardioMode,normalizeMyRoutines,routineLength} from './stretching.js';
+import {cardioFavourites as cardioFavouritesOf,cardioLength as cardioLengthOf,cardioMode,normalizeMyRoutines,routineLength} from './stretching.js';
 import {normalizeProfile,energyBaseline,effectiveProfile} from './energy-profile.js';
 import {readSuggestions} from './profile-suggestions.js';
 import {normalizeAvailability} from './training-availability.js';
@@ -108,12 +108,14 @@ export function normalizeTraining(input={}){
   // Cardio: none / start / end / both (older setups: warmupCardio false → none), and the machine.
   const cardio=cardioMode(input),warmupCardio=cardio==='start'||cardio==='both';
   const cardioType=String(input.cardioType||'').trim().slice(0,40)||'exercise_bike';
+  // The cardio's length (0 = no limit, a stopwatch) and the favourite times offered in the workout.
+  const cardioLength=cardioLengthOf(input.cardioLength),cardioFavourites=cardioFavouritesOf(input.cardioFavourites);
   // The athlete's own warm-ups and stretchings, the one used by default (else auto)
   // and the length of the automatic ones (5–30 min, else sized to the session).
   const myRoutines=normalizeMyRoutines(input.myRoutines);
   const pick=kind=>myRoutines[kind].some(r=>r.id===input[kind+'Routine'])?input[kind+'Routine']:'auto';
   const length=v=>routineLength(v)||'auto';
-  return {experience,experienceBySport,equipment:kind,limitations,availability,stations,gymName,gymUrl,dumbbellWeights,places,activePlace,goal,warmup,warmupCardio,cardio,cardioType,stretching,
+  return {experience,experienceBySport,equipment:kind,limitations,availability,stations,gymName,gymUrl,dumbbellWeights,places,activePlace,goal,warmup,warmupCardio,cardio,cardioType,cardioLength,cardioFavourites,stretching,
     myRoutines,warmupRoutine:pick('warmup'),stretchingRoutine:pick('stretching'),warmupLength:length(input.warmupLength),stretchingLength:length(input.stretchingLength)};
 }
 export async function updateTrainingSetup(db,input={}){
