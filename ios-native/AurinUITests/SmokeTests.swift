@@ -243,12 +243,13 @@ final class SmokeTests: XCTestCase {
 
         // For the App Store screenshots: Today down to the day's timeline, and
         // Training down to the coach's card under today's workout.
-        for (tab, file, swipes) in [("today", "dnes", 3), ("training", "trenink", 2)] {
+        // A quarter of the screen at a time, so one shot holds a whole card.
+        for (tab, file, steps) in [("today", "dnes", 7), ("training", "trenink", 4)] {
             english("-tab", tab)
             pause(4)
-            for i in 0..<swipes {
-                app.swipeUp()
-                pause(1.5)
+            for i in 0..<steps {
+                scroll(0.25)
+                pause(1)
                 shot("\(file)-\(i + 2)")
             }
         }
@@ -303,6 +304,13 @@ final class SmokeTests: XCTestCase {
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5), "the app quit on \(route)")
         XCTAssertFalse(card.isHittable, "\(route) did not open")
         shot(file)
+    }
+
+    /// Scrolls up by a share of the screen, held at the end so it does not fly on.
+    private func scroll(_ share: CGFloat) {
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7 - share))
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.4)
     }
 
     private func pause(_ seconds: TimeInterval = 1.5) {
