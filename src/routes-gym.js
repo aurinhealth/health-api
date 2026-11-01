@@ -106,6 +106,14 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
     // liked: the athlete's thumbs up (true) or down (false), so the picker offers the disliked ones last.
     const [setup,taste]=await Promise.all([trainingSetup(env.DB).catch(()=>null),exercisePreferences(env.DB)]);
     const liked=new Set(taste.liked),disliked=new Set(taste.disliked);
+    // ?q= (the Apple Watch's search): the 20 names that match, fitting ones first, without the muscles.
+    const q=String(url.searchParams.get('q')||'').trim().slice(0,60);
+    if(q){
+      const fold=t=>String(t).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(),key=fold(q);
+      const found=gymExerciseCatalog().filter(e=>fold(e.name).includes(key)).map(e=>({name:e.name,sets:e.sets??null,reps:e.reps??null,fits:fitsEquipment(e.name,setup)}))
+        .sort((a,b)=>(a.fits===false)-(b.fits===false)||a.name.localeCompare(b.name)).slice(0,20);
+      return Response.json({status:'ok',exercises:found},{headers:{'Cache-Control':'no-store'}});
+    }
     return Response.json({status:'ok',exercises:gymExerciseCatalog().map(e=>({...e,stations:EXERCISE_STATIONS[e.name]||[],muscles:exerciseMuscles(e.name),fits:fitsEquipment(e.name,setup),fatigue:EXERCISE_INTELLIGENCE[e.name]?.fatigue??null,liked:liked.has(e.name)?true:disliked.has(e.name)?false:null}))},{headers:{'Cache-Control':'no-store'}});
   }
   // Replacements for one exercise of a day's plan (workout mode, gym table).
@@ -186,11 +194,13 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       let data={status:"ok",values:[],videoLinks:[]};
       try { const plan=await readGymPlan(env.DB,date); data={status:"ok",date,values:plan.stored?plan.values:[],videoLinks:[],stored:plan.stored,cancelled:plan.cancelled,recoverable:plan.recoverable}; }
       catch(error) { console.error("Gym plan read failed",error); data={status:"partial",values:[],videoLinks:[],message:L("Plán se nepodařilo načíst.", "The plan couldn't be loaded.")}; }
+      // ?lite=1 (the Apple Watch): the sheet alone, without the 500 rows of history and the muscles.
+      const lite=url.searchParams.get('lite')==='1';
       let history=[];
-      try { history=await getStrengthHistory(env.DB,500,{drops:true}); } catch(error) { console.error("Gym history read failed",error); }
+      if(!lite)try { history=await getStrengthHistory(env.DB,500,{drops:true}); } catch(error) { console.error("Gym history read failed",error); }
       // Muscles each exercise of the day loads (plan and saved sets), for the body figure.
       const names=new Set([...(data.values||[]).slice(7).map(r=>r?.[1]),...history.filter(r=>String(r.workout_date||'').slice(0,10)===date).map(r=>r.exercise)].filter(Boolean));
-      const muscles=Object.fromEntries([...names].map(name=>[name,exerciseMuscles(name)]));
+      const muscles=lite?{}:Object.fromEntries([...names].map(name=>[name,exerciseMuscles(name)]));
       // The athlete's equipment, so the coach swaps exercises only for ones it allows.
       const setup=await trainingSetup(env.DB).catch(()=>null),equipment=setup?{equipment:setup.equipment||null,stations:setup.stations||[]}:null;
       // An older plan without its warm-up, cardio and stretching gets them from Posilovna.
@@ -286,7 +296,8 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
         const wrote=await syncGymActivity(env,date,{name}).catch(error=>{console.error('Gym activity failed',error?.message);return false;});
         if(wrote){const job=matchActivities(env,{days:2}).then(()=>bumpCacheVersion(env.DB)).catch(error=>console.error('Activity matching failed',error?.message));if(ctx?.waitUntil)ctx.waitUntil(job);else await job;}
       }
-      const history=await getStrengthHistory(env.DB,500);
+      // lite (the Apple Watch saving a set): no history back, 500 rows fewer read.
+      const history=body?.lite===true?[]:await getStrengthHistory(env.DB,500);
       return Response.json({status:"ok",storage:"d1",values:storedValues,history,historySaved:historyResult,message:sets.length?L("Workout uložen do interní databáze.", "Workout saved to the app database."):L("Změny plánu jsou uložené; dokončené série označ Hotovo.", "Plan changes are saved; mark completed sets as Done.")},{headers:{"Cache-Control":"no-store"}});
       } catch(error) {
         console.error("Gym save failed", error);

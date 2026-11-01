@@ -3,7 +3,9 @@ import Foundation
 /// The day's gym plan as the watch gets it (App/WatchGymBridge.swift): each
 /// exercise with its sets, the weight and reps to start from and the rest after
 /// each set. The watch asks for it when the training page opens and sends each
-/// set back when it is done; the iPhone writes it into the day's sheet.
+/// set back when it is done; the iPhone writes it into the day's sheet. Out of
+/// the iPhone's reach the watch loads and saves the sheet on the server itself
+/// (AurinWatch/GymStore.swift, WatchShared/GymSheet.swift).
 struct WatchGym: Codable, Equatable, Sendable {
     var date: String
     var title: String?
@@ -11,6 +13,9 @@ struct WatchGym: Codable, Equatable, Sendable {
     /// The rest before the next exercise (Nastavení → Posilovna → Pauzy).
     var restExercises: Int
     var exercises: [Exercise]
+    /// The day's sheet itself (GymDay.values), so the watch can go on without
+    /// the iPhone; nil from an older iPhone.
+    var sheet: [[JSONValue]]? = nil
 
     struct Exercise: Codable, Equatable, Sendable {
         /// As in the sheet; changes name it.
@@ -100,6 +105,17 @@ struct WatchGym: Codable, Equatable, Sendable {
         }
     }
 
+    /// The sheet the watch worked on alone and saved to the server itself,
+    /// handed to the iPhone once it is in reach again: the iPhone takes it as
+    /// the day's and the watch goes on through the iPhone.
+    struct Sheet: Codable, Equatable, Sendable {
+        var date: String
+        var values: [[JSONValue]]
+
+        func encoded() -> Data? { try? JSONEncoder().encode(self) }
+        static func decode(_ data: Data) -> Sheet? { try? JSONDecoder().decode(Sheet.self, from: data) }
+    }
+
     /// A change of the plan from the watch (the menu under ≡); the iPhone
     /// writes it into the sheet and answers with the new plan.
     struct Change: Codable, Equatable, Sendable {
@@ -151,6 +167,8 @@ struct WatchGym: Codable, Equatable, Sendable {
     static let watchEndKey = "gymWatchEnd"
     /// Both ways: the rest between sets (Rest).
     static let restKey = "gymRest"
+    /// Watch → iPhone: the sheet the watch saved alone (Sheet), with a reply once taken.
+    static let sheetKey = "gymSheet"
 
     struct Live: Codable, Equatable, Sendable {
         var start: Date
