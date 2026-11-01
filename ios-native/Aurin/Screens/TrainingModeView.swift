@@ -256,7 +256,9 @@ struct TrainingModeView: View {
         .sheet(isPresented: $editing) {
             if let day {
                 PlanEditorSheet(day: day, catalog: catalog, date: date, current: index,
-                                go: { edited, id in Task { await saveEdited(edited, focus: id) } }) { edited in Task { await saveEdited(edited) } }
+                                go: { edited, id in Task { await saveEdited(edited, focus: id) } },
+                                // After the sheet is gone: the workout mode closes with it.
+                                discard: { Task { try? await Task.sleep(for: .milliseconds(450)); await discard() } }) { edited in Task { await saveEdited(edited) } }
             }
         }
     }

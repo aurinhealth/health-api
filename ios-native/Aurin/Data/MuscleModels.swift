@@ -86,6 +86,31 @@ struct MuscleFatigue: Decodable {
     /// The muscles that are not rested yet, the most tired first.
     var tired: [Muscle] { (muscles ?? []).filter { $0.state != "rested" } }
 
+    /// "Odpočaté" in Sestavit trénink: up to five rested muscles of the figure
+    /// (the server's limit), the body parts trained longest ago first, within
+    /// them the big muscles first. Empty when nothing is rested.
+    var restedFocus: [String] {
+        let order = ["chest", "upper_back", "lats", "quads", "hamstrings", "hips", "front_delts", "side_delts", "rear_delts",
+                     "biceps", "triceps", "calves", "abs", "lower_back", "traps", "obliques", "forearms"]
+        func since(_ id: String) -> Int { groups?.first { $0.id == Self.groupId(body: id) }?.daysSince ?? 99 }
+        let rested = order.enumerated().filter { tired(body: $0.element) == nil }
+        return Array(rested.sorted { since($0.element) != since($1.element) ? since($0.element) > since($1.element) : $0.offset < $1.offset }
+            .map(\.element).prefix(5))
+    }
+
+    /// The body part (src/muscle-fatigue.js GROUPS) of a muscle of the figure.
+    static func groupId(body id: String) -> String {
+        switch id {
+        case "upper_back", "lats", "lower_back", "traps": return "back"
+        case "front_delts", "side_delts", "rear_delts": return "shoulders"
+        case "biceps", "triceps", "forearms": return "arms"
+        case "abs", "obliques": return "core"
+        case "hips": return "glutes"
+        case "quads", "hamstrings", "calves": return "legs"
+        default: return id
+        }
+    }
+
     /// The six body parts of the rings.
     var rings: [Group] { (groups ?? []).filter { $0.ring != false } }
 
