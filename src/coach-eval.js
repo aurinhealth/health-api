@@ -450,6 +450,8 @@ function dayRefs(sentence, date) {
   // "po páteční jízdě" is about the day after it (run 28, S15).
   const add = (re, d) => { for (const m of text.matchAll(new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g'))) if (!/(?:před|po|before|after)\s+$/i.test(text.slice(0, m.index))) found.push([m.index, d]); };
   add(/pozítř\p{L}*|day after tomorrow/iu, shift(date, 2));
+  // "zítra, pozítří i na den potom": the day after the day after tomorrow (run 41, S15).
+  add(/den potom|the day after that/iu, shift(date, 3));
   add(/(?<!\p{L})dnes|dnešn|today|tonight/iu, date);
   add(/(?<!po)zítř|(?<!po)zítra|(?<!after )tomorrow/i, shift(date, 1));
   for (let k = 0; k <= 13; k++) { const d = shift(date, k), w = weekdayOf(d); add(WEEKDAYS.cs[w], d); add(WEEKDAYS.en[w], d); }
