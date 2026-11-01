@@ -451,7 +451,7 @@ test('since run 37: swimming, triathlon, diet, equipment, chest, a strength athl
   assert.deepEqual(names(memory), []); assert.deepEqual(memory.memory.forget, knee);
   assert.ok(names(await run('S39', 'Už jsem to smazal.', [], { forget: knee, update: [] })).includes('quality:netvrdí, že už zapomněl (čeká na potvrzení)'));
   // A plan from the chat; the strength athlete's gym day; yesterday's ride from its detail screen.
-  assert.deepEqual(names(await run('S40', 'Zakládám ti plán Půlmaraton na 12 týdnů.', [card({ type: 'plan', sport: '', minutes: 0, planId: 'run-half', date: shift(84), raceKm: 21.1 })])), []);
+  assert.deepEqual(names(await run('S40', 'Zakládám ti plán Půlmaraton na 12 týdnů, datum závodu je zatím odhad.', [card({ type: 'plan', sport: '', minutes: 0, planId: 'run-half', date: shift(84), raceKm: 21.1 })])), []);
   assert.deepEqual(names(await run('S37', 'Dnes posilovna na horní polovinu těla.')), []);
   assert.deepEqual(names(await run('S41', 'Včerejší sweet spot: NP 228 W při RPE 7, povedlo se.')), []);
 });
@@ -476,4 +476,16 @@ test('run 38: every main sport gets the coach in both languages, a week split is
   const swim = { type: 'workout', eventId: '', date: '2026-10-23', sport: 'swim', minutes: 30, status: '', statusUntil: '', reason: 'plavání', fromExercise: '', toExercise: '', workoutId: '', kind: 'endurance', activityId: '', otherActivityId: '', time: '', kcal: 0, gymFocus: '', gymMuscles: [], insisted: false, planId: '', days: [], raceKm: 0 };
   const ctx = scenarioContext(scenarioById('S32'), day, at).ctx;
   assert.deepEqual(validateCoachActions([swim], ctx, day, { userInitiated: true }), []);
+});
+
+test('run 39: only the planning verbs send a question to the full model; hedging in S32 and a firm made-up race date in S40 are flagged', () => {
+  for (const q of ['Jak mám tenhle týden rozložit tréninky mezi plavání, kolo a běh?', 'Rozděl mi tréninky na týden', 'Jak to mám rozvrhnout?', 'How should I split my week between swim, bike and run?', 'Spread my workouts over 5 days']) assert.equal(assistantTask(q, { view: 'today' }), 'planning', q);
+  // Nouns and adjectives of the same roots stay quick questions.
+  for (const q of ['Jak rozdělená je moje zátěž?', 'Jaké je rozdělení zón?', 'Jak je rozložená moje zátěž v týdnu?', 'Kde mám rozvrh tréninků?', 'Ukaž mi rozvrh na týden', 'What was my 5k split?', 'What is my split time?']) assert.equal(assistantTask(q, { view: 'today' }), 'quick', q);
+  const day = '2026-10-21', at = '2026-10-21 08:00';
+  const failedOn = (id, answer, kept = []) => checkReply(scenarioById(id), { answer, kept, proposed: kept, task: 'planning' }, at, day).filter(c => !c.ok).map(c => c.name);
+  assert.ok(failedOn('S32', 'Zítra sweet spot; při horší připravenosti bych zvolil lehkou jízdu.').includes('bez váhání u doporučení („při horší připravenosti bych…“)'));
+  const plan = [{ type: 'plan', planId: 'run-half', sport: 'run', date: '2027-01-13' }];
+  assert.ok(failedOn('S40', 'Navrhl bych plán Půlmaraton s cílem 13. ledna 2027.', plan).includes('datum závodu podá jako odhad nebo se na něj zeptá'));
+  assert.ok(!failedOn('S40', 'Navrhl bych plán Půlmaraton; datum závodu 17. 1. je odhad, kdy je tvůj závod?', plan).includes('datum závodu podá jako odhad nebo se na něj zeptá'));
 });
