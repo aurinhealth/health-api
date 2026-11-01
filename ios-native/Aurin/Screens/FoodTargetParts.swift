@@ -17,9 +17,16 @@ struct TargetPartsRow: View {
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.tr("Základ") + " " + Fmt.int(parts.base) + ", " + L10n.tr("Tréninky") + " " + added(parts.workouts)
-            + ", " + L10n.tr("Naplánováno") + " " + added(parts.planned))
+        .accessibilityLabel(spoken)
         .accessibilityAddTraits(.isButton)
+    }
+
+    /// "Base 2,300, Workouts +200, Planned +150" for VoiceOver.
+    private var spoken: String {
+        let base: String = L10n.tr("Základ") + " " + Fmt.int(parts.base)
+        let done: String = L10n.tr("Tréninky") + " " + added(parts.workouts)
+        let planned: String = L10n.tr("Naplánováno") + " " + added(parts.planned)
+        return [base, done, planned].joined(separator: ", ")
     }
 
     private func added(_ value: Double) -> String { value > 0 ? "+" + Fmt.int(value) : "0" }
@@ -46,10 +53,10 @@ struct TargetPartsBar: View {
     let parts: FoodSnapshot.TargetParts
 
     var body: some View {
-        let total = max(parts.base + parts.workouts + parts.planned, 1)
+        let total: Double = max(parts.base + parts.workouts + parts.planned, 1)
         GeometryReader { geo in
             let gaps = CGFloat([parts.workouts, parts.planned].filter { $0 > 0 }.count) * 2
-            let width = max(geo.size.width - gaps, 0)
+            let width: Double = Double(max(geo.size.width - gaps, 0))
             HStack(spacing: 2) {
                 Rectangle().fill(Palette.brown).frame(width: width * parts.base / total)
                 if parts.workouts > 0 { Rectangle().fill(Palette.green).frame(width: width * parts.workouts / total) }
