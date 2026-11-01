@@ -497,3 +497,17 @@ test('run 41: "na den potom" in S15 names the day after the day after tomorrow',
   const failed = checkReply(scenarioById('S15'), { answer, kept, proposed: kept, task: 'planning' }, at, day).filter(c => !c.ok).map(c => c.name + ':' + (c.detail || ''));
   assert.ok(!failed.some(f => f.startsWith('text zmiňuje každou kartu')), failed.join(' | '));
 });
+
+test('run 42: "den po dlouhé jízdě" (S15), "hned po ní … běh" as the brick and a rest on a free Friday (S32) are no failures', () => {
+  const day = '2026-10-21', at = '2026-10-21 08:00';
+  const failedOn = (id, answer, kept) => checkReply(scenarioById(id), { answer, kept, proposed: kept, task: 'planning' }, at, day).filter(c => !c.ok).map(c => c.name);
+  const s15 = [{ type: 'workout', sport: 'ride', date: '2026-10-22', kind: 'recovery', minutes: 45 }, { type: 'workout', sport: 'ride', date: '2026-10-24', kind: 'recovery', minutes: 45 }];
+  assert.ok(!failedOn('S15', 'Tři dny VO2max po sobě bych nenaplánoval.\n\n- Zítra bych jel 45 min lehce v Z1.\n- Den po dlouhé jízdě bych dal 45 min regeneračně v Z1.', s15).includes('text zmiňuje každou kartu'));
+  const s32 = [{ type: 'rest', sport: 'run', date: '2026-10-24', eventId: 'planned:9303' }, { type: 'workout', sport: 'run', date: '2026-10-24', kind: 'endurance', minutes: 45 }, { type: 'workout', sport: 'run', date: '2026-10-25', kind: 'recovery', minutes: 20 }];
+  const answer = 'Tenhle týden bych nechal dvě jízdy, dva běhy a jedno plavání.\n\n- Zítra nech plánovaný sweet spot na kole a v pátek odpočívej.\n- V sobotu bych nahradil tempový běh lehkým během. V neděli nech dlouhou jízdu a hned po ní přidej 20 minut velmi lehkého běhu na nácvik přechodu.';
+  const failed = failedOn('S32', answer, s32);
+  assert.ok(!failed.includes('brick: běh hned po jízdě'), failed.join(' | '));
+  assert.ok(!failed.includes('každá změna z textu má kartu'), failed.join(' | '));
+  // A change on a planned day without a card is still caught.
+  assert.ok(failedOn('S32', 'Zítra bych sweet spot zrušil.', s32).includes('každá změna z textu má kartu'));
+});
