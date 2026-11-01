@@ -26,6 +26,7 @@ import { bumpCacheVersion, closedDay } from "./api-cache.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { markConnectionBroken, markConnectionOk, isGoogleAuthFailure, isIntervalsAuthFailure } from "./connection-health.js";
 import { manualPairs } from "./manual-pairs.js";
+import { dayCalories, dayRows } from "./day-reads.js";
 import { matchPlannedWorkouts } from "./plan-match.js";
 export { matchPlannedWorkouts };
 import { readSyncPrefs, healthAllowed, sentIntervalsIds, sentByAurin } from "./sync-destinations.js";
@@ -1915,13 +1916,13 @@ function activityIsStrength(activity) {
 async function nearbyRideContext(env, date) {
   const start = dateDaysFromDate(date, 1);
   const end = dateDaysFromDate(date, 3);
-  const rows = await env.DB.prepare(`
+  const rows = await dayRows(env.DB, env.USER_ID, "planned", start, end) || await env.DB.prepare(`
     SELECT payload_json, start_time
     FROM health_datapoints
     WHERE user_id = ? AND source_family IN ('intervals','local')
       AND data_type = 'planned-workout'
       AND start_time >= ? AND start_time < ?
-    ORDER BY start_time
+    ORDER BY start_time, id
   `).bind(env.USER_ID, start, end).all();
   const nextRide = rows.results.map(row => {
     try { return plannedWorkoutInfo(JSON.parse(row.payload_json || '{}')); } catch { return null; }
@@ -1968,7 +1969,9 @@ async function energyForDate(env, date) {
   // Google Health stores UTC: the user's day runs from local midnight to midnight.
   const dayStart = dayStartUtc(date), dayEnd = dayStartUtc(nextDate);
   // The day's reads don't depend on each other, so they run together.
-  const [google, planned, activities, googleExercises, weight, profile, activityTracked] = await Promise.all([env.DB.prepare(`
+  // While a week is analysed, each read comes from one read of the whole week
+  // (day-reads.js), in the same order; otherwise the day asks for its own.
+  const [google, planned, activities, googleExercises, weight, profile, activityTracked] = await Promise.all([dayCalories(env.DB, env.USER_ID, date, nextDate).then(rows => rows !== undefined ? rows : env.DB.prepare(`
     SELECT value_numeric, sample_time
     FROM health_datapoints
     WHERE user_id = ? AND data_type = 'total-calories'
@@ -1976,17 +1979,17 @@ async function energyForDate(env, date) {
       AND sample_time < ?
     ORDER BY sample_time DESC, id DESC
     LIMIT 1
-  `).bind(env.USER_ID, date, nextDate).first(),
-  env.DB.prepare(`
+  `).bind(env.USER_ID, date, nextDate).first()),
+  dayRows(env.DB, env.USER_ID, "planned", date, nextDate).then(rows => rows || env.DB.prepare(`
     SELECT *
     FROM health_datapoints
     WHERE user_id = ? AND source_family IN ('intervals','local')
       AND data_type = 'planned-workout'
       AND start_time >= ?
       AND start_time < ?
-    ORDER BY start_time
-  `).bind(env.USER_ID, date, nextDate).all(),
-  env.DB.prepare(`
+    ORDER BY start_time, id
+  `).bind(env.USER_ID, date, nextDate).all()),
+  dayRows(env.DB, env.USER_ID, "activities", date, nextDate).then(rows => rows || env.DB.prepare(`
     SELECT *
     FROM health_datapoints
     WHERE user_id = ? AND source_family IN ('intervals','local','wahoo')
@@ -1994,9 +1997,9 @@ async function energyForDate(env, date) {
       AND start_time >= ?
       AND start_time < ?
       AND (record_role IS NULL OR record_role != 'duplicate')
-    ORDER BY start_time
-  `).bind(env.USER_ID, date, nextDate).all(),
-  env.DB.prepare(`
+    ORDER BY start_time, id
+  `).bind(env.USER_ID, date, nextDate).all()),
+  dayRows(env.DB, env.USER_ID, "exercises", dayStart, dayEnd).then(rows => rows || env.DB.prepare(`
     SELECT *
     FROM health_datapoints
     WHERE user_id = ? AND source_family IN ('google-wearables','apple-health')
@@ -2004,8 +2007,8 @@ async function energyForDate(env, date) {
       AND start_time >= ?
       AND start_time < ?
       AND (record_role IS NULL OR record_role != 'duplicate')
-    ORDER BY start_time
-  `).bind(env.USER_ID, dayStart, dayEnd).all(),
+    ORDER BY start_time, id
+  `).bind(env.USER_ID, dayStart, dayEnd).all()),
   latestStoredWeight(env.DB, env.USER_ID),
   loadEffectiveProfile(env.DB, env.USER_ID),
   // Sport is estimated from the profile only when no source tracks activities.
@@ -2572,7 +2575,7 @@ function scaleRecipe(recipe, servings) {
 
 async function foodLogForDate(env, date) {
   // Planned or cancelled food (ChatGPT can plan a meal) is not eaten.
-  const rows = await env.DB.prepare(`
+  const rows = await dayRows(env.DB, env.USER_ID, "food", date) || await env.DB.prepare(`
     SELECT * FROM food_logs
     WHERE user_id = ? AND consumed_date = ? AND (status IS NULL OR status='eaten')
     ORDER BY consumed_at, id

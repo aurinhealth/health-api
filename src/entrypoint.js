@@ -146,7 +146,8 @@ import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnit
 import { appUpdateRequired } from "./app-version.js";
 import { compactOldData } from "./heart-rate-compaction.js";
 import { upkeepHourSummary } from "./hour-summary.js";
-import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, rememberTimeZone, localNow, localToday, localDate, localHour, timeZone, zoneOffsetMs } from "./user-time.js";
+import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, rememberTimeZone, localNow, localToday, localDate, localHour, timeZone, zoneOffsetMs, dayStartUtc } from "./user-time.js";
+import { readDaysTogether } from "./day-reads.js";
 import { shiftDate, googleHealthFor, dashboardProfile, mondayOfDate, dayStartSql, mapLimit, userWeekStart } from "./dashboard-shared.js";
 import { recentCoachProposals, ensureCoachInboxTable } from "./coach-inbox.js";
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
@@ -810,7 +811,7 @@ async function coachPush(env, ctx) {
   if (eveningDue) await claim('coach-pm', date);
   let nudge = zoneDue ? coachNudge({ date, hour, zone: state.zone }) : null;
   if (!nudge && (morningDue || eveningDue) && state.status === 'active') {
-    const inputs = await loadCoachInputs(env, ctx, internalHeaders(), date);
+    const inputs = await loadPushInputs(env, ctx, internalHeaders(), date);
     const upcoming = await upcomingSessions(env, (inputs.week?.days || []).filter(d => d.date >= date && d.date <= shiftDate(date, 1)));
     const readiness = morningDue ? readinessFor({ date, google: inputs.health?.wellness || [], intervals: inputs.fitness?.wellness || [], sessions: inputs.health?.sleep || [], profile: inputs.profile }) : null;
     nudge = coachNudge({ date, hour, morning: morningDue, evening: eveningDue, upcoming, sleep: inputs.health?.sleep || [],
@@ -1159,6 +1160,29 @@ async function profileTriathlonSplit(env,profile,history){
   let levels={};try{levels=JSON.parse(setup?.training_json||'{}').experienceBySport||{};}catch{}
   const sessions=Math.max(6,Math.min(10,Math.round((history.recentCount||0)/4))),hours=Number(profile?.weeklyHours)||null;
   return triathlonSplit({year:history.sports,levels,sessions,minutes:hours?hours*60:history.weeklyMinutes||null});
+}
+// What the coach's push looks at (coachPush): this week and the next (only
+// today and later are read), fitness, Google Health, the 30 nights and the
+// profile, made exactly as loadCoachInputs makes them. The rest of the
+// coach's inputs (last week, the day's analysis, gym, drinks, performance
+// trends, journal, tests) the push never reads; loading them all made each
+// check some 450 queries (2026-10-31).
+async function loadPushInputs(env,ctx,internalAuth,date){
+  const start=mondayOfDate(date);
+  const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));
+  const json=r=>r.json().catch(()=>({}));
+  // The same cached weeks as the coach's inputs, one at a time.
+  const weeksLoading=(async()=>{const out=[];for(const w of [start,shiftDate(start,7)])out.push(await cached(env,ctx,'week-lite:'+w,()=>internal('/app/api/week?lite=1&start='+w).then(json)));return out;})();
+  weeksLoading.catch(()=>{});
+  const [fitness,sleep,health,profile]=await Promise.all([
+    // Through JSON as there, so the values are the same to the last one.
+    cached(env,ctx,'fitness:90',()=>internal('/app/api/fitness?days=90').then(json)).then(d=>json(Response.json(d))),
+    app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-30)+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>intervalsSleep(env,ctx,d,shiftDate(date,-30),shiftDate(date,1))).then(d=>json(Response.json(d))),
+    googleHealthFor(env,ctx,date).catch(()=>({})),
+    dashboardProfile(env)
+  ]);
+  const weekData=await weeksLoading;
+  return {date,fitness,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},profile:profile?{sex:profile.sex,age:profile.age,height:profile.height,sleepGoal:profile.sleepGoal,cycle:profile.cycle||null,...(profile.readinessLocks?{readinessLocks:profile.readinessLocks}:{}),training:await trainingSetup(env.DB)}:null};
 }
 async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   const monday=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));
@@ -2871,6 +2895,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const health = profile ? await googleHealthFor(env, ctx, dates[6]).catch(error => { console.error("Energy budget unavailable", error.message); return null; }) : null;
     // D1 runs one query at a time: three days at once keep its queue short
     // (all seven at once overloaded it when several weeks were asked together).
+    // Each day's analysis takes its rows from one read of the whole week
+    // (day-reads.js): about 5 queries instead of 35. Only for this week's days.
+    const together = readDaysTogether(env.DB, env.USER_ID, start, shiftDate(start, 7), dayStartUtc);
     const days = await mapLimit(dates, 3, async date => {
       const dailyUrl = new URL("/analysis/daily", request.url);
       dailyUrl.searchParams.set("date", date);
@@ -2906,7 +2933,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         date >= localToday() ? foodRecommend(env, recommendUrl, known).then(r => r.json()).catch(error => ({ status: "error", message: error.message })) : null
       ]);
       return { ...dayOf(daily), food, recommendations };
-    });
+    }).finally(together);
     return {status:"ok",start,end:dates[6],days};
     }, { ttl: 120 });
     return Response.json(week,{headers:{"Cache-Control":"no-store"}});
