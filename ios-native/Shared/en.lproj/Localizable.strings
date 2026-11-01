@@ -2313,7 +2313,7 @@
 /* Wahoo in Zdroje dat */
 "Jízdy a běhy z Wahoo se v Aurinu smažou a plán do Wahoo přestane chodit." = "The Wahoo rides and runs will be deleted from Aurin and the plan will stop going to Wahoo.";
 "Hotové jízdy a běhy: čas, vzdálenost, výkon, TSS, tep a kadenci." = "Done rides and runs: time, distance, power, TSS, heart rate and cadence.";
-"Tréninky naplánované v Aurinu, do ELEMNT a KICKR." = "Workouts planned in Aurin, to the ELEMNT and KICKR.";
+"Tréninky naplánované v Aurinu, do ELEMNT a KICKR, a FTP s výkonovými zónami." = "Workouts planned in Aurin, to the ELEMNT and KICKR, and your FTP with power zones.";
 "Odpojit a smazat jízdy z Wahoo" = "Disconnect and delete the Wahoo rides";
 "Jen v Aurinu: Wahoo ho dál má, Aurin ho nepočítá." = "In Aurin only: Wahoo keeps it, Aurin stops counting it.";
 "Jen v Aurinu: aktivita přišla ze Stravy a smazat jde jen ve Stravě. Aurin ji přestane počítat." = "In Aurin only: this activity came from Strava and can only be deleted in Strava. Aurin stops counting it.";

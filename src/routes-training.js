@@ -14,9 +14,18 @@ import { linkPlanned } from "./planned-links.js";
 import { saveTrainingProfile, getTrainingProfile } from "./training-profile.js";
 import { estimateThresholdPace, estimateFtp, FTP_METHODS, PACE_METHODS, PACE_ZONE_MODELS, POWER_ZONE_MODELS, HR_ZONE_MODELS } from "./training-zones.js";
 import { writeIntervalsZones } from "./intervals-zones.js";
+import { writeWahooZones } from "./wahoo.js";
 import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
 import { thresholdCheckState, TEST_IDS, manualTestResult } from "./threshold-check-state.js";
+
+// Saved FTP and zones go to Wahoo too (wahoo.js writeWahooZones), in the
+// background: the answer does not wait for Wahoo.
+function wahooZonesLater(env,ctx,t){
+  if(!env.WAHOO_TOKEN)return;
+  const write=writeWahooZones(env,t).then(r=>{if(r.status!=='ok'&&r.status!=='skipped')console.error('Wahoo zones not written',r.status,r.message||'');}).catch(error=>console.error('Wahoo zones not written',error.message));
+  if(ctx?.waitUntil)ctx.waitUntil(write);
+}
 
 // Planned workouts moved or deleted, pairs, session energy and feedback.
 export async function handleTrainingEditsApi(request,env,ctx,url,session,internalAuth){
@@ -126,6 +135,7 @@ export async function handleThresholdApi(request,env,ctx,url,session,internalAut
         await saveTrainingProfile(env.DB,{...await getTrainingProfile(env.DB),...patch});
         const t=await athleteThresholds(env);
         const intervals=env.INTERVALS_API_KEY?await writeIntervalsZones(env,t).catch(error=>({status:'error',message:error.message})):null;
+        wahooZonesLater(env,ctx,t);
         await saveCheck(env.DB,sport,{status:'applied',testId:check?.testId||null,testDate:check?.testDate||null,estimate,result:check?.result||null});
         return Response.json({status:'ok',saved:patch,intervals},{headers:{'Cache-Control':'no-store'}});
       }
@@ -142,6 +152,7 @@ export async function handleThresholdApi(request,env,ctx,url,session,internalAut
       const t=await athleteThresholds(env);
       // Saved zones go to Intervals.icu too, unless the form says not to.
       const intervals=body&&body.writeIntervals!==false?await writeIntervalsZones(env,t):null;
+      if(body)wahooZonesLater(env,ctx,t);
       return Response.json({status:'ok',intervals,intervalsConnected:Boolean(env.INTERVALS_API_KEY),profile:t.profile,resolved:{ftp:t.ftp,ftpSource:t.source,indoorFtp:t.indoorFtp,intervalsFtp:t.intervalsFtp,latestRideFtp:t.latestRideFtp,lthr:t.lthr,maxHr:t.maxHr,restHr:t.restHr,runThresholdPace:t.runThresholdPace,runPaceSource:t.runPaceSource,intervalsRunPace:t.intervalsRunPace,runLthr:t.runLthr,swimCss:t.swimCss,swimCssSource:t.swimCssSource,poolLength:t.poolLength,poolLengthSource:t.poolLengthSource,openWater:t.openWater},swimZones:t.swimZones,powerZones:t.powerZones,hrZones:t.hrZones,paceZones:t.paceZones,runHrZones:t.runHrZones,
         ftpMethods:Object.entries(FTP_METHODS).map(([id,m])=>({id,label:m.label,inputs:m.inputs.map(([key,label])=>({key,label}))})),
         paceMethods:Object.entries(PACE_METHODS).map(([id,m])=>({id,label:m.label,inputs:m.inputs.map(([key,label])=>({key,label}))})),

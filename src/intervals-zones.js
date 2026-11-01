@@ -12,7 +12,8 @@ import { intervalsReads } from "./intervals-reads.js";
 const bare = name => String(name || "").replace(/^(Z\d+[a-c+]?|SS|[EMTIR])\s+/, "").trim() || String(name || "");
 const OPEN = 999;
 
-function powerBounds(profile) {
+// The power zone tops in % FTP of the athlete's model (also for Wahoo, wahoo.js).
+export function powerBounds(profile) {
   if (profile.powerZoneModel === "custom" && Array.isArray(profile.powerZoneBounds)) return profile.powerZoneBounds;
   return (POWER_ZONE_MODELS[profile.powerZoneModel] || POWER_ZONE_MODELS.coggan7).bounds;
 }

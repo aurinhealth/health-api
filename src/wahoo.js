@@ -21,6 +21,9 @@
 // Sandbox allows 25 requests in 5 minutes and 250 a day for the whole app, so
 // nothing polls Wahoo: a failed export waits for the next retry.
 //
+// The FTP and power zones saved in Aurin (Nastavení → Tréninkové zóny) go to
+// Wahoo as well, like to Intervals.icu (writeWahooZones, power_zones_write).
+//
 // Wahoo's terms: data deleted on disconnecting, the connection itself never paid.
 import { exportDue, failedExport } from './export-retry.js';
 import { saveConnectionSecret, deleteConnectionSecret, refreshConnectionTokens, tokensDue } from './connection-secrets.js';
@@ -34,6 +37,7 @@ import { outdoorWidth, n } from './workout-model.js';
 import { readSyncPrefs } from './sync-destinations.js';
 import { timingSafeEqualString } from './dashboard-auth.js';
 import { athleteThresholds } from './intervals-athlete.js';
+import { powerBounds } from './intervals-zones.js';
 import { L } from './lang.js';
 import { KEEP_TYPE_SQL } from './activity-type.js';
 
@@ -43,7 +47,7 @@ const API = 'https://api.wahooligan.com';
 const AUTHORIZE = API + '/oauth/authorize';
 const TOKEN = API + '/oauth/token';
 // The scopes asked for in the Wahoo application, nothing more.
-export const WAHOO_SCOPES = ['user_read', 'workouts_read', 'workouts_write', 'plans_read', 'plans_write', 'power_zones_read', 'offline_data'];
+export const WAHOO_SCOPES = ['user_read', 'workouts_read', 'workouts_write', 'plans_read', 'plans_write', 'power_zones_read', 'power_zones_write', 'offline_data'];
 export const FIRST_IMPORT_DAYS = 61;
 
 export function wahooConfigured(env) {
@@ -126,7 +130,9 @@ export async function wahooAccessToken(env, { fetchImpl = fetch, now = Date.now(
 
 // One API call; `form` is sent as Wahoo's form fields (plan[file]=…). A 401 or
 // 403 marks the connection broken; a 429 (the Sandbox limit) only waits.
-async function wahooApi(env, path, { method = 'GET', form = null, fetchImpl = fetch, now = Date.now() } = {}) {
+// `scoped`: a 403 means only a scope the connection lacks (power_zones_write
+// on a connection made before it was asked for), not a broken connection.
+async function wahooApi(env, path, { method = 'GET', form = null, fetchImpl = fetch, now = Date.now(), scoped = false } = {}) {
   const token = await wahooAccessToken(env, { fetchImpl, now });
   let response;
   try {
@@ -137,7 +143,7 @@ async function wahooApi(env, path, { method = 'GET', form = null, fetchImpl = fe
       signal: AbortSignal.timeout(15000)
     });
   } catch (error) { throw Object.assign(new Error('No answer: ' + (error?.name || error?.message)), { noAnswer: true }); }
-  if (response.status === 401 || response.status === 403) await markConnectionBroken(env, SOURCE, 'Wahoo HTTP ' + response.status);
+  if (response.status === 401 || (response.status === 403 && !scoped)) await markConnectionBroken(env, SOURCE, 'Wahoo HTTP ' + response.status);
   if (!response.ok && !(method === 'DELETE' && response.status === 404)) throw Object.assign(new Error('Wahoo HTTP ' + response.status), { status: response.status });
   return response.status === 204 ? null : response.json().catch(() => null);
 }
@@ -449,6 +455,48 @@ export async function retryWahooExports(env, { limit = 4, fetchImpl = fetch, now
     results.push(await syncWahooWorkout(env, id, { fetchImpl, now, thresholds: targets }));
   }
   return results;
+}
+
+// ---- Power zones ----
+
+// Wahoo keeps up to 7 power zones in watts: zone_N is the top of zone N, the
+// last one open (500 % FTP stands for "no top", as in Wahoo's own app).
+const WAHOO_MAX_ZONES = 7, OPEN_TOP = 5;
+// The zone set as Wahoo's form fields, from athleteThresholds(); null without
+// an FTP. More than 7 zones (a custom model) keeps the first 6 bounds, the rest
+// fall into the top zone.
+export function wahooPowerZones(t) {
+  const ftp = Math.round(Number(t?.ftp) || 0);
+  if (!(ftp > 0)) return null;
+  const bounds = powerBounds(t.profile || {}).map(Number).slice(0, WAHOO_MAX_ZONES - 1);
+  const tops = [...bounds.map(b => Math.round(ftp * b / 100)), Math.round(ftp * OPEN_TOP)];
+  const form = { 'power_zone[ftp]': String(ftp), 'power_zone[zone_count]': String(tops.length), 'power_zone[workout_type_family_id]': '0' };
+  tops.forEach((w, i) => { form['power_zone[zone_' + (i + 1) + ']'] = String(w); });
+  return form;
+}
+
+// Writes the FTP and power zones to Wahoo: Aurin's own cycling zone set is
+// changed, or made the first time (Wahoo lists only the sets this app made).
+// Two requests, only when zones are saved or Wahoo is connected. Returns
+// { status: "ok" | "needs-permission" | "not-connected" | "skipped" | "error", message }.
+export async function writeWahooZones(env, thresholds, { fetchImpl = fetch, now = Date.now() } = {}) {
+  if (!readWahooTokens(env)) return { status: 'not-connected' };
+  const form = wahooPowerZones(thresholds);
+  if (!form) return { status: 'skipped' };
+  try {
+    const list = await wahooApi(env, '/v1/power_zones', { fetchImpl, now, scoped: true });
+    const sets = Array.isArray(list) ? list : Array.isArray(list?.power_zones) ? list.power_zones : [];
+    // Aurin makes one cycling set; one Wahoo kept without a family counts too,
+    // so a second save never makes a second set.
+    const family = z => z?.workout_type_family_id;
+    const own = sets.find(z => z?.id != null && family(z) != null && Number(family(z)) === 0) || sets.find(z => z?.id != null && family(z) == null);
+    if (own) await wahooApi(env, '/v1/power_zones/' + encodeURIComponent(own.id), { method: 'PUT', form, fetchImpl, now, scoped: true });
+    else await wahooApi(env, '/v1/power_zones', { method: 'POST', form, fetchImpl, now, scoped: true });
+    return { status: 'ok' };
+  } catch (error) {
+    if (error?.status === 403) return { status: 'needs-permission' };
+    return { status: 'error', message: error?.message || 'Wahoo' };
+  }
 }
 
 // Wahoo forgets Aurin's access (also when the Aurin account is deleted).
