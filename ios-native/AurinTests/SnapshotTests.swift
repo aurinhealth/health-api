@@ -474,6 +474,21 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(EquipmentView.kg(2.5), "2,5 kg")
         XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/vo2max")!), .vo2max)
         XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/library/run")!), .workoutLibrary("run"))
+        // The equipment picker: every station once, by kind, with the muscles it is for.
+        let stations = try JSONDecoder().decode([GymEquipment.Station].self, from: Data(#"""
+        [{"id":"dumbbells","group":"Volné váhy","label":"Jednoručky","sections":["free_weights"],"uses":"Celé tělo","keywords":"cinky"},
+         {"id":"chest_press","group":"Prsa","label":"Tlaky na prsa (stroj)","sections":["upper_machines"],"uses":"Prsa · triceps"},
+         {"id":"pec_deck","group":"Záda a ramena","label":"Pec deck (rozpažování a zadní ramena)","sections":["upper_machines"],"uses":"Prsa · zadní ramena","keywords":"butterfly motýlek"},
+         {"id":"cables","group":"Kladky","label":"Kladky (kabelový stroj)","sections":["cables"],"uses":"Celé tělo"},
+         {"id":"sled","group":"Kardio","label":"Saně","sections":[]}]
+        """#.utf8))
+        let sections = [GymEquipment.Section(id: "free_weights", label: "Volné váhy"), GymEquipment.Section(id: "cables", label: "Kladky"),
+                        GymEquipment.Section(id: "upper_machines", label: "Stroje na horní polovinu")]
+        let place = GymPlace(id: "p", kind: "gym", name: "METAGYM Kutná Hora", stations: ["dumbbells", "pec_deck"], url: "", dumbbellWeights: [])
+        XCTAssertEqual(GymPlaceView.folded("Motýlek"), "motylek")
+        try render("gym-place", glow: Palette.Glow.training, height: 1100) {
+            GymPlaceView(place: .constant(place), stations: stations, sections: sections, catalog: .constant([curl, press]), onDelete: {})
+        }
     }
 
     func testRoundTwoScreens() throws {
