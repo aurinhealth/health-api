@@ -15,7 +15,10 @@ export const COACH_VISUALS=['form','recovery','sleep','nutrition','week','traini
 // The kind of ride or run a proposed workout is (week-ai.js KINDS), so the
 // prepared workout is the one the answer talks about.
 export const WORKOUT_KINDS=['recovery','endurance','long','tempo','sweet_spot','threshold','vo2max'];
-export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','visuals','actions','memory'],properties:{answer:{type:'string'},memory:{type:'object',additionalProperties:false,required:['forget','update'],properties:{forget:{type:'array',items:{type:'string'}},update:{type:'array',items:{type:'object',additionalProperties:false,required:['from','to'],properties:{from:{type:'string'},to:{type:'string'}}}}}},visuals:{type:'array',items:{type:'string',enum:COACH_VISUALS}},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','statusUntil','reason','fromExercise','toExercise','workoutId','kind','activityId','otherActivityId','time','kcal','gymFocus','insisted','planId','days','raceKm'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap','week_sport','activity_kcal','activity_delete','activity_merge','activity_time','plan']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','']},minutes:{type:'integer'},status:{type:'string',enum:['active','sick','injured','on_break','']},statusUntil:{type:'string'},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'},workoutId:{type:'string'},kind:{type:'string',enum:['',...WORKOUT_KINDS]},gymFocus:{type:'string',enum:['','upper','lower']},insisted:{type:'boolean'},activityId:{type:'string'},otherActivityId:{type:'string'},time:{type:'string'},kcal:{type:'integer'},planId:{type:'string'},days:{type:'array',items:{type:'integer'}},raceKm:{type:'number'}}}}}}};
+// The muscle groups a gym card can be built around (strength-generator.js
+// FOCUS_GROUPS, the same ids; a test keeps them equal).
+export const GYM_MUSCLES=['chest','upper_back','lats','front_delts','side_delts','rear_delts','biceps','triceps','abs','obliques','quads','hamstrings','hips','calves','forearms','traps','lower_back'];
+export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','visuals','actions','memory'],properties:{answer:{type:'string'},memory:{type:'object',additionalProperties:false,required:['forget','update'],properties:{forget:{type:'array',items:{type:'string'}},update:{type:'array',items:{type:'object',additionalProperties:false,required:['from','to'],properties:{from:{type:'string'},to:{type:'string'}}}}}},visuals:{type:'array',items:{type:'string',enum:COACH_VISUALS}},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','statusUntil','reason','fromExercise','toExercise','workoutId','kind','activityId','otherActivityId','time','kcal','gymFocus','gymMuscles','insisted','planId','days','raceKm'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap','week_sport','activity_kcal','activity_delete','activity_merge','activity_time','plan']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','']},minutes:{type:'integer'},status:{type:'string',enum:['active','sick','injured','on_break','']},statusUntil:{type:'string'},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'},workoutId:{type:'string'},kind:{type:'string',enum:['',...WORKOUT_KINDS]},gymFocus:{type:'string',enum:['','upper','lower']},gymMuscles:{type:'array',items:{type:'string',enum:GYM_MUSCLES}},insisted:{type:'boolean'},activityId:{type:'string'},otherActivityId:{type:'string'},time:{type:'string'},kcal:{type:'integer'},planId:{type:'string'},days:{type:'array',items:{type:'integer'}},raceKm:{type:'number'}}}}}}};
 export const ACTION_INSTRUCTIONS=actionInstructions();
 // Words the athlete must have used before the coach may propose Sick or Injured.
 export const SICK_WORDS=/nemoc|horeč|horec|sick|chřip|chrip|nachl|rým|covid|vir[oó]z|viros|teplot|\bill\b|illness|unwell|fever|\bflu\b|\bcold\b|virus|sore throat|temperature/i;
@@ -78,6 +81,45 @@ const GYM_UPPER=/bez\s+noh|horn[íi]\s+(?:polovin|část|cast)|vr[šs]ek|upper\s
 export function gymFocusOf(a,message){
   if(['upper','lower'].includes(a?.gymFocus))return a.gymFocus;
   const m=String(message||'');return GYM_UPPER.test(m)?'upper':GYM_LOWER.test(m)?'lower':null;
+}
+// The muscle groups the athlete asked for by name ("cviky na prsa", "chest
+// day", "procvičit záda a biceps"): a wish, not a complaint, so "bolí mě záda"
+// names none. A card the answer calls chest-focused was built as a lower-body
+// day without them (Petr 2026-11-01).
+const MUSCLE_WORDS=[
+  [/prs(?:a|ou|ní|ni|ách|ach|um)?(?!\p{L})|hrudn\p{L}*|hrudi|chest|pecs?(?!\p{L})|pectorals?/iu,['chest']],
+  [/(?:horní\s+|horni\s+)?z[áa]d(?:a|ech|ou)?(?!\p{L})|(?:upper\s+)?back(?!\p{L})|lats?(?!\p{L})/iu,['upper_back','lats']],
+  [/ramen(?:a|ou)?(?!\p{L})|ramínk\p{L}*|shoulders?|delts?(?!\p{L})/iu,['front_delts','side_delts','rear_delts']],
+  [/bicepsy?|biceps(?:es)?|bicák\p{L}*|bicak\p{L}*/iu,['biceps']],
+  [/tricepsy?|triceps(?:es)?|tricák\p{L}*|tricak\p{L}*/iu,['triceps']],
+  [/ruce(?!\p{L})|ruk(?:y|ou)?(?!\p{L})|paže|paze|arms?(?!\p{L})/iu,['biceps','triceps']],
+  [/břich\p{L}*|brich\p{L}*|břišní|brisni|abs(?!\p{L})|core(?!\p{L})|střed\s+těla|stred\s+tela/iu,['abs','obliques']],
+  [/hýžd\p{L}*|hyzd\p{L}*|zadek|zadeček|glutes?(?!\p{L})/iu,['hips']],
+  [/lýtk\p{L}*|lytk\p{L}*|calf|calves/iu,['calves']],
+  [/zadní\s+stehn\p{L}*|zadni\s+stehn\p{L}*|hamstrings?/iu,['hamstrings']],
+  [/přední\s+stehn\p{L}*|predni\s+stehn\p{L}*|quads?(?!\p{L})|quadriceps/iu,['quads']]
+];
+const MUSCLE_ANY=new RegExp(MUSCLE_WORDS.map(([re])=>'(?:'+re.source+')').join('|'),'iu');
+// "na prsa a triceps", "for chest and arms", "procvičit záda", "chest day", "cviky na prsa".
+const MUSCLE_LIST='(?:'+MUSCLE_ANY.source+')(?:\\s*(?:,|a|and|i|\\+|&)\\s*(?:'+MUSCLE_ANY.source+'))*';
+const MUSCLE_WISH=new RegExp('(?:(?<!\\p{L})(?:na|for|on|train|training|work|hit|target)|procvi\\p{L}*|posíl\\p{L}*|posil\\p{L}*|zaměř\\p{L}*\\s+na|zamer\\p{L}*\\s+na)\\s+(?:(?:the|my|moje|mé|me|si)\\s+)?'+MUSCLE_LIST+'|'+MUSCLE_LIST+'\\s+(?:day|exercises?|workout|session|cviky|cvičení|cviceni|trénink|trenink)','giu');
+export function requestedMuscles(message){
+  const out=[];
+  for(const m of String(message||'').matchAll(MUSCLE_WISH))for(const [re,groups] of MUSCLE_WORDS)if(new RegExp(re.source,'giu').test(m[0]))for(const g of groups)if(!out.includes(g))out.push(g);
+  return out;
+}
+// What a single group needs beside it to fill a real session: 75 minutes of
+// chest alone would be seven presses and flyes.
+const COMPANIONS={chest:['triceps','abs'],upper_back:['lats','biceps'],lats:['upper_back','biceps'],front_delts:['side_delts','triceps'],side_delts:['rear_delts','triceps'],rear_delts:['upper_back','side_delts'],biceps:['triceps','forearms'],triceps:['biceps','chest'],abs:['obliques','lower_back'],obliques:['abs','lower_back'],quads:['hamstrings','hips'],hamstrings:['quads','hips'],hips:['quads','hamstrings'],calves:['quads','hamstrings'],forearms:['biceps','triceps'],traps:['upper_back','rear_delts'],lower_back:['hips','abs']};
+const LEG_GROUPS=['quads','hamstrings','hips','calves'];
+// The muscle groups a gym card is built around: the ones the athlete named
+// always, then the coach's, at most five; a lone group gets its companions
+// for a session of 45 minutes or more.
+export function gymMusclesOf(a,message){
+  const asked=requestedMuscles(message),coach=(Array.isArray(a?.gymMuscles)?a.gymMuscles:[]).filter(g=>GYM_MUSCLES.includes(g));
+  let out=[...new Set([...asked,...coach])].slice(0,5);
+  if(out.length===1&&Number(a?.minutes)>=45)out=[...out,...COMPANIONS[out[0]]];
+  return out;
 }
 export function validateCoachActions(actions,context,today,{userInitiated=false}={}){
   const events=new Map((context.week||[]).flatMap(d=>(d.planned||[]).map(a=>[String(a.id),{date:d.date,...a}])));
@@ -187,8 +229,11 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
           const trimmed=trimGymPlan(context.gymPlan.values,a.minutes);if(!trimmed)return [];
           return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,workoutName:trimmed.name,trim:{values:trimmed.values,source:context.gymPlan.values,removed:trimmed.removed}}];
         }
-        const focus=gymFocusOf(a,context.userMessage);
-        return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,...(focus?{gymFocus:focus}:{})}];
+        // Named muscle groups set the half of the body too, so the card, its
+        // name and the next days' rule (never the same half twice) agree.
+        const muscles=gymMusclesOf(a,context.userMessage),legs=muscles.filter(g=>LEG_GROUPS.includes(g)).length;
+        const focus=muscles.length?(legs===muscles.length?'lower':legs?null:'upper'):gymFocusOf(a,context.userMessage);
+        return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,...(focus?{gymFocus:focus}:{}),...(muscles.length?{gymMuscles:muscles}:{})}];
       }
       return [{type:'workout',date:a.date,sport:a.sport,minutes:a.minutes,reason,...kind,...(insisted?{insisted:true}:{}),...(library&&a.sport!=='gym'?{workoutId:String(library.id),workoutName:library.name}:{})}];
     }
