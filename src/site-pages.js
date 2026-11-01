@@ -751,7 +751,7 @@ function pageLang(request, czech = false) {
 // secured, and what happens on disconnecting and deleting; the support page is the help on managing and
 // deleting data. Keep both in step with the code: scopes in google-scopes.js, the wellness copy in
 // wellness-sync.js, the download and deletion in account-data.js.
-const UPDATED = {cs: '31. října 2026', en: '31 October 2026'};
+const UPDATED = {cs: '1. listopadu 2026', en: '1 November 2026'};
 // The controller's address for questions and data requests (privacy policy and support page).
 const CONTACT_EMAIL = 'support@aurin.health';
 // Who runs Aurin: a sole trader, so the privacy policy, the terms and the health data policy give the
@@ -906,7 +906,7 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
       reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'breathing rate'], ['drop', 'blood oxygen']], sends: [], none: 'nothing, Aurin only reads WHOOP'},
     {id: 'wahoo', name: 'Wahoo', logo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt="" width="40" height="40"></span>',
       reads: [['bike', 'finished rides and runs'], ['bolt', 'power and TSS'], ['heart', 'heart rate']],
-      sends: [['calendar', 'planned workouts, to ELEMNT and KICKR', 'planned workouts']]}];
+      sends: [['calendar', 'planned workouts, to ELEMNT and KICKR', 'planned workouts'], ['zones', 'FTP and power zones', 'power zones']]}];
   // The flow: each service on the left sends what Aurin reads along a curve into the mark, and what Aurin sends
   // back runs out to the services on the right that take it. Two layouts: wide (left to right) for computers,
   // tall (top to bottom) for phones. The things carried are chips that travel the curves (CSS offset-path); the
@@ -1138,7 +1138,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <h2>Who receives your data</h2>
 <ul>
 <li><strong>Intervals.icu</strong>, if you connect it: the workouts you plan in Aurin, the workouts you finish in Aurin, nutrition notes and calorie targets in your calendar, and only if you turn on health data for it (when you connect it, or later in Settings → Sync) workouts from Apple Health that no other service has brought there (type, time, distance, heart rate and calories), your weight and several times a day a copy of your daily wellness from Google Health and Apple Health (sleep, average sleeping heart rate, steps, resting heart rate, HRV, oxygen saturation, respiration, VO2 max and body fat). Intervals.icu handles this data under its own privacy policy.</li>
-<li><strong>Wahoo</strong>, if you connect it: the rides and runs you plan in Aurin, with their steps and targets, so they appear on your ELEMNT and KICKR. Wahoo handles this data under its own privacy policy.</li>
+<li><strong>Wahoo</strong>, if you connect it: the rides and runs you plan in Aurin, with their steps and targets, so they appear on your ELEMNT and KICKR, and your FTP with your power zones, so your ELEMNT uses the same FTP and zones as Aurin. Wahoo handles this data under its own privacy policy.</li>
 <li><strong>Google Health</strong>: the food and drinks you log and, if you allow it, your weight and the workouts you finish in Aurin.</li>
 <li><strong>OpenAI</strong> (USA), when you use an AI feature (such as the assistant, recognizing food from a photo, label or description, plan reviews, workout reflections or exercise descriptions): the data that request needs, such as your message, the photo and related training, sleep, health and nutrition data, including data from a connected Ultrahuman Ring or WHOOP. OpenAI processes it on our behalf under its API data processing terms: it does not use data sent through its API to train its models and keeps it for up to 30 days to detect abuse, unless the law requires it to keep it longer.</li>
 <li><strong>Cloudflare</strong> runs Aurin, stores its database in Europe and keeps the technical logs.${email ? ' Its Email Service sends the sign-in and confirmation codes and the notices about new passkeys.' : ''} On the website, Cloudflare Turnstile checks that the waitlist form is sent by a person. For that it reads technical details of your browser and sets no tracking cookies. Cloudflare Web Analytics counts visits to the website (which pages, from which site and country, on which kind of device) without cookies and without following you to other websites.</li>
@@ -1160,7 +1160,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <li><strong>GitHub, Inc.</strong> (USA), our processor for the backup and the host of the exercise photos: certified under the EU–US Data Privacy Framework, and the EU Standard Contractual Clauses in its Data Protection Agreement.</li>
 <li><strong>Google LLC</strong> (USA), for Google Health and YouTube a separate controller you choose to use: certified under the EU–US Data Privacy Framework.</li>
 <li><strong>Intervals.icu Ltd</strong> (United Kingdom, servers in Germany and Finland), a separate controller: the European Commission’s adequacy decision for the United Kingdom.</li>
-<li><strong>Wahoo Fitness</strong> (USA), a separate controller: it gets only the rides and runs you plan, because you connected Wahoo to have them on your device (Article 49(1)(b) GDPR).</li>
+<li><strong>Wahoo Fitness</strong> (USA), a separate controller: it gets only the rides and runs you plan and your FTP with your power zones, because you connected Wahoo to have them on your device (Article 49(1)(b) GDPR).</li>
 <li><strong>Open-Meteo GmbH</strong> (Switzerland): the European Commission’s adequacy decision for Switzerland.</li>
 <li><strong>WHOOP</strong> (USA) and <strong>Ultrahuman</strong> (India) are services you connect so that Aurin can read your data from them. Aurin sends them only its requests for that data, with the access you granted, and none of your data.</li>
 </ul>
@@ -1262,7 +1262,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <h2>Kdo data dostává</h2>
 <ul>
 <li><strong>Intervals.icu</strong>, když ho připojíš: tréninky, které naplánuješ v Aurinu, tréninky, které v Aurinu dokončíš, poznámky k výživě a cíle kalorií v kalendáři, a jen když mu zdravotní data zapneš (při připojení nebo později v Nastavení → Synchronizace) tréninky z Apple Zdraví, které tam nepřinesla jiná služba (typ, čas, vzdálenost, tep a kalorie), tvoji váhu a několikrát denně kopii denních wellness údajů z Google Health a Apple Zdraví (spánek, průměrný tep ve spánku, kroky, klidový tep, HRV, okysličení krve, dech, VO₂max a tělesný tuk). Intervals.icu s nimi zachází podle svých zásad ochrany soukromí.</li>
-<li><strong>Wahoo</strong>, když ho připojíš: jízdy a běhy, které naplánuješ v Aurinu, s jejich úseky a cíli, aby se objevily v ELEMNT a KICKR. Wahoo s nimi nakládá podle svých zásad ochrany osobních údajů.</li>
+<li><strong>Wahoo</strong>, když ho připojíš: jízdy a běhy, které naplánuješ v Aurinu, s jejich úseky a cíli, aby se objevily v ELEMNT a KICKR, a tvoje FTP s výkonovými zónami, aby ELEMNT počítal se stejným FTP a zónami jako Aurin. Wahoo s nimi nakládá podle svých zásad ochrany osobních údajů.</li>
 <li><strong>Google Health</strong>: jídlo a pití, které zapíšeš, a když to povolíš, i tvoje váha a tréninky, které v Aurinu dokončíš.</li>
 <li><strong>OpenAI</strong> (USA), když použiješ AI funkci (třeba asistenta, rozpoznání jídla z fotky, etikety nebo popisu, revizi plánu, zhodnocení tréninku nebo popis cviku): data, která daný požadavek potřebuje, třeba tvoji zprávu, fotku a související údaje o tréninku, spánku, zdraví a výživě, včetně dat z připojeného prstenu Ultrahuman nebo WHOOPu. OpenAI je zpracovává naším jménem podle svých podmínek zpracování dat přes API: data poslaná přes API nepoužívá k trénování modelů a uchovává je nejvýš 30 dní kvůli odhalování zneužití, pokud mu zákon neukládá uchovat je déle.</li>
 <li><strong>Cloudflare</strong> provozuje Aurin, ukládá jeho databázi v Evropě a uchovává technické záznamy.${email ? ' Jeho služba Email Service posílá kódy pro přihlášení a potvrzení a upozornění na nové přístupové klíče.' : ''} Na webu Cloudflare Turnstile ověřuje, že formulář čekací listiny posílá člověk. Čte k tomu technické údaje o prohlížeči a nenastavuje sledovací cookies. Cloudflare Web Analytics počítá návštěvy webu (které stránky, odkud a z jaké země, na jakém typu zařízení) bez cookies a bez sledování na jiných webech.</li>
@@ -1284,7 +1284,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <li><strong>GitHub, Inc.</strong> (USA), náš zpracovatel pro zálohu a úložiště fotek cviků: certifikace v rámci Data Privacy Framework a standardní smluvní doložky EU v jeho smlouvě o ochraně údajů.</li>
 <li><strong>Google LLC</strong> (USA), pro Google Health a YouTube samostatný správce, kterého se rozhodneš používat: certifikace v rámci Data Privacy Framework.</li>
 <li><strong>Intervals.icu Ltd</strong> (Spojené království, servery v Německu a Finsku), samostatný správce: rozhodnutí Evropské komise o odpovídající ochraně pro Spojené království.</li>
-<li><strong>Wahoo Fitness</strong> (USA), samostatný správce: dostane jen jízdy a běhy, které naplánuješ, protože sis Wahoo připojil, abys je měl ve svém zařízení (čl. 49 odst. 1 písm. b) GDPR).</li>
+<li><strong>Wahoo Fitness</strong> (USA), samostatný správce: dostane jen jízdy a běhy, které naplánuješ, a tvoje FTP s výkonovými zónami, protože sis Wahoo připojil, abys je měl ve svém zařízení (čl. 49 odst. 1 písm. b) GDPR).</li>
 <li><strong>Open-Meteo GmbH</strong> (Švýcarsko): rozhodnutí Evropské komise o odpovídající ochraně pro Švýcarsko.</li>
 <li><strong>WHOOP</strong> (USA) a <strong>Ultrahuman</strong> (Indie) jsou služby, které připojíš, aby z nich Aurin mohl číst tvoje data. Aurin jim posílá jen své žádosti o tato data s přístupem, který jsi udělil, a žádná tvoje data.</li>
 </ul>

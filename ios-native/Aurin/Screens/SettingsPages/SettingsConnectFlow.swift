@@ -156,7 +156,7 @@ struct ServiceConnectSheet: View {
         case "wahoo":
             return Service(name: "Wahoo",
                            reads: L10n.tr("Hotové jízdy a běhy: čas, vzdálenost, výkon, TSS, tep a kadenci."),
-                           writes: L10n.tr("Tréninky naplánované v Aurinu, do ELEMNT a KICKR."))
+                           writes: L10n.tr("Tréninky naplánované v Aurinu, do ELEMNT a KICKR, a FTP s výkonovými zónami."))
         case "ultrahuman":
             return Service(name: "Ultrahuman",
                            reads: L10n.tr("Spánek, klidový tep, HRV, VO₂max a teplotu z prstenu."),

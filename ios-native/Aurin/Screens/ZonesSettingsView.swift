@@ -25,6 +25,9 @@ struct ZonesSettingsView: View {
     @State private var test200 = ""
     @State private var original: JSONObject = [:]
     @AppStorage("writeIntervals") private var writeIntervals = true
+    @AppStorage("writeWahoo") private var writeWahoo = true
+    /// Wahoo refused or failed the last write: the next save sends the zones again.
+    @State private var wahooRetry = false
     @State private var reconnecting: ConnectTarget?
 
     var body: some View {
@@ -53,6 +56,7 @@ struct ZonesSettingsView: View {
                 }
                 if sport == "run" { run(training) } else if sport == "swim" { swim(training) } else { bike(training) }
                 intervals(training)
+                if training.wahooConnected == true { wahoo(training) }
             } else if store.demo {
                 Text("V ukázce se zóny nenačítají.").font(Typo.small).foregroundStyle(Palette.muted)
             } else if store.loaded {
@@ -63,7 +67,7 @@ struct ZonesSettingsView: View {
         }
         // Also without a change while Intervals.icu has not taken the zones yet
         // (after connecting it again, one tap sends them).
-        .toolbar { SaveButton(enabled: changes != original || heart != heartOriginal || (writeIntervals && store.training?.intervals?.status != "ok" && store.training?.intervalsConnected == true), saving: store.saving) { Task { await save() } } }
+        .toolbar { SaveButton(enabled: changes != original || heart != heartOriginal || (writeIntervals && store.training?.intervals?.status != "ok" && store.training?.intervalsConnected == true) || (writeWahoo && wahooRetry), saving: store.saving) { Task { await save() } } }
         .onAppear { fill(); fillHeart() }
         .onChange(of: store.training) { fill() }
         .sheet(item: $reconnecting) { target in ServiceConnectSheet(target: target) { await store.load() } }
@@ -229,6 +233,40 @@ struct ZonesSettingsView: View {
         }
     }
 
+    // MARK: Wahoo
+
+    /// Like Intervals.icu: the FTP and power zones go to Wahoo after a save
+    /// that changed them; shown only with Wahoo connected.
+    @ViewBuilder
+    private func wahoo(_ t: TrainingProfileResponse) -> some View {
+        PillToggle(title: "Zapisovat do Wahoo",
+                   subtitle: writeWahoo ? "FTP a výkonové zóny se po uložení pošlou do Wahoo" : "Zóny zůstanou jen v Aurinu",
+                   systemImage: "arrow.triangle.2.circlepath", isOn: $writeWahoo)
+        if writeWahoo, let result = t.wahoo {
+            switch result.status {
+            case "ok":
+                Label("Zapsáno do Wahoo", systemImage: "checkmark.circle.fill")
+                    .font(Typo.small).foregroundStyle(Palette.green)
+            case "needs-permission":
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Wahoo zápis odmítlo. Připoj ho znovu a ulož zóny ještě jednou.")
+                        .font(Typo.small).foregroundStyle(Palette.rust)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button { reconnecting = ConnectTarget(id: "wahoo") } label: {
+                        Text("Připojit znovu").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
+                            .padding(.horizontal, 16).frame(height: 40)
+                            .background(Palette.button, in: Capsule())
+                    }
+                }
+            case "error":
+                Text("Do Wahoo se nepodařilo zapsat.")
+                    .font(Typo.small).foregroundStyle(Palette.rust)
+            default:
+                EmptyView()
+            }
+        }
+    }
+
     // MARK: Values
 
     nonisolated static func pace(_ seconds: Double) -> String {
@@ -328,8 +366,12 @@ struct ZonesSettingsView: View {
             guard await store.saveProfile(heart) else { return }
             fillHeart()
         }
-        if changes != original || (writeIntervals && store.training?.intervals?.status != "ok" && store.training?.intervalsConnected == true) {
-            if await store.saveTraining(changes, writeIntervals: writeIntervals) { fill() }
+        let again = writeWahoo && wahooRetry
+        if changes != original || again || (writeIntervals && store.training?.intervals?.status != "ok" && store.training?.intervalsConnected == true) {
+            if await store.saveTraining(changes, writeIntervals: writeIntervals, writeWahoo: writeWahoo, wahooAgain: again) {
+                fill()
+                if let status = store.training?.wahoo?.status { wahooRetry = status == "needs-permission" || status == "error" }
+            }
         }
     }
 }

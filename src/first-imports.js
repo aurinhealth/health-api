@@ -5,14 +5,18 @@ import { matchActivities } from "./index.js";
 import { bumpCacheVersion } from "./api-cache.js";
 import { syncUltrahuman, FIRST_IMPORT_DAYS as ULTRAHUMAN_FIRST_DAYS } from "./ultrahuman.js";
 import { syncWhoop, FIRST_IMPORT_DAYS as WHOOP_FIRST_DAYS } from "./whoop.js";
-import { syncWahoo, retryWahooExports, FIRST_IMPORT_DAYS as WAHOO_FIRST_DAYS } from "./wahoo.js";
+import { syncWahoo, retryWahooExports, writeWahooZonesLater, FIRST_IMPORT_DAYS as WAHOO_FIRST_DAYS } from "./wahoo.js";
+import { athleteThresholds } from "./intervals-athlete.js";
 
 const IMPORTS = {
   // Ultrahuman: the ring's last two months (readiness's baseline).
   ultrahuman: env => syncUltrahuman(env, { days: ULTRAHUMAN_FIRST_DAYS }),
   whoop: env => syncWhoop(env, { days: WHOOP_FIRST_DAYS }),
-  // Wahoo: the done workouts, matched to the plan, and the plans ahead sent.
+  // Wahoo: the done workouts, matched to the plan, the plans ahead sent and
+  // the FTP with the power zones written.
+  // The zones go even when the import failed.
   wahoo: env => syncWahoo(env, { days: WAHOO_FIRST_DAYS }).then(() => matchActivities(env, { days: WAHOO_FIRST_DAYS + 1 })).then(() => retryWahooExports(env))
+    .finally(() => athleteThresholds(env).then(t => writeWahooZonesLater(env, null, t)).catch(error => console.error("Wahoo zones not written", error.message)))
 };
 const TOKENS = { ultrahuman: "ULTRAHUMAN_TOKEN", whoop: "WHOOP_TOKEN", wahoo: "WAHOO_TOKEN" };
 const NAMES = { ultrahuman: "Ultrahuman", whoop: "WHOOP", wahoo: "Wahoo" };
