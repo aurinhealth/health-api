@@ -170,6 +170,16 @@ final class GymSetEditTests: XCTestCase {
         XCTAssertNotNil(ExerciseOrder.letter(d.exercises[3].superset))
     }
 
+    func testASupersetTakesTheSameNumberOfSets() {
+        var d = day([row("WORK", "Pullover", "1", "27,5"), row("WORK", "Pullover", "2", "27,5"),
+                     row("WORK", "Shrug", "1", "15"), row("WORK", "Shrug", "2", "15"), row("WORK", "Shrug", "3", "15"), row("WORK", "Shrug", "4", "15")])
+        d.superset(0, with: 1)
+        XCTAssertEqual(d.exercises.map(\.workCount), [4, 4])
+        XCTAssertEqual(d.exercises[0].sets.map(\.number), ["1", "2", "3", "4"])
+        XCTAssertEqual(d.exercises[0].sets.last?.plannedKg, "27,5", "the new sets copy the last one")
+        XCTAssertEqual(d.exercises.map { ExerciseOrder.letter($0.superset) }, ["A", "A"])
+    }
+
     func testReadyMadePlacesComeOnceToAnAccountWithPlaces() {
         let mine = GymPlace(id: "place-1", kind: "gym", name: "METAGYM", stations: ["dumbbells"], url: "", dumbbellWeights: [])
         let body = GymPlace(id: "place-2", kind: "home", name: L10n.tr("Vlastní váha"), stations: ["floor_mats"], url: "", dumbbellWeights: [])

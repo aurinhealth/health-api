@@ -515,8 +515,21 @@ struct GymDay: Decodable, Equatable {
             let value = letter(offset + 1) ?? "ABCDEFGHIJ".map(String.init).first { !used.contains($0) } ?? "A"
             mark(offset, value)
             mark(offset + 1, value)
+            write(list, rest)
+            evenSuperset(value)
+            return
         }
         write(list, rest)
+    }
+
+    /// A superset goes round by round, so its exercises get the same number
+    /// of work sets: the shorter ones take sets up to the longest.
+    mutating func evenSuperset(_ letter: String) {
+        let group = exercises.indices.filter { ExerciseOrder.letter(exercises[$0].superset) == letter }
+        let most = group.map { exercises[$0].workCount }.max() ?? 0
+        for i in group {
+            for _ in 0..<max(0, most - exercises[i].workCount) { addSet(at: i) }
+        }
     }
 
     /// Joins the exercise with another one into a superset: the other moves
