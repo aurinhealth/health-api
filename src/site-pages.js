@@ -727,7 +727,7 @@ ${body}
 <nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li></ul></nav>
 <nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/cs/privacy" hreflang="cs">Soukromí</a> · <a href="/cs/terms" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
-<div class="base"><span>© 2026 Aurin · run by ${OPERATOR.short}</span><span>Aurin is not a medical device.</span></div>
+<div class="base"><span>© 2026 Aurin</span><span>Aurin is not a medical device.</span></div>
 </div></footer>
 ${demoScript}
 ${siteScript}
@@ -756,11 +756,10 @@ const UPDATED = {cs: '31. října 2026', en: '31 October 2026'};
 const CONTACT_EMAIL = 'support@aurin.health';
 // Who runs Aurin: a sole trader, so the privacy policy, the terms and the health data policy give the
 // name, registered office and IČO (§ 435 of the Czech Civil Code), as in the Trade Licensing Register.
+// The footer stays short (© 2026 Aurin) and links these pages under Documents.
 const OPERATOR = {
   en: 'Petr Bouma, a sole trader in the Czech Republic (Company ID (IČO) 30194202, registered office Vrchlického 142, Sedlec, 284 03 Kutná Hora, registered in the Czech Trade Licensing Register)',
-  cs: 'Petr Bouma, fyzická osoba podnikající v České republice (IČO 30194202, sídlo Vrchlického 142, Sedlec, 284 03 Kutná Hora, zapsán v živnostenském rejstříku)',
-  // The footer of every page (the website is English only).
-  short: 'Petr Bouma, IČO 30194202, Vrchlického 142, 284 03 Kutná Hora, Czech Republic'
+  cs: 'Petr Bouma, fyzická osoba podnikající v České republice (IČO 30194202, sídlo Vrchlického 142, Sedlec, 284 03 Kutná Hora, zapsán v živnostenském rejstříku)'
 };
 const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
 const HEALTH_POLICY = 'https://developers.google.com/health/policies/health-api-developer-user-data-policy';
