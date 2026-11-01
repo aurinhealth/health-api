@@ -489,3 +489,11 @@ test('run 39: only the planning verbs send a question to the full model; hedging
   assert.ok(failedOn('S40', 'Navrhl bych plán Půlmaraton s cílem 13. ledna 2027.', plan).includes('datum závodu podá jako odhad nebo se na něj zeptá'));
   assert.ok(!failedOn('S40', 'Navrhl bych plán Půlmaraton; datum závodu 17. 1. je odhad, kdy je tvůj závod?', plan).includes('datum závodu podá jako odhad nebo se na něj zeptá'));
 });
+
+test('run 41: "na den potom" in S15 names the day after the day after tomorrow', () => {
+  const day = '2026-10-21', at = '2026-10-21 08:00';
+  const answer = 'Tři dny VO2max za sebou bych neplánoval.\n\n- Zítra: 60 min lehké vytrvalosti.\n- Pozítří: ponechal bych plánovanou 3h dlouhou jízdu v Z2.\n- Den potom: 45 min regeneračně do 145 W, bez intervalů.';
+  const kept = [{ type: 'workout', sport: 'ride', date: '2026-10-22', kind: 'endurance', minutes: 60 }, { type: 'workout', sport: 'ride', date: '2026-10-24', kind: 'recovery', minutes: 45 }];
+  const failed = checkReply(scenarioById('S15'), { answer, kept, proposed: kept, task: 'planning' }, at, day).filter(c => !c.ok).map(c => c.name + ':' + (c.detail || ''));
+  assert.ok(!failed.some(f => f.startsWith('text zmiňuje každou kartu')), failed.join(' | '));
+});
