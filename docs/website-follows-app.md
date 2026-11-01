@@ -14,6 +14,9 @@ flags app pull requests that leave the overview untouched.
   `public/site/app/*.webp`. `scripts/site-screens.mjs` turns the unzipped artifact into them; the same
   shots in dark mode become `*-dark.webp` for the site's dark look (`DARK_SITE`).
 - The same screens make the overview as images for Reddit or the App Store (`scripts/render-overview.mjs`).
+- The App Store screenshots (6.3" 1206×2622, 6.9" 1320×2868; the app is iPhone only) use the same English
+  shots, plus the smoke test's `dnes-*` (Today down to the day's timeline), `trenink-*` (Training down to the
+  coach's card) and `kouc-odpoved` (the coach answering).
 - Beside each phone stands a live demo (`src/site-demos.js`): a piece of the app rebuilt in HTML that
   moves (the dial turns, the rest timer counts down, the coach answers), following the app's own view and
   the sample day. Where a screenshot can't show a step, the phone's screen is built there too (strain, the
