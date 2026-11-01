@@ -3,9 +3,10 @@ import SwiftUI
 
 // MARK: - A place's stations
 
-/// One place: body parts and kinds of equipment on the left, the stations of
-/// the chosen one on the right, each ticked on or off, with "i" for what it is
-/// and the exercises done on it.
+/// One place: every station once, by kind of equipment, each ticked on or off,
+/// with the muscles it is for and "i" for what it is and the exercises done on
+/// it. Chips show one kind or only what is ticked; search finds a station by its
+/// name, by words for it and by the exercises done on it.
 struct GymPlaceView: View {
     @Binding var place: GymPlace
     let stations: [GymEquipment.Station]
@@ -13,7 +14,9 @@ struct GymPlaceView: View {
     @Binding var catalog: [GymCatalogExercise]
     let onDelete: () -> Void
 
+    /// The chip: nil all, `Self.ticked` only what is ticked, else a section.
     @State private var section: String?
+    @State private var query = ""
     @State private var info: GymEquipment.Station?
     @State private var toast: Toast?
     @State private var renaming = false
@@ -37,11 +40,15 @@ struct GymPlaceView: View {
                 .padding(.top, 24)
                 Text("Co tam je").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 6)
 
-                HStack(alignment: .top, spacing: 10) {
-                    rail.frame(width: 112)
-                    list
+                searchField.padding(.top, 16)
+                VStack(alignment: .leading, spacing: 0) {
+                    if search.isEmpty {
+                        chips.padding(.top, 12)
+                        sectionList
+                    } else {
+                        results
+                    }
                 }
-                .padding(.top, 18)
                 .padding(.bottom, toast == nil ? 0 : 70)
             }
         }
@@ -70,7 +77,6 @@ struct GymPlaceView: View {
         .confirmationDialog(L10n.f("Smazat %@?", place.name), isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Smazat", role: .destructive) { onDelete() }
         }
-        .onAppear { if section == nil { section = firstSection } }
     }
 
     private var menu: some View {
@@ -85,18 +91,21 @@ struct GymPlaceView: View {
         .accessibilityLabel(L10n.tr("Upravit"))
     }
 
+    private static let ticked = "__ticked"
+
     /// The sections that have stations, in the server's order.
     private var shownSections: [GymEquipment.Section] {
         sections.filter { s in stations.contains { $0.sectionIds.contains(s.id) } }
     }
 
-    private var firstSection: String? {
-        let selected = Set(place.stations)
-        return shownSections.first { s in stations.contains { $0.sectionIds.contains(s.id) && selected.contains($0.id) } }?.id ?? shownSections.first?.id
+    /// The stations listed: those under a section (a station without one does nothing).
+    private var listed: [GymEquipment.Station] {
+        let ids = Set(shownSections.map(\.id))
+        return stations.filter { !ids.isDisjoint(with: $0.sectionIds) }
     }
 
-    private func items(_ id: String?) -> [GymEquipment.Station] {
-        stations.filter { $0.sectionIds.contains(id ?? "") }
+    private func items(_ id: String) -> [GymEquipment.Station] {
+        stations.filter { $0.sectionIds.contains(id) }
     }
 
     private func label(of station: GymEquipment.Station) -> String {
@@ -104,51 +113,141 @@ struct GymPlaceView: View {
         return sections.first { $0.id == id }?.label ?? station.group
     }
 
-    private var rail: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(shownSections) { s in
+    // MARK: Chips and sections
+
+    private var chips: some View {
+        let on = listed.filter { place.stations.contains($0.id) }.count
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 7) {
+                chip(L10n.tr("Vše"), id: nil)
+                chip(L10n.f("Zaškrtnuté %@", String(on)), id: Self.ticked)
+                ForEach(shownSections) { s in chip(s.label, id: s.id) }
+            }
+            .padding(.horizontal, 24)
+        }
+        .padding(.horizontal, -24)
+    }
+
+    private func chip(_ title: String, id: String?) -> some View {
+        let chosen = section == id
+        return Button { section = id } label: {
+            Text(title).font(.footnote.weight(.medium))
+                .foregroundStyle(chosen ? Palette.background : Palette.secondary)
+                .padding(.horizontal, 13).frame(height: 32)
+                .background(chosen ? Palette.ink : Palette.card, in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(chosen ? .isSelected : [])
+    }
+
+    /// All sections, one of them, or only what is ticked (still by section).
+    private var sectionList: some View {
+        let shown = shownSections.filter { section == nil || section == Self.ticked || $0.id == section }
+        return VStack(alignment: .leading, spacing: 0) {
+            if section == Self.ticked && !listed.contains(where: { place.stations.contains($0.id) }) {
+                Text("Nic takového tu není.").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 20)
+            }
+            ForEach(shown) { s in
                 let all = items(s.id)
-                let on = all.filter { place.stations.contains($0.id) }.count
-                let chosen = s.id == section
-                Button { section = s.id } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(s.label).font(.subheadline.weight(chosen ? .semibold : .regular)).foregroundStyle(chosen ? Palette.ink : Palette.secondary)
-                            .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
-                        Text(verbatim: "\(on)/\(all.count)").font(Typo.caption).foregroundStyle(Palette.muted)
+                let rows = section == Self.ticked ? all.filter { place.stations.contains($0.id) } : all
+                if !rows.isEmpty {
+                    HStack(alignment: .firstTextBaseline) {
+                        SectionLabel(text: s.label)
+                        Spacer(minLength: 8)
+                        Text(verbatim: "\(all.filter { place.stations.contains($0.id) }.count)/\(all.count)")
+                            .font(Typo.caption).foregroundStyle(Palette.muted)
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 9)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(chosen ? Palette.card : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(alignment: .leading) {
-                        if chosen { Capsule().fill(Palette.green).frame(width: 3).padding(.vertical, 10) }
-                    }
-                    .contentShape(Rectangle())
+                    .padding(.horizontal, 4).padding(.top, 22).padding(.bottom, 8)
+                    card(rows.map { ($0, $0.uses) })
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(chosen ? .isSelected : [])
             }
         }
     }
 
-    private var list: some View {
-        let rows = items(section)
-        return VStack(spacing: 0) {
-            ForEach(Array(rows.enumerated()), id: \.element.id) { index, station in
-                if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1).padding(.leading, 14) }
-                row(station)
+    private func card(_ rows: [(GymEquipment.Station, String?)]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.element.0.id) { index, item in
+                if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1).padding(.leading, 16) }
+                row(item.0, caption: item.1)
             }
         }
         .cardSurface(cornerRadius: 18)
         .frame(maxWidth: .infinity)
     }
 
-    private func row(_ station: GymEquipment.Station) -> some View {
+    // MARK: Search
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
+            TextField(L10n.tr("Vybavení nebo cvik"), text: $query)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+            if !query.isEmpty {
+                Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Palette.faint) }
+                    .buttonStyle(.plain).accessibilityLabel(L10n.tr("Smazat"))
+            }
+        }
+        .font(.body)
+        .padding(.horizontal, 12).frame(height: 42)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var search: String { Self.folded(query.trimmingCharacters(in: .whitespaces)) }
+
+    static func folded(_ text: String) -> String {
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+    }
+
+    /// Stations found by their name, words and muscles, then those found by an
+    /// exercise done on them (with the exercises that matched).
+    private var found: (byName: [GymEquipment.Station], byExercise: [(GymEquipment.Station, String)]) {
+        let q = search
+        let byName = listed.filter { st in
+            [st.label, st.keywords ?? "", st.uses ?? ""].contains { Self.folded($0).contains(q) }
+        }
+        let named = Set(byName.map(\.id))
+        let hits = catalog.filter { Self.folded($0.name).contains(q) }
+        let byExercise: [(GymEquipment.Station, String)] = listed.compactMap { st in
+            guard !named.contains(st.id) else { return nil }
+            let names = hits.filter { ($0.stations ?? []).contains(st.id) }.map(\.name)
+            guard !names.isEmpty else { return nil }
+            let shown = names.prefix(2).joined(separator: " · ")
+            return (st, names.count > 2 ? shown + " · +\(names.count - 2)" : shown)
+        }
+        return (byName, byExercise)
+    }
+
+    @ViewBuilder
+    private var results: some View {
+        let result = found
+        let byName = result.byName, byExercise = result.byExercise
+        if byName.isEmpty && byExercise.isEmpty {
+            Text("Nic takového tu není.").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 20)
+        }
+        if !byName.isEmpty {
+            SectionLabel(text: L10n.tr("Vybavení")).padding(.horizontal, 4).padding(.top, 22).padding(.bottom, 8)
+            card(byName.map { ($0, $0.uses) })
+        }
+        if !byExercise.isEmpty {
+            SectionLabel(text: L10n.tr("Podle cviků")).padding(.horizontal, 4).padding(.top, 22).padding(.bottom, 8)
+            card(byExercise.map { ($0.0, $0.1) })
+        }
+    }
+
+    private func row(_ station: GymEquipment.Station, caption: String?) -> some View {
         let on = place.stations.contains(station.id)
         return HStack(spacing: 4) {
             Button { toggle(station) } label: {
                 HStack {
-                    Text(station.label).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
-                        .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(station.label).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                            .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                        if let caption = caption?.nilIfBlank {
+                            Text(caption).font(Typo.caption).foregroundStyle(Palette.muted)
+                                .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                     Spacer(minLength: 4)
                 }
                 .contentShape(Rectangle())
@@ -169,8 +268,8 @@ struct GymPlaceView: View {
             .accessibilityLabel(station.label)
             .accessibilityAddTraits(on ? .isSelected : [])
         }
-        .padding(.leading, 14).padding(.trailing, 6).padding(.vertical, 4)
-        .frame(minHeight: 52)
+        .padding(.leading, 16).padding(.trailing, 6).padding(.vertical, 6)
+        .frame(minHeight: 56)
     }
 
     /// Ticking one on says how many exercises it opens up.

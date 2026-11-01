@@ -65,11 +65,22 @@ function failedValue(value) {
   return value.status === "error" || value.degraded === true || Object.keys(value).length === 0;
 }
 
-export async function cached(env, ctx, key, compute, { ttl = CACHE_TTL_SECONDS, store = globalThis.caches?.default } = {}) {
-  if (!store || env.DB?.userId == null) return compute();
+async function entryUrl(env, key) {
   const scope = encodeURIComponent((env.ENVIRONMENT || 'production') + ':' + (env.USER_DATA_SHARD || 'legacy'));
   const { version, food } = await cacheVersion(env.DB);
-  const url = "https://cache.internal/" + scope + "/" + env.DB.userId + "/" + (FOOD_FREE.test(key) ? version : version + "." + food) + "/" + encodeURIComponent(key);
+  return "https://cache.internal/" + scope + "/" + env.DB.userId + "/" + (FOOD_FREE.test(key) ? version : version + "." + food) + "/" + encodeURIComponent(key);
+}
+
+// The kept entry of `key` under the current version, or null; computes nothing.
+export async function cachedOnly(env, key, { store = globalThis.caches?.default } = {}) {
+  if (!store || env.DB?.userId == null) return null;
+  const hit = await store.match(await entryUrl(env, key)).catch(() => null);
+  return hit ? hit.json().catch(() => null) : null;
+}
+
+export async function cached(env, ctx, key, compute, { ttl = CACHE_TTL_SECONDS, store = globalThis.caches?.default } = {}) {
+  if (!store || env.DB?.userId == null) return compute();
+  const url = await entryUrl(env, key);
   const hit = await store.match(url).catch(() => null);
   if (hit) return hit.json();
   // Waiting for the one computing it: a copy, as from the cache, since callers change what they get.

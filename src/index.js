@@ -26,6 +26,7 @@ import { bumpCacheVersion, closedDay } from "./api-cache.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { markConnectionBroken, markConnectionOk, isGoogleAuthFailure, isIntervalsAuthFailure } from "./connection-health.js";
 import { manualPairs } from "./manual-pairs.js";
+import { readDay } from "./day-reads.js";
 import { matchPlannedWorkouts } from "./plan-match.js";
 export { matchPlannedWorkouts };
 import { readSyncPrefs, healthAllowed, sentIntervalsIds, sentByAurin } from "./sync-destinations.js";
@@ -1915,14 +1916,7 @@ function activityIsStrength(activity) {
 async function nearbyRideContext(env, date) {
   const start = dateDaysFromDate(date, 1);
   const end = dateDaysFromDate(date, 3);
-  const rows = await env.DB.prepare(`
-    SELECT payload_json, start_time
-    FROM health_datapoints
-    WHERE user_id = ? AND source_family IN ('intervals','local')
-      AND data_type = 'planned-workout'
-      AND start_time >= ? AND start_time < ?
-    ORDER BY start_time
-  `).bind(env.USER_ID, start, end).all();
+  const rows = await readDay(env.DB, env.USER_ID, "planned", start, end);
   const nextRide = rows.results.map(row => {
     try { return plannedWorkoutInfo(JSON.parse(row.payload_json || '{}')); } catch { return null; }
   }).find(workout => workout?.cycling && Number(workout.durationHours || 0) >= 1);
@@ -1968,44 +1962,13 @@ async function energyForDate(env, date) {
   // Google Health stores UTC: the user's day runs from local midnight to midnight.
   const dayStart = dayStartUtc(date), dayEnd = dayStartUtc(nextDate);
   // The day's reads don't depend on each other, so they run together.
-  const [google, planned, activities, googleExercises, weight, profile, activityTracked] = await Promise.all([env.DB.prepare(`
-    SELECT value_numeric, sample_time
-    FROM health_datapoints
-    WHERE user_id = ? AND data_type = 'total-calories'
-      AND sample_time >= ?
-      AND sample_time < ?
-    ORDER BY sample_time DESC, id DESC
-    LIMIT 1
-  `).bind(env.USER_ID, date, nextDate).first(),
-  env.DB.prepare(`
-    SELECT *
-    FROM health_datapoints
-    WHERE user_id = ? AND source_family IN ('intervals','local')
-      AND data_type = 'planned-workout'
-      AND start_time >= ?
-      AND start_time < ?
-    ORDER BY start_time
-  `).bind(env.USER_ID, date, nextDate).all(),
-  env.DB.prepare(`
-    SELECT *
-    FROM health_datapoints
-    WHERE user_id = ? AND source_family IN ('intervals','local','wahoo')
-      AND data_type = 'activity'
-      AND start_time >= ?
-      AND start_time < ?
-      AND (record_role IS NULL OR record_role != 'duplicate')
-    ORDER BY start_time
-  `).bind(env.USER_ID, date, nextDate).all(),
-  env.DB.prepare(`
-    SELECT *
-    FROM health_datapoints
-    WHERE user_id = ? AND source_family IN ('google-wearables','apple-health')
-      AND data_type = 'exercise'
-      AND start_time >= ?
-      AND start_time < ?
-      AND (record_role IS NULL OR record_role != 'duplicate')
-    ORDER BY start_time
-  `).bind(env.USER_ID, dayStart, dayEnd).all(),
+  // While a week is analysed, each read comes from one read of the whole week
+  // (day-reads.js), in the same order; otherwise the day asks for its own.
+  const [google, planned, activities, googleExercises, weight, profile, activityTracked] = await Promise.all([
+  readDay(env.DB, env.USER_ID, "calories", date, nextDate).then(r => r.results?.[0] ?? null),
+  readDay(env.DB, env.USER_ID, "planned", date, nextDate),
+  readDay(env.DB, env.USER_ID, "activities", date, nextDate),
+  readDay(env.DB, env.USER_ID, "exercises", dayStart, dayEnd),
   latestStoredWeight(env.DB, env.USER_ID),
   loadEffectiveProfile(env.DB, env.USER_ID),
   // Sport is estimated from the profile only when no source tracks activities.
@@ -2572,11 +2535,7 @@ function scaleRecipe(recipe, servings) {
 
 async function foodLogForDate(env, date) {
   // Planned or cancelled food (ChatGPT can plan a meal) is not eaten.
-  const rows = await env.DB.prepare(`
-    SELECT * FROM food_logs
-    WHERE user_id = ? AND consumed_date = ? AND (status IS NULL OR status='eaten')
-    ORDER BY consumed_at, id
-  `).bind(env.USER_ID, date).all();
+  const rows = await readDay(env.DB, env.USER_ID, "food", date);
 
   const entries = rows.results || [];
   const totals = entries.reduce((sum, row) => {

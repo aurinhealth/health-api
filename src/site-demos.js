@@ -525,10 +525,10 @@ const wRange = (pos, c) => `<i class="aw-rb"><b style="left:${pos}%;background:$
 const wRing = (size, r, width, frac, c, inner) => `<span class="aw-ring" style="width:${size}px;height:${size}px"><svg viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" pathLength="100" stroke="${c}" stroke-opacity=".22" stroke-width="${width}" stroke-dasharray="8 2"/><circle cx="${size / 2}" cy="${size / 2}" r="${r}" pathLength="100" stroke="${c}" stroke-width="${width}" stroke-dasharray="${frac === 1 ? '8 2' : `${'8 2 '.repeat(Math.round(frac * 10)).trim()} 0 100`}" transform="rotate(-90 ${size / 2} ${size / 2})"/></svg>${inner}</span>`;
 const wTop = (left, time, right) => `<div class="aw-top"><span>${left}</span><span class="aw-time">${time}</span><span>${right}</span></div>`;
 const wBtn = (icon, c) => `<span class="aw-ib" style="color:${c}">${ic(icon)}</span>`;
-const watchHome = `<div class="aw-s" style="--gw:#163A2E">${wTop(wBtn('alarm', WA.indigo), '7:12', wBtn('chat', WA.amber))}
-<div class="aw-hero"><span class="aw-n" style="font-size:58px">78</span><span class="aw-side"><span class="aw-k">Readiness</span><span class="aw-pill" style="color:${WA.green}">high</span></span></div>
+const watchHome = `<div class="aw-s aw-home" style="--gw:#163A2E">${wTop(wBtn('alarm', WA.indigo), '7:12', wBtn('chat', WA.amber))}
+<div class="aw-hero"><span class="aw-n">78</span><span class="aw-side"><span class="aw-k">Readiness</span><span class="aw-pill" style="color:${WA.green}">high</span></span></div>
 <div class="aw-g">${[['Sleep', '7:12', '', 28, WA.amber, '89%'], ['Strain', '8.4', '', 14, WA.amber, 'of 11–14'], ['HRV', '64', 'ms', 76, WA.green, 'high']].map(([k, v, u, pos, c, note]) => `<div><span class="aw-k">${k}</span><span class="aw-n aw-v">${v}${u ? `<small>${u}</small>` : ''}</span>${wRange(pos, c)}<b style="color:${c}">${note}</b></div>`).join('')}</div>
-<div class="aw-next"><span style="color:${WA.amber}">${ic('gym')}</span>Strength training · 45′ at 5:30 PM</div></div>`;
+<div class="aw-next"><span style="color:${WA.amber}">${ic('gym')}</span>Strength training, full body · 45′ at 5:30 PM</div></div>`;
 const watchGym = `<div class="aw-s" style="--gw:#3A2A17">${wTop(wBtn('pause', WA.ink), '5:41', `<span class="aw-ib">${ic('menu')}</span>`)}
 <div class="aw-ex"><b>Squat</b><span><i class="aw-ib aw-sm">${ic('minus')}</i>set 2/4<i class="aw-ib aw-sm">${ic('plus')}</i></span></div>
 <div class="aw-two"><div class="aw-box on"><span class="aw-n">80</span><span class="aw-k">kg</span></div><div class="aw-box"><span class="aw-n">8</span><span class="aw-k">reps</span></div></div>
@@ -546,15 +546,27 @@ const watchFood = `<div class="aw-s" style="--gw:#163047">${wTop('', '12:20', ''
 <div class="aw-food">${wRing(70, 29, 7, .52, WA.amber, `<span class="aw-in"><span class="aw-n">1,380</span><small>OF 2,650</small></span>`)}<div><b style="color:${WA.amber}">Food</b><span class="aw-news">1,270 kcal left</span><span class="aw-k">lunch logged 12:30</span></div></div>
 <div class="aw-mac">${[['Carbs', 177, 330, '#FFC274'], ['Protein', 84, 150, '#83C7FF'], ['Fat', 36, 80, '#B3A1FF']].map(([k, v, t, c]) => `<div><b style="color:${c}">${k}</b>${v}/${t} g<i><b style="width:${Math.round(v / t * 100)}%;background:${c}"></b></i></div>`).join('')}</div>
 <div class="aw-water"><span style="color:${WA.blue}">${ic('drop')}</span><div><b>1.5</b> <span class="aw-k">/ 2.6 L</span><i><b style="width:58%"></b></i></div><span class="aw-plus">+250</span></div></div>`;
-const watchFace = `<div class="aw-s aw-face"><div class="aw-date">THU<b>8</b></div><div class="aw-clock">7:12</div>
-<div class="aw-comps">${[['sun', '78', .78, WA.green], ['moon', '7:12', .89, WA.indigo], ['flame', '8.4', .6, WA.amber]].map(([icon, v, f, c]) => wRing(56, 23, 5, f, c, `<span class="aw-in" style="color:${c}">${ic(icon)}<b${v.length > 3 ? ' style="font-size:12.5px"' : ''}>${v}</b></span>`)).join('')}</div></div>`;
-// The watch chapter's steps: [the glow token behind the watch, title, text, screen].
+// The app's ring on the face (SegmentedArc): ten arcs over three quarters of a circle, open at the bottom
+// for the word, the value inside; the rest in a dim shade of the same colour.
+const wArc = (frac, c, value, word) => {
+  const R = 21, cx = 25, seg = 270 / 10, pt = a => [cx + R * Math.cos(a * Math.PI / 180), cx + R * Math.sin(a * Math.PI / 180)].map(n => n.toFixed(2)).join(' ');
+  const arcs = Array.from({length: 10}, (_, i) => { const a = 135 + i * seg + 1.2, b = 135 + (i + 1) * seg - 1.2;
+    return `<path d="M${pt(a)}A${R} ${R} 0 0 1 ${pt(b)}" stroke="${c}"${i < Math.round(frac * 10) ? '' : ' stroke-opacity=".28"'}/>`; }).join('');
+  return `<span class="aw-arc"><svg viewBox="0 0 50 50" aria-hidden="true">${arcs}</svg><b${value.length > 3 ? ' class="aw-sm2"' : ''}>${value}</b><i style="color:${c}">${word}</i></span>`;
+};
+// The Day complication (WideView.day): readiness, sleep and strain with ten steps, the goal's steps edged.
+const wSteps = (frac, c, goal) => `<i class="aw-st">${Array.from({length: 10}, (_, i) => `<b style="background:${c}${i < Math.round(frac * 10) ? '' : ';opacity:.28'}${goal && i >= goal[0] && i < goal[1] ? ';box-shadow:inset 0 0 0 1px #fff' : ''}"></b>`).join('')}</i>`;
+const watchFace = `<div class="aw-s aw-face"><div class="aw-frow">${wArc(.35, WA.amber, '4:18', 'WORKOUT')}${wArc(.58, WA.blue, '1.5', 'WATER')}<div class="aw-date">THU<b>8</b></div></div>
+<div class="aw-clock">7:12</div>
+<div class="aw-day">${[['READY', '78', WA.green, .78], ['SLEEP', '7:12', WA.amber, .76, [7, 9]], ['STRAIN', '8.4', WA.amber, .53, [6, 9]]].map(([k, v, c, f, g]) => `<div><span style="color:${c}">${k}</span><b>${v}</b>${wSteps(f, c, g)}</div>`).join('')}</div>
+<div class="aw-frow aw-fbot">${wArc(.52, '#FFC274', '1380', 'KCAL')}${wArc(.56, '#83C7FF', '84', 'PROTEIN')}${wArc(.84, WA.indigo, '6:30', 'ALARM')}</div></div>`;
+
 export const WATCH = [
   ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness, sleep, strain and HRV, as on Today, and what’s next today in one line.', watchHome],
   ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown. Your heart rate and calories go into the same workout.', watchGym],
   ['glow-training', 'Rest, then a tap.', 'The rest counts down on the wrist and taps you when it’s time, with the next set ready.', watchRest],
   ['glow-health', 'Water in one tap.', 'What’s left to eat today, the macros, and +250 for a glass of water. Your iPhone gets it at once.', watchFood],
-  ['glow-health', 'On your watch face.', 'Readiness, last night’s sleep and today’s strain sit beside the time, so you don’t even open the app.', watchFace]];
+  ['glow-health', 'On your watch face.', 'Readiness, sleep and strain against today’s goal, a countdown to your workout, water, food, protein and your alarm sit around the time, so you don’t even open the app.', watchFace]];
 
 // Apple Watch's part opens with the watch face and its three complications.
 const actWatch = `<div class="dm wc aw-act"><div class="aw-w">${watchFace}</div></div>`;
@@ -1011,12 +1023,12 @@ html:not(.js) .stage1{display:none}
 .aw-rb{position:relative;display:block;height:4px;margin:4px 0 3px;border-radius:2px;background:#2A2C2E}.aw-rb:before{content:"";position:absolute;left:33%;width:34%;top:0;bottom:0;background:rgba(255,255,255,.18)}
 .aw-rb b{position:absolute;top:-2px;width:8px;height:8px;margin-left:-4px;border-radius:50%;border:1.5px solid #000}
 .aw-next{display:flex;align-items:center;gap:5px;margin-top:7px;font-size:10.5px;font-weight:600;white-space:nowrap}
-.aw-ex{display:flex;align-items:center;justify-content:space-between;margin-top:4px}.aw-ex b{font-size:16px}.aw-ex>span{display:flex;align-items:center;gap:5px;font-weight:500}
-.aw-two{display:flex;gap:6px;margin-top:6px}.aw-two>div{flex:1}
-.aw-box{display:flex;flex-direction:column;align-items:center;padding:4px 0 3px;border-radius:13px;background:rgba(255,255,255,.08)}.aw-box .aw-n{font-size:34px}
+.aw-ex{display:flex;align-items:center;justify-content:space-between;margin-top:2px}.aw-ex b{font-size:16px}.aw-ex>span{display:flex;align-items:center;gap:5px;font-weight:500}
+.aw-two{display:flex;gap:6px;margin-top:5px}.aw-two>div{flex:1}
+.aw-box{display:flex;flex-direction:column;align-items:center;padding:2px 0 2px;border-radius:13px;background:rgba(255,255,255,.08)}.aw-box .aw-n{font-size:28px}.aw-box .aw-k{font-size:10px}
 .aw-box.on{background:#16352B;box-shadow:inset 0 0 0 2px #8FE6C4}
-.aw-done{display:grid;place-items:center;height:34px;margin-top:7px;border-radius:17px;background:#F4F2EE;color:#0A0B0C;font-size:14px;font-weight:700}
-.aw-tiles>div{padding:5px 9px;border-radius:12px;background:rgba(255,255,255,.07)}.aw-tiles b{display:block;font-size:17px}.aw-tiles small{font-size:10px}
+.aw-done{display:grid;place-items:center;height:30px;margin-top:5px;border-radius:17px;background:#F4F2EE;color:#0A0B0C;font-size:14px;font-weight:700}
+.aw-tiles>div{padding:3px 9px;border-radius:11px;background:rgba(255,255,255,.07)}.aw-tiles .aw-k{font-size:10px}.aw-tiles b{display:block;font-size:15px;line-height:1.2}.aw-tiles small{font-size:10px}
 .aw-rrow{display:flex;align-items:center;gap:8px;margin-top:14px}.aw-rr{position:relative;display:grid;place-items:center;flex:none;width:56px;height:56px}.aw-rr svg{position:absolute;inset:0;fill:none}.aw-rr .aw-n{font-size:20px}
 .aw-rrow>div{display:flex;flex-direction:column;min-width:0}.aw-rrow .aw-k{font-size:10px}.aw-nx{font-size:15px}.aw-live{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}.aw-live .di{width:9px;height:9px;fill:currentColor;stroke:none}
 .aw-rate{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:10px}.aw-rate span{display:grid;place-items:center;height:36px;border-radius:12px;background:rgba(255,255,255,.09);font-size:14px;font-weight:600}
@@ -1030,9 +1042,17 @@ html:not(.js) .stage1{display:none}
 .aw-mac i,.aw-water i{display:block;height:3px;margin-top:2px;border-radius:2px;background:#2A2C2E}.aw-mac i b,.aw-water i b{display:block;height:100%;border-radius:2px;background:#7CC3F0}
 .aw-water{display:flex;align-items:center;gap:7px;margin-top:8px;padding:6px 6px 6px 10px;border-radius:14px;background:#141618}.aw-water>div{flex:1;font-size:13px}
 .aw-plus{padding:6px 10px;border-radius:99px;background:#7CC3F0;color:#000;font-size:13px;font-weight:700}
-.aw-face{background:#000}.aw-date{float:right;display:flex;flex-direction:column;align-items:center;justify-content:center;width:48px;height:48px;margin-top:4px;border-radius:50%;background:#1c1d1f;color:#FF6B5B;font-size:9px;font-weight:600}.aw-date b{color:#fff;font-size:17px}
-.aw-clock{clear:both;margin-top:2px;text-align:center;font-size:58px;font-weight:600;line-height:1;letter-spacing:-1px}
-.aw-comps{display:flex;justify-content:center;gap:9px;margin-top:12px}.aw-comps .aw-in .di{width:11px;height:11px}.aw-comps .aw-in b{color:#fff;font-size:15px;font-weight:700}
+.aw-face{background:#000;padding:16px 16px 12px}.aw-frow{display:flex;align-items:center;justify-content:space-between}
+.aw-date{display:flex;flex-direction:column;align-items:center;justify-content:center;width:46px;height:46px;border-radius:50%;background:#1c1d1f;color:#FF6B5B;font-size:9px;font-weight:600}.aw-date b{color:#fff;font-size:17px}
+.aw-arc{position:relative;display:grid;place-items:center;flex:none;width:50px;height:50px}.aw-arc svg{position:absolute;inset:0;fill:none;stroke-width:5}
+.aw-arc>b{margin-bottom:3px;font:700 14px/1 -apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;font-variant-numeric:tabular-nums}.aw-arc>b.aw-sm2{font-size:11.5px}
+.aw-arc>i{position:absolute;bottom:1px;left:0;right:0;text-align:center;font:700 6.5px/1 -apple-system,Inter,sans-serif;font-style:normal;letter-spacing:.2px}
+.aw-clock{margin:2px 0 4px;text-align:center;font-size:50px;font-weight:600;line-height:1;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.aw-day{display:flex}.aw-day>div{flex:1;display:flex;flex-direction:column;padding:0 5px}.aw-day>div+div{border-left:1px solid rgba(255,255,255,.14)}
+.aw-day span{font-size:8.5px;font-weight:700;letter-spacing:.4px}.aw-day>div>b{font:700 18px/1.15 -apple-system,Inter,sans-serif}
+.aw-st{display:flex;gap:1.5px;margin-top:2px}.aw-st b{flex:1;height:5px;border-radius:1px}
+.aw-home .aw-hero .aw-n{font-size:70px}.aw-home .aw-hero{margin-top:4px}.aw-home .aw-g{margin-top:10px}.aw-home .aw-g>div{padding:8px 6px 8px 8px}.aw-home .aw-v{font-size:23px}.aw-home .aw-next{align-items:flex-start;margin-top:12px;font-size:12.5px;line-height:1.3;white-space:normal}.aw-home .aw-next .di{margin-top:2px}
+.aw-face{display:flex;flex-direction:column;justify-content:space-between}.aw-fbot{padding:0 2px 4px}
 @media (prefers-reduced-motion:reduce){.dw-spout,.js .dw.goal,.js .dw-burst.in path,.js .dw-drop.in,.js .dw-ring.in{animation:none}.dw-drop,.dw-ring{display:none}}
 .wc .th .di{font-size:12px}.wc .chips3 .ch3{border-radius:16px;transition:background .35s,border-color .35s}.wc .ch3 b{font-weight:600;font-size:15px}
 .wc .hg{margin-bottom:0}.hgt.w-draw{transition:clip-path 1.6s ease-in-out!important;clip-path:inset(0 0 0 0)}.js .hgt.w-draw.wait:not(.in){opacity:1;transform:none;clip-path:inset(0 100% 0 0)}

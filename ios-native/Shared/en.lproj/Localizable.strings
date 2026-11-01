@@ -2716,6 +2716,10 @@
 "nové cviky" = "new exercises";
 "nových cviků" = "new exercises";
 "Přidáno: %@" = "Added: %@";
+"Zaškrtnuté %@" = "Ticked %@";
+"Vybavení nebo cvik" = "Equipment or exercise";
+"Nic takového tu není." = "Nothing like that here.";
+"Podle cviků" = "By exercise";
 "Cviky ›" = "Exercises ›";
 "Cviky · %@" = "Exercises · %@";
 "Přidat fotky" = "Add photos";

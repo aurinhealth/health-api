@@ -64,19 +64,13 @@ struct WatchSettingsView: View {
     private func pageRow(_ page: String) -> some View {
         let fixed = page == "readiness"
         HStack(spacing: 0) {
-            Image(systemName: "line.3.horizontal")
-                .scaledFont(15, weight: .medium, cap: .denseCap)
-                .foregroundStyle(Palette.faint)
-                .frame(width: 26)
-                .padding(.leading, 14)
-                .opacity(fixed ? 0 : 1)
-                .accessibilityHidden(true)
+            SettingsGrip().opacity(fixed ? 0 : 1)
             SettingsToggle(title: L10n.tr(Self.names[page] ?? page), subtitle: fixed ? L10n.tr("Vždy první") : nil,
                            isOn: shown(page), disabled: fixed)
                 .padding(.leading, -6)
         }
         .contentShape(Rectangle())
-        .modifier(PageDrag(page: page, fixed: fixed) { moved in move(moved, before: page) })
+        .modifier(SettingsReorder(id: page, movable: !fixed, accepts: WatchSettings.allPages) { moved in move(moved, before: page) })
     }
 
     /// Puts `moved` where `target` is; Readiness never leaves the top.
@@ -122,29 +116,5 @@ struct WatchSettingsView: View {
         Binding(get: { page == "readiness" || settings.pages.contains(page) }, set: { on in
             settings.pages = order.filter { $0 == page ? on : settings.pages.contains($0) }
         })
-    }
-}
-
-/// Drag a page onto another to move it there (the pages are on cards, not a List).
-private struct PageDrag: ViewModifier {
-    let page: String
-    let fixed: Bool
-    let drop: (String) -> Void
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if fixed {
-            content.dropDestination(for: String.self) { items, _ in take(items) }
-        } else {
-            content
-                .draggable(page)
-                .dropDestination(for: String.self) { items, _ in take(items) }
-        }
-    }
-
-    private func take(_ items: [String]) -> Bool {
-        guard let moved = items.first, WatchSettings.allPages.contains(moved) else { return false }
-        drop(moved)
-        return true
     }
 }

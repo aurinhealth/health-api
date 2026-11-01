@@ -14,7 +14,8 @@ name: iOS TestFlight
 # - ASC_KEY_P8: the whole contents of the downloaded AuthKey_XXXX.p8
 # Without them the workflow skips the upload and stays green.
 #
-# Every build gets "What to Test" in TestFlight, in Czech: the TestFlight
+# Every build gets "What to Test" in TestFlight, English first and then Czech
+# (each TestFlight language gets its own part): the TestFlight
 # sections of the pull requests merged since the last build uploaded from main
 # (.github/scripts/testflight_notes.py), or the text typed in when the
 # workflow is run by hand. A separate Linux job sets it, because App Store
