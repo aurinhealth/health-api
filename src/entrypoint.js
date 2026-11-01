@@ -83,7 +83,7 @@ import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmen
 import { chatLibraryQuery, askedSession } from './chat-ask.js';
 import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
 import { isHardSession, isHardKind } from './session-intensity.js';
-import { reviseWeek, rulesRevision, revisionSignature, readRevision, saveRevision, decideRevision, shownRevision } from './week-revision.js';
+import { reviseWeek, rulesRevision, revisionSignature, readRevision, saveRevision, decideRevision, shownRevision, liveRevision } from './week-revision.js';
 import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
 import { illnessWarning, illnessSigns } from './illness-check.js';
 import { readinessFor } from './readiness.js';
@@ -1506,7 +1506,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const doneOn=d=>(days.find(x=>x.date===d)?.daily?.training?.completed||[]).filter(a=>['ride','run'].includes(sportOf(a)));
       // Today's sessions, else yesterday's when its revision still waits.
       let date=today,done=doneOn(today);
-      if(!done.length){const y=shiftDate(today,-1),stored=await readRevision(env.DB,y);if(stored?.status==='pending')return Response.json({status:'ok',revision:shownRevision(stored,{today})},{headers:{'Cache-Control':'no-store'}});date=y;done=doneOn(y);if(!done.length||stored)return Response.json({status:'ok',revision:null},{headers:{'Cache-Control':'no-store'}});}
+      if(!done.length){const y=shiftDate(today,-1),stored=await readRevision(env.DB,y);if(stored?.status==='pending')return Response.json({status:'ok',revision:shownRevision(liveRevision(stored,days,today),{today})},{headers:{'Cache-Control':'no-store'}});date=y;done=doneOn(y);if(!done.length||stored)return Response.json({status:'ok',revision:null},{headers:{'Cache-Control':'no-store'}});}
       const feedback=(await recentWorkoutFeedback(env.DB,date).catch(()=>[])).filter(f=>f.date===date);
       // The effort given anywhere counts, not only on a library workout: the
       // "Jak to šlo?" rating (coach_reflections) and the RPE in Intervals.icu.
@@ -1516,7 +1516,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const planFit=(await workoutRatings(env.DB,date).catch(()=>[])).filter(r=>['ride','run'].includes(r.sport)).map(r=>({sport:r.sport,rating:r.rating,text:r.text||null}));
       const signature=revisionSignature(done,feedback,planFit),stored=await readRevision(env.DB,date);
       // A decided revision stays decided; a waiting one is redone when a new session or rating came.
-      if(stored&&(stored.signature===signature||stored.status!=='pending'))return Response.json({status:'ok',revision:shownRevision(stored,{today})},{headers:{'Cache-Control':'no-store'}});
+      if(stored&&(stored.signature===signature||stored.status!=='pending'))return Response.json({status:'ok',revision:shownRevision(liveRevision(stored,days,today),{today})},{headers:{'Cache-Control':'no-store'}});
       const upcoming=await upcomingSessions(env,days.filter(x=>x.date>date&&x.date>=today&&x.date<=shiftDate(date,6)));
       // The kind of a done session: its library workout, else its name, else its intensity (IF).
       const doneKind=(a,f)=>{if(f?.system)return kindOfSystem(f.system);const named=kindOfSystem(a.name,'');if(named&&named!=='endurance')return named;const p=a.payload||{},raw=Number(a.intensityFactor??p.icu_intensity),fi=raw>3?raw/100:raw;return fi>=.88?'threshold':fi>=.8?'tempo':fi>0?'endurance':named||null;};

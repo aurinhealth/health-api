@@ -188,7 +188,7 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         let name = eventSnapshot?.name.map { L10n.f("„%@“", $0) } ?? L10n.tr("trénink")
         switch type {
         case "move": return L10n.f("Přesunout %@ na %@", name, day)
-        case "rest": return L10n.f("Volno místo %@ (%@)", name, day)
+        case "rest": return L10n.f("Odstranit %@ (%@)", name, day)
         case "workout":
             let sportName = L10n.tr(["ride": "jízda", "run": "běh", "gym": "posilovna"][sport ?? ""] ?? "trénink")
             return L10n.f("Naplánovat: %@", workoutName ?? sportName) + (minutes.map { " · " + Fmt.duration(Int($0)) } ?? "") + " · " + day
