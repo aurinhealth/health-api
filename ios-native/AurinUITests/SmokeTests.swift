@@ -234,6 +234,23 @@ final class SmokeTests: XCTestCase {
         if tapIfThere(app.buttons.matching(identifier: "Coach").allElementsBoundByIndex.first { $0.isHittable } ?? app.buttons["Coach"]) {
             pause(3)
             shot("kouc")
+            // The coach's ready answer from the sample day (App Store screenshots).
+            if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "How should I train today")).firstMatch) {
+                pause(8)
+                shot("kouc-odpoved")
+            }
+        }
+
+        // For the App Store screenshots: Today down to the day's timeline, and
+        // Training down to the coach's card under today's workout.
+        for (tab, file, swipes) in [("today", "dnes", 3), ("training", "trenink", 2)] {
+            english("-tab", tab)
+            pause(4)
+            for i in 0..<swipes {
+                app.swipeUp()
+                pause(1.5)
+                shot("\(file)-\(i + 2)")
+            }
         }
     }
 
