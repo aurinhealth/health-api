@@ -504,7 +504,7 @@ struct ExerciseCard: View {
     private func row(_ s: GymSet, current: GymSet?) -> GymSetRow {
         let phase: GymSetRow.Phase = s.done ? .done : (s.row == current?.row ? .current : .next)
         let pick = onIntensity
-        return GymSetRow(label: s.warmup ? "W" : s.drop ? "↳" : s.side == "P" ? "" : s.number, side: s.side,
+        return GymSetRow(label: s.warmup ? (s.side == "P" ? "" : "W") : s.drop ? "↳" : s.side == "P" ? "" : s.number, side: s.side,
                          lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
                          kg: LiftWeight.shown(s.done ? s.kg : s.plannedKg) ?? "",
                          reps: Fmt.range((s.done ? s.reps : s.plannedReps) ?? ""),

@@ -348,10 +348,17 @@ export function recoveryReadiness(input) {
   // Days until the newest source has its own 14 (shown as "zpřesní se za …").
   const owns = [components.hrv && hb.carried, components.restingHR && rb.carried].filter(Boolean).map(c => Math.max(1, 14 - (c.own || 0)));
   const provisionalDays = owns.length ? Math.max(...owns) : null;
+  // A new athlete without 14 days of HRV or resting heart rate yet: the days
+  // measured so far, today included (1–14), so Today can show "Day 5 of 14"
+  // and when the score comes (in 15 − days days). Null once either one has
+  // its baseline, and with nothing measured at all (no wearable yet).
+  const measuredToday = Number(today.hrv) > 0 || Number(today.restingHR) > 0 ? 1 : 0;
+  const learned = Math.max(hb.count || 0, rb.count || 0) + measuredToday;
+  const learningDays = hb.mean == null && rb.mean == null && learned > 0 ? Math.min(14, learned) : null;
   const weights = { hrv: 0.5, restingHR: 0.25, sleep: 0.25 };
   const used = Object.keys(weights).filter(k => components[k]);
   const missing = Object.keys(weights).filter(k => !components[k]);
-  if (!(components.hrv || components.restingHR) || used.reduce((s, k) => s + weights[k], 0) < 0.5) return { score: null, zone: null, components, flags, missing, provisional, provisionalDays };
+  if (!(components.hrv || components.restingHR) || used.reduce((s, k) => s + weights[k], 0) < 0.5) return { score: null, zone: null, components, flags, missing, provisional, provisionalDays, learningDays };
   let score = used.reduce((s, k) => s + weights[k] * components[k].score, 0) / used.reduce((s, k) => s + weights[k], 0);
   if (components.respiration && components.respiration.elevated) score -= 10;
   const skinCost = components.skinTemp && components.skinTemp.elevated ? 10 : 0;
@@ -362,7 +369,7 @@ export function recoveryReadiness(input) {
     score -= extra;
   }
   score = Math.round(Math.max(0, Math.min(100, score)));
-  return { score, zone: score >= 67 ? "green" : score >= 34 ? "yellow" : "red", components, flags, missing, provisional, provisionalDays };
+  return { score, zone: score >= 67 ? "green" : score >= 34 ? "yellow" : "red", components, flags, missing, provisional, provisionalDays, learningDays };
 }
 
 // The morning check-in (morning-checkin.js) on top of the body's readiness: it

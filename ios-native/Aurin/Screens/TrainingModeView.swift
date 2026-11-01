@@ -238,7 +238,7 @@ struct TrainingModeView: View {
         // "Vybrat jiný cvik": any exercise from the catalog takes its sets still to do.
         .sheet(item: Binding(get: { replacing.map { Named(name: $0) } }, set: { replacing = $0?.name })) { item in
             GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day?.exercises.map(\.name) ?? []),
-                              title: "Vybrat jiný cvik", eyebrow: L10n.f("Místo cviku %@", ExerciseCatalog.shownName(item.name))) { name in
+                              title: "Vybrat jiný cvik", eyebrow: L10n.f("Místo cviku %@", ExerciseCatalog.shownName(item.name)), hideUsed: true) { name in
                 let kg = GymCoach.suggest(name, history: history, before: date, catalog: catalog.first { $0.name == name }).work.first?.kg
                 let alt = GymAlternative(name: name, muscle: nil, sets: nil, reps: nil, note: nil, station: nil, kg: kg)
                 Task { await swapExercise(item.name, for: alt) }
@@ -471,7 +471,7 @@ struct TrainingModeView: View {
                                      kg: LiftWeight.number(LiftWeight.kgText(kg.isEmpty ? shownKg : kg)), usual: usual)
             plateTap = { loadingBar = target }
         }
-        return GymSetRow(label: s.warmup ? "W" : s.drop ? "↳" : s.side == "P" ? "" : s.number, side: s.side,
+        return GymSetRow(label: s.warmup ? (s.side == "P" ? "" : "W") : s.drop ? "↳" : s.side == "P" ? "" : s.number, side: s.side,
                          lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
                          kg: shownKg, reps: shownReps, state: phase,
                          kgText: $kg, repsText: $reps, kgHint: shownKg, repsHint: s.plannedReps.map(Fmt.range),

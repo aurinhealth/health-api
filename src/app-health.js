@@ -145,6 +145,8 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
       flags: readiness.flags || [],
       // A baseline carried over from another source until the new one has 14 days.
       provisional: !!readiness.provisional,
+      // Days of baseline so far while a new athlete has under 14 (recovery-model.js).
+      learningDays: readiness.learningDays ?? null,
       parts: [...readinessParts(body), ...(body.score != null && readiness.score < body.score ? [{ key: "checkin", points: readiness.score - body.score }] : [])],
       checkin: checkin || null,
       hrv: c.hrv ? round(c.hrv.value) : null,
