@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { COACH_EVAL_SCENARIOS, scenarioById, scenarioContext, checkReply, cardKind, runScenario, runComposeScenario, handleCoachEval, COACH_EVAL_DATE, coachEvalPrincipal, COACH_EVAL_AUDIENCE, COACH_EVAL_WORKFLOWS, effortsBackToBackText } from '../src/coach-eval.js';
 import { coachInstructionsFor, assistantTask } from '../src/coach-assistant.js';
+import { MAIN_SPORTS } from '../src/athlete-focus.js';
+import { withLang } from '../src/lang.js';
 import { isPublicPath } from '../src/dashboard-auth.js';
 import { lang } from '../src/lang.js';
 import { validateCoachActions } from '../src/coach-actions.js';
@@ -452,4 +454,26 @@ test('since run 37: swimming, triathlon, diet, equipment, chest, a strength athl
   assert.deepEqual(names(await run('S40', 'Zakládám ti plán Půlmaraton na 12 týdnů.', [card({ type: 'plan', sport: '', minutes: 0, planId: 'run-half', date: shift(84), raceKm: 21.1 })])), []);
   assert.deepEqual(names(await run('S37', 'Dnes posilovna na horní polovinu těla.')), []);
   assert.deepEqual(names(await run('S41', 'Včerejší sweet spot: NP 228 W při RPE 7, povedlo se.')), []);
+});
+
+test('run 38: every main sport gets the coach in both languages, a week split is planning, "střední" is no Wednesday, a plan comes alone, a swim card is dropped', async () => {
+  // S30/S31: a swimmer's coach threw on the missing swim rules; a sport without rules gets the general ones.
+  for (const l of ['cs', 'en']) for (const sport of [...Object.keys(MAIN_SPORTS), 'unknown', null]) {
+    const text = await withLang(l, () => coachInstructionsFor(sport ? { sport } : null));
+    assert.ok(text.length > 1000 && !/undefined/.test(text), l + ' ' + sport);
+  }
+  assert.equal(assistantTask('Jak mám tenhle týden rozložit tréninky mezi plavání, kolo a běh?', { view: 'today' }), 'planning');
+  assert.equal(assistantTask('How should I split my week between swim, bike and run?', { view: 'today' }), 'planning');
+  assert.equal(assistantTask('Jaké mám FTP?', { view: 'today' }), 'quick');
+  const day = '2026-10-21', at = '2026-10-21 08:00';
+  const failedOn = (id, reply) => checkReply(scenarioById(id), reply, at, day).filter(c => !c.ok).map(c => c.name);
+  assert.ok(!failedOn('S35', { answer: 'Na zítra jednoručky; nohy ve střední náročnosti.', kept: [], proposed: [] }).includes('o dnešku píše „dnes“, ne název dne'));
+  assert.ok(failedOn('S32', { answer: 'Středa: plánované technické plavání.', kept: [], proposed: [], task: 'quick' }).includes('o dnešku píše „dnes“, ne název dne'));
+  const plan = { type: 'plan', planId: 'run-half', sport: 'run', date: '2027-01-13' };
+  assert.ok(!failedOn('S40', { answer: 'Zakládám plán Půlmaraton.', kept: [plan], proposed: [plan] }).includes('vedle plánu žádná další karta (bez vyžádání)'));
+  assert.ok(failedOn('S40', { answer: 'Zakládám plán Půlmaraton. Dnes bych VO2max zrušil.', kept: [plan, { type: 'rest', eventId: 'planned:9001', date: day, sport: 'ride' }], proposed: [] }).includes('vedle plánu žádná další karta (bez vyžádání)'));
+  // A swim is no card the app can show: it is dropped, never kept as another sport.
+  const swim = { type: 'workout', eventId: '', date: '2026-10-23', sport: 'swim', minutes: 30, status: '', statusUntil: '', reason: 'plavání', fromExercise: '', toExercise: '', workoutId: '', kind: 'endurance', activityId: '', otherActivityId: '', time: '', kcal: 0, gymFocus: '', gymMuscles: [], insisted: false, planId: '', days: [], raceKm: 0 };
+  const ctx = scenarioContext(scenarioById('S32'), day, at).ctx;
+  assert.deepEqual(validateCoachActions([swim], ctx, day, { userInitiated: true }), []);
 });

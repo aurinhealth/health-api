@@ -382,6 +382,7 @@ export const COACH_EVAL_SCENARIOS = [
       quality('neopren pod 15 °C', says(r, /neopren|wetsuit/i)), quality('bójka nebo výrazná čepice', says(r, /bójk|čepic|buoy|cap/i)), noUnaskedCard(r)] },
   { id: 'S32', title: 'Triatlonista: rozložení týdne', message: 'Jak mám tenhle týden rozložit tréninky mezi plavání, kolo a běh?', athlete: TRIATHLETE, context: triSplitFacts,
     checks: r => [safety('žádné tvrdé karty dva dny po sobě', !hardInRow(r).length, hardInRow(r).join(', ')),
+      quality('dotaz jde na plný model (plánování)', r.task === 'planning', r.task),
       quality('zmíní všechny tři sporty', says(r, /plav/i) && says(r, /kol[oae]|jízd|jet\b/i) && says(r, /běh|běž/i)), quality('víc plavání jako nejslabší disciplíny', says(r, /plav\p{L}*[^.]{0,80}(?:víc|častěji|krátk|nejslab|nov)|(?:víc|častěji|krátk|nejslab|nov)[^.]{0,80}plav/iu)),
       quality('brick: běh hned po jízdě', says(r, /brick|(?:hned |rovnou |krátký běh |krátce běh)[^.]{0,30}po (?:dlouhé )?jízd|po (?:dlouhé )?jízd\p{L}*[^.]{0,40}(?:hned|rovnou)?[^.]{0,20}běh/iu))] },
   { id: 'S33', title: 'Veganská strava, chybí 60 g bílkovin', message: 'Co si dám k večeři, abych dobral bílkoviny?', athlete: VEGAN,
@@ -407,7 +408,9 @@ export const COACH_EVAL_SCENARIOS = [
       quality('netvrdí, že už zapomněl (čeká na potvrzení)', !says(r, CLAIMS_FORGOTTEN)), noUnaskedCard(r)] },
   { id: 'S40', title: 'Plán z chatu: půlmaraton za 12 týdnů', message: 'Chci za 12 týdnů běžet půlmaraton. Založ mi na to tréninkový plán.', context: () => ({ planTemplates: coachPlanTemplates() }),
     checks: r => { const plan = r.kept.find(a => a.type === 'plan');
-      return [quality('karta plánu na půlmaraton', plan?.planId === 'run-half', plan ? plan.planId : 'bez karty plánu'), quality('jen jeden plán', r.kept.filter(a => a.type === 'plan').length <= 1)]; } },
+      return [quality('karta plánu na půlmaraton', plan?.planId === 'run-half', plan ? plan.planId : 'bez karty plánu'), quality('jen jeden plán', r.kept.filter(a => a.type === 'plan').length <= 1),
+        // Run 38: the plan came with a rest and an easy ride for today's VO2max nobody asked about.
+        quality('vedle plánu žádná další karta (bez vyžádání)', !r.kept.some(a => a.type !== 'plan'), r.kept.filter(a => a.type !== 'plan').map(a => [a.type, a.kind || a.sport, a.date].filter(Boolean).join(' ')).join(', '))]; } },
   { id: 'S41', title: 'Dotaz z detailu včerejší jízdy', message: 'Jak se mi to povedlo?', context: detailContext,
     checks: r => [quality('mluví o včerejším sweet spotu (NP 228 W, RPE 7)', says(r, /228|RPE\s*7|sweet/i)), noUnaskedCard(r)] },
   // Quick questions about the athlete's own numbers: the app answers them with
@@ -433,7 +436,7 @@ const luna = (r, { cards = false } = {}) => [quality('odpovídá lehký model (L
 // (today, tomorrow, a weekday in the next two weeks, the nearer first), the changes it promises
 // and the words a card of each kind is spoken of with.
 // At the start of a word: "bezprostředním" is no Wednesday (run 19, S12).
-const WEEKDAYS = { cs: [/(?<!\p{L})neděl/iu, /(?<!\p{L})pondě?l/iu, /(?<!\p{L})úter[ýn]/iu, /(?<!\p{L})střed/iu, /(?<!\p{L})čtvrt(?:ek|ku|kem|eční)/iu, /(?<!\p{L})pát(?:ek|ku|kem|eční)/iu, /(?<!\p{L})sobot/iu], en: [/sunday/i, /monday/i, /tuesday/i, /wednesday/i, /thursday/i, /friday/i, /saturday/i] };
+const WEEKDAYS = { cs: [/(?<!\p{L})neděl/iu, /(?<!\p{L})pondě?l/iu, /(?<!\p{L})úter[ýn]/iu, /(?<!\p{L})střed(?![nň])/iu, /(?<!\p{L})čtvrt(?:ek|ku|kem|eční)/iu, /(?<!\p{L})pát(?:ek|ku|kem|eční)/iu, /(?<!\p{L})sobot/iu], en: [/sunday/i, /monday/i, /tuesday/i, /wednesday/i, /thursday/i, /friday/i, /saturday/i] };
 const weekdayOf = date => new Date(date + 'T12:00:00Z').getUTCDay();
 // The days in the order the sentence names them.
 function dayRefs(sentence, date) {
