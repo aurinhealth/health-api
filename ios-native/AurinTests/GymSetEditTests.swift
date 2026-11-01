@@ -29,6 +29,36 @@ final class GymSetEditTests: XCTestCase {
         XCTAssertEqual(d.exercises[0].sets.count, 2)
     }
 
+    func testBySidesBothLegsWarmUp() {
+        var d = day([row("WARMUP", "Bulgarian split squat", "1", "6"), row("WORK", "Bulgarian split squat", "1", "10"),
+                     row("WORK", "Bulgarian split squat", "2", "10")])
+        d.setSides(at: 0, true)
+        XCTAssertEqual(d.exercises[0].sets.filter(\.warmup).map(\.side), ["L", "P"])
+        XCTAssertEqual(d.exercises[0].sets.filter { !$0.warmup }.map(\.side), ["L", "P", "L", "P"])
+        // Swiping one side's warm-up away takes the pair.
+        d.deleteSet(row: d.exercises[0].sets[1].row)
+        XCTAssertEqual(d.exercises[0].sets.filter(\.warmup).count, 0)
+        // Back to both at once: one row per warm-up and set.
+        var e = day([row("WARMUP", "Lunge", "1", "6", side: "L"), row("WARMUP", "Lunge", "1", "6", side: "P"),
+                     row("WORK", "Lunge", "1", "10", done: true, side: "L"), row("WORK", "Lunge", "1", "10", side: "P"),
+                     row("WORK", "Lunge", "2", "10", side: "L"), row("WORK", "Lunge", "2", "10", side: "P")])
+        e.setSides(at: 0, false)
+        XCTAssertEqual(e.exercises[0].sets.map(\.warmup), [true, false, false, false])
+        XCTAssertEqual(e.exercises[0].sets.map(\.number), ["1", "1", "1", "2"])
+    }
+
+    func testBySidesWarmupsFollowTheOrderOnBothSides() {
+        var d = day([row("WARMUP", "Bench", "1", "35"), row("WORK", "Bench", "1", "55"),
+                     row("WARMUP", "Lunge", "1", "13", side: "L"), row("WARMUP", "Lunge", "1", "13", side: "P"),
+                     row("WORK", "Lunge", "1", "20", side: "L"), row("WORK", "Lunge", "1", "20", side: "P")])
+        // The lunge goes first: three ramp-up steps, each for L and P.
+        d.moveExercise(from: 1, to: 0)
+        let warms = d.exercises[0].sets.filter(\.warmup)
+        XCTAssertEqual(warms.map(\.side), ["L", "P", "L", "P", "L", "P"])
+        XCTAssertEqual(warms.map(\.number), ["1", "1", "2", "2", "3", "3"])
+        XCTAssertEqual(warms.map(\.plannedKg), ["8", "8", "13", "13", "16", "16"])
+    }
+
     func testDeletingTheSetSwipedNotTheFirst() {
         var d = day([row("WORK", "Bench", "1", "50", done: true), row("WORK", "Bench", "2", "55", done: true), row("WORK", "Bench", "3", "60")])
         d.deleteSet(row: d.exercises[0].sets[1].row)

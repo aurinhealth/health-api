@@ -7,6 +7,8 @@ extension Notification.Name {
     static let watchGym = Notification.Name("watchGym")
     /// The watch started, moved or ended the rest (object: WatchGym.Rest).
     static let watchRest = Notification.Name("watchRest")
+    /// The weight and reps being set on the watch (object: WatchGym.Draft).
+    static let watchDraft = Notification.Name("watchDraft")
 }
 
 /// The gym on the Apple Watch (AurinWatch/Gym*.swift), both ways: the day's
@@ -169,6 +171,13 @@ extension WatchBridge {
             session.sendMessage([WatchGym.replyKey: data], replyHandler: nil, errorHandler: nil)
         }
         sendContext()
+    }
+
+    /// The weight and reps typed for the set at hand, to the watch's gym (only while in reach).
+    func sendDraft(_ draft: WatchGym.Draft) {
+        guard let session = WCSession.isSupported() ? WCSession.default : nil, session.activationState == .activated,
+              session.isPaired, session.isWatchAppInstalled, session.isReachable, let data = draft.encoded() else { return }
+        session.sendMessage([WatchGym.draftKey: data], replyHandler: nil, errorHandler: nil)
     }
 
     /// The rest in Training mode, to the watch's gym (only while in reach).

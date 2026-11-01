@@ -13,6 +13,9 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
     var readiness: Int?
     /// green, yellow or red.
     var zone: String?
+    /// A new athlete's days of baseline so far (1–14) while readiness has no
+    /// number yet (TodaySnapshot.Readiness.learningDays).
+    var learningDays: Int? = nil
     /// Today's summary from the server (src/app-today.js), in the app's language.
     var headline: String?
     var summary: String?
