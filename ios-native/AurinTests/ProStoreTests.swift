@@ -6,6 +6,18 @@ import XCTest
 /// yearly one, an offer code), as the simulator buys it from the Aurin scheme.
 @MainActor
 final class ProStoreTests: XCTestCase {
+    override func setUp() async throws {
+        // A purchase that StoreKit never answers fails here after a minute
+        // (ios-native.yml turns test timeouts on) instead of holding CI.
+        executionTimeAllowance = 60
+        // The purchase sheet needs the app's window to anchor to; the host app
+        // may still be starting when the first test runs.
+        for _ in 0..<100 where ProStore.anchorScene() == nil {
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        XCTAssertNotNil(ProStore.anchorScene(), "the host app has no window scene for the purchase sheet")
+    }
+
     private func makeSession() throws -> SKTestSession {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Aurin", withExtension: "storekit"))
         let session = try SKTestSession(contentsOf: url)
