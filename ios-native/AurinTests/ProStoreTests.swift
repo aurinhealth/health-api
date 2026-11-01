@@ -6,6 +6,27 @@ import XCTest
 /// yearly one, an offer code), as the simulator buys it from the Aurin scheme.
 @MainActor
 final class ProStoreTests: XCTestCase {
+    override func setUp() async throws {
+        // A purchase that StoreKit never answers fails here after a minute
+        // (ios-native.yml turns test timeouts on) instead of holding CI.
+        executionTimeAllowance = 60
+        // The purchase sheet needs the app's window to anchor to; the host app
+        // may still be starting when the first test runs.
+        for _ in 0..<100 where ProStore.anchorScene() == nil {
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        XCTAssertNotNil(ProStore.anchorScene(), "the host app has no window scene for the purchase sheet")
+        XCTAssertTrue(ProStore.hostsUnitTests, "the host app leaves the App Store alone while the tests buy")
+    }
+
+    /// How long each StoreKit step took, in the CI log, so a slow one is named.
+    private func step<T>(_ name: String, _ work: () async throws -> T) async rethrows -> T {
+        let start = Date()
+        print("ProStoreTests \(name): started")
+        defer { print("ProStoreTests \(name): \(String(format: "%.1f", Date().timeIntervalSince(start))) s") }
+        return try await work()
+    }
+
     private func makeSession() throws -> SKTestSession {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Aurin", withExtension: "storekit"))
         let session = try SKTestSession(contentsOf: url)
@@ -20,7 +41,7 @@ final class ProStoreTests: XCTestCase {
         let store = ProStore()
         var reminded: String?
         store.trialReminder = { _, price in reminded = price }
-        await store.load()
+        await step("load") { await store.load() }
         XCTAssertEqual(Set(store.products.keys), Set(ProStore.ids))
         XCTAssertTrue(store.trialEligible, "a new Apple ID starts the yearly plan with the free week")
         let yearly = try XCTUnwrap(store.price(ProStore.yearlyID))
@@ -28,7 +49,7 @@ final class ProStoreTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(store.perMonth(ProStore.yearlyID)).contains("124"))
         XCTAssertEqual(ProPlans.priced(store).first?.price, L10n.f("%@ / rok", yearly))
 
-        let outcome = try await store.purchase(ProStore.yearlyID)
+        let outcome = try await step("purchase yearly") { try await store.purchase(ProStore.yearlyID) }
         XCTAssertEqual(outcome, .purchased(trial: true))
         XCTAssertEqual(reminded, yearly, "the day-5 reminder names the price")
         XCTAssertTrue(store.entitled)
@@ -41,11 +62,11 @@ final class ProStoreTests: XCTestCase {
         let store = ProStore()
         var reminded = false
         store.trialReminder = { _, _ in reminded = true }
-        await store.load()
-        let outcome = try await store.purchase(ProStore.monthlyID)
+        await step("load") { await store.load() }
+        let outcome = try await step("purchase monthly") { try await store.purchase(ProStore.monthlyID) }
         XCTAssertEqual(outcome, .purchased(trial: false))
         XCTAssertFalse(reminded)
-        await store.refresh()
+        await step("refresh") { await store.refresh() }
         XCTAssertTrue(store.entitled)
         _ = session
     }

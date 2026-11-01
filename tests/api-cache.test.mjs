@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cached, closedDay } from "../src/api-cache.js";
+import { cached, cachedOnly, closedDay } from "../src/api-cache.js";
 
 function setup() {
   const map = new Map();
@@ -166,4 +166,18 @@ test("a closed day is two or more days back: today and yesterday still get late 
   assert.equal(closedDay("2026-09-29", "2026-10-01"), true);
   assert.equal(closedDay("2026-11-02", "2026-10-31"), false);
   assert.equal(closedDay("", "2026-10-31"), false);
+});
+
+test("cachedOnly gives a kept entry under the current version and computes nothing", async () => {
+  const { env, store } = setup();
+  assert.equal(await cachedOnly(env, "coach-inputs:2026-11-01", { store }), null);
+  await cached(env, null, "coach-inputs:2026-11-01", async () => ({ date: "2026-11-01", week: { days: [] } }), { store });
+  assert.deepEqual(await cachedOnly(env, "coach-inputs:2026-11-01", { store }), { date: "2026-11-01", week: { days: [] } });
+  // Another version (a change by the user) does not see it.
+  const { env: newer } = setup();
+  newer.DB.prepare = () => ({ bind: () => ({ first: async () => ({ version: 2 }) }) });
+  assert.equal(await cachedOnly(newer, "coach-inputs:2026-11-01", { store }), null);
+  // No cache or no user: nothing.
+  assert.equal(await cachedOnly({ DB: {} }, "coach-inputs:2026-11-01", { store }), null);
+  assert.equal(await cachedOnly(env, "coach-inputs:2026-11-01", { store: null }), null);
 });

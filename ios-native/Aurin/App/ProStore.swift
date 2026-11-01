@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import StoreKit
+import UIKit
 import UserNotifications
 
 /// Aurin Pro from the App Store (StoreKit 2): the subscription group "Aurin
@@ -39,6 +40,10 @@ final class ProStore {
     @ObservationIgnored private var updates: Task<Void, Never>?
     @ObservationIgnored private var accountToken: UUID?
 
+    /// The app is the host of the unit tests (AurinTests), not used on a phone.
+    /// The smoke test (AurinUITests) runs the app on its own, without this.
+    nonisolated static let hostsUnitTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+
     init(trialEligible: Bool = false) {
         self.trialEligible = trialEligible
     }
@@ -47,6 +52,11 @@ final class ProStore {
     /// in the App Store, purchases approved by a parent) and loads the plans.
     /// No api with the sample data: purchases from Aurin.storekit stay on the phone.
     func start(api: APIClient?) {
+        // The unit tests run inside the app: its own App Store calls at launch
+        // (the plans, what is active, AppTransaction) would go to the real App
+        // Store, which has no account in the simulator, and StoreKit makes the
+        // tests' purchases from Aurin.storekit wait behind them, sometimes forever.
+        guard !Self.hostsUnitTests else { return }
         self.api = api
         guard updates == nil else { return }
         updates = Task { [weak self] in
@@ -77,7 +87,7 @@ final class ProStore {
     /// TestFlight for AI (src/ai-limit-share.js). Once per build and account;
     /// a failure tries again at the next start or sign-in.
     func reportInstall() async {
-        guard let api, let result = try? await AppTransaction.shared, case .verified(let app) = result else { return }
+        guard !Self.hostsUnitTests, let api, let result = try? await AppTransaction.shared, case .verified(let app) = result else { return }
         // Xcode signs with its own key, which the server never accepts.
         guard app.environment == .sandbox || app.environment == .production else { return }
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
@@ -140,7 +150,16 @@ final class ProStore {
         defer { purchasing = false }
         var options: Set<Product.PurchaseOption> = []
         if let token = await accountUUID() { options.insert(.appAccountToken(token)) }
-        switch try await product.purchase(options: options) {
+        // The purchase sheet is shown over the app's window. Without a scene to
+        // anchor it, StoreKit logs "Could not find a UI anchor" and the purchase
+        // can wait forever (seen in the simulator right after the app starts).
+        let result: Product.PurchaseResult
+        if let scene = Self.anchorScene() {
+            result = try await product.purchase(confirmIn: scene, options: options)
+        } else {
+            result = try await product.purchase(options: options)
+        }
+        switch result {
         case .success(let result):
             guard case .verified(let transaction) = result else {
                 throw APIError.message(L10n.tr("App Store nákup nepotvrdil. Zkus Obnovit nákup."))
@@ -157,6 +176,16 @@ final class ProStore {
         @unknown default:
             return .cancelled
         }
+    }
+
+    /// The window scene the purchase sheet appears over: the one in front,
+    /// else any scene with a window.
+    static func anchorScene() -> UIWindowScene? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        return scenes.first { $0.activationState == .foregroundActive && $0.keyWindow != nil }
+            ?? scenes.first { $0.activationState == .foregroundActive }
+            ?? scenes.first { !$0.windows.isEmpty }
+            ?? scenes.first
     }
 
     /// Obnovit nákup: asks the App Store for this Apple ID's purchases (it may
