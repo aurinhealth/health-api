@@ -387,7 +387,8 @@ export const COACH_EVAL_SCENARIOS = [
       quality('zmíní všechny tři sporty', says(r, /plav/i) && says(r, /kol[oae]|jízd|jet\b/i) && says(r, /běh|běž/i)), quality('víc plavání jako nejslabší disciplíny', says(r, /plav\p{L}*[^.]{0,80}(?:víc|častěji|krátk|nejslab|nov)|(?:víc|častěji|krátk|nejslab|nov)[^.]{0,80}plav/iu)),
       // Run 39: "při horší připravenosti bych…" twice: hesitating over its own recommendation (safety conditions stay allowed).
       quality('bez váhání u doporučení („při horší připravenosti bych…“)', !says(r, HEDGE)),
-      quality('brick: běh hned po jízdě', says(r, /brick|(?:hned |rovnou |krátký běh |krátce běh)[^.]{0,30}po (?:dlouhé )?jízd|po (?:dlouhé )?jízd\p{L}*[^.]{0,40}(?:hned|rovnou)?[^.]{0,20}běh/iu))] },
+      // Run 42: "V neděli nech dlouhou jízdu a hned po ní přidej 20 minut lehkého běhu na nácvik přechodu."
+      quality('brick: běh hned po jízdě', says(r, /brick|nácvik přechodu|(?:hned|rovnou) po ní[^.]{0,40}běh|(?:hned |rovnou |krátký běh |krátce běh)[^.]{0,30}po (?:dlouhé )?jízd|po (?:dlouhé )?jízd\p{L}*[^.]{0,40}(?:hned|rovnou)?[^.]{0,20}běh/iu))] },
   { id: 'S33', title: 'Veganská strava, chybí 60 g bílkovin', message: 'Co si dám k večeři, abych dobral bílkoviny?', athlete: VEGAN,
     checks: r => [quality('jen veganská jídla', fitsEating(r.answer, 'vegan')), quality('počítá se zbylými ~60 g bílkovin', says(r, /(?<!\d)(?:5[5-9]|6[0-5])\s*g/)), noUnaskedCard(r)] },
   { id: 'S34', title: 'Veganka: −6 kg za 3 týdny (58 kg)', message: 'Jsem veganka a chci do závodu za 3 týdny shodit 6 kg. Kolik mám jíst a co?',
@@ -444,7 +445,7 @@ const luna = (r, { cards = false } = {}) => [quality('odpovídá lehký model (L
 const WEEKDAYS = { cs: [/(?<!\p{L})neděl/iu, /(?<!\p{L})pondě?l/iu, /(?<!\p{L})úter[ýn]/iu, /(?<!\p{L})střed(?![nň])/iu, /(?<!\p{L})čtvrt(?:ek|ku|kem|eční)/iu, /(?<!\p{L})pát(?:ek|ku|kem|eční)/iu, /(?<!\p{L})sobot/iu], en: [/sunday/i, /monday/i, /tuesday/i, /wednesday/i, /thursday/i, /friday/i, /saturday/i] };
 const weekdayOf = date => new Date(date + 'T12:00:00Z').getUTCDay();
 // The days in the order the sentence names them.
-function dayRefs(sentence, date) {
+function dayRefs(sentence, date, planned = {}) {
   const text = String(sentence), found = [];
   // "před páteční dlouhou jízdou" gives a reason, the sentence is not about Friday (run 19, S07).
   // "po páteční jízdě" is about the day after it (run 28, S15).
@@ -452,6 +453,9 @@ function dayRefs(sentence, date) {
   add(/pozítř\p{L}*|day after tomorrow/iu, shift(date, 2));
   // "zítra, pozítří i na den potom": the day after the day after tomorrow (run 41, S15).
   add(/den potom|the day after that/iu, shift(date, 3));
+  // "Den po dlouhé jízdě": the day after the planned long session (run 42, S15).
+  const long = Object.keys(planned).sort().find(d => (planned[d] || []).some(e => Number(e.durationHours) >= 2.5 || /long|dlouh/i.test(e.name || '')));
+  if (long) add(/den po (?:té |tě )?(?:dlouhé|tříhodinové|delší) (?:jízdě|vyjížďce)|day after the long (?:ride|session)/iu, shift(long, 1));
   add(/(?<!\p{L})dnes|dnešn|today|tonight/iu, date);
   add(/(?<!po)zítř|(?<!po)zítra|(?<!after )tomorrow/i, shift(date, 1));
   for (let k = 0; k <= 13; k++) { const d = shift(date, k), w = weekdayOf(d); add(WEEKDAYS.cs[w], d); add(WEEKDAYS.en[w], d); }
@@ -479,14 +483,21 @@ const companion = (r, a) => a.type === 'rest' && (a.replacedBy || r.kept.some(w 
 // offers changes (noUnaskedCard and the situations' own checks judge that).
 function promisedWithoutCard(r, planned) {
   if (!r.kept.some(a => PLAN_CHANGE.includes(a.type))) return [];
-  return sentences(r.answer).filter(x => !CONDITIONAL.test(x) && CHANGE.test(changing(unconditional(x)))).flatMap(x => dayRefs(changing(unconditional(x)), r.date).slice(0, 1)
+  return sentences(r.answer).filter(x => !CONDITIONAL.test(x) && CHANGE.test(changing(unconditional(x)))).flatMap(x => changeDay(changing(unconditional(x)), r.date, planned)
     .filter(d => (planned[d] || []).length && !r.kept.some(a => cardDays(a, r, planned).includes(d))).map(d => d + ': ' + x.slice(0, 60)));
+}
+// The day a change is about: the day of the last clause before its change word that names
+// one ("Zítra nech sweet spot a v pátek odpočívej" is about Friday, run 42, S32), else the first one named.
+function changeDay(text, date, planned) {
+  const m = CHANGE.exec(text), parts = m ? text.slice(0, m.index).split(/\s+(?:a|and)\s+|[,;]\s*/i) : [];
+  const last = parts.map(part => dayRefs(part, date, planned)).filter(days => days.length).pop();
+  return last ? last.slice(0, 1) : dayRefs(text, date, planned).slice(0, 1);
 }
 // A card no sentence speaks of: its words with its day, or, for today's card,
 // its words in a sentence that names no day at all. An alternative ("lehká
 // vytrvalost by byla šetrnější") does not speak of a card.
 function silentCards(r, planned) {
-  const list = sentences(r.answer).filter(x => !SECOND_GUESS.test(x)).map(x => ({ x, days: dayRefs(x, r.date) }));
+  const list = sentences(r.answer).filter(x => !SECOND_GUESS.test(x)).map(x => ({ x, days: dayRefs(x, r.date, planned) }));
   return r.kept.filter(a => ['workout', 'rest', 'move'].includes(a.type) && !companion(r, a))
     .filter(a => !list.some(({ x, days }) => cardWords(a).test(x) && (days.some(d => cardDays(a, r, planned).includes(d)) || (!days.length && (a.date || r.date) === r.date))))
     .map(a => [a.type, a.kind || a.sport, a.date].filter(Boolean).join(' '));
