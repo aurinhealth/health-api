@@ -28,9 +28,10 @@ extension APIClient {
                        body: ["eventId": JSONValue.string(eventId), "destination": .string(destination)], timeout: 40)
     }
 
-    /// The planned ride as Zwift's .zwo (Zwift, MyWhoosh and other trainer apps open it).
-    func plannedZwo(eventId: String) async throws -> Data {
-        try await getData("/app/api/my-workouts/from-planned.zwo?id=" + Self.query(eventId))
+    /// The planned workout as a file: "zwo" (Zwift, MyWhoosh; rides and runs)
+    /// or "fit" (Garmin, Wahoo, Karoo, COROS; rides, runs and swims).
+    func plannedFile(eventId: String, format: String) async throws -> Data {
+        try await getData("/app/api/my-workouts/from-planned.\(format)?id=" + Self.query(eventId))
     }
 }
 
@@ -54,8 +55,8 @@ struct SendToButton: View {
 }
 
 /// Wahoo and Intervals.icu with their status and "Odeslat znovu", the Apple
-/// Watch (the system's preview adds it to the Workout app) and, for a ride,
-/// the .zwo file through the share sheet. Only places Aurin can really send to.
+/// Watch (the system's preview adds it to the Workout app) and "Export to":
+/// the .zwo (ride, run) and .fit (ride, run, swim) file through the share sheet. Only places Aurin can really send to.
 struct PlannedSendSheet: View {
     @Environment(AppModel.self) private var model
     let workout: PlannedWorkout.Workout
@@ -65,7 +66,8 @@ struct PlannedSendSheet: View {
     @State private var error: String?
     @State private var watchPlan: WorkoutPlan?
     @State private var watchShowing = false
-    @State private var sharing = false
+    /// The file being made for the share sheet: "zwo" or "fit".
+    @State private var sharing: String?
     /// A swim to the watch: in the pool (metres) or in open water (time).
     @State private var openWater = false
     /// Joined to another session of the day (a brick): both legs steady go as
@@ -106,11 +108,10 @@ struct PlannedSendSheet: View {
                         action: "Přidat", primary: false, busy: false) { watchShowing = true }
                         .workoutPreview(watchPlan, isPresented: $watchShowing)
                 }
-                if session.sport == "ride", let id = session.eventId {
-                    row(icon: AnyView(symbol("doc")), name: "Zwift, MyWhoosh", status: L10n.tr("soubor .zwo"), statusColor: Palette.muted,
-                        action: "Sdílet", primary: false, busy: sharing) { share(id) }
+                if let id = session.eventId, ["ride", "run", "swim"].contains(session.sport) {
+                    exportRow(id)
                 }
-                if destinations?.isEmpty == true, watchPlan == nil, session.sport != "ride" {
+                if destinations?.isEmpty == true, watchPlan == nil, !(session.eventId != nil && ["ride", "run", "swim"].contains(session.sport)) {
                     Text("Připoj Wahoo nebo Intervals.icu v Nastavení.").font(Typo.small).foregroundStyle(Palette.muted)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 12)
                 }
@@ -175,11 +176,47 @@ struct PlannedSendSheet: View {
                     .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .disabled(sending != nil || sharing)
+                .disabled(sending != nil || sharing != nil)
             }
         }
         .padding(.vertical, 12)
         .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
+    }
+
+    /// "Export to" with a button per file: .zwo for a ride or run, .fit for all.
+    private func exportRow(_ id: String) -> some View {
+        let zwo = session.sport == "ride" || session.sport == "run"
+        return HStack(spacing: 14) {
+            symbol("doc")
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Exportovat do").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                Text(verbatim: zwo ? "Zwift, Garmin, Karoo" : "Garmin, COROS, Wahoo").font(Typo.caption).foregroundStyle(Palette.muted)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            HStack(spacing: 8) {
+                if zwo { fileButton(".zwo", format: "zwo", id: id) }
+                fileButton(".fit", format: "fit", id: id)
+            }
+        }
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
+    }
+
+    private func fileButton(_ label: String, format: String, id: String) -> some View {
+        Button { share(id, format: format) } label: {
+            ZStack {
+                Text(verbatim: label).opacity(sharing == format ? 0 : 1)
+                if sharing == format { ProgressView().controlSize(.small).tint(Palette.ink) }
+            }
+            .font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink)
+            .frame(minWidth: 34).padding(.horizontal, 12).frame(height: 34)
+            .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(sending != nil || sharing != nil)
+        .accessibilityLabel(L10n.f("Exportovat jako %@", label))
     }
 
     private func symbol(_ name: String) -> some View {
@@ -225,16 +262,16 @@ struct PlannedSendSheet: View {
         }
     }
 
-    private func share(_ id: String) {
+    private func share(_ id: String, format: String) {
         Task {
-            sharing = true
+            sharing = format
             error = nil
-            defer { sharing = false }
+            defer { sharing = nil }
             do {
-                let data = try await model.api.plannedZwo(eventId: id)
+                let data = try await model.api.plannedFile(eventId: id, format: format)
                 let name = session.title.folding(options: .diacriticInsensitive, locale: nil)
                     .components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: "-")
-                let url = FileManager.default.temporaryDirectory.appendingPathComponent((name.isEmpty ? "workout" : name) + ".zwo")
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent((name.isEmpty ? "workout" : name) + "." + format)
                 try data.write(to: url, options: .atomic)
                 present(url)
             } catch {
