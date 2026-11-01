@@ -123,7 +123,11 @@ struct RootView: View {
                 }
                 .dynamicTypeSize(Self.textSizes)
                 .onDisappear { visited = []; scrolledTabs = [] }
+                .onChange(of: model.paths, initial: true) { _, paths in
+                    ScreenTrail.visit(model.tab, paths[model.tab]?.last)
+                }
                 .onChange(of: model.tab) { old, tab in
+                    ScreenTrail.visit(tab, model.paths[tab]?.last)
                     visited.insert(old)
                     // A tab built earlier: only its data is checked, like on its first visit.
                     guard visited.contains(tab) else { return }
@@ -218,6 +222,9 @@ struct RootView: View {
                 .dynamicTypeSize(Self.textSizes)
             }
             .sheet(isPresented: $showSettings) { SettingsView().dynamicTypeSize(Self.textSizes) }
+            .onChange(of: showCoach) { _, open in
+                if open { ScreenTrail.visit("coach") } else { ScreenTrail.visit(model.tab, model.paths[model.tab]?.last) }
+            }
             .sheet(isPresented: $showCoach) { CoachView(view: coachView, date: model.selectedDate).dynamicTypeSize(Self.textSizes) }
             .sheet(isPresented: $showShare) {
                 if let today = model.today {
