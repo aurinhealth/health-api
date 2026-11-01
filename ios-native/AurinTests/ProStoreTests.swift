@@ -7,9 +7,11 @@ import XCTest
 @MainActor
 final class ProStoreTests: XCTestCase {
     override func setUp() async throws {
-        // A purchase that StoreKit never answers fails here after a minute
-        // (ios-native.yml turns test timeouts on) instead of holding CI.
-        executionTimeAllowance = 60
+        // The simulator's first test purchase can take close to a minute on
+        // CI (51 s seen with the app's own App Store calls already off), so a
+        // purchase gets five minutes; one that StoreKit never answers fails
+        // then (ios-native.yml turns test timeouts on) instead of holding CI.
+        executionTimeAllowance = 300
         // The purchase sheet needs the app's window to anchor to; the host app
         // may still be starting when the first test runs.
         for _ in 0..<100 where ProStore.anchorScene() == nil {
