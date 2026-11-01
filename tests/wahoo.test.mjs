@@ -9,6 +9,7 @@ import { storeLocalEvent, syncLocalWorkout, editLocalWorkout } from "../src/loca
 import { saveSyncPrefs, syncOverview } from "../src/sync-destinations.js";
 import { connectionStatus } from "../src/connections.js";
 import { withTimeZone } from "../src/user-time.js";
+import { powerZones } from "../src/training-zones.js";
 import { changeActivityType } from "../src/activity-type.js";
 import { setActivityKcal } from "../src/activity-edits.js";
 
@@ -302,43 +303,44 @@ test("the hourly look for a Wahoo ride runs only on a day with a ride planned an
   assert.equal(await expected(), false, "the ride has come");
 });
 
+const z = (ftp, profile = {}) => ({ ftp, profile, powerZones: powerZones(profile, ftp) });
 test("the FTP and power zones go to Wahoo as watt tops: Aurin's set is made once, then changed", async () => {
   const { db } = setup();
-  const coggan = wahooPowerZones({ ftp: 250, profile: {} });
+  const coggan = wahooPowerZones(z(250));
   assert.deepEqual(coggan, {
     "power_zone[ftp]": "250", "power_zone[zone_count]": "7", "power_zone[workout_type_family_id]": "0",
     "power_zone[zone_1]": "138", "power_zone[zone_2]": "188", "power_zone[zone_3]": "225", "power_zone[zone_4]": "263",
     "power_zone[zone_5]": "300", "power_zone[zone_6]": "375", "power_zone[zone_7]": "1250"
   });
   // Fewer zones send fewer fields; more than Wahoo's 7 fold into the top zone.
-  const seiler = wahooPowerZones({ ftp: 200, profile: { powerZoneModel: "seiler3" } });
+  const seiler = wahooPowerZones(z(200, { powerZoneModel: "seiler3" }));
   assert.equal(seiler["power_zone[zone_count]"], "3");
   assert.equal(seiler["power_zone[zone_3]"], "1000");
   assert.equal(seiler["power_zone[zone_4]"], undefined);
-  const nine = wahooPowerZones({ ftp: 200, profile: { powerZoneModel: "custom", powerZoneBounds: [50, 60, 70, 80, 90, 100, 110, 120, 130] } });
+  const nine = wahooPowerZones(z(200, { powerZoneModel: "custom", powerZoneBounds: [50, 60, 70, 80, 90, 100, 110, 120, 130] }));
   assert.equal(nine["power_zone[zone_count]"], "7");
   assert.equal(nine["power_zone[zone_6]"], "200");
-  assert.equal(wahooPowerZones({ ftp: null, profile: {} }), null);
+  assert.equal(wahooPowerZones(z(null)), null);
 
   const first = api({ "GET /v1/power_zones": () => Response.json([]), "POST /v1/power_zones": () => Response.json({ id: 31 }) });
-  assert.deepEqual(await writeWahooZones(env(db), { ftp: 250, profile: {} }, { fetchImpl: first.fetchImpl, now: NOW }), { status: "ok" });
+  assert.deepEqual(await writeWahooZones(env(db), z(250), { fetchImpl: first.fetchImpl, now: NOW }), { status: "ok" });
   const made = first.calls.find(c => c.method === "POST" && c.path === "/v1/power_zones");
   assert.equal(made.body["power_zone[zone_4]"], "263");
 
   const again = api({ "GET /v1/power_zones": () => Response.json([{ id: 31, workout_type_family_id: 0 }]) });
-  assert.deepEqual(await writeWahooZones(env(db), { ftp: 260, profile: {} }, { fetchImpl: again.fetchImpl, now: NOW }), { status: "ok" });
+  assert.deepEqual(await writeWahooZones(env(db), z(260), { fetchImpl: again.fetchImpl, now: NOW }), { status: "ok" });
   assert.deepEqual(again.calls.filter(c => c.path.startsWith("/v1/power_zones")).map(c => c.method + " " + c.path), ["GET /v1/power_zones", "PUT /v1/power_zones/31"]);
   assert.equal(again.calls.at(-1).body["power_zone[ftp]"], "260");
-  // A set Wahoo returned without a family is still Aurin's own: changed, not made twice.
-  const bare = api({ "GET /v1/power_zones": () => Response.json([{ id: 32, workout_type_family_id: null }]) });
-  await writeWahooZones(env(db), { ftp: 260, profile: {} }, { fetchImpl: bare.fetchImpl, now: NOW });
-  assert.equal(bare.calls.at(-1).method + " " + bare.calls.at(-1).path, "PUT /v1/power_zones/32");
+  // A set without the cycling family is not Aurin's: left alone, Aurin's own is made.
+  const other = api({ "GET /v1/power_zones": () => Response.json([{ id: 32, workout_type_family_id: null }]), "POST /v1/power_zones": () => Response.json({ id: 33 }) });
+  await writeWahooZones(env(db), z(260), { fetchImpl: other.fetchImpl, now: NOW });
+  assert.equal(other.calls.at(-1).method + " " + other.calls.at(-1).path, "POST /v1/power_zones");
 
   // Without an FTP nothing goes out; not connected says so.
   const none = api();
-  assert.deepEqual(await writeWahooZones(env(db), { ftp: null, profile: {} }, { fetchImpl: none.fetchImpl, now: NOW }), { status: "skipped" });
+  assert.deepEqual(await writeWahooZones(env(db), z(null), { fetchImpl: none.fetchImpl, now: NOW }), { status: "skipped" });
   assert.equal(none.calls.length, 0);
-  assert.deepEqual(await writeWahooZones(env(db, null), { ftp: 250, profile: {} }), { status: "not-connected" });
+  assert.deepEqual(await writeWahooZones(env(db, null), z(250)), { status: "not-connected" });
 });
 
 test("a connection made before power_zones_write is asked to connect again, and stays working", async () => {
@@ -346,10 +348,42 @@ test("a connection made before power_zones_write is asked to connect again, and 
   const e = env(db);
   const health = () => raw.sqlite.prepare("SELECT status FROM sync_status WHERE sync_name='connection_wahoo'").get()?.status ?? null;
   const denied = api({ "GET /v1/power_zones": () => Response.json([]), "POST /v1/power_zones": () => new Response("{}", { status: 403 }) });
-  assert.deepEqual(await writeWahooZones(e, { ftp: 250, profile: {} }, { fetchImpl: denied.fetchImpl, now: NOW }), { status: "needs-permission" });
+  assert.deepEqual(await writeWahooZones(e, z(250), { fetchImpl: denied.fetchImpl, now: NOW }), { status: "needs-permission" });
   assert.notEqual(health(), "broken", "a missing scope does not mark Wahoo broken");
+  // A 403 on reading the sets (power_zones_read, granted from the start) is a broken connection.
+  const { db: db2, raw: raw2 } = setup();
+  const readDenied = api({ "GET /v1/power_zones": () => new Response("{}", { status: 403 }) });
+  await writeWahooZones(env(db2), z(250), { fetchImpl: readDenied.fetchImpl, now: NOW });
+  assert.equal(raw2.sqlite.prepare("SELECT status FROM sync_status WHERE sync_name='connection_wahoo'").get()?.status, "broken");
   // A refused token (401) still does.
   const expired = api({ "GET /v1/power_zones": () => new Response("{}", { status: 401 }) });
-  assert.equal((await writeWahooZones(e, { ftp: 250, profile: {} }, { fetchImpl: expired.fetchImpl, now: NOW })).status, "error");
+  assert.equal((await writeWahooZones(e, z(250), { fetchImpl: expired.fetchImpl, now: NOW })).status, "error");
   assert.equal(health(), "broken");
+});
+
+test("saving zones writes Wahoo only when the FTP or the power zones change", async () => {
+  const { db } = setup();
+  const { handleThresholdApi } = await import("../src/routes-training.js");
+  const seen = [], real = globalThis.fetch;
+  globalThis.fetch = async (url, opts = {}) => {
+    const u = new URL(url);
+    if (u.hostname === "api.wahooligan.com") { seen.push((opts.method || "GET") + " " + u.pathname); return u.pathname === "/oauth/token" ? Response.json({ access_token: "a2", refresh_token: "r2", expires_in: 7200 }) : Response.json(opts.method ? { id: 5 } : []); }
+    return new Response("{}", { status: 404 });
+  };
+  try {
+    const save = async body => {
+      const waits = [];
+      const url = new URL("https://aurin.health/app/api/training-profile");
+      const response = await handleThresholdApi(new Request(url, { method: "POST", headers: { Origin: url.origin }, body: JSON.stringify({ writeIntervals: false, ...body }) }), env(db), { waitUntil: p => waits.push(p) }, url, { signedIn: true }, false);
+      assert.equal(response.status, 200);
+      await Promise.all(waits);
+    };
+    await save({ ftp: 250 });
+    assert.ok(seen.includes("POST /v1/power_zones"), seen.join(", "));
+    seen.length = 0;
+    await save({ ftp: 250, runThresholdPace: 270 });
+    assert.deepEqual(seen, [], "a saved pace sends nothing to Wahoo");
+    await save({ ftp: 250, runThresholdPace: 270, powerZoneModel: "five" });
+    assert.ok(seen.includes("POST /v1/power_zones"));
+  } finally { globalThis.fetch = real; }
 });

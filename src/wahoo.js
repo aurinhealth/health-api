@@ -37,7 +37,6 @@ import { outdoorWidth, n } from './workout-model.js';
 import { readSyncPrefs } from './sync-destinations.js';
 import { timingSafeEqualString } from './dashboard-auth.js';
 import { athleteThresholds } from './intervals-athlete.js';
-import { powerBounds } from './intervals-zones.js';
 import { L } from './lang.js';
 import { KEEP_TYPE_SQL } from './activity-type.js';
 
@@ -462,34 +461,33 @@ export async function retryWahooExports(env, { limit = 4, fetchImpl = fetch, now
 // Wahoo keeps up to 7 power zones in watts: zone_N is the top of zone N, the
 // last one open (500 % FTP stands for "no top", as in Wahoo's own app).
 const WAHOO_MAX_ZONES = 7, OPEN_TOP = 5;
-// The zone set as Wahoo's form fields, from athleteThresholds(); null without
-// an FTP. More than 7 zones (a custom model) keeps the first 6 bounds, the rest
-// fall into the top zone.
+// The zone set as Wahoo's form fields, from athleteThresholds() (its
+// powerZones in watts, training-zones.js); null without an FTP. A custom model
+// with more than 7 zones keeps the first 6 tops, the rest fall into the top zone.
 export function wahooPowerZones(t) {
   const ftp = Math.round(Number(t?.ftp) || 0);
   if (!(ftp > 0)) return null;
-  const bounds = powerBounds(t.profile || {}).map(Number).slice(0, WAHOO_MAX_ZONES - 1);
-  const tops = [...bounds.map(b => Math.round(ftp * b / 100)), Math.round(ftp * OPEN_TOP)];
+  const tops = (Array.isArray(t.powerZones) ? t.powerZones : []).map(z => Number(z?.wattsHigh)).filter(w => w > 0).slice(0, WAHOO_MAX_ZONES - 1);
+  tops.push(Math.round(ftp * OPEN_TOP));
   const form = { 'power_zone[ftp]': String(ftp), 'power_zone[zone_count]': String(tops.length), 'power_zone[workout_type_family_id]': '0' };
-  tops.forEach((w, i) => { form['power_zone[zone_' + (i + 1) + ']'] = String(w); });
+  tops.forEach((w, i) => { form['power_zone[zone_' + (i + 1) + ']'] = String(Math.round(w)); });
   return form;
 }
 
-// Writes the FTP and power zones to Wahoo: Aurin's own cycling zone set is
-// changed, or made the first time (Wahoo lists only the sets this app made).
-// Two requests, only when zones are saved or Wahoo is connected. Returns
-// { status: "ok" | "needs-permission" | "not-connected" | "skipped" | "error", message }.
+// Writes the FTP and power zones to Wahoo: Aurin's own cycling set (family 0,
+// as Aurin makes it) is changed, or made the first time; Wahoo lists only the
+// sets this app made. Two requests, only when the FTP or the power zones
+// change or Wahoo is connected. Returns { status: "ok" | "needs-permission" |
+// "not-connected" | "skipped" | "error", message }.
 export async function writeWahooZones(env, thresholds, { fetchImpl = fetch, now = Date.now() } = {}) {
   if (!readWahooTokens(env)) return { status: 'not-connected' };
   const form = wahooPowerZones(thresholds);
   if (!form) return { status: 'skipped' };
   try {
-    const list = await wahooApi(env, '/v1/power_zones', { fetchImpl, now, scoped: true });
+    const list = await wahooApi(env, '/v1/power_zones', { fetchImpl, now });
     const sets = Array.isArray(list) ? list : Array.isArray(list?.power_zones) ? list.power_zones : [];
-    // Aurin makes one cycling set; one Wahoo kept without a family counts too,
-    // so a second save never makes a second set.
-    const family = z => z?.workout_type_family_id;
-    const own = sets.find(z => z?.id != null && family(z) != null && Number(family(z)) === 0) || sets.find(z => z?.id != null && family(z) == null);
+    const own = sets.find(z => z?.id != null && z.workout_type_family_id != null && Number(z.workout_type_family_id) === 0);
+    // Only the write needs power_zones_write: there a 403 is that scope missing.
     if (own) await wahooApi(env, '/v1/power_zones/' + encodeURIComponent(own.id), { method: 'PUT', form, fetchImpl, now, scoped: true });
     else await wahooApi(env, '/v1/power_zones', { method: 'POST', form, fetchImpl, now, scoped: true });
     return { status: 'ok' };
@@ -497,6 +495,16 @@ export async function writeWahooZones(env, thresholds, { fetchImpl = fetch, now 
     if (error?.status === 403) return { status: 'needs-permission' };
     return { status: 'error', message: error?.message || 'Wahoo' };
   }
+}
+
+// The same in the background (saved zones, a new connection): the answer does
+// not wait for Wahoo, and a write that did not go through is logged.
+export function writeWahooZonesLater(env, ctx, thresholds) {
+  const write = writeWahooZones(env, thresholds)
+    .then(r => { if (!['ok', 'skipped', 'not-connected'].includes(r.status)) console.error('Wahoo zones not written', r.status, r.message || ''); return r; })
+    .catch(error => console.error('Wahoo zones not written', error.message));
+  if (ctx?.waitUntil) ctx.waitUntil(write);
+  return write;
 }
 
 // Wahoo forgets Aurin's access (also when the Aurin account is deleted).
