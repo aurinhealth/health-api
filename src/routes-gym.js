@@ -3,7 +3,7 @@
 import { trainingSetup, updateTrainingSetup } from "./onboarding.js";
 import { fitsEquipment, EXERCISES, recommendedGoal, gymDayFacts } from "./strength-generator.js";
 import { buildStrengthContext } from "./strength-context.js";
-import { cardioFor, cardioMode, cardioOptions, cardioType, myRoutinesView, routineMoves, routinesFor, routineSize, typicalExtraMinutes, withRoutines } from "./stretching.js";
+import { cardioFavourites, cardioFor, cardioLength, cardioMode, cardioOptions, cardioType, myRoutinesView, routineMoves, routinesFor, routineSize, typicalExtraMinutes, withRoutines } from "./stretching.js";
 import app from "./strength-gateway.js";
 import { bumpCacheVersion } from "./api-cache.js";
 import { exercisePreferences, recentWorkoutRatings } from "./exercise-feedback.js";
@@ -71,7 +71,7 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
   if(url.pathname==='/app/api/gym/preferences'){
     // The goal "auto" follows the main sport (profile, else the training history).
     const sport=training=>mainSportOf(env,training);
-    const reply=async training=>Response.json({status:'ok',goal:training.goal||'auto',recommendedGoal:recommendedGoal(await sport(training),training.experience),experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.experienceBySport?.strength?.autoLevel||'beginner',experienceBySport:training.experienceBySport,warmup:training.warmup!==false,warmupCardio:['start','both'].includes(cardioMode(training)),cardio:cardioMode(training),cardioType:cardioType(training),cardioOptions:cardioOptions(training.stations),stretching:training.stretching!==false,warmupLength:lengthOf(training.warmupLength),stretchingLength:lengthOf(training.stretchingLength),warmupRoutine:training.warmupRoutine||'auto',stretchingRoutine:training.stretchingRoutine||'auto',myRoutines:myRoutinesView(training),extraMinutes:typicalExtraMinutes({warmup:training.warmup!==false,cardio:cardioMode(training),stretching:training.stretching!==false,warmupMinutes:ownMinutes(training,'warmup')||(lengthOf(training.warmupLength)!=='auto'?training.warmupLength:null),stretchingMinutes:ownMinutes(training,'stretching')||(lengthOf(training.stretchingLength)!=='auto'?training.stretchingLength:null)})},{headers:{'Cache-Control':'no-store'}});
+    const reply=async training=>Response.json({status:'ok',goal:training.goal||'auto',recommendedGoal:recommendedGoal(await sport(training),training.experience),experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.experienceBySport?.strength?.autoLevel||'beginner',experienceBySport:training.experienceBySport,warmup:training.warmup!==false,warmupCardio:['start','both'].includes(cardioMode(training)),cardio:cardioMode(training),cardioType:cardioType(training),cardioOptions:cardioOptions(training.stations),cardioLength:cardioLength(training.cardioLength),cardioFavourites:cardioFavourites(training.cardioFavourites),stretching:training.stretching!==false,warmupLength:lengthOf(training.warmupLength),stretchingLength:lengthOf(training.stretchingLength),warmupRoutine:training.warmupRoutine||'auto',stretchingRoutine:training.stretchingRoutine||'auto',myRoutines:myRoutinesView(training),extraMinutes:typicalExtraMinutes({warmup:training.warmup!==false,cardio:cardioMode(training),cardioLength:cardioLength(training.cardioLength),stretching:training.stretching!==false,warmupMinutes:ownMinutes(training,'warmup')||(lengthOf(training.warmupLength)!=='auto'?training.warmupLength:null),stretchingMinutes:ownMinutes(training,'stretching')||(lengthOf(training.stretchingLength)!=='auto'?training.stretchingLength:null)})},{headers:{'Cache-Control':'no-store'}});
     if(request.method==='GET')return reply(await trainingSetup(env.DB));
     if(request.method==='POST'){
       if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
@@ -84,6 +84,9 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
       if(typeof body.warmupCardio==='boolean'){input.warmupCardio=body.warmupCardio;if(body.cardio==null)input.cardio=body.warmupCardio?'start':'none';}
       if(['none','start','end','both'].includes(body.cardio))input.cardio=body.cardio;
       if(typeof body.cardioType==='string'&&body.cardioType.trim())input.cardioType=body.cardioType.trim().slice(0,40);
+      // The cardio's length (0 = no limit) and the favourite times (normalised in onboarding.js).
+      if(body.cardioLength!=null)input.cardioLength=cardioLength(body.cardioLength);
+      if(Array.isArray(body.cardioFavourites))input.cardioFavourites=cardioFavourites(body.cardioFavourites);
       // The own warm-ups and stretchings (each kind replaced whole), the one used by default and the automatic length.
       if(body.myRoutines&&typeof body.myRoutines==='object'){const old=(await trainingSetup(env.DB)).myRoutines||{};input.myRoutines={warmup:Array.isArray(body.myRoutines.warmup)?body.myRoutines.warmup:old.warmup,stretching:Array.isArray(body.myRoutines.stretching)?body.myRoutines.stretching:old.stretching};}
       for(const kind of ['warmup','stretching']){

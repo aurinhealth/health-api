@@ -3572,3 +3572,13 @@
 "Nic naplánováno" = "Nothing planned";
 "asi %@ kcal" = "about %@ kcal";
 "Tréninky se počítají ze %@ %% toho, co spálí." = "Workouts count at %@ %% of what they burn.";
+"Bez limitu" = "No limit";
+"Délka kardia" = "Cardio length";
+"Bez limitu čas jen běží a zastavíš ho, až budeš hotový." = "With no limit the time just runs; you stop it when you are done.";
+"Oblíbené časy" = "Favourite times";
+"Přidat čas" = "Add a time";
+"Zastavit" = "Stop";
+"Spustit kardio" = "Start cardio";
+"zbývá" = "left";
+"běží" = "running";
+"Uloží délku a konec kardia" = "Saves the cardio's length and end";

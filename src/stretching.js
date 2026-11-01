@@ -461,11 +461,28 @@ export function cardioType(setup = {}) {
   const options = cardioOptions(setup?.stations);
   return (options.find(o => o.id === setup?.cardioType) || options[0]).id;
 }
-/** The day's cardio parts: {type, start, end} in minutes (null when off), or null for none. */
+// The cardio's length (Nastavení → Posilovna → Cardio length): 0 = no limit (the
+// default: a stopwatch runs until the athlete stops it), else 1–60 min; and the
+// favourite times offered as chips in the workout.
+export const CARDIO_FAVOURITES = [10, 15, 20];
+export function cardioLength(value) {
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) && n > 0 ? Math.min(60, n) : 0;
+}
+export function cardioFavourites(value) {
+  if (!Array.isArray(value)) return [...CARDIO_FAVOURITES];
+  return [...new Set(value.map(Number).filter(n => Number.isFinite(n)).map(Math.round).filter(n => n >= 1 && n <= 60))].sort((a, b) => a - b).slice(0, 6);
+}
+/**
+ * The day's cardio parts: {type, start, end, length} or null for none. start and
+ * end say which parts are on (minutes sized to the session, what app builds
+ * before the stopwatch run); length is the time the app runs: 0 = no limit.
+ */
 export function cardioFor(setup = {}, size = routineSize(60).cardio) {
-  const mode = cardioMode(setup);
+  const mode = cardioMode(setup), length = cardioLength(setup?.cardioLength);
   if (mode === 'none') return null;
-  return { type: cardioType(setup), start: mode === 'start' || mode === 'both' ? size.start : null, end: mode === 'end' || mode === 'both' ? size.end : null };
+  const on = part => length || size[part];
+  return { type: cardioType(setup), start: mode === 'start' || mode === 'both' ? on('start') : null, end: mode === 'end' || mode === 'both' ? on('end') : null, length };
 }
 
 // The warm-up, the stretching and the cardio live in the stored plan's sixth
@@ -474,7 +491,8 @@ export function cardioFor(setup = {}, size = routineSize(60).cardio) {
 export const ROUTINES_ROW = 5;
 export const ROUTINES_LABEL = 'Rozcvička a protažení';
 const stored = r => r?.items?.length ? { minutes: r.minutes, items: r.items, ...(r.name ? { name: String(r.name) } : {}) } : null;
-const storedCardio = c => c && (c.start || c.end) ? { type: String(c.type || 'exercise_bike'), start: Number(c.start) || null, end: Number(c.end) || null } : null;
+// A plan stored before the stopwatch has no length: no limit.
+const storedCardio = c => c && (c.start || c.end) ? { type: String(c.type || 'exercise_bike'), start: Number(c.start) || null, end: Number(c.end) || null, length: cardioLength(c.length) } : null;
 // A part turned off in Posilovna is still stored (`spare`) and listed in `off`,
 // so the app offers it switched off and it can be turned on for the day.
 export function routinesRow({ warmup = null, stretching = null, cardio = null, spare = null } = {}) {
@@ -514,17 +532,18 @@ export function withRoutines(values, setup, muscleOf) {
 
 // Typical minutes the warm-up, the cardio and the stretching add to each
 // session length, for the length picker before a plan exists (a full-body
-// session; 0 when off).
-export function typicalExtraMinutes({ warmup = true, warmupCardio = true, cardio, stretching = true, warmupMinutes = null, stretchingMinutes = null } = {}) {
+// session; 0 when off). Cardio without a limit adds no planned minutes.
+export function typicalExtraMinutes({ warmup = true, warmupCardio = true, cardio, cardioLength: length = 0, stretching = true, warmupMinutes = null, stretchingMinutes = null } = {}) {
   const rows = ['chest', 'back', 'quads', 'hamstrings', 'shoulders', 'glutes'].map(m => ['WORK', m]);
   const muscleOf = name => name;
   const mode = cardioMode({ cardio, warmupCardio });
   return Object.fromEntries([30, 45, 60, 75, 90].map(minutes => {
     const size = routineSize(minutes);
-    const parts = cardioFor({ cardio: mode }, size.cardio);
+    const parts = cardioFor({ cardio: mode, cardioLength: length }, size.cardio);
+    const cardioMinutes = parts?.length ? (parts.start ? parts.length : 0) + (parts.end ? parts.length : 0) : 0;
     return [minutes, {
       warmup: warmup ? warmupMinutes || warmupFor(rows, muscleOf, size.warmup).minutes : 0,
-      cardio: (parts?.start || 0) + (parts?.end || 0),
+      cardio: cardioMinutes,
       stretching: stretching ? stretchingMinutes || stretchingFor(rows, muscleOf, size.stretching).minutes : 0
     }];
   }));
