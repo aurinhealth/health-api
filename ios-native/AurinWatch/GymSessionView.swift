@@ -38,9 +38,18 @@ struct GymSessionView: View {
         let sameExercise: Bool
         var letter: String?
     }
-    /// 40, 41 and 42 mm (up to 224 pt high): smaller rows, so the set, Set
-    /// done and the Time and Heart tiles fit without scrolling.
-    static let small = WKInterfaceDevice.current().screenBounds.height < 230
+    /// How the set screen is sized: the largest of these whose set, Set done
+    /// and Time and Heart fit the height under the top bar on this watch.
+    enum Fit {
+        /// 45, 46 and 49 mm with room to spare.
+        case roomy
+        /// Smaller rows.
+        case compact
+        /// Smaller rows, with the time and heart rate in the set's row instead of tiles of their own.
+        case tight
+
+        var small: Bool { self != .roomy }
+    }
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -156,51 +165,24 @@ struct GymSessionView: View {
     private func setScreen(_ gym: WatchGym, _ lift: WatchGym.Lift) -> some View {
         let e = gym.exercises.firstIndex { $0.lifts.contains { $0.row == lift.row } } ?? exercise
         let ex = gym.exercises[e]
-        return ScrollView {
-            // Sized to the screen so the set, Set done and the Time and Heart
-            // tiles under it show without scrolling; Volume and Calories below.
-            VStack(alignment: .leading, spacing: 3) {
-                Text(ex.title).font(.system(size: Self.small ? 14 : 16, weight: .semibold)).foregroundStyle(W.ink)
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                // − set 2/4 +: one set fewer or one more of this exercise (mockup 20).
-                HStack(spacing: 4) {
-                    roundButton("minus") { store.change(.removeSet, exercise: e) }
-                        .accessibilityLabel(W.tr("O sérii méně", "One set fewer"))
-                    Text(label(lift, in: ex)).font(.system(size: 12, weight: .medium)).foregroundStyle(W.secondary)
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity)
-                    roundButton("plus") { store.change(.addSet, exercise: e) }
-                        .accessibilityLabel(W.tr("O sérii víc", "One set more"))
-                }
-                .disabled(store.changing)
-                HStack(spacing: 6) {
-                    // Detents: the value moves only by whole steps (0.5 kg or 1 lb, one rep),
-                    // never through the in-between values the plain rotation shows.
-                    // `kg` holds the weight as shown, in pounds with imperial units.
-                    tile(GymText.kg(kg), unit: W.weightUnit, field: .kg, value: $kg, step: W.weightStep, top: W.imperial ? 1100 : 500)
-                        .digitalCrownRotation(detent: $kg, from: 0, through: W.imperial ? 1100 : 500, by: W.weightStep, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
-                    tile("\(Int(reps))", unit: W.tr("opak.", "reps"), field: .reps, value: $reps, step: 1, top: 100)
-                        .digitalCrownRotation(detent: $reps, from: 0, through: 100, by: 1, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
-                }
-                Button {
-                    done(lift, in: gym)
-                } label: {
-                    // Lower than the system's prominent button, which left no room for the tiles.
-                    Text(W.tr("Série hotová", "Set done"))
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.black)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: Self.small ? 30 : 38)
-                        .background(W.ink, in: Capsule())
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 5), GridItem(.flexible(), spacing: 5)], spacing: 5) {
-                    // The time runs on its own, without drawing the whole set again each second.
-                    timeCell
-                    cell(W.tr("Tep", "Heart"), workout.heartRate.map { W.number($0) } ?? "–", "bpm", W.pink)
-                    cell(W.tr("Objem", "Volume"), GymText.volume(gym.volume), nil, W.indigo)
-                    cell(W.tr("Kalorie", "Calories"), W.number(workout.calories), "kcal", W.amber)
+        // The height under the top bar (the clock, pause and ≡) differs by watch
+        // and by watchOS: measured here, not guessed from the screen size.
+        return GeometryReader { space in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 5) {
+                    // The set, Set done and Time and Heart without scrolling, in the
+                    // largest size that fits; Volume and Calories below.
+                    ViewThatFits(in: .vertical) {
+                        setStack(gym, lift, ex, e, .roomy)
+                        setStack(gym, lift, ex, e, .compact)
+                        setStack(gym, lift, ex, e, .tight)
+                    }
+                    // A few points short of the edge, where the screen's corners round off.
+                    .frame(height: max(0, space.size.height - 4), alignment: .top)
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 5), GridItem(.flexible(), spacing: 5)], spacing: 5) {
+                        cell(W.tr("Objem", "Volume"), GymText.volume(gym.volume), nil, W.indigo, small: false)
+                        cell(W.tr("Kalorie", "Calories"), W.number(workout.calories), "kcal", W.amber, small: false)
+                    }
                 }
             }
         }
@@ -208,6 +190,57 @@ struct GymSessionView: View {
         .defaultFocus($focus, .kg)
         .onAppear { load(lift) }
         .onChange(of: lift.row) { _, _ in load(lift) }
+    }
+
+    private func setStack(_ gym: WatchGym, _ lift: WatchGym.Lift, _ ex: WatchGym.Exercise, _ e: Int, _ fit: Fit) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(ex.title).font(.system(size: fit.small ? 14 : 16, weight: .semibold)).foregroundStyle(W.ink)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            // − set 2/4 +: one set fewer or one more of this exercise (mockup 20).
+            HStack(spacing: 4) {
+                roundButton("minus", small: fit.small) { store.change(.removeSet, exercise: e) }
+                    .accessibilityLabel(W.tr("O sérii méně", "One set fewer"))
+                VStack(spacing: 0) {
+                    Text(label(lift, in: ex)).font(.system(size: 12, weight: .medium)).foregroundStyle(W.secondary)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    if fit == .tight { liveLine }
+                }
+                .frame(maxWidth: .infinity)
+                roundButton("plus", small: fit.small) { store.change(.addSet, exercise: e) }
+                    .accessibilityLabel(W.tr("O sérii víc", "One set more"))
+            }
+            .disabled(store.changing)
+            HStack(spacing: 6) {
+                // Detents: the value moves only by whole steps (0.5 kg or 1 lb, one rep),
+                // never through the in-between values the plain rotation shows.
+                // `kg` holds the weight as shown, in pounds with imperial units.
+                tile(GymText.kg(kg), unit: W.weightUnit, field: .kg, value: $kg, step: W.weightStep, top: W.imperial ? 1100 : 500, small: fit.small)
+                    .digitalCrownRotation(detent: $kg, from: 0, through: W.imperial ? 1100 : 500, by: W.weightStep, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
+                tile("\(Int(reps))", unit: W.tr("opak.", "reps"), field: .reps, value: $reps, step: 1, top: 100, small: fit.small)
+                    .digitalCrownRotation(detent: $reps, from: 0, through: 100, by: 1, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
+            }
+            Button {
+                done(lift, in: gym)
+            } label: {
+                // Lower than the system's prominent button, which left no room for the tiles.
+                Text(W.tr("Série hotová", "Set done"))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: fit.small ? 30 : 38)
+                    .background(W.ink, in: Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            if fit != .tight {
+                HStack(spacing: 5) {
+                    // The time runs on its own, without drawing the whole set again each second.
+                    timeCell(small: fit.small)
+                    cell(W.tr("Tep", "Heart"), workout.heartRate.map { W.number($0) } ?? "–", "bpm", W.pink, small: fit.small)
+                }
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// "série 2/4", "rozcvička", "drop", with the side of a one-sided set.
@@ -226,23 +259,23 @@ struct GymSessionView: View {
         return text
     }
 
-    private func roundButton(_ symbol: String, action: @escaping () -> Void) -> some View {
+    private func roundButton(_ symbol: String, small: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol).font(.system(size: 12, weight: .bold)).foregroundStyle(W.ink)
-                .frame(width: Self.small ? 24 : 26, height: Self.small ? 24 : 26)
+                .frame(width: small ? 24 : 26, height: small ? 24 : 26)
                 .background(W.tile, in: Circle())
         }
         .buttonStyle(.plain)
     }
 
-    private func tile(_ value: String, unit: String, field: Field, value number: Binding<Double>, step: Double, top: Double) -> some View {
+    private func tile(_ value: String, unit: String, field: Field, value number: Binding<Double>, step: Double, top: Double, small: Bool) -> some View {
         let on = focus == field
         return VStack(spacing: 0) {
-            Text(value).font(W.serif(Self.small ? 22 : 28)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.6)
+            Text(value).font(W.serif(small ? 22 : 28)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.6)
             Text(unit).font(.system(size: 10)).foregroundStyle(W.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, Self.small ? 1 : 2)
+        .padding(.vertical, small ? 1 : 2)
         .background(on ? W.green.opacity(0.18) : W.tile, in: RoundedRectangle(cornerRadius: 12))
         .overlay { RoundedRectangle(cornerRadius: 12).stroke(on ? W.green : .clear, lineWidth: 2) }
         .focusable(true)
@@ -260,7 +293,7 @@ struct GymSessionView: View {
     }
 
     /// The workout's time and heart rate in one short line, inside rows the
-    /// set and the rest already have (no row of its own on a small screen).
+    /// set and the rest already have (no row of its own where the screen is short).
     private var liveLine: some View {
         HStack(spacing: 5) {
             clock.foregroundStyle(W.ink)
@@ -285,31 +318,31 @@ struct GymSessionView: View {
         }
     }
 
-    private var timeCell: some View {
+    private func timeCell(small: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(W.tr("Čas", "Time")).font(.system(size: 10)).foregroundStyle(W.secondary)
             clock
-            .font(.system(size: Self.small ? 15 : 17, weight: .semibold).monospacedDigit()).foregroundStyle(W.ink)
+            .font(.system(size: small ? 15 : 17, weight: .semibold).monospacedDigit()).foregroundStyle(W.ink)
             .lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 7)
-        .padding(.vertical, Self.small ? 2 : 3)
+        .padding(.vertical, small ? 2 : 3)
         .background(W.tile, in: RoundedRectangle(cornerRadius: 10))
     }
 
-    private func cell(_ title: String, _ value: String, _ unit: String?, _ color: Color) -> some View {
+    private func cell(_ title: String, _ value: String, _ unit: String?, _ color: Color, small: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title).font(.system(size: 10)).foregroundStyle(W.secondary)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(value).font(.system(size: Self.small ? 15 : 17, weight: .semibold)).foregroundStyle(color)
+                Text(value).font(.system(size: small ? 15 : 17, weight: .semibold)).foregroundStyle(color)
                 if let unit, value != "–" { Text(unit).font(.system(size: 9)).foregroundStyle(W.secondary) }
             }
             .lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 7)
-        .padding(.vertical, Self.small ? 2 : 3)
+        .padding(.vertical, small ? 2 : 3)
         .background(W.tile, in: RoundedRectangle(cornerRadius: 10))
     }
 
