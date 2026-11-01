@@ -356,11 +356,13 @@ struct GymDay: Decodable, Equatable {
         while start - 1 >= Self.firstSetRow, cell(values[start - 1], 1) == name { start -= 1 }
         while end + 1 < values.count, cell(values[end + 1], 1) == name { end += 1 }
         var drop = [row]
-        if Self.rowType(values[row]) == "WORK" {
+        let type = Self.rowType(values[row])
+        // By sides the other side's row of the set (or warm-up) goes along.
+        if type != "DROP", ["L", "P"].contains(cell(values[row], 13) ?? "") {
             let number = cell(values[row], 2)
-            if ["L", "P"].contains(cell(values[row], 13) ?? "") {
-                drop += (start...end).filter { $0 != row && Self.rowType(values[$0]) == "WORK" && cell(values[$0], 2) == number }
-            }
+            drop += (start...end).filter { $0 != row && Self.rowType(values[$0]) == type && cell(values[$0], 2) == number }
+        }
+        if type == "WORK" {
             // Its drop sets go with it.
             for at in drop.sorted() {
                 var next = at + 1
@@ -375,11 +377,14 @@ struct GymDay: Decodable, Equatable {
         for i in drop.reversed() { values.remove(at: i) }
         end -= drop.count
         guard end >= start else { return drop }
-        var warmups = 0, work = 0, last: String?
+        var warmups = 0, work = 0, last: String?, lastWarmup: String?
         for i in start...end {
             switch Self.rowType(values[i]) {
             case "WARMUP":
-                warmups += 1
+                // By sides an L and a P row share a number.
+                let number = cell(values[i], 2)
+                if number != lastWarmup || lastWarmup == nil || (cell(values[i], 13) ?? "") != "P" { warmups += 1 }
+                lastWarmup = number
                 set(row: i, column: 2, String(warmups))
             case "DROP":
                 set(row: i, column: 2, String(max(work, 1)))
@@ -404,20 +409,25 @@ struct GymDay: Decodable, Equatable {
         for (position, i) in main.enumerated() {
             let warms = list[i].filter(Self.isWarmupRow)
             let ramp: [(Double, String)] = position == 0 ? [(0.4, "8"), (0.65, "5"), (0.8, "3")] : [(0.65, "5")]
-            guard warms.count != ramp.count, !warms.contains(where: { Self.isDone(cell($0, 8)) }),
+            // An exercise done by sides warms up both: each step an L and a P row.
+            let sides = warms.contains { !(cell($0, 13) ?? "").isEmpty } ? ["L", "P"] : [""]
+            guard warms.count != ramp.count * sides.count, !warms.contains(where: { Self.isDone(cell($0, 8)) }),
                   let work = list[i].first(where: { !Self.isWarmupRow($0) }), let kg = LiftWeight.number(cell(work, 3) ?? "") else { continue }
             var template = warms[0]
             while template.count < Self.columns.count { template.append(.string("")) }
-            let rows: [[JSONValue]] = ramp.enumerated().map { n, step in
-                var row = template
-                row[2] = .string(String(n + 1))
-                row[3] = .string(Self.warmupKg(kg * step.0))
-                row[4] = .string(step.1)
-                for column in [5, 6, 7] { row[column] = .string("") }
-                row[8] = .string("FALSE")
-                row[11] = .string("FALSE")
-                if n > 0 { row[10] = .string("") }
-                return row
+            let rows: [[JSONValue]] = ramp.enumerated().flatMap { n, step in
+                sides.map { side in
+                    var row = template
+                    row[2] = .string(String(n + 1))
+                    row[3] = .string(Self.warmupKg(kg * step.0))
+                    row[4] = .string(step.1)
+                    for column in [5, 6, 7] { row[column] = .string("") }
+                    row[8] = .string("FALSE")
+                    row[11] = .string("FALSE")
+                    row[13] = .string(side)
+                    if n > 0 { row[10] = .string("") }
+                    return row
+                }
             }
             list[i] = rows + list[i].filter { !Self.isWarmupRow($0) }
         }
@@ -435,24 +445,23 @@ struct GymDay: Decodable, Equatable {
         return value.rounded() == value ? String(Int(value)) : String(value).replacingOccurrences(of: ".", with: ",")
     }
 
-    /// "Každá strana zvlášť": the work sets not done yet become an L and a P
-    /// row each; back to "Obě strany najednou" keeps one row per set. Done
-    /// sets stay as they were logged.
+    /// "Každá strana zvlášť": the sets not done yet (warm-ups too) become an
+    /// L and a P row each; back to "Obě strany najednou" keeps one row per
+    /// set. Done sets stay as they were logged.
     mutating func setSides(at offset: Int, _ on: Bool) {
         var (list, rest) = blocks
         guard list.indices.contains(offset) else { return }
         var out: [[JSONValue]] = []
         for var row in list[offset] {
             while row.count < Self.columns.count { row.append(.string("")) }
-            let open = !Self.isDone(cell(row, 8)) && (cell(row, 0) ?? "WORK").uppercased() != "WARMUP"
             let side = cell(row, 13) ?? ""
-            guard open else { out.append(row); continue }
+            guard !Self.isDone(cell(row, 8)) else { out.append(row); continue }
             if on, side.isEmpty {
                 row[13] = .string("L"); out.append(row)
                 row[13] = .string("P"); out.append(row)
             } else if !on, !side.isEmpty {
                 // The L row stands for the set; the P row goes.
-                if side == "L" || !out.contains(where: { cell($0, 2) == cell(row, 2) && !Self.isDone(cell($0, 8)) }) {
+                if side == "L" || !out.contains(where: { Self.rowType($0) == Self.rowType(row) && cell($0, 2) == cell(row, 2) && !Self.isDone(cell($0, 8)) }) {
                     row[13] = .string(""); out.append(row)
                 }
             } else {

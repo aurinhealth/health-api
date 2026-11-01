@@ -664,7 +664,7 @@ struct RestSetsList: View {
                 Rectangle().fill(Palette.hairline).frame(height: 1)
                 HStack(spacing: 8) {
                     HStack(spacing: 4) {
-                        Text(s.warmup ? "W" : s.drop ? "↳" : s.side == "P" ? "" : s.number)
+                        Text(s.warmup ? (s.side == "P" ? "" : "W") : s.drop ? "↳" : s.side == "P" ? "" : s.number)
                         if let side = s.side { Text(verbatim: side).font(.caption.weight(.bold)).foregroundStyle(GymSides.color(side)) }
                         if s.done { Image(systemName: "checkmark").scaledFont(10, weight: .bold, cap: .denseCap).foregroundStyle(Palette.green) }
                     }
