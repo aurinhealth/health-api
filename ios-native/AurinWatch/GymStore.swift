@@ -162,6 +162,18 @@ final class GymStore: ObservableObject {
     /// The rest Training mode on the iPhone started, moved or skipped.
     @Published var phoneRest: WatchGym.Rest?
 
+    /// The weight and reps Training mode on the iPhone is at for a set.
+    @Published var phoneDraft: WatchGym.Draft?
+
+    /// The weight and reps being set here, to Training mode on the iPhone (only while in reach).
+    func sendDraft(_ draft: WatchGym.Draft) {
+        guard !draft.same(phoneDraft) else { return }
+        let session = WCSession.default
+        guard WCSession.isSupported(), session.activationState == .activated, session.isReachable,
+              let data = draft.encoded() else { return }
+        session.sendMessage([WatchGym.draftKey: data], replyHandler: { _ in }, errorHandler: { _ in })
+    }
+
     /// The rest here to Training mode on the iPhone (only while in reach).
     func sendRest(_ rest: WatchGym.Rest) {
         let session = WCSession.default

@@ -10,11 +10,11 @@ test("one-sided exercises are known by name, two-sided ones are not", () => {
   for (const name of ["Bench press", "Lat pulldown", "Předkopy"]) assert.ok(!oneSided(name), name);
 });
 
-test("their work sets go L and P, warm-ups and two-sided ones stay; the lagging side gets a set more", () => {
+test("their sets go L and P, warm-ups too, two-sided ones stay; the lagging side gets a set more", () => {
   const rows = [row("Bulharský dřep", 1, "WARMUP"), row("Bulharský dřep", 1), row("Bulharský dřep", 2), row("Bench press", 1)];
   const out = splitSides(rows, { weaker: { "Bulharský dřep": "P" } });
   assert.deepEqual(out.map(r => [r[0], r[1], r[2], r[13]]), [
-    ["WARMUP", "Bulharský dřep", "1", ""], ["WORK", "Bulharský dřep", "1", "L"], ["WORK", "Bulharský dřep", "1", "P"],
+    ["WARMUP", "Bulharský dřep", "1", "L"], ["WARMUP", "Bulharský dřep", "1", "P"], ["WORK", "Bulharský dřep", "1", "L"], ["WORK", "Bulharský dřep", "1", "P"],
     ["WORK", "Bulharský dřep", "2", "L"], ["WORK", "Bulharský dřep", "2", "P"], ["WORK", "Bulharský dřep", "3", "P"], ["WORK", "Bench press", "1", ""]
   ]);
 });

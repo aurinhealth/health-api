@@ -3,7 +3,9 @@ import SwiftUI
 /// Režim tréninku → Upravit plán: the exercises in their order with how far
 /// each is, to drag into another order, swipe away, give a set more or fewer,
 /// swap for another, join into a superset with any other (a swipe to the
-/// right), see how one is done ("i"), or add one from the catalog.
+/// right), see how one is done ("i"), or add one from the catalog. A swipe to
+/// the left (or Odebrat cvik) takes the whole exercise out, its done sets too.
+/// Under way, Zahodit trénink at the bottom throws the workout away.
 /// "Uložit" hands the changed day back. Po cvicích turns the stretching and the
 /// cardio at the end on or off for the day (and changes them) right away.
 struct PlanEditorSheet: View {
@@ -24,10 +26,14 @@ struct PlanEditorSheet: View {
     @State private var technique: String?
     /// The exercise (by its id) to join into a superset with one picked next.
     @State private var pairing: String?
+    /// Zahodit trénink: the workout mode throws the workout away (nil: not offered).
+    var discard: (() -> Void)? = nil
+    @State private var confirmDiscard = false
 
     init(day: GymDay, catalog: [GymCatalogExercise], date: String? = nil, current: Int? = nil,
-         go: ((GymDay, String) -> Void)? = nil, save: @escaping (GymDay) -> Void) {
+         go: ((GymDay, String) -> Void)? = nil, discard: (() -> Void)? = nil, save: @escaping (GymDay) -> Void) {
         self.go = go
+        self.discard = discard
         _day = State(initialValue: day)
         self.catalog = catalog
         self.date = date
@@ -46,9 +52,6 @@ struct PlanEditorSheet: View {
                         guard let source = from.first else { return }
                         day.moveExercise(from: source, to: to)
                     }
-                    .onDelete { offsets in
-                        for offset in offsets.sorted(by: >) { day.removeExercise(at: offset) }
-                    }
                 }
                 Section {
                     Button { adding = true } label: {
@@ -64,6 +67,18 @@ struct PlanEditorSheet: View {
                         Text("Po cvicích")
                     }
                 }
+                if discard != nil {
+                    Section {
+                        Button(role: .destructive) { confirmDiscard = true } label: {
+                            Text("Zahodit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.rust).frame(maxWidth: .infinity)
+                        }
+                    }
+                }
+            }
+            .confirmationDialog("Zahodit trénink?", isPresented: $confirmDiscard, titleVisibility: .visible) {
+                Button("Zahodit trénink", role: .destructive) { dismiss(); discard?() }
+            } message: {
+                Text("Trénink zmizí z plánu dne, smažou se zapsané série i trénink uložený do Apple Health.")
             }
             // No edit mode: a row swipes (Superset to the right, delete to the
             // left) and a long press drags it into another place.
@@ -172,6 +187,7 @@ struct PlanEditorSheet: View {
                 } else if left, SupersetPicker.offers(day, offset) {
                     Button { pairing = exercise.id } label: { Label("Supersérie s…", systemImage: "link") }
                 }
+                Button(role: .destructive) { day.deleteExercise(at: offset) } label: { Label("Odebrat cvik", systemImage: "trash") }
             } label: {
                 Image(systemName: "ellipsis").frame(width: 32, height: 32).background(Palette.track, in: Circle()).tapTarget(width: 44, height: 32)
             }
@@ -195,6 +211,10 @@ struct PlanEditorSheet: View {
                 Button { pairing = exercise.id } label: { Label("Supersérie", systemImage: "link") }
                     .tint(Palette.indigo)
             }
+        }
+        // A leading swipe action turns off onDelete's own: the delete is here.
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) { day.deleteExercise(at: offset) } label: { Label("Smazat", systemImage: "trash") }
         }
     }
 

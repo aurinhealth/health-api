@@ -31,6 +31,8 @@ struct TrainingModeView: View {
     @State private var restStart: Date?
     /// The rest the watch sent last: not sent back to it.
     @State private var watchRest: WatchGym.Rest?
+    /// The last weight and reps from the watch (not sent back).
+    @State private var watchDraft: WatchGym.Draft?
     @State private var catalog: [GymCatalogExercise] = []
     @State private var dumbbells: [Double] = []
     @State private var editing = false
@@ -97,6 +99,7 @@ struct TrainingModeView: View {
             HeartRateWatch(live: live) { syncActivity(quiet: true) }
             // The Apple Watch's gym, 1:1 (its own view: the chain below is long enough).
             WatchGymHooks(live: live, restEnd: restEnd, sendRest: sendRest, received: receiveRest, ended: finishIfEndedOnWatch)
+            WatchDraftHooks(kg: kg, reps: reps, row: atHand?.row, send: sendDraft, received: receiveDraft)
             VStack(alignment: .leading, spacing: 0) {
                 header
                 if let day, !finishedSession, let exercise = current(day) { tools(day, exercise) }
@@ -238,7 +241,7 @@ struct TrainingModeView: View {
         // "Vybrat jiný cvik": any exercise from the catalog takes its sets still to do.
         .sheet(item: Binding(get: { replacing.map { Named(name: $0) } }, set: { replacing = $0?.name })) { item in
             GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day?.exercises.map(\.name) ?? []),
-                              title: "Vybrat jiný cvik", eyebrow: L10n.f("Místo cviku %@", ExerciseCatalog.shownName(item.name))) { name in
+                              title: "Vybrat jiný cvik", eyebrow: L10n.f("Místo cviku %@", ExerciseCatalog.shownName(item.name)), hideUsed: true) { name in
                 let kg = GymCoach.suggest(name, history: history, before: date, catalog: catalog.first { $0.name == name }).work.first?.kg
                 let alt = GymAlternative(name: name, muscle: nil, sets: nil, reps: nil, note: nil, station: nil, kg: kg)
                 Task { await swapExercise(item.name, for: alt) }
@@ -253,7 +256,9 @@ struct TrainingModeView: View {
         .sheet(isPresented: $editing) {
             if let day {
                 PlanEditorSheet(day: day, catalog: catalog, date: date, current: index,
-                                go: { edited, id in Task { await saveEdited(edited, focus: id) } }) { edited in Task { await saveEdited(edited) } }
+                                go: { edited, id in Task { await saveEdited(edited, focus: id) } },
+                                // After the sheet is gone: the workout mode closes with it.
+                                discard: { Task { try? await Task.sleep(for: .milliseconds(450)); await discard() } }) { edited in Task { await saveEdited(edited) } }
             }
         }
     }
@@ -469,7 +474,7 @@ struct TrainingModeView: View {
                                      kg: LiftWeight.number(LiftWeight.kgText(kg.isEmpty ? shownKg : kg)), usual: usual)
             plateTap = { loadingBar = target }
         }
-        return GymSetRow(label: s.warmup ? "W" : s.drop ? "↳" : s.side == "P" ? "" : s.number, side: s.side,
+        return GymSetRow(label: s.warmup ? (s.side == "P" ? "" : "W") : s.drop ? "↳" : s.side == "P" ? "" : s.number, side: s.side,
                          lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
                          kg: shownKg, reps: shownReps, state: phase,
                          kgText: $kg, repsText: $reps, kgHint: shownKg, repsHint: s.plannedReps.map(Fmt.range),
@@ -583,7 +588,11 @@ struct TrainingModeView: View {
                             Image(systemName: "dumbbell").scaledFont(15, cap: .denseCap).foregroundStyle(Palette.secondary)
                                 .frame(width: 34, height: 34).background(Palette.track, in: Circle())
                             VStack(alignment: .leading, spacing: 1) {
-                                Text("Další").font(Typo.caption).foregroundStyle(Palette.muted)
+                                HStack(spacing: 8) {
+                                    // "Next", not the "More" the shared Další key reads in English.
+                                    Text(verbatim: L10n.isEnglish ? "Next" : "Další").font(Typo.caption).foregroundStyle(Palette.muted)
+                                    if let letter = ExerciseOrder.letter(next.superset) { GymTag.superset(letter) }
+                                }
                                 Text(next.name)
                                     .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
                                 Text(nextLoad(next)).font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(1)
@@ -670,7 +679,10 @@ struct TrainingModeView: View {
             if let restStart { LiveHeartRecovery(live: live, since: restStart) }
             if let set {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Teď").font(Typo.caption).foregroundStyle(Palette.muted)
+                    HStack(spacing: 8) {
+                        Text("Teď").font(Typo.caption).foregroundStyle(Palette.muted)
+                        if let letter = ExerciseOrder.letter(exercise.superset) { GymTag.superset(letter) }
+                    }
                     HStack(alignment: .firstTextBaseline) {
                         Text(nowLine(exercise, set))
                             .font(.body.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
@@ -1038,6 +1050,31 @@ struct TrainingModeView: View {
         restTotal = max(1, rest.total)
         restStart = end.addingTimeInterval(-TimeInterval(restTotal))
         restEnd = end
+    }
+
+    /// The set the weight and reps fields are for.
+    private var atHand: GymSet? {
+        guard let day, !finishedSession, let exercise = current(day) else { return nil }
+        return nextSet(exercise)
+    }
+
+    /// The weight and reps typed here, to the watch's gym at once, unless they came from there.
+    private func sendDraft() {
+        guard !model.demo, live.running || startTapped, let set = atHand,
+              let kgValue = LiftWeight.number(LiftWeight.kgText(kg)) ?? set.plannedKg.flatMap(LiftWeight.number) else { return }
+        let draft = WatchGym.Draft(date: date, row: set.row, kg: kgValue,
+                                   reps: Int(reps.trimmingCharacters(in: .whitespaces)) ?? GymCoach.firstNumber(set.plannedReps) ?? 0)
+        guard !draft.same(watchDraft) else { return }
+        WatchBridge.shared.sendDraft(draft)
+    }
+
+    /// The weight and reps being set on the watch: the same in the fields here.
+    private func receiveDraft(_ draft: WatchGym.Draft) {
+        guard draft.date == date, draft.row == atHand?.row else { return }
+        watchDraft = draft
+        let shown = LiftWeight.shown(GymCoach.kgText(draft.kg)) ?? ""
+        if LiftWeight.number(LiftWeight.kgText(kg)).map({ abs($0 - draft.kg) >= 0.05 }) ?? true { kg = shown }
+        if Int(reps.trimmingCharacters(in: .whitespaces)) != draft.reps { reps = String(draft.reps) }
     }
 
     /// The rest to the watch's gym, unless it came from there.
@@ -1610,6 +1647,29 @@ struct TrailingIcon: LabelStyle {
 
 extension Array {
     subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
+}
+
+/// The weight and reps of the set at hand, the same on the watch while they
+/// are typed (a short wait, so each keystroke doesn't go on its own).
+struct WatchDraftHooks: View {
+    let kg: String
+    let reps: String
+    let row: Int?
+    let send: () -> Void
+    let received: (WatchGym.Draft) -> Void
+
+    var body: some View {
+        Color.clear.frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+            .task(id: "\(row ?? -1)|\(kg)|\(reps)") {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled, row != nil else { return }
+                send()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .watchDraft)) { note in
+                if let draft = note.object as? WatchGym.Draft { received(draft) }
+            }
+    }
 }
 
 /// Training mode and the Apple Watch's gym: the rest sent and taken both

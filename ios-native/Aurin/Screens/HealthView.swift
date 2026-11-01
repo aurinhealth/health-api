@@ -84,7 +84,7 @@ struct HealthContent: View {
                 WeekStrip(date: health.date, week: WeekStrip.week(of: health.date, in: page.map(\.today) ?? model.today))
                     .padding(.top, 14)
 
-                RouteLink(route: .readiness) { ReadinessCard(readiness: health.readiness) }
+                RouteLink(route: .readiness) { ReadinessCard(readiness: health.readiness, date: health.date) }
                     .padding(.top, 24)
 
                 // Cycle tracking, only for today, with the morning question
@@ -110,6 +110,7 @@ struct HealthContent: View {
 
 struct ReadinessCard: View {
     let readiness: HealthSnapshot.Readiness
+    var date: String = ""
 
     var body: some View {
         Card {
@@ -124,6 +125,8 @@ struct ReadinessCard: View {
                     if let pill = ReadinessText.pill(readiness.zone) { Pill(text: pill.0, foreground: pill.1, background: pill.2) }
                 }
                 PartsRow(parts: readiness.parts)
+            } else if let days = readiness.learningDays {
+                ReadinessLearning(days: days, date: date, title: Typo.sentence(30, relativeTo: .title))
             } else {
                 Text("Zatím bez čísla").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Text("Připravenost potřebuje dnešní noc a aspoň 14 dní HRV nebo klidového tepu.")

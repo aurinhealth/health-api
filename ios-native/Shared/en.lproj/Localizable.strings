@@ -626,6 +626,7 @@
 "Server odpověděl chybou %@." = "The server returned error %@.";
 "Sestavit posilovnu" = "Build a gym workout";
 "Sestavit trénink" = "Build workout";
+"Sestavit z odpočatých" = "Build workout from rested";
 "Sestavuji…" = "Building…";
 "Seznam" = "List";
 "Silový trénink" = "Strength training";
@@ -843,6 +844,9 @@
 "Zapsat váhu" = "Log weight";
 "Zapsáno do Intervals.icu" = "Written to Intervals.icu";
 "Zatím bez čísla" = "No score yet";
+"Učím se tvůj normál" = "Learning your normal";
+"Den %@ ze 14" = "Day %@ of 14";
+"Číslo zhruba od %@" = "Score from about %@";
 "Zatím nic" = "Nothing yet";
 "Zatím nic. Přidej první jídlo dne." = "Nothing yet. Add your first meal of the day.";
 "Zatím tu nic není. Potraviny, které přidáš, se tu objeví příště." = "Nothing here yet. Foods you add will show up here next time.";

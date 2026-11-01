@@ -94,7 +94,7 @@ struct TodayContent: View {
         }
 
         RouteLink(route: .readiness) {
-            ReadinessHero(readiness: today.readiness, nightMissing: today.sleep == nil, isToday: today.steps.hour != nil)
+            ReadinessHero(readiness: today.readiness, date: today.date, nightMissing: today.sleep == nil, isToday: today.steps.hour != nil)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
         }
@@ -519,6 +519,8 @@ struct DayCapsule: View {
 
 struct ReadinessHero: View {
     let readiness: TodaySnapshot.Readiness
+    /// The shown day, for when the score comes (ReadinessLearning).
+    var date: String = ""
     var nightMissing = false
     var isToday = true
 
@@ -538,6 +540,8 @@ struct ReadinessHero: View {
                     Text(provisionalLine)
                         .font(Typo.small).foregroundStyle(Palette.muted)
                 }
+            } else if let days = readiness.learningDays {
+                ReadinessLearning(days: days, date: date)
             } else {
                 Text(nightMissing && isToday ? "Čeká na dnešní noc" : "Zatím bez čísla")
                     .font(Typo.sentence(34, relativeTo: .largeTitle))
@@ -566,6 +570,49 @@ struct ReadinessHero: View {
         case "yellow": return ("střední", Palette.amber, Palette.amberSoft)
         case "red": return ("nízká", Palette.rust, Palette.rust.opacity(0.14))
         default: return nil
+        }
+    }
+}
+
+/// A new athlete's first two weeks (Petr, 2026-11-01): instead of "Zatím bez
+/// čísla", readiness says it is learning their normal, with a segment for each
+/// of the 14 days it needs, how many it has and about when the score comes.
+/// Also on the Health screen's readiness card.
+struct ReadinessLearning: View {
+    let days: Int
+    let date: String
+    var title: Font = Typo.sentence(34, relativeTo: .largeTitle)
+
+    private var shown: Int { min(14, max(1, days)) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Učím se tvůj normál")
+                .font(title)
+                .foregroundStyle(Palette.ink)
+                .padding(.top, 8)
+            HStack(spacing: 4) {
+                ForEach(0..<14, id: \.self) { i in
+                    Capsule()
+                        .fill(i < shown ? Palette.amberBar : Palette.track)
+                        .frame(height: 8)
+                }
+            }
+            .padding(.top, 16)
+            .accessibilityHidden(true)
+            HStack {
+                Text(L10n.f("Den %@ ze 14", String(shown)))
+                    .foregroundStyle(Palette.secondary)
+                Spacer(minLength: 8)
+                if !date.isEmpty {
+                    Text(L10n.f("Číslo zhruba od %@", Fmt.dayMonth(ISODay.shift(date, max(1, 15 - shown)))))
+                        .foregroundStyle(Palette.muted)
+                }
+            }
+            .font(Typo.small)
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+            .padding(.top, 8)
         }
     }
 }
