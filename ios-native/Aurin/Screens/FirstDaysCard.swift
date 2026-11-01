@@ -39,7 +39,8 @@ struct FirstDaysCard: View {
     @AppStorage(FirstDays.mealKey) private var meal = false
     @AppStorage(FirstDays.coachKey) private var coach = false
 
-    private var night: Bool { today.readiness.score != nil }
+    /// Readiness has a number, or it has started learning the normal (a measured night).
+    private var night: Bool { today.readiness.score != nil || (today.readiness.learningDays ?? 0) > 0 }
     private var doneCount: Int { [night, meal, coach].filter { $0 }.count }
 
     /// Within two weeks of the setup and not everything done yet.

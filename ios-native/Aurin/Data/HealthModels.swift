@@ -45,6 +45,8 @@ struct HealthSnapshot: Decodable, Equatable {
         let history: [Point]
         /// Today's "Jak se dnes cítíš?" answer, when it is part of the number.
         var checkin: String? = nil
+        /// Days of baseline so far while a new athlete has under 14 (TodaySnapshot.Readiness).
+        var learningDays: Int? = nil
     }
 
     struct Stages: Decodable, Equatable {
