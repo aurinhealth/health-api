@@ -8,7 +8,7 @@ import {PERSONAL_TABLES,_resetTenancyForTest} from '../src/tenancy.js';
 import {routedUserDb} from '../src/user-data-routing.js';
 import {savePersonalFood,searchFoodCatalog} from '../src/personal-foods.js';
 import {saveRecipe,searchRecipes} from '../src/personal-recipes.js';
-import {reportFood} from '../src/shared-foods.js';
+import {reportFood,saveSharedFood,searchSharedFoods} from '../src/shared-foods.js';
 import {deleteAccount,finishAccountDeletions} from '../src/account-data.js';
 import {exportAccount} from './helpers/account-export.mjs';
 import {sessionCookie} from '../src/dashboard-auth.js';
@@ -44,9 +44,10 @@ const count=(db,table)=>db.sqlite.prepare('SELECT COUNT(*) n FROM '+table).get()
 async function seed(f) {
   const a=await userDataEnvironment(f.env,user(3)),b=await userDataEnvironment(f.env,user(4));
   await savePersonalFood(a.DB,product);await savePersonalFood(b.DB,product);
-  const shared=(await searchFoodCatalog(a.DB,'Test mléko')).find(p=>p.catalog_id);
-  // search deduplicates the own result first, so get the immutable public ID directly.
-  const catalogId=shared?.catalog_id||f.core.sqlite.prepare('SELECT food_key FROM shared_foods').get().food_key;
+  // The food in the catalogue as the owner approved it; the contributions are
+  // what older versions recorded when they shared users' own foods.
+  const catalogId=(await saveSharedFood(a.DB,product)).catalog_id;
+  f.core.sqlite.prepare('INSERT INTO food_contributions(user_id,personal_id,catalog_id) VALUES(?,?,?),(?,?,?)').run(3,'test mleko|test',catalogId,4,'test mleko|test',catalogId);
   await reportFood(a.DB,{catalogId,reason:'Test: ověřit etiketu'});
   await saveRecipe(a.DB,{name:'Test breakfast',servings:1,shared:true,ingredients:[{name:'Milk',quantity:100,unit:'ml',calories:50,protein_g:3,carbs_g:5,fat_g:2}]});
   f.core.sqlite.exec("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,payload_json) VALUES(1,'manual','weight','owner-history','{}'); INSERT INTO food_logs(user_id,consumed_date,recipe_title,kcal) VALUES(1,'2026-10-10','Owner lunch',500)");
@@ -138,7 +139,7 @@ test('a lost activation response never rolls back committed routing; a rerun com
   };
   await assert.rejects(migrateFoodCatalog({...f,core:'core',foods:'foods'}),/lost response/);
   assert.equal(f.core.sqlite.prepare("SELECT value FROM schema_meta WHERE key='food_catalog_state'").get().value,'ready');
-  const active=await userDataEnvironment(f.env,user(4));await savePersonalFood(active.DB,{...product,name:'New food after activation'});
+  const active=await userDataEnvironment(f.env,user(4));await saveSharedFood(active.DB,{...product,name:'New food after activation'});
   f.api.query=original;assert.deepEqual(await migrateFoodCatalog({...f,core:'core',foods:'foods'}),{skipped:true});
   assert.equal(count(f.foods,'shared_foods'),2);assert.equal(count(f.core,'food_contributions'),0);
 });
@@ -215,14 +216,14 @@ test('live search smoke proves the Worker reads FOODS and cleans its exact canar
   await smokeFoodCatalog({api:f.api,foods:'foods',oidcToken:'test-oidc',fetchImpl:async(url,options)=>{
     assert.equal(url,'https://aurin.health/app/api/food/search');assert.equal(options.headers.Authorization,'Bearer test-oidc');
     const barcode=JSON.parse(options.body).barcode;
-    const row=f.foods.sqlite.prepare("SELECT food_key,product_json FROM shared_foods WHERE json_extract(product_json,'$.barcode')=?").get(barcode);
-    return Response.json({status:'ok',candidates:[{...JSON.parse(row.product_json),catalog_id:row.food_key}]});
+    // The real catalogue search, which shows only approved foods, finds the canary.
+    return Response.json({status:'ok',candidates:await searchSharedFoods(f.foods,'',barcode)});
   }});assert.equal(count(f.foods,'shared_foods'),0);
   await assert.rejects(smokeFoodCatalog({api:f.api,foods:'foods',oidcToken:'test-oidc',fetchImpl:async()=>Response.json({status:'ok',candidates:[]})}),/lookup failed/);
   assert.equal(count(f.foods,'shared_foods'),0);
 });
 
-test('values the AI looked up or estimated stay private and keep out of the common catalogue',async()=>{
+test('saved foods stay private: AI values and label values never enter the common catalogue',async()=>{
   const f=setup(),a=await userDataEnvironment(f.env,user(3)),b=await userDataEnvironment(f.env,user(4));
   const saved=await savePersonalFood(a.DB,{...product,source:'ai-estimate'});
   assert.equal(saved.origin,'ai-estimate');
@@ -231,8 +232,11 @@ test('values the AI looked up or estimated stay private and keep out of the comm
   await savePersonalFood(a.DB,{...product,id:saved.id,source:'personal',calories_100g:52});
   assert.equal(count(f.core,'shared_foods'),0);
   assert.equal((await searchFoodCatalog(b.DB,'',product.barcode)).length,0);
-  await savePersonalFood(b.DB,product);
-  assert.equal(count(f.core,'shared_foods'),1);
+  // A food read from its label stays the user's own too (SEC-003): it reaches
+  // others only as a suggestion the owner approves.
+  await savePersonalFood(b.DB,{...product,source:'package_label'});
+  assert.equal(count(f.core,'shared_foods'),0);
+  assert.equal((await searchFoodCatalog(a.DB,'',product.barcode)).filter(p=>p.catalog_id).length,0);
 });
 
 // D in audit/zrychleni-aplikace-mereni-2026-10-29.md: the route and the

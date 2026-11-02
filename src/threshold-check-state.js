@@ -6,7 +6,7 @@ import { athleteThresholds } from "./intervals-athlete.js";
 import { getWeekPlan, planWeekRoles, roleTime, roleFor } from "./week-planner.js";
 import { weekRoleOptions } from "./plan-context.js";
 import { availabilityOn } from "./training-availability.js";
-import { getChecks, thresholdSessions, estimateRideFtp, estimateRunPace, saveCheck, testResult, getTestWorkout, thresholdOffer, recommendTestDay } from "./threshold-check.js";
+import { getChecks, thresholdSessions, estimateRideFtp, estimateRunPace, saveCheck, testResult, getTestWorkout, thresholdOffer, recommendTestDay, testFor } from "./threshold-check.js";
 import { activePlan, planWeek } from "./training-plans.js";
 import { L } from "./lang.js";
 import { shiftDate, dashboardProfile, mondayOfDate } from "./dashboard-shared.js";
@@ -16,7 +16,7 @@ import { shiftDate, dashboardProfile, mondayOfDate } from "./dashboard-shared.js
 // athlete's confirmation. A planned test that has passed is read from the
 // day's activity (Intervals.icu intervals); without them the app asks for the
 // values.
-export const TEST_IDS={ride:['test-ride-ftp20','test-ride-lthr30'],run:['test-run-tt30']};
+export const TEST_IDS={ride:['test-ride-ftp20','test-ride-lthr30'],run:['test-run-tt30'],swim:['test-swim-css']};
 // The last 90 days of rides and runs (threshold-check.js sessions), the
 // athlete's thresholds and the heart-rate anchors the estimates use. Shared
 // with the coach's performance trends (performance-trends.js).
@@ -37,7 +37,7 @@ export async function loadThresholdSessions(env,ctx,today){
 }
 export async function thresholdCheckState(env,ctx,today){
   const [{sessions,thresholds,athlete},checks]=await Promise.all([loadThresholdSessions(env,ctx,today),getChecks(env.DB)]);
-  const current={ftp:thresholds.ftp||null,lthr:thresholds.lthr||null,runThresholdPace:thresholds.runThresholdPace||null};
+  const current={ftp:thresholds.ftp||null,lthr:thresholds.lthr||null,runThresholdPace:thresholds.runThresholdPace||null,swimCss:thresholds.swimCss||null};
   const estimates={ride:estimateRideFtp(sessions,athlete,today),run:estimateRunPace(sessions,athlete,today)};
   // The active plan's weeks set the days' roles (weekRoleOptions, as on Today).
   const active=await activePlan(env.DB,today).catch(()=>null);
@@ -64,12 +64,13 @@ export async function thresholdCheckState(env,ctx,today){
     const testDate=i>=0?shiftDate(monday,i):null,c=checks[active.sport];
     if(!testDate||testDate<=today||testDate>shiftDate(today,10))continue;
     if(c&&(['scheduled','measured'].includes(c.status)||String(c.updatedAt||'').slice(0,10)>=shiftDate(testDate,-14)))continue;
-    const testId=active.sport==='run'?'test-run-tt30':Number(thresholds.ftp)>0?'test-ride-ftp20':'test-ride-lthr30';
+    const testId=testFor(active.sport,Number(thresholds.ftp)>0);
     await saveCheck(env.DB,active.sport,{status:'scheduled',testId,testDate,estimate:estimates[active.sport]});
     checks[active.sport]={sport:active.sport,status:'scheduled',testId,testDate,estimate:estimates[active.sport]};
   }
   const offers=[],scheduled=[],results=[],manual=[];
-  for(const sport of ['ride','run']){
+  // Swimming: only the plan's CSS test, no estimate to offer one from.
+  for(const sport of ['ride','run','swim']){
     const check=checks[sport];
     // A planned test that has passed: its result, or the athlete's values.
     if(check?.status==='scheduled'&&check.testDate<=today){
@@ -80,11 +81,12 @@ export async function thresholdCheckState(env,ctx,today){
         if(result){await saveCheck(env.DB,sport,{...check,status:'measured',result});checks[sport]={...check,status:'measured',result};}
         else {manual.push({sport,testId:check.testId,testDate:check.testDate});continue;}
       }else if(check.testDate<shiftDate(today,-3)){await saveCheck(env.DB,sport,{...check,status:'dismissed'});checks[sport]={...check,status:'dismissed',updatedAt:today};}
-      else if(check.testDate<today){manual.push({sport,testId:check.testId,testDate:check.testDate});continue;}
+      else if(check.testDate<today||sport==='swim'){manual.push({sport,testId:check.testId,testDate:check.testDate});continue;}
     }
     const c=checks[sport];
     if(c?.status==='scheduled'){const w=getTestWorkout(c.testId);scheduled.push({sport,testId:c.testId,testDate:c.testDate,name:w?.name||null,minutes:w?.duration_minutes||null});continue;}
     if(c?.status==='measured'){results.push({sport,testId:c.testId,testDate:c.testDate,result:c.result,current});continue;}
+    if(sport==='swim')continue;
     const offer=thresholdOffer({sport,sessions,current,estimate:estimates[sport],check:c,today});
     if(!offer)continue;
     const w=getTestWorkout(offer.testId);
@@ -98,6 +100,13 @@ export async function thresholdCheckState(env,ctx,today){
 export function manualTestResult(testId,values={}){
   const num=v=>Number.isFinite(Number(v))&&Number(v)>0?Number(v):null;
   if(testId==='test-ride-ftp20'){const p=num(values.power20);if(!p||p>1500)throw new Error(L('Zadej průměrný výkon za 20 minut.','Enter your average power over 20 minutes.'));return {ftp:Math.round(p*.95),power20:p};}
+  // The CSS test: the two times in seconds (or "m:ss"), CSS = (t400 − t200) / 2 a 100 m.
+  if(testId==='test-swim-css'){
+    const time=v=>{const m=String(v??'').trim().match(/^(\d{1,2}):(\d{2})$/);return m?Number(m[1])*60+Number(m[2]):num(v);};
+    const t400=time(values.t400),t200=time(values.t200),css=t400&&t200&&t400>t200&&t200/2<t400/4?Math.round((t400-t200)/2):null;
+    if(!css||css<60||css>240)throw new Error(L('Zadej časy na 400 m a 200 m (m:ss).','Enter your 400 m and 200 m times (m:ss).'));
+    return {swimCss:css,t400,t200};
+  }
   if(testId==='test-ride-lthr30'){const hr=num(values.hr);if(!hr||hr<80||hr>230)throw new Error(L('Zadej průměrný tep posledních 20 minut.','Enter the average heart rate of the last 20 minutes.'));return {lthr:Math.round(hr)};}
   const km=num(String(values.distanceKm??'').replace(',','.')),pace=km?Math.round(1800/km):null;
   if(!pace||pace<150||pace>600)throw new Error(L('Zadej vzdálenost uběhnutou za 30 minut.','Enter the distance you ran in 30 minutes.'));

@@ -167,7 +167,7 @@ struct RootView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
                 }
-                // A food read from its label is in the common catalogue (AppModel.thankForLabel).
+                // A food read from its label went to the owner for the common catalogue (AppModel.suggestNewFood).
                 if let thanks = model.thanks {
                     ThanksToast(text: thanks) { model.thanks = nil }
                         .padding(.horizontal, 16)
@@ -222,8 +222,8 @@ struct RootView: View {
                 .dynamicTypeSize(Self.textSizes)
             }
             .sheet(isPresented: $showSettings) { SettingsView().dynamicTypeSize(Self.textSizes) }
-            .onChange(of: showCoach) { _, open in
-                if open { ScreenTrail.visit("coach") } else { ScreenTrail.visit(model.tab, model.paths[model.tab]?.last) }
+            .onChange(of: openSheet) { _, sheet in
+                if let sheet { ScreenTrail.visit(sheet) } else { ScreenTrail.visit(model.tab, model.paths[model.tab]?.last) }
             }
             .sheet(isPresented: $showCoach) { CoachView(view: coachView, date: model.selectedDate).dynamicTypeSize(Self.textSizes) }
             .sheet(isPresented: $showShare) {
@@ -357,6 +357,19 @@ struct RootView: View {
     /// whatever sheet was open.
     private func run(_ id: String) {
         closeSheets { Task { await open(id) } }
+    }
+
+    /// The sheet on top of the tabs, for ScreenTrail; nil on the tab itself.
+    private var openSheet: String? {
+        if model.needsSetup { return "setup" }
+        if showCoach || coachChat != nil { return "coach" }
+        if showSettings { return "settings" }
+        if showAdd { return "add" }
+        if showShare { return "share" }
+        if showSyncStatus { return "syncStatus" }
+        if quickFood != nil { return "addFood" }
+        if fixedFood != nil { return "foodAmount" }
+        return nil
     }
 
     /// Closes whatever sheet was open, then opens the next thing.

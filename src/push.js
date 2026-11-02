@@ -314,6 +314,7 @@ export function foodApprovedMessage(kind, product) {
     title: String(product?.name || "").slice(0, 80) || L("Potravina", "Food"),
     body: kind === "report"
       ? L("Díky za nahlášení! Hodnoty jsou opravené a teď je vidí všichni.", "Thanks for the report! The values are fixed and everyone sees them now.")
+      : kind === "new_food" ? L("Díky! Potravina je v katalogu a teď ji najdou všichni.", "Thanks! The food is in the catalogue and everyone can find it now.")
       : L("Tvoje oprava platí. V Aurinu ji teď vidí všichni.", "Your correction is approved. Everyone in Aurin sees it now.")
   };
 }

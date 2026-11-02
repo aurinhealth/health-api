@@ -15,7 +15,7 @@ const failed = (id, reply) => checkReply(scenarioById(id), reply, now, date).fil
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
-  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 41 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
+  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 43 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
   const zone = id => scenarioContext(scenarioById(id), date, now).ctx.cyclingCoachV2.readiness;
   assert.equal(zone('S01').todayZone, 'green');
   for (const id of ['S02', 'S03', 'S08']) assert.equal(zone(id).status, 'red', id);
@@ -78,7 +78,7 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.equal((await handleCoachEval(post({}), staging, null)).status, 401);
   assert.equal((await handleCoachEval(post({}), staging, { kind: 'system' })).status, 401);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
-  assert.equal(list.scenarios.length, 47);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
+  assert.equal(list.scenarios.length, 49);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
   const run = async (env, s) => ({ id: s.id, status: 'ok', lang: lang() });
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
@@ -456,7 +456,7 @@ test('since run 37: swimming, triathlon, diet, equipment, chest, a strength athl
   assert.deepEqual(names(await run('S41', 'Včerejší sweet spot: NP 228 W při RPE 7, povedlo se.')), []);
 });
 
-test('run 38: every main sport gets the coach in both languages, a week split is planning, "střední" is no Wednesday, a plan comes alone, a swim card is dropped', async () => {
+test('run 38: every main sport gets the coach in both languages, a week split is planning, "střední" is no Wednesday, a plan comes alone, a swim card stays a swim', async () => {
   // S30/S31: a swimmer's coach threw on the missing swim rules; a sport without rules gets the general ones.
   for (const l of ['cs', 'en']) for (const sport of [...Object.keys(MAIN_SPORTS), 'unknown', null]) {
     const text = await withLang(l, () => coachInstructionsFor(sport ? { sport } : null));
@@ -472,10 +472,30 @@ test('run 38: every main sport gets the coach in both languages, a week split is
   const plan = { type: 'plan', planId: 'run-half', sport: 'run', date: '2027-01-13' };
   assert.ok(!failedOn('S40', { answer: 'Zakládám plán Půlmaraton.', kept: [plan], proposed: [plan] }).includes('vedle plánu žádná další karta (bez vyžádání)'));
   assert.ok(failedOn('S40', { answer: 'Zakládám plán Půlmaraton. Dnes bych VO2max zrušil.', kept: [plan, { type: 'rest', eventId: 'planned:9001', date: day, sport: 'ride' }], proposed: [] }).includes('vedle plánu žádná další karta (bez vyžádání)'));
-  // A swim is no card the app can show: it is dropped, never kept as another sport.
-  const swim = { type: 'workout', eventId: '', date: '2026-10-23', sport: 'swim', minutes: 30, status: '', statusUntil: '', reason: 'plavání', fromExercise: '', toExercise: '', workoutId: '', kind: 'endurance', activityId: '', otherActivityId: '', time: '', kcal: 0, gymFocus: '', gymMuscles: [], insisted: false, planId: '', days: [], raceKm: 0 };
+  // A swim card stays a swim: in the pool, or in open water by the athlete's ask (never as another sport).
+  const swim = { type: 'workout', eventId: '', date: '2026-10-23', sport: 'swim', minutes: 30, status: '', statusUntil: '', reason: 'plavání', fromExercise: '', toExercise: '', workoutId: '', kind: 'endurance', place: 'pool', activityId: '', otherActivityId: '', time: '', kcal: 0, gymFocus: '', gymMuscles: [], insisted: false, planId: '', days: [], raceKm: 0 };
   const ctx = scenarioContext(scenarioById('S32'), day, at).ctx;
-  assert.deepEqual(validateCoachActions([swim], ctx, day, { userInitiated: true }), []);
+  const [card] = validateCoachActions([swim], ctx, day, { userInitiated: true });
+  assert.deepEqual([card.sport, card.minutes, card.kind, card.openWater], ['swim', 30, 'endurance', undefined]);
+  assert.equal(validateCoachActions([{ ...swim, place: 'open_water' }], ctx, day, { userInitiated: true })[0].openWater, true);
+  // Never longer than 90 min, never open water for someone who can't swim 100 m yet.
+  assert.deepEqual(validateCoachActions([{ ...swim, minutes: 120 }], ctx, day, { userInitiated: true }), []);
+  assert.deepEqual(validateCoachActions([{ ...swim, place: 'open_water' }], { ...ctx, cannotSwim100m: true }, day, { userInitiated: true }), []);
+  assert.equal(validateCoachActions([swim], { ...ctx, cannotSwim100m: true }, day, { userInitiated: true }).length, 1, 'the pool stays');
+  // Today's planned swim (Plavání technika) is replaced by a new swim today: its rest comes with the card.
+  const today = validateCoachActions([{ ...swim, date: day }], ctx, day, { userInitiated: true });
+  assert.deepEqual(today.map(a => [a.type, a.sport]), [['workout', 'swim'], ['rest', 'swim']]);
+});
+
+test('the swim card scenarios: a pool card tomorrow, open water only with the safety line', () => {
+  const day = '2026-10-21', at = '2026-10-21 08:00', tomorrow = '2026-10-22';
+  const failedOn = (id, answer, kept) => checkReply(scenarioById(id), { answer, kept, proposed: kept, task: 'planning' }, at, day).filter(c => !c.ok).map(c => c.name);
+  const pool = { type: 'workout', sport: 'swim', date: tomorrow, minutes: 45, kind: 'threshold' };
+  assert.deepEqual(failedOn('S42', 'Zítra CSS série 8×100 m, včera byla vytrvalost.', [pool]).filter(n => /karta|45|bazén|kola/.test(n)), []);
+  assert.ok(failedOn('S42', 'Zítra plavání.', [{ ...pool, minutes: 60 }]).includes('nejvýš 45 min'));
+  const lake = { ...pool, minutes: 60, kind: 'endurance', openWater: true };
+  assert.deepEqual(failedOn('S43', 'Zítra hodina v jezeře. Nikdy neplav sám, vezmi si výraznou čepici a bójku.', [lake]).filter(n => /sám|volné|bójk/.test(n)), []);
+  assert.ok(failedOn('S43', 'Zítra hodina v jezeře.', [{ ...lake, openWater: undefined }]).includes('karta plavání ve volné vodě na zítřek'));
 });
 
 test('run 39: only the planning verbs send a question to the full model; hedging in S32 and a firm made-up race date in S40 are flagged', () => {

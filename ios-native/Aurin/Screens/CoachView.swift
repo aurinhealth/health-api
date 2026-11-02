@@ -933,6 +933,9 @@ struct WorkoutPreviewBlock: View {
                     WorkoutProfile(blocks: blocks, sport: action.sport ?? "ride", compact: true)
                 }
                 Text(verbatim: numbers(workout)).font(Typo.caption).foregroundStyle(Palette.secondary)
+                if action.openWater == true {
+                    Text("Nikdy neplav sám, výrazná čepice a bójka.").font(Typo.caption).foregroundStyle(Palette.amber)
+                }
             } else if let plan = preview.plan {
                 let exercises = GymProposal(draftId: nil, planName: plan.planName ?? "", rationale: nil, rows: plan.rows, muscles: [:]).exercises
                 Text(verbatim: plan.planName.flatMap { $0.isEmpty ? nil : $0 } ?? L10n.tr("Posilovna")).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
@@ -959,9 +962,20 @@ struct WorkoutPreviewBlock: View {
     }
 
     /// "1 h · 62 TSS · 88–93 % FTP": the length, the load and the hardest step.
+    /// A swim: "45 min · 1 900 m · 1:48 /100 m" in the pool, "1 h · ≈ 2 000 m · by time outside" in open water.
     private func numbers(_ w: LibraryWorkout) -> String {
         var parts: [String] = []
         if let m = w.duration_minutes ?? action.minutes, m > 0 { parts.append(Fmt.duration(Int(m.rounded()))) }
+        if action.sport == "swim" {
+            let open = action.openWater == true
+            if let meters = w.distance_meters, meters > 0 { parts.append((open ? "≈ " : "") + Fmt.int(meters) + " m") }
+            if open { parts.append(L10n.tr("venku podle času")) }
+            else if let top = WorkoutProfile.segments(w.steps ?? []).filter({ $0.step.rest != true }).max(by: { $0.percent < $1.percent })?.step,
+                    let slow = top.paceSlow, let fast = top.paceFast {
+                parts.append(ZonesSettingsView.pace((slow + fast) / 2) + " /100 m")
+            }
+            return parts.joined(separator: " · ")
+        }
         if let tss = w.target_load, tss > 0 { parts.append("\(Int(tss.rounded())) TSS") }
         if (action.sport ?? "ride") == "ride", let top = WorkoutProfile.segments(w.steps ?? []).max(by: { $0.percent < $1.percent })?.step,
            let hi = top.percentHigh ?? top.percentLow {

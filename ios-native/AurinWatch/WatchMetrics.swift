@@ -37,11 +37,7 @@ extension Array where Element == WatchSnapshot.Day {
 
 extension W {
     nonisolated static func dayValue(_ text: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.date(from: text)
+        WatchStore.dayFormatter.date(from: text)
     }
 
     nonisolated static func dayText(_ date: Date) -> String { WatchStore.localDate(date) }

@@ -7,7 +7,7 @@ import {scopedDb} from '../src/tenancy.js';
 import {completeOnboarding,onboardingStatus,hasRecentActivityData} from '../src/onboarding.js';
 import {subscriptionStatus,assertAIAccess} from '../src/subscription.js';
 import {savePersonalFood,listPersonalFoods,deletePersonalFood,searchFoodCatalog} from '../src/personal-foods.js';
-import {reportFood} from '../src/shared-foods.js';
+import {reportFood,saveSharedFood} from '../src/shared-foods.js';
 import {saveRecipe,listRecipes,deleteRecipe,searchRecipes} from '../src/personal-recipes.js';
 import {scheduleWorkoutInIntervals,getScheduledWorkouts} from '../src/workout-library.js';
 import {movePlannedEvent,deletePlannedEvent,setPlannedEnvironment} from '../src/planned-events.js';
@@ -36,16 +36,19 @@ test('pilot grants AI to consenting invited accounts; an enabled paywall checks 
  await a.prepare("UPDATE subscriptions SET valid_until='2000-01-01' WHERE user_id=1").run();await assert.rejects(assertAIAccess(paid),e=>e.status===402);
  assert.equal((await subscriptionStatus({...paid,DB:scopedDb(setup().raw,2),USER_ID:2})).aiAccess,false);
 });
-test('food edits retain identity, preserve other accounts, replace shared values and accept one report per account',async()=>{
+test('food edits retain identity, preserve other accounts, stay private until approved and accept one report per account',async()=>{
  const {a,b}=setup();const p=await savePersonalFood(a,food);const q=await savePersonalFood(b,food);
- const shared=(await searchFoodCatalog(b,'Test jogurt'))[0];assert.ok(shared);
+ assert.ok((await searchFoodCatalog(b,'Test jogurt')).every(f=>!f.catalog_id));
  const changed=await savePersonalFood(a,{...p,name:'Přejmenovaný jogurt',calories_100g:110});assert.equal(changed.id,p.id);assert.equal((await listPersonalFoods(a)).length,1);assert.equal((await listPersonalFoods(b))[0].name,food.name);
+ assert.equal((await searchFoodCatalog(b,'Přejmenovaný jogurt')).length,0);
  await assert.rejects(savePersonalFood(b,{...changed,id:'not-owned'}),/nebyla nalezena/);
  await deletePersonalFood(a,p.id);assert.equal((await listPersonalFoods(a)).length,0);assert.equal((await listPersonalFoods(b)).length,1);
- const candidate=(await searchFoodCatalog(a,'Test jogurt'))[0];assert.ok(candidate.catalog_id);assert.equal(candidate.id,undefined);
+ assert.equal((await searchFoodCatalog(a,'Test jogurt')).length,0);
+ await saveSharedFood(a,food);
+ const candidate=(await searchFoodCatalog(a,'Test jogurt'))[0];assert.ok(candidate.catalog_id);assert.equal(candidate.id,undefined);assert.equal(candidate.label_verified,true);
  await reportFood(a,{catalogId:candidate.catalog_id,reason:'Nesedí kalorie'});await reportFood(a,{catalogId:candidate.catalog_id,reason:'Nesedí tuky'});
  assert.equal((await searchFoodCatalog(a,'Test jogurt'))[0].reports,1);assert.equal((await searchFoodCatalog(a,'')).length,0);
- await deletePersonalFood(b,q.id);assert.equal((await searchFoodCatalog(a,'Test jogurt')).length,0);
+ await deletePersonalFood(b,q.id);assert.equal((await searchFoodCatalog(a,'Test jogurt')).length,1);
 });
 test('recipes calculate portions, remain private unless shared and can be edited and deleted without cross-account access',async()=>{
  const {a,b}=setup();const r=await saveRecipe(a,recipe);assert.equal(r.portion.calories_100g,100);assert.equal((await searchRecipes(b,'Jogurtová')).length,0);

@@ -285,7 +285,7 @@ test('the Apple Watch chapter shows the watch app on the sample morning',async()
   assert.ok(section.includes('>'+clock(today.sleep.minutes)+'<'),'sleep');
   assert.ok(section.includes('>'+today.hrv.value+'<small>ms'),'HRV');
   assert.ok(section.includes('>'+today.strain.score+'<'),'strain');
-  assert.equal((section.match(/class="aw-s[ "]/g)||[]).length,5,'one watch, five screens');
+  assert.equal((section.match(/class="aw-s[ "]/g)||[]).length,6,'one watch, six screens');
   assert.equal((section.match(/class="aw-w"/g)||[]).length,1);
 });
 

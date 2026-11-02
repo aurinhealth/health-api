@@ -209,12 +209,9 @@ test("the connect sheet's cookie is good only for connecting, for a quarter of a
   const oddCookie = "pfd_session=" + odd + "." + await signText(odd, env.SESSION_SECRET);
   assert.equal(await verifyDashboardSession(new Request("https://aurin.health/oauth/google", { headers: { Cookie: oddCookie } }), env.SESSION_SECRET), null);
   // Coming back to the app clears it; any other answer is left alone.
-  const back = endConnectSession(new Response(null, { status: 302, headers: { Location: "loadwise://connected?event=google", "Set-Cookie": "pfd_google_oauth_state=; Path=/oauth/google; Max-Age=0" } }));
-  assert.equal(back.headers.get("Location"), "loadwise://connected?event=google");
+  const back = endConnectSession(new Response(null, { status: 302, headers: { Location: "https://aurin.health/auth/app/connected?event=google", "Set-Cookie": "pfd_google_oauth_state=; Path=/oauth/google; Max-Age=0" } }));
+  assert.equal(back.headers.get("Location"), "https://aurin.health/auth/app/connected?event=google");
   assert.deepEqual(back.headers.getSetCookie(), ["pfd_google_oauth_state=; Path=/oauth/google; Max-Age=0", "pfd_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax"]);
-  // The app's https return page (builds from 2026-11) ends it too.
-  const https = endConnectSession(new Response(null, { status: 302, headers: { Location: "https://aurin.health/auth/app/connected?event=wahoo" } }));
-  assert.deepEqual(https.headers.getSetCookie(), ["pfd_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax"]);
   const onward = new Response(null, { status: 302, headers: { Location: "https://accounts.google.com/o/oauth2/v2/auth" } });
   assert.equal(endConnectSession(onward), onward);
   assert.equal(endConnectSession(null), null);

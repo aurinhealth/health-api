@@ -38,6 +38,8 @@ export async function handleNativeAppleLogin(request, env, pathname, { fetchImpl
   let claims;
   try { claims = await verifyAppleIdToken(token, appBundleId(env), await sha256Hex(nonce), fetchImpl); }
   catch (error) { console.error("Apple app ID token rejected", error.message); return appJson({ error: "failed", message: L("Účet Apple se nepodařilo ověřit.", "Couldn't verify your Apple account.") }, 401); }
+  // A token signs in once: whoever got hold of a used one (and its nonce) cannot sign in with it again.
+  if (!(await claimAppleToken(env.DB, claims))) { console.warn("Apple app ID token used again"); return appJson({ error: "failed", message: L("Účet Apple se nepodařilo ověřit.", "Couldn't verify your Apple account.") }, 401); }
   const verified = claims.email_verified === true || claims.email_verified === "true";
   await ensureTenancy(env.DB, env, { request });
   let user;
@@ -148,6 +150,34 @@ async function appleJwks(fetchImpl, kid) {
   return data;
 }
 export function _resetAppleJwksCacheForTest() { cachedJwks = null; cachedJwksAt = 0; forcedJwksAt = 0; }
+
+// Identity tokens that signed in, by their nonce claim (the SHA-256 of the app's nonce, which
+// Apple signed into the token), kept until the token expires (Apple: 10 minutes). The first use
+// claims the row; another request with the same token finds it taken. The table is made on the
+// first Apple sign-in, and forgetUsedAppleTokens (the nightly cron) drops the expired rows.
+// Returns true for the first use.
+const TOKEN_USES_TABLE = `CREATE TABLE IF NOT EXISTS apple_token_uses (
+  nonce TEXT PRIMARY KEY,
+  expires_at INTEGER NOT NULL
+)`;
+export async function claimAppleToken(db, claims) {
+  const nonce = String(claims?.nonce || ""), expires = Math.floor(Number(claims?.exp)) || 0;
+  if (!nonce || !expires) return false;
+  const claim = () => db.prepare("INSERT INTO apple_token_uses(nonce, expires_at) VALUES(?, ?) ON CONFLICT(nonce) DO NOTHING").bind(nonce, expires).run();
+  let result;
+  try { result = await claim(); }
+  catch (error) {
+    if (!/no such table/i.test(String(error?.message))) throw error;
+    await db.prepare(TOKEN_USES_TABLE).run();
+    result = await claim();
+  }
+  return Number(result?.meta?.changes) > 0;
+}
+
+export async function forgetUsedAppleTokens(db, now = Date.now()) {
+  try { return Number((await db.prepare("DELETE FROM apple_token_uses WHERE expires_at < ?").bind(Math.floor(now / 1000)).run())?.meta?.changes) || 0; }
+  catch (error) { if (/no such table/i.test(String(error?.message))) return 0; throw error; }
+}
 
 // Apple IDs linked to users. One Apple ID per user; a row goes with the user (user_id).
 async function ensureIdentities(db) {

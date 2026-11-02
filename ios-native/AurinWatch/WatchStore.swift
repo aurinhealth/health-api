@@ -210,12 +210,19 @@ final class WatchStore: NSObject, ObservableObject {
         if let data = value.encoded() { UserDefaults.standard.set(data, forKey: Self.savedKey) }
     }
 
-    nonisolated static func localDate(_ date: Date) -> String {
+    /// Made once, not on every redraw (the root view asks on each one); it
+    /// follows the watch's time zone. DateFormatter is safe to share across threads.
+    nonisolated(unsafe) static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .autoupdatingCurrent
         formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    nonisolated static func localDate(_ date: Date) -> String {
+        dayFormatter.string(from: date)
     }
 }
 
@@ -236,6 +243,8 @@ extension WatchStore: WCSessionDelegate {
             GymWorkout.shared.announce()
             // Sets saved here alone go to the iPhone now.
             GymStore.shared.sync()
+            // What the iPhone's "Nahlásit problém" says about the watch.
+            WatchReport.send()
         }
     }
 

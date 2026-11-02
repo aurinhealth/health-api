@@ -13,13 +13,12 @@ test("an app built for an older API is told to update", async () => {
   assert.match(body.message, /Nainstaluj novější verzi/);
 });
 
-// Builds from before 2026-11 send the level as X-Loadwise-Api.
-test("the app's API level is read from X-Aurin-Api, and from X-Loadwise-Api of an older build", () => {
+test("the app's API level is read from X-Aurin-Api only", () => {
   assert.equal(APP_API_HEADER, "X-Aurin-Api");
   assert.equal(appApiLevel(request({ "X-Aurin-Api": "1" })), "1");
-  assert.equal(appApiLevel(request({ "X-Loadwise-Api": "1" })), "1");
+  assert.equal(appApiLevel(request({ "X-Loadwise-Api": "1" })), null);
   assert.equal(appApiLevel(request({})), null);
-  assert.equal(appUpdateRequired(request({ "X-Loadwise-Api": String(MIN_APP_API - 1) })).status, 426);
+  assert.equal(appUpdateRequired(request({ "X-Aurin-Api": String(MIN_APP_API - 1) })).status, 426);
 });
 
 test("the Worker checks the app version before anything else runs", () => {

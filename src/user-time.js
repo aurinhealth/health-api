@@ -26,9 +26,31 @@ const parts = (at, options) => Object.fromEntries(dateFormat("en-GB", { timeZone
 const FULL = { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" };
 
 // Wall-clock time "YYYY-MM-DDTHH:MM:SS" in the user's zone of an instant.
+// Formatting each time took the most CPU of a coach card (thousands of rows,
+// 2026-11-02); the zone's offset is asked once per 15 minutes instead. Zones
+// change their offset only at whole quarter hours, so it holds for all of one.
+const QUARTER = 15 * 60000;
+const offsets = new Map();
+function quarterOffset(zone, ms) {
+  const start = Math.floor(ms / QUARTER) * QUARTER, key = zone + "|" + start;
+  let offset = offsets.get(key);
+  if (offset === undefined) {
+    const p = parts(new Date(start), FULL);
+    offset = Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour), Number(p.minute), Number(p.second)) - start;
+    if (offsets.size >= 20000) offsets.clear();
+    offsets.set(key, offset);
+  }
+  return offset;
+}
 function wallClock(at) {
-  const p = parts(at, FULL);
-  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}`;
+  const ms = at instanceof Date ? at.getTime() : Number(at);
+  const local = Number.isFinite(ms) ? new Date(ms + quarterOffset(timeZone(), ms)) : null;
+  const year = local?.getUTCFullYear();
+  if (!local || !(year >= 1000 && year <= 9999)) {
+    const p = parts(at, FULL);
+    return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}`;
+  }
+  return local.toISOString().slice(0, 19);
 }
 
 // Today's date in the user's zone ("2026-10-05"). Between midnight and the

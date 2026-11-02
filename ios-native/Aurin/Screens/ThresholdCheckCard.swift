@@ -45,12 +45,15 @@ struct ThresholdCheck: Decodable, Equatable {
         let lthr: Double?
         let runThresholdPace: Double?
         let runLthr: Double?
+        /// A swim plan's CSS test: seconds per 100 m.
+        var swimCss: Double? = nil
     }
 
     struct Current: Decodable, Equatable {
         let ftp: Double?
         let lthr: Double?
         let runThresholdPace: Double?
+        var swimCss: Double? = nil
     }
 
     struct Measured: Decodable, Equatable {
@@ -128,18 +131,19 @@ struct ThresholdCheckCard: View {
         if fresh != nil { ThresholdCheckMemory.kept = (fresh, Date()) }
     }
 
-    private func sportTitle(_ sport: String) -> String { L10n.tr(sport == "run" ? "Běh" : "Kolo") }
+    private func sportTitle(_ sport: String) -> String { L10n.tr(sport == "run" ? "Běh" : sport == "swim" ? "Plavání" : "Kolo") }
 
     private func valueText(_ metric: String, _ value: Double) -> String {
         switch metric {
         case "runThresholdPace", "pace": return ZonesSettingsView.pace(Units.pace(value)) + " " + Units.paceUnit
         case "lthr", "runLthr": return "\(Int(value.rounded())) bpm"
+        case "swimCss": return raceTime(Int(value.rounded())) + " /100 m"
         default: return "\(Int(value.rounded())) W"
         }
     }
 
     private func metricName(_ metric: String) -> String {
-        L10n.tr(metric == "runThresholdPace" ? "Prahové tempo" : metric == "lthr" ? "Prahový tep" : "FTP")
+        metric == "swimCss" ? "CSS" : L10n.tr(metric == "runThresholdPace" ? "Prahové tempo" : metric == "lthr" ? "Prahový tep" : "FTP")
     }
 
     // MARK: - offer
@@ -219,7 +223,7 @@ struct ThresholdCheckCard: View {
                 }
                 HStack(spacing: 10) {
                     PrimaryButton(title: L10n.tr("Uložit"), systemImage: "checkmark", busy: busy) {
-                        Task { await act(["action": .string("apply"), "sport": .string(r.sport), "values": .object(values(r.result))], estimate: nil) }
+                        Task { await act(["action": .string("apply"), "sport": .string(r.sport), "values": .object(values(r.result)), "writeWahoo": .bool(UserDefaults.standard.object(forKey: "writeWahoo") as? Bool ?? true)], estimate: nil) }
                     }
                     .disabled(busy)
                     SecondaryButton(title: "Neukládat") {
@@ -241,6 +245,7 @@ struct ThresholdCheckCard: View {
         line("ftp", v.ftp, current?.ftp)
         line("lthr", v.lthr, current?.lthr)
         line("runThresholdPace", v.runThresholdPace, current?.runThresholdPace)
+        line("swimCss", v.swimCss, current?.swimCss)
         if let hr = v.runLthr { out.append(L10n.f("%@: %@", metricName("lthr"), valueText("lthr", hr))) }
         return out
     }
@@ -251,6 +256,7 @@ struct ThresholdCheckCard: View {
         if let x = v?.lthr { out["lthr"] = .number(x) }
         if let x = v?.runThresholdPace { out["runThresholdPace"] = .number(x) }
         if let x = v?.runLthr { out["runLthr"] = .number(x) }
+        if let x = v?.swimCss { out["swimCss"] = .number(x) }
         return out
     }
 
@@ -262,7 +268,7 @@ struct ThresholdCheckCard: View {
             Text(L10n.f("Jak dopadl test %@?", Fmt.dayHeading(m.testDate))).font(Typo.sentence(20)).foregroundStyle(Palette.ink)
             ForEach(fields(m.testId), id: \.key) { (field: Field) in
                 TextField(L10n.tr(field.label), text: Binding(get: { typed[m.sport + field.key] ?? "" }, set: { typed[m.sport + field.key] = $0 }))
-                    .keyboardType(.decimalPad)
+                    .keyboardType(field.time ? .numbersAndPunctuation : .decimalPad)
                     .padding(12)
                     .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
@@ -270,7 +276,10 @@ struct ThresholdCheckCard: View {
                 PrimaryButton(title: L10n.tr("Spočítat"), busy: busy) {
                     var body: JSONObject = [:]
                     for field: Field in fields(m.testId) {
-                        let text = (typed[m.sport + field.key] ?? "").replacingOccurrences(of: ",", with: ".")
+                        let raw = typed[m.sport + field.key] ?? ""
+                        // A swim time "6:40" in seconds.
+                        if field.time { if let value = ZonesSettingsView.seconds(raw) { body[field.key] = .number(value) }; continue }
+                        let text = raw.replacingOccurrences(of: ",", with: ".")
                         guard let value = Double(text) else { continue }
                         body[field.key] = .number(field.key == "distanceKm" ? value / Units.distance(1) : value)
                     }
@@ -287,12 +296,15 @@ struct ThresholdCheckCard: View {
     private struct Field {
         let key: String
         let label: String
+        /// Typed as m:ss.
+        var time = false
     }
 
     private func fields(_ testId: String) -> [Field] {
         switch testId {
         case "test-ride-ftp20": return [Field(key: "power20", label: "Průměrný výkon 20 min (W)")]
         case "test-ride-lthr30": return [Field(key: "hr", label: "Průměrný tep posledních 20 min")]
+        case "test-swim-css": return [Field(key: "t400", label: "Čas na 400 m (m:ss)", time: true), Field(key: "t200", label: "Čas na 200 m (m:ss)", time: true)]
         default:
             return [Field(key: "distanceKm", label: Units.imperial ? "Uběhnutá vzdálenost za 30 min (mi)" : "Uběhnutá vzdálenost za 30 min (km)"),
                     Field(key: "hr", label: "Průměrný tep posledních 20 min")]
@@ -359,6 +371,7 @@ extension ThresholdCheckCard {
         switch testId ?? "" {
         case "test-ride-ftp20": return metricName("ftp")
         case "test-ride-lthr30": return metricName("lthr")
+        case "test-swim-css": return metricName("swimCss")
         default: return sport == "run" ? metricName("runThresholdPace") : L10n.tr("Test")
         }
     }
@@ -376,7 +389,7 @@ extension ThresholdCheckCard {
         case .offer(let sport):
             guard let o = check.offers.first(where: { $0.sport == sport }) else { return "" }
             guard o.reason != "missing", let estimate = o.estimate?.value else { return headline(o) }
-            let format = o.sport == "ride" ? "Podle jízd %@" : o.sport == "run" ? "Podle běhů %@" : "Podle tréninků %@"
+            let format = o.sport == "ride" ? "Podle jízd %@" : o.sport == "run" ? "Podle běhů %@" : o.sport == "swim" ? "Podle plavání %@" : "Podle tréninků %@"
             return L10n.f(format, valueText(o.metric, estimate))
         }
     }
