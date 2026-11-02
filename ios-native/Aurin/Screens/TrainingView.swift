@@ -10,6 +10,10 @@ struct TrainingView: View {
     @State private var calendarDay: String?
     /// A day set from the pinned bar, for the calendar.
     @State private var jumpDay: DayJump?
+    /// The day of today's Začít trénink while its place is under the tab bar
+    /// (NextSession), and the bottom of the visible page: it floats above the bar.
+    @State private var startUnderBar: String?
+    @State private var pageBottom: CGFloat = 0
 
     var body: some View {
         NavigationStack(path: model.path(.training)) {
@@ -41,6 +45,26 @@ struct TrainingView: View {
                     ProgressView()
                 }
             }
+            .environment(\.startButtonReport, { startUnderBar = $0 })
+            .environment(\.startButtonFloor, pageBottom > 0 ? pageBottom - StartButtonSpot.barZone : 0)
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { pageBottom = $0 }
+            .overlay(alignment: .bottom) {
+                if let date = floatingStart {
+                    NavigationLink(value: AppRoute.trainingMode(date)) {
+                        Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
+                            .frame(maxWidth: .infinity).frame(height: 54)
+                            .background(Palette.green, in: Capsule())
+                            .shadow(color: Palette.green.opacity(0.3), radius: 12, y: 6)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 28)
+                    .padding(.bottom, StartButtonSpot.barZone + 8)
+                    // VoiceOver reaches the same button in the card.
+                    .accessibilityHidden(true)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.snappy, value: floatingStart == nil)
             .navBarVisibility(.hidden)
             .appRoutes()
         }
@@ -64,6 +88,14 @@ struct TrainingView: View {
         // Every planned session of the week done: the App Store rating (AurinTips.swift).
         .reviewAfterFinishedWeek(model.training?.sessions, demo: model.demo)
         .sheet(isPresented: $addingWorkout) { ManualWorkoutSheet() }
+    }
+
+    /// Today's Začít trénink while its place in the card is under the tab bar
+    /// (or further down): the same button floats just above the bar. Not with
+    /// a hidden workout's bar there, nor over an undo toast.
+    private var floatingStart: String? {
+        guard toast == nil, model.minimizedGym == nil, !model.immersive else { return nil }
+        return startUnderBar
     }
 
     private func undo(_ t: PlanToast) {
@@ -365,6 +397,33 @@ struct TodaySessions: View {
     }
 }
 
+/// Today's Začít trénink on Training floats above the tab bar while its place
+/// in the card is under the bar or further down (review 2026-11-02, point 3).
+enum StartButtonSpot {
+    /// The tab bar (60 pt, Dynamic Type can grow it) and its gap above the
+    /// bottom of the safe area (RootView).
+    static let barZone: CGFloat = 76
+}
+
+private struct StartButtonReportKey: EnvironmentKey { nonisolated(unsafe) static let defaultValue: ((String?) -> Void)? = nil }
+private struct StartButtonFloorKey: EnvironmentKey { static let defaultValue: CGFloat = 0 }
+
+extension EnvironmentValues {
+    /// The day of today's Začít trénink while it is under the tab bar, nil
+    /// once it is above it or gone (NextSession → TrainingView). Only a change
+    /// is reported, so scrolling does not redraw the screen.
+    var startButtonReport: ((String?) -> Void)? {
+        get { self[StartButtonReportKey.self] }
+        set { self[StartButtonReportKey.self] = newValue }
+    }
+
+    /// The top of the tab bar on screen (global), 0 before it is measured.
+    var startButtonFloor: CGFloat {
+        get { self[StartButtonFloorKey.self] }
+        set { self[StartButtonFloorKey.self] = newValue }
+    }
+}
+
 struct NextSession: View {
     let session: TrainingSnapshot.Session
     let today: String
@@ -374,6 +433,8 @@ struct NextSession: View {
     var strainNow: Double? = nil
     /// In the swiping card: as tall as the tallest of today's.
     var fill = false
+    @Environment(\.startButtonReport) private var startReport
+    @Environment(\.startButtonFloor) private var startFloor
 
     // Its own card, so the gym tools below (today's) don't read as its buttons.
     var body: some View {
@@ -390,6 +451,10 @@ struct NextSession: View {
                         .background(Palette.green, in: Capsule())
                 }
                 .buttonStyle(.plain)
+                .onGeometryChange(for: Bool.self) { [floor = startFloor] in floor > 0 && $0.frame(in: .global).maxY > floor } action: { under in
+                    startReport?(under ? session.date : nil)
+                }
+                .onDisappear { startReport?(nil) }
                 .padding(.top, 4)
             }
             if fill { Spacer(minLength: 0) }
