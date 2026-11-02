@@ -204,21 +204,7 @@ struct StartPlanSheet: View {
                     }
                 }
                 if let per = template.perSport {
-                    // A multisport plan: its sports (picked, or the race's), the days come
-                    // from the usual week, a day may have two sports.
-                    VStack(alignment: .leading, spacing: 8) {
-                        SectionLabel(text: "Sporty")
-                        PlanSportChips(selected: template.choose == true ? sports : template.sports ?? [], toggle: template.choose == true ? toggleSport : nil)
-                        if template.choose == true {
-                            Text("Vyber dva nebo tři. Šest tréninků týdně se mezi ně rozdělí.")
-                                .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    VStack(alignment: .leading, spacing: 8) {
-                        SectionLabel(text: "Týden")
-                        Text(L10n.f("%@ týdně. Dny rozdělím podle času, který v týdnu máš.", PlanSportChips.sessionsText(PlanSportChips.perSport(per, sports: template.choose == true ? sports : nil))))
-                            .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-                    }
+                    multisportSetup(per)
                 } else {
                     planSetup
                 }
@@ -398,6 +384,28 @@ struct StartPlanSheet: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value).font(Typo.number(24)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
             Text(label).font(Typo.caption).foregroundStyle(Palette.muted)
+        }
+    }
+
+    /// A multisport plan: its sports (picked, or the race's), the days come
+    /// from the usual week, a day may have two sports.
+    @ViewBuilder private func multisportSetup(_ per: [String: Int]) -> some View {
+        let picks = template.choose == true
+        let shown: [String] = picks ? sports : (template.sports ?? [])
+        let toggle: ((String) -> Void)? = picks ? { sport in toggleSport(sport) } : nil
+        let week: String = PlanSportChips.sessionsText(PlanSportChips.perSport(per, sports: picks ? sports : nil))
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(text: "Sporty")
+            PlanSportChips(selected: shown, toggle: toggle)
+            if picks {
+                Text("Vyber dva nebo tři. Šest tréninků týdně se mezi ně rozdělí.")
+                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(text: "Týden")
+            Text(verbatim: L10n.f("%@ týdně. Dny rozdělím podle času, který v týdnu máš.", week))
+                .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 
