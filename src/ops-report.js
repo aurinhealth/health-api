@@ -6,7 +6,7 @@
 // in, with proposals for the limits (accountsReport), every morning.
 import { AsyncLocalStorage } from "node:async_hooks";
 import { emailConfigured, sendEmail } from "./email-sender.js";
-import { accountCapacity } from "./tenancy.js";
+import { accountCapacity, openReserveShards, reserveCapacity, RESERVE_OPEN_BELOW, RESERVE_SHARD_USERS } from "./tenancy.js";
 import { aiMonthlyLimitUsd, ensureAiUsage } from "./ai-usage.js";
 import { ensureStoreColumns } from "./app-store.js";
 import { unpaidLimitShare, groupOfSubscription } from "./ai-limit-share.js";
@@ -197,7 +197,10 @@ export function opsReport(rows, capacity, date, ai = null, stuckDeletions = [], 
   if (of("broken").length) sections.push(`Rozbitá propojení (uživatel musí znovu připojit)\n${list(of("broken"))}`);
   if (of("server").length) sections.push(`Chyby serveru\n${list(of("server"))}`);
   if (of("slow").length) sections.push(`Pomalé požadavky a úlohy (${SLOW_REQUEST_MS / 1000} s a víc, ${MANY_QUERIES} dotazů nebo ${MANY_ROWS / 1e6} M přečtených řádků do D1)\n${list(of("slow"))}`);
-  if (capacity?.places && capacity.used / capacity.places >= 0.8) sections.push(`Místo pro účty\n- Obsazeno ${capacity.used} z ${capacity.places} (${Math.round(capacity.used / capacity.places * 100)} %). Nové registrace se po zaplnění řadí do čekací listiny.`);
+  // capacity.reserve: the databases kept in reserve (tenancy.js openReserveShards opens them).
+  const reserve = capacity?.reserve || null, spare = reserve?.places ? ` V záloze ${reserve.databases} ${reserve.databases === 1 ? "databáze" : reserve.databases < 5 ? "databáze" : "databází"} (${reserve.places} míst), otevřou se samy, až zbude méně než ${RESERVE_OPEN_BELOW} volných.` : "";
+  const low = Boolean(reserve && capacity?.places && capacity.free + reserve.places < 2 * RESERVE_OPEN_BELOW);
+  if (capacity?.places && (capacity.used / capacity.places >= 0.8 || low)) sections.push(`Místo pro účty\n- Obsazeno ${capacity.used} z ${capacity.places} (${Math.round(capacity.used / capacity.places * 100)} %). Nové registrace se po zaplnění řadí do čekací listiny.${spare}${low ? `\n- Záloha databází dochází (volných ${capacity.free}, v záloze ${reserve.places}): ve wrangler.jsonc zvyšte USER_DATA_SHARD_COUNT o 10 (každá databáze ${RESERVE_SHARD_USERS} míst) a vydejte, nasazení nové databáze založí samo.` : ""}`);
   if (stuckDeletions?.length) sections.push(`Nedokončená smazání účtů (cron je opakuje, data zatím zůstávají)\n${stuckDeletions.map(row => `- účet #${row.user_id} smazaný ${String(row.requested_at || "").slice(0, 10)}: ${row.attempts}× selhalo${row.last_error ? ` (naposledy: ${row.last_error})` : ""}`).join("\n")}`);
   if (accounts) sections.push(accounts);
   if (ai) sections.push(ai);
@@ -216,7 +219,11 @@ export async function sendDailyOpsReport(env, now = new Date()) {
   const today = day(now), yesterday = day(new Date(now.getTime() - 86400000));
   if (await env.DB.prepare("SELECT 1 FROM ops_events WHERE day=? AND kind='report'").bind(today).first()) return { sent: false, already: true };
   const rows = (await env.DB.prepare("SELECT kind,service,count,last_message FROM ops_events WHERE day=? AND kind!='report'").bind(yesterday).all()).results || [];
-  const capacity = await accountCapacity(env.DB, env).catch(() => null);
+  // Also opens a database from reserve if sign-ups have not done it already.
+  const room = await openReserveShards(env.DB, env).catch(() => null) || await accountCapacity(env.DB, env).catch(() => null);
+  // The test server keeps two databases and no reserve on purpose.
+  const reserve = room && env.ENVIRONMENT !== "staging" ? await reserveCapacity(env.DB) : null;
+  const capacity = room ? { ...room, ...(reserve ? { reserve } : {}) } : null;
   const ai = await aiSection(env, yesterday).catch(error => { console.warn("AI usage report failed", error?.message || error); return null; });
   const stuck = await stuckAccountDeletions(env.DB).catch(error => { console.warn("Stuck account deletions read failed", error?.message || error); return []; });
   const setting = value => value == null || value === "" || !Number.isFinite(Number(value)) ? null : Number(value);
