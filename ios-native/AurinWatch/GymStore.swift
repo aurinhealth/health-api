@@ -78,6 +78,16 @@ final class GymStore: ObservableObject {
         })
     }
 
+    /// When a plan for the day last came (from the iPhone or the server).
+    private var loadedAt: Date?
+
+    /// The Training page: loads only without today's plan or after 10 minutes.
+    func loadIfStale() {
+        guard !loading else { return }
+        if let gym, gym.date == day, let loadedAt, Date().timeIntervalSince(loadedAt) < 10 * 60 { return }
+        load()
+    }
+
     /// The day's sheet from the server with the watch's own sign-in.
     private func fromServer(_ date: String) async {
         loading = true
@@ -151,6 +161,7 @@ final class GymStore: ObservableObject {
             unsent = false
         }
         gym = fresh
+        loadedAt = Date()
         save()
     }
 
@@ -237,7 +248,8 @@ final class GymStore: ObservableObject {
     /// What the watch wrote alone goes on its way: to the server when it has
     /// not yet, to the iPhone when it is in reach (its connection came up).
     func sync() {
-        sync()
+        upload()
+        handBack()
     }
 
     /// The newest sheet to the server, one save at a time; tried again with
@@ -337,8 +349,21 @@ final class GymStore: ObservableObject {
     /// The weight and reps Training mode on the iPhone is at for a set.
     @Published var phoneDraft: WatchGym.Draft?
 
-    /// The weight and reps being set here, to Training mode on the iPhone (only while in reach).
+    /// The weight and reps being set here, to Training mode on the iPhone (only
+    /// while in reach): once the crown rests for 0.3 s, not at every 0.5 kg step
+    /// (20 kg were 40 messages).
     func sendDraft(_ draft: WatchGym.Draft) {
+        draftTask?.cancel()
+        draftTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            GymStore.shared.sendDraftNow(draft)
+        }
+    }
+
+    private var draftTask: Task<Void, Never>?
+
+    private func sendDraftNow(_ draft: WatchGym.Draft) {
         guard !draft.same(phoneDraft), let session = phone, session.isReachable,
               let data = draft.encoded() else { return }
         session.sendMessage([WatchGym.draftKey: data], replyHandler: { _ in }, errorHandler: { _ in })
