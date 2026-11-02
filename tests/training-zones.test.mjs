@@ -88,3 +88,26 @@ test("rested with no quality this week, the coach picks the quality system train
   assert.equal(coach.recommendation.session.kind, "threshold");
   assert.match(coach.rationale.join(" "), /žádná kvalita.*Práh jsi/);
 });
+
+test("Intervals.icu slow or down: the sport settings read last time are used, and the job is not reported as failed", async () => {
+  const raw = createD1(), db = scopedDb(raw, 4), saved = new Map();
+  const store = { put: async (key, response) => { saved.set(key, await response.text()); }, match: async key => saved.has(key) ? new Response(saved.get(key)) : undefined };
+  const env = { DB: db, USER_ID: 4, INTERVALS_API_KEY: "k" };
+  const ok = async () => Response.json({ sportSettings: [{ types: ["Ride"], ftp: 280, lthr: 165 }] });
+  const first = await athleteThresholds(env, ok, { store });
+  assert.deepEqual([first.ftp, first.lthr, first.source], [280, 165, "intervals-settings"]);
+  await new Promise(resolve => setImmediate(resolve));
+  const timeout = async () => { throw new DOMException("The operation was aborted due to timeout", "TimeoutError"); };
+  const errors = [], warnings = [], error = console.error, warn = console.warn;
+  console.error = (...args) => errors.push(args.join(" ")); console.warn = (...args) => warnings.push(args.join(" "));
+  try {
+    const later = await athleteThresholds(env, timeout, { store });
+    assert.deepEqual([later.ftp, later.lthr, later.source], [280, 165, "intervals-settings"]);
+    assert.equal(errors.filter(e => /Intervals athlete settings/.test(e)).length, 0);
+    assert.equal(warnings.filter(w => /Intervals athlete settings/.test(w)).length, 1);
+    // Another user gets nothing of it.
+    const other = await athleteThresholds({ DB: scopedDb(raw, 5), USER_ID: 5, INTERVALS_API_KEY: "k" }, timeout, { store });
+    assert.equal(other.lthr, null);
+    assert.equal(errors.filter(e => /Intervals athlete settings unavailable/.test(e)).length, 1);
+  } finally { console.error = error; console.warn = warn; }
+});

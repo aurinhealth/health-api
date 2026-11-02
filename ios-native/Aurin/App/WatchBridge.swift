@@ -83,10 +83,13 @@ final class WatchBridge: NSObject {
             defer { loadingHealth = false }
             let api = AppModel.live?.api ?? APIClient()
             guard api.hasSession else { return }
-            // The week for the Training page, when the app has not loaded it yet.
+            // The week for the Training page (when the app has not loaded it
+            // yet), the wake times and health: at once, not one after another.
+            async let profileLoad = api.profile()
+            async let healthLoad = api.health()
             if training == nil, let week = try? await api.training() { training = week }
-            if let loaded = try? await api.profile() { profile = loaded }
-            guard let loaded = try? await api.health() else { send(); return }
+            if let loaded = try? await profileLoad { profile = loaded }
+            guard let loaded = try? await healthLoad else { send(); return }
             update(loaded)
         }
     }
@@ -370,8 +373,8 @@ extension WatchBridge: WCSessionDelegate {
                 return
             }
             if let sheet {
-                await applyGym(sheet: sheet)
-                replyHandler(["ok": true])
+                let gym = await applyGym(sheet: sheet)
+                replyHandler(gym.encoded().map { [WatchGym.replyKey: $0, "ok": true] } ?? ["ok": true])
                 return
             }
             if let change {
@@ -411,13 +414,19 @@ extension WatchBridge: WCSessionDelegate {
         }
     }
 
-    /// Today, the week and health from the server, when the app has none for today.
+    /// Today, the week and health from the server, when the app has none for
+    /// today: all three at once (each takes seconds), not one after another,
+    /// so the answer reaches the watch before its message gives up.
     private func loadTodayForWatch() async {
         let api = AppModel.live?.api ?? APIClient()
-        guard api.hasSession, let loaded = try? await api.today() else { return }
+        guard api.hasSession else { return }
+        async let todayLoad = api.today()
+        async let weekLoad = api.training()
+        async let healthLoad = api.health()
+        guard let loaded = try? await todayLoad else { return }
         today = loaded
-        if let week = try? await api.training() { training = week }
-        if let fresh = try? await api.health(), fresh.date == loaded.date {
+        if let week = try? await weekLoad { training = week }
+        if let fresh = try? await healthLoad, fresh.date == loaded.date {
             health = fresh
             healthLoaded = Date()
         }

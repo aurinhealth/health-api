@@ -14,6 +14,7 @@ final class GymStore: ObservableObject {
     private static let savedKey = "watchGym"
     private static let aloneKey = "watchGymAlone"
     private static let unsentKey = "watchGymUnsent"
+    private static let earlierKey = "watchGymEarlier"
 
     @Published private(set) var gym: WatchGym?
     @Published private(set) var loading = false
@@ -31,11 +32,35 @@ final class GymStore: ObservableObject {
 
     init() {
         let defaults = UserDefaults.standard
-        if let data = defaults.data(forKey: Self.savedKey), let saved = WatchGym.decode(data),
-           saved.date == WatchStore.localDate(Date()) {
-            gym = saved
-            alone = defaults.bool(forKey: Self.aloneKey)
-            unsent = defaults.bool(forKey: Self.unsentKey)
+        if let data = defaults.data(forKey: Self.savedKey), let saved = WatchGym.decode(data) {
+            if saved.date == WatchStore.localDate(Date()) {
+                gym = saved
+                alone = defaults.bool(forKey: Self.aloneKey)
+                unsent = defaults.bool(forKey: Self.unsentKey)
+            } else if defaults.bool(forKey: Self.aloneKey), defaults.bool(forKey: Self.unsentKey) {
+                // Written alone on an earlier day and never saved (no internet
+                // since): kept until the server has it, not dropped with the day.
+                Self.keepEarlier(saved)
+            }
+        }
+    }
+
+    /// A day the watch wrote alone that has not reached the server yet.
+    private static func keepEarlier(_ gym: WatchGym) {
+        guard gym.sheet != nil, let data = gym.encoded() else { return }
+        UserDefaults.standard.set(data, forKey: earlierKey)
+    }
+
+    /// The earlier day's sheet to the server; kept for the next try when offline.
+    private func uploadEarlier() {
+        guard let data = UserDefaults.standard.data(forKey: Self.earlierKey) else { return }
+        guard let earlier = WatchGym.decode(data), let values = earlier.sheet else {
+            UserDefaults.standard.removeObject(forKey: Self.earlierKey)
+            return
+        }
+        Task { @MainActor in
+            guard await WatchAPI.saveGym(GymDay(date: earlier.date, values: values, cancelled: nil), date: earlier.date) else { return }
+            if UserDefaults.standard.data(forKey: Self.earlierKey) == data { UserDefaults.standard.removeObject(forKey: Self.earlierKey) }
         }
     }
 
@@ -76,6 +101,16 @@ final class GymStore: ObservableObject {
         }, errorHandler: { _ in
             Task { @MainActor in await GymStore.shared.fromServer(date) }
         })
+    }
+
+    /// When a plan for the day last came (from the iPhone or the server).
+    private var loadedAt: Date?
+
+    /// The Training page: loads only without today's plan or after 10 minutes.
+    func loadIfStale() {
+        guard !loading else { return }
+        if let gym, gym.date == day, let loadedAt, Date().timeIntervalSince(loadedAt) < 10 * 60 { return }
+        load()
     }
 
     /// The day's sheet from the server with the watch's own sign-in.
@@ -146,11 +181,14 @@ final class GymStore: ObservableObject {
             }
             fresh.sheet = sheet?.values
         } else {
-            // Another day: whatever the watch wrote alone belonged to the one before.
+            // Another day: whatever the watch wrote alone belonged to the one
+            // before; not saved yet, it goes to the server on its own.
+            if alone, unsent, let gym { Self.keepEarlier(gym); uploadEarlier() }
             alone = false
             unsent = false
         }
         gym = fresh
+        loadedAt = Date()
         save()
     }
 
@@ -237,12 +275,15 @@ final class GymStore: ObservableObject {
     /// What the watch wrote alone goes on its way: to the server when it has
     /// not yet, to the iPhone when it is in reach (its connection came up).
     func sync() {
-        sync()
+        upload()
+        handBack()
     }
 
     /// The newest sheet to the server, one save at a time; tried again with
     /// the next set, the next load, and the end of the workout.
     private func upload() {
+        // An earlier day the watch wrote alone and has not saved yet goes first.
+        uploadEarlier()
         guard alone, unsent, !uploading else { return }
         uploading = true
         Task { @MainActor in
@@ -259,13 +300,16 @@ final class GymStore: ObservableObject {
     private func handBack() {
         guard alone, let session = phone, session.isReachable, let gym, let values = gym.sheet,
               let data = WatchGym.Sheet(date: gym.date, values: values).encoded() else { return }
-        session.sendMessage([WatchGym.sheetKey: data], replyHandler: { _ in
+        session.sendMessage([WatchGym.sheetKey: data], replyHandler: { reply in
+            // The iPhone's plan: the watch's sheet with sets ticked on the iPhone meanwhile.
+            let plan = reply[WatchGym.replyKey] as? Data
             Task { @MainActor in
                 let store = GymStore.shared
                 // Changed here meanwhile: the next hand-back takes that.
                 guard store.gym?.sheet == values else { store.handBack(); return }
                 store.alone = false
                 store.unsent = false
+                if let plan { store.received(plan) }
             }
         }, errorHandler: { _ in })
     }
@@ -337,8 +381,21 @@ final class GymStore: ObservableObject {
     /// The weight and reps Training mode on the iPhone is at for a set.
     @Published var phoneDraft: WatchGym.Draft?
 
-    /// The weight and reps being set here, to Training mode on the iPhone (only while in reach).
+    /// The weight and reps being set here, to Training mode on the iPhone (only
+    /// while in reach): once the crown rests for 0.3 s, not at every 0.5 kg step
+    /// (20 kg were 40 messages).
     func sendDraft(_ draft: WatchGym.Draft) {
+        draftTask?.cancel()
+        draftTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            GymStore.shared.sendDraftNow(draft)
+        }
+    }
+
+    private var draftTask: Task<Void, Never>?
+
+    private func sendDraftNow(_ draft: WatchGym.Draft) {
         guard !draft.same(phoneDraft), let session = phone, session.isReachable,
               let data = draft.encoded() else { return }
         session.sendMessage([WatchGym.draftKey: data], replyHandler: { _ in }, errorHandler: { _ in })
@@ -410,6 +467,7 @@ final class GymStore: ObservableObject {
         alone = false
         unsent = false
         UserDefaults.standard.removeObject(forKey: Self.savedKey)
+        UserDefaults.standard.removeObject(forKey: Self.earlierKey)
     }
 
     private func save() {

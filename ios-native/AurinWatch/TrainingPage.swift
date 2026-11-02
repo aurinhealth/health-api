@@ -45,7 +45,10 @@ struct TrainingPage: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .onAppear { store.load() }
+        // Each turn of the crown to this page shows it again: the plan only
+        // when there is none for today or it is older than 10 minutes (the
+        // iPhone sends every change it saves on its own).
+        .onAppear { store.loadIfStale() }
         .task(id: day) {
             if day == today { preview = nil } else { preview = await store.preview(date: day) }
         }

@@ -107,7 +107,7 @@ export async function handleThresholdApi(request,env,ctx,url,session,internalAut
       if(request.method==='GET')return Response.json(await thresholdCheckState(env,ctx,today),{headers:{'Cache-Control':'no-store'}});
       if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
       if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-      const body=await request.json().catch(()=>({})),sport=body.sport==='run'?'run':'ride',checks=await getChecks(env.DB),check=checks[sport]||null;
+      const body=await request.json().catch(()=>({})),sport=['run','swim'].includes(body.sport)?body.sport:'ride',checks=await getChecks(env.DB),check=checks[sport]||null;
       const estimate=body.estimate&&Number(body.estimate.value)>0?{value:Number(body.estimate.value),basis:String(body.estimate.basis||'').slice(0,30)}:check?.estimate||null;
       if(body.action==='schedule'){
         const testId=TEST_IDS[sport].includes(body.testId)?body.testId:TEST_IDS[sport][0];
@@ -127,6 +127,7 @@ export async function handleThresholdApi(request,env,ctx,url,session,internalAut
         // The confirmed values go to the training profile (and to Intervals.icu, as from Nastavení → Zóny).
         const v=body.values||{},num=x=>Number.isFinite(Number(x))&&Number(x)>0?Math.round(Number(x)):null,patch={};
         if(sport==='ride'){if(num(v.ftp)&&num(v.ftp)<=1000)patch.ftp=num(v.ftp);if(num(v.lthr)&&num(v.lthr)<=230)patch.lthr=num(v.lthr);}
+        else if(sport==='swim'){if(num(v.swimCss)>=60&&num(v.swimCss)<=240)patch.swimCss=num(v.swimCss);}
         else {if(num(v.runThresholdPace)>=150&&num(v.runThresholdPace)<=600)patch.runThresholdPace=num(v.runThresholdPace);if(num(v.runLthr)&&num(v.runLthr)<=230)patch.runLthr=num(v.runLthr);}
         if(!Object.keys(patch).length)throw new Error(L('Chybí hodnota k uložení.','There is no value to save.'));
         await saveTrainingProfile(env.DB,{...await getTrainingProfile(env.DB),...patch});

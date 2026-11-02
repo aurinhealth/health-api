@@ -292,8 +292,10 @@ final class APIClient: @unchecked Sendable {
 
     // MARK: - Workouts
 
+    /// The day's sheet alone (lite): GymDay reads only the sheet, so the 500
+    /// rows of history and the muscles the web page draws stay on the server.
     func gym(date: String) async throws -> GymDay {
-        try await get("/app/api/gym?date=" + date)
+        try await get("/app/api/gym?lite=1&date=" + date)
     }
 
     /// Saves the whole plan (the server keeps the sheet and the history of sets).
@@ -304,6 +306,9 @@ final class APIClient: @unchecked Sendable {
     static func gymBody(_ day: GymDay, date: String) -> JSONObject {
         var body = day.saveBody
         body["date"] = .string(date)
+        // The answer is not read: without lite the server reads 500 rows of
+        // history after every set and sends them back for nothing.
+        body["lite"] = .bool(true)
         return body
     }
 

@@ -120,3 +120,19 @@ test("an Intervals.icu read is given up after a time limit, writes and other hos
   await assert.rejects(slow("https://intervals.icu/api/v1/athlete/0"), { name: "TimeoutError" });
   clearTimeout(alive);
 });
+
+test("the same read asked for at once goes to Intervals.icu once, each caller gets its own answer", async () => {
+  const { reads, calls } = setup();
+  const url = d => `https://intervals.icu/api/v1/athlete/0/wellness?oldest=${d}&newest=2026-10-16`;
+  const answers = await Promise.all([reads()(url("2026-10-01")), reads()(url("2026-10-09")), reads()(url("2026-10-14"))]);
+  assert.equal(calls.length, 1);
+  assert.deepEqual((await Promise.all(answers.map(a => a.json()))).map(rows => rows.length), [3, 2, 1]);
+  // A failed read is shared the same way, and not kept.
+  const failing = intervalsReads({ INTERVALS_API_KEY: "Bearer tok", USER_ID: 2, DB: fakeDb() }, null, { fetchImpl: async () => { calls.push(1); await new Promise(resolve => setTimeout(resolve, 20)); return new Response("busy", { status: 503 }); }, store: fakeStore(), now: () => NOW });
+  const settings = await Promise.all([failing("https://intervals.icu/api/v1/athlete/0"), failing("https://intervals.icu/api/v1/athlete/0")]);
+  assert.deepEqual(settings.map(r => r.status), [503, 503]);
+  assert.deepEqual(await Promise.all(settings.map(r => r.text())), ["busy", "busy"]);
+  assert.equal(calls.length, 2);
+  await failing("https://intervals.icu/api/v1/athlete/0");
+  assert.equal(calls.length, 3);
+});

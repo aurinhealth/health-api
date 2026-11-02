@@ -186,7 +186,7 @@ struct ZonesSettingsView: View {
         return (60...240).contains(css) ? css.rounded() : nil
     }
 
-    private static func seconds(_ typed: String) -> Double? {
+    static func seconds(_ typed: String) -> Double? {
         let parts = typed.trimmingCharacters(in: .whitespaces).split(separator: ":")
         guard parts.count == 2, let m = Double(parts[0]), let s = Double(parts[1]), s < 60 else { return nil }
         return m * 60 + s
