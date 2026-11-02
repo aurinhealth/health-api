@@ -221,6 +221,27 @@ enum WatchAPI {
         (try? JSONEncoder().encode(names)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
     }
 
+    /// An exercise's technique steps (GET /app/api/gym/technique, the iPhone's
+    /// technique sheet): none for an exercise outside the catalog, nil offline.
+    static func gymTechnique(_ exercise: String) async -> [String]? {
+        var query = URLComponents()
+        query.queryItems = [URLQueryItem(name: "exercise", value: exercise)]
+        guard let session, let q = query.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B"),
+              let request = request("/app/api/gym/technique?" + q, session: session),
+              let (data, response) = try? await urlSession.data(for: request) else { return nil }
+        struct Response: Decodable {
+            struct Technique: Decodable { let steps: [String]? }
+            let technique: Technique?
+        }
+        switch (response as? HTTPURLResponse)?.statusCode ?? 0 {
+        case 200: return ((try? JSONDecoder().decode(Response.self, from: data))?.technique?.steps ?? []).filter { !$0.isEmpty }
+        // Not in the catalog: nothing to show, and nothing to ask again.
+        case 404: return []
+        case 401: store(nil); return nil
+        default: return nil
+        }
+    }
+
     /// Exercises whose names hold `query`, the ones the gym allows first (GET /app/api/gym/exercises?q=).
     static func gymSearch(_ text: String, inPlan: [String]) async -> [WatchGym.Option] {
         var query = URLComponents()

@@ -29,6 +29,10 @@ struct WatchGym: Codable, Equatable, Sendable {
         /// The letter of its superset ("A"), nil when it is in none: a
         /// superset goes round by round, one exercise after the other.
         var superset: String? = nil
+        /// Moje poznámka: the athlete's own note on the exercise ("seat 4, narrow grip").
+        var note: String? = nil
+        /// The best set before today by the estimated one-rep max: a set past it is a record.
+        var record: Last? = nil
         var title: String { shown ?? name }
     }
 
@@ -48,8 +52,16 @@ struct WatchGym: Codable, Equatable, Sendable {
         var rest: Int
         /// The letter it is planned or rated at (GymIntensity on the iPhone).
         var intensity: String? = nil
+        /// The same set last time (Training mode's "Minule 97,5 × 6").
+        var last: Last? = nil
         /// Not a warm-up nor a drop set.
         var work: Bool { !warmup && !drop }
+    }
+
+    /// A set from the history: its weight (nil with body weight) and reps.
+    struct Last: Codable, Equatable, Sendable {
+        var kg: Double?
+        var reps: Int
     }
 
     /// A set done on the watch.
