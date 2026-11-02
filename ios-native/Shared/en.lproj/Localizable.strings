@@ -3257,7 +3257,6 @@
 "Nainstalovat" = "Install";
 
 /* Onboarding review 2026-10-28: invite, consent first, notifications page, first days. */
-"Aurin je zatím jen na pozvánku. [Nemáš ji? Přidej se na čekací listinu.](https://aurin.health/#join)" = "Aurin is invite-only for now. [No invite? Join the waitlist.](https://aurin.health/#join)";
 "Tento účet nemá do Aurinu pozvánku. Aurin je teď jen pro pozvané." = "This account has no invite to Aurin. Aurin is invite-only for now.";
 "Tento Google účet nemá do Aurinu pozvánku. Aurin je teď jen pro pozvané." = "This Google account has no invite to Aurin. Aurin is invite-only for now.";
 "Přidat se na čekací listinu" = "Join the waitlist";
