@@ -223,6 +223,38 @@ export function testResult(testId, intervals = [], activity = {}) {
   return pace >= 150 && pace <= 600 ? { runThresholdPace: pace, runLthr: pick.hr ? Math.round(pick.hr + 2) : null, distance: finite(pick.distance) } : null;
 }
 
+// The best average power over `seconds` from a ride's curves (time in s from
+// the start, watts), for a 20-min test whose effort is not one lap of its own
+// (Intervals.icu split it, or the head unit has no laps). Gaps over 10 s
+// (a pause) count as no power; null without enough time or power.
+export function bestPower(time = [], watts = [], seconds = 1200) {
+  const n = Math.min(time.length, watts.length);
+  if (n < 2) return null;
+  const end = Number(time[n - 1]) - Number(time[0]);
+  if (!(end >= seconds) || end > 12 * 3600) return null;
+  const per = new Float64Array(Math.ceil(end) + 1);
+  for (let i = 0; i < n - 1; i++) {
+    const a = Math.round(Number(time[i]) - Number(time[0])), b = Math.round(Number(time[i + 1]) - Number(time[0])), w = Number(watts[i]);
+    if (!(b > a) || b - a > 10 || !(w > 0) || w > 3000) continue;
+    for (let s = a; s < b; s++) per[s] = w;
+  }
+  let sum = 0, best = 0;
+  for (let s = 0; s < per.length; s++) {
+    sum += per[s];
+    if (s >= seconds) sum -= per[s - seconds];
+    if (s >= seconds - 1) best = Math.max(best, sum);
+  }
+  const avg = Math.round(best / seconds);
+  return avg > 0 ? avg : null;
+}
+
+// A 20-min FTP test from the ride's best 20 minutes (bestPower).
+export function curveTestResult(testId, time, watts) {
+  if (testId !== "test-ride-ftp20") return null;
+  const power20 = bestPower(time, watts, 1200);
+  return power20 ? { ftp: Math.round(power20 * 0.95), power20, fromCurve: true } : null;
+}
+
 // ---- storage ---------------------------------------------------------------
 // One row per sport: scheduled (test planned on test_date), measured (the
 // test was done and its values wait for confirmation), dismissed, applied.

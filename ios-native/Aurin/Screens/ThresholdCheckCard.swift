@@ -74,6 +74,12 @@ struct ThresholdCheck: Decodable, Equatable {
     let results: [Measured]
     let manual: [Manual]
     let current: Current?
+    /// The services a confirmed result goes to besides Aurin (connected; the switches are the phone's).
+    struct Connected: Decodable, Equatable {
+        let intervals: Bool?
+        let wahoo: Bool?
+    }
+    let connected: Connected?
 }
 
 extension APIClient {
@@ -103,6 +109,9 @@ struct ThresholdCheckCard: View {
     @State private var typed: [String: String] = [:]
     @State private var busy = false
     @State private var error: String?
+    /// The switches of Nastavení → Zóny: where a saved result also goes.
+    @AppStorage("writeIntervals") private var writeIntervals = true
+    @AppStorage("writeWahoo") private var writeWahoo = true
     var top: CGFloat = 0
 
     var body: some View {
@@ -110,7 +119,7 @@ struct ThresholdCheckCard: View {
             if shows {
                 VStack(spacing: 12) {
                     if let check {
-                        ForEach(check.results, id: \.sport) { result($0, current: check.current) }
+                        ForEach(check.results, id: \.sport) { result($0, current: check.current, connected: check.connected) }
                         ForEach(check.manual, id: \.sport) { manual($0) }
                         ForEach(check.scheduled, id: \.sport) { planned($0) }
                         ForEach(check.offers) { offer($0) }
@@ -221,7 +230,7 @@ struct ThresholdCheckCard: View {
 
     // MARK: - result
 
-    @ViewBuilder private func result(_ r: ThresholdCheck.Measured, current: ThresholdCheck.Current?) -> some View {
+    @ViewBuilder private func result(_ r: ThresholdCheck.Measured, current: ThresholdCheck.Current?, connected: ThresholdCheck.Connected?) -> some View {
         let lines = resultLines(r, current: current)
         if !lines.isEmpty {
             Card {
@@ -229,9 +238,11 @@ struct ThresholdCheckCard: View {
                 ForEach(lines, id: \.self) { line in
                     Text(line).font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                 }
+                Text(sentTo(r, connected: connected))
+                    .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 10) {
                     PrimaryButton(title: L10n.tr("Uložit"), systemImage: "checkmark", busy: busy) {
-                        Task { await act(["action": .string("apply"), "sport": .string(r.sport), "values": .object(values(r.result)), "writeWahoo": .bool(UserDefaults.standard.object(forKey: "writeWahoo") as? Bool ?? true)], estimate: nil) }
+                        Task { await act(["action": .string("apply"), "sport": .string(r.sport), "values": .object(values(r.result)), "writeIntervals": .bool(writeIntervals), "writeWahoo": .bool(writeWahoo)], estimate: nil) }
                     }
                     .disabled(busy)
                     SecondaryButton(title: "Neukládat") {
@@ -239,6 +250,19 @@ struct ThresholdCheckCard: View {
                     }
                 }
             }
+        }
+    }
+
+    /// What Save does besides storing the value: the zones follow it, and go to
+    /// Intervals.icu and (a new FTP) Wahoo when connected and switched on.
+    private func sentTo(_ r: ThresholdCheck.Measured, connected: ThresholdCheck.Connected?) -> String {
+        var to: [String] = []
+        if connected?.intervals == true && writeIntervals { to.append("Intervals.icu") }
+        if connected?.wahoo == true && writeWahoo && r.result?.ftp != nil { to.append("Wahoo") }
+        switch to.count {
+        case 0: return L10n.tr("Po uložení se přepočítají tvoje zóny.")
+        case 1: return L10n.f("Po uložení se přepočítají tvoje zóny a pošlou do %@.", to[0])
+        default: return L10n.f("Po uložení se přepočítají tvoje zóny a pošlou do %@ a %@.", to[0], to[1])
         }
     }
 

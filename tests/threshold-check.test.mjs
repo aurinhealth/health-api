@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { estimateRideFtp, estimateRunPace, thresholdOffer, recommendTestDay, testResult, upcomingTest, getTestWorkout, thresholdSessions } from "../src/threshold-check.js";
+import { estimateRideFtp, estimateRunPace, thresholdOffer, recommendTestDay, testResult, upcomingTest, getTestWorkout, thresholdSessions, bestPower, curveTestResult } from "../src/threshold-check.js";
 import { buildCyclingCoachV2 } from "../src/cycling-coach-v2.js";
 
 const today = "2026-10-11";
@@ -93,4 +93,18 @@ test("the coach keeps the two days before a test easy", () => {
   assert.equal(coach("2026-10-13", "2026-10-14").recommendation.session.kind, "recovery");
   assert.equal(coach("2026-10-13", "2026-10-15").recommendation.session.kind, "endurance");
   assert.equal(upcomingTest({ ride: { status: "scheduled", testDate: "2026-10-14" }, run: { status: "dismissed", testDate: "2026-10-12" } }, "2026-10-13").testDate, "2026-10-14");
+});
+
+test("without a 20-min lap the test takes the ride's best 20 minutes", () => {
+  // 10 min at 150 W, 20 min at 300 W, 10 min at 150 W, sampled every 2 s.
+  const time = [], watts = [];
+  for (let t = 0; t <= 2400; t += 2) { time.push(t); watts.push(t >= 600 && t < 1800 ? 300 : 150); }
+  assert.equal(bestPower(time, watts), 300);
+  assert.deepEqual(curveTestResult("test-ride-ftp20", time, watts), { ftp: 285, power20: 300, fromCurve: true });
+  // A pause (gap over 10 s) counts as no power; too short or no power: nothing.
+  assert.equal(bestPower([0, 600, 1300], [300, 300, 300]), null);
+  assert.equal(bestPower(time.slice(0, 500), watts.slice(0, 500)), null);
+  assert.equal(bestPower(time, watts.map(() => null)), null);
+  // Only the 20-min FTP test reads the curve.
+  assert.equal(curveTestResult("test-ride-lthr30", time, watts), null);
 });
