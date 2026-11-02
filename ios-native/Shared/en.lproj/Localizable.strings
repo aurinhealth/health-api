@@ -529,6 +529,7 @@
 "celkem %@ kcal" = "%@ kcal in total";
 "Po dnech" = "Day by day";
 "%@ kcal aktivně" = "%@ kcal active";
+"%@ kcal navíc" = "%@ kcal over";
 "Bez zaznamenané aktivity, jen běžný pohyb." = "No recorded activity, just everyday movement.";
 "Aktivní minuty v zónách" = "Active zone minutes";
 "tento týden" = "this week";

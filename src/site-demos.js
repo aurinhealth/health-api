@@ -355,9 +355,9 @@ const foodTarget = `<div class="dm pad">
 <div class="row base"><span class="num big">1,380</span><span class="fo mut">of 2,650<br>kcal ›</span></div>
 <i class="tbar" style="margin-top:14px"><b style="flex:2300;background:var(--brown)"></b><b style="flex:200;background:var(--green)"></b><b style="flex:150;background:repeating-linear-gradient(135deg,var(--amber) 0 3px,transparent 3px 6px)"></b></i>
 <div class="tp3">${[['Base', '2,300', 'brown'], ['Workouts', '+200', 'green'], ['Planned', '+150', 'amber']].map(([k, v, c], i) => `<div><span class="mut s"><i style="${i === 2 ? `border:1.5px solid var(--${c})` : `background:var(--${c})`}"></i>${k}</span><span class="num md">${v}</span></div>`).join('')}</div>
-<div class="coach"><div class="ch4">${ic('spark')}Coach</div><p class="sent">Training day: 350 kcal more. 1,270 kcal left, an afternoon snack of about 360 kcal.</p></div>
 <div class="mac3">${[['Carbs', 177, 330, 'carbs'], ['Protein', 84, 150, 'protein'], ['Fat', 36, 80, 'fat']].map(([k, v, t, c]) => `<div><span class="mut s"><i style="background:var(--${c})"></i>${k}</span><span class="num md">${v}<small> / ${t} g</small></span><i class="mb"><b style="--w:${v / t * 100}%;background:var(--${c})"></b></i></div>`).join('')}</div>
 <div class="mut s alln">All nutrients ›</div>
+<div class="coach"><div class="ch4">${ic('spark')}Coach</div><p class="sent">Training day: 350 kcal more. 1,270 kcal left, an afternoon snack of about 360 kcal.</p></div>
 </div>`;
 
 // AddFoodSheet.swift ("Co přidáme?": the meal, the search, six tiles, the foods list), then BarcodeScanSheet.swift:
