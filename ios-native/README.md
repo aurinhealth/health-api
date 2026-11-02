@@ -6,7 +6,7 @@ web app (`/app/api/today` for the Today screen), so the numbers match.
 ## What it does now
 
 - Sign-in with Apple, with Google via Safari (the handoff
-  `/auth/google?app=…` → `loadwise://auth` → `POST /auth/app/session`) or
+  `/auth/google?app=…` → `https://aurin.health/auth/app/return` → `POST /auth/app/session`) or
   with a code sent to the e-mail. After the first e-mail sign-in the app
   offers a passkey ("Příště přes Face ID", Data/Passkeys.swift); the sign-in
   screen then has "Přihlásit přes passkey". Passkeys need the
@@ -65,7 +65,7 @@ web app (`/app/api/today` for the Today screen), so the numbers match.
 
 ## Version check
 
-Every request carries `X-Loadwise-Api: <APIClient.apiLevel>`. When the server
+Every request carries `X-Aurin-Api: <APIClient.apiLevel>`. When the server
 needs a newer app (`MIN_APP_API` in `src/app-version.js`) it answers 426 and
 the app shows "Je potřeba nová verze" instead of the screens. Raise both
 numbers in the same pull request, only for changes that break what installed

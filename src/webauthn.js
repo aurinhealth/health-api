@@ -1,6 +1,6 @@
 // Passkeys (WebAuthn) checked with WebCrypto, without a library: the browser's
 // answers to navigator.credentials.create() and .get(), verified the way the
-// WebAuthn spec (Level 3, §7.1 and §7.2) asks. Loadwise asks for no attestation,
+// WebAuthn spec (Level 3, §7.1 and §7.2) asks. Aurin asks for no attestation,
 // so it trusts the public key that the signed-in user's browser hands over and
 // never the claimed device model.
 
@@ -209,7 +209,7 @@ function checkClientData(bytes, { type, challenge, origin }) {
   if (data?.type !== type) throw new WebAuthnError("Unexpected client data type");
   if (typeof data.challenge !== "string" || !challenge || data.challenge !== challenge) throw new WebAuthnError("Challenge does not match");
   if (data.origin !== origin) throw new WebAuthnError("Origin does not match");
-  // Loadwise never asks for a passkey from inside another site's frame.
+  // Aurin never asks for a passkey from inside another site's frame.
   if (data.crossOrigin === true) throw new WebAuthnError("Cross-origin request");
 }
 

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
-import { handleNativeAppleLogin, revokeApple, appleClientSecret, verifyAppleIdToken, _resetAppleJwksCacheForTest } from "../src/apple-login.js";
+import { handleNativeAppleLogin, revokeApple, appleClientSecret, verifyAppleIdToken, forgetUsedAppleTokens, _resetAppleJwksCacheForTest } from "../src/apple-login.js";
 import { isPublicPath } from "../src/dashboard-auth.js";
 import { ensureTenancy, _resetTenancyForTest } from "../src/tenancy.js";
 
@@ -123,10 +123,40 @@ test("the app's Apple sign-in refuses a web token, a wrong nonce, a form post an
   const denied = await nativeRequest(env, { identityToken: app, nonce: APP_NONCE }, { fetchImpl });
   assert.equal(denied.status, 403);
   assert.equal((await denied.json()).error, "not_invited");
-  // OPEN_SIGNUP: anyone Apple vouches for gets an account.
-  const open = await nativeRequest({ ...env, OPEN_SIGNUP: "true" }, { identityToken: app, nonce: APP_NONCE }, { fetchImpl });
+  // OPEN_SIGNUP: anyone Apple vouches for gets an account (with a new token: the refused one is used up).
+  const again = await idToken({ aud: "health.aurin.app", nonce: await hex(APP_NONCE + "-again") });
+  const open = await nativeRequest({ ...env, OPEN_SIGNUP: "true" }, { identityToken: again, nonce: APP_NONCE + "-again" }, { fetchImpl });
   assert.equal(open.status, 200);
   assert.ok(await env.DB.prepare("SELECT id FROM users WHERE email='friend@example.com'").first());
+});
+
+test("an Apple identity token signs in once; the same token again, even in parallel, is refused (SEC-007)", async () => {
+  const env = await withUsers();
+  await env.DB.prepare("INSERT INTO user_invites(email) VALUES ('friend@example.com')").run();
+  const fetchImpl = nativeFetch({});
+  const token = await idToken({ aud: "health.aurin.app", nonce: await hex(APP_NONCE) });
+  const first = await nativeRequest(env, { identityToken: token, nonce: APP_NONCE }, { fetchImpl });
+  assert.equal(first.status, 200);
+  const replay = await nativeRequest(env, { identityToken: token, nonce: APP_NONCE }, { fetchImpl });
+  assert.equal(replay.status, 401);
+  assert.equal((await replay.json()).error, "failed");
+  assert.equal(sessionOf(replay), "", "no session for the replay");
+  // Two requests with one new token at the same moment: one signs in.
+  const twin = await idToken({ aud: "health.aurin.app", nonce: await hex(APP_NONCE + "-twin") });
+  const both = await Promise.all([0, 1].map(() => nativeRequest(env, { identityToken: twin, nonce: APP_NONCE + "-twin" }, { fetchImpl })));
+  assert.deepEqual(both.map(r => r.status).sort(), [200, 401]);
+  // A token that fails verification claims nothing: the nonce stays free for the real token.
+  const forged = (await idToken({ aud: "health.aurin.app", nonce: await hex(APP_NONCE + "-later") })).replace(/\.[^.]+$/, "." + b64("bad-signature"));
+  assert.equal((await nativeRequest(env, { identityToken: forged, nonce: APP_NONCE + "-later" }, { fetchImpl })).status, 401);
+  const later = await idToken({ aud: "health.aurin.app", nonce: await hex(APP_NONCE + "-later") });
+  assert.equal((await nativeRequest(env, { identityToken: later, nonce: APP_NONCE + "-later" }, { fetchImpl })).status, 200);
+  // The nightly cleanup drops only the expired rows.
+  const count = async () => (await env.DB.prepare("SELECT COUNT(*) AS n FROM apple_token_uses").first()).n;
+  assert.equal(await count(), 3);
+  assert.equal(await forgetUsedAppleTokens(env.DB), 0);
+  assert.equal(await forgetUsedAppleTokens(env.DB, Date.now() + 301_000), 3);
+  assert.equal(await count(), 0);
+  assert.equal(await forgetUsedAppleTokens(freshEnv().DB), 0, "no table yet is nothing to drop");
 });
 
 test("a token signed with a key Apple rotated in fetches the keys again, at most once a minute", async () => {

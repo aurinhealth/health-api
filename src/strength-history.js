@@ -140,6 +140,16 @@ export async function ensureStrengthTable(db) {
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_strength_sets_user_date ON strength_sets(user_id, workout_date DESC)`).run();
 }
 
+// The columns a saved set is compared on before it is written again.
+const SET_FIELDS = ["source_key", "workout_date", "plan_row", "type", "exercise", "set_no", "planned_kg", "planned_reps", "actual_kg", "actual_reps", "rpe", "note"];
+// 60 and 60.0, null and "" read back from D1 as the value that was written.
+function sameValue(a, b) {
+  const blank = v => v === null || v === undefined || v === "";
+  if (blank(a) || blank(b)) return blank(a) && blank(b);
+  if (typeof a === "number" || typeof b === "number") return Number(a) === Number(b);
+  return String(a) === String(b);
+}
+
 export async function importStrengthHistory(db, workout) {
   await ensureStrengthTable(db);
   const date = text(workout?.date);
@@ -147,7 +157,7 @@ export async function importStrengthHistory(db, workout) {
   const sets = Array.isArray(workout?.sets) ? workout.sets : [];
   if (!sets.length) throw new Error("Workout sets must be a non-empty array");
 
-  let imported = 0;
+  const rows = [];
   for (let i = 0; i < sets.length; i++) {
     const s = sets[i] || {};
     const type = text(s.type || "WORK").toUpperCase();
@@ -160,9 +170,19 @@ export async function importStrengthHistory(db, workout) {
     const options = strengthSetOptions(s);
     const rpe = options.toFailure ? 10 : numberOrNull(s.rpe) ?? intensityRpe(options.intensity);
     const note = strengthOptionNote(s);
-    const sourceKey = `manual:${date}:${i + 1}`;
-
-    await db.prepare(`
+    rows.push({ workout_date: date, plan_row: 1000000 + i + 1, type, exercise, set_no: setNo, planned_kg: plannedKg, planned_reps: plannedReps, actual_kg: actualKg, actual_reps: actualReps, rpe, note, source_key: `manual:${date}:${i + 1}` });
+  }
+  // The app saves the whole day after every set: only the sets that are new
+  // or changed are written, in one trip (before: every done set again, one
+  // query each, and D1 counts an unchanged upsert as a written row).
+  const stored = new Map();
+  for (let i = 0; i < rows.length; i += 90) {
+    const keys = rows.slice(i, i + 90).map(r => r.source_key);
+    const found = await db.prepare(`SELECT ${SET_FIELDS.join(", ")}, completed, source FROM strength_sets WHERE user_id = ? AND source_key IN (${keys.map(() => "?").join(",")})`).bind(db.userId, ...keys).all();
+    for (const row of found.results || []) stored.set(row.source_key, row);
+  }
+  const changed = rows.filter(r => { const old = stored.get(r.source_key); return !old || Number(old.completed) !== 1 || old.source !== "manual" || SET_FIELDS.some(f => !sameValue(old[f], r[f])); });
+  const statements = changed.map(r => db.prepare(`
       INSERT INTO strength_sets (user_id, 
         workout_date, plan_row, type, exercise, set_no, planned_kg, planned_reps,
         actual_kg, actual_reps, rpe, completed, note, video, replacement, execution,
@@ -182,14 +202,14 @@ export async function importStrengthHistory(db, workout) {
         completed=1,
         note=excluded.note,
         updated_at=CURRENT_TIMESTAMP
-    `).bind(db.userId, 
-      date, 1000000 + i + 1, type, exercise, setNo, plannedKg, plannedReps,
-      actualKg, actualReps, rpe, note, sourceKey
-    ).run();
-    imported++;
-  }
+    `).bind(db.userId,
+      r.workout_date, r.plan_row, r.type, r.exercise, r.set_no, r.planned_kg, r.planned_reps,
+      r.actual_kg, r.actual_reps, r.rpe, r.note, r.source_key
+    ));
+  for (let i = 0; i < statements.length; i += 50) await db.batch(statements.slice(i, i + 50));
+  const imported = rows.length;
 
-  return { status: "ok", workoutDate: date, setsImported: imported, source: "manual" };
+  return { status: "ok", workoutDate: date, setsImported: imported, setsWritten: changed.length, source: "manual" };
 }
 
 // A day saved from the dashboard keeps its completed sets as manual:<date>:1…n.

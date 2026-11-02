@@ -21,7 +21,7 @@ enum WatchToday {
         var plan: [PlanItem]?
         var steps: Steps?
 
-        struct Readiness: Decodable { var score: Int?; var zone: String? }
+        struct Readiness: Decodable { var score: Int?; var zone: String?; var learningDays: Int? }
         struct Sleep: Decodable { var minutes: Double?; var need: Double?; var start: String?; var end: String? }
         struct Strain: Decodable {
             var score: Double?; var training: Double?; var movement: Double?; var planned: Double?; var target: Target?
@@ -48,9 +48,12 @@ enum WatchToday {
     /// The day from the server, on top of the last snapshot; nil when the
     /// watch isn't signed in or has no connection.
     static func load(over last: WatchSnapshot?) async -> WatchSnapshot? {
-        guard let data = await WatchAPI.get("/app/api/today"),
+        // Both at once: each takes seconds on the server.
+        async let todayData = WatchAPI.get("/app/api/today")
+        async let trainingData = WatchAPI.get("/app/api/training")
+        guard let data = await todayData,
               let today = try? JSONDecoder().decode(Today.self, from: data) else { return nil }
-        let training = await WatchAPI.get("/app/api/training").flatMap { try? JSONDecoder().decode(Training.self, from: $0) }
+        let training = await trainingData.flatMap { try? JSONDecoder().decode(Training.self, from: $0) }
         let sameDay = last?.date == today.date
         let points = { (p: [Today.Point]?) in (p ?? []).map { WatchSnapshot.Day(date: $0.date, value: $0.value) } }
         let metric = { (m: Today.Metric?, old: WatchSnapshot.Metric?, spread: Double) -> WatchSnapshot.Metric? in
@@ -81,18 +84,22 @@ enum WatchToday {
                                water: $0.water?.ml, waterTarget: $0.water?.target)
         }
         return WatchSnapshot(date: today.date, updated: Date(), language: last?.language ?? WatchAPI.session?.language ?? "en",
-                             readiness: today.readiness?.score, zone: today.readiness?.zone,
+                             readiness: today.readiness?.score, zone: today.readiness?.zone, learningDays: today.readiness?.learningDays,
                              headline: today.summary?.headline, summary: today.summary?.text,
                              sleep: sleep, restingHR: metric(today.restingHR, last?.restingHR, 2), hrv: metric(today.hrv, last?.hrv, 0),
                              strain: strain, steps: today.steps?.today, week: week, food: food,
                              alarm: last?.alarm, imperial: last?.imperial ?? WatchAPI.session?.imperial)
     }
 
+    private static let iso = ISO8601DateFormatter()
+    private static let fraction: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
     /// "23:05" from an ISO time, "7:02" from "07:02".
     private static func clock(_ value: String) -> String {
-        let iso = ISO8601DateFormatter()
-        let fraction = ISO8601DateFormatter()
-        fraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let date = iso.date(from: value) ?? fraction.date(from: value) {
             return W.dateFormatter("H:mm", posix: true).string(from: date)
         }

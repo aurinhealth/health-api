@@ -230,10 +230,20 @@ extension AppModel {
     /// server error the newest sheet of the day waits. Throws the server's refusal.
     func saveGym(_ day: GymDay, date: String) async throws {
         guard !demo else { return }
+        // The day's parts as last chosen here go with the plan (the watch reads them there).
+        var day = day
+        GymDayParts.carry(into: &day, date: date)
         WatchBridge.shared.gymSaved(day, date: date)
         try await writes.saveGym(day, date: date)
         // The muscles count this workout at their next load.
         musclesAt = nil
+    }
+
+    /// The day's parts changed here (Dnešní trénink, Upravit plán): the plan
+    /// takes them, so the watch and the next load have them too.
+    func syncDayParts(date: String) async {
+        guard !demo, var day = try? await gymDay(date: date), GymDayParts.carry(into: &day, date: date) else { return }
+        try? await saveGym(day, date: date)
     }
 
     /// Zahodit trénink (WriteQueue.discardGym).

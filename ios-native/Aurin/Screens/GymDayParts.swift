@@ -23,6 +23,14 @@ enum GymCardio {
         }
     }
 
+    /// "Bez limitu" or "12 min".
+    static func length(_ minutes: Int) -> String {
+        minutes > 0 ? "\(minutes) min" : L10n.tr("Bez limitu")
+    }
+
+    /// The favourite times before anyone chose them (src/stretching.js CARDIO_FAVOURITES).
+    static let favourites = [10, 15, 20]
+
     static func symbol(_ id: String) -> String {
         switch id {
         case "treadmill": return "figure.run"
@@ -35,11 +43,9 @@ enum GymCardio {
     }
 }
 
-enum GymDayPart: String, Codable, CaseIterable, Identifiable {
-    case warmup, cardioStart, exercises, cardioEnd, stretching
+// MARK: - The day's parts on the iPhone (the data is in WatchShared/GymParts.swift)
 
-    var id: String { rawValue }
-    var isCardio: Bool { self == .cardioStart || self == .cardioEnd }
+extension GymDayPart {
     var kind: GymRoutineKind {
         switch self {
         case .warmup, .exercises: return .warmup
@@ -49,56 +55,44 @@ enum GymDayPart: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-/// One day's parts: their order, those turned off, each cardio's machine and minutes,
-/// and a warm-up or stretching chosen for the day (another length or an own one).
-struct GymDayParts: Codable, Equatable {
-    var order: [GymDayPart]
-    var off: [GymDayPart]
-    var cardio: [String: Choice]
-    var routines: [String: Routine]? = nil
-
-    struct Choice: Codable, Equatable {
-        var type: String
-        var minutes: Int
-    }
-
-    /// The choice (an own routine's id, else automatic with a length; nil = auto) and what it made.
-    struct Routine: Codable, Equatable {
-        var routine: String?
-        var length: Int?
-        var moves: GymStretching
-    }
-
+extension GymDayParts {
     static let storageKey = "gym.day.parts"
 
-    /// The plan's parts: the cardio the setup chose is on, the other one off, and
-    /// the warm-up and the stretching off when Posilovna turned them off.
-    static func defaults(_ day: GymDay) -> GymDayParts {
-        let plan = day.cardio
-        let type = plan?.type ?? "exercise_bike"
-        var off: [GymDayPart] = day.routinesOff.compactMap { $0 == "warmup" ? .warmup : $0 == "stretching" ? .stretching : nil }
-        if plan?.start == nil { off.append(.cardioStart) }
-        if plan?.end == nil { off.append(.cardioEnd) }
-        return GymDayParts(order: GymDayPart.allCases, off: off,
-                           cardio: [GymDayPart.cardioStart.rawValue: Choice(type: type, minutes: plan?.start ?? 10),
-                                    GymDayPart.cardioEnd.rawValue: Choice(type: type, minutes: plan?.end ?? 10)])
-    }
-
-    /// The day's saved choices, else the plan's.
+    /// The day's choices: the newer of this phone's and the plan's (changed on the watch), else the plan's defaults.
     static func resolved(_ day: GymDay, stored: String, date: String) -> GymDayParts {
-        var parts = all(stored)[date] ?? defaults(day)
-        for part in GymDayPart.allCases where !parts.order.contains(part) { parts.order.append(part) }
-        return parts
+        current(day, local: all(stored)[date])
     }
 
-    /// Saves the day's choices; only the last week's days are kept.
+    /// Saves the day's choices, stamped now; only the last week's days are kept.
+    /// The day's plan takes them too (AppModel.saveGym), so the watch has them.
+    @MainActor
     static func saving(_ parts: GymDayParts, date: String, into stored: String) -> String {
+        var parts = parts
+        parts.updated = Date()
         var days = all(stored)
         days[date] = parts
         let oldest = Calendar.current.date(byAdding: .day, value: -7, to: Date()).map { isoDay.string(from: $0) } ?? ""
         days = days.filter { $0.key >= oldest }
         guard let data = try? JSONEncoder().encode(days) else { return stored }
-        return String(decoding: data, as: UTF8.self)
+        let text = String(decoding: data, as: UTF8.self)
+        UserDefaults.standard.set(text, forKey: storageKey)
+        Task { await AppModel.live?.syncDayParts(date: date) }
+        return text
+    }
+
+    /// The phone's own choices for a day (nil when none were made here).
+    static func local(date: String) -> GymDayParts? {
+        all(UserDefaults.standard.string(forKey: storageKey) ?? "")[date]
+    }
+
+    /// The plan with the day's newer choices in it: the phone's when they are
+    /// newer than the plan's. True when the plan changed.
+    @discardableResult
+    static func carry(into day: inout GymDay, date: String) -> Bool {
+        guard let mine = local(date: date) else { return false }
+        if let plan = day.dayParts, (plan.updated ?? .distantPast) >= (mine.updated ?? .distantPast) { return false }
+        day.setDayParts(mine)
+        return day.dayParts == mine
     }
 
     private static func all(_ stored: String) -> [String: GymDayParts] {
@@ -113,75 +107,30 @@ struct GymDayParts: Codable, Equatable {
         return f
     }()
 
-    func isOn(_ part: GymDayPart) -> Bool { part == .exercises || !off.contains(part) }
-
-    func choice(_ part: GymDayPart) -> Choice {
-        cardio[part.rawValue] ?? Choice(type: "exercise_bike", minutes: 10)
-    }
-
-    /// The parts the day has (the warm-up and the stretching only when the plan made them).
-    func visible(_ day: GymDay) -> [GymDayPart] {
-        order.filter { part in
-            switch part {
-            case .warmup: return day.warmup != nil
-            case .stretching: return day.stretching != nil
-            default: return true
-            }
-        }
-    }
-
-    /// The parts turned on before and after the exercises, in order.
-    func before(_ day: GymDay) -> [GymDayPart] {
-        let parts = visible(day)
-        guard let i = parts.firstIndex(of: .exercises) else { return [] }
-        return parts[..<i].filter(isOn)
-    }
-
-    func after(_ day: GymDay) -> [GymDayPart] {
-        let parts = visible(day)
-        guard let i = parts.firstIndex(of: .exercises) else { return [] }
-        return parts[(i + 1)...].filter(isOn)
-    }
-
     /// The moves of a part (a cardio part is one timed item).
     func routine(_ part: GymDayPart, day: GymDay) -> GymStretching? {
         switch part {
-        case .warmup: return routines?[part.rawValue]?.moves ?? day.warmup
-        case .stretching: return routines?[part.rawValue]?.moves ?? day.stretching
+        case .warmup, .stretching: return moves(part, day: day)
         case .exercises: return nil
         case .cardioStart, .cardioEnd:
             let c = choice(part)
             let item = GymStretching.Item(id: part == .cardioStart ? "cardio-start" : "cardio-end", name: GymCardio.name(c.type),
-                                          seconds: c.minutes * 60, sides: false,
+                                          seconds: max(0, c.minutes) * 60, sides: false,
                                           steps: [L10n.tr("Tempo, při kterém ještě zvládneš mluvit.")])
-            return GymStretching(minutes: c.minutes, items: [item])
+            return GymStretching(minutes: max(0, c.minutes), items: [item])
         }
     }
 
     func minutes(_ part: GymDayPart, day: GymDay) -> Int { routine(part, day: day)?.minutes ?? 0 }
 
-    /// "Automaticky · 6 min", "Legs · 7 min", "Rotoped · 10 min".
+    /// "Automaticky · 6 min", "Legs · 7 min", "Rotoped · 10 min", "Rotoped · Bez limitu".
     func subtitle(_ part: GymDayPart, day: GymDay) -> String {
         if part.isCardio {
             let c = choice(part)
-            return GymCardio.name(c.type) + " · \(c.minutes) min"
+            return GymCardio.name(c.type) + " · " + GymCardio.length(c.minutes)
         }
         let name = routine(part, day: day)?.name?.nilIfBlank ?? L10n.tr("Automaticky")
         return name + " · \(minutes(part, day: day)) min"
-    }
-
-    /// Moves `part` to where `target` is.
-    mutating func move(_ part: GymDayPart, to target: GymDayPart) {
-        guard part != target, let from = order.firstIndex(of: part), let to = order.firstIndex(of: target) else { return }
-        order.remove(at: from)
-        order.insert(part, at: to)
-    }
-
-    /// Moves `part` one place up (-1) or down (+1) among the day's parts.
-    mutating func step(_ part: GymDayPart, by offset: Int, day: GymDay) {
-        let shown = visible(day)
-        guard let i = shown.firstIndex(of: part), shown.indices.contains(i + offset) else { return }
-        move(part, to: shown[i + offset])
     }
 }
 
@@ -327,14 +276,17 @@ struct GymPartsCard: View {
     private func color(_ part: GymDayPart) -> Color { part == .exercises ? Palette.amberBar : part.kind.color }
 }
 
-/// Kardio: the machine (the active place's, and the jump rope) and the minutes.
+/// Kardio: the machine (the active place's, and the jump rope) and the time:
+/// no limit (a stopwatch) or 1–60 min, the favourite times as chips.
 struct GymCardioSheet: View {
     let choice: GymDayParts.Choice
     let options: [GymPreferences.CardioOption]
     var onDone: (GymDayParts.Choice) -> Void
+    @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var type = "exercise_bike"
-    @State private var minutes = 10
+    @State private var minutes = 0
+    @State private var favourites = GymCardio.favourites
 
     var body: some View {
         NavigationStack {
@@ -359,14 +311,11 @@ struct GymCardioSheet: View {
                         }
                     }
                     .cardSurface(cornerRadius: 22)
-                    Stepper(value: $minutes, in: 5...60, step: 5) {
-                        HStack {
-                            Text("Délka").font(.body).foregroundStyle(Palette.ink)
-                            Spacer()
-                            Text(verbatim: "\(minutes) min").font(Typo.bodyStrong).foregroundStyle(Palette.ink).monospacedDigit()
-                        }
+                    VStack(alignment: .leading, spacing: 12) {
+                        CardioLengthSlider(minutes: $minutes, title: "Délka")
+                        CardioTimeChips(favourites: favourites, minutes: $minutes)
                     }
-                    .padding(.horizontal, 16).frame(minHeight: 52)
+                    .padding(16)
                     .cardSurface(cornerRadius: 22)
                 }
                 .padding(20)
@@ -382,7 +331,11 @@ struct GymCardioSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
-        .onAppear { type = choice.type; minutes = choice.minutes }
+        .onAppear { type = choice.type; minutes = max(0, min(60, choice.minutes)) }
+        .task {
+            guard !model.demo, let saved = try? await model.api.gymPreferences().cardioFavourites else { return }
+            favourites = saved
+        }
     }
 
     /// The place's machines (all of them in the sample day or until they load), the chosen one kept.

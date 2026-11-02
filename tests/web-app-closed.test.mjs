@@ -7,7 +7,7 @@ const env = { SESSION_SECRET: "test-session-secret" };
 const BASE = "https://aurin.health";
 const challenge = "a".repeat(43);
 const cookie = async () => (await sessionCookie(6, Math.floor(Date.now() / 1000) + 3600, env.SESSION_SECRET)).split(";")[0];
-const iPhone = { "X-Loadwise-Api": "1" };
+const iPhone = { "X-Aurin-Api": "1" };
 
 test("the old web address /app leads to the overview page", async () => {
   for (const path of ["/app", "/app/"]) {
@@ -33,6 +33,7 @@ test("browser sign-in is closed, the iPhone app's Google sheet is not", async ()
   assert.equal((await closedToBrowser(new Request(BASE + "/auth/google?app=short"), env)).headers.get("Location"), "/");
   assert.equal(await closedToBrowser(new Request(BASE + "/auth/google?app=" + challenge), env), null);
   assert.equal(await closedToBrowser(new Request(BASE + "/auth/google/callback?code=x&state=y"), env), null);
+  assert.equal(await closedToBrowser(new Request(BASE + "/auth/app/return?error=cancelled"), env), null);
   for (const path of ["/auth/email/start", "/auth/email/verify", "/auth/passkey/options", "/auth/passkey/verify", "/auth/apple/callback", "/auth/app/session"]) {
     assert.equal((await closedToBrowser(new Request(BASE + path, { method: "POST", body: "{}" }), env)).status, 410, path);
   }
@@ -48,7 +49,7 @@ test("the iPhone app keeps working with the same session", async () => {
 
 test("connecting a service from the iPhone app still goes through the browser", async () => {
   const Cookie = await cookie();
-  for (const path of ["/auth/app/connect?ticket=x", "/oauth/google?return=native", "/oauth/google/callback?code=x", "/oauth/intervals/callback?code=x"]) {
+  for (const path of ["/auth/app/connect?ticket=x", "/oauth/google?return=app", "/oauth/google/callback?code=x", "/oauth/intervals/callback?code=x"]) {
     assert.equal(await closedToBrowser(new Request(BASE + path, { headers: { Cookie } }), env), null, path);
   }
 });

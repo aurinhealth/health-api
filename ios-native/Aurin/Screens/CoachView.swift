@@ -83,6 +83,7 @@ struct CoachView: View {
                                 BubbleView(bubble: bubble, writing: sending && bubble.id == messages.last?.id && !bubble.mine,
                                            decide: { action, confirm in Task { await decide(action, confirm: confirm, in: bubble.id) } },
                                            undoMemory: { chip in Task { await undo(chip, in: bubble.id) } },
+                                           decideMemory: { chip, yes in Task { await decide(chip, yes, in: bubble.id) } },
                                            undoAction: { action in Task { await undo(action, in: bubble.id) } },
                                            adjust: { action, chip, date in Task { await adjust(action, chip: chip, date: date, in: bubble.id) } },
                                            logFood: { items, meal in Task { await logFood(items, meal: meal, in: bubble.id) } },
@@ -390,7 +391,7 @@ struct CoachView: View {
                         if let a = result.answer ?? last { $0.text = a }
                         $0.actions = result.actions ?? []
                         $0.visuals = result.visuals ?? []
-                        $0.memory = result.memoryChanges?.chips ?? []
+                        $0.memory = (result.memoryChanges?.chips ?? []) + (result.memoryProposals?.proposals ?? [])
                         // A food sentence: the card says it all, the summary text is not shown.
                         if result.kind == "food_draft", let draft = result.draft, draft.items.contains(where: { $0.product != nil }) {
                             $0.food = draft
@@ -521,6 +522,25 @@ struct CoachView: View {
         }
     }
 
+    /// "Zapomenout" or "Přepsat" under an answer changes the memory as the coach
+    /// proposed and leaves the usual line with "Zpět"; "Nechat" keeps it as it is.
+    private func decide(_ chip: CoachMemoryChip, _ yes: Bool, in bubble: UUID) async {
+        do {
+            if yes {
+                switch chip.kind {
+                case .forgotten: try await model.api.forgetMemory(chip.text)
+                case .updated: try await model.api.editMemory(from: chip.from ?? chip.text, to: chip.text)
+                case .saved: try await model.api.addMemory(chip.text)
+                }
+            }
+            edit(bubble) { b in
+                if let i = b.memory.firstIndex(where: { $0.id == chip.id }) { b.memory[i].proposed = false; b.memory[i].kept = !yes }
+            }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     /// Logs the confirmed foods (nil items: "Ne"), then says what is left of the day.
     private func logFood(_ items: [(product: FoodProduct, amount: Double, meal: String)]?, meal: String, in bubble: UUID) async {
         guard let draft = messages.first(where: { $0.id == bubble })?.food else { return }
@@ -608,6 +628,7 @@ struct BubbleView: View {
     var writing = false
     var decide: (CoachAction, Bool) -> Void
     var undoMemory: (CoachMemoryChip) -> Void = { _ in }
+    var decideMemory: (CoachMemoryChip, Bool) -> Void = { _, _ in }
     var undoAction: (CoachAction) -> Void = { _ in }
     var adjust: (CoachAction, String, String?) -> Void = { _, _, _ in }
     var logFood: ([(product: FoodProduct, amount: Double, meal: String)]?, String) -> Void = { _, _ in }
@@ -653,7 +674,11 @@ struct BubbleView: View {
                 CoachVisual(kind: kind)
             }
             ForEach(bubble.memory) { chip in
-                MemoryChipView(chip: chip) { undoMemory(chip) }
+                if chip.proposed {
+                    MemoryProposalCard(chip: chip) { decideMemory(chip, $0) }
+                } else {
+                    MemoryChipView(chip: chip) { undoMemory(chip) }
+                }
             }
             ForEach(bubble.actions) { action in
                 ActionCard(action: action, result: action.draftId.flatMap { bubble.decided[$0] },
@@ -908,6 +933,9 @@ struct WorkoutPreviewBlock: View {
                     WorkoutProfile(blocks: blocks, sport: action.sport ?? "ride", compact: true)
                 }
                 Text(verbatim: numbers(workout)).font(Typo.caption).foregroundStyle(Palette.secondary)
+                if action.openWater == true {
+                    Text("Nikdy neplav sám, výrazná čepice a bójka.").font(Typo.caption).foregroundStyle(Palette.amber)
+                }
             } else if let plan = preview.plan {
                 let exercises = GymProposal(draftId: nil, planName: plan.planName ?? "", rationale: nil, rows: plan.rows, muscles: [:]).exercises
                 Text(verbatim: plan.planName.flatMap { $0.isEmpty ? nil : $0 } ?? L10n.tr("Posilovna")).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
@@ -934,9 +962,20 @@ struct WorkoutPreviewBlock: View {
     }
 
     /// "1 h · 62 TSS · 88–93 % FTP": the length, the load and the hardest step.
+    /// A swim: "45 min · 1 900 m · 1:48 /100 m" in the pool, "1 h · ≈ 2 000 m · by time outside" in open water.
     private func numbers(_ w: LibraryWorkout) -> String {
         var parts: [String] = []
         if let m = w.duration_minutes ?? action.minutes, m > 0 { parts.append(Fmt.duration(Int(m.rounded()))) }
+        if action.sport == "swim" {
+            let open = action.openWater == true
+            if let meters = w.distance_meters, meters > 0 { parts.append((open ? "≈ " : "") + Fmt.int(meters) + " m") }
+            if open { parts.append(L10n.tr("venku podle času")) }
+            else if let top = WorkoutProfile.segments(w.steps ?? []).filter({ $0.step.rest != true }).max(by: { $0.percent < $1.percent })?.step,
+                    let slow = top.paceSlow, let fast = top.paceFast {
+                parts.append(ZonesSettingsView.pace((slow + fast) / 2) + " /100 m")
+            }
+            return parts.joined(separator: " · ")
+        }
         if let tss = w.target_load, tss > 0 { parts.append("\(Int(tss.rounded())) TSS") }
         if (action.sport ?? "ride") == "ride", let top = WorkoutProfile.segments(w.steps ?? []).max(by: { $0.percent < $1.percent })?.step,
            let hi = top.percentHigh ?? top.percentLow {

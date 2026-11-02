@@ -11,7 +11,7 @@ import { getCookbookRecipeByPage } from "./cookbook.js";
 import { queueFoodGoogle, processFoodGoogle } from "./food-google-sync.js";
 import { lookupFoodWithAI, estimateFoodWithAI } from "./food-ai.js";
 import { sendFoodApproved } from "./push.js";
-import { saveFoodSuggestion, listFoodSuggestions, decideFoodSuggestion, saveFoodReport, markReported } from "./food-suggestions.js";
+import { saveFoodSuggestion, saveNewFoodSuggestion, listFoodSuggestions, decideFoodSuggestion, saveFoodReport, markReported } from "./food-suggestions.js";
 import { listFluids, foodDrinks, dayActivityHours, hydrationTarget, hydrationMl, addFluid, updateFluid, deleteFluid, bulkFluids, FluidInputError } from "./fluids.js";
 import { mealConsumedAt } from "./food-log.js";
 import { updateFoodEntry, copyFoodEntry, deleteFoodEntry, bulkFoodEntries } from "./food-entry-management.js";
@@ -19,6 +19,7 @@ import legacyHealthApi, { googleToken } from "./index.js";
 import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
 import { dashboardProfile } from "./dashboard-shared.js";
+import { waterGoal, loadBuild } from "./water-goal.js";
 
 export async function queueFoodGoogleSafely(env,ctx,id,options){
   try{
@@ -65,6 +66,7 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
   }
   // "Navrhnout opravu pro všechny": a correction of a catalogue food for the
   // owner to approve; the owner lists and decides them (food-suggestions.js).
+  // "Suggest for everyone" (kind new_food): a food the user saved, for the catalogue.
   // "Hodnoty nesedí": a catalogue food reported without the right values.
   if(url.pathname==='/app/api/food/report'&&request.method==='POST'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
@@ -83,7 +85,7 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
       if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
       if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
       const body=await request.json().catch(()=>({}));
-      if(url.pathname==='/app/api/food/suggestions')return Response.json(await saveFoodSuggestion(env.DB,body),{headers:{'Cache-Control':'no-store'}});
+      if(url.pathname==='/app/api/food/suggestions')return Response.json(await (body.kind==='new_food'?saveNewFoodSuggestion:saveFoodSuggestion)(env.DB,body),{headers:{'Cache-Control':'no-store'}});
       if(!owner)return Response.json({message:L('Nenalezeno.', 'Not found.')},{status:404});
       const {notify,...decided}=await decideFoodSuggestion(raw,env.DB,body);
       // The authors hear the food is fixed (push.js); the owner's answer doesn't wait for Apple.
@@ -128,7 +130,8 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
         const [logged,fromFood,weight,profile,hours]=await Promise.all([listFluids(env.DB,date),foodDrinks(env.DB,env.USER_ID,date),
           env.DB.prepare("SELECT value_numeric FROM health_datapoints WHERE user_id=? AND data_type='weight' AND value_numeric IS NOT NULL AND COALESCE(sample_time,start_time,end_time)<=? ORDER BY COALESCE(sample_time,start_time,end_time) DESC LIMIT 1").bind(env.USER_ID,date+'T23:59:59').first().catch(()=>null),
           dashboardProfile(env).catch(()=>null),dayActivityHours(env.DB,env.USER_ID,date)]);
-        const target=hydrationTarget({weightKg:weight?.value_numeric,sex:profile?.sex,...hours});
+        const auto=hydrationTarget({weightKg:weight?.value_numeric,sex:profile?.sex,...hours});
+        const target=waterGoal(auto,profile||{},await loadBuild(env.DB,profile,date,auto,localToday()).catch(error=>{console.error('Water build-up unavailable',error.message);return null;}));
         // Drinks from the food diary are listed with the logged ones and counted (alcohol not).
         const entries=[...logged,...fromFood].sort((a,b)=>String(a.consumedAt).localeCompare(String(b.consumedAt))).map(e=>({...e,hydrationMl:hydrationMl(e.ml,e.kind)}));
         return Response.json({status:'ok',date,entries,totalMl:entries.reduce((s,e)=>s+e.ml,0),hydrationMl:entries.reduce((s,e)=>s+e.hydrationMl,0),target},{headers:{'Cache-Control':'no-store'}});

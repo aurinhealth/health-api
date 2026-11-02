@@ -128,11 +128,16 @@ final class AppModel {
     /// The day food and drinks are written to.
     var writeDay: String { writesToday ? Self.localDate(Date()) : shownDay }
     /// The open tab and each tab's navigation stack, so cards, widgets and
-    /// links (loadwise://open/sleep) can open any detail.
+    /// links (aurin://open/sleep) can open any detail.
     var tab: AppTab = .today
     var paths: [AppTab: [AppRoute]] = [:]
     /// After the first sign-in: the profile setup has not been done yet.
     var needsSetup = false
+    /// Health data paused in Settings → Soukromí a data (AppModel+HealthPause):
+    /// the app shows only the paused screen, also before the server answers.
+    var healthPaused = UserDefaults.standard.bool(forKey: AppModel.healthPausedKey)
+    /// "Zapnout znovu" on the paused screen: the setup shows only the consent.
+    var resumingHealth = false
     /// The "Příště přes Face ID" sheet, the next time the app opens after the
     /// first e-mail sign-in on this phone (PasskeyOfferLater, RootView).
     var passkeyOffer = false
@@ -157,13 +162,18 @@ final class AppModel {
     /// A deleted workout waiting a few seconds for "Zpět" (RootView): the
     /// deletion reaches the server and Apple Health only after that.
     var undoToast: PlanToast?
-    /// "Uloženo. Díky, teď ho najdou i ostatní." after a food read from its
-    /// label: it enters the common catalogue at once (src/personal-foods.js).
+    /// "Uloženo. Díky, po kontrole ho najdou i ostatní." after a food read from
+    /// its label was suggested for everyone (suggestNewFood).
     var thanks: String?
 
-    func thankForLabel(_ product: FoodProduct) {
-        guard !demo, product.source == "package_label", !product.perPortion, product.origin == nil else { return }
-        thanks = L10n.tr("Uloženo. Díky, teď ho najdou i ostatní.")
+    /// "Navrhnout pro všechny": the food stays the user's own; the owner gets it
+    /// to approve into the common catalogue (Nastavení → Návrhy oprav → Nové).
+    func suggestNewFood(_ product: FoodProduct) {
+        guard !demo, product.canSuggestNew else { return }
+        let api = self.api
+        // In the background: a refused suggestion (daily limit) must not hold up the food.
+        Task.detached { try? await api.suggestNewFood(product) }
+        thanks = L10n.tr("Uloženo. Díky, po kontrole ho najdou i ostatní.")
     }
 
     /// hide: the planned event that leaves the week and the calendar at once;
@@ -229,7 +239,7 @@ final class AppModel {
         // "-open readiness" (the website's screenshots) opens a detail as its link
         // would, without the system's "Open in Aurin?" question that simctl openurl brings.
         if let i = args.firstIndex(of: "-open"), i + 1 < args.count,
-           let url = URL(string: "loadwise://open/\(args[i + 1])") {
+           let url = URL(string: "aurin://open/\(args[i + 1])") {
             handle(url)
         }
         // The network back: what waited goes out and the screens load again.
@@ -242,6 +252,9 @@ final class AppModel {
         }
         api.onSubscriptionRequired = { [weak self] in
             Task { @MainActor in if let self { Paywall.present(self) } }
+        }
+        api.onHealthPaused = { [weak self] in
+            Task { @MainActor in if let self, !self.demo, self.phase == .signedIn { self.notePaused(true) } }
         }
         if !demo {
             connectWrites()

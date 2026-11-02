@@ -12,7 +12,7 @@ struct SuggestFeatureView: View {
     @State private var sent = false
 
     var body: some View {
-        SettingsPage(title: "Navrhnout funkci") {
+        SettingsPage(title: "Navrhnout funkci", trail: false) {
             if sent {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("Díky, návrh odešel.").font(Typo.sentence(24)).foregroundStyle(Palette.ink)

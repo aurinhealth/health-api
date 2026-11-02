@@ -202,6 +202,7 @@ struct EmailChangeView: View {
     @State private var sent = false
     @State private var busy = false
     @State private var changed: String?
+    @State private var stepUp: StepUpRequest?
     @State private var error: String?
     /// Each field its own value: after "Send code" the code field takes the keyboard
     /// (and the code from Mail) instead of it closing with the e-mail field.
@@ -264,6 +265,7 @@ struct EmailChangeView: View {
                 }
             }
         }
+        .stepUpSheet($stepUp)
     }
 
     private func send() async {
@@ -275,6 +277,9 @@ struct EmailChangeView: View {
             sent = true
             error = nil
             focused = .code
+        } catch APIError.stepUpRequired(_, let info) {
+            // First "Confirm it's you" (a passkey, or a code to the current address); then the code goes out.
+            stepUp = StepUpRequest(info: info, reason: L10n.tr("Změna e-mailu potřebuje krátké ověření.")) { await send() }
         } catch {
             // The server's own words: taken, the same address, too soon…
             self.error = error.localizedDescription

@@ -11,7 +11,7 @@ test("a week keeps only what differs from the usual week", () => {
   assert.deepEqual(weekOverride(usual, usual), {});
   const week = sanitizeWeekPlan({ ...usual, days: [["run"], [], [], [], [], [], []], sessions: { "0|run|0": { minutes: 45 } } });
   const own = weekOverride(week, usual);
-  assert.deepEqual(Object.keys(own).sort(), ["days", "sessions"]);
+  assert.deepEqual(Object.keys(own).sort(), ["bricks", "days", "sessions"]);
   assert.deepEqual(own.sessions, { "0|run|0": { minutes: 45 } });
   const busy = sanitizeWeekPlan({ ...usual, availability: time([0, 0, 60, 0, 60, 120, 120]) });
   assert.deepEqual(Object.keys(weekOverride(busy, usual)).sort(), ["availability", "availabilityMode"]);

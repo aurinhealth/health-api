@@ -69,13 +69,45 @@ export function entryNutrients(entry) {
   return out;
 }
 
-export function targetsFor(profile = {}, kcalTarget = null) {
-  const female = profile?.sex === 'female', out = {};
-  for (const n of NUTRIENTS) if (n.target) out[n.key] = n.target[female ? 1 : 0];
+// Tolerable upper intake levels for adults (EFSA, overview of ULs, 2025;
+// iron: the safe level of 2024). An own target never goes above them. For
+// magnesium and folate they count supplements and fortified folic acid only,
+// so they are not used as a cap there.
+export const UPPER = { vitd: 100, vita: 3000, vite: 300, b6: 12, zn: 25, se: 255, iod: 600, ca: 2500, fe: 40 };
+
+// Plant iron and zinc are absorbed less: vegetarians need 1.8× the iron and
+// up to 1.5× the zinc (IOM 2001). Vegans the same.
+const PLANT_FACTOR = { fe: 1.8, zn: 1.5 };
+
+// The Auto targets (sex, energy, diet) and, with Pro, the user's own ones
+// (Settings: the nutrient detail → Target). own lists the keys set by hand.
+export function targetsFor(profile = {}, kcalTarget = null, { own = true } = {}) {
+  const female = profile?.sex === 'female', out = {}, auto = {};
+  const plant = ['vegetarian', 'vegan'].includes(profile?.dietEating);
+  for (const n of NUTRIENTS) if (n.target) {
+    const base = n.target[female ? 1 : 0], factor = plant ? PLANT_FACTOR[n.key] || 1 : 1;
+    auto[n.key] = Math.min(UPPER[n.key] ?? Infinity, Math.round(base * factor * 10) / 10);
+  }
   // Fibre and sugar follow the energy target like the Jídlo screen (app-food.js).
-  out.fiber = kcalTarget != null ? Math.max(25, Math.round(kcalTarget / 1000 * 14)) : 30;
-  out.sugar = kcalTarget != null ? Math.round(kcalTarget * 0.1 / 4) : 50;
-  out.salt = 5;
+  auto.fiber = kcalTarget != null ? Math.max(25, Math.round(kcalTarget / 1000 * 14)) : 30;
+  auto.sugar = kcalTarget != null ? Math.round(kcalTarget * 0.1 / 4) : 50;
+  auto.salt = 5;
+  Object.assign(out, auto);
+  const mine = own ? ownTargets(profile) : {};
+  Object.assign(out, mine);
+  Object.defineProperty(out, 'auto', { value: auto });
+  Object.defineProperty(out, 'own', { value: Object.keys(mine) });
+  return out;
+}
+
+// The user's own targets from the profile, known keys only, under the upper limit.
+export function ownTargets(profile = {}) {
+  const v = profile?.nutrientTargets, out = {};
+  if (!v || typeof v !== 'object') return out;
+  for (const key of Object.keys(v)) {
+    const x = Number(v[key]);
+    if (BY_KEY.has(key) && Number.isFinite(x) && x > 0) out[key] = Math.min(UPPER[key] ?? Infinity, Math.round(x * 100) / 100);
+  }
   return out;
 }
 
@@ -84,7 +116,7 @@ const fmt = v => v == null ? null : v >= 100 ? Math.round(v) : v >= 10 ? Math.ro
 // The Živiny page: days of food logs (newest last), each { date, food }.
 // Free accounts get fibre, sugar and salt; the rest comes back locked, without values.
 export function buildNutrients({ days = [], profile = {}, kcalTarget = null, pro = false, language }) {
-  const targets = targetsFor(profile, kcalTarget), totals = {}, counted = {};
+  const targets = targetsFor(profile, kcalTarget, { own: pro }), totals = {}, counted = {};
   let meals = 0, withMicros = 0;
   for (const { food } of days) for (const e of eatenEntries(food)) {
     meals++;
@@ -129,10 +161,10 @@ export function nutrientCoach(items, days, language) {
 
 // One nutrient: today's amount, the 7-day average against the target, the
 // meals it came from today and foods rich in it (top.json of the micro build).
-export function buildNutrientDetail({ key, today, week = [], profile = {}, kcalTarget = null, rich = [], language }) {
+export function buildNutrientDetail({ key, today, week = [], profile = {}, kcalTarget = null, rich = [], pro = false, language }) {
   const def = BY_KEY.get(key);
   if (!def) return null;
-  const target = targetsFor(profile, kcalTarget)[key];
+  const targets = targetsFor(profile, kcalTarget, { own: pro }), target = targets[key];
   const sum = food => eatenEntries(food).reduce((s, e) => s + (entryNutrients(e)[key] || 0), 0);
   const eaten = fmt(sum(today));
   const avg = week.length ? week.reduce((s, d) => s + sum(d.food), 0) / week.length : null;
@@ -140,6 +172,10 @@ export function buildNutrientDetail({ key, today, week = [], profile = {}, kcalT
     .filter(s => s.amount > 0).sort((a, b) => b.amount - a.amount).slice(0, 8);
   return {
     key, name: nutrientName(key, language), unit: def.unit, limit: Boolean(def.limit), eaten, target,
+    // The Target row: Aurin's own value, whether the user set one, the upper
+    // limit, and why Auto is higher (vegetarian iron and zinc).
+    autoTarget: targets.auto[key], custom: targets.own.includes(key), upperLimit: UPPER[key] ?? null,
+    autoBasis: PLANT_FACTOR[key] && ['vegetarian', 'vegan'].includes(profile?.dietEating) ? profile.dietEating : null,
     percent: target ? Math.round(eaten / target * 100) : null,
     weekPercent: avg != null && target ? Math.round(avg / target * 100) : null,
     sources,

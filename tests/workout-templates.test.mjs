@@ -150,7 +150,7 @@ test("a saved workout planned before it got its routines is read with Posilovna'
   const read = withRoutines(old, { warmup: true, stretching: true, cardio: "end", cardioType: "treadmill" }, name => EXERCISES[name]?.muscle);
   const routines = readRoutines(read);
   assert.ok(routines.warmup.items.length && routines.stretching.items.length);
-  assert.deepEqual(routines.cardio, { type: "treadmill", start: null, end: 10 });
+  assert.deepEqual(routines.cardio, { type: "treadmill", start: null, end: 10, length: 0 });
   assert.deepEqual(read[4], ["Časový limit (min)", 57, "Odhad (min)", 57]);
   assert.deepEqual(read.slice(6), old.slice(6));
   // A plan that has them stays as it is.

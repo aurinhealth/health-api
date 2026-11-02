@@ -8,17 +8,47 @@ struct BarStyle {
     var dashed = false
 }
 
+/// Text in and around a chart: the app's smallest size (Typo.tiny), never less.
+let chartText: CGFloat = 11
+
 /// A value on a detail chart's scale: a hairline across (unless `line` is
-/// false) and its text in a column on the right.
+/// false) and its text in a column on the right. With `name` the word stands
+/// over the value ("goal" over "72"), for a line that isn't a round value.
 struct ScaleTick: Hashable {
     let value: Double
     let text: String
     var color: Color = Palette.faint
     var line = true
+    var name: String? = nil
 }
 
 /// The column on the right that holds a detail chart's scale.
-let scaleWidth: CGFloat = 40
+let scaleWidth: CGFloat = 46
+
+/// The column on the right that holds a small chart's line tag ("goal 150").
+let tagWidth: CGFloat = 46
+
+/// What a dashed line stands for, beside the chart and never over its bars:
+/// the word over the value ("goal" over "150").
+struct LineTag: View {
+    let name: String
+    let value: String
+    var color: Color = Palette.muted
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(verbatim: name).scaledFont(chartText, cap: .denseCap)
+            Text(verbatim: value).scaledFont(chartText, weight: .semibold, cap: .denseCap)
+        }
+        .foregroundStyle(color)
+        .lineLimit(1).fixedSize()
+    }
+
+    /// The tag's middle at the line's height, kept inside a chart `height` tall.
+    static func center(_ y: CGFloat, height: CGFloat) -> CGFloat {
+        min(max(y, 13), max(height - 13, 13))
+    }
+}
 
 /// Hairlines and their values for a chart `width` wide (the column comes on
 /// top of it), `y` turning a value into its height from the chart's top.
@@ -33,12 +63,18 @@ struct ChartScale: View {
                 if t.line {
                     Rectangle().fill(Palette.hairline).frame(width: width, height: 1).offset(y: y(t.value))
                 }
-                Text(verbatim: t.text)
-                    .scaledFont(9, weight: t.line ? .regular : .semibold, cap: .denseCap)
-                    .foregroundStyle(t.color)
-                    .lineLimit(1).fixedSize()
-                    .frame(height: 12)
-                    .offset(x: width + 6, y: y(t.value) - 6)
+                if let name = t.name {
+                    LineTag(name: name, value: t.text, color: t.color)
+                        .frame(height: 28)
+                        .offset(x: width + 6, y: y(t.value) - 14)
+                } else {
+                    Text(verbatim: t.text)
+                        .scaledFont(chartText, weight: t.line ? .regular : .semibold, cap: .denseCap)
+                        .foregroundStyle(t.color)
+                        .lineLimit(1).fixedSize()
+                        .frame(height: 14)
+                        .offset(x: width + 6, y: y(t.value) - 7)
+                }
             }
         }
     }
@@ -54,13 +90,13 @@ struct ChartDates: View {
             let w = geo.size.width - trailing
             ForEach(marks.indices, id: \.self) { i in
                 Text(verbatim: marks[i].text)
-                    .scaledFont(9, cap: .denseCap)
+                    .scaledFont(chartText, cap: .denseCap)
                     .foregroundStyle(Palette.faint)
                     .lineLimit(1).fixedSize()
-                    .position(x: min(max(w * marks[i].at, 14), w - 14), y: 6)
+                    .position(x: min(max(w * marks[i].at, 16), w - 16), y: 7)
             }
         }
-        .frame(height: 12)
+        .frame(height: 14)
     }
 }
 
@@ -75,7 +111,7 @@ struct ChartLegend: View {
             row(note: note)
             row(note: nil)
         }
-        .scaledFont(9, cap: .denseCap)
+        .scaledFont(chartText, cap: .denseCap)
         .foregroundStyle(Palette.faint)
     }
 
@@ -98,22 +134,33 @@ struct ChartSpan: View {
     let start: String
     var end: String = L10n.tr("dnes")
 
+    /// The first and the last day of a series ("Sep 24" … "Oct 8").
+    init(dates: [String]) {
+        start = dates.first.map(Fmt.dayMonthShort) ?? ""
+        end = dates.last.map(Fmt.dayMonthShort) ?? ""
+    }
+
+    init(start: String, end: String = L10n.tr("dnes")) {
+        self.start = start
+        self.end = end
+    }
+
     var body: some View {
         HStack {
             Text(verbatim: start)
             Spacer(minLength: 4)
             Text(verbatim: end)
         }
-        .scaledFont(9, cap: .denseCap)
+        .scaledFont(chartText, cap: .denseCap)
         .foregroundStyle(Palette.faint)
         .lineLimit(1)
     }
 }
 
 /// Vertical bars with an optional dashed target line and labels underneath.
-/// The dashed line says what it is (`targetLabel`, "goal 10,000"); a caption
-/// above the bars says what they count ("TSS per week"); a detail screen adds
-/// its scale on the right (`scale`).
+/// The dashed line says what it is in a column on the right (`targetTag`,
+/// "goal" over "10,000"); a caption above the bars says what they count
+/// ("TSS per week"); a detail screen adds its scale on the right (`scale`).
 struct BarChart: View {
     let values: [Double]
     let styles: [BarStyle]
@@ -125,16 +172,13 @@ struct BarChart: View {
     var highlighted: Int? = nil
     var spacing: CGFloat = 4
     var height: CGFloat = 64
-    var targetLabel: String? = nil
-    /// Where the label sits over the line: on the left when the newest bar
-    /// (on the right) would hide it.
-    var targetLabelAlignment: Alignment = .trailing
+    var targetTag: (name: String, value: String)? = nil
     var caption: String? = nil
     var scale: [ScaleTick] = []
 
     var body: some View {
         let top = hi ?? (values.max() ?? 1)
-        let trailing = scale.isEmpty ? 0 : scaleWidth
+        let trailing = !scale.isEmpty ? scaleWidth : targetTag == nil ? 0 : tagWidth
         VStack(spacing: 4) {
             GeometryReader { geo in
                 let h = geo.size.height
@@ -163,15 +207,11 @@ struct BarChart: View {
                             .stroke(targetColor, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                             .frame(width: w, height: 1)
                             .offset(y: -h * scaled(target, lo, top))
-                        if let targetLabel {
-                            Text(verbatim: targetLabel)
-                                .scaledFont(9, cap: .denseCap)
-                                .foregroundStyle(targetColor)
-                                .lineLimit(1).fixedSize()
-                                .padding(.horizontal, 2)
-                                .background(Palette.card.opacity(0.85), in: Capsule())
-                                .frame(width: w, alignment: targetLabelAlignment)
-                                .offset(y: -h * scaled(target, lo, top) - 3)
+                        if let targetTag, scale.isEmpty {
+                            LineTag(name: targetTag.name, value: targetTag.value)
+                                .frame(height: 28)
+                                .offset(x: w + 6, y: LineTag.center(h * (1 - scaled(target, lo, top)), height: h) - 14)
+                                .frame(width: geo.size.width, height: h, alignment: .topLeading)
                         }
                     }
                 }
@@ -180,10 +220,10 @@ struct BarChart: View {
             .overlay(alignment: .topLeading) {
                 if let caption {
                     Text(verbatim: caption)
-                        .scaledFont(9, cap: .denseCap)
+                        .scaledFont(chartText, cap: .denseCap)
                         .foregroundStyle(Palette.faint)
                         .lineLimit(1).fixedSize()
-                        .offset(y: -14)
+                        .offset(y: -17)
                 }
             }
             if let labels {
@@ -192,7 +232,7 @@ struct BarChart: View {
                         // Wider than its bar when the bars are thin ("14" over 2.5 pt
                         // gaps): it may overflow sideways, it must not wrap.
                         Text(labels[i])
-                            .scaledFont(9, weight: i == highlighted ? .semibold : .regular, cap: .denseCap)
+                            .scaledFont(chartText, weight: i == highlighted ? .semibold : .regular, cap: .denseCap)
                             .foregroundStyle(i == highlighted ? Palette.ink : Palette.faint)
                             .lineLimit(1)
                             .fixedSize()
@@ -260,7 +300,7 @@ struct LineChart: View {
 
 /// Weighings as faint dots, the smoothed trend as a line, the goal dashed.
 /// With `scale` (the detail) the scale stands on the right and the goal is
-/// one of its values instead of a label over the line.
+/// one of its values; without it the goal's tag stands beside the line.
 struct TrendDotsChart: View {
     let raw: [Double]
     let trend: [Double]
@@ -273,7 +313,7 @@ struct TrendDotsChart: View {
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
-            let width = size.width - (scale.isEmpty ? 0 : scaleWidth)
+            let width = size.width - (!scale.isEmpty ? scaleWidth : goal == nil ? 0 : tagWidth)
             let x = { (i: Int, n: Int) in 3 + (width - 6) * CGFloat(i) / CGFloat(max(n - 1, 1)) }
             let y = { (v: Double) in 3 + (size.height - 6) * (1 - scaled(v, lo, hi)) }
             ZStack(alignment: .topLeading) {
@@ -292,11 +332,9 @@ struct TrendDotsChart: View {
                         .frame(width: width, height: 1)
                         .offset(y: y(goal))
                     if scale.isEmpty {
-                        Text(L10n.f("cíl %@", goal.formatted(.number.precision(.fractionLength(0)).locale(Fmt.locale))))
-                            .scaledFont(9, cap: .denseCap)
-                            .foregroundStyle(Palette.green)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                            .offset(y: y(goal) - 13)
+                        LineTag(name: L10n.tr("cíl"), value: Fmt.int(goal), color: Palette.green)
+                            .frame(height: 28)
+                            .offset(x: width + 6, y: LineTag.center(y(goal), height: size.height) - 14)
                     }
                 }
             }

@@ -437,6 +437,8 @@ struct FoodAmountView: View {
     @State private var saving = false
     @State private var error: String?
     @State private var edit = false
+    /// "Navrhnout pro všechny" for a food read from its label (FoodProduct.canSuggestNew).
+    @State private var suggestNew = true
     /// "Co nesedí?" open, and the report sent from here.
     @State private var reporting = false
     @State private var reportedNow = false
@@ -490,7 +492,7 @@ struct FoodAmountView: View {
                 .buttonStyle(.plain)
                 if edit {
                     SettingsGroup(title: product.perPortion ? "Jedna porce" : L10n.f("Na 100 %@", product.unit),
-                                  footer: product.canSuggest && !product.perPortion ? L10n.tr("Oprava zároveň odejde ke kontrole, aby se opravila i v katalogu pro ostatní.") : nil) {
+                                  footer: product.canSuggest && !product.canSuggestNew && !product.perPortion ? L10n.tr("Oprava zároveň odejde ke kontrole, aby se opravila i v katalogu pro ostatní.") : nil) {
                         SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: "Potravina")
                         SettingsDivider()
                         SettingsField(title: "Výrobce, značka", text: $brand, keyboard: .default, placeholder: "nepovinné")
@@ -515,6 +517,9 @@ struct FoodAmountView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+                if product.canSuggestNew && !model.demo {
+                    SettingsGroup { SettingsToggle(title: "Navrhnout pro všechny", isOn: $suggestNew) }
+                }
                 MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 }))
                 Button { Task { await save() } } label: {
                     Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(target)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
@@ -598,12 +603,14 @@ struct FoodAmountView: View {
         defer { saving = false }
         var corrected = current
         // A corrected catalogue food stays the user's own until the owner approves it.
-        let changed = product.canSuggest && corrected.values != product.values
+        // A food read from its label has nothing in the catalogue to correct: the
+        // values as the user fixed them go as the new food (suggestNewFood).
+        let changed = product.canSuggest && !product.canSuggestNew && corrected.values != product.values
         if changed { corrected.origin = "edited" }
         if let message = await model.logFood(product: corrected, amount: value, meal: target) {
             error = message
         } else {
-            if changed { sendCorrection(corrected) } else { model.thankForLabel(corrected) }
+            if changed { sendCorrection(corrected) } else if suggestNew { model.suggestNewFood(corrected) }
             done()
         }
     }

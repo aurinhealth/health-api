@@ -7,6 +7,10 @@ export function isStaging(env) {
   return env?.ENVIRONMENT === "staging";
 }
 
+// The owner on the test server: no limits of an account and no group brake,
+// so the coach evaluation keeps running (ai-usage.js, ai-total.js).
+export const ownerUnlimited = env => env?.USER_IS_OWNER === true && isStaging(env);
+
 export async function markStaging(response) {
   const headers = new Headers(response.headers);
   headers.set("X-Robots-Tag", "noindex, nofollow");

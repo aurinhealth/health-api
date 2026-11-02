@@ -8,11 +8,15 @@ final class WorkoutShareTests: XCTestCase {
         XCTAssertEqual(AppRoute(url: URL(string: "https://aurin.health/t/Ab3dEf7hJk")!), .sharedWorkout("Ab3dEf7hJk"))
         XCTAssertEqual(AppRoute(url: URL(string: "https://www.aurin.health/t/Ab3dEf7hJk")!), .sharedWorkout("Ab3dEf7hJk"))
         XCTAssertNil(AppRoute(url: URL(string: "https://petrfitnessdata.eu/t/Ab3dEf7hJk")!))
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/share/Ab3dEf7hJk")!), .sharedWorkout("Ab3dEf7hJk"))
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/share/Ab3dEf7hJk")!), .sharedWorkout("Ab3dEf7hJk"))
+        // The old name's scheme is gone.
+        XCTAssertNil(AppRoute(url: URL(string: "loadwise://open/share/Ab3dEf7hJk")!))
+        XCTAssertNil(TabLink.tab(URL(string: "loadwise://open/food")!))
+        XCTAssertNil(AppRoute(url: URL(string: "other://open/sleep")!))
         XCTAssertNil(AppRoute(url: URL(string: "https://aurin.health/t/short")!))
         XCTAssertNil(AppRoute(url: URL(string: "https://aurin.health/privacy")!))
         XCTAssertNil(AppRoute(url: URL(string: "https://example.com/t/Ab3dEf7hJk")!))
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/my-workouts")!), .myWorkouts)
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/my-workouts")!), .myWorkouts)
     }
 
     func testAPlannedDayBecomesAWorkoutWithoutWeights() {

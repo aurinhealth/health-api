@@ -1,5 +1,5 @@
 import { sessionSecret, signedInResponse } from "./dashboard-auth.js";
-import { ensureTenancy, normalizeEmail, publicUser, mayCreateAccount, createAccount } from "./tenancy.js";
+import { ensureTenancy, normalizeEmail, publicUser, mayCreateAccount, createAccount, SignupLimited } from "./tenancy.js";
 import { inheritAiLimits } from "./ai-limit-memory.js";
 import { L } from "./lang.js";
 
@@ -38,9 +38,13 @@ export async function handleNativeAppleLogin(request, env, pathname, { fetchImpl
   let claims;
   try { claims = await verifyAppleIdToken(token, appBundleId(env), await sha256Hex(nonce), fetchImpl); }
   catch (error) { console.error("Apple app ID token rejected", error.message); return appJson({ error: "failed", message: L("Účet Apple se nepodařilo ověřit.", "Couldn't verify your Apple account.") }, 401); }
+  // A token signs in once: whoever got hold of a used one (and its nonce) cannot sign in with it again.
+  if (!(await claimAppleToken(env.DB, claims))) { console.warn("Apple app ID token used again"); return appJson({ error: "failed", message: L("Účet Apple se nepodařilo ověřit.", "Couldn't verify your Apple account.") }, 401); }
   const verified = claims.email_verified === true || claims.email_verified === "true";
   await ensureTenancy(env.DB, env, { request });
-  const user = await signInAppleUser(env.DB, env, { sub: String(claims.sub), email: verified ? claims.email : null, name: cleanName(body?.name) });
+  let user;
+  try { user = await signInAppleUser(env.DB, env, { sub: String(claims.sub), email: verified ? claims.email : null, name: cleanName(body?.name), request }); }
+  catch (error) { if (error instanceof SignupLimited) return appJson({ error: "too_many", message: error.message }, 429); throw error; }
   if (!user) {
     console.warn("Apple app login denied for an account without an invitation");
     return appJson({ error: "not_invited", message: L("Tento účet Apple nemá do Aurinu pozvánku. Přihlas se přes Google nebo e-mailem, na který ti pozvánka přišla.", "This Apple account isn't invited to Aurin. Continue with Google or with the email your invitation went to.") }, 403);
@@ -147,6 +151,34 @@ async function appleJwks(fetchImpl, kid) {
 }
 export function _resetAppleJwksCacheForTest() { cachedJwks = null; cachedJwksAt = 0; forcedJwksAt = 0; }
 
+// Identity tokens that signed in, by their nonce claim (the SHA-256 of the app's nonce, which
+// Apple signed into the token), kept until the token expires (Apple: 10 minutes). The first use
+// claims the row; another request with the same token finds it taken. The table is made on the
+// first Apple sign-in, and forgetUsedAppleTokens (the nightly cron) drops the expired rows.
+// Returns true for the first use.
+const TOKEN_USES_TABLE = `CREATE TABLE IF NOT EXISTS apple_token_uses (
+  nonce TEXT PRIMARY KEY,
+  expires_at INTEGER NOT NULL
+)`;
+export async function claimAppleToken(db, claims) {
+  const nonce = String(claims?.nonce || ""), expires = Math.floor(Number(claims?.exp)) || 0;
+  if (!nonce || !expires) return false;
+  const claim = () => db.prepare("INSERT INTO apple_token_uses(nonce, expires_at) VALUES(?, ?) ON CONFLICT(nonce) DO NOTHING").bind(nonce, expires).run();
+  let result;
+  try { result = await claim(); }
+  catch (error) {
+    if (!/no such table/i.test(String(error?.message))) throw error;
+    await db.prepare(TOKEN_USES_TABLE).run();
+    result = await claim();
+  }
+  return Number(result?.meta?.changes) > 0;
+}
+
+export async function forgetUsedAppleTokens(db, now = Date.now()) {
+  try { return Number((await db.prepare("DELETE FROM apple_token_uses WHERE expires_at < ?").bind(Math.floor(now / 1000)).run())?.meta?.changes) || 0; }
+  catch (error) { if (/no such table/i.test(String(error?.message))) return 0; throw error; }
+}
+
 // Apple IDs linked to users. One Apple ID per user; a row goes with the user (user_id).
 async function ensureIdentities(db) {
   await db.batch([
@@ -165,7 +197,7 @@ async function ensureIdentities(db) {
 
 // A verified Apple identity signs in: a linked Apple ID, else an existing user, an invited e-mail
 // or the owner by the e-mail Apple confirmed (anyone, with OPEN_SIGNUP). The invitation is consumed on first login.
-export async function signInAppleUser(db, env, { sub, email, name = null }) {
+export async function signInAppleUser(db, env, { sub, email, name = null, request = null }) {
   if (!sub) return null;
   await ensureIdentities(db);
   const address = normalizeEmail(email);
@@ -175,8 +207,8 @@ export async function signInAppleUser(db, env, { sub, email, name = null }) {
     // An account that already has another Apple ID does not take a second one by e-mail.
     if (row && await db.prepare("SELECT 1 AS linked FROM user_identities WHERE provider = 'apple' AND user_id = ?").bind(row.id).first()) return null;
     if (!row) {
-      if (!(await mayCreateAccount(db, env, address))) return null;
-      const made = await createAccount(db, env, address, name);
+      if (!(await mayCreateAccount(db, env, address, { request }))) return null;
+      const made = await createAccount(db, env, address, name, { request });
       if (!made) return null;
       row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(address).first();
       if (made === "created" && row) await inheritAiLimits(db, env, row.id, { email: address, appleSub: String(sub) });

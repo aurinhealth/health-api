@@ -15,6 +15,8 @@ enum APIError: LocalizedError, Equatable {
     case unknownPasskey(String)
     /// The account has no invite to Aurin (not_invited, src/apple-login.js, src/google-login.js).
     case notInvited(String)
+    /// A sensitive change needs "Confirm it's you" first (403 step_up_required, src/step-up.js).
+    case stepUpRequired(String, StepUpInfo)
 
     var errorDescription: String? {
         switch self {
@@ -26,6 +28,7 @@ enum APIError: LocalizedError, Equatable {
         case .coachAllowanceUsed(let text, _): return text
         case .unknownPasskey(let text): return text
         case .notInvited(let text): return text
+        case .stepUpRequired(let text, _): return text
         }
     }
 }
@@ -35,7 +38,7 @@ enum APIError: LocalizedError, Equatable {
 /// this run of the app and SessionKeychain keeps in the Keychain.
 final class APIClient: @unchecked Sendable {
     static let sessionCookie = "pfd_session"
-    /// The version of the server's API this app reads, sent as X-Loadwise-Api.
+    /// The version of the server's API this app reads, sent as X-Aurin-Api.
     /// Raise it together with MIN_APP_API in src/app-version.js when a server
     /// change breaks what installed apps expect; older apps then ask for an update.
     static let apiLevel = 1
@@ -45,6 +48,10 @@ final class APIClient: @unchecked Sendable {
 
     /// Called on the first 426: AppModel swaps the screens for the update notice.
     var onUpdateRequired: (@Sendable () -> Void)?
+
+    /// 403 health_paused (src/health-pause.js): health data was paused, also on
+    /// another device; AppModel shows the paused screen and stops Apple Health.
+    var onHealthPaused: (@Sendable () -> Void)?
 
     /// A client made without an address follows Nastavení → Testování → Server,
     /// also when it is switched while the client lives (AppDelegate's, Apple Health's).
@@ -252,13 +259,27 @@ final class APIClient: @unchecked Sendable {
             try check(response, data)
             throw APIError.message(L10n.f("Server odpověděl chybou %@.", String(status)))
         }
-        let url = FileManager.default.temporaryDirectory.appending(path: "aurin-data-" + Self.localToday() + ".ndjson")
+        let url = FileManager.default.temporaryDirectory.appending(path: Self.exportPrefix + Self.localToday() + ".ndjson")
         try? FileManager.default.removeItem(at: url)
         try FileManager.default.moveItem(at: downloaded, to: url)
+        // Readable only while the phone is unlocked; it goes when Soukromí a data closes (removeExports).
+        try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: url.path)
         return url
     }
 
-    /// Deletes the account and everything in it (confirmed in Soukromí a data with Face ID or the code).
+    private static let exportPrefix = "aurin-data-"
+
+    /// The exported account leaves the phone: when Soukromí a data closes, on
+    /// signing out or deleting the account, and at launch (one left by an app that ended).
+    static func removeExports() {
+        let dir = FileManager.default.temporaryDirectory
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return }
+        for name in names where name.hasPrefix(exportPrefix) && name.hasSuffix(".ndjson") {
+            try? FileManager.default.removeItem(at: dir.appending(path: name))
+        }
+    }
+
+    /// Deletes the account and everything in it (after "Confirm it's you" in Soukromí a data, src/step-up.js).
     func deleteAccount() async throws {
         let _: JSONValue = try await send("/app/api/account/delete", method: "POST", body: ["confirm": JSONValue.string("SMAZAT")])
         signOut()
@@ -271,8 +292,10 @@ final class APIClient: @unchecked Sendable {
 
     // MARK: - Workouts
 
+    /// The day's sheet alone (lite): GymDay reads only the sheet, so the 500
+    /// rows of history and the muscles the web page draws stay on the server.
     func gym(date: String) async throws -> GymDay {
-        try await get("/app/api/gym?date=" + date)
+        try await get("/app/api/gym?lite=1&date=" + date)
     }
 
     /// Saves the whole plan (the server keeps the sheet and the history of sets).
@@ -283,6 +306,9 @@ final class APIClient: @unchecked Sendable {
     static func gymBody(_ day: GymDay, date: String) -> JSONObject {
         var body = day.saveBody
         body["date"] = .string(date)
+        // The answer is not read: without lite the server reads 500 rows of
+        // history after every set and sends them back for nothing.
+        body["lite"] = .bool(true)
         return body
     }
 
@@ -633,6 +659,11 @@ final class APIClient: @unchecked Sendable {
                                           body: ["provider": JSONValue.string(provider), "type": .string(type), "on": .bool(on)])
     }
 
+    /// The types each service the server reads sent in the last week (src/source-sending.js).
+    func sourcesSending() async throws -> SourcesSending {
+        try await get("/app/api/sources/sending")
+    }
+
     func saveSourcePriority(_ priority: SourcePriority) async throws {
         let _: JSONValue = try await send("/app/api/sources/priority", method: "POST", body: priority)
     }
@@ -709,6 +740,7 @@ final class APIClient: @unchecked Sendable {
                 onUpdateRequired?()
                 throw OutboxRefusal.outdated(message)
             }
+            if json?["status"] as? String == "health_paused" { onHealthPaused?() }
             // A timeout or too many requests at the server: later, as with a server error.
             if (400..<500).contains(http.statusCode), ![408, 429].contains(http.statusCode) { throw OutboxRefusal.rejected(message) }
             throw OutboxRefusal.retry(message)
@@ -736,10 +768,12 @@ final class APIClient: @unchecked Sendable {
     }
 
     /// Every request but the sign-out: what fails lands in ErrorLog, which
-    /// "Nahlásit problém" sends with the report.
+    /// "Nahlásit problém" sends with the report, and the last few in RequestTrail.
     private func load(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        let started = Date()
         do {
             let (data, response) = try await session.data(for: request)
+            RequestTrail.add(request, status: (response as? HTTPURLResponse)?.statusCode, started: started)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                 ErrorLog.add(request, status: http.statusCode, message: json?["message"] as? String)
@@ -748,6 +782,7 @@ final class APIClient: @unchecked Sendable {
         } catch {
             // A screen that went away cancels its requests; that is no failure.
             if (error as? URLError)?.code != .cancelled, !(error is CancellationError) {
+                RequestTrail.add(request, status: nil, started: started)
                 ErrorLog.add(request, status: nil, message: error.localizedDescription)
             }
             throw Self.readable(error)
@@ -789,7 +824,7 @@ final class APIClient: @unchecked Sendable {
         request.setValue(TimeZone.current.identifier, forHTTPHeaderField: "X-Time-Zone")
         request.setValue(L10n.language, forHTTPHeaderField: "X-Interface-Language")
         request.setValue(Units.imperial ? "imperial" : "metric", forHTTPHeaderField: "X-Units")
-        request.setValue(String(Self.apiLevel), forHTTPHeaderField: "X-Loadwise-Api")
+        request.setValue(String(Self.apiLevel), forHTTPHeaderField: "X-Aurin-Api")
         // Writes with the session cookie must come from the site's own origin.
         if method != "GET" && (path.hasPrefix("/app/") || path.hasPrefix("/auth/")) {
             request.setValue(baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")), forHTTPHeaderField: "Origin")
@@ -815,12 +850,18 @@ final class APIClient: @unchecked Sendable {
                 onUpdateRequired?()
                 throw APIError.updateRequired(message ?? L10n.tr("Tahle verze Aurinu už není podporovaná. Nainstaluj novější verzi."))
             }
+            if json?["status"] as? String == "health_paused" { onHealthPaused?() }
             if json?["status"] as? String == "ai_consent_required" {
                 throw APIError.aiConsentRequired(message ?? L10n.tr("AI funkce potřebují tvůj souhlas."))
             }
             if json?["status"] as? String == "coach_allowance_used" {
                 struct Used: Decodable { let coachAllowance: CoachAllowance? }
                 throw APIError.coachAllowanceUsed(message ?? L10n.tr("Zprávy koučovi na tento týden jsou vyčerpané."), (try? decoder.decode(Used.self, from: data))?.coachAllowance)
+            }
+            if json?["status"] as? String == "step_up_required" {
+                struct Required: Decodable { let stepUp: StepUpInfo }
+                let info = (try? decoder.decode(Required.self, from: data))?.stepUp ?? StepUpInfo(passkey: false, email: nil)
+                throw APIError.stepUpRequired(message ?? L10n.tr("Nejdřív potvrď, že jsi to ty."), info)
             }
             if http.statusCode == 402 {
                 onSubscriptionRequired?()
@@ -831,6 +872,3 @@ final class APIClient: @unchecked Sendable {
     }
 }
 
-extension String {
-    var nilIfBlank: String? { trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : self }
-}

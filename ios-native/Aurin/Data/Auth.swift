@@ -6,7 +6,9 @@ import UIKit
 // Google refuses sign-in inside an app's own web view, so the app uses the
 // same handoff as the Capacitor app (src/google-login.js):
 // 1. open /auth/google?app=<challenge> in a system browser sheet,
-// 2. the server answers with loadwise://auth?token=<short-lived token>,
+// 2. the server answers with https://<its host>/auth/app/return?token=<short-lived token>,
+//    which only this app can catch: iOS hands an https callback only to an app
+//    with that host among its associated domains (project.yml),
 // 3. the app trades the token plus the verifier behind the challenge for the
 //    session cookie at POST /auth/app/session.
 // The cookie lands in HTTPCookieStorage.shared, which URLSession sends with
@@ -26,7 +28,7 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         var start = URLComponents(url: api.baseURL.appending(path: "auth/google"), resolvingAgainstBaseURL: false)!
         start.queryItems = [URLQueryItem(name: "app", value: challenge)]
 
-        let callback = try await openBrowser(start.url!)
+        let callback = try await openBrowser(start.url!, callback: Self.callback(api.baseURL, path: Self.signInReturnPath))
         let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
         if let error = items.first(where: { $0.name == "error" })?.value { throw Self.signInError(error) }
         guard let token = items.first(where: { $0.name == "token" })?.value else {
@@ -35,31 +37,44 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         try await api.exchangeHandoff(token: token, verifier: verifier)
     }
 
-    /// loadwise://auth?error=<code> from a failed Google sign-in (src/google-login.js).
+    static let signInReturnPath = "/auth/app/return"
+    static let connectedPath = "/auth/app/connected"
+
+    /// The address the browser sheet closes on: https on the server's own host.
+    static func callback(_ server: URL, path: String) throws -> ASWebAuthenticationSession.Callback {
+        guard let host = server.host() else { throw APIError.message(L10n.tr("Přihlášení se nepodařilo.")) }
+        return .https(host: host, path: path)
+    }
+
+    /// …/auth/app/return?error=<code> from a failed Google sign-in (src/google-login.js).
     static func signInError(_ code: String) -> Error {
         switch code {
         case "cancelled": return APIError.message(L10n.tr("Přihlášení přes Google bylo zrušeno."))
         case "not_invited": return APIError.notInvited(L10n.tr("Tento Google účet nemá do Aurinu pozvánku. Aurin je teď jen pro pozvané."))
         case "expired": return APIError.message(L10n.tr("Přihlášení se přerušilo. Zkus to znovu."))
         case "unavailable": return APIError.message(L10n.tr("Přihlášení přes Google teď nejde. Zkus to později nebo se přihlas e-mailem."))
+        // Too many new accounts from this network today (src/tenancy.js); e-mail would be held the same way.
+        case "too_many": return APIError.message(L10n.tr("Z této sítě dnes vzniklo příliš mnoho nových účtů. Zkus to prosím zítra."))
         default: return APIError.message(L10n.tr("Google přihlášení se nepodařilo ověřit. Zkus to znovu."))
         }
     }
 
     /// Connects Google or Intervals.icu: the provider's page in the browser
-    /// sheet, back at loadwise://connected?event=… (src/connect-return.js).
+    /// sheet, back at https://<server>/auth/app/connected?event=…, which only
+    /// this app can catch, like the sign-in (src/connect-return.js).
     func connect(provider: String) async throws -> String {
         let link = try await api.connectLink(provider: provider)
         // The ticket again as a header: without it the server lets nobody in, so a
         // ticket link sent to someone else expires (src/native-connect.js).
         let ticket = URLComponents(url: link, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "ticket" })?.value
-        let callback = try await openBrowser(link, headers: ticket.map { ["X-Aurin-Connect": $0] } ?? [:])
+        let headers = ticket.map { ["X-Aurin-Connect": $0] } ?? [:]
+        let callback = try await openBrowser(link, callback: Self.callback(api.baseURL, path: Self.connectedPath), headers: headers)
         return URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "event" })?.value ?? "unknown"
     }
 
-    private func openBrowser(_ url: URL, headers: [String: String] = [:]) async throws -> URL {
+    private func openBrowser(_ url: URL, callback: ASWebAuthenticationSession.Callback, headers: [String: String] = [:]) async throws -> URL {
         try await withCheckedThrowingContinuation { continuation in
-            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "loadwise") { callback, error in
+            let session = ASWebAuthenticationSession(url: url, callback: callback) { callback, error in
                 if let callback {
                     continuation.resume(returning: callback)
                 } else if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {
@@ -86,10 +101,9 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
     }
 
     // 32 random bytes as base64url: 43 characters, like the web app's verifier.
+    // CryptoKit's key never comes back empty, as an unchecked SecRandomCopyBytes could.
     static func randomVerifier() -> String {
-        var bytes = [UInt8](repeating: 0, count: 32)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-        return base64url(Data(bytes))
+        base64url(SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) })
     }
 
     /// Sign in with Apple: the request asks Apple to put the SHA-256 (hex) of

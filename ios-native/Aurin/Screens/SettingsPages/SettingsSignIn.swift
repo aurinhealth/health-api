@@ -11,6 +11,7 @@ struct PasskeysSettingsView: View {
     @State private var loaded = false
     @State private var busy = false
     @State private var removing: PasskeyInfo?
+    @State private var stepUp: StepUpRequest?
     @State private var error: String?
 
     var body: some View {
@@ -47,6 +48,7 @@ struct PasskeysSettingsView: View {
         } message: {
             Text("Zařízení, které se s ním přihlásilo, se odhlásí.")
         }
+        .stepUpSheet($stepUp)
     }
 
     private func load() async {
@@ -61,6 +63,8 @@ struct PasskeysSettingsView: View {
         do {
             try await model.passkeys.register(api: model.api)
             await load()
+        } catch APIError.stepUpRequired(_, let info) {
+            stepUp = StepUpRequest(info: info, reason: L10n.tr("Nový způsob přihlášení potřebuje krátké ověření.")) { await add() }
         } catch is CancellationError {
         } catch {
             self.error = APIClient.readable(error).localizedDescription

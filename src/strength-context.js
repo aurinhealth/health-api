@@ -4,6 +4,7 @@ import { getAthleteState } from './athlete-state.js';
 import { isHardSession } from './session-intensity.js';
 import { dateFormat } from "./date-format.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
+import { intervalsReads } from "./intervals-reads.js";
 import { timeZone, localDateTime } from "./user-time.js";
 import { activityKindOf, sameSession } from "./activity-match.js";
 const DEFAULT_ACTIVITY_DAYS = 14;
@@ -87,7 +88,9 @@ async function intervalsGet(env, path) {
     }).filter(Boolean);
   }
   if(!env.INTERVALS_API_KEY)return [];
-  const response = await fetch("https://intervals.icu/api/v1" + path, { headers: { Authorization: intervalsAuth(env), Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
+  // Through the read cache (intervals-reads.js): the wellness window is the
+  // one Today and the coach already read, not one more request to Intervals.icu.
+  const response = await intervalsReads(env)("https://intervals.icu/api/v1" + path, { headers: { Authorization: intervalsAuth(env), Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
   const text = await response.text(); let data; try { data = JSON.parse(text); } catch { data = text; }
   if (!response.ok) throw new Error(`Intervals.icu HTTP ${response.status}: ${JSON.stringify(data)}`);
   return data;

@@ -140,6 +140,8 @@ enum SmallComplication {
     static func configuration(_ metric: SmallMetric) -> some WidgetConfiguration {
         StaticConfiguration(kind: "aurin.small." + metric.rawValue, provider: DayProvider()) { entry in
             SmallView(metric: metric, value: Small.value(metric, entry.snapshot, at: entry.date))
+                // Hidden on a locked watch (and wrist down with "Hide Sensitive Complications").
+                .privacySensitive()
                 .containerBackground(.black, for: .widget)
                 .widgetURL(Tap.url(for: metric, entry))
         }
@@ -542,6 +544,8 @@ enum WideComplication {
     static func configuration(_ kind: WideKind) -> some WidgetConfiguration {
         StaticConfiguration(kind: "aurin.wide." + kind.rawValue, provider: DayProvider()) { entry in
             WideView(kind: kind, entry: entry)
+                // Hidden on a locked watch (and wrist down with "Hide Sensitive Complications").
+                .privacySensitive()
                 .containerBackground(.black, for: .widget)
                 .widgetURL(Tap.url(for: kind, entry))
         }

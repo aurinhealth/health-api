@@ -232,6 +232,12 @@ struct HistoryPage: View {
                     RuleMark(y: .value("Potřeba", need / 60))
                         .foregroundStyle(W.amber)
                         .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                        // Says what the line is, above it on the left, clear of the scale.
+                        .annotation(position: .top, alignment: .leading, spacing: 1) {
+                            Text(W.tr("potřeba", "need"))
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(W.amber)
+                        }
                 } else if let band {
                     RectangleMark(xStart: .value("Od", first), xEnd: .value("Do", last),
                                   yStart: .value("Nízko", band.lowerBound), yEnd: .value("Vysoko", band.upperBound))
@@ -263,7 +269,7 @@ struct HistoryPage: View {
                         .foregroundStyle(W.track)
                     AxisValueLabel {
                         Text(tickLabel(value.as(Double.self) ?? 0))
-                            .font(.system(size: 8.5))
+                            .font(.system(size: 10))
                             .foregroundStyle(W.muted)
                     }
                 }
@@ -277,10 +283,10 @@ struct HistoryPage: View {
                 Spacer(minLength: 2)
                 Text(W.tr("Dnes", "Today"))
             }
-            .font(.system(size: 8.5))
+            .font(.system(size: 10))
             .foregroundStyle(W.muted)
             .lineLimit(1)
-            .padding(.trailing, 20)
+            .padding(.trailing, 24)
         }
     }
 }

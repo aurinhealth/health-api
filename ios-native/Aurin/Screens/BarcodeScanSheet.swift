@@ -39,6 +39,8 @@ struct BarcodeScanSheet: View {
     /// The label had no name: the front of the package, read for the name
     /// and the brand of this food.
     @State private var frontOf: FoodProduct?
+    /// "Navrhnout pro všechny" for a food read from its label (FoodProduct.canSuggestNew).
+    @State private var suggestNew = true
 
     /// nil until the camera permission is known (the scanner is unavailable
     /// before the first permission prompt, so the app asks first).
@@ -220,6 +222,9 @@ struct BarcodeScanSheet: View {
                     VStack(alignment: .leading, spacing: 4) {
                         PortionWheel(product: product, amount: $amount, kind: Binding(get: { portionKind ?? .base }, set: { portionKind = $0 })).id(product.id + (product.serving_size?.string ?? "") + (product.serving_name ?? ""))
                         servingLine(product)
+                    }
+                    if product.canSuggestNew && !model.demo {
+                        SettingsGroup { SettingsToggle(title: "Navrhnout pro všechny", isOn: $suggestNew) }
                     }
                     MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 }))
                     Button { Task { await save(product) } } label: {
@@ -417,7 +422,7 @@ struct BarcodeScanSheet: View {
         if let message = await model.logFood(product: p, amount: value, meal: target) {
             error = message
         } else {
-            model.thankForLabel(p)
+            if suggestNew { model.suggestNewFood(p) }
             dismiss()
             onLogged()
         }

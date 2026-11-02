@@ -63,7 +63,7 @@ through, so a workflow edited on a branch gets none of them:
 `PROMPTS_REPO_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` stay repository secrets: the pull requests' tests need
 the prompts on every branch, and the account ID opens nothing. The repository's account ID is the live
 account's; the `staging` environment overrides it with the test account's. The prompts token should be a fine-grained
-token that can only read `shaarkyn/aurin-prompts`.
+token that can only read `aurinhealth/aurin-prompts`.
 
 A Vydat run asks for one approval (the deploy). A pull request that changes `ios-testflight.yml` asks twice,
 for the upload and, once it is done, for "What to Test"; rejecting skips the upload. An approval not given
@@ -133,5 +133,6 @@ e.g. `S02,S04`.
 Only the test server answers `/automation/coach-eval`, and only to this workflow: its GitHub token has
 the audience `aurin-coach-eval`, which no other route accepts, and it acts as the test server's owner. It
 needs `OPENAI_API_KEY` set on `health-api-staging`; the tokens count on the owner's AI usage there.
-The test server's AI brake (`AI_TOTAL_DAILY_LIMIT_USD`, 1 USD a day) holds the owner there too, so a
-full run can stop on HTTP 429 once the day's dollar is spent; run fewer scenarios or wait for the next UTC day.
+The test server's AI brake (`AI_TOTAL_DAILY_LIMIT_USD`, 5 USD a day, an e-mail at 3 USD) holds the owner
+there too. A full run of all scenarios costs about 0.65 USD, so a few fit in a day; past the brake the
+remaining scenarios fail fast until the next UTC day (01:00 in Prague in winter).

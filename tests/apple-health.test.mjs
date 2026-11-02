@@ -8,6 +8,7 @@ import { googleDashboard } from "../src/google-dashboard.js";
 import { sleepSessionFromRow } from "../src/sleep-sessions.js";
 import { averageRestingHeartRate } from "../src/profile-suggestions.js";
 import { connectionStatus } from "../src/connections.js";
+import { setJournalOptions } from "../src/journal-store.js";
 
 const schema = readFileSync(new URL("../staging/schema.sql", import.meta.url), "utf8");
 function setup() {
@@ -314,4 +315,26 @@ test("a sync with nothing new chooses no source again; a changed hour does", asy
   await saveAppleHealth(db, 1, { records: [{ ...records[0], value: 1300 }, records[1]] }, { now });
   assert.ok(choosing() > 0);
   assert.equal(rows(raw, "source_family='google-wearables' AND data_type='steps'")[0].record_role, "duplicate");
+});
+
+test("sexual activity is kept only with the consent the server holds; what the app says does not count", async () => {
+  const { raw, db } = setup();
+  const now = Date.parse("2026-10-16T12:00:00Z");
+  const records = [{ type: "daily-sexual-activity", id: "journal:daily-sexual-activity:2026-10-15", date: "2026-10-15", value: 1 }];
+  const stored = () => raw.sqlite.prepare("SELECT COUNT(*) AS n FROM health_datapoints WHERE data_type='daily-sexual-activity'").get().n;
+  // No consent: an app saying otherwise does not keep it.
+  await saveAppleHealth(db, 1, { records, sexualActivity: true }, { now });
+  assert.equal(stored(), 0);
+  await setJournalOptions(db, { appleSex: true });
+  await saveAppleHealth(db, 1, { records }, { now });
+  assert.equal(stored(), 1);
+  // Withdrawn: the stored days go at once, and later uploads keep none.
+  await setJournalOptions(db, { appleSex: false });
+  assert.equal(stored(), 0);
+  await saveAppleHealth(db, 1, { records }, { now });
+  assert.equal(stored(), 0);
+  // Stored before the consent existed: the next upload without it deletes them.
+  raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,sample_time,value_numeric,payload_json) VALUES(1,'apple-health','daily-sexual-activity','old','2026-10-01',1,'{}')").run();
+  await saveAppleHealth(db, 1, { records: [] }, { now });
+  assert.equal(stored(), 0);
 });

@@ -5,7 +5,11 @@ import WatchKit
 /// The coach's notifications on the watch (the morning card, a proposed
 /// swap, a reply): today's readiness in the big ring in the middle, the title
 /// in the serif and the text under it. The buttons come from the iPhone's
-/// categories (PushRegistration.swift) and are answered there.
+/// categories (PushRegistration.swift) and are answered there. With the
+/// values hidden on the iPhone (Skrýt zdravotní údaje) the push's own texts
+/// come in `private` (src/push.js): this long look shows them, since the watch
+/// shows notifications only unlocked on the wrist; the short look keeps the
+/// banner's stock text.
 final class CoachNotificationController: WKUserNotificationHostingController<CoachNotificationView> {
     private var titleText = ""
     private var bodyText = ""
@@ -15,8 +19,10 @@ final class CoachNotificationController: WKUserNotificationHostingController<Coa
     }
 
     override func didReceive(_ notification: UNNotification) {
-        titleText = notification.request.content.title
-        bodyText = notification.request.content.body
+        let content = notification.request.content
+        let hidden = content.userInfo["private"] as? [String: Any]
+        titleText = hidden?["title"] as? String ?? content.title
+        bodyText = hidden?["body"] as? String ?? content.body
     }
 }
 
