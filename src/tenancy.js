@@ -615,7 +615,7 @@ export async function accountCapacity(db, env) {
   return { places, used: places - free, free };
 }
 
-// The places of the databases kept in reserve (migration 0034), and how many
+// The places of the databases kept in reserve (migration 0035), and how many
 // of them there are; null before the migration.
 export async function reserveCapacity(db) {
   try {
