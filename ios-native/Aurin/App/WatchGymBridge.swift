@@ -37,7 +37,31 @@ extension WatchBridge {
         let rest = Self.restSettings
         var gym = WatchGym(day, date: date, restSets: rest.sets, restExercises: rest.exercises)
         gym.partsDone = Self.partsDone(day, date: date)
+        Self.addInfo(&gym, day: day, date: date)
         return gym
+    }
+
+    /// What Training mode shows at each exercise (mockup "u cviku"): the note,
+    /// the best set before today and each work set's numbers last time, from
+    /// the history and notes the phone already keeps (no request of its own).
+    static func addInfo(_ gym: inout WatchGym, day: GymDay, date: String,
+                        history: GymHistory? = GymHistoryCache.load(), notes: [String: String] = ExerciseNotes.shared.notes) {
+        for e in gym.exercises.indices {
+            let name = gym.exercises[e].name
+            gym.exercises[e].note = notes[name]?.nilIfBlank
+            if let best = GymSessionMath.record(history?.exercise(name), before: date), let reps = best.reps {
+                gym.exercises[e].record = WatchGym.Last(kg: best.kg, reps: Int(reps))
+            }
+            guard let last = history?.last(name, before: date),
+                  let exercise = day.exercises.first(where: { $0.name == name }) else { continue }
+            // The same place among the work sets as Training mode (GymSessionMath.lastTime).
+            let work = exercise.sets.filter(\.work)
+            for l in gym.exercises[e].lifts.indices {
+                guard let position = work.firstIndex(where: { $0.row == gym.exercises[e].lifts[l].row }),
+                      last.sets.indices.contains(position), let reps = last.sets[position].reps else { continue }
+                gym.exercises[e].lifts[l].last = WatchGym.Last(kg: last.sets[position].kg, reps: Int(reps))
+            }
+        }
     }
 
     /// The parts of the day done here: the warm-up or stretching with every move
@@ -77,6 +101,8 @@ extension WatchBridge {
     /// takes seconds); the server's copy follows to the watch when it differs.
     /// Without a copy, from the server, else nothing.
     func loadGym(date: String) async -> WatchGym? {
+        // Not waited for: the plan answers at once and goes again with them.
+        Task { await loadExerciseInfo(date: date) }
         if date == AppModel.localDate(Date()), let saved = AppModel.live?.writes.waitingGym(date: date) ?? gymDays[date] ?? GymDayCache.load(date: date) {
             gymDays[date] = saved
             Task { @MainActor in await refreshGym(date: date, shown: saved) }
@@ -86,6 +112,20 @@ extension WatchBridge {
         gymDays[date] = day
         return watchGym(day, date: date)
     }
+
+    /// The notes and the history of sets, once a run of the app, for "last
+    /// time" and the record at each exercise on the watch; the plan already
+    /// sent goes again with them. The history as Training mode loads it each
+    /// time it opens (one request), so a workout done since is in it.
+    private func loadExerciseInfo(date: String) async {
+        guard !Self.exerciseInfoLoaded, let model = AppModel.live, !model.demo else { return }
+        Self.exerciseInfoLoaded = true
+        await ExerciseNotes.shared.load(api: model.api, demo: false)
+        _ = await model.gymHistory()
+        if let day = gymDays[date] { gymSaved(day, date: date) }
+    }
+
+    private static var exerciseInfoLoaded = false
 
     /// The day from the server (through the app's model when it runs, which
     /// keeps the writes still waiting and the saved copy).

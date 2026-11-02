@@ -8,6 +8,7 @@ import { trimGymPlan } from './gym-trim.js';
 import { parseStrengthPlan } from './strength-history.js';
 import { planTemplates, getTemplate, planStart } from './training-plans.js';
 import { actionInstructions } from './private/coach-actions.js';
+import { MAX_MINUTES } from './workout-model.js';
 export { actionInstructions };
 
 // Pictures the app can draw under an answer from the athlete's real data.
@@ -209,7 +210,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
     }
     // A swim: 15–90 min in the pool, or in open water (place open_water, by
     // time, with the safety line), never for someone who can't swim 100 m yet.
-    if(a.type==='workout'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','swim','gym'].includes(a.sport)&&Number.isInteger(a.minutes)&&a.minutes>=(a.sport==='run'?20:a.sport==='swim'?15:30)&&a.minutes<=(a.sport==='swim'?90:360)){
+    if(a.type==='workout'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','swim','gym'].includes(a.sport)&&Number.isInteger(a.minutes)&&a.minutes>=(a.sport==='run'?20:a.sport==='swim'?15:30)&&a.minutes<=(a.sport==='swim'?90:MAX_MINUTES[a.sport]||360)){
       const openWater=a.sport==='swim'&&a.place==='open_water';
       if(openWater&&context.cannotSwim100m)return [];
       if(!userInitiated&&context.remainingPlanned?.some(x=>x.date===a.date))return [];

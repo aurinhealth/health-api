@@ -3277,6 +3277,7 @@
 "Na budík v %@ potřebuješ jít spát do %@." = "To wake at %@ rested, be in bed by %@.";
 "První dny" = "First days";
 "%@ ze 3" = "%@ of 3";
+"%@ ze 2" = "%@ of 2";
 "Nos dnes v noci hodinky" = "Wear your watch tonight";
 "Ráno uvidíš připravenost." = "Readiness comes in the morning.";
 "Vyfoť talíř nebo naskenuj kód." = "Snap a photo or scan a barcode.";
@@ -3587,6 +3588,18 @@
 "běží" = "running";
 "Uloží délku a konec kardia" = "Saves the cardio's length and end";
 
+/* First-run setup: main sport, goal and time (SetupFocusPages) */
+"Jaký je tvůj hlavní sport?" = "What's your main sport?";
+"Aurin podle něj plánuje. Ostatní sporty z hodinek se počítají dál." = "Aurin plans around it. Other sports from your watch still count.";
+"Jaký je tvůj cíl?" = "What's your goal?";
+"Kouč podle něj skládá tvůj týden. Změníš ho kdykoli." = "The coach builds your week around it. You can change it any time.";
+"Víc energie, postupné zlepšení" = "More energy, steady progress";
+"Datum a vzdálenost" = "A date and a distance";
+"Jídlo i trénink k tomu" = "Eat and train for it";
+"Kdy můžeš trénovat?" = "When can you train?";
+"Potáhni pruh u každého dne. Aurin plánuje v tomhle čase a když potřebuješ odpočinek, vezme si méně." = "Drag each bar. Aurin plans within it and uses less when you need rest.";
+"Kde posiluješ?" = "Where do you lift?";
+"Posilovna, doma nebo obojí · vybavení" = "Gym, home or both · equipment";
 /* One coach card on Today (CoachThingsCard.swift) */
 "Kouč se ptá" = "Check-in";
 "Po tréninku" = "After workout";
@@ -3614,6 +3627,10 @@
 "Čas na 200 m (m:ss)" = "200 m time (m:ss)";
 "Nikdy neplav sám, výrazná čepice a bójka." = "Never alone, bright cap and a tow float.";
 "venku podle času" = "by time outside";
+"Po uložení se přepočítají tvoje zóny." = "Saving recalculates your zones.";
+"Po uložení se přepočítají tvoje zóny a pošlou do %@." = "Saving recalculates your zones and sends them to %@.";
+"Po uložení se přepočítají tvoje zóny a pošlou do %@ a %@." = "Saving recalculates your zones and sends them to %@ and %@.";
+"Podle nejlepších 20 minut jízdy." = "From the best 20 minutes of the ride.";
 
 "Ukončit trénink" = "End workout";
 "Ještě cvičím" = "Keep going";

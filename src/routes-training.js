@@ -132,7 +132,8 @@ export async function handleThresholdApi(request,env,ctx,url,session,internalAut
         if(!Object.keys(patch).length)throw new Error(L('Chybí hodnota k uložení.','There is no value to save.'));
         await saveTrainingProfile(env.DB,{...await getTrainingProfile(env.DB),...patch});
         const t=await athleteThresholds(env);
-        const intervals=env.INTERVALS_API_KEY?await writeIntervalsZones(env,t).catch(error=>({status:'error',message:error.message})):null;
+        // Like Nastavení → Zóny: Intervals.icu only with "Write to Intervals.icu" on.
+        const intervals=env.INTERVALS_API_KEY&&body.writeIntervals!==false?await writeIntervalsZones(env,t).catch(error=>({status:'error',message:error.message})):null;
         // A new FTP goes to Wahoo too, in the background, unless "Write to Wahoo" is off (wahoo.js writeWahooZones).
         if(patch.ftp&&env.WAHOO_TOKEN&&body.writeWahoo!==false)writeWahooZonesLater(env,ctx,t);
         await saveCheck(env.DB,sport,{status:'applied',testId:check?.testId||null,testDate:check?.testDate||null,estimate,result:check?.result||null});

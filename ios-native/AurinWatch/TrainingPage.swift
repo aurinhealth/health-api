@@ -592,6 +592,62 @@ enum GymText {
         return kg >= 1000 ? W.number(kg / 1000, digits: 1) + " t" : W.number(kg) + " kg"
     }
 
+    /// "97,5 × 6", "12 op." with body weight: a set from the history, in the athlete's units.
+    static func lift(_ set: WatchGym.Last) -> String {
+        guard let kg = set.kg, kg > 0 else { return W.tr("\(set.reps) op.", "\(set.reps) reps") }
+        return Self.kg(W.weight(kg)) + " × \(set.reps)"
+    }
+
+    /// Under the exercise's name: "Minule 97,5 × 6 · cíl: těžká" (Training
+    /// mode's "Minule" and the set's planned letter); nil with neither.
+    static func info(_ lift: WatchGym.Lift) -> String? {
+        guard lift.work else { return nil }
+        var parts: [String] = []
+        if let last = lift.last { parts.append(W.tr("Minule ", "Last time ") + Self.lift(last)) }
+        if let letter = lift.intensity, let aim = aim(letter) {
+            parts.append((parts.isEmpty ? W.tr("Cíl: ", "Aim: ") : W.tr("cíl: ", "aim: ")) + aim)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// The planned letter in words (GymIntensity.name on the iPhone); none for a warm-up or drop set.
+    static func aim(_ letter: String) -> String? {
+        switch letter {
+        case "T": return W.tr("technika", "technique")
+        case "E": return W.tr("snadná", "easy")
+        case "M": return W.tr("střední", "medium")
+        case "H": return W.tr("těžká", "hard")
+        case "F": return W.tr("selhání", "failure")
+        case "PR": return W.tr("osobní rekord", "personal record")
+        default: return nil
+        }
+    }
+
+    /// The colour of a letter, as on the iPhone (GymIntensity.color).
+    static func intensityColor(_ letter: String) -> Color {
+        switch letter {
+        case "T": return W.blue
+        case "E": return W.green
+        case "M": return W.indigo
+        case "H": return W.amber
+        case "F": return W.red
+        case "PR": return Color(hex: 0xE8C25A)
+        case "D": return W.pink
+        default: return W.muted
+        }
+    }
+
+    /// The set's planned letter in a dashed box, as the iPhone's table shows a plan's letter.
+    static func intensityPill(_ letter: String) -> some View {
+        let color = intensityColor(letter)
+        return Text(letter).font(.system(size: 10, weight: .bold)).foregroundStyle(color)
+            .lineLimit(1).fixedSize()
+            .padding(.horizontal, 4)
+            .frame(minWidth: 18, minHeight: 18)
+            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(color, style: StrokeStyle(lineWidth: 1.2, dash: [2.5, 2])))
+            .accessibilityLabel(W.tr("Cíl: ", "Aim: ") + (aim(letter) ?? letter))
+    }
+
     static func elapsed(_ seconds: TimeInterval) -> String {
         let s = max(0, Int(seconds))
         return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)

@@ -384,27 +384,10 @@ jobs:
           fi
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok", "status="+str(d.get("status")); assert d.get("preview") is True, "not a preview"; p=d.get("plan") or {}; assert p.get("rows"), "plan has no rows"; assert p.get("loadEstimates") is not None, "plan has no load estimates"' <<< "$body"
 
-      - name: Smoke test Google Health nutrition
-        if: env.TARGET == 'production'
-        env:
-          OIDC_TOKEN: ${{ steps.oidc_strength.outputs.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          response="$(curl -sS -w '\n%{http_code}' -H "Authorization: Bearer $OIDC_TOKEN" "https://aurin.health/health/nutrition")"
-          code="${response##*$'\n'}"
-          body="${response%$'\n'*}"
-          if [ "$code" != "200" ]; then
-            # Only the server's short message (Google's error code), never the records.
-            echo "HTTP $code"
-            python -c 'import json,sys; print(str((json.load(sys.stdin) or {}).get("message",""))[:300])' <<< "$body" || true
-            exit 1
-          fi
-          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok","status="+str(d.get("status")); assert d.get("data_type")=="nutrition-log","data_type="+str(d.get("data_type"))' <<< "$body"
-
-      # The app's main screen as the owner's account sees it (the deploy token
-      # acts as the owner, like the nutrition check). The logs are public: only
-      # the status, the time and the server's short message, never the data.
+      # The app's main screen. The deploy token acts as its own empty, disabled
+      # account (SMOKE_USER_EMAIL, src/tenancy.js smokeUser), never the owner's, so
+      # no real health data can reach these public logs (security audit 2026-11,
+      # SEC-010). Still only the status, the time and the server's short message.
       # A failure stops the release; a slow answer only warns, since the live
       # server's time varies (a cold start, Intervals).
       - name: Smoke test Today

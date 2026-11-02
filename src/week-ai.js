@@ -19,6 +19,7 @@ import { withFocus } from "./athlete-focus.js";
 import { availabilityOn } from "./training-availability.js";
 import { indoorMinutes } from "./adaptive-week.js";
 import { HARD_KINDS } from "./session-intensity.js";
+import { MAX_MINUTES as LONGEST } from "./workout-model.js";
 import { weekInstructions, sessionInstructions } from './private/week-ai.js';
 export { weekInstructions, sessionInstructions };
 
@@ -30,6 +31,8 @@ export const KINDS = ["recovery", "endurance", "long", "tempo", "sweet_spot", "t
 // The generator's focus for a kind (cycling-coach-v2.js reads goal.focus).
 export const FOCUS_OF = { recovery: "recovery", endurance: "endurance", long: "long_endurance", tempo: "tempo", sweet_spot: "sweet_spot", threshold: "threshold", vo2max: "vo2max" };
 export const MIN_MINUTES = { ride: 30, run: 20, swim: 15, gym: 30 };
+// The longest the AI week makes a session on its own; a day the athlete asked
+// for may go up to the longest ride or run (workout-model.js: 8 h, 6 h).
 export const MAX_MINUTES = { ride: 300, run: 150, swim: 90, gym: 90 };
 const DEFAULT_MINUTES = { ride: 60, run: 45, swim: 40, gym: 60 };
 
@@ -104,7 +107,7 @@ export function sanitizeWeekDays(days, { start, today, prefs = null, readiness =
     const environment = sport === "gym" ? "indoor" : raw?.environment === "indoor" ? "indoor" : "outdoor";
     if (split?.weak === sport && HARD_KINDS.has(kind)) kind = "endurance";
     let minutes = num(raw?.minutes) ?? DEFAULT_MINUTES[sport];
-    minutes = Math.min(MAX_MINUTES[sport], split?.short?.[sport] ?? Infinity, minutes);
+    minutes = Math.min(raw?.requested ? LONGEST[sport] ?? MAX_MINUTES[sport] : MAX_MINUTES[sport], split?.short?.[sport] ?? Infinity, minutes);
     const available = availabilityOn(prefs, date).minutes, left = available == null ? null : available - (used.get(date) || 0);
     // A day the athlete asked for keeps its session even without set time.
     if (left != null && !(raw?.requested && left < MIN_MINUTES[sport])) minutes = Math.min(minutes, left);

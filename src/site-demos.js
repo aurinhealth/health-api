@@ -418,7 +418,7 @@ const coachScreen = `<div class="app glow-today chat">${STATUS}
 <div class="u">How should I train today?</div>
 <div class="c1"><span>Readiness is 78 and HRV is above normal for the third day. Your upper body is rested, so today is a good day for strength. Keep squats moderate after this morning’s run.</span></div>
 <div class="u"${at('1300')}>I’d like a gym workout this evening, about an hour.</div>
-<div class="dots"${at('2100 3200-in')}><i></i><i></i><i></i><span>Coach is thinking…</span></div>
+<div class="dots"${at('2100 3200-in')}><span>Coach is thinking…</span></div>
 <div class="c1"${at('3200')}><span data-type="3200,900">Here’s a full-body session for 5:30 PM:</span></div>
 <div class="act"${at('4400')}>
 <div class="al">${ic('wand')}Schedule · Thu, Oct 8</div>
@@ -438,7 +438,7 @@ const memoryScreen = `<div class="app glow-today chat">${STATUS}
 <div class="nav c"><span class="cb">${ic('x')}</span><b>Coach</b><span class="cb">⋯</span></div>
 <div class="msgs">
 <div class="u">My left knee hurts when I run. No running for a few weeks, please.</div>
-<div class="dots"${at('500 1500-in')}><i></i><i></i><i></i><span>Coach is thinking…</span></div>
+<div class="dots"${at('500 1500-in')}><span>Coach is thinking…</span></div>
 <div class="c1"${at('1500')}><span data-type="1500,1100">Got it, no running until your knee is better. I’ll swap Saturday’s run for an easy ride and keep lunges out of your gym days.</span></div>
 <div class="mchip"${at('2900')}>${ic('check')}Remembered: left knee hurts when running<span class="mut">Back</span></div>
 </div>
@@ -511,12 +511,12 @@ const actSleep = `<div class="dm wc">
 <div class="wcard"${rise(360)}><div class="row sp base"><span class="mut">Last night</span><span class="num md">7:12</span></div>
 <div class="hg" aria-hidden="true"><div class="hgl"><span>Awake</span><span>REM</span><span>Light</span><span>Deep</span></div><div class="hgt w-draw"${at('600')}>${NIGHT.map(([t, s, e]) => `<i class="${t}" style="left:${(s / 449 * 100).toFixed(2)}%;width:${Math.max(0.5, (e - s) / 449 * 100).toFixed(2)}%"></i>`).join('')}</div></div></div>
 </div>`;
-// Coach: the question, dots for a moment, the answer typed out, then its workout.
+// Coach: the question, "Coach is thinking…" for a moment (CoachThinking, text only), the answer typed out, then its workout.
 const COACH_SAYS = ['Readiness is 61 after 5 h 40 of sleep. ', 'Keep legs, go lighter:', ' squat 3 × 8 at 70 kg.'];
 const typed = (() => { let t = 1600; return COACH_SAYS.map(x => { const at0 = t; t += x.length * 26; return [x, at0, x.length * 26]; }); })();
 const actCoach = `<div class="dm wc coach2">
 <div class="w-q"${rise(100)}>Bad night. Legs today?</div>
-<div class="dots"${at('700 1600-in')}><i></i><i></i><i></i></div>
+<div class="dots"${at('700 1600-in')}><span>Coach is thinking…</span></div>
 <div class="wcard w-a"${at('1600')}><p class="sent">${typed.map(([x, start, len], i) => `<span${i === 1 ? ' class="grn w-it"' : ''} data-type="${start},${len}">${x}</span>`).join('')}</p></div>
 <div class="wcard row w-wo"${at(String(typed[2][1] + typed[2][2] + 200))}><span class="ib amb">${ic('lift')}</span><div><b>Legs, lighter</b><span class="mut s">40 min · 4 exercises</span></div><span class="w-add">Add</span></div>
 </div>`;
@@ -533,7 +533,8 @@ const watchHome = `<div class="aw-s aw-home" style="--gw:#163A2E">${wTop(wBtn('a
 <div class="aw-g">${[['Sleep', '7:12', '', 28, WA.amber, '89%'], ['Strain', '8.4', '', 14, WA.amber, 'of 11–14'], ['HRV', '64', 'ms', 76, WA.green, 'high']].map(([k, v, u, pos, c, note]) => `<div><span class="aw-k">${k}</span><span class="aw-n aw-v">${v}${u ? `<small>${u}</small>` : ''}</span>${wRange(pos, c)}<b style="color:${c}">${note}</b></div>`).join('')}</div>
 <div class="aw-next"><span style="color:${WA.amber}">${ic('gym')}</span>Strength training, full body · 45′ at 5:30 PM</div></div>`;
 const watchGym = `<div class="aw-s" style="--gw:#3A2A17">${wTop(wBtn('pause', WA.ink), '5:41', `<span class="aw-ib">${ic('menu')}</span>`)}
-<div class="aw-ex"><b>Squat</b><span><i class="aw-ib aw-sm">${ic('minus')}</i>set 2/4<i class="aw-ib aw-sm">${ic('plus')}</i></span></div>
+<div class="aw-ex"><b>Squat</b><span><i class="aw-ib aw-sm">${ic('minus')}</i>set 2/4<i class="aw-pl" style="color:${WA.amber}">H</i><i class="aw-ib aw-sm">${ic('plus')}</i></span></div>
+<div class="aw-inf">Last time 77.5 × 8 · aim: hard</div>
 <div class="aw-two"><div class="aw-box on"><span class="aw-n">80</span><span class="aw-k">kg</span></div><div class="aw-box"><span class="aw-n">8</span><span class="aw-k">reps</span></div></div>
 <div class="aw-done">Set done</div>
 <div class="aw-two aw-tiles"><div><span class="aw-k">Time</span><b>12:40</b></div><div><span class="aw-k">Heart</span><b style="color:${WA.red}">128 <small>bpm</small></b></div></div>
@@ -581,7 +582,7 @@ ${[['run', '5 km', '24 min', WA.red], ['bike', '20 km', '33 min', WA.amber], ['r
 
 export const WATCH = [
   ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness, sleep, strain and HRV, as on Today, and what’s next today in one line.', watchHome],
-  ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown. Leave the iPhone in your locker: the watch keeps your sets, swaps a taken machine even without signal, and hands them over later. Your heart rate and calories go into the same workout.', watchGym],
+  ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown, last time’s set under the exercise and its technique a tap away. Leave the iPhone in your locker: the watch keeps your sets, swaps a taken machine even without signal, and hands them over later. Your heart rate and calories go into the same workout.', watchGym],
   ['glow-training', 'Rest, then a tap.', 'The rest counts down on the wrist and taps you when it’s time, with the next set ready.', watchRest],
   ['glow-training', 'Warm up and cool down too.', 'Cardio, the warm-up and the stretching run on the wrist with the sets: a countdown for each move, or a stopwatch on the bike. Switch them on or off and move them before or after your exercises, and your iPhone gets the same plan.', watchWarmup],
   ['glow-training', 'Race day, one tap.', 'A duathlon, aquabike, aquathlon or triathlon from your plan shows as one card, its legs in race order, and starts as one multisport workout: the watch times each leg and each change. Tap it for each leg’s target.', watchRace],
@@ -882,8 +883,7 @@ html:not(.js) .stage1{display:none}
 .msgs{flex:1;display:flex;flex-direction:column;gap:12px;padding:10px 0;justify-content:flex-start}
 .msgs .u{align-self:flex-end;max-width:80%;padding:10px 14px;border-radius:18px;background:var(--button);color:var(--on-button);font-size:15.5px}
 .msgs .c1{align-self:flex-start;max-width:86%;padding:12px 16px;border-radius:18px;background:var(--panel);font-size:15.5px;line-height:1.45}
-.dots{align-self:flex-start;display:flex;align-items:center;gap:5px;padding:14px 16px;border-radius:18px;background:var(--panel)}.dots i{width:7px;height:7px;border-radius:50%;background:var(--text);animation:blink 1s infinite}.dots span{margin-left:7px;font-size:13px;color:var(--muted)}.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
-@keyframes blink{50%{opacity:.25}}
+.dots{align-self:flex-start;display:flex;align-items:center;padding:14px 16px;border-radius:18px;background:var(--panel)}.dots span{font-size:13px;color:var(--muted)}
 .js .dots[data-at]:not(.in){display:none}
 .act{align-self:stretch;padding:14px;border-radius:16px;background:color-mix(in srgb,var(--amber-soft) 60%,transparent)}
 .al{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600}.an{font-size:22px;margin:6px 0 4px}
@@ -897,7 +897,7 @@ html:not(.js) .stage1{display:none}
 .inp{display:flex;align-items:center;gap:10px;padding:10px 0 34px}.inp .mut{flex:1;padding:12px 14px;border-radius:20px;background:var(--panel)}
 .inp .cam{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--panel)}
 .snd{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--button);color:var(--on-button)}
-@media (prefers-reduced-motion:reduce){.cam .scan,.dots i,.btn .sp1{animation:none}}
+@media (prefers-reduced-motion:reduce){.cam .scan,.btn .sp1{animation:none}}
 /* The welcome's cards (ACTS): the app's paper cards with their soft shadow, rising into place. */
 .dm.wc{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;width:100%}
 .wcard{padding:14px 16px;border-radius:22px;background:var(--panel);box-shadow:0 1px 1px rgba(60,45,20,.05),0 16px 36px -12px rgba(60,45,20,.22)}
@@ -1042,6 +1042,8 @@ html:not(.js) .stage1{display:none}
 .aw-rb b{position:absolute;top:-2px;width:8px;height:8px;margin-left:-4px;border-radius:50%;border:1.5px solid #000}
 .aw-next{display:flex;align-items:center;gap:5px;margin-top:7px;font-size:10.5px;font-weight:600;white-space:nowrap}
 .aw-ex{display:flex;align-items:center;justify-content:space-between;margin-top:2px}.aw-ex b{font-size:16px}.aw-ex>span{display:flex;align-items:center;gap:5px;font-weight:500}
+.aw-pl{display:inline-grid;place-items:center;min-width:16px;height:16px;border:1.2px dashed;border-radius:5px;font-size:10px;font-weight:700;font-style:normal}
+.aw-inf{margin-top:1px;font-size:10px;color:#9AA39F;white-space:nowrap}
 .aw-two{display:flex;gap:6px;margin-top:5px}.aw-two>div{flex:1}
 .aw-box{display:flex;flex-direction:column;align-items:center;padding:2px 0 2px;border-radius:13px;background:rgba(255,255,255,.08)}.aw-box .aw-n{font-size:28px}.aw-box .aw-k{font-size:10px}
 .aw-box.on{background:#16352B;box-shadow:inset 0 0 0 2px #8FE6C4}

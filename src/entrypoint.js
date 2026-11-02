@@ -70,7 +70,7 @@ import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabil
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
 import { grantedExtras } from "./google-scopes.js";
-import { renderForEnvironment } from "./workout-model.js";
+import { renderForEnvironment, MAX_MINUTES } from "./workout-model.js";
 import { plannedEventWorkout } from "./planned-detail.js";
 import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, freeMinutes, roleTime, usualFor, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, hrvSourceRows, weeklyRunCap, capRunVolume, committedRunMinutes } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
@@ -128,7 +128,7 @@ import { handleWhoopOAuth, disconnectWhoop, syncWhoop } from "./whoop.js";
 import { wahooDetail } from "./wahoo-detail.js";
 import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, wahooRideExpected, readWahooTokens } from "./wahoo.js";
 import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed } from "./sync-destinations.js";
-import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, usersWithAccount, usersWithPushTokens, openSignup } from "./tenancy.js";
+import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, smokeUser, usersWithProviders, usersWithAccount, usersWithPushTokens, openSignup } from "./tenancy.js";
 import { userDataEnvironment, prefetchUserData, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
 import { handlePasskeyLogin } from "./passkeys.js";
@@ -509,8 +509,12 @@ const worker = {
       // A cookie from before the user signed out everywhere (or changed the e-mail, removed a passkey or the Apple ID) is no cookie.
       if (user && !sessionMatchesUser(principal, user)) { user = null; principal = null; }
       if (!user && !isPublic) return unauthorizedResponse();
-    } else if (principal?.kind === "owner" || principal?.kind === "system" || principal?.kind === "coach-eval") {
-      // The owner API key and GitHub automations act as the owner.
+    } else if (principal?.kind === "system") {
+      // The deploy smoke test acts as its own empty account, never as the owner (tenancy.js smokeUser).
+      user = await smokeUser(env.DB, env);
+      if (!user) return Response.json({status:'error',message:'The deploy check account is not set up (SMOKE_USER_EMAIL).'},{status:503,headers:{'Cache-Control':'no-store'}});
+    } else if (principal?.kind === "owner" || principal?.kind === "coach-eval") {
+      // The owner's coach evaluation (coach-eval.js) reads the owner's own data.
       user = await ownerUser(env.DB, env);
     }
     if (user) {
@@ -1649,7 +1653,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(from>last)return Response.json({status:'ok',check:null},{headers:{'Cache-Control':'no-store'}});
       const ROLE_KIND={quality:'threshold',long:'long',endurance:'endurance',recovery:'recovery'};
       const drafts=(Array.isArray(body.sessions)?body.sessions:[]).slice(0,28).filter(x=>validTrainingDay(x?.date)&&x.date>=from&&x.date<=last&&['ride','run','swim','gym'].includes(x?.sport)&&x.key).map(x=>{
-        const minutes=Math.max(10,Math.min(360,Math.round(Number(x.minutes)||60))),kind=x.sport==='gym'?'gym':KINDS.includes(x.kind)&&x.kind!=='gym'?x.kind:x.system?kindOfSystem(x.system):ROLE_KIND[x.role]||null;
+        const minutes=Math.max(10,Math.min(MAX_MINUTES.ride,Math.round(Number(x.minutes)||60))),kind=x.sport==='gym'?'gym':KINDS.includes(x.kind)&&x.kind!=='gym'?x.kind:x.system?kindOfSystem(x.system):ROLE_KIND[x.role]||null;
         return {id:String(x.key).slice(0,64),date:x.date,sport:x.sport,minutes,kind:kind||kindOfPlanned({sport:x.sport,name:x.name,minutes}),name:typeof x.name==='string'?x.name.slice(0,120):null};
       });
       if(!drafts.length)return Response.json({status:'ok',check:null},{headers:{'Cache-Control':'no-store'}});

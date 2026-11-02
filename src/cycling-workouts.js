@@ -158,7 +158,7 @@ function buildFamilyWorkouts() {
     });
   }
   for (const e of ENDURANCE) {
-    for (const total of [45, 60, 75, 90, 105, 120, 150, 180, 210, 240, 300, 360]) {
+    for (const total of [45, 60, 75, 90, 105, 120, 150, 180, 210, 240, 300, 360, 420, 480]) {
       if (total < (e.minTotal || 0)) continue;
       const main = total - 20;
       const structure = [step(10, 55, "90", "rozjetí"), ...e.core(main), easy(10, 50)];

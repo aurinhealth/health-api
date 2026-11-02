@@ -123,7 +123,10 @@ final class GymStore: ObservableObject {
             failed = gym == nil
             return
         }
-        take(built(sheet, date: date))
+        var plan = built(sheet, date: date)
+        // The notes, records and last time's sets came with the iPhone's plan.
+        if let gym, gym.date == date { plan.keepInfo(from: gym) }
+        take(plan)
     }
 
     private func built(_ sheet: GymDay, date: String) -> WatchGym {
@@ -211,8 +214,8 @@ final class GymStore: ObservableObject {
         guard var gym else { return }
         gym.update(row: row) { $0.kg = kg; $0.reps = reps; $0.done = true }
         // The next set of the exercise starts from this one, as on the iPhone.
-        if let next = gym.next(after: row), !next.newExercise, let done = gym.lift(row: row), done.work, next.lift.work, !next.lift.done {
-            gym.update(row: next.lift.row) { $0.kg = kg; $0.reps = reps }
+        if let next = gym.nextInExercise(after: row), let done = gym.lift(row: row), done.work, next.work {
+            gym.update(row: next.row) { $0.kg = kg; $0.reps = reps }
         }
         self.gym = gym
         let done = WatchGym.Done(date: gym.date, row: row, kg: kg, reps: reps)
@@ -227,8 +230,8 @@ final class GymStore: ObservableObject {
     /// letter goes to the iPhone's sheet.
     func rate(row: Int, letter: String, next kg: Double) {
         guard var gym else { return }
-        if let next = gym.next(after: row), !next.newExercise, next.lift.work, !next.lift.done {
-            gym.update(row: next.lift.row) { $0.kg = kg }
+        if let next = gym.nextInExercise(after: row), next.work {
+            gym.update(row: next.row) { $0.kg = kg }
         }
         gym.update(row: row) { $0.intensity = letter }
         self.gym = gym
@@ -364,6 +367,7 @@ final class GymStore: ObservableObject {
         sheet.apply(change)
         var fresh = WatchGym(sheet, date: old.date, restSets: WatchStore.shared.settings.restSets, restExercises: old.restExercises)
         fresh.partsDone = old.partsDone
+        fresh.keepInfo(from: old)
         for e in fresh.exercises.indices {
             for l in fresh.exercises[e].lifts.indices where !fresh.exercises[e].lifts[l].done {
                 let lift = fresh.exercises[e].lifts[l]
@@ -543,6 +547,7 @@ final class GymStore: ObservableObject {
     /// request (GET /app/api/gym/alternatives?exercises=); offline it fails at
     /// once and the next plan or load tries again.
     private func keepSwaps() {
+        keepTechniques()
         guard let gym, gym.date == WatchStore.localDate(Date()), !fetchingSwaps, WatchAPI.signedIn else { return }
         let kept = swaps?.date == gym.date ? swaps?.byExercise ?? [:] : [:]
         var missing: [String] = []
@@ -563,6 +568,72 @@ final class GymStore: ObservableObject {
             // Exercises that came with a plan during the request.
             store.keepSwaps()
         }
+    }
+
+    // MARK: Technique (mockup "u cviku" 5)
+
+    private static let techniquesKey = "watchGymTechniques"
+
+    /// The technique's steps of the exercises the plans had, in the language
+    /// they came in, kept from day to day: a tap on the name shows them in a
+    /// gym without Wi-Fi. An exercise outside the catalog keeps no steps.
+    private struct Techniques: Codable {
+        var language: String
+        var byExercise: [String: [String]]
+    }
+
+    private var techniques: Techniques? = UserDefaults.standard.data(forKey: GymStore.techniquesKey)
+        .flatMap { try? JSONDecoder().decode(Techniques.self, from: $0) }
+    private var fetchingTechniques = false
+
+    private var techniqueLanguage: String { W.english ? "en" : "cs" }
+
+    /// Fetches the steps of the plan's exercises not kept yet, one request
+    /// each (GET /app/api/gym/technique, as the iPhone's technique sheet), in
+    /// a row; an exercise done before costs nothing. Offline the next plan tries again.
+    private func keepTechniques() {
+        guard let gym, !fetchingTechniques, WatchAPI.signedIn else { return }
+        let language = techniqueLanguage
+        let kept = techniques?.language == language ? techniques?.byExercise ?? [:] : [:]
+        let missing = gym.exercises.map(\.name).reduce(into: [String]()) { if kept[$1] == nil && !$0.contains($1) { $0.append($1) } }
+        guard !missing.isEmpty else { return }
+        fetchingTechniques = true
+        let account = swapsAccount
+        Task { @MainActor in
+            let store = GymStore.shared
+            var found: [String: [String]] = [:]
+            for name in missing {
+                // nil offline: stop, the rest waits for the next plan.
+                guard let steps = await WatchAPI.gymTechnique(name) else { break }
+                found[name] = steps
+            }
+            store.fetchingTechniques = false
+            guard !found.isEmpty, store.swapsAccount == account else { return }
+            var value = (store.techniques?.language == language ? store.techniques : nil) ?? Techniques(language: language, byExercise: [:])
+            value.byExercise.merge(found) { $1 }
+            // The 80 last are plenty for anyone's exercises.
+            if value.byExercise.count > 80 {
+                let today = Set(store.gym?.exercises.map(\.name) ?? [])
+                for name in value.byExercise.keys.filter({ !today.contains($0) }).prefix(value.byExercise.count - 80) {
+                    value.byExercise[name] = nil
+                }
+            }
+            store.techniques = value
+            if let data = try? JSONEncoder().encode(value) { UserDefaults.standard.set(data, forKey: GymStore.techniquesKey) }
+        }
+    }
+
+    /// An exercise's technique steps: the kept ones, else fetched now (an
+    /// exercise added during the workout); none outside the catalog, nil offline.
+    func technique(_ exercise: String) async -> [String]? {
+        let language = techniqueLanguage
+        if techniques?.language == language, let steps = techniques?.byExercise[exercise] { return steps }
+        guard let steps = await WatchAPI.gymTechnique(exercise) else { return nil }
+        var value = (techniques?.language == language ? techniques : nil) ?? Techniques(language: language, byExercise: [:])
+        value.byExercise[exercise] = steps
+        techniques = value
+        if let data = try? JSONEncoder().encode(value) { UserDefaults.standard.set(data, forKey: Self.techniquesKey) }
+        return steps
     }
 
     /// The swaps kept for an exercise of today, without those the plan has by now.
@@ -592,57 +663,11 @@ final class GymStore: ObservableObject {
         UserDefaults.standard.removeObject(forKey: Self.savedKey)
         UserDefaults.standard.removeObject(forKey: Self.earlierKey)
         UserDefaults.standard.removeObject(forKey: Self.swapsKey)
+        techniques = nil
+        UserDefaults.standard.removeObject(forKey: Self.techniquesKey)
     }
 
     private func save() {
         if let data = gym?.encoded() { UserDefaults.standard.set(data, forKey: Self.savedKey) }
     }
-}
-
-extension WatchGym {
-    func lift(row: Int) -> Lift? {
-        exercises.lazy.flatMap(\.lifts).first { $0.row == row }
-    }
-
-    mutating func update(row: Int, _ change: (inout Lift) -> Void) {
-        for e in exercises.indices {
-            if let l = exercises[e].lifts.firstIndex(where: { $0.row == row }) {
-                change(&exercises[e].lifts[l])
-                return
-            }
-        }
-    }
-
-    /// Where the set after `row` is: the next row of its exercise, else the
-    /// first set not done of a later exercise, else of an earlier one.
-    func next(after row: Int) -> (exercise: Int, lift: Lift, newExercise: Bool)? {
-        guard let e = exercises.firstIndex(where: { $0.lifts.contains { $0.row == row } }),
-              let l = exercises[e].lifts.firstIndex(where: { $0.row == row }) else { return nil }
-        if let lift = exercises[e].lifts[(l + 1)...].first(where: { !$0.done }) {
-            return (e, lift, false)
-        }
-        let order = Array(exercises.indices[(e + 1)...]) + Array(exercises.indices[..<e])
-        for i in order {
-            if let lift = exercises[i].lifts.first(where: { !$0.done }) { return (i, lift, true) }
-        }
-        return nil
-    }
-
-    /// The first set not done, from the top.
-    var current: (exercise: Int, lift: Lift)? {
-        for e in exercises.indices {
-            if let lift = exercises[e].lifts.first(where: { !$0.done }) { return (e, lift) }
-        }
-        return nil
-    }
-
-    var started: Bool { exercises.contains { $0.lifts.contains(where: \.done) } }
-    var allDone: Bool { current == nil }
-
-    /// kg × reps of the work sets done.
-    var volume: Double {
-        exercises.flatMap(\.lifts).filter { $0.done && $0.work }.reduce(0) { $0 + ($1.kg ?? 0) * Double($1.reps ?? 0) }
-    }
-
-    var setsDone: Int { exercises.flatMap(\.lifts).filter { $0.done && !$0.warmup }.count }
 }

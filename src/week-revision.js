@@ -8,6 +8,7 @@ import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { withFocus } from "./athlete-focus.js";
 import { KINDS, EASIER, MIN_MINUTES } from "./week-ai.js";
 import { HARD_KINDS } from "./session-intensity.js";
+import { MAX_MINUTES as LONGEST } from "./workout-model.js";
 import { EXPECTED_RPE } from "./coach-reflection.js";
 import { MEMORY_RULE } from "./athlete-state.js";
 import { revisionInstructions } from './private/week-revision.js';
@@ -18,6 +19,8 @@ const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(
 const round5 = m => Math.round(m / 5) * 5;
 const gap = (a, b) => Math.abs(Date.parse(a + "T12:00:00Z") - Date.parse(b + "T12:00:00Z")) / DAY;
 const REVISE_KINDS = KINDS.filter(k => k !== "gym");
+// The longest the revision makes a ride or run on its own. A session planned
+// longer (up to workout-model.js MAX_MINUTES, an 8 h ride) keeps its length.
 const MAX_MINUTES = { ride: 300, run: 150 };
 const MAX_CHANGES = 3;
 
@@ -81,7 +84,7 @@ export function sanitizeChanges(changes, upcoming, { done = [], availabilityByDa
       if (readiness?.zone === "red" || neighbour) { kind = u.kind || "endurance"; undone = true; }
     }
     const budget = num(availabilityByDate[u.date]);
-    const cap = Math.min(MAX_MINUTES[u.sport], Math.max(u.minutes || 0, budget && budget > 0 ? budget : 0, MIN_MINUTES[u.sport]));
+    const cap = Math.min(LONGEST[u.sport], Math.max(u.minutes || 0, Math.min(MAX_MINUTES[u.sport], Math.max(budget && budget > 0 ? budget : 0, MIN_MINUTES[u.sport]))));
     let minutes = Math.round(num(c.minutes) || u.minutes || 60);
     minutes = Math.max(MIN_MINUTES[u.sport], Math.min(cap, round5(minutes)));
     if (kind === u.kind && Math.abs(minutes - (u.minutes || 0)) < 5) continue;
