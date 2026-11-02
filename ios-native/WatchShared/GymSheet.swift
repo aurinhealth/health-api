@@ -598,6 +598,10 @@ extension GymDay {
 
     /// A change from the watch's menu (≡).
     mutating func apply(_ change: WatchGym.Change) {
+        if change.kind == .parts {
+            if let parts = change.parts { setDayParts(parts) }
+            return
+        }
         let names = exercises.map(\.name)
         guard names.indices.contains(change.exercise) else { return }
         switch change.kind {
@@ -613,6 +617,8 @@ extension GymDay {
         case .move:
             guard let to = change.to else { return }
             moveExercise(from: change.exercise, to: to)
+        case .parts:
+            return
         }
     }
 }

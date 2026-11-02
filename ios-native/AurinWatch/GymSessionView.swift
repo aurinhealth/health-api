@@ -22,6 +22,10 @@ struct GymSessionView: View {
     @State private var list = false
     @State private var summary = false
     @State private var coachOpen = false
+    /// The cardio, warm-up or stretching on the screen and how far it got.
+    @StateObject private var run = GymPartRun()
+    /// An exercise picked in ≡ before the first set: the parts before the exercises wait.
+    @State private var skipBefore = false
     /// The set just done, rated during the rest that follows it.
     @State private var rated: Rated?
     /// The tile the crown turns: the weight, or the reps after a tap on them.
@@ -58,10 +62,17 @@ struct GymSessionView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if summary || store.gym?.allDone == true {
+                if summary {
                     GymSummary(finish: finish)
                 } else if workout.pausedAt != nil {
                     paused
+                } else if let part = shownPart, let day = store.sheetDay, let parts = store.dayParts {
+                    GymPartView(run: run, part: part, parts: parts, day: day) {
+                        if store.gym?.allDone == true, nextAfter == nil { summary = true }
+                    }
+                    .id(part)
+                } else if store.gym?.allDone == true {
+                    GymSummary(finish: finish)
                 } else if let end = restEnd, end > now {
                     rest(until: end)
                 } else if let gym = store.gym, let lift = currentLift(in: gym) {
@@ -71,7 +82,7 @@ struct GymSessionView: View {
                 }
             }
             .toolbar {
-                if !summary, workout.pausedAt == nil, restEnd.map({ $0 > now }) != true, store.gym?.allDone != true {
+                if !summary, workout.pausedAt == nil, restEnd.map({ $0 > now }) != true, store.gym?.allDone != true || shownPart != nil {
                     // In the cover's own corner: at .topBarLeading the cover's ✕
                     // took its place (and closed the screen with the workout running).
                     ToolbarItem(placement: .cancellationAction) {
@@ -86,7 +97,7 @@ struct GymSessionView: View {
                             .accessibilityLabel(W.tr("Kouč", "Coach"))
                     }
                 }
-                if !summary, workout.pausedAt == nil, store.gym?.allDone != true {
+                if !summary, workout.pausedAt == nil, store.gym?.allDone != true || shownPart != nil {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button { list = true } label: { Image(systemName: "line.3.horizontal") }
                             .accessibilityLabel(W.tr("Cviky", "Exercises"))
@@ -95,14 +106,22 @@ struct GymSessionView: View {
             }
             .sheet(isPresented: $list) {
                 NavigationStack {
-                    GymExerciseList(current: exercise) { picked in
+                    GymExerciseList(current: exercise, running: shownPart) { picked in
                         exercise = picked
                         restEnd = nil
+                        skipBefore = true
+                        run.close()
                         list = false
                     } moved: { current in
                         exercise = current
+                    } openPart: { part in
+                        store.reopenPart(part)
+                        restEnd = nil
+                        run.open(part, minutes: store.dayParts?.choice(part).minutes ?? 0)
+                        list = false
                     } end: {
                         list = false
+                        run.close()
                         summary = true
                     }
                 }
@@ -126,6 +145,12 @@ struct GymSessionView: View {
             store.endedOnPhone = false
             end(onPhone: true)
         }
+        // The next part before the first set or after the last, from its start.
+        .onChange(of: shownPart, initial: true) { _, part in
+            guard let part, run.part != part else { return }
+            run.open(part, minutes: store.dayParts?.choice(part).minutes ?? 0)
+        }
+        .onChange(of: workout.pausedAt) { _, at in run.paused(at != nil) }
         // The rest the same as in Training mode on the iPhone, both ways.
         .onChange(of: restEnd) { _, end in sendRest(end) }
         .onChange(of: store.phoneRest) { _, rest in
@@ -153,6 +178,22 @@ struct GymSessionView: View {
                 }
             }
         }
+    }
+
+    /// The part on the screen: one opened from ≡, else the next one turned on
+    /// before the first set (until an exercise is picked) or after the last.
+    private var shownPart: GymDayPart? {
+        if let part = run.part { return part }
+        guard let gym = store.gym, let day = store.sheetDay, let parts = store.dayParts else { return nil }
+        let started = gym.exercises.contains { $0.lifts.contains(\.done) }
+        if !started, !skipBefore, let part = parts.before(day).first(where: { !store.partFinished($0) }) { return part }
+        return gym.allDone ? nextAfter : nil
+    }
+
+    /// The next part after the exercises not done or skipped yet.
+    private var nextAfter: GymDayPart? {
+        guard let day = store.sheetDay, let parts = store.dayParts else { return nil }
+        return parts.after(day).first { !store.partFinished($0) }
     }
 
     /// The set on the screen: the first not done of the chosen exercise, else the next one with sets left.
@@ -424,7 +465,8 @@ struct GymSessionView: View {
         rated = lift.work ? Rated(row: lift.row, kg: W.kg(kg), before: lift.intensity, sameExercise: next.map { !$0.newExercise } ?? false) : nil
         WKInterfaceDevice.current().play(.success)
         guard let next else {
-            summary = true
+            // The cardio or stretching after the exercises first, then the summary.
+            if nextAfter == nil { summary = true }
             return
         }
         exercise = next.exercise
@@ -626,52 +668,73 @@ struct GymSessionView: View {
     }
 }
 
-/// ≡: the exercises with their sets, one to jump to; swipe for Swap and
-/// Remove, Add exercise at the end, and the end of the workout.
+/// ≡: the parts of the day in order (mockup "části"): the cardio, warm-up and
+/// stretching with their switches among the exercises; a tap runs a part or
+/// jumps to an exercise, swipe an exercise for Swap and Remove, touch and hold
+/// to drag either to another place. A part goes before or after the exercises.
 struct GymExerciseList: View {
     @ObservedObject private var store = GymStore.shared
     let current: Int
+    /// The part on the session's screen.
+    let running: GymDayPart?
     let pick: (Int) -> Void
     /// The exercise on the screen after a move, at its new place.
     let moved: (Int) -> Void
+    let openPart: (GymDayPart) -> Void
     let end: () -> Void
     @State private var swap: Int?
+
+    /// One line of the list: a part, or an exercise by its key.
+    private enum Line: Hashable {
+        case part(GymDayPart)
+        case exercise(String)
+
+        var isExercises: Bool {
+            switch self {
+            case .exercise, .part(.exercises): return true
+            default: return false
+            }
+        }
+    }
+
+    /// The day's parts in order with the exercises in the place of Cviky
+    /// (that word itself only while there are none).
+    private func lines(_ gym: WatchGym) -> [Line] {
+        guard let day = store.sheetDay, let parts = store.dayParts else { return gym.exercises.map { .exercise($0.key) } }
+        return parts.visible(day).flatMap { part -> [Line] in
+            guard part == .exercises else { return [.part(part)] }
+            return gym.exercises.isEmpty ? [.part(.exercises)] : gym.exercises.map { .exercise($0.key) }
+        }
+    }
 
     var body: some View {
         List {
             if let gym = store.gym {
                 Section {
-                    // By the exercise, not its place: a removed or moved one takes its swipe along.
-                    ForEach(Array(gym.exercises.enumerated()), id: \.element.key) { index, e in
-                        Button { pick(index) } label: {
-                            HStack {
-                                Text(e.title).foregroundStyle(index == current ? W.amber : W.ink).lineLimit(2)
-                                Spacer(minLength: 4)
-                                let work = e.lifts.filter(\.work)
-                                Text("\(work.filter(\.done).count)/\(work.count)").foregroundStyle(W.secondary)
+                    // By the line, not its place: a removed or moved exercise takes its swipe along.
+                    ForEach(lines(gym), id: \.self) { line in
+                        switch line {
+                        case .part(let part):
+                            if part == .exercises {
+                                Text(W.tr("Cviky", "Exercises")).font(.system(size: 14)).foregroundStyle(W.secondary)
+                            } else {
+                                partLine(part)
                             }
-                            .font(.system(size: 14))
-                        }
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                store.change(.removeExercise, exercise: index)
-                            } label: {
-                                Label(W.tr("Odebrat", "Remove"), systemImage: "trash")
+                        case .exercise(let key):
+                            if let index = gym.exercises.firstIndex(where: { $0.key == key }) {
+                                exerciseLine(gym.exercises[index], index)
                             }
-                            Button {
-                                swap = index
-                            } label: {
-                                Label(W.tr("Vyměnit", "Swap"), systemImage: "arrow.triangle.2.circlepath")
-                            }
-                            .tint(W.indigo)
                         }
                     }
-                    .onMove { from, to in
-                        guard let source = from.first, store.gym != nil else { return }
-                        var order = Array(gym.exercises.indices)
-                        order.move(fromOffsets: from, toOffset: to)
-                        if let place = order.firstIndex(of: current) { moved(place) }
-                        store.change(.move, exercise: source, to: to)
+                    .onMove { from, to in move(gym, from: from, to: to) }
+                    if let parts = store.dayParts, let off = [GymDayPart.cardioEnd, .cardioStart].first(where: { !parts.isOn($0) }) {
+                        Button {
+                            var next = parts
+                            next.off.removeAll { $0 == off }
+                            store.setParts(next)
+                        } label: {
+                            Label(W.tr("Přidat kardio", "Add cardio"), systemImage: "plus").foregroundStyle(W.amber)
+                        }
                     }
                     NavigationLink {
                         GymOptionsView(title: W.tr("Přidat cvik", "Add exercise"), exercise: nil) { option in
@@ -696,6 +759,112 @@ struct GymExerciseList: View {
                     store.change(.swap, exercise: index, option: option)
                 }
             }
+        }
+    }
+
+    private func exerciseLine(_ e: WatchGym.Exercise, _ index: Int) -> some View {
+        Button { pick(index) } label: {
+            HStack {
+                Text(e.title).foregroundStyle(index == current && running == nil ? W.amber : W.ink).lineLimit(2)
+                Spacer(minLength: 4)
+                let work = e.lifts.filter(\.work)
+                Text("\(work.filter(\.done).count)/\(work.count)").foregroundStyle(W.secondary)
+            }
+            .font(.system(size: 14))
+        }
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) {
+                store.change(.removeExercise, exercise: index)
+            } label: {
+                Label(W.tr("Odebrat", "Remove"), systemImage: "trash")
+            }
+            Button {
+                swap = index
+            } label: {
+                Label(W.tr("Vyměnit", "Swap"), systemImage: "arrow.triangle.2.circlepath")
+            }
+            .tint(W.indigo)
+        }
+    }
+
+    /// A part with its switch: off, it is passed over and stays in the list;
+    /// a tap runs it (again, when done).
+    @ViewBuilder private func partLine(_ part: GymDayPart) -> some View {
+        if let parts = store.dayParts, let day = store.sheetDay {
+            let on = parts.isOn(part)
+            let done = store.partFinished(part)
+            HStack(spacing: 6) {
+                Button { openPart(part) } label: {
+                    HStack(spacing: 4) {
+                        if done { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(W.green) }
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(GymPartView.name(part)).font(.system(size: 14))
+                                .foregroundStyle(part == running ? W.amber : (on && !done ? W.ink : W.muted)).lineLimit(1)
+                            Text(subtitle(part, parts: parts, day: day)).font(.system(size: 11)).foregroundStyle(on ? W.secondary : W.dim)
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                Toggle("", isOn: Binding(get: { on }, set: { value in
+                    var next = parts
+                    next.off.removeAll { $0 == part }
+                    if !value { next.off.append(part) }
+                    store.setParts(next)
+                }))
+                .labelsHidden()
+                .tint(W.green)
+                .fixedSize()
+                .accessibilityLabel(GymPartView.name(part))
+            }
+        }
+    }
+
+    /// "Bike · no limit", "5 moves", "6 min".
+    private func subtitle(_ part: GymDayPart, parts: GymDayParts, day: GymDay) -> String {
+        if part.isCardio {
+            let choice = parts.choice(part)
+            return GymPartView.machine(choice.type) + " · " + (choice.minutes > 0 ? "\(choice.minutes) min" : W.tr("bez limitu", "no limit"))
+        }
+        let routine = parts.moves(part, day: day)
+        if part == .warmup {
+            let count = routine?.items.count ?? 0
+            return W.english ? "\(count) move" + (count == 1 ? "" : "s") : "\(count) " + (count == 1 ? "cvik" : count < 5 ? "cviky" : "cviků")
+        }
+        return "\(routine?.minutes ?? 0) min"
+    }
+
+    /// A part dragged goes before the exercises, or after them when dropped
+    /// anywhere below the first; an exercise moves among the exercises.
+    private func move(_ gym: WatchGym, from: IndexSet, to: Int) {
+        guard let source = from.first else { return }
+        var list = lines(gym)
+        let line = list[source]
+        list.move(fromOffsets: from, toOffset: to)
+        switch line {
+        case .part(let part) where part != .exercises:
+            guard var parts = store.dayParts, let first = list.firstIndex(where: { $0 != line && $0.isExercises }) else { return }
+            var before: [GymDayPart] = [], after: [GymDayPart] = []
+            for (i, l) in list.enumerated() {
+                guard case .part(let p) = l, p != .exercises else { continue }
+                if i < first { before.append(p) } else { after.append(p) }
+            }
+            let shown = before + [.exercises] + after
+            parts.order = shown + parts.order.filter { !shown.contains($0) }
+            store.setParts(parts)
+        case .exercise(let key):
+            guard let was = gym.exercises.firstIndex(where: { $0.key == key }) else { return }
+            let keys = list.compactMap { l -> String? in if case .exercise(let k) = l { return k } else { return nil } }
+            guard let place = keys.firstIndex(of: key), place != was else { return }
+            var order = Array(gym.exercises.indices)
+            let offset = place > was ? place + 1 : place
+            order.move(fromOffsets: IndexSet(integer: was), toOffset: offset)
+            if let at = order.firstIndex(of: current) { moved(at) }
+            store.change(.move, exercise: was, to: offset)
+        default:
+            return
         }
     }
 }
