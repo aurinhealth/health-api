@@ -11,7 +11,7 @@ struct TodayTrainingCard: View {
 
     /// Today's workouts still ahead.
     static func planned(_ today: TodaySnapshot) -> [TodaySnapshot.PlanItem] {
-        today.plan.filter { $0.kind == "workout" && !$0.done && $0.status == "planned" }
+        today.plan.filter { $0.kind == "workout" && !$0.done && ($0.status ?? "planned") == "planned" }
     }
 
     var body: some View {
@@ -69,7 +69,7 @@ struct TodayTrainingRow: View {
 
     /// "Today · 5:30 PM · 45 min": the time and length only when known.
     private var meta: String {
-        let time = (item.session?.time).map { ClockText.format($0) }
+        let time = (item.session?.time ?? item.time).map { ClockText.format($0) }
         let length = (item.session?.minutes).map { Fmt.duration($0) }
         return [L10n.tr("Dnes"), time, length].compactMap { $0 }.joined(separator: " · ")
     }
