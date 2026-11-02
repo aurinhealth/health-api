@@ -160,6 +160,7 @@ final class WatchBridge: NSObject {
         guard !context.isEmpty else { return }
         var settings = Self.settings
         (settings.restSets, settings.restExercises) = Self.restSettings
+        (settings.lastGym, settings.lastGymExercises) = Self.lastGym
         context[WatchSettings.contextKey] = settings.encoded()
         if let signIn = Self.signIn()?.encoded() { context[WatchSession.contextKey] = signIn }
         // The same Today again (a refresh with nothing new; only the time it
@@ -348,6 +349,8 @@ extension WatchBridge: WCSessionDelegate {
         let options = (message[WatchGym.optionsKey] as? Data).flatMap(WatchGym.OptionsRequest.decode)
         let sheet = (message[WatchGym.sheetKey] as? Data).flatMap(WatchGym.Sheet.decode)
         let partDone = (message[WatchGym.partDoneKey] as? Data).flatMap(WatchGym.PartDone.decode)
+        let start = (message[WatchGym.startKey] as? Data).flatMap(WatchGym.Start.decode)
+        let discard = message[WatchGym.discardKey] as? String
         let water = message[WatchSnapshot.waterKey] as? Int
         let drinkKind = message[WatchSnapshot.drinkKindKey] as? String ?? "water"
         let alarmChange = (message[WatchSnapshot.AlarmChange.key] as? Data).flatMap(WatchSnapshot.AlarmChange.decode)
@@ -415,6 +418,16 @@ extension WatchBridge: WCSessionDelegate {
             if let partDone {
                 applyGym(partDone)
                 replyHandler(["ok": true])
+                return
+            }
+            if let start {
+                let gym = await startGym(start)
+                replyHandler(gym?.encoded().map { [WatchGym.replyKey: $0] } ?? [:])
+                return
+            }
+            if let discard {
+                replyHandler(["ok": true])
+                await discardGym(date: discard)
                 return
             }
             if let sheet {
@@ -513,12 +526,15 @@ extension WatchBridge: WCSessionDelegate {
         // The watch's gym workout, started while this iPhone was out of reach.
         let live = (userInfo[WatchGym.liveKey] as? Data).flatMap(WatchGym.Live.decode)
         let partDone = (userInfo[WatchGym.partDoneKey] as? Data).flatMap(WatchGym.PartDone.decode)
+        let discard = userInfo[WatchGym.discardKey] as? String
         Task { @MainActor in
             if let partDone { applyGym(partDone) }
             if let live, !gymEnded { LiveWorkout.shared.watch(live) }
             if let done { await applyGym(done) }
             if gymEnded { LiveWorkout.shared.watchEnded() }
             if let rated { await applyGym(rated) }
+            // After the sets sent before it, so none of them brings the day back.
+            if let discard { await discardGym(date: discard) }
             if let water { await addWater(ml: water, kind: drinkKind) }
             if let onWatch { await alarmOnWatch(onWatch) }
             if alarmStopped || alarmSnoozed != nil { await watchAlarm(stopped: alarmStopped, snoozedUntil: alarmSnoozed) }

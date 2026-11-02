@@ -86,6 +86,8 @@ final class GymStore: ObservableObject {
         let date = day
         // A plan kept from before (a relaunch, a day written alone) gets its swaps too.
         keepSwaps()
+        // A rating given offline.
+        sendRating()
         if alone, gym?.date == date {
             sync()
             return
@@ -319,6 +321,96 @@ final class GymStore: ObservableObject {
                 if let plan { store.received(plan) }
             }
         }, errorHandler: { _ in })
+    }
+
+    // MARK: - A day without a plan, the end (mockups "jen hodinky" 6–8)
+
+    /// A start on the watch could not put the workout together (alert).
+    @Published var failedStart = false
+    @Published private(set) var starting = false
+
+    /// No gym planned today: the iPhone puts the workout in the day (the last
+    /// one again, one for the rested muscles, or an empty one) and answers
+    /// with it. Out of its reach an empty workout starts here alone; the other
+    /// two need the iPhone. True when there is a workout to open.
+    func start(_ kind: WatchGym.Start.Kind) async -> Bool {
+        let date = day
+        if let session = phone, session.isReachable, let data = WatchGym.Start(date: date, kind: kind).encoded() {
+            starting = true
+            defer { starting = false }
+            let reply: Data? = await withCheckedContinuation { continuation in
+                session.sendMessage([WatchGym.startKey: data], replyHandler: { reply in
+                    continuation.resume(returning: reply[WatchGym.replyKey] as? Data)
+                }, errorHandler: { _ in
+                    continuation.resume(returning: nil)
+                })
+            }
+            if let reply, let plan = WatchGym.decode(reply) {
+                take(plan)
+                return true
+            }
+        }
+        guard kind == .empty else {
+            failedStart = true
+            return false
+        }
+        // Alone: the day's sheet with its header only; it reaches the server
+        // with the first exercise added (changeHere).
+        var sheet = GymDay(date: date, values: [], cancelled: nil)
+        sheet.ensureHeader(date: date)
+        take(built(sheet, date: date))
+        alone = true
+        return true
+    }
+
+    /// Discarded (mockup 8, Zahodit trénink): the day loses the workout here,
+    /// on the iPhone and on the server; the sets still waiting for the iPhone go too.
+    func discard() {
+        guard let gym else { return }
+        let date = gym.date
+        if let session = phone {
+            for transfer in session.outstandingUserInfoTransfers
+            where [WatchGym.doneKey, WatchGym.ratedKey, WatchGym.partDoneKey].contains(where: { transfer.userInfo[$0] != nil }) {
+                transfer.cancel()
+            }
+        }
+        self.gym = nil
+        alone = false
+        unsent = false
+        partsFinished = []
+        UserDefaults.standard.removeObject(forKey: Self.savedKey)
+        let message: [String: Any] = [WatchGym.discardKey: date]
+        if let session = phone, session.isReachable {
+            // The iPhone discards it (its saved copy and queue too); not
+            // answering, the watch tells the server itself.
+            session.sendMessage(message, replyHandler: { _ in }, errorHandler: { _ in
+                Task { await WatchAPI.discardGym(date: date) }
+            })
+        } else {
+            Task { await WatchAPI.discardGym(date: date) }
+        }
+    }
+
+    private static let ratingKey = "watchGymRating"
+
+    /// How the workout's plan suited (good, ok, bad: the iPhone's Sedělo,
+    /// Ujde, Nesedělo), sent with Finish; offline it waits for the next load.
+    func rateWorkout(_ rating: String, date: String) {
+        UserDefaults.standard.set(date + "|" + rating, forKey: Self.ratingKey)
+        sendRating()
+    }
+
+    private func sendRating() {
+        guard let saved = UserDefaults.standard.string(forKey: Self.ratingKey) else { return }
+        let parts = saved.split(separator: "|").map(String.init)
+        guard parts.count == 2 else {
+            UserDefaults.standard.removeObject(forKey: Self.ratingKey)
+            return
+        }
+        Task { @MainActor in
+            guard await WatchAPI.rateGym(date: parts[0], rating: parts[1]) else { return }
+            if UserDefaults.standard.string(forKey: Self.ratingKey) == saved { UserDefaults.standard.removeObject(forKey: Self.ratingKey) }
+        }
     }
 
     /// The workout finished here: alone, the end goes into the sheet (the
@@ -663,6 +755,7 @@ final class GymStore: ObservableObject {
         UserDefaults.standard.removeObject(forKey: Self.savedKey)
         UserDefaults.standard.removeObject(forKey: Self.earlierKey)
         UserDefaults.standard.removeObject(forKey: Self.swapsKey)
+        UserDefaults.standard.removeObject(forKey: Self.ratingKey)
         techniques = nil
         UserDefaults.standard.removeObject(forKey: Self.techniquesKey)
     }

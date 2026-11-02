@@ -87,7 +87,8 @@ extension WatchGym {
     }
 
     var started: Bool { exercises.contains { $0.lifts.contains(where: \.done) } }
-    var allDone: Bool { current == nil }
+    /// Every set done; an empty workout (no exercise yet) is not done.
+    var allDone: Bool { !exercises.isEmpty && current == nil }
 
     /// kg × reps of the work sets done.
     var volume: Double {
@@ -98,6 +99,25 @@ extension WatchGym {
 }
 
 extension WatchGym {
+    struct NewRecord: Equatable, Identifiable {
+        let name: String
+        let title: String
+        let set: Last
+        var id: String { name }
+    }
+
+    /// The exercises whose best work set today beats their best before today,
+    /// with that set (the summary's PR lines, Training mode's Nový rekord);
+    /// a first time is no record.
+    var newRecords: [NewRecord] {
+        exercises.compactMap { e in
+            guard let old = e.record, old.e1rm > 0 else { return nil }
+            let done = e.lifts.filter { $0.done && $0.work }.compactMap { lift in lift.reps.map { Last(kg: lift.kg, reps: $0) } }
+            guard let best = done.max(by: { $0.e1rm < $1.e1rm }), best.e1rm > old.e1rm + 0.01 else { return nil }
+            return NewRecord(name: e.name, title: e.title, set: best)
+        }
+    }
+
     /// The note, the record and last time's sets of a plan built again from
     /// the sheet alone (a change on the watch, the server's copy): kept from
     /// the plan before, which had them from the iPhone.

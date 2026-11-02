@@ -62,6 +62,12 @@ struct WatchGym: Codable, Equatable, Sendable {
     struct Last: Codable, Equatable, Sendable {
         var kg: Double?
         var reps: Int
+
+        /// The estimated one-rep max, as on the iPhone (GymSessionMath.e1rm).
+        var e1rm: Double {
+            guard let kg, kg > 0, reps > 0 else { return 0 }
+            return reps == 1 ? kg : kg * (1 + Double(reps) / 30)
+        }
     }
 
     /// A set done on the watch.
@@ -183,6 +189,28 @@ struct WatchGym: Codable, Equatable, Sendable {
         var query: String?
     }
 
+    /// No gym planned today (mockup "jen hodinky" 6): the watch asks the
+    /// iPhone to put one in the day; the answer is the new plan.
+    struct Start: Codable, Equatable, Sendable {
+        enum Kind: String, Codable, Sendable {
+            /// The last workout's exercises with the next loads (Zopakovat minulou).
+            case repeatLast
+            /// Put together for the rested muscles (Sestavit z odpočatých).
+            case rested
+            /// Nothing yet: the exercises are added one by one (Prázdný trénink).
+            case empty
+        }
+        var date: String
+        var kind: Kind
+
+        func encoded() -> Data? { try? JSONEncoder().encode(self) }
+        static func decode(_ data: Data) -> Start? { try? JSONDecoder().decode(Start.self, from: data) }
+    }
+
+    /// Watch → iPhone: Start, answered with the plan (replyKey).
+    static let startKey = "gymStart"
+    /// Watch → iPhone: the day (its date) whose workout was discarded on the watch.
+    static let discardKey = "gymDiscard"
     static let requestKey = "gymRequest"
     static let replyKey = "gym"
     static let doneKey = "gymDone"
