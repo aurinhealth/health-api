@@ -56,6 +56,11 @@ struct TrainingView: View {
             .overlay(alignment: .bottom) {
                 floatingStartButton
             }
+            // The card's own button steps aside while the floating one stands in,
+            // so the two never show at once.
+            .onChange(of: floatingStart, initial: true) { _, day in
+                if startSpot.floating != day { startSpot.floating = day }
+            }
             .navBarVisibility(.hidden)
             .appRoutes()
         }
@@ -102,9 +107,7 @@ struct TrainingView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, 28)
-                .padding(.bottom, StartButtonSpot.barZone + 8)
-                // VoiceOver reaches the same button in the card.
-                .accessibilityHidden(true)
+                .padding(.bottom, StartButtonSpot.barZone + StartButtonSpot.gap)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -416,6 +419,9 @@ enum StartButtonSpot {
     /// The tab bar (60 pt, Dynamic Type can grow it) and its gap above the
     /// bottom of the safe area (RootView).
     static let barZone: CGFloat = 76
+    /// The floating button's gap above the bar. The card's button hands over
+    /// at the same line, so the swap happens where the two would overlap.
+    static let gap: CGFloat = 8
 }
 
 /// Where today's Začít trénink is on Training: NextSession writes, TrainingView's
@@ -426,6 +432,8 @@ final class StartSpot {
     var underBar: String?
     /// The top of the tab bar on screen (global), 0 before it is measured.
     var floor: CGFloat = 0
+    /// The day whose button floats right now: its button in the card is hidden.
+    var floating: String?
 
     func report(_ day: String, under: Bool) {
         if under { if underBar != day { underBar = day } }
@@ -443,6 +451,8 @@ struct NextSession: View {
     /// In the swiping card: as tall as the tallest of today's.
     var fill = false
     @Environment(StartSpot.self) private var startSpot: StartSpot?
+    /// The floating copy above the tab bar stands in for this card's button.
+    private var standIn: Bool { startSpot?.floating == session.date }
 
     // Its own card, so the gym tools below (today's) don't read as its buttons.
     var body: some View {
@@ -459,7 +469,14 @@ struct NextSession: View {
                         .background(Palette.green, in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .onGeometryChange(for: Bool.self) { [floor = startSpot?.floor ?? 0] in floor > 0 && $0.frame(in: .global).maxY > floor } action: { under in
+                // While the floating copy is up, this one is hidden: scrolled to just
+                // behind the bar it would otherwise peek out under the floating one.
+                .opacity(standIn ? 0 : 1)
+                .allowsHitTesting(!standIn)
+                .accessibilityHidden(standIn)
+                .onGeometryChange(for: Bool.self) { [floor = startSpot?.floor ?? 0] in
+                    floor > 0 && $0.frame(in: .global).maxY > floor - StartButtonSpot.gap
+                } action: { under in
                     startSpot?.report(session.date, under: under)
                 }
                 .onDisappear { startSpot?.report(session.date, under: false) }
