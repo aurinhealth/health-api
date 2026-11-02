@@ -157,13 +157,8 @@ struct FoodContent: View {
                                      isToday: food.date == today, past: food.date < today)
                 }
         }
-        // An earlier day shows only its data; a day ahead keeps its sentence.
-        let day = page.map(\.selectedDate) ?? model.selectedDate
-        if day.map({ $0 > AppModel.localDate(Date()) }) ?? true {
-            CoachTextCard(screen: "food", fallbackText: food.sentence, live: day == nil).padding(.top, 16)
-        }
-
-        MacroCells(macros: food.macros).padding(.top, 26)
+        // The macros right under the target, so they show without scrolling; the coach's card under them.
+        MacroCells(macros: food.macros).padding(.top, 20)
         // Pro: the nutrients picked under Živiny → Upravit; the rest is one tap away.
         ForEach(food.nutrients ?? []) { item in
             NutrientRow(item: item).padding(.top, 8)
@@ -178,6 +173,12 @@ struct FoodContent: View {
         }
         .buttonStyle(.plain)
         .padding(.top, 8)
+
+        // An earlier day shows only its data; a day ahead keeps its sentence.
+        let day = page.map(\.selectedDate) ?? model.selectedDate
+        if day.map({ $0 > AppModel.localDate(Date()) }) ?? true {
+            CoachTextCard(screen: "food", fallbackText: food.sentence, live: day == nil).padding(.top, 10)
+        }
 
         board.padding(.top, 18)
 
