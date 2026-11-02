@@ -10,8 +10,6 @@ struct TrainingView: View {
     @State private var calendarDay: String?
     /// A day set from the pinned bar, for the calendar.
     @State private var jumpDay: DayJump?
-    /// The day of today's Začít trénink while its place is under the tab bar
-    /// (NextSession), and the bottom of the visible page: it floats above the bar.
     /// Where today's Začít trénink is (NextSession writes, the floating copy reads).
     @State private var startSpot = StartSpot()
 
