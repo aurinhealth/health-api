@@ -379,6 +379,22 @@ struct GymDay: Decodable, Equatable {
         write(list, rest)
     }
 
+    /// The sheet the watch wrote alone, with the sets this copy has done that
+    /// the watch's has not: a set ticked on the iPhone while the watch thought
+    /// it was out of reach (a message that timed out) is not lost when the
+    /// iPhone takes the watch's sheet. Only a row of the same exercise and kind
+    /// at the same place is taken; anything the watch changed stays the watch's.
+    static func merged(_ watch: [[JSONValue]], keepingDoneFrom phone: [[JSONValue]]) -> [[JSONValue]] {
+        var out = watch
+        for row in out.indices where row >= firstSetRow && row < phone.count {
+            let mine = phone[row], theirs = out[row]
+            guard mine.count > 8, theirs.count > 1, rowType(mine) == rowType(theirs), mine[1] == theirs[1],
+                  isDone(mine[8].string), !(theirs.count > 8 && isDone(theirs[8].string)) else { continue }
+            out[row] = mine
+        }
+        return out
+    }
+
     /// The body of POST /app/api/gym: the sets and the whole sheet.
     var saveBody: JSONObject {
         var full = values

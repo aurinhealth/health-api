@@ -373,8 +373,8 @@ extension WatchBridge: WCSessionDelegate {
                 return
             }
             if let sheet {
-                await applyGym(sheet: sheet)
-                replyHandler(["ok": true])
+                let gym = await applyGym(sheet: sheet)
+                replyHandler(gym.encoded().map { [WatchGym.replyKey: $0, "ok": true] } ?? ["ok": true])
                 return
             }
             if let change {
