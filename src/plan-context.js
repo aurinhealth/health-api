@@ -10,7 +10,7 @@ import { latestStoredWeight } from "./athlete-weight.js";
 import { getWeekPlan, planWeekRoles, roleTime, planRoleOptions } from "./week-planner.js";
 import { getAthleteState } from "./athlete-state.js";
 import { loadProfiles } from "./profile-suggestions.js";
-import { reviewPlan, planWeek, planQuality, planLoad, applyPlan, activePlan, planSports } from "./training-plans.js";
+import { reviewPlan, planWeek, planQuality, planLoad, applyPlan, activePlan, planSports, planDoneSports } from "./training-plans.js";
 import { weekWeather, dayHours } from "./adaptive-week.js";
 import { weatherKitConfigured, weatherKitDetail } from "./weatherkit.js";
 import { ensureGymPlans } from "./gym-plan-store.js";
@@ -49,7 +49,7 @@ export async function planForWeek(env,ctx,start){
 // endurance sport: a gym-heavy history does not turn every ride and run into
 // support. The profile is read only without a plan, once per data version.
 export async function weekRoleOptions(env,ctx,plan,pw){
-  if(plan&&pw)return planRoleOptions(plan,planQuality(pw));
+  if(plan&&pw)return planRoleOptions(plan,planQuality(pw),planSports(plan));
   const mainSport=await cached(env,ctx,'main-sport',()=>profileMainSport(env)).catch(()=>null);
   return mainSport?{mainSport}:{};
 }
@@ -69,13 +69,15 @@ export async function syncedPlans(env,today=localToday()){
 }
 // Days with an activity of the plan's sports (`of`: a plan or a sport), from (inclusive) to (exclusive).
 export async function planSportDates(env,of,from,to){
+  const sports=planDoneSports(of);
   const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(from,-1),shiftDate(to,1)).all()).results||[];
-  return [...new Set(rows.map(activityFromRow).filter(a=>a&&planSports(of).includes(a.kind)&&a.date>=from&&a.date<to&&(a.minutes==null||a.minutes>=15)).map(a=>a.date))];
+  return [...new Set(rows.map(activityFromRow).filter(a=>a&&sports.includes(a.kind)&&a.date>=from&&a.date<to&&(a.minutes==null||a.minutes>=15)).map(a=>a.date))];
 }
 // Minutes of the sport done, from (inclusive) to (exclusive): a plan's result.
 export async function planSportMinutes(env,of,from,to){
+  const sports=planDoneSports(of);
   const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(from,-1),shiftDate(to,1)).all()).results||[];
-  return dedupeActivities(rows.map(activityFromRow)).filter(a=>a&&planSports(of).includes(a.kind)&&a.date>=from&&a.date<to).reduce((sum,a)=>sum+(Number(a.minutes)||0),0);
+  return dedupeActivities(rows.map(activityFromRow)).filter(a=>a&&sports.includes(a.kind)&&a.date>=from&&a.date<to).reduce((sum,a)=>sum+(Number(a.minutes)||0),0);
 }
 // The key days (quality, test, long) the plan put in a week.
 export async function planKeyDates(env,plan,monday){
