@@ -193,19 +193,6 @@ private struct WelcomeOpening: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .rises(play, delay: 0.35)
                 .padding(.bottom, 8)
-            // Said up front, so nobody without an invite finds out only at the sign-in.
-            Label {
-                Text("Aurin je zatím jen na pozvánku. [Nemáš ji? Přidej se na čekací listinu.](https://aurin.health/#join)")
-                    .font(Typo.small).foregroundStyle(Palette.secondary)
-                    .tint(Palette.blue)
-                    .fixedSize(horizontal: false, vertical: true)
-            } icon: {
-                Image(systemName: "lock").foregroundStyle(Palette.amber)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .rises(play, delay: 0.6)
-            .padding(.top, 10)
-            .padding(.bottom, 8)
         }
     }
 }
