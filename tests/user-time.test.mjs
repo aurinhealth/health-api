@@ -64,3 +64,16 @@ test("a night belongs to the day the user wakes up on in their zone", () => {
   assert.equal(sleepSessionFromRow(row).date, "2026-10-07");
   assert.equal(withTimeZone("Asia/Tokyo", () => sleepSessionFromRow(row).date), "2026-10-08");
 });
+
+test("wall-clock times from the cached offset match Intl around every DST change", async () => {
+  const { withTimeZone, zonedIso } = await import("../src/user-time.js");
+  for (const zone of ["Europe/Prague", "America/New_York", "Australia/Lord_Howe", "Asia/Kathmandu", "Pacific/Chatham", "America/St_Johns"]) {
+    const f = new Intl.DateTimeFormat("en-GB", { timeZone: zone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const intl = ms => { const p = Object.fromEntries(f.formatToParts(new Date(ms)).map(x => [x.type, x.value])); return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}`; };
+    withTimeZone(zone, () => {
+      for (let ms = Date.parse("2026-01-01T00:00:00Z"); ms < Date.parse("2027-01-01T00:00:00Z"); ms += 29 * 60000 + 1001) {
+        assert.equal(zonedIso(new Date(ms)).at.slice(0, 19), intl(ms), zone + " " + new Date(ms).toISOString());
+      }
+    });
+  }
+});
