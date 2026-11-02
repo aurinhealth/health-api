@@ -565,9 +565,10 @@ export const getTemplate = id => planTemplates().find(t => t.id === id) || null;
 const CATALOGUE = { ride: CYCLING_WORKOUTS, run: RUNNING_WORKOUTS, swim: SWIMMING_WORKOUTS };
 const LIMITS = { ride: [30, 360], run: [20, 240], swim: [15, 120] };
 const familyLevels = (sport, family) => [...new Set(CATALOGUE[sport].filter(w => w.family === family).map(w => w.level).filter(Number.isFinite))].sort((a, b) => a - b);
-// A key session one or two levels easier for a beginner, one harder for an
-// experienced athlete (their capability in that energy system, level 3 = normal).
-export const levelShift = capability => clamp(Math.round((Number(capability?.level) || 3) - 3), -2, 1);
+// A key session one or two levels easier for a beginner, up to three harder for
+// a strong athlete (their capability in that energy system, level 3 = normal,
+// "experienced" starts at 4 and climbs with each workout done well).
+export const levelShift = capability => clamp(Math.round((Number(capability?.level) || 3) - 3), -2, 3);
 // The catalogue workout for a family, level and length: the wanted level
 // (or an easier one) at the nearest length that fits; with none that fits,
 // the wanted level's shortest, shortened. Another length is the
