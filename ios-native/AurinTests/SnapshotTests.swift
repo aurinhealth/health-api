@@ -483,7 +483,7 @@ final class SnapshotTests: XCTestCase {
          {"id":"sled","group":"Kardio","label":"Saně","sections":[]}]
         """#.utf8))
         let sections = [GymEquipment.Section(id: "free_weights", label: "Volné váhy"), GymEquipment.Section(id: "cables", label: "Kladky"),
-                        GymEquipment.Section(id: "upper_machines", label: "Stroje na horní polovinu")]
+                        GymEquipment.Section(id: "upper_machines", label: "Stroje – horní část těla")]
         let place = GymPlace(id: "p", kind: "gym", name: "METAGYM Kutná Hora", stations: ["dumbbells", "pec_deck"], url: "", dumbbellWeights: [])
         XCTAssertEqual(GymPlaceView.folded("Motýlek"), "motylek")
         try render("gym-place", glow: Palette.Glow.training, height: 1100) {
