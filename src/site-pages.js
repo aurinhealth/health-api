@@ -109,6 +109,12 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .hero .cta{margin-top:36px}
 .hero .wl{align-items:flex-start}.hero .wl .tf{text-align:left}
 .hero .note{margin-top:16px;font-size:var(--fs-14);color:var(--muted)}
+/* What Aurin reads from, right under the form: the watches and rings people already wear, as names (not their
+   makers' logos). Only devices the app reads, through Apple Health or Google Health or directly. */
+.works{margin-top:34px}
+.works .wk{display:block;font-size:var(--fs-12);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.works ul{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.works li{display:inline-flex;align-items:center;height:32px;padding:0 13px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--panel) 70%,transparent);box-shadow:inset 0 0 0 1px var(--line);font-size:var(--fs-14);font-weight:600;color:var(--sec)}
 /* The phone and its three numbers are drawn at one size (the rig) and scaled down where the column is narrower,
    so the numbers never leave the column and the coach sits under the phone, not over its tab bar. */
 .stage{position:relative;display:flex;justify-content:center}
@@ -437,6 +443,7 @@ main:focus{outline:none}
   /* The mark is already in the nav: on a tablet and a phone the hero starts with the words. */
   .hero .sun{display:none}
   .lede{margin-left:auto;margin-right:auto}
+  .works ul{justify-content:center}
   .hero .wl{align-items:center}.hero .wl .tf{text-align:center}
   .stage{margin-top:48px}
   .morning{padding-top:32px}
@@ -472,6 +479,7 @@ main:focus{outline:none}
   .hero .grid{gap:0;text-align:left}.hero .copy{display:contents}.hero .kicker{justify-self:start}.hero .lede{margin-left:0}
   .hero .cta{order:1;margin-top:28px}.hero .stage{order:2;margin-top:40px}
   .hero .wl{align-items:flex-start}.hero .wl .tf{text-align:left}
+  .hero .works{order:1;margin-top:26px}.works ul{justify-content:flex-start;gap:6px}.works li{height:30px;padding:0 11px}
   .rig{width:322px;height:672px;--hz:.8}
   .rig .device{left:0}
   /* On a phone a part opens with its title and line only: its chapters right under show the same day. */
@@ -779,6 +787,9 @@ const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 // verifies the app (submitted 2026-10-25); after that this can go back to false.
 // The text stays word for word (tests/site-pages.test.mjs).
 export const GOOGLE_DISCLOSURE_ON_HOME = true;
+// The watches and rings the hero names under the form: Apple Watch through Apple Health, Fitbit and Pixel Watch
+// through Google Health, the Ultrahuman Ring and WHOOP directly. Aurin does not support Garmin.
+export const WEARABLES = ['Apple Watch', 'Fitbit', 'Pixel Watch', 'WHOOP', 'Ultrahuman'];
 export const googleDisclosure = () => `<div class="card disclosure reveal" lang="en"><h3>Google Health data disclosure</h3>
 <p>Aurin is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
 <p>With your authorization, the service may read fitness, health-metric, sleep, and nutrition data from Google Health. It may also add nutrition logs to Google Health when you ask the service to record food or drinks. This data is used only for the requested training and nutrition features.</p>
@@ -999,6 +1010,7 @@ ${sun(72)}
 <h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w${i >= SLANT ? ' it' : ''}" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
 <p class="lede">Aurin reads your sleep, HRV and workouts from the watch or ring you wear, and every morning turns them into one number, one plan and one coach.</p>
 <div class="cta">${store('top')}<p class="note">Free early access on iPhone through TestFlight.</p></div>
+<div class="works"><span class="wk" id="works-t">Works with what you already wear</span><ul aria-labelledby="works-t">${WEARABLES.map(w => `<li>${w}</li>`).join('')}</ul></div>
 </div>
 <div class="stage"><div class="rig">
 <div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">${day.hrv} ms</div><div class="d up">↑ ${day.hrv - day.hrvBaseline} ms above normal</div></div>
