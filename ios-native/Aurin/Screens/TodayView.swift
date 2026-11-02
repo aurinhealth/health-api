@@ -98,6 +98,18 @@ struct TodayContent: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
         }
+        // The athlete's status to the right of "Připravenost" (Petr, 2026-11-02),
+        // on top of the link so its tap opens the status, not the readiness.
+        .overlay(alignment: .top) {
+            if selectedDate == nil {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    // The label's width, so a long injury note stops short of it.
+                    Text("Připravenost").font(Typo.body).hidden().accessibilityHidden(true)
+                    Spacer(minLength: 0)
+                    AthleteStatusRow()
+                }
+            }
+        }
         .padding(.top, 40)
 
         // The first two weeks after the setup: what fills Today (FirstDaysCard).
@@ -105,17 +117,23 @@ struct TodayContent: View {
             FirstDaysCard(today: today, openCoach: openCoach).padding(.top, 20)
         }
 
-        // Today's weather at the week plan's place (or the offer to set
-        // it) with the athlete's status, above the key numbers.
-        if selectedDate == nil {
-            TodayWeatherCard(weather: today.weather).padding(.top, 28)
-        }
-
         KeyNumbers(today: today)
-            .padding(.top, selectedDate == nil ? 12 : 28)
+            .padding(.top, 28)
 
-        // Aktivita dne: the day's activity from anything (CoachPick.swift).
-        if selectedDate == nil { CoachPickCard().padding(.top, 16) }
+        if selectedDate == nil {
+            // Today's workout with Start, and the activity of the day when it
+            // suggests something else; without a plan the activity of the day
+            // in full (CoachPick.swift, Petr 2026-11-02).
+            let planned = TodayTrainingCard.planned(today)
+            if planned.isEmpty {
+                CoachPickCard(top: 12)
+            } else {
+                TodayTrainingCard(items: planned, red: today.readiness.zone == "red").padding(.top, 12)
+            }
+
+            // Today's weather at the week plan's place (or the offer to set it).
+            TodayWeatherCard(weather: today.weather).padding(.top, 12)
+        }
 
         if selectedDate == nil {
             if let plan = today.trainingPlan {
