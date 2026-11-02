@@ -3583,3 +3583,16 @@
 "zbývá" = "left";
 "běží" = "running";
 "Uloží délku a konec kardia" = "Saves the cardio's length and end";
+
+/* First-run setup: main sport, goal and time (SetupFocusPages) */
+"Jaký je tvůj hlavní sport?" = "What's your main sport?";
+"Aurin podle něj plánuje. Ostatní sporty z hodinek se počítají dál." = "Aurin plans around it. Other sports from your watch still count.";
+"Jaký je tvůj cíl?" = "What's your goal?";
+"Kouč podle něj skládá tvůj týden. Změníš ho kdykoli." = "The coach builds your week around it. You can change it any time.";
+"Víc energie, postupné zlepšení" = "More energy, steady progress";
+"Datum a vzdálenost" = "A date and a distance";
+"Jídlo i trénink k tomu" = "Eat and train for it";
+"Kdy můžeš trénovat?" = "When can you train?";
+"Potáhni pruh u každého dne. Aurin plánuje v tomhle čase a když potřebuješ odpočinek, vezme si méně." = "Drag each bar. Aurin plans within it and uses less when you need rest.";
+"Kde posiluješ?" = "Where do you lift?";
+"Posilovna, doma nebo obojí · vybavení" = "Gym, home or both · equipment";

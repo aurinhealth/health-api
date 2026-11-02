@@ -10,7 +10,7 @@ import SwiftUI
 
 enum FreeTime {
     /// Off, a length, or no limit (nil).
-    static let choices: [Int?] = [0, 20, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300, 360, nil]
+    static let choices: [Int?] = [0, 20, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300, 360, 420, 480, nil]
 
     static func label(_ minutes: Int?) -> String {
         guard let minutes else { return L10n.tr("bez omezení") }

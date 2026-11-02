@@ -8,6 +8,7 @@ import { trimGymPlan } from './gym-trim.js';
 import { parseStrengthPlan } from './strength-history.js';
 import { planTemplates, getTemplate, planStart } from './training-plans.js';
 import { actionInstructions } from './private/coach-actions.js';
+import { MAX_MINUTES } from './workout-model.js';
 export { actionInstructions };
 
 // Pictures the app can draw under an answer from the athlete's real data.
@@ -208,7 +209,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
     }
     // A swim card (sport swim) is dropped here: the app has no swim card yet, and
     // without the sport in the schema the coach put a swim on a gym card (coach evaluation run 38, S32).
-    if(a.type==='workout'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)&&Number.isInteger(a.minutes)&&a.minutes>=(a.sport==='run'?20:30)&&a.minutes<=360){
+    if(a.type==='workout'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)&&Number.isInteger(a.minutes)&&a.minutes>=(a.sport==='run'?20:30)&&a.minutes<=(MAX_MINUTES[a.sport]||360)){
       if(!userInitiated&&context.remainingPlanned?.some(x=>x.date===a.date))return [];
       const budget=context.availabilityByDate?.[a.date]?.minutes;if(!userInitiated&&budget!=null&&a.minutes>budget)return [];
       // Only a workout the coach was actually offered; the preview then shows exactly it.

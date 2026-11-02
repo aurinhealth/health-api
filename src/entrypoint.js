@@ -70,7 +70,7 @@ import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabil
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
 import { grantedExtras } from "./google-scopes.js";
-import { renderForEnvironment } from "./workout-model.js";
+import { renderForEnvironment, MAX_MINUTES } from "./workout-model.js";
 import { plannedEventWorkout } from "./planned-detail.js";
 import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, freeMinutes, roleTime, usualFor, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, hrvSourceRows, weeklyRunCap, capRunVolume, committedRunMinutes } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
@@ -1612,7 +1612,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(from>last)return Response.json({status:'ok',check:null},{headers:{'Cache-Control':'no-store'}});
       const ROLE_KIND={quality:'threshold',long:'long',endurance:'endurance',recovery:'recovery'};
       const drafts=(Array.isArray(body.sessions)?body.sessions:[]).slice(0,28).filter(x=>validTrainingDay(x?.date)&&x.date>=from&&x.date<=last&&['ride','run','swim','gym'].includes(x?.sport)&&x.key).map(x=>{
-        const minutes=Math.max(10,Math.min(360,Math.round(Number(x.minutes)||60))),kind=x.sport==='gym'?'gym':KINDS.includes(x.kind)&&x.kind!=='gym'?x.kind:x.system?kindOfSystem(x.system):ROLE_KIND[x.role]||null;
+        const minutes=Math.max(10,Math.min(MAX_MINUTES.ride,Math.round(Number(x.minutes)||60))),kind=x.sport==='gym'?'gym':KINDS.includes(x.kind)&&x.kind!=='gym'?x.kind:x.system?kindOfSystem(x.system):ROLE_KIND[x.role]||null;
         return {id:String(x.key).slice(0,64),date:x.date,sport:x.sport,minutes,kind:kind||kindOfPlanned({sport:x.sport,name:x.name,minutes}),name:typeof x.name==='string'?x.name.slice(0,120):null};
       });
       if(!drafts.length)return Response.json({status:'ok',check:null},{headers:{'Cache-Control':'no-store'}});
