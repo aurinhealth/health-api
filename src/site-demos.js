@@ -565,7 +565,7 @@ const watchFace = `<div class="aw-s aw-face"><div class="aw-frow">${wArc(.35, WA
 
 export const WATCH = [
   ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness, sleep, strain and HRV, as on Today, and what’s next today in one line.', watchHome],
-  ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown. Your heart rate and calories go into the same workout.', watchGym],
+  ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown. Leave the iPhone in your locker: the watch keeps your sets and hands them over later. Your heart rate and calories go into the same workout.', watchGym],
   ['glow-training', 'Rest, then a tap.', 'The rest counts down on the wrist and taps you when it’s time, with the next set ready.', watchRest],
   ['glow-health', 'Water in one tap.', 'What’s left to eat today, the macros, and +250 for a glass of water. Your iPhone gets it at once.', watchFood],
   ['glow-health', 'On your watch face.', 'Readiness, sleep and strain against today’s goal, a countdown to your workout, water, food, protein and your alarm sit around the time, so you don’t even open the app.', watchFace]];
