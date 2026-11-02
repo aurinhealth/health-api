@@ -88,6 +88,9 @@
     // Anyone may create an account while shard capacity lasts (src/tenancy.js accountCapacity);
     // when it is full, new e-mails land in signup_waitlist.
     "OPEN_SIGNUP": "true",
+    // The account the deploy smoke test acts as: its own, empty and disabled, never the
+    // owner's (src/tenancy.js smokeUser; security audit 2026-11, SEC-010). Nobody receives mail there.
+    "SMOKE_USER_EMAIL": "deploy-check@aurin.health",
     // Emergency brake on an account's AI spending per month (src/ai-usage.js);
     // audit/aurin-pro-ai-limity-plan-2026-10-18.md.
     "AI_MONTHLY_LIMIT_USD": "5",
@@ -177,6 +180,7 @@
         "USER_DATA_SHARD_COUNT": "2",
         "CONTACT_EMAIL": "support@aurin.health",
         "OPEN_SIGNUP": "true",
+        "SMOKE_USER_EMAIL": "deploy-check@aurin.health",
         "AI_MONTHLY_LIMIT_USD": "5",
         "AI_UNPAID_LIMIT_SHARE": "0.5",
         "AI_DAILY_LIMIT_USD": "1",

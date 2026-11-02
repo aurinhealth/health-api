@@ -128,7 +128,7 @@ import { handleWhoopOAuth, disconnectWhoop, syncWhoop } from "./whoop.js";
 import { wahooDetail } from "./wahoo-detail.js";
 import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, wahooRideExpected, readWahooTokens } from "./wahoo.js";
 import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed } from "./sync-destinations.js";
-import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, usersWithAccount, usersWithPushTokens, openSignup } from "./tenancy.js";
+import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, smokeUser, usersWithProviders, usersWithAccount, usersWithPushTokens, openSignup } from "./tenancy.js";
 import { userDataEnvironment, prefetchUserData, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
 import { handlePasskeyLogin } from "./passkeys.js";
@@ -509,8 +509,12 @@ const worker = {
       // A cookie from before the user signed out everywhere (or changed the e-mail, removed a passkey or the Apple ID) is no cookie.
       if (user && !sessionMatchesUser(principal, user)) { user = null; principal = null; }
       if (!user && !isPublic) return unauthorizedResponse();
-    } else if (principal?.kind === "owner" || principal?.kind === "system" || principal?.kind === "coach-eval") {
-      // The owner API key and GitHub automations act as the owner.
+    } else if (principal?.kind === "system") {
+      // The deploy smoke test acts as its own empty account, never as the owner (tenancy.js smokeUser).
+      user = await smokeUser(env.DB, env);
+      if (!user) return Response.json({status:'error',message:'The deploy check account is not set up (SMOKE_USER_EMAIL).'},{status:503,headers:{'Cache-Control':'no-store'}});
+    } else if (principal?.kind === "owner" || principal?.kind === "coach-eval") {
+      // The owner's coach evaluation (coach-eval.js) reads the owner's own data.
       user = await ownerUser(env.DB, env);
     }
     if (user) {
