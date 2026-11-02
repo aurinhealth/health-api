@@ -312,14 +312,14 @@ const foodOne = `<div class="dm pad one">
 </div>`;
 
 // Readiness in the luteal phase (recovery-model.js lutealOffset): the normal for resting heart rate moves up by the
-// athlete's own luteal rise, so the sample day's 48 bpm is weighed against 50–54 (its "your normal" above).
+// athlete's own luteal rise. The sample day is day 21, so its "your normal 50–54 bpm" above is already this phase's
+// normal; on other days it is 48–52.
 const cycleOne = `<div class="dm pad one">
 <span class="pill pnk">Day 21 · Luteal</span>
-<b class="cy-k">Resting heart rate</b>
-<div class="row base one-v"><span class="num big"${n(40, 48, 300, 900, 'i')}>48</span><span class="mut">bpm</span></div>
-<div class="mut" data-tx="0|your normal 48–52 bpm;1500|your normal in this phase 50–54 bpm">your normal in this phase 50–54 bpm</div>
-${range(20, 'green', 600)}
-<div class="one-pt pnk"${at('1900')}>+2 bpm for this phase</div>
+<b class="cy-k">Resting heart rate normal</b>
+<div class="row base one-v"><span class="num big" data-tx="0|48–52;1300|50–54">50–54</span><span class="mut">bpm</span></div>
+<div class="mut">48–52 bpm on other days</div>
+<div class="one-pt grn cy-p"${at('2000')}>A usual rise costs no points</div>
 </div>`;
 
 const LETTERS = [['W', 'Warm-up', 'muted'], ['T', 'Technique', 'blue'], ['E', 'Easy', 'green'], ['M', 'Moderate', 'indigo'], ['H', 'High', 'amber'], ['F', 'Failure', 'red'], ['PR', 'Personal record', 'gold'], ['D', 'Drop set', 'pink']];
@@ -1031,7 +1031,7 @@ html:not(.js) .stage1{display:none}
 .one-ip{margin-left:auto;transform:scale(1.5)}
 .one-pt.rst{background:color-mix(in srgb,var(--rust) 12%,transparent);color:var(--rust-ink)}.one-pt.ind{background:color-mix(in srgb,var(--indigo) 12%,transparent);color:var(--indigo)}.one-pt.amb{background:color-mix(in srgb,var(--amber) 16%,transparent);color:var(--sec)}
 .one-pt .di{width:16px;height:16px;vertical-align:-2px;margin-right:4px}.one .rst{color:var(--rust-ink)}.one-ft{margin-top:14px}
-.pill.pnk{color:var(--pink);background:var(--pink-soft)}.one .cy-k{display:block;margin-top:12px}.one-pt.pnk{background:var(--pink-soft);color:var(--pink)}
+.pill.pnk{color:var(--pink);background:var(--pink-soft)}.one .cy-k{display:block;margin-top:12px}.one .cy-p{margin-top:16px}.one-pt.pnk{background:var(--pink-soft);color:var(--pink)}
 .cy-l{margin-top:8px}.cy-m{margin-top:6px;align-items:center}.cy-m .sent{font-size:28px}.cy-m .di{width:20px;height:20px;stroke-width:2.4}.cy-m .faint{opacity:.35}
 .app .cy-g{display:grid;grid-template-columns:repeat(7,1fr);gap:8px 4px;margin-top:14px}.cy-w{font-size:12px;color:var(--muted);text-align:center}
 .cy-d{display:flex;justify-content:center;height:42px}.cy-d i{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;font:normal 500 13px/1 -apple-system,system-ui,sans-serif;color:var(--sec)}
