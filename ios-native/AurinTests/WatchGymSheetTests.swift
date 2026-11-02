@@ -98,6 +98,8 @@ final class WatchGymSheetTests: XCTestCase {
         var next = try XCTUnwrap(gym.next(after: bench[0]))
         XCTAssertEqual(next.exercise, 1)
         XCTAssertEqual(next.turn, .partner)
+        // The next set of the same exercise starts from this one's weight (not the partner's).
+        XCTAssertEqual(gym.nextInExercise(after: bench[0])?.row, bench[1])
         gym.update(row: bench[0]) { $0.done = true }
         next = try XCTUnwrap(gym.next(after: row[0]))
         XCTAssertEqual(next.exercise, 0)
@@ -109,8 +111,6 @@ final class WatchGymSheetTests: XCTestCase {
         XCTAssertEqual(next.exercise, 2, "past the superset when all of it is done")
         XCTAssertNil(next.turn)
         XCTAssertTrue(next.newExercise)
-        // The next set of the same exercise starts from this one's weight (not the partner's).
-        XCTAssertEqual(gym.nextInExercise(after: bench[0])?.row, bench[1])
     }
 
     /// A one-sided exercise: the right side tapped first, the left one comes
