@@ -264,7 +264,6 @@ final class GymStore: ObservableObject {
     /// What the watch wrote alone goes on its way: to the server when it has
     /// not yet, to the iPhone when it is in reach (its connection came up).
     func sync() {
-        uploadEarlier()
         upload()
         handBack()
     }
@@ -272,6 +271,8 @@ final class GymStore: ObservableObject {
     /// The newest sheet to the server, one save at a time; tried again with
     /// the next set, the next load, and the end of the workout.
     private func upload() {
+        // An earlier day the watch wrote alone and has not saved yet goes first.
+        uploadEarlier()
         guard alone, unsent, !uploading else { return }
         uploading = true
         Task { @MainActor in
