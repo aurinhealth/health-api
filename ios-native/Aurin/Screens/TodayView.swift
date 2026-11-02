@@ -125,14 +125,12 @@ struct TodayContent: View {
             }
             if today.trainingPlan?.paused == true {
                 PlanPausedCard().padding(.top, 10)
-            } else if let proposal = today.trainingPlan?.proposal {
-                PlanProposalCard(proposal: proposal).padding(.top, 10).id(proposal.type + proposal.text)
             }
-            // Each card keeps its gap only while it shows (an empty one left a hole).
-            CoachCheckInCard(openCoach: openCoach, top: today.trainingPlan == nil ? 24 : 10)
-            WeekRevisionCard(top: 12)
-            WeekCheckCard(top: 12)
-            ThresholdCheckCard(top: 12)
+            // One card for what the coach asks today (check-in, review after a
+            // workout, week check, threshold, the plan's proposal). It keeps its
+            // gap only while it shows (an empty one left a hole).
+            CoachThingsCard(proposal: today.trainingPlan?.paused == true ? nil : today.trainingPlan?.proposal,
+                            openCoach: openCoach, top: today.trainingPlan == nil ? 24 : 10)
         }
 
         // An earlier day shows only its data: the coach speaks about today.

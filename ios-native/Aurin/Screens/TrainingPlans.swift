@@ -910,10 +910,12 @@ struct PlanDetailView: View {
 
 /// On Today: what the plan proposes (a missed session moved, last week
 /// repeated, a lighter week back from a break). Nothing changes until the
-/// athlete chooses; the change can be undone.
+/// athlete chooses; the change can be undone. A thing in the coach's card
+/// (CoachThingsCard), so plain there.
 struct PlanProposalCard: View {
     @Environment(AppModel.self) private var model
     let proposal: TodaySnapshot.PlanProposal
+    var plain = false
     @State private var choice: String?
     @State private var picking = false
     @State private var busy = false
@@ -925,7 +927,7 @@ struct PlanProposalCard: View {
     }
 
     var body: some View {
-        Card {
+        MaybeCard(plain: plain) {
             if let done {
                 HStack(spacing: 12) {
                     Image(systemName: "checkmark").scaledFont(13, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onAccent)
