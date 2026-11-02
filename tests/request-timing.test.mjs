@@ -24,16 +24,16 @@ test("queries, rows read and database time are counted for the request they ran 
 });
 
 test("a request is slow from 3 s, 400 queries or a million rows; a cron job only by its queries and rows", () => {
-  const store = (ms, queries, rowsRead) => ({ started: Date.now() - ms, queries, rowsRead, dbMs: 0 });
+  const store = (ms, queries, rowsRead, dbWaitMs = 0) => ({ started: Date.now() - ms, queries, rowsRead, dbMs: 0, dbWaitMs });
   assert.equal(slowness(store(500, 40, 2000)), null);
-  assert.match(slowness(store(3500, 40, 2000)), /^35\d\d ms, 40 dotazů, 2000 řádků$/);
+  assert.match(slowness(store(3500, 40, 2000, 1200)), /^35\d\d ms \(z toho D1 1200 ms\), 40 dotazů, 2000 řádků$/);
   assert.match(slowness(store(100, 450, 0)), /450 dotazů/);
   assert.match(slowness(store(100, 1, MANY_ROWS)), /1000000 řádků/);
   assert.equal(slowness(store(60000, 10, 10), { cron: true }), null);
   assert.ok(slowness(store(10, 10, MANY_ROWS + 1), { cron: true }));
   // The Google sync's batches: thousands of statements in a few trips are not slow.
   assert.equal(slowness({ ...store(18000, 4660, 14497), trips: 93 }, { cron: true }), null);
-  assert.match(slowness({ ...store(100, 4660, 0), trips: 450 }, { cron: true }), /^\d+ ms, 450 dotazů \(4660 příkazů v dávkách\), 0 řádků$/);
+  assert.match(slowness({ ...store(100, 4660, 0), trips: 450 }, { cron: true }), /^\d+ ms \(z toho D1 0 ms\), 450 dotazů \(4660 příkazů v dávkách\), 0 řádků$/);
 });
 
 test("a cron job that reads a million rows lands in the morning report", async () => {
@@ -45,7 +45,7 @@ test("a cron job that reads a million rows lands in the morning report", async (
   assert.equal(rows[0].kind, "slow");
   assert.equal(rows[0].service, "cron sync");
   assert.match(rows[0].last_message, /1000005 řádků/);
-  assert.match(opsReport(rows, null, "2026-10-29").text, /Pomalé požadavky a úlohy[^\n]*\n- cron sync: 1× \(naposledy: \d+ ms, 1 dotazů, 1000005 řádků\)/);
+  assert.match(opsReport(rows, null, "2026-10-29").text, /Pomalé požadavky a úlohy[^\n]*\n- cron sync: 1× \(naposledy: \d+ ms \(z toho D1 \d+ ms\), 1 dotazů, 1000005 řádků\)/);
 });
 
 test("every answer of the Worker carries Server-Timing", () => {
@@ -53,4 +53,22 @@ test("every answer of the Worker carries Server-Timing", () => {
   const exported = source.slice(source.lastIndexOf("export default {"));
   assert.match(exported, /return timed\(async work => \{/);
   assert.match(exported, /withTiming\(await withPlainErrors\(request, answered\), work, route, env, ctx\)/);
+});
+
+// /me with 32 queries and 14 rows took 3 s on 2026-11-01: the report says how
+// much of a request was waiting for D1. Parallel queries count once, a failed
+// try and the pause before the next one count too.
+test("the time waiting for D1 counts parallel queries once and includes retries", async () => {
+  const pause = ms => async () => { await new Promise(r => setTimeout(r, ms)); return { results: [], meta: { rows_read: 1 } }; };
+  const work = await timed(async store => {
+    await Promise.all([withD1Retry(pause(100)), withD1Retry(pause(100)), withD1Retry(pause(100))]);
+    await new Promise(r => setTimeout(r, 80)); // not D1: AI, another service
+    let tries = 0;
+    await withD1Retry(async () => { if (!tries++) throw new Error("D1 DB is overloaded"); return { results: [] }; }, { delays: [50], sleep: ms => new Promise(r => setTimeout(r, ms)) });
+    return store;
+  });
+  assert.ok(work.dbMs >= 290, "each query's time added up: " + work.dbMs);
+  assert.ok(work.dbWaitMs >= 145 && work.dbWaitMs < 260, "in flight once, retry pause included: " + work.dbWaitMs);
+  assert.equal(work.inFlight, 0);
+  assert.ok(Date.now() - work.started >= work.dbWaitMs + 75);
 });
