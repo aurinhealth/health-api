@@ -5,43 +5,7 @@ import SwiftUI
 // to tick, each move's photos and steps behind "i", and a timer that leads
 // through every hold.
 
-/// The warm-up or the stretching: its moves in order, and the name of an own one
-/// ("Legs"; nil for the automatic one).
-struct GymStretching: Codable, Equatable {
-    let minutes: Int
-    let items: [Item]
-    var name: String? = nil
-
-    struct Item: Codable, Equatable, Identifiable {
-        let id: String
-        let name: String
-        let seconds: Int
-        let sides: Bool
-        var rounds: Int = 1
-        var steps: [String] = []
-        var photos: [String] = []
-        /// The YouTube id of a demonstration.
-        var video: String? = nil
-
-        enum CodingKeys: String, CodingKey { case id, name, seconds, sides, rounds, steps, photos, video }
-
-        init(id: String, name: String, seconds: Int, sides: Bool, rounds: Int = 1, steps: [String] = [], photos: [String] = []) {
-            self.id = id; self.name = name; self.seconds = seconds; self.sides = sides
-            self.rounds = rounds; self.steps = steps; self.photos = photos
-        }
-
-        init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-            id = try c.decode(String.self, forKey: .id)
-            name = try c.decode(String.self, forKey: .name)
-            seconds = try c.decode(Int.self, forKey: .seconds)
-            sides = try c.decodeIfPresent(Bool.self, forKey: .sides) ?? false
-            rounds = max(1, try c.decodeIfPresent(Int.self, forKey: .rounds) ?? 1)
-            steps = try c.decodeIfPresent([String].self, forKey: .steps) ?? []
-            photos = try c.decodeIfPresent([String].self, forKey: .photos) ?? []
-            video = try c.decodeIfPresent(String.self, forKey: .video).flatMap { $0.isEmpty ? nil : $0 }
-        }
-
+extension GymStretching.Item {
         /// "2 × 30 s na stranu", "45 s", "3 min"; a cardio without a limit "Bez limitu".
         var duration: String {
             if seconds <= 0 { return L10n.tr("Bez limitu") }
@@ -49,42 +13,10 @@ struct GymStretching: Codable, Equatable {
             let each = sides ? L10n.f("%@ na stranu", time) : time
             return (rounds > 1 ? "\(rounds) × " : "") + each
         }
+}
 
-        var photoURLs: [URL] { photos.compactMap(URL.init(string:)) }
-    }
-
-    /// The plan's sixth row: ["Rozcvička a protažení", "{warmup, stretching}"].
-    static let row = 5
-
-    struct Routines: Decodable {
-        let warmup: GymStretching?
-        let stretching: GymStretching?
-        var cardio: Cardio? = nil
-        /// The parts turned off in Nastavení → Posilovna, offered switched off.
-        var off: [String]? = nil
-    }
-
-    /// The day's cardio: the machine, which parts are on (start and end, minutes
-    /// for older builds; nil when off) and the time it runs: 0 or nil = no limit.
-    struct Cardio: Decodable, Equatable {
-        let type: String
-        let start: Int?
-        let end: Int?
-        var length: Int? = nil
-    }
-
-    static func routines(_ values: [[JSONValue]]) -> Routines? {
-        guard values.count > row, values[row].count > 1, values[row][0].string == "Rozcvička a protažení",
-              let data = values[row][1].string?.data(using: .utf8) else { return nil }
-        return try? JSONDecoder().decode(Routines.self, from: data)
-    }
-
-    init(minutes: Int, items: [Item], name: String? = nil) {
-        self.minutes = minutes
-        self.items = items
-        self.name = name
-    }
-
+/// Every hold of the warm-up or stretching on the iPhone (the data is in WatchShared/GymParts.swift).
+extension GymStretching {
     /// Every hold in order: each round, on each side.
     var holds: [Hold] {
         items.flatMap { item in
@@ -159,7 +91,7 @@ struct StretchingCard: View {
     let date: String
     var kind: GymRoutineKind = .stretching
     var compact = false
-    @AppStorage("gym.stretching.done") private var stored = ""
+    @AppStorage(StretchingCard.doneKey) private var stored = ""
     @State private var info: GymStretching.Item?
     @State private var timer = false
 
@@ -246,6 +178,9 @@ struct StretchingCard: View {
         let key = kind.key + id
         if !Self.done(stored, date: date).contains(key) { stored = Self.toggled(stored, date: date, id: key) }
     }
+
+    /// Where the ticks are kept (also read by WatchGymBridge).
+    static let doneKey = "gym.stretching.done"
 
     static func done(_ stored: String, date: String) -> Set<String> {
         let prefix = date + ":"
@@ -382,8 +317,14 @@ struct StretchTimerView: View {
         .padding(20)
         .background { Palette.background.ignoresSafeArea() }
         .task { await run() }
-        .onAppear { ScreenAwake.hold("stretching", watchMaySleep: false) }
-        .onDisappear { ScreenAwake.release("stretching") }
+        .onAppear {
+            ScreenAwake.hold("stretching", watchMaySleep: false)
+            LiveWorkout.shared.partOpen("stretching", true)
+        }
+        .onDisappear {
+            ScreenAwake.release("stretching")
+            LiveWorkout.shared.partOpen("stretching", false)
+        }
     }
 
     /// "Série 1/2 · levá".

@@ -450,8 +450,17 @@ final class LiveWorkout: NSObject {
     func worked() {
         guard running, idleEnd == nil else { return }
         lastWork = Date()
-        let plan = onWatch ? nil : lastWork
+        let plan = onWatch || !openParts.isEmpty ? nil : lastWork
         Task { await IdleWorkout.plan(after: plan) }
+    }
+
+    /// The cardio or stretching screens open on the iPhone: a 30 min cardio has
+    /// no set in it, so no question while one runs, and 10 min from its end.
+    @ObservationIgnored private var openParts: Set<String> = []
+
+    func partOpen(_ name: String, _ open: Bool) {
+        if open { openParts.insert(name) } else { openParts.remove(name) }
+        worked()
     }
 
     /// "End workout" on the question: Training mode opens (when it isn't on
@@ -464,7 +473,7 @@ final class LiveWorkout: NSObject {
 
     /// Every 15 s while the workout runs: 30 min without a set and no answer ends it.
     private func checkIdle() {
-        guard running, !onWatch, idleEnd == nil, let last = lastWork ?? start else { return }
+        guard running, !onWatch, idleEnd == nil, openParts.isEmpty, let last = lastWork ?? start else { return }
         if Date().timeIntervalSince(last) >= IdleWorkout.endAfter {
             idleEnd = last
             openFromWatch = AppModel.localDate(last)

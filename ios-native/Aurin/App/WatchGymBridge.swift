@@ -31,8 +31,46 @@ extension WatchBridge {
     private var api: APIClient { AppModel.live?.api ?? APIClient() }
 
     func watchGym(_ day: GymDay, date: String) -> WatchGym {
+        // The day's parts as last chosen on the phone, for the watch's list.
+        var day = day
+        GymDayParts.carry(into: &day, date: date)
         let rest = Self.restSettings
-        return WatchGym(day, date: date, restSets: rest.sets, restExercises: rest.exercises)
+        var gym = WatchGym(day, date: date, restSets: rest.sets, restExercises: rest.exercises)
+        gym.partsDone = Self.partsDone(day, date: date)
+        return gym
+    }
+
+    /// The parts of the day done here: the warm-up or stretching with every move
+    /// ticked off, the cardio stopped (Training mode, StretchingCard).
+    static func partsDone(_ day: GymDay, date: String) -> [String] {
+        let defaults = UserDefaults.standard
+        let ticks = StretchingCard.done(defaults.string(forKey: StretchingCard.doneKey) ?? "", date: date)
+        let logs = defaults.string(forKey: GymCardioLog.storageKey) ?? ""
+        let parts = GymDayParts.resolved(day, stored: defaults.string(forKey: GymDayParts.storageKey) ?? "", date: date)
+        return GymDayPart.allCases.filter { part in
+            if part.isCardio {
+                return ticks.contains(part.tickPrefix + part.cardioId) || GymCardioLog.entry(logs, date: date, id: part.cardioId) != nil
+            }
+            guard let moves = parts.moves(part, day: day), !moves.items.isEmpty else { return false }
+            return moves.items.allSatisfy { ticks.contains(part.tickPrefix + $0.id) }
+        }.map(\.rawValue)
+    }
+
+    /// A part done on the watch: its moves ticked off and the cardio's length kept,
+    /// as if done in Training mode here.
+    func applyGym(_ done: WatchGym.PartDone) {
+        let defaults = UserDefaults.standard
+        var stored = defaults.string(forKey: StretchingCard.doneKey) ?? ""
+        let already = StretchingCard.done(stored, date: done.date)
+        for tick in done.ticks where !already.contains(tick) {
+            stored = StretchingCard.toggled(stored, date: done.date, id: tick)
+        }
+        defaults.set(stored, forKey: StretchingCard.doneKey)
+        if let id = done.cardio, let seconds = done.seconds, let end = done.end {
+            let logs = defaults.string(forKey: GymCardioLog.storageKey) ?? ""
+            defaults.set(GymCardioLog.saving(GymCardioLog.Entry(seconds: seconds, end: end), date: done.date, id: id, into: logs),
+                         forKey: GymCardioLog.storageKey)
+        }
     }
 
     /// The day's plan. Today's copy on the phone answers at once (the server
@@ -103,7 +141,7 @@ extension WatchBridge {
     /// A change from the watch's menu; the new plan goes back to the watch.
     func applyGym(_ change: WatchGym.Change) async -> WatchGym? {
         guard var day = await gymDay(change.date) else { return nil }
-        guard day.exercises.indices.contains(change.exercise) else { return watchGym(day, date: change.date) }
+        guard change.kind == .parts || day.exercises.indices.contains(change.exercise) else { return watchGym(day, date: change.date) }
         day.apply(change)
         await save(day, date: change.date)
         return watchGym(day, date: change.date)
