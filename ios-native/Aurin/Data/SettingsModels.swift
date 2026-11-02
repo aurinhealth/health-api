@@ -195,3 +195,9 @@ struct SourcePriority: Codable, Equatable {
 
     static let auto = SourcePriority(night: "auto", day: "auto")
 }
+
+/// GET /app/api/sources/sending: per service, the app types it sent in the last `days` days.
+struct SourcesSending: Decodable {
+    let days: Int?
+    let sending: [String: [String]]?
+}

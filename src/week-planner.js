@@ -67,7 +67,12 @@ export function sanitizeWeekPlan(input = {}) {
     ...(alternate ? { alternate, availabilityB: normalizeAvailability(input.availabilityB) } : {}),
     // The day of the long ride or run (0 = Monday); none: the day with the most free time.
     // longDay: the athlete's own long ride or run day; null (kept, so a week can hold "none") for the plan's pick.
-    longDay: Number.isInteger(input.longDay) && input.longDay >= 0 && input.longDay <= 6 ? input.longDay : null };
+    longDay: Number.isInteger(input.longDay) && input.longDay >= 0 && input.longDay <= 6 ? input.longDay : null,
+    // The athlete's own bricks: weekdays whose run goes right after the ride (chip "Brick").
+    bricks: sanitizeBricks(input.bricks, days) };
+}
+export function sanitizeBricks(raw, days) {
+  return [...new Set(Array.isArray(raw) ? raw : [])].filter(i => Number.isInteger(i) && i >= 0 && i <= 6 && days[i].includes("ride") && days[i].includes("run")).sort((a, b) => a - b);
 }
 const mondayOfWeek = date => { const d = new Date(date + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7); return d.toISOString().slice(0, 10); };
 // With two weeks in turn: true when the week of `date` is a week B.
@@ -149,8 +154,8 @@ export async function saveWeekPlan(db, input, date = null) {
 export function weekOverride(prefs, defaults = {}) {
   const same = key => JSON.stringify(prefs[key] ?? null) === JSON.stringify(defaults[key] ?? null);
   const own = {};
-  for (const key of ['days', 'location', 'availability', 'weeklyActivities', 'sessions', 'availabilityMode', 'longDay']) if (key in prefs && !same(key)) own[key] = prefs[key];
-  if ('days' in own || 'sessions' in own) Object.assign(own, { days: prefs.days, sessions: prefs.sessions });
+  for (const key of ['days', 'location', 'availability', 'weeklyActivities', 'sessions', 'bricks', 'availabilityMode', 'longDay']) if (key in prefs && !same(key)) own[key] = prefs[key];
+  if ('days' in own || 'sessions' in own || 'bricks' in own) Object.assign(own, { days: prefs.days, sessions: prefs.sessions, bricks: prefs.bricks });
   // Time for a weekday set by hand is the athlete's, not the starting template's.
   if ('availability' in own && prefs.availabilityMode) own.availabilityMode = prefs.availabilityMode;
   return own;

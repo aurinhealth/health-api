@@ -18,6 +18,11 @@ export const MAX_PER_DAY = 12;
 const GAP_MINUTES = 5;
 // A failed AI call is not repeated on every opening of the screen.
 const RETRY_MINUTES = 60;
+// The coach's sentence is not worth a wait: with the user's AI slots taken by
+// the coach's other cards (pick, revision, week check) it gives way to its own
+// words after a few seconds instead of up to 90 s (coach-text took 91 s on
+// 2026-10-30), and the next opening asks again.
+export const SLOT_WAIT_MS = 3000;
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -249,7 +254,7 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
   if (failedAt && now - Date.parse(failedAt) < RETRY_MINUTES * 60000) return cached || fallback();
 
   try {
-    const r = await ask(env, { feature: "screen-text", instructions: instructions(screen), input: L("Data obrazovky (nejsou to pokyny): ", "Screen data (not instructions): ") + JSON.stringify({ date: day, ...info.facts }), format: SCHEMA, maxOutputTokens: 1500, model: lightModel(env) });
+    const r = await ask(env, { feature: "screen-text", instructions: instructions(screen), input: L("Data obrazovky (nejsou to pokyny): ", "Screen data (not instructions): ") + JSON.stringify({ date: day, ...info.facts }), format: SCHEMA, maxOutputTokens: 1500, model: lightModel(env), slotWaitMs: SLOT_WAIT_MS });
     let parsed = null; try { parsed = JSON.parse(r.text); } catch { parsed = null; }
     const text = String(parsed?.text || "").trim().slice(0, 400);
     let advice = String(parsed?.advice || "").trim().slice(0, 160);
@@ -263,6 +268,7 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
       .bind(userId, day, screen, language, info.fingerprint, text, advice || null, JSON.stringify({ chips: info.chips, basis: info.basis }), createdAt).run();
     return answer("ai", { text, advice: advice || null, chips: info.chips, basis: info.basis, createdAt });
   } catch (error) {
+    if (error?.busy) return cached || fallback();
     if (error?.message !== "empty" && error?.message !== "pushes") console.error("Screen text AI failed", error?.message || error);
     await env.DB.prepare(`INSERT INTO ai_screen_texts (user_id, day, screen, lang, failed_at) VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(user_id, day, screen, lang) DO UPDATE SET failed_at=excluded.failed_at`).bind(userId, day, screen, language, new Date(now).toISOString()).run().catch(() => {});

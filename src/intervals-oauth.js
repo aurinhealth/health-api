@@ -26,7 +26,7 @@ const back = (location, cookie = clearState) => new Response(null, { status: 302
 
 export async function handleIntervalsOAuth(request, env, pathname, fetchImpl = fetch) {
   if (pathname === "/oauth/intervals" && request.method === "GET") {
-    if (!intervalsOAuthConfigured(env)) return back(connectReturnUrl(connectReturn(request), "intervals-failed"));
+    if (!intervalsOAuthConfigured(env)) return back(connectReturnUrl(connectReturn(request), "intervals-failed", env));
     const state = crypto.randomUUID(), verifier = pkceVerifier();
     const u = new URL("https://intervals.icu/oauth/authorize");
     u.searchParams.set("client_id", String(env.INTERVALS_CLIENT_ID).trim());
@@ -41,11 +41,11 @@ export async function handleIntervalsOAuth(request, env, pathname, fetchImpl = f
   const url = new URL(request.url), code = url.searchParams.get("code"), state = url.searchParams.get("state");
   const m = (request.headers.get("Cookie") || "").match(new RegExp("(?:^|;\\s*)" + STATE_COOKIE + "=([^;]+)"));
   const [expected, to, uid, verifier] = decodeURIComponent(m?.[1] || "").split(".");
-  if (!state || state !== expected || !verifier) return back(connectReturnUrl("settings", "intervals-failed"));
+  if (!state || state !== expected || !verifier) return back(connectReturnUrl(to || connectReturn(request), "intervals-failed", env));
   // Started by another account than the one signed in now: its keys are not stored here.
-  if (!startedBy(uid, env)) return back(connectReturnUrl(to, "intervals-failed"));
-  if (url.searchParams.get("error") || !code) return back(connectReturnUrl(to, "intervals-cancelled"));
-  if (!intervalsOAuthConfigured(env)) return back(connectReturnUrl(to, "intervals-failed"));
+  if (!startedBy(uid, env)) return back(connectReturnUrl(to, "intervals-failed", env));
+  if (url.searchParams.get("error") || !code) return back(connectReturnUrl(to, "intervals-cancelled", env));
+  if (!intervalsOAuthConfigured(env)) return back(connectReturnUrl(to, "intervals-failed", env));
   const response = await fetchImpl("https://intervals.icu/api/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
@@ -54,12 +54,12 @@ export async function handleIntervalsOAuth(request, env, pathname, fetchImpl = f
   const data = response ? await response.json().catch(() => ({})) : {};
   if (!response?.ok || !data.access_token) {
     console.error("Intervals.icu OAuth token exchange failed", response?.status ?? "network");
-    return back(connectReturnUrl(to, "intervals-failed"));
+    return back(connectReturnUrl(to, "intervals-failed", env));
   }
   await saveConnectionSecret(env, "intervals", INTERVALS_TOKEN_PREFIX + data.access_token);
   // The athlete Intervals.icu's webhooks name (intervals-webhook.js).
   if (data.athlete?.id != null) await saveConnectionSecret(env, "intervals_athlete", String(data.athlete.id));
-  return back(connectReturnUrl(to, "intervals"));
+  return back(connectReturnUrl(to, "intervals", env));
 }
 
 // "Odpojit" for an OAuth connection, and deleting the account: Intervals.icu

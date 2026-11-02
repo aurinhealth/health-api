@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {existsSync,readFileSync} from 'node:fs';
+import {existsSync,readFileSync,readdirSync,statSync} from 'node:fs';
 import worker from '../src/entrypoint.js';
 import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME} from '../src/site-pages.js';
 
@@ -287,4 +287,46 @@ test('the Apple Watch chapter shows the watch app on the sample morning',async()
   assert.ok(section.includes('>'+today.strain.score+'<'),'strain');
   assert.equal((section.match(/class="aw-s[ "]/g)||[]).length,5,'one watch, five screens');
   assert.equal((section.match(/class="aw-w"/g)||[]).length,1);
+});
+
+test('the privacy policy, terms and health data policy name the operator as a sole trader, and every transfer outside the EU has its safeguard',async()=>{
+  const get=async(fn,path)=>(await fn(new Request('https://aurin.health'+path))).text();
+  const [privacy,cs,terms,termsCs,health]=await Promise.all([get(privacyPage,'/privacy'),get(privacyPage,'/cs/privacy'),get(termsPage,'/terms'),get(termsPage,'/cs/terms'),get(healthDataPage,'/health-data')]);
+  // § 435 of the Civil Code: name, registered office and IČO on every page that speaks for the operator;
+  // the footer stays short and links these pages.
+  for(const html of [privacy,cs,terms,termsCs,health]){
+    assert.match(html,/IČO\)? 30194202/);
+    assert.match(html,/Vrchlického 142, Sedlec, 284 03 Kutná Hora/);
+    assert.match(html,/<span>© 2026 Aurin<\/span>/);
+    assert.match(html,/<a href="\/privacy">Privacy Policy<\/a><\/li><li><a href="\/terms">Terms of Use<\/a><\/li><li><a href="\/health-data">Consumer Health Data<\/a>/);
+    assert.doesNotMatch(html,/private individual|soukromá osoba/);
+  }
+  assert.match(readFileSync(new URL('../public/llms.txt',import.meta.url),'utf8'),/IČO 30194202/);
+  const transfers=html=>html.slice(html.search(/<strong>(Transfers outside the EU|Předávání mimo EU)\.<\/strong>/),html.indexOf('dataprivacyframework.gov/list'));
+  for(const html of [privacy,cs]){
+    const list=transfers(html);
+    for(const [party,safeguard] of [['Cloudflare, Inc.',/Data Privacy Framework/],['OpenAI',/OpenAI Ireland Ltd/],['Apple',/Apple Distribution International Ltd\./],['GitHub, Inc.',/Data Privacy Framework/],['Google LLC',/Data Privacy Framework/],['Intervals.icu Ltd',/(United Kingdom|Spojené království)/],['Wahoo Fitness',/49/],['Open-Meteo GmbH',/(Switzerland|Švýcarsko)/],['WHOOP',/(India|Indie)/]]){
+      const item=list.match(new RegExp('<li><strong>'+party.replace(/\./g,'\\.')+'</strong>[^\n]*</li>'))?.[0];
+      assert.ok(item,party);
+      assert.match(item,safeguard,party);
+    }
+    // Apple is not on the Data Privacy Framework list: its transfers rely on the clauses.
+    assert.doesNotMatch(list,/Apple Inc\. is certified|Apple Inc\. je certifikovaný/);
+    assert.doesNotMatch(html,/otherwise the EU Standard Contractual Clauses|jinak standardními smluvními doložkami EU/);
+    assert.match(html,/GitHub Actions/);
+  }
+  // The consumer health data page says what the privacy policy and the app do.
+  assert.match(health,/deletes your account and all its data immediately; database backups are overwritten within 30 days/);
+  assert.match(privacy,/Database backups are overwritten within 30 days/);
+  assert.match(health,/<li><strong>Intervals\.icu<\/strong>: when you connect it, Aurin first shows what it writes there: the workouts you plan and finish in Aurin and your calorie target/);
+  assert.match(health,/only after you also turn on “Also send health data”/);
+  assert.match(health,/<li><strong>Wahoo<\/strong>: when you connect it, Aurin first shows that it sends there only the rides and runs you plan/);
+  assert.match(health,/sexual activity on a day[^<]*kept only in Aurin’s database and its backups, never goes to AI or any connected service/);
+  for(const part of ['<strong>To collect it.</strong>','<strong>To share it.</strong>','mood and anxiety','GitHub, which runs the weekly database backup'])assert.ok(health.includes(part),part);
+});
+
+test('app screens on the site are real shots, not an empty screen', () => {
+  const dir = new URL('../public/site/app/', import.meta.url);
+  for (const f of readdirSync(dir).filter(f => f.endsWith('.webp')))
+    assert.ok(statSync(new URL(f, dir)).size > 8000, `${f} looks blank (a shot taken before the screen drew)`);
 });

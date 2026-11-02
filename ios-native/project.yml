@@ -67,8 +67,13 @@ targets:
         # for this app (src/apple-app-site-association.js, APPLE_TEAM_ID).
         # aurin.health is the server the app talks to (APIClient.server).
         # applinks: a shared workout's link (/t/<id>) opens the app.
+        # webcredentials also lets only this app catch the return addresses of
+        # Google sign-in and of connecting a service, https://<server>/auth/app/…
+        # (Data/Auth.swift), on the test server too (both serve the file; the
+        # deploy checks it).
         com.apple.developer.associated-domains:
           - webcredentials:aurin.health
+          - webcredentials:staging.aurin.health
           - applinks:aurin.health
         # Push notifications (App/PushRegistration.swift, src/push.js): the
         # morning readiness. One entitlements file serves every build, and
@@ -97,12 +102,12 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         # The permission prompts in Czech, the development language; the phone's
         # language picks the text from Shared/{cs,en}.lproj/InfoPlist.strings.
-        NSCameraUsageDescription: Aurin čte čárové kódy na obalech potravin, aby je mohl zapsat do jídelníčku, fotí pozadí obrázku ke sdílení a fotky, které pošleš kouči.
-        NSPhotoLibraryUsageDescription: Aurin načte fotku jídla, posilovny, pro kouče nebo pozadí ke sdílení, kterou vybereš.
+        NSCameraUsageDescription: "Aurin čte čárové kódy, fotí etikety a jídlo, aby je zapsal, fotky pro kouče a pozadí obrázků ke sdílení. Se zapnutou AI posílá fotky etiket, jídla a pro kouče k přečtení společnosti OpenAI."
+        NSPhotoLibraryUsageDescription: "Aurin načte fotku, kterou vybereš: jídlo nebo etiketu do jídelníčku, posilovnu, fotku pro kouče nebo pozadí ke sdílení. Se zapnutou AI posílá fotky jídla, etiket a pro kouče k přečtení společnosti OpenAI."
         NSLocationWhenInUseUsageDescription: Aurin vezme polohu jen když o to požádáš, aby ukázal počasí a kouč poradil trénink venku nebo uvnitř.
-        NSHealthShareUsageDescription: Aurin čte z Apple Health spánek, tréninky, tep, HRV, teplotu zápěstí, kroky, váhu, jídlo a pití z jiných aplikací, pro deník všímavost, čas na denním světle, hluk ve spánku, příznaky a sexuální aktivitu a se zapnutým sledováním cyklu i menstruaci, ovulační testy a antikoncepci, aby spočítal regeneraci, zátěž a kalorický cíl a vyplnil deník.
+        NSHealthShareUsageDescription: "Aurin čte spánek, tréninky a jejich trasy (ukáže je jen v telefonu), tep, HRV, okysličení krve, dech, teplotu, kroky, váhu, tělesný tuk, výšku, věk a pohlaví, jídlo a pití, aby spočítal regeneraci, zátěž a kalorický cíl. Když je zapneš: náladu, příznaky, všímavost a sexuální aktivitu pro deník a cyklus. Data jdou na server Aurinu v EU, do AI jen s tvým svolením."
         # Settings → Zdroje dat → Apple Health writes workouts, weight, food and water (App/AppleHealthExport.swift).
-        NSHealthUpdateUsageDescription: Aurin do Apple Health zapíše jen to, co v aplikaci sám zaznamenáš a v Synchronizaci zapneš, například tréninky, váhu, jídlo a pití.
+        NSHealthUpdateUsageDescription: "Aurin do Apple Health zapíše jen to, co v aplikaci sám zaznamenáš a v Synchronizaci zapneš, například tréninky, váhu, jídlo a pití, a náladu zapsanou v deníku."
         # Nastavení → Snímač tepu: a Bluetooth chest strap or band for Režim tréninku (App/HeartRateSensor.swift).
         NSBluetoothAlwaysUsageDescription: Aurin se připojí ke snímači tepu, který si spáruješ, aby v režimu tréninku ukázal tep.
         # Kdy mám čas → Kalendář v iPhonu (App/CalendarTime.swift): only the free minutes per day reach the server.
@@ -111,10 +116,12 @@ targets:
         # iOS 26 AlarmKit: the alarm from Nastavení → Spánek rings like the Clock's.
         NSAlarmKitUsageDescription: Aurin tě vzbudí v čase budíku, podle kterého počítá večerku.
         NSFaceIDUsageDescription: Aurin se zeptá na Face ID, než smaže tvůj účet.
-        # loadwise://open/sleep: the widgets open a screen of the app.
+        # aurin://open/sleep: the widgets open a screen of the app. loadwise is the
+        # scheme from before 2026-11: calendar events written by older versions link to it.
         CFBundleURLTypes:
           - CFBundleURLName: health.aurin.app
             CFBundleURLSchemes:
+              - aurin
               - loadwise
         # Posilovna naživo and Režim tréninku on the lock screen and in the Dynamic Island (App/GymLiveActivity.swift).
         NSSupportsLiveActivities: true
@@ -206,6 +213,7 @@ targets:
     platform: iOS
     sources:
       - path: AurinMorning
+      - path: Shared/NotificationText.swift
       - path: Aurin/Resources/Fonts/InstrumentSerif-Regular.ttf
         buildPhase: resources
     settings:
@@ -238,6 +246,10 @@ targets:
     sources:
       - path: AurinWatch
       - path: WatchShared
+      # The watch app's privacy manifest: UserDefaults, and the gym, heart rate
+      # and coach messages it sends to the server.
+      - path: Privacy/Watch/PrivacyInfo.xcprivacy
+        buildPhase: resources
       - path: Aurin/Resources/Fonts/InstrumentSerif-Regular.ttf
         buildPhase: resources
       - path: Aurin/Resources/Fonts/Newsreader-Regular.ttf

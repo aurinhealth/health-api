@@ -66,6 +66,24 @@ export function emailChangeCodeEmail(lang, code) {
   return { subject: t.subject(code), text: `${t.intro}\n\n${code}\n\n${t.outro}\n`, html: htmlEmail(lang === "en" ? "en" : "cs", [t.intro, t.outro], code) };
 }
 
+const STEP_UP_CODE_TEXT = {
+  cs: {
+    subject: code => `${code} je tvůj kód pro potvrzení v Aurinu`,
+    intro: "Tvůj kód, kterým v Aurinu potvrdíš, že jsi to ty (změna e-mailu, nový přístupový klíč, stažení dat nebo smazání účtu):",
+    outro: "Platí 10 minut. Pokud o kód nežádáš ty, nikomu ho nedávej a v Aurinu v Nastavení → Účet odhlas ostatní zařízení."
+  },
+  en: {
+    subject: code => `${code} is your Aurin confirmation code`,
+    intro: "Your code to confirm it's you in Aurin (changing the email, adding a passkey, downloading your data or deleting the account):",
+    outro: "It is valid for 10 minutes. If you did not ask for it, don't share it with anyone and sign out other devices in Aurin under Settings → Account."
+  }
+};
+
+export function stepUpCodeEmail(lang, code) {
+  const t = STEP_UP_CODE_TEXT[lang === "en" ? "en" : "cs"];
+  return { subject: t.subject(code), text: `${t.intro}\n\n${code}\n\n${t.outro}\n`, html: htmlEmail(lang === "en" ? "en" : "cs", [t.intro, t.outro], code) };
+}
+
 // When a security notice happened, in the user's own zone (user-time.js) and named,
 // "7 October 2026 at 10:00 CEST", so nobody abroad reads Prague time as their own.
 function noticeTime(en, date, zone) {

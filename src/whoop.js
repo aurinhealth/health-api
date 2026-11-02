@@ -63,7 +63,7 @@ async function tokenRequest(env, params, fetchImpl) {
 
 export async function handleWhoopOAuth(request, env, pathname, fetchImpl = fetch) {
   if (pathname === '/oauth/whoop' && request.method === 'GET') {
-    if (!whoopConfigured(env)) return back(connectReturnUrl(connectReturn(request), 'whoop-failed'));
+    if (!whoopConfigured(env)) return back(connectReturnUrl(connectReturn(request), 'whoop-failed', env));
     const state = crypto.randomUUID();
     const u = new URL(AUTHORIZE);
     u.searchParams.set('client_id', String(env.WHOOP_CLIENT_ID).trim());
@@ -77,18 +77,18 @@ export async function handleWhoopOAuth(request, env, pathname, fetchImpl = fetch
   const url = new URL(request.url), code = url.searchParams.get('code'), state = url.searchParams.get('state');
   const m = (request.headers.get('Cookie') || '').match(new RegExp('(?:^|;\\s*)' + STATE_COOKIE + '=([^;]+)'));
   const [expected, to, uid] = decodeURIComponent(m?.[1] || '').split('.');
-  if (!state || state !== expected) return back(connectReturnUrl('settings', 'whoop-failed'));
+  if (!state || state !== expected) return back(connectReturnUrl(to || connectReturn(request), 'whoop-failed', env));
   // Started by another account than the one signed in now: its keys are not stored here.
-  if (!startedBy(uid, env)) return back(connectReturnUrl(to, 'whoop-failed'));
-  if (url.searchParams.get('error') || !code) return back(connectReturnUrl(to, 'whoop-cancelled'));
-  if (!whoopConfigured(env)) return back(connectReturnUrl(to, 'whoop-failed'));
+  if (!startedBy(uid, env)) return back(connectReturnUrl(to, 'whoop-failed', env));
+  if (url.searchParams.get('error') || !code) return back(connectReturnUrl(to, 'whoop-cancelled', env));
+  if (!whoopConfigured(env)) return back(connectReturnUrl(to, 'whoop-failed', env));
   const data = await tokenRequest(env, { grant_type: 'authorization_code', code, redirect_uri: redirectUri(env, request) }, fetchImpl);
-  if (!data) { console.error('WHOOP OAuth token exchange failed'); return back(connectReturnUrl(to, 'whoop-failed')); }
+  if (!data) { console.error('WHOOP OAuth token exchange failed'); return back(connectReturnUrl(to, 'whoop-failed', env)); }
   const text = tokensText(data);
   await saveConnectionSecret(env, SOURCE, text);
   await clearConnectionHealth(env, SOURCE);
   env.WHOOP_TOKEN = text;
-  return back(connectReturnUrl(to, 'whoop'));
+  return back(connectReturnUrl(to, 'whoop', env));
 }
 
 // A valid access token, refreshed (and the new pair saved) when it is about to run out.

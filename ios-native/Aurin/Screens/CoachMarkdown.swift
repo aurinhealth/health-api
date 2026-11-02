@@ -79,8 +79,18 @@ struct CoachMarkdown: View, Equatable {
     }
 
     /// **bold**, *italic*, `code` and links; plain text when it is not markdown.
+    /// Only a link to aurin.health stays tappable: an answer that picked up a
+    /// link from somewhere else shows its words without it.
     static func inline(_ text: String) -> AttributedString {
-        (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
+        var out = (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
+        let foreign = out.runs.compactMap { run in run.link.flatMap { allowedLink($0) ? nil : run.range } }
+        for range in foreign { out[range].link = nil }
+        return out
+    }
+
+    /// https on aurin.health, the hosts of the app's own links.
+    static func allowedLink(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == "https" && AppRoute.linkHosts.contains(url.host()?.lowercased() ?? "")
     }
 
     static func blocks(_ text: String) -> [Block] {

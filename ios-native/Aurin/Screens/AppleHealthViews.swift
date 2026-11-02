@@ -6,7 +6,7 @@ struct AppleHealthConnectSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     var done: () async -> Void
-    @State private var chosen = Set(HealthCategory.allCases)
+    @State private var chosen = HealthCategory.defaults
     @State private var working = false
     private var health: AppleHealth { AppleHealth.shared }
 

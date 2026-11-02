@@ -88,6 +88,10 @@ struct TodaySnapshot: Decodable, Equatable {
         /// new one has 14 days of its own; `provisionalDays` is how many are left.
         var provisional: Bool? = nil
         var provisionalDays: Int? = nil
+        /// A new athlete without 14 days of HRV or resting heart rate yet: the
+        /// days measured so far, today included (1–14). Nil once readiness has
+        /// its baseline (src/recovery-model.js recoveryReadiness).
+        var learningDays: Int? = nil
     }
 
     struct Sleep: Decodable, Equatable {

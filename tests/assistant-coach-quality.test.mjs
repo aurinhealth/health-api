@@ -383,3 +383,9 @@ test('the engine sport reads whole words only', () => {
   assert.equal(engineSport({ sport: 'running' }, null, 'Na kole v sobotu?'), 'ride');
   assert.equal(engineSport({ sport: 'running' }, null, 'Plavání v bazénu'), 'swim');
 });
+
+test('memory the coach would forget or rewrite waits for the athlete to confirm it',()=>{
+  const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8'),start=entry.indexOf("url.pathname==='/app/api/assistant'&&request.method==='POST'"),block=entry.slice(start,entry.indexOf("if(body.stream)return assistantStreamResponse(reply",start));
+  assert.doesNotMatch(block,/updateAthleteState\(env\.DB,\{forget:/);assert.doesNotMatch(block,/updateAthleteState\(env\.DB,\{edit:/);
+  assert.match(block,/memoryChanges:\{saved:memory\|\|null,forgotten:\[\],updated:\[\]\},memoryProposals:changes/);
+});

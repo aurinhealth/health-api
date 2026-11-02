@@ -1,7 +1,7 @@
 // Runs in the existing deployment jobs with their Cloudflare credentials.
 // Credentials stay in GitHub Actions; they are never stored in a Worker or
 // uploaded artifact. Only empty, independently named databases are provisioned.
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -97,6 +97,7 @@ export async function provisionDatabases({ accountId, token, plan, fetchImpl = f
 async function main() {
   const environment = process.argv.includes('--staging') ? 'staging' : '';
   const activate = process.argv.includes('--activate');
+  const afterDeploy = process.argv.includes('--after-deploy');
   const config = parseConfig(readFileSync('wrangler.jsonc', 'utf8'));
   const plan = shardPlan(config, environment);
   const configPath = 'wrangler.runtime.jsonc';
@@ -113,6 +114,16 @@ async function main() {
     writeFileSync(file, ACTIVATION_SQL);
     wrangler(['d1', 'execute', plan.core.database_name, '--remote', '--file', file]);
     console.log('User data routing activated; existing histories remain on legacy DB.');
+    return;
+  }
+  // after-deploy/*.sql on every database, once the new Worker is live: data changes the
+  // previous version could still undo while the deploy ran. Each file guards itself.
+  if (afterDeploy) {
+    const files = readdirSync('after-deploy').filter(f => f.endsWith('.sql')).sort();
+    for (const name of [plan.core.database_name, ...plan.shards.map(s => s.name)]) {
+      for (const file of files) wrangler(['d1', 'execute', name, '--remote', '--file', 'after-deploy/' + file]);
+      console.log('After-deploy changes applied to ' + name);
+    }
     return;
   }
   const databases = await provisionDatabases({ accountId: process.env.CLOUDFLARE_ACCOUNT_ID, token: process.env.CLOUDFLARE_API_TOKEN, plan });

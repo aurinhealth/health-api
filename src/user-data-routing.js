@@ -15,7 +15,7 @@ export const CENTRAL_PERSONAL_TABLES = new Set([
 ]);
 const CENTRAL_TABLES = new Set([
   ...CENTRAL_PERSONAL_TABLES, 'users', 'user_invites', 'schema_meta',
-  'account_deletions', 'user_data_routes', 'user_data_shards', 'ai_limit_memory',
+  'account_deletions', 'health_pauses', 'user_data_routes', 'user_data_shards', 'ai_limit_memory',
   'shared_foods', 'shared_recipes', 'workout_library', 'exercise_techniques',
   'cookbook', 'auth_challenges', 'email_login_codes', 'review_code_failures', 'request_limits', 'd1_migrations'
 ]);

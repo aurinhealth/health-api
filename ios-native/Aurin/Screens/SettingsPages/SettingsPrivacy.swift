@@ -12,6 +12,8 @@ struct PrivacySettingsView: View {
     @State private var exportURL: URL?
     @State private var exporting = false
     @State private var confirmDelete = false
+    @State private var pausing = false
+    @State private var stepUp: StepUpRequest?
     @State private var error: String?
 
     var body: some View {
@@ -24,10 +26,13 @@ struct PrivacySettingsView: View {
                 SettingsDivider()
                 fact("sparkles", Palette.indigo, "AI jen s tvým souhlasem", "Kouč a fotky jídla posílají jen to, co otázka potřebuje. OpenAI se na nich neučí.")
                 SettingsDivider()
-                fact("tray.and.arrow.down", Palette.green, "Stáhneš je, nebo smažeš", "Všechno si stáhneš nebo smažeš účet se všemi daty, přímo tady.")
+                fact("tray.and.arrow.down", Palette.green, "Stáhneš, pozastavíš, nebo smažeš", "Všechno si stáhneš, zdravotní data pozastavíš, nebo smažeš účet, přímo tady.")
             }
-            SettingsGroup(footer: "Kouč včetně fotek v chatu, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál.") {
-                SettingsToggle(title: "AI funkce", isOn: Binding(get: { ai }, set: { setAI($0) }), disabled: !aiLoaded || model.demo)
+            // Paused health data takes the AI consent with it (src/health-pause.js).
+            if !model.healthPaused {
+                SettingsGroup(footer: "Kouč včetně fotek v chatu, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál.") {
+                    SettingsToggle(title: "AI funkce", isOn: Binding(get: { ai }, set: { setAI($0) }), disabled: !aiLoaded || model.demo)
+                }
             }
             SettingsGroup {
                 if let exportURL {
@@ -50,6 +55,14 @@ struct PrivacySettingsView: View {
                 }
                 .buttonStyle(.plain)
             }
+            // Taking back the consent to health data without deleting the account (GDPR art. 7(3)).
+            if !model.healthPaused {
+                SettingsGroup(footer: "Odvolá souhlas a smaže tvoje zdravotní data. Účet a Pro zůstanou.") {
+                    Button { pausing = true } label: { SettingsRow(title: "Pozastavit zdravotní data") }
+                        .buttonStyle(.plain)
+                        .disabled(model.demo)
+                }
+            }
             SettingsGroup(footer: "Smaže účet i všechna data na serveru. Nejde vrátit. Data v Intervals.icu a Google zůstanou, kde jsou.") {
                 Button { confirmDelete = true } label: { SettingsRow(title: "Smazat účet", chevron: false, titleColor: Palette.rust) }
                     .buttonStyle(.plain)
@@ -57,33 +70,31 @@ struct PrivacySettingsView: View {
             }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
         }
+        .sheet(isPresented: $pausing) { HealthPauseSheet { dismiss() } }
         .task {
-            guard !model.demo else { return }
+            guard !model.demo, !model.healthPaused else { return }
             ai = (try? await model.api.aiAllowed()) ?? false
             aiLoaded = true
         }
-        // One question with a red button, then Face ID or the phone's code (delete()).
+        // Shared or not, the export does not stay on the phone after the page.
+        .onDisappear {
+            guard exportURL != nil else { return }
+            exportURL = nil
+            APIClient.removeExports()
+        }
+        // One question with a red button, Face ID or the phone's code, then "Confirm it's you" when the server asks for it (delete()).
         .confirmationDialog("Smazat účet?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Smazat účet", role: .destructive) { Task { await delete() } }
             Button("Zrušit", role: .cancel) {}
         } message: {
             Text("Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit.")
         }
+        .stepUpSheet($stepUp)
     }
 
     private func fact(_ symbol: String, _ color: Color, _ title: String, _ text: String) -> some View {
         SettingsRow(icon: SettingsIcon(systemImage: symbol, color: color), title: title, subtitle: text, chevron: false)
             .accessibilityElement(children: .combine)
-    }
-
-    /// Face ID, Touch ID or the phone's code, so someone holding an unlocked
-    /// phone cannot delete the account in two taps. A phone with no code set
-    /// has nothing to ask; the question before is the confirmation then.
-    private static func ownerConfirms() async -> Bool {
-        let context = LAContext()
-        var unavailable: NSError?
-        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &unavailable) else { return true }
-        return (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: L10n.tr("Smazat účet Aurin"))) ?? false
     }
 
     /// The policy on aurin.health, in Czech while the app speaks Czech.
@@ -94,7 +105,14 @@ struct PrivacySettingsView: View {
     private func export() async {
         exporting = true
         defer { exporting = false }
-        do { exportURL = try await model.api.exportData() } catch { self.error = error.localizedDescription }
+        do {
+            exportURL = try await model.api.exportData()
+            error = nil
+        } catch APIError.stepUpRequired(_, let info) {
+            stepUp = StepUpRequest(info: info, reason: L10n.tr("Stažení všech dat potřebuje krátké ověření.")) { await export() }
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
     /// Only a change by the user is saved (not the value loaded from the server).
@@ -106,8 +124,26 @@ struct PrivacySettingsView: View {
         }
     }
 
-    private func delete() async {
-        guard await Self.ownerConfirms() else { return }
+    /// Face ID, Touch ID or the phone's code, so someone holding an unlocked
+    /// phone cannot delete the account in two taps (a sign-in a moment ago spares
+    /// the server's check below, this one never). A phone with no code set has
+    /// nothing to ask; the question before is the confirmation then.
+    /// Pausing health data asks the same (HealthPauseSheet), with its own reason.
+    static func ownerConfirms(_ reason: String = L10n.tr("Smazat účet Aurin")) async -> Bool {
+        let context = LAContext()
+        var unavailable: NSError?
+        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &unavailable) else { return true }
+        return (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)) ?? false
+    }
+
+    /// The phone's owner first (ownerConfirms), then the server asks to confirm
+    /// it's you (a passkey or a code to the e-mail) unless that happened a moment
+    /// ago, so neither someone holding the phone nor someone with a copied
+    /// sign-in deletes the account. After that check the phone isn't asked again.
+    private func delete(ownerConfirmed: Bool = false) async {
+        if !ownerConfirmed {
+            guard await Self.ownerConfirms() else { return }
+        }
         do {
             let passkey = await model.api.passkeyHandle()
             try await model.api.deleteAccount()
@@ -116,6 +152,8 @@ struct PrivacySettingsView: View {
             PasskeyService.remember(false)
             AvatarStore.remove()
             model.signOut()
+        } catch APIError.stepUpRequired(_, let info) {
+            stepUp = StepUpRequest(info: info, reason: L10n.tr("Smazání účtu potřebuje krátké ověření."), destructive: true) { await delete(ownerConfirmed: true) }
         } catch {
             self.error = error.localizedDescription
         }

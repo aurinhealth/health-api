@@ -31,7 +31,7 @@ jobs:
       - name: Check out the private AI prompts
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          repository: shaarkyn/aurin-prompts
+          repository: aurinhealth/aurin-prompts
           token: ${{ secrets.PROMPTS_REPO_TOKEN }}
           path: src/private
 

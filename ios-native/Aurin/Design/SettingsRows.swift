@@ -117,6 +117,44 @@ struct SettingsToggle: View {
     }
 }
 
+/// The handle on the left of a row that can be dragged to a new place.
+struct SettingsGrip: View {
+    var body: some View {
+        Image(systemName: "line.3.horizontal")
+            .scaledFont(15, weight: .medium, cap: .denseCap)
+            .foregroundStyle(Palette.faint)
+            .frame(width: 26)
+            .padding(.leading, 14)
+            .accessibilityHidden(true)
+    }
+}
+
+/// Reordering rows on a card (not a List): a row is dragged onto another and
+/// takes its place. `accepts` lists the ids that may be dropped here.
+struct SettingsReorder: ViewModifier {
+    let id: String
+    var movable = true
+    let accepts: [String]
+    let drop: (String) -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if movable {
+            content
+                .draggable(id)
+                .dropDestination(for: String.self) { items, _ in take(items) }
+        } else {
+            content.dropDestination(for: String.self) { items, _ in take(items) }
+        }
+    }
+
+    private func take(_ items: [String]) -> Bool {
+        guard let moved = items.first, accepts.contains(moved) else { return false }
+        drop(moved)
+        return true
+    }
+}
+
 /// A row with a text field on the right, e.g. "Výška · 182 cm".
 struct SettingsField: View {
     let title: String

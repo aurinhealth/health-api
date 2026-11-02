@@ -9,7 +9,7 @@
 // hash takes these over. A record is forgotten once both its week and its month
 // are over, at most about five weeks (privacy policy). Nothing is kept for an
 // account that used no AI this week or month.
-import { localToday } from "./user-time.js";
+import { limitToday } from "./user-time.js";
 import { mondayOfDate, shiftDate } from "./dashboard-shared.js";
 import { ensureAiUsage, aiSpentToday, aiSpentThisMonth, CARRIED_MODEL, CARRIED_MONTH_FEATURE } from "./ai-usage.js";
 import { coachAllowance, ensureCoachCarryover } from "./coach-allowance.js";
@@ -63,8 +63,9 @@ export function forgetOn(today) {
 
 // On deletion, before the account's rows go: env is the account's own (scoped)
 // env. Best effort: a failure is logged and never stops the deletion.
-export async function rememberAiLimits(env, user, { today = localToday() } = {}) {
+export async function rememberAiLimits(env, user, { today } = {}) {
   try {
+    today ??= await limitToday(env);
     const identity = await env.DB.prepare("SELECT subject FROM user_identities WHERE provider = 'apple' AND user_id = ?").bind(env.USER_ID).first().catch(() => null);
     const row = await env.DB.prepare("SELECT google_sub FROM users WHERE id = ?").bind(env.USER_ID).first().catch(() => null);
     const keys = await limitKeys(env, { email: user.email, appleSub: identity?.subject, googleSub: row?.google_sub });

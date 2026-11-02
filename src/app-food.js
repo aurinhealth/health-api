@@ -3,7 +3,7 @@
 // the day's meals in the slots the athlete chose (profile.meals), each with its
 // share of the day's target and a suggestion for the slots still ahead, and
 // water. Pure: GET /app/api/food-today loads the inputs.
-import { localDateTime } from "./user-time.js";
+import { localDateTime, localToday } from "./user-time.js";
 import { MEAL_DEFAULT_TIMES } from "./food-log.js";
 import { L } from "./lang.js";
 
@@ -70,6 +70,49 @@ export function dayCalories(nutrition = {}) {
     ? Math.max(num(breakdown.minTarget) ?? 0, Math.round(rest + (num(breakdown.sportDailyAverage) ?? 0)))
     : Math.round(target) - Math.max(0, raw ?? 0));
   return { target, everyday, bonus: raw != null ? Math.min(raw, Math.max(0, Math.round(target) - everyday)) : null };
+}
+
+// The day's target in its parts for the Food screen: the base (resting burn,
+// everyday movement and the weight goal, held up by the safe minimum and raised
+// when the watch measures a more active day than usual), the workouts already
+// done and the ones still planned. Each workout counts with the share of its
+// burn the target takes (trainingCoverage), never more than training really
+// raised the target by (dayCalories), so the three parts always add up to the
+// target. A day gone by keeps only what was done. An own goal has no parts.
+export function targetParts(nutrition = {}, { past = false } = {}) {
+  const { target, everyday, bonus } = dayCalories(nutrition);
+  if (target == null || nutrition.ownTarget) return null;
+  const breakdown = nutrition.calorieBreakdown || {};
+  const coverage = num(breakdown.trainingCoverage) ?? 0.7;
+  const all = (Array.isArray(breakdown.workouts) ? breakdown.workouts : [])
+    .filter(w => w && num(w.kcal) > 0 && (w.kind === "done" || (w.kind === "planned" && !past)));
+  let room = Math.max(0, bonus ?? 0);
+  const part = kind => {
+    const list = all.filter(w => w.kind === kind);
+    const wanted = Math.round(list.reduce((s, w) => s + num(w.kcal) * coverage, 0));
+    const total = Math.min(wanted, room);
+    room -= total;
+    // Each workout's share of the part, the last one takes the rounding.
+    let given = 0;
+    const items = list.map((w, i) => {
+      const counted = i === list.length - 1 ? total - given : Math.round(total * num(w.kcal) * coverage / Math.max(wanted, 1));
+      given += counted;
+      return { kind, type: w.type || null, name: w.name ? String(w.name).slice(0, 80) : null, minutes: num(w.minutes) || null, kcal: Math.round(num(w.kcal)), counted };
+    });
+    return { total, items };
+  };
+  const done = part("done"), planned = part("planned");
+  const base = Math.round(target) - done.total - planned.total;
+  const resting = num(breakdown.baselineRestTDEE), movement = num(breakdown.sportDailyAverage) ?? 0, rest = num(breakdown.restIntakeTarget);
+  let lines = null;
+  if (resting != null && rest != null) {
+    // Whole numbers that add up to the base: the goal takes the rounding.
+    const expected = Math.round(rest + movement), goal = expected - Math.round(resting) - Math.round(movement);
+    const minimum = Math.max(0, (everyday ?? expected) - expected), moreActive = base - expected - minimum;
+    // Only at the 4000 kcal ceiling would the lines not add up: then the base alone.
+    if (moreActive >= 0) lines = { restingBurn: Math.round(resting), movement: Math.round(movement), goal, minimum, moreActive };
+  }
+  return { base, workouts: done.total, planned: planned.total, coverage, lines, items: [...done.items, ...planned.items] };
 }
 
 export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {}, slots = null }) {
@@ -162,6 +205,8 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
     trainingBonus: bonus,
     // The day's target without what training and movement add (Týdenní kalorie).
     everyday,
+    // The target in its parts: base, workouts done and planned (Food screen).
+    targetParts: targetParts(nutrition, { past: date < localToday() }),
     // For the coach's text (screen-texts.js): the hour, the safe minimum and the weight goal.
     hour,
     minimumKcal: num(breakdown.minTarget),

@@ -203,6 +203,8 @@ import SwiftUI
 
 /// The Vibrace button in Režim tréninku: what sounds, and the countdown.
 struct GymSignalsMenu: View {
+    /// Only the icon, when the row is too narrow for the word (its icon shows the mode).
+    var compact = false
     @AppStorage(GymSignals.vibrationKey) private var vibration = true
     @AppStorage(GymSignals.soundKey) private var sound = false
     @AppStorage(GymSignals.countdownKey) private var countdown = 3
@@ -224,7 +226,7 @@ struct GymSignalsMenu: View {
             }
             .pickerStyle(.inline)
         } label: {
-            ToolChip(systemImage: icon, title: L10n.tr(title))
+            ToolChip(systemImage: icon, title: compact ? nil : L10n.tr(title))
         }
         .accessibilityLabel(L10n.tr("Zvuk a vibrace"))
     }
@@ -247,14 +249,18 @@ struct GymSignalsMenu: View {
 struct ToolChip: View {
     let systemImage: String
     var tint: Color = Palette.ink
-    var title: String
+    /// nil: only the icon, in a capsule at least 44 pt wide.
+    var title: String?
 
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: systemImage).scaledFont(13, weight: .medium).foregroundStyle(tint)
-            Text(verbatim: title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
+            if let title {
+                Text(verbatim: title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
+            }
         }
         .padding(.horizontal, 12)
+        .frame(minWidth: 44)
         .frame(height: 34)
         .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
         .contentShape(Capsule())

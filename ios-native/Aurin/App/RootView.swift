@@ -84,6 +84,17 @@ struct RootView: View {
         switch model.phase {
         case .signedOut:
             LoginView().dynamicTypeSize(Self.textSizes)
+        case .signedIn where model.healthPaused && !model.demo:
+            // Health data paused (AppModel+HealthPause): the paused screen; its
+            // "Zapnout znovu" opens the consent of the setup.
+            HealthPausedView()
+                .dynamicTypeSize(Self.textSizes)
+                .fullScreenCover(isPresented: Binding(get: { model.needsSetup }, set: { model.needsSetup = $0 })) { SetupFlowView().dynamicTypeSize(Self.textSizes) }
+                .task {
+                    async let setup: Void = model.checkSetup()
+                    async let account: Void = model.loadAccountInitial()
+                    _ = await (setup, account)
+                }
         case .signedIn:
             ZStack(alignment: .bottom) {
                 // A tab once opened stays built behind the open one, so coming
@@ -112,7 +123,11 @@ struct RootView: View {
                 }
                 .dynamicTypeSize(Self.textSizes)
                 .onDisappear { visited = []; scrolledTabs = [] }
+                .onChange(of: model.paths, initial: true) { _, paths in
+                    ScreenTrail.visit(model.tab, paths[model.tab]?.last)
+                }
                 .onChange(of: model.tab) { old, tab in
+                    ScreenTrail.visit(tab, model.paths[tab]?.last)
                     visited.insert(old)
                     // A tab built earlier: only its data is checked, like on its first visit.
                     guard visited.contains(tab) else { return }
@@ -207,6 +222,9 @@ struct RootView: View {
                 .dynamicTypeSize(Self.textSizes)
             }
             .sheet(isPresented: $showSettings) { SettingsView().dynamicTypeSize(Self.textSizes) }
+            .onChange(of: showCoach) { _, open in
+                if open { ScreenTrail.visit("coach") } else { ScreenTrail.visit(model.tab, model.paths[model.tab]?.last) }
+            }
             .sheet(isPresented: $showCoach) { CoachView(view: coachView, date: model.selectedDate).dynamicTypeSize(Self.textSizes) }
             .sheet(isPresented: $showShare) {
                 if let today = model.today {
@@ -297,6 +315,16 @@ struct RootView: View {
             }
             // Back in the app: new data, and what waited for signal (and water
             // added from the widget) goes out.
+            // The gym started on the Apple Watch: Training mode opens here too.
+            .onChange(of: LiveWorkout.shared.openFromWatch, initial: true) { _, date in
+                guard let date else { return }
+                LiveWorkout.shared.openFromWatch = nil
+                guard !model.demo, !model.immersive else { return }
+                // Training mode for that day is on the screen already (opened, not started):
+                // it stays as it is and runs with the watch, instead of opening over itself.
+                guard !model.paths.values.contains(where: { $0.last == .trainingMode(date) }) else { return }
+                model.open(.trainingMode(date))
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background, !model.demo {
                     BackgroundRefresh.schedule()

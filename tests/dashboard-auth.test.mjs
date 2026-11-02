@@ -17,7 +17,7 @@ test("personal data routes are not public", () => {
 });
 
 test("static pages, Google login and self-authenticating routes stay public", () => {
-  for (const path of ["/", "/app/logout", "/auth/google", "/auth/app/apple", "/.well-known/apple-app-site-association", "/oauth/google/callback", "/automation/strength"]) {
+  for (const path of ["/", "/app/logout", "/auth/google", "/auth/app/apple", "/.well-known/apple-app-site-association", "/oauth/google/callback", "/automation/strength", "/webhooks/wahoo", "/webhooks/intervals", "/webhooks/app-store"]) {
     assert.equal(isPublicPath(path), true, path);
   }
   // The old web app and its browser sign-in are gone.
@@ -212,6 +212,9 @@ test("the connect sheet's cookie is good only for connecting, for a quarter of a
   const back = endConnectSession(new Response(null, { status: 302, headers: { Location: "loadwise://connected?event=google", "Set-Cookie": "pfd_google_oauth_state=; Path=/oauth/google; Max-Age=0" } }));
   assert.equal(back.headers.get("Location"), "loadwise://connected?event=google");
   assert.deepEqual(back.headers.getSetCookie(), ["pfd_google_oauth_state=; Path=/oauth/google; Max-Age=0", "pfd_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax"]);
+  // The app's https return page (builds from 2026-11) ends it too.
+  const https = endConnectSession(new Response(null, { status: 302, headers: { Location: "https://aurin.health/auth/app/connected?event=wahoo" } }));
+  assert.deepEqual(https.headers.getSetCookie(), ["pfd_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax"]);
   const onward = new Response(null, { status: 302, headers: { Location: "https://accounts.google.com/o/oauth2/v2/auth" } });
   assert.equal(endConnectSession(onward), onward);
   assert.equal(endConnectSession(null), null);

@@ -21,7 +21,7 @@ export async function handleGoogleOAuth(request, env, pathname) {
   if (pathname !== "/oauth/google/callback" || request.method !== "GET") return null;
   const url = new URL(request.url); const code=url.searchParams.get("code"); const state=url.searchParams.get("state"); const cookie=request.headers.get("Cookie")||""; const m=cookie.match(/(?:^|;\s*)pfd_google_oauth_state=([^;]+)/);
   const [expected, back, uid, verifier] = decodeURIComponent(m?.[1] || "").split(".");
-  if (url.searchParams.get("error") && state && state === expected) return new Response(null,{status:302,headers:{Location:connectReturnUrl(back,"google-cancelled"),'Set-Cookie':'pfd_google_oauth_state=; Path=/oauth/google; Max-Age=0; Secure; HttpOnly; SameSite=Lax','Cache-Control':'no-store'}});
+  if (url.searchParams.get("error") && state && state === expected) return new Response(null,{status:302,headers:{Location:connectReturnUrl(back, "google-cancelled", env),'Set-Cookie':'pfd_google_oauth_state=; Path=/oauth/google; Max-Age=0; Secure; HttpOnly; SameSite=Lax','Cache-Control':'no-store'}});
   if (!code || !state || !m || expected !== state || !verifier) return html("Google OAuth failed","Invalid or missing OAuth state. Start again from /oauth/google.",400);
   // Started by another account than the one signed in now: its keys are not stored here.
   if (!startedBy(uid, env)) return html("Google Health","Připojení začal jiný účet, než který je teď přihlášený. Připoj Google Health znovu v aplikaci Aurin (Nastavení → Zdroje dat).",403);
@@ -37,7 +37,7 @@ export async function handleGoogleOAuth(request, env, pathname) {
   await saveConnectionSecret(env,'google',data.refresh_token);
   // What the user actually granted; optional scopes may have been declined.
   await saveConnectionSecret(env,'google_scopes',String(data.scope||HEALTH_SCOPES.join(' ')));
-  return new Response(null,{status:302,headers:{Location:connectReturnUrl(back,"google"),'Set-Cookie':'pfd_google_oauth_state=; Path=/oauth/google; Max-Age=0; Secure; HttpOnly; SameSite=Lax','Cache-Control':'no-store'}});
+  return new Response(null,{status:302,headers:{Location:connectReturnUrl(back, "google", env),'Set-Cookie':'pfd_google_oauth_state=; Path=/oauth/google; Max-Age=0; Secure; HttpOnly; SameSite=Lax','Cache-Control':'no-store'}});
 }
 function html(title,body,status){return new Response("<!doctype html><html><head><meta charset=\"utf-8\"><title>Aurin</title></head><body style=\"font-family:system-ui;max-width:760px;margin:50px auto;padding:24px;line-height:1.5\"><h1>"+esc(title)+"</h1>"+body+"</body></html>",{status:status||200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","Referrer-Policy":"no-referrer"}});}
 function esc(value){return String(value).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll("\"","&quot;");}

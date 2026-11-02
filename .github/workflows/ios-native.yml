@@ -100,6 +100,8 @@ jobs:
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
       # Unit tests render the screens to PNG (AurinTests/SnapshotTests.swift).
+      # Test timeouts: a test that hangs (a StoreKit purchase that is never
+      # answered) fails after its allowance instead of holding the run for 90 min.
       - name: Test and render screens
         env:
           TEST_RUNNER_SNAPSHOT_DIR: ${{ github.workspace }}/screens
@@ -108,6 +110,8 @@ jobs:
           set -o pipefail
           xcodebuild -project Aurin.xcodeproj -scheme Aurin -configuration Debug \
             -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
+            -test-timeouts-enabled YES -default-test-execution-time-allowance 300 \
+            -maximum-test-execution-time-allowance 600 \
             CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/build.log"
 
       # When the app would not open on the simulator, the installer's own reason.

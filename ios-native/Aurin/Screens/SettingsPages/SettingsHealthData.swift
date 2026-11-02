@@ -25,6 +25,8 @@ enum HealthDataSources {
         case (.sleep, _): return ["sleep"]
         case (.steps, _): return ["steps"]
         case (.breathing, _): return ["spO2", "respiration"]
+        // Apple Health's workouts (src/watch-forward.js), next to the app's own.
+        case (.workouts, "intervals"): return ["workouts"]
         default: return []
         }
     }
@@ -56,6 +58,24 @@ enum HealthDataSources {
         }
     }
 
+    /// A source counts when it sent the type in this many days and is read.
+    static let sendingDays = 7
+
+    /// Whether Aurin reads the type from a service the server reads (its Reads from switch).
+    @MainActor
+    static func reading(_ id: String, _ type: HealthCategory, store: SettingsStore, sync: SyncSettingsStore?) -> Bool {
+        if type == .workouts { return sync?.destination(id)?.prefs.pullActivities == true }
+        return store.reads(id, type.rawValue) == true
+    }
+
+    /// The sources that really send the type: Apple Health's apps and devices
+    /// (each on its own, counted on the iPhone) and the services the server
+    /// reads that are switched on and sent it in the last week.
+    @MainActor
+    static func count(_ type: HealthCategory, apple: Int, store: SettingsStore, sync: SyncSettingsStore?) -> Int {
+        readers(type, store: store, sync: sync).filter { $0 != "apple" && reading($0, type, store: store, sync: sync) && store.sent($0, type.rawValue) }.count + apple
+    }
+
     @MainActor
     static func connected(_ id: String, _ store: SettingsStore) -> Bool {
         store.connections.contains { $0.id == id && $0.connected == true }
@@ -66,6 +86,9 @@ enum HealthDataSources {
 struct HealthDataGroup: View {
     let store: SettingsStore
     let sync: SyncSettingsStore?
+    /// Per type, Apple Health's apps and devices that sent it in the last week (nil until counted).
+    @State private var apple: [HealthCategory: Int]?
+    private var health: AppleHealth { AppleHealth.shared }
 
     private struct Row: Identifiable {
         let type: HealthCategory
@@ -93,8 +116,9 @@ struct HealthDataGroup: View {
                         HStack(spacing: 10) {
                             Text(row.type.title).font(.body).foregroundStyle(Palette.ink)
                             Spacer(minLength: 8)
-                            HStack(spacing: -5) {
-                                ForEach(Array(row.ids.prefix(4)), id: \.self) { IntegrationIcon(id: $0, size: 20) }
+                            if let n = count(row.type) {
+                                Text(verbatim: "\(n)").font(.body).monospacedDigit()
+                                    .foregroundStyle(n > 0 ? Palette.secondary : Palette.faint)
                             }
                             Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                         }
@@ -104,7 +128,26 @@ struct HealthDataGroup: View {
                     .buttonStyle(.plain)
                 }
             }
+            // Again when Apple Health, one of its types or one of its apps is switched.
+            .task(id: "\(health.enabled) \(health.categories.map(\.rawValue).sorted()) \(health.hidden)") { await countApple() }
         }
+    }
+
+    /// Nothing until counted, so a number never jumps.
+    private func count(_ type: HealthCategory) -> Int? {
+        if store.demo { return HealthDataSources.readers(type, store: store, sync: sync).count }
+        guard let apple, store.sending != nil else { return nil }
+        return HealthDataSources.count(type, apple: apple[type] ?? 0, store: store, sync: sync)
+    }
+
+    private func countApple() async {
+        guard !store.demo else { return }
+        await store.loadSending()
+        var out: [HealthCategory: Int] = [:]
+        if health.isAvailable {
+            for type in HealthDataSources.types { out[type] = await health.sending(type, days: HealthDataSources.sendingDays).count }
+        }
+        apple = out
     }
 }
 
@@ -120,6 +163,8 @@ struct HealthDataTypeView: View {
     @State private var connectingGoogle = false
     /// The apps and devices that wrote this type into Apple Health.
     @State private var appleSources: [AppleHealth.Source] = []
+    /// When each of them last wrote the type.
+    @State private var appleLast: [String: Date] = [:]
     private var health: AppleHealth { AppleHealth.shared }
 
     var body: some View {
@@ -134,7 +179,7 @@ struct HealthDataTypeView: View {
                         if id == "apple", health.enabled, health.categories.contains(type) {
                             ForEach(appleSources) { source in
                                 SettingsDivider()
-                                SettingsToggle(title: source.name, subtitle: L10n.tr("přes Apple Health"), isOn: Binding(
+                                SettingsToggle(title: source.name, subtitle: appleLast[source.id].map(SourceActions.when) ?? L10n.tr("přes Apple Health"), isOn: Binding(
                                     get: { health.isShown(source.id, in: type) },
                                     set: { health.setShown(source.id, in: type, $0) }))
                                     .padding(.leading, 44)
@@ -165,6 +210,7 @@ struct HealthDataTypeView: View {
         .task(id: health.enabled && health.categories.contains(type)) {
             guard health.enabled, health.categories.contains(type), !store.demo else { appleSources = []; return }
             appleSources = await health.sources(for: type)
+            appleLast = await health.lastWritten(type)
         }
     }
 
@@ -192,6 +238,10 @@ struct HealthDataTypeView: View {
 
     private func readSubtitle(_ id: String) -> String? {
         if id == "apple" { return L10n.tr("v tomhle iPhonu") }
+        // Switched on, but nothing of this type came in the last week.
+        if store.sending != nil, HealthDataSources.reading(id, type, store: store, sync: sync), !store.sent(id, type.rawValue) {
+            return L10n.tr("Žádná data za 7 dní")
+        }
         return store.connections.first { $0.id == id }?.lastSuccessAt.flatMap(SourceActions.when)
     }
 
@@ -233,8 +283,28 @@ struct HealthDataTypeView: View {
     // MARK: Sending
 
     private func sendBinding(_ id: String, sync: SyncSettingsStore) -> Binding<Bool> {
-        if type == .workouts { return SyncSendGroup.binding(id, \.pushActivities, sync: sync) }
         let types = HealthDataSources.sent(type, to: id)
+        if type == .workouts, types.isEmpty { return SyncSendGroup.binding(id, \.pushActivities, sync: sync) }
+        if type == .workouts {
+            // Intervals.icu: the app's workouts and Apple Health's go together.
+            return Binding(
+                get: { guard let d = sync.destination(id) else { return false }
+                       return d.prefs.pushActivities && types.allSatisfy(d.prefs.health.allows) },
+                set: { on in
+                    guard let d = sync.destination(id) else { return }
+                    var prefs = d.prefs
+                    prefs.pushActivities = on
+                    var chosen: [String]
+                    switch d.prefs.health {
+                    case .all: chosen = d.healthTypes
+                    case .some(let list): chosen = list
+                    }
+                    chosen.removeAll { types.contains($0) }
+                    if on { chosen += types.filter(d.healthTypes.contains) }
+                    prefs.health = .some(d.healthTypes.filter(chosen.contains))
+                    Task { [prefs] in await sync.save(id, prefs) }
+                })
+        }
         return Binding(
             get: { guard let d = sync.destination(id) else { return false }
                    return types.filter(d.healthTypes.contains).allSatisfy(d.prefs.health.allows) },

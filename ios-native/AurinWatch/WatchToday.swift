@@ -21,7 +21,7 @@ enum WatchToday {
         var plan: [PlanItem]?
         var steps: Steps?
 
-        struct Readiness: Decodable { var score: Int?; var zone: String? }
+        struct Readiness: Decodable { var score: Int?; var zone: String?; var learningDays: Int? }
         struct Sleep: Decodable { var minutes: Double?; var need: Double?; var start: String?; var end: String? }
         struct Strain: Decodable {
             var score: Double?; var training: Double?; var movement: Double?; var planned: Double?; var target: Target?
@@ -81,7 +81,7 @@ enum WatchToday {
                                water: $0.water?.ml, waterTarget: $0.water?.target)
         }
         return WatchSnapshot(date: today.date, updated: Date(), language: last?.language ?? WatchAPI.session?.language ?? "en",
-                             readiness: today.readiness?.score, zone: today.readiness?.zone,
+                             readiness: today.readiness?.score, zone: today.readiness?.zone, learningDays: today.readiness?.learningDays,
                              headline: today.summary?.headline, summary: today.summary?.text,
                              sleep: sleep, restingHR: metric(today.restingHR, last?.restingHR, 2), hrv: metric(today.hrv, last?.hrv, 0),
                              strain: strain, steps: today.steps?.today, week: week, food: food,

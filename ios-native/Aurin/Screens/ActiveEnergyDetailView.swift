@@ -65,7 +65,7 @@ struct ActiveEnergyContent: View {
                          highlighted: all.count - 1,
                          spacing: 2,
                          height: 140,
-                         scale: scaleTicks(0, top, count: 3, extra: mean.map { [ScaleTick(value: $0, text: L10n.f("prům. %@", Fmt.int($0)), color: Palette.muted, line: false)] } ?? []))
+                         scale: scaleTicks(0, top, count: 3, extra: mean.map { [ScaleTick(value: $0, text: Fmt.int($0), color: Palette.muted, line: false, name: L10n.tr("průměr"))] } ?? []))
             }
             .padding(.top, 20)
 

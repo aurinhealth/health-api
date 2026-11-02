@@ -276,8 +276,10 @@ struct WeekRevisionCard: View {
         .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }
     }
 
+    /// "Endurance · 90 min": a name that already ends in its minutes gets no second length.
     private static func line(_ side: WeekRevision.Side?) -> String {
-        [side?.name, side?.minutes.map { Fmt.duration($0) }].compactMap { $0 }.joined(separator: " · ")
+        let named = side?.name?.range(of: #"·\s*\d+\s*min\s*$"#, options: .regularExpression) != nil
+        return [side?.name, named ? nil : side?.minutes.map { Fmt.duration($0) }].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func decide(_ r: WeekRevision, apply: Bool) async {

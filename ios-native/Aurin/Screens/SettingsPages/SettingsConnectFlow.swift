@@ -111,7 +111,8 @@ struct ConnectFlowSheets: ViewModifier {
 /// One service's connect screen, the same for every service
 /// (mockups/pripojeni-sluzeb): the Aurin and service logos, what Aurin reads
 /// and writes, the service's own sign-in in the browser sheet, then
-/// "… je propojený". Google Health also asks for consent (Google's policy).
+/// "… je propojený". Google Health also asks for consent (Google's policy);
+/// Intervals.icu gets health data only with its switch on (off at first).
 struct ServiceConnectSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -120,8 +121,11 @@ struct ServiceConnectSheet: View {
     var connected: () async -> Void = {}
     @State private var phase = Phase.intro
     @State private var agree = false
+    @State private var sendHealth = false
     @State private var busy = false
     @State private var error: String?
+    /// Connected, but turning the health data on did not save.
+    @State private var healthError: String?
 
     enum Phase { case intro, done }
 
@@ -131,6 +135,8 @@ struct ServiceConnectSheet: View {
         let writes: String
         /// Google Health: what for and who gets the data, and the consent switch.
         var google = false
+        /// Intervals.icu: health data goes there only when switched on here or in Synchronizace.
+        var healthOptIn = false
     }
 
     static func service(_ id: String) -> Service {
@@ -142,7 +148,7 @@ struct ServiceConnectSheet: View {
         case "intervals":
             return Service(name: "Intervals.icu",
                            reads: L10n.tr("Tréninky, plán, zóny a váhu."),
-                           writes: L10n.tr("Tréninky naplánované i odcvičené v Aurinu, kalorický cíl, váhu a denní hodnoty z Apple Health a Google Health."))
+                           writes: L10n.tr("Tréninky naplánované i odcvičené v Aurinu a kalorický cíl."), healthOptIn: true)
         case "whoop":
             return Service(name: "WHOOP",
                            reads: L10n.tr("Spánek a jeho fáze, klidový tep, HRV, dech a okysličení krve."),
@@ -224,6 +230,19 @@ struct ServiceConnectSheet: View {
                         Toggle("Souhlasím, aby Aurin takto používal moje data z Google Health.", isOn: $agree)
                             .font(Typo.small).tint(Palette.green).padding(.top, 14)
                     }
+                    if service.healthOptIn {
+                        Toggle(isOn: $sendHealth) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Posílat i zdravotní data").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                                Text("Spánek, tep, HRV, okysličení krve, dech, VO₂max, tělesný tuk, kroky, váhu a tréninky z Apple Watch. Intervals.icu je samostatná firma a zachází s nimi podle svých zásad.")
+                                    .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .toggleStyle(AurinToggleStyle())
+                        .padding(.horizontal, 16).padding(.vertical, 12)
+                        .cardSurface(cornerRadius: 16)
+                        .padding(.top, 8)
+                    }
                     if let error {
                         Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 14)
                             .fixedSize(horizontal: false, vertical: true)
@@ -268,6 +287,10 @@ struct ServiceConnectSheet: View {
                 .multilineTextAlignment(.center).padding(.top, 22)
             Text("Data se začínají stahovat. Můžeš zatím pokračovat.")
                 .font(Typo.small).foregroundStyle(Palette.muted).multilineTextAlignment(.center).padding(.top, 8)
+            if let healthError {
+                Text(healthError).font(Typo.small).foregroundStyle(Palette.rust).multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true).padding(.top, 10)
+            }
             DownloadBar().padding(.horizontal, 40).padding(.top, 22)
             Spacer()
             PrimaryButton(title: L10n.tr("Hotovo")) { dismiss() }
@@ -294,6 +317,12 @@ struct ServiceConnectSheet: View {
     }
 
     private func finished() async {
+        // Off: whatever Synchronizace already has stays as it was.
+        if service.healthOptIn, sendHealth {
+            do { try await model.api.sendAllHealth(to: target.id) } catch {
+                healthError = L10n.f("Zdravotní data se nepodařilo zapnout. Zapneš je v Nastavení → Zdroje dat → %@ → Zdravotní data.", service.name)
+            }
+        }
         withAnimation { phase = .done }
         await connected()
     }
