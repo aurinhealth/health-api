@@ -13,6 +13,8 @@ struct GymPlaceView: View {
     let sections: [GymEquipment.Section]
     @Binding var catalog: [GymCatalogExercise]
     let onDelete: () -> Void
+    /// False only in tests: the page without its scroll view, which a snapshot leaves blank.
+    var scrolls = true
 
     /// Only what is ticked ("Zaškrtnuté"), else all.
     @State private var onlyTicked = false
@@ -30,28 +32,11 @@ struct GymPlaceView: View {
     }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: place.name) {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .firstTextBaseline) {
-                    SectionLabel(text: place.name + " · " + EquipmentView.countLine(place))
-                    Spacer(minLength: 8)
-                    menu
-                }
-                .padding(.top, 24)
-                Text("Co tam je").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 6)
-
-                searchField.padding(.top, 16)
-                ScrollViewReader { proxy in
-                    VStack(alignment: .leading, spacing: 0) {
-                        if search.isEmpty {
-                            chips(proxy).padding(.top, 12)
-                            sectionList
-                        } else {
-                            results
-                        }
-                    }
-                }
-                .padding(.bottom, toast == nil ? 0 : 70)
+        Group {
+            if scrolls {
+                DetailScreen(glow: Palette.Glow.training, title: place.name) { page }
+            } else {
+                page.padding(.horizontal, 24).padding(.top, 30)
             }
         }
         .overlay(alignment: .bottom) { if let toast { toastView(toast) } }
@@ -78,6 +63,32 @@ struct GymPlaceView: View {
         }
         .confirmationDialog(L10n.f("Smazat %@?", place.name), isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Smazat", role: .destructive) { onDelete() }
+        }
+    }
+
+    /// The header, the search, the chips and the list.
+    private var page: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                SectionLabel(text: place.name + " · " + EquipmentView.countLine(place))
+                Spacer(minLength: 8)
+                menu
+            }
+            .padding(.top, 24)
+            Text("Co tam je").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 6)
+
+            searchField.padding(.top, 16)
+            ScrollViewReader { proxy in
+                VStack(alignment: .leading, spacing: 0) {
+                    if search.isEmpty {
+                        chips(proxy).padding(.top, 12)
+                        sectionList
+                    } else {
+                        results
+                    }
+                }
+            }
+            .padding(.bottom, toast == nil ? 0 : 70)
         }
     }
 

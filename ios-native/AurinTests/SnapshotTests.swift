@@ -487,7 +487,8 @@ final class SnapshotTests: XCTestCase {
         let place = GymPlace(id: "p", kind: "gym", name: "METAGYM Kutná Hora", stations: ["dumbbells", "pec_deck"], url: "", dumbbellWeights: [])
         XCTAssertEqual(GymPlaceView.folded("Motýlek"), "motylek")
         try render("gym-place", glow: Palette.Glow.training, height: 1100) {
-            GymPlaceView(place: .constant(place), stations: stations, sections: sections, catalog: .constant([curl, press]), onDelete: {})
+            GymPlaceView(place: .constant(place), stations: stations, sections: sections, catalog: .constant([curl, press]), onDelete: {}, scrolls: false)
+                .frame(maxHeight: .infinity, alignment: .top)
         }
     }
 
