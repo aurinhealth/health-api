@@ -190,6 +190,22 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// The coach's swim cards: 8×100 m at CSS in the pool, and open water with the safety line.
+    func testCoachSwimCards() throws {
+        func step(_ meters: Int, _ pct: Double, css: Double = 108, rest: Bool = false) -> String {
+            let pace = css * 100 / pct
+            return rest ? #"{"durationSeconds":15,"percentLow":0,"percentHigh":0,"rest":true}"# : #"{"durationSeconds":\#(Double(meters) / 100 * pace),"percentLow":\#(pct - 2),"percentHigh":\#(pct + 2),"paceSlow":\#(pace + 2),"paceFast":\#(pace - 2),"meters":\#(meters)}"#
+        }
+        let css = "[" + [#"{"repeats":1,"steps":[\#(step(300, 86))]}"#, #"{"repeats":8,"steps":[\#(step(100, 100)),\#(step(0, 0, rest: true))]}"#, #"{"repeats":1,"steps":[\#(step(200, 86)),\#(step(100, 84))]}"#].joined(separator: ",") + "]"
+        let lake = "[" + [#"{"repeats":1,"steps":[\#(step(200, 86))]}"#, #"{"repeats":6,"steps":[\#(step(50, 96)),\#(step(50, 88))]}"#, #"{"repeats":1,"steps":[\#(step(1100, 95)),\#(step(100, 84))]}"#].joined(separator: ",") + "]"
+        let json = #"{"status":"ok","answer":"Prahové série v CSS.","chatId":13,"actions":[{"type":"workout","date":"2026-11-06","sport":"swim","minutes":45,"kind":"threshold","draftId":460,"reason":"CSS","preview":{"workout":{"id":"swim-css-8x100","name":"Práh 8×100 m","primary_system":"threshold","duration_minutes":45,"distance_meters":1900,"environment":"indoor","steps":\#(css)}}},{"type":"workout","date":"2026-11-07","sport":"swim","minutes":45,"kind":"endurance","openWater":true,"draftId":461,"reason":"Volná voda","preview":{"workout":{"id":"swim-open-water-2000","name":"Volná voda 2000 m","primary_system":"endurance","duration_minutes":45,"distance_meters":2000,"environment":"outdoor","steps":\#(lake)}}}]}"#
+        let result = try JSONDecoder().decode(AssistantResult.self, from: Data(json.utf8))
+        XCTAssertEqual(result.actions?[1].openWater, true)
+        try render("coach-swim-cards", height: 640) {
+            VStack(spacing: 14) { ForEach(result.actions ?? []) { ActionCard(action: $0, result: nil, decide: { _ in }) } }.padding(24)
+        }
+    }
+
     func testEnglishAndImperial() throws {
         L10n.setLanguage("en")
         Units.setSystem("imperial")
