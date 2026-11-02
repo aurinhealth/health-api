@@ -1,13 +1,14 @@
 import SwiftUI
 
 /// Nastavení → Správa → Návrhy oprav potravin (the owner only): users'
-/// corrections of catalogue foods, waiting, approved or rejected. Approving
-/// puts the corrected food in the common catalogue (src/food-suggestions.js).
+/// corrections of catalogue foods, reports and new foods ("Navrhnout pro
+/// všechny"), waiting, approved or rejected. Approving puts the food in the
+/// common catalogue (src/food-suggestions.js).
 struct FoodSuggestionsView: View {
     @Environment(AppModel.self) private var model
     let store: SettingsStore
     @State private var status = "pending"
-    /// "correction" (Opravy) or "report" (Hlášení).
+    /// "correction" (Opravy), "report" (Hlášení) or "new_food" (Nové).
     @State private var kind = "correction"
     @State private var list: FoodSuggestionList?
     @State private var error: String?
@@ -17,6 +18,7 @@ struct FoodSuggestionsView: View {
             Picker("Druh", selection: $kind) {
                 Text(L10n.f("Opravy · %d", list?.pending?["correction"] ?? 0)).tag("correction")
                 Text(L10n.f("Hlášení · %d", list?.pending?["report"] ?? 0)).tag("report")
+                Text(L10n.f("Nové · %d", list?.pending?["new_food"] ?? 0)).tag("new_food")
             }
             .pickerStyle(.segmented)
             Picker("Stav", selection: $status) {
@@ -73,7 +75,8 @@ struct FoodSuggestionsView: View {
     }
 }
 
-/// One suggestion: what changes and what stays, who sent it, Schválit or Zamítnout.
+/// One suggestion: what changes and what stays (a new food: its values), who
+/// sent it, Schválit or Zamítnout.
 struct FoodSuggestionDetail: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -92,25 +95,34 @@ struct FoodSuggestionDetail: View {
         SettingsPage(title: suggestion.name) {
             Text(([suggestion.after["brand"]?.string, suggestion.barcode.map { "EAN " + $0 }].compactMap { $0 }).joined(separator: " · "))
                 .font(Typo.caption).foregroundStyle(Palette.muted).frame(maxWidth: .infinity)
-            SettingsGroup(title: "Změny") {
-                ForEach(Array(changed.enumerated()), id: \.offset) { index, field in
-                    if index > 0 { SettingsDivider() }
-                    HStack(spacing: 8) {
-                        Text(LocalizedStringKey(field.title)).font(.body).foregroundStyle(Palette.ink)
-                        Spacer(minLength: 8)
-                        Text(verbatim: Self.text(suggestion.before[field.key], field.unit) ?? "–").strikethrough().foregroundStyle(Palette.faint)
-                        Image(systemName: "arrow.right").font(.caption).foregroundStyle(Palette.faint)
-                        Text(verbatim: Self.text(suggestion.after[field.key], field.unit) ?? "–").fontWeight(.semibold).foregroundStyle(Palette.green)
-                    }
-                    .font(.subheadline)
-                    .padding(.horizontal, 16).frame(minHeight: 50)
-                }
-            }
-            if !kept.isEmpty {
-                SettingsGroup(title: "Beze změny") {
-                    ForEach(Array(kept.enumerated()), id: \.offset) { index, field in
+            if isNew {
+                SettingsGroup(title: L10n.f("Na 100 %@", suggestion.after["nutrition_basis"]?.string == "ml" ? "ml" : "g")) {
+                    ForEach(Array(values.enumerated()), id: \.offset) { index, field in
                         if index > 0 { SettingsDivider() }
                         SettingsRow(title: field.title, value: Self.text(suggestion.after[field.key], field.unit), chevron: false)
+                    }
+                }
+            } else {
+                SettingsGroup(title: "Změny") {
+                    ForEach(Array(changed.enumerated()), id: \.offset) { index, field in
+                        if index > 0 { SettingsDivider() }
+                        HStack(spacing: 8) {
+                            Text(LocalizedStringKey(field.title)).font(.body).foregroundStyle(Palette.ink)
+                            Spacer(minLength: 8)
+                            Text(verbatim: Self.text(suggestion.before[field.key], field.unit) ?? "–").strikethrough().foregroundStyle(Palette.faint)
+                            Image(systemName: "arrow.right").font(.caption).foregroundStyle(Palette.faint)
+                            Text(verbatim: Self.text(suggestion.after[field.key], field.unit) ?? "–").fontWeight(.semibold).foregroundStyle(Palette.green)
+                        }
+                        .font(.subheadline)
+                        .padding(.horizontal, 16).frame(minHeight: 50)
+                    }
+                }
+                if !kept.isEmpty {
+                    SettingsGroup(title: "Beze změny") {
+                        ForEach(Array(kept.enumerated()), id: \.offset) { index, field in
+                            if index > 0 { SettingsDivider() }
+                            SettingsRow(title: field.title, value: Self.text(suggestion.after[field.key], field.unit), chevron: false)
+                        }
                     }
                 }
             }
@@ -137,6 +149,11 @@ struct FoodSuggestionDetail: View {
         }
     }
 
+    private var isNew: Bool { suggestion.kind == "new_food" }
+    /// A new food: every filled value but the name and the brand (shown above).
+    private var values: [(key: String, title: String, unit: String)] {
+        Self.fields.filter { $0.key != "name" && $0.key != "brand" && Self.text(suggestion.after[$0.key], $0.unit) != nil }
+    }
     private var changed: [(key: String, title: String, unit: String)] { Self.fields.filter { suggestion.changes.contains($0.key) } }
     private var kept: [(key: String, title: String, unit: String)] {
         Self.fields.filter { !suggestion.changes.contains($0.key) && Self.text(suggestion.after[$0.key], $0.unit) != nil && $0.key != "name" && $0.key != "brand" }
@@ -147,8 +164,11 @@ struct FoodSuggestionDetail: View {
         return value?.string
     }
 
-    /// "Porce 1 g → 19 g" for the list: the first change.
+    /// "Porce 1 g → 19 g" for the list: the first change; a new food: its brand and code.
     static func summary(_ s: FoodSuggestion) -> String {
+        if s.kind == "new_food" {
+            return [s.after["brand"]?.string, s.barcode.map { "EAN " + $0 }].compactMap { $0 }.joined(separator: " · ")
+        }
         guard let key = s.changes.first, let field = fields.first(where: { $0.key == key }) else { return "" }
         let more = s.changes.count > 1 ? " +\(s.changes.count - 1)" : ""
         return L10n.tr(field.title) + " " + (text(s.before[key], field.unit) ?? "–") + " → " + (text(s.after[key], field.unit) ?? "–") + more

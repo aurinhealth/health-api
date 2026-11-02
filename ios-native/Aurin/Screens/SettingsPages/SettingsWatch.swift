@@ -15,63 +15,33 @@ struct WatchSettingsView: View {
     private static let names = ["readiness": "Připravenost", "training": "Trénink", "food": "Jídlo"]
 
     var body: some View {
-        List {
-            Section { device }
-            Section {
-                ForEach(order, id: \.self) { page in
-                    Toggle(L10n.tr(Self.names[page] ?? page), isOn: shown(page))
-                        .disabled(page == "readiness")
-                        .moveDisabled(page == "readiness")
+        SettingsPage(title: "Apple Watch") {
+            device
+            SettingsGroup(title: "Stránky", footer: "Mezi stránkami se na hodinkách přechází korunkou. Pořadí změníš přetažením.") {
+                ForEach(Array(order.enumerated()), id: \.element) { i, page in
+                    if i > 0 { SettingsDivider() }
+                    pageRow(page)
                 }
-                .onMove { from, to in
-                    order.move(fromOffsets: from, toOffset: to)
-                    // Readiness opens the watch app: it stays on top.
-                    if let i = order.firstIndex(of: "readiness"), i != 0 { order.remove(at: i); order.insert("readiness", at: 0) }
-                    settings.pages = order.filter { settings.pages.contains($0) }
-                }
-            } header: {
-                Text("Stránky")
-            } footer: {
-                Text("Mezi stránkami se na hodinkách přechází korunkou. Pořadí změníš přetažením.")
             }
-            Section {
-                Toggle(L10n.tr("Otevřít na hodinkách"), isOn: $settings.openOnWatch)
-                Picker(L10n.tr("Když skončí pauza"), selection: $settings.restEnd) {
-                    Text("Ťuknutí a zvuk").tag("tapBeep")
-                    Text("Jen ťuknutí").tag("tap")
-                    Text("Nic").tag("none")
-                }
-            } header: {
-                Text("Posilovna")
-            } footer: {
-                Text("Režim tréninku v iPhonu spustí posilovnu i na hodinkách. Hodinky měří tep a kalorie a trénink uloží do Zdraví jednou.")
+            SettingsGroup(title: "Posilovna", footer: "Režim tréninku v iPhonu spustí posilovnu i na hodinkách. Hodinky měří tep a kalorie a trénink uloží do Zdraví jednou.") {
+                SettingsToggle(title: L10n.tr("Otevřít na hodinkách"), isOn: $settings.openOnWatch)
+                SettingsDivider()
+                SettingsPicker(title: "Když skončí pauza", selection: $settings.restEnd,
+                               options: [("tapBeep", "Ťuknutí a zvuk"), ("tap", "Jen ťuknutí"), ("none", "Nic")])
             }
-            Section {
-                Picker(L10n.tr("Budík zvoní na"), selection: $settings.alarmOnWatch) {
-                    Text("iPhonu").tag(false)
-                    Text("Apple Watch").tag(true)
-                }
+            SettingsGroup(title: "Budík", footer: settings.alarmOnWatch
+                ? "Hodinky zvoní první. Když je nevypneš, za 5 minut zazvoní iPhone. Čas budíku je stejný jako v Nastavení → Spánek."
+                : "Zvoní jen jedno zařízení. Čas budíku je stejný jako v Nastavení → Spánek.") {
+                SettingsPicker(title: "Budík zvoní na", selection: Binding(get: { settings.alarmOnWatch ? "watch" : "iphone" },
+                                                                         set: { settings.alarmOnWatch = $0 == "watch" }),
+                               options: [("iphone", "iPhonu"), ("watch", "Apple Watch")])
                 if settings.alarmOnWatch {
-                    LabeledContent(L10n.tr("Záloha na iPhonu")) {
-                        Text(backup.map { $0.formatted(date: .omitted, time: .shortened) } ?? "–")
-                            .foregroundStyle(Palette.indigo)
-                    }
-                }
-            } header: {
-                Text("Budík")
-            } footer: {
-                if settings.alarmOnWatch {
-                    Text("Hodinky zvoní první. Když je nevypneš, za 5 minut zazvoní iPhone. Čas budíku je stejný jako v Nastavení → Spánek.")
-                } else {
-                    Text("Zvoní jen jedno zařízení. Čas budíku je stejný jako v Nastavení → Spánek.")
+                    SettingsDivider()
+                    SettingsRow(title: "Záloha na iPhonu",
+                                value: backup.map { $0.formatted(date: .omitted, time: .shortened) } ?? "–", chevron: false)
                 }
             }
         }
-        .environment(\.editMode, .constant(.active))
-        .scrollContentBackground(.hidden)
-        .background(Palette.background)
-        .navigationTitle("Apple Watch")
-        .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             backup = SystemAlarm.backupTime
             order = settings.pages + WatchSettings.allPages.filter { !settings.pages.contains($0) }
@@ -85,6 +55,33 @@ struct WatchSettingsView: View {
                 }
             }
         }
+    }
+
+    /// A page with its switch; the others carry a handle on the left and are
+    /// dragged onto each other to change the order. Readiness opens the watch
+    /// app, so it stays first and on.
+    @ViewBuilder
+    private func pageRow(_ page: String) -> some View {
+        let fixed = page == "readiness"
+        HStack(spacing: 0) {
+            SettingsGrip().opacity(fixed ? 0 : 1)
+            SettingsToggle(title: L10n.tr(Self.names[page] ?? page), subtitle: fixed ? L10n.tr("Vždy první") : nil,
+                           isOn: shown(page), disabled: fixed)
+                .padding(.leading, -6)
+        }
+        .contentShape(Rectangle())
+        .modifier(SettingsReorder(id: page, movable: !fixed, accepts: WatchSettings.allPages) { moved in move(moved, before: page) })
+    }
+
+    /// Puts `moved` where `target` is; Readiness never leaves the top.
+    private func move(_ moved: String, before target: String) {
+        guard moved != target, moved != "readiness", let from = order.firstIndex(of: moved),
+              let to = order.firstIndex(of: target) else { return }
+        withAnimation(.snappy) {
+            order.remove(at: from)
+            order.insert(moved, at: max(1, to))
+        }
+        settings.pages = order.filter { settings.pages.contains($0) }
     }
 
     private var device: some View {
@@ -104,13 +101,15 @@ struct WatchSettingsView: View {
                 .font(.system(size: 22))
                 .foregroundStyle(Palette.ink)
                 .frame(width: 40, height: 40)
-                .background(Palette.background, in: RoundedRectangle(cornerRadius: 10))
+                .background(Palette.track, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text("Apple Watch").font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
                 Text(text).font(Typo.small).foregroundStyle(state.installed ? Palette.green : Palette.muted)
             }
+            Spacer(minLength: 0)
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 16).padding(.vertical, 14)
+        .cardSurface(cornerRadius: 22)
     }
 
     private func shown(_ page: String) -> Binding<Bool> {

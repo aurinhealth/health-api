@@ -46,7 +46,7 @@ test("the export is NDJSON: a header line, then one line per row", async () => {
   const db = database();
   const now = new Date("2026-10-12T08:00:00Z");
   const { header, rows, text } = await exportAccount({ DB: scopedDb(db, 3), USER_ID: 3 }, { ...user, name: "A" }, { now });
-  assert.deepEqual(header, { format: "loadwise-export", version: 2, exportedAt: "2026-10-12T08:00:00.000Z", account: { email: "a@example.com", name: "A" } });
+  assert.deepEqual(header, { format: "aurin-export", version: 2, exportedAt: "2026-10-12T08:00:00.000Z", account: { email: "a@example.com", name: "A" } });
   assert.equal(text.split("\n").length, rows.length + 2);
   for (const line of rows) assert.deepEqual(Object.keys(line), ["table", "row"]);
   assert.deepEqual(rows.map(line => line.table).sort(), ["dashboard_profile", "health_datapoints"]);
@@ -77,7 +77,7 @@ test("the export stream reads a page only when the reader asks for more, and sto
   db.prepare = sql => { if (/^SELECT rowid AS export_rowid__/.test(sql)) queries++; return prepare(sql); };
   const reader = exportAccountStream({ DB: scopedDb(db, 3), USER_ID: 3 }, user, { pageRows: 5 }).getReader();
   const decoder = new TextDecoder();
-  assert.equal(JSON.parse(decoder.decode((await reader.read()).value)).format, "loadwise-export");
+  assert.equal(JSON.parse(decoder.decode((await reader.read()).value)).format, "aurin-export");
   const page = decoder.decode((await reader.read()).value).trim().split("\n").map(line => JSON.parse(line));
   assert.equal(page.length, 5);
   assert.equal(page[0].table, "health_datapoints");

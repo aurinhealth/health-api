@@ -20,6 +20,7 @@ import { localToday } from "./user-time.js";
 import { siteLang } from "./site-pages.js";
 import { ENDURANCE_SPORTS, cleanEnduranceTemplate, enduranceStructure, templateFromStructure, blockLines, zwoFile, ZONES } from "./endurance-templates.js";
 import { totalMinutes } from "./workout-model.js";
+import { fitWorkoutFile } from "./fit-workout.js";
 import { stepRows } from "./workout-explanation.js";
 import { getWorkout, scheduleWorkoutInIntervals } from "./workout-library.js";
 import { SITE_ORIGIN } from "./app-origin.js";
@@ -237,14 +238,30 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
       if (!w || !structure.length) return json({ message: L("Trénink nemá úseky, které by šly uložit.", "The workout has no sections to save.") }, 404);
       return json({ status: "ok", template: templateFromStructure(ENDURANCE_SPORTS.includes(w.sport) ? w.sport : "ride", w.name, structure) });
     }
-    // "Send to" → Zwift, MyWhoosh: the planned ride as a .zwo file.
+    // "Export to" → .zwo: the planned ride or run as a Zwift file.
     if (path === "/app/api/my-workouts/from-planned.zwo" && request.method === "GET") {
       const w = await plannedWorkout(env, String(url.searchParams.get("id") || ""));
       let structure = [];
       try { structure = JSON.parse(w?.structure_json || "[]"); } catch { /* none */ }
-      if (!w || (w.sport && w.sport !== "ride") || !structure.length) return json({ message: L("Tenhle trénink jako soubor pro Zwift nejde.", "This workout can't be made into a Zwift file.") }, 404);
-      const template = templateFromStructure("ride", w.name, structure);
+      const sport = w?.sport || "ride";
+      if (!w || !["ride", "run"].includes(sport) || !structure.length) return json({ message: L("Tenhle trénink jako soubor pro Zwift nejde.", "This workout can't be made into a Zwift file.") }, 404);
+      const template = templateFromStructure(sport, w.name, structure);
       return new Response(zwoFile(template), { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "no-store" } });
+    }
+    // "Export to" → .fit: the planned ride, run or swim as a FIT workout
+    // (Garmin, Wahoo, Karoo, COROS). A run asks for the threshold pace so the
+    // steps get real paces; a ride stays in % FTP, a swim without targets.
+    if (path === "/app/api/my-workouts/from-planned.fit" && request.method === "GET") {
+      const w = await plannedWorkout(env, String(url.searchParams.get("id") || ""));
+      let structure = [];
+      try { structure = JSON.parse(w?.structure_json || "[]"); } catch { /* none */ }
+      const sport = ENDURANCE_SPORTS.includes(w?.sport) ? w.sport : "ride";
+      if (!w || !structure.length) return json({ message: L("Tenhle trénink jako soubor .fit nejde.", "This workout can't be made into a .fit file.") }, 404);
+      const template = templateFromStructure(sport, w.name, structure);
+      const thresholds = sport === "run" ? await athleteThresholds(env).catch(() => null) : null;
+      // No pool length: the watch uses the pool the swimmer set for the swim.
+      const file = fitWorkoutFile(template, { thresholdPace: thresholds?.runThresholdPace || null });
+      return new Response(file, { headers: { "content-type": "application/vnd.ant.fit", "cache-control": "no-store" } });
     }
     // A ride or run put together from the athlete's words; nothing is saved.
     if (path === "/app/api/my-workouts/describe" && request.method === "POST") {
@@ -443,7 +460,7 @@ ${muscles.length ? `<div class="bars">${muscles.map((name, i) => `<div><i class=
 ${endurance ? intervalGraph(template) : ""}
 <ol class="card">${list}</ol>
 <p class="note">${endurance ? t(share.sport === "swim" ? "Tempo na 100 m ti aplikace přepočte podle tvého CSS." : share.sport === "run" ? "Tempo ti aplikace přepočte podle tvého prahového tempa." : "Watty ti aplikace přepočte podle tvého FTP.", share.sport === "swim" ? "The app turns the paces per 100 m into yours from your CSS." : share.sport === "run" ? "The app turns the paces into yours from your threshold pace." : "The app turns the watts into yours from your FTP.") : t("Váhy ti aplikace navrhne podle tvých vlastních tréninků a toho, jak jsi odpočatý.", "The app suggests the weights from your own workouts and how rested you are.")}</p>
-<a class="button" id="open" href="loadwise://open/share/${share.id}">${t("Otevřít v Aurinu", "Open in Aurin")}</a>
+<a class="button" id="open" href="aurin://open/share/${share.id}">${t("Otevřít v Aurinu", "Open in Aurin")}</a>
 <p class="note" id="noapp" hidden>${store ? `<a href="${store}">${t("Stáhni si Aurin z App Store", "Get Aurin on the App Store")}</a>` : t("Aurin bude brzy v App Store.", "Aurin is coming soon to the App Store.")}</p>${share.sport === "ride" ? `
 <a class="button ghost" href="/t/${share.id}/workout.zwo">${t("Stáhnout .zwo pro Zwift", "Download .zwo for Zwift")}</a>` : ""}`;
   // Without the app the scheme does nothing: the page stays, so it shows the way to the app.

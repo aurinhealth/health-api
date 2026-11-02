@@ -242,14 +242,14 @@ final class CalendarTime {
             let minutes = a.minutes.map { Int($0.rounded()) }.flatMap { $0 > 0 ? $0 : nil } ?? 60
             return Entry(key: a.id, date: a.date, title: a.title, minutes: minutes, time: a.time,
                          notes: [Self.sportLabel(a.sport), Fmt.duration(minutes)].compactMap { $0 }.joined(separator: " · "),
-                         link: URL(string: a.sport == "strength" ? "loadwise://open/gym/" + a.date : "loadwise://open/training"))
+                         link: URL(string: a.sport == "strength" ? "aurin://open/gym/" + a.date : "aurin://open/training"))
         }
         // A workout done today keeps its place in the calendar.
         let done = Set(calendar.days.flatMap(\.activities).compactMap(\.plannedId))
         for plan in [plans?.active, plans?.activeGym].compactMap({ $0 }) {
             guard let race = plan.raceDate, race >= today else { continue }
             entries.append(Entry(key: "race|" + plan.templateId, date: race, title: L10n.f("Závod · %@", plan.name), minutes: nil, time: nil,
-                                 notes: plan.raceKm.map { Fmt.decimal($0) + " km" } ?? "", link: URL(string: "loadwise://open/training")))
+                                 notes: plan.raceKm.map { Fmt.decimal($0) + " km" } ?? "", link: URL(string: "aurin://open/training")))
         }
         _ = read()
         do {

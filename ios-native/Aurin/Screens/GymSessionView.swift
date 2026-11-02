@@ -59,9 +59,11 @@ struct GymSessionView: View {
         return nil
     }
 
+    /// A lifting session done that day shows as done even when the day's plan
+    /// was cancelled: the workout happened, the cancellation is only the plan's.
     private var showsDone: Bool {
-        if day?.cancelled == true { return false }
-        return doneMode || doneSession != nil
+        if doneSession != nil { return true }
+        return doneMode && day?.cancelled != true
     }
 
     /// Done: every set ticked, or a past day with sets ticked.
@@ -502,7 +504,7 @@ struct ExerciseCard: View {
     private func row(_ s: GymSet, current: GymSet?) -> GymSetRow {
         let phase: GymSetRow.Phase = s.done ? .done : (s.row == current?.row ? .current : .next)
         let pick = onIntensity
-        return GymSetRow(label: s.warmup ? "W" : s.drop ? "↳" : s.side == "P" ? "" : s.number, side: s.side,
+        return GymSetRow(label: s.warmup ? (s.side == "P" ? "" : "W") : s.drop ? "↳" : s.side == "P" ? "" : s.number, side: s.side,
                          lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
                          kg: LiftWeight.shown(s.done ? s.kg : s.plannedKg) ?? "",
                          reps: Fmt.range((s.done ? s.reps : s.plannedReps) ?? ""),
@@ -886,9 +888,15 @@ struct SupersetGroup<Content: View>: View {
     }
 }
 
-/// The exercise's YouTube video played inside the app.
+/// The exercise's YouTube video played inside the app. Only a video id
+/// (eleven letters, digits, - and _) makes the page, and the page cannot go
+/// anywhere else: the video plays in its frame, nothing else opens.
 struct YouTubePlayer: UIViewRepresentable {
     let id: String
+
+    static func isVideoId(_ id: String) -> Bool {
+        id.count == 11 && id.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }
+    }
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -898,24 +906,38 @@ struct YouTubePlayer: UIViewRepresentable {
         view.isOpaque = false
         view.backgroundColor = .black
         view.scrollView.isScrollEnabled = false
+        view.navigationDelegate = context.coordinator
         return view
     }
 
     func updateUIView(_ view: WKWebView, context: Context) {
-        guard context.coordinator.loaded != id else { return }
+        guard context.coordinator.loaded != id, Self.isVideoId(id) else { return }
         context.coordinator.loaded = id
         let html = """
         <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
         <style>html,body{margin:0;height:100%;background:#000}iframe{position:absolute;inset:0;width:100%;height:100%;border:0}</style></head>
         <body><iframe src="https://www.youtube-nocookie.com/embed/\(id)?playsinline=1&rel=0&modestbranding=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></body></html>
         """
+        context.coordinator.pageLoads = true
+        // YouTube's player wants to know which site embeds it (without it, error 153).
         view.loadHTMLString(html, baseURL: APIClient.server)
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    final class Coordinator {
+    @MainActor final class Coordinator: NSObject, WKNavigationDelegate {
         var loaded: String?
+        /// The page itself is loading; after it, the page stays where it is.
+        var pageLoads = false
+
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
+            // The video's own frame navigates freely; the page and new windows do not.
+            guard let frame = navigationAction.targetFrame else { return .cancel }
+            if !frame.isMainFrame { return .allow }
+            let allow = pageLoads
+            pageLoads = false
+            return allow ? .allow : .cancel
+        }
     }
 }
 

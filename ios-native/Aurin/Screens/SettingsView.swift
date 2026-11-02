@@ -69,12 +69,17 @@ struct SettingsMenu: View {
                 SettingsSectionTiles(store: store)
             }
 
-            // Only the owner: users' corrections of catalogue foods to approve.
+            // Only the owner: users' corrections of catalogue foods to approve, and what AI costs today.
             if store.owner && !model.demo {
                 SettingsGroup(title: "Správa") {
                     NavigationLink { FoodSuggestionsView(store: store) } label: {
                         SettingsRow(icon: SettingsIcon(systemImage: "tray", color: Palette.amber), title: "Návrhy oprav potravin",
                                     badge: store.pendingFoodSuggestions)
+                    }
+                    SettingsDivider()
+                    NavigationLink { AISpendingView(store: store) } label: {
+                        SettingsRow(icon: SettingsIcon(systemImage: "chart.bar.xaxis", color: Palette.green), title: "Útraty AI",
+                                    value: store.aiSpentToday.map { L10n.f("%@ dnes", AISpendingView.usd($0)) })
                     }
                 }
                 .buttonStyle(.plain)

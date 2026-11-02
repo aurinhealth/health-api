@@ -1,7 +1,7 @@
 // Runs in the existing deployment jobs with their Cloudflare credentials.
 // Credentials stay in GitHub Actions; they are never stored in a Worker or
 // uploaded artifact. Only empty, independently named databases are provisioned.
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -43,6 +43,15 @@ export function runtimeConfig(config, environment, plan, databases) {
   if (new Set(selected.d1_databases.map(d => d.database_id)).size !== selected.d1_databases.length) throw new Error('Duplicate database binding');
   selected.vars.USER_DATA_ROUTING = 'true';
   return result;
+}
+
+// A database new to the directory: kept in reserve (no accounts) when another
+// already takes accounts, so the server opens it only when the free places run
+// low (tenancy.js openReserveShards); the first one of a new environment opens
+// at once. 25 accounts each. Later deploys keep what is there (capacity,
+// closed or opened databases, user assignments).
+export function registrySql(shard) {
+  return `INSERT INTO user_data_shards(shard_key,binding_name,state,accepting_new,reserve,max_users,max_bytes) SELECT '${shard.key}','${shard.binding}','ready',open,1-open,25,7000000000 FROM (SELECT CASE WHEN EXISTS(SELECT 1 FROM user_data_shards WHERE shard_key!='legacy' AND state='ready' AND accepting_new=1) THEN 0 ELSE 1 END AS open) WHERE 1 ON CONFLICT(shard_key) DO NOTHING;`;
 }
 
 export const ACTIVATION_SQL = `
@@ -97,6 +106,7 @@ export async function provisionDatabases({ accountId, token, plan, fetchImpl = f
 async function main() {
   const environment = process.argv.includes('--staging') ? 'staging' : '';
   const activate = process.argv.includes('--activate');
+  const afterDeploy = process.argv.includes('--after-deploy');
   const config = parseConfig(readFileSync('wrangler.jsonc', 'utf8'));
   const plan = shardPlan(config, environment);
   const configPath = 'wrangler.runtime.jsonc';
@@ -115,6 +125,16 @@ async function main() {
     console.log('User data routing activated; existing histories remain on legacy DB.');
     return;
   }
+  // after-deploy/*.sql on every database, once the new Worker is live: data changes the
+  // previous version could still undo while the deploy ran. Each file guards itself.
+  if (afterDeploy) {
+    const files = readdirSync('after-deploy').filter(f => f.endsWith('.sql')).sort();
+    for (const name of [plan.core.database_name, ...plan.shards.map(s => s.name)]) {
+      for (const file of files) wrangler(['d1', 'execute', name, '--remote', '--file', 'after-deploy/' + file]);
+      console.log('After-deploy changes applied to ' + name);
+    }
+    return;
+  }
   const databases = await provisionDatabases({ accountId: process.env.CLOUDFLARE_ACCOUNT_ID, token: process.env.CLOUDFLARE_API_TOKEN, plan });
   writeFileSync(configPath, JSON.stringify(runtimeConfig(config, environment, plan, databases), null, 2) + '\n');
   const registry = [];
@@ -125,7 +145,7 @@ async function main() {
     wrangler(['d1', 'execute', shard.name, '--remote', '--file', 'staging/user-data-shard.sql']);
     // On later deploys preserve operator capacity/drain settings. Re-registering
     // does not reopen a full database or change existing user assignments.
-    registry.push(`INSERT INTO user_data_shards(shard_key,binding_name,state,accepting_new,max_users,max_bytes) VALUES('${shard.key}','${shard.binding}','ready',1,10,7000000000) ON CONFLICT(shard_key) DO NOTHING;`);
+    registry.push(registrySql(shard));
   }
   const file = '.wrangler/user-shards/register.sql';
   writeFileSync(file, registry.join('\n') + '\n');

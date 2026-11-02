@@ -173,7 +173,8 @@ export async function migrateFoodCatalog({api,core,foods,pageRows=100,maxRows=50
 export async function verifyFoodDatabase(api,foods,{check=async()=>{}}={}) {
   const meta=await metadata(api,foods);
   if (meta.schema_version!=='1') throw new Error('Food database is not initialized');
-  const key='deployment:'+crypto.randomUUID(),product={name:'Synthetic deployment canary',barcode:'8590000000000'};
+  // label_verified: the live search shows only foods the owner approved.
+  const key='deployment:'+crypto.randomUUID(),product={name:'Synthetic deployment canary',barcode:'8590000000000',label_verified:true};
   try {
     await api.query(foods,'INSERT INTO shared_foods(food_key,search_name,product_json) VALUES(?,?,?)',[key,'synthetic deployment canary',JSON.stringify(product)]);
     const rows=(await api.query(foods,"SELECT food_key FROM shared_foods WHERE json_extract(product_json,'$.barcode')=? AND food_key=?",[product.barcode,key])).results;

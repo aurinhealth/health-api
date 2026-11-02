@@ -516,6 +516,7 @@ struct GymCoachLine: View {
 /// which exercise the pick replaces.
 struct GymExerciseSearch: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var model
     let date: String
     let history: GymHistory
     let catalog: [GymCatalogExercise]
@@ -524,9 +525,14 @@ struct GymExerciseSearch: View {
     var title = "Přidat cvik"
     /// Over the title: "Místo cviku Cable rear delt fly".
     var eyebrow: String? = nil
+    /// "Vybrat jiný cvik": the exercises already in the workout are left out,
+    /// a swap to one of them would join its sets to the other one's.
+    var hideUsed = false
     let pick: (String) -> Void
     @State private var query = ""
     @State private var muscle: String?
+    /// Only exercises whose main muscle is rested (Svaly), as in Cviky.
+    @State private var rested = false
     @State private var technique: String?
 
     struct Item: Identifiable {
@@ -540,18 +546,19 @@ struct GymExerciseSearch: View {
         let matches: (String) -> Bool = { name in
             let entry = catalog.first { $0.name == name }
             if let muscle, !(entry.map { ExerciseCatalog.works($0, muscle) } ?? false) { return false }
+            if rested, let entry, ExerciseCatalog.tired(entry, model.muscles) != nil { return false }
             let folded = ExerciseCatalog.fold([name, entry?.muscle ?? "", entry?.station ?? ""].joined(separator: " "))
             return words.allSatisfy { folded.contains($0) }
         }
         var out: [Item] = []
-        var seen = Set<String>()
+        var seen: Set<String> = hideUsed ? used : []
         for exercise in history.recent(before: date) {
             guard !seen.contains(exercise.name), matches(exercise.name),
                   let last = exercise.sessions.first(where: { $0.date < date }) else { continue }
             out.append(Item(name: exercise.name, caption: GymCoach.lastText(last)))
             seen.insert(exercise.name)
         }
-        if !words.isEmpty || muscle != nil || out.isEmpty {
+        if !words.isEmpty || muscle != nil || rested || out.isEmpty {
             for entry in catalog where !seen.contains(entry.name) && entry.fits != false {
                 guard matches(entry.name) else { continue }
                 out.append(Item(name: entry.name, caption: [entry.muscle, entry.station].compactMap { $0?.nilIfBlank }.joined(separator: " · ")))
@@ -567,7 +574,7 @@ struct GymExerciseSearch: View {
                 header
                 searchField.padding(.top, 8)
                 chips.padding(.top, 4)
-                if query.isEmpty && muscle == nil && !history.recent(before: date).isEmpty {
+                if query.isEmpty && muscle == nil && !rested && !history.recent(before: date).isEmpty {
                     SectionLabel(text: "Naposledy").padding(.horizontal, 4).padding(.top, 8)
                 }
                 ForEach(items) { (item: Item) in
@@ -593,6 +600,8 @@ struct GymExerciseSearch: View {
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
             TechniqueSheet(exercise: item.name)
         }
+        // Odpočaté needs today's muscles (read again only when stale).
+        .task { if model.musclesStale { await model.loadMuscles() } }
     }
 
     private var header: some View {
@@ -623,7 +632,10 @@ struct GymExerciseSearch: View {
     private var chips: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
-                chip(L10n.tr("Vše"), muscle == nil) { muscle = nil }
+                chip(L10n.tr("Vše"), muscle == nil && !rested) { muscle = nil; rested = false }
+                if model.muscles.map({ !$0.tired.isEmpty }) == true {
+                    chip(L10n.tr("Odpočaté"), rested, dot: Palette.green) { rested.toggle() }
+                }
                 ForEach(BodyFigure.muscles.indices, id: \.self) { i in
                     let id = BodyFigure.muscles[i].id
                     chip(BodyFigure.label(id), muscle == id) { muscle = muscle == id ? nil : id }
@@ -635,9 +647,13 @@ struct GymExerciseSearch: View {
         .padding(.horizontal, -20)
     }
 
-    private func chip(_ text: String, _ on: Bool, action: @escaping () -> Void) -> some View {
+    private func chip(_ text: String, _ on: Bool, dot: Color? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(verbatim: text).font(.footnote.weight(.medium))
+            HStack(spacing: 6) {
+                if let dot { Circle().fill(dot).frame(width: 7, height: 7) }
+                Text(verbatim: text)
+            }
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(on ? Palette.onButton : Palette.ink)
                 .padding(.horizontal, 12).frame(height: 30)
                 .background(on ? Palette.button : Palette.track, in: Capsule())

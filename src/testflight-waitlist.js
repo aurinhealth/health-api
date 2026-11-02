@@ -35,11 +35,16 @@ export function waitlistEmail(value) {
 // was new or already listed, so the form tells nobody who signed up.
 // Cloudflare Turnstile shows that a person sent the form (security review 2026-10-25): a bot
 // without its token no longer uses up the day's 300 for everyone. TURNSTILE_SECRET_KEY is a
-// Worker secret; without it (the test server) the form works as before and the log says so.
+// Worker secret. Without it nothing is stored (security review 2026-11-02, SEC-005): a missing
+// key must not open the list to bots, so the form says the waitlist is closed for now.
 export async function handleWaitlistSignup(request, env, pathname, fetchImpl = fetch) {
   if (pathname !== "/waitlist") return null;
   if (request.method !== "POST") return json({ message: "Use POST." }, 405);
   if (request.headers.get("Origin") !== new URL(request.url).origin) return json({ message: "Invalid request origin." }, 403);
+  if (!String(env.TURNSTILE_SECRET_KEY || "")) {
+    console.error("TURNSTILE_SECRET_KEY is not set; waitlist sign-ups are refused");
+    return json({ message: "The waitlist is closed right now. Try again later." }, 503);
+  }
   const body = await request.json().catch(() => ({}));
   const email = waitlistEmail(body?.email);
   if (!email) return json({ message: "Enter a valid email." }, 400);
@@ -51,9 +56,12 @@ export async function handleWaitlistSignup(request, env, pathname, fetchImpl = f
   return json({ status: "ok" });
 }
 
+// The token must come from the waitlist widget on this very site: the site key is
+// public, so a token solved on another page that embeds it says a hostname other
+// than the one the form was sent to (aurin.health, or staging.aurin.health on the test server).
 async function humanSent(env, request, token, fetchImpl) {
   const secret = String(env.TURNSTILE_SECRET_KEY || "");
-  if (!secret) { console.error("TURNSTILE_SECRET_KEY is not set; waitlist sign-up not checked"); return true; }
+  if (!secret) return false;
   if (typeof token !== "string" || !token || token.length > 2048) return false;
   const form = new FormData();
   form.set("secret", secret); form.set("response", token);
@@ -61,7 +69,7 @@ async function humanSent(env, request, token, fetchImpl) {
   if (ip) form.set("remoteip", ip);
   const result = await fetchImpl("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: form })
     .then(r => r.json()).catch(error => { console.error("Turnstile check failed", error.message); return null; });
-  return result?.success === true && result.action === "waitlist";
+  return result?.success === true && result.action === "waitlist" && result.hostname === new URL(request.url).hostname;
 }
 
 // Storage limitation (privacy policy): an address leaves both lists (this one

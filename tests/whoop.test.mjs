@@ -94,7 +94,7 @@ test("a connection started by one account is not stored for another signed in be
   const other = env(scopedDb(raw, 22), null, { WHOOP_TOKEN: undefined, USER_ID: 22 });
   const { fetchImpl, calls } = api();
   const done = await handleWhoopOAuth(new Request("https://aurin.health/oauth/whoop/callback?code=c&state=" + state, { headers: { Cookie: cookie } }), other, "/oauth/whoop/callback", fetchImpl);
-  assert.equal(done.headers.get("Location"), "loadwise://connected?event=whoop-failed");
+  assert.equal(done.headers.get("Location"), "https://aurin.health/auth/app/connected?event=whoop-failed");
   assert.equal(calls.length, 0, "the code is never exchanged");
   assert.equal(other.WHOOP_TOKEN, undefined);
   assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM connection_credentials").get().n, 0);

@@ -18,7 +18,7 @@
 // record_role 'duplicate' (matched_activity_id 'ultrahuman'). Disconnecting
 // deletes the ring's rows and gives those days back to the other sources.
 import { saveConnectionSecret, deleteConnectionSecret, refreshConnectionTokens, tokensDue } from './connection-secrets.js';
-import { connectReturn, connectReturnUrl, oauthStateValue, startedBy } from './connect-return.js';
+import { connectReturnUrl, oauthStateValue, startedBy } from './connect-return.js';
 import { appOrigin } from './app-origin.js';
 import { markConnectionBroken, markConnectionOk, clearConnectionHealth } from './connection-health.js';
 import { healthPointJson } from './health-point-json.js';
@@ -69,7 +69,7 @@ async function tokenRequest(env, params, fetchImpl) {
 
 export async function handleUltrahumanOAuth(request, env, pathname, fetchImpl = fetch) {
   if (pathname === '/oauth/ultrahuman' && request.method === 'GET') {
-    if (!ultrahumanConfigured(env)) return back(connectReturnUrl(connectReturn(request), 'ultrahuman-failed'));
+    if (!ultrahumanConfigured(env)) return back(connectReturnUrl('ultrahuman-failed', env));
     const state = crypto.randomUUID();
     const u = new URL(AUTHORIZE);
     u.searchParams.set('client_id', String(env.ULTRAHUMAN_CLIENT_ID).trim());
@@ -77,24 +77,24 @@ export async function handleUltrahumanOAuth(request, env, pathname, fetchImpl = 
     u.searchParams.set('response_type', 'code');
     u.searchParams.set('scope', ULTRAHUMAN_SCOPES.join(' '));
     u.searchParams.set('state', state);
-    return back(u.toString(), STATE_COOKIE + '=' + oauthStateValue(state, request, env) + '; Max-Age=600; Path=/oauth/ultrahuman; Secure; HttpOnly; SameSite=Lax');
+    return back(u.toString(), STATE_COOKIE + '=' + oauthStateValue(state, env) + '; Max-Age=600; Path=/oauth/ultrahuman; Secure; HttpOnly; SameSite=Lax');
   }
   if (pathname !== '/oauth/ultrahuman/callback' || request.method !== 'GET') return null;
   const url = new URL(request.url), code = url.searchParams.get('code'), state = url.searchParams.get('state');
   const m = (request.headers.get('Cookie') || '').match(new RegExp('(?:^|;\\s*)' + STATE_COOKIE + '=([^;]+)'));
-  const [expected, to, uid] = decodeURIComponent(m?.[1] || '').split('.');
-  if (!state || state !== expected) return back(connectReturnUrl('settings', 'ultrahuman-failed'));
+  const [expected, uid] = decodeURIComponent(m?.[1] || '').split('.');
+  if (!state || state !== expected) return back(connectReturnUrl('ultrahuman-failed', env));
   // Started by another account than the one signed in now: its keys are not stored here.
-  if (!startedBy(uid, env)) return back(connectReturnUrl(to, 'ultrahuman-failed'));
-  if (url.searchParams.get('error') || !code) return back(connectReturnUrl(to, 'ultrahuman-cancelled'));
-  if (!ultrahumanConfigured(env)) return back(connectReturnUrl(to, 'ultrahuman-failed'));
+  if (!startedBy(uid, env)) return back(connectReturnUrl('ultrahuman-failed', env));
+  if (url.searchParams.get('error') || !code) return back(connectReturnUrl('ultrahuman-cancelled', env));
+  if (!ultrahumanConfigured(env)) return back(connectReturnUrl('ultrahuman-failed', env));
   const data = await tokenRequest(env, { grant_type: 'authorization_code', code, redirect_uri: redirectUri(env, request) }, fetchImpl);
-  if (!data) { console.error('Ultrahuman OAuth token exchange failed'); return back(connectReturnUrl(to, 'ultrahuman-failed')); }
+  if (!data) { console.error('Ultrahuman OAuth token exchange failed'); return back(connectReturnUrl('ultrahuman-failed', env)); }
   const text = tokensText(data);
   await saveConnectionSecret(env, SOURCE, text);
   await clearConnectionHealth(env, SOURCE);
   env.ULTRAHUMAN_TOKEN = text;
-  return back(connectReturnUrl(to, 'ultrahuman'));
+  return back(connectReturnUrl('ultrahuman', env));
 }
 
 // A valid access token, refreshed (and saved) when it is about to run out.

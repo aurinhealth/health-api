@@ -5,13 +5,12 @@ import UserNotifications
 
 /// Zdroje dat, laid out like Bevel's: the connected services as cards, each
 /// with its page (what Aurin reads and sends, permissions, sync, disconnect),
-/// "+" for the rest in sections, and syncing everything at the bottom.
+/// the rest right under them to connect, and syncing everything at the bottom.
 struct SourcesSettingsView: View {
     @Environment(AppModel.self) private var model
     let store: SettingsStore
     @State private var actions = SourceActions()
     @State private var syncing = false
-    @State private var adding = false
     @State private var connectingApple = false
     @State private var flow = ConnectFlowState()
     @State private var choosing: PriorityPart?
@@ -30,25 +29,13 @@ struct SourcesSettingsView: View {
 
     var body: some View {
         SettingsPage(title: "Zdroje dat") {
-            HStack {
-                Text("Propojení").font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
-                Spacer()
-                Button { adding = true } label: {
-                    Image(systemName: "plus").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
-                        .frame(width: 36, height: 36).background(Palette.card, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Přidat propojení")
-            }
+            Text("Připojeno").font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
 
             if connected.isEmpty && store.loaded {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Zatím není nic propojené.").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    PrimaryButton(title: "Přidat propojení", systemImage: "plus") { adding = true }
-                }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .cardSurface(cornerRadius: 18)
+                Text("Zatím není nic propojené.").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .cardSurface(cornerRadius: 18)
             }
             VStack(spacing: 10) {
                 ForEach(connected) { provider in
@@ -58,6 +45,18 @@ struct SourcesSettingsView: View {
                         IntegrationCard(provider: provider, lastSync: lastSync, working: actions.working == provider.id)
                     }
                     .buttonStyle(.plain)
+                }
+            }
+
+            // The one place to connect: what is not connected yet, right under what is.
+            if store.loaded && !store.demo && !offers.isEmpty {
+                SectionLabel(text: "Přidat zdroj").padding(.top, 10)
+                VStack(spacing: 10) {
+                    ForEach(offers, id: \.id) { offer in
+                        IntegrationOfferCard(id: offer.id, name: offer.name, detail: offer.detail, working: actions.working == offer.id) {
+                            start(offer.id)
+                        }
+                    }
                 }
             }
 
@@ -74,21 +73,6 @@ struct SourcesSettingsView: View {
             // Each type of data: where it comes from and where it goes (SettingsHealthData.swift).
             if store.loaded {
                 HealthDataGroup(store: store, sync: sync).padding(.top, 10)
-            }
-
-            if store.loaded && !store.demo {
-                SectionLabel(text: "Můžeš připojit").padding(.top, 10)
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                    ForEach(offers, id: \.id) { offer in
-                        if let url = offer.url {
-                            Link(destination: url) { IntegrationTile(id: offer.id, name: offer.name, note: offer.note) }
-                                .buttonStyle(.plain)
-                        } else {
-                            Button { start(offer.id) } label: { IntegrationTile(id: offer.id, name: offer.name, note: offer.note) }
-                                .buttonStyle(.plain)
-                        }
-                    }
-                }
             }
 
             SettingsGroup(title: "Data") {
@@ -125,13 +109,6 @@ struct SourcesSettingsView: View {
             }
             if let message = actions.message {
                 Text(message).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .sheet(isPresented: $adding) {
-            AddIntegrationSheet(available: available, appleConnected: connected.contains { $0.id == "apple" }) { provider in
-                adding = false
-                // The service's connect screen once this sheet has closed.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { start(provider) }
             }
         }
         .sheet(item: $choosing) { part in
@@ -183,22 +160,33 @@ struct SourcesSettingsView: View {
     private struct Offer {
         let id: String
         let name: String
-        let note: String
-        var url: URL? = nil
+        let detail: String
     }
 
-    /// What is not connected yet: the services Aurin reads itself (Ultrahuman once
-    /// the server offers it), then the
-    /// watches and apps that come in through Intervals.icu.
+    /// What is not connected yet, health and sleep first, then training. Apple
+    /// Health is read on the phone, so the server's list does not carry it.
     private var offers: [Offer] {
         var list: [Offer] = []
         if !connected.contains(where: { $0.id == "apple" }) && AppleHealth.shared.isAvailable {
-            list.append(Offer(id: "apple", name: "Apple Health", note: L10n.tr("připojit")))
+            list.append(Offer(id: "apple", name: "Apple Health", detail: L10n.tr("spánek, tréninky, tep, HRV, kroky a váha")))
         }
-        for provider in available where ["google", "ultrahuman", "whoop", "wahoo", "intervals"].contains(provider.id) {
-            list.append(Offer(id: provider.id, name: provider.name ?? provider.id, note: L10n.tr("připojit")))
+        for id in ["google", "whoop", "ultrahuman", "intervals", "wahoo"] {
+            guard let provider = available.first(where: { $0.id == id }) else { continue }
+            list.append(Offer(id: id, name: provider.name ?? id, detail: Self.detail(id)))
         }
         return list
+    }
+
+    /// What each service gives Aurin, in a few words.
+    private static func detail(_ id: String) -> String {
+        switch id {
+        case "google": return L10n.tr("spánek, tep, HRV, kroky, váha a jídlo")
+        case "whoop": return L10n.tr("spánek, regenerace, HRV a zátěž")
+        case "ultrahuman": return L10n.tr("spánek, HRV, teplota a pohyb")
+        case "intervals": return L10n.tr("aktivity, plán tréninků, forma a wellness")
+        case "wahoo": return L10n.tr("jízdy a trénink na trenažeru")
+        default: return ""
+        }
     }
 }
 

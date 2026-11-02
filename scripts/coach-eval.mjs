@@ -51,6 +51,9 @@ const lines = [
   "| | Situace | Úloha | Model | s | Bezpečnost | Kvalita |", "|---|---|---|---|---|---|---|",
   ...results.map(r => `| ${r.status !== "ok" ? "⚠️" : r.passed ? "✅" : "❌"} ${r.id} | ${r.title} | ${r.task || ""} | ${r.model || ""} | ${r.ms != null ? Math.round(r.ms / 1000) : ""} | ${mark(r, "safety")} | ${mark(r, "quality")} |`), ""
 ];
+// Failed quality checks do not fail a situation, so they are listed on their own (Petr, run 39).
+const weak = results.flatMap(r => (r.checks || []).filter(c => !c.ok && c.severity === "quality").map(c => `- ${r.id} · ${c.name}${c.detail ? ` (${c.detail})` : ""}`));
+lines.push("## Neprošlé kontroly kvality", "", ...(weak.length ? weak : ["Žádné."]), "");
 for (const r of results) {
   lines.push(`## ${r.id} · ${r.title}`, "");
   if (r.status !== "ok") { lines.push(`⚠️ ${r.status}: ${r.message || ""}`, ""); continue; }

@@ -54,3 +54,35 @@ test("every answer of the Worker carries Server-Timing", () => {
   assert.match(exported, /return timed\(async work => \{/);
   assert.match(exported, /withTiming\(await withPlainErrors\(request, answered\), work, route, env, ctx\)/);
 });
+
+test("the slow report says what the request waited for: D1, Intervals, AI, another request", async () => {
+  const { beginWait, waitKindOfUrl } = await import("../src/request-timing.js");
+  const { cached } = await import("../src/api-cache.js");
+  assert.equal(waitKindOfUrl("https://intervals.icu/api/v1/athlete/0/wellness"), "intervals");
+  assert.equal(waitKindOfUrl(new Request("https://api.openai.com/v1/responses")), "ai");
+  assert.equal(waitKindOfUrl("https://health.googleapis.com/v4/x"), "google");
+  assert.equal(waitKindOfUrl("https://api.open-meteo.com/v1"), "other");
+  const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const work = await timed(async store => {
+    // Two Intervals calls side by side count once; D1 alongside counts for itself.
+    await Promise.all([
+      (async () => { const end = beginWait("intervals"); await pause(150); end(); })(),
+      (async () => { const end = beginWait("intervals"); await pause(120); end(); })(),
+      withD1Retry(async () => { await pause(110); return { results: [], meta: { rows_read: 1 } }; })
+    ]);
+    return store;
+  });
+  assert.ok(work.waits.intervals >= 140 && work.waits.intervals < 260, String(work.waits.intervals));
+  assert.ok(work.waits.d1 >= 100);
+  const slow = slowness({ ...work, started: Date.now() - 3200 });
+  assert.match(slow, /^3\d{3} ms, 1 dotazů, 1 řádků; čekání: D1 \d+ ms, Intervals \d+ ms$/);
+  assert.match(serverTiming(work), /, intervals;dur=\d+$/);
+  // Waiting for the coach inputs another request is computing.
+  const store = { match: async () => undefined, put: async () => {} };
+  const env = { DB: { userId: 7, prepare: () => ({ bind: () => ({ first: async () => ({ version: 1, food: 0 }) }) }) } };
+  let release;
+  const first = cached(env, null, "coach-inputs:x", () => new Promise(resolve => { release = resolve; }), { store });
+  const second = timed(async s => { const p = cached(env, null, "coach-inputs:x", async () => ({ again: true }), { store }); await pause(120); release({ a: 1 }); await p; return s; });
+  const waited = await second; await first;
+  assert.ok(waited.waits.shared >= 100, JSON.stringify(waited.waits));
+});

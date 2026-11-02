@@ -50,7 +50,7 @@ function readSession(row) {
   const type = p.type || p.category || row.type || null;
   const elapsed = seconds(p.elapsed_time) ?? seconds(p.moving_time);
   const stub = !elapsed && !utc;
-  return { at, alt: (stub || /strava/i.test(String(p.source || ""))) && !utc && !ZONED.test(String(local)) ? Date.parse(String(local) + "Z") : null, kind: type ? activityKindOf(type) : null, minutes: elapsed ? elapsed / 60 : row.minutes || row.durationHours * 60 || null, stub, source: row.source_family === "wahoo" ? "wahoo" : "intervals" };
+  return { at, alt: (stub || /strava/i.test(String(p.source || ""))) && !utc && !ZONED.test(String(local)) ? Date.parse(String(local) + "Z") : null, kind: type ? activityKindOf(type) : null, minutes: elapsed ? elapsed / 60 : row.minutes || row.durationHours * 60 || null, stub, source: row.source_family === "wahoo" ? "wahoo" : p.aurinGym ? "aurin-gym" : "intervals" };
 }
 
 const START_WINDOW = 20 * 60000, STUB_WINDOW = 2 * 60000;
@@ -97,10 +97,11 @@ function overlapping(x, y) {
 export const sameSession = (x, y) => sessionGap(x, y) != null || coversSession(x, y) || coversSession(y, x) || overlapping(x, y);
 
 // Which of the two records to keep: a full Intervals.icu activity, then
-// Wahoo's (power and TSS), then the watch's Google exercise, then an
-// Intervals.icu stub.
+// Wahoo's (power and TSS), then the watch's Google exercise, then the gym
+// session Aurin built from the logged sets (gym-session-activity.js: its
+// calories are an estimate), then an Intervals.icu stub.
 export function richerSession(x, y) {
-  const rank = r => { const s = sessionOf(r); return !s ? 9 : s.source === "intervals" && !s.stub ? 0 : s.source === "wahoo" ? 1 : s.source === "google" ? 2 : 3; };
+  const rank = r => { const s = sessionOf(r); return !s ? 9 : s.source === "intervals" && !s.stub ? 0 : s.source === "wahoo" ? 1 : s.source === "google" ? 2 : s.source === "aurin-gym" ? 2.5 : 3; };
   return rank(y) < rank(x) ? y : x;
 }
 

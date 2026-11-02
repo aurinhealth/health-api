@@ -158,6 +158,7 @@ enum OutboxStore {
             try? FileManager.default.removeItem(at: url)
         } else {
             try? JSONEncoder().encode(items).write(to: url, options: .atomic)
+            keepOutOfBackups(url)
         }
         if unread.isEmpty {
             try? FileManager.default.removeItem(at: asideURL)
@@ -166,14 +167,30 @@ enum OutboxStore {
             list.append(Data(unread.joined(separator: Data(",".utf8))))
             list.append(Data("]".utf8))
             try? list.write(to: asideURL, options: .atomic)
+            keepOutOfBackups(asideURL)
         }
     }
 
-    /// Signing out: this account's waiting writes go, the unread ones too.
+    /// The waiting writes (food, weight, the journal) stay on this phone: not
+    /// in iCloud or computer backups. An atomic write makes a new file, so
+    /// each write marks it again. They stay readable while the phone is locked
+    /// after its first unlock, because the Watch and Siri add to them then.
+    private static func keepOutOfBackups(_ file: URL) {
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var marked = file
+        try? marked.setResourceValues(values)
+    }
+
+    /// Signing out: this account's waiting writes go, the unread ones and the damaged ones too.
     static func clear() {
         disk.sync {
             try? FileManager.default.removeItem(at: url)
             try? FileManager.default.removeItem(at: asideURL)
+            let dir = url.deletingLastPathComponent()
+            for name in (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [] where name.hasPrefix("outbox") && name.contains("-damaged-") {
+                try? FileManager.default.removeItem(at: dir.appending(path: name))
+            }
         }
     }
 
@@ -187,7 +204,9 @@ enum OutboxStore {
             guard let data = try? Data(contentsOf: file) else { continue }
             guard let list = (try? JSONSerialization.jsonObject(with: data)) as? [Any] else {
                 let name = file.deletingPathExtension().lastPathComponent + "-damaged-\(Int(Date().timeIntervalSince1970)).json"
-                try? FileManager.default.moveItem(at: file, to: file.deletingLastPathComponent().appending(path: name))
+                let damaged = file.deletingLastPathComponent().appending(path: name)
+                try? FileManager.default.moveItem(at: file, to: damaged)
+                keepOutOfBackups(damaged)
                 continue
             }
             for element in list {
@@ -216,18 +235,21 @@ enum GymDayCache {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appending(path: "gym", directoryHint: .isDirectory)
     }
 
+    /// The day names the file, so only a real day (yyyy-MM-dd) does.
     static func save(_ day: GymDay, date: String) {
+        guard AppRoute.isDay(date) else { return }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try? JSONEncoder().encode(day.values).write(to: directory.appending(path: date + ".json"), options: .atomic)
     }
 
     static func load(date: String) -> GymDay? {
-        guard let data = try? Data(contentsOf: directory.appending(path: date + ".json")),
+        guard AppRoute.isDay(date), let data = try? Data(contentsOf: directory.appending(path: date + ".json")),
               let values = try? JSONDecoder().decode([[JSONValue]].self, from: data) else { return nil }
         return GymDay(date: date, values: values, cancelled: nil)
     }
 
     static func remove(date: String) {
+        guard AppRoute.isDay(date) else { return }
         try? FileManager.default.removeItem(at: directory.appending(path: date + ".json"))
     }
 
@@ -392,7 +414,7 @@ final class NetworkWatch: @unchecked Sendable {
             self.connected = now
             if back { Task { @MainActor in await onBack() } }
         }
-        monitor.start(queue: DispatchQueue(label: "loadwise.network"))
+        monitor.start(queue: DispatchQueue(label: "aurin.network"))
     }
 
     deinit { monitor.cancel() }

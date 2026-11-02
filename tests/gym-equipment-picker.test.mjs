@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { METAGYM_KUTNA_HORA, OTHER_STATIONS, STATION_PICKER, STATION_SECTION_IDS, EXERCISE_STATIONS, stationSections } from "../src/gym-equipment.js";
+import { METAGYM_KUTNA_HORA, OTHER_STATIONS, STATION_PICKER, STATION_SECTION_IDS, STATION_USE, EXERCISE_STATIONS, stationSections } from "../src/gym-equipment.js";
 import { equipmentCatalog, GYM_STATION_IDS } from "../src/gym-equipment-ai.js";
 import { normalizePlaces } from "../src/onboarding.js";
 
@@ -19,28 +19,39 @@ test("the station ids stored in places stay", () => {
   for (const id of STORED_IDS) assert.ok(GYM_STATION_IDS.includes(id), id);
 });
 
-test("every station is in at least one known section and has its line", () => {
+// Kept in the data (stored in places) but not listed: nothing uses them.
+const HIDDEN = ["sled", "battle_ropes"];
+
+test("every listed station is in exactly one known section and has its line, muscles and search words", () => {
   for (const id of GYM_STATION_IDS) {
     const entry = STATION_PICKER[id];
     assert.ok(entry, id);
-    assert.ok(entry[0].length > 0 && entry[0].every(s => STATION_SECTION_IDS.includes(s)), id);
     assert.ok(entry[1] && entry[2], id);
+    if (HIDDEN.includes(id)) { assert.deepEqual(entry[0], [], id); continue; }
+    assert.equal(entry[0].length, 1, id);
+    assert.ok(STATION_SECTION_IDS.includes(entry[0][0]), id);
+    assert.ok(STATION_USE[id]?.every(Boolean), "muscles and words: " + id);
   }
+  for (const id of Object.keys(STATION_USE)) assert.ok(STATION_PICKER[id]?.[0].length, "no words for an unlisted station: " + id);
   for (const id of Object.keys(STATION_PICKER)) assert.ok(GYM_STATION_IDS.includes(id), "no picker entry without a station: " + id);
 });
 
 test("every section has stations, and every exercise's stations are in the picker", () => {
   for (const section of STATION_SECTION_IDS) assert.ok(Object.values(STATION_PICKER).some(e => e[0].includes(section)), section);
   for (const [exercise, stations] of Object.entries(EXERCISE_STATIONS)) for (const id of stations) assert.ok(STATION_PICKER[id], exercise + ": " + id);
-  assert.deepEqual(stationSections().map(s => s.id), ["chest", "back", "shoulders", "arms", "legs", "core", "free_weights", "accessories", "cables", "cardio"]);
+  assert.deepEqual(stationSections().map(s => s.id), ["free_weights", "benches", "cables", "upper_machines", "leg_machines", "core", "accessories", "cardio"]);
 });
 
 test("the equipment catalog adds sections and a line, keeping id, group and label", () => {
   const catalog = equipmentCatalog();
-  assert.ok(catalog.every(s => s.id && s.group && s.label && Array.isArray(s.sections) && s.sections.length && s.description));
-  assert.deepEqual(catalog.find(s => s.id === "pullup_bar").sections, ["back", "core"]);
+  const listed = catalog.filter(s => !HIDDEN.includes(s.id));
+  assert.ok(listed.every(s => s.id && s.group && s.label && s.sections.length === 1 && s.description && s.uses && s.keywords));
+  assert.deepEqual(catalog.find(s => s.id === "pec_deck").sections, ["upper_machines"]);
+  assert.equal(catalog.find(s => s.id === "pec_deck").uses, "Prsa · zadní ramena");
+  assert.deepEqual(catalog.find(s => s.id === "pullup_bar").sections, ["benches"]);
   assert.deepEqual(catalog.find(s => s.id === "resistance_bands").sections, ["accessories"]);
-  assert.ok(catalog.find(s => s.id === "kettlebells").sections.includes("free_weights"));
+  assert.deepEqual(catalog.find(s => s.id === "kettlebells").sections, ["free_weights"]);
+  assert.deepEqual(catalog.find(s => s.id === "sled").sections, []);
 });
 
 test("a place keeps its star; places without one are unchanged", () => {

@@ -13,7 +13,7 @@ Secret `ALLOWED_GOOGLE_EMAILS` už potřeba není.
 
 ## Pozvání uživatele
 
-1. Pozvánka je e-mail v tabulce `user_invites` (správa pozvánek byla jen ve starém webu; API `/app/api/admin/invites` zůstává pro správce). S proměnnou `OPEN_SIGNUP=true` dostane účet každý, kdo se přihlásí.
+1. Pozvánka je e-mail v tabulce `user_invites` (správa pozvánek byla jen ve starém webu; API pro pozvánky už není, pozvánka se dá zapsat jen přímo do databáze). S proměnnou `OPEN_SIGNUP=true` dostane účet každý, kdo se přihlásí.
 2. Přihlášení přes Google funguje pro každého pozvaného hned: žádá jen e-mail (`openid email`) a na ty se ověření ani testovací režim nevztahují. Ověření se týká jen připojení Google Health:
    - Projekt ve stavu *Testing*: přidej stejný e-mail i do **Google Cloud Console → Google Auth Platform → Audience → Test users** (nejvýš 100 lidí). Souhlas s Google Health jim vyprší po 7 dnech a musí se připojit znovu.
    - Projekt zveřejněný (*In production*), ale neověřený: seznam Test users není potřeba a souhlas nevyprší. Uživatel jen potvrdí varování, že aplikace není ověřená. Google Health takto připojí nejvýš 100 lidí, víc až po ověření aplikace Googlem.

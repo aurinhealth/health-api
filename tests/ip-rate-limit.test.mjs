@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
-import { allowRequest, allowClient, clientKey, callerNetwork, CLIENT_LIMITS } from "../src/ip-rate-limit.js";
+import { allowRequest, allowClient, forgetStaleRequestLimits, clientKey, callerNetwork, CLIENT_LIMITS } from "../src/ip-rate-limit.js";
 
 const MIGRATION = readFileSync(new URL("../migrations/0020_request_limits.sql", import.meta.url), "utf8");
 const T0 = Date.parse("2026-10-07T08:00:00Z");
@@ -29,10 +29,26 @@ test("missing limits are unlimited and the migration matches the table the code 
   db.sqlite.exec(MIGRATION);
   for (let i = 0; i < 20; i++) assert.equal(await allowRequest(db, "g", { day: 500 }, T0 + i), true);
   assert.equal(db.sqlite.prepare("SELECT day_count FROM request_limits WHERE key = 'g'").get().day_count, 20);
-  // Stale rows go when a request is written.
+});
+
+test("stale rows go in the nightly cleanup, not with every request (SEC-013)", async () => {
+  const db = createD1();
+  assert.equal(await forgetStaleRequestLimits(db, T0), 0, "no table yet");
+  db.sqlite.exec(MIGRATION);
   db.sqlite.prepare("INSERT INTO request_limits(key, minute, hour, day, updated_at) VALUES('old', '', '', '', ?)").run(Math.floor(T0 / 1000) - 3 * 86400);
-  await allowRequest(db, "g", {}, T0 + 21);
-  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM request_limits WHERE key = 'old'").get().n, 0);
+  const statements = [];
+  const prepare = db.prepare.bind(db);
+  db.prepare = sql => { statements.push(sql); return prepare(sql); };
+  await allowRequest(db, "g", {}, T0);
+  assert.ok(!statements.some(sql => /DELETE/i.test(sql)), "a request only claims its own row");
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM request_limits WHERE key = 'old'").get().n, 1);
+  assert.equal(await forgetStaleRequestLimits(db, T0), 1);
+  assert.deepEqual(db.sqlite.prepare("SELECT key FROM request_limits").all().map(r => r.key), ["g"]);
+});
+
+test("the nightly cron runs the cleanup", () => {
+  const source = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  assert.match(source, /getUTCHours\(\) === 2 && new Date\(\)\.getUTCMinutes\(\) % 10 === 3\) await forgetStaleRequestLimits\(env\.DB\)/);
 });
 
 test("callers are told apart by a keyed hash of their address, never the address itself", async () => {

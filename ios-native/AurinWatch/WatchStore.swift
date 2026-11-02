@@ -210,12 +210,19 @@ final class WatchStore: NSObject, ObservableObject {
         if let data = value.encoded() { UserDefaults.standard.set(data, forKey: Self.savedKey) }
     }
 
-    nonisolated static func localDate(_ date: Date) -> String {
+    /// Made once, not on every redraw (the root view asks on each one); it
+    /// follows the watch's time zone. DateFormatter is safe to share across threads.
+    nonisolated(unsafe) static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .autoupdatingCurrent
         formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    nonisolated static func localDate(_ date: Date) -> String {
+        dayFormatter.string(from: date)
     }
 }
 
@@ -231,6 +238,13 @@ extension WatchStore: WCSessionDelegate {
             if let gym { GymStore.shared.received(gym) }
             if let data { WatchStore.shared.receive(data) } else if !empty { WatchStore.shared.receive(nil) }
             WatchStore.shared.ask()
+            GymStore.shared.loadIfWaiting()
+            // A gym workout started before the connection was up: the iPhone hears of it now.
+            GymWorkout.shared.announce()
+            // Sets saved here alone go to the iPhone now.
+            GymStore.shared.sync()
+            // What the iPhone's "Nahlásit problém" says about the watch.
+            WatchReport.send()
         }
     }
 
@@ -264,8 +278,14 @@ extension WatchStore: WCSessionDelegate {
         let progress = message[WatchCoach.progressKey] as? String
         let answer = message[WatchCoach.answerKey] as? Data
         let ended = message[WatchGym.endKey] as? Bool == true
+        let open = message[WatchGym.openKey] as? Bool == true
+        let draft = (message[WatchGym.draftKey] as? Data).flatMap(WatchGym.Draft.decode)
+        let rest = (message[WatchGym.restKey] as? Data).flatMap(WatchGym.Rest.decode)
         Task { @MainActor in
+            if let rest, GymWorkout.shared.running { GymStore.shared.phoneRest = rest }
             if ended, GymWorkout.shared.running { GymStore.shared.endedOnPhone = true }
+            if open { GymStore.shared.openFromPhone() }
+            if let draft, GymWorkout.shared.running { GymStore.shared.phoneDraft = draft }
             if let gym { GymStore.shared.received(gym) }
             if let progress { CoachStore.shared.received(progress: progress) }
             if let answer { CoachStore.shared.received(answer: answer) }
@@ -274,6 +294,11 @@ extension WatchStore: WCSessionDelegate {
 
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
         guard session.isReachable else { return }
-        Task { @MainActor in WatchStore.shared.ask() }
+        Task { @MainActor in
+            WatchStore.shared.ask()
+            GymStore.shared.loadIfWaiting()
+            GymWorkout.shared.announce()
+            GymStore.shared.sync()
+        }
     }
 }

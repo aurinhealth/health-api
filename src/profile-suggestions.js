@@ -132,8 +132,19 @@ export async function refreshSuggestions(env, { googleToken, fetchImpl = fetch, 
   const current = await readSuggestions(env.DB, env.USER_ID);
   // A newly granted permission refreshes right away instead of the next day.
   const permissions = JSON.stringify(grantedExtras(env));
+  // The training history (main sport, experience) counts once a day with the
+  // rest; until the first activities arrive it is checked on each request
+  // (an empty history reads no rows), so a new account gets its sport after the first sync.
+  if (!force && current?.fetchedAt && now - Date.parse(current.fetchedAt) < DAY_MS && current.permissions === permissions) {
+    const known = current.trainingHistory;
+    if (known?.recentCount || known?.yearCount) return current;
+    const history = await trainingHistory(env.DB, env.USER_ID, { now });
+    if (!history.recentCount && !history.yearCount) return { ...current, mainSport: history.mainSport, trainingHistory: history };
+    const next = { ...current, mainSport: history.mainSport, trainingHistory: history };
+    await env.DB.prepare("UPDATE dashboard_profile SET profile_json = ? WHERE user_id = ? AND id = 2").bind(JSON.stringify(next), env.USER_ID).run();
+    return next;
+  }
   const history=await trainingHistory(env.DB,env.USER_ID,{now});
-  if (!force && current?.fetchedAt && now - Date.parse(current.fetchedAt) < DAY_MS && current.permissions === permissions) return {...current,mainSport:history.mainSport,trainingHistory:history};
   const averageSteps = await averageDailySteps(env.DB, env.USER_ID, now).catch(() => null);
   const rhr = await averageRestingHeartRate(env.DB, env.USER_ID, now).catch(() => null)
     ?? await intervalsRestingHeartRate(env, fetchImpl, now).catch(() => null);

@@ -37,6 +37,16 @@ test('recovery works without sleep, but not on sleep alone',()=>{
   assert.ok(recoveryReadiness({rows:[...rows,{id:date,hrv:61}],date}).score>0);
   assert.equal(recoveryReadiness({rows:[...rows,{id:date}],date,night:{date,durationMin:480}}).score,null);
 });
+test('a new athlete gets the days of baseline so far until 14, then none',()=>{
+  const rows=history(4,i=>({hrv:60+(i%3),restingHR:50}));
+  const date=day(4);
+  const r=recoveryReadiness({rows:[...rows,{id:date,hrv:61}],date,night:{date,durationMin:480}});
+  assert.equal(r.score,null);assert.equal(r.learningDays,5);
+  assert.equal(recoveryReadiness({rows,date}).learningDays,4);
+  assert.equal(recoveryReadiness({rows:[{id:date}],date}).learningDays,null);
+  const full=history(20,i=>({hrv:60+(i%3),restingHR:50}));
+  assert.equal(recoveryReadiness({rows:[...full,{id:day(20),hrv:61}],date:day(20)}).learningDays,null);
+});
 test('heart-rate load weights Google zones as Edwards zones 2–5 and saturates on 0–21',()=>{
   assert.equal(heartRateLoad({light:30,moderate:20,vigorous:10,peak:2}),30*2+20*3+10*4+2*5);
   assert.equal(heartRateLoad({}),null);assert.equal(heartRateLoad(null),null);

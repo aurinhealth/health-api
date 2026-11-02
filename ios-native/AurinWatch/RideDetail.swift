@@ -4,26 +4,49 @@ import WidgetKit
 
 /// A planned ride's or run's steps (mockup 44): asked from the iPhone when it
 /// is in reach, else from the server with the watch's own sign-in, and kept
-/// while the app runs.
+/// on the watch for the day, so a relaunch shows them without asking again.
+/// A session whose name or length changed (the coach swapped it) is asked again.
 @MainActor
 final class PlanStore: ObservableObject {
     static let shared = PlanStore()
+    private static let savedKey = "watchPlans"
     @Published private(set) var plans: [String: WatchPlan] = [:]
     @Published private(set) var failed: Set<String> = []
     private var asking: Set<String> = []
     /// Plans asked for without the complication (a brick's next leg), and the one it has.
     private var quiet: Set<String> = []
     private var shelved: String?
+    /// The session each plan was asked for (its name and length), by event.
+    private var stamps: [String: String] = [:]
+
+    private struct Saved: Codable {
+        var date: String
+        var plans: [String: WatchPlan]
+        var stamps: [String: String]
+    }
+
+    init() {
+        guard let data = UserDefaults.standard.data(forKey: Self.savedKey),
+              let saved = try? JSONDecoder().decode(Saved.self, from: data),
+              saved.date == WatchStore.localDate(Date()) else { return }
+        plans = saved.plans
+        stamps = saved.stamps
+    }
+
+    private static func stamp(_ session: WatchSnapshot.Session) -> String {
+        "\(session.title)|\(session.minutes ?? 0)"
+    }
 
     /// The session's plan; with shelf, also the complication's (the next workout's steps).
     func load(_ session: WatchSnapshot.Session, shelf: Bool = true) {
         guard let id = session.eventId else { return }
-        if let plan = plans[id] {
+        if let plan = plans[id], stamps[id] == Self.stamp(session) {
             if shelf, shelved != id { save(plan, id: id) }
             return
         }
         if shelf { quiet.remove(id) } else if !asking.contains(id) { quiet.insert(id) }
         guard !asking.contains(id) else { return }
+        stamps[id] = Self.stamp(session)
         asking.insert(id)
         failed.remove(id)
         let request = WatchPlan.Request(eventId: id, date: session.date)
@@ -53,10 +76,17 @@ final class PlanStore: ObservableObject {
         if let plan {
             plans[id] = plan
             if !quiet.contains(id) { save(plan, id: id) }
+            keep()
         } else {
             failed.insert(id)
         }
         quiet.remove(id)
+    }
+
+    /// The day's plans on the watch; another day's are dropped.
+    private func keep() {
+        let saved = Saved(date: WatchStore.localDate(Date()), plans: plans, stamps: stamps.filter { plans[$0.key] != nil })
+        if let data = try? JSONEncoder().encode(saved) { UserDefaults.standard.set(data, forKey: Self.savedKey) }
     }
 
     private func save(_ plan: WatchPlan, id: String) {
@@ -173,7 +203,7 @@ struct RideDetail: View {
             Spacer()
             Text("\(total)")
         }
-        .font(.system(size: 9))
+        .font(.system(size: 10))
         .foregroundStyle(W.muted)
     }
 

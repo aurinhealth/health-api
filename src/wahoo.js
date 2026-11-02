@@ -21,10 +21,13 @@
 // Sandbox allows 25 requests in 5 minutes and 250 a day for the whole app, so
 // nothing polls Wahoo: a failed export waits for the next retry.
 //
+// The FTP and power zones saved in Aurin (Nastavení → Tréninkové zóny) go to
+// Wahoo as well, like to Intervals.icu (writeWahooZones, power_zones_write).
+//
 // Wahoo's terms: data deleted on disconnecting, the connection itself never paid.
 import { exportDue, failedExport } from './export-retry.js';
 import { saveConnectionSecret, deleteConnectionSecret, refreshConnectionTokens, tokensDue } from './connection-secrets.js';
-import { connectReturn, connectReturnUrl, oauthStateValue, startedBy } from './connect-return.js';
+import { connectReturnUrl, oauthStateValue, startedBy } from './connect-return.js';
 import { appOrigin } from './app-origin.js';
 import { markConnectionBroken, markConnectionOk, clearConnectionHealth } from './connection-health.js';
 import { healthPointJson } from './health-point-json.js';
@@ -43,7 +46,7 @@ const API = 'https://api.wahooligan.com';
 const AUTHORIZE = API + '/oauth/authorize';
 const TOKEN = API + '/oauth/token';
 // The scopes asked for in the Wahoo application, nothing more.
-export const WAHOO_SCOPES = ['user_read', 'workouts_read', 'workouts_write', 'plans_read', 'plans_write', 'power_zones_read', 'offline_data'];
+export const WAHOO_SCOPES = ['user_read', 'workouts_read', 'workouts_write', 'plans_read', 'plans_write', 'power_zones_read', 'power_zones_write', 'offline_data'];
 export const FIRST_IMPORT_DAYS = 61;
 
 export function wahooConfigured(env) {
@@ -77,7 +80,7 @@ async function tokenRequest(env, params, fetchImpl) {
 
 export async function handleWahooOAuth(request, env, pathname, fetchImpl = fetch) {
   if (pathname === '/oauth/wahoo' && request.method === 'GET') {
-    if (!wahooConfigured(env)) return back(connectReturnUrl(connectReturn(request), 'wahoo-failed'));
+    if (!wahooConfigured(env)) return back(connectReturnUrl('wahoo-failed', env));
     const state = crypto.randomUUID();
     const u = new URL(AUTHORIZE);
     u.searchParams.set('client_id', String(env.WAHOO_CLIENT_ID).trim());
@@ -85,19 +88,19 @@ export async function handleWahooOAuth(request, env, pathname, fetchImpl = fetch
     u.searchParams.set('response_type', 'code');
     u.searchParams.set('scope', WAHOO_SCOPES.join(' '));
     u.searchParams.set('state', state);
-    return back(u.toString(), STATE_COOKIE + '=' + oauthStateValue(state, request, env) + '; Max-Age=600; Path=/oauth/wahoo; Secure; HttpOnly; SameSite=Lax');
+    return back(u.toString(), STATE_COOKIE + '=' + oauthStateValue(state, env) + '; Max-Age=600; Path=/oauth/wahoo; Secure; HttpOnly; SameSite=Lax');
   }
   if (pathname !== '/oauth/wahoo/callback' || request.method !== 'GET') return null;
   const url = new URL(request.url), code = url.searchParams.get('code'), state = url.searchParams.get('state');
   const m = (request.headers.get('Cookie') || '').match(new RegExp('(?:^|;\\s*)' + STATE_COOKIE + '=([^;]+)'));
-  const [expected, to, uid] = decodeURIComponent(m?.[1] || '').split('.');
-  if (!state || state !== expected) return back(connectReturnUrl('settings', 'wahoo-failed'));
+  const [expected, uid] = decodeURIComponent(m?.[1] || '').split('.');
+  if (!state || state !== expected) return back(connectReturnUrl('wahoo-failed', env));
   // Started by another account than the one signed in now: its keys are not stored here.
-  if (!startedBy(uid, env)) return back(connectReturnUrl(to, 'wahoo-failed'));
-  if (url.searchParams.get('error') || !code) return back(connectReturnUrl(to, 'wahoo-cancelled'));
-  if (!wahooConfigured(env)) return back(connectReturnUrl(to, 'wahoo-failed'));
+  if (!startedBy(uid, env)) return back(connectReturnUrl('wahoo-failed', env));
+  if (url.searchParams.get('error') || !code) return back(connectReturnUrl('wahoo-cancelled', env));
+  if (!wahooConfigured(env)) return back(connectReturnUrl('wahoo-failed', env));
   const data = await tokenRequest(env, { grant_type: 'authorization_code', code, redirect_uri: redirectUri(env, request) }, fetchImpl);
-  if (!data) { console.error('Wahoo OAuth token exchange failed'); return back(connectReturnUrl(to, 'wahoo-failed')); }
+  if (!data) { console.error('Wahoo OAuth token exchange failed'); return back(connectReturnUrl('wahoo-failed', env)); }
   // The Wahoo user id: the webhook says whose workout it brings by it.
   const user = await fetchImpl(API + '/v1/user', { headers: { Authorization: 'Bearer ' + data.access_token, Accept: 'application/json' }, signal: AbortSignal.timeout(15000) })
     .then(r => r.ok ? r.json() : null).catch(() => null);
@@ -105,7 +108,7 @@ export async function handleWahooOAuth(request, env, pathname, fetchImpl = fetch
   await saveConnectionSecret(env, SOURCE, text);
   await clearConnectionHealth(env, SOURCE);
   env.WAHOO_TOKEN = text;
-  return back(connectReturnUrl(to, 'wahoo'));
+  return back(connectReturnUrl('wahoo', env));
 }
 
 // A valid access token, refreshed (and the new pair saved) when it is about to run out.
@@ -126,7 +129,9 @@ export async function wahooAccessToken(env, { fetchImpl = fetch, now = Date.now(
 
 // One API call; `form` is sent as Wahoo's form fields (plan[file]=…). A 401 or
 // 403 marks the connection broken; a 429 (the Sandbox limit) only waits.
-async function wahooApi(env, path, { method = 'GET', form = null, fetchImpl = fetch, now = Date.now() } = {}) {
+// `scoped`: a 403 means only a scope the connection lacks (power_zones_write
+// on a connection made before it was asked for), not a broken connection.
+async function wahooApi(env, path, { method = 'GET', form = null, fetchImpl = fetch, now = Date.now(), scoped = false } = {}) {
   const token = await wahooAccessToken(env, { fetchImpl, now });
   let response;
   try {
@@ -137,7 +142,7 @@ async function wahooApi(env, path, { method = 'GET', form = null, fetchImpl = fe
       signal: AbortSignal.timeout(15000)
     });
   } catch (error) { throw Object.assign(new Error('No answer: ' + (error?.name || error?.message)), { noAnswer: true }); }
-  if (response.status === 401 || response.status === 403) await markConnectionBroken(env, SOURCE, 'Wahoo HTTP ' + response.status);
+  if (response.status === 401 || (response.status === 403 && !scoped)) await markConnectionBroken(env, SOURCE, 'Wahoo HTTP ' + response.status);
   if (!response.ok && !(method === 'DELETE' && response.status === 404)) throw Object.assign(new Error('Wahoo HTTP ' + response.status), { status: response.status });
   return response.status === 204 ? null : response.json().catch(() => null);
 }
@@ -449,6 +454,57 @@ export async function retryWahooExports(env, { limit = 4, fetchImpl = fetch, now
     results.push(await syncWahooWorkout(env, id, { fetchImpl, now, thresholds: targets }));
   }
   return results;
+}
+
+// ---- Power zones ----
+
+// Wahoo keeps up to 7 power zones in watts: zone_N is the top of zone N, the
+// last one open (500 % FTP stands for "no top", as in Wahoo's own app).
+const WAHOO_MAX_ZONES = 7, OPEN_TOP = 5;
+// The zone set as Wahoo's form fields, from athleteThresholds() (its
+// powerZones in watts, training-zones.js); null without an FTP. A custom model
+// with more than 7 zones keeps the first 6 tops, the rest fall into the top zone.
+export function wahooPowerZones(t) {
+  const ftp = Math.round(Number(t?.ftp) || 0);
+  if (!(ftp > 0)) return null;
+  const tops = (Array.isArray(t.powerZones) ? t.powerZones : []).map(z => Number(z?.wattsHigh)).filter(w => w > 0).slice(0, WAHOO_MAX_ZONES - 1);
+  tops.push(Math.round(ftp * OPEN_TOP));
+  const form = { 'power_zone[ftp]': String(ftp), 'power_zone[zone_count]': String(tops.length), 'power_zone[workout_type_family_id]': '0' };
+  tops.forEach((w, i) => { form['power_zone[zone_' + (i + 1) + ']'] = String(Math.round(w)); });
+  return form;
+}
+
+// Writes the FTP and power zones to Wahoo: Aurin's own cycling set (family 0,
+// as Aurin makes it) is changed, or made the first time; Wahoo lists only the
+// sets this app made. Two requests, only when the FTP or the power zones
+// change or Wahoo is connected. Returns { status: "ok" | "needs-permission" |
+// "not-connected" | "skipped" | "error", message }.
+export async function writeWahooZones(env, thresholds, { fetchImpl = fetch, now = Date.now() } = {}) {
+  if (!readWahooTokens(env)) return { status: 'not-connected' };
+  const form = wahooPowerZones(thresholds);
+  if (!form) return { status: 'skipped' };
+  try {
+    const list = await wahooApi(env, '/v1/power_zones', { fetchImpl, now });
+    const sets = Array.isArray(list) ? list : Array.isArray(list?.power_zones) ? list.power_zones : [];
+    const own = sets.find(z => z?.id != null && z.workout_type_family_id != null && Number(z.workout_type_family_id) === 0);
+    // Only the write needs power_zones_write: there a 403 is that scope missing.
+    if (own) await wahooApi(env, '/v1/power_zones/' + encodeURIComponent(own.id), { method: 'PUT', form, fetchImpl, now, scoped: true });
+    else await wahooApi(env, '/v1/power_zones', { method: 'POST', form, fetchImpl, now, scoped: true });
+    return { status: 'ok' };
+  } catch (error) {
+    if (error?.status === 403) return { status: 'needs-permission' };
+    return { status: 'error', message: error?.message || 'Wahoo' };
+  }
+}
+
+// The same in the background (saved zones, a new connection): the answer does
+// not wait for Wahoo, and a write that did not go through is logged.
+export function writeWahooZonesLater(env, ctx, thresholds) {
+  const write = writeWahooZones(env, thresholds)
+    .then(r => { if (!['ok', 'skipped', 'not-connected'].includes(r.status)) console.error('Wahoo zones not written', r.status, r.message || ''); return r; })
+    .catch(error => console.error('Wahoo zones not written', error.message));
+  if (ctx?.waitUntil) ctx.waitUntil(write);
+  return write;
 }
 
 // Wahoo forgets Aurin's access (also when the Aurin account is deleted).
