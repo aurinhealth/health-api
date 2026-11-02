@@ -140,9 +140,23 @@ struct FoodContent: View {
             Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
             if let target = food.target {
                 // With its parts the target opens where the numbers come from.
-                Text(L10n.f("z %@\nkcal", Fmt.int(target)) + (food.targetParts != nil ? " ›" : ""))
-                    .font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
-                    .onTapGesture { if food.targetParts != nil { showingParts = true } }
+                let more = food.targetParts != nil ? " ›" : ""
+                let over = (food.kcal ?? 0).rounded() - target.rounded()
+                Group {
+                    if over >= 1 {
+                        // Past the target (its workouts done and planned included): a calm note
+                        // in rust, as a limit past on the macros, not the number in red.
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(L10n.f("%@ kcal navíc", Fmt.int(over))).font(Typo.small.weight(.semibold)).foregroundStyle(Palette.rust)
+                            Text(L10n.f("z %@ kcal", Fmt.int(target)) + more).font(Typo.small).foregroundStyle(Palette.muted)
+                        }
+                        .lineLimit(1)
+                    } else {
+                        Text(L10n.f("z %@\nkcal", Fmt.int(target)) + more)
+                            .font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
+                    }
+                }
+                .onTapGesture { if food.targetParts != nil { showingParts = true } }
             }
         }
         .padding(.top, 30)
