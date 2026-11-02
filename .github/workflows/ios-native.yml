@@ -113,13 +113,20 @@ jobs:
         env:
           TEST_RUNNER_SNAPSHOT_DIR: ${{ github.workspace }}/screens
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/screens"
+          mkdir -p "$GITHUB_WORKSPACE/screens/during-tests"
+          # The simulator's screen once a minute while the tests run (during-tests/):
+          # a system sheet that holds a test purchase up shows there.
+          (while sleep 60; do xcrun simctl io "${{ steps.sim.outputs.udid }}" screenshot "$GITHUB_WORKSPACE/screens/during-tests/$(date +%H%M%S).png" >/dev/null 2>&1; done) &
+          shots=$!
           set -o pipefail
+          status=0
           xcodebuild -project Aurin.xcodeproj -scheme Aurin -configuration Debug \
             -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
             -test-timeouts-enabled YES -default-test-execution-time-allowance 300 \
             -maximum-test-execution-time-allowance 600 \
-            CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/build.log"
+            CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/build.log" || status=$?
+          kill "$shots" || true
+          exit $status
 
       # Warnings that are always a bug stop the run: Swift only warns about a
       # function that calls itself forever (GymStore.sync() did, and the watch

@@ -1,4 +1,5 @@
 import StoreKitTest
+import UIKit
 import XCTest
 @testable import Aurin
 
@@ -25,7 +26,22 @@ final class ProStoreTests: XCTestCase {
     private func step<T>(_ name: String, _ work: () async throws -> T) async rethrows -> T {
         let start = Date()
         print("ProStoreTests \(name): started")
-        defer { print("ProStoreTests \(name): \(String(format: "%.1f", Date().timeIntervalSince(start))) s") }
+        // A step still waiting after a minute names what the purchase sheet would
+        // anchor to: the scene's state and what its window shows.
+        let watch = Task { @MainActor in
+            try await Task.sleep(for: .seconds(60))
+            for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+                let shown = scene.windows.map { window in
+                    let presented = window.rootViewController?.presentedViewController.map { "\(type(of: $0))" } ?? "none"
+                    return "\(type(of: window)) key=\(window.isKeyWindow) presented=\(presented)"
+                }
+                print("ProStoreTests \(name) after 60 s: scene \(scene.activationState.rawValue), windows \(shown)")
+            }
+        }
+        defer {
+            watch.cancel()
+            print("ProStoreTests \(name): \(String(format: "%.1f", Date().timeIntervalSince(start))) s")
+        }
         return try await work()
     }
 

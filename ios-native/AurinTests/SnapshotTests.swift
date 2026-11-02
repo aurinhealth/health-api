@@ -997,10 +997,51 @@ final class SnapshotTests: XCTestCase {
                 .frame(width: width, height: height)
                 .background { ScreenBackground(glow: glow) }
                 .environment(\.colorScheme, scheme)
-            let renderer = ImageRenderer(content: view)
-            renderer.scale = 2
-            let data = try XCTUnwrap(renderer.uiImage?.pngData(), "\(name) did not render")
+            let image: UIImage?
+            if String(reflecting: V.self).contains("NavigationStack") {
+                // ImageRenderer stops the whole test run on iOS 27 ("no current update
+                // to enqueue action to") when the view holds a NavigationStack, which it
+                // cannot flatten; such a screen is drawn from a window instead.
+                image = hosted(view, width: width, height: height, scheme: scheme)
+            } else {
+                let renderer = ImageRenderer(content: view)
+                renderer.scale = 2
+                image = renderer.uiImage
+            }
+            let data = try XCTUnwrap(image?.pngData(), "\(name) did not render")
             try data.write(to: outputDirectory.appending(path: "\(name)-\(suffix).png"))
+        }
+    }
+
+    /// The view in a window of the test host, drawn as the screen shows it.
+    private func hosted<V: View>(_ view: V, width: CGFloat, height: CGFloat?, scheme: ColorScheme) -> UIImage? {
+        let controller = UIHostingController(rootView: view)
+        controller.safeAreaRegions = []
+        controller.overrideUserInterfaceStyle = scheme == .dark ? .dark : .light
+        controller.view.backgroundColor = .clear
+        // Without a set height the view's own height, as ImageRenderer measured it;
+        // a view that takes any height it gets stops at a long phone screen.
+        let fitted = height ?? controller.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        let size = CGSize(width: width, height: fitted.isFinite && fitted > 0 ? min(ceil(fitted), 4000) : 1600)
+        guard let scene = ProStore.anchorScene() else { return nil }
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(origin: .zero, size: size)
+        window.rootViewController = controller
+        window.isHidden = false
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+        }
+        controller.view.frame = window.bounds
+        controller.view.layoutIfNeeded()
+        // SwiftUI's first update and the async images settle.
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        controller.view.layoutIfNeeded()
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 2
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            _ = controller.view.drawHierarchy(in: CGRect(origin: .zero, size: size), afterScreenUpdates: true)
         }
     }
 }
