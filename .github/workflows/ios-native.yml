@@ -272,7 +272,7 @@ jobs:
             dir=watch locale=en_US; [ "$lang" = cs ] && dir=watch-cs locale=cs_CZ
             set -- -language $lang -AppleLanguages "($lang)" -AppleLocale $locale
             shoot $dir 1-morning "$@"
-            shoot $dir 2-training "$@" -page training -bottom
+            shoot $dir 2-training "$@" -page training -week
             shoot $dir 3-food "$@" -page food
             shoot $dir 4-gym "$@" -gym
             shoot $dir 5-rest "$@" -gym -rest

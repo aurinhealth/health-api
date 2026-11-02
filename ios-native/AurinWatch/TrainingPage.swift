@@ -25,6 +25,7 @@ struct TrainingPage: View {
 
     var body: some View {
         let day = shownDay
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
@@ -42,12 +43,19 @@ struct TrainingPage: View {
                 }
                 WeekRow(days: weekDays, today: today, shown: day, sessions: sessions) { picked = $0 }
                     .padding(.top, 6)
+                    .id("week")
                 content(day)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        // The sample day's screenshot (-bottom): the week and Continue whole.
-        .defaultScrollAnchor(WatchDemo.flag("-bottom") ? .bottom : .top)
+        .task {
+            // The sample day's screenshot (-week): scrolled by the title's
+            // height, so the week and Continue are both whole.
+            guard WatchDemo.flag("-week") else { return }
+            try? await Task.sleep(for: .milliseconds(400))
+            proxy.scrollTo("week", anchor: .top)
+        }
+        }
         // Each turn of the crown to this page shows it again: the plan only
         // when there is none for today or it is older than 10 minutes (the
         // iPhone sends every change it saves on its own).
