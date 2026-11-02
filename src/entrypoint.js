@@ -78,7 +78,7 @@ import { saveCalendarFree, clearCalendarFree } from './calendar-free.js';
 import { getCheckin, readinessCheckin, saveCheckin } from './morning-checkin.js';
 import { getChecks, upcomingTest } from './threshold-check.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, memoryCheck, memoryChanges } from './athlete-state.js';
-import { triRaceDay, TRI_RACES, planSports, savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planWorkoutId, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
+import { triRaceDay, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planWorkoutId, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
 import { chatLibraryQuery, askedSession } from './chat-ask.js';
 import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
@@ -1009,8 +1009,8 @@ async function currentCtl(env,ctx){
   return row?Math.round(Number(row.ctl)):null;
 }
 // Weekdays (0 = Monday) of a sport in the week plan's days, and the days the athlete chose.
-// A triathlon plan's days: those with any of its three sports.
-const sportDays=(days,sport)=>(days||[]).map((d,i)=>planSports(sport).some(s=>(d||[]).includes(s))?i:null).filter(i=>i!=null);
+// A multisport plan's days: those with any of its sports (`of`: a sport, or {template, sports}).
+const sportDays=(days,of)=>(days||[]).map((d,i)=>planSports(of).some(s=>(d||[]).includes(s))?i:null).filter(i=>i!=null);
 const chosenDays=list=>{const out=[...new Set((Array.isArray(list)?list:[]).map(Number).filter(n=>Number.isInteger(n)&&n>=0&&n<=6))].sort();return out.length?out:null;};
 // The free time a plan preview works with: the usual week, and week B with shift work.
 const planTimeOf=prefs=>({availability:prefs?.availability||[],availabilityB:prefs?.availabilityB||null,alternate:prefs?.alternate||null});
@@ -1021,6 +1021,13 @@ function minutesList(list){
 }
 // The usual time per weekday keeps each day's window, only its minutes change.
 const withMinutes=(availability,list)=>Array.from({length:7},(_,i)=>({...(availability?.[i]||{}),minutes:list[i].minutes}));
+// A plan's sports on exactly the chosen days of the usual week: a multisport
+// plan spreads its sports over those days again (`plan`: its picked sports).
+function planOnDays(prefs,template,plan,chosen){
+  if(template.sport!=='triathlon')return withSportDays(prefs,template.sport,chosen);
+  const sports=planSports({...(plan||{}),template}),days=(prefs?.days||[]).map(d=>(d||[]).filter(x=>!sports.includes(x)));
+  return planDays(template,{...prefs,days},null,plan?.sports,chosen);
+}
 // The sport on exactly the chosen days of the usual week.
 function withSportDays(prefs,sport,chosen){
   const days=Array.from({length:7},(_,i)=>(prefs?.days?.[i]||[]).filter(x=>x!==sport));
@@ -1033,7 +1040,7 @@ function withSportDays(prefs,sport,chosen){
 async function coachPlanPreview(env,ctx,a){
   const template=getTemplate(a.planId);if(!template)return null;
   const [prefs,ctl,plans]=await Promise.all([getWeekPlan(env.DB),currentCtl(env,ctx),syncedPlans(env,localToday()).catch(()=>({}))]);
-  const days=a.days||sportDays(planDays(template,prefs).days,template.sport);
+  const days=a.days||sportDays(planDays(template,prefs).days,template);
   const preview=planPreview(template,{ctl,days,firstDay:a.firstDay||null,startDate:a.startDate,...planTimeOf(prefs)});
   const full=preview.weeks.filter(w=>!w.race&&w.phase!=='recovery'&&w.phase!=='taper'),minutes=(full.length?full:preview.weeks).map(w=>w.minutes);
   const running=template.sport==='gym'?plans.gym:plans.active,current=running&&getTemplate(running.templateId)?planSummary(running,localToday()):null;
@@ -1045,7 +1052,9 @@ async function coachPlanPreview(env,ctx,a){
 // (race-estimate.js). Null for a plan without a race.
 function raceInfo(template,km,{thresholds={},weight=null,target=null,estimateStart=null,weeks=null}={}){
   if(!template?.race||!(Number(km)>0))return null;
-  if(template.race.tri){const d=triRaceDay(template.race.tri,{thresholdPace:thresholds.runThresholdPace,ftp:Number(thresholds.ftp)||null,weight,swimCss:thresholds.swimCss}),r=TRI_RACES[template.race.tri];return d?{km:Number(template.race.km),kind:template.race.tri,minutes:d.minutes,legs:{swim:{meters:r.swim,minutes:d.swim.minutes},ride:{km:r.ride,minutes:d.ride.minutes},run:{km:r.run,minutes:d.run.minutes}}}:null;}
+  if(template.race.tri){const d=triRaceDay(template.race.tri,{thresholdPace:thresholds.runThresholdPace,ftp:Number(thresholds.ftp)||null,weight,swimCss:thresholds.swimCss}),r=TRI_RACES[template.race.tri];// legList: every leg in the race's order; legs: a triathlon's three by sport (older apps).
+    return d?{km:Number(template.race.km),kind:template.race.tri,minutes:d.minutes,legList:d.legs.map(x=>({sport:x.sport,...(x.meters?{meters:x.meters}:{km:x.km}),minutes:x.minutes})),
+      ...(r.legs?{}:{legs:{swim:{meters:r.swim,minutes:d.swim.minutes},ride:{km:r.ride,minutes:d.ride.minutes},run:{km:r.run,minutes:d.run.minutes}}})}:null;}
   if(template.sport==='ride'&&template.race.ride){const r=rideRace(template.race.ride,Number(km),{ftp:Number(thresholds.ftp)||null,weight});return r?{km:Number(km),kind:r.kind,minutes:r.minutes,low:r.low,high:r.high,share:r.share,estimated:r.estimated}:null;}
   const estimate=runRaceSeconds(Number(km),thresholds.runThresholdPace),goal=Number(target)>0?Math.round(Number(target)):null;
   return {km:Number(km),estimate,estimateStart:Number(estimateStart)>0?Math.round(Number(estimateStart)):null,target:goal,goalPace:goal?Math.round(goal/Number(km)):null,verdict:goal&&estimate?goalVerdict(goal,estimate,weeks??template.weeks.length):null};
@@ -1080,8 +1089,8 @@ async function planResult(env,ctx,today){
   const plan=await finishedPlan(env.DB,today);
   if(!plan)return null;
   const template=getTemplate(plan.templateId),end=shiftDate(plan.endDate,1);
-  const [thresholds,ctl,doneDates,minutes,prefs]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),currentCtl(env,ctx),planSportDates(env,plan.sport,plan.startDate,end).catch(()=>[]),planSportMinutes(env,plan.sport,plan.startDate,end).catch(()=>0),getWeekPlan(env.DB).catch(()=>({}))]);
-  const completion=planCompletion(plan,{days:sportDays(prefs.days,plan.sport),doneDates,today:shiftDate(end,1)});
+  const [thresholds,ctl,doneDates,minutes,prefs]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),currentCtl(env,ctx),planSportDates(env,plan,plan.startDate,end).catch(()=>[]),planSportMinutes(env,plan,plan.startDate,end).catch(()=>0),getWeekPlan(env.DB).catch(()=>({}))]);
+  const completion=planCompletion(plan,{days:sportDays(prefs.days,plan),doneDates,today:shiftDate(end,1)});
   const next=planTemplates().filter(t=>t.sport===plan.sport&&t.id!==template.id&&!t.race).slice(0,2).map(t=>({id:t.id,name:t.name,goal:t.goal}));
   return {id:plan.id,templateId:template.id,name:template.name,sport:plan.sport,startDate:plan.firstDay||plan.startDate,endDate:plan.endDate,ftpStart:plan.start?.ftp??null,ftpEnd:Number(thresholds.ftp)||null,ctlStart:plan.start?.ctl??null,ctlEnd:ctl,sessionsDone:doneDates.length,sessionsPlanned:plan.start?.sessions??null,minutesDone:Math.round(minutes),minutesPlanned:plan.start?.minutes??null,completion,weeks:templateSummary(template).weeks,next};
 }
@@ -1096,7 +1105,7 @@ async function planProposal(env,ctx){
   let proposal=plan.proposal||null;
   if(!proposal&&pf?.plan){
     const targets=await computeWeekTargets(env,ctx,monday).catch(()=>null);
-    proposal=missedSession(targets,plan,monday,today,await planSportDates(env,plan.sport,monday,today).catch(()=>[]));
+    proposal=missedSession(targets,plan,monday,today,await planSportDates(env,plan,monday,today).catch(()=>[]));
   }
   return proposal?{...proposalView(proposal,plan,today),raw:proposal}:null;
 }
@@ -1902,13 +1911,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           const template=getTemplate(plan.templateId),range=template.sport==='gym'?[2,7]:template.days;
           if(chosen.length<range[0]||chosen.length>range[1])throw new Error(L(`Tento plán má ${range[0]}–${range[1]} dní týdně.`, `This plan has ${range[0]}–${range[1]} days a week.`));
           const prefs=await getWeekPlan(env.DB),week=body.from==='next'?await getWeekPlan(env.DB,today,{calendar:false}):null;
-          const usual=withSportDays(prefs,template.sport,chosen);
+          const usual=planOnDays(prefs,template,plan,chosen);
           // longDay: the long ride's or run's day (0–6), null for the day with the most free time.
           const longDay=body.longDay===undefined||!['ride','run'].includes(template.sport)?prefs.longDay:Number.isInteger(body.longDay)&&chosen.includes(body.longDay)?body.longDay:null;
           await saveWeekPlan(env.DB,{...prefs,days:usual.days,longDay,...(body.availability?{availability:withMinutes(prefs.availability,minutesList(body.availability)),availabilityMode:'manual'}:{})});
           if(week)await saveWeekPlan(env.DB,week,today);
           // From this week: a week changed on its own (its days, its time) takes the new days too.
-          else{const own=await getWeekPlan(env.DB,today,{calendar:false});if(own.source==='week')await saveWeekPlan(env.DB,{...own,days:withSportDays(own,template.sport,chosen).days,longDay},today);}
+          else{const own=await getWeekPlan(env.DB,today,{calendar:false});if(own.source==='week')await saveWeekPlan(env.DB,{...own,days:planOnDays(own,template,plan,chosen).days,longDay},today);}
           if(template.sport==='gym'&&plan.perWeek&&plan.perWeek!==chosen.length)await savePlanState(env.DB,{...plan,perWeek:chosen.length});
         }
         // A gym plan's sessions a week (2–7): gym days added or left out to match.
@@ -1919,6 +1928,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           if(need.added.length||need.removed.length)await saveWeekPlan(env.DB,{...prefs,days:need.days});
           await savePlanState(env.DB,{...plan,perWeek:n});
         }
+        // A multisport plan without a race: other sports from now on; days for a new sport come from the free time.
+        else if(body.action==='sports'){
+          const plan=await current(),template=getTemplate(plan.templateId),sports=chosenSports(body.sports);
+          if(!template?.choose)throw new Error(L('Sporty tohoto plánu dává závod.', "This plan's sports come from its race."));
+          if(!sports)throw new Error(L('Vyber dva nebo tři sporty.', 'Pick two or three sports.'));
+          const prefs=await getWeekPlan(env.DB),need=planDays(template,prefs,null,sports);
+          if(need.added.length)await saveWeekPlan(env.DB,{...prefs,days:need.days});
+          await savePlanState(env.DB,{...plan,sports});
+        }
         else if(body.action==='start'){
           const template=getTemplate(String(body.templateId||''));
           if(!template)throw new Error(L('Neznámý plán.', 'Unknown plan.'));
@@ -1928,18 +1946,22 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           // count: the sessions a week chosen (rides, runs; gym 2–7).
           const perWeek=template.sport==='gym'&&Number(body.perWeek)>=2&&Number(body.perWeek)<=7?Math.round(Number(body.perWeek)):null;
           const count=perWeek||(Number(body.count)>0?Number(body.count):null);
-          const need=chosen&&template.sport!=='triathlon'?withSportDays(prefs,template.sport,chosen):planDays(template,prefs,template.sport==='triathlon'?null:count);
+          // A multisport plan without a race: the two or three sports the athlete picked.
+          const sports=template.choose?chosenSports(body.sports):null;
+          if(template.choose&&!sports)throw new Error(L('Vyber dva nebo tři sporty.', 'Pick two or three sports.'));
+          const mine={template,sports};
+          const need=chosen&&template.sport!=='triathlon'?withSportDays(prefs,template.sport,chosen):planDays(template,prefs,template.sport==='triathlon'?null:count,sports);
           // A new ride or run plan starts without an earlier plan's own long day.
           const dropLong=template.sport!=='gym'&&Number.isInteger(prefs.longDay);
           if(need.added.length||need.removed?.length||(chosen&&template.sport!=='triathlon')||dropLong)await saveWeekPlan(env.DB,{...prefs,days:need.days,...(dropLong?{longDay:null}:{})});
           // What the result compares with at the end: FTP, fitness and the estimate now.
           const [thresholds,ctl]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),currentCtl(env,ctx)]);
-          const estimate=planPreview(template,{ctl,days:sportDays(need.days,template.sport),firstDay:when.firstDay,startDate:when.startDate,...planTimeOf(prefs),perWeek});
+          const estimate=planPreview(template,{ctl,days:sportDays(need.days,mine),firstDay:when.firstDay,startDate:when.startDate,...planTimeOf(prefs),perWeek,sports});
           // A running race: the goal time (10 minutes to a day) and the estimate it started from.
           const km=template.race?(template.race.options?.includes(Number(body.raceKm))?Number(body.raceKm):template.race.km):null;
           const target=template.sport==='run'&&km&&Number(body.targetSeconds)>=600&&Number(body.targetSeconds)<=86400?Math.round(Number(body.targetSeconds)):null;
           const raceEstimate=template.sport==='run'&&km?runRaceSeconds(km,thresholds.runThresholdPace):null;
-          await startPlan(env.DB,{templateId:template.id,startDate:when.startDate,raceDate:when.raceDate,raceKm:body.raceKm,state:{firstDay:when.firstDay||null,target,perWeek,start:{ftp:Number(thresholds.ftp)||null,ctl:ctl??null,sessions:estimate.totals.sessions,minutes:estimate.totals.minutes,...(raceEstimate?{estimate:raceEstimate}:{})}}});
+          await startPlan(env.DB,{templateId:template.id,startDate:when.startDate,raceDate:when.raceDate,raceKm:body.raceKm,state:{firstDay:when.firstDay||null,target,perWeek,...(sports?{sports}:{}),start:{ftp:Number(thresholds.ftp)||null,ctl:ctl??null,sessions:estimate.totals.sessions,minutes:estimate.totals.minutes,...(raceEstimate?{estimate:raceEstimate}:{})}}});
           started={firstWeek:when.firstWeek,addedDays:chosen&&template.sport!=='triathlon'?[]:need.added};
         }
         else throw new Error(L('Neznámá akce.', 'Unknown action.'));
@@ -1949,7 +1971,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       let summary=active?planSummary(active,today):null,gymSummary=gym?planSummary(gym,today):null,finished=null,finishedGym=null;
       if(summary?.started){
         const prefs=await getWeekPlan(env.DB).catch(()=>({}));
-        summary.completion=planCompletion(active,{days:sportDays(prefs.days,active.sport),doneDates:await planSportDates(env,active.sport,active.startDate,mondayOfDate(today)).catch(()=>[]),today});
+        summary.completion=planCompletion(active,{days:sportDays(prefs.days,active),doneDates:await planSportDates(env,active,active.startDate,mondayOfDate(today)).catch(()=>[]),today});
       }
       if(gymSummary?.started){
         const prefs=await getWeekPlan(env.DB).catch(()=>({}));
@@ -1984,9 +2006,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // Only the same plan, already running, brings its own number of sessions.
       const gymPlan=template.sport==='gym'?(running||plans.gym):null;
       const perWeek=template.sport==='gym'?(Number(url.searchParams.get('perWeek'))||(gymPlan?.templateId===template.id?gymPlan.perWeek:null)||null):null;
-      const own=template.sport!=='triathlon'&&chosen,need=own?{days:null,added:[]}:planDays(template,prefs,template.sport==='triathlon'?null:perWeek||Number(url.searchParams.get('count'))||null);
-      const days=own||sportDays(need.days,template.sport);
-      const preview=planPreview(template,{ctl:await currentCtl(env,ctx),days,firstDay:when.firstDay,startDate:when.startDate,...planTimeOf(prefs),perWeek});
+      // ?sports=ride,swim: a multisport plan's picked sports (the running plan's own with ?active=1).
+      const sports=template.choose?chosenSports(running?running.sports:url.searchParams.get('sports')?.split(','))||planSports(template).slice(0,2):null,mine={template,sports};
+      const own=template.sport!=='triathlon'&&chosen,need=own?{days:null,added:[]}:planDays(template,prefs,template.sport==='triathlon'?null:perWeek||Number(url.searchParams.get('count'))||null,sports);
+      const days=own||sportDays(need.days,mine);
+      const preview=planPreview(template,{ctl:await currentCtl(env,ctx),days,firstDay:when.firstDay,startDate:when.startDate,...planTimeOf(prefs),perWeek,sports});
+      if(sports)preview.sports=sports;
       // Days the plan adds to the usual week (shown dashed) and the other plan
       // that shares the free time (a gym plan next to a ride or run plan).
       const other=template.sport==='gym'?plans.active:plans.gym;
@@ -1997,7 +2022,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(['ride','run'].includes(template.sport)){const week=usualFor(prefs,today),planned=withSportDays(week,template.sport,days).days;
         const longOf=time=>{const i=planWeekRoles(planned,{...time,mainSport:template.sport}).findIndex(d=>d.items.some(x=>x.role==='long'));return i>=0?i:null;};
         const day=longOf(roleTime(week));preview.long={day,auto:longOf({minutes:freeMinutes(week)}),own:day!=null&&day===week.longDay};}
-      if(otherTemplate&&other.templateId!==template.id)preview.other={name:otherTemplate.name,sport:otherTemplate.sport,days:sportDays(prefs.days,otherTemplate.sport)};
+      if(otherTemplate&&other.templateId!==template.id)preview.other={name:otherTemplate.name,sport:otherTemplate.sport,days:sportDays(prefs.days,other)};
       // A race plan: the race's estimate (a running race) or power and time (a cycling race) for ?raceKm=.
       let race=null;
       if(template.race){
@@ -2021,10 +2046,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const [targets,thresholds,doneDates]=await Promise.all([
         computeWeekTargets(env,ctx,monday).catch(()=>({items:[]})),
         cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),
-        planSportDates(env,plan.sport,monday,shiftDate(monday,7)).catch(()=>[])
+        planSportDates(env,plan,monday,shiftDate(monday,7)).catch(()=>[])
       ]);
       const done=new Set(doneDates),sessions=[];
-      for(const x of (targets.items||[]).filter(x=>planSports(plan.sport).includes(x.sport)&&(plan.sport==='triathlon'||(x.slot||0)===0)&&x.plan?.workoutId)){
+      for(const x of (targets.items||[]).filter(x=>planSports(plan).includes(x.sport)&&(plan.sport==='triathlon'||(x.slot||0)===0)&&x.plan?.workoutId)){
         const library=await getWorkout(env.DB,x.plan.workoutId).catch(()=>null);
         let workout=null;
         if(library){

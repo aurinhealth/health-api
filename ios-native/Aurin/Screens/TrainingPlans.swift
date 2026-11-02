@@ -19,8 +19,20 @@ struct TrainingPlans: Decodable, Equatable {
     struct Race: Decodable, Equatable {
         let km: Double
         let options: [Double]?
-        /// A cycling race: granfondo, mtb, tt or climb; a triathlon: sprint, olympic, half or full.
+        /// A cycling race: granfondo, mtb, tt or climb; a multisport race: sprint,
+        /// olympic, half, full, du-sprint, du-standard, aquabike or aquathlon.
         var kind: String? = nil
+        /// A multisport race's legs in order ("run", 10 km; "ride", 40 km; …).
+        var legList: [RaceLeg]? = nil
+    }
+
+    struct RaceLeg: Decodable, Equatable {
+        let sport: String
+        var meters: Int? = nil
+        var km: Double? = nil
+
+        /// "1 500 m", "40 km".
+        var distance: String { meters.map { Fmt.int(Double($0)) + " m" } ?? raceDistance(km ?? 0) }
     }
 
     struct Template: Decodable, Equatable, Identifiable {
@@ -36,8 +48,12 @@ struct TrainingPlans: Decodable, Equatable {
         let weeks: [Week]
         /// Tests in the plan (an FTP test, a strength test).
         var tests: Bool? = nil
-        /// A triathlon plan's sessions a week per sport ("ride", "run", "swim").
+        /// A multisport plan's sessions a week per sport ("ride", "run", "swim").
         var perSport: [String: Int]? = nil
+        /// A multisport plan's sports (its race's, Ride, Run, Swim order).
+        var sports: [String]? = nil
+        /// The athlete picks two or three sports (a multisport plan without a race).
+        var choose: Bool? = nil
     }
 
     struct Active: Decodable, Equatable {
@@ -71,6 +87,9 @@ struct TrainingPlans: Decodable, Equatable {
         /// A gym plan: its sessions this week and the split ("Tlaky / tahy / nohy").
         var perWeek: Int? = nil
         var split: String? = nil
+        /// A multisport plan: its sports and their sessions a week.
+        var sports: [String]? = nil
+        var perSport: [String: Int]? = nil
         let template: Template
 
         func done(_ week: Int) -> Int? { completion?[String(week)] }
@@ -172,6 +191,8 @@ struct PlanPreview: Decodable, Equatable {
     var added: [Int]? = nil
     var other: Other? = nil
     var long: Long? = nil
+    /// A multisport plan without a race: the sports it plans for.
+    var sports: [String]? = nil
 }
 
 /// A race plan's race (src/race-estimate.js): a running race's estimate now,
@@ -194,6 +215,8 @@ struct PlanRace: Decodable, Equatable {
     var verdict: String? = nil
     /// A triathlon: each leg's distance and estimated minutes.
     var legs: Legs? = nil
+    /// A multisport race: every leg in its order (a duathlon's two runs too).
+    var legList: [Leg]? = nil
 
     struct Legs: Decodable, Equatable {
         let swim: Leg
@@ -202,16 +225,29 @@ struct PlanRace: Decodable, Equatable {
     }
 
     struct Leg: Decodable, Equatable {
+        var sport: String? = nil
         var meters: Int? = nil
         var km: Double? = nil
         let minutes: Int
+
+        var distance: String { meters.map { Fmt.int(Double($0)) + " m" } ?? raceDistance(km ?? 0) }
+    }
+
+    /// The legs in the race's order: a triathlon's from `legs` when the server sends only those.
+    var orderedLegs: [Leg] {
+        if let legList { return legList }
+        guard let legs else { return [] }
+        return [Leg(sport: "swim", meters: legs.swim.meters, minutes: legs.swim.minutes), Leg(sport: "ride", km: legs.ride.km, minutes: legs.ride.minutes), Leg(sport: "run", km: legs.run.km, minutes: legs.run.minutes)]
     }
 
     /// "Plavání ~29 min · kolo ~1:03 h · běh ~50 min".
     var legsText: String? {
-        guard let legs else { return nil }
-        return [(L10n.tr("Plavání"), legs.swim), (L10n.tr("kolo"), legs.ride), (L10n.tr("běh"), legs.run)]
-            .map { $0.0 + " ~" + planDuration($0.1.minutes) }.joined(separator: " · ")
+        let list = orderedLegs
+        guard !list.isEmpty else { return nil }
+        return list.enumerated().map { i, leg in
+            let name = L10n.tr(["swim": "plavání", "ride": "kolo", "run": "běh"][leg.sport ?? ""] ?? "")
+            return (i == 0 ? name.prefix(1).uppercased() + name.dropFirst() : name) + " ~" + planDuration(leg.minutes)
+        }.joined(separator: " · ")
     }
 }
 
@@ -268,8 +304,9 @@ extension APIClient {
         try await send("/app/api/plans", method: "POST", body: body)
     }
 
-    func trainingPlanPreview(templateId: String? = nil, startDate: String? = nil, days: [Int]? = nil, raceDate: String? = nil, raceKm: Double? = nil, targetSeconds: Int? = nil, count: Int? = nil, perWeek: Int? = nil) async throws -> PlanPreview {
+    func trainingPlanPreview(templateId: String? = nil, startDate: String? = nil, days: [Int]? = nil, raceDate: String? = nil, raceKm: Double? = nil, targetSeconds: Int? = nil, count: Int? = nil, perWeek: Int? = nil, sports: [String]? = nil) async throws -> PlanPreview {
         var query = templateId == nil ? ["active=1"] : ["templateId=" + templateId!]
+        if let sports, !sports.isEmpty { query.append("sports=" + sports.joined(separator: ",")) }
         if let count { query.append("count=" + String(count)) }
         if let perWeek { query.append("perWeek=" + String(perWeek)) }
         if let startDate { query.append("startDate=" + startDate) }
@@ -704,7 +741,7 @@ struct TrainingPlansSheet: View {
         }
     }
 
-    /// Ride, run, swim, triathlon, gym: the sport order everywhere in the app.
+    /// Ride, run, swim, multisport (triathlon, duathlon, aquabike, aquathlon), gym: the sport order everywhere in the app.
     static let sports: [(id: String, symbol: String, color: Color)] = [
         ("ride", "bicycle", Palette.amberBar), ("run", "figure.run", Palette.rust), ("swim", "figure.pool.swim", Palette.blue),
         ("triathlon", "figure.open.water.swim", Palette.green), ("gym", "dumbbell.fill", Palette.indigo)
@@ -712,7 +749,7 @@ struct TrainingPlansSheet: View {
 
     private func sportTile(_ item: (id: String, symbol: String, color: Color)) -> some View {
         let on = sport == item.id
-        let title = item.id == "triathlon" ? "Tri" : L10n.tr(["ride": "Kolo", "run": "Běh", "swim": "Plavání", "gym": "Posilovna"][item.id] ?? "")
+        let title = item.id == "triathlon" ? "Multi" : L10n.tr(["ride": "Kolo", "run": "Běh", "swim": "Plavání", "gym": "Posilovna"][item.id] ?? "")
         return Button { withAnimation(.snappy) { sport = item.id } } label: {
             VStack(spacing: 6) {
                 Image(systemName: item.symbol).scaledFont(15, weight: .semibold, cap: .denseCap)

@@ -32,12 +32,12 @@ export async function planForWeek(env,ctx,start){
   if(plan&&!plan.pauseFrom&&!(plan.reviewed>=thisMonday)){
     const last=shiftDate(thisMonday,-7);
     const keyDates=await planKeyDates(env,plan,last).catch(()=>[]);
-    plan=(await reviewPlan(env.DB,plan,thisMonday,{keyDates,doneDates:await planSportDates(env,plan.sport,last,thisMonday).catch(()=>[])}).catch(()=>({plan}))).plan;
+    plan=(await reviewPlan(env.DB,plan,thisMonday,{keyDates,doneDates:await planSportDates(env,plan,last,thisMonday).catch(()=>[])}).catch(()=>({plan}))).plan;
   }
   const pw=plan&&!plan.pauseFrom?planWeek(plan,start):null;
   if(!pw)return {plan:null,pw:null,roles:await weekRoleOptions(env,ctx,null,null),load:null,apply:t=>t};
   // A triathlon plan: the capabilities of each of its sports.
-  const tri=plan.sport==='triathlon',capabilitiesOf=()=>tri?Promise.all(planSports(plan.sport).map(s=>getCapabilities(env.DB,s).catch(()=>({})))).then(list=>Object.fromEntries(planSports(plan.sport).map((s,i)=>[s,list[i]]))):getCapabilities(env.DB,plan.sport).catch(()=>({}));
+  const tri=plan.sport==='triathlon',capabilitiesOf=()=>tri?Promise.all(planSports(plan).map(s=>getCapabilities(env.DB,s).catch(()=>({})))).then(list=>Object.fromEntries(planSports(plan).map((s,i)=>[s,list[i]]))):getCapabilities(env.DB,plan.sport).catch(()=>({}));
   const [thresholds,capabilities,weight]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),capabilitiesOf(),plan.sport==='ride'||tri?latestStoredWeight(env.DB).catch(()=>null):null]);
   const options={thresholdPace:thresholds.runThresholdPace,hasPower:Number(thresholds.ftp)>0,shifts:capabilities,ftp:Number(thresholds.ftp)||null,weight:weightKg(weight),swimCss:thresholds.swimCss||null};
   return {plan,pw,roles:await weekRoleOptions(env,ctx,plan,pw),load:planLoad(pw),apply:t=>applyPlan(t,plan,start,options)};
@@ -67,22 +67,22 @@ export async function syncedPlans(env,today=localToday()){
   const [active,gym]=await Promise.all([activePlan(env.DB,today,{state}),activePlan(env.DB,today,{gym:true,state})]);
   return {active,gym};
 }
-// Days with an activity of the sport, from (inclusive) to (exclusive).
-export async function planSportDates(env,sport,from,to){
+// Days with an activity of the plan's sports (`of`: a plan or a sport), from (inclusive) to (exclusive).
+export async function planSportDates(env,of,from,to){
   const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(from,-1),shiftDate(to,1)).all()).results||[];
-  return [...new Set(rows.map(activityFromRow).filter(a=>a&&planSports(sport).includes(a.kind)&&a.date>=from&&a.date<to&&(a.minutes==null||a.minutes>=15)).map(a=>a.date))];
+  return [...new Set(rows.map(activityFromRow).filter(a=>a&&planSports(of).includes(a.kind)&&a.date>=from&&a.date<to&&(a.minutes==null||a.minutes>=15)).map(a=>a.date))];
 }
 // Minutes of the sport done, from (inclusive) to (exclusive): a plan's result.
-export async function planSportMinutes(env,sport,from,to){
+export async function planSportMinutes(env,of,from,to){
   const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(from,-1),shiftDate(to,1)).all()).results||[];
-  return dedupeActivities(rows.map(activityFromRow)).filter(a=>a&&planSports(sport).includes(a.kind)&&a.date>=from&&a.date<to).reduce((sum,a)=>sum+(Number(a.minutes)||0),0);
+  return dedupeActivities(rows.map(activityFromRow)).filter(a=>a&&planSports(of).includes(a.kind)&&a.date>=from&&a.date<to).reduce((sum,a)=>sum+(Number(a.minutes)||0),0);
 }
 // The key days (quality, test, long) the plan put in a week.
 export async function planKeyDates(env,plan,monday){
   const pw=planWeek(plan,monday),prefs=pw?await getWeekPlan(env.DB,monday).catch(()=>null):null;
   if(!prefs?.days)return [];
   const roles=planWeekRoles(prefs.days,{...await weekRoleOptions(env,null,plan,pw),...roleTime(prefs)});
-  return roles.map((d,i)=>d.items.some(x=>planSports(plan.sport).includes(x.sport)&&['quality','long'].includes(x.role))?shiftDate(monday,i):null).filter(Boolean);
+  return roles.map((d,i)=>d.items.some(x=>planSports(plan).includes(x.sport)&&['quality','long'].includes(x.role))?shiftDate(monday,i):null).filter(Boolean);
 }
 
 // The weather place of the week plan and today's forecast for Today (app-today.js

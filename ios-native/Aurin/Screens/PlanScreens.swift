@@ -139,6 +139,8 @@ struct StartPlanSheet: View {
     @State private var ownDays = false
     @State private var editingTime = false
     @State private var timeSaved = 0
+    /// A multisport plan without a race: the two or three sports picked.
+    @State private var sports: [String] = []
 
     private var today: String { AppModel.localDate(Date()) }
     /// Today, the next three days and next Monday.
@@ -151,7 +153,7 @@ struct StartPlanSheet: View {
         } ?? ISODay.shift(today, 7)
         return Array(Set((0...3).map { ISODay.shift(today, $0) } + [next])).sorted()
     }
-    private var key: String { [start, ownDays ? days.map(String.init).joined(separator: ",") : "", AppModel.localDate(raceDate), String(raceKm), String(target ?? 0), String(count ?? 0), String(timeSaved)].joined(separator: "|") }
+    private var key: String { [start, ownDays ? days.map(String.init).joined(separator: ",") : "", AppModel.localDate(raceDate), String(raceKm), String(target ?? 0), String(count ?? 0), String(timeSaved), sports.joined(separator: ",")].joined(separator: "|") }
     private var range: ClosedRange<Int> { (template.days.first ?? 3)...(template.days.last ?? 3) }
 
     var body: some View {
@@ -202,10 +204,19 @@ struct StartPlanSheet: View {
                     }
                 }
                 if let per = template.perSport {
-                    // A triathlon plan: the days come from the usual week, a day may have two sports.
+                    // A multisport plan: its sports (picked, or the race's), the days come
+                    // from the usual week, a day may have two sports.
+                    VStack(alignment: .leading, spacing: 8) {
+                        SectionLabel(text: "Sporty")
+                        PlanSportChips(selected: template.choose == true ? sports : template.sports ?? [], toggle: template.choose == true ? toggleSport : nil)
+                        if template.choose == true {
+                            Text("Vyber dva nebo tři. Šest tréninků týdně se mezi ně rozdělí.")
+                                .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                     VStack(alignment: .leading, spacing: 8) {
                         SectionLabel(text: "Týden")
-                        Text(L10n.f("Kolo %@×, běh %@× a plavání %@× týdně. Dny rozdělím podle času, který v týdnu máš.", String(per["ride"] ?? 0), String(per["run"] ?? 0), String(per["swim"] ?? 0)))
+                        Text(L10n.f("%@ týdně. Dny rozdělím podle času, který v týdnu máš.", PlanSportChips.sessionsText(PlanSportChips.perSport(per, sports: template.choose == true ? sports : nil))))
                             .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                 } else {
@@ -266,6 +277,7 @@ struct StartPlanSheet: View {
             if start < today { start = today }
             if days.isEmpty { days = initial?.days ?? [] }
             if preview == nil { preview = initial }
+            if sports.isEmpty { sports = initial?.sports ?? Array((template.sports ?? []).prefix(2)) }
             raceKm = template.race?.km ?? 0
             raceDate = Calendar.current.date(byAdding: .day, value: template.weeksCount * 7, to: Date()) ?? Date()
         }
@@ -275,7 +287,8 @@ struct StartPlanSheet: View {
             if Task.isCancelled { return }
             do {
                 let fresh = try await model.api.trainingPlanPreview(templateId: template.id, startDate: template.race == nil ? start : nil, days: template.perSport == nil && ownDays && !days.isEmpty ? days : nil, raceDate: template.race == nil ? nil : AppModel.localDate(raceDate),
-                                                                     raceKm: template.race == nil ? nil : raceKm, targetSeconds: target, count: template.perSport == nil && !ownDays ? count : nil)
+                                                                     raceKm: template.race == nil ? nil : raceKm, targetSeconds: target, count: template.perSport == nil && !ownDays ? count : nil,
+                                                                     sports: template.choose == true ? sports : nil)
                 preview = fresh
                 if !ownDays || days.isEmpty { days = fresh.days }
                 error = nil
@@ -388,10 +401,17 @@ struct StartPlanSheet: View {
         }
     }
 
+    /// Two or three sports: the last two stay on.
+    private func toggleSport(_ sport: String) {
+        if sports.contains(sport) { if sports.count > 2 { sports.removeAll { $0 == sport } } }
+        else { sports = PlanSportChips.order.filter { sports.contains($0) || $0 == sport } }
+    }
+
     private func begin() async {
         busy = true
         defer { busy = false }
         var body: JSONObject = ["action": .string("start"), "templateId": .string(template.id), "days": .array(days.map { .number(Double($0)) })]
+        if template.choose == true { body["sports"] = .array(sports.map { .string($0) }) }
         if template.race != nil {
             body["raceDate"] = .string(AppModel.localDate(raceDate))
             body["raceKm"] = .number(raceKm)
@@ -515,6 +535,7 @@ struct ActivePlanView: View {
     @State private var rescheduling = false
     @State private var editingDays = false
     @State private var editingPlanDays = false
+    @State private var editingSports = false
     @State private var editingGoal = false
     @State private var error: String?
 
@@ -529,7 +550,8 @@ struct ActivePlanView: View {
                     if let active {
                         ActivePlanContent(active: active, preview: preview, week: week, error: error, editDays: { editingDays = true },
                                           editGoal: active.template.sport == "run" && active.race != nil ? { editingGoal = true } : nil,
-                                          editPlanDays: { editingPlanDays = true }, reschedule: { rescheduling = true },
+                                          editPlanDays: { editingPlanDays = true }, editSports: active.template.choose == true ? { editingSports = true } : nil,
+                                          reschedule: { rescheduling = true },
                                           choose: { choosing = true }, stop: { confirmStop = true }) { await reload() }
                     }
                 }
@@ -557,6 +579,9 @@ struct ActivePlanView: View {
             if let active {
                 DaysAndTimeSheet(sport: active.template.sport, range: (active.template.days.first ?? 1)...(active.template.days.last ?? 7), initial: preview?.days ?? [], time: preview?.time, long: preview?.long)
             }
+        }
+        .sheet(isPresented: $editingSports, onDismiss: { Task { await reload() } }) {
+            if let active { PlanSportsSheet(initial: active.sports ?? []).presentationDetents([.medium]) }
         }
         .sheet(isPresented: $editingGoal) {
             if let active, let race = active.race {
@@ -616,6 +641,8 @@ struct ActivePlanContent: View {
     /// A running race plan: change the goal time.
     var editGoal: (() -> Void)? = nil
     var editPlanDays: () -> Void = {}
+    /// A multisport plan without a race: change its sports.
+    var editSports: (() -> Void)? = nil
     var reschedule: () -> Void = {}
     var choose: () -> Void = {}
     var stop: () -> Void = {}
@@ -635,7 +662,7 @@ struct ActivePlanContent: View {
         }
         .padding(.top, 16)
         if let race = active.race {
-            if race.legs != nil { triRace(race).padding(.top, 12) } else if active.template.sport == "run" { runGoal(race).padding(.top, 12) } else { rideRace(race).padding(.top, 12) }
+            if !race.orderedLegs.isEmpty { triRace(race).padding(.top, 12) } else if active.template.sport == "run" { runGoal(race).padding(.top, 12) } else { rideRace(race).padding(.top, 12) }
         }
 
         // Upravit: at most four tiles, a title on one line and up to two lines under it.
@@ -694,6 +721,9 @@ struct ActivePlanContent: View {
                 PlanAdjustTile(symbol: "clock", title: L10n.tr("Čas tento týden"), subtitle: weekTimeText(week), action: editDays)
             }
             PlanAdjustTile(symbol: "calendar", title: L10n.tr("Dny a čas"), subtitle: daysText, color: Palette.green, action: editPlanDays)
+            if let editSports, let sports = active.sports {
+                PlanAdjustTile(symbol: "figure.mixed.cardio", title: L10n.tr("Sporty"), subtitle: sports.map(PlanSportChips.name).joined(separator: " · "), color: Palette.amber, action: editSports)
+            }
             if active.template.race == nil {
                 PlanAdjustTile(symbol: "arrow.uturn.backward", title: L10n.tr("Změnit začátek"),
                                subtitle: L10n.f("od %@", Fmt.dayMonth(active.firstDay ?? active.startDate)), color: Palette.blue, action: reschedule)
@@ -757,16 +787,15 @@ struct ActivePlanContent: View {
     }
 
     /// A cycling race: its power and time on its course.
-    /// A triathlon: each leg's estimated time on race day.
+    /// A multisport race: each leg's estimated time on race day, in its order.
     @ViewBuilder private func triRace(_ race: PlanRace) -> some View {
-        if let legs = race.legs {
+        let legs = race.orderedLegs
+        if !legs.isEmpty {
             Card {
                 WidgetHeader(title: L10n.tr("Závod"), color: Palette.green, trailing: active.raceDate.map { Fmt.dayMonth($0) })
                 Text(verbatim: active.template.name).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
                 HStack(alignment: .top, spacing: 20) {
-                    leg(Fmt.int(Double(legs.swim.meters ?? 0)) + " m", legs.swim.minutes)
-                    leg(raceDistance(legs.ride.km ?? 0), legs.ride.minutes)
-                    leg(raceDistance(legs.run.km ?? 0), legs.run.minutes)
+                    ForEach(legs.indices, id: \.self) { i in leg(legs[i].distance, legs[i].minutes) }
                     Spacer(minLength: 0)
                 }
                 Text("Odhad času z tvých prahových hodnot, bez depa.").font(Typo.caption).foregroundStyle(Palette.muted)

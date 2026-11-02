@@ -898,6 +898,17 @@ final class SnapshotTests: XCTestCase {
             NavigationStack { ActivePlanContent(active: run, preview: nil, week: nil, editGoal: {}).padding(.horizontal, 24) }.environment(model)
         }
         try render("plan-goal-time", height: 620) { GoalTimeSheet(km: 21.1, estimate: 6270, weeks: 10, initial: 6120) { _ in } }
+        // Multisport: a duathlon (its race's sports, run, ride, run on race day) and a plan without a race with picked sports.
+        let du = #"{"id":"du-standard","sport":"triathlon","name":"Standardní duatlon","goal":"Běh 10 km, kolo 40 km, běh 5 km","description":"","level":"intermediate","weeksCount":12,"days":[5,7],"race":{"km":55,"options":null,"kind":"du-standard","legList":[{"sport":"run","km":10},{"sport":"ride","km":40},{"sport":"run","km":5}]},"perSport":{"ride":3,"run":3},"sports":["ride","run"],"weeks":[\#(weeks)]}"#
+        let duPlan = #"{"templates":[\#(du)],"active":{"id":11,"templateId":"du-standard","name":"Standardní duatlon","startDate":"2026-10-19","raceDate":"2027-01-10","raceKm":55,"week":6,"weeksCount":12,"phaseLabel":"Budování","started":true,"paused":false,"shiftedWeeks":0,"returning":false,"sports":["ride","run"],"perSport":{"ride":3,"run":3},"race":{"km":55,"kind":"du-standard","minutes":131,"legList":[{"sport":"run","km":10,"minutes":44},{"sport":"ride","km":40,"minutes":66},{"sport":"run","km":5,"minutes":21}]},"template":\#(du)},"activeGym":null,"started":null}"#
+        let duathlon = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(duPlan.utf8)).active)
+        try render("plan-race-duathlon", glow: Palette.Glow.training, height: 700) {
+            NavigationStack { ActivePlanContent(active: duathlon, preview: nil, week: nil).padding(.horizontal, 24) }.environment(model)
+        }
+        try render("plan-start-duathlon", height: 900) { StartPlanSheet(template: duathlon.template).environment(model) }
+        let multi = try decoder.decode(TrainingPlans.Template.self, from: Data(#"{"id":"multi-base","sport":"triathlon","name":"Multisport","goal":"Kondice ve dvou nebo třech sportech","description":"","level":"intermediate","weeksCount":12,"days":[4,7],"race":null,"perSport":{"ride":2,"run":2,"swim":2},"sports":["ride","run","swim"],"choose":true,"weeks":[\#(weeks)]}"#.utf8))
+        try render("plan-start-multisport", height: 900) { StartPlanSheet(template: multi).environment(model) }
+        try render("plan-sports", height: 420) { PlanSportsSheet(initial: ["ride", "swim"]).environment(model) }
         // A gym plan with its strength tests, and its result with the lifts before and after.
         let testKeys = "\"Dřep, bench, mrtvý tah: odhad maxima\",\"3× týdně\"", workKeys = "\"3× týdně\",\"5 × 5\",\"RPE 8\""
         let strengthWeeks = (1...12).map { (i: Int) -> String in

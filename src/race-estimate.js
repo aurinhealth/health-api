@@ -53,6 +53,9 @@ export const RIDE_RACES = {
   climb: { course: "climb" },
   // A triathlon's ride: lower the longer the race, the run still to come (Friel).
   "tri-short": { low: .8, high: .88, course: "tt" },
+  // A duathlon's ride: the second run still to come; an aquabike's: the ride ends it.
+  "du-short": { low: .8, high: .88, course: "tt" },
+  aquabike: { low: .82, high: .9, course: "tt" },
   "tri-half": { low: .72, high: .8, course: "tt" },
   "tri-full": { low: .65, high: .72, course: "tt" }
 };
