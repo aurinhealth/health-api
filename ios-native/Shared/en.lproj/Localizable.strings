@@ -3586,6 +3586,15 @@
 "běží" = "running";
 "Uloží délku a konec kardia" = "Saves the cardio's length and end";
 
+/* One coach card on Today (CoachThingsCard.swift) */
+"Kouč se ptá" = "Check-in";
+"Po tréninku" = "After workout";
+"Podle jízd %@" = "Your rides say %@";
+"Podle běhů %@" = "Your runs say %@";
+"Podle tréninků %@" = "Your workouts say %@";
+"Podle plavání %@" = "Your swims say %@";
+"Měním…" = "Swapping…";
+"Nechat plán" = "Keep plan";
 "Zapisovat do Wahoo" = "Write to Wahoo";
 "FTP a výkonové zóny se po uložení pošlou do Wahoo" = "FTP and power zones are sent to Wahoo after saving";
 "Zapsáno do Wahoo" = "Written to Wahoo";
