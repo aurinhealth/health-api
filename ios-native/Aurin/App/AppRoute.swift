@@ -90,9 +90,8 @@ enum AppRoute: Hashable {
         }
     }
 
-    /// The app's own link schemes: aurin, and loadwise from before 2026-11
-    /// (calendar events and links written by older versions still use it).
-    static let schemes: Set<String> = ["aurin", "loadwise"]
+    /// The app's own link scheme.
+    static let schemes: Set<String> = ["aurin"]
 
     /// Hosts of shared workout links.
     static let linkHosts: Set<String> = ["aurin.health", "www.aurin.health"]
