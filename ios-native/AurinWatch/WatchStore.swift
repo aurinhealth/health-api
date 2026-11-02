@@ -61,6 +61,10 @@ final class WatchStore: NSObject, ObservableObject {
     /// The newest Today from the iPhone, when it is in reach; else, or when
     /// it has nothing for today, from the server with the watch's sign-in.
     func ask() {
+        // Today came from the iPhone a moment ago (it sends each change itself):
+        // asking again only woke the iPhone, at every raise of the wrist.
+        if let heard, Date().timeIntervalSince(heard) < Self.askAfter,
+           snapshot?.date == Self.localDate(Date()) { return }
         guard WCSession.isSupported() else { Task { await fromServer() }; return }
         let session = WCSession.default
         guard session.activationState == .activated, session.isReachable else {
@@ -79,6 +83,10 @@ final class WatchStore: NSObject, ObservableObject {
     }
 
     private var loading = false
+    /// When the iPhone last sent Today (its context or a reply), the same or new.
+    private var heard: Date?
+    /// The watch asks the iPhone again after this long.
+    private static let askAfter: TimeInterval = 15 * 60
 
     /// Today from the server when the watch has none for today (WatchToday).
     func fromServer() async {
@@ -125,6 +133,7 @@ final class WatchStore: NSObject, ObservableObject {
             return
         }
         guard var value = WatchSnapshot.decode(data) else { return }
+        heard = Date()
         if let snapshot, snapshot.date == value.date, snapshot.updated > value.updated { return }
         // A drink still waiting for Undo isn't in the iPhone's day yet.
         if let drink, var food = value.food {

@@ -3604,3 +3604,8 @@
 "Čas na 200 m (m:ss)" = "200 m time (m:ss)";
 "Nikdy neplav sám, výrazná čepice a bójka." = "Never alone, bright cap and a tow float.";
 "venku podle času" = "by time outside";
+
+"Ukončit trénink" = "End workout";
+"Ještě cvičím" = "Keep going";
+"Pořád cvičíš?" = "Still working out?";
+"Žádná série 10 minut. Ukonči trénink, nebo pokračuj." = "No set for 10 min. End the workout or keep going.";
