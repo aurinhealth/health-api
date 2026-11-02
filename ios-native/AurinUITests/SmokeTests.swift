@@ -9,7 +9,7 @@ final class SmokeTests: XCTestCase {
     private var app: XCUIApplication!
     private var step = 0
     /// The test's number: 1-… the first launch, 2-… the main screens, 3-… the status, 4-… the website.
-    private var prefix: String { name.contains("test1") ? "1" : name.contains("test2") ? "2" : name.contains("test3") ? "3" : "4" }
+    private var prefix: String { name.contains("test1") ? "1" : name.contains("test2") ? "2" : name.contains("test3") ? "3" : name.contains("test5") ? "5" : "4" }
 
     override func setUp() {
         continueAfterFailure = false
@@ -238,24 +238,81 @@ final class SmokeTests: XCTestCase {
             if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "How should I train today")).firstMatch) {
                 pause(8)
                 shot("kouc-odpoved")
+                // A second question, so the conversation fills the screen.
+                if ask("What should I eat after training?", send: "Send") {
+                    pause(8)
+                    shot("kouc-odpoved-2")
+                }
             }
         }
 
         // For the App Store screenshots: Today down to the day's timeline, and
         // Training down to the coach's card under today's workout.
         // A quarter of the screen at a time, so one shot holds a whole card.
-        for (tab, file, steps) in [("today", "dnes", 7), ("training", "trenink", 4)] {
+        for (tab, file, steps, share) in [("today", "dnes", 7, 0.25), ("training", "trenink", 4, 0.25), ("training", "trenink-jemne", 4, 0.06)] {
             english("-tab", tab)
             pause(4)
             for i in 0..<steps {
-                scroll(0.25)
+                scroll(CGFloat(share))
                 pause(1)
                 shot("\(file)-\(i + 2)")
             }
         }
     }
 
+    /// The App Store screenshots in Czech (the Czech App Store page): the same
+    /// sample-day screens as test4's English ones, on a Czech phone. Pictures only.
+    func test5AppStoreCzech() {
+        continueAfterFailure = true
+        for (route, file) in [("readiness", "pripravenost"), ("muscles", "svaly"), ("sleep", "spanek")] {
+            launch("-demo", "-open", route)
+            pause(4)
+            shot(file)
+        }
+        launch("-demo")
+        pause(4)
+        shot("dnes")
+        launch("-demo", "-tab", "food")
+        pause(4)
+        shot("jidlo")
+        for (tab, file, steps, share) in [("today", "dnes", 7, 0.25), ("training", "trenink", 4, 0.06)] {
+            launch("-demo", "-tab", tab)
+            pause(4)
+            shot("\(file)-1")
+            for i in 0..<steps {
+                scroll(CGFloat(share))
+                pause(1)
+                shot("\(file)-\(i + 2)")
+            }
+        }
+        launch("-demo", "-open", "gym/2026-10-08")
+        pause(4)
+        if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Začít trénink")).firstMatch) {
+            pause(3)
+            shot("rezim")
+        }
+        launch("-demo")
+        pause(4)
+        if tapIfThere(app.buttons.matching(identifier: "Kouč").allElementsBoundByIndex.first { $0.isHittable } ?? app.buttons["Kouč"]) {
+            pause(3)
+            if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Jak mám dnes trénovat")).firstMatch) {
+                pause(8)
+                if ask("Co sníst po tréninku?", send: "Odeslat") { pause(8) }
+                shot("kouc-odpoved")
+            }
+        }
+    }
+
     // MARK: - Helpers
+
+    /// Types a question to the coach and sends it.
+    private func ask(_ text: String, send: String) -> Bool {
+        let field = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
+        guard field.waitForExistence(timeout: 4) else { return false }
+        field.tap()
+        field.typeText(text)
+        return tapIfThere(app.buttons[send])
+    }
 
     /// The app in English and US English formats, as the website shows it: light,
     /// or dark when CI takes the website's dark shots (SITE_APPEARANCE=dark).
