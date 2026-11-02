@@ -2,7 +2,7 @@ import { L } from './lang.js';
 import { routedUserDb } from './user-data-routing.js';
 import { inheritAiLimits } from './ai-limit-memory.js';
 import { readOnlySql, withD1Retry } from './d1-retry.js';
-import { allowClient, clientWouldPass, releaseClient } from './ip-rate-limit.js';
+import { allowClient, releaseClient } from './ip-rate-limit.js';
 import { sessionSecret } from './dashboard-auth.js';
 // Multi-user support: every personal row carries user_id, requests run with a
 // user-scoped env, and the schema upgrade that adds user_id to existing tables.
@@ -550,13 +550,6 @@ export async function mayCreateAccount(db, env, address, { request = null } = {}
     signupClaims.add(request);
   }
   return true;
-}
-
-// Before a sign-in code goes to an address without an account: whether this
-// network may still open one, so nobody waits for a code that cannot sign them in.
-export async function signupOpenFor(db, env, address, request) {
-  if (!request || (await emailCodeAccess(db, env, address)) !== "open") return true;
-  return clientWouldPass(db, request, sessionSecret(env), "signup", Date.now(), NEW_ACCOUNT_LIMITS);
 }
 
 // Creates the account of an address mayCreateAccount let in: "created", "exists" (made by
