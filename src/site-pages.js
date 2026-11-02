@@ -957,7 +957,7 @@ ${layer('wide')}${layer('tall')}
 </div>`).join('');
 
   const faq = [
-    ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit, Pixel Watch or Garmin. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
+    ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit or Pixel Watch. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
     ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
     ['What does it cost?', 'Nothing during testing. After the release, the coach, food from a photo, reviews, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: $6.99 a month or $59.99 a year with the first week free, shown in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.'],
     ['Does Aurin know my cycle?', 'If you turn on cycle tracking in Settings → Cycle, yes. Your readiness then weighs your resting heart rate and temperature against your own days in the same phase, and, if you allow it, the coach knows it too.'],
