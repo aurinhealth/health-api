@@ -14,6 +14,7 @@ final class GymStore: ObservableObject {
     private static let savedKey = "watchGym"
     private static let aloneKey = "watchGymAlone"
     private static let unsentKey = "watchGymUnsent"
+    private static let earlierKey = "watchGymEarlier"
 
     @Published private(set) var gym: WatchGym?
     @Published private(set) var loading = false
@@ -31,11 +32,35 @@ final class GymStore: ObservableObject {
 
     init() {
         let defaults = UserDefaults.standard
-        if let data = defaults.data(forKey: Self.savedKey), let saved = WatchGym.decode(data),
-           saved.date == WatchStore.localDate(Date()) {
-            gym = saved
-            alone = defaults.bool(forKey: Self.aloneKey)
-            unsent = defaults.bool(forKey: Self.unsentKey)
+        if let data = defaults.data(forKey: Self.savedKey), let saved = WatchGym.decode(data) {
+            if saved.date == WatchStore.localDate(Date()) {
+                gym = saved
+                alone = defaults.bool(forKey: Self.aloneKey)
+                unsent = defaults.bool(forKey: Self.unsentKey)
+            } else if defaults.bool(forKey: Self.aloneKey), defaults.bool(forKey: Self.unsentKey) {
+                // Written alone on an earlier day and never saved (no internet
+                // since): kept until the server has it, not dropped with the day.
+                Self.keepEarlier(saved)
+            }
+        }
+    }
+
+    /// A day the watch wrote alone that has not reached the server yet.
+    private static func keepEarlier(_ gym: WatchGym) {
+        guard gym.sheet != nil, let data = gym.encoded() else { return }
+        UserDefaults.standard.set(data, forKey: earlierKey)
+    }
+
+    /// The earlier day's sheet to the server; kept for the next try when offline.
+    private func uploadEarlier() {
+        guard let data = UserDefaults.standard.data(forKey: Self.earlierKey) else { return }
+        guard let earlier = WatchGym.decode(data), let values = earlier.sheet else {
+            UserDefaults.standard.removeObject(forKey: Self.earlierKey)
+            return
+        }
+        Task { @MainActor in
+            guard await WatchAPI.saveGym(GymDay(date: earlier.date, values: values, cancelled: nil), date: earlier.date) else { return }
+            if UserDefaults.standard.data(forKey: Self.earlierKey) == data { UserDefaults.standard.removeObject(forKey: Self.earlierKey) }
         }
     }
 
@@ -146,7 +171,9 @@ final class GymStore: ObservableObject {
             }
             fresh.sheet = sheet?.values
         } else {
-            // Another day: whatever the watch wrote alone belonged to the one before.
+            // Another day: whatever the watch wrote alone belonged to the one
+            // before; not saved yet, it goes to the server on its own.
+            if alone, unsent, let gym { Self.keepEarlier(gym); uploadEarlier() }
             alone = false
             unsent = false
         }
@@ -237,6 +264,7 @@ final class GymStore: ObservableObject {
     /// What the watch wrote alone goes on its way: to the server when it has
     /// not yet, to the iPhone when it is in reach (its connection came up).
     func sync() {
+        uploadEarlier()
         upload()
         handBack()
     }
@@ -414,6 +442,7 @@ final class GymStore: ObservableObject {
         alone = false
         unsent = false
         UserDefaults.standard.removeObject(forKey: Self.savedKey)
+        UserDefaults.standard.removeObject(forKey: Self.earlierKey)
     }
 
     private func save() {
