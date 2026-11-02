@@ -703,8 +703,9 @@ html:not(.js) .tgt .fill{width:${(16.7 / 21 * 100).toFixed(1)}%}
 /* Training week. */
 .strip{display:grid;grid-template-columns:repeat(6,1fr);gap:2px}
 .dc{display:flex;flex-direction:column;align-items:center;gap:5px;transform:scale(.92)}.dc.sel{transform:none}
-/* The other days fade, but their names keep the muted colour so they stay readable (4.5:1). */
-.dc:not(.sel) .ci,.dc:not(.sel) .dn{opacity:.6}
+/* The other days fade, but their names keep the muted colour so they stay readable (4.5:1); their numbers fade
+   a little less than the icons so they stay above 4.5:1 on the card too (5.1:1). */
+.dc:not(.sel) .ci{opacity:.6}.dc:not(.sel) .dn{opacity:.64}
 .wd{font-size:11.5px;font-weight:500;color:var(--muted)}.wd.today{color:var(--amber);font-weight:700}
 .ci{position:relative;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;font-size:17px;--c:var(--muted);color:var(--c);background:color-mix(in srgb,var(--muted) 14%,transparent);box-shadow:inset 0 0 0 2px var(--c);transition:.5s cubic-bezier(.16,1,.3,1);transition-property:background-color,color,box-shadow,outline-color,opacity,transform}
 .ci.ok,.ci.done{background:color-mix(in srgb,var(--green) 14%,transparent)}.ci.off{background:color-mix(in srgb,var(--amber-bar) 14%,transparent)}.ci.out{background:color-mix(in srgb,var(--blue) 14%,transparent)}

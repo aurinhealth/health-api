@@ -57,6 +57,8 @@ p{margin:0}
 .wl .done{align-items:center;gap:10px;height:56px;padding:0 26px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--green) 13%,var(--panel));color:var(--green);font-size:var(--fs-17);font-weight:600}
 .wl .done svg{width:20px;height:20px;stroke:currentColor}
 .wl .err{margin-top:10px;font-size:var(--fs-14);color:var(--rust-ink)}.wl .err:empty{display:none}
+/* The email to install comes from Apple with "TestFlight" as its sender, not from Aurin, so say so where people look for it. */
+.wl .tf{display:none;max-width:420px;margin-top:12px;font:var(--fs-14)/1.45 var(--sans);color:var(--sec);text-align:center}.wl.sent .tf{display:block}
 .wl.sent .field{display:none}.wl.sent .done{display:inline-flex}
 /* After joining: pass Aurin on (the phone's own sharing, or the link copied). Nothing about it is stored. */
 .wl .share{display:none;align-items:center;gap:8px;margin-top:12px;padding:8px 14px;border:0;border-radius:var(--r-pill);background:transparent;font:inherit;font-size:var(--fs-14);font-weight:600;color:var(--sec);cursor:pointer}
@@ -103,7 +105,7 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .hero h1 .it{font-style:italic;color:var(--green)}
 .lede{max-width:500px;margin-top:26px;font-size:var(--fs-20);color:var(--sec)}
 .hero .cta{margin-top:36px}
-.hero .wl{align-items:flex-start}
+.hero .wl{align-items:flex-start}.hero .wl .tf{text-align:left}
 .hero .note{margin-top:16px;font-size:var(--fs-14);color:var(--muted)}
 /* The phone and its three numbers are drawn at one size (the rig) and scaled down where the column is narrower,
    so the numbers never leave the column and the coach sits under the phone, not over its tab bar. */
@@ -208,8 +210,9 @@ main:focus{outline:none}
 .an-l{position:relative;width:160px;height:12px}
 .an-l::before,.an-fill{content:"";position:absolute;left:0;right:0;top:5px;height:2px;border-radius:2px;background:var(--track)}
 .an-fill{right:auto;width:calc(var(--i,0) * 20%);background:linear-gradient(90deg,color-mix(in srgb,var(--sun) 40%,transparent),var(--sun));transition:width .45s cubic-bezier(.16,1,.3,1)}
-.an-l a{position:absolute;left:calc(var(--k) * 20%);top:0;width:12px;height:12px;margin-left:-6px;border-radius:50%}
-.an-l a::after{content:"";position:absolute;left:3px;top:3px;width:6px;height:6px;border-radius:50%;background:color-mix(in srgb,var(--text) 18%,transparent);transition:background .3s}
+/* Each dot is a 24 px target (WCAG 2.2), wider than the 6 px dot it draws. */
+.an-l a{position:absolute;left:calc(var(--k) * 20%);top:-6px;width:24px;height:24px;margin-left:-12px;border-radius:50%}
+.an-l a::after{content:"";position:absolute;left:9px;top:9px;width:6px;height:6px;border-radius:50%;background:color-mix(in srgb,var(--text) 18%,transparent);transition:background .3s}
 .an-l a.done::after{background:var(--sun)}
 .an-dot{position:absolute;left:calc(var(--i,0) * 20%);top:0;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:var(--sun);box-shadow:0 0 0 2px var(--panel),0 0 10px var(--sun);pointer-events:none;transition:left .45s cubic-bezier(.16,1,.3,1)}
 
@@ -431,7 +434,7 @@ main:focus{outline:none}
   /* The mark is already in the nav: on a tablet and a phone the hero starts with the words. */
   .hero .sun{display:none}
   .lede{margin-left:auto;margin-right:auto}
-  .hero .wl{align-items:center}
+  .hero .wl{align-items:center}.hero .wl .tf{text-align:center}
   .stage{margin-top:48px}
   .morning{padding-top:32px}
   /* Chapters: the words, then the phone with its piece over the lower part, then the steps. */
@@ -517,7 +520,7 @@ const turnstileScript = `<script src="${TURNSTILE}/turnstile/v0/api.js?render=ex
 const store = id => `<form class="wl" action="/waitlist" method="post" novalidate>
 <span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" spellcheck="false" required><button type="submit" class="go">Get early access${ARROW}</button></span>
 <span class="ts" data-key="${TURNSTILE_SITE_KEY}"></span>
-<span class="done" role="status">${CHECK}<span>You’re on the list</span></span>
+<span class="done" role="status">${CHECK}<span>You’re on the list</span></span><p class="tf">The email to install Aurin comes from Apple’s TestFlight, so keep an eye on your inbox (and spam).</p>
 <button type="button" class="share">${SHARE}<span>Know someone who trains? Share Aurin</span></button>
 <span class="err" role="alert"></span>
 </form>`;
@@ -954,6 +957,7 @@ ${layer('wide')}${layer('tall')}
     ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit, Pixel Watch or Garmin. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
     ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
     ['What does it cost?', 'Nothing during testing. After the release, the coach, food from a photo, reviews, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: $6.99 a month or $59.99 a year with the first week free, shown in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.'],
+    ['Does Aurin know my cycle?', 'If you turn on cycle tracking in Settings → Cycle, yes. Your readiness then weighs your resting heart rate and temperature against your own days in the same phase, and, if you allow it, the coach knows it too.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from, and under Health data see for each type where Aurin reads it from and sends it to, with a switch for each.'],
     ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
     ['Where is my data and who sees it?', 'In Aurin’s database in Europe, encrypted. We never sell it or use it for ads. AI features get only what a question needs, and only once you allow them. <a href="/privacy">More in the privacy policy</a>.'],
