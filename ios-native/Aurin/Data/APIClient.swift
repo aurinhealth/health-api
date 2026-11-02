@@ -306,6 +306,9 @@ final class APIClient: @unchecked Sendable {
     static func gymBody(_ day: GymDay, date: String) -> JSONObject {
         var body = day.saveBody
         body["date"] = .string(date)
+        // The answer is not read: without lite the server reads 500 rows of
+        // history after every set and sends them back for nothing.
+        body["lite"] = .bool(true)
         return body
     }
 

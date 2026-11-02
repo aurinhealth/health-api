@@ -84,3 +84,23 @@ test('a saved set taken out of the day leaves the history too', async () => {
   const entry = serverSource();
   assert.match(entry, /const before = storedPlan\.stored \? completedSets\(storedPlan\.values\.slice\(7\)\)\.length : 0;\s*if\(before>sets\.length\) await removeManualSets\(env\.DB,date,sets\.length,before\);/);
 });
+
+test("saving the day after every set writes only the sets that are new or changed, in one trip", async () => {
+  const raw = createD1(), db = scopedDb(raw, 1), date = "2026-11-02";
+  let batches = 0, writes = 0;
+  const counted = { ...db, userId: db.userId, prepare: sql => db.prepare(sql), batch: statements => { batches++; writes += statements.length; return db.batch(statements); } };
+  const set = (exercise, kg, reps) => ({ exercise, type: "WORK", setNo: 1, plannedKg: kg, plannedReps: "8", actualKg: kg, actualReps: reps, completed: true });
+  const first = await importStrengthHistory(counted, { date, sets: [set("Bench press", 60, 8)] });
+  assert.equal(first.setsWritten, 1);
+  const day = [set("Bench press", 60, 8), set("Bench press", 62.5, 8), set("Squat", 80, 6)];
+  const second = await importStrengthHistory(counted, { date, sets: day });
+  assert.deepEqual([second.setsImported, second.setsWritten, batches, writes], [3, 2, 2, 3]);
+  // The same day again: nothing to write.
+  assert.equal((await importStrengthHistory(counted, { date, sets: day })).setsWritten, 0);
+  assert.equal(batches, 2);
+  // A corrected weight is written; the stored rows match what was sent.
+  day[2] = set("Squat", 82.5, 6);
+  assert.equal((await importStrengthHistory(counted, { date, sets: day })).setsWritten, 1);
+  const rows = raw.sqlite.prepare("SELECT source_key, exercise, actual_kg, actual_reps, completed FROM strength_sets ORDER BY source_key").all().map(r => ({ ...r }));
+  assert.deepEqual(rows.map(r => [r.source_key, r.actual_kg, r.completed]), [[`manual:${date}:1`, 60, 1], [`manual:${date}:2`, 62.5, 1], [`manual:${date}:3`, 82.5, 1]]);
+});
