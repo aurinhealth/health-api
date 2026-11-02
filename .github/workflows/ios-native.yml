@@ -114,6 +114,19 @@ jobs:
             -maximum-test-execution-time-allowance 600 \
             CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/build.log"
 
+      # Warnings that are always a bug stop the run: Swift only warns about a
+      # function that calls itself forever (GymStore.sync() did, and the watch
+      # app crashed on every launch), code that can never run, and a cast that
+      # can never succeed. The test build compiles the iPhone and the watch app.
+      - name: Stop on warnings that are always bugs
+        run: |
+          log="$RUNNER_TEMP/build.log"
+          grep -E '\.swift:[0-9]+:[0-9]+: warning: .*(infinite recursion|will never be executed|always fails)' "$log" | sed -E 's#^.*/ios-native/##' | sort -u > "$RUNNER_TEMP/bugs.txt" || true
+          if [ -s "$RUNNER_TEMP/bugs.txt" ]; then
+            while read -r line; do echo "::error::$line"; done < "$RUNNER_TEMP/bugs.txt"
+            exit 1
+          fi
+
       # When the app would not open on the simulator, the installer's own reason.
       - name: Why the app does not install
         if: failure()
