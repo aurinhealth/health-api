@@ -953,6 +953,8 @@ struct WeekPlanView: View {
         defer { saving = false }
         /// The day's last saved ride, which the brick run follows.
         var rides: [String: String] = [:]
+        /// The day's last saved race leg, which the next leg follows (a duathlon's run, ride, run).
+        var raceLegs: [String: String] = [:]
         for i in sessions.indices where sessions[i].status == .ready {
             let s = sessions[i]
             do {
@@ -964,11 +966,18 @@ struct WeekPlanView: View {
                 } else if let w = s.workout {
                     // The brick run gets no time of its own: joining it to the
                     // saved ride sets it from the ride's real length (planned-links.js).
+                    // A race leg after the first starts when the one before ends, as the brick run does.
+                    let raceLeg = s.role == "race" ? raceLegs[s.date] : nil
                     let event = try await model.api.scheduleWorkout(id: w.id, date: s.date, indoor: s.environment == "indoor",
-                                                                    time: s.brick ? nil : s.time)
+                                                                    time: s.brick || raceLeg != nil ? nil : s.time)
                     if s.sport == "ride", let event { rides[s.date] = event }
                     // Joined, it goes to the watch with the ride as one workout.
                     if s.brick, let event, let ride = rides[s.date] { try await model.api.linkPlanned(eventId: event, after: ride) }
+                    // A race's legs joined in their order: the watch shows the race as one card.
+                    if s.role == "race", let event {
+                        if let raceLeg { try await model.api.linkPlanned(eventId: event, after: raceLeg) }
+                        raceLegs[s.date] = event
+                    }
                 }
                 sessions[i].status = .saved
             } catch {

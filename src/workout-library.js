@@ -615,6 +615,8 @@ export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, con
   event = buildIntervalsEvent(workout, date, environmentOf(environment), { thresholds, startTime });
   const rendered=renderForEnvironment(workout,environmentOf(environment));
   event.moving_time=Math.round(rendered.duration_minutes*60);event.icu_training_load=event.load_target;
+  // A plan's race leg: the watch shows the race day as one card (stays in the app, local-workouts.js).
+  if(workout.family==='race')event.race=true;
   const local=await storeLocalEvent(db,event);
   await db.prepare(`INSERT INTO workout_schedule_links(user_id,sport,workout_id,family,scheduled_date,environment,intervals_external_id,intervals_event_id,status) VALUES(?,?,?,?,?,?,?,?,?)
     ON CONFLICT(user_id,intervals_external_id) DO NOTHING`)

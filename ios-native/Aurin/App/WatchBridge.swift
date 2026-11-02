@@ -245,7 +245,7 @@ final class WatchBridge: NSObject {
                                           planned: today.strain.planned, nextTitle: next?.title, nextTime: next?.time)
         let week = training?.sessions?.filter { $0.status != "missed" }.map {
             WatchSnapshot.Session(date: $0.date, time: $0.time, title: $0.title, sport: $0.sport, minutes: $0.minutes, done: $0.status == "done",
-                                  eventId: $0.eventId, after: $0.after, next: $0.next)
+                                  eventId: $0.eventId, after: $0.after, next: $0.next, race: $0.race)
         }
         let n = today.nutrition
         let macro = { (m: TodaySnapshot.Macro) in WatchSnapshot.Macro(eaten: m.eaten, target: m.target, limit: m.limit) }
@@ -459,7 +459,8 @@ extension WatchBridge: WCSessionDelegate {
             for (i, s) in (block.steps ?? []).enumerated() {
                 steps.append(WatchPlan.step(seconds: s.durationSeconds, low: s.percentLow, high: s.percentHigh, note: s.note, intensity: s.intensity,
                                             meters: s.meters, rest: s.rest == true, swim: swim, english: L10n.isEnglish,
-                                            repeats: max(1, block.repeats ?? 1), first: i == 0))
+                                            repeats: max(1, block.repeats ?? 1), first: i == 0,
+                                            watts: (s.wattsLow, s.wattsHigh), pace: (s.paceSlow, s.paceFast)))
             }
         }
         // Without steps too: a brick's steady leg goes to the watch as one multisport workout.

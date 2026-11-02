@@ -17,20 +17,16 @@ struct ReadinessHome: View {
             NavigationLink(value: Page.why) { hero }
                 .buttonStyle(.plain)
             gauges.padding(.top, 6)
-            if let today = todayLine {
-                NavigationLink(value: today.session) {
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        Image(systemName: today.symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(W.amber)
-                        Text(today.text).font(.system(size: 13, weight: .semibold)).foregroundStyle(W.ink)
-                            .lineLimit(2).minimumScaleFactor(0.8)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 7)
-                    .contentShape(Rectangle())
+            if let race = todayRace {
+                // Race day: the race opens its legs (RaceDetail).
+                NavigationLink(value: race) {
+                    todayRow(text: race.name + (race.first.time.map { " · " + W.clockText($0) } ?? ""), symbol: "flag.fill")
                 }
                 .buttonStyle(.plain)
-                .disabled(today.session.sport != "ride" && today.session.sport != "run")
+            } else if let today = todayLine {
+                NavigationLink(value: today.session) { todayRow(text: today.text, symbol: today.symbol) }
+                    .buttonStyle(.plain)
+                    .disabled(today.session.sport != "ride" && today.session.sport != "run")
             }
             Spacer(minLength: 0)
         }
@@ -111,6 +107,23 @@ struct ReadinessHome: View {
     }
 
     // MARK: Today
+
+    /// Today's race not yet done, in place of the next workout ("Duatlon · 9:00").
+    private var todayRace: RaceDay? {
+        RaceDay((s.week ?? []).filter { $0.date == s.date && !$0.done })
+    }
+
+    private func todayRow(text: String, symbol: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Image(systemName: symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(W.amber)
+            Text(text).font(.system(size: 13, weight: .semibold)).foregroundStyle(W.ink)
+                .lineLimit(2).minimumScaleFactor(0.8)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 7)
+        .contentShape(Rectangle())
+    }
 
     /// What is next today, under the numbers ("Sweet spot · 75′ at 17:30"), the
     /// length once though the plan's title may already end with it.
