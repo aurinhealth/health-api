@@ -43,7 +43,13 @@ fails the job before activation. Production deploys are serialized.
 
 Increase `USER_DATA_SHARD_COUNT` in `wrangler.jsonc` and run the normal deployment
 to add capacity. Do not decrease it: provisioning refuses to remove existing
-database bindings. Set `accepting_new=0` in the central registry to drain a shard;
+database bindings. A database new to the registry takes 25 accounts and is kept
+in reserve (`reserve=1`, `accepting_new=0`) while another one takes accounts;
+when fewer than 100 places are free, the Worker opens the next reserve database
+it is bound to by itself (`openReserveShards` in `src/tenancy.js`, at sign-up and
+in the morning report), and the morning report asks for more databases when the
+free and reserve places together fall below 200. Set `accepting_new=0` (with
+`reserve=0`) in the central registry to drain a shard; a drained shard is never reopened automatically;
 existing users keep working. `state='offline'` refuses all access to that shard.
 Before a shard approaches D1's 10 GB paid-plan limit, inspect actual growth and
 plan an explicit, verified move of affected users. This change does not automate

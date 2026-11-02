@@ -538,7 +538,9 @@ export async function mayCreateAccount(db, env, address, { request = null } = {}
   }
   // A new account needs a place in a user database; without one every request
   // of it would fail, so the address waits on the list (signup_waitlist) instead.
-  const room = await accountCapacity(db, env).catch(() => null);
+  // Fewer than 100 places left: the next database in reserve opens first.
+  let room = await accountCapacity(db, env).catch(() => null);
+  if (room && room.free < RESERVE_OPEN_BELOW) room = await openReserveShards(db, env, { capacity: room }).catch(() => room);
   if (room && room.free <= 0) return waitlist(db, address, "the user databases are full");
   if (!invited && request) {
     if (!(await allowClient(db, request, sessionSecret(env), "signup", Date.now(), NEW_ACCOUNT_LIMITS))) {
@@ -611,6 +613,39 @@ export async function accountCapacity(db, env) {
       ${UNPLACED_USERS} AS unplaced`).first();
   const places = Number(row?.places) || 0, free = Math.max(0, (Number(row?.open) || 0) - (Number(row?.unplaced) || 0));
   return { places, used: places - free, free };
+}
+
+// The places of the databases kept in reserve (migration 0034), and how many
+// of them there are; null before the migration.
+export async function reserveCapacity(db) {
+  try {
+    const row = await db.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(max_users),0) AS places FROM user_data_shards WHERE reserve=1 AND state='ready' AND shard_key!='legacy'").first();
+    return { databases: Number(row?.n) || 0, places: Number(row?.places) || 0 };
+  } catch { return null; }
+}
+
+// With fewer than RESERVE_OPEN_BELOW free places left, the next database in
+// reserve takes accounts, one after another until there is room again or none
+// is left. Only a database the Worker is bound to opens, so a place counted
+// free is a place a new account can really get. Returns the capacity after.
+export const RESERVE_OPEN_BELOW = 100;
+// Accounts a new database takes (scripts/provision-user-shards.mjs registers it so).
+export const RESERVE_SHARD_USERS = 25;
+export async function openReserveShards(db, env, { below = RESERVE_OPEN_BELOW, capacity = null } = {}) {
+  let room = capacity || await accountCapacity(db, env).catch(() => null);
+  if (!room) return room;
+  for (let opened = 0; room.free < below && opened < 10; opened++) {
+    let next = null;
+    try {
+      const candidates = (await db.prepare("SELECT shard_key,binding_name FROM user_data_shards WHERE reserve=1 AND state='ready' AND shard_key!='legacy' ORDER BY shard_key").all()).results || [];
+      next = candidates.find(c => /^USER_DATA_\d{3}$/.test(c.binding_name || "") && env?.[c.binding_name]?.prepare && env[c.binding_name] !== env.DB);
+    } catch { return room; }
+    if (!next) break;
+    const result = await db.prepare("UPDATE user_data_shards SET accepting_new=1,reserve=0 WHERE shard_key=? AND reserve=1").bind(next.shard_key).run();
+    if (Number(result?.meta?.changes)) console.warn("User database opened from reserve", next.shard_key, "free places were", room.free);
+    room = await accountCapacity(db, env).catch(() => room);
+  }
+  return room;
 }
 
 // Signs in the owner of an e-mail address that confirmed a code: an existing
