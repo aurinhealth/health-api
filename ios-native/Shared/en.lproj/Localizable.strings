@@ -2314,7 +2314,7 @@
 /* Wahoo in Zdroje dat */
 "Jízdy a běhy z Wahoo se v Aurinu smažou a plán do Wahoo přestane chodit." = "The Wahoo rides and runs will be deleted from Aurin and the plan will stop going to Wahoo.";
 "Hotové jízdy a běhy: čas, vzdálenost, výkon, TSS, tep a kadenci." = "Done rides and runs: time, distance, power, TSS, heart rate and cadence.";
-"Tréninky naplánované v Aurinu, do ELEMNT a KICKR." = "Workouts planned in Aurin, to the ELEMNT and KICKR.";
+"Tréninky naplánované v Aurinu, do ELEMNT a KICKR, a FTP s výkonovými zónami." = "Workouts planned in Aurin, to the ELEMNT and KICKR, and your FTP with power zones.";
 "Odpojit a smazat jízdy z Wahoo" = "Disconnect and delete the Wahoo rides";
 "Jen v Aurinu: Wahoo ho dál má, Aurin ho nepočítá." = "In Aurin only: Wahoo keeps it, Aurin stops counting it.";
 "Jen v Aurinu: aktivita přišla ze Stravy a smazat jde jen ve Stravě. Aurin ji přestane počítat." = "In Aurin only: this activity came from Strava and can only be deleted in Strava. Aurin stops counting it.";
@@ -3583,6 +3583,12 @@
 "zbývá" = "left";
 "běží" = "running";
 "Uloží délku a konec kardia" = "Saves the cardio's length and end";
+
+"Zapisovat do Wahoo" = "Write to Wahoo";
+"FTP a výkonové zóny se po uložení pošlou do Wahoo" = "FTP and power zones are sent to Wahoo after saving";
+"Zapsáno do Wahoo" = "Written to Wahoo";
+"Wahoo zápis odmítlo. Připoj ho znovu a ulož zóny ještě jednou." = "Wahoo refused the write. Connect it again, then save the zones again.";
+"Do Wahoo se nepodařilo zapsat." = "Couldn't write to Wahoo.";
 
 /* Multisport plans (PlanScreens.swift, PlanTime.swift) */
 "Sporty" = "Sports";
