@@ -198,6 +198,14 @@ final class WatchBridge: NSObject {
         return (session.isPaired, session.isWatchAppInstalled, session.isReachable)
     }
 
+    /// What the watch app last said about itself (AurinWatch/WatchReport.swift),
+    /// for "Nahlásit problém"; nil before a watch app that sends it.
+    var watchDiagnostics: WatchDiagnostics? {
+        guard let session, session.activationState == .activated,
+              let data = session.receivedApplicationContext[WatchDiagnostics.contextKey] as? Data else { return nil }
+        return WatchDiagnostics.decode(data)
+    }
+
     /// The saved Today when the app was woken only for the watch.
     private func restore() {
         if today == nil, let saved = SnapshotCache.load(TodaySnapshot.self, key: "today")?.value,

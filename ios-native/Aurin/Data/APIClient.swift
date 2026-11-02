@@ -768,10 +768,12 @@ final class APIClient: @unchecked Sendable {
     }
 
     /// Every request but the sign-out: what fails lands in ErrorLog, which
-    /// "Nahlásit problém" sends with the report.
+    /// "Nahlásit problém" sends with the report, and the last few in RequestTrail.
     private func load(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        let started = Date()
         do {
             let (data, response) = try await session.data(for: request)
+            RequestTrail.add(request, status: (response as? HTTPURLResponse)?.statusCode, started: started)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                 ErrorLog.add(request, status: http.statusCode, message: json?["message"] as? String)
@@ -780,6 +782,7 @@ final class APIClient: @unchecked Sendable {
         } catch {
             // A screen that went away cancels its requests; that is no failure.
             if (error as? URLError)?.code != .cancelled, !(error is CancellationError) {
+                RequestTrail.add(request, status: nil, started: started)
                 ErrorLog.add(request, status: nil, message: error.localizedDescription)
             }
             throw Self.readable(error)
