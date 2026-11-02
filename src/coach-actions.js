@@ -19,16 +19,17 @@ export const WORKOUT_KINDS=['recovery','endurance','long','tempo','sweet_spot','
 // The muscle groups a gym card can be built around (strength-generator.js
 // FOCUS_GROUPS, the same ids; a test keeps them equal).
 export const GYM_MUSCLES=['chest','upper_back','lats','front_delts','side_delts','rear_delts','biceps','triceps','abs','obliques','quads','hamstrings','hips','calves','forearms','traps','lower_back'];
-export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','visuals','actions','memory'],properties:{answer:{type:'string'},memory:{type:'object',additionalProperties:false,required:['forget','update'],properties:{forget:{type:'array',items:{type:'string'}},update:{type:'array',items:{type:'object',additionalProperties:false,required:['from','to'],properties:{from:{type:'string'},to:{type:'string'}}}}}},visuals:{type:'array',items:{type:'string',enum:COACH_VISUALS}},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','statusUntil','reason','fromExercise','toExercise','workoutId','kind','activityId','otherActivityId','time','kcal','gymFocus','gymMuscles','insisted','planId','days','raceKm'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap','week_sport','activity_kcal','activity_delete','activity_merge','activity_time','plan']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','swim','']},minutes:{type:'integer'},status:{type:'string',enum:['active','sick','injured','on_break','']},statusUntil:{type:'string'},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'},workoutId:{type:'string'},kind:{type:'string',enum:['',...WORKOUT_KINDS]},gymFocus:{type:'string',enum:['','upper','lower']},gymMuscles:{type:'array',items:{type:'string',enum:GYM_MUSCLES}},insisted:{type:'boolean'},activityId:{type:'string'},otherActivityId:{type:'string'},time:{type:'string'},kcal:{type:'integer'},planId:{type:'string'},days:{type:'array',items:{type:'integer'}},raceKm:{type:'number'}}}}}}};
+export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','visuals','actions','memory'],properties:{answer:{type:'string'},memory:{type:'object',additionalProperties:false,required:['forget','update'],properties:{forget:{type:'array',items:{type:'string'}},update:{type:'array',items:{type:'object',additionalProperties:false,required:['from','to'],properties:{from:{type:'string'},to:{type:'string'}}}}}},visuals:{type:'array',items:{type:'string',enum:COACH_VISUALS}},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','statusUntil','reason','fromExercise','toExercise','workoutId','kind','place','activityId','otherActivityId','time','kcal','gymFocus','gymMuscles','insisted','planId','days','raceKm'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap','week_sport','activity_kcal','activity_delete','activity_merge','activity_time','plan']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','swim','']},minutes:{type:'integer'},status:{type:'string',enum:['active','sick','injured','on_break','']},statusUntil:{type:'string'},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'},workoutId:{type:'string'},kind:{type:'string',enum:['',...WORKOUT_KINDS]},place:{type:'string',enum:['','pool','open_water']},gymFocus:{type:'string',enum:['','upper','lower']},gymMuscles:{type:'array',items:{type:'string',enum:GYM_MUSCLES}},insisted:{type:'boolean'},activityId:{type:'string'},otherActivityId:{type:'string'},time:{type:'string'},kcal:{type:'integer'},planId:{type:'string'},days:{type:'array',items:{type:'integer'}},raceKm:{type:'number'}}}}}}};
 export const ACTION_INSTRUCTIONS=actionInstructions();
 // Words the athlete must have used before the coach may propose Sick or Injured.
 export const SICK_WORDS=/nemoc|horeč|horec|sick|chřip|chrip|nachl|rým|covid|vir[oó]z|viros|teplot|\bill\b|illness|unwell|fever|\bflu\b|\bcold\b|virus|sore throat|temperature/i;
 export const INJURY_WORDS=/zran|bol[eíe]|bolest|injur|natáh|natah|podvrt|výron|vyron|nateklé|natekl|\bpain|\bhurt|sprain|swollen|pulled/i;
 // The multi-week plans the coach can start (training-plans.js), as the coach sees them.
-export const coachPlanTemplates=()=>planTemplates().map(t=>({id:t.id,sport:t.sport,name:t.name,goal:t.goal,weeks:t.weeks.length,daysPerWeek:t.days,level:t.level,...(t.race?{raceKm:t.race.km,...(t.race.options?{raceKmOptions:t.race.options}:{})}:{})}));
+// A plan whose sports the athlete picks (multisport without a race) starts in the app, not from the coach.
+export const coachPlanTemplates=()=>planTemplates().filter(t=>!t.choose).map(t=>({id:t.id,sport:t.sport,name:t.name,goal:t.goal,weeks:t.weeks.length,daysPerWeek:t.days,level:t.level,...(t.race?{raceKm:t.race.km,...(t.race.options?{raceKmOptions:t.race.options}:{})}:{})}));
 const SHORT_DAYS=['ne','po','út','st','čt','pá','so'],SHORT_DAYS_EN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],MONTHS_EN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const shortDate=d=>!validDay(d)?'':L(SHORT_DAYS[new Date(d+'T12:00:00Z').getUTCDay()]+' '+Number(d.slice(8))+'. '+Number(d.slice(5,7))+'.',SHORT_DAYS_EN[new Date(d+'T12:00:00Z').getUTCDay()]+' '+Number(d.slice(8))+' '+MONTHS_EN[Number(d.slice(5,7))-1]);
-const SPORT_NAMES=()=>L({ride:'kolo',run:'běh',gym:'gym'},{ride:'ride',run:'run',gym:'gym'}),STATUS_NAMES=()=>L({active:'Aktivní',sick:'Nemoc',injured:'Zranění',on_break:'Pauza'},{active:'Active',sick:'Sick',injured:'Injured',on_break:'Rest'});
+const SPORT_NAMES=()=>L({ride:'kolo',run:'běh',swim:'plavání',gym:'gym'},{ride:'ride',run:'run',swim:'swim',gym:'gym'}),STATUS_NAMES=()=>L({active:'Aktivní',sick:'Nemoc',injured:'Zranění',on_break:'Pauza'},{active:'Active',sick:'Sick',injured:'Injured',on_break:'Rest'});
 // One line per validated proposal, stored with the answer so later turns know it.
 export function actionSummary(a){
   const workout=a.eventSnapshot?.name||L('trénink','workout');
@@ -69,7 +70,7 @@ export function holdBackToday(context){
 // earlier in the same answer. A hard workout needs 48 h from each and at most
 // two hard days in any 7 (Revize 2026-10-16, nález 3).
 // The sport of a planned session (Intervals.icu type), as a card's sport field.
-export function eventSport(e){const t=String(e?.type||'');return /run/i.test(t)?'run':/weight|strength|gym/i.test(t)?'gym':/ride|cycl|bike/i.test(t)?'ride':'';}
+export function eventSport(e){const t=String(e?.type||'');return /swim/i.test(t)?'swim':/run/i.test(t)?'run':/weight|strength|gym/i.test(t)?'gym':/ride|cycl|bike/i.test(t)?'ride':'';}
 const dayDiff=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/86400000);
 export function hardDayConflict(date,hardDates){
   if(hardDates.some(d=>Math.abs(dayDiff(d,date))<2))return true;
@@ -177,7 +178,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
     // week within the plan's range (else the week plan's days), one per answer.
     if(a.type==='plan'){
       const template=getTemplate(String(a.planId||''));
-      if(!userInitiated||!template||trainingStatus(context.athleteState).paused||taken().some(x=>x.type==='plan'))return [];
+      if(!userInitiated||!template||template.choose||trainingStatus(context.athleteState).paused||taken().some(x=>x.type==='plan'))return [];
       let when;try{when=planStart(template,{today,raceDate:template.race&&validDay(a.date)?a.date:null,startDate:!template.race&&validDay(a.date)&&a.date>today?a.date:null});}catch{return [];}
       const days=[...new Set((Array.isArray(a.days)?a.days:[]).map(Number).filter(n=>Number.isInteger(n)&&n>=0&&n<=6))].sort();
       const chosen=template.sport!=='gym'&&days.length>=template.days[0]&&days.length<=template.days[1]?days:null;
@@ -207,9 +208,11 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       hard=hard.flatMap(h=>h.id!==String(a.eventId)?[h]:a.type==='move'?[{...h,date:a.date}]:[]);
       return [{type:a.type,eventId:String(a.eventId),date:a.type==='move'?a.date:event.date,sport:eventSport(event),reason,eventSnapshot:{name:event.name,date:event.date,durationHours:event.durationHours}}];
     }
-    // A swim card (sport swim) is dropped here: the app has no swim card yet, and
-    // without the sport in the schema the coach put a swim on a gym card (coach evaluation run 38, S32).
-    if(a.type==='workout'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)&&Number.isInteger(a.minutes)&&a.minutes>=(a.sport==='run'?20:30)&&a.minutes<=(MAX_MINUTES[a.sport]||360)){
+    // A swim: 15–90 min in the pool, or in open water (place open_water, by
+    // time, with the safety line), never for someone who can't swim 100 m yet.
+    if(a.type==='workout'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','swim','gym'].includes(a.sport)&&Number.isInteger(a.minutes)&&a.minutes>=(a.sport==='run'?20:a.sport==='swim'?15:30)&&a.minutes<=(a.sport==='swim'?90:MAX_MINUTES[a.sport]||360)){
+      const openWater=a.sport==='swim'&&a.place==='open_water';
+      if(openWater&&context.cannotSwim100m)return [];
       if(!userInitiated&&context.remainingPlanned?.some(x=>x.date===a.date))return [];
       const budget=context.availabilityByDate?.[a.date]?.minutes;if(!userInitiated&&budget!=null&&a.minutes>budget)return [];
       // Only a workout the coach was actually offered; the preview then shows exactly it.
@@ -238,7 +241,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
         const focus=muscles.length?(legs===muscles.length?'lower':legs?null:'upper'):gymFocusOf(a,context.userMessage);
         return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,...(focus?{gymFocus:focus}:{}),...(muscles.length?{gymMuscles:muscles}:{})}];
       }
-      return [{type:'workout',date:a.date,sport:a.sport,minutes:a.minutes,reason,...kind,...(insisted?{insisted:true}:{}),...(library&&a.sport!=='gym'?{workoutId:String(library.id),workoutName:library.name}:{})}];
+      return [{type:'workout',date:a.date,sport:a.sport,minutes:a.minutes,reason,...kind,...(openWater?{openWater:true}:{}),...(insisted?{insisted:true}:{}),...(library&&a.sport!=='gym'?{workoutId:String(library.id),workoutName:library.name}:{})}];
     }
     return [];
   }

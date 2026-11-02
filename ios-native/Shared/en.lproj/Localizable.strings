@@ -3490,9 +3490,9 @@
 "Nejlepší časy" = "Best times";
 "Zatím žádné plavání v bazénu. První plavání z Apple Watch nebo Garminu sem doplní časy." = "No pool swims yet. Your first swim from Apple Watch or Garmin fills these in.";
 "Třeba „rozplavání 300 m, 8× 100 m na prahu s 20 s pauzou, vyplavání 200 m“" = "E.g. “300 m warm-up, 8× 100 m at threshold with 20 s rest, 200 m cool-down”";
-"Kolo %@×, běh %@× a plavání %@× týdně. Dny rozdělím podle času, který v týdnu máš." = "Riding %@×, running %@× and swimming %@× a week. I'll spread the days by the time you have in the week.";
 "Odhad: %@." = "Estimate: %@.";
 "Odhad času z tvých prahových hodnot, bez depa." = "Estimated from your thresholds, without transitions.";
+"Odhad z tvého CSS, ve volné vodě." = "Estimated from your CSS, in open water.";
 "Plavání týdně" = "Swims a week";
 
 /* Zdroje dat → Zdravotní data (SettingsHealthData.swift) */
@@ -3597,3 +3597,16 @@
 "Potáhni pruh u každého dne. Aurin plánuje v tomhle čase a když potřebuješ odpočinek, vezme si méně." = "Drag each bar. Aurin plans within it and uses less when you need rest.";
 "Kde posiluješ?" = "Where do you lift?";
 "Posilovna, doma nebo obojí · vybavení" = "Gym, home or both · equipment";
+
+/* Multisport plans (PlanScreens.swift, PlanTime.swift) */
+"Sporty" = "Sports";
+"Tréninkové dny" = "Training days";
+"Vyber dva nebo tři. Šest tréninků týdně se mezi ně rozdělí." = "Pick two or three. Six sessions a week are shared among them.";
+"%@ týdně. Dny rozdělím podle času, který v týdnu máš." = "%@ a week. I'll spread the days by the time you have in the week.";
+
+"o %@ s rychleji na 100 m · %@" = "%@ s faster per 100 m · %@";
+"o %@ s pomaleji na 100 m · %@" = "%@ s slower per 100 m · %@";
+"Čas na 400 m (m:ss)" = "400 m time (m:ss)";
+"Čas na 200 m (m:ss)" = "200 m time (m:ss)";
+"Nikdy neplav sám, výrazná čepice a bójka." = "Never alone, bright cap and a tow float.";
+"venku podle času" = "by time outside";

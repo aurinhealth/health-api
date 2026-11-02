@@ -79,7 +79,7 @@
     // 20 groups of at most 10 accounts; capacity is also checked in bytes.
     "USER_DATA_ROUTING": "true",
     "FOOD_CATALOG_ROUTING": "true",
-    "USER_DATA_SHARD_COUNT": "20",
+    "USER_DATA_SHARD_COUNT": "30",
     // OWNER_EMAIL (the owner's sign-in address, src/tenancy.js) is not here: the deploy
     // passes it from the GitHub environment's secret OWNER_EMAIL (deploy-worker.yml),
     // and wrangler dev reads it from .dev.vars. Problem reports go to CONTACT_EMAIL,

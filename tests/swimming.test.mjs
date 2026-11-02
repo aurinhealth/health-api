@@ -21,7 +21,8 @@ test("the swim catalogue: pool workouts in metres, both languages, beginners sta
   for (const w of SWIMMING_WORKOUTS) {
     assert.equal(w.sport, "swim", w.id);
     assert.ok(w.distance_meters > 0, w.id);
-    assert.ok(w.duration_minutes >= 10 && w.duration_minutes <= 90, w.id + " " + w.duration_minutes);
+    // The long swims of the open-water race plan (up to 4 km) take longer.
+    assert.ok(w.duration_minutes >= 10 && w.duration_minutes <= (["swim-continuous", "swim-open-water"].includes(w.family) ? 120 : 90), w.id + " " + w.duration_minutes);
   }
   const first = SWIMMING_WORKOUTS.find(w => w.family === "swim-first");
   assert.ok(flattenSteps(JSON.parse(first.structure_json)).filter(s => !s.rest).every(s => s.meters <= 100));

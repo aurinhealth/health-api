@@ -267,10 +267,13 @@ export const roleTime = prefs => ({ minutes: freeMinutes(prefs), longDay: Number
 
 // The week roles a training plan sets (training-plans.js): its quality days,
 // its sport first and as main sport (a triathlon plan keeps its own split).
-export function planRoleOptions(plan, quality = null) {
+// `sports`: a multisport plan's sports; the others (an athlete's own swim next
+// to a duathlon) get no key session.
+export function planRoleOptions(plan, quality = null, sports = null) {
   if (!plan?.sport) return {};
-  const tri = plan.sport === "triathlon";
-  return { ...(quality != null ? { quality } : {}), prefer: tri ? "ride" : plan.sport, ...(tri ? {} : { mainSport: plan.sport }) };
+  const tri = plan.sport === "triathlon", list = tri && sports?.length ? sports : ["ride", "run", "swim"];
+  const avoid = tri ? ["ride", "run", "swim"].filter(s => !list.includes(s)) : [];
+  return { ...(quality != null ? { quality } : {}), prefer: tri ? (list.includes("ride") ? "ride" : list[0]) : plan.sport, ...(tri ? {} : { mainSport: plan.sport }), ...(avoid.length ? { avoid } : {}) };
 }
 
 // Role of one sport on one date, for the generator.

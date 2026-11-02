@@ -32,7 +32,7 @@ export function quickSnapshot(context, today) {
   const planned = week.filter(d => d.date >= today).flatMap(d => (d.planned || []).map(a => ({ date: d.date, sport: eventSportOf(a) })).filter(p => p.sport));
   return { today, days, budget, hard, planned, red: holdBackToday(context), paused: trainingStatus(context?.athleteState).paused };
 }
-const eventSportOf = a => { const t = String(a?.type || ''); return /run/i.test(t) ? 'run' : /ride|cycl|bike/i.test(t) ? 'ride' : ''; };
+const eventSportOf = a => { const t = String(a?.type || ''); return /swim/i.test(t) ? 'swim' : /run/i.test(t) ? 'run' : /ride|cycl|bike/i.test(t) ? 'ride' : ''; };
 
 // The kind of the card's ride or run: the one asked for, else the workout's system.
 export const kindOf = a => a.kind && RANK[a.kind] != null ? a.kind : kindOfSystem(a.preview?.workout?.primary_system, 'endurance');
@@ -55,8 +55,9 @@ export function quickOptions(a, quick) {
   return {
     shorter: shorterMinutes(a) < a.minutes,
     longer: !a.trim && longerMinutes(a, quick) > a.minutes,
-    easier: gym ? true : EASIER[kind] !== kind,
-    harder: !(gym ? quick.red && a.date === quick.today : HARDER[kind] === kind || !hardFits(a.date, quick)),
+    // Open water is one steady swim by time: only its length changes.
+    easier: gym ? true : !a.openWater && EASIER[kind] !== kind,
+    harder: !a.openWater && !(gym ? quick.red && a.date === quick.today : HARDER[kind] === kind || !hardFits(a.date, quick)),
     day: !a.trim && days.some(d => d.fits),
     days
   };

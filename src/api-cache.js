@@ -5,6 +5,8 @@
 // makes older entries unreachable at once; the TTL covers data that arrives
 // by itself (Intervals.icu, Google Health).
 
+import { beginWait } from "./request-timing.js";
+
 export const CACHE_TTL_SECONDS = 600;
 
 // A closed day: two or more days back (today and yesterday still get late
@@ -54,7 +56,7 @@ export async function bumpCacheVersion(db, { food = false } = {}) {
 }
 
 // Entries that never show food or drinks: a meal logged keeps them.
-export const FOOD_FREE = /^(fitness|thresholds|curves|laps|intervals-wellness|activity-detail|training-calendar|milestones|share-milestones|main-sport):?/;
+export const FOOD_FREE = /^(fitness|thresholds|curves|laps|coach-performance|intervals-wellness|activity-detail|training-calendar|milestones|share-milestones|main-sport):?/;
 // The routes that change only food and drinks (entrypoint.js).
 export const FOOD_WRITE = /^\/app\/api\/(fluids|water|food\/(entry|entries|log|personal|recipes|nutrients\/favorites|suggestions\/decide|report))(\/|$)/;
 // A handler that saved nothing new says so, and nothing is made outdated.
@@ -84,7 +86,7 @@ export async function cached(env, ctx, key, compute, { ttl = CACHE_TTL_SECONDS, 
   const hit = await store.match(url).catch(() => null);
   if (hit) return hit.json();
   // Waiting for the one computing it: a copy, as from the cache, since callers change what they get.
-  if (computing.has(url)) return computing.get(url).then(value => structuredClone(value));
+  if (computing.has(url)) { const end = beginWait("shared"); return computing.get(url).then(value => structuredClone(value)).finally(end); }
   const pending = compute();
   computing.set(url, pending);
   let value;

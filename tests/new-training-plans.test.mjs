@@ -101,7 +101,7 @@ test("the strength plan tests on its first session and goes light on the others"
 });
 
 test("every gym plan exercise exists and every slot ends with something for home", () => {
-  for (const id of ["gym-muscle", "gym-strength", "gym-running", "gym-home"]) {
+  for (const id of ["gym-muscle", "gym-strength", "gym-running", "gym-swimming", "gym-home"]) {
     for (const w of getTemplate(id).weeks) for (const slot of [...w.gym.exercises, ...(w.gym.test || [])]) {
       for (const name of [].concat(slot)) assert.ok(EXERCISES[name], `${id}: ${name}`);
       assert.ok([].concat(slot).some(name => fitsEquipment(name, "dumbbells")), `${id}: ${[].concat(slot)[0]} has a dumbbell or body-weight option`);

@@ -45,6 +45,15 @@ export function runtimeConfig(config, environment, plan, databases) {
   return result;
 }
 
+// A database new to the directory: kept in reserve (no accounts) when another
+// already takes accounts, so the server opens it only when the free places run
+// low (tenancy.js openReserveShards); the first one of a new environment opens
+// at once. 25 accounts each. Later deploys keep what is there (capacity,
+// closed or opened databases, user assignments).
+export function registrySql(shard) {
+  return `INSERT INTO user_data_shards(shard_key,binding_name,state,accepting_new,reserve,max_users,max_bytes) SELECT '${shard.key}','${shard.binding}','ready',open,1-open,25,7000000000 FROM (SELECT CASE WHEN EXISTS(SELECT 1 FROM user_data_shards WHERE shard_key!='legacy' AND state='ready' AND accepting_new=1) THEN 0 ELSE 1 END AS open) WHERE 1 ON CONFLICT(shard_key) DO NOTHING;`;
+}
+
 export const ACTIVATION_SQL = `
 INSERT INTO user_data_routes(user_id,shard_key)
   SELECT id,'legacy' FROM users
@@ -136,7 +145,7 @@ async function main() {
     wrangler(['d1', 'execute', shard.name, '--remote', '--file', 'staging/user-data-shard.sql']);
     // On later deploys preserve operator capacity/drain settings. Re-registering
     // does not reopen a full database or change existing user assignments.
-    registry.push(`INSERT INTO user_data_shards(shard_key,binding_name,state,accepting_new,max_users,max_bytes) VALUES('${shard.key}','${shard.binding}','ready',1,10,7000000000) ON CONFLICT(shard_key) DO NOTHING;`);
+    registry.push(registrySql(shard));
   }
   const file = '.wrangler/user-shards/register.sql';
   writeFileSync(file, registry.join('\n') + '\n');

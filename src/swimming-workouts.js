@@ -58,15 +58,23 @@ function catalog(t) {
     ([m]) => [swim(m / 2, 84, t("volně", "easy")), swim(m / 2, 84, t("volně, piškot", "easy, pull buoy"))],
     t("Lehké plavání: uvolní ramena a záda po náročnějších dnech.", "Easy swimming loosens shoulders and back after harder days."), ["recovery"]);
   // Continuous swims: the goal of the swim plans ("400 m without stopping", "1,500 m").
-  add("swim-continuous", "endurance", [[300], [400], [600], [800], [1000], [1200], [1500]],
+  // 2–4 km: the long swim of the open-water race plan (about 80 % of the race).
+  add("swim-continuous", "endurance", [[300], [400], [600], [800], [1000], [1200], [1500], [2000], [2500], [3000], [4000]],
     ([m]) => t(`Souvisle ${m} m`, `Continuous ${m} m`),
     ([m]) => [swim(100, 84, t("rozplavání, volně", "warm-up, easy")), swim(m, 88, t("souvisle, klidné tempo, pravidelný dech", "without stopping, an easy pace, steady breathing")), swim(100, 82, t("vyplavání", "cool-down"))],
     t("Souvislé plavání bez zastavení: klidné tempo, které vydržíš celou vzdálenost.", "Swimming without stopping: an easy pace you can hold for the whole distance."), ["continuous"]);
   // Open water practice: goes by time outside (workout-model.js adaptStructure).
-  add("swim-open-water", "endurance", [[1000], [1500], [2000]],
+  add("swim-open-water", "endurance", [[1000], [1500], [2000], [3000]],
     ([m]) => t(`Volná voda ≈ ${m} m`, `Open water ≈ ${m} m`),
     ([m]) => [swim(200, 86, t("rozplavání, zvykni si na vodu", "warm-up, get used to the water")), rep(6, [swim(50, 96, t("podívej se dopředu každých 6 záběrů", "look ahead every 6 strokes")), swim(50, 88, t("volně", "easy"))]), swim(m - 900, 95, t("plynule v závodním úsilí", "steady at race effort")), swim(100, 84, t("vyplavání", "cool-down"))],
     t("Orientace ve vodě a plynulé tempo jako v závodě. Nikdy neplav sám.", "Sighting and a steady race effort. Never swim alone."), ["open-water"]);
+  // Sighting in the pool: a look ahead every 25 m and turns without pushing
+  // off the wall, as in open water, where poor sighting adds 3–12 % to the
+  // distance (open-water race plan).
+  add("swim-sighting", "endurance", [[4, 200], [4, 300], [4, 400], [3, 600]],
+    ([r, m]) => t(`Orientace ${r}×${m} m`, `Sighting ${r}×${m} m`),
+    ([r, m]) => [...WU, drills(2), set(r, m, 95, 20, t("každých 25 m se podívej dopředu, obrátka bez odrazu", "look ahead every 25 m, turn without pushing off")), swim(200, 86, t("volně", "easy")), ...CD],
+    t("Orientace jako ve volné vodě: pohled dopředu bez ztráty rytmu a obrátky bez odrazu od stěny.", "Sighting as in open water: a look ahead without losing your rhythm and turns without pushing off the wall."), ["open-water"]);
   return out;
 }
 

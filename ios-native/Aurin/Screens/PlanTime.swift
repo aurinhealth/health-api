@@ -286,7 +286,7 @@ struct DaysAndTimeSheet: View {
         NavigationStack {
             SettingsPage(title: "Dny a čas") {
                 VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel(text: sport == "run" ? "Dny běhu" : sport == "gym" ? "Dny v posilovně" : "Dny na kole")
+                    SectionLabel(text: sport == "run" ? "Dny běhu" : sport == "gym" ? "Dny v posilovně" : sport == "triathlon" ? "Tréninkové dny" : "Dny na kole")
                     PlanDayChips(days: days, toggle: toggle)
                     Text(verbatim: L10n.f("Tento plán má %@ dní týdně.", range.lowerBound == range.upperBound ? String(range.lowerBound) : "\(range.lowerBound)–\(range.upperBound)"))
                         .font(Typo.caption).foregroundStyle(days.count < range.lowerBound || days.count > range.upperBound ? Palette.rust : Palette.muted)
@@ -437,6 +437,98 @@ struct PlanDayChips: View {
                 .accessibilityLabel(FreeTime.weekdayNames[i] + (auto ? ", " + L10n.tr("navrženo") : ""))
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
+        }
+    }
+}
+
+/// A multisport plan's sports: Ride, Run and Swim, on for the plan's own.
+/// With `toggle` the athlete picks them (two or three), otherwise they are the race's.
+struct PlanSportChips: View {
+    static let order = ["ride", "run", "swim"]
+    let selected: [String]
+    var toggle: ((String) -> Void)? = nil
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(Self.order, id: \.self) { sport in
+                let on = selected.contains(sport)
+                let item = TrainingPlansSheet.sports.first { $0.id == sport }
+                Button { toggle?(sport) } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: item?.symbol ?? "circle").scaledFont(13, weight: .semibold, cap: .denseCap)
+                        Text(verbatim: Self.name(sport)).font(.footnote.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                    .foregroundStyle(on ? Palette.onButton : Palette.muted)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(on ? Palette.button : Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .opacity(toggle == nil && !on ? 0.5 : 1)
+                }
+                .buttonStyle(.plain)
+                .disabled(toggle == nil)
+                .accessibilityLabel(Self.name(sport))
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+    }
+
+    static func name(_ sport: String) -> String { L10n.tr(["ride": "Kolo", "run": "Běh", "swim": "Plavání"][sport] ?? "") }
+
+    /// Sessions a week per sport: picked sports share the plan's sessions (six: 3 + 3, 2 + 2 + 2), as the server does.
+    static func perSport(_ per: [String: Int], sports: [String]?) -> [(String, Int)] {
+        guard let sports, !sports.isEmpty else { return order.compactMap { s in per[s].map { (s, $0) } } }
+        let total = per.values.reduce(0, +)
+        return sports.enumerated().map { i, s in (s, total / sports.count + (i < total % sports.count ? 1 : 0)) }
+    }
+
+    /// "Kolo 3×, běh 3×".
+    static func sessionsText(_ list: [(String, Int)]) -> String {
+        list.enumerated().map { i, item in
+            let name = name(item.0)
+            return (i == 0 ? name : name.lowercased()) + " " + String(item.1) + "×"
+        }.joined(separator: ", ")
+    }
+}
+
+/// A multisport plan without a race: its two or three sports from now on.
+struct PlanSportsSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let initial: [String]
+    @State private var sports: [String] = []
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            SettingsPage(title: "Sporty") {
+                VStack(alignment: .leading, spacing: 8) {
+                    PlanSportChips(selected: sports, toggle: toggle)
+                    Text("Vyber dva nebo tři. Šest tréninků týdně se mezi ně rozdělí.")
+                        .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                }
+                if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+                PrimaryButton(title: L10n.tr("Uložit"), busy: busy) { Task { await save() } }
+                    .disabled(busy || model.demo || sports.count < 2 || sports == initial)
+            }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } } }
+        }
+        .onAppear { if sports.isEmpty { sports = initial } }
+    }
+
+    private func toggle(_ sport: String) {
+        if sports.contains(sport) { if sports.count > 2 { sports.removeAll { $0 == sport } } }
+        else { sports = PlanSportChips.order.filter { sports.contains($0) || $0 == sport } }
+    }
+
+    private func save() async {
+        busy = true
+        defer { busy = false }
+        do {
+            _ = try await model.api.trainingPlanAction(["action": .string("sports"), "sports": .array(sports.map { .string($0) })])
+            await model.refreshTraining()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }
