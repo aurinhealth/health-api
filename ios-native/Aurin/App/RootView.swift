@@ -167,7 +167,7 @@ struct RootView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
                 }
-                // A food read from its label is in the common catalogue (AppModel.thankForLabel).
+                // A food read from its label went to the owner for the common catalogue (AppModel.suggestNewFood).
                 if let thanks = model.thanks {
                     ThanksToast(text: thanks) { model.thanks = nil }
                         .padding(.horizontal, 16)
