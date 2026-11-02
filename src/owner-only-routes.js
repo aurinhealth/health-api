@@ -1,8 +1,8 @@
 // Routes that only the old web dashboard called. The iPhone app (ios-native/)
 // calls none of them, so a signed-in user other than the owner gets 404 there.
-// The owner (in the app) and the deploy smoke test (GitHub Actions) keep them: the
-// deploy smoke checks read /app/api/daily, /app/api/sleep, /app/api/activities
-// and /health/nutrition. Calls made inside the Worker (handleDashboardApi,
+// The owner (in the app) and the deploy smoke test (GitHub Actions, as its own
+// empty account) keep them: the deploy smoke checks read /app/api/daily,
+// /app/api/sleep, /app/api/activities and /app/api/week. Calls made inside the Worker (handleDashboardApi,
 // legacyHealthApi.fetch) do not pass through this check.
 import { L } from "./lang.js";
 

@@ -23,12 +23,12 @@ export const SESSION_MAX_SECONDS = 365 * 24 * 60 * 60;
 export const CONNECT_SESSION_SECONDS = 15 * 60;
 const CONNECT_SCOPE = "connect";
 const connectPath = pathname => pathname === "/auth/app/connect" || /^\/oauth\/(google|intervals|ultrahuman|whoop|wahoo)(\/callback)?$/.test(pathname);
-// What the deploy smoke test (a GitHub Actions token, github-oidc.js) may call
-// as the owner: the reads it checks, the food search and the gym generator's
-// preview. Any other route refuses the token.
+// What the deploy smoke test (a GitHub Actions token, github-oidc.js) may call,
+// as its own empty account (tenancy.js smokeUser), never as the owner: the reads
+// it checks, the food search and the gym generator's preview. Any other route
+// refuses the token.
 const SYSTEM_ROUTES = new Set([
   "POST /automation/strength",
-  "GET /health/nutrition",
   "GET /app/api/today",
   "GET /app/api/daily",
   "GET /app/api/sleep",
