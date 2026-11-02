@@ -254,15 +254,18 @@ jobs:
             xcrun simctl io "$watch" screenshot "$out/$name.png"
           }
           for lang in en cs; do
-            dir=watch; [ "$lang" = cs ] && dir=watch-cs
-            shoot $dir 1-morning -language $lang
-            shoot $dir 2-training -language $lang -page training
-            shoot $dir 3-food -language $lang -page food
-            shoot $dir 4-gym -language $lang -gym
-            shoot $dir 5-rest -language $lang -gym -rest
-            shoot $dir 6-face -language $lang -face
-            shoot $dir 7-sleep -language $lang -open sleep
-            shoot $dir 8-strain -language $lang -open strain
+            # The system's own texts (the time to the next workout, the clock) in
+            # the shot's language too, not the simulator's English.
+            dir=watch locale=en_US; [ "$lang" = cs ] && dir=watch-cs locale=cs_CZ
+            set -- -language $lang -AppleLanguages "($lang)" -AppleLocale $locale
+            shoot $dir 1-morning "$@"
+            shoot $dir 2-training "$@" -page training
+            shoot $dir 3-food "$@" -page food
+            shoot $dir 4-gym "$@" -gym
+            shoot $dir 5-rest "$@" -gym -rest
+            shoot $dir 6-face "$@" -face
+            shoot $dir 7-sleep "$@" -open sleep
+            shoot $dir 8-strain "$@" -open strain
           done
           xcrun simctl shutdown "$watch" || true
 

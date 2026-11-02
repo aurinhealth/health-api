@@ -34,6 +34,8 @@ struct DemoFace: View {
             }
         }
         .padding(.horizontal, 8)
+        // "in 3 hr 9 min" ("za 3 h 9 min") in the sample day's language too.
+        .environment(\.locale, W.locale)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.black.ignoresSafeArea())
     }
