@@ -227,7 +227,7 @@ struct ThresholdCheckCard: View {
                 }
                 HStack(spacing: 10) {
                     PrimaryButton(title: L10n.tr("Uložit"), systemImage: "checkmark", busy: busy) {
-                        Task { await act(["action": .string("apply"), "sport": .string(r.sport), "values": .object(values(r.result))], estimate: nil) }
+                        Task { await act(["action": .string("apply"), "sport": .string(r.sport), "values": .object(values(r.result)), "writeWahoo": .bool(UserDefaults.standard.object(forKey: "writeWahoo") as? Bool ?? true)], estimate: nil) }
                     }
                     .disabled(busy)
                     SecondaryButton(title: "Neukládat") {

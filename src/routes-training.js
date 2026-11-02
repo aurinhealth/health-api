@@ -132,8 +132,8 @@ export async function handleThresholdApi(request,env,ctx,url,session,internalAut
         await saveTrainingProfile(env.DB,{...await getTrainingProfile(env.DB),...patch});
         const t=await athleteThresholds(env);
         const intervals=env.INTERVALS_API_KEY?await writeIntervalsZones(env,t).catch(error=>({status:'error',message:error.message})):null;
-        // A new FTP goes to Wahoo too, in the background (wahoo.js writeWahooZones).
-        if(patch.ftp&&env.WAHOO_TOKEN)writeWahooZonesLater(env,ctx,t);
+        // A new FTP goes to Wahoo too, in the background, unless "Write to Wahoo" is off (wahoo.js writeWahooZones).
+        if(patch.ftp&&env.WAHOO_TOKEN&&body.writeWahoo!==false)writeWahooZonesLater(env,ctx,t);
         await saveCheck(env.DB,sport,{status:'applied',testId:check?.testId||null,testDate:check?.testDate||null,estimate,result:check?.result||null});
         return Response.json({status:'ok',saved:patch,intervals},{headers:{'Cache-Control':'no-store'}});
       }
