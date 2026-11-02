@@ -104,7 +104,7 @@ import legacyHealthApi, { googleToken, matchActivities } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
 import { reviewRefusal, isReviewAccount } from "./app-review.js";
-import { handleNativeAppleLogin } from "./apple-login.js";
+import { handleNativeAppleLogin, forgetUsedAppleTokens } from "./apple-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat, startChatWithCoach, lastAnswerId, ownedChat } from "./assistant-chats.js";
 import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedReplyPush } from "./coach-push-reply.js";
 import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
@@ -455,6 +455,8 @@ const worker = {
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 7) await forgetOldWaitlist(env.DB).catch(error => console.error("Waitlist cleanup failed", error.message));
     // Request limits nobody has used for two days (ip-rate-limit.js).
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 3) await forgetStaleRequestLimits(env.DB).catch(error => console.error("Request limit cleanup failed", error.message));
+    // Apple sign-in tokens past their expiry: they cannot sign in anyway (apple-login.js).
+    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 3) await forgetUsedAppleTokens(env.DB).catch(error => console.error("Apple token cleanup failed", error.message));
     // Yesterday's failed syncs, broken connections and server errors, to the owner (ops-report.js);
     // only from the live server.
     if (!isStaging(env) && (controller.cron === "* * * * *" && new Date().getUTCHours() === 6 && new Date().getUTCMinutes() % 10 === 0)) await sendDailyOpsReport(env).catch(error => console.error("Daily ops report failed", error.message));

@@ -52,7 +52,9 @@ struct TrainingPage: View {
         .task(id: day) {
             if day == today { preview = nil } else { preview = await store.preview(date: day) }
         }
-        .fullScreenCover(isPresented: $running) { GymSessionView() }
+        .fullScreenCover(isPresented: $running, onDismiss: { WatchReport.visit("training") }) {
+            GymSessionView().onAppear { WatchReport.visit("gym") }
+        }
         .containerBackground(W.glow(W.Glow.strain), for: .tabView)
     }
 

@@ -11,7 +11,7 @@ import { getCookbookRecipeByPage } from "./cookbook.js";
 import { queueFoodGoogle, processFoodGoogle } from "./food-google-sync.js";
 import { lookupFoodWithAI, estimateFoodWithAI } from "./food-ai.js";
 import { sendFoodApproved } from "./push.js";
-import { saveFoodSuggestion, listFoodSuggestions, decideFoodSuggestion, saveFoodReport, markReported } from "./food-suggestions.js";
+import { saveFoodSuggestion, saveNewFoodSuggestion, listFoodSuggestions, decideFoodSuggestion, saveFoodReport, markReported } from "./food-suggestions.js";
 import { listFluids, foodDrinks, dayActivityHours, hydrationTarget, hydrationMl, addFluid, updateFluid, deleteFluid, bulkFluids, FluidInputError } from "./fluids.js";
 import { mealConsumedAt } from "./food-log.js";
 import { updateFoodEntry, copyFoodEntry, deleteFoodEntry, bulkFoodEntries } from "./food-entry-management.js";
@@ -66,6 +66,7 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
   }
   // "Navrhnout opravu pro všechny": a correction of a catalogue food for the
   // owner to approve; the owner lists and decides them (food-suggestions.js).
+  // "Suggest for everyone" (kind new_food): a food the user saved, for the catalogue.
   // "Hodnoty nesedí": a catalogue food reported without the right values.
   if(url.pathname==='/app/api/food/report'&&request.method==='POST'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
@@ -84,7 +85,7 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
       if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
       if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
       const body=await request.json().catch(()=>({}));
-      if(url.pathname==='/app/api/food/suggestions')return Response.json(await saveFoodSuggestion(env.DB,body),{headers:{'Cache-Control':'no-store'}});
+      if(url.pathname==='/app/api/food/suggestions')return Response.json(await (body.kind==='new_food'?saveNewFoodSuggestion:saveFoodSuggestion)(env.DB,body),{headers:{'Cache-Control':'no-store'}});
       if(!owner)return Response.json({message:L('Nenalezeno.', 'Not found.')},{status:404});
       const {notify,...decided}=await decideFoodSuggestion(raw,env.DB,body);
       // The authors hear the food is fixed (push.js); the owner's answer doesn't wait for Apple.

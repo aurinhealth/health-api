@@ -198,6 +198,14 @@ final class WatchBridge: NSObject {
         return (session.isPaired, session.isWatchAppInstalled, session.isReachable)
     }
 
+    /// What the watch app last said about itself (AurinWatch/WatchReport.swift),
+    /// for "Nahlásit problém"; nil before a watch app that sends it.
+    var watchDiagnostics: WatchDiagnostics? {
+        guard let session, session.activationState == .activated,
+              let data = session.receivedApplicationContext[WatchDiagnostics.contextKey] as? Data else { return nil }
+        return WatchDiagnostics.decode(data)
+    }
+
     /// The saved Today when the app was woken only for the watch.
     private func restore() {
         if today == nil, let saved = SnapshotCache.load(TodaySnapshot.self, key: "today")?.value,
@@ -308,6 +316,7 @@ extension WatchBridge: WCSessionDelegate {
         let change = (message[WatchGym.changeKey] as? Data).flatMap(WatchGym.Change.decode)
         let options = (message[WatchGym.optionsKey] as? Data).flatMap(WatchGym.OptionsRequest.decode)
         let sheet = (message[WatchGym.sheetKey] as? Data).flatMap(WatchGym.Sheet.decode)
+        let partDone = (message[WatchGym.partDoneKey] as? Data).flatMap(WatchGym.PartDone.decode)
         let water = message[WatchSnapshot.waterKey] as? Int
         let drinkKind = message[WatchSnapshot.drinkKindKey] as? String ?? "water"
         let alarmChange = (message[WatchSnapshot.AlarmChange.key] as? Data).flatMap(WatchSnapshot.AlarmChange.decode)
@@ -369,6 +378,11 @@ extension WatchBridge: WCSessionDelegate {
             }
             if let water {
                 await addWater(ml: water, kind: drinkKind)
+                replyHandler(["ok": true])
+                return
+            }
+            if let partDone {
+                applyGym(partDone)
                 replyHandler(["ok": true])
                 return
             }
@@ -466,7 +480,9 @@ extension WatchBridge: WCSessionDelegate {
         let gymEnded = userInfo[WatchGym.watchEndKey] as? Bool == true
         // The watch's gym workout, started while this iPhone was out of reach.
         let live = (userInfo[WatchGym.liveKey] as? Data).flatMap(WatchGym.Live.decode)
+        let partDone = (userInfo[WatchGym.partDoneKey] as? Data).flatMap(WatchGym.PartDone.decode)
         Task { @MainActor in
+            if let partDone { applyGym(partDone) }
             if let live, !gymEnded { LiveWorkout.shared.watch(live) }
             if let done { await applyGym(done) }
             if gymEnded { LiveWorkout.shared.watchEnded() }

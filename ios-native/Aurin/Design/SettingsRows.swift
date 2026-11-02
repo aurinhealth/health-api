@@ -187,6 +187,8 @@ struct SettingsField: View {
 /// button (from the navigation stack) and a scrolling column.
 struct SettingsPage<Content: View>: View {
     let title: String
+    /// Kept in ScreenTrail as "page/<title>" (Settings and other pages in its look); off for the report pages themselves.
+    var trail = true
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -199,6 +201,7 @@ struct SettingsPage<Content: View>: View {
         .background { Palette.settingsBackground.ignoresSafeArea() }
         .navigationTitle(L10n.tr(title))
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { if trail { ScreenTrail.visit("page/" + title) } }
     }
 }
 

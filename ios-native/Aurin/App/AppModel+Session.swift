@@ -279,6 +279,7 @@ extension AppModel {
             AppleHealth.shared.pause(account: UserDefaults.standard.string(forKey: AvatarStore.emailKey))
             forgetAccountData()
             ErrorLog.clear()
+            RequestTrail.clear()
             // The next account looks for its own kept settings.
             SettingsBackup.forget()
             for key in [AvatarStore.nameKey, AvatarStore.emailKey, AvatarStore.idKey, Self.displayNameKey, Self.accountUncheckedKey] { UserDefaults.standard.removeObject(forKey: key) }

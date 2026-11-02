@@ -3,7 +3,9 @@ import SwiftUI
 /// "Upravit produkt" from the barcode scanner: the serving (its name and
 /// weight), the package and the values per 100 g. Saved as the user's own
 /// food; for a catalogue food the correction can also go to the owner to
-/// approve for everyone ("Navrhnout opravu pro všechny").
+/// approve for everyone ("Navrhnout opravu pro všechny"). A food just read
+/// from its label isn't saved yet: the corrected values go back to the scanner,
+/// which saves the food with the meal and may suggest it (canSuggestNew).
 struct FoodProductEditor: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -62,7 +64,7 @@ struct FoodProductEditor: View {
                     SettingsDivider()
                     SettingsField(title: "Vláknina", text: $fiber, unit: "g")
                 }
-                if save == nil && product.canSuggest && !product.perPortion {
+                if save == nil && product.canSuggest && !product.canSuggestNew && !product.perPortion {
                     SettingsGroup { SettingsToggle(title: "Navrhnout opravu pro všechny", isOn: $suggest) }
                 }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
@@ -116,7 +118,7 @@ struct FoodProductEditor: View {
     private func save() async {
         let corrected = current
         guard corrected.values != product.values else { dismiss(); return }
-        if model.demo { saved(corrected); dismiss(); return }
+        if model.demo || (save == nil && product.canSuggestNew) { saved(corrected); dismiss(); return }
         saving = true
         defer { saving = false }
         if let save {
@@ -125,7 +127,7 @@ struct FoodProductEditor: View {
         }
         do {
             let own = try await model.api.savePersonalFood(corrected)
-            if suggest && product.canSuggest && !product.perPortion {
+            if suggest && product.canSuggest && !product.canSuggestNew && !product.perPortion {
                 // In the background: a refused suggestion (daily limit) must not hold up the food.
                 let api = model.api, before = product
                 Task.detached { try? await api.suggestFoodCorrection(before: before, after: corrected) }

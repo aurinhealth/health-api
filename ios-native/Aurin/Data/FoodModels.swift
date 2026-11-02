@@ -304,6 +304,11 @@ struct FoodProduct: Codable, Equatable, Identifiable {
 
     var canSuggest: Bool { (isShared && source != "ai-estimate" && source != "ai") || origin == "edited" }
 
+    /// "Navrhnout pro všechny": a food the catalogue doesn't know, read from its
+    /// label (values per 100 g). It stays the user's own; the owner may add it
+    /// for everyone (src/food-suggestions.js, kind new_food).
+    var canSuggestNew: Bool { source == "package_label" && !perPortion && origin == nil }
+
     func kcal(for amount: Double) -> Double? {
         guard let c = calories_100g else { return nil }
         return perPortion ? c * amount : c * amount / 100
