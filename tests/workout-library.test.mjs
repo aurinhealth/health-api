@@ -273,3 +273,20 @@ test("saving again with a time of day moves the workout already in the calendar"
     assert.equal(String(row.start_time).slice(0, 16), "2026-10-03T18:00");
   });
 });
+
+test("a plan's race leg is saved marked as a race, and an older one gets the mark when saved again", async () => {
+  const { raw, alice } = users(), args = { workoutId: "race-run-5-24-p102-leg", date: "2026-11-08", confirm: true, environment: "outdoor" };
+  const r = await scheduleWorkoutInIntervals({}, alice, args);
+  assert.equal(r.status, "ok");
+  const id = r.eventId.replace(/^planned:/, "");
+  const event = () => JSON.parse(raw.sqlite.prepare("SELECT event_json FROM local_workouts WHERE id=?").get(id).event_json);
+  assert.equal(event().race, true);
+  assert.equal(event().moving_time, 24 * 60, "only the race: the next leg starts when it ends");
+  // Saved before the mark existed: the same save adds it.
+  raw.sqlite.prepare("UPDATE local_workouts SET event_json=? WHERE id=?").run(JSON.stringify({ ...event(), race: undefined }), id);
+  assert.equal(event().race, undefined);
+  assert.equal((await scheduleWorkoutInIntervals({}, alice, args)).status, "already_scheduled");
+  assert.equal(event().race, true);
+  const easy = await scheduleWorkoutInIntervals({}, alice, { workoutId: "pfd-vo2-5x4x112-90", date: "2026-11-08", confirm: true });
+  assert.equal(JSON.parse(raw.sqlite.prepare("SELECT event_json FROM local_workouts WHERE id=?").get(easy.eventId.replace(/^planned:/, "")).event_json).race, undefined);
+});

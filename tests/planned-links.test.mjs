@@ -80,3 +80,23 @@ test("the week's brick: the short run right after the longest ride", () => {
   const plan = markBrick(days, { planDays: [{ date: "2026-11-05", plan: { kind: "brick" } }] });
   assert.equal(plan.find(d => d.brick).date, "2026-11-05");
 });
+
+test("a duathlon's three race legs join in order, each starting when the one before ends", async () => {
+  const { env, event, move } = await setup();
+  const leg = (key, type, minutes, time = "00:00") => storeLocalEvent(env.DB, { external_id: key, type, name: key, start_date_local: "2026-11-08T" + time + ":00", moving_time: minutes * 60, race: true });
+  const [run1, ride, run2] = [await leg("run1", "Run", 24, "09:00"), await leg("ride", "Ride", 33), await leg("run2", "Run", 13)].map(x => x.id);
+  await linkPlanned(env, { eventId: "planned:" + ride, after: "planned:" + run1 }, move);
+  await linkPlanned(env, { eventId: "planned:" + run2, after: "planned:" + ride }, move);
+  assert.deepEqual([(await event(run1)).next, (await event(ride)).after, (await event(ride)).next, (await event(run2)).after], [ride, run1, run2, ride]);
+  assert.equal((await event(ride)).start_date_local, "2026-11-08T09:29:00");
+  assert.equal((await event(run2)).start_date_local, "2026-11-08T10:07:00");
+  assert.equal((await event(run2)).race, true);
+  // Moving the first run takes the ride and the second run along, each right after the one before.
+  const fetchImpl = async () => new Response("{}");
+  await movePlannedEvent(env, { eventId: "planned:" + run1, date: "2026-11-09", time: "10:00" }, fetchImpl);
+  assert.deepEqual([(await event(ride)).start_date_local, (await event(run2)).start_date_local], ["2026-11-09T10:29:00", "2026-11-09T11:07:00"]);
+  assert.equal((await event(run2)).after, ride);
+  // Moving the ride on its own leaves all three apart.
+  await movePlannedEvent(env, { eventId: "planned:" + ride, date: "2026-11-10", time: "08:00" }, fetchImpl);
+  assert.deepEqual([(await event(run1)).next, (await event(ride)).after, (await event(ride)).next, (await event(run2)).after], [undefined, undefined, undefined, undefined]);
+});

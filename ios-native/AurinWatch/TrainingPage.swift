@@ -88,7 +88,24 @@ struct TrainingPage: View {
         let done = sessions.filter { $0.date == day && $0.done }
         let gym = day == today ? store.gym : preview
         let gymPlanned = gym.map { !$0.exercises.isEmpty } ?? false
-        if planned.count > 1 {
+        if let race = RaceDay(planned) {
+            // Race day (mockup hodinky-zavod): the race as one card, anything else of the day
+            // under it as it would show on its own (a ride or run with its start, the gym with Start).
+            let others = planned.filter { !race.legs.contains($0) }
+            raceCard(race)
+            ForEach(Array(others.enumerated()), id: \.offset) { _, other in
+                if other.sport != "strength", other.eventId != nil {
+                    NavigationLink(value: other) { planCard(other) }
+                        .buttonStyle(.plain)
+                        .padding(.top, 6)
+                } else {
+                    sideCard(other, day: day, gym: gym)
+                }
+            }
+            if gymPlanned, !others.contains(where: { $0.sport == "strength" }), !done.contains(where: { $0.sport == "strength" }) {
+                sideCard(WatchSnapshot.Session(date: day, title: W.tr("Posilovna", "Gym"), sport: "strength", minutes: gym?.minutes, done: false), day: day, gym: gym)
+            }
+        } else if planned.count > 1 {
             // Two or more (mockup 23): each its own card, the picked one open
             // with its steps or exercises and its button, a tap picks another.
             let pick = min(chosen[day] ?? 0, planned.count - 1)
@@ -164,6 +181,15 @@ struct TrainingPage: View {
             Text(W.tr("Spustíš v aplikaci Cvičení.", "Start it in the Workout app."))
                 .font(.system(size: 12)).foregroundStyle(W.muted).padding(.top, 6)
         }
+    }
+
+    /// Another workout on race day, open on its own tile.
+    private func sideCard(_ s: WatchSnapshot.Session, day: String, gym: WatchGym?) -> some View {
+        VStack(alignment: .leading, spacing: 0) { single(s, day: day, gym: gym) }
+            .padding(.horizontal, 10).padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
+            .padding(.top, 6)
     }
 
     /// The picked one of a day's workouts, open, with an amber edge.
@@ -269,6 +295,88 @@ struct TrainingPage: View {
             // The next leg's plan only for the multisport start: the complication keeps this one's.
             if let leg = nextLeg(s) { plans.load(leg, shelf: false) }
         }
+    }
+
+    /// A race (mockup hodinky-zavod): when and how long, its name, each leg
+    /// with its distance and time, and today one start for the whole race.
+    private func raceCard(_ race: RaceDay) -> some View {
+        NavigationLink(value: race) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text(subtitle(race.first, day: race.first.date, length: false)).font(.system(size: 11, weight: .semibold)).foregroundStyle(W.amber)
+                    Spacer(minLength: 4)
+                    if let minutes = race.minutes { Text(RaceDay.length(minutes)).font(.system(size: 11)).foregroundStyle(W.muted) }
+                }
+                HStack(spacing: 6) {
+                    Image(systemName: race.legs.count == 1 ? W.sportSymbol(race.first.sport) : "flag.fill")
+                        .font(.system(size: 14)).foregroundStyle(W.amber)
+                    Text(race.name).font(.system(size: 17, weight: .semibold)).foregroundStyle(W.ink)
+                        .lineLimit(2).minimumScaleFactor(0.75)
+                }
+                .padding(.top, 3)
+                VStack(spacing: 0) {
+                    ForEach(Array(race.legs.enumerated()), id: \.offset) { index, leg in
+                        if index > 0 { Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1) }
+                        HStack(spacing: 7) {
+                            Image(systemName: W.sportSymbol(leg.sport)).font(.system(size: 12))
+                                .foregroundStyle(RaceDay.color(leg.sport)).frame(width: 16)
+                            Text(RaceDay.distance(leg) ?? RaceDay.sportName(leg.sport))
+                                .font(.system(size: 13, weight: .medium)).foregroundStyle(W.ink).lineLimit(1)
+                            Spacer(minLength: 4)
+                            if let minutes = leg.minutes { Text(RaceDay.length(minutes)).font(.system(size: 12)).foregroundStyle(W.muted) }
+                        }
+                        .padding(.vertical, 5)
+                    }
+                }
+                .padding(.top, 4)
+                // One leg (an open-water race): its target right on the card.
+                if race.legs.count == 1, let target = RaceDay.target(race.first.eventId.flatMap { plans.plans[$0] }, sport: race.first.sport) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(target.value).font(W.news(22)).foregroundStyle(W.ink)
+                        Text(target.unit).font(.system(size: 11)).foregroundStyle(W.muted)
+                    }
+                }
+                if canStart(race) {
+                    Button {
+                        Task { await start(race) }
+                    } label: {
+                        Label(W.tr("Otevřít ve Cvičení", "Open in Workout"), systemImage: "play.fill")
+                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(W.green)
+                    .padding(.top, 6)
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 8)
+        // The first leg's plan also for the complication; the others only for the start.
+        .onAppear { for (index, leg) in race.legs.enumerated() { plans.load(leg, shelf: index == 0) } }
+    }
+
+    /// Today, once every leg's plan is known (one that won't load leaves the race to its first leg).
+    private func canStart(_ race: RaceDay) -> Bool {
+        guard race.first.date == today, let first = race.first.eventId, plans.plans[first] != nil else { return false }
+        return race.legs.allSatisfy { leg in leg.eventId.map { plans.plans[$0] != nil || plans.failed.contains($0) } ?? false }
+    }
+
+    /// The whole race as one multisport workout: the Workout app times each
+    /// leg and each change. One leg, or sports this watch can't put in this
+    /// order, opens the first leg with its steps.
+    private func start(_ race: RaceDay) async {
+        let legs = race.legs.compactMap { leg in leg.eventId.flatMap { plans.plans[$0] }.map { (sport: leg.sport, plan: $0) } }
+        var workout: WorkoutPlan?
+        if race.legs.count > 1, legs.count == race.legs.count { workout = WorkoutOpener.multisport(legs, name: race.name) }
+        if workout == nil, let first = race.first.eventId.flatMap({ plans.plans[$0] }) {
+            workout = WorkoutOpener.workout(first, sport: race.first.sport, name: race.legs.count == 1 ? race.name : Self.name(race.first))
+        }
+        guard let workout else { return }
+        try? await workout.openInWorkoutApp()
     }
 
     /// Open in Workout shows today once what it starts is known: a brick
