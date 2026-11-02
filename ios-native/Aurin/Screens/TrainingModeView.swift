@@ -297,18 +297,21 @@ struct TrainingModeView: View {
     /// Under the header: the heart rate, the coach, the plan and ⋯ (History, Sound and vibration).
     private func tools(_ day: GymDay, _ exercise: GymExercise) -> some View {
         HStack(spacing: 8) {
-            // Coach, Plan and ⋯ keep their size; the heart drops "Bez tepu" when the
-            // row is too narrow, e.g. with larger text, so nothing wraps or ends in "…".
-            // Coach stays outside ViewThatFits: a switch must not close its open chat.
-            ViewThatFits(in: .horizontal) {
-                HeartSourceButton(live: live, compact: false) { sensors = true }.fixedSize()
-                HeartSourceButton(live: live, compact: true) { sensors = true }.fixedSize()
+            // Heart, Coach and Plan from the left, ⋯ on the right. Coach, Plan and ⋯ keep
+            // their size; the heart drops "Bez tepu" when the row is too narrow, e.g. with
+            // larger text, so nothing wraps or ends in "…". Coach stays outside
+            // ViewThatFits: a switch must not close its open chat.
+            HStack(spacing: 8) {
+                ViewThatFits(in: .horizontal) {
+                    HeartSourceButton(live: live, compact: false) { sensors = true }.fixedSize()
+                    HeartSourceButton(live: live, compact: true) { sensors = true }.fixedSize()
+                }
+                CoachPill(subject: .workout(day, exercise: exercise, resting: restEnd != nil, restSeconds: restTotal, date: date), height: 34)
+                Button { editing = true } label: { ToolChip(systemImage: "list.bullet", title: L10n.tr("Plán")).fixedSize() }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.tr("Upravit plán"))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            CoachPill(subject: .workout(day, exercise: exercise, resting: restEnd != nil, restSeconds: restTotal, date: date), height: 34)
-            Button { editing = true } label: { ToolChip(systemImage: "list.bullet", title: L10n.tr("Plán")).fixedSize() }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.tr("Upravit plán"))
             more(exercise)
         }
         .padding(.top, 12)
