@@ -62,3 +62,32 @@ test("the day filters of source choice and Apple replacement seek the day index"
   const update = plan(`UPDATE health_datapoints SET record_role = 'duplicate' WHERE user_id = 1 AND source_family IN ('google-wearables') AND data_type = 'heart-rate' AND ${day.replace("?", "'2026-10-01'")}`);
   assert.match(update, /idx_health_datapoints_user_day .*<expr>>\?/, update);
 });
+
+// Workouts of every source by start time: the partial index on activity and
+// exercise rows (migrations/0034) lets "data_type IN ('activity','exercise') AND
+// start_time >= ?" seek the days. Before it, idx_health_datapoints_user_0 found
+// the user's workouts and every one since the first import was read.
+test("workout queries by start time over every source seek the workout index", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(schema);
+  const add = db.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,start_time,payload_json) VALUES(1,?,?,?,?,'{}')");
+  for (let i = 0; i < 2000; i++) add.run(i % 2 ? "intervals" : "google-wearables", i % 2 ? "activity" : "exercise", "w" + i, new Date(Date.UTC(2021, 0, 1) + i * 86400000).toISOString());
+  const found = [];
+  for (const name of readdirSync(new URL("../src/", import.meta.url)).filter(n => n.endsWith(".js"))) {
+    const text = src(name);
+    for (const m of text.matchAll(/data_type ?IN ?\('activity', ?'exercise'\) AND start_time ?>= ?\?/g)) {
+      const head = text.lastIndexOf("SELECT", m.index), quote = text[head - 1];
+      if (text.slice(text.lastIndexOf("WHERE", m.index), m.index).includes("source_family")) continue;
+      const sql = text.slice(head, text.indexOf(quote, m.index));
+      found.push(name);
+      const plan = db.prepare("EXPLAIN QUERY PLAN " + sql).all(...sql.split("?").slice(1).map(() => "2026-10-01")).map(r => r.detail).join(" | ");
+      assert.match(plan, /idx_health_datapoints_user_workout_start \(user_id=\? AND data_type=\? AND start_time>\?/, name + ": " + plan);
+    }
+  }
+  assert.ok(found.length >= 9, found.join(", "));
+  // The partial index holds only workouts: a heart-rate sample adds no index row.
+  const rows = () => db.prepare("SELECT COUNT(*) n FROM health_datapoints INDEXED BY idx_health_datapoints_user_workout_start WHERE user_id = 1 AND data_type IN ('activity','exercise') AND start_time >= ''").get().n;
+  const before = rows();
+  db.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,sample_time,start_time,payload_json) VALUES(1,'google-wearables','heart-rate','h1','2026-10-02T10:00:00Z','2026-10-02T10:00:00Z','{}')").run();
+  assert.equal(rows(), before);
+});
