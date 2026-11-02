@@ -438,7 +438,8 @@ main:focus{outline:none}
 @media (max-width:960px){
   /* Hero: the words first, the phone under them. */
   .hero{padding-top:120px}
-  .hero .grid{grid-template-columns:1fr;text-align:center}
+  /* minmax(0,…): the phone's stage must not widen the column past the screen (it cut off the words and the button). */
+  .hero .grid{grid-template-columns:minmax(0,1fr);text-align:center}
   /* The mark is already in the nav: on a tablet and a phone the hero starts with the words. */
   .hero .sun{display:none}
   .lede{margin-left:auto;margin-right:auto}
@@ -738,7 +739,7 @@ ${body}
 <div class="top">
 <div class="brand">${mark(40)}<p>Train for how you feel today.</p></div>
 <nav aria-label="Aurin"><h3 translate="no">Aurin</h3><ul><li><a href="/#a-readiness">Readiness</a></li><li><a href="/#a-training">Training</a></li><li><a href="/#a-food">Nutrition</a></li><li><a href="/#a-sleep">Sleep</a></li><li><a href="/#a-coach">Coach</a></li><li><a href="/#a-watch">Apple Watch</a></li><li><a href="/#connections">Connections</a></li></ul></nav>
-<nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li></ul></nav>
+<nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li><li><a href="https://x.com/aurin_health" rel="me noopener">Aurin on X</a></li></ul></nav>
 <nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/cs/privacy" hreflang="cs">Soukromí</a> · <a href="/cs/terms" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
 <div class="base"><span>© 2026 Aurin</span><span>Aurin is not a medical device.</span></div>
