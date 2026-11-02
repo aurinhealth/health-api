@@ -998,10 +998,12 @@ final class SnapshotTests: XCTestCase {
                 .background { ScreenBackground(glow: glow) }
                 .environment(\.colorScheme, scheme)
             let image: UIImage?
-            if String(reflecting: V.self).contains("NavigationStack") {
+            let type = String(reflecting: V.self)
+            if type.contains("NavigationStack") || type.contains("Sheet") {
                 // ImageRenderer stops the whole test run on iOS 27 ("no current update
                 // to enqueue action to") when the view holds a NavigationStack, which it
-                // cannot flatten; such a screen is drawn from a window instead.
+                // cannot flatten; such a screen, and every sheet (most open with their
+                // own NavigationStack), is drawn from a window instead.
                 image = hosted(view, width: width, height: height, scheme: scheme)
             } else {
                 let renderer = ImageRenderer(content: view)

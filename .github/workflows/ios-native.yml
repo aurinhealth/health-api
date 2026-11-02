@@ -116,7 +116,7 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/screens/during-tests"
           # The simulator's screen once a minute while the tests run (during-tests/):
           # a system sheet that holds a test purchase up shows there.
-          (while sleep 60; do xcrun simctl io "${{ steps.sim.outputs.udid }}" screenshot "$GITHUB_WORKSPACE/screens/during-tests/$(date +%H%M%S).png" >/dev/null 2>&1; done) &
+          (set +e; while sleep 60; do xcrun simctl io "${{ steps.sim.outputs.udid }}" screenshot "$GITHUB_WORKSPACE/screens/during-tests/$(date +%H%M%S).png" >/dev/null 2>&1; done) &
           shots=$!
           set -o pipefail
           status=0
