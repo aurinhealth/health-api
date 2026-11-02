@@ -47,7 +47,8 @@ permissions:
 
 jobs:
   testflight:
-    runs-on: macos-latest
+    # The same image as ios-native.yml: Xcode 27 is only there.
+    runs-on: xcode-27
     timeout-minutes: 40
     environment: ${{ github.event_name == 'pull_request' && 'testflight-pr' || 'testflight' }}
     # One upload at a time; the notes job below doesn't hold the next one up.
@@ -87,8 +88,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The same Xcode as ios-native.yml (the newest stable one): the newest SDK, which
-      # App Store Connect also requires for new uploads.
+      # The same Xcode as ios-native.yml (the newest stable one on the xcode-27 image):
+      # the newest SDK, which App Store Connect also requires for new uploads.
       - name: Pick Xcode
         if: steps.secrets.outputs.ready == 'true'
         run: |

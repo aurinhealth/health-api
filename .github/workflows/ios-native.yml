@@ -15,7 +15,8 @@ name: iOS native app
 #   (site/: the English, light-mode shots the website uses; smoke/: each step
 #   of the smoke test Vydat relies on; site-dark/ and smoke-dark/: the website's
 #   shots again in dark mode, for its dark look), and preview/: the App Store preview
-#   videos in English and Czech (app-preview-en.mp4, app-preview-cs.mp4).
+#   videos in English and Czech (app-preview-en.mp4, app-preview-cs.mp4), and
+#   duo/: the sample day on the iPhone Duo simulator.
 
 on:
   workflow_dispatch:
@@ -41,7 +42,9 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-latest
+    # Xcode 27 lives on its own image (macos-latest still stops at Xcode 26.6):
+    # only Xcode 27.1 and later build the app full screen on iPhone Duo.
+    runs-on: xcode-27
     # On main the run also builds for iPhone and uploads it after the App Store
     # preview; since the preview it takes over an hour (cancelled at 60 min).
     timeout-minutes: 90
@@ -52,14 +55,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      # The newest stable Xcode on the newest macOS runner (macos-latest moves to
-      # each new image; macos-15 stopped at Xcode 26.3). Xcode 26 and later bring
+      # The newest stable Xcode on the image (no beta or release candidate), and
+      # what it carries: the run's log shows the Xcode, the iOS runtimes and
+      # whether the iPhone Duo simulator is there. Xcode 26 and later bring
       # AlarmKit (the alarm in Nastavení → Spánek).
       - name: Pick Xcode
         run: |
+          ls -d /Applications/Xcode*.app || true
           xcode=$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -vi -e beta -e release_candidate -e _rc | sort -V | tail -1)
           if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode/Contents/Developer"; fi
           xcodebuild -version
+          xcrun simctl list runtimes
+          xcrun simctl list devicetypes | grep -i -e duo -e "iPhone 1[78]" || true
 
       # The licensed 3D muscle figure, from R2 into the bundle (never in the repository):
       # the sample day's screens and the App Store preview show it.
@@ -267,6 +274,49 @@ jobs:
           node "$GITHUB_WORKSPACE/scripts/app-preview.mjs" "$dir"
           rm -f "$dir/recording.mp4"
           exit $status
+
+      # The app on iPhone Duo, Apple's foldable (Xcode 27.1 and later have its
+      # simulator): the sample day in English and light mode, each display the
+      # simulator shows (duo/). Not a release check: never fails the run.
+      - name: Screenshot the app on iPhone Duo
+        continue-on-error: true
+        run: |
+          xcrun simctl shutdown "${{ steps.sim.outputs.udid }}" || true
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          duo = [d for r in devices if "iOS" in r for d in devices[r] if "Duo" in d["name"]]
+          print(duo[-1]["udid"] if duo else "")')
+          if [ -z "$udid" ]; then
+            type=$(xcrun simctl list devicetypes | grep -i "iPhone Duo" | head -1 | sed -E 's/.*\((com\.apple[^)]*)\).*/\1/')
+            runtime=$(xcrun simctl list runtimes | grep -E "^iOS" | tail -1 | sed -E 's/.* - (com\.apple[^ ]*).*/\1/')
+            if [ -z "$type" ]; then echo "::warning::No iPhone Duo simulator on this image"; exit 0; fi
+            udid=$(xcrun simctl create "iPhone Duo" "$type" "$runtime")
+          fi
+          dir="$GITHUB_WORKSPACE/screens/duo"
+          mkdir -p "$dir"
+          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl io "$udid" enumerate || true
+          xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/Aurin.app
+          xcrun simctl ui "$udid" appearance light
+          xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
+          shoot() {
+            xcrun simctl io "$udid" screenshot "$dir/$1.png"
+            # A second display (the foldable's other screen), when the simulator has one.
+            xcrun simctl io "$udid" screenshot --display=external "$dir/$1-external.png" 2>/dev/null || true
+          }
+          for tab in today training health food; do
+            xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en
+            sleep 7
+            shoot "$tab"
+          done
+          for route in readiness muscles gym/2026-10-08; do
+            xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -open "$route" -AppleLanguages "(en)" -AppleLocale en_US -language en
+            sleep 7
+            shoot "${route%%/*}"
+          done
+          xcrun simctl shutdown "$udid" || true
 
       # Unsigned: Sideloadly signs it with the user's Apple ID.
       - name: Build for iPhone
