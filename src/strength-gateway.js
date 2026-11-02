@@ -1,7 +1,6 @@
 import { L } from './lang.js';
 import app from "./index.js";
 import { foodRecommend } from "./food-recommend.js";
-import { timingSafeEqualString } from "./dashboard-auth.js";
 import { isInternalCall } from "./internal-auth.js";
 import { buildStrengthContext } from "./strength-context.js";
 import { parseStrengthPlan } from "./strength-history.js";
@@ -25,7 +24,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/strength/")) {
-      const auth = authorizeStrength(request, env);
+      const auth = authorizeStrength(request);
       if (auth) return auth;
     }
     if (url.pathname === "/strength/write-plan" && request.method === "POST") return writeStrengthPlanRoute(env, request);
@@ -56,12 +55,9 @@ async function nutritionFor(env, ctx, context, options) {
   return withAppTarget(buildNutritionPlan(context, options), await appDailyTarget(env, ctx, context?.date));
 }
 
-// The app's own layers call with the internal token; API clients from outside
-// with the owner key (STRENGTH_API_KEY).
-function authorizeStrength(request, env) {
+// Only the app's own layers call, with the internal token.
+function authorizeStrength(request) {
   if (isInternalCall(request)) return null;
-  const authorization = request.headers.get("Authorization") || "";
-  if (env.STRENGTH_API_KEY && timingSafeEqualString(authorization, `Bearer ${env.STRENGTH_API_KEY}`)) return null;
   return Response.json({ status: "error", step: "strength_auth", message: "Unauthorized" }, { status: 401 });
 }
 
