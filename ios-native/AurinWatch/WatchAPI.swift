@@ -72,11 +72,20 @@ enum WatchAPI {
 
     /// A GET with the watch's sign-in; nil without one, offline or on an error.
     static func get(_ path: String) async -> Data? {
-        guard let session, let request = request(path, session: session),
-              let (data, response) = try? await urlSession.data(for: request) else { return nil }
+        guard let session, let request = request(path, session: session) else { return nil }
+        guard let (data, response) = try? await urlSession.data(for: request) else {
+            WatchReport.failed("GET " + path, message: "no connection")
+            return nil
+        }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401 { store(nil) }
+        if status != 200 { WatchReport.failed("GET " + path, status: status, message: serverMessage(data)) }
         return status == 200 ? data : nil
+    }
+
+    /// The server's "message" in a refusal, for WatchReport.
+    private static func serverMessage(_ data: Data) -> String? {
+        (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["message"] as? String
     }
 
     /// The chat the app was written in during the last 6 hours, so the watch continues it.
@@ -107,11 +116,13 @@ enum WatchAPI {
         do {
             (data, response) = try await urlSession.data(for: request)
         } catch {
+            WatchReport.failed("POST /app/api/assistant", message: error.localizedDescription)
             throw Failure(text: W.tr("Hodinky nejsou připojené k internetu ani k iPhonu.", "The watch has no internet and no iPhone nearby."))
         }
         let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
+            WatchReport.failed("POST /app/api/assistant", status: status, message: object["message"] as? String)
             if status == 401 {
                 store(nil)
                 throw Failure(text: W.tr("Přihlášení vypršelo. Otevři Aurin v iPhonu.", "Your sign-in ran out. Open Aurin on your iPhone."))
@@ -130,9 +141,16 @@ enum WatchAPI {
         query.queryItems = [URLQueryItem(name: "id", value: plan.eventId)]
         if plan.date == WatchStore.localDate(Date()) { query.queryItems?.append(URLQueryItem(name: "date", value: plan.date)) }
         guard let session, let q = query.percentEncodedQuery,
-              let request = request("/app/api/workouts/planned?" + q, session: session),
-              let (data, response) = try? await urlSession.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+              let request = request("/app/api/workouts/planned?" + q, session: session) else { return nil }
+        guard let (data, response) = try? await urlSession.data(for: request) else {
+            WatchReport.failed("GET /app/api/workouts/planned", message: "no connection")
+            return nil
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard status == 200 else {
+            WatchReport.failed("GET /app/api/workouts/planned", status: status, message: serverMessage(data))
+            return nil
+        }
         return WatchPlan.parse(data, english: session.language == "en")
     }
 
@@ -153,26 +171,54 @@ enum WatchAPI {
         body["date"] = .string(date)
         body["lite"] = .bool(true)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        guard let json = try? JSONEncoder().encode(body),
-              let (_, response) = try? await urlSession.upload(for: request, from: json) else { return false }
+        guard let json = try? JSONEncoder().encode(body) else { return false }
+        guard let (data, response) = try? await urlSession.upload(for: request, from: json) else {
+            WatchReport.failed("POST /app/api/gym", message: "no connection")
+            return false
+        }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401 { store(nil) }
+        if !(200..<300).contains(status) { WatchReport.failed("POST /app/api/gym", status: status, message: serverMessage(data)) }
         return (200..<300).contains(status)
     }
 
     /// Exercises to swap in for `exercise` that fit the athlete's gym, with
     /// the load from their history (GET /app/api/gym/alternatives).
     static func gymAlternatives(date: String, exercise: String, inPlan: [String]) async -> [WatchGym.Option] {
-        var query = URLComponents()
-        query.queryItems = [URLQueryItem(name: "date", value: date), URLQueryItem(name: "exercise", value: exercise)]
-        if let data = try? JSONEncoder().encode(inPlan), let json = String(data: data, encoding: .utf8) {
-            query.queryItems?.append(URLQueryItem(name: "inPlan", value: json))
-        }
-        struct Found: Decodable { let name: String; let kg: Double?; let sets: JSONValue?; let reps: JSONValue? }
         struct Response: Decodable { let alternatives: [Found]? }
-        guard let q = query.percentEncodedQuery, let data = await get("/app/api/gym/alternatives?" + q),
+        guard let data = await alternatives(date: date, inPlan: inPlan, [URLQueryItem(name: "exercise", value: exercise)]),
               let list = (try? JSONDecoder().decode(Response.self, from: data))?.alternatives else { return [] }
-        return list.prefix(20).map { option($0.name, kg: $0.kg, sets: $0.sets, reps: $0.reps) }
+        return list.prefix(20).map { option($0) }
+    }
+
+    /// Three swaps for each of `exercises` in one request, kept on the watch
+    /// for a swap without the iPhone or internet (GymStore.keepSwaps); nil
+    /// offline or from an older server.
+    static func gymSwaps(date: String, exercises: [String], inPlan: [String]) async -> [String: [WatchGym.Option]]? {
+        struct Response: Decodable { let byExercise: [String: [Found]]? }
+        guard let data = await alternatives(date: date, inPlan: inPlan, [URLQueryItem(name: "exercises", value: json(exercises))]),
+              let found = (try? JSONDecoder().decode(Response.self, from: data))?.byExercise else { return nil }
+        return found.mapValues { list in list.prefix(3).map { option($0) } }
+    }
+
+    /// An exercise in GET /app/api/gym/alternatives' answer.
+    private struct Found: Decodable { let name: String; let kg: Double?; let sets: JSONValue?; let reps: JSONValue? }
+
+    private static func option(_ found: Found) -> WatchGym.Option {
+        option(found.name, kg: found.kg, sets: found.sets, reps: found.reps)
+    }
+
+    /// GET /app/api/gym/alternatives with the day, the plan's exercises and `items`.
+    private static func alternatives(date: String, inPlan: [String], _ items: [URLQueryItem]) async -> Data? {
+        var query = URLComponents()
+        query.queryItems = [URLQueryItem(name: "date", value: date), URLQueryItem(name: "inPlan", value: json(inPlan))] + items
+        // "+" would reach the server as a space.
+        guard let q = query.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B") else { return nil }
+        return await get("/app/api/gym/alternatives?" + q)
+    }
+
+    private static func json(_ names: [String]) -> String {
+        (try? JSONEncoder().encode(names)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
     }
 
     /// Exercises whose names hold `query`, the ones the gym allows first (GET /app/api/gym/exercises?q=).

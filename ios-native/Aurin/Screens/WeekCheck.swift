@@ -109,11 +109,13 @@ struct WeekCheckContent: View {
     var appliedText: String? = nil
     var busy = false
     var error: String? = nil
+    /// Inside the coach's card on Today: no card of its own.
+    var plain = false
     var onKeep: () -> Void
     var onApply: () -> Void
 
     var body: some View {
-        Card {
+        MaybeCard(plain: plain) {
             HStack(spacing: 7) {
                 Image(systemName: applied ? "checkmark.circle.fill" : "sparkles")
                     .scaledFont(14, weight: .semibold)
@@ -234,31 +236,23 @@ private struct WrapLayout: Layout {
     }
 }
 
-/// On Today: the morning check of the calendar. It shows only when the coach
-/// proposes a change, and for an hour after "Upravit".
+/// On Today: the morning check of the calendar, a thing in the coach's card
+/// (CoachThingsCard). It shows only when the coach proposes a change; after
+/// "Upravit" it confirms for a moment and goes.
 struct WeekCheckCard: View {
     @Environment(AppModel.self) private var model
-    @State private var check: WeekCheck?
+    let things: CoachThings
     @State private var busy = false
     @State private var error: String?
-    var top: CGFloat = 0
 
     var body: some View {
-        // A stack, not a Group: on an empty Group the task never runs.
-        VStack(spacing: 0) {
-            if let check, !(check.changes ?? []).isEmpty {
-                let applied = check.status == "applied"
-                WeekCheckContent(check: check, today: AppModel.localDate(Date()), applied: applied,
-                                 appliedText: applied ? appliedText(check) : nil, busy: busy, error: error,
-                                 onKeep: { Task { await decide(check, apply: false) } },
-                                 onApply: { Task { await decide(check, apply: true) } })
-                    .disabled(model.demo)
-                    .padding(.top, top)
-            }
-        }
-        .task {
-            guard !model.demo else { return }
-            check = try? await model.api.weekCheck()
+        if let check = things.check, !(check.changes ?? []).isEmpty {
+            let applied = check.status == "applied"
+            WeekCheckContent(check: check, today: AppModel.localDate(Date()), applied: applied,
+                             appliedText: applied ? appliedText(check) : nil, busy: busy, error: error, plain: true,
+                             onKeep: { Task { await decide(check, apply: false) } },
+                             onApply: { Task { await decide(check, apply: true) } })
+                .disabled(model.demo)
         }
     }
 
@@ -275,9 +269,14 @@ struct WeekCheckCard: View {
         error = nil
         do {
             let next = try await model.api.decideWeekCheck(date: date, apply: apply)
-            withAnimation { check = apply ? next : nil }
+            withAnimation { things.check = apply ? next : nil }
             if apply {
                 await model.refreshTraining()
+                // "Upraveno i v kalendáři." for a moment, then the next thing moves up;
+                // a session that did not change keeps its warning in view.
+                guard next?.changes?.contains(where: { $0.applied == false }) != true else { return }
+                try? await Task.sleep(for: CoachThings.settleDelay)
+                if things.check?.date == date { withAnimation(.snappy) { things.check = nil } }
             }
         } catch {
             self.error = error.localizedDescription

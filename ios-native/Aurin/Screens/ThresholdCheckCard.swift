@@ -101,12 +101,14 @@ enum ThresholdCheckMemory {
     static var kept: (check: ThresholdCheck?, at: Date)?
 }
 
-/// On Today: the threshold estimate and the test to confirm it. The athlete
-/// picks the day (the recommended one is chosen), or declines; after the test
-/// the new value is saved only when confirmed.
+/// One thing of the check in the coach's card on Today (CoachThingsCard): a
+/// test result to save, a result to type in, the planned test or the offer of
+/// one. The athlete picks the test's day (the recommended one is chosen), or
+/// declines; after the test the new value is saved only with Uložit.
 struct ThresholdCheckCard: View {
     @Environment(AppModel.self) private var model
-    @State private var check: ThresholdCheck?
+    let entry: ThresholdEntry
+    let things: CoachThings
     @State private var day: [String: String] = [:]
     @State private var typed: [String: String] = [:]
     @State private var busy = false
@@ -114,39 +116,29 @@ struct ThresholdCheckCard: View {
     /// The switches of Nastavení → Zóny: where a saved result also goes.
     @AppStorage("writeIntervals") private var writeIntervals = true
     @AppStorage("writeWahoo") private var writeWahoo = true
-    var top: CGFloat = 0
 
     var body: some View {
-        VStack(spacing: 0) {
-            if shows {
-                VStack(spacing: 12) {
-                    if let check {
-                        ForEach(check.results, id: \.sport) { result($0, current: check.current, connected: check.connected) }
-                        ForEach(check.manual, id: \.sport) { manual($0) }
-                        ForEach(check.scheduled, id: \.sport) { planned($0) }
-                        ForEach(check.offers) { offer($0) }
-                    }
-                    if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+        VStack(alignment: .leading, spacing: 12) {
+            if let check = things.threshold {
+                switch entry {
+                case .result(let sport):
+                    if let r = check.results.first(where: { $0.sport == sport }) { result(r, current: check.current, connected: check.connected) }
+                case .manual(let sport):
+                    if let m = check.manual.first(where: { $0.sport == sport }) { manual(m) }
+                case .planned(let sport):
+                    if let p = check.scheduled.first(where: { $0.sport == sport }) { planned(p) }
+                case .offer(let sport):
+                    if let o = check.offers.first(where: { $0.sport == sport }) { offer(o) }
                 }
-                .padding(.top, top)
             }
+            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
         }
-        .task {
-            guard !model.demo else { return }
-            if let kept = ThresholdCheckMemory.kept, Date().timeIntervalSince(kept.at) < 15 * 60 { check = kept.check; return }
-            await load()
-        }
-    }
-
-    private var shows: Bool {
-        if error != nil { return true }
-        guard let check else { return false }
-        return !(check.results.isEmpty && check.manual.isEmpty && check.scheduled.isEmpty && check.offers.isEmpty)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func load() async {
         let fresh = try? await model.api.thresholdCheck()
-        check = fresh
+        things.threshold = fresh
         if fresh != nil { ThresholdCheckMemory.kept = (fresh, Date()) }
     }
 
@@ -169,7 +161,7 @@ struct ThresholdCheckCard: View {
 
     @ViewBuilder private func offer(_ o: ThresholdCheck.Offer) -> some View {
         let chosen = day[o.sport] ?? o.recommended
-        Card {
+        VStack(alignment: .leading, spacing: 12) {
             WidgetHeader(title: sportTitle(o.sport) + " · " + metricName(o.metric), color: Palette.amberBar)
             Text(headline(o)).font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
             Text(L10n.f("Ověř to testem: %@ (%@).", o.testName, Fmt.duration(o.testMinutes ?? 60)))
@@ -220,7 +212,7 @@ struct ThresholdCheckCard: View {
     // MARK: - planned test
 
     private func planned(_ p: ThresholdCheck.Planned) -> some View {
-        Card {
+        VStack(alignment: .leading, spacing: 12) {
             WidgetHeader(title: sportTitle(p.sport) + " · " + L10n.tr("Test"), color: Palette.amberBar)
             Text(L10n.f("%@ · %@", p.name ?? L10n.tr("Test"), Fmt.dayHeading(p.testDate)))
                 .font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
@@ -235,7 +227,7 @@ struct ThresholdCheckCard: View {
     @ViewBuilder private func result(_ r: ThresholdCheck.Measured, current: ThresholdCheck.Current?, connected: ThresholdCheck.Connected?) -> some View {
         let lines = resultLines(r, current: current)
         if !lines.isEmpty {
-            Card {
+            VStack(alignment: .leading, spacing: 12) {
                 WidgetHeader(title: sportTitle(r.sport) + " · " + L10n.tr("Výsledek testu"), color: Palette.green)
                 ForEach(lines, id: \.self) { line in
                     Text(line).font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
@@ -298,7 +290,7 @@ struct ThresholdCheckCard: View {
     // MARK: - manual result
 
     private func manual(_ m: ThresholdCheck.Manual) -> some View {
-        Card {
+        VStack(alignment: .leading, spacing: 12) {
             WidgetHeader(title: sportTitle(m.sport) + " · " + L10n.tr("Výsledek testu"), color: Palette.amberBar)
             Text(L10n.f("Jak dopadl test %@?", Fmt.dayHeading(m.testDate))).font(Typo.sentence(20)).foregroundStyle(Palette.ink)
             ForEach(fields(m.testId), id: \.key) { (field: Field) in
@@ -360,6 +352,72 @@ struct ThresholdCheckCard: View {
             if case .string(let action)? = body["action"], ["schedule", "apply"].contains(action) { await model.refresh() }
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+}
+
+/// A thing of the threshold check. The server keeps one row per sport, so a
+/// sport is one thing that goes from the offer to the planned test to the result.
+enum ThresholdEntry: Hashable {
+    case result(String), manual(String), planned(String), offer(String)
+
+    var sport: String {
+        switch self {
+        case .result(let s), .manual(let s), .planned(let s), .offer(let s): return s
+        }
+    }
+}
+
+extension ThresholdCheckCard {
+    /// The check's things in the card's old order: results, then the test
+    /// planned, then the offers.
+    static func entries(_ check: ThresholdCheck?) -> [ThresholdEntry] {
+        guard let check else { return [] }
+        var out: [ThresholdEntry] = []
+        out += check.results.map { ThresholdEntry.result($0.sport) }
+        out += check.manual.map { ThresholdEntry.manual($0.sport) }
+        out += check.scheduled.map { ThresholdEntry.planned($0.sport) }
+        out += check.offers.map { ThresholdEntry.offer($0.sport) }
+        return out
+    }
+
+    /// The row's label in the coach's card, the same from the offer to the
+    /// result: "FTP", "Threshold pace".
+    var label: String {
+        let check = things.threshold
+        let sport = entry.sport
+        let testId: String?
+        switch entry {
+        case .offer:
+            if let o = check?.offers.first(where: { $0.sport == sport }) { return metricName(o.metric) }
+            testId = nil
+        case .planned: testId = check?.scheduled.first(where: { $0.sport == sport })?.testId
+        case .result: testId = check?.results.first(where: { $0.sport == sport })?.testId
+        case .manual: testId = check?.manual.first(where: { $0.sport == sport })?.testId
+        }
+        switch testId ?? "" {
+        case "test-ride-ftp20": return metricName("ftp")
+        case "test-ride-lthr30": return metricName("lthr")
+        case "test-swim-css": return metricName("swimCss")
+        default: return sport == "run" ? metricName("runThresholdPace") : L10n.tr("Test")
+        }
+    }
+
+    /// The row's line: "Your rides say 268 W", "FTP: 268 W (now 255 W)". Empty: nothing to show.
+    var summary: String {
+        guard let check = things.threshold else { return "" }
+        switch entry {
+        case .result(let sport):
+            return check.results.first { $0.sport == sport }.flatMap { resultLines($0, current: check.current).first } ?? ""
+        case .manual(let sport):
+            return check.manual.first { $0.sport == sport }.map { L10n.f("Jak dopadl test %@?", Fmt.dayHeading($0.testDate)) } ?? ""
+        case .planned(let sport):
+            return check.scheduled.first { $0.sport == sport }.map { L10n.f("%@ · %@", $0.name ?? L10n.tr("Test"), Fmt.dayHeading($0.testDate)) } ?? ""
+        case .offer(let sport):
+            guard let o = check.offers.first(where: { $0.sport == sport }) else { return "" }
+            guard o.reason != "missing", let estimate = o.estimate?.value else { return headline(o) }
+            let format = o.sport == "ride" ? "Podle jízd %@" : o.sport == "run" ? "Podle běhů %@" : o.sport == "swim" ? "Podle plavání %@" : "Podle tréninků %@"
+            return L10n.f(format, valueText(o.metric, estimate))
         }
     }
 }

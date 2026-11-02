@@ -71,18 +71,15 @@ export async function allowRequest(db, key, limits = {}, now = Date.now()) {
       AND (request_limits.hour IS NOT excluded.hour OR request_limits.hour_count < ?)
       AND (request_limits.day IS NOT excluded.day OR request_limits.day_count < ?)`)
     .bind(key, time.slice(0, 16), time.slice(0, 13), time.slice(0, 10), seconds, cap(limits.minute), cap(limits.hour), cap(limits.day)).run();
-  const allowed = Number(claimed.meta?.changes) > 0;
-  if (allowed) await db.prepare("DELETE FROM request_limits WHERE updated_at < ?").bind(seconds - STALE_SECONDS).run().catch(() => {});
-  return allowed;
+  return Number(claimed.meta?.changes) > 0;
 }
 
-// Whether one more request for `key` would pass now, without claiming it.
-export async function wouldAllow(db, key, limits = {}, now = Date.now()) {
-  await ensureTable(db);
-  const time = new Date(now).toISOString(), row = await db.prepare("SELECT minute, minute_count, hour, hour_count, day, day_count FROM request_limits WHERE key = ?").bind(key).first();
-  if (!row) return true;
-  const full = (span, at, count) => Number.isFinite(Number(limits[span])) && Number(limits[span]) > 0 && row[span] === at && Number(count) >= Number(limits[span]);
-  return !(full("minute", time.slice(0, 16), row.minute_count) || full("hour", time.slice(0, 13), row.hour_count) || full("day", time.slice(0, 10), row.day_count));
+// Rows nobody has used for two days, removed by the nightly cron (entrypoint.js).
+// It used to run with every allowed request, and without an index on updated_at
+// each run read the whole table (security review 2026-11-02, SEC-013).
+export async function forgetStaleRequestLimits(db, now = Date.now()) {
+  try { return Number((await db.prepare("DELETE FROM request_limits WHERE updated_at < ?").bind(Math.floor(now / 1000) - STALE_SECONDS).run())?.meta?.changes) || 0; }
+  catch (error) { if (/no such table/i.test(String(error?.message))) return 0; throw error; }
 }
 
 // Gives back a request claimed for `key` that did not happen after all.
@@ -102,5 +99,4 @@ export const CLIENT_LIMITS = { minute: 5, hour: 30 };
 export async function allowClient(db, request, secret, scope, now = Date.now(), limits = CLIENT_LIMITS) {
   return allowRequest(db, scope + ":" + await clientKey(request, secret), limits, now);
 }
-export const clientWouldPass = async (db, request, secret, scope, now = Date.now(), limits = CLIENT_LIMITS) => wouldAllow(db, scope + ":" + await clientKey(request, secret), limits, now);
 export const releaseClient = async (db, request, secret, scope, now = Date.now()) => releaseRequest(db, scope + ":" + await clientKey(request, secret), now);

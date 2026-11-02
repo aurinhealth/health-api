@@ -232,6 +232,7 @@
 "Jím obvykle" = "I usually eat";
 "Jízda" = "Ride";
 "K čemu" = "What for";
+"Kde se to stalo" = "Where did it happen";
 "Kalorie" = "Calories";
 "Kalorie, živiny a pití. Vodu přidáš jedním klepnutím." = "Calories, macros and drinks. Add water with one tap.";
 "Kapka" = "Drop";
@@ -2950,7 +2951,8 @@
 "Nahlášeno" = "Reported";
 "Díky, nahlášeno." = "Thanks, reported.";
 "Opraveno" = "Fixed";
-"Uloženo. Díky, teď ho najdou i ostatní." = "Saved. Thanks, now others can find it too.";
+"Uloženo. Díky, po kontrole ho najdou i ostatní." = "Saved. Thanks, others will find it once it's checked.";
+"Navrhnout pro všechny" = "Suggest for everyone";
 "Co nesedí?" = "What's wrong?";
 "Energie nebo živiny" = "Energy or nutrients";
 "Název nebo značka" = "Name or brand";
@@ -2960,6 +2962,7 @@
 "Nahlásit" = "Report";
 "Opravy · %d" = "Corrections · %d";
 "Hlášení · %d" = "Reports · %d";
+"Nové · %d" = "New · %d";
 "Druh" = "Kind";
 "Hlášení" = "Report";
 "Co nesedí" = "What's wrong";
@@ -3254,7 +3257,6 @@
 "Nainstalovat" = "Install";
 
 /* Onboarding review 2026-10-28: invite, consent first, notifications page, first days. */
-"Aurin je zatím jen na pozvánku. [Nemáš ji? Přidej se na čekací listinu.](https://aurin.health/#join)" = "Aurin is invite-only for now. [No invite? Join the waitlist.](https://aurin.health/#join)";
 "Tento účet nemá do Aurinu pozvánku. Aurin je teď jen pro pozvané." = "This account has no invite to Aurin. Aurin is invite-only for now.";
 "Tento Google účet nemá do Aurinu pozvánku. Aurin je teď jen pro pozvané." = "This Google account has no invite to Aurin. Aurin is invite-only for now.";
 "Přidat se na čekací listinu" = "Join the waitlist";
@@ -3584,6 +3586,15 @@
 "běží" = "running";
 "Uloží délku a konec kardia" = "Saves the cardio's length and end";
 
+/* One coach card on Today (CoachThingsCard.swift) */
+"Kouč se ptá" = "Check-in";
+"Po tréninku" = "After workout";
+"Podle jízd %@" = "Your rides say %@";
+"Podle běhů %@" = "Your runs say %@";
+"Podle tréninků %@" = "Your workouts say %@";
+"Podle plavání %@" = "Your swims say %@";
+"Měním…" = "Swapping…";
+"Nechat plán" = "Keep plan";
 "Zapisovat do Wahoo" = "Write to Wahoo";
 "FTP a výkonové zóny se po uložení pošlou do Wahoo" = "FTP and power zones are sent to Wahoo after saving";
 "Zapsáno do Wahoo" = "Written to Wahoo";
@@ -3606,3 +3617,8 @@
 "Po uložení se přepočítají tvoje zóny a pošlou do %@." = "Saving recalculates your zones and sends them to %@.";
 "Po uložení se přepočítají tvoje zóny a pošlou do %@ a %@." = "Saving recalculates your zones and sends them to %@ and %@.";
 "Podle nejlepších 20 minut jízdy." = "From the best 20 minutes of the ride.";
+
+"Ukončit trénink" = "End workout";
+"Ještě cvičím" = "Keep going";
+"Pořád cvičíš?" = "Still working out?";
+"Žádná série 10 minut. Ukonči trénink, nebo pokračuj." = "No set for 10 min. End the workout or keep going.";

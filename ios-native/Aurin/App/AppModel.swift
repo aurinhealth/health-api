@@ -162,13 +162,18 @@ final class AppModel {
     /// A deleted workout waiting a few seconds for "Zpět" (RootView): the
     /// deletion reaches the server and Apple Health only after that.
     var undoToast: PlanToast?
-    /// "Uloženo. Díky, teď ho najdou i ostatní." after a food read from its
-    /// label: it enters the common catalogue at once (src/personal-foods.js).
+    /// "Uloženo. Díky, po kontrole ho najdou i ostatní." after a food read from
+    /// its label was suggested for everyone (suggestNewFood).
     var thanks: String?
 
-    func thankForLabel(_ product: FoodProduct) {
-        guard !demo, product.source == "package_label", !product.perPortion, product.origin == nil else { return }
-        thanks = L10n.tr("Uloženo. Díky, teď ho najdou i ostatní.")
+    /// "Navrhnout pro všechny": the food stays the user's own; the owner gets it
+    /// to approve into the common catalogue (Nastavení → Návrhy oprav → Nové).
+    func suggestNewFood(_ product: FoodProduct) {
+        guard !demo, product.canSuggestNew else { return }
+        let api = self.api
+        // In the background: a refused suggestion (daily limit) must not hold up the food.
+        Task.detached { try? await api.suggestNewFood(product) }
+        thanks = L10n.tr("Uloženo. Díky, po kontrole ho najdou i ostatní.")
     }
 
     /// hide: the planned event that leaves the week and the calendar at once;

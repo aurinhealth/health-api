@@ -7,7 +7,7 @@ import XCTest
 @MainActor
 final class GoogleSignInCallbackTests: XCTestCase {
     func testTheBrowserSheetClosesOnlyOnAurinsReturnAddress() throws {
-        let callback = AuthService.callback(try XCTUnwrap(URL(string: "https://aurin.health")), path: AuthService.signInReturnPath, https: true)
+        let callback = try AuthService.callback(XCTUnwrap(URL(string: "https://aurin.health")), path: AuthService.signInReturnPath)
         XCTAssertTrue(callback.matchesURL(try XCTUnwrap(URL(string: "https://aurin.health/auth/app/return?token=abc.def"))))
         XCTAssertTrue(callback.matchesURL(try XCTUnwrap(URL(string: "https://aurin.health/auth/app/return?error=cancelled"))))
         XCTAssertFalse(callback.matchesURL(try XCTUnwrap(URL(string: "aurin://auth?token=abc.def"))))
@@ -15,16 +15,15 @@ final class GoogleSignInCallbackTests: XCTestCase {
         XCTAssertFalse(callback.matchesURL(try XCTUnwrap(URL(string: "https://evil.example/auth/app/return?token=abc.def"))))
     }
 
-    func testTheTestServerReturnsToItsOwnHostAndAnOlderServerToTheOldScheme() throws {
-        let staging = AuthService.callback(try XCTUnwrap(URL(string: "https://staging.aurin.health")), path: AuthService.signInReturnPath, https: true)
+    func testTheTestServerReturnsToItsOwnHost() throws {
+        let staging = try AuthService.callback(XCTUnwrap(URL(string: "https://staging.aurin.health")), path: AuthService.signInReturnPath)
         XCTAssertTrue(staging.matchesURL(try XCTUnwrap(URL(string: "https://staging.aurin.health/auth/app/return?token=abc.def"))))
         XCTAssertFalse(staging.matchesURL(try XCTUnwrap(URL(string: "https://aurin.health/auth/app/return?token=abc.def"))))
-        let older = AuthService.callback(try XCTUnwrap(URL(string: "https://aurin.health")), path: AuthService.signInReturnPath, https: false)
-        XCTAssertTrue(older.matchesURL(try XCTUnwrap(URL(string: "loadwise://auth?token=abc.def"))))
+        XCTAssertFalse(staging.matchesURL(try XCTUnwrap(URL(string: "loadwise://auth?token=abc.def"))))
     }
 
     func testConnectingAServiceClosesOnTheConnectedAddress() throws {
-        let callback = AuthService.callback(try XCTUnwrap(URL(string: "https://aurin.health")), path: AuthService.connectedPath, https: true)
+        let callback = try AuthService.callback(XCTUnwrap(URL(string: "https://aurin.health")), path: AuthService.connectedPath)
         XCTAssertTrue(callback.matchesURL(try XCTUnwrap(URL(string: "https://aurin.health/auth/app/connected?event=whoop"))))
         XCTAssertFalse(callback.matchesURL(try XCTUnwrap(URL(string: "https://aurin.health/auth/app/return?token=abc.def"))))
     }

@@ -27,7 +27,7 @@
 // Wahoo's terms: data deleted on disconnecting, the connection itself never paid.
 import { exportDue, failedExport } from './export-retry.js';
 import { saveConnectionSecret, deleteConnectionSecret, refreshConnectionTokens, tokensDue } from './connection-secrets.js';
-import { connectReturn, connectReturnUrl, oauthStateValue, startedBy } from './connect-return.js';
+import { connectReturnUrl, oauthStateValue, startedBy } from './connect-return.js';
 import { appOrigin } from './app-origin.js';
 import { markConnectionBroken, markConnectionOk, clearConnectionHealth } from './connection-health.js';
 import { healthPointJson } from './health-point-json.js';
@@ -80,7 +80,7 @@ async function tokenRequest(env, params, fetchImpl) {
 
 export async function handleWahooOAuth(request, env, pathname, fetchImpl = fetch) {
   if (pathname === '/oauth/wahoo' && request.method === 'GET') {
-    if (!wahooConfigured(env)) return back(connectReturnUrl(connectReturn(request), 'wahoo-failed', env));
+    if (!wahooConfigured(env)) return back(connectReturnUrl('wahoo-failed', env));
     const state = crypto.randomUUID();
     const u = new URL(AUTHORIZE);
     u.searchParams.set('client_id', String(env.WAHOO_CLIENT_ID).trim());
@@ -88,19 +88,19 @@ export async function handleWahooOAuth(request, env, pathname, fetchImpl = fetch
     u.searchParams.set('response_type', 'code');
     u.searchParams.set('scope', WAHOO_SCOPES.join(' '));
     u.searchParams.set('state', state);
-    return back(u.toString(), STATE_COOKIE + '=' + oauthStateValue(state, request, env) + '; Max-Age=600; Path=/oauth/wahoo; Secure; HttpOnly; SameSite=Lax');
+    return back(u.toString(), STATE_COOKIE + '=' + oauthStateValue(state, env) + '; Max-Age=600; Path=/oauth/wahoo; Secure; HttpOnly; SameSite=Lax');
   }
   if (pathname !== '/oauth/wahoo/callback' || request.method !== 'GET') return null;
   const url = new URL(request.url), code = url.searchParams.get('code'), state = url.searchParams.get('state');
   const m = (request.headers.get('Cookie') || '').match(new RegExp('(?:^|;\\s*)' + STATE_COOKIE + '=([^;]+)'));
-  const [expected, to, uid] = decodeURIComponent(m?.[1] || '').split('.');
-  if (!state || state !== expected) return back(connectReturnUrl(to || connectReturn(request), 'wahoo-failed', env));
+  const [expected, uid] = decodeURIComponent(m?.[1] || '').split('.');
+  if (!state || state !== expected) return back(connectReturnUrl('wahoo-failed', env));
   // Started by another account than the one signed in now: its keys are not stored here.
-  if (!startedBy(uid, env)) return back(connectReturnUrl(to, 'wahoo-failed', env));
-  if (url.searchParams.get('error') || !code) return back(connectReturnUrl(to, 'wahoo-cancelled', env));
-  if (!wahooConfigured(env)) return back(connectReturnUrl(to, 'wahoo-failed', env));
+  if (!startedBy(uid, env)) return back(connectReturnUrl('wahoo-failed', env));
+  if (url.searchParams.get('error') || !code) return back(connectReturnUrl('wahoo-cancelled', env));
+  if (!wahooConfigured(env)) return back(connectReturnUrl('wahoo-failed', env));
   const data = await tokenRequest(env, { grant_type: 'authorization_code', code, redirect_uri: redirectUri(env, request) }, fetchImpl);
-  if (!data) { console.error('Wahoo OAuth token exchange failed'); return back(connectReturnUrl(to, 'wahoo-failed', env)); }
+  if (!data) { console.error('Wahoo OAuth token exchange failed'); return back(connectReturnUrl('wahoo-failed', env)); }
   // The Wahoo user id: the webhook says whose workout it brings by it.
   const user = await fetchImpl(API + '/v1/user', { headers: { Authorization: 'Bearer ' + data.access_token, Accept: 'application/json' }, signal: AbortSignal.timeout(15000) })
     .then(r => r.ok ? r.json() : null).catch(() => null);
@@ -108,7 +108,7 @@ export async function handleWahooOAuth(request, env, pathname, fetchImpl = fetch
   await saveConnectionSecret(env, SOURCE, text);
   await clearConnectionHealth(env, SOURCE);
   env.WAHOO_TOKEN = text;
-  return back(connectReturnUrl(to, 'wahoo', env));
+  return back(connectReturnUrl('wahoo', env));
 }
 
 // A valid access token, refreshed (and the new pair saved) when it is about to run out.

@@ -15,8 +15,8 @@ struct FoodSuggestion: Decodable, Identifiable, Equatable {
     let status: String
     let createdAt: String?
     let fromUser: FromUser?
-    /// "correction", or "report" with what is wrong (reason), a note and how
-    /// many reports the food has.
+    /// "correction", "new_food" (a food the catalogue doesn't have), or
+    /// "report" with what is wrong (reason), a note and how many reports the food has.
     var kind: String?
     var reason: String?
     var note: String?
@@ -31,7 +31,7 @@ struct FoodSuggestion: Decodable, Identifiable, Equatable {
 struct FoodSuggestionList: Decodable {
     let suggestions: [FoodSuggestion]
     let counts: [String: Int]?
-    /// Pending per kind: "correction" and "report".
+    /// Pending per kind: "correction", "report" and "new_food".
     var pending: [String: Int]?
 }
 
@@ -48,6 +48,12 @@ extension APIClient {
     func suggestFoodCorrection(before: FoodProduct, after: FoodProduct) async throws {
         struct Body: Encodable { let before: FoodProduct; let after: FoodProduct }
         let _: JSONValue = try await send("/app/api/food/suggestions", method: "POST", body: Body(before: before, after: after))
+    }
+
+    /// "Navrhnout pro všechny": a food the catalogue doesn't have, for the owner to approve.
+    func suggestNewFood(_ product: FoodProduct) async throws {
+        struct Body: Encodable { let kind: String; let product: FoodProduct }
+        let _: JSONValue = try await send("/app/api/food/suggestions", method: "POST", body: Body(kind: "new_food", product: product))
     }
 
     /// The owner only: pending, approved or rejected suggestions.

@@ -291,6 +291,24 @@ final class AppleHealth {
 
     private static let resumeKey = "appleHealth.resumeFor"
 
+    /// What was last sent, per server (as lastSyncKey), and when.
+    private static var sentPrintKey: String { ServerChoice.current == .live ? "appleHealth.sentPrint" : "appleHealth.sentPrint.staging" }
+    private static var sentAtKey: String { ServerChoice.current == .live ? "appleHealth.sentAt" : "appleHealth.sentAt.staging" }
+
+    /// The uploads' content without their windows (whose end moves with the
+    /// clock), for this account: the same print is the same data.
+    private static func uploadPrint(_ uploads: [AppleHealthUpload]) -> String? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        var data = Data((UserDefaults.standard.string(forKey: AvatarStore.emailKey) ?? "").utf8)
+        for var upload in uploads {
+            upload.windows = nil
+            guard let part = try? encoder.encode(upload) else { return nil }
+            data.append(part)
+        }
+        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
     private static func fingerprint(_ email: String) -> String {
         SHA256.hash(data: Data(email.lowercased().utf8)).map { String(format: "%02x", $0) }.joined()
     }
@@ -363,7 +381,8 @@ final class AppleHealth {
         guard enabled, isAvailable, observers.isEmpty else { return }
         let types = Set(categories.flatMap(\.observed))
         for type in types {
-            let query = HKObserverQuery(sampleType: type, predicate: nil) { _, completion, error in
+            // Not for what Aurin wrote itself (water, food, weight sent to Apple Health).
+            let query = HKObserverQuery(sampleType: type, predicate: HealthReader.notOurs) { _, completion, error in
                 guard error == nil else { completion(); return }
                 // HealthKit's handler may be called from any thread.
                 nonisolated(unsafe) let completion = completion
@@ -418,7 +437,7 @@ final class AppleHealth {
         // the empty windows would delete nights and workouts on the server.
         guard UIApplication.shared.isProtectedDataAvailable else { return SyncOutcome(ok: false, changed: false) }
         if !force, let lastSync, Date().timeIntervalSince(lastSync) < 600 { return SyncOutcome(ok: true, changed: false) }
-        let task = Task { await perform(api: api) }
+        let task = Task { await perform(api: api, force: force) }
         running = task
         runningSince = Date()
         syncing = true
@@ -449,7 +468,7 @@ final class AppleHealth {
         if running != nil, runningSince < left { abandon() }
     }
 
-    private func perform(api: APIClient) async -> SyncOutcome {
+    private func perform(api: APIClient, force: Bool) async -> SyncOutcome {
         let round = generation
         // A type added in an update (muscle mass) is asked for once, in the app;
         // granted, its history comes with this sync.
@@ -467,6 +486,19 @@ final class AppleHealth {
         do {
             await reader.hide(hidden, in: categories)
             guard let uploads = await reader.collect(categories, days: days, now: started) else { return SyncOutcome(ok: false, changed: false) }
+            // The same days read again with nothing new (most HealthKit wakes and
+            // refreshes): nothing goes out. The radio stays off and the server
+            // reads and writes no rows. Sent anyway every few hours, and always
+            // for the history (days nil) and a forced sync.
+            let uploadPrint = Self.uploadPrint(uploads)
+            if !force, days != nil, let uploadPrint, uploadPrint == UserDefaults.standard.string(forKey: Self.sentPrintKey),
+               let sentAt = UserDefaults.standard.object(forKey: Self.sentAtKey) as? Date, started.timeIntervalSince(sentAt) < 6 * 3600 {
+                guard round == generation else { return SyncOutcome(ok: false, changed: false) }
+                lastSync = started
+                UserDefaults.standard.set(started, forKey: Self.lastSyncKey)
+                message = nil
+                return SyncOutcome(ok: true, changed: false)
+            }
             var changed = false
             for upload in uploads {
                 // Signed out or another account meanwhile: this iPhone's data is not theirs to get.
@@ -478,6 +510,8 @@ final class AppleHealth {
             guard round == generation else { return SyncOutcome(ok: false, changed: changed) }
             lastSync = started
             UserDefaults.standard.set(started, forKey: Self.lastSyncKey)
+            UserDefaults.standard.set(uploadPrint, forKey: Self.sentPrintKey)
+            UserDefaults.standard.set(started, forKey: Self.sentAtKey)
             if sexHistory { JournalSwitch.sexHistory(false) }
             message = nil
             return SyncOutcome(ok: true, changed: changed)
@@ -703,7 +737,11 @@ final class HealthReader: @unchecked Sendable {
     /// marked with an aurin: sync identifier): the server has it already.
     /// A workout recorded live in Režim tréninku (LiveWorkout) has no such
     /// mark and is read like a watch's, so its calories and heart rate count.
-    private var notOurs: NSPredicate {
+    private var notOurs: NSPredicate { Self.notOurs }
+
+    /// Also what wakes the app (AppleHealth.start): a drink or a meal Aurin
+    /// itself wrote to Apple Health woke it for a sync that brought nothing back.
+    static var notOurs: NSPredicate {
         NSCompoundPredicate(notPredicateWithSubpredicate: NSCompoundPredicate(andPredicateWithSubpredicates: [
             HKQuery.predicateForObjects(from: HKSource.default()),
             HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeySyncIdentifier)

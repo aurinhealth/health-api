@@ -1,12 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { handleWaitlistSignup, listWaitlist, decideWaitlist, ascToken, TESTER_LIMIT, forgetOldWaitlist } from "../src/testflight-waitlist.js";
 
 const origin = "https://aurin.health";
-const signup = (env, email, headers = {}, token, fetchImpl) => handleWaitlistSignup(new Request(origin + "/waitlist", { method: "POST",
-  headers: { Origin: origin, "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.9", ...headers }, body: JSON.stringify({ email, token }) }), env, "/waitlist", fetchImpl);
+// Turnstile as Cloudflare answers for a person on aurin.health; a test's env without
+// TURNSTILE_SECRET_KEY gets one, an env that names it (even empty) keeps its own.
+const person = async (url, init) => Response.json({ success: init.body.get("response") === "ok", action: "waitlist", hostname: "aurin.health" });
+const withKey = env => ("TURNSTILE_SECRET_KEY" in env ? env : { ...env, TURNSTILE_SECRET_KEY: "secret" });
+const signup = (env, email, headers = {}, token = "ok", fetchImpl = person) => handleWaitlistSignup(new Request(origin + "/waitlist", { method: "POST",
+  headers: { Origin: origin, "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.9", ...headers }, body: JSON.stringify({ email, token }) }), withKey(env), "/waitlist", fetchImpl);
 
 async function keyPem() {
   const pair = await webcrypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
@@ -107,24 +112,55 @@ test("with Turnstile on, only a form a person sent is stored, and a bot doesn't 
     calls.push({ url, secret: init.body.get("secret"), response: init.body.get("response"), ip: init.body.get("remoteip") });
     const token = init.body.get("response");
     if (token === "down") throw new Error("network");
-    return Response.json(token === "good" ? { success: true, action: "waitlist" } : token === "other" ? { success: true, action: "login" } : { success: false });
+    return Response.json(token === "good" ? { success: true, action: "waitlist", hostname: "aurin.health" }
+      : token === "other" ? { success: true, action: "login", hostname: "aurin.health" }
+      // A token solved on another site that embeds the public site key (SEC-005).
+      : token === "elsewhere" ? { success: true, action: "waitlist", hostname: "evil.example" }
+      // The test server's token is no token for the live server.
+      : token === "staging" ? { success: true, action: "waitlist", hostname: "staging.aurin.health" }
+      : { success: false });
   };
   const env = { DB: createD1(), SESSION_SECRET: "s", TURNSTILE_SECRET_KEY: "secret" };
   const codes = [];
-  for (const [i, token] of [undefined, "bad", "other", "down", "good"].entries()) {
+  for (const [i, token] of ["", "bad", "other", "down", "elsewhere", "staging", "good"].entries()) {
     codes.push((await signup(env, `p${i}@x.cz`, { "CF-Connecting-IP": "203.0.113." + i }, token, cloudflare)).status);
   }
-  assert.deepEqual(codes, [403, 403, 403, 403, 200]);
-  assert.equal(calls.length, 4, "no token, no call to Cloudflare");
-  assert.deepEqual(calls.at(-1), { url: "https://challenges.cloudflare.com/turnstile/v0/siteverify", secret: "secret", response: "good", ip: "203.0.113.4" });
-  assert.deepEqual((await listWaitlist(env.DB, {})).pending.map(p => p.email), ["p4@x.cz"]);
+  assert.deepEqual(codes, [403, 403, 403, 403, 403, 403, 200]);
+  assert.equal(calls.length, 6, "no token, no call to Cloudflare");
+  assert.deepEqual(calls.at(-1), { url: "https://challenges.cloudflare.com/turnstile/v0/siteverify", secret: "secret", response: "good", ip: "203.0.113.6" });
+  assert.deepEqual((await listWaitlist(env.DB, {})).pending.map(p => p.email), ["p6@x.cz"]);
   // Only the one that passed counts towards the day's 300 for everyone.
   assert.equal(env.DB.sqlite.prepare("SELECT day_count FROM request_limits WHERE key = 'waitlist:all'").get().day_count, 1);
 });
 
-test("without TURNSTILE_SECRET_KEY (the test server) the form works as before", async t => {
+test("without TURNSTILE_SECRET_KEY nothing is stored and nothing is counted (SEC-005)", async t => {
   const errors = t.mock.method(console, "error", () => {});
-  const env = { DB: createD1(), SESSION_SECRET: "s" };
-  assert.equal((await signup(env, "a@x.cz", {}, undefined, () => { throw new Error("no call"); })).status, 200);
+  const env = { DB: createD1(), SESSION_SECRET: "s", TURNSTILE_SECRET_KEY: "" };
+  const response = await signup(env, "a@x.cz", {}, "ok", () => { throw new Error("no call"); });
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).message, /closed/);
   assert.match(String(errors.mock.calls[0].arguments[0]), /TURNSTILE_SECRET_KEY/);
+  assert.deepEqual((await listWaitlist(env.DB, {})).pending, []);
+  assert.equal(env.DB.sqlite.prepare("SELECT name FROM sqlite_master WHERE name = 'request_limits'").get(), undefined, "no D1 write for a closed list");
+});
+
+test("on the test server a token from staging.aurin.health passes", async () => {
+  const env = { DB: createD1(), SESSION_SECRET: "s", TURNSTILE_SECRET_KEY: "secret" };
+  const staging = "https://staging.aurin.health";
+  const cloudflare = async () => Response.json({ success: true, action: "waitlist", hostname: "staging.aurin.health" });
+  const request = new Request(staging + "/waitlist", { method: "POST", headers: { Origin: staging, "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.9" },
+    body: JSON.stringify({ email: "a@x.cz", token: "ok" }) });
+  assert.equal((await handleWaitlistSignup(request, env, "/waitlist", cloudflare)).status, 200);
+});
+
+test("the security review's test sign-up leaves the test server's list", async () => {
+  const db = createD1();
+  await signup({ DB: db, SESSION_SECRET: "s" }, "sec005-poc-1730550000@example.com", { "CF-Connecting-IP": "203.0.113.1" });
+  await signup({ DB: db, SESSION_SECRET: "s" }, "jana@x.cz", { "CF-Connecting-IP": "203.0.113.2" });
+  db.sqlite.exec(readFileSync(new URL("../migrations/0036_waitlist_review_entry.sql", import.meta.url), "utf8"));
+  assert.deepEqual((await listWaitlist(db, {})).pending.map(p => p.email), ["jana@x.cz"]);
+  // A database that never had a sign-up gets the table and nothing else.
+  const empty = createD1();
+  empty.sqlite.exec(readFileSync(new URL("../migrations/0036_waitlist_review_entry.sql", import.meta.url), "utf8"));
+  assert.deepEqual((await listWaitlist(empty, {})).pending, []);
 });

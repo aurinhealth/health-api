@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import WatchConnectivity
 
 /// Hands Today to the Apple Watch app (AurinWatch) over WatchConnectivity:
@@ -64,6 +65,7 @@ final class WatchBridge: NSObject {
         training = nil
         healthLoaded = nil
         gymDays = [:]
+        lastContext = nil
         guard let session, session.activationState == .activated else { return }
         try? session.updateApplicationContext([:])
     }
@@ -74,10 +76,18 @@ final class WatchBridge: NSObject {
     }
 
     /// The 90 days of resting HR and HRV live in Health only: loaded once an
-    /// hour while the watch app is installed.
+    /// hour while the watch app is installed and the app is open. In the
+    /// background (HealthKit wakes, the refresh task) once a day: the history
+    /// changes with the night, and each load was two requests on the radio.
     private func loadHealthIfNeeded(for date: String) {
         guard watchReady, !loadingHealth else { return }
-        if let health, health.date == date, let healthLoaded, Date().timeIntervalSince(healthLoaded) < 3600 { return }
+        let background = UIApplication.shared.applicationState != .active
+        // Woken without the app: the history the app saved today will do.
+        if background, health == nil, let saved = SnapshotCache.load(HealthSnapshot.self, key: "health")?.value, saved.date == date {
+            health = saved
+        }
+        let fresh = healthLoaded.map { Date().timeIntervalSince($0) < 3600 } ?? false
+        if let health, health.date == date, background || fresh { return }
         loadingHealth = true
         Task { @MainActor in
             defer { loadingHealth = false }
@@ -137,9 +147,11 @@ final class WatchBridge: NSObject {
         guard watchReady, let session else { return }
         var context: [String: Any] = [:]
         var alarm: WatchSnapshot.Alarm?
+        var sentSnapshot: WatchSnapshot?
         if let today {
             let snapshot = Self.snapshot(today, health: health, training: training, profile: profile)
             alarm = snapshot.alarm
+            sentSnapshot = snapshot
             if let data = snapshot.encoded() { context[WatchSnapshot.contextKey] = data }
         }
         // The iPhone's backup for the watch's alarm follows the wake times.
@@ -150,9 +162,28 @@ final class WatchBridge: NSObject {
         (settings.restSets, settings.restExercises) = Self.restSettings
         context[WatchSettings.contextKey] = settings.encoded()
         if let signIn = Self.signIn()?.encoded() { context[WatchSession.contextKey] = signIn }
-        try? session.updateApplicationContext(context)
+        // The same Today again (a refresh with nothing new; only the time it
+        // was made differs): the watch already has it. Sent, it woke the watch
+        // in the background just to throw it away.
+        let rest = [WatchGym.replyKey, WatchSettings.contextKey, WatchSession.contextKey].map { context[$0] as? Data }
+        var unchanged = sentSnapshot
+        unchanged?.updated = lastContext?.snapshot?.updated ?? .distantPast
+        if let lastContext, lastContext.snapshot == unchanged, lastContext.rest == rest,
+           !session.applicationContext.isEmpty {
+            lastSent = Date()
+            return
+        }
+        do {
+            try session.updateApplicationContext(context)
+            lastContext = (sentSnapshot, rest)
+        } catch {
+            lastContext = nil
+        }
         lastSent = Date()
     }
+
+    /// What the watch got last (sendContext), to leave out the same again.
+    private var lastContext: (snapshot: WatchSnapshot?, rest: [Data?])?
 
     /// Training mode started here: a watch app that is running opens the gym too.
     func openWatchGym() {
@@ -196,6 +227,14 @@ final class WatchBridge: NSObject {
     var watchState: (paired: Bool, installed: Bool, reachable: Bool) {
         guard let session, session.activationState == .activated else { return (false, false, false) }
         return (session.isPaired, session.isWatchAppInstalled, session.isReachable)
+    }
+
+    /// What the watch app last said about itself (AurinWatch/WatchReport.swift),
+    /// for "Nahlásit problém"; nil before a watch app that sends it.
+    var watchDiagnostics: WatchDiagnostics? {
+        guard let session, session.activationState == .activated,
+              let data = session.receivedApplicationContext[WatchDiagnostics.contextKey] as? Data else { return nil }
+        return WatchDiagnostics.decode(data)
     }
 
     /// The saved Today when the app was woken only for the watch.
