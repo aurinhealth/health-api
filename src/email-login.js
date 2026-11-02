@@ -1,7 +1,8 @@
 // Signing in with a one-time code sent by e-mail.
 // POST /auth/email/start { email } answers the same way for every address, so the
 // page never tells who has access; the code is sent in the background, and only to
-// active users, invited addresses and the owner. POST /auth/email/verify
+// active users, invited addresses and the owner (anyone, with OPEN_SIGNUP). A network that
+// opened its new accounts for today hears so only in verify, after the code. POST /auth/email/verify
 // { email, code } signs in. A code is valid for 10 minutes and allows 5 tries, and after
 // 20 wrong codes in a day (UTC) an address is locked until midnight. An address gets at most
 // one code a minute and 10 a day. A device that once signed in with the address (the signed
@@ -17,7 +18,7 @@
 // account asks for at most 2 a minute, 5 an hour and 10 a day, one caller for 5, 20 and 30.
 import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie, knownDevice, knownDeviceCookie, heldKnownDevice } from "./dashboard-auth.js";
 import { allowClient, allowRequest } from "./ip-rate-limit.js";
-import { normalizeEmail, emailCodeAccess, signInEmailUser, changeUserEmail, SignupLimited, signupOpenFor } from "./tenancy.js";
+import { normalizeEmail, emailCodeAccess, signInEmailUser, changeUserEmail, SignupLimited } from "./tenancy.js";
 import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail, stepUpCodeEmail } from "./email-sender.js";
 import { siteLang } from "./site-pages.js";
 import { reviewCodeActive } from "./app-review.js";
@@ -66,10 +67,9 @@ export async function handleEmailLogin(request, env, pathname, ctx) {
   if (email.length > 254 || !EMAIL_PATTERN.test(email)) return json({ message: L("Zadej platný e-mail.", "Enter a valid email.") }, 400);
   if (pathname === "/auth/email/start") {
     if (!(await allowClient(env.DB, request, sessionSecret(env), "email", Date.now(), START_LIMITS))) return json({ message: TOO_MANY() }, 429);
-    // A new address from a network that opened its new accounts for today: told now,
-    // not after the code (NEW_ACCOUNT_LIMITS, tenancy.js). Callers are held by
-    // START_LIMITS above, so this cannot be used to try many addresses.
-    if (!(await signupOpenFor(env.DB, env, email, request))) return json({ message: new SignupLimited().message }, 429);
+    // A network that opened its new accounts for today (NEW_ACCOUNT_LIMITS, tenancy.js) is told
+    // so only after the code, in verify: an answer here that differed for a new address would
+    // tell anyone on such a network which addresses have an account.
     const known = await knownDevice(request, env, email);
     // Whether a code goes out (and how long that takes) stays out of the answer.
     const work = sendCode(env, email, requestLanguage(request), { known }).catch(error => console.error("Sign-in code e-mail failed", error?.code || error?.message));
