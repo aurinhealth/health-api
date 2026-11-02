@@ -294,32 +294,45 @@ struct TrainingModeView: View {
         }
     }
 
-    /// Under the header: sound and vibration, the heart rate, the coach and the plan.
+    /// Under the header: the heart rate, the coach, the plan and ⋯ (History, Sound and vibration).
     private func tools(_ day: GymDay, _ exercise: GymExercise) -> some View {
         HStack(spacing: 8) {
-            // Coach and Plan keep their words; the left chips drop theirs
-            // (first Vibrace, then Bez tepu) when the row is too narrow, e.g.
-            // with larger text, so nothing wraps or ends in "…". Coach stays
-            // outside ViewThatFits: a switch must not close its open chat.
+            // Coach, Plan and ⋯ keep their size; the heart drops "Bez tepu" when the
+            // row is too narrow, e.g. with larger text, so nothing wraps or ends in "…".
+            // Coach stays outside ViewThatFits: a switch must not close its open chat.
             ViewThatFits(in: .horizontal) {
-                signalsAndHeart(compactSignals: false, compactHeart: false)
-                signalsAndHeart(compactSignals: true, compactHeart: false)
-                signalsAndHeart(compactSignals: true, compactHeart: true)
+                HeartSourceButton(live: live, compact: false) { sensors = true }.fixedSize()
+                HeartSourceButton(live: live, compact: true) { sensors = true }.fixedSize()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             CoachPill(subject: .workout(day, exercise: exercise, resting: restEnd != nil, restSeconds: restTotal, date: date), height: 34)
             Button { editing = true } label: { ToolChip(systemImage: "list.bullet", title: L10n.tr("Plán")).fixedSize() }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.tr("Upravit plán"))
+            more(exercise)
         }
         .padding(.top, 12)
     }
 
-    private func signalsAndHeart(compactSignals: Bool, compactHeart: Bool) -> some View {
-        HStack(spacing: 8) {
-            GymSignalsMenu(compact: compactSignals).fixedSize()
-            HeartSourceButton(live: live, compact: compactHeart) { sensors = true }.fixedSize()
+    /// ⋯: what is seldom needed mid-set. History (the Last time column already shows the last
+    /// workout) and Sound and vibration (set once).
+    private func more(_ exercise: GymExercise) -> some View {
+        let count = history.exercise(exercise.name)?.sessions.filter { $0.date < date }.count ?? 0
+        return Menu {
+            Button { historyFor = exercise.name } label: {
+                Label {
+                    Text("Historie")
+                    if count > 0 { Text(verbatim: L10n.plural("%lld tréninků", count)) }
+                } icon: {
+                    Image(systemName: "chart.bar")
+                }
+            }
+            .accessibilityLabel(L10n.tr("Historie cviku"))
+            GymSignalsMenu(inMenu: true)
+        } label: {
+            ToolChip(systemImage: "ellipsis").fixedSize()
         }
+        .accessibilityLabel(L10n.tr("Další volby"))
     }
 
     private func title(_ day: GymDay) -> String {
@@ -349,14 +362,19 @@ struct TrainingModeView: View {
                     Button { swapping = exercise.name } label: { ToolChip(systemImage: "arrow.triangle.swap", title: L10n.tr("Vyměnit")) }
                         .buttonStyle(.plain).accessibilityLabel(L10n.tr("Nahradit cvik"))
                 }
-                Button { historyFor = exercise.name } label: { ToolChip(systemImage: "chart.bar", title: L10n.tr("Historie")) }
-                    .buttonStyle(.plain).accessibilityLabel(L10n.tr("Historie cviku"))
                 Button { technique = exercise.name } label: { ToolChip(systemImage: "info.circle", title: L10n.tr("Technika")) }
                     .buttonStyle(.plain)
+                // No note yet: + Poznámka in the row. A written note shows under it, tap to edit.
+                if notes.note(exercise.name) == nil {
+                    Button { noteFor = exercise.name } label: { ToolChip(systemImage: "plus", title: L10n.tr("Poznámka"), dashed: true) }
+                        .buttonStyle(.plain).accessibilityLabel(L10n.tr("Přidat poznámku ke cviku"))
+                }
             }
             .padding(.top, 10)
 
-            ExerciseNoteLine(note: notes.note(exercise.name)) { noteFor = exercise.name }.padding(.top, 8)
+            if notes.note(exercise.name) != nil {
+                ExerciseNoteLine(note: notes.note(exercise.name)) { noteFor = exercise.name }.padding(.top, 8)
+            }
 
             chips(day, exercise, set)
 
