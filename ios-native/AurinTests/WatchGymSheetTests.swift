@@ -82,4 +82,49 @@ final class WatchGymSheetTests: XCTestCase {
         XCTAssertEqual(ExerciseName.shown("Cable Single Arm Rear Delt Row"), "Cable single arm rear delt row")
         XCTAssertEqual(ExerciseName.shown("Face pull"), "Face pull")
     }
+
+    /// A superset on the watch goes round by round as in Training mode on the
+    /// iPhone: A1, B1 straight after, the rest, A2, B2, then the next exercise.
+    func testASupersetGoesRoundByRound() throws {
+        var sheet = day()
+        sheet.appendExercise("Plank", suggestion: GymSuggestion(warmups: [], work: [GymSuggestion.Planned(kg: 0, reps: 30)], line: ""))
+        sheet.toggleSuperset(at: 0)
+        var gym = WatchGym(sheet, date: "2026-11-01", restSets: 75, restExercises: 120)
+        XCTAssertEqual(gym.exercises.map(\.superset), ["A", "A", nil])
+        XCTAssertEqual(gym.superset(of: 1), [0, 1])
+        XCTAssertNil(gym.superset(of: 2))
+        let bench = gym.exercises[0].lifts.map(\.row), row = gym.exercises[1].lifts.map(\.row)
+        XCTAssertEqual(row.count, 2, "the shorter exercise takes sets up to the longer one")
+        var next = try XCTUnwrap(gym.next(after: bench[0]))
+        XCTAssertEqual(next.exercise, 1)
+        XCTAssertEqual(next.turn, .partner)
+        gym.update(row: bench[0]) { $0.done = true }
+        next = try XCTUnwrap(gym.next(after: row[0]))
+        XCTAssertEqual(next.exercise, 0)
+        XCTAssertEqual(next.lift.row, bench[1])
+        XCTAssertEqual(next.turn, .round)
+        gym.update(row: row[0]) { $0.done = true }
+        gym.update(row: bench[1]) { $0.done = true }
+        next = try XCTUnwrap(gym.next(after: row[1]))
+        XCTAssertEqual(next.exercise, 2, "past the superset when all of it is done")
+        XCTAssertNil(next.turn)
+        XCTAssertTrue(next.newExercise)
+        // The next set of the same exercise starts from this one's weight (not the partner's).
+        XCTAssertEqual(gym.nextInExercise(after: bench[0])?.row, bench[1])
+    }
+
+    /// A one-sided exercise: the right side tapped first, the left one comes
+    /// straight after it, then the next set.
+    func testTheOtherSideComesNext() throws {
+        var sheet = day()
+        sheet.setSides(at: 1, true)
+        let gym = WatchGym(sheet, date: "2026-11-01", restSets: 75, restExercises: 120)
+        let lifts = gym.exercises[1].lifts
+        XCTAssertEqual(lifts.map(\.side), ["L", "P"])
+        let next = try XCTUnwrap(gym.next(after: lifts[1].row))
+        XCTAssertEqual(next.lift.row, lifts[0].row)
+        XCTAssertFalse(next.newExercise)
+        XCTAssertEqual(gym.otherSide(of: lifts[0], in: 1)?.row, lifts[1].row)
+        XCTAssertNil(gym.otherSide(of: gym.exercises[0].lifts[0], in: 0))
+    }
 }
