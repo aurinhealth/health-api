@@ -186,8 +186,9 @@ struct TrainingModeView: View {
             }
         }
         .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) }; syncActivity() }
-        .onChange(of: day) { _, _ in syncActivity() }
-        .onChange(of: index) { _, _ in syncActivity() }
+        // A set ticked or a change: "Still working out?" waits another 10 min (IdleWorkout).
+        .onChange(of: day) { _, _ in syncActivity(); live.worked() }
+        .onChange(of: index) { _, _ in syncActivity(); live.worked() }
         .onChange(of: finishedSession) { _, _ in syncActivity() }
         // Back from the lock screen after the rest ran out: straight to the set.
         .onChange(of: scenePhase) { _, phase in
@@ -1388,25 +1389,28 @@ struct TrainingModeView: View {
 
     /// Finished on the Apple Watch (its summary): finished here too, with the
     /// summary and the rating, as with Dokončit.
+    /// Finished on the watch, or left without a set for 30 min (IdleWorkout):
+    /// the end at the last set then.
     private func finishIfEndedOnWatch() {
-        guard live.endedOnWatch, live.running, !finishedSession, !saving, day != nil else { return }
-        Task { await finish() }
+        guard live.endedOnWatch || live.idleEnd != nil, live.running, !finishedSession, !saving, day != nil else { return }
+        let end = live.idleEnd ?? Date()
+        Task { await finish(at: end) }
     }
 
     /// The sets are saved as they are ticked: the week shows the session done,
     /// then the rating.
-    private func finish() async {
+    private func finish(at end: Date = Date()) async {
         restEnd = nil
         // The start and end in the sheet: opened again, the workout shows its
         // summary (Ohodnotit, Pokračovat v tréninku) and can go on from its start.
         if var next = day {
             if next.startedAt == nil, let start = live.start { next.markStarted(start) }
-            next.markFinished(Date())
+            next.markFinished(end)
             day = next
         }
         if live.running {
-            let saved = await live.finish()
-            totals = (live.minutes, live.kcal, live.avgHeartRate, live.maxHeartRate, saved, live.zoneMinutes(lows: zoneLows))
+            let saved = await live.finish(at: end)
+            totals = (live.minutes(at: end), live.kcal, live.avgHeartRate, live.maxHeartRate, saved, live.zoneMinutes(lows: zoneLows))
             live.reset()
         }
         // The summary comes first, with Ohodnotit and Zahodit trénink.
@@ -1426,7 +1430,7 @@ struct TrainingModeView: View {
             // To Intervals.icu and Google Health as chosen in Zdroje dat (Aurin posílá);
             // Apple Health has the live workout already.
             let minutes = totals.map { max(1, $0.minutes) }
-            await model.shareGym(day, date: date, start: minutes.map { Date().addingTimeInterval(-Double($0) * 60) }, minutes: minutes,
+            await model.shareGym(day, date: date, start: minutes.map { end.addingTimeInterval(-Double($0) * 60) }, minutes: minutes,
                                  appleSaved: totals?.saved == true)
         }
     }
@@ -1686,6 +1690,7 @@ struct WatchGymHooks: View {
             .accessibilityHidden(true)
             .onChange(of: restEnd) { _, end in sendRest(end) }
             .onChange(of: live.endedOnWatch) { _, _ in ended() }
+            .onChange(of: live.idleEnd) { _, _ in ended() }
             .onReceive(NotificationCenter.default.publisher(for: .watchRest)) { note in
                 if let rest = note.object as? WatchGym.Rest { received(rest) }
             }

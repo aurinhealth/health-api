@@ -39,6 +39,12 @@ final class LiveWorkout: NSObject {
     private(set) var onWatch = false
     /// When the watch's workout last sent a reading (every few seconds while it runs).
     @ObservationIgnored private var watchHeard: Date?
+    /// The last set or change in Training mode (IdleWorkout): 10 min after it
+    /// the iPhone asks "Still working out?", 30 min after it the workout ends.
+    @ObservationIgnored private var lastWork: Date?
+    /// The workout left without a set for 30 min, or ended from the question:
+    /// Training mode finishes, with the end at the last set (TrainingModeView).
+    private(set) var idleEnd: Date?
     /// The watch's workout runs now: a reading within the last 30 s. The
     /// iPhone's screen may then sleep (ScreenAwake).
     var watchLeads: Bool {
@@ -192,6 +198,8 @@ final class LiveWorkout: NSObject {
         guard start == nil else { return }
         let begun = since ?? Date()
         start = begun
+        idleEnd = nil
+        worked()
         if let weightKg, weightKg > 30 { self.weightKg = weightKg }
         savedToHealth = false
         savedWorkout = nil
@@ -292,7 +300,11 @@ final class LiveWorkout: NSObject {
         onWatch = true
         let first = !watchLeads
         watchHeard = Date()
-        if first { ScreenAwake.apply() }
+        if first {
+            ScreenAwake.apply()
+            // The watch asks "Still working out?" itself.
+            Task { await IdleWorkout.plan(after: nil) }
+        }
         if sensor.liveBpm == nil, let bpm = live.heartRate, bpm > 0 {
             note(bpm)
             heartSource = "Apple Watch"
@@ -309,8 +321,9 @@ final class LiveWorkout: NSObject {
     /// Ends the clock. On iOS 26 the workout goes to Apple Health; returns
     /// whether it did.
     @discardableResult
-    func finish() async -> Bool {
+    func finish(at end: Date = Date()) async -> Bool {
         guard let begun = start else { return false }
+        Task { await IdleWorkout.plan(after: nil) }
         poll?.cancel(); poll = nil
         stopSensor()
         // The summary is read on the iPhone: its screen stays on again.
@@ -328,8 +341,8 @@ final class LiveWorkout: NSObject {
             return true
         }
         var saved = false
-        if #available(iOS 26.0, *) { saved = await endSession(from: begun) }
-        if !saved { saved = await saveWorkout(from: begun, to: Date()) }
+        if #available(iOS 26.0, *) { saved = await endSession(from: begun, to: end) }
+        if !saved { saved = await saveWorkout(from: begun, to: end) }
         savedToHealth = saved
         return saved
     }
@@ -405,6 +418,9 @@ final class LiveWorkout: NSObject {
         carried = nil
         Checkpoint.clear()
         watchHeard = nil
+        lastWork = nil
+        idleEnd = nil
+        Task { await IdleWorkout.plan(after: nil) }
         ScreenAwake.apply()
     }
 
@@ -422,7 +438,38 @@ final class LiveWorkout: NSObject {
         return out
     }
 
-    var minutes: Int { clockStart.map { max(1, Int((Date().timeIntervalSince($0) / 60).rounded())) } ?? 0 }
+    var minutes: Int { minutes(at: Date()) }
+
+    /// The minutes until `end` (an idle workout ends at its last set).
+    func minutes(at end: Date) -> Int { clockStart.map { max(1, Int((end.timeIntervalSince($0) / 60).rounded())) } ?? 0 }
+
+    // MARK: Left running (IdleWorkout)
+
+    /// A set ticked or a change made in Training mode, or "Keep going": the
+    /// question waits another 10 min. The watch asks itself when it records.
+    func worked() {
+        guard running, idleEnd == nil else { return }
+        lastWork = Date()
+        let plan = onWatch ? nil : lastWork
+        Task { await IdleWorkout.plan(after: plan) }
+    }
+
+    /// "End workout" on the question: Training mode opens (when it isn't on
+    /// the screen) and finishes, with the end at the last set.
+    func endIdle() {
+        guard running, idleEnd == nil, !onWatch else { return }
+        idleEnd = lastWork ?? start
+        if let start { openFromWatch = AppModel.localDate(start) }
+    }
+
+    /// Every 15 s while the workout runs: 30 min without a set and no answer ends it.
+    private func checkIdle() {
+        guard running, !onWatch, idleEnd == nil, let last = lastWork ?? start else { return }
+        if Date().timeIntervalSince(last) >= IdleWorkout.endAfter {
+            idleEnd = last
+            openFromWatch = AppModel.localDate(last)
+        }
+    }
 
     // MARK: Without a live builder
 
@@ -442,6 +489,7 @@ final class LiveWorkout: NSObject {
             keep()
             // The watch stopped sending (its workout ended, out of reach): the screen stays on again.
             ScreenAwake.apply()
+            checkIdle()
         }
         if !liveKcal {
             // Strength training about 5 MET, 4 above rest: active kcal = 4 × kg × hours.
@@ -638,11 +686,10 @@ final class LiveWorkout: NSObject {
     }
 
     @available(iOS 26.0, *)
-    private func endSession(from begun: Date) async -> Bool {
+    private func endSession(from begun: Date, to end: Date) async -> Bool {
         guard let session = session as? HKWorkoutSession, let builder = builder as? HKLiveWorkoutBuilder else { return false }
         await add(beatSamples(), to: builder)
         session.end()
-        let end = Date()
         let ended: Bool = await withCheckedContinuation { continuation in
             builder.endCollection(withEnd: end) { ok, _ in continuation.resume(returning: ok) }
         }

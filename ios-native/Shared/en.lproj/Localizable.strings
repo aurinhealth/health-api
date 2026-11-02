@@ -3583,3 +3583,7 @@
 "zbývá" = "left";
 "běží" = "running";
 "Uloží délku a konec kardia" = "Saves the cardio's length and end";
+"Ukončit trénink" = "End workout";
+"Ještě cvičím" = "Keep going";
+"Pořád cvičíš?" = "Still working out?";
+"Žádná série 10 minut. Ukonči trénink, nebo pokračuj." = "No set for 10 min. End the workout or keep going.";

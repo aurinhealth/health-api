@@ -1,6 +1,7 @@
 import Foundation
 import HealthKit
 import WatchConnectivity
+import WatchKit
 
 /// The gym as a HealthKit strength workout on the watch: it keeps the app on
 /// the screen between sets, measures the heart rate and the calories, and
@@ -21,6 +22,19 @@ final class GymWorkout: NSObject, ObservableObject {
     /// the heart rate, or the session failed): no heart rate will come, and the
     /// set screen says what to allow instead of a bare dash.
     @Published private(set) var noHealth = false
+    /// No set or change for 10 min: the set screen asks "Still working out?"
+    /// (GymSessionView). A workout nobody ended kept the heart rate sensor,
+    /// the app and the messages to the iPhone going for hours.
+    @Published private(set) var askStill = false
+    /// No answer and no set for 30 min: the workout ends, with its end at the last set.
+    @Published private(set) var idleEnd: Date?
+    /// The last set or change on the watch or the iPhone (worked()).
+    private(set) var lastWork: Date?
+    private var idleWatch: Task<Void, Never>?
+    /// Asked once since the last set (End workout doesn't bring it back).
+    private var asked = false
+    static let askAfter: TimeInterval = 10 * 60
+    static let endAfter: TimeInterval = 30 * 60
 
     private let store = HKHealthStore()
     private var session: HKWorkoutSession?
@@ -34,6 +48,7 @@ final class GymWorkout: NSObject, ObservableObject {
         // not only with the first heart rate.
         // Only with a HealthKit workout here: the iPhone then leaves Apple Health to it.
         defer { if session != nil { announceUntilHeard() } }
+        defer { if start != nil, idleWatch == nil { watchIdle() } }
         guard session == nil, HKHealthStore.isHealthDataAvailable() else {
             if start == nil { start = Date() }
             return
@@ -82,8 +97,48 @@ final class GymWorkout: NSObject, ObservableObject {
         // The pauses before the relaunch, as the builder counted them.
         pausedTotal = max(0, Date().timeIntervalSince(start ?? Date()) - builder.elapsedTime)
         if recovered.state == .paused { pausedAt = Date() }
+        watchIdle()
         return true
     }
+
+    // MARK: Left running
+
+    /// A set, a change or Keep going: the question waits another 10 min.
+    func worked() {
+        guard start != nil, idleEnd == nil else { return }
+        lastWork = Date()
+        asked = false
+        if askStill { askStill = false }
+    }
+
+    /// Every 30 s while the workout runs: the question after 10 min without
+    /// a set (with a tap on the wrist), the end after 30 min.
+    private func watchIdle() {
+        idleWatch?.cancel()
+        lastWork = Date()
+        asked = false
+        idleWatch = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                guard !Task.isCancelled, let self, let start = self.start, self.idleEnd == nil else { return }
+                let last = self.lastWork ?? start
+                let idle = Date().timeIntervalSince(last)
+                if idle >= Self.endAfter {
+                    self.askStill = false
+                    self.idleEnd = last
+                    return
+                }
+                if idle >= Self.askAfter, !self.asked {
+                    self.asked = true
+                    self.askStill = true
+                    WKInterfaceDevice.current().play(.notification)
+                }
+            }
+        }
+    }
+
+    /// The question answered with End workout: the summary takes over.
+    func dismissAsk() { askStill = false }
 
     /// The clock of the workout without its pauses: the time cell counts from here.
     var clockStart: Date? { start.map { $0.addingTimeInterval(pausedTotal) } }
@@ -109,7 +164,8 @@ final class GymWorkout: NSObject, ObservableObject {
     }
 
     /// Ends the workout; saved to Apple Health when sets were done, else thrown away.
-    func finish(save: Bool) async {
+    /// `end`: when the workout ended (an idle one at its last set), else now.
+    func finish(save: Bool, at end: Date? = nil) async {
         guard let session, let builder else {
             reset()
             return
@@ -117,7 +173,7 @@ final class GymWorkout: NSObject, ObservableObject {
         session.end()
         // Let go now, so the session's own "ended" isn't taken for a loss.
         self.session = nil
-        let now = Date()
+        let now = max(end ?? Date(), builder.startDate ?? start ?? Date())
         try? await builder.endCollection(at: now)
         if save {
             _ = try? await builder.finishWorkout()
@@ -139,6 +195,12 @@ final class GymWorkout: NSObject, ObservableObject {
         pausedTotal = 0
         noHealth = false
         announced = false
+        idleWatch?.cancel()
+        idleWatch = nil
+        lastWork = nil
+        asked = false
+        askStill = false
+        idleEnd = nil
         if queued, WCSession.isSupported() {
             // A start still waiting for the iPhone would open a workout that is over.
             for transfer in WCSession.default.outstandingUserInfoTransfers where transfer.userInfo[WatchGym.liveKey] != nil {

@@ -22,6 +22,17 @@ struct GymSessionView: View {
     @State private var list = false
     @State private var summary = false
     @State private var coachOpen = false
+    /// Ended by itself after 30 min without a set: what was saved, until Done.
+    @State private var autoSaved: AutoSaved?
+    /// End workout on "Still working out?": the workout ends at the last set.
+    @State private var idleStop: Date?
+
+    struct AutoSaved {
+        let minutes: Int
+        let sets: Int
+        let calories: Double
+        let end: Date
+    }
     /// The set just done, rated during the rest that follows it.
     @State private var rated: Rated?
     /// The tile the crown turns: the weight, or the reps after a tap on them.
@@ -58,7 +69,11 @@ struct GymSessionView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if summary || store.gym?.allDone == true {
+                if let autoSaved {
+                    saved(autoSaved)
+                } else if workout.askStill, !summary {
+                    stillWorking
+                } else if summary || store.gym?.allDone == true {
                     GymSummary(finish: finish)
                 } else if workout.pausedAt != nil {
                     paused
@@ -71,7 +86,7 @@ struct GymSessionView: View {
                 }
             }
             .toolbar {
-                if !summary, workout.pausedAt == nil, restEnd.map({ $0 > now }) != true, store.gym?.allDone != true {
+                if autoSaved == nil, !workout.askStill, !summary, workout.pausedAt == nil, restEnd.map({ $0 > now }) != true, store.gym?.allDone != true {
                     // In the cover's own corner: at .topBarLeading the cover's ✕
                     // took its place (and closed the screen with the workout running).
                     ToolbarItem(placement: .cancellationAction) {
@@ -86,7 +101,7 @@ struct GymSessionView: View {
                             .accessibilityLabel(W.tr("Kouč", "Coach"))
                     }
                 }
-                if !summary, workout.pausedAt == nil, store.gym?.allDone != true {
+                if autoSaved == nil, !summary, workout.pausedAt == nil, store.gym?.allDone != true {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button { list = true } label: { Image(systemName: "line.3.horizontal") }
                             .accessibilityLabel(W.tr("Cviky", "Exercises"))
@@ -126,8 +141,23 @@ struct GymSessionView: View {
             store.endedOnPhone = false
             end(onPhone: true)
         }
+        // A set, a change or a pause here or on the iPhone: "Still working out?"
+        // waits another 10 min (GymWorkout.worked).
+        .onChange(of: store.gym) { _, _ in workout.worked() }
+        .onChange(of: exercise) { _, _ in workout.worked() }
+        .onChange(of: kg) { _, _ in workout.worked() }
+        .onChange(of: reps) { _, _ in workout.worked() }
+        .onChange(of: workout.pausedAt) { _, _ in workout.worked() }
+        // No set and no answer for 30 min: saved, ended at the last set.
+        .onChange(of: workout.idleEnd) { _, idle in
+            guard let idle, autoSaved == nil else { return }
+            autoSaved = AutoSaved(minutes: Int(max(0, idle.timeIntervalSince(workout.clockStart ?? idle))) / 60,
+                                  sets: store.gym?.setsDone ?? 0, calories: workout.calories, end: idle)
+            summary = false
+            end(onPhone: false, at: idle, keepOpen: true)
+        }
         // The rest the same as in Training mode on the iPhone, both ways.
-        .onChange(of: restEnd) { _, end in sendRest(end) }
+        .onChange(of: restEnd) { _, end in sendRest(end); workout.worked() }
         .onChange(of: store.phoneRest) { _, rest in
             guard let rest, let gym = store.gym, rest.date == gym.date, !summary else { return }
             if let name = rest.exercise, let at = gym.exercises.firstIndex(where: { $0.name == name }) { exercise = at }
@@ -609,20 +639,97 @@ struct GymSessionView: View {
         restEnd = next > Date() ? next : nil
     }
 
-    private func finish() { end(onPhone: false) }
+    private func finish() { end(onPhone: false, at: idleStop) }
 
     /// Finished here (the summary) or in Training mode on the iPhone; finished
-    /// here, the iPhone hears of it.
-    private func end(onPhone: Bool) {
+    /// here, the iPhone hears of it. `at`: an idle workout's end at its last
+    /// set; `keepOpen`: the screen says it was saved until Done.
+    private func end(onPhone: Bool, at end: Date? = nil, keepOpen: Bool = false) {
         let save = (store.gym?.setsDone ?? 0) > 0
-        if !onPhone { store.finished(at: Date()) }
+        if !onPhone { store.finished(at: end ?? Date()) }
         Task {
-            await workout.finish(save: save)
+            await workout.finish(save: save, at: end)
             // After the end here, so the iPhone's answer (gymEnd) finds nothing running.
             if !onPhone { workout.endOnPhone() }
+            guard !keepOpen else { return }
             store.openedFromPhone = false
             dismiss()
         }
+    }
+
+    // MARK: Left running (mockup baterie 1 and 2)
+
+    /// No set for 10 min: End workout goes to the summary, Keep going waits 10 min more.
+    private var stillWorking: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(W.tr("Posilovna", "Gym") + " · \(Int(workout.elapsed / 60)) min")
+                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(W.amber).textCase(.uppercase)
+                Text(W.tr("Pořád cvičíš?", "Still working out?")).font(W.serif(24)).foregroundStyle(W.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(W.tr("Žádná série 10 minut.", "No set for 10 min.")).font(.system(size: 13)).foregroundStyle(W.muted)
+                Button {
+                    idleStop = workout.lastWork
+                    workout.dismissAsk()
+                    summary = true
+                } label: {
+                    Text(W.tr("Ukončit trénink", "End workout")).font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(W.ink)
+                .padding(.top, 8)
+                Button {
+                    workout.worked()
+                } label: {
+                    Text(W.tr("Ještě cvičím", "Keep going")).font(.system(size: 15, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// Ended by itself: saved with its end at the last set; Done closes it.
+    private func saved(_ s: AutoSaved) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(W.tr("Trénink uložen", "Workout saved"))
+                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(W.green).textCase(.uppercase)
+                Text(W.tr("Posilovna", "Gym") + " · \(s.minutes) min").font(W.serif(24)).foregroundStyle(W.ink)
+                Text(W.tr("Konec při poslední sérii, ", "Ended at your last set, ") + W.dateFormatter("H:mm", posix: true).string(from: s.end) + ".")
+                    .font(.system(size: 13)).foregroundStyle(W.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 6) {
+                    savedTile(W.tr("Série", "Sets"), "\(s.sets)")
+                    savedTile("kcal", W.number(s.calories))
+                }
+                .padding(.top, 4)
+                Button {
+                    autoSaved = nil
+                    store.openedFromPhone = false
+                    dismiss()
+                } label: {
+                    Text(W.tr("Hotovo", "Done")).font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(W.ink)
+                .padding(.top, 6)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func savedTile(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(label).font(.system(size: 11)).foregroundStyle(W.muted)
+            Text(value).font(W.serif(22)).foregroundStyle(W.ink)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 9).padding(.vertical, 4)
+        .background(W.tile, in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
