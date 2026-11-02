@@ -15,6 +15,8 @@ struct ReportProblemView: View {
     @State private var screenshot: Data?
     @State private var preview: UIImage?
     @State private var includeDiagnostics = true
+    /// "iphone" or "watch": where the problem happened, asked only with Aurin on a paired watch.
+    @State private var place = "iphone"
     @State private var sending = false
     @State private var error: String?
     @State private var sent = false
@@ -38,6 +40,14 @@ struct ReportProblemView: View {
     }
 
     @ViewBuilder private var form: some View {
+        if Self.watchHasAurin {
+            SettingsGroup(title: "Kde se to stalo") {
+                placeRow("iphone", title: "iPhone", systemImage: "iphone")
+                SettingsDivider()
+                placeRow("watch", title: "Apple Watch", systemImage: "applewatch")
+            }
+        }
+
         SettingsGroup(title: "Co se stalo") {
             TextEditor(text: $text)
                 .font(.body)
@@ -94,6 +104,36 @@ struct ReportProblemView: View {
 
     private var canSend: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).count >= 3 }
 
+    @MainActor private static var watchHasAurin: Bool {
+        let state = WatchBridge.shared.watchState
+        return state.paired && state.installed
+    }
+
+    private func placeRow(_ value: String, title: String, systemImage: String) -> some View {
+        Button {
+            place = value
+        } label: {
+            HStack(spacing: 14) {
+                SettingsIcon(systemImage: systemImage, color: Palette.ink)
+                Text(title).font(.body).foregroundStyle(Palette.ink)
+                Spacer(minLength: 8)
+                if place == value {
+                    Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Palette.green)
+                }
+            }
+            .padding(.horizontal, 16)
+            .frame(minHeight: 50)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(place == value ? .isSelected : [])
+    }
+
+    /// Where it happened goes with the report also without the diagnostics.
+    private var placeOnly: JSONObject? {
+        Self.watchHasAurin ? ["happenedOn": .string(place)] : nil
+    }
+
     // MARK: - Screenshot
 
     private func load(_ item: PhotosPickerItem?) async {
@@ -132,6 +172,8 @@ struct ReportProblemView: View {
             "demo": .bool(model.demo),
             "reportedAt": .string(ISO8601DateFormatter().string(from: Date()))
         ]
+        // The user's own answer to "Kde se to stalo", asked only with Aurin on the watch.
+        if Self.watchHasAurin { d["happenedOn"] = .string(place) }
         let stamp = ISO8601DateFormatter()
         // Where the user was: the tab and its open detail, a sheet, a page of Settings; the last one last.
         d["screens"] = .array(ScreenTrail.entries.map { JSONValue.object(["screen": .string($0.name), "at": .string(stamp.string(from: $0.at))]) })
@@ -243,7 +285,7 @@ struct ReportProblemView: View {
         sending = true
         defer { sending = false }
         do {
-            _ = try await model.api.reportProblem(message: message, screenshot: screenshot, diagnostics: includeDiagnostics ? diagnostics : nil)
+            _ = try await model.api.reportProblem(message: message, screenshot: screenshot, diagnostics: includeDiagnostics ? diagnostics : placeOnly)
             error = nil
             withAnimation { sent = true }
         } catch {

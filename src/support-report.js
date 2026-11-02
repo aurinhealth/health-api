@@ -132,10 +132,14 @@ const trail = list => (Array.isArray(list) ? list : []).slice(-6).map(e => typeo
 
 // The screen the report is about: the last one before Settings opened, or the
 // Settings page itself when the user went into one.
+// On the watch (the user's answer to "Kde se to stalo"): the watch's last page.
 export function reportScreen(diagnostics) {
-  const list = Array.isArray(diagnostics?.screens) ? diagnostics.screens : [];
+  const watch = diagnostics?.happenedOn === "watch";
+  const source = watch ? diagnostics?.appleWatch?.screens : diagnostics?.screens;
+  const list = Array.isArray(source) ? source : [];
   const names = list.map(e => typeof e === "string" ? e : e?.screen).filter(v => typeof v === "string" && v);
   const last = names.filter(name => name !== "settings").at(-1);
+  if (watch) return last ? `Apple Watch, ${cut(last, 60)}` : "Apple Watch";
   return last ? cut(last, 60) : null;
 }
 
@@ -145,6 +149,7 @@ export function reportScreen(diagnostics) {
 export function reportWhere(diagnostics, client) {
   const d = diagnostics && typeof diagnostics === "object" ? diagnostics : null;
   const out = [];
+  if (d?.happenedOn === "watch" || d?.happenedOn === "iphone") out.push(`Happened on (the user's answer): ${d.happenedOn === "watch" ? "Apple Watch" : "iPhone"}`);
   if (d?.app || d?.deviceModel || d?.ios) {
     out.push(`Sent from: iPhone app, Aurin ${d.app || "?"}, ${d.deviceModel || d.device || "iPhone"}, iOS ${d.ios || "?"}${d.demo ? ", demo" : ""}`);
   } else if (client?.userAgent || client?.api) {

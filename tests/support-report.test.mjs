@@ -172,3 +172,14 @@ test("where: an older app's plain screen names, a watch without Aurin or details
   assert.deepEqual(reportFindings({ appleWatch: { paired: true, aurinInstalled: true, app: "1.4 (312)", signedIn: false, sentAt: old } }, null),
     ["watch: not signed in on its own (nothing without the iPhone nearby)", `watch: its app last reported 4 days ago (${old}), so it has not been opened since`]);
 });
+
+test("the user's answer where it happened leads, and a watch problem names the watch's page in the subject", async () => {
+  const { env, sent } = setup();
+  const diagnostics = { happenedOn: "watch", app: "1.4 (312)", ios: "26.1", deviceModel: "iPhone16,1", screens: [{ screen: "training", at: "2026-11-02T10:01:00Z" }, { screen: "settings", at: "2026-11-02T10:03:00Z" }],
+    appleWatch: { paired: true, aurinInstalled: true, app: "1.4 (312)", watchOS: "26.0", model: "Watch7,3", signedIn: true, screens: [{ screen: "readiness", at: "2026-11-02T09:58:00Z" }, { screen: "gym", at: "2026-11-02T10:00:00Z" }] } };
+  await saveSupportReport(env, { message: "Série se neuložila", diagnostics });
+  assert.equal(sent[0].subject, "Aurin: problem report #1 from a@b.cz (Apple Watch, gym)");
+  assert.match(sent[0].text.split("Série")[0], /From: .*\nHappened on \(the user's answer\): Apple Watch\nSent from: iPhone app/);
+  assert.deepEqual(reportWhere({ happenedOn: "iphone" }, { api: "7" }), ["Happened on (the user's answer): iPhone", "Sent from: iPhone app without diagnostics"]);
+  assert.equal(reportScreen({ happenedOn: "watch" }), "Apple Watch");
+});
