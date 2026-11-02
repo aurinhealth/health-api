@@ -533,6 +533,9 @@ struct GymSessionView: View {
                     Button("+15 s") { shift(15) }
                 }
                 .font(.system(size: 12, weight: .semibold))
+                // "Přeskočit" broke into two lines on a 46 mm watch.
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
                 .buttonStyle(.bordered)
             }
             .frame(maxWidth: .infinity)

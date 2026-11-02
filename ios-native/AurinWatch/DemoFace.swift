@@ -17,7 +17,7 @@ struct DemoFace: View {
     var body: some View {
         let entry = DayEntry(date: Date(), snapshot: s)
         VStack(alignment: .leading, spacing: 6) {
-            Text(Date(), format: Date.FormatStyle(locale: W.locale).weekday(.abbreviated).day())
+            Text(Self.day)
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .textCase(.uppercase)
                 .foregroundStyle(W.amber)
@@ -36,6 +36,15 @@ struct DemoFace: View {
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.black.ignoresSafeArea())
+    }
+
+    /// "MON 2", "PO 2." in the sample day's language (Text with a format
+    /// style took the watch's own language).
+    private static var day: String {
+        let formatter = DateFormatter()
+        formatter.locale = W.locale
+        formatter.setLocalizedDateFormatFromTemplate("EEEd")
+        return formatter.string(from: Date())
     }
 
     private func small(_ metric: SmallMetric, _ entry: DayEntry) -> some View {

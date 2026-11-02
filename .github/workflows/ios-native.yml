@@ -246,13 +246,12 @@ jobs:
           xcrun simctl boot "$watch" || true
           xcrun simctl bootstatus "$watch" -b
           xcrun simctl install "$watch" "$app"
-          xcrun simctl status_bar "$watch" override --time "9:41" || true
           shoot() {
-            dir="$GITHUB_WORKSPACE/screens/$1"; name=$2; shift 2
-            mkdir -p "$dir"
+            local out="$GITHUB_WORKSPACE/screens/$1" name=$2; shift 2
+            mkdir -p "$out"
             xcrun simctl launch --terminate-running-process "$watch" health.aurin.app.watchkitapp -demo "$@"
             sleep 6
-            xcrun simctl io "$watch" screenshot "$dir/$name.png"
+            xcrun simctl io "$watch" screenshot "$out/$name.png"
           }
           for lang in en cs; do
             dir=watch; [ "$lang" = cs ] && dir=watch-cs
