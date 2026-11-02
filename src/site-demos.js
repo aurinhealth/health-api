@@ -356,9 +356,9 @@ const foodTarget = `<div class="dm pad">
 <div class="row base"><span class="num big">1,380</span><span class="fo mut">of 2,650<br>kcal ›</span></div>
 <i class="tbar" style="margin-top:14px"><b style="flex:2300;background:var(--brown)"></b><b style="flex:200;background:var(--green)"></b><b style="flex:150;background:repeating-linear-gradient(135deg,var(--amber) 0 3px,transparent 3px 6px)"></b></i>
 <div class="tp3">${[['Base', '2,300', 'brown'], ['Workouts', '+200', 'green'], ['Planned', '+150', 'amber']].map(([k, v, c], i) => `<div><span class="mut s"><i style="${i === 2 ? `border:1.5px solid var(--${c})` : `background:var(--${c})`}"></i>${k}</span><span class="num md">${v}</span></div>`).join('')}</div>
-<div class="coach"><div class="ch4">${ic('spark')}Coach</div><p class="sent">Training day: 350 kcal more. 1,270 kcal left, an afternoon snack of about 360 kcal.</p></div>
 <div class="mac3">${[['Carbs', 177, 330, 'carbs'], ['Protein', 84, 150, 'protein'], ['Fat', 36, 80, 'fat']].map(([k, v, t, c]) => `<div><span class="mut s"><i style="background:var(--${c})"></i>${k}</span><span class="num md">${v}<small> / ${t} g</small></span><i class="mb"><b style="--w:${v / t * 100}%;background:var(--${c})"></b></i></div>`).join('')}</div>
 <div class="mut s alln">All nutrients ›</div>
+<div class="coach"><div class="ch4">${ic('spark')}Coach</div><p class="sent">Training day: 350 kcal more. 1,270 kcal left, an afternoon snack of about 360 kcal.</p></div>
 </div>`;
 
 // AddFoodSheet.swift ("Co přidáme?": the meal, the search, six tiles, the foods list), then BarcodeScanSheet.swift:
@@ -581,7 +581,7 @@ ${[['run', '5 km', '24 min', WA.red], ['bike', '20 km', '33 min', WA.amber], ['r
 
 export const WATCH = [
   ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness, sleep, strain and HRV, as on Today, and what’s next today in one line.', watchHome],
-  ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown. Leave the iPhone in your locker: the watch keeps your sets and hands them over later. Your heart rate and calories go into the same workout.', watchGym],
+  ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown. Leave the iPhone in your locker: the watch keeps your sets, swaps a taken machine even without signal, and hands them over later. Your heart rate and calories go into the same workout.', watchGym],
   ['glow-training', 'Rest, then a tap.', 'The rest counts down on the wrist and taps you when it’s time, with the next set ready.', watchRest],
   ['glow-training', 'Warm up and cool down too.', 'Cardio, the warm-up and the stretching run on the wrist with the sets: a countdown for each move, or a stopwatch on the bike. Switch them on or off and move them before or after your exercises, and your iPhone gets the same plan.', watchWarmup],
   ['glow-training', 'Race day, one tap.', 'A duathlon, aquabike, aquathlon or triathlon from your plan shows as one card, its legs in race order, and starts as one multisport workout: the watch times each leg and each change. Tap it for each leg’s target.', watchRace],

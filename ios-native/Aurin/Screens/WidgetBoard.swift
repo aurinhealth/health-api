@@ -280,7 +280,7 @@ struct Wiggle: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        TimelineView(.animation(minimumInterval: nil, paused: reduceMotion)) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
             content.rotationEffect(.degrees(reduceMotion ? 0 : angle(at: context.date)))
         }
     }

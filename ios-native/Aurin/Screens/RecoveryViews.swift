@@ -261,8 +261,8 @@ struct RecoveryRoutineView: View {
             }
         }
         .onReceive(clock) { _ in tick() }
-        .onChange(of: timerOn) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .onChange(of: timerOn) { _, on in if on { ScreenAwake.hold("recovery", watchMaySleep: false) } else { ScreenAwake.release("recovery") } }
+        .onDisappear { ScreenAwake.release("recovery") }
         .sensoryFeedback(.success, trigger: ticked.count)
         .onAppear { if item.isDone { saved = true; ticked = Set(exercises.map { $0.key }) } }
     }

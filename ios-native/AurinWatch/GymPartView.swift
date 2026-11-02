@@ -85,6 +85,8 @@ struct GymPartView: View {
 
     @State private var now = Date()
     @State private var crownMinutes: Double = 0
+    /// The last minute this part told the workout it's still going (GymWorkout.worked).
+    @State private var workedAt = Date.distantPast
     @FocusState private var crown: Bool
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -102,6 +104,11 @@ struct GymPartView: View {
         .onReceive(tick) { date in
             guard workout.pausedAt == nil, run.part == part else { return }
             now = date
+            // Cardio running or a hold counting down: no "Still working out?" meanwhile.
+            if run.started != nil || run.holdEnd != nil, date.timeIntervalSince(workedAt) >= 60 {
+                workedAt = date
+                workout.worked()
+            }
             if part.isCardio {
                 if let end = run.cardioEnd, date >= end { stopCardio(at: end) }
             } else if let routine = parts.moves(part, day: day) {
@@ -169,6 +176,7 @@ struct GymPartView: View {
                     primary(W.tr("Start", "Start")) {
                         run.started = Date()
                         now = Date()
+                        workout.worked()
                         WKInterfaceDevice.current().play(.start)
                     }
                     Button(W.tr("Přeskočit", "Skip")) { finish(done: false) }
@@ -213,6 +221,7 @@ struct GymPartView: View {
     private func stopCardio(at time: Date) {
         guard let started = run.started else { return }
         WKInterfaceDevice.current().play(.stop)
+        workout.worked()
         let seconds = max(0, Int(time.timeIntervalSince(started).rounded()))
         store.finishPart(part, ticks: [part.tickPrefix + part.cardioId], cardio: (seconds: seconds, end: time))
         run.close()
@@ -252,6 +261,7 @@ struct GymPartView: View {
     private func next(in routine: GymStretching) {
         let holds = GymHold.all(routine)
         guard holds.indices.contains(run.hold) else { return }
+        workout.worked()
         let hold = holds[run.hold]
         if hold.last, !run.doneMoves.contains(hold.item.id) { run.doneMoves.append(hold.item.id) }
         run.hold += 1

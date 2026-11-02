@@ -5,18 +5,53 @@ import SwiftUI
 /// one screen. The number opens why readiness is what it is, each column its
 /// detail (the pages are in WatchRoot's navigationDestination); the alarm
 /// sits at the top left, the coach at the top right.
+///
+/// Before today's numbers come (review 2026-11-02, point 6) it shows the last
+/// day it has, greyed: "Getting today…" while the watch fetches them, "No
+/// connection" only when that failed, and "Waiting for last night's sleep"
+/// when today came without the night.
 struct ReadinessHome: View {
     let s: WatchSnapshot
+    /// Why `s` is not today's numbers; nil when it is.
+    var stale: Stale? = nil
+    /// Today's snapshot while the night is awaited (its next workout).
+    var today: WatchSnapshot? = nil
 
     enum Page: Hashable {
         case why, sleep, restingHR, hrv, strain, alarm, coach
+    }
+
+    enum Stale {
+        /// The watch is getting today (from the iPhone or the server).
+        case loading
+        /// Neither the iPhone nor the server gave today.
+        case failed
+        /// Today came without last night's sleep (the wearable has not synced yet).
+        case night
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             NavigationLink(value: Page.why) { hero }
                 .buttonStyle(.plain)
-            gauges.padding(.top, 6)
+                // An older day's details would read as today's.
+                .disabled(stale != nil)
+            if stale == .failed {
+                Text(W.tr("Bez spojení. Otevři Aurin v iPhonu a aktualizuj.", "No connection. Open Aurin on your iPhone to update."))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(W.amber)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+            } else if stale != nil {
+                Text(dayLabel)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(W.secondary)
+                    .padding(.top, 2)
+            }
+            gauges.padding(.top, stale == nil ? 6 : 3)
+                .disabled(stale != nil)
             if let race = todayRace {
                 // Race day: the race opens its legs (RaceDetail).
                 NavigationLink(value: race) {
@@ -67,15 +102,16 @@ struct ReadinessHome: View {
             } else {
                 Text(s.readiness.map { String($0) } ?? "–")
                     .font(W.serif(58))
-                    .foregroundStyle(W.ink)
+                    .foregroundStyle(stale == nil ? W.ink : W.muted)
                     .lineLimit(1)
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text(W.tr("Připravenost", "Readiness"))
+                Text(title)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(W.secondary)
-                    .lineLimit(1)
+                    .lineLimit(stale == .night ? 2 : 1)
                     .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let pill {
                     Text(pill.text)
                         .font(.system(size: 11, weight: .semibold))
@@ -83,6 +119,7 @@ struct ReadinessHome: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
                         .background(pill.color.opacity(0.16), in: Capsule())
+                        .opacity(stale == nil ? 1 : 0.45)
                 }
             }
         }
@@ -92,6 +129,21 @@ struct ReadinessHome: View {
     }
 
     private var learning: Int? { s.learningDays.map { min(14, max(1, $0)) } }
+
+    /// Beside the number: what the page waits for, else "Readiness".
+    private var title: String {
+        switch stale {
+        case .loading: W.tr("Načítám dnešek…", "Getting today…")
+        case .night: W.tr("Čekám na spánek z noci", "Waiting for last night's sleep")
+        case .failed, nil: W.tr("Připravenost", "Readiness")
+        }
+    }
+
+    /// Whose numbers these are: "Yesterday", or the day's name when older.
+    private var dayLabel: String {
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date()).map(WatchStore.localDate)
+        return s.date == yesterday ? W.tr("Včera", "Yesterday") : W.dayName(s.date).capitalized
+    }
 
     /// The iPhone's words for the zone (TodayView's pill); while readiness
     /// learns a new athlete's normal, "učím se".
@@ -110,7 +162,9 @@ struct ReadinessHome: View {
 
     /// Today's race not yet done, in place of the next workout ("Duatlon · 9:00").
     private var todayRace: RaceDay? {
-        RaceDay((s.week ?? []).filter { $0.date == s.date && !$0.done })
+        // As todayLine: an older day's plan is not today's.
+        guard let day = stale == nil ? s : today else { return nil }
+        return RaceDay((day.week ?? []).filter { $0.date == day.date && !$0.done })
     }
 
     private func todayRow(text: String, symbol: String) -> some View {
@@ -128,7 +182,9 @@ struct ReadinessHome: View {
     /// What is next today, under the numbers ("Sweet spot · 75′ at 17:30"), the
     /// length once though the plan's title may already end with it.
     private var todayLine: (text: String, symbol: String, session: WatchSnapshot.Session)? {
-        guard let next = (s.week ?? []).first(where: { $0.date == s.date && !$0.done }) else { return nil }
+        // An older day's plan is not today's: only today's snapshot tells it.
+        guard let day = stale == nil ? s : today,
+              let next = (day.week ?? []).first(where: { $0.date == day.date && !$0.done }) else { return nil }
         var text = next.name
         if let minutes = next.minutes { text += " · \(minutes)′" }
         if let time = next.time { text += W.tr(" v ", " at ") + time }
@@ -162,6 +218,9 @@ struct ReadinessHome: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
+        // An older day's numbers, greyed (point 6).
+        .saturation(stale == nil ? 1 : 0)
+        .opacity(stale == nil ? 1 : 0.55)
         .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
     }
 

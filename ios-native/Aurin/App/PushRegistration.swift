@@ -44,7 +44,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         CrashReports.shared.start()
         let center = UNUserNotificationCenter.current()
         center.setNotificationCategories(Set(Reminders.pillNotificationCategories + [CoachPush.category, CoachPush.replyCategory, CoachPush.actionCategory,
-                                                                                    MorningPush.category]))
+                                                                                    MorningPush.category, IdleWorkout.category]))
         center.delegate = self
         return true
     }
@@ -74,7 +74,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                                             withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         let content = notification.request.content
         let options: UNNotificationPresentationOptions
-        if Reminders.isPill(content.categoryIdentifier) {
+        if Reminders.isPill(content.categoryIdentifier) || content.categoryIdentifier == IdleWorkout.categoryID {
             options = [.banner, .sound, .list]
         } else {
             // The server's pushes (the morning readiness, the coach), also while the
@@ -109,6 +109,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
         if content.categoryIdentifier == MorningPush.categoryID {
             MorningPush.answer(response)
+            return
+        }
+        if content.categoryIdentifier == IdleWorkout.categoryID {
+            IdleWorkout.answer(response)
             return
         }
         if let product = FoodPush.product(from: content.userInfo) {

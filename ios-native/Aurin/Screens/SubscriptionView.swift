@@ -488,7 +488,7 @@ struct PaywallView: View {
         } else if reduceMotion {
             content(0.6)
         } else {
-            TimelineView(.animation) { context in content(context.date.timeIntervalSince(started)) }
+            TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in content(context.date.timeIntervalSince(started)) }
         }
     }
 

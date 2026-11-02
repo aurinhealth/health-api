@@ -169,15 +169,33 @@ private struct PickDetails: View {
 /// coach learns from, with "Vrátit" for a moment.
 struct CoachPickCard: View {
     @Environment(AppModel.self) private var model
+    /// Today's planned workouts (TodayTrainingCard, Petr 2026-11-02): with any,
+    /// the card is a short suggestion under them, and nothing when the pick
+    /// only confirms the plan.
+    var planned: [TodaySnapshot.PlanItem] = []
+    /// A red morning: a pick of the planned sport is an easier one, so it shows.
+    var red = false
+    /// The gap above the full card, only while it shows (an empty one left a hole).
+    var top: CGFloat = 0
     @State private var pick: CoachPick? = CoachPick.stored
     @State private var busy = false
     @State private var error: String?
     @State private var declined = false
     @AppStorage("activity-of-the-day-folded") private var folded = false
 
+    /// The pick's kinds of today's planned workouts ("gym" for strength).
+    private var plannedKinds: Set<String> {
+        Set(planned.map { $0.sport == "strength" ? "gym" : $0.sport ?? "other" })
+    }
+
     var body: some View {
-        Group {
-            if let pick, pick.chosen == nil, let best = pick.best {
+        // A stack, not a Group: hidden under a plan it agrees with, the task still runs.
+        VStack(alignment: .leading, spacing: 0) {
+            if let pick, pick.chosen == nil, let best = pick.best, !planned.isEmpty {
+                if red || !plannedKinds.contains(best.kind) {
+                    suggestion(best, pick).transition(.opacity)
+                }
+            } else if let pick, pick.chosen == nil, let best = pick.best {
                 VStack(alignment: .leading, spacing: 12) {
                     Button { withAnimation(.snappy) { folded.toggle() } } label: {
                         HStack {
@@ -210,8 +228,9 @@ struct CoachPickCard: View {
                 }
                 .padding(18).frame(maxWidth: .infinity, alignment: .leading)
                 .cardSurface(cornerRadius: 24)
+                .padding(.top, top)
                 .transition(.opacity)
-            } else if declined {
+            } else if declined && planned.isEmpty {
                 HStack(spacing: 10) {
                     Text("Aktivita dne odmítnuta").font(Typo.small).foregroundStyle(Palette.ink)
                     Spacer(minLength: 6)
@@ -224,6 +243,7 @@ struct CoachPickCard: View {
                 }
                 .padding(.leading, 18).padding(.trailing, 8).frame(height: 52)
                 .background(Palette.card, in: Capsule())
+                .padding(.top, top)
                 .transition(.opacity)
             }
         }
@@ -274,6 +294,59 @@ struct CoachPickCard: View {
         }
         .buttonStyle(.plain)
         .disabled(busy)
+    }
+
+    /// Under today's plan: what the coach suggests instead, Vyměnit (the pick
+    /// goes in, the first planned workout out) or Nechat plán (as Odmítnout).
+    @ViewBuilder private func suggestion(_ best: CoachPick.Option, _ pick: CoachPick) -> some View {
+        Rectangle().fill(Palette.hairline).frame(height: 1).padding(.top, 12)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: "sparkles").scaledFont(11, weight: .semibold).foregroundStyle(Palette.indigo)
+                (Text(verbatim: L10n.tr("Aktivita dne") + ": ").fontWeight(.semibold).foregroundColor(Palette.indigo)
+                 + Text(verbatim: best.reason ?? best.title).foregroundColor(Palette.secondary))
+                    .font(Typo.small)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 10) {
+                PickIcon(option: best, size: 28)
+                Text(verbatim: best.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                if let subtitle = best.subtitle {
+                    Text(verbatim: subtitle).font(Typo.small).foregroundStyle(Palette.muted).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+            HStack(spacing: 10) {
+                SecondaryButton(title: busy ? "Měním…" : "Vyměnit") { Task { await swap(best, pick) } }
+                SecondaryButton(title: "Nechat plán") { Task { await decline(best) } }
+            }
+            .disabled(busy || model.demo)
+        }
+        .padding(.top, 12)
+    }
+
+    /// Vyměnit: the pick goes in as with "Dát na dnes"; once it is in the plan,
+    /// the first workout planned for today goes out (a gym plan is cancelled,
+    /// its sets stay saved). A pick that opens the library first changes nothing yet.
+    private func swap(_ best: CoachPick.Option, _ pick: CoachPick) async {
+        busy = true; error = nil
+        defer { busy = false }
+        do {
+            guard try await CoachPickActions.take(best, pick: pick, model: model) else { return }
+            if let session = planned.first?.session {
+                if session.sport == "strength" {
+                    try await GymPlanActions.cancel(model, date: session.date, eventId: session.eventId)
+                } else if let id = session.eventId {
+                    try await model.api.deletePlanned(eventId: id)
+                }
+                await model.refresh()
+                await model.refreshTraining()
+            }
+        } catch {
+            self.error = error.localizedDescription
+        }
+        await reload()
     }
 
     /// Odmítnout: gone at once, the server keeps it for the day.
