@@ -57,6 +57,27 @@ final class WatchGymSheetTests: XCTestCase {
         XCTAssertEqual(sheet.values, before)
     }
 
+    func testTheWatchSheetKeepsASetTickedOnTheIPhoneMeanwhile() {
+        var watch = day()
+        var phone = day()
+        let first = watch.exercises[0].sets[0].row, second = watch.exercises[0].sets[1].row
+        let start = Date(timeIntervalSince1970: 1_793_000_000)
+        // The watch went alone after its first set; the iPhone ticked the second.
+        watch.apply(WatchGym.Done(date: "2026-11-01", row: first, kg: 62.5, reps: 8), start: start)
+        phone.apply(WatchGym.Done(date: "2026-11-01", row: first, kg: 62.5, reps: 8), start: start)
+        phone.complete(row: second, kg: "62.5", reps: "7", rpe: "")
+        var merged = GymDay(date: "2026-11-01", values: GymDay.merged(watch.values, keepingDoneFrom: phone.values), cancelled: nil)
+        XCTAssertEqual(merged.exercises[0].sets.map(\.done), [true, true])
+        XCTAssertEqual(merged.exercises[0].sets[1].reps, "7")
+        // An exercise the watch swapped meanwhile stays the watch's.
+        watch.apply(WatchGym.Change(date: "2026-11-01", kind: .swap, exercise: 1,
+                                    option: WatchGym.Option(name: "Lat Pulldown", shown: "Lat pulldown", kg: 45, sets: 1, reps: "10")))
+        phone.complete(row: phone.exercises[1].sets[0].row, kg: "50", reps: "10", rpe: "")
+        merged.values = GymDay.merged(watch.values, keepingDoneFrom: phone.values)
+        XCTAssertEqual(merged.exercises[1].name, "Lat Pulldown")
+        XCTAssertFalse(merged.exercises[1].sets[0].done)
+    }
+
     func testANameFromTheCatalogReadsAsASentence() {
         XCTAssertEqual(ExerciseName.shown("Cable Single Arm Rear Delt Row"), "Cable single arm rear delt row")
         XCTAssertEqual(ExerciseName.shown("Face pull"), "Face pull")

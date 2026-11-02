@@ -95,11 +95,15 @@ extension WatchBridge {
 
     /// The sheet the watch worked on alone while the iPhone was out of reach
     /// (it saved it to the server itself): the iPhone takes it as the day's,
-    /// Training mode shows it and the newest copy waiting to be sent is this one.
-    func applyGym(sheet: WatchGym.Sheet) async {
-        var day = await gymDay(sheet.date) ?? GymDay(date: sheet.date, values: [], cancelled: nil)
-        day.values = sheet.values
+    /// keeping sets ticked here meanwhile, Training mode shows it and the
+    /// newest copy waiting to be sent is this one. The plan goes back to the
+    /// watch, so it has the sets ticked here too.
+    func applyGym(sheet: WatchGym.Sheet) async -> WatchGym {
+        let mine = await gymDay(sheet.date)
+        var day = mine ?? GymDay(date: sheet.date, values: [], cancelled: nil)
+        day.values = GymDay.merged(sheet.values, keepingDoneFrom: mine?.values ?? [])
         await save(day, date: sheet.date)
+        return watchGym(day, date: sheet.date)
     }
 
     /// Exercises to swap in (similar to the one given) or to add (matching the

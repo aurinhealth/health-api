@@ -259,13 +259,16 @@ final class GymStore: ObservableObject {
     private func handBack() {
         guard alone, let session = phone, session.isReachable, let gym, let values = gym.sheet,
               let data = WatchGym.Sheet(date: gym.date, values: values).encoded() else { return }
-        session.sendMessage([WatchGym.sheetKey: data], replyHandler: { _ in
+        session.sendMessage([WatchGym.sheetKey: data], replyHandler: { reply in
+            // The iPhone's plan: the watch's sheet with sets ticked on the iPhone meanwhile.
+            let plan = reply[WatchGym.replyKey] as? Data
             Task { @MainActor in
                 let store = GymStore.shared
                 // Changed here meanwhile: the next hand-back takes that.
                 guard store.gym?.sheet == values else { store.handBack(); return }
                 store.alone = false
                 store.unsent = false
+                if let plan { store.received(plan) }
             }
         }, errorHandler: { _ in })
     }
