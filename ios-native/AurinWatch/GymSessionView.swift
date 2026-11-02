@@ -185,7 +185,7 @@ struct GymSessionView: View {
     private var shownPart: GymDayPart? {
         if let part = run.part { return part }
         guard let gym = store.gym, let day = store.sheetDay, let parts = store.dayParts else { return nil }
-        let started = gym.exercises.contains { $0.lifts.contains(\.done) }
+        let started = gym.exercises.contains { $0.lifts.contains(where: \.done) }
         if !started, !skipBefore, let part = parts.before(day).first(where: { !store.partFinished($0) }) { return part }
         return gym.allDone ? nextAfter : nil
     }
