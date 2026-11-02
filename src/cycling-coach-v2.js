@@ -9,6 +9,7 @@ import { readinessFor } from "./readiness.js";
 import { manualReadinessFor } from "./morning-checkin.js";
 import { readinessParts } from "./app-health.js";
 import { sessionLoad } from "./training-load.js";
+import { MAX_MINUTES } from "./workout-model.js";
 
 const n=(v,d=null)=>v===null||v===undefined||v===""?d:Number.isFinite(Number(v))?Number(v):d;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -340,7 +341,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
 
   const plannedToday=planned.find(a=>isoDate(a.date)===targetDate)||daily?.training?.planned?.find(isSport)||null;
   const plannedInfo=plannedToday?classifyPlannedWorkout(plannedToday,sport):null;
-  const [minLen,maxLen]=swim?[15,90]:sport==="run"?[20,240]:[30,360];
+  const [minLen,maxLen]=swim?[15,90]:sport==="run"?[20,MAX_MINUTES.run]:[30,MAX_MINUTES.ride];
   const explicitMinutes=n(availabilityMinutes,n(preferences.availableMinutes,n(plannedInfo?.minutes,n(plannedToday?.durationHours)*60||null)));
   // No time given and nothing planned: the coach picks the length from the
   // athlete's usual session over the last three weeks (or CTL), see below.

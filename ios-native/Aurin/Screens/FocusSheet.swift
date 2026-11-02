@@ -26,6 +26,31 @@ struct FocusPromptCard: View {
     }
 }
 
+/// The choices of "Zaměření" and of the first-run setup (SetupFocusPages),
+/// outside the views so both read them from anywhere.
+enum FocusChoice {
+    /// The chips, mapped to the profile's mainSport (src/athlete-focus.js).
+    static let sports = [("cycling", "Kolo"), ("running", "Běh"), ("swimming", "Plavání"), ("triathlon", "Triatlon"), ("strength", "Posilovna"), ("general", "Obecná kondice")]
+    /// The goal rows, kept as the profile's sportGoal in the athlete's words.
+    static let goals = [("fitness", "Zlepšit kondici"), ("race", "Závod"), ("lose", "Zhubnout")]
+    static let goalTexts = ["fitness": "zlepšit kondici", "race": "závod", "lose": "zhubnout"]
+
+    /// Swimming or triathlon: "Uplaveš 100 m bez zastavení?" is asked.
+    static func swims(_ sport: String) -> Bool { sport == "swimming" || sport == "triathlon" }
+
+    /// The profile with the main sport and the goal; an empty choice stays as it was.
+    static func applying(_ profile: JSONObject, sport: String, goal: String, swims100: Bool?) -> JSONObject {
+        var next = profile
+        if !sport.isEmpty { next["mainSport"] = .string(sport) }
+        if let text = goalTexts[goal] { next["sportGoal"] = .string(text) }
+        // Losing weight is also the weight goal of the calorie target, unless one is set already.
+        if goal == "lose", !(next["goal"]?.string ?? "").hasPrefix("lose") { next["goal"] = .string("lose_0.5") }
+        // Can't swim 100 m yet: the coach suggests lessons, swims stay in the pool (src/athlete-focus.js).
+        if let swims100, swims(sport) { next["swims100"] = .bool(swims100) }
+        return next
+    }
+}
+
 /// "Zaměření": the main sport, the time for training on each weekday (the
 /// same bars as "Kdy mám čas", AvailabilityView) and the goal. "Uložit" saves
 /// the profile (mainSport, sportGoal and, for losing weight, the weight goal)
@@ -47,11 +72,9 @@ struct FocusSheet: View {
     @State private var swims100: Bool?
     private let monday = WeekPlanView.monday()
 
-    /// The chips, mapped to the profile's mainSport (src/athlete-focus.js).
-    static let sports = [("cycling", "Kolo"), ("running", "Běh"), ("swimming", "Plavání"), ("triathlon", "Triatlon"), ("strength", "Posilovna"), ("general", "Obecná kondice")]
-    /// The goal rows, kept as the profile's sportGoal in the athlete's words.
-    static let goals = [("fitness", "Zlepšit kondici"), ("race", "Závod"), ("lose", "Zhubnout")]
-    static let goalTexts = ["fitness": "zlepšit kondici", "race": "závod", "lose": "zhubnout"]
+    static let sports = FocusChoice.sports
+    static let goals = FocusChoice.goals
+    static let goalTexts = FocusChoice.goalTexts
 
     var body: some View {
         NavigationStack {
@@ -60,7 +83,7 @@ struct FocusSheet: View {
                     Text("Zaměření").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                     ChipFlow(items: Self.sports.map { $0.0 }, label: { id in Self.sports.first { $0.0 == id }?.1 ?? id },
                              isOn: { $0 == sport }, toggle: { sport = $0 })
-                    if sport == "swimming" || sport == "triathlon" {
+                    if FocusChoice.swims(sport) {
                         SettingsGroup(footer: swims100 == false ? "Začneme krátkými délkami a technikou v bazénu. Pár lekcí s trenérem plavání ti pomůže nejvíc." : "Když ne, začneme krátkými délkami a technikou.") {
                             HStack(spacing: 12) {
                                 Text("Uplaveš 100 m bez zastavení?").font(.body).foregroundStyle(Palette.ink)
@@ -140,22 +163,19 @@ struct FocusSheet: View {
         }
     }
 
+    /// Can't swim 100 m yet: the swims start from first lengths (src/swimming-workouts.js).
+    static func saveSwimLevel(_ api: APIClient, sport: String, swims100: Bool?) async throws {
+        guard let swims100, FocusChoice.swims(sport) else { return }
+        _ = try await api.saveGymPreferences(["experienceBySport": .object(["swim": .string(swims100 ? "auto" : "beginner")])])
+    }
+
     private func save() async {
         saving = true
         defer { saving = false }
-        var next = profile
-        next["mainSport"] = .string(sport)
-        if let text = Self.goalTexts[goal] { next["sportGoal"] = .string(text) }
-        // Losing weight is also the weight goal of the calorie target, unless one is set already.
-        if goal == "lose", !(next["goal"]?.string ?? "").hasPrefix("lose") { next["goal"] = .string("lose_0.5") }
-        // Can't swim 100 m yet: the coach suggests lessons, swims stay in the pool (src/athlete-focus.js).
-        if let swims100, sport == "swimming" || sport == "triathlon" { next["swims100"] = .bool(swims100) }
+        let next = FocusChoice.applying(profile, sport: sport, goal: goal, swims100: swims100)
         do {
             try await model.api.saveProfile(next)
-            // Can't swim 100 m yet: the swims start from first lengths (src/swimming-workouts.js).
-            if swims100 != nil, sport == "swimming" || sport == "triathlon" {
-                _ = try await model.api.saveGymPreferences(["experienceBySport": .object(["swim": .string(swims100 == false ? "beginner" : "auto")])])
-            }
+            try await Self.saveSwimLevel(model.api, sport: sport, swims100: swims100)
             if prefs != nil {
                 let days = WeekPlanPrefs.days(prefs).map { Array($0.prefix(WeekPlanPrefs.maxPerDay)) }
                 let body = WeekPlanPrefs.edited(prefs, minutes: minutes, days: days, weeklyActivities: WeekPlanPrefs.weeklyActivities(prefs))

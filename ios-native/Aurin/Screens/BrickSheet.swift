@@ -50,6 +50,19 @@ enum PlanLinks {
         return out + list.filter { s in !out.contains { $0.id == s.id } }
     }
 
+    /// Every leg joined with this one, in order: a brick's two, a race's two
+    /// or three (a duathlon's run, ride, run).
+    static func chain(of s: WeekSession, in sessions: [WeekSession]) -> [WeekSession] {
+        var head = s
+        var seen: Set<String> = [s.id]
+        while let a = head.after, let before = sessions.first(where: { $0.eventId == a }), seen.insert(before.id).inserted { head = before }
+        var out = [head]
+        while let n = out.last?.next, let f = sessions.first(where: { $0.eventId == n }), !out.contains(where: { $0.id == f.id }) {
+            out.append(f)
+        }
+        return out
+    }
+
     /// The first leg of a joined session and the second, from either.
     static func pair(of s: WeekSession, in sessions: [WeekSession]) -> (WeekSession, WeekSession)? {
         if let a = s.after, let first = sessions.first(where: { $0.eventId == a }) { return (first, s) }

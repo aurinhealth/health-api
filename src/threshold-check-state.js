@@ -1,12 +1,15 @@
 // The threshold check's state for /app/api/threshold-check (threshold-check.js).
 import { cached } from "./api-cache.js";
-import { rideIntervals } from "./activity-detail.js";
+import { rideIntervals, boundedJson } from "./activity-detail.js";
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { athleteThresholds } from "./intervals-athlete.js";
 import { getWeekPlan, planWeekRoles, roleTime, roleFor } from "./week-planner.js";
 import { weekRoleOptions } from "./plan-context.js";
 import { availabilityOn } from "./training-availability.js";
-import { getChecks, thresholdSessions, estimateRideFtp, estimateRunPace, saveCheck, testResult, getTestWorkout, thresholdOffer, recommendTestDay, testFor } from "./threshold-check.js";
+import { getChecks, thresholdSessions, estimateRideFtp, estimateRunPace, saveCheck, testResult, curveTestResult, getTestWorkout, thresholdOffer, recommendTestDay, testFor } from "./threshold-check.js";
+import { intervalsReads } from "./intervals-reads.js";
+import { intervalsAuthorization } from "./intervals-auth.js";
+import { wahooStreams } from "./wahoo-detail.js";
 import { activePlan, planWeek } from "./training-plans.js";
 import { L } from "./lang.js";
 import { shiftDate, dashboardProfile, mondayOfDate } from "./dashboard-shared.js";
@@ -35,6 +38,22 @@ export async function loadThresholdSessions(env,ctx,today){
   const athlete={ftp:thresholds.ftp,lthr:thresholds.lthr,runLthr:thresholds.runLthr,maxHr:thresholds.maxHr||(age?Math.round(208-0.7*age):null),restHr:thresholds.restHr||(rest.length?rest[Math.floor(rest.length/2)]:null)};
   return {sessions,thresholds,athlete};
 }
+// The test ride's own curves (time, watts) when its laps hold no 20-min effort:
+// Intervals.icu's streams of the activity (no per-ride power curve in its
+// API that the app uses), or the Wahoo workout's FIT file (wahoo-detail.js,
+// read once and kept).
+async function testCurves(env,id){
+  let streams=[];
+  if(String(id||'').startsWith('wahoo:')){
+    const row=await env.DB.prepare("SELECT external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family='wahoo' AND data_type='activity' AND external_id=?").bind(env.USER_ID,String(id)).first();
+    if(row)streams=await wahooStreams(env,row);
+  }else if(env.INTERVALS_API_KEY&&/^[a-zA-Z0-9_-]{1,80}$/.test(id||'')){
+    streams=await intervalsReads(env)('https://intervals.icu/api/v1/activity/'+encodeURIComponent(id)+'/streams?types=time,watts',{headers:{Authorization:intervalsAuthorization(env.INTERVALS_API_KEY),Accept:'application/json'},signal:AbortSignal.timeout(10000)}).then(r=>boundedJson(r,4*1024*1024));
+  }
+  const s=type=>(Array.isArray(streams)?streams:[]).find(x=>x.type===type)?.data||[];
+  return {time:s('time'),watts:s('watts')};
+}
+
 export async function thresholdCheckState(env,ctx,today){
   const [{sessions,thresholds,athlete},checks]=await Promise.all([loadThresholdSessions(env,ctx,today),getChecks(env.DB)]);
   const current={ftp:thresholds.ftp||null,lthr:thresholds.lthr||null,runThresholdPace:thresholds.runThresholdPace||null,swimCss:thresholds.swimCss||null};
@@ -77,7 +96,17 @@ export async function thresholdCheckState(env,ctx,today){
       const done=sessions.filter(x=>x.kind===sport&&x.date===check.testDate).sort((a,b)=>(b.minutes||0)-(a.minutes||0))[0];
       if(done){
         const detail=done.id?await rideIntervals(env,done.id).catch(()=>null):null;
-        const result=detail?testResult(check.testId,detail.intervals):null;
+        let result=detail?testResult(check.testId,detail.intervals):null;
+        // No lap of about 20 minutes (a 20-min FTP test): the ride's best 20
+        // minutes, still only a value to confirm. Tried once per ride (kept in
+        // the check), and only on a ride as long as the test: a short ride
+        // earlier that day leaves the test ride to come.
+        const w=getTestWorkout(check.testId),long=(done.minutes||0)>=(w?.duration_minutes||45)*0.8;
+        if(!result&&done.id&&check.testId==='test-ride-ftp20'&&long&&check.result?.curveTried!==done.id){
+          const c=await testCurves(env,done.id).catch(()=>null);
+          result=c?curveTestResult(c.time,c.watts,current.ftp):null;
+          if(!result){await saveCheck(env.DB,sport,{...check,result:{curveTried:done.id}});checks[sport]={...check,result:{curveTried:done.id}};}
+        }
         if(result){await saveCheck(env.DB,sport,{...check,status:'measured',result});checks[sport]={...check,status:'measured',result};}
         else {manual.push({sport,testId:check.testId,testDate:check.testDate});continue;}
       }else if(check.testDate<shiftDate(today,-3)){await saveCheck(env.DB,sport,{...check,status:'dismissed'});checks[sport]={...check,status:'dismissed',updatedAt:today};}
@@ -93,7 +122,8 @@ export async function thresholdCheckState(env,ctx,today){
     const when=recommendTestDay({today,sport,minutes:w.duration_minutes,days:days.map(d=>({date:d.date,sports:d.sports,minutes:d.minutes,role:d.prefs?roleFor(d.prefs,d.date,sport,d.options)?.role||null:null}))});
     offers.push({...offer,testName:w.name,testMinutes:w.duration_minutes,testDescription:w.description,...when});
   }
-  return {status:'ok',current,estimates,offers,scheduled,results,manual};
+  // Where a confirmed result goes besides Aurin; the app shows only those whose switch is on.
+  return {status:'ok',current,estimates,offers,scheduled,results,manual,connected:{intervals:Boolean(env.INTERVALS_API_KEY),wahoo:Boolean(env.WAHOO_TOKEN)}};
 }
 
 // A manually entered test result into the values to confirm.

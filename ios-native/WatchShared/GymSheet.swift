@@ -597,7 +597,9 @@ extension WatchGym {
                               intensity: GymIntensity.letter(set.intensity))
             }
             let shown = ExerciseName.shown(exercise.name)
-            return WatchGym.Exercise(name: exercise.name, shown: shown == exercise.name ? nil : shown, lifts: lifts)
+            let letter = (exercise.superset ?? "").trimmingCharacters(in: .whitespaces).uppercased()
+            return WatchGym.Exercise(name: exercise.name, shown: shown == exercise.name ? nil : shown, lifts: lifts,
+                                     superset: letter.isEmpty ? nil : letter)
         }
         self.init(date: date, title: day.planName, minutes: day.plannedMinutes, restExercises: restExercises,
                   exercises: day.cancelled == true ? [] : exercises, sheet: day.values)
@@ -613,13 +615,25 @@ extension GymDay {
     }
 
     /// A change from the watch's menu (≡).
+    /// The header rows, the date and the column names, for a day without a plan
+    /// (an empty workout on the iPhone or the watch).
+    mutating func ensureHeader(date: String) {
+        while values.count < Self.firstSetRow { values.append([]) }
+        if text(2, 0) == nil {
+            set(row: 2, column: 0, "Datum")
+            set(row: 2, column: 1, date)
+        }
+        if values[6].count < Self.columns.count { values[6] = Self.columns.map { JSONValue.string($0) } }
+    }
+
     mutating func apply(_ change: WatchGym.Change) {
         if change.kind == .parts {
             if let parts = change.parts { setDayParts(parts) }
             return
         }
         let names = exercises.map(\.name)
-        guard names.indices.contains(change.exercise) else { return }
+        // The first exercise of an empty workout has no place to follow.
+        guard names.indices.contains(change.exercise) || (change.kind == .addExercise && names.isEmpty) else { return }
         switch change.kind {
         case .addSet: addSet(at: change.exercise)
         case .removeSet: removeSet(at: change.exercise)

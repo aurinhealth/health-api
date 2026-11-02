@@ -38,13 +38,13 @@ test("sessions identify their user; GitHub OIDC acts as system; the old owner AP
   assert.deepEqual(await resolvePrincipal(req({ Authorization: "Bearer a.b.c" }), env, async () => ({})), { kind: "system" });
 });
 
-test("the deploy token acts as the owner only on the routes the smoke test calls", async () => {
+test("the deploy token is accepted only on the routes the smoke test calls", async () => {
   const at = (path, method = "GET") => new Request("https://aurin.health" + path, { method, headers: { Authorization: "Bearer a.b.c" } });
   const accept = async () => ({});
-  for (const [path, method] of [["/automation/strength", "POST"], ["/health/nutrition"], ["/app/api/today"], ["/app/api/daily"], ["/app/api/sleep"], ["/app/api/gym"], ["/app/api/activities"], ["/app/api/week"], ["/app/api/food/search", "POST"]]) {
+  for (const [path, method] of [["/automation/strength", "POST"], ["/app/api/today"], ["/app/api/daily"], ["/app/api/sleep"], ["/app/api/gym"], ["/app/api/activities"], ["/app/api/week"], ["/app/api/food/search", "POST"]]) {
     assert.deepEqual(await resolvePrincipal(at(path, method), env, accept), { kind: "system" }, path);
   }
-  for (const [path, method] of [["/app/api/account/export"], ["/app/api/account/delete", "POST"], ["/app/api/me"], ["/app/api/food/log", "POST"], ["/app/api/today", "POST"], ["/app/api/admin/users"], ["/strength/history"], ["/sync/google"]]) {
+  for (const [path, method] of [["/app/api/account/export"], ["/app/api/account/delete", "POST"], ["/app/api/me"], ["/app/api/food/log", "POST"], ["/app/api/today", "POST"], ["/app/api/admin/users"], ["/strength/history"], ["/sync/google"], ["/health/nutrition"]]) {
     assert.equal(await resolvePrincipal(at(path, method), env, accept), null, method + " " + path);
   }
 });

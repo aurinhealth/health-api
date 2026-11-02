@@ -9,6 +9,8 @@ extension Notification.Name {
     static let watchRest = Notification.Name("watchRest")
     /// The weight and reps being set on the watch (object: WatchGym.Draft).
     static let watchDraft = Notification.Name("watchDraft")
+    /// The workout was discarded on the watch: Training mode of that day closes (object: its date).
+    static let watchGymDiscarded = Notification.Name("watchGymDiscarded")
 }
 
 /// The gym on the Apple Watch (AurinWatch/Gym*.swift), both ways: the day's
@@ -37,7 +39,39 @@ extension WatchBridge {
         let rest = Self.restSettings
         var gym = WatchGym(day, date: date, restSets: rest.sets, restExercises: rest.exercises)
         gym.partsDone = Self.partsDone(day, date: date)
+        Self.addInfo(&gym, day: day, date: date)
         return gym
+    }
+
+    /// What Training mode shows at each exercise (mockup "u cviku"): the note,
+    /// the best set before today and each work set's numbers last time, from
+    /// the history and notes the phone already keeps (no request of its own).
+    static func addInfo(_ gym: inout WatchGym, day: GymDay, date: String,
+                        history: GymHistory? = GymHistoryCache.load(), notes: [String: String] = ExerciseNotes.shared.notes) {
+        for e in gym.exercises.indices {
+            let name = gym.exercises[e].name
+            gym.exercises[e].note = notes[name]?.nilIfBlank
+            if let best = GymSessionMath.record(history?.exercise(name), before: date), let reps = best.reps {
+                gym.exercises[e].record = WatchGym.Last(kg: best.kg, reps: Int(reps))
+            }
+            guard let last = history?.last(name, before: date),
+                  let exercise = day.exercises.first(where: { $0.name == name }) else { continue }
+            // The same place among the work sets as Training mode (GymSessionMath.lastTime).
+            let work = exercise.sets.filter(\.work)
+            for l in gym.exercises[e].lifts.indices {
+                guard let position = work.firstIndex(where: { $0.row == gym.exercises[e].lifts[l].row }),
+                      last.sets.indices.contains(position), let reps = last.sets[position].reps else { continue }
+                gym.exercises[e].lifts[l].last = WatchGym.Last(kg: last.sets[position].kg, reps: Int(reps))
+            }
+        }
+    }
+
+    /// The last gym workout before today and its number of exercises, from
+    /// the history the phone keeps (Repeat last workout on the watch).
+    static var lastGym: (date: String?, exercises: Int?) {
+        let today = AppModel.localDate(Date())
+        guard let history = GymHistoryCache.load(), let date = history.lastWorkoutDate(before: today) else { return (nil, nil) }
+        return (date, history.lastWorkout(before: today).count)
     }
 
     /// The parts of the day done here: the warm-up or stretching with every move
@@ -77,6 +111,8 @@ extension WatchBridge {
     /// takes seconds); the server's copy follows to the watch when it differs.
     /// Without a copy, from the server, else nothing.
     func loadGym(date: String) async -> WatchGym? {
+        // Not waited for: the plan answers at once and goes again with them.
+        Task { await loadExerciseInfo(date: date) }
         if date == AppModel.localDate(Date()), let saved = AppModel.live?.writes.waitingGym(date: date) ?? gymDays[date] ?? GymDayCache.load(date: date) {
             gymDays[date] = saved
             Task { @MainActor in await refreshGym(date: date, shown: saved) }
@@ -86,6 +122,20 @@ extension WatchBridge {
         gymDays[date] = day
         return watchGym(day, date: date)
     }
+
+    /// The notes and the history of sets, once a run of the app, for "last
+    /// time" and the record at each exercise on the watch; the plan already
+    /// sent goes again with them. The history as Training mode loads it each
+    /// time it opens (one request), so a workout done since is in it.
+    private func loadExerciseInfo(date: String) async {
+        guard !Self.exerciseInfoLoaded, let model = AppModel.live, !model.demo else { return }
+        Self.exerciseInfoLoaded = true
+        await ExerciseNotes.shared.load(api: model.api, demo: false)
+        _ = await model.gymHistory()
+        if let day = gymDays[date] { gymSaved(day, date: date) }
+    }
+
+    private static var exerciseInfoLoaded = false
 
     /// The day from the server (through the app's model when it runs, which
     /// keeps the writes still waiting and the saved copy).
@@ -141,10 +191,80 @@ extension WatchBridge {
     /// A change from the watch's menu; the new plan goes back to the watch.
     func applyGym(_ change: WatchGym.Change) async -> WatchGym? {
         guard var day = await gymDay(change.date) else { return nil }
-        guard change.kind == .parts || day.exercises.indices.contains(change.exercise) else { return watchGym(day, date: change.date) }
+        guard change.kind == .parts || day.exercises.indices.contains(change.exercise) || (change.kind == .addExercise && day.exercises.isEmpty)
+        else { return watchGym(day, date: change.date) }
         day.apply(change)
         await save(day, date: change.date)
         return watchGym(day, date: change.date)
+    }
+
+    /// No gym planned today and a start on the watch (mockup "jen hodinky" 6):
+    /// the day gets the last workout's exercises with the next loads, a
+    /// workout for the rested muscles (as Sestavit z odpočatých, saved at
+    /// once) or stays empty for exercises added one by one. nil when it
+    /// could not be put together (no signal, nothing to repeat).
+    func startGym(_ start: WatchGym.Start) async -> WatchGym? {
+        guard let model = AppModel.live else { return nil }
+        let date = start.date
+        // A day that didn't load is not an empty day: never written over.
+        var day: GymDay
+        if model.demo {
+            day = GymDay(date: date, values: [], cancelled: nil)
+        } else {
+            guard let loaded = try? await model.gymDay(date: date) else { return nil }
+            day = loaded
+        }
+        // Planned meanwhile (on the iPhone or by the coach): that plan.
+        guard day.exercises.isEmpty else {
+            gymDays[date] = day
+            return watchGym(day, date: date)
+        }
+        switch start.kind {
+        case .empty:
+            day.ensureHeader(date: date)
+        case .repeatLast:
+            let history = await model.gymHistory()
+            let names = history.lastWorkout(before: date)
+            guard !names.isEmpty else { return nil }
+            let catalog = model.demo ? [] : ((try? await model.api.gymExercises()) ?? [])
+            day.ensureHeader(date: date)
+            for name in names {
+                day.appendExercise(name, suggestion: GymCoach.suggest(name, history: history, before: date, catalog: catalog.first { $0.name == name }))
+            }
+        case .rested:
+            guard !model.demo else { return nil }
+            if model.musclesStale { await model.loadMuscles() }
+            let rested = model.muscles?.restedFocus ?? []
+            do {
+                // As the Odpočaté focus of the gym builder: the rested muscles, else the generator's own pick.
+                let proposal = try await model.api.previewGym(date: date, minutes: GymLength.usual ?? 45, focus: nil,
+                                                              muscles: rested, autoLength: true, usualMinutes: GymLength.usual)
+                guard let id = proposal.draftId else { return nil }
+                try await model.api.confirmGym(draftId: id, rows: proposal.rows)
+            } catch {
+                return nil
+            }
+            guard let fresh = try? await model.gymDay(date: date) else { return nil }
+            gymDays[date] = fresh
+            Task { @MainActor in await model.refreshTraining() }
+            return watchGym(fresh, date: date)
+        }
+        await save(day, date: date)
+        return watchGym(day, date: date)
+    }
+
+    /// The workout discarded on the watch: the day loses it as with Zahodit
+    /// trénink in Training mode (the plan, the logged sets, the Intervals.icu event).
+    func discardGym(date: String) async {
+        gymDays[date] = nil
+        // Training mode following the watch's workout stops with it, without a workout in Apple Health.
+        LiveWorkout.shared.watchDiscarded()
+        NotificationCenter.default.post(name: .watchGymDiscarded, object: date)
+        guard let model = AppModel.live, !model.demo else { return }
+        try? await model.discardGym(date: date)
+        async let training: Void = model.refreshTraining()
+        await model.refresh()
+        await training
     }
 
     /// The sheet the watch worked on alone while the iPhone was out of reach

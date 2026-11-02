@@ -332,3 +332,12 @@ test("A gym session done today does the day's strength plan when the gym plan wa
   const today = days.map(d => d.date === DATE ? { ...d, daily: { training: { planned: [copy], completed: [aurin], matched: [] } } } : d);
   assert.deepEqual(buildTraining({ ...input, days: today, gym: {} }).todaySessions, []);
 });
+
+test("a training plan's race leg tells the watch it is a race", () => {
+  const plan = { id: "planned:local-a1", source: "local", type: "Run", name: "Race 5 km", start: DATE + "T09:00:00", durationHours: 0.4, payload: { race: true, next: "local-b2" } };
+  const easy = { id: "planned:local-c3", source: "local", type: "Run", name: "Easy run", start: DATE + "T18:00:00", durationHours: 0.5, payload: {} };
+  const { sessions } = daySessions(DATE, DATE, { planned: [plan, easy], completed: [], matched: [] });
+  assert.equal(sessions.find(s => s.eventId === "planned:local-a1").race, true);
+  assert.equal(sessions.find(s => s.eventId === "planned:local-a1").next, "planned:local-b2");
+  assert.equal(sessions.find(s => s.eventId === "planned:local-c3").race, undefined);
+});

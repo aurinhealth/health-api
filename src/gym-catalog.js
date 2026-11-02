@@ -357,11 +357,13 @@ export function gymLoadEstimate(exercise,history=[]){
 }
 // Exercises the athlete gave a thumbs down (taste.disliked) are offered only
 // when nothing else fits; liked ones come first among equally similar ones.
-export function gymAlternatives(exercise,history=[],exclude=[],taste={}){
+// fits: what the athlete's gym has, kept before the 8 are cut (a small home
+// gym still gets its 8 from further down, not what is left of the first 8).
+export function gymAlternatives(exercise,history=[],exclude=[],taste={},fits=()=>true){
   const name=normalizeExerciseName(exercise),skip=new Set([name,...exclude.map(normalizeExerciseName)]);
   if(!EXERCISE_INTELLIGENCE[name])return [];
   const liked=new Set((taste.liked||[]).map(normalizeExerciseName));
-  const found=findExerciseAlternatives(name,history).filter(a=>EXERCISES[a.name]&&availableAt(a.name)&&!skip.has(a.name));
+  const found=findExerciseAlternatives(name,history).filter(a=>EXERCISES[a.name]&&availableAt(a.name)&&!skip.has(a.name)&&fits(a.name));
   const ranked=withoutDisliked(found,taste.disliked,a=>a.name).map((a,i)=>({a,i})).sort((x,y)=>(x.i-(liked.has(x.a.name)?1.5:0))-(y.i-(liked.has(y.a.name)?1.5:0))).map(x=>x.a);
   return ranked.slice(0,8).map(a=>{
     const def=EXERCISES[a.name],estimate=gymLoadEstimate(a.name,history)||{kg:null,source:'no-reference'};

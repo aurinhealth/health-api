@@ -176,6 +176,13 @@ enum W {
         return dateFormatter("EEEE").string(from: date)
     }
 
+    /// "dnes", "zítra" or the day's name ("sobota"), as a workout's detail says when it is.
+    static func relativeDay(_ text: String) -> String {
+        let today = WatchStore.localDate(Date())
+        let tomorrow = WatchStore.localDate(Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date())
+        return text == today ? tr("dnes", "today") : text == tomorrow ? tr("zítra", "tomorrow") : dayName(text)
+    }
+
     /// "pá", "Fri".
     static func dayShort(_ text: String) -> String {
         guard let date = day(text) else { return text }

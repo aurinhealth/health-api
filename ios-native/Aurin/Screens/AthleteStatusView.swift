@@ -99,9 +99,10 @@ struct AthleteStatusPill: View {
     }
 }
 
-/// The first row of Today's weather card: the state's icon and name in its colour,
-/// then for a state other than Aktivní how long it lasts ("do 17. 10.",
-/// "do změny") and an injury's note. No frame; a tap changes it.
+/// On Today to the right of "Připravenost" (Petr, 2026-11-02; until then the
+/// weather card's first row): the state's icon and name in its colour, then
+/// for a state other than Aktivní how long it lasts ("do 17. 10.", "do změny")
+/// and an injury's note, cut short when long. No frame; a tap changes it.
 struct AthleteStatusRow: View {
     @Environment(AppModel.self) private var model
     @State private var editing = false
@@ -110,18 +111,19 @@ struct AthleteStatusRow: View {
         let status = model.athleteStatus ?? .active
         let kind = AthleteStatusKind.from(status.status)
         Button { editing = true } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 // The state's icon, not a dot: a coloured dot read as "live".
-                Image(systemName: kind.symbol).scaledFont(13, weight: .semibold, cap: .denseCap).foregroundStyle(kind.color)
-                    .frame(width: 18)
-                Text(kind.title).font(.subheadline.weight(.semibold)).foregroundStyle(kind.color)
+                Image(systemName: kind.symbol).scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(kind.color)
+                Text(kind.title).font(.footnote.weight(.semibold)).foregroundStyle(kind.color)
+                    .fixedSize()
                 if let detail = Self.detail(status, kind) {
-                    Text(verbatim: "· " + detail).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(1)
+                    Text(verbatim: "· " + detail).font(.footnote).foregroundStyle(Palette.muted)
+                        .lineLimit(1).truncationMode(.tail)
                 }
-                Spacer(minLength: 8)
                 // It opens a choice below, not a page: a quiet downward chevron.
-                Image(systemName: "chevron.down").scaledFont(10, weight: .semibold).foregroundStyle(Palette.faint.opacity(0.7))
+                Image(systemName: "chevron.down").scaledFont(9, weight: .semibold).foregroundStyle(Palette.faint.opacity(0.7))
             }
+            .padding(.vertical, 4)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
