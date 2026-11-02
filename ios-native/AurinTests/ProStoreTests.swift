@@ -1,3 +1,4 @@
+import StoreKit
 import StoreKitTest
 import UIKit
 import XCTest
@@ -45,17 +46,28 @@ final class ProStoreTests: XCTestCase {
         return try await work()
     }
 
-    private func makeSession() throws -> SKTestSession {
+    private func makeSession() async throws -> SKTestSession {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Aurin", withExtension: "storekit"))
         let session = try SKTestSession(contentsOf: url)
         session.resetToDefaultState()
         session.disableDialogs = true
         session.clearTransactions()
+        // On the iOS 27 simulator the first purchase after it boots went to the real
+        // App Store ("Sign in to Apple Account" on screen) and waited forever: the
+        // test store was not answering yet. Its storefront (CZE, Aurin.storekit)
+        // shows when it does; until then the tests wait.
+        var storefront = await Storefront.current?.countryCode
+        for _ in 0..<60 where storefront != "CZE" {
+            try await Task.sleep(for: .seconds(1))
+            storefront = await Storefront.current?.countryCode
+        }
+        print("ProStoreTests storefront: \(storefront ?? "none")")
+        XCTAssertEqual(storefront, "CZE", "StoreKit answers from Aurin.storekit, not the App Store")
         return session
     }
 
     func testPlansFreeWeekAndPurchase() async throws {
-        let session = try makeSession()
+        let session = try await makeSession()
         let store = ProStore()
         var reminded: String?
         store.trialReminder = { _, price in reminded = price }
@@ -76,7 +88,7 @@ final class ProStoreTests: XCTestCase {
     }
 
     func testMonthlyHasNoFreeWeek() async throws {
-        let session = try makeSession()
+        let session = try await makeSession()
         let store = ProStore()
         var reminded = false
         store.trialReminder = { _, _ in reminded = true }
