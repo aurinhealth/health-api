@@ -12,8 +12,8 @@ struct TrainingView: View {
     @State private var jumpDay: DayJump?
     /// The day of today's Začít trénink while its place is under the tab bar
     /// (NextSession), and the bottom of the visible page: it floats above the bar.
-    @State private var startUnderBar: String?
-    @State private var pageBottom: CGFloat = 0
+    /// Where today's Začít trénink is (NextSession writes, the floating copy reads).
+    @State private var startSpot = StartSpot()
 
     var body: some View {
         NavigationStack(path: model.path(.training)) {
@@ -45,26 +45,19 @@ struct TrainingView: View {
                     ProgressView()
                 }
             }
-            .environment(\.startButtonReport, { startUnderBar = $0 })
-            .environment(\.startButtonFloor, pageBottom > 0 ? pageBottom - StartButtonSpot.barZone : 0)
-            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { pageBottom = $0 }
-            .overlay(alignment: .bottom) {
-                if let date = floatingStart {
-                    NavigationLink(value: AppRoute.trainingMode(date)) {
-                        Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
-                            .frame(maxWidth: .infinity).frame(height: 54)
-                            .background(Palette.green, in: Capsule())
-                            .shadow(color: Palette.green.opacity(0.3), radius: 12, y: 6)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 28)
-                    .padding(.bottom, StartButtonSpot.barZone + 8)
-                    // VoiceOver reaches the same button in the card.
-                    .accessibilityHidden(true)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            // One object for the whole screen: its identity never changes, so a
+            // redraw of Training does not redraw the cards that read it.
+            .environment(startSpot)
+            // The page's bottom from a background, which the floating button never moves.
+            .background {
+                Color.clear.onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY.rounded() } action: { bottom in
+                    let floor = bottom > 0 ? bottom - StartButtonSpot.barZone : 0
+                    if startSpot.floor != floor { startSpot.floor = floor }
                 }
             }
-            .animation(.snappy, value: floatingStart == nil)
+            .overlay(alignment: .bottom) {
+                floatingStartButton
+            }
             .navBarVisibility(.hidden)
             .appRoutes()
         }
@@ -95,7 +88,29 @@ struct TrainingView: View {
     /// a hidden workout's bar there, nor over an undo toast.
     private var floatingStart: String? {
         guard toast == nil, model.minimizedGym == nil, !model.immersive else { return nil }
-        return startUnderBar
+        return startSpot.underBar
+    }
+
+    /// The animation only on the button itself: the page under it never animates
+    /// with it, so its own frames cannot flip the button back and forth.
+    private var floatingStartButton: some View {
+        ZStack(alignment: .bottom) {
+            if let date = floatingStart {
+                NavigationLink(value: AppRoute.trainingMode(date)) {
+                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
+                        .frame(maxWidth: .infinity).frame(height: 54)
+                        .background(Palette.green, in: Capsule())
+                        .shadow(color: Palette.green.opacity(0.3), radius: 12, y: 6)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 28)
+                .padding(.bottom, StartButtonSpot.barZone + 8)
+                // VoiceOver reaches the same button in the card.
+                .accessibilityHidden(true)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy, value: floatingStart == nil)
     }
 
     private func undo(_ t: PlanToast) {
@@ -405,22 +420,18 @@ enum StartButtonSpot {
     static let barZone: CGFloat = 76
 }
 
-private struct StartButtonReportKey: EnvironmentKey { nonisolated(unsafe) static let defaultValue: ((String?) -> Void)? = nil }
-private struct StartButtonFloorKey: EnvironmentKey { static let defaultValue: CGFloat = 0 }
-
-extension EnvironmentValues {
-    /// The day of today's Začít trénink while it is under the tab bar, nil
-    /// once it is above it or gone (NextSession → TrainingView). Only a change
-    /// is reported, so scrolling does not redraw the screen.
-    var startButtonReport: ((String?) -> Void)? {
-        get { self[StartButtonReportKey.self] }
-        set { self[StartButtonReportKey.self] = newValue }
-    }
-
+/// Where today's Začít trénink is on Training: NextSession writes, TrainingView's
+/// floating copy reads. Writes happen only on a change, so scrolling redraws nothing.
+@MainActor @Observable
+final class StartSpot {
+    /// The day of the button while it sits under the tab bar or further down.
+    var underBar: String?
     /// The top of the tab bar on screen (global), 0 before it is measured.
-    var startButtonFloor: CGFloat {
-        get { self[StartButtonFloorKey.self] }
-        set { self[StartButtonFloorKey.self] = newValue }
+    var floor: CGFloat = 0
+
+    func report(_ day: String, under: Bool) {
+        if under { if underBar != day { underBar = day } }
+        else if underBar == day { underBar = nil }
     }
 }
 
@@ -433,8 +444,7 @@ struct NextSession: View {
     var strainNow: Double? = nil
     /// In the swiping card: as tall as the tallest of today's.
     var fill = false
-    @Environment(\.startButtonReport) private var startReport
-    @Environment(\.startButtonFloor) private var startFloor
+    @Environment(StartSpot.self) private var startSpot: StartSpot?
 
     // Its own card, so the gym tools below (today's) don't read as its buttons.
     var body: some View {
@@ -451,10 +461,10 @@ struct NextSession: View {
                         .background(Palette.green, in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .onGeometryChange(for: Bool.self) { [floor = startFloor] in floor > 0 && $0.frame(in: .global).maxY > floor } action: { under in
-                    startReport?(under ? session.date : nil)
+                .onGeometryChange(for: Bool.self) { [floor = startSpot?.floor ?? 0] in floor > 0 && $0.frame(in: .global).maxY > floor } action: { under in
+                    startSpot?.report(session.date, under: under)
                 }
-                .onDisappear { startReport?(nil) }
+                .onDisappear { startSpot?.report(session.date, under: false) }
                 .padding(.top, 4)
             }
             if fill { Spacer(minLength: 0) }
