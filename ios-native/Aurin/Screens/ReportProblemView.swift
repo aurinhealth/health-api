@@ -23,7 +23,7 @@ struct ReportProblemView: View {
     private static let maxScreenshotBytes = 1_000_000
 
     var body: some View {
-        SettingsPage(title: "Nahlásit problém") {
+        SettingsPage(title: "Nahlásit problém", trail: false) {
             if sent {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("Díky, hlášení odešlo.").font(Typo.sentence(24)).foregroundStyle(Palette.ink)
@@ -124,7 +124,7 @@ struct ReportProblemView: View {
             "app": .string("\(version) (\(build))"),
             "ios": .string(UIDevice.current.systemVersion),
             "device": .string(UIDevice.current.model),
-            "deviceModel": .string(Self.deviceModel),
+            "deviceModel": .string(WatchDiagnostics.hardwareModel),
             "language": .string(L10n.language),
             "units": .string(UserDefaults.standard.string(forKey: Units.key) ?? "metric"),
             "timeZone": .string(TimeZone.current.identifier),
@@ -132,10 +132,16 @@ struct ReportProblemView: View {
             "demo": .bool(model.demo),
             "reportedAt": .string(ISO8601DateFormatter().string(from: Date()))
         ]
-        // Where the user was before Settings: the tab and its open detail, the last one last.
-        d["screens"] = .array(ScreenTrail.entries.map { JSONValue.string($0) })
-        let watch = WatchBridge.shared.watchState
-        d["appleWatch"] = .object(["paired": .bool(watch.paired), "aurinInstalled": .bool(watch.installed)])
+        let stamp = ISO8601DateFormatter()
+        // Where the user was: the tab and its open detail, a sheet, a page of Settings; the last one last.
+        d["screens"] = .array(ScreenTrail.entries.map { JSONValue.object(["screen": .string($0.name), "at": .string(stamp.string(from: $0.at))]) })
+        // What the app asked the server for just before, also what went fine, and how long it took.
+        d["recentRequests"] = .array(RequestTrail.entries.map { entry -> JSONValue in
+            var o: JSONObject = ["at": .string(stamp.string(from: entry.at)), "path": .string(entry.path), "ms": .number(Double(entry.ms))]
+            if let status = entry.status { o["status"] = .number(Double(status)) }
+            return .object(o)
+        })
+        d["appleWatch"] = .object(Self.watchDiagnostics(stamp))
         d["connections"] = .array(store.connections.map { provider -> JSONValue in
             var o: JSONObject = ["id": .string(provider.id), "connected": .bool(provider.connected == true)]
             if provider.needsReconnect == true { o["needsReconnect"] = .bool(true) }
@@ -171,7 +177,6 @@ struct ReportProblemView: View {
             d["appleHealth"] = .object(a)
         }
         // The week's failed requests, also from earlier launches (ErrorLog).
-        let stamp = ISO8601DateFormatter()
         d["recentErrors"] = .array(ErrorLog.entries.map { entry -> JSONValue in
             var o: JSONObject = ["at": .string(stamp.string(from: entry.at)), "path": .string(entry.path), "message": .string(entry.message)]
             if let status = entry.status { o["status"] = .number(Double(status)) }
@@ -200,14 +205,26 @@ struct ReportProblemView: View {
         return d
     }
 
-    /// The hardware name, like "iPhone16,1"; UIDevice only says "iPhone".
-    private static var deviceModel: String {
-        var info = utsname()
-        uname(&info)
-        let name = withUnsafeBytes(of: &info.machine) { raw in
-            String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self)
-        }
-        return name.isEmpty ? "?" : name
+    /// The watch: paired, Aurin on it, and what its app last said about itself
+    /// (WatchDiagnostics): its version, watchOS, model, last pages and failures.
+    @MainActor private static func watchDiagnostics(_ stamp: ISO8601DateFormatter) -> JSONObject {
+        let state = WatchBridge.shared.watchState
+        var o: JSONObject = ["paired": .bool(state.paired), "aurinInstalled": .bool(state.installed), "reachable": .bool(state.reachable)]
+        guard state.paired, state.installed, let watch = WatchBridge.shared.watchDiagnostics else { return o }
+        o["app"] = .string(watch.app)
+        o["watchOS"] = .string(watch.watchOS)
+        o["model"] = .string(watch.model)
+        o["signedIn"] = .bool(watch.signedIn)
+        if let date = watch.todayDate { o["todayDate"] = .string(date) }
+        o["sentAt"] = .string(stamp.string(from: watch.sentAt))
+        o["screens"] = .array(watch.screens.map { JSONValue.object(["screen": .string($0.name), "at": .string(stamp.string(from: $0.at))]) })
+        o["recentErrors"] = .array(watch.errors.reversed().map { e -> JSONValue in
+            var f: JSONObject = ["at": .string(stamp.string(from: e.at)), "path": .string(e.what)]
+            if let status = e.status { f["status"] = .number(Double(status)) }
+            if let message = e.message { f["message"] = .string(message) }
+            return .object(f)
+        })
+        return o
     }
 
     private var diagnosticsText: String {

@@ -236,6 +236,8 @@ extension WatchStore: WCSessionDelegate {
             GymWorkout.shared.announce()
             // Sets saved here alone go to the iPhone now.
             GymStore.shared.sync()
+            // What the iPhone's "Nahlásit problém" says about the watch.
+            WatchReport.send()
         }
     }
 

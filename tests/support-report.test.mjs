@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { handleSupportReport, saveSupportReport, validateReport, reportFindings, MAX_SCREENSHOT_BASE64, MAX_DIAGNOSTICS, DAILY_REPORTS } from "../src/support-report.js";
+import { handleSupportReport, saveSupportReport, validateReport, reportFindings, reportWhere, reportScreen, requestClient, MAX_SCREENSHOT_BASE64, MAX_DIAGNOSTICS, DAILY_REPORTS } from "../src/support-report.js";
 
 const migration = readFileSync(new URL("../migrations/0016_support_reports.sql", import.meta.url), "utf8");
 const JPEG = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBD";
@@ -121,4 +121,54 @@ test("a feature idea is stored without a screenshot or server snapshot and e-mai
   assert.match(sent[0].text, /App: Aurin 1\.2 \(34\), iOS 26\.0, cs/);
   assert.doesNotMatch(sent[0].text, /Diagnostics|Worth a look/);
   assert.throws(() => validateReport({ kind: "idea", message: " " }), e => e.status === 400 && /nápad|idea/.test(e.message));
+});
+
+test("the e-mail opens with where the report came from: the iPhone, its screens, the watch and the last requests", async () => {
+  const { env, sent } = setup();
+  const diagnostics = {
+    app: "1.4 (312)", ios: "26.1", device: "iPhone", deviceModel: "iPhone16,1",
+    screens: [{ screen: "today", at: "2026-11-02T10:01:05Z" }, { screen: "training/muscle", at: "2026-11-02T10:02:00Z" }, { screen: "settings", at: "2026-11-02T10:03:00Z" }],
+    recentRequests: [{ at: "2026-11-02T10:02:01Z", path: "GET /app/api/coach/pick", status: 200, ms: 4137 }, { at: "2026-11-02T10:01:06Z", path: "GET /app/api/today", status: 200, ms: 420 }],
+    appleWatch: { paired: true, aurinInstalled: true, reachable: false, app: "1.3 (300)", watchOS: "26.0", model: "Watch7,3", signedIn: true, todayDate: "2026-11-02", sentAt: new Date().toISOString(),
+      screens: [{ screen: "readiness", at: "2026-11-02T09:58:00Z" }, { screen: "gym", at: "2026-11-02T10:00:00Z" }],
+      recentErrors: [{ at: "2026-11-02T10:00:30Z", path: "POST /app/api/gym", status: 500, message: "D1 error" }] }
+  };
+  const request = new Request("https://x.test/app/api/support/report", { method: "POST", headers: { Origin: "https://x.test", "Content-Type": "application/json", "X-Aurin-Api": "7", "User-Agent": "Aurin/312 CFNetwork/3826 Darwin/25.1.0" }, body: JSON.stringify({ message: "Série se neuložila", diagnostics }) });
+  assert.equal((await handleSupportReport(request, env, { signedIn: true, origin: "https://x.test" })).status, 200);
+  const { subject, text, html } = sent[0];
+  assert.equal(subject, "Aurin: problem report #1 from a@b.cz (training/muscle)");
+  const head = text.split("Série se neuložila")[0];
+  assert.match(head, /Sent from: iPhone app, Aurin 1\.4 \(312\), iPhone16,1, iOS 26\.1/);
+  assert.match(head, /Screens before the report \(UTC\): today 10:01 → training\/muscle 10:02 → settings 10:03/);
+  assert.match(head, /Apple Watch: Aurin 1\.3 \(300\), watchOS 26\.0, Watch7,3, signed in, out of reach, shows 2026-11-02; last pages: readiness 09:58 → gym 10:00/);
+  assert.match(head, /Last requests: GET \/app\/api\/coach\/pick 200 4137 ms \(10:02\); GET \/app\/api\/today 200 420 ms \(10:01\)/);
+  assert.match(text, /1 slow request\(s\) just before the report, slowest GET \/app\/api\/coach\/pick 200 4137 ms/);
+  assert.match(text, /watch: runs Aurin 1\.3 \(300\), the iPhone 1\.4 \(312\)/);
+  assert.match(text, /watch: 1 failed request\(s\) this week, latest 2026-11-02T10:00:30Z POST \/app\/api\/gym 500 D1 error/);
+  assert.match(html, /<br>Screens before the report \(UTC\): today 10:01/);
+});
+
+test("without diagnostics the request's own headers still say which app sent it", async () => {
+  const { raw, env, sent } = setup();
+  const client = requestClient(new Request("https://x.test", { headers: { "X-Aurin-Api": "7", "User-Agent": "Aurin/312 CFNetwork/3826 Darwin/25.1.0" } }));
+  assert.deepEqual(client, { api: "7", userAgent: "Aurin/312 CFNetwork/3826 Darwin/25.1.0" });
+  assert.equal(requestClient(new Request("https://x.test")), null);
+  await saveSupportReport(env, { message: "Nejde to" }, client);
+  assert.deepEqual(JSON.parse(raw.sqlite.prepare("SELECT diagnostics_json FROM support_reports").get().diagnostics_json).client, client);
+  assert.match(sent[0].text, /Sent from: iPhone app without diagnostics \(Aurin\/312 CFNetwork\/3826 Darwin\/25\.1\.0\)/);
+  assert.equal(sent[0].subject, "Aurin: problem report #1 from a@b.cz");
+});
+
+test("where: an older app's plain screen names, a watch without Aurin or details, a stale watch report", () => {
+  assert.deepEqual(reportWhere({ app: "1.2 (34)", ios: "26.0", device: "iPhone", screens: ["today", "coach"], appleWatch: { paired: false, aurinInstalled: false } }, null),
+    ["Sent from: iPhone app, Aurin 1.2 (34), iPhone, iOS 26.0", "Screens before the report (UTC): today → coach", "Apple Watch: none paired"]);
+  assert.deepEqual(reportWhere({ appleWatch: { paired: true, aurinInstalled: false } }, null), ["Apple Watch: paired, Aurin not on it"]);
+  assert.match(reportWhere({ appleWatch: { paired: true, aurinInstalled: true, reachable: true } }, null)[0], /Aurin on it, in reach; no details/);
+  assert.deepEqual(reportWhere(null, null), []);
+  assert.equal(reportScreen({ screens: ["today", "settings"] }), "today");
+  assert.equal(reportScreen({ screens: [{ screen: "today" }, { screen: "settings" }, { screen: "page/Zdroje dat" }] }), "page/Zdroje dat");
+  assert.equal(reportScreen({}), null);
+  const old = new Date(Date.now() - 4 * 86_400_000).toISOString();
+  assert.deepEqual(reportFindings({ appleWatch: { paired: true, aurinInstalled: true, app: "1.4 (312)", signedIn: false, sentAt: old } }, null),
+    ["watch: not signed in on its own (nothing without the iPhone nearby)", `watch: its app last reported 4 days ago (${old}), so it has not been opened since`]);
 });

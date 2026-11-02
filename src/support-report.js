@@ -6,6 +6,9 @@
 // is set up, led by the findings worth a look (reportFindings).
 // "Navrhnout funkci" goes the same way with kind "idea": just the text and the
 // app version, no screenshot and no server snapshot; it shares the daily limit.
+// The e-mail opens with where the report came from (reportWhere): the device and
+// app, the screens before it, the Apple Watch and its app, the last requests;
+// also without diagnostics, from the request's own headers (client).
 import { L } from "./lang.js";
 import { emailConfigured, sendEmail } from "./email-sender.js";
 
@@ -108,8 +111,60 @@ export function reportFindings(diagnostics, server, now = Date.now()) {
     if (/^(error|broken|partial)$/.test(s.status) || s.problems?.length) out.push(`server sync ${s.name}: ${s.status}${s.lastError ? ` (${s.lastError})` : ""}${(s.problems || []).map(p => `; ${p.source} ${p.status}${p.message ? ` ${p.message}` : ""}`).join("")}`);
   }
   if (server?.failedSends?.length) out.push(`${server.failedSends.length} send(s) to other apps failed in the last two weeks`);
+  const slow = (Array.isArray(d.recentRequests) ? d.recentRequests : []).filter(r => Number(r?.ms) >= SLOW_MS);
+  if (slow.length) out.push(`${slow.length} slow request(s) just before the report, slowest ${requestLine(slow.reduce((a, b) => Number(b.ms) > Number(a.ms) ? b : a))}`);
+  const watch = d.appleWatch && typeof d.appleWatch === "object" ? d.appleWatch : null;
+  if (watch?.app && d.app && watch.app !== d.app) out.push(`watch: runs Aurin ${watch.app}, the iPhone ${d.app}`);
+  if (watch?.aurinInstalled && watch.app && watch.signedIn === false) out.push("watch: not signed in on its own (nothing without the iPhone nearby)");
+  const watchErrors = Array.isArray(watch?.recentErrors) ? watch.recentErrors : [];
+  if (watchErrors.length) out.push(`watch: ${watchErrors.length} failed request(s) this week, latest ${[watchErrors[0].at, watchErrors[0].path, watchErrors[0].status, watchErrors[0].message].filter(v => v != null && v !== "").join(" ")}`);
+  const days = watch?.sentAt ? Math.floor((now - Date.parse(watch.sentAt)) / 86_400_000) : 0;
+  if (days >= 3) out.push(`watch: its app last reported ${days} days ago (${watch.sentAt}), so it has not been opened since`);
   if (d.offline === true) out.push("the phone was offline");
   return out.map(line => cut(line, 400));
+}
+
+const SLOW_MS = 3000;
+const hhmm = at => typeof at === "string" && /T\d\d:\d\d/.test(at) ? at.slice(11, 16) : null;
+const requestLine = r => [r.path, r.status ?? "no answer", r.ms != null ? `${r.ms} ms` : null, hhmm(r.at) && `(${hhmm(r.at)})`].filter(v => v != null && v !== "").join(" ");
+// "today 10:01 → training/muscle 10:02"; an older app sends names without times.
+const trail = list => (Array.isArray(list) ? list : []).slice(-6).map(e => typeof e === "string" ? e : [e?.screen, hhmm(e?.at)].filter(Boolean).join(" ")).filter(Boolean).map(v => cut(v, 80)).join(" → ");
+
+// The screen the report is about: the last one before Settings opened, or the
+// Settings page itself when the user went into one.
+export function reportScreen(diagnostics) {
+  const list = Array.isArray(diagnostics?.screens) ? diagnostics.screens : [];
+  const names = list.map(e => typeof e === "string" ? e : e?.screen).filter(v => typeof v === "string" && v);
+  const last = names.filter(name => name !== "settings").at(-1);
+  return last ? cut(last, 60) : null;
+}
+
+// Where the report came from, one line each, from the app's diagnostics and
+// the request's headers (client): the device and app, the screens, the watch,
+// the last requests. Times are UTC.
+export function reportWhere(diagnostics, client) {
+  const d = diagnostics && typeof diagnostics === "object" ? diagnostics : null;
+  const out = [];
+  if (d?.app || d?.deviceModel || d?.ios) {
+    out.push(`Sent from: iPhone app, Aurin ${d.app || "?"}, ${d.deviceModel || d.device || "iPhone"}, iOS ${d.ios || "?"}${d.demo ? ", demo" : ""}`);
+  } else if (client?.userAgent || client?.api) {
+    out.push(`Sent from: ${client.api ? "iPhone app" : "unknown client"} without diagnostics${client.userAgent ? ` (${client.userAgent})` : ""}`);
+  }
+  const screens = trail(d?.screens);
+  if (screens) out.push(`Screens before the report (UTC): ${screens}`);
+  const watch = d?.appleWatch && typeof d.appleWatch === "object" ? d.appleWatch : null;
+  if (watch) {
+    if (!watch.paired) out.push("Apple Watch: none paired");
+    else if (!watch.aurinInstalled) out.push("Apple Watch: paired, Aurin not on it");
+    else if (!watch.app) out.push(`Apple Watch: Aurin on it${watch.reachable ? ", in reach" : ""}; no details (the watch app is older or not opened yet)`);
+    else {
+      const pages = trail(watch.screens);
+      out.push(`Apple Watch: Aurin ${watch.app}, watchOS ${watch.watchOS || "?"}, ${watch.model || "?"}, ${watch.signedIn ? "signed in" : "not signed in"}, ${watch.reachable ? "in reach" : "out of reach"}${watch.todayDate ? `, shows ${watch.todayDate}` : ""}${pages ? `; last pages: ${pages}` : ""}`);
+    }
+  }
+  const requests = (Array.isArray(d?.recentRequests) ? d.recentRequests : []).slice(0, 3);
+  if (requests.length) out.push(`Last requests: ${requests.map(requestLine).join("; ")}`);
+  return out.map(line => cut(line, 600));
 }
 
 const escape = value => String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -128,12 +183,14 @@ function reportEmail(env, { id, message, diagnostics, screenshot, idea }) {
   if (idea) return ideaEmail(env, { id, message, parsed, who });
   const pretty = parsed ? JSON.stringify(parsed, null, 2) : diagnostics || "";
   const findings = reportFindings(parsed, parsed?.server);
-  const text = [`Aurin problem report #${id}`, `From: ${who}`, "", message, "", findings.length ? ["Worth a look:", ...findings.map(f => `- ${f}`)].join("\n") : "Nothing stands out in the diagnostics.", "", screenshot ? `Screenshot: stored with the report (${Math.round(screenshot.length * 0.75 / 1024)} kB, support_reports #${id}).` : "Screenshot: none.", "", "Diagnostics:", pretty || "none"].join("\n");
-  const html = `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif"><p><strong>Aurin problem report #${id}</strong><br>From: ${escape(who)}</p><p style="white-space:pre-wrap">${escape(message)}</p>`
+  const where = reportWhere(parsed, parsed?.client);
+  const screen = reportScreen(parsed);
+  const text = [`Aurin problem report #${id}`, `From: ${who}`, ...where, "", message, "", findings.length ? ["Worth a look:", ...findings.map(f => `- ${f}`)].join("\n") : "Nothing stands out in the diagnostics.", "", screenshot ? `Screenshot: stored with the report (${Math.round(screenshot.length * 0.75 / 1024)} kB, support_reports #${id}).` : "Screenshot: none.", "", "Diagnostics:", pretty || "none"].join("\n");
+  const html = `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif"><p><strong>Aurin problem report #${id}</strong><br>From: ${escape(who)}${where.map(line => `<br>${escape(line)}`).join("")}</p><p style="white-space:pre-wrap">${escape(message)}</p>`
     + (findings.length ? `<p><strong>Worth a look:</strong></p><ul>${findings.map(f => `<li>${escape(f)}</li>`).join("")}</ul>` : "<p>Nothing stands out in the diagnostics.</p>")
     + (screenshot ? `<p><img alt="Screenshot" style="max-width:360px;border:1px solid #ddd" src="data:image/jpeg;base64,${screenshot}"></p>` : "")
     + `<pre style="font-size:12px;background:#f4f4f5;padding:12px;white-space:pre-wrap">${escape(pretty || "none")}</pre></body></html>`;
-  return { subject: `Aurin: problem report #${id} from ${env.USER_EMAIL || "user " + (env.USER_ID ?? "")}`, text, html };
+  return { subject: `Aurin: problem report #${id} from ${env.USER_EMAIL || "user " + (env.USER_ID ?? "")}${screen ? ` (${screen})` : ""}`, text, html };
 }
 
 export function supportAddress(env) {
@@ -141,14 +198,23 @@ export function supportAddress(env) {
   return /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(value) ? value : "";
 }
 
+// What the request itself says about the app that sent it, also when the
+// user left the diagnostics out: the API level and the User-Agent
+// ("Aurin/312 CFNetwork/… Darwin/25.0.0"). Null when neither came.
+export function requestClient(request) {
+  const api = cut(request?.headers?.get("X-Aurin-Api")?.trim() || null, 10);
+  const userAgent = cut(request?.headers?.get("User-Agent")?.trim() || null, 160);
+  return api || userAgent ? { ...(api ? { api } : {}), ...(userAgent ? { userAgent } : {}) } : null;
+}
+
 // Stores the report and e-mails it when possible; {id, emailed}.
-export async function saveSupportReport(env, body) {
+export async function saveSupportReport(env, body, client = null) {
   const report = validateReport(body);
   await ensure(env.DB);
   await assertAllowed(env.DB, report.idea);
   // The server's side goes with the app's, so the stored report is whole.
   const server = report.idea ? null : await serverSnapshot(env.DB).catch(() => null);
-  if (server) report.diagnostics = JSON.stringify({ ...(report.diagnostics ? JSON.parse(report.diagnostics) : {}), server });
+  if (server) report.diagnostics = JSON.stringify({ ...(report.diagnostics ? JSON.parse(report.diagnostics) : {}), server, ...(client ? { client } : {}) });
   const result = await env.DB.prepare("INSERT INTO support_reports(user_id,message,screenshot_base64,diagnostics_json) VALUES(?,?,?,?)").bind(env.DB.userId, report.message, report.screenshot, report.diagnostics).run();
   const id = Number(result?.meta?.last_row_id) || null;
   let emailed = false;
@@ -172,7 +238,7 @@ export async function handleSupportReport(request, env, { signedIn, origin }) {
   try {
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") return Response.json({ message: L("Neplatné hlášení.", "Invalid report.") }, { status: 400 });
-    const saved = await saveSupportReport(env, body);
+    const saved = await saveSupportReport(env, body, requestClient(request));
     const idea = body.kind === "idea";
     return Response.json({ status: "ok", ...saved, message: idea ? L("Díky, návrh odešel.", "Thanks, your idea has been sent.") : L("Díky, hlášení odešlo.", "Thanks, the report has been sent.") }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
