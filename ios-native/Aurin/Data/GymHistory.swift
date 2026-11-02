@@ -162,7 +162,23 @@ enum DemoGymHistory {
         GymHistory.Exercise(name: "One-arm DB row", sessions: [
             GymHistory.Session(date: "2026-10-05", sets: [lift(30, 10, 10), lift(30, 10, 10), lift(32.5, 8, 10)])
         ])
-    ])
+    ] + lastWeek)
+
+    /// The sample day's gym (DemoData.gymJSON) a week before, so Training
+    /// mode's "Last time" column has numbers: by the sheet's names in Czech
+    /// and in English (the English sample day translates the sheet).
+    private static let lastWeek: [GymHistory.Exercise] = {
+        let rows: [([String], [GymHistory.Lift])] = [
+            (["Dřep", "Squat"], [lift(77.5, 8, 6), lift(77.5, 8, 6), lift(77.5, 7, 6), lift(77.5, 6, 6)]),
+            (["Tlak na lavici", "Bench press"], [lift(60, 8, 8), lift(60, 8, 8), lift(60, 7, 8)]),
+            (["Přítahy", "Rows"], [lift(47.5, 10, 10), lift(47.5, 10, 10), lift(47.5, 9, 10)]),
+            (["Rumunský mrtvý tah", "Romanian deadlift"], [lift(67.5, 8, 8), lift(67.5, 8, 8), lift(67.5, 8, 8)]),
+            (["Výpady", "Lunges"], [lift(14, 10, 10), lift(14, 10, 10), lift(14, 10, 10)])
+        ]
+        return rows.flatMap { row -> [GymHistory.Exercise] in
+            row.0.map { GymHistory.Exercise(name: $0, sessions: [GymHistory.Session(date: "2026-10-01", sets: row.1)]) }
+        }
+    }()
 
     private static func lift(_ kg: Double, _ reps: Double, _ target: Double) -> GymHistory.Lift {
         GymHistory.Lift(kg: kg, reps: reps, target: target, rpe: nil)

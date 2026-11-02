@@ -89,22 +89,21 @@ enum WatchDemo {
     /// warm-up and first set done, the second next.
     static var gym: WatchGym {
         typealias L = WatchGym.Lift
-        let squat = tr("Dřep", "Squat")
-        let bench = tr("Tlak na lavici", "Bench press")
-        let rows = tr("Přítahy v předklonu", "Bent-over rows")
+        func sets(_ first: Int, _ count: Int, _ kg: Double, _ reps: Int, _ planned: String, rest: Int) -> [L] {
+            (0..<count).map { L(row: first + $0, number: String($0 + 1), warmup: false, drop: false, kg: kg, reps: reps,
+                                plannedReps: planned, done: false, rest: rest) }
+        }
+        var squat = [L(row: 7, number: "1", warmup: true, drop: false, kg: 40, reps: 8, plannedReps: "8", done: true, rest: 60)]
+        squat += sets(8, 4, 80, 8, "6-8", rest: 150)
+        squat[1].done = true
+        squat[1].intensity = "M"
         return WatchGym(
             date: day(0), title: tr("Celé tělo", "Full body"), minutes: 45, restExercises: 120,
             exercises: [
-                WatchGym.Exercise(name: "Dřep", shown: squat, lifts: [
-                    L(row: 7, number: "1", warmup: true, drop: false, kg: 40, reps: 8, plannedReps: "8", done: true, rest: 60),
-                    L(row: 8, number: "1", warmup: false, drop: false, kg: 80, reps: 8, plannedReps: "6-8", done: true, rest: 150, intensity: "M"),
-                    L(row: 9, number: "2", warmup: false, drop: false, kg: 80, reps: 8, plannedReps: "6-8", done: false, rest: 150),
-                    L(row: 10, number: "3", warmup: false, drop: false, kg: 80, reps: 8, plannedReps: "6-8", done: false, rest: 150)]),
-                WatchGym.Exercise(name: "Tlak na lavici", shown: bench, lifts: [
-                    L(row: 11, number: "1", warmup: false, drop: false, kg: 62.5, reps: 8, plannedReps: "8-10", done: false, rest: 90),
-                    L(row: 12, number: "2", warmup: false, drop: false, kg: 62.5, reps: 8, plannedReps: "8-10", done: false, rest: 90)]),
-                WatchGym.Exercise(name: "Přítahy v předklonu", shown: rows, lifts: [
-                    L(row: 13, number: "1", warmup: false, drop: false, kg: 50, reps: 10, plannedReps: "10", done: false, rest: 90),
-                    L(row: 14, number: "2", warmup: false, drop: false, kg: 50, reps: 10, plannedReps: "10", done: false, rest: 90)])])
+                WatchGym.Exercise(name: "Dřep", shown: tr("Dřep", "Squat"), lifts: squat),
+                WatchGym.Exercise(name: "Tlak na lavici", shown: tr("Tlak na lavici", "Bench press"), lifts: sets(12, 3, 62.5, 8, "8", rest: 90)),
+                WatchGym.Exercise(name: "Přítahy", shown: tr("Přítahy", "Rows"), lifts: sets(15, 3, 50, 10, "10", rest: 90)),
+                WatchGym.Exercise(name: "Rumunský mrtvý tah", shown: tr("Rumunský mrtvý tah", "Romanian deadlift"), lifts: sets(18, 3, 70, 8, "8", rest: 120)),
+                WatchGym.Exercise(name: "Výpady", shown: tr("Výpady", "Lunges"), lifts: sets(21, 3, 16, 10, "10", rest: 90))])
     }
 }

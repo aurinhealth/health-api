@@ -248,8 +248,10 @@ final class SmokeTests: XCTestCase {
 
         // For the App Store screenshots: Today down to the day's timeline, and
         // Training down to the coach's card under today's workout.
-        // A quarter of the screen at a time, so one shot holds a whole card.
-        for (tab, file, steps, share) in [("today", "dnes", 7, 0.25), ("training", "trenink", 4, 0.25), ("training", "trenink-jemne", 4, 0.06)] {
+        // A quarter of the screen at a time, so one shot holds a whole card;
+        // Training also a few points at a time, for the shot that holds the week
+        // and today's whole card with Start above the tab bar.
+        for (tab, file, steps, share) in [("today", "dnes", 7, 0.25), ("training", "trenink", 4, 0.25), ("training", "trenink-jemne", 8, 0.03)] {
             english("-tab", tab)
             pause(4)
             for i in 0..<steps {
@@ -275,7 +277,7 @@ final class SmokeTests: XCTestCase {
         launch("-demo", "-tab", "food")
         pause(4)
         shot("jidlo")
-        for (tab, file, steps, share) in [("today", "dnes", 7, 0.25), ("training", "trenink", 4, 0.06)] {
+        for (tab, file, steps, share) in [("today", "dnes", 7, 0.25), ("training", "trenink", 8, 0.03)] {
             launch("-demo", "-tab", tab)
             pause(4)
             shot("\(file)-1")
