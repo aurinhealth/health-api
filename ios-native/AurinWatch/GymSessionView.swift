@@ -41,6 +41,8 @@ struct GymSessionView: View {
     @State private var rated: Rated?
     /// The tile the crown turns: the weight, or the reps after a tap on them.
     @State private var selected: Field = .kg
+    /// The side tapped in the set's LEFT / RIGHT (mockup "strany"): that side first.
+    @State private var picked: Int?
     /// The crown is on the tiles (not scrolling the screen).
     @FocusState private var crown: Bool
 
@@ -227,6 +229,10 @@ struct GymSessionView: View {
 
     /// The set on the screen: the first not done of the chosen exercise, else the next one with sets left.
     private func currentLift(in gym: WatchGym) -> WatchGym.Lift? {
+        if let picked, gym.exercises[safe: exercise]?.lifts.contains(where: { $0.row == picked && !$0.done }) == true,
+           let lift = gym.lift(row: picked) {
+            return lift
+        }
         if gym.exercises.indices.contains(exercise), let lift = gym.exercises[exercise].lifts.first(where: { !$0.done }) {
             return lift
         }
@@ -276,6 +282,10 @@ struct GymSessionView: View {
 
     private func setStack(_ gym: WatchGym, _ lift: WatchGym.Lift, _ ex: WatchGym.Exercise, _ e: Int, _ fit: Fit) -> some View {
         VStack(alignment: .leading, spacing: 3) {
+            if let line = supersetLine(gym, lift, e) {
+                Text(line).font(.system(size: 10, weight: .semibold)).foregroundStyle(W.amber)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+            }
             Text(ex.title).font(.system(size: fit.small ? 14 : 16, weight: .semibold)).foregroundStyle(W.ink)
                 .lineLimit(1).minimumScaleFactor(0.7)
             // − set 2/4 +: one set fewer or one more of this exercise (mockup 20).
@@ -283,8 +293,12 @@ struct GymSessionView: View {
                 roundButton("minus", small: fit.small) { store.change(.removeSet, exercise: e) }
                     .accessibilityLabel(W.tr("O sérii méně", "One set fewer"))
                 VStack(spacing: 0) {
-                    Text(label(lift, in: ex)).font(.system(size: 12, weight: .medium)).foregroundStyle(W.secondary)
-                        .lineLimit(1).minimumScaleFactor(0.7)
+                    HStack(spacing: 4) {
+                        Text(label(lift, in: ex, superset: gym.superset(of: e) != nil, side: false))
+                            .font(.system(size: 12, weight: .medium)).foregroundStyle(W.secondary)
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                        if lift.side != nil { sides(lift, in: gym, e) }
+                    }
                     if fit == .tight { liveLine }
                 }
                 .frame(maxWidth: .infinity)
@@ -332,8 +346,62 @@ struct GymSessionView: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// "série 2/4", "rozcvička", "drop", with the side of a one-sided set.
-    private func label(_ lift: WatchGym.Lift, in e: WatchGym.Exercise) -> String {
+    /// Mockup "supersérie": "SUPERSET A · 1/2 · then Seated row", or after the
+    /// round's last exercise the rest that follows it; nil outside a superset.
+    private func supersetLine(_ gym: WatchGym, _ lift: WatchGym.Lift, _ e: Int) -> String? {
+        guard !lift.warmup, let group = gym.superset(of: e), let letter = gym.exercises[e].superset,
+              let at = group.firstIndex(of: e) else { return nil }
+        var text = W.tr("SUPERSÉRIE", "SUPERSET") + " \(letter) · \(at + 1)/\(group.count)"
+        if let next = gym.next(after: lift.row), next.exercise != e || next.turn != nil {
+            switch next.turn {
+            case .partner?: text += W.tr(" · pak ", " · then ") + gym.exercises[next.exercise].title
+            case .round?: text += W.tr(" · pak pauza \(lift.rest) s", " · rest \(lift.rest) s after")
+            case nil: text += W.tr(" · pak pauza \(gym.restExercises) s", " · rest \(gym.restExercises) s after")
+            }
+        }
+        return text
+    }
+
+    /// LEFT / RIGHT of a one-sided set: the side at hand lit, a tap takes the
+    /// other side first (when it is not done yet).
+    private func sides(_ lift: WatchGym.Lift, in gym: WatchGym, _ e: Int) -> some View {
+        let other = gym.otherSide(of: lift, in: e)
+        return ViewThatFits(in: .horizontal) {
+            sidePill(lift.side, short: false)
+            sidePill(lift.side, short: true)
+        }
+        .contentShape(Capsule())
+        .onTapGesture {
+            guard let other else { return }
+            WKInterfaceDevice.current().play(.click)
+            picked = other.row
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(lift.side == "L" ? W.tr("Levá strana", "Left side") : W.tr("Pravá strana", "Right side"))
+        .accessibilityHint(other == nil ? "" : W.tr("Klepnutím druhá strana", "Tap for the other side"))
+        .accessibilityAddTraits(other == nil ? [] : .isButton)
+    }
+
+    private func sidePill(_ side: String?, short: Bool) -> some View {
+        HStack(spacing: 0) {
+            ForEach(["L", "P"], id: \.self) { s in
+                let on = side == s
+                Text(s == "L" ? (short ? "L" : W.tr("LEVÁ", "LEFT")) : (short ? W.tr("P", "R") : W.tr("PRAVÁ", "RIGHT")))
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(on ? .black : W.secondary)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, short ? 6 : 5)
+                    .frame(height: 18)
+                    .background(on ? W.ink : .clear, in: Capsule())
+            }
+        }
+        .padding(1)
+        .background(W.tile, in: Capsule())
+    }
+
+    /// "série 2/4" ("kolo 2/4" in a superset), "rozcvička", "drop", with the side of a one-sided set.
+    private func label(_ lift: WatchGym.Lift, in e: WatchGym.Exercise, superset: Bool = false, side: Bool = true) -> String {
         var text: String
         if lift.warmup {
             text = W.tr("rozcvička", "warm-up")
@@ -342,9 +410,9 @@ struct GymSessionView: View {
         } else {
             let numbers = e.lifts.filter(\.work).map(\.number).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
             let at = (numbers.firstIndex(of: lift.number) ?? 0) + 1
-            text = W.tr("série", "set") + " \(at)/\(numbers.count)"
+            text = (superset ? W.tr("kolo", "round") : W.tr("série", "set")) + " \(at)/\(numbers.count)"
         }
-        if let side = lift.side { text += " · " + (side == "L" ? "L" : W.tr("P", "R")) }
+        if side, let side = lift.side { text += " · " + (side == "L" ? "L" : W.tr("P", "R")) }
         return text
     }
 
@@ -490,6 +558,7 @@ struct GymSessionView: View {
 
     private func done(_ lift: WatchGym.Lift, in gym: WatchGym) {
         let next = gym.next(after: lift.row)
+        picked = nil
         store.complete(row: lift.row, kg: W.kg(kg), reps: Int(reps))
         rated = lift.work ? Rated(row: lift.row, kg: W.kg(kg), before: lift.intensity, sameExercise: next.map { !$0.newExercise } ?? false) : nil
         WKInterfaceDevice.current().play(.success)
@@ -501,7 +570,13 @@ struct GymSessionView: View {
         exercise = next.exercise
         // No rest before a drop set or the other side of the same set.
         let otherSide = !next.newExercise && next.lift.number == lift.number && next.lift.side != nil && next.lift.side != lift.side
-        let seconds = next.newExercise ? gym.restExercises : (next.lift.drop || otherSide ? 0 : lift.rest)
+        let seconds: Int
+        switch next.turn {
+        // A superset: its partner straight on, the set's rest after each round (as on the iPhone).
+        case .partner?: seconds = 0
+        case .round?: seconds = lift.rest
+        case nil: seconds = next.newExercise ? gym.restExercises : (next.lift.drop || otherSide ? 0 : lift.rest)
+        }
         if seconds > 0 {
             restTotal = Double(seconds)
             restEnd = Date().addingTimeInterval(Double(seconds))
@@ -871,6 +946,10 @@ struct GymExerciseList: View {
     private func exerciseLine(_ e: WatchGym.Exercise, _ index: Int) -> some View {
         Button { pick(index) } label: {
             HStack {
+                // A superset's exercises under their letter, as on the iPhone.
+                if let letter = e.superset, store.gym?.superset(of: index) != nil {
+                    Text(letter).font(.system(size: 11, weight: .bold)).foregroundStyle(W.amber)
+                }
                 Text(e.title).foregroundStyle(index == current && running == nil ? W.amber : W.ink).lineLimit(2)
                 Spacer(minLength: 4)
                 let work = e.lifts.filter(\.work)
