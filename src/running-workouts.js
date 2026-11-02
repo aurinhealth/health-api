@@ -75,7 +75,7 @@ const ENDURANCE = [
     build: t => [step(5, 78, null, "rozklus"), step(t - 5, 84, null, "lehce, konverzační tempo")] },
   { key: "run-easy-strides", label: "Lehký běh s rovinkami", totals: [40, 45, 50, 60, 75], desc: "Lehký běh a na konci 6 rovinek – rychlost a technika bez únavy.",
     build: t => [step(5, 78, null, "rozklus"), step(t - 5 - 8 - 3, 84, null, "lehce"), rep(6, [step(sec(20), 118, null, "rovinka – svižně, uvolněně"), step(sec(60), 70, null, "volně / chůze")]), step(3, 76, null, "výklus")] },
-  { key: "run-long", label: "Dlouhý běh", totals: [75, 90, 105, 120, 135, 150, 180], desc: "Dlouhý běh v lehkém tempu – vytrvalost, odolnost nohou a práce s palivem.",
+  { key: "run-long", label: "Dlouhý běh", totals: [75, 90, 105, 120, 135, 150, 180, 210, 240, 300, 360], desc: "Dlouhý běh v lehkém tempu – vytrvalost, odolnost nohou a práce s palivem.",
     build: t => [step(10, 78, null, "rozklus"), step(t - 10, 83, null, "lehce, stabilně")] },
   { key: "run-long-progressive", label: "Dlouhý běh s rychlým závěrem", secondary: "tempo", totals: [75, 90, 105, 120, 150], desc: "Dlouhý běh, posledních ~20 % v tempu – učí běžet rychle v únavě.",
     build: t => { const fast = Math.round(t * .2); return [step(10, 78, null, "rozklus"), step(t - 10 - fast, 83, null, "lehce"), step(fast, 91, null, "tempo v únavě")]; } },

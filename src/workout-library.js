@@ -6,7 +6,7 @@ import { storeLocalEvent, syncLocalWorkout, ensureLocalWorkouts } from './local-
 // rows in workout_library), per-user capability progression, ranking, "generate a
 // workout for this day" and scheduling to the user's Intervals.icu calendar.
 // Every query on personal tables filters by db.userId (see tenancy.js).
-import { renderForEnvironment, buildWorkout, totalMinutes, step, n, clamp, zoneOf, zonesFor } from "./workout-model.js";
+import { renderForEnvironment, buildWorkout, totalMinutes, step, n, clamp, zoneOf, zonesFor, MAX_MINUTES } from "./workout-model.js";
 import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
 import { SWIMMING_WORKOUTS, SWIMMING_WORKOUTS_EN } from "./swimming-workouts.js";
@@ -231,7 +231,7 @@ export async function generateWorkout(db, { sport = "ride", environment = "indoo
   if (sport === "run" && kind === "sweet_spot") kind = "threshold";
   // The swim catalog has endurance, threshold (CSS), speed and sprints.
   if (sport === "swim") kind = { tempo: "threshold", sweet_spot: "threshold", anaerobic: "vo2max" }[kind] || kind;
-  const minutes = sport === "swim" ? clamp(n(availabilityMinutes, n(rec.durationMinutes, 40)), 15, 90) : sport === "run" ? clamp(n(availabilityMinutes, n(rec.durationMinutes, 60)), 20, 240) : clamp(n(availabilityMinutes, n(rec.durationMinutes, 90)), 30, 360);
+  const minutes = sport === "swim" ? clamp(n(availabilityMinutes, n(rec.durationMinutes, 40)), 15, 90) : sport === "run" ? clamp(n(availabilityMinutes, n(rec.durationMinutes, 60)), 20, MAX_MINUTES.run) : clamp(n(availabilityMinutes, n(rec.durationMinutes, 90)), 30, MAX_MINUTES.ride);
   const context = { readiness: coach.readiness?.status || "green", hardBikeDaysRolling7d: coach.load?.hardBikeDaysRolling7d ?? 0, phase: coach.constraints?.phase === "auto" ? "" : coach.constraints?.phase, targetDifficulty: coach.recommendation?.progression?.targetDifficulty };
   let result = await searchWorkoutLibrary(db, { sport, environment, system: kind, durationMinutes: minutes, durationTolerance: 15, limit: 12 }, context);
   if (!result.workouts.length) result = await searchWorkoutLibrary(db, { sport, environment, system: kind, durationMinutes: minutes, durationTolerance: 45, limit: 12 }, context);
@@ -371,7 +371,7 @@ export function resizeWorkout(base, minutes, { maxDifficulty = null, easyOnly = 
     const best = (builtIn().swim || []).filter(w => w.family === base.family && (!Number.isFinite(Number(maxDifficulty)) || n(w.difficulty, 0) <= Number(maxDifficulty) || w.id === base.id)).sort((a, b) => off(a) - off(b))[0];
     return !best || best.id === base.id ? base : { ...best, resized_from: base.id, resize_notes: [L("stejný typ plavání v délce ", "the same kind of swim at ") + best.duration_minutes + L(" min z knihovny", " min from the library")] };
   }
-  const target = Math.round(clamp(n(minutes, n(base.duration_minutes, 60)), run ? 20 : 30, run ? 240 : 360));
+  const target = Math.round(clamp(n(minutes, n(base.duration_minutes, 60)), run ? 20 : 30, MAX_MINUTES[sport]));
   if (Math.abs(target - n(base.duration_minutes, 0)) <= 1) return base;
   const fits = w => Math.abs(n(w.duration_minutes, 0) - target) <= 2;
   const library = builtIn()[sport] || [];
