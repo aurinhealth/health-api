@@ -121,7 +121,8 @@ test("own foods stay private; 'Suggest for everyone' sends a new food the owner 
 
   await assert.rejects(saveNewFoodSuggestion(a, { product: { ...bar, nutrition_basis: "portion" } }), e => e.status === 400);
   await assert.rejects(saveNewFoodSuggestion(a, { product: { ...bar, calories_100g: null } }), e => e.status === 400);
-  await saveNewFoodSuggestion(a, { product: { ...bar, calories_100g: 370 } });
+  await saveNewFoodSuggestion(a, { product: { ...bar, calories_100g: 370, brand: "x".repeat(5000) } });
+  assert.equal(JSON.parse(raw.sqlite.prepare("SELECT after_json FROM food_suggestions WHERE kind='new_food'").get().after_json).brand.length, 120, "text is cut to a label's length");
   const sent = await saveNewFoodSuggestion(a, { product: bar });
   const { suggestions, pending } = await listFoodSuggestions(raw, { kind: "new_food" });
   assert.equal(suggestions.length, 1, "a newer suggestion of the same food replaces the older one");

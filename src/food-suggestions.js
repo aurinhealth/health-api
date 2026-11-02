@@ -56,7 +56,8 @@ export const SUGGESTION_FIELDS = ["name", "brand", "serving_size", "serving_name
 function label(input) {
   const p = productFromLabel(input || {});
   if (!p) return null;
-  return Object.fromEntries(["barcode", "nutrition_basis", "catalog_key", ...SUGGESTION_FIELDS].map(k => [k, p[k] ?? null]));
+  // Text other than the name (checked by the callers) is cut to a label's length.
+  return Object.fromEntries(["barcode", "nutrition_basis", "catalog_key", ...SUGGESTION_FIELDS].map(k => [k, typeof p[k] === "string" && k !== "name" ? p[k].slice(0, 120) : p[k] ?? null]));
 }
 export function suggestionChanges(before, after) {
   return SUGGESTION_FIELDS.filter(k => String(before?.[k] ?? "") !== String(after?.[k] ?? ""));
