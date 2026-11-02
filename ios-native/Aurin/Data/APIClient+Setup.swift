@@ -34,6 +34,21 @@ extension APIClient {
         return me.consent?.needed ?? false
     }
 
+    /// needed as above; paused: the user took the consent back in Settings →
+    /// Soukromí a data (src/health-pause.js), so the app shows the paused screen.
+    func healthConsentState() async throws -> (needed: Bool, paused: Bool) {
+        struct Consent: Decodable { let needed: Bool?; let paused: Bool? }
+        struct Me: Decodable { let consent: Consent? }
+        let me: Me = try await get("/app/api/me")
+        return (me.consent?.needed ?? false, me.consent?.paused ?? false)
+    }
+
+    /// Settings → Soukromí a data → Pozastavit zdravotní data: the consent is
+    /// taken back and the server deletes the health data (src/health-pause.js).
+    func pauseHealthData() async throws {
+        let _: JSONValue = try await send("/app/api/health-pause", method: "POST", body: ["confirm": JSONValue.string("PAUSE")], timeout: 60)
+    }
+
     /// The consent from the setup: health data, which covers the AI features too (as on the web).
     /// The health-data consent and, when the user ticked it, the separate one
     /// to send what an AI feature needs to OpenAI. Left unticked, an AI choice

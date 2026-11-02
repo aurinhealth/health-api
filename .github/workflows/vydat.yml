@@ -36,7 +36,7 @@ on:
         required: false
         default: ""
       what_to_test:
-        description: "What to Test for the testers (empty: summary of the pull requests since the last release)"
+        description: "What to Test for the testers (empty: summary of the pull requests since the last release; English first, then a line --- Česky --- and Czech)"
         required: false
         default: ""
       external:

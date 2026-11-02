@@ -55,12 +55,16 @@ const source = (step, dark) => {
   const file = existsSync(dir) && readdirSync(dir).find(f => /^4-\d\d-/.test(f) && f.replace(/^4-\d\d-/, '').replace(/\.png$/, '') === step);
   return file && join(dir, file);
 };
+// A shot taken before the screen drew is one flat colour under the status bar; it would put an empty
+// phone on the site, so the old file stays and the run fails.
+const blank = png => Number(execFileSync(magick, [png, '-gravity', 'south', '-crop', '100%x85%+0+0', '+repage', '-format', '%[fx:standard_deviation]', 'info:']).toString()) < 0.01;
+let missing = 0, dark = 0;
 const save = (png, name) => {
+  if (blank(png)) { console.error(`${name}: ${png} is blank, the old ${name}.webp stays`); missing++; return 0; }
   const target = join(out, `${name}.webp`);
   execFileSync(magick, [png, '-filter', 'Lanczos', '-resize', `${WIDTH}x${HEIGHT}!`, '-quality', String(QUALITY), '-define', 'webp:method=6', target]);
   return Math.round(statSync(target).size / 1024);
 };
-let missing = 0, dark = 0;
 const hasDark = existsSync(join(from, 'site-dark')) || existsSync(join(from, 'smoke-dark'));
 for (const [name, step] of Object.entries(SCREENS)) {
   const png = source(step, false);

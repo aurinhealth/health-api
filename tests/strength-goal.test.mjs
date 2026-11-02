@@ -115,12 +115,16 @@ test('the warm-up moves fit the session and the cardio is its own part', () => {
   assert.ok(lower.warmup.items.some(x => ['worlds_greatest', 'squat', 'leg_swings', 'hip_circles', 'bridge', 'squat_to_stand', 'spiderman', 'hip_flexor_rock'].includes(x.id)));
   assert.ok(upper.warmup.minutes >= 1 && upper.warmup.minutes <= 8);
   assert.equal(warmupFor([], () => null), null);
-  assert.deepEqual(upper.cardio, { type: 'exercise_bike', start: 10, end: null });
+  assert.deepEqual(upper.cardio, { type: 'exercise_bike', start: 10, end: null, length: 0 });
   assert.equal(generateStrengthPlan(context({ warmupCardio: false }), { durationMinutes: 60, focus: 'upper' }).cardio, null);
-  assert.deepEqual(generateStrengthPlan(context({ cardio: 'both', cardioType: 'treadmill', stations: ['treadmill'] }), { durationMinutes: 60 }).cardio, { type: 'treadmill', start: 10, end: 10 });
+  assert.deepEqual(generateStrengthPlan(context({ cardio: 'both', cardioType: 'treadmill', stations: ['treadmill'] }), { durationMinutes: 60 }).cardio, { type: 'treadmill', start: 10, end: 10, length: 0 });
   assert.equal(normalizeTraining({ warmupCardio: false }).cardio, 'none');
   assert.equal(normalizeTraining({}).cardio, 'start');
   assert.equal(normalizeTraining({ cardio: 'end' }).warmupCardio, false);
+  assert.equal(normalizeTraining({}).cardioLength, 0);
+  assert.deepEqual(normalizeTraining({}).cardioFavourites, [10, 15, 20]);
+  assert.equal(normalizeTraining({ cardioLength: 25 }).cardioLength, 25);
+  assert.deepEqual(normalizeTraining({ cardioFavourites: [5, 25] }).cardioFavourites, [5, 25]);
 });
 
 test('warm-up and stretching moves that need a station only come with it', () => {
@@ -142,16 +146,36 @@ test('cardio options follow the place, the jump rope always fits', async () => {
   assert.equal(cardioType({ cardioType: 'rowing_ergometer', stations: ['treadmill'] }), 'treadmill');
   assert.equal(cardioFor({ cardio: 'none' }), null);
   const row = routinesRow({ cardio: { type: 'treadmill', start: null, end: 10 } });
-  assert.deepEqual(read([[], [], [], [], [], row]).cardio, { type: 'treadmill', start: null, end: 10 });
+  assert.deepEqual(read([[], [], [], [], [], row]).cardio, { type: 'treadmill', start: null, end: 10, length: 0 });
+});
+
+test('cardio runs without a limit unless a length is chosen, favourites stay tidy', async () => {
+  const { cardioFor, cardioLength, cardioFavourites, routinesRow, readRoutines: read } = await import('../src/stretching.js');
+  assert.deepEqual(cardioFor({ cardio: 'start' }), { type: 'exercise_bike', start: 10, end: null, length: 0 });
+  assert.deepEqual(cardioFor({ cardio: 'both', cardioLength: 7 }), { type: 'exercise_bike', start: 7, end: 7, length: 7 });
+  assert.equal(cardioLength(0), 0);
+  assert.equal(cardioLength('abc'), 0);
+  assert.equal(cardioLength(90), 60);
+  assert.equal(cardioLength(6.6), 7);
+  assert.deepEqual(cardioFavourites(undefined), [10, 15, 20]);
+  assert.deepEqual(cardioFavourites([]), []);
+  assert.deepEqual(cardioFavourites([20, 7, 7, 0, 61, 'x', 12, 30, 40, 50, 60]), [7, 12, 20, 30, 40, 50]);
+  // A plan stored before the stopwatch: no limit.
+  const row = routinesRow({ cardio: { type: 'treadmill', start: 10, end: null } });
+  assert.equal(read([[], [], [], [], [], row]).cardio.length, 0);
+  const timed = routinesRow({ cardio: { type: 'treadmill', start: 9, end: null, length: 9 } });
+  assert.equal(read([[], [], [], [], [], timed]).cardio.length, 9);
 });
 
 test('typical extra minutes follow the session length and the switches', async () => {
   const { typicalExtraMinutes } = await import('../src/stretching.js');
   const all = typicalExtraMinutes();
-  assert.ok(all[60].warmup > 0 && all[60].stretching > 0 && all[60].cardio > 0);
+  // Cardio has no limit by default: it adds no planned minutes.
+  assert.ok(all[60].warmup > 0 && all[60].stretching > 0 && all[60].cardio === 0);
   assert.ok(all[30].warmup <= all[90].warmup);
-  assert.equal(typicalExtraMinutes({ warmupCardio: false })[60].cardio, 0);
-  assert.ok(typicalExtraMinutes({ cardio: 'both' })[60].cardio > all[60].cardio);
+  assert.equal(typicalExtraMinutes({ warmupCardio: false, cardioLength: 12 })[60].cardio, 0);
+  assert.equal(typicalExtraMinutes({ cardioLength: 12 })[60].cardio, 12);
+  assert.equal(typicalExtraMinutes({ cardio: 'both', cardioLength: 7 })[60].cardio, 14);
   const off = typicalExtraMinutes({ warmup: false, stretching: false, cardio: 'none' });
   assert.deepEqual(off[60], { warmup: 0, cardio: 0, stretching: 0 });
 });

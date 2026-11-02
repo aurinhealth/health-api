@@ -2,12 +2,14 @@
 // Intervals.icu, which cannot read Apple Health. Aurin's own workouts are not
 // among them (the iPhone leaves them out); they go when they are finished.
 //
+// Only with "Tréninky z Apple Health" on for Intervals.icu (off at first).
+//
 // A workout goes once, two hours after it ended and only while no other
 // source has it: an app that uploads to Intervals.icu itself (Strava, Garmin
 // Connect, Zwift) has done so by then, the sync has brought that activity
 // back and the matching has paired it with the watch's copy
 // (index.js matchActivities), so it is not sent a second time.
-import { sendActivity, ensureSyncTables } from "./sync-destinations.js";
+import { sendActivity, ensureSyncTables, readSyncPrefs, healthAllowed } from "./sync-destinations.js";
 import { localDate } from "./user-time.js";
 import { L } from "./lang.js";
 import { typeName, watchType } from "./activity-type.js";
@@ -49,6 +51,9 @@ export function watchActivity(row) {
 // One pass for one user with Intervals.icu connected.
 export async function forwardWatchWorkouts(env, { now = Date.now(), fetchImpl = fetch } = {}) {
   if (!(env.CONNECTED_PROVIDERS || []).includes("intervals")) return { status: "skipped" };
+  // Apple Health's workouts are health data: they go only once the athlete
+  // turned them on for Intervals.icu (the connect sheet or Synchronizace).
+  if (!healthAllowed(await readSyncPrefs(env.DB, env.USER_ID, "intervals"), "workouts")) return { status: "skipped", reason: "off" };
   await ensureSyncTables(env.DB);
   const rows = (await env.DB.prepare(`SELECT external_id, start_time, end_time, payload_json FROM health_datapoints h
     WHERE user_id = ? AND source_family = 'apple-health' AND data_type = 'exercise' AND start_time >= ? AND end_time <= ?

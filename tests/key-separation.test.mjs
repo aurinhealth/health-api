@@ -29,8 +29,35 @@ test("with CONNECTION_KEY, connection keys are encrypted with it and bound to th
   const copied = await connectionEnvironment({ DB, CONNECTION_KEY, USER_ID: 2 });
   assert.equal(copied.GOOGLE_REFRESH_TOKEN, undefined);
   assert.deepEqual(copied.CONNECTED_PROVIDERS, []);
-  assert.deepEqual((await connectionEnvironment({ DB, STRENGTH_API_KEY: OWNER_KEY, USER_ID: 1 })).CONNECTED_PROVIDERS, []);
-  assert.ok(errors.mock.callCount() >= 4);
+  const ownerKeyOnly = await connectionEnvironment({ DB, STRENGTH_API_KEY: OWNER_KEY, USER_ID: 1 });
+  assert.equal(ownerKeyOnly.GOOGLE_REFRESH_TOKEN, undefined);
+  assert.equal(ownerKeyOnly.INTERVALS_API_KEY, undefined);
+  // The copied rows did not decrypt for account 2; the owner key alone does not even try.
+  assert.ok(errors.mock.callCount() >= 2);
+});
+
+// v2 and v3: the same CONNECTION_KEY, derived under the app's old name and under Aurin.
+// Rows are still written as v2, which the version before this one reads (rollback, deploy).
+async function sealed(version, name, value) {
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(CONNECTION_KEY), "HKDF", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey({ name: "HKDF", hash: "SHA-256", salt: new Uint8Array(32), info: new TextEncoder().encode(name + " connection credentials") }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt"]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: new TextEncoder().encode("4:intervals") }, key, new TextEncoder().encode(value));
+  return version + "." + Buffer.from(iv).toString("base64") + "." + Buffer.from(cipher).toString("base64");
+}
+test("v2 and v3 keys are both read, and loading them rewrites nothing", async () => {
+  const DB = createD1();
+  await saveConnectionSecret({ DB, CONNECTION_KEY, USER_ID: 4 }, "intervals", "placeholder");
+  for (const [version, name] of [["v2", "loadwise"], ["v3", "aurin"]]) {
+    const value = await sealed(version, name, version + "-intervals-key");
+    DB.sqlite.prepare("UPDATE connection_credentials SET encrypted = ? WHERE user_id = 4").run(value);
+    assert.equal((await connectionEnvironment({ DB, CONNECTION_KEY, USER_ID: 4 })).INTERVALS_API_KEY, version + "-intervals-key");
+    assert.equal(stored(DB)[0].encrypted, value);
+  }
+  // A v3 row under the wrong name does not open.
+  DB.sqlite.prepare("UPDATE connection_credentials SET encrypted = ? WHERE user_id = 4").run((await sealed("v3", "loadwise", "x")));
+  const errors = console.error; console.error = () => {};
+  try { assert.equal((await connectionEnvironment({ DB, CONNECTION_KEY, USER_ID: 4 })).INTERVALS_API_KEY, undefined); } finally { console.error = errors; }
 });
 
 test("a key in the old format (encrypted with the owner API key) no longer opens", async t => {
@@ -65,11 +92,10 @@ test("the app's layers call each other with a token of their own, not the owner 
   assert.equal(isInternalCall(call(headers.Authorization)), true);
   assert.equal(isInternalCall(call(`Bearer ${OWNER_KEY}`)), false);
   assert.equal(isInternalCall(call(null)), false);
-  // The strength routes take the internal token (no owner key needed) or the owner key, nothing else.
+  // The strength routes take the internal token only; the old owner key no longer opens them.
   const env = { STRENGTH_API_KEY: OWNER_KEY, MCP_API_KEY: "mcp-only-key" };
   assert.equal((await gateway.fetch(call(headers.Authorization), {}, ctx)).status, 404);
-  assert.equal((await gateway.fetch(call(`Bearer ${OWNER_KEY}`), env, ctx)).status, 404);
-  for (const authorization of [null, "Bearer mcp-only-key", "Bearer ", "Bearer undefined"]) assert.equal((await gateway.fetch(call(authorization), env, ctx)).status, 401, String(authorization));
+  for (const authorization of [null, `Bearer ${OWNER_KEY}`, "Bearer mcp-only-key", "Bearer ", "Bearer undefined"]) assert.equal((await gateway.fetch(call(authorization), env, ctx)).status, 401, String(authorization));
   assert.equal((await gateway.fetch(call("Bearer undefined"), {}, ctx)).status, 401);
   // No layer sends the owner API key along any more.
   for (const file of readdirSync(new URL("../src/", import.meta.url)).filter(name => name.endsWith(".js"))) {

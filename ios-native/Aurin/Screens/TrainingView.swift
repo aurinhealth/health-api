@@ -746,8 +746,7 @@ struct ActiveCaloriesWidget: View {
                          highlighted: active.week.count - 1,
                          spacing: size == .small ? 3 : 4,
                          height: height,
-                         targetLabel: active.usual.map { L10n.f("obvykle %@", Fmt.int($0)) },
-                         targetLabelAlignment: .leading)
+                         targetTag: active.usual.map { (name: L10n.tr("obvykle"), value: Fmt.int($0)) })
             }
         }
     }
@@ -780,7 +779,7 @@ struct ZonesWidget: View {
                     ZoneWeekBars(weeks: weeks, height: 52)
                 }
                 ZoneLegend(week: week)
-                Text(L10n.f("doporučení WHO 150 min týdně · lehká aktivita %@", Fmt.hoursMinutesLong(week.light)))
+                Text(L10n.f("lehká aktivita %@ · WHO 150 min týdně", Fmt.hoursMinutesLong(week.light)))
                     .font(Typo.tiny).foregroundStyle(Palette.faint)
             } else {
                 // An answer from before the weeks were sent.
@@ -817,7 +816,7 @@ enum ZoneStyle {
 
 /// The weeks' active minutes as stacked bars: moderate, then vigorous and peak
 /// twice (as WHO counts them). The current week is the last one, highlighted;
-/// the 150-minute recommendation is the dashed line.
+/// the 150-minute recommendation is the dashed line, its tag beside the bars.
 struct ZoneWeekBars: View {
     let weeks: [TrainingSnapshot.ZoneWeek]
     var height: CGFloat = 52
@@ -829,6 +828,7 @@ struct ZoneWeekBars: View {
         VStack(spacing: 4) {
             GeometryReader { geo in
                 let h = geo.size.height
+                let w = geo.size.width - tagWidth
                 ZStack(alignment: .bottomLeading) {
                     HStack(alignment: .bottom, spacing: spacing) {
                         ForEach(weeks.indices, id: \.self) { i in
@@ -836,16 +836,15 @@ struct ZoneWeekBars: View {
                                 .opacity(i == weeks.count - 1 ? 1 : 0.5)
                         }
                     }
+                    .frame(width: w)
                     DashedLine()
                         .stroke(Palette.green, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                        .frame(height: 1)
+                        .frame(width: w, height: 1)
                         .offset(y: -h * scaled(target, 0, top))
-                    Text(verbatim: L10n.f("cíl %@", Fmt.int(target)))
-                        .scaledFont(9, weight: .medium, cap: .denseCap)
-                        .foregroundStyle(Palette.green)
-                        .lineLimit(1).fixedSize()
-                        .frame(width: geo.size.width, alignment: .trailing)
-                        .offset(y: -h * scaled(target, 0, top) - 3)
+                    LineTag(name: L10n.tr("cíl"), value: Fmt.int(target), color: Palette.green)
+                        .frame(height: 28)
+                        .offset(x: w + 6, y: LineTag.center(h * (1 - scaled(target, 0, top)), height: h) - 14)
+                        .frame(width: geo.size.width, height: h, alignment: .topLeading)
                 }
                 .frame(width: geo.size.width, height: h, alignment: .bottomLeading)
             }
@@ -853,13 +852,14 @@ struct ZoneWeekBars: View {
             HStack(spacing: spacing) {
                 ForEach(weeks.indices, id: \.self) { i in
                     Text(verbatim: Self.label(weeks[i]))
-                        .scaledFont(9, weight: i == weeks.count - 1 ? .semibold : .regular)
+                        .scaledFont(chartText, weight: i == weeks.count - 1 ? .semibold : .regular, cap: .denseCap)
                         .foregroundStyle(i == weeks.count - 1 ? Palette.ink : Palette.faint)
                         .lineLimit(1)
                         .fixedSize()
                         .frame(maxWidth: .infinity)
                 }
             }
+            .padding(.trailing, tagWidth)
         }
         .accessibilityHidden(true)
     }

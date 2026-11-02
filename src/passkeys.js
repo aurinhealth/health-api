@@ -97,6 +97,19 @@ async function takeChallenge(db, challenge, purpose) {
     .bind(challenge, purpose, Math.floor(Date.now() / 1000)).first();
 }
 
+// A signed answer checked against the stored passkey (sign-in and step-up): the verification
+// result, or null when it is refused. The passkey names the account it belongs to; it has to be the
+// account it is stored with.
+async function verifyStoredAssertion(credential, issued, stored, { origin, rpId }, refusedLog) {
+  if (credential.response?.userHandle !== stored.user_handle) return null;
+  try { return await verifyAuthentication(credential, { challenge: issued.challenge, origin, rpId, stored: { publicKey: JSON.parse(stored.public_key), alg: stored.alg, signCount: stored.sign_count } }); }
+  catch (error) {
+    if (!(error instanceof WebAuthnError)) throw error;
+    console.warn(refusedLog, error.message);
+    return null;
+  }
+}
+
 export async function handlePasskeyLogin(request, env, pathname) {
   if (pathname !== "/auth/passkey/options" && pathname !== "/auth/passkey/verify") return null;
   if (request.method !== "POST") return json({ message: L("Použij POST.", "Use POST.") }, 405);
@@ -116,15 +129,8 @@ export async function handlePasskeyLogin(request, env, pathname) {
     : null;
   // unknownCredential lets the browser drop a passkey that no longer exists here.
   if (!stored) return json({ message: L("Tenhle přístupový klíč Aurin nezná. Přihlas se jinak, třeba kódem z e-mailu.", "Aurin doesn't recognize this passkey. Sign in another way, for example with an email code."), unknownCredential: true, rpId }, 401);
-  // The passkey names the account it belongs to; it has to be the account it is stored with.
-  if (credential.response?.userHandle !== stored.user_handle) return json({ message: NOT_VERIFIED() }, 401);
-  let result;
-  try { result = await verifyAuthentication(credential, { challenge: issued.challenge, origin, rpId, stored: { publicKey: JSON.parse(stored.public_key), alg: stored.alg, signCount: stored.sign_count } }); }
-  catch (error) {
-    if (!(error instanceof WebAuthnError)) throw error;
-    console.warn("Passkey sign-in refused", error.message);
-    return json({ message: NOT_VERIFIED() }, 401);
-  }
+  const result = await verifyStoredAssertion(credential, issued, stored, { origin, rpId }, "Passkey sign-in refused");
+  if (!result) return json({ message: NOT_VERIFIED() }, 401);
   const user = await findUser(db, stored.user_id, env);
   if (!user) return json({ message: L("Tento účet nemá do Aurinu přístup.", "This account doesn't have access to Aurin.") }, 403);
   await db.batch([
@@ -135,8 +141,33 @@ export async function handlePasskeyLogin(request, env, pathname) {
   return signedInResponse(user.id, env, { status: "ok", email: user.email });
 }
 
+// Confirming it's you with one of the account's own passkeys (step-up.js): the options for the
+// signed-in user, then the signed answer. True when it was the user's passkey and it verified.
+export async function stepUpPasskeyOptions(request, env, user) {
+  const db = env.RAW_DB || env.DB, { rpId } = relyingParty(request);
+  const rows = (await db.prepare("SELECT id, transports FROM user_passkeys WHERE user_id = ?").bind(user.id).all()).results || [];
+  if (!rows.length) return json({ message: L("Účet nemá žádný přístupový klíč.", "This account has no passkey.") }, 400);
+  const challenge = await issueChallenge(db, "step-up", { userId: user.id });
+  if (!challenge) return json({ message: L("Zkus to za pár minut.", "Try again in a few minutes.") }, 429);
+  return json({ challenge, rpId, timeout: CHALLENGE_SECONDS * 1000, userVerification: "required", allowCredentials: rows.map(row => ({ type: "public-key", id: row.id, transports: parseTransports(row.transports) })) });
+}
+
+export async function verifyStepUpPasskey(request, env, user, credential) {
+  const db = env.RAW_DB || env.DB, { origin, rpId } = relyingParty(request);
+  const issued = await takeChallenge(db, clientDataChallenge(credential), "step-up");
+  if (!issued || Number(issued.user_id) !== user.id || typeof credential?.id !== "string" || credential.id.length > 1400) return false;
+  // Only a passkey of this very account counts.
+  const stored = await db.prepare("SELECT id, user_handle, public_key, alg, sign_count FROM user_passkeys WHERE id = ? AND user_id = ?").bind(credential.id, user.id).first();
+  const result = stored ? await verifyStoredAssertion(credential, issued, stored, { origin, rpId }, "Passkey step-up refused") : null;
+  if (!result) return false;
+  await db.prepare("UPDATE user_passkeys SET sign_count = MAX(sign_count, ?), backed_up = ?, last_used_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?").bind(result.signCount, result.backedUp ? 1 : 0, stored.id, user.id).run();
+  return true;
+}
+
 // Settings → Account. Needs the browser session (an API key cannot add passkeys).
-export async function handlePasskeyApi(request, env, url, session, ctx) {
+// stepUp: the "confirm it's you" check (step-up.js) before a passkey is added, asked once the account
+// may add one.
+export async function handlePasskeyApi(request, env, url, session, ctx, stepUp = null) {
   if (url.pathname !== "/app/api/passkeys" && url.pathname !== "/app/api/passkeys/options") return null;
   if (!session.signedIn || !session.user) return json({ message: L("Přihlášení vypršelo. Přihlas se znovu.", "Your session has expired. Sign in again.") }, 401);
   const db = env.RAW_DB, user = session.user, { origin, rpId } = relyingParty(request);
@@ -146,6 +177,8 @@ export async function handlePasskeyApi(request, env, url, session, ctx) {
   if (request.method === "POST" && url.pathname === "/app/api/passkeys/options") {
     const existing = (await db.prepare("SELECT id, user_handle, transports FROM user_passkeys WHERE user_id = ?").bind(user.id).all()).results || [];
     if (existing.length >= MAX_PASSKEYS) return json({ message: L(`Účet už má ${MAX_PASSKEYS} přístupových klíčů. Další přidat nejde.`, `This account already has ${MAX_PASSKEYS} passkeys. No more can be added.`) }, 400);
+    const unconfirmed = stepUp ? await stepUp() : null;
+    if (unconfirmed) return unconfirmed;
     // One random id per user, never the e-mail or the account number.
     const userHandle = existing[0]?.user_handle || randomChallenge(32);
     const challenge = await issueChallenge(db, "register", { userId: user.id, userHandle });

@@ -62,9 +62,9 @@ test("Today combines readiness, sleep, strain, food and plan for the app", () =>
   assert.ok(t.strain.planned > 0 && t.strain.planned <= 21);
   assert.deepEqual(t.summary, { headline: "Jak dnes začít", text: "Spánek 6 h 52 min.", recommendation: "Trénink dej naplno." });
   assert.deepEqual(t.nutrition, {
-    kcal: 1380, target: 2650, trainingBonus: 350,
+    kcal: 1380, target: 2650, autoTarget: 2650, trainingBonus: 350,
     protein: { eaten: 112, target: 150 }, carbs: { eaten: 205, target: 330 }, fat: { eaten: 37, target: 80 },
-    water: { ml: 1800, target: 2500 }
+    water: { ml: 1800, target: 2500, autoTarget: 2500, mode: "auto" }
   });
   assert.equal(t.steps.goal, 10000);
   assert.equal(t.steps.week.length, 7);

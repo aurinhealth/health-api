@@ -5,7 +5,21 @@
 // makes older entries unreachable at once; the TTL covers data that arrives
 // by itself (Intervals.icu, Google Health).
 
+import { beginWait } from "./request-timing.js";
+
 export const CACHE_TTL_SECONDS = 600;
+
+// A closed day: two or more days back (today and yesterday still get late
+// watch syncs). Its analysis and food are kept for CLOSED_DAY_TTL_SECONDS
+// under the same version: whatever changes such a day bumps the version (the
+// user's own changes, Apple Health, Intervals.icu, Wahoo, and a Google sync
+// that changed a row of a closed day: index.js saveGooglePointsBatch).
+export const CLOSED_DAY_TTL_SECONDS = 6 * 3600;
+export function closedDay(day, today) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(day || "")) || !/^\d{4}-\d{2}-\d{2}$/.test(String(today || ""))) return false;
+  const limit = new Date(Date.parse(today + "T12:00:00Z") - 2 * 86400000).toISOString().slice(0, 10);
+  return day <= limit;
+}
 // The same entry being computed in this isolate: Today's coach cards ask for
 // the same coach inputs at the same moment, and each used to compute them
 // (some 400 database reads each) before the first one was kept.
@@ -42,7 +56,7 @@ export async function bumpCacheVersion(db, { food = false } = {}) {
 }
 
 // Entries that never show food or drinks: a meal logged keeps them.
-export const FOOD_FREE = /^(fitness|thresholds|curves|laps|intervals-wellness|activity-detail|training-calendar|milestones|share-milestones):?/;
+export const FOOD_FREE = /^(fitness|thresholds|curves|laps|coach-performance|intervals-wellness|activity-detail|training-calendar|milestones|share-milestones|main-sport):?/;
 // The routes that change only food and drinks (entrypoint.js).
 export const FOOD_WRITE = /^\/app\/api\/(fluids|water|food\/(entry|entries|log|personal|recipes|nutrients\/favorites|suggestions\/decide|report))(\/|$)/;
 // A handler that saved nothing new says so, and nothing is made outdated.
@@ -53,15 +67,26 @@ function failedValue(value) {
   return value.status === "error" || value.degraded === true || Object.keys(value).length === 0;
 }
 
-export async function cached(env, ctx, key, compute, { ttl = CACHE_TTL_SECONDS, store = globalThis.caches?.default } = {}) {
-  if (!store || env.DB?.userId == null) return compute();
+async function entryUrl(env, key) {
   const scope = encodeURIComponent((env.ENVIRONMENT || 'production') + ':' + (env.USER_DATA_SHARD || 'legacy'));
   const { version, food } = await cacheVersion(env.DB);
-  const url = "https://cache.internal/" + scope + "/" + env.DB.userId + "/" + (FOOD_FREE.test(key) ? version : version + "." + food) + "/" + encodeURIComponent(key);
+  return "https://cache.internal/" + scope + "/" + env.DB.userId + "/" + (FOOD_FREE.test(key) ? version : version + "." + food) + "/" + encodeURIComponent(key);
+}
+
+// The kept entry of `key` under the current version, or null; computes nothing.
+export async function cachedOnly(env, key, { store = globalThis.caches?.default } = {}) {
+  if (!store || env.DB?.userId == null) return null;
+  const hit = await store.match(await entryUrl(env, key)).catch(() => null);
+  return hit ? hit.json().catch(() => null) : null;
+}
+
+export async function cached(env, ctx, key, compute, { ttl = CACHE_TTL_SECONDS, store = globalThis.caches?.default } = {}) {
+  if (!store || env.DB?.userId == null) return compute();
+  const url = await entryUrl(env, key);
   const hit = await store.match(url).catch(() => null);
   if (hit) return hit.json();
   // Waiting for the one computing it: a copy, as from the cache, since callers change what they get.
-  if (computing.has(url)) return computing.get(url).then(value => structuredClone(value));
+  if (computing.has(url)) { const end = beginWait("shared"); return computing.get(url).then(value => structuredClone(value)).finally(end); }
   const pending = compute();
   computing.set(url, pending);
   let value;

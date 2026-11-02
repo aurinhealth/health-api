@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
 """TestFlight "What to Test" notes for the build just uploaded.
 
-The notes are written by hand in each pull request's description, in Czech
-and in English (the app's TestFlight information has both languages):
+The notes are written by hand in each pull request's description, in English
+first and then in Czech (the app's TestFlight information has both languages):
 
   ## TestFlight
-  **Co je nového**
-  - Jídlo a pití se uloží hned a okno se zavře okamžitě.
-  **Co otestovat**
-  - Přidej jídlo a hned ho smaž přes Vrátit.
   **What's new**
   - Food and drinks save at once and the sheet closes right away.
   **What to test**
   - Add a food and delete it straight away with Undo.
+  **Co je nového**
+  - Jídlo a pití se uloží hned a okno se zavře okamžitě.
+  **Co otestovat**
+  - Přidej jídlo a hned ho smaž přes Vrátit.
 
 A pull request with nothing for testers says "Nic k otestování" in that
-section instead. The notes file holds the Czech text, then a line
-"--- English ---" and the English text; a file without that line (text typed
-in by hand) goes to every language as it is.
+section instead. The notes file holds the English text, then a line
+"--- Česky ---" and the Czech text (English always first); a file without
+that line (text typed in by hand) goes to every language as it is. An older
+file with Czech first and "--- English ---" still reads.
 
   testflight_notes.py write BASE_SHA OUT_FILE
       Collects the TestFlight sections of the pull requests merged since
@@ -54,16 +55,17 @@ NEW, TEST = "Co je nového", "Co otestovat"
 NEW_EN, TEST_EN = "What's new", "What to test"
 HEADINGS = {h.lower(): h for h in (NEW, TEST, NEW_EN, TEST_EN)}
 NOTHING = "nic k otestování"
-ENGLISH = "--- English ---"  # splits the notes file into Czech and English
+CZECH = "--- Česky ---"  # splits the notes file: English above, Czech below
+ENGLISH = "--- English ---"  # older notes files: Czech above, English below
 EXAMPLE = f"""## TestFlight
-**{NEW}**
-- Jídlo a pití se uloží hned a okno se zavře okamžitě.
-**{TEST}**
-- Přidej jídlo a hned ho smaž přes Vrátit.
 **{NEW_EN}**
 - Food and drinks save at once and the sheet closes right away.
 **{TEST_EN}**
-- Add a food and delete it straight away with Undo."""
+- Add a food and delete it straight away with Undo.
+**{NEW}**
+- Jídlo a pití se uloží hned a okno se zavře okamžitě.
+**{TEST}**
+- Přidej jídlo a hned ho smaž přes Vrátit."""
 # What a build says when the pull requests give nothing to quote: (cs, en).
 OTHERS = {"cs": "Další drobné úpravy.", "en": "Other small improvements."}
 NONE = {"cs": "Drobné úpravy, nic nového k otestování.", "en": "Small fixes, nothing new to test."}
@@ -145,14 +147,18 @@ def render_one(entries, lang):
 
 
 def render(entries):
-    """The notes file: Czech, the ENGLISH line, English."""
-    return render_one(entries, "cs") + "\n\n" + ENGLISH + "\n\n" + render_one(entries, "en")
+    """The notes file: English, the CZECH line, Czech."""
+    return render_one(entries, "en") + "\n\n" + CZECH + "\n\n" + render_one(entries, "cs")
 
 
 def languages(notes):
-    """{"cs": text, "en": text} from a notes file; one text for both without ENGLISH."""
-    cs, sep, en = notes.partition("\n" + ENGLISH + "\n")
-    return {"cs": cs.strip()[:LIMIT], "en": (en if sep else cs).strip()[:LIMIT]}
+    """{"cs": text, "en": text} from a notes file; one text for both without a split line."""
+    en, sep, cs = notes.partition("\n" + CZECH + "\n")
+    if not sep:
+        cs, sep, en = notes.partition("\n" + ENGLISH + "\n")
+    if not sep:
+        cs = en = notes
+    return {"cs": cs.strip()[:LIMIT], "en": en.strip()[:LIMIT]}
 
 
 def notes_since(base):
@@ -176,18 +182,18 @@ def check():
     sec = section(event["pull_request"].get("body"))
     if sec is None:
         sys.exit("::error::Popis PR nemá sekci TestFlight pro testery. Přidej ji do popisu "
-                 "(česky, bez čísel PR a názvů v kódu), nebo do ní napiš „Nic k otestování“:\n\n" + EXAMPLE)
+                 "(nejdřív anglicky, pod tím česky, bez čísel PR a názvů v kódu), nebo do ní napiš „Nic k otestování“:\n\n" + EXAMPLE)
     czech, english = sec[NEW] + sec[TEST], sec[NEW_EN] + sec[TEST_EN]
     lines = czech + english
     if english and not czech:
-        sys.exit(f"::error::Sekce TestFlight potřebuje i českou část ({NEW} / {TEST}).")
+        sys.exit(f"::error::Sekce TestFlight potřebuje pod anglickou částí i českou ({NEW} / {TEST}):\n\n" + EXAMPLE)
     if czech and not re.search(r"[ěščřžýáíéůúťďň]", " ".join(czech), re.I):
         sys.exit("::error::Česká část sekce TestFlight má být česky (Co je nového / Co otestovat).")
     if sec[NEW] and not sec[TEST]:
         sys.exit(f"::error::Sekce TestFlight potřebuje i „{TEST}“: konkrétní kroky v aplikaci.")
     if czech and not english:
         sys.exit(f"::error::Sekce TestFlight potřebuje i anglickou verzi pod „**{NEW_EN}**“ a „**{TEST_EN}**“ "
-                 "(stejné body anglicky, pro testery s angličtinou):\n\n" + EXAMPLE)
+                 "(nejdřív anglicky, pod tím stejné body česky):\n\n" + EXAMPLE)
     if sec[NEW_EN] and not sec[TEST_EN]:
         sys.exit(f"::error::Anglická část sekce TestFlight potřebuje i „{TEST_EN}“.")
     symbols = sorted({c for c in " ".join(lines) if unicodedata.category(c) == "So"})

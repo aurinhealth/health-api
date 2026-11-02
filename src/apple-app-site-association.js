@@ -1,9 +1,12 @@
 // /.well-known/apple-app-site-association: the file iOS reads before it lets
-// the iPhone app use the passkeys of the server's host (aurin.health). The webcredentials entry matches the
-// app's associated-domains entitlement (ios-native/project.yml).
+// the iPhone app use the passkeys of the server's host (aurin.health) and catch
+// the https address Google sign-in returns to (google-login.js, on the test
+// server's host too). The webcredentials entry matches the app's
+// associated-domains entitlement (ios-native/project.yml).
 // APPLE_TEAM_ID is the Apple Developer team of the app (App Store Connect →
-// Membership, ten characters); without it the file is not served and the
-// app's passkey buttons fall back to the e-mail sign-in.
+// Membership, ten characters). Without it the file is not served: the passkey
+// buttons fall back to the e-mail sign-in and Google sign-in cannot return to
+// the app, so the deploy fails without it (deploy-worker.yml).
 export const APP_BUNDLE_ID = "health.aurin.app";
 const PATH = "/.well-known/apple-app-site-association";
 

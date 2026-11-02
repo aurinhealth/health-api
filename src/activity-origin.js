@@ -1,10 +1,11 @@
+import { ownExternalId } from "./sync-destinations.js";
 // Where a done activity came from, for the line under its name in the app's
 // detail ("Google Health", "Wahoo"): the service or device that recorded it,
 // with the key of its logo in the app (IntegrationIcon; null: the name alone).
 //
 // An Intervals.icu activity names its upload in `source` (WAHOO, GARMIN_CONNECT,
 // STRAVA, ZWIFT, OAUTH_CLIENT, UPLOAD, MANUAL) and the recorder in
-// `device_name`; one written in Aurin carries external_id "loadwise:…".
+// `device_name`; one written in Aurin carries external_id "aurin:…" ("loadwise:…" before 2026-11).
 const DEVICES = [
   [/wahoo|elemnt|kickr/i, { name: 'Wahoo', logo: 'wahoo' }],
   [/garmin|forerunner|fenix|f[eē]nix|edge \d|venu|epix|instinct/i, { name: 'Garmin', logo: null }],
@@ -21,7 +22,7 @@ const SOURCES = { WAHOO: 'Wahoo', GARMIN_CONNECT: 'Garmin', STRAVA: 'Strava', ZW
 const INTERVALS = { name: 'Intervals.icu', logo: 'intervals' };
 
 export function intervalsOrigin(detail = {}) {
-  if (String(detail.external_id || '').startsWith('loadwise:')) return { name: 'Aurin', logo: 'aurin' };
+  if (ownExternalId(detail.external_id)) return { name: 'Aurin', logo: 'aurin' };
   const device = String(detail.device_name || '');
   const source = String(detail.source || '').toUpperCase();
   for (const [match, origin] of DEVICES) if (match.test(device)) return origin;

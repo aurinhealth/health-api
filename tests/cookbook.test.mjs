@@ -63,7 +63,9 @@ test("the owner's upload is stored and used at once; anything else is refused", 
   await assert.rejects(saveCookbook(db, { recipes: [{ page: "x" }] }), /Expected/);
   assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM cookbook").get().n, 1);
   const entry = serverSource();
-  assert.match(entry, /\/app\/api\/admin\/cookbook"[\s\S]{0,120}if \(!user\.isOwner\)/);
+  // Every admin route, the cookbook among them, is for the owner only (routes-admin.js).
+  assert.match(entry, /function handleAdminApi\([\s\S]{0,120}if \(!session\.signedIn \|\| !user\?\.isOwner\)/);
+  assert.match(entry, /\/app\/api\/admin\/cookbook"/);
 });
 
 // The printed book is copyrighted: its recipes must not come back into this public repository.

@@ -69,3 +69,90 @@ test("what the app shows: legs, sessions per sport and each sport's long session
   const p = planPreview(getTemplate("tri-sprint"), { ctl: 40, days: [0, 1, 2, 3, 4, 5, 6], startDate: "2026-11-02" });
   assert.equal(p.weeks[0].sessions, 6);
 });
+
+test("multisport races with two sports: their legs in order, no third sport", async () => {
+  const { perSportOf, chosenSports } = await import("../src/training-plans.js");
+  for (const [id, sports, legs] of [["du-sprint", ["ride", "run"], ["run", "ride", "run"]], ["du-standard", ["ride", "run"], ["run", "ride", "run"]], ["aquabike", ["ride", "swim"], ["swim", "ride"]], ["aquathlon", ["run", "swim"], ["swim", "run"]]]) {
+    const t = getTemplate(id);
+    assert.deepEqual(planSports(t), sports, id);
+    assert.equal(t.weeks.at(-1).phase, "race");
+    for (const w of t.weeks) assert.deepEqual(Object.keys(w.sports).sort(), [...sports].sort());
+    assert.equal(t.weeks.some(w => w.brick), sports.includes("ride") && sports.includes("run"), id + ": a brick only with a ride and a run");
+    const d = triRaceDay(t.race.tri, { thresholdPace: 280, ftp: 250, swimCss: 110 });
+    assert.deepEqual(d.legs.map(x => x.sport), legs);
+    assert.ok(d.legs.every(x => raceWorkout(x.workoutId)?.sport === x.sport), id + ": each leg has its workout");
+    assert.ok(d.minutes > d.legs.reduce((a, x) => a + x.minutes, 0), "transitions count");
+    const s = templateSummary(t);
+    assert.deepEqual(s.race.legList.map(x => x.sport), legs);
+    assert.equal(s.race.legs, undefined, "the by-sport legs are a triathlon's");
+    assert.deepEqual(Object.keys(perSportOf(t)), sports);
+  }
+  // A 5 km run after the ride is slower than after a swim.
+  const du = triRaceDay("du-standard", { thresholdPace: 280 }), aqua = triRaceDay("aquathlon", { thresholdPace: 280 });
+  assert.ok(du.legs[2].minutes >= aqua.legs[1].minutes && du.legs[2].workoutId.endsWith("-p98"), "slower after the ride");
+  assert.equal(chosenSports(["swim"]), null);
+  assert.deepEqual(chosenSports(["swim", "ride"]), ["ride", "swim"], "the app's order");
+});
+
+test("a duathlon week: race day run, ride, run; the athlete's own swim stays as it was", () => {
+  const t = getTemplate("du-standard"), base = sanitizeWeekPlan({ weeklyActivities: 8, availability: AVAILABLE });
+  const prefs = sanitizeWeekPlan({ ...base, days: planDays(t, base).days.map((d, i) => i === 2 ? [...d.filter(s => s !== "swim"), "swim"].slice(-2) : d) });
+  assert.ok(!planDays(t, base).days.some(d => d.includes("swim")), "the plan adds no swim");
+  const when = planStart(t, { today: "2026-11-02", raceDate: "2027-01-24" });
+  const plan = { templateId: t.id, sport: "triathlon", ...when };
+  const run = n => {
+    const start = shift(when.startDate, (n - 1) * 7);
+    const p = weekProposal({ prefs, start, today: "2026-11-02", state: { status: "active" } });
+    return applyPlan(p, plan, start, { thresholdPace: 280, ftp: 250 });
+  };
+  const build = run(6);
+  assert.ok(build.items.some(x => x.brick), "a ride–run brick in the build");
+  assert.ok(build.items.filter(x => x.sport === "swim").every(x => !x.plan), "the swim is not the plan's");
+  const race = run(12).items.filter(x => x.plan?.kind === "race");
+  assert.deepEqual(race.map(x => x.sport), ["run", "ride", "run"]);
+  assert.ok(race.every(x => x.date === "2027-01-24" && x.leg === undefined));
+});
+
+test("multisport without a race: two or three picked sports share six sessions", async () => {
+  const { perSportOf } = await import("../src/training-plans.js");
+  const t = getTemplate("multi-base");
+  assert.ok(t.choose && !t.race);
+  assert.ok(!t.weeks.some(w => w.race || w.phase === "taper" || w.brick), "no race, taper or brick");
+  assert.deepEqual(perSportOf(t, { sports: ["swim", "ride"] }), { ride: 3, swim: 3 });
+  assert.deepEqual(perSportOf(t, { sports: ["ride", "run", "swim"] }), { ride: 2, run: 2, swim: 2 });
+  assert.deepEqual(planSports({ templateId: "multi-base", sports: ["run", "ride"] }), ["ride", "run"]);
+  const { days } = planDays(t, sanitizeWeekPlan({ availability: AVAILABLE }), null, ["ride", "swim"]);
+  const count = s => days.filter(d => d.includes(s)).length;
+  assert.deepEqual([count("ride"), count("run"), count("swim")], [3, 0, 3]);
+  const p = planPreview(t, { ctl: 40, days: [0, 1, 2, 3, 4, 5, 6], startDate: "2026-11-02", sports: ["ride", "swim"] });
+  assert.equal(p.weeks[0].sessions, 6);
+  assert.ok(p.weeks.every(w => w.keys.length <= 2), "only the picked sports' key sessions");
+});
+
+test("multisport days chosen by the athlete: the sports go only on those days", () => {
+  const t = getTemplate("du-standard"), chosen = [1, 3, 5, 6];
+  const { days } = planDays(t, sanitizeWeekPlan({ availability: AVAILABLE }), null, null, chosen);
+  assert.ok(days.every((d, i) => chosen.includes(i) || !d.some(s => ["ride", "run"].includes(s))));
+  assert.ok(chosen.every(i => days[i].length > 0));
+});
+
+test("review: picked sports reach the week, the summary and the roles", async () => {
+  const { planWeek, planSummary, perSportOf } = await import("../src/training-plans.js");
+  const { planRoleOptions } = await import("../src/week-planner.js");
+  const plan = { templateId: "multi-base", sport: "triathlon", startDate: "2026-11-02", sports: ["run", "swim"] };
+  const pw = planWeek(plan, "2026-12-07");
+  assert.ok(pw.spec.q.every(k => ["run", "swim"].includes(k.sport)) && !pw.spec.sports.ride, "no ride key session");
+  const keys = planSummary(plan, "2026-11-04").template.weeks.flatMap(w => w.keys).join(" ");
+  assert.ok(!/Práh 2×|Sweet spot|Threshold 2×/.test(keys), keys);
+  // Started from an older app without sports: ride and run, the same everywhere.
+  assert.deepEqual(planSports({ templateId: "multi-base" }), ["ride", "run"]);
+  assert.deepEqual(perSportOf(getTemplate("multi-base"), {}), { ride: 3, run: 3 });
+  // A duathlon's roles: the athlete's own swim gets no key session; an aquathlon prefers the run.
+  assert.deepEqual(planRoleOptions({ sport: "triathlon" }, 2, ["ride", "run"]).avoid, ["swim"]);
+  assert.equal(planRoleOptions({ sport: "triathlon" }, 2, ["run", "swim"]).prefer, "run");
+  assert.equal(planRoleOptions({ sport: "triathlon" }, 2, ["ride", "run", "swim"]).avoid, undefined);
+  // Chosen days count whatever their free time.
+  const short = AVAILABLE.map((d, i) => i === 1 ? { minutes: 15 } : d);
+  const { days } = planDays(getTemplate("du-standard"), sanitizeWeekPlan({ availability: short }), null, null, [0, 1, 3, 5]);
+  assert.ok(days[1].length > 0, "Tuesday is used");
+});

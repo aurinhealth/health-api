@@ -177,6 +177,10 @@ struct NutrientDetailView: View {
     let date: String
     @State private var detail: NutrientDetail?
     @State private var error: String?
+    @State private var editing = false
+    /// The own target in the sheet; nil is Auto.
+    @State private var own: Double?
+    @State private var ownBefore: Double?
 
     var body: some View {
         ZStack {
@@ -185,7 +189,7 @@ struct NutrientDetailView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     NutrientsTopBar(title: detail?.name ?? "", back: { dismiss() })
                     if let detail {
-                        NutrientDetailContent(detail: detail)
+                        NutrientDetailContent(detail: detail, editTarget: { editing = true })
                     } else if let error {
                         Text(error).font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 24)
                     } else {
@@ -202,11 +206,35 @@ struct NutrientDetailView: View {
             do { detail = try await model.api.nutrientDetail(key: key, date: date) }
             catch { self.error = error.localizedDescription }
         }
+        .sheet(isPresented: $editing, onDismiss: { Task { await saveTarget() } }) {
+            if let detail { NutrientTargetSheet(detail: detail, own: $own) }
+        }
+        .onChange(of: editing) { _, open in
+            if open { own = detail?.custom == true ? detail?.target : nil; ownBefore = own }
+        }
+    }
+
+    /// Saves an own target (nil: back to Auto) into the profile's
+    /// nutrientTargets and loads the nutrient again.
+    private func saveTarget() async {
+        guard own != ownBefore, !model.demo else { return }
+        do {
+            var profile = try await model.api.profile()
+            var targets: JSONObject = [:]
+            if case .object(let saved)? = profile["nutrientTargets"] { targets = saved }
+            targets[key] = own.map { .number($0) }
+            profile["nutrientTargets"] = .object(targets.filter { $0.value != .null })
+            try await model.api.saveProfile(profile)
+            detail = try await model.api.nutrientDetail(key: key, date: date)
+            await model.refreshFood()
+        } catch { self.error = error.localizedDescription }
     }
 }
 
 struct NutrientDetailContent: View {
     let detail: NutrientDetail
+    /// Opens the Target sheet; nil shows no Target row.
+    var editTarget: (() -> Void)? = nil
 
     private var low: Bool { !detail.limit && (detail.percent ?? 100) <= 50 }
     private var over: Bool { detail.limit && (detail.eaten ?? 0) > (detail.target ?? .infinity) }
@@ -225,6 +253,14 @@ struct NutrientDetailContent: View {
                 .padding(.top, 8)
             if let week = detail.weekPercent {
                 Text(L10n.f("Průměr za 7 dní: %@ %%", Fmt.int(week))).font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 10)
+            }
+            if let editTarget, detail.target != nil {
+                Button(action: editTarget) {
+                    SettingsRow(title: "Denní cíl", value: NutrientTargetSheet.value(detail))
+                        .cardSurface(cornerRadius: 22)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 20)
             }
             if !detail.sources.isEmpty {
                 SectionLabel(text: "Dnes z").padding(.top, 26).padding(.bottom, 2)
@@ -337,5 +373,91 @@ struct NutrientFavoritesList: View {
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
+    }
+}
+
+/// Cíl of one nutrient: Auto (Aurin's own, higher for plant iron and zinc)
+/// or one's own (Aurin Pro), never above the safe upper limit (EFSA).
+struct NutrientTargetSheet: View {
+    let detail: NutrientDetail
+    @Binding var own: Double?
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+
+    /// "Auto · vegetariánsky · 20 mg" or "Vlastní · 25 mg".
+    static func value(_ detail: NutrientDetail) -> String {
+        let amount = NutrientItem.amount(detail.target ?? 0) + " " + detail.unit
+        if detail.custom == true { return L10n.tr("Vlastní") + " · " + amount }
+        if let basis = detail.autoBasis { return "Auto · " + L10n.tr(basis == "vegan" ? "vegansky" : "vegetariánsky") + " · " + amount }
+        return "Auto · " + amount
+    }
+
+    private var auto: Double { detail.autoTarget ?? detail.target ?? 1 }
+    private var step: Double { auto >= 100 ? 10 : auto >= 10 ? 1 : 0.1 }
+    private var top: Double { detail.upperLimit ?? max(auto * 10, step * 10) }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text(L10n.f("Cíl: %@", detail.name)).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Spacer()
+                    ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
+                }
+                .padding(.bottom, 6)
+                Button { own = nil } label: {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(verbatim: "Auto").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                            Text(verbatim: autoHint).font(Typo.caption).foregroundStyle(Palette.muted)
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "checkmark").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
+                            .frame(width: 18).opacity(own == nil ? 1 : 0)
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 13)
+                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(own == nil ? Palette.ink.opacity(0.7) : .clear, lineWidth: 1.5)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(own == nil ? .isSelected : [])
+                Text(L10n.tr("Nebo nastav vlastní")).font(.caption.weight(.medium)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted)
+                    .padding(.horizontal, 4).padding(.top, 8)
+                if detail.pro == true {
+                    NumberStepper(title: "Za den", value: Binding(get: { own ?? auto }, set: { own = $0 }),
+                                  range: step...top, step: step, unit: detail.unit, digits: step < 1 ? 1 : 0)
+                } else {
+                    Button { Paywall.present(model) } label: {
+                        SettingsRow(title: "Vlastní cíl", chevron: false)
+                            .overlay(alignment: .trailing) {
+                                HStack(spacing: 3) { Image(systemName: "lock.fill").scaledFont(10); Text(verbatim: "Pro") }
+                                    .font(.footnote.weight(.semibold)).foregroundStyle(Palette.muted).padding(.trailing, 18)
+                            }
+                            .cardSurface(cornerRadius: 22)
+                    }
+                    .buttonStyle(.plain)
+                }
+                if let upper = detail.upperLimit {
+                    Text(L10n.f("Bezpečná horní hranice je %@ (EFSA). Aurin nad ni nejde.", NutrientItem.amount(upper) + " " + detail.unit))
+                        .font(Typo.caption).foregroundStyle(Palette.muted)
+                        .padding(.horizontal, 4).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(20)
+        }
+        .background(Palette.background)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    /// "20 mg · vegetariánsky, rostlinné železo se vstřebá hůř".
+    private var autoHint: String {
+        let amount = NutrientItem.amount(auto) + " " + detail.unit
+        guard detail.autoBasis != nil else { return amount }
+        return amount + " · " + L10n.tr(detail.key == "zn" ? "z rostlin se zinek vstřebá hůř" : "z rostlin se železo vstřebá hůř")
     }
 }

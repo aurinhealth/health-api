@@ -86,19 +86,6 @@ export function splitReason({ weak, strong, category, count }) {
   return why + keep;
 }
 
-// The year's sessions and hours per sport, from the activities training-history.js reads anyway.
-export function yearBySport(activities = [], since) {
-  const out = {};
-  for (const a of activities) {
-    if (!a?.kind || !a.date || (since && a.date < since)) continue;
-    const o = out[a.kind] || (out[a.kind] = { count: 0, hours: 0 });
-    o.count++;
-    o.hours += (Number(a.minutes) || 0) / 60;
-  }
-  for (const o of Object.values(out)) o.hours = Math.round(o.hours * 10) / 10;
-  return out;
-}
-
 // The split as the AI week and the coach read it.
 export function splitFacts(split) {
   if (!split) return null;

@@ -10,6 +10,8 @@ import { todayGymContext,gymAdjustmentRequest } from './coach-gym-adjustment.js'
 import { readOpenAIStream,partialCoachAnswer } from './assistant-stream.js';
 import { resolveStrengthPerformance } from './strength-history.js';
 import { rideFtpFor } from './intervals-athlete.js';
+import { activityKindOf } from './activity-match.js';
+import { isHardSession } from './session-intensity.js';
 import { aiLanguageNote, L, lang } from './lang.js';
 import { assertAiAllowance, claimAiSlot, estimateAiCostUsd, keepAiReservation, recordAiUsage } from './ai-usage.js';
 import { trendFacts } from './trend-facts.js';
@@ -18,7 +20,9 @@ import { sleepNeedFor, weekSleepDebt } from './recovery-model.js';
 import { SPORT_RULES, coachInstructionsFor, safetyNote } from './private/coach-assistant.js';
 export { coachInstructionsFor, safetyNote };
 
-export const focusSportKey=focus=>({cycling:'ride',triathlon:'ride',running:'run',swimming:'swim',strength:'strength',general:'general'})[focus?.sport]||'ride';
+// The prompt's rules for the athlete's sport; a sport the prompts have no
+// rules for gets the general ones, so it never throws (run 38: a swimmer's coach did).
+export const focusSportKey=focus=>{const key=({cycling:'ride',triathlon:'ride',running:'run',swimming:'swim',strength:'strength',general:'general'})[focus?.sport]||'ride';return SPORT_RULES[key]?key:'general';};
 // The default (Czech, cycling) prompt; askCoach builds the athlete's own.
 export const coachInstructions = coachInstructionsFor();
 
@@ -86,11 +90,12 @@ export function compactTraining(training){
 // the day burned, drinks and the last days' eating.
 export function nutritionContext(n,{daily=null,week=null,fluids=null,date=null}={}){
   if(!n||typeof n!=='object')return null;
-  const eaten=n.foodLog?.totals||null,target=num(n.calorieTarget),macros=n.macros||null,b=n.calorieBreakdown||{};
+  const eaten=n.foodLog?.totals||null,target=num(n.calorieTarget),macros=n.macros?{protein_g:num(n.macros.protein_g),carbs_g:num(n.macros.carbs_g),fat_g:num(n.macros.fat_g)}:null,b=n.calorieBreakdown||{};
   const left=(goal,have)=>num(goal)==null?null:Math.round(num(goal)-(num(have)||0));
   const w=daily?.weight||{},avg=x=>round(num(x),1);
   const lastDays=date?(week?.days||[]).filter(d=>d.date<date&&d.date>=shiftDay(date,-7)).map(d=>{const t=d.daily?.nutrition?.foodLog?.totals;return t&&num(t.kcal)>0?compactObject({date:d.date,eatenKcal:round(num(t.kcal)),proteinG:round(num(t.protein_g)),targetKcal:round(num(d.daily?.nutrition?.calorieTarget))}):null;}).filter(Boolean):[];
-  return compactObject({calorieTarget:target,macros,eaten,
+  // diet: what the athlete eats, the macro style (keto…), protein per kg and per meal (diet.js).
+  return compactObject({calorieTarget:target,macros,diet:n.diet||null,eaten,
     remaining:target==null&&!macros?null:compactObject({kcal:left(target,eaten?.kcal),protein_g:left(macros?.protein_g,eaten?.protein_g),carbs_g:left(macros?.carbs_g,eaten?.carbs_g),fat_g:left(macros?.fat_g,eaten?.fat_g)}),
     targetReason:typeof n.reason==='string'?n.reason.slice(0,400):null,
     minimumKcal:num(b.minTarget),deficitKcal:num(b.weightLossDeficit),
@@ -158,12 +163,58 @@ export function sleepNeedContext(sessions=[],{date,profile=null,wellness=[]}={})
 }
 // The engine plans rides, runs or swims: the open screen first, then the
 // sport the message asks about ("a run tomorrow?"), then the main sport.
-const RUN_WORDS=/\bběh|\bběž|\bběhat|\bbehat|\bklus|\brun(?:s|ning)?\b|\bjog/i,RIDE_WORDS=/\bkol[aeou]?\b|\bkolem\b|\bjízd|\bjezd|\bvyjížď|\btrenažér|\bride|\bbike|\bcycl/i,SWIM_WORDS=/\bplav|\bbazén|\bbazen|\bswim|\bpool\b/i;
+// Whole words only: "během" (during), "kolem" (around), "kola" (rounds) and a
+// cycle are not a run or a ride.
+const RUN_WORDS=/(?<!\p{L})(?:b[eě]h(?:u|y|ů|ání|at|ám|áme|ej|ejte)?|b[eě]ž(?:et|ím|íš|í|íme|el|ela|ec|ce|ci|ecký|ecké)?|zab[eě]h\p{L}*|klus\p{L}*|run|runs|running|jog\p{L}*)(?!\p{L})/iu,
+  RIDE_WORDS=/(?<!\p{L})(?:kolo|na kole|j[ií]zd\p{L}*|vyj[ií]žď\p{L}*|vyjizd\p{L}*|jezd\p{L}*|trena[žz][eé]r\p{L}*|ride|rides|riding|bike|bikes|biking|cycling|cyclist)(?!\p{L})/iu,
+  SWIM_WORDS=/(?<!\p{L})(?:plav\p{L}*|baz[eé]n\p{L}*|swim\p{L}*|pool)(?!\p{L})/iu;
+const ENDURANCE_KINDS=['ride','run','swim'];
 export function engineSport(focus,appContext=null,message=''){
   const s=appContext?.sport;if(s==='ride'||s==='run'||s==='swim')return s;
   const asked=[RUN_WORDS.test(message)&&'run',RIDE_WORDS.test(message)&&'ride',SWIM_WORDS.test(message)&&'swim'].filter(Boolean);
   if(asked.length===1)return asked[0];
   return focus?.sport==='running'?'run':focus?.sport==='swimming'?'swim':'ride';
+}
+// A strength athlete's day is a gym day (revize doporučování 2026-10-16,
+// nález 20b): the engine keeps the readiness and the load, the gym generator
+// builds the workout. A ride, run or swim stays when the open screen or the
+// message asks for one, or when one is planned for the day.
+export function gymDay(focus,{appContext=null,message='',daily=null}={}){
+  if(focus?.sport!=='strength')return false;
+  if(ENDURANCE_KINDS.includes(appContext?.sport))return false;
+  if(RUN_WORDS.test(message)||RIDE_WORDS.test(message)||SWIM_WORDS.test(message))return false;
+  return !(daily?.training?.planned||[]).some(a=>ENDURANCE_KINDS.includes(activityKindOf(a?.type||a?.name)));
+}
+// Legs worked hard in the last 48 hours: lower-body gym sets, or a hard or
+// long run or ride (90 min run, 150 min ride).
+function legsTired(engine,week,date){
+  if(Number(engine?.load?.lowerBodyGymSignals48h)>0)return true;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date||'')))return false;
+  const from=shiftDay(date,-2);
+  return (week?.days||[]).filter(d=>d.date>=from&&d.date<=date).flatMap(d=>d.daily?.training?.completed||[]).some(a=>{
+    const kind=activityKindOf(a?.type||a?.name);if(kind!=='run'&&kind!=='ride')return false;
+    return isHardSession(a,kind)||Number(a.durationHours)*60>=(kind==='run'?90:150);
+  });
+}
+// The engine's day turned into a gym day by readiness: red is mobility and
+// light strength, yellow a lighter session without sets to failure, green a
+// full one. Tired legs leave an upper-body day. The time is the athlete's
+// (asked, planned or the week plan's for the day); 0 is no training today.
+// The endurance session stays an alternative for when the athlete asks.
+export function strengthDay(engine,{availabilityMinutes=null,dayMinutes=null,week=null,date=null}={}){
+  if(!engine||engine.athleteState?.paused)return engine;
+  const given=[availabilityMinutes,engine.constraints?.autoLength===false?engine.constraints.availableMinutes:null,dayMinutes].find(v=>v!=null&&Number.isFinite(Number(v)));
+  const time=given==null?null:Math.max(0,Number(given));
+  const status=engine.readiness?.status,legs=legsTired(engine,week,date||engine.date);
+  const focus=status==='red'?'mobility':legs?'upper':'full';
+  const fit=(usual,max)=>Math.min(time??usual,max);
+  const session=time===0?{kind:'rest',name:L('Dnes bez tréninku','No training today'),durationMinutes:0,focus:null,intensity:null}
+    :status==='red'?{kind:'gym_recovery',name:L('Mobilita a lehká síla','Mobility and light strength'),durationMinutes:fit(30,30),focus,intensity:'RPE <= 5'}
+    :status==='yellow'?{kind:'gym',name:L('Silový trénink, lehčí','Strength training, lighter'),durationMinutes:fit(45,60),focus,intensity:'RPE <= 7, no sets to failure'}
+    :{kind:'gym',name:L('Silový trénink','Strength training'),durationMinutes:fit(60,90),focus,intensity:'RPE 7-9'};
+  const endurance=engine.recommendation?.session;
+  return {...engine,sport:'gym',recommendation:{session,adaptations:[legs&&time!==0&&status!=='red'?L('Nohy pracovaly v posledních 48 h: dnes horní polovina těla.','Legs worked in the last 48 h: upper body today.'):null].filter(Boolean),decisionRule:'strength_main_sport',progression:null},
+    alternatives:[...(endurance&&endurance.kind!=='rest'?[{...endurance,onlyWhenAsked:true}]:[]),...(engine.alternatives||[]).map(a=>({...a,onlyWhenAsked:true}))]};
 }
 // The engine's goal from the main event: base far out, build in the last 12
 // weeks; the final 3 weeks stay automatic (the engine has no taper phase).
@@ -209,7 +260,7 @@ export function recoveryForCoach(r) {
   };
 }
 
-export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[],recoveryTime=null,journal=null}) {
+export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,appContext=null,message='',dayMinutes=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[],recoveryTime=null,journal=null}) {
   const strengthSince=shiftDay(date,-14);
   const strengthSets=(gym?.history||[]).filter(r=>r.workout_date>=strengthSince&&r.workout_date<=date&&/^(WORK|DROP)$/.test(String(r.type||'WORK').toUpperCase())).sort((a,b)=>String(b.workout_date).localeCompare(String(a.workout_date))).slice(0,120);
   const days = week?.days?.map(row => ({
@@ -222,13 +273,17 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
   // hard training there is said and another day offered (běh 10, S21).
   const longOrRace = x => /long|dlouh|závod|race/i.test(String(x?.name || "")) || Number(x?.durationHours) >= (/run/i.test(String(x?.type || "")) ? 1.5 : 2.5);
   days?.forEach((d, i) => { const next = days[i + 1]?.planned?.find(longOrRace); if (next) d.beforeLong = next.name || (/run/i.test(String(next.type || "")) ? "long run" : "long ride"); });
-  const cyclingCoachV2 = buildCyclingCoachV2({
+  const engine = buildCyclingCoachV2({
     date, daily, week, fitness, health, gym,
     preferences:{cadence:"85–95 rpm",...preferences},
     availabilityMinutes, goal:goal||focusGoal(focus), manualReadiness, capabilities,athleteState,sport:sport||engineSport(focus),focus,profile,checkin,upcomingTest,recoveryTime
   });
+  // One place for every caller (chat, week planning, coach evaluation): a
+  // strength athlete's day is a gym day unless a ride, run or swim is asked or planned.
+  const gymFirst = gymDay(focus, { appContext, message, daily });
+  const cyclingCoachV2 = gymFirst ? strengthDay(engine, { availabilityMinutes, dayMinutes, week, date }) : engine;
   return {
-    date,...(now?{now}:{}),weekday:weekdayOf(date),
+    date,...(now?{now}:{}),weekday:weekdayOf(date),...(gymFirst?{gymDay:true}:{}),
     athleteState:cyclingCoachV2.athleteState.status,statusNote:cyclingCoachV2.athleteState.note,
     statusUntil:athleteState?.statusUntil||null,
     rhythm:preferences.weeklyActivities == null ? null : {weeklyActivities:preferences.weeklyActivities},
@@ -306,7 +361,9 @@ export const isSimpleMessage=message=>{const m=String(message||'').trim();return
 // ("Mám dnes jít na intervaly?", "Kolik mám dát na bench?", "Jak se mi
 // povedla jízda?") stays with the main model.
 const QUICK_ASK=/^(?:kolik|jak(?:ý|á|é|ou|ých|ým|ými)?(?=\s|\?|$)|kdy|kde|co\s+(?:mám|mam|je|bylo|jsem|dělám)|je\s|jsou\s|byl[aoy]?\s|ukaž|ukaz|vypiš|vypis|připomeň|pripomen|how\s+(?:much|many)|what(?:'s|\s+(?:is|was|are|were))?(?=\s|\?|$)|when|where|show|list|remind)/iu;
-const NEEDS_THOUGHT=/pro[cč]|doporu[cč]|navrh|uprav|zm[eě][nň]|vym[eě][nň]|napl[aá]n|p[řr]iprav|vygener|vytvo[řr]|p[řr]idej|p[řr]esu[nň]|zru[sš]|analyz|porovn|vyhodno|zhodno|hodnot|povedl|rozbor|zlep[sš]|vhodn|lep[sš][ií]|l[ií]p(?!\p{L})|l[eé]pe(?!\p{L})|norm[aá]ln|v\s+po[řr][aá]dku|bezpe[čc]n|rad[ua]\b|pomoz|pomoc|stoj[ií]\s+za|strategi|bude\s+st[aá][čt]|m[eě]l\s+bych|by\s*ch|co\s+bys|(?:m[aá]m|m[uů][zž]u|mohu|sm[ií]m)[^?]*?(?:j[ií]t|jet|b[eě][zž]et|cvi[cč]it|vynech|zkr[aá]t|d[aá]t|zvol|pokra[cč]ov|odpo[cč]in(?:out)?\b|tr[eé]nov|za[řr]adit|p[řr]idat|d[eě]lat|ud[eě]lat|j[ií]st|sn[ií]st|pauz)/iu;
+// Spreading sessions over days ("jak mám tenhle týden rozložit…", coach evaluation run 38, S32) is planning;
+// only the verbs: "rozložená zátěž", "rozdělení", "rozvrh" or "my 5k split" stay quick questions (run 39).
+const NEEDS_THOUGHT=/pro[cč]|doporu[cč]|(?<!\p{L})(?:rozlo[zž]|rozd[eě]l)(?:it|[ií]m|[ií][sš]|[ií]|me|te)?(?!\p{L})|(?<!\p{L})rozvrh(?:nout|ni|nu|ne[sš]|ne|n[eě]te|neme)(?!\p{L})|\b(?:split|spread|distribute)\s+(?:my|the|this|it|them|sessions|workouts|training|runs|rides|swims)\b|navrh|uprav|zm[eě][nň]|vym[eě][nň]|napl[aá]n|p[řr]iprav|vygener|vytvo[řr]|p[řr]idej|p[řr]esu[nň]|zru[sš]|analyz|porovn|vyhodno|zhodno|hodnot|povedl|rozbor|zlep[sš]|vhodn|lep[sš][ií]|l[ií]p(?!\p{L})|l[eé]pe(?!\p{L})|norm[aá]ln|v\s+po[řr][aá]dku|bezpe[čc]n|rad[ua]\b|pomoz|pomoc|stoj[ií]\s+za|strategi|bude\s+st[aá][čt]|m[eě]l\s+bych|by\s*ch|co\s+bys|(?:m[aá]m|m[uů][zž]u|mohu|sm[ií]m)[^?]*?(?:j[ií]t|jet|b[eě][zž]et|cvi[cč]it|vynech|zkr[aá]t|d[aá]t|zvol|pokra[cč]ov|odpo[cč]in(?:out)?\b|tr[eé]nov|za[řr]adit|p[řr]idat|d[eě]lat|ud[eě]lat|j[ií]st|sn[ií]st|pauz)/iu;
 const NEEDS_THOUGHT_EN=/(?<!\p{L})(?:why|recommend|suggest|propose|adjust|chang(?:e|es|ing)|swap|plan\s+(?:me|a|an|my|the|next|this|for|out)|prepare|generate|create|add(?:s|ed|ing)?(?!\p{L})|move(?:s|d)?(?!\p{L})|cancel|analy|compare|evaluat|assess|rat(?:e|ing)\s+(?:my|the|this|that|it|how)|improve|suitable|better|advice|advise|help|worth|strategy|(?:should|can|could|would|shall|may|might)\s+(?:i|we)(?!\p{L}))/iu;
 // "Jak mám jezdit zbytek týdne?" is advice on the plan, not a lookup: the full
 // model and the library (Revize doporučování tréninků 2026-10-16, nález 16).
@@ -349,7 +406,9 @@ const timeoutFor=maxOutputTokens=>maxOutputTokens>TASK_LIMITS.planning?TASK_TIME
 
 // What the athlete reads when OpenAI refuses a request ("AI 429: …").
 export function aiFailureText(status){return 'AI '+status+': '+(status===429?L('AI je teď přetížená. Zkus to za chvíli.', 'The AI is busy right now. Try again in a moment.'):status>=500?L('AI služba není dostupná.', 'The AI service isn\'t available.'):L('AI požadavek se nepodařil.', 'The AI request failed.'));}
-export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null, reasoningEffort = 'low',onText=null,feature=null,timeoutMs=null }) {
+// slotWaitMs: how long to wait for a free AI slot (claimAiSlot); a text that can
+// fall back to its own words waits briefly instead of the full 90 s.
+export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null, reasoningEffort = 'low',onText=null,feature=null,timeoutMs=null,slotWaitMs=undefined }) {
   await assertAIAccess(env);
   // All users together under the day's emergency brake (ai-total.js).
   await assertAiTotal(env);
@@ -358,7 +417,7 @@ export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5
   // the slot held: the calls running beside this one count at their reservation.
   await assertAiAllowance(env,feature);
   const reserveUsd=estimateAiCostUsd(model||env.OPENAI_MODEL||'gpt-6-sol',{instructions,input,maxOutputTokens,tools});
-  const release=await claimAiSlot(env,{feature,reserveUsd});
+  const release=await claimAiSlot(env,{feature,reserveUsd,...(slotWaitMs!=null?{waitMs:slotWaitMs}:{})});
   try{
     await assertAiAllowance(env,feature,{exceptId:release.id});
     return await openAIResponse(env,{instructions,input,maxOutputTokens,tools,format,model,reasoningEffort,onText,feature,timeoutMs,slotId:release.id});

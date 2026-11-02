@@ -9,6 +9,7 @@ import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { saveAppTransaction, handleAppStoreNotification, appAccountToken } from "../src/app-store.js";
 import { packMessages, packMessagesLeft, packPurchases } from "../src/coach-packs.js";
+import { aiGroup } from "../src/ai-limit-share.js";
 import { coachAllowance, checkCoachMessage, claimCoachMessage, recordCoachMessage, releaseCoachMessage } from "../src/coach-allowance.js";
 
 const fixture = name => readFileSync(new URL(`./fixtures/app-store/${name}`, import.meta.url), "utf8");
@@ -126,4 +127,15 @@ test("the low warning comes only when the week's and bought ones together run lo
   assert.deepEqual([(await coachAllowance(env, TODAY)).left, (await coachAllowance(env, TODAY)).near], [7, true]);
   for (let i = 0; i < 7; i++) await send(env, 300 + i);
   await assert.rejects(claimCoachMessage(env, null, { today: TODAY, now }), error => error.status === 429 && error.coachAllowance.exhausted === true);
+});
+
+test("an account with bought messages left counts with the paying ones for AI limits", async () => {
+  const { raw, user } = setup();
+  raw.sqlite.exec("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, created_at TEXT)");
+  raw.sqlite.exec("INSERT INTO users(id, created_at) VALUES (1, '2026-01-01 00:00:00'), (2, '2026-01-01 00:00:00')");
+  assert.equal(await aiGroup(user(1)), "free");
+  await buy(user(1), pack());
+  assert.equal(await aiGroup(user(1)), "paid");
+  await buy(user(2), pack({ transactionId: "3000000002", originalTransactionId: "3000000002", environment: "Sandbox" }));
+  assert.equal(await aiGroup(user(2)), "free", "a Sandbox pack on the live server does not");
 });

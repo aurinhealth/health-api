@@ -14,10 +14,64 @@ struct FoodSnapshot: Decodable, Equatable {
     var mealSlots: [String]? = nil
     /// Up to three nutrients pinned under the macros (Pro; Živiny → Upravit).
     var nutrients: [NutrientItem]? = nil
+    /// Nastavení → Výživa → Strava as it applies today (src/diet.js).
+    var diet: Diet? = nil
+    /// The day's target in its parts: base, workouts done and planned
+    /// (targetParts in src/app-food.js). None with an own calorie goal.
+    var targetParts: TargetParts? = nil
+
+    struct TargetParts: Decodable, Equatable {
+        let base: Double
+        let workouts: Double
+        let planned: Double
+        /// The share of a workout's burn the target takes (0.7).
+        var coverage: Double? = nil
+        var lines: Lines? = nil
+        var items: [Item]? = nil
+
+        /// The base line by line; they add up to `base`.
+        struct Lines: Decodable, Equatable {
+            let restingBurn: Double
+            let movement: Double
+            /// The weight goal (negative when losing weight).
+            let goal: Double
+            /// What the safe minimum holds the base up by.
+            let minimum: Double
+            /// What the watch measured above a usual day.
+            let moreActive: Double
+        }
+
+        /// One workout: "done" or "planned", what it burns and what it adds.
+        struct Item: Decodable, Equatable {
+            let kind: String
+            var type: String? = nil
+            var name: String? = nil
+            var minutes: Double? = nil
+            let kcal: Double
+            let counted: Double
+        }
+    }
 
     struct Amount: Decodable, Equatable {
         let eaten: Double?
         let target: Double?
+        /// Keto and less carbs: the carbs are a limit, not a target to eat up.
+        var limit: Bool? = nil
+        /// Keto: net carbs (fibre is not counted).
+        var net: Bool? = nil
+    }
+
+    /// What the athlete eats and how the day's calories are split.
+    struct Diet: Decodable, Equatable {
+        /// everything, pescatarian, vegetarian, vegan
+        var eating: String? = nil
+        /// balanced, high_protein, lower_carb, keto, custom
+        var style: String? = nil
+        var proteinPerKg: Double? = nil
+        var proteinAuto: Bool? = nil
+        var proteinPerMealG: Double? = nil
+        var carbsLimitG: Double? = nil
+        var netCarbs: Bool? = nil
     }
 
     struct Macros: Decodable, Equatable {
@@ -250,6 +304,11 @@ struct FoodProduct: Codable, Equatable, Identifiable {
 
     var canSuggest: Bool { (isShared && source != "ai-estimate" && source != "ai") || origin == "edited" }
 
+    /// "Navrhnout pro všechny": a food the catalogue doesn't know, read from its
+    /// label (values per 100 g). It stays the user's own; the owner may add it
+    /// for everyone (src/food-suggestions.js, kind new_food).
+    var canSuggestNew: Bool { source == "package_label" && !perPortion && origin == nil }
+
     func kcal(for amount: Double) -> Double? {
         guard let c = calories_100g else { return nil }
         return perPortion ? c * amount : c * amount / 100
@@ -378,4 +437,12 @@ struct NutrientDetail: Decodable, Equatable {
     var sources: [Source] = []
     var richTitle: String? = nil
     var rich: [Rich] = []
+    /// The Target row: Aurin's value, the user's own one, the upper limit
+    /// (EFSA) and why Auto is higher ("vegetarian", "vegan").
+    var autoTarget: Double? = nil
+    var custom: Bool? = nil
+    var upperLimit: Double? = nil
+    var autoBasis: String? = nil
+    /// Aurin Pro: only then can the target be one's own.
+    var pro: Bool? = nil
 }

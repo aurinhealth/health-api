@@ -64,3 +64,8 @@ test('history counts the user\'s own day: just after midnight in Prague today\'s
  const h=await trainingHistory(a,1,{now});
  assert.equal(h.recentCount,3);assert.equal(h.mainSport,'cycling');
 });
+test('onboarding never sets the diet\'s Pro fields (custom macros, own protein, own targets); Settings checks Pro',async()=>{
+ const {a}=db(),env={DB:a,USER_ID:1};
+ const r=await completeOnboarding(env,{profile:{dietEating:'vegan',dietStyle:'custom',proteinPerKg:2.6,nutrientTargets:{fe:30}}});
+ assert.deepEqual([r.profile.dietEating,r.profile.dietStyle,r.profile.proteinPerKg,r.profile.nutrientTargets],['vegan','balanced',null,{}]);
+});

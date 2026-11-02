@@ -109,7 +109,7 @@ final class SyncSettingsStore {
         SyncDestination(id: "google", connected: false, prefs: SyncPrefs(pushPlanned: false, pushActivities: false, pullActivities: true, health: .all),
                         supports: SyncSupports(pushPlanned: false, pushActivities: true, pullActivities: true, health: true), healthTypes: ["weight", "nutrition"]),
         SyncDestination(id: "intervals", connected: true, prefs: SyncPrefs(pushPlanned: true, pushActivities: true, pullActivities: true, health: .all),
-                        supports: all, healthTypes: ["weight", "bodyFat", "restingHR", "hrv", "sleep", "steps", "spO2", "respiration", "vo2max"])
+                        supports: all, healthTypes: ["weight", "bodyFat", "restingHR", "hrv", "sleep", "steps", "spO2", "respiration", "vo2max", "workouts"])
     ]
 }
 

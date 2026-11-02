@@ -17,6 +17,8 @@ struct AssistantResult: Decodable, Equatable {
     var draft: FoodDraft? = nil
     /// What the coach remembered, forgot or rewrote with this answer.
     var memoryChanges: MemoryChanges? = nil
+    /// What the coach would forget or rewrite: nothing changes until "Zapomenout" or "Přepsat".
+    var memoryProposals: MemoryChanges? = nil
     /// This week's messages to the coach after this answer (src/coach-allowance.js).
     var coachAllowance: CoachAllowance? = nil
 
@@ -36,6 +38,11 @@ struct AssistantResult: Decodable, Equatable {
                 + (forgotten ?? []).map { CoachMemoryChip(kind: .forgotten, text: $0) }
                 + (updated ?? []).map { CoachMemoryChip(kind: .updated, text: $0.to, from: $0.from) }
         }
+
+        /// The same changes, each waiting under the answer for the athlete to confirm it.
+        var proposals: [CoachMemoryChip] {
+            chips.map { var chip = $0; chip.proposed = true; return chip }
+        }
     }
 }
 
@@ -47,6 +54,9 @@ struct CoachMemoryChip: Identifiable, Equatable {
     let text: String
     var from: String? = nil
     var undone = false
+    /// Proposed by the coach: "Zapomenout" or "Přepsat" changes the memory, "Nechat" keeps it.
+    var proposed = false
+    var kept = false
     /// A memory from the card's quick changes says what it remembered.
     var showsText = false
 }
@@ -140,6 +150,8 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     /// workout: Kratší, Delší, Lehčí, Těžší and the days for Jiný den
     /// (src/coach-quick-change.js); `quickChange` is the last one made.
     var quick: Quick? = nil
+    /// A swim card in open water (src/coach-actions.js): by time outside, with the safety line.
+    var openWater: Bool? = nil
     var quickChange: String? = nil
 
     struct Quick: Decodable, Equatable {
@@ -178,9 +190,9 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         let name = eventSnapshot?.name.map { L10n.f("„%@“", $0) } ?? L10n.tr("trénink")
         switch type {
         case "move": return L10n.f("Přesunout %@ na %@", name, day)
-        case "rest": return L10n.f("Volno místo %@ (%@)", name, day)
+        case "rest": return L10n.f("Odstranit %@ (%@)", name, day)
         case "workout":
-            let sportName = L10n.tr(["ride": "jízda", "run": "běh", "gym": "posilovna"][sport ?? ""] ?? "trénink")
+            let sportName = L10n.tr(["ride": "jízda", "run": "běh", "swim": "plavání", "gym": "posilovna"][sport ?? ""] ?? "trénink")
             return L10n.f("Naplánovat: %@", workoutName ?? sportName) + (minutes.map { " · " + Fmt.duration(Int($0)) } ?? "") + " · " + day
         case "plan": return L10n.f("Tréninkový plán: %@", planName ?? "")
         case "gym_swap": return L10n.f("V posilovně vyměnit %@ za %@", fromExercise ?? L10n.tr("cvik"), toExercise ?? L10n.tr("jiný"))

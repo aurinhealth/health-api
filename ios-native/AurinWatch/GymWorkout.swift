@@ -10,13 +10,19 @@ final class GymWorkout: NSObject, ObservableObject {
     static let shared = GymWorkout()
 
     @Published private(set) var start: Date?
-    @Published private(set) var heartRate: Double?
-    @Published private(set) var calories: Double = 0
-    @Published private(set) var averageHeartRate: Double?
-    @Published private(set) var maxHeartRate: Double?
+    // The readings come every few seconds: the screen is told only when a
+    // number it shows changes (collected), not at each reading.
+    private(set) var heartRate: Double?
+    private(set) var calories: Double = 0
+    private(set) var averageHeartRate: Double?
+    private(set) var maxHeartRate: Double?
     /// Paused (mockup 7): since when, and how long the pauses before took.
     @Published private(set) var pausedAt: Date?
     @Published private(set) var pausedTotal: TimeInterval = 0
+    /// Apple Health didn't let the workout run (no permission for workouts or
+    /// the heart rate, or the session failed): no heart rate will come, and the
+    /// set screen says what to allow instead of a bare dash.
+    @Published private(set) var noHealth = false
 
     private let store = HKHealthStore()
     private var session: HKWorkoutSession?
@@ -26,6 +32,10 @@ final class GymWorkout: NSObject, ObservableObject {
     private var lastLive = Date.distantPast
 
     func begin() async {
+        // The iPhone hears of the start at once (Training mode opens there),
+        // not only with the first heart rate.
+        // Only with a HealthKit workout here: the iPhone then leaves Apple Health to it.
+        defer { if session != nil { announceUntilHeard() } }
         guard session == nil, HKHealthStore.isHealthDataAvailable() else {
             if start == nil { start = Date() }
             return
@@ -33,10 +43,14 @@ final class GymWorkout: NSObject, ObservableObject {
         let share: Set<HKSampleType> = [HKObjectType.workoutType(), HKQuantityType(.activeEnergyBurned), HKQuantityType(.heartRate)]
         let read: Set<HKObjectType> = [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned), HKObjectType.workoutType()]
         try? await store.requestAuthorization(toShare: share, read: read)
+        // Without leave to save workouts the session doesn't run: said on the set screen.
+        // (A denied heart rate can't be told apart from none yet; the session still tries.)
+        noHealth = store.authorizationStatus(for: HKObjectType.workoutType()) != .sharingAuthorized
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .traditionalStrengthTraining
         configuration.locationType = .indoor
         guard let session = try? HKWorkoutSession(healthStore: store, configuration: configuration) else {
+            noHealth = true
             start = Date()
             return
         }
@@ -116,6 +130,7 @@ final class GymWorkout: NSObject, ObservableObject {
     }
 
     private func reset() {
+        objectWillChange.send()
         session = nil
         builder = nil
         start = nil
@@ -125,6 +140,15 @@ final class GymWorkout: NSObject, ObservableObject {
         maxHeartRate = nil
         pausedAt = nil
         pausedTotal = 0
+        noHealth = false
+        announced = false
+        if queued, WCSession.isSupported() {
+            // A start still waiting for the iPhone would open a workout that is over.
+            for transfer in WCSession.default.outstandingUserInfoTransfers where transfer.userInfo[WatchGym.liveKey] != nil {
+                transfer.cancel()
+            }
+        }
+        queued = false
     }
 
     /// What the builder measured so far, read off its statistics.
@@ -136,28 +160,86 @@ final class GymWorkout: NSObject, ObservableObject {
     }
 
     fileprivate func collected(_ r: Reading) {
-        if let value = r.heartRate { heartRate = value }
-        if let value = r.average { averageHeartRate = value }
-        if let value = r.max { maxHeartRate = value }
-        if let value = r.calories { calories = value }
+        let heart = r.heartRate ?? heartRate, average = r.average ?? averageHeartRate
+        let top = r.max ?? maxHeartRate, kcal = r.calories ?? calories
+        // Whole numbers, rounded as W.number shows them.
+        let shown = { (values: [Double?]) in values.map { $0.map { Int($0.rounded(.toNearestOrEven)) } } }
+        if shown([heart, average, top, kcal]) != shown([heartRate, averageHeartRate, maxHeartRate, calories]) {
+            objectWillChange.send()
+        }
+        heartRate = heart
+        averageHeartRate = average
+        maxHeartRate = top
+        calories = kcal
         sendLive()
     }
 
     /// Every few seconds to Training mode on the iPhone, which then shows these
     /// and leaves Apple Health to this workout (WatchGym.Live).
-    private func sendLive() {
-        guard let start, Date().timeIntervalSince(lastLive) >= 5, WCSession.isSupported() else { return }
+    /// Until the iPhone has heard of this workout once, each try goes out (no
+    /// 5 s wait), and when it is out of reach the start is queued for it: an
+    /// iPhone that hears nothing starts a workout of its own after a while,
+    /// and the system then ends this one, with its heart rate.
+    private func sendLive(force: Bool = false) {
+        guard let start, force || !announced || Date().timeIntervalSince(lastLive) >= 5, WCSession.isSupported() else { return }
         let session = WCSession.default
-        guard session.activationState == .activated, session.isReachable,
+        guard session.activationState == .activated,
               let data = WatchGym.Live(start: start, heartRate: heartRate, calories: calories).encoded() else { return }
+        guard session.isReachable else {
+            if !queued {
+                queued = true
+                session.transferUserInfo([WatchGym.liveKey: data])
+            }
+            return
+        }
         lastLive = Date()
-        session.sendMessage([WatchGym.liveKey: data], replyHandler: { _ in }, errorHandler: { _ in })
+        session.sendMessage([WatchGym.liveKey: data], replyHandler: { _ in
+            Task { @MainActor in GymWorkout.shared.announced = true }
+        }, errorHandler: { _ in })
+    }
+
+    /// The iPhone heard of this workout (a reply to a live message).
+    private var announced = false
+    /// The start went to the iPhone's queue while it was out of reach.
+    private var queued = false
+
+    /// The watch's connection came up (often after the workout started on a
+    /// cold launch) or a few seconds passed: the start goes to the iPhone now.
+    func announce() {
+        guard session != nil, !announced else { return }
+        sendLive(force: true)
+    }
+
+    /// Tries every 2 s for the first 30 s, until the iPhone answers.
+    private func announceUntilHeard() {
+        Task { @MainActor [weak self] in
+            for _ in 0..<15 {
+                guard let self, self.session != nil, !self.announced else { return }
+                self.announce()
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+    }
+
+    /// Finished here (the summary's Finish): Training mode on the iPhone ends
+    /// too, queued for when the iPhone is out of reach.
+    func endOnPhone() {
+        guard WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated else { return }
+        let message: [String: Any] = [WatchGym.watchEndKey: true]
+        if session.isReachable {
+            session.sendMessage(message, replyHandler: { _ in }, errorHandler: { _ in WCSession.default.transferUserInfo(message) })
+        } else {
+            session.transferUserInfo(message)
+        }
     }
 
     /// The system ended the session (another workout started, an error): the
     /// gym goes on with its clock, the next workout starts from here.
-    fileprivate func lost(_ ended: ObjectIdentifier) {
+    fileprivate func lost(_ ended: ObjectIdentifier, failed: Bool = false) {
         guard let session, ObjectIdentifier(session) == ended else { return }
+        if failed { noHealth = true }
         let builder = self.builder
         self.session = nil
         self.builder = nil
@@ -179,7 +261,7 @@ extension GymWorkout: HKWorkoutSessionDelegate {
 
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
         let id = ObjectIdentifier(workoutSession)
-        Task { @MainActor in GymWorkout.shared.lost(id) }
+        Task { @MainActor in GymWorkout.shared.lost(id, failed: true) }
     }
 }
 

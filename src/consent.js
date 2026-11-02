@@ -34,17 +34,20 @@ export async function consentStatus(env) {
     version: CONSENT_VERSION,
     health,
     ai,
+    // Health data paused in Settings (health-pause.js): the app shows the paused
+    // screen instead of asking as for a new account.
+    paused: !health && rows.some(r => r.kind === 'health' && r.withdrawn_at),
     needed: env.USER_IS_OWNER !== true && health?.version !== CONSENT_VERSION,
     aiAllowed: Boolean(ai) || (env.USER_IS_OWNER === true && !aiWithdrawn)
   };
 }
 
 // {health:true} and/or {ai:true|false}. Health consent can only be given here;
-// it is taken back by deleting the account (Settings → Account).
+// it is taken back by pausing health data (health-pause.js) or deleting the account.
 export async function saveConsent(env, input = {}) {
   const userId = env.USER_ID ?? env.DB?.userId;
   if (!userId) throw new Error(L('Přihlas se do aplikace.', 'Sign in to the app.'));
-  if (input.health !== undefined && input.health !== true) throw new Error(L('Bez souhlasu se zpracováním údajů o zdraví aplikace fungovat nemůže. Souhlas odvoláš smazáním účtu.', 'The app can\'t work without consent to process health data. To withdraw it, delete your account.'));
+  if (input.health !== undefined && input.health !== true) throw new Error(L('Bez souhlasu se zpracováním údajů o zdraví aplikace fungovat nemůže. Souhlas odvoláš v Nastavení → Soukromí a data.', 'The app can\'t work without consent to process health data. To withdraw it, go to Settings → Privacy and data.'));
   if (input.ai !== undefined && typeof input.ai !== 'boolean') throw new Error(L('Neplatná volba souhlasu s AI.', 'Invalid AI consent choice.'));
   if (input.health === undefined && input.ai === undefined) throw new Error(L('Chybí volba souhlasu.', 'No consent choice given.'));
   if (input.ai !== undefined && !input.health && !(await consentStatus(env)).health) throw new Error(L('Nejdřív je potřeba souhlas se zpracováním údajů o zdraví.', 'Consent to process health data comes first.'));

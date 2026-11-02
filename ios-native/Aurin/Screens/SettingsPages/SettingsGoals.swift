@@ -40,14 +40,12 @@ struct GoalsSettingsView: View {
                 SettingsPicker(title: "Běžný den", selection: $activity, options: activityOptions)
                 SettingsDivider()
                 SettingsPicker(title: "Sport týdně", selection: $sportHours, options: sportHourOptions)
-                if let kcal = model.today?.nutrition.target {
-                    SettingsDivider()
-                    SettingsRow(title: "Kalorie", value: Fmt.int(kcal) + " kcal", chevron: false)
-                }
-                if let water = model.today?.nutrition.water.target {
-                    SettingsDivider()
-                    SettingsRow(title: "Pití", value: Units.volumeText(water), chevron: false)
-                }
+                SettingsDivider()
+                Button { editing = .kcal } label: { SettingsRow(title: "Kalorie", value: kcalValue) }
+                    .buttonStyle(.plain)
+                SettingsDivider()
+                Button { editing = .water } label: { SettingsRow(title: "Pití", value: waterValue) }
+                    .buttonStyle(.plain)
             }
             SettingsGroup(title: "Trénink") {
                 SettingsPicker(title: "Hlavní sport", selection: $mainSport, options: sportOptions)
@@ -82,8 +80,39 @@ struct GoalsSettingsView: View {
             }
         }
         .toolbar { SaveButton(enabled: changes != original, saving: store.saving) { Task { await save() } } }
+        .sheet(item: $editing) { goal in
+            switch goal {
+            case .kcal: CalorieGoalSheet(store: store, auto: model.today?.nutrition.autoTarget ?? model.today?.nutrition.target)
+            case .water: WaterGoalSheet(store: store, water: model.today?.nutrition.water, today: model.today?.date ?? "")
+            }
+        }
+        // A changed goal shows on Today and in the rows above.
+        .onChange(of: store.profile) { old, new in
+            if ["kcalGoal", "waterMode", "waterGoal", "waterStart", "waterStep"].contains(where: { old[$0] != new[$0] }) {
+                Task { await model.reloadToday() }
+            }
+        }
         // Once: coming back from Spánek keeps what was typed here.
         .onAppear { if !filled { fill(); filled = true } }
+    }
+
+    enum OwnGoal: String, Identifiable { case kcal, water; var id: String { rawValue } }
+    @State private var editing: OwnGoal?
+
+    /// "Auto · 2 450 kcal" or "Vlastní · 2 200 kcal".
+    private var kcalValue: String {
+        let own = store.profile["kcalGoal"]?.number
+        let value = own ?? model.today?.nutrition.target
+        return L10n.tr(own != nil ? "Vlastní" : "Auto") + (value.map { " · " + Fmt.int($0) + " kcal" } ?? "")
+    }
+
+    /// "Auto · 3,2 l", "Vlastní · 2,0 l" or "Postupně · 2,25 l".
+    private var waterValue: String {
+        let water = model.today?.nutrition.water
+        let mode = store.profile["waterMode"]?.string ?? ""
+        let word = mode == "custom" ? "Vlastní" : mode == "build" ? "Postupně" : "Auto"
+        let ml = mode == "build" ? water?.build?.baseMl ?? store.profile["waterStart"]?.number : mode == "custom" ? store.profile["waterGoal"]?.number : water?.target
+        return L10n.tr(word) + (ml.map { " · " + waterText($0) } ?? "")
     }
 
     /// "7:30 h", or "automaticky" while the goal follows age and the day.
@@ -138,9 +167,12 @@ struct GoalsSettingsView: View {
         history["weeklyHours"]?.number.flatMap { $0 >= 1 ? $0 : nil }
     }
 
-    /// "automaticky · běh": the sport of the recent activities.
+    /// "automaticky · běh": the sport of the main race or goal, else of the last year of training.
     private var sportOptions: [(String, String)] {
-        let recent = (history["recentCount"]?.number ?? 0) > 0 ? store.suggestions["mainSport"]?.string ?? history["mainSport"]?.string : nil
+        let trained = (history["recentCount"]?.number ?? 0) > 0 || (history["yearCount"]?.number ?? 0) > 0
+        // Plain "automaticky" while there is neither a goal's sport nor training to go by.
+        let auto = store.suggestions["autoMainSport"]?.string.flatMap { $0 == "general" && !trained ? nil : $0 }
+        let recent = auto ?? (trained ? store.suggestions["mainSport"]?.string ?? history["mainSport"]?.string : nil)
         let label = recent.flatMap { id in Self.sports.first { $0.0 == id }?.1 }
         return [("auto", label.map { L10n.tr("automaticky") + " · " + L10n.tr($0) } ?? L10n.tr("automaticky"))] + Self.sports
     }
