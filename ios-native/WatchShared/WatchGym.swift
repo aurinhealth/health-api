@@ -16,6 +16,9 @@ struct WatchGym: Codable, Equatable, Sendable {
     /// The day's sheet itself (GymDay.values), so the watch can go on without
     /// the iPhone; nil from an older iPhone.
     var sheet: [[JSONValue]]? = nil
+    /// The parts already done on the iPhone today (GymDayPart raw values: the
+    /// warm-up ticked off, the cardio stopped); nil from an older iPhone.
+    var partsDone: [String]? = nil
 
     struct Exercise: Codable, Equatable, Sendable {
         /// As in the sheet; changes name it.
@@ -116,10 +119,26 @@ struct WatchGym: Codable, Equatable, Sendable {
         static func decode(_ data: Data) -> Sheet? { try? JSONDecoder().decode(Sheet.self, from: data) }
     }
 
+    /// A part done on the watch (the warm-up, stretching or cardio), so Training
+    /// mode on the iPhone shows it done: the moves ticked off (their ids as the
+    /// iPhone keeps them, StretchingCard) and the cardio's length and end.
+    struct PartDone: Codable, Equatable, Sendable {
+        var date: String
+        var part: String
+        var ticks: [String]
+        var seconds: Int? = nil
+        var end: Date? = nil
+        /// The cardio's item id ("cardio-start", "cardio-end").
+        var cardio: String? = nil
+
+        func encoded() -> Data? { try? JSONEncoder().encode(self) }
+        static func decode(_ data: Data) -> PartDone? { try? JSONDecoder().decode(PartDone.self, from: data) }
+    }
+
     /// A change of the plan from the watch (the menu under ≡); the iPhone
     /// writes it into the sheet and answers with the new plan.
     struct Change: Codable, Equatable, Sendable {
-        enum Kind: String, Codable, Sendable { case addSet, removeSet, removeExercise, swap, addExercise, move }
+        enum Kind: String, Codable, Sendable { case addSet, removeSet, removeExercise, swap, addExercise, move, parts }
         var date: String
         var kind: Kind
         /// The exercise's place in `exercises`.
@@ -128,6 +147,8 @@ struct WatchGym: Codable, Equatable, Sendable {
         var option: Option?
         /// move: the place it goes to, as List.onMove reports it.
         var to: Int?
+        /// parts: the day's parts as changed on the watch (on or off, the order).
+        var parts: GymDayParts? = nil
     }
 
     /// An exercise offered for a swap or to add, with what it would start from.
@@ -169,6 +190,8 @@ struct WatchGym: Codable, Equatable, Sendable {
     static let restKey = "gymRest"
     /// Watch → iPhone: the sheet the watch saved alone (Sheet), with a reply once taken.
     static let sheetKey = "gymSheet"
+    /// Watch → iPhone: a part done on the watch (PartDone), queued when out of reach.
+    static let partDoneKey = "gymPartDone"
 
     struct Live: Codable, Equatable, Sendable {
         var start: Date
