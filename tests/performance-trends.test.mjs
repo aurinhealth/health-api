@@ -82,3 +82,13 @@ test("recent intervals keep the work laps of the last two weeks", async () => {
   assert.equal(out[1].efforts[0].pace, "4:10/km");
   assert.equal(await recentIntervals([], "2026-10-14", detail), null);
 });
+
+test("only the coach's chat and the AI week plan wait for the performance reads from Intervals.icu", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const fresh = source.slice(source.indexOf("async function loadCoachInputsFresh"), source.indexOf("\n}\n", source.indexOf("async function loadCoachInputsFresh")));
+  assert.doesNotMatch(fresh, /coachPerformance/);
+  assert.equal((source.match(/loadCoachInputs\([^)]*\{performance:true\}\)/g) || []).length, 2);
+  const weekAi = source.slice(source.indexOf("if(url.pathname==='/app/api/coach/week-ai'"));
+  assert.match(weekAi.slice(0, 3000), /loadCoachInputs\(env,ctx,internalAuth,today,\{performance:true\}\)/);
+});

@@ -150,6 +150,8 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     /// workout: Kratší, Delší, Lehčí, Těžší and the days for Jiný den
     /// (src/coach-quick-change.js); `quickChange` is the last one made.
     var quick: Quick? = nil
+    /// A swim card in open water (src/coach-actions.js): by time outside, with the safety line.
+    var openWater: Bool? = nil
     var quickChange: String? = nil
 
     struct Quick: Decodable, Equatable {
@@ -190,7 +192,7 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         case "move": return L10n.f("Přesunout %@ na %@", name, day)
         case "rest": return L10n.f("Odstranit %@ (%@)", name, day)
         case "workout":
-            let sportName = L10n.tr(["ride": "jízda", "run": "běh", "gym": "posilovna"][sport ?? ""] ?? "trénink")
+            let sportName = L10n.tr(["ride": "jízda", "run": "běh", "swim": "plavání", "gym": "posilovna"][sport ?? ""] ?? "trénink")
             return L10n.f("Naplánovat: %@", workoutName ?? sportName) + (minutes.map { " · " + Fmt.duration(Int($0)) } ?? "") + " · " + day
         case "plan": return L10n.f("Tréninkový plán: %@", planName ?? "")
         case "gym_swap": return L10n.f("V posilovně vyměnit %@ za %@", fromExercise ?? L10n.tr("cvik"), toExercise ?? L10n.tr("jiný"))

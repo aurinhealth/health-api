@@ -7,9 +7,9 @@ import { parseConfig, shardPlan, runtimeConfig, provisionDatabases, ACTIVATION_S
 const config = () => parseConfig(readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8'));
 test('generated bindings preserve assets and never reuse the central database ID', () => {
   const c = config(), prod = shardPlan(c);
-  assert.equal(prod.shards.length, 20);
+  assert.equal(prod.shards.length, 30);
   const generated = runtimeConfig(c,'',prod,prod.shards.map((s,i) => ({name:s.name,uuid:'shard-'+i,jurisdiction:'eu'})));
-  assert.equal(generated.d1_databases.length, 21);
+  assert.equal(generated.d1_databases.length, 31);
   assert.deepEqual(generated.assets,c.assets);
   assert.throws(() => runtimeConfig(c,'',prod,prod.shards.map(s => ({name:s.name,uuid:prod.core.database_id,jurisdiction:'eu'}))), /Invalid/);
   assert.throws(() => shardPlan(c,'other'), /Unsupported/);
@@ -42,8 +42,8 @@ test('provisioning reuses existing EU databases and creates only missing names',
     return Response.json({success:true,result,result_info:{total_pages:1}});
   };
   const databases = await provisionDatabases({accountId:'a'.repeat(32),token:'test-token',plan,fetchImpl});
-  assert.equal(databases.length,20);
-  assert.equal(calls.filter(c=>c.method==='POST').length,19);
+  assert.equal(databases.length,30);
+  assert.equal(calls.filter(c=>c.method==='POST').length,29);
   assert.equal(JSON.parse(calls.find(c=>c.method==='POST').body).jurisdiction,'eu');
   await assert.rejects(provisionDatabases({accountId:'a'.repeat(32),token:'test-token',plan,fetchImpl:async()=>Response.json({success:false},{status:403})}),/HTTP 403/);
 });

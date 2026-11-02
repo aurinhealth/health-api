@@ -83,10 +83,13 @@ final class WatchBridge: NSObject {
             defer { loadingHealth = false }
             let api = AppModel.live?.api ?? APIClient()
             guard api.hasSession else { return }
-            // The week for the Training page, when the app has not loaded it yet.
+            // The week for the Training page (when the app has not loaded it
+            // yet), the wake times and health: at once, not one after another.
+            async let profileLoad = api.profile()
+            async let healthLoad = api.health()
             if training == nil, let week = try? await api.training() { training = week }
-            if let loaded = try? await api.profile() { profile = loaded }
-            guard let loaded = try? await api.health() else { send(); return }
+            if let loaded = try? await profileLoad { profile = loaded }
+            guard let loaded = try? await healthLoad else { send(); return }
             update(loaded)
         }
     }
@@ -193,6 +196,14 @@ final class WatchBridge: NSObject {
     var watchState: (paired: Bool, installed: Bool, reachable: Bool) {
         guard let session, session.activationState == .activated else { return (false, false, false) }
         return (session.isPaired, session.isWatchAppInstalled, session.isReachable)
+    }
+
+    /// What the watch app last said about itself (AurinWatch/WatchReport.swift),
+    /// for "Nahlásit problém"; nil before a watch app that sends it.
+    var watchDiagnostics: WatchDiagnostics? {
+        guard let session, session.activationState == .activated,
+              let data = session.receivedApplicationContext[WatchDiagnostics.contextKey] as? Data else { return nil }
+        return WatchDiagnostics.decode(data)
     }
 
     /// The saved Today when the app was woken only for the watch.
@@ -305,6 +316,7 @@ extension WatchBridge: WCSessionDelegate {
         let change = (message[WatchGym.changeKey] as? Data).flatMap(WatchGym.Change.decode)
         let options = (message[WatchGym.optionsKey] as? Data).flatMap(WatchGym.OptionsRequest.decode)
         let sheet = (message[WatchGym.sheetKey] as? Data).flatMap(WatchGym.Sheet.decode)
+        let partDone = (message[WatchGym.partDoneKey] as? Data).flatMap(WatchGym.PartDone.decode)
         let water = message[WatchSnapshot.waterKey] as? Int
         let drinkKind = message[WatchSnapshot.drinkKindKey] as? String ?? "water"
         let alarmChange = (message[WatchSnapshot.AlarmChange.key] as? Data).flatMap(WatchSnapshot.AlarmChange.decode)
@@ -369,9 +381,14 @@ extension WatchBridge: WCSessionDelegate {
                 replyHandler(["ok": true])
                 return
             }
-            if let sheet {
-                await applyGym(sheet: sheet)
+            if let partDone {
+                applyGym(partDone)
                 replyHandler(["ok": true])
+                return
+            }
+            if let sheet {
+                let gym = await applyGym(sheet: sheet)
+                replyHandler(gym.encoded().map { [WatchGym.replyKey: $0, "ok": true] } ?? ["ok": true])
                 return
             }
             if let change {
@@ -411,13 +428,19 @@ extension WatchBridge: WCSessionDelegate {
         }
     }
 
-    /// Today, the week and health from the server, when the app has none for today.
+    /// Today, the week and health from the server, when the app has none for
+    /// today: all three at once (each takes seconds), not one after another,
+    /// so the answer reaches the watch before its message gives up.
     private func loadTodayForWatch() async {
         let api = AppModel.live?.api ?? APIClient()
-        guard api.hasSession, let loaded = try? await api.today() else { return }
+        guard api.hasSession else { return }
+        async let todayLoad = api.today()
+        async let weekLoad = api.training()
+        async let healthLoad = api.health()
+        guard let loaded = try? await todayLoad else { return }
         today = loaded
-        if let week = try? await api.training() { training = week }
-        if let fresh = try? await api.health(), fresh.date == loaded.date {
+        if let week = try? await weekLoad { training = week }
+        if let fresh = try? await healthLoad, fresh.date == loaded.date {
             health = fresh
             healthLoaded = Date()
         }
@@ -457,7 +480,9 @@ extension WatchBridge: WCSessionDelegate {
         let gymEnded = userInfo[WatchGym.watchEndKey] as? Bool == true
         // The watch's gym workout, started while this iPhone was out of reach.
         let live = (userInfo[WatchGym.liveKey] as? Data).flatMap(WatchGym.Live.decode)
+        let partDone = (userInfo[WatchGym.partDoneKey] as? Data).flatMap(WatchGym.PartDone.decode)
         Task { @MainActor in
+            if let partDone { applyGym(partDone) }
             if let live, !gymEnded { LiveWorkout.shared.watch(live) }
             if let done { await applyGym(done) }
             if gymEnded { LiveWorkout.shared.watchEnded() }

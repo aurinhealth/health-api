@@ -11,10 +11,15 @@ recipe fields appear in search results. Personal foods/recipes, amounts eaten,
 dates, preferences and diary notes stay in the assigned personal database.
 The private cookbook remains on the central database.
 
+Search shows only foods the owner approved (`label_verified`): corrections,
+fixed reports and new foods users suggested for everyone (`src/food-suggestions.js`).
+Users' own foods are never copied to the catalogue. `food_contributions` lists
+the unchecked copies older versions made; those rows stay but are not shown, and
+saving or deleting the food again removes its copy.
+
 Barcode lookup uses an expression index on the stored product barcode. Name
 search retains the existing normalized Czech/fuzzy matching behavior. Catalogue
-IDs are content-derived; saving an already present shared ID does not rewrite
-the catalogue row just to advance its timestamp. Large multilingual datasets
+IDs are content-derived; approving the same values again updates that row. Large multilingual datasets
 and FTS/search infrastructure can be added separately after validating sources.
 
 ## Deployment

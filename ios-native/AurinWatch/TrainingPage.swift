@@ -48,11 +48,16 @@ struct TrainingPage: View {
         }
         // The sample day's screenshot (-bottom): the week and Continue whole.
         .defaultScrollAnchor(WatchDemo.flag("-bottom") ? .bottom : .top)
-        .onAppear { store.load() }
+        // Each turn of the crown to this page shows it again: the plan only
+        // when there is none for today or it is older than 10 minutes (the
+        // iPhone sends every change it saves on its own).
+        .onAppear { store.loadIfStale() }
         .task(id: day) {
             if day == today { preview = nil } else { preview = await store.preview(date: day) }
         }
-        .fullScreenCover(isPresented: $running) { GymSessionView() }
+        .fullScreenCover(isPresented: $running, onDismiss: { WatchReport.visit("training") }) {
+            GymSessionView().onAppear { WatchReport.visit("gym") }
+        }
         .containerBackground(W.glow(W.Glow.strain), for: .tabView)
     }
 

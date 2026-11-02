@@ -14,9 +14,15 @@ import { linkPlanned } from "./planned-links.js";
 import { saveTrainingProfile, getTrainingProfile } from "./training-profile.js";
 import { estimateThresholdPace, estimateFtp, FTP_METHODS, PACE_METHODS, PACE_ZONE_MODELS, POWER_ZONE_MODELS, HR_ZONE_MODELS } from "./training-zones.js";
 import { writeIntervalsZones } from "./intervals-zones.js";
+import { writeWahooZones, writeWahooZonesLater } from "./wahoo.js";
 import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
 import { thresholdCheckState, TEST_IDS, manualTestResult } from "./threshold-check-state.js";
+
+// What sets the power zones in watts: only a change of these (or "save
+// again" after reconnecting, wahooAgain) writes them to Wahoo, two requests of
+// Wahoo's app-wide limit; a saved pace or heart rate does not.
+const powerKey=p=>JSON.stringify([p?.ftp||null,p?.powerZoneModel||null,p?.powerZoneModel==='custom'?p?.powerZoneBounds||null:null]);
 
 // Planned workouts moved or deleted, pairs, session energy and feedback.
 export async function handleTrainingEditsApi(request,env,ctx,url,session,internalAuth){
@@ -101,7 +107,7 @@ export async function handleThresholdApi(request,env,ctx,url,session,internalAut
       if(request.method==='GET')return Response.json(await thresholdCheckState(env,ctx,today),{headers:{'Cache-Control':'no-store'}});
       if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
       if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-      const body=await request.json().catch(()=>({})),sport=body.sport==='run'?'run':'ride',checks=await getChecks(env.DB),check=checks[sport]||null;
+      const body=await request.json().catch(()=>({})),sport=['run','swim'].includes(body.sport)?body.sport:'ride',checks=await getChecks(env.DB),check=checks[sport]||null;
       const estimate=body.estimate&&Number(body.estimate.value)>0?{value:Number(body.estimate.value),basis:String(body.estimate.basis||'').slice(0,30)}:check?.estimate||null;
       if(body.action==='schedule'){
         const testId=TEST_IDS[sport].includes(body.testId)?body.testId:TEST_IDS[sport][0];
@@ -121,11 +127,14 @@ export async function handleThresholdApi(request,env,ctx,url,session,internalAut
         // The confirmed values go to the training profile (and to Intervals.icu, as from Nastavení → Zóny).
         const v=body.values||{},num=x=>Number.isFinite(Number(x))&&Number(x)>0?Math.round(Number(x)):null,patch={};
         if(sport==='ride'){if(num(v.ftp)&&num(v.ftp)<=1000)patch.ftp=num(v.ftp);if(num(v.lthr)&&num(v.lthr)<=230)patch.lthr=num(v.lthr);}
+        else if(sport==='swim'){if(num(v.swimCss)>=60&&num(v.swimCss)<=240)patch.swimCss=num(v.swimCss);}
         else {if(num(v.runThresholdPace)>=150&&num(v.runThresholdPace)<=600)patch.runThresholdPace=num(v.runThresholdPace);if(num(v.runLthr)&&num(v.runLthr)<=230)patch.runLthr=num(v.runLthr);}
         if(!Object.keys(patch).length)throw new Error(L('Chybí hodnota k uložení.','There is no value to save.'));
         await saveTrainingProfile(env.DB,{...await getTrainingProfile(env.DB),...patch});
         const t=await athleteThresholds(env);
         const intervals=env.INTERVALS_API_KEY?await writeIntervalsZones(env,t).catch(error=>({status:'error',message:error.message})):null;
+        // A new FTP goes to Wahoo too, in the background, unless "Write to Wahoo" is off (wahoo.js writeWahooZones).
+        if(patch.ftp&&env.WAHOO_TOKEN&&body.writeWahoo!==false)writeWahooZonesLater(env,ctx,t);
         await saveCheck(env.DB,sport,{status:'applied',testId:check?.testId||null,testDate:check?.testDate||null,estimate,result:check?.result||null});
         return Response.json({status:'ok',saved:patch,intervals},{headers:{'Cache-Control':'no-store'}});
       }
@@ -137,12 +146,16 @@ export async function handleThresholdApi(request,env,ctx,url,session,internalAut
     try{
       if(request.method==='POST'&&url.pathname.endsWith('/estimate')){const body=await request.json().catch(()=>({}));return Response.json({status:'ok',...(body.kind==='pace'?estimateThresholdPace(String(body.method||''),body.inputs||{}):estimateFtp(String(body.method||''),body.inputs||{}))});}
       let body=null;
-      if(request.method==='POST'){body=await request.json().catch(()=>({}));await saveTrainingProfile(env.DB,body);}
+      let powerBefore=null;
+      if(request.method==='POST'){body=await request.json().catch(()=>({}));if(env.WAHOO_TOKEN&&body.writeWahoo!==false&&body.wahooAgain!==true)powerBefore=powerKey(await getTrainingProfile(env.DB));await saveTrainingProfile(env.DB,body);}
       else if(request.method!=='GET')return Response.json({message:'Method not allowed'},{status:405});
       const t=await athleteThresholds(env);
       // Saved zones go to Intervals.icu too, unless the form says not to.
       const intervals=body&&body.writeIntervals!==false?await writeIntervalsZones(env,t):null;
-      return Response.json({status:'ok',intervals,intervalsConnected:Boolean(env.INTERVALS_API_KEY),profile:t.profile,resolved:{ftp:t.ftp,ftpSource:t.source,indoorFtp:t.indoorFtp,intervalsFtp:t.intervalsFtp,latestRideFtp:t.latestRideFtp,lthr:t.lthr,maxHr:t.maxHr,restHr:t.restHr,runThresholdPace:t.runThresholdPace,runPaceSource:t.runPaceSource,intervalsRunPace:t.intervalsRunPace,runLthr:t.runLthr,swimCss:t.swimCss,swimCssSource:t.swimCssSource,poolLength:t.poolLength,poolLengthSource:t.poolLengthSource,openWater:t.openWater},swimZones:t.swimZones,powerZones:t.powerZones,hrZones:t.hrZones,paceZones:t.paceZones,runHrZones:t.runHrZones,
+      // Changed FTP or power zones go to Wahoo too, unless the form's "Write to Wahoo" is off (wahoo.js writeWahooZones).
+      const toWahoo=Boolean(body&&env.WAHOO_TOKEN&&body.writeWahoo!==false&&(body.wahooAgain===true||powerKey(t.profile)!==powerBefore));
+      const wahoo=toWahoo?await writeWahooZones(env,t).catch(error=>({status:'error',message:error.message})):null;
+      return Response.json({status:'ok',intervals,intervalsConnected:Boolean(env.INTERVALS_API_KEY),wahoo,wahooConnected:Boolean(env.WAHOO_TOKEN),profile:t.profile,resolved:{ftp:t.ftp,ftpSource:t.source,indoorFtp:t.indoorFtp,intervalsFtp:t.intervalsFtp,latestRideFtp:t.latestRideFtp,lthr:t.lthr,maxHr:t.maxHr,restHr:t.restHr,runThresholdPace:t.runThresholdPace,runPaceSource:t.runPaceSource,intervalsRunPace:t.intervalsRunPace,runLthr:t.runLthr,swimCss:t.swimCss,swimCssSource:t.swimCssSource,poolLength:t.poolLength,poolLengthSource:t.poolLengthSource,openWater:t.openWater},swimZones:t.swimZones,powerZones:t.powerZones,hrZones:t.hrZones,paceZones:t.paceZones,runHrZones:t.runHrZones,
         ftpMethods:Object.entries(FTP_METHODS).map(([id,m])=>({id,label:m.label,inputs:m.inputs.map(([key,label])=>({key,label}))})),
         paceMethods:Object.entries(PACE_METHODS).map(([id,m])=>({id,label:m.label,inputs:m.inputs.map(([key,label])=>({key,label}))})),
         paceZoneModels:Object.entries(PACE_ZONE_MODELS).map(([id,m])=>({id,label:m.label,bounds:m.bounds})),

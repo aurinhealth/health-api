@@ -116,13 +116,11 @@ targets:
         # iOS 26 AlarmKit: the alarm from Nastavení → Spánek rings like the Clock's.
         NSAlarmKitUsageDescription: Aurin tě vzbudí v čase budíku, podle kterého počítá večerku.
         NSFaceIDUsageDescription: Aurin se zeptá na Face ID, než smaže tvůj účet.
-        # aurin://open/sleep: the widgets open a screen of the app. loadwise is the
-        # scheme from before 2026-11: calendar events written by older versions link to it.
+        # aurin://open/sleep: the widgets open a screen of the app.
         CFBundleURLTypes:
           - CFBundleURLName: health.aurin.app
             CFBundleURLSchemes:
               - aurin
-              - loadwise
         # Posilovna naživo and Režim tréninku on the lock screen and in the Dynamic Island (App/GymLiveActivity.swift).
         NSSupportsLiveActivities: true
         # Syncing without the app being opened (App/BackgroundRefresh.swift):

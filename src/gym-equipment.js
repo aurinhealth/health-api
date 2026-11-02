@@ -471,7 +471,7 @@ export const STATION_SECTIONS = [
   { id: "free_weights", label: "Volné váhy", en: "Free weights" },
   { id: "benches", label: "Lavice a stojany", en: "Benches and racks" },
   { id: "cables", label: "Kladky", en: "Cables" },
-  { id: "upper_machines", label: "Stroje na horní polovinu", en: "Upper-body machines" },
+  { id: "upper_machines", label: "Stroje – horní část těla", en: "Upper-body machines" },
   { id: "leg_machines", label: "Stroje na nohy", en: "Leg machines" },
   { id: "core", label: "Břicho a trup", en: "Core" },
   { id: "accessories", label: "Drobné vybavení", en: "Small gear" },

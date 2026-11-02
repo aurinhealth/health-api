@@ -5,6 +5,7 @@ import {createD1} from './helpers/d1.mjs';
 import {scopedDb} from '../src/tenancy.js';
 import {foodIntake} from '../src/food-portions.js';
 import {savePersonalFood,searchFoodCatalog,searchPersonalFoods,listPersonalFoods} from '../src/personal-foods.js';
+import {saveSharedFood} from '../src/shared-foods.js';
 import {foodLookupLanguages,lookupFoodWithAI} from '../src/food-ai.js';
 import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck,energyGap,settleEnergyCheck} from '../src/activity-energy-check.js';
 import {withTimeZone} from '../src/user-time.js';
@@ -23,13 +24,16 @@ test('canonical 100g values and saved pack, portion and piece survive and work f
   const own=(await listPersonalFoods(owner))[0];assert.equal(own.preferred_unit,'pack');assert.equal(own.piece_size,'150 g');
   assert.equal(foodIntake(own,1,'pack').calories,360);assert.equal(foodIntake(own,1,'portion').calories,120);assert.equal(foodIntake(own,.5,'piece').calories,60);
   assert.equal((await searchPersonalFoods(other,'řecký jogurt')).length,0);
+  assert.equal((await searchFoodCatalog(other,'recky jogurt')).length,0);
+  // In the common catalogue only after the owner approves it, with label values only.
+  await saveSharedFood(owner,{...food,note:'private',date:'2026-10-01',user_id:1});
   const shared=(await searchFoodCatalog(other,'recky jogurt'))[0];assert.equal(shared.calories_100g,80);assert.equal(shared.source,'shared');assert.equal(shared.preferred_unit,null);assert.equal(shared.note,undefined);assert.equal(shared.user_id,undefined);assert.equal(shared.date,undefined);
 });
-test('own unit has priority; sharing a correction does not overwrite another label variant',async()=>{
-  const {owner,other,raw}=db();await savePersonalFood(owner,food);await savePersonalFood(other,{...food,calories_100g:90,preferred_unit:'piece'});
+test('own unit has priority; an approved label variant does not overwrite another',async()=>{
+  const {owner,raw}=db();await savePersonalFood(owner,food);await saveSharedFood(owner,food);await saveSharedFood(owner,{...food,calories_100g:90,preferred_unit:'piece'});
   assert.equal((await searchFoodCatalog(owner,'Řecký jogurt'))[0].preferred_unit,'pack');
   assert.equal(raw.sqlite.prepare('SELECT COUNT(*) n FROM shared_foods').get().n,2);
-  await savePersonalFood(owner,food);assert.equal(raw.sqlite.prepare('SELECT COUNT(*) n FROM shared_foods').get().n,2);
+  await saveSharedFood(owner,food);assert.equal(raw.sqlite.prepare('SELECT COUNT(*) n FROM shared_foods').get().n,2);
 });
 test('an unknown portion weight never turns into fabricated 100g values in the common catalogue',async()=>{
   const {owner,other}=db();await savePersonalFood(owner,{...food,nutrition_basis:'portion',quantity:'',serving_size:'',piece_size:'',calories_100g:600});
@@ -114,7 +118,8 @@ test('edits during an in-flight create wait for its result and then patch once',
 
 test('a known portion weight is converted into canonical values and keeps its serving size',async()=>{
   const {owner,other}=db();await savePersonalFood(owner,{...food,nutrition_basis:'portion',serving_size:'150 g',calories_100g:120,protein_100g:15,carbs_100g:9,fat_100g:3});
-  const saved=(await searchFoodCatalog(other,food.name))[0];assert.equal(saved.nutrition_basis,'g');assert.equal(saved.calories_100g,80);assert.equal(foodIntake(saved,1,'portion').calories,120);
+  assert.equal((await searchFoodCatalog(other,food.name)).length,0);
+  const saved=(await searchPersonalFoods(owner,food.name))[0];assert.equal(saved.nutrition_basis,'g');assert.equal(saved.calories_100g,80);assert.equal(foodIntake(saved,1,'portion').calories,120);
 });
 
 test('moving an exported meal into the future removes its old Google record, then restoration creates a new one',async()=>{

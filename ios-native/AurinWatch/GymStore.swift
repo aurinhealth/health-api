@@ -14,6 +14,7 @@ final class GymStore: ObservableObject {
     private static let savedKey = "watchGym"
     private static let aloneKey = "watchGymAlone"
     private static let unsentKey = "watchGymUnsent"
+    private static let earlierKey = "watchGymEarlier"
 
     @Published private(set) var gym: WatchGym?
     @Published private(set) var loading = false
@@ -36,11 +37,35 @@ final class GymStore: ObservableObject {
             return
         }
         let defaults = UserDefaults.standard
-        if let data = defaults.data(forKey: Self.savedKey), let saved = WatchGym.decode(data),
-           saved.date == WatchStore.localDate(WatchDemo.now) {
-            gym = saved
-            alone = defaults.bool(forKey: Self.aloneKey)
-            unsent = defaults.bool(forKey: Self.unsentKey)
+        if let data = defaults.data(forKey: Self.savedKey), let saved = WatchGym.decode(data) {
+            if saved.date == WatchStore.localDate(Date()) {
+                gym = saved
+                alone = defaults.bool(forKey: Self.aloneKey)
+                unsent = defaults.bool(forKey: Self.unsentKey)
+            } else if defaults.bool(forKey: Self.aloneKey), defaults.bool(forKey: Self.unsentKey) {
+                // Written alone on an earlier day and never saved (no internet
+                // since): kept until the server has it, not dropped with the day.
+                Self.keepEarlier(saved)
+            }
+        }
+    }
+
+    /// A day the watch wrote alone that has not reached the server yet.
+    private static func keepEarlier(_ gym: WatchGym) {
+        guard gym.sheet != nil, let data = gym.encoded() else { return }
+        UserDefaults.standard.set(data, forKey: earlierKey)
+    }
+
+    /// The earlier day's sheet to the server; kept for the next try when offline.
+    private func uploadEarlier() {
+        guard let data = UserDefaults.standard.data(forKey: Self.earlierKey) else { return }
+        guard let earlier = WatchGym.decode(data), let values = earlier.sheet else {
+            UserDefaults.standard.removeObject(forKey: Self.earlierKey)
+            return
+        }
+        Task { @MainActor in
+            guard await WatchAPI.saveGym(GymDay(date: earlier.date, values: values, cancelled: nil), date: earlier.date) else { return }
+            if UserDefaults.standard.data(forKey: Self.earlierKey) == data { UserDefaults.standard.removeObject(forKey: Self.earlierKey) }
         }
     }
 
@@ -82,6 +107,16 @@ final class GymStore: ObservableObject {
         }, errorHandler: { _ in
             Task { @MainActor in await GymStore.shared.fromServer(date) }
         })
+    }
+
+    /// When a plan for the day last came (from the iPhone or the server).
+    private var loadedAt: Date?
+
+    /// The Training page: loads only without today's plan or after 10 minutes.
+    func loadIfStale() {
+        guard !loading else { return }
+        if let gym, gym.date == day, let loadedAt, Date().timeIntervalSince(loadedAt) < 10 * 60 { return }
+        load()
     }
 
     /// The day's sheet from the server with the watch's own sign-in.
@@ -153,11 +188,15 @@ final class GymStore: ObservableObject {
             }
             fresh.sheet = sheet?.values
         } else {
-            // Another day: whatever the watch wrote alone belonged to the one before.
+            // Another day: whatever the watch wrote alone belonged to the one
+            // before; not saved yet, it goes to the server on its own.
+            if alone, unsent, let gym { Self.keepEarlier(gym); uploadEarlier() }
             alone = false
             unsent = false
+            partsFinished = []
         }
         gym = fresh
+        loadedAt = Date()
         save()
     }
 
@@ -244,12 +283,15 @@ final class GymStore: ObservableObject {
     /// What the watch wrote alone goes on its way: to the server when it has
     /// not yet, to the iPhone when it is in reach (its connection came up).
     func sync() {
-        sync()
+        upload()
+        handBack()
     }
 
     /// The newest sheet to the server, one save at a time; tried again with
     /// the next set, the next load, and the end of the workout.
     private func upload() {
+        // An earlier day the watch wrote alone and has not saved yet goes first.
+        uploadEarlier()
         guard alone, unsent, !uploading else { return }
         uploading = true
         Task { @MainActor in
@@ -266,13 +308,16 @@ final class GymStore: ObservableObject {
     private func handBack() {
         guard alone, let session = phone, session.isReachable, let gym, let values = gym.sheet,
               let data = WatchGym.Sheet(date: gym.date, values: values).encoded() else { return }
-        session.sendMessage([WatchGym.sheetKey: data], replyHandler: { _ in
+        session.sendMessage([WatchGym.sheetKey: data], replyHandler: { reply in
+            // The iPhone's plan: the watch's sheet with sets ticked on the iPhone meanwhile.
+            let plan = reply[WatchGym.replyKey] as? Data
             Task { @MainActor in
                 let store = GymStore.shared
                 // Changed here meanwhile: the next hand-back takes that.
                 guard store.gym?.sheet == values else { store.handBack(); return }
                 store.alone = false
                 store.unsent = false
+                if let plan { store.received(plan) }
             }
         }, errorHandler: { _ in })
     }
@@ -290,9 +335,9 @@ final class GymStore: ObservableObject {
     /// A change from the menu (a set or an exercise added, removed or
     /// swapped): the iPhone writes it into the sheet and answers with the new
     /// plan; out of its reach the watch changes the sheet itself.
-    func change(_ kind: WatchGym.Change.Kind, exercise: Int, option: WatchGym.Option? = nil, to: Int? = nil) {
+    func change(_ kind: WatchGym.Change.Kind, exercise: Int, option: WatchGym.Option? = nil, to: Int? = nil, parts: GymDayParts? = nil) {
         guard let gym else { return }
-        let change = WatchGym.Change(date: gym.date, kind: kind, exercise: exercise, option: option, to: to)
+        let change = WatchGym.Change(date: gym.date, kind: kind, exercise: exercise, option: option, to: to, parts: parts)
         guard phoneWrites, let session = phone, let data = change.encoded() else {
             changeHere(change)
             return
@@ -322,6 +367,7 @@ final class GymStore: ObservableObject {
         var sheet = GymDay(date: old.date, values: values, cancelled: nil)
         sheet.apply(change)
         var fresh = WatchGym(sheet, date: old.date, restSets: WatchStore.shared.settings.restSets, restExercises: old.restExercises)
+        fresh.partsDone = old.partsDone
         for e in fresh.exercises.indices {
             for l in fresh.exercises[e].lifts.indices where !fresh.exercises[e].lifts[l].done {
                 let lift = fresh.exercises[e].lifts[l]
@@ -338,14 +384,91 @@ final class GymStore: ObservableObject {
         goAlone()
     }
 
+    // MARK: - The parts around the exercises (warm-up, cardio, stretching)
+
+    private static let partsKey = "watchGymParts"
+
+    /// The parts finished here today (done or skipped), "date|warmup,cardioStart".
+    @Published private(set) var partsFinished: [String] = {
+        let saved = UserDefaults.standard.string(forKey: "watchGymParts") ?? ""
+        let pieces = saved.split(separator: "|", maxSplits: 1).map(String.init)
+        guard pieces.count == 2, pieces[0] == WatchStore.localDate(Date()) else { return [] }
+        return pieces[1].split(separator: ",").map(String.init)
+    }()
+
+    /// The day's sheet, for its parts (nil from an older iPhone).
+    var sheetDay: GymDay? {
+        guard let gym, let values = gym.sheet else { return nil }
+        return GymDay(date: gym.date, values: values, cancelled: nil)
+    }
+
+    /// The day's parts as last chosen on the iPhone or here.
+    var dayParts: GymDayParts? { sheetDay.map { GymDayParts.current($0) } }
+
+    /// Done or skipped here, or done in Training mode on the iPhone.
+    func partFinished(_ part: GymDayPart) -> Bool {
+        partsFinished.contains(part.rawValue) || gym?.partsDone?.contains(part.rawValue) == true
+    }
+
+    /// A part finished here; what was done of it goes to Training mode on the
+    /// iPhone (the moves ticked off, the cardio's length and end), queued when out of reach.
+    func finishPart(_ part: GymDayPart, ticks: [String], cardio: (seconds: Int, end: Date)? = nil) {
+        guard let gym else { return }
+        if !partsFinished.contains(part.rawValue) { partsFinished.append(part.rawValue) }
+        UserDefaults.standard.set(gym.date + "|" + partsFinished.joined(separator: ","), forKey: Self.partsKey)
+        guard !ticks.isEmpty || cardio != nil, let session = phone,
+              let data = WatchGym.PartDone(date: gym.date, part: part.rawValue, ticks: ticks, seconds: cardio?.seconds,
+                                           end: cardio?.end, cardio: part.isCardio ? part.cardioId : nil).encoded() else { return }
+        let message = [WatchGym.partDoneKey: data]
+        if session.isReachable {
+            session.sendMessage(message, replyHandler: { _ in }, errorHandler: { _ in WCSession.default.transferUserInfo(message) })
+        } else {
+            session.transferUserInfo(message)
+        }
+    }
+
+    /// A part run again from the list: no longer finished here.
+    func reopenPart(_ part: GymDayPart) {
+        partsFinished.removeAll { $0 == part.rawValue }
+    }
+
+    /// The day's parts changed here (a switch, a new place): into the day's
+    /// plan, so the iPhone has them too.
+    func setParts(_ parts: GymDayParts) {
+        var parts = parts
+        parts.updated = Date()
+        // On the screen at once; the iPhone's answer (or the save here) follows.
+        if var shown = gym, let values = shown.sheet {
+            var sheet = GymDay(date: shown.date, values: values, cancelled: nil)
+            sheet.setDayParts(parts)
+            shown.sheet = sheet.values
+            gym = shown
+            save()
+        }
+        change(.parts, exercise: 0, parts: parts)
+    }
+
     /// The rest Training mode on the iPhone started, moved or skipped.
     @Published var phoneRest: WatchGym.Rest?
 
     /// The weight and reps Training mode on the iPhone is at for a set.
     @Published var phoneDraft: WatchGym.Draft?
 
-    /// The weight and reps being set here, to Training mode on the iPhone (only while in reach).
+    /// The weight and reps being set here, to Training mode on the iPhone (only
+    /// while in reach): once the crown rests for 0.3 s, not at every 0.5 kg step
+    /// (20 kg were 40 messages).
     func sendDraft(_ draft: WatchGym.Draft) {
+        draftTask?.cancel()
+        draftTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            GymStore.shared.sendDraftNow(draft)
+        }
+    }
+
+    private var draftTask: Task<Void, Never>?
+
+    private func sendDraftNow(_ draft: WatchGym.Draft) {
         guard !draft.same(phoneDraft), let session = phone, session.isReachable,
               let data = draft.encoded() else { return }
         session.sendMessage([WatchGym.draftKey: data], replyHandler: { _ in }, errorHandler: { _ in })
@@ -417,6 +540,7 @@ final class GymStore: ObservableObject {
         alone = false
         unsent = false
         UserDefaults.standard.removeObject(forKey: Self.savedKey)
+        UserDefaults.standard.removeObject(forKey: Self.earlierKey)
     }
 
     private func save() {

@@ -93,28 +93,36 @@ struct WatchRoot: View {
             }
             .tabViewStyle(.verticalPage)
             .onOpenURL(perform: open)
-            .fullScreenCover(isPresented: $gym.openedFromPhone) { GymSessionView() }
+            // The page by the crown, for the iPhone's "Nahlásit problém" (WatchReport).
+            .onChange(of: page, initial: true) { _, page in WatchReport.visit(page) }
+            .onChange(of: path.count) { _, count in if count == 0 { WatchReport.visit(page) } }
+            .fullScreenCover(isPresented: $gym.openedFromPhone, onDismiss: { WatchReport.visit(page) }) {
+                GymSessionView().onAppear { WatchReport.visit("gym") }
+            }
             // Here, not inside a page: the vertical pages are lazy, and a
             // destination declared in one was never found by the stack.
             .navigationDestination(for: WatchSnapshot.Session.self) { session in
-                RideDetail(session: session)
+                RideDetail(session: session).onAppear { WatchReport.visit("training/session") }
             }
             .navigationDestination(for: ReadinessHome.Page.self) { page in
-                if let s = store.snapshot {
-                    switch page {
-                    case .why: WhyDetail(s: s)
-                    case .sleep: SleepDetail(s: s)
-                    case .restingHR: MetricDetail(s: s, metric: .restingHR)
-                    case .hrv: MetricDetail(s: s, metric: .hrv)
-                    case .strain: StrainDetail(s: s)
-                    case .alarm: AlarmView()
-                    case .coach: CoachView()
+                Group {
+                    if let s = store.snapshot {
+                        switch page {
+                        case .why: WhyDetail(s: s)
+                        case .sleep: SleepDetail(s: s)
+                        case .restingHR: MetricDetail(s: s, metric: .restingHR)
+                        case .hrv: MetricDetail(s: s, metric: .hrv)
+                        case .strain: StrainDetail(s: s)
+                        case .alarm: AlarmView()
+                        case .coach: CoachView()
+                        }
                     }
                 }
+                .onAppear { WatchReport.visit("readiness/\(page)") }
             }
         }
         .fullScreenCover(isPresented: Binding(get: { alarm.ringing }, set: { if !$0 { alarm.stop() } })) {
-            AlarmRinging()
+            AlarmRinging().onAppear { WatchReport.visit("alarmRinging") }
         }
         .task { openDemo() }
     }

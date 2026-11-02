@@ -563,10 +563,19 @@ const watchFace = `<div class="aw-s aw-face"><div class="aw-frow">${wArc(.35, WA
 <div class="aw-day">${[['READY', '78', WA.green, .78], ['SLEEP', '7:12', WA.amber, .76, [7, 9]], ['STRAIN', '8.4', WA.amber, .53, [6, 9]]].map(([k, v, c, f, g]) => `<div><span style="color:${c}">${k}</span><b>${v}</b>${wSteps(f, c, g)}</div>`).join('')}</div>
 <div class="aw-frow aw-fbot">${wArc(.52, '#FFC274', '1380', 'KCAL')}${wArc(.56, '#83C7FF', '84', 'PROTEIN')}${wArc(.84, WA.indigo, '6:30', 'ALARM')}</div></div>`;
 
+// The warm-up on the watch (GymPartView): move by move with a countdown each, Next and Skip all, the
+// workout's time and heart rate under it; the cardio and the stretching run the same way.
+const watchWarmup = `<div class="aw-s" style="--gw:#163A2E">${wTop(wBtn('pause', WA.ink), '6:06', `<span class="aw-ib">${ic('menu')}</span>`)}
+<div class="aw-lbl" style="color:${WA.green}">WARM-UP · 2/5</div><b class="aw-pt">Arm circles</b>
+<div class="aw-rrow aw-prow"><span class="aw-rr"><svg viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="25.5" stroke="#2A2C2E" stroke-width="5"/><circle cx="28" cy="28" r="25.5" stroke="${WA.green}" stroke-width="5" stroke-linecap="round" pathLength="100" stroke-dasharray="60 100" transform="rotate(-90 28 28)"/></svg><span class="aw-n">18</span></span>
+<div class="aw-pb"><span class="aw-done">Next</span><span>Skip all</span></div></div>
+<div class="aw-two aw-tiles"><div><span class="aw-k">Time</span><b>6:10</b></div><div><span class="aw-k">Heart</span><b style="color:${WA.red}">104 <small>bpm</small></b></div></div></div>`;
+
 export const WATCH = [
   ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness, sleep, strain and HRV, as on Today, and what’s next today in one line.', watchHome],
   ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown. Leave the iPhone in your locker: the watch keeps your sets and hands them over later. Your heart rate and calories go into the same workout.', watchGym],
   ['glow-training', 'Rest, then a tap.', 'The rest counts down on the wrist and taps you when it’s time, with the next set ready.', watchRest],
+  ['glow-training', 'Warm up and cool down too.', 'Cardio, the warm-up and the stretching run on the wrist with the sets: a countdown for each move, or a stopwatch on the bike. Switch them on or off and move them before or after your exercises, and your iPhone gets the same plan.', watchWarmup],
   ['glow-health', 'Water in one tap.', 'What’s left to eat today, the macros, and +250 for a glass of water. Your iPhone gets it at once.', watchFood],
   ['glow-health', 'On your watch face.', 'Readiness, sleep and strain against today’s goal, a countdown to your workout, water, food, protein and your alarm sit around the time, so you don’t even open the app.', watchFace]];
 
@@ -1032,6 +1041,7 @@ html:not(.js) .stage1{display:none}
 .aw-rrow{display:flex;align-items:center;gap:8px;margin-top:14px}.aw-rr{position:relative;display:grid;place-items:center;flex:none;width:56px;height:56px}.aw-rr svg{position:absolute;inset:0;fill:none}.aw-rr .aw-n{font-size:20px}
 .aw-rrow>div{display:flex;flex-direction:column;min-width:0}.aw-rrow .aw-k{font-size:10px}.aw-nx{font-size:15px}.aw-live{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}.aw-live .di{width:9px;height:9px;fill:currentColor;stroke:none}
 .aw-rate{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:10px}.aw-rate span{display:grid;place-items:center;height:36px;border-radius:12px;background:rgba(255,255,255,.09);font-size:14px;font-weight:600}
+.aw-lbl{margin-top:6px;font-size:11px;font-weight:600;letter-spacing:.04em}.aw-pt{display:block;font-size:16px}.aw-prow{margin-top:8px}.aw-pb{flex:1;gap:5px}.aw-pb .aw-done{margin-top:0}.aw-pb>span:last-child{display:grid;place-items:center;height:30px;border-radius:17px;background:rgba(255,255,255,.12);font-size:14px;font-weight:600}
 .aw-btns{display:flex;gap:4px;margin-top:8px}.aw-btns span{flex:1;display:grid;place-items:center;height:32px;border-radius:16px;background:rgba(255,255,255,.12);font-size:12px;font-weight:600}
 
 .aw-ring{position:relative;display:grid;place-items:center;flex:none}.aw-ring>svg{position:absolute;inset:0;fill:none}

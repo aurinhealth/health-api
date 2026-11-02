@@ -31,22 +31,76 @@ extension WatchBridge {
     private var api: APIClient { AppModel.live?.api ?? APIClient() }
 
     func watchGym(_ day: GymDay, date: String) -> WatchGym {
+        // The day's parts as last chosen on the phone, for the watch's list.
+        var day = day
+        GymDayParts.carry(into: &day, date: date)
         let rest = Self.restSettings
-        return WatchGym(day, date: date, restSets: rest.sets, restExercises: rest.exercises)
+        var gym = WatchGym(day, date: date, restSets: rest.sets, restExercises: rest.exercises)
+        gym.partsDone = Self.partsDone(day, date: date)
+        return gym
     }
 
-    /// The day's plan, from the server when it answers, else the one saved on the phone.
-    func loadGym(date: String) async -> WatchGym? {
-        var day: GymDay?
-        if let model = AppModel.live {
-            day = try? await model.gymDay(date: date)
-        } else if api.hasSession {
-            day = try? await api.gym(date: date)
+    /// The parts of the day done here: the warm-up or stretching with every move
+    /// ticked off, the cardio stopped (Training mode, StretchingCard).
+    static func partsDone(_ day: GymDay, date: String) -> [String] {
+        let defaults = UserDefaults.standard
+        let ticks = StretchingCard.done(defaults.string(forKey: StretchingCard.doneKey) ?? "", date: date)
+        let logs = defaults.string(forKey: GymCardioLog.storageKey) ?? ""
+        let parts = GymDayParts.resolved(day, stored: defaults.string(forKey: GymDayParts.storageKey) ?? "", date: date)
+        return GymDayPart.allCases.filter { part in
+            if part.isCardio {
+                return ticks.contains(part.tickPrefix + part.cardioId) || GymCardioLog.entry(logs, date: date, id: part.cardioId) != nil
+            }
+            guard let moves = parts.moves(part, day: day), !moves.items.isEmpty else { return false }
+            return moves.items.allSatisfy { ticks.contains(part.tickPrefix + $0.id) }
+        }.map(\.rawValue)
+    }
+
+    /// A part done on the watch: its moves ticked off and the cardio's length kept,
+    /// as if done in Training mode here.
+    func applyGym(_ done: WatchGym.PartDone) {
+        let defaults = UserDefaults.standard
+        var stored = defaults.string(forKey: StretchingCard.doneKey) ?? ""
+        let already = StretchingCard.done(stored, date: done.date)
+        for tick in done.ticks where !already.contains(tick) {
+            stored = StretchingCard.toggled(stored, date: done.date, id: tick)
         }
-        day = day ?? gymDays[date] ?? GymDayCache.load(date: date)
-        guard let day else { return nil }
+        defaults.set(stored, forKey: StretchingCard.doneKey)
+        if let id = done.cardio, let seconds = done.seconds, let end = done.end {
+            let logs = defaults.string(forKey: GymCardioLog.storageKey) ?? ""
+            defaults.set(GymCardioLog.saving(GymCardioLog.Entry(seconds: seconds, end: end), date: done.date, id: id, into: logs),
+                         forKey: GymCardioLog.storageKey)
+        }
+    }
+
+    /// The day's plan. Today's copy on the phone answers at once (the server
+    /// takes seconds); the server's copy follows to the watch when it differs.
+    /// Without a copy, from the server, else nothing.
+    func loadGym(date: String) async -> WatchGym? {
+        if date == AppModel.localDate(Date()), let saved = AppModel.live?.writes.waitingGym(date: date) ?? gymDays[date] ?? GymDayCache.load(date: date) {
+            gymDays[date] = saved
+            Task { @MainActor in await refreshGym(date: date, shown: saved) }
+            return watchGym(saved, date: date)
+        }
+        guard let day = await fetchGym(date: date) ?? gymDays[date] ?? GymDayCache.load(date: date) else { return nil }
         gymDays[date] = day
         return watchGym(day, date: date)
+    }
+
+    /// The day from the server (through the app's model when it runs, which
+    /// keeps the writes still waiting and the saved copy).
+    private func fetchGym(date: String) async -> GymDay? {
+        if let model = AppModel.live { return try? await model.gymDay(date: date) }
+        guard api.hasSession else { return nil }
+        return try? await api.gym(date: date)
+    }
+
+    /// The server's copy after the watch got the phone's: sent on when it
+    /// differs and nothing changed the day here meanwhile (a set from the watch is newer).
+    private func refreshGym(date: String, shown: GymDay) async {
+        guard let fresh = await fetchGym(date: date), fresh.values != shown.values,
+              gymDays[date] == shown else { return }
+        gymSaved(fresh, date: date)
     }
 
     /// The copy the watch works on: sets arrive one by one and are applied to
@@ -87,7 +141,7 @@ extension WatchBridge {
     /// A change from the watch's menu; the new plan goes back to the watch.
     func applyGym(_ change: WatchGym.Change) async -> WatchGym? {
         guard var day = await gymDay(change.date) else { return nil }
-        guard day.exercises.indices.contains(change.exercise) else { return watchGym(day, date: change.date) }
+        guard change.kind == .parts || day.exercises.indices.contains(change.exercise) else { return watchGym(day, date: change.date) }
         day.apply(change)
         await save(day, date: change.date)
         return watchGym(day, date: change.date)
@@ -95,11 +149,15 @@ extension WatchBridge {
 
     /// The sheet the watch worked on alone while the iPhone was out of reach
     /// (it saved it to the server itself): the iPhone takes it as the day's,
-    /// Training mode shows it and the newest copy waiting to be sent is this one.
-    func applyGym(sheet: WatchGym.Sheet) async {
-        var day = await gymDay(sheet.date) ?? GymDay(date: sheet.date, values: [], cancelled: nil)
-        day.values = sheet.values
+    /// keeping sets ticked here meanwhile, Training mode shows it and the
+    /// newest copy waiting to be sent is this one. The plan goes back to the
+    /// watch, so it has the sets ticked here too.
+    func applyGym(sheet: WatchGym.Sheet) async -> WatchGym {
+        let mine = await gymDay(sheet.date)
+        var day = mine ?? GymDay(date: sheet.date, values: [], cancelled: nil)
+        day.values = GymDay.merged(sheet.values, keepingDoneFrom: mine?.values ?? [])
         await save(day, date: sheet.date)
+        return watchGym(day, date: sheet.date)
     }
 
     /// Exercises to swap in (similar to the one given) or to add (matching the

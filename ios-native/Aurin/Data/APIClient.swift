@@ -292,8 +292,10 @@ final class APIClient: @unchecked Sendable {
 
     // MARK: - Workouts
 
+    /// The day's sheet alone (lite): GymDay reads only the sheet, so the 500
+    /// rows of history and the muscles the web page draws stay on the server.
     func gym(date: String) async throws -> GymDay {
-        try await get("/app/api/gym?date=" + date)
+        try await get("/app/api/gym?lite=1&date=" + date)
     }
 
     /// Saves the whole plan (the server keeps the sheet and the history of sets).
@@ -304,6 +306,9 @@ final class APIClient: @unchecked Sendable {
     static func gymBody(_ day: GymDay, date: String) -> JSONObject {
         var body = day.saveBody
         body["date"] = .string(date)
+        // The answer is not read: without lite the server reads 500 rows of
+        // history after every set and sends them back for nothing.
+        body["lite"] = .bool(true)
         return body
     }
 
@@ -641,12 +646,9 @@ final class APIClient: @unchecked Sendable {
 
     /// A short-lived link that opens the provider's consent in the browser
     /// sheet, signed in as this user (src/native-connect.js).
-    /// https: the browser sheet waits for the server's own https return (Auth.connect).
-    func connectLink(provider: String, https: Bool) async throws -> URL {
+    func connectLink(provider: String) async throws -> URL {
         struct Response: Decodable { let url: String }
-        var body = ["provider": JSONValue.string(provider)]
-        if https { body["return"] = .string("https") }
-        let r: Response = try await send("/app/api/connect/start", method: "POST", body: body)
+        let r: Response = try await send("/app/api/connect/start", method: "POST", body: ["provider": JSONValue.string(provider)])
         guard let url = URL(string: r.url) else { throw APIError.message(L10n.tr("Odkaz na připojení je neplatný.")) }
         return url
     }
@@ -766,10 +768,12 @@ final class APIClient: @unchecked Sendable {
     }
 
     /// Every request but the sign-out: what fails lands in ErrorLog, which
-    /// "Nahlásit problém" sends with the report.
+    /// "Nahlásit problém" sends with the report, and the last few in RequestTrail.
     private func load(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        let started = Date()
         do {
             let (data, response) = try await session.data(for: request)
+            RequestTrail.add(request, status: (response as? HTTPURLResponse)?.statusCode, started: started)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                 ErrorLog.add(request, status: http.statusCode, message: json?["message"] as? String)
@@ -778,6 +782,7 @@ final class APIClient: @unchecked Sendable {
         } catch {
             // A screen that went away cancels its requests; that is no failure.
             if (error as? URLError)?.code != .cancelled, !(error is CancellationError) {
+                RequestTrail.add(request, status: nil, started: started)
                 ErrorLog.add(request, status: nil, message: error.localizedDescription)
             }
             throw Self.readable(error)

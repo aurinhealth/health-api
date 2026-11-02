@@ -5,17 +5,19 @@ import SwiftUI
 
 /// One place: every station once, by kind of equipment, each ticked on or off,
 /// with the muscles it is for and "i" for what it is and the exercises done on
-/// it. Chips show one kind or only what is ticked; search finds a station by its
-/// name, by words for it and by the exercises done on it.
+/// it. Chips show all or only what is ticked and jump to a kind; search finds a
+/// station by its name, by words for it and by the exercises done on it.
 struct GymPlaceView: View {
     @Binding var place: GymPlace
     let stations: [GymEquipment.Station]
     let sections: [GymEquipment.Section]
     @Binding var catalog: [GymCatalogExercise]
     let onDelete: () -> Void
+    /// False only in tests: the page without its scroll view, which a snapshot leaves blank.
+    var scrolls = true
 
-    /// The chip: nil all, `Self.ticked` only what is ticked, else a section.
-    @State private var section: String?
+    /// Only what is ticked ("Zaškrtnuté"), else all.
+    @State private var onlyTicked = false
     @State private var query = ""
     @State private var info: GymEquipment.Station?
     @State private var toast: Toast?
@@ -30,26 +32,11 @@ struct GymPlaceView: View {
     }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: place.name) {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .firstTextBaseline) {
-                    SectionLabel(text: place.name + " · " + EquipmentView.countLine(place))
-                    Spacer(minLength: 8)
-                    menu
-                }
-                .padding(.top, 24)
-                Text("Co tam je").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 6)
-
-                searchField.padding(.top, 16)
-                VStack(alignment: .leading, spacing: 0) {
-                    if search.isEmpty {
-                        chips.padding(.top, 12)
-                        sectionList
-                    } else {
-                        results
-                    }
-                }
-                .padding(.bottom, toast == nil ? 0 : 70)
+        Group {
+            if scrolls {
+                DetailScreen(glow: Palette.Glow.training, title: place.name) { page }
+            } else {
+                page.padding(.horizontal, 24).padding(.top, 30)
             }
         }
         .overlay(alignment: .bottom) { if let toast { toastView(toast) } }
@@ -79,6 +66,32 @@ struct GymPlaceView: View {
         }
     }
 
+    /// The header, the search, the chips and the list.
+    private var page: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                SectionLabel(text: place.name + " · " + EquipmentView.countLine(place))
+                Spacer(minLength: 8)
+                menu
+            }
+            .padding(.top, 24)
+            Text("Co tam je").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 6)
+
+            searchField.padding(.top, 16)
+            ScrollViewReader { proxy in
+                VStack(alignment: .leading, spacing: 0) {
+                    if search.isEmpty {
+                        chips(proxy).padding(.top, 12)
+                        sectionList
+                    } else {
+                        results
+                    }
+                }
+            }
+            .padding(.bottom, toast == nil ? 0 : 70)
+        }
+    }
+
     private var menu: some View {
         Menu {
             Button { newName = place.name; renaming = true } label: { Label("Přejmenovat", systemImage: "pencil") }
@@ -90,8 +103,6 @@ struct GymPlaceView: View {
         }
         .accessibilityLabel(L10n.tr("Upravit"))
     }
-
-    private static let ticked = "__ticked"
 
     /// The sections that have stations, in the server's order.
     private var shownSections: [GymEquipment.Section] {
@@ -115,22 +126,28 @@ struct GymPlaceView: View {
 
     // MARK: Chips and sections
 
-    private var chips: some View {
+    /// "Vše" and "Zaškrtnuté" choose what is listed; a kind's chip scrolls to it.
+    private func chips(_ proxy: ScrollViewProxy) -> some View {
         let on = listed.filter { place.stations.contains($0.id) }.count
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
-                chip(L10n.tr("Vše"), id: nil)
-                chip(L10n.f("Zaškrtnuté %@", String(on)), id: Self.ticked)
-                ForEach(shownSections) { s in chip(s.label, id: s.id) }
+                chip(L10n.tr("Vše"), chosen: !onlyTicked) { onlyTicked = false }
+                chip(L10n.f("Zaškrtnuté %@", String(on)), chosen: onlyTicked) { onlyTicked = true }
+                ForEach(visibleSections) { s in
+                    chip(s.label, chosen: false) {
+                        withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(Self.anchor(s.id), anchor: UnitPoint(x: 0.5, y: 0.12)) }
+                    }
+                }
             }
             .padding(.horizontal, 24)
         }
         .padding(.horizontal, -24)
     }
 
-    private func chip(_ title: String, id: String?) -> some View {
-        let chosen = section == id
-        return Button { section = id } label: {
+    private static func anchor(_ section: String) -> String { "section-" + section }
+
+    private func chip(_ title: String, chosen: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             Text(title).font(.footnote.weight(.medium))
                 .foregroundStyle(chosen ? Palette.background : Palette.secondary)
                 .padding(.horizontal, 13).frame(height: 32)
@@ -141,17 +158,28 @@ struct GymPlaceView: View {
         .accessibilityAddTraits(chosen ? .isSelected : [])
     }
 
-    /// All sections, one of them, or only what is ticked (still by section).
+    /// The stations of a kind that are listed now: all, or only the ticked ones.
+    private func rows(_ section: String) -> [GymEquipment.Station] {
+        let all = items(section)
+        return onlyTicked ? all.filter { place.stations.contains($0.id) } : all
+    }
+
+    /// The kinds with something listed now, so every chip has a section to jump to.
+    private var visibleSections: [GymEquipment.Section] {
+        shownSections.filter { !rows($0.id).isEmpty }
+    }
+
+    /// Every kind under the other, all stations or only the ticked ones.
     private var sectionList: some View {
-        let shown = shownSections.filter { section == nil || section == Self.ticked || $0.id == section }
-        return VStack(alignment: .leading, spacing: 0) {
-            if section == Self.ticked && !listed.contains(where: { place.stations.contains($0.id) }) {
+        VStack(alignment: .leading, spacing: 0) {
+            if visibleSections.isEmpty {
                 Text("Nic takového tu není.").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 20)
             }
-            ForEach(shown) { s in
+            ForEach(visibleSections) { s in
                 let all = items(s.id)
-                let rows = section == Self.ticked ? all.filter { place.stations.contains($0.id) } : all
-                if !rows.isEmpty {
+                let shown = rows(s.id)
+                Color.clear.frame(height: 0).id(Self.anchor(s.id))
+                VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .firstTextBaseline) {
                         SectionLabel(text: s.label)
                         Spacer(minLength: 8)
@@ -159,7 +187,7 @@ struct GymPlaceView: View {
                             .font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                     .padding(.horizontal, 4).padding(.top, 22).padding(.bottom, 8)
-                    card(rows.map { ($0, $0.uses) })
+                    card(shown.map { ($0, $0.uses) })
                 }
             }
         }

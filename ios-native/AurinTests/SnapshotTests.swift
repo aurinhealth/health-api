@@ -190,6 +190,22 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// The coach's swim cards: 8×100 m at CSS in the pool, and open water with the safety line.
+    func testCoachSwimCards() throws {
+        func step(_ meters: Int, _ pct: Double, css: Double = 108, rest: Bool = false) -> String {
+            let pace = css * 100 / pct
+            return rest ? #"{"durationSeconds":15,"percentLow":0,"percentHigh":0,"rest":true}"# : #"{"durationSeconds":\#(Double(meters) / 100 * pace),"percentLow":\#(pct - 2),"percentHigh":\#(pct + 2),"paceSlow":\#(pace + 2),"paceFast":\#(pace - 2),"meters":\#(meters)}"#
+        }
+        let css = "[" + [#"{"repeats":1,"steps":[\#(step(300, 86))]}"#, #"{"repeats":8,"steps":[\#(step(100, 100)),\#(step(0, 0, rest: true))]}"#, #"{"repeats":1,"steps":[\#(step(200, 86)),\#(step(100, 84))]}"#].joined(separator: ",") + "]"
+        let lake = "[" + [#"{"repeats":1,"steps":[\#(step(200, 86))]}"#, #"{"repeats":6,"steps":[\#(step(50, 96)),\#(step(50, 88))]}"#, #"{"repeats":1,"steps":[\#(step(1100, 95)),\#(step(100, 84))]}"#].joined(separator: ",") + "]"
+        let json = #"{"status":"ok","answer":"Prahové série v CSS.","chatId":13,"actions":[{"type":"workout","date":"2026-11-06","sport":"swim","minutes":45,"kind":"threshold","draftId":460,"reason":"CSS","preview":{"workout":{"id":"swim-css-8x100","name":"Práh 8×100 m","primary_system":"threshold","duration_minutes":45,"distance_meters":1900,"environment":"indoor","steps":\#(css)}}},{"type":"workout","date":"2026-11-07","sport":"swim","minutes":45,"kind":"endurance","openWater":true,"draftId":461,"reason":"Volná voda","preview":{"workout":{"id":"swim-open-water-2000","name":"Volná voda 2000 m","primary_system":"endurance","duration_minutes":45,"distance_meters":2000,"environment":"outdoor","steps":\#(lake)}}}]}"#
+        let result = try JSONDecoder().decode(AssistantResult.self, from: Data(json.utf8))
+        XCTAssertEqual(result.actions?[1].openWater, true)
+        try render("coach-swim-cards", height: 640) {
+            VStack(spacing: 14) { ForEach(result.actions ?? []) { ActionCard(action: $0, result: nil, decide: { _ in }) } }.padding(24)
+        }
+    }
+
     func testEnglishAndImperial() throws {
         L10n.setLanguage("en")
         Units.setSystem("imperial")
@@ -483,11 +499,12 @@ final class SnapshotTests: XCTestCase {
          {"id":"sled","group":"Kardio","label":"Saně","sections":[]}]
         """#.utf8))
         let sections = [GymEquipment.Section(id: "free_weights", label: "Volné váhy"), GymEquipment.Section(id: "cables", label: "Kladky"),
-                        GymEquipment.Section(id: "upper_machines", label: "Stroje na horní polovinu")]
+                        GymEquipment.Section(id: "upper_machines", label: "Stroje – horní část těla")]
         let place = GymPlace(id: "p", kind: "gym", name: "METAGYM Kutná Hora", stations: ["dumbbells", "pec_deck"], url: "", dumbbellWeights: [])
         XCTAssertEqual(GymPlaceView.folded("Motýlek"), "motylek")
         try render("gym-place", glow: Palette.Glow.training, height: 1100) {
-            GymPlaceView(place: .constant(place), stations: stations, sections: sections, catalog: .constant([curl, press]), onDelete: {})
+            GymPlaceView(place: .constant(place), stations: stations, sections: sections, catalog: .constant([curl, press]), onDelete: {}, scrolls: false)
+                .frame(maxHeight: .infinity, alignment: .top)
         }
     }
 
@@ -898,6 +915,17 @@ final class SnapshotTests: XCTestCase {
             NavigationStack { ActivePlanContent(active: run, preview: nil, week: nil, editGoal: {}).padding(.horizontal, 24) }.environment(model)
         }
         try render("plan-goal-time", height: 620) { GoalTimeSheet(km: 21.1, estimate: 6270, weeks: 10, initial: 6120) { _ in } }
+        // Multisport: a duathlon (its race's sports, run, ride, run on race day) and a plan without a race with picked sports.
+        let du = #"{"id":"du-standard","sport":"triathlon","name":"Standardní duatlon","goal":"Běh 10 km, kolo 40 km, běh 5 km","description":"","level":"intermediate","weeksCount":12,"days":[5,7],"race":{"km":55,"options":null,"kind":"du-standard","legList":[{"sport":"run","km":10},{"sport":"ride","km":40},{"sport":"run","km":5}]},"perSport":{"ride":3,"run":3},"sports":["ride","run"],"weeks":[\#(weeks)]}"#
+        let duPlan = #"{"templates":[\#(du)],"active":{"id":11,"templateId":"du-standard","name":"Standardní duatlon","startDate":"2026-10-19","raceDate":"2027-01-10","raceKm":55,"week":6,"weeksCount":12,"phaseLabel":"Budování","started":true,"paused":false,"shiftedWeeks":0,"returning":false,"sports":["ride","run"],"perSport":{"ride":3,"run":3},"race":{"km":55,"kind":"du-standard","minutes":131,"legList":[{"sport":"run","km":10,"minutes":44},{"sport":"ride","km":40,"minutes":66},{"sport":"run","km":5,"minutes":21}]},"template":\#(du)},"activeGym":null,"started":null}"#
+        let duathlon = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(duPlan.utf8)).active)
+        try render("plan-race-duathlon", glow: Palette.Glow.training, height: 700) {
+            NavigationStack { ActivePlanContent(active: duathlon, preview: nil, week: nil).padding(.horizontal, 24) }.environment(model)
+        }
+        try render("plan-start-duathlon", height: 900) { StartPlanSheet(template: duathlon.template).environment(model) }
+        let multi = try decoder.decode(TrainingPlans.Template.self, from: Data(#"{"id":"multi-base","sport":"triathlon","name":"Multisport","goal":"Kondice ve dvou nebo třech sportech","description":"","level":"intermediate","weeksCount":12,"days":[4,7],"race":null,"perSport":{"ride":2,"run":2,"swim":2},"sports":["ride","run","swim"],"choose":true,"weeks":[\#(weeks)]}"#.utf8))
+        try render("plan-start-multisport", height: 900) { StartPlanSheet(template: multi).environment(model) }
+        try render("plan-sports", height: 420) { PlanSportsSheet(initial: ["ride", "swim"]).environment(model) }
         // A gym plan with its strength tests, and its result with the lifts before and after.
         let testKeys = "\"Dřep, bench, mrtvý tah: odhad maxima\",\"3× týdně\"", workKeys = "\"3× týdně\",\"5 × 5\",\"RPE 8\""
         let strengthWeeks = (1...12).map { (i: Int) -> String in
@@ -919,6 +947,19 @@ final class SnapshotTests: XCTestCase {
         let gymResult = try decoder.decode(PlanResult.self, from: Data(gymResultJSON.utf8))
         try render("plan-result-gym", glow: Palette.Glow.today, height: 1100) {
             NavigationStack { PlanResultContent(result: gymResult).padding(.horizontal, 24) }.environment(model)
+        }
+        // An open-water race: one swim leg, the time estimated from CSS.
+        let ow = #"{"id":"swim-open-water","sport":"swim","name":"Závod ve volné vodě","goal":"Závod 1,5 až 5 km ve volné vodě","description":"","level":"intermediate","weeksCount":12,"days":[3,4],"race":{"km":3.8,"options":[1.5,3.8,5],"swim":true},"weeks":[\#(weeks)]}"#
+        let owPlan = #"{"templates":[\#(ow)],"active":{"id":12,"templateId":"swim-open-water","name":"Závod ve volné vodě","startDate":"2026-10-19","raceDate":"2027-01-10","raceKm":3.8,"week":6,"weeksCount":12,"phaseLabel":"Budování","started":true,"paused":false,"shiftedWeeks":0,"returning":false,"race":{"km":3.8,"kind":"swim","minutes":76,"estimated":false,"legList":[{"sport":"swim","meters":3800,"minutes":76}]},"template":\#(ow)},"activeGym":null,"started":null}"#
+        let openWater = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(owPlan.utf8)).active)
+        try render("plan-race-open-water", glow: Palette.Glow.training, height: 700) {
+            NavigationStack { ActivePlanContent(active: openWater, preview: nil, week: nil).padding(.horizontal, 24) }.environment(model)
+        }
+        // Faster swimming: the result with CSS before and after.
+        let swimResultJSON = #"{"id":13,"templateId":"swim-css","name":"Rychlejší plavání","sport":"swim","startDate":"2026-10-19","endDate":"2026-12-27","ftpStart":null,"ftpEnd":null,"cssStart":112,"cssEnd":105,"ctlStart":31,"ctlEnd":38,"sessionsDone":28,"sessionsPlanned":30,"minutesDone":1290,"minutesPlanned":1350,"completion":{"1":100,"2":100,"3":67,"4":100,"5":100,"6":100,"7":100,"8":100},"weeks":[\#(weeks)],"next":[]}"#
+        let swimResult = try decoder.decode(PlanResult.self, from: Data(swimResultJSON.utf8))
+        try render("plan-result-swim", glow: Palette.Glow.today, height: 1150) {
+            NavigationStack { PlanResultContent(result: swimResult).padding(.horizontal, 24) }.environment(model)
         }
     }
 

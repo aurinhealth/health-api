@@ -2,7 +2,7 @@ import { L } from './lang.js';
 import { routedUserDb } from './user-data-routing.js';
 import { inheritAiLimits } from './ai-limit-memory.js';
 import { readOnlySql, withD1Retry } from './d1-retry.js';
-import { allowClient, clientWouldPass, releaseClient } from './ip-rate-limit.js';
+import { allowClient, releaseClient } from './ip-rate-limit.js';
 import { sessionSecret } from './dashboard-auth.js';
 // Multi-user support: every personal row carries user_id, requests run with a
 // user-scoped env, and the schema upgrade that adds user_id to existing tables.
@@ -428,9 +428,14 @@ function quote(name) {
 
 // Users and invitations.
 
+// The admin is whoever OWNER_EMAIL names now. users.role is not read for it: it
+// was written once for the owner of the day and never taken away, so an earlier
+// owner would have stayed an admin after OWNER_EMAIL changed (security audit
+// 2026-11, SEC-006).
 export function publicUser(row, env) {
   if (!row) return null;
-  return { id: row.id, email: row.email, name: row.name || null, role: row.role, isAdmin: row.role === "admin", isOwner: normalizeEmail(row.email) === ownerEmail(env) };
+  const isOwner = normalizeEmail(row.email) === ownerEmail(env);
+  return { id: row.id, email: row.email, name: row.name || null, role: isOwner ? "admin" : "user", isAdmin: isOwner, isOwner };
 }
 
 // With sessionEpoch: the epoch a session cookie has to carry (dashboard-auth.js).
@@ -538,7 +543,9 @@ export async function mayCreateAccount(db, env, address, { request = null } = {}
   }
   // A new account needs a place in a user database; without one every request
   // of it would fail, so the address waits on the list (signup_waitlist) instead.
-  const room = await accountCapacity(db, env).catch(() => null);
+  // Fewer than 100 places left: the next database in reserve opens first.
+  let room = await accountCapacity(db, env).catch(() => null);
+  if (room && room.free < RESERVE_OPEN_BELOW) room = await openReserveShards(db, env, { capacity: room }).catch(() => room);
   if (room && room.free <= 0) return waitlist(db, address, "the user databases are full");
   if (!invited && request) {
     if (!(await allowClient(db, request, sessionSecret(env), "signup", Date.now(), NEW_ACCOUNT_LIMITS))) {
@@ -548,13 +555,6 @@ export async function mayCreateAccount(db, env, address, { request = null } = {}
     signupClaims.add(request);
   }
   return true;
-}
-
-// Before a sign-in code goes to an address without an account: whether this
-// network may still open one, so nobody waits for a code that cannot sign them in.
-export async function signupOpenFor(db, env, address, request) {
-  if (!request || (await emailCodeAccess(db, env, address)) !== "open") return true;
-  return clientWouldPass(db, request, sessionSecret(env), "signup", Date.now(), NEW_ACCOUNT_LIMITS);
 }
 
 // Creates the account of an address mayCreateAccount let in: "created", "exists" (made by
@@ -613,6 +613,39 @@ export async function accountCapacity(db, env) {
   return { places, used: places - free, free };
 }
 
+// The places of the databases kept in reserve (migration 0035), and how many
+// of them there are; null before the migration.
+export async function reserveCapacity(db) {
+  try {
+    const row = await db.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(max_users),0) AS places FROM user_data_shards WHERE reserve=1 AND state='ready' AND shard_key!='legacy'").first();
+    return { databases: Number(row?.n) || 0, places: Number(row?.places) || 0 };
+  } catch { return null; }
+}
+
+// With fewer than RESERVE_OPEN_BELOW free places left, the next database in
+// reserve takes accounts, one after another until there is room again or none
+// is left. Only a database the Worker is bound to opens, so a place counted
+// free is a place a new account can really get. Returns the capacity after.
+export const RESERVE_OPEN_BELOW = 100;
+// Accounts a new database takes (scripts/provision-user-shards.mjs registers it so).
+export const RESERVE_SHARD_USERS = 25;
+export async function openReserveShards(db, env, { below = RESERVE_OPEN_BELOW, capacity = null } = {}) {
+  let room = capacity || await accountCapacity(db, env).catch(() => null);
+  if (!room) return room;
+  for (let opened = 0; room.free < below && opened < 10; opened++) {
+    let next = null;
+    try {
+      const candidates = (await db.prepare("SELECT shard_key,binding_name FROM user_data_shards WHERE reserve=1 AND state='ready' AND shard_key!='legacy' ORDER BY shard_key").all()).results || [];
+      next = candidates.find(c => /^USER_DATA_\d{3}$/.test(c.binding_name || "") && env?.[c.binding_name]?.prepare && env[c.binding_name] !== env.DB);
+    } catch { return room; }
+    if (!next) break;
+    const result = await db.prepare("UPDATE user_data_shards SET accepting_new=1,reserve=0 WHERE shard_key=? AND reserve=1").bind(next.shard_key).run();
+    if (Number(result?.meta?.changes)) console.warn("User database opened from reserve", next.shard_key, "free places were", room.free);
+    room = await accountCapacity(db, env).catch(() => room);
+  }
+  return room;
+}
+
 // Signs in the owner of an e-mail address that confirmed a code: an existing
 // user, or an invited address / the owner, whose account is created now.
 export async function signInEmailUser(db, env, email, { request = null } = {}) {
@@ -662,14 +695,8 @@ export async function changeUserEmail(db, env, id, email) {
   return { email: address, previous: row.email };
 }
 
-export async function listUsersAndInvites(db) {
-  const [users, invites] = await Promise.all([
-    db.prepare("SELECT id, email, name, role, disabled, created_at, last_login_at FROM users ORDER BY id").all(),
-    db.prepare("SELECT email, created_at FROM user_invites ORDER BY created_at DESC").all()
-  ]);
-  return { users: users.results || [], invites: invites.results || [] };
-}
-
+// No route invites or blocks anyone any more (sign-up is open, OPEN_SIGNUP);
+// these two stay for the tests and for a change made by hand on the owner's request.
 export async function inviteUser(db, email, invitedBy) {
   const address = normalizeEmail(email);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) || address.length > 254) throw new Error(L("Zadej platný e-mail.", "Enter a valid e-mail."));
@@ -677,10 +704,6 @@ export async function inviteUser(db, email, invitedBy) {
   if (existing) throw new Error(L("Tento uživatel už má přístup.", "This user already has access."));
   await db.prepare("INSERT INTO user_invites(email, invited_by) VALUES(?, ?) ON CONFLICT(email) DO NOTHING").bind(address, Number(invitedBy) || null).run();
   return address;
-}
-
-export async function removeInvite(db, email) {
-  await db.prepare("DELETE FROM user_invites WHERE email=?").bind(normalizeEmail(email)).run();
 }
 
 export async function setUserDisabled(db, env, id, disabled) {
