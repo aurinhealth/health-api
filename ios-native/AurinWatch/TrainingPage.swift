@@ -42,6 +42,7 @@ struct TrainingPage: View {
                 WeekRow(days: weekDays, today: today, shown: day, sessions: sessions) { picked = $0 }
                     .padding(.top, 6)
                 content(day)
+                if day == today, noGymToday { noGym }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -56,6 +57,65 @@ struct TrainingPage: View {
             GymSessionView().onAppear { WatchReport.visit("gym") }
         }
         .containerBackground(W.glow(W.Glow.strain), for: .tabView)
+        .alert(W.tr("Trénink se nepodařilo sestavit", "Couldn't put the workout together"), isPresented: $store.failedStart) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(W.tr("Sestaví ho iPhone. Měj ho u sebe a zkus to znovu.", "Your iPhone puts it together. Keep it close and try again."))
+        }
+    }
+
+    // MARK: No gym planned today (mockup "jen hodinky" 6)
+
+    /// Today's Today is here and has no gym in it, planned or done, and the
+    /// watch has none with exercises.
+    private var noGymToday: Bool {
+        guard let s = watch.snapshot, s.date == today else { return false }
+        if sessions.contains(where: { $0.date == today && $0.sport == "strength" }) { return false }
+        if let gym = store.gym, gym.date == today, !gym.exercises.isEmpty { return false }
+        return true
+    }
+
+    /// Repeat last workout, Build from rested, Empty workout: the iPhone puts
+    /// it in the day (an empty one starts here alone too) and it opens.
+    private var noGym: some View {
+        let settings = watch.settings
+        return VStack(alignment: .leading, spacing: 5) {
+            Text(W.tr("Posilovna není v plánu", "No gym planned"))
+                .font(.system(size: 15, weight: .semibold)).foregroundStyle(W.ink)
+            if let last = settings.lastGym {
+                Text(W.tr("Minule: ", "Last: ") + W.dayName(last) + (settings.lastGymExercises.map { " · " + Self.exercises($0) } ?? ""))
+                    .font(.system(size: 12)).foregroundStyle(W.secondary)
+            }
+            if store.starting {
+                ProgressView().frame(maxWidth: .infinity).padding(.top, 6)
+            } else {
+                if settings.lastGym != nil {
+                    startButton(.repeatLast, W.tr("Zopakovat minulý", "Repeat last workout"), prominent: true)
+                }
+                startButton(.rested, W.tr("Sestavit z odpočatých", "Build from rested"), prominent: settings.lastGym == nil)
+                startButton(.empty, W.tr("Prázdný trénink", "Empty workout"), prominent: false)
+            }
+        }
+        .padding(.top, 12)
+    }
+
+    private func startButton(_ kind: WatchGym.Start.Kind, _ title: String, prominent: Bool) -> some View {
+        Button {
+            Task { if await store.start(kind) { running = true } }
+        } label: {
+            Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(prominent ? .black : W.ink)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(prominent ? W.ink : W.tile)
+        .padding(.top, 3)
+    }
+
+    /// "5 cviků", "5 exercises".
+    static func exercises(_ count: Int) -> String {
+        guard !W.english else { return count == 1 ? "1 exercise" : "\(count) exercises" }
+        return "\(count) " + (count == 1 ? "cvik" : (2...4).contains(count) ? "cviky" : "cviků")
     }
 
     // MARK: The day shown

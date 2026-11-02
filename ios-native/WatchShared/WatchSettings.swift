@@ -19,6 +19,10 @@ struct WatchSettings: Codable, Equatable, Sendable {
     /// rest before the next exercise, for a plan the watch loads without the iPhone.
     var restSets: Int = -1
     var restExercises: Int = 120
+    /// The day of the last gym workout and its number of exercises, for
+    /// Repeat last workout on a day without a plan; nil before the first.
+    var lastGym: String? = nil
+    var lastGymExercises: Int? = nil
 
     init() {}
 
@@ -31,6 +35,8 @@ struct WatchSettings: Codable, Equatable, Sendable {
         openOnWatch = try c.decodeIfPresent(Bool.self, forKey: .openOnWatch) ?? true
         restSets = try c.decodeIfPresent(Int.self, forKey: .restSets) ?? -1
         restExercises = try c.decodeIfPresent(Int.self, forKey: .restExercises) ?? 120
+        lastGym = try c.decodeIfPresent(String.self, forKey: .lastGym)
+        lastGymExercises = try c.decodeIfPresent(Int.self, forKey: .lastGymExercises)
     }
 
     func encoded() -> Data? { try? JSONEncoder().encode(self) }

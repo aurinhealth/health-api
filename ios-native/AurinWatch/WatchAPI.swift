@@ -182,6 +182,34 @@ enum WatchAPI {
         return (200..<300).contains(status)
     }
 
+    /// A JSON POST with the watch's sign-in; false offline or on an error.
+    private static func post(_ path: String, _ body: [String: JSONValue]) async -> Bool {
+        guard let session, var request = request(path, method: "POST", session: session),
+              let json = try? JSONEncoder().encode(body) else { return false }
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        guard let (data, response) = try? await urlSession.upload(for: request, from: json) else {
+            WatchReport.failed("POST " + path, message: "no connection")
+            return false
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if status == 401 { store(nil) }
+        if !(200..<300).contains(status) { WatchReport.failed("POST " + path, status: status, message: serverMessage(data)) }
+        return (200..<300).contains(status)
+    }
+
+    /// The day's workout discarded without the iPhone, as Zahodit trénink does
+    /// (the plan, the logged sets and the Intervals.icu event go).
+    static func discardGym(date: String) async -> Bool {
+        await post("/app/api/gym", ["date": .string(date), "action": .string("discard")])
+    }
+
+    /// How well the workout's plan suited (good, ok, bad), as the iPhone's
+    /// rating after a workout (POST /app/api/feedback/workout).
+    static func rateGym(date: String, rating: String) async -> Bool {
+        await post("/app/api/feedback/workout", ["date": .string(date), "sessionId": .string("gym:" + date), "sport": .string("strength"),
+                                                 "rating": .string(rating), "text": .string("")])
+    }
+
     /// Exercises to swap in for `exercise` that fit the athlete's gym, with
     /// the load from their history (GET /app/api/gym/alternatives).
     static func gymAlternatives(date: String, exercise: String, inPlan: [String]) async -> [WatchGym.Option] {

@@ -159,4 +159,35 @@ final class WatchGymSheetTests: XCTestCase {
         XCTAssertEqual(fresh.exercises[0].record, WatchGym.Last(kg: 65, reps: 5))
         XCTAssertEqual(fresh.exercises[0].lifts.map(\.last), [WatchGym.Last(kg: 57.5, reps: 8), WatchGym.Last(kg: 57.5, reps: 7), nil])
     }
+
+    func testAnEmptyWorkoutStartsWithItsFirstExercise() {
+        var sheet = GymDay(date: "2026-11-02", values: [], cancelled: nil)
+        sheet.ensureHeader(date: "2026-11-02")
+        let empty = WatchGym(sheet, date: "2026-11-02", restSets: 75, restExercises: 120)
+        XCTAssertTrue(empty.exercises.isEmpty)
+        // Nothing to do yet is not done: the summary waits for a set.
+        XCTAssertFalse(empty.allDone)
+        sheet.apply(WatchGym.Change(date: "2026-11-02", kind: .addExercise, exercise: 0,
+                                    option: WatchGym.Option(name: "Bench Press", shown: "Bench press", kg: 60, sets: 3, reps: "8")))
+        XCTAssertEqual(sheet.exercises.map(\.name), ["Bench Press"])
+        XCTAssertEqual(sheet.exercises[0].sets.count, 3)
+        // Other changes still need an exercise at that place.
+        let before = sheet.values
+        sheet.apply(WatchGym.Change(date: "2026-11-02", kind: .removeExercise, exercise: 3))
+        XCTAssertEqual(sheet.values, before)
+    }
+
+    func testANewRecordIsTodaysBestPastTheBestBefore() {
+        var gym = WatchGym(day(), date: "2026-11-01", restSets: 75, restExercises: 120)
+        gym.exercises[0].record = WatchGym.Last(kg: 60, reps: 8)
+        // Seated row was never done before: no record however heavy.
+        gym.exercises[1].record = nil
+        let bench = gym.exercises[0].lifts
+        gym.update(row: bench[0].row) { $0.kg = 60; $0.reps = 8; $0.done = true }
+        XCTAssertTrue(gym.newRecords.isEmpty)
+        gym.update(row: bench[1].row) { $0.kg = 62.5; $0.reps = 8; $0.done = true }
+        gym.update(row: gym.exercises[1].lifts[0].row) { $0.kg = 80; $0.reps = 10; $0.done = true }
+        XCTAssertEqual(gym.newRecords, [WatchGym.NewRecord(name: "Bench Press", title: gym.exercises[0].title, set: WatchGym.Last(kg: 62.5, reps: 8))])
+    }
 }
+
