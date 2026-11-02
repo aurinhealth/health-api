@@ -1,10 +1,47 @@
 {
   "identifier" : "6D1A2E7B",
-  "nonRenewingSubscriptions" : [
-
-  ],
+  "nonRenewingSubscriptions" : [],
   "products" : [
-
+    {
+      "displayPrice" : "99",
+      "familyShareable" : false,
+      "internalID" : "21540010",
+      "localizations" : [
+        {
+          "description" : "Zprávy kouči navíc, které nepropadnou",
+          "displayName" : "40 zpráv kouči",
+          "locale" : "cs"
+        },
+        {
+          "description" : "Extra messages for the coach that never run out",
+          "displayName" : "40 coach messages",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "health.aurin.app.coach.messages40",
+      "referenceName" : "Coach 40 messages",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "199",
+      "familyShareable" : false,
+      "internalID" : "21540011",
+      "localizations" : [
+        {
+          "description" : "Zprávy kouči navíc, které nepropadnou",
+          "displayName" : "100 zpráv kouči",
+          "locale" : "cs"
+        },
+        {
+          "description" : "Extra messages for the coach that never run out",
+          "displayName" : "100 coach messages",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "health.aurin.app.coach.messages100",
+      "referenceName" : "Coach 100 messages",
+      "type" : "Consumable"
+    }
   ],
   "settings" : {
     "_applicationInternalID" : "6740000000",
@@ -13,9 +50,7 @@
     "_lastSynchronizedDate" : 0,
     "_locale" : "cs_CZ",
     "_storefront" : "CZE",
-    "_storeKitErrors" : [
-
-    ]
+    "_storeKitErrors" : []
   },
   "subscriptionGroups" : [
     {
@@ -35,9 +70,7 @@
       "name" : "Aurin Pro",
       "subscriptions" : [
         {
-          "adHocOffers" : [
-
-          ],
+          "adHocOffers" : [],
           "codeOffers" : [
             {
               "displayPrice" : "745",
@@ -83,12 +116,8 @@
           "type" : "RecurringSubscription"
         },
         {
-          "adHocOffers" : [
-
-          ],
-          "codeOffers" : [
-
-          ],
+          "adHocOffers" : [],
+          "codeOffers" : [],
           "displayPrice" : "199",
           "familyShareable" : false,
           "groupNumber" : 1,
