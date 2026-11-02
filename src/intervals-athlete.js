@@ -27,31 +27,59 @@ function hrModelFor(model, lthr, maxHr, restHr) {
   return maxHr && restHr ? "karvonen" : maxHr ? "hrMax5" : model;
 }
 
-export async function athleteThresholds(env, fetchImpl = intervalsReads(env)) {
+// The sport settings last read from Intervals.icu, kept for a week in the
+// Worker cache (no D1 rows): when Intervals.icu is slow or down (a read gives
+// up after 8 s, intervals-reads.js) the zones and FTP stay the athlete's
+// instead of falling back to the last ride's FTP, and the job that asked is
+// not reported as failed (the morning readiness push still goes out).
+const LAST_SETTINGS_DAYS = 7;
+const lastSettingsKey = env => "https://cache.internal/intervals-athlete/" + encodeURIComponent((env.ENVIRONMENT || "production") + ":" + (env.USER_DATA_SHARD || "legacy")) + "/" + encodeURIComponent(String(env.USER_ID ?? "")) + "/" + encodeURIComponent(String(env.INTERVALS_ATHLETE_ID || "0"));
+async function rememberSettings(env, store, settings) {
+  if (!store || env.USER_ID == null) return;
+  try { await store.put(lastSettingsKey(env), new Response(JSON.stringify(settings), { headers: { "Content-Type": "application/json", "Cache-Control": "max-age=" + LAST_SETTINGS_DAYS * 86400 } })); } catch {}
+}
+async function lastSettings(env, store) {
+  if (!store || env.USER_ID == null) return null;
+  try { const hit = await store.match(lastSettingsKey(env)); const list = hit ? await hit.json() : null; return Array.isArray(list) ? list : null; } catch { return null; }
+}
+
+export async function athleteThresholds(env, fetchImpl = intervalsReads(env), { store = globalThis.caches?.default } = {}) {
   const out = { ftp: null, indoorFtp: null, lthr: null, maxHr: null, runThresholdPace: null, runPaceSource: null, intervalsRunPace: null, runLthr: null, runMaxHr: null, swimCss: null, swimCssSource: null, source: null, intervalsFtp: null, latestRideFtp: null };
   if (env.INTERVALS_API_KEY) {
+    let settings = null, problem = null, thrown = false;
     try {
       const response = await fetchImpl("https://intervals.icu/api/v1/athlete/0", { headers: { Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json" } });
       if (response.ok) {
         const athlete = await response.json();
-        const settings = Array.isArray(athlete?.sportSettings) ? athlete.sportSettings : [];
-        const ride = settings.find(s => (s.types || []).includes("Ride")) || settings.find(s => (s.types || []).some(t => /ride/i.test(t)));
-        const run = settings.find(s => (s.types || []).includes("Run"));
-        const swim = settings.find(s => (s.types || []).includes("Swim"));
-        // Intervals.icu stores swim threshold pace as speed (m/s) too.
-        const swimSpeed = n(swim?.threshold_pace), css = swimSpeed ? (swimSpeed < 5 ? 100 / swimSpeed : swimSpeed) : null;
-        if (css >= 60 && css <= 240) { out.swimCss = Math.round(css); out.swimCssSource = "intervals-settings"; }
-        if (ride) { out.ftp = n(ride.ftp); out.indoorFtp = n(ride.indoor_ftp); out.lthr = n(ride.lthr); out.maxHr = n(ride.max_hr); }
-        if (run) {
-          // Intervals.icu stores threshold pace as speed (m/s); accept s/km too.
-          const v = n(run.threshold_pace);
-          const pace = v == null ? null : v < 20 ? 1000 / v : v;
-          if (pace && pace >= 150 && pace <= 600) { out.runThresholdPace = Math.round(pace); out.intervalsRunPace = out.runThresholdPace; out.runPaceSource = "intervals-settings"; }
-          out.runLthr = n(run.lthr); out.runMaxHr = n(run.max_hr);
-        }
-        if (out.ftp) { out.source = "intervals-settings"; out.intervalsFtp = out.ftp; }
+        settings = Array.isArray(athlete?.sportSettings) ? athlete.sportSettings : [];
+        // Kept on the side; the answer does not wait for it.
+        rememberSettings(env, store, settings);
+      } else problem = "HTTP " + response.status;
+    } catch (error) { problem = error.message; thrown = true; }
+    if (!settings && problem) {
+      settings = await lastSettings(env, store);
+      // With the settings read before, nothing is missing: a note, not a failure.
+      // A refused answer (an expired sign-in) is connection-health.js's to report.
+      if (settings) console.warn("Intervals athlete settings unavailable, using the last ones read", problem);
+      else if (thrown) console.error("Intervals athlete settings unavailable", problem);
+    }
+    if (settings) {
+      const ride = settings.find(s => (s.types || []).includes("Ride")) || settings.find(s => (s.types || []).some(t => /ride/i.test(t)));
+      const run = settings.find(s => (s.types || []).includes("Run"));
+      const swim = settings.find(s => (s.types || []).includes("Swim"));
+      // Intervals.icu stores swim threshold pace as speed (m/s) too.
+      const swimSpeed = n(swim?.threshold_pace), css = swimSpeed ? (swimSpeed < 5 ? 100 / swimSpeed : swimSpeed) : null;
+      if (css >= 60 && css <= 240) { out.swimCss = Math.round(css); out.swimCssSource = "intervals-settings"; }
+      if (ride) { out.ftp = n(ride.ftp); out.indoorFtp = n(ride.indoor_ftp); out.lthr = n(ride.lthr); out.maxHr = n(ride.max_hr); }
+      if (run) {
+        // Intervals.icu stores threshold pace as speed (m/s); accept s/km too.
+        const v = n(run.threshold_pace);
+        const pace = v == null ? null : v < 20 ? 1000 / v : v;
+        if (pace && pace >= 150 && pace <= 600) { out.runThresholdPace = Math.round(pace); out.intervalsRunPace = out.runThresholdPace; out.runPaceSource = "intervals-settings"; }
+        out.runLthr = n(run.lthr); out.runMaxHr = n(run.max_hr);
       }
-    } catch (error) { console.error("Intervals athlete settings unavailable", error.message); }
+      if (out.ftp) { out.source = "intervals-settings"; out.intervalsFtp = out.ftp; }
+    }
   }
   if (!out.ftp && env.DB) {
     try {

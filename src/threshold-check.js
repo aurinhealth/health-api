@@ -23,8 +23,10 @@
 // - ride without power: Friel's 30 min time trial, LTHR = the average heart
 //   rate of its last 20 minutes;
 // - run: Friel's 30 min time trial, threshold pace ≈ its average pace and
-//   LTHR = the heart rate of its last 20 minutes.
-import { buildWorkout, step, rep, sec } from "./workout-model.js";
+//   LTHR = the heart rate of its last 20 minutes;
+// - swim (the Faster swimming plan): 400 m and 200 m all out, CSS =
+//   (t400 − t200) / 2 per 100 m (Swim Smooth).
+import { buildWorkout, step, rep, sec, swimMinutes } from "./workout-model.js";
 import { DEFAULT_THRESHOLD_HRR } from "./training-load.js";
 import { L } from "./lang.js";
 
@@ -56,11 +58,24 @@ export function testWorkouts() {
       citation: "Friel J. The Triathlete's Training Bible. 4th ed. VeloPress; 2016.",
       structure: [step(12, 78, null, L("rozklus", "warm-up jog")), rep(4, [step(sec(20), 115, null, L("rovinka – svižně, uvolněně", "stride – quick and relaxed")), step(sec(40), 65, null, L("volně / chůze", "easy / walk"))]), step(3, 72, null, L("klus", "jog")), step(30, 100, null, L("30 min naplno, rovnoměrně", "30 min all out, evenly")), step(10, 72, null, L("výklus", "cool-down jog"))],
       description: L("30 minut naplno a rovnoměrně, ideálně na rovině. Prahové tempo je průměr celých 30 minut, prahový tep průměr posledních 20 minut.", "30 minutes all out and evenly, ideally on the flat. Threshold pace is the average of the whole 30 minutes, the threshold heart rate the average of the last 20.")
-    })
+    }),
+    swimTest()
   ];
 }
+// The CSS test in the pool: lengths in metres like the swim catalogue (swimming-workouts.js).
+function swimTest() {
+  const swim = (meters, pace, note) => ({ durationMinutes: swimMinutes(meters, pace), power: pace, meters, note });
+  return buildWorkout({
+    id: "test-swim-css", sport: "swim", name: L("Test CSS · 400 + 200 m", "CSS test · 400 + 200 m"), system: "threshold", family: "test", tags: ["test"], sourceKind: "research", sourceName: L("Publikovaný protokol", "Published protocol"),
+    citation: "Wakayoshi K et al. Determination and validity of critical velocity as an index of swimming performance. Int J Sports Med. 1992;13(5):367-371.",
+    structure: [swim(300, 86, L("rozplavání, volně", "warm-up, easy")), rep(4, [swim(50, 95, L("postupně rychleji", "build up")), { durationMinutes: sec(20), power: 0, rest: true, note: null }]),
+      swim(400, 104, L("400 m naplno, rovnoměrně, zapiš si čas", "400 m all out and even, note the time")), swim(200, 82, L("5 min volně", "5 min easy")),
+      swim(200, 106, L("200 m naplno, zapiš si čas", "200 m all out, note the time")), swim(200, 84, L("vyplavání", "cool-down"))],
+    description: L("Po rozplavání 400 m naplno, pět minut volně a 200 m naplno. Oba časy zapiš do aplikace: CSS je rozdíl časů děleno dvěma na 100 m.", "After the warm-up, 400 m all out, five minutes easy and 200 m all out. Enter both times in the app: CSS is the difference of the times divided by two, per 100 m.")
+  });
+}
 export const getTestWorkout = id => testWorkouts().find(w => w.id === id) || null;
-export const testFor = (sport, hasPower) => (sport === "run" ? "test-run-tt30" : hasPower ? "test-ride-ftp20" : "test-ride-lthr30");
+export const testFor = (sport, hasPower) => (sport === "swim" ? "test-swim-css" : sport === "run" ? "test-run-tt30" : hasPower ? "test-ride-ftp20" : "test-ride-lthr30");
 
 // ---- sessions --------------------------------------------------------------
 // Rides and runs (activityFromRow, deduplicated) with what the estimates need
@@ -188,6 +203,8 @@ export function recommendTestDay({ today, sport, days = [], minutes = 60 }) {
 // The test's effort from the activity's intervals (Intervals.icu): the
 // longest-average interval of 18–22 min (FTP test) or 27–33 min (time trial).
 export function testResult(testId, intervals = [], activity = {}) {
+  // The CSS test is read from the two times the athlete enters (manualTestResult).
+  if (testId === "test-swim-css") return null;
   const want = testId === "test-ride-ftp20" ? [18, 22] : [27, 33];
   const pick = (intervals || []).filter(i => i.seconds >= want[0] * 60 && i.seconds <= want[1] * 60)
     .sort((a, b) => (testId === "test-run-tt30" ? (b.speed || 0) - (a.speed || 0) : (b.watts || b.hr || 0) - (a.watts || a.hr || 0)))[0];

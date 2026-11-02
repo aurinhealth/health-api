@@ -11,10 +11,12 @@ final class GymWorkout: NSObject, ObservableObject {
     static let shared = GymWorkout()
 
     @Published private(set) var start: Date?
-    @Published private(set) var heartRate: Double?
-    @Published private(set) var calories: Double = 0
-    @Published private(set) var averageHeartRate: Double?
-    @Published private(set) var maxHeartRate: Double?
+    // The readings come every few seconds: the screen is told only when a
+    // number it shows changes (collected), not at each reading.
+    private(set) var heartRate: Double?
+    private(set) var calories: Double = 0
+    private(set) var averageHeartRate: Double?
+    private(set) var maxHeartRate: Double?
     /// Paused (mockup 7): since when, and how long the pauses before took.
     @Published private(set) var pausedAt: Date?
     @Published private(set) var pausedTotal: TimeInterval = 0
@@ -184,6 +186,7 @@ final class GymWorkout: NSObject, ObservableObject {
     }
 
     private func reset() {
+        objectWillChange.send()
         session = nil
         builder = nil
         start = nil
@@ -219,10 +222,17 @@ final class GymWorkout: NSObject, ObservableObject {
     }
 
     fileprivate func collected(_ r: Reading) {
-        if let value = r.heartRate { heartRate = value }
-        if let value = r.average { averageHeartRate = value }
-        if let value = r.max { maxHeartRate = value }
-        if let value = r.calories { calories = value }
+        let heart = r.heartRate ?? heartRate, average = r.average ?? averageHeartRate
+        let top = r.max ?? maxHeartRate, kcal = r.calories ?? calories
+        // Whole numbers, rounded as W.number shows them.
+        let shown = { (values: [Double?]) in values.map { $0.map { Int($0.rounded(.toNearestOrEven)) } } }
+        if shown([heart, average, top, kcal]) != shown([heartRate, averageHeartRate, maxHeartRate, calories]) {
+            objectWillChange.send()
+        }
+        heartRate = heart
+        averageHeartRate = average
+        maxHeartRate = top
+        calories = kcal
         sendLive()
     }
 

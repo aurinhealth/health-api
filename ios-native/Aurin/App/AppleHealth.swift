@@ -475,8 +475,13 @@ final class AppleHealth {
         if UIApplication.shared.applicationState == .active, await reader.askNewTypes(categories) { lastSync = nil }
         let started = Date()
         // The first sync takes the history; later ones the days since the last
-        // one and a day more (late watch data), at most a month.
-        let days: Int? = lastSync.map { min(30, max(2, Int(started.timeIntervalSince($0) / 86400) + 2)) }
+        // one and a day more (late watch data). After more than a month away
+        // the history again, so sleep, HRV and workouts of the weeks before
+        // the last month are not left out.
+        let days: Int? = lastSync.flatMap { last -> Int? in
+            let since = max(2, Int(started.timeIntervalSince(last) / 86400) + 2)
+            return since > 30 ? nil : since
+        }
         let sexHistory = JournalSwitch.wantsSexHistory
         do {
             await reader.hide(hidden, in: categories)

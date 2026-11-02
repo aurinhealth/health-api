@@ -38,6 +38,10 @@ test("the key session's workout: never harder than planned, shortened when time 
   // A beginner one or two levels easier, an experienced athlete one harder.
   assert.equal(levelShift({ level: 1 }), -2);
   assert.equal(levelShift({ level: 4.4 }), 1);
+  // A strong rider up to three levels harder: the same plan, a bigger session.
+  assert.equal(levelShift({ level: 6 }), 3);
+  assert.equal(levelShift({ level: 9 }), 3);
+  assert.ok(planWorkoutId("ride", { family: "thr", level: 4 }, 90, 3) !== planWorkoutId("ride", { family: "thr", level: 4 }, 90, 0));
   assert.equal(planWorkoutId("run", { family: "run-cruise", level: 3 }, 60, -2), "run-cruise-4x5-60");
 });
 

@@ -197,7 +197,7 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       let data={status:"ok",values:[],videoLinks:[]};
       try { const plan=await readGymPlan(env.DB,date); data={status:"ok",date,values:plan.stored?plan.values:[],videoLinks:[],stored:plan.stored,cancelled:plan.cancelled,recoverable:plan.recoverable}; }
       catch(error) { console.error("Gym plan read failed",error); data={status:"partial",values:[],videoLinks:[],message:L("Plán se nepodařilo načíst.", "The plan couldn't be loaded.")}; }
-      // ?lite=1 (the Apple Watch): the sheet alone, without the 500 rows of history and the muscles.
+      // ?lite=1 (the iPhone and Apple Watch apps): the sheet alone, without the 500 rows of history and the muscles.
       const lite=url.searchParams.get('lite')==='1';
       let history=[];
       if(!lite)try { history=await getStrengthHistory(env.DB,500,{drops:true}); } catch(error) { console.error("Gym history read failed",error); }

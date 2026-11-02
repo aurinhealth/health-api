@@ -35,18 +35,34 @@ extension WatchBridge {
         return WatchGym(day, date: date, restSets: rest.sets, restExercises: rest.exercises)
     }
 
-    /// The day's plan, from the server when it answers, else the one saved on the phone.
+    /// The day's plan. Today's copy on the phone answers at once (the server
+    /// takes seconds); the server's copy follows to the watch when it differs.
+    /// Without a copy, from the server, else nothing.
     func loadGym(date: String) async -> WatchGym? {
-        var day: GymDay?
-        if let model = AppModel.live {
-            day = try? await model.gymDay(date: date)
-        } else if api.hasSession {
-            day = try? await api.gym(date: date)
+        if date == AppModel.localDate(Date()), let saved = AppModel.live?.writes.waitingGym(date: date) ?? gymDays[date] ?? GymDayCache.load(date: date) {
+            gymDays[date] = saved
+            Task { @MainActor in await refreshGym(date: date, shown: saved) }
+            return watchGym(saved, date: date)
         }
-        day = day ?? gymDays[date] ?? GymDayCache.load(date: date)
-        guard let day else { return nil }
+        guard let day = await fetchGym(date: date) ?? gymDays[date] ?? GymDayCache.load(date: date) else { return nil }
         gymDays[date] = day
         return watchGym(day, date: date)
+    }
+
+    /// The day from the server (through the app's model when it runs, which
+    /// keeps the writes still waiting and the saved copy).
+    private func fetchGym(date: String) async -> GymDay? {
+        if let model = AppModel.live { return try? await model.gymDay(date: date) }
+        guard api.hasSession else { return nil }
+        return try? await api.gym(date: date)
+    }
+
+    /// The server's copy after the watch got the phone's: sent on when it
+    /// differs and nothing changed the day here meanwhile (a set from the watch is newer).
+    private func refreshGym(date: String, shown: GymDay) async {
+        guard let fresh = await fetchGym(date: date), fresh.values != shown.values,
+              gymDays[date] == shown else { return }
+        gymSaved(fresh, date: date)
     }
 
     /// The copy the watch works on: sets arrive one by one and are applied to
@@ -95,11 +111,15 @@ extension WatchBridge {
 
     /// The sheet the watch worked on alone while the iPhone was out of reach
     /// (it saved it to the server itself): the iPhone takes it as the day's,
-    /// Training mode shows it and the newest copy waiting to be sent is this one.
-    func applyGym(sheet: WatchGym.Sheet) async {
-        var day = await gymDay(sheet.date) ?? GymDay(date: sheet.date, values: [], cancelled: nil)
-        day.values = sheet.values
+    /// keeping sets ticked here meanwhile, Training mode shows it and the
+    /// newest copy waiting to be sent is this one. The plan goes back to the
+    /// watch, so it has the sets ticked here too.
+    func applyGym(sheet: WatchGym.Sheet) async -> WatchGym {
+        let mine = await gymDay(sheet.date)
+        var day = mine ?? GymDay(date: sheet.date, values: [], cancelled: nil)
+        day.values = GymDay.merged(sheet.values, keepingDoneFrom: mine?.values ?? [])
         await save(day, date: sheet.date)
+        return watchGym(day, date: sheet.date)
     }
 
     /// Exercises to swap in (similar to the one given) or to add (matching the
