@@ -57,12 +57,14 @@ p{margin:0}
 .wl .done{align-items:center;gap:10px;height:56px;padding:0 26px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--green) 13%,var(--panel));color:var(--green);font-size:var(--fs-17);font-weight:600}
 .wl .done svg{width:20px;height:20px;stroke:currentColor}
 .wl .err{margin-top:10px;font-size:var(--fs-14);color:var(--rust-ink)}.wl .err:empty{display:none}
-/* The email to install comes from Apple with "TestFlight" as its sender, not from Aurin, so say so where people look for it. */
+/* The link to install comes from Apple with "TestFlight" as its sender, not from Aurin, so say so where people look for it.
+   The line about TestFlight under the form has said its part by then. */
+.hero .cta:has(.wl.sent) .note{display:none}
 .wl .tf{display:none;max-width:420px;margin-top:12px;font:var(--fs-14)/1.45 var(--sans);color:var(--sec);text-align:center}.wl.sent .tf{display:block}
 .wl.sent .field{display:none}.wl.sent .done{display:inline-flex}
 /* After joining: pass Aurin on (the phone's own sharing, or the link copied). Nothing about it is stored. */
 .wl .share{display:none;align-items:center;gap:8px;margin-top:12px;padding:8px 14px;border:0;border-radius:var(--r-pill);background:transparent;font:inherit;font-size:var(--fs-14);font-weight:600;color:var(--sec);cursor:pointer}
-.wl .share:hover{background:var(--panel)}.wl .share svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.wl .share{box-shadow:inset 0 0 0 1px var(--line)}.wl .share:hover{background:var(--panel)}.wl .share svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .wl.sent .share{display:inline-flex}
 /* Cloudflare's "Verify you are human", only when Cloudflare asks for it. */
 .wl .ts{display:flex;justify-content:center}.wl .ts iframe{margin-top:12px}.wl.sent .ts{display:none}
@@ -468,6 +470,7 @@ main:focus{outline:none}
   /* Left-aligned on a phone: four centred lines read badly. */
   .hero .grid{gap:0;text-align:left}.hero .copy{display:contents}.hero .kicker{justify-self:start}.hero .lede{margin-left:0}
   .hero .cta{order:1;margin-top:28px}.hero .stage{order:2;margin-top:40px}
+  .hero .wl{align-items:flex-start}.hero .wl .tf{text-align:left}
   .rig{width:322px;height:672px;--hz:.8}
   .rig .device{left:0}
   /* On a phone a part opens with its title and line only: its chapters right under show the same day. */
@@ -520,7 +523,7 @@ const turnstileScript = `<script src="${TURNSTILE}/turnstile/v0/api.js?render=ex
 const store = id => `<form class="wl" action="/waitlist" method="post" novalidate>
 <span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" spellcheck="false" required><button type="submit" class="go">Get early access${ARROW}</button></span>
 <span class="ts" data-key="${TURNSTILE_SITE_KEY}"></span>
-<span class="done" role="status">${CHECK}<span>You’re on the list</span></span><p class="tf">The email to install Aurin comes from Apple’s TestFlight, so keep an eye on your inbox (and spam).</p>
+<span class="done" role="status">${CHECK}<span>You’re on the list</span></span><p class="tf">Apple’s TestFlight will email you a link to install Aurin. If it doesn’t arrive, check your spam.</p>
 <button type="button" class="share">${SHARE}<span>Know someone who trains? Share Aurin</span></button>
 <span class="err" role="alert"></span>
 </form>`;
