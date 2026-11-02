@@ -232,6 +232,10 @@ extension WatchStore: WCSessionDelegate {
             if let data { WatchStore.shared.receive(data) } else if !empty { WatchStore.shared.receive(nil) }
             WatchStore.shared.ask()
             GymStore.shared.loadIfWaiting()
+            // A gym workout started before the connection was up: the iPhone hears of it now.
+            GymWorkout.shared.announce()
+            // Sets saved here alone go to the iPhone now.
+            GymStore.shared.sync()
         }
     }
 
@@ -265,10 +269,14 @@ extension WatchStore: WCSessionDelegate {
         let progress = message[WatchCoach.progressKey] as? String
         let answer = message[WatchCoach.answerKey] as? Data
         let ended = message[WatchGym.endKey] as? Bool == true
+        let open = message[WatchGym.openKey] as? Bool == true
+        let draft = (message[WatchGym.draftKey] as? Data).flatMap(WatchGym.Draft.decode)
         let rest = (message[WatchGym.restKey] as? Data).flatMap(WatchGym.Rest.decode)
         Task { @MainActor in
             if let rest, GymWorkout.shared.running { GymStore.shared.phoneRest = rest }
             if ended, GymWorkout.shared.running { GymStore.shared.endedOnPhone = true }
+            if open { GymStore.shared.openFromPhone() }
+            if let draft, GymWorkout.shared.running { GymStore.shared.phoneDraft = draft }
             if let gym { GymStore.shared.received(gym) }
             if let progress { CoachStore.shared.received(progress: progress) }
             if let answer { CoachStore.shared.received(answer: answer) }
@@ -280,6 +288,8 @@ extension WatchStore: WCSessionDelegate {
         Task { @MainActor in
             WatchStore.shared.ask()
             GymStore.shared.loadIfWaiting()
+            GymWorkout.shared.announce()
+            GymStore.shared.sync()
         }
     }
 }

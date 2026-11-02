@@ -42,8 +42,9 @@ struct GymStretching: Codable, Equatable {
             video = try c.decodeIfPresent(String.self, forKey: .video).flatMap { $0.isEmpty ? nil : $0 }
         }
 
-        /// "2 × 30 s na stranu", "45 s", "3 min".
+        /// "2 × 30 s na stranu", "45 s", "3 min"; a cardio without a limit "Bez limitu".
         var duration: String {
+            if seconds <= 0 { return L10n.tr("Bez limitu") }
             let time = seconds >= 120 && seconds % 60 == 0 ? "\(seconds / 60) min" : "\(seconds) s"
             let each = sides ? L10n.f("%@ na stranu", time) : time
             return (rounds > 1 ? "\(rounds) × " : "") + each
@@ -63,11 +64,13 @@ struct GymStretching: Codable, Equatable {
         var off: [String]? = nil
     }
 
-    /// The day's cardio: the machine and the minutes at the start and at the end (nil when off).
+    /// The day's cardio: the machine, which parts are on (start and end, minutes
+    /// for older builds; nil when off) and the time it runs: 0 or nil = no limit.
     struct Cardio: Decodable, Equatable {
         let type: String
         let start: Int?
         let end: Int?
+        var length: Int? = nil
     }
 
     static func routines(_ values: [[JSONValue]]) -> Routines? {
@@ -172,7 +175,11 @@ struct StretchingCard: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(kind.title).font(.headline).foregroundStyle(Palette.ink)
-                    ExtraMinutesPill(text: L10n.f("+%@ min navíc", String(stretching.minutes)), color: kind.color)
+                    if let log = cardioLog {
+                        ExtraMinutesPill(text: log.summary, color: kind.color)
+                    } else {
+                        ExtraMinutesPill(text: stretching.minutes > 0 ? L10n.f("+%@ min navíc", String(stretching.minutes)) : L10n.tr("Bez limitu"), color: kind.color)
+                    }
                 }
                 Spacer()
                 Button { timer = true } label: {
@@ -219,11 +226,25 @@ struct StretchingCard: View {
         }
         .sheet(item: $info) { item in StretchInfoSheet(item: item) }
         .fullScreenCover(isPresented: $timer) {
-            StretchTimerView(stretching: stretching, kind: kind) { id in
-                let key = kind.key + id
-                if !Self.done(stored, date: date).contains(key) { stored = Self.toggled(stored, date: date, id: key) }
+            if kind == .cardio, let item = stretching.items.first {
+                CardioTimerView(item: item, date: date) { markDone(item.id) }
+            } else {
+                StretchTimerView(stretching: stretching, kind: kind) { id in markDone(id) }
             }
         }
+    }
+
+    @AppStorage(GymCardioLog.storageKey) private var cardioLogs = ""
+
+    /// The cardio's stopped time (Stop in CardioTimerView), shown instead of its length.
+    private var cardioLog: GymCardioLog.Entry? {
+        guard kind == .cardio, let item = stretching.items.first else { return nil }
+        return GymCardioLog.entry(cardioLogs, date: date, id: item.id)
+    }
+
+    private func markDone(_ id: String) {
+        let key = kind.key + id
+        if !Self.done(stored, date: date).contains(key) { stored = Self.toggled(stored, date: date, id: key) }
     }
 
     static func done(_ stored: String, date: String) -> Set<String> {
@@ -422,6 +443,10 @@ struct GymPreferences: Decodable, Equatable {
     var cardioType: String?
     /// The cardio machines of the active place, and the jump rope.
     var cardioOptions: [CardioOption]?
+    /// The cardio's default length in minutes: 0 = no limit (a stopwatch).
+    var cardioLength: Int?
+    /// The favourite cardio times offered as chips in the workout.
+    var cardioFavourites: [Int]?
     var stretching: Bool
     /// Typical minutes the routines add to each session length ("60" → warm-up and stretching).
     var extraMinutes: [String: Extra]?
@@ -547,6 +572,10 @@ struct GymPreferencesGroup: View {
     @State private var goal = "auto"
     @State private var cardio = "start"
     @State private var cardioType = "exercise_bike"
+    /// Délka kardia: 0 = no limit; the favourite times offered in the workout.
+    @State private var cardioLength = 0
+    @State private var favourites = GymCardio.favourites
+    @State private var addingTime = false
     @State private var choosingGoal = false
     @State private var error: String?
 
@@ -557,6 +586,7 @@ struct GymPreferencesGroup: View {
         VStack(alignment: .leading, spacing: 8) {
             group
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+            cardioGroups.padding(.top, 18)
         }
         .task { await load() }
         .onChange(of: goal) { _, value in goalChanged(value) }
@@ -591,6 +621,55 @@ struct GymPreferencesGroup: View {
             routineLink(.stretching)
         }
         .disabled(prefs == nil && !model.demo)
+    }
+
+    /// Délka kardia (no limit … 60 min) and Oblíbené časy (chips in the workout).
+    private var cardioGroups: some View {
+        VStack(alignment: .leading, spacing: 26) {
+            SettingsGroup(title: L10n.tr("Délka kardia"), footer: L10n.tr("Bez limitu čas jen běží a zastavíš ho, až budeš hotový.")) {
+                CardioLengthSlider(minutes: $cardioLength) { value in
+                    save(["cardioLength": .number(Double(value))], unchanged: (prefs?.cardioLength ?? 0) == value)
+                }
+                .padding(16)
+            }
+            SettingsGroup(title: L10n.tr("Oblíbené časy")) {
+                ForEach(favourites, id: \.self) { minutes in
+                    HStack {
+                        Text(verbatim: "\(minutes) min").font(.body).foregroundStyle(Palette.ink)
+                        Spacer()
+                        Button { saveFavourites(favourites.filter { $0 != minutes }) } label: {
+                            Image(systemName: "star.fill").scaledFont(15, weight: .medium).foregroundStyle(Palette.muted)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text("Odebrat z oblíbených"))
+                    }
+                    .padding(.leading, 16).padding(.trailing, 6)
+                    .frame(minHeight: 50)
+                    SettingsDivider()
+                }
+                Button { addingTime = true } label: {
+                    Text("Přidat čas").font(.body).foregroundStyle(Palette.amber)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16).frame(minHeight: 50)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(favourites.count >= 6)
+            }
+            .sheet(isPresented: $addingTime) {
+                CardioTimeSheet { value in saveFavourites(favourites + [value]) }
+            }
+        }
+        .disabled(prefs == nil && !model.demo)
+    }
+
+    /// At most six, each once, shortest first (src/stretching.js cardioFavourites).
+    private func saveFavourites(_ list: [Int]) {
+        let next = Array(Set(list.filter { (1...60).contains($0) })).sorted().prefix(6).map { $0 }
+        favourites = next
+        save(["cardioFavourites": .array(next.map { .number(Double($0)) })], unchanged: prefs?.cardioFavourites == next)
     }
 
     private func goalChanged(_ value: String) {
@@ -665,6 +744,8 @@ struct GymPreferencesGroup: View {
         goal = value.goal
         cardio = value.cardioMode
         cardioType = value.cardioType ?? value.cardioOptions?.first?.id ?? "exercise_bike"
+        cardioLength = value.cardioLength ?? 0
+        favourites = value.cardioFavourites ?? GymCardio.favourites
     }
 
     private func save(_ change: JSONObject, unchanged: Bool) {

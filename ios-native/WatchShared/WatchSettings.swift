@@ -15,6 +15,10 @@ struct WatchSettings: Codable, Equatable, Sendable {
     var alarmOnWatch: Bool = false
     /// Training mode on the iPhone opens the gym on the watch too.
     var openOnWatch: Bool = true
+    /// Nastavení → Pauzy v posilovně (-1: the plan's for each exercise) and the
+    /// rest before the next exercise, for a plan the watch loads without the iPhone.
+    var restSets: Int = -1
+    var restExercises: Int = 120
 
     init() {}
 
@@ -25,6 +29,8 @@ struct WatchSettings: Codable, Equatable, Sendable {
         restEnd = try c.decodeIfPresent(String.self, forKey: .restEnd) ?? "tapBeep"
         alarmOnWatch = try c.decodeIfPresent(Bool.self, forKey: .alarmOnWatch) ?? false
         openOnWatch = try c.decodeIfPresent(Bool.self, forKey: .openOnWatch) ?? true
+        restSets = try c.decodeIfPresent(Int.self, forKey: .restSets) ?? -1
+        restExercises = try c.decodeIfPresent(Int.self, forKey: .restExercises) ?? 120
     }
 
     func encoded() -> Data? { try? JSONEncoder().encode(self) }

@@ -292,11 +292,13 @@ test('the Apple Watch chapter shows the watch app on the sample morning',async()
 test('the privacy policy, terms and health data policy name the operator as a sole trader, and every transfer outside the EU has its safeguard',async()=>{
   const get=async(fn,path)=>(await fn(new Request('https://aurin.health'+path))).text();
   const [privacy,cs,terms,termsCs,health]=await Promise.all([get(privacyPage,'/privacy'),get(privacyPage,'/cs/privacy'),get(termsPage,'/terms'),get(termsPage,'/cs/terms'),get(healthDataPage,'/health-data')]);
-  // § 435 of the Civil Code: name, registered office and IČO on every page that speaks for the operator, and in the footer.
+  // § 435 of the Civil Code: name, registered office and IČO on every page that speaks for the operator;
+  // the footer stays short and links these pages.
   for(const html of [privacy,cs,terms,termsCs,health]){
     assert.match(html,/IČO\)? 30194202/);
     assert.match(html,/Vrchlického 142, Sedlec, 284 03 Kutná Hora/);
-    assert.match(html,/© 2026 Aurin · run by Petr Bouma, IČO 30194202, Vrchlického 142, 284 03 Kutná Hora, Czech Republic/);
+    assert.match(html,/<span>© 2026 Aurin<\/span>/);
+    assert.match(html,/<a href="\/privacy">Privacy Policy<\/a><\/li><li><a href="\/terms">Terms of Use<\/a><\/li><li><a href="\/health-data">Consumer Health Data<\/a>/);
     assert.doesNotMatch(html,/private individual|soukromá osoba/);
   }
   assert.match(readFileSync(new URL('../public/llms.txt',import.meta.url),'utf8'),/IČO 30194202/);

@@ -124,6 +124,7 @@ struct ReportProblemView: View {
             "app": .string("\(version) (\(build))"),
             "ios": .string(UIDevice.current.systemVersion),
             "device": .string(UIDevice.current.model),
+            "deviceModel": .string(Self.deviceModel),
             "language": .string(L10n.language),
             "units": .string(UserDefaults.standard.string(forKey: Units.key) ?? "metric"),
             "timeZone": .string(TimeZone.current.identifier),
@@ -131,6 +132,10 @@ struct ReportProblemView: View {
             "demo": .bool(model.demo),
             "reportedAt": .string(ISO8601DateFormatter().string(from: Date()))
         ]
+        // Where the user was before Settings: the tab and its open detail, the last one last.
+        d["screens"] = .array(ScreenTrail.entries.map { JSONValue.string($0) })
+        let watch = WatchBridge.shared.watchState
+        d["appleWatch"] = .object(["paired": .bool(watch.paired), "aurinInstalled": .bool(watch.installed)])
         d["connections"] = .array(store.connections.map { provider -> JSONValue in
             var o: JSONObject = ["id": .string(provider.id), "connected": .bool(provider.connected == true)]
             if provider.needsReconnect == true { o["needsReconnect"] = .bool(true) }
@@ -193,6 +198,16 @@ struct ReportProblemView: View {
         if let e = store.errorMessage { errors["settings"] = .string(e) }
         d["lastErrors"] = .object(errors)
         return d
+    }
+
+    /// The hardware name, like "iPhone16,1"; UIDevice only says "iPhone".
+    private static var deviceModel: String {
+        var info = utsname()
+        uname(&info)
+        let name = withUnsafeBytes(of: &info.machine) { raw in
+            String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self)
+        }
+        return name.isEmpty ? "?" : name
     }
 
     private var diagnosticsText: String {

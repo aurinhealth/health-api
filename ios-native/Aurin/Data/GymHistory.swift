@@ -214,21 +214,14 @@ enum GymCoach {
     }
 
     /// The sheet's kg text: "85", "82.5".
-    static func kgText(_ kg: Double) -> String {
-        let r = (kg * 100).rounded() / 100
-        return r.rounded() == r ? String(Int(r)) : String(r)
-    }
+    static func kgText(_ kg: Double) -> String { GymDay.kgText(kg) }
 
     /// kg as shown in the chosen unit: "82,5".
     static func shown(_ kg: Double) -> String {
         LiftWeight.shown(kgText(kg)) ?? kgText(kg)
     }
 
-    static func firstNumber(_ text: String?) -> Int? {
-        guard let text else { return nil }
-        let digits = text.trimmingCharacters(in: .whitespaces).prefix { $0.isNumber }
-        return digits.isEmpty ? nil : Int(String(digits))
-    }
+    static func firstNumber(_ text: String?) -> Int? { GymDay.firstNumber(text) }
 
     static func firstNumber(_ value: JSONValue?) -> Int? {
         if let n = value?.number { return Int(n) }
@@ -466,17 +459,6 @@ enum GymCoach {
 // MARK: - The gym sheet for a logged workout
 
 extension GymDay {
-    /// Row 5 of the header: "Odcvičeno", start and end (ISO 8601).
-    static let timeRow = 5
-
-    // ISO8601DateFormatter is thread-safe.
-    nonisolated(unsafe) private static let iso: ISO8601DateFormatter = ISO8601DateFormatter()
-
-    private func text(_ row: Int, _ column: Int) -> String? {
-        guard row < values.count, column < values[row].count else { return nil }
-        return values[row][column].string
-    }
-
     /// The header rows, the date and the column names, for a day without a plan.
     mutating func ensureHeader(date: String) {
         while values.count < Self.firstSetRow { values.append([]) }
@@ -490,34 +472,6 @@ extension GymDay {
     mutating func setName(_ name: String) {
         guard values.count > 2 else { return }
         set(row: 2, column: 3, name)
-    }
-
-    /// The row is also where a generated plan keeps its warm-up and
-    /// stretching ("Rozcvička a protažení", JSON; src/stretching.js): the
-    /// times then go after them, so they stay.
-    private var timeColumn: Int { text(Self.timeRow, 0) == "Rozcvička a protažení" ? 2 : 0 }
-
-    var startedAt: Date? { text(Self.timeRow, timeColumn + 1).flatMap { Self.iso.date(from: $0) } }
-    var finishedAt: Date? { text(Self.timeRow, timeColumn + 2).flatMap { Self.iso.date(from: $0) } }
-
-    mutating func markStarted(_ date: Date) {
-        guard values.count > Self.timeRow else { return }
-        let base = timeColumn
-        if base == 0 { set(row: Self.timeRow, column: 0, "Odcvičeno") }
-        set(row: Self.timeRow, column: base + 1, Self.iso.string(from: date))
-    }
-
-    mutating func markFinished(_ date: Date) {
-        guard values.count > Self.timeRow else { return }
-        let base = timeColumn
-        if base == 0 { set(row: Self.timeRow, column: 0, "Odcvičeno") }
-        set(row: Self.timeRow, column: base + 2, Self.iso.string(from: date))
-    }
-
-    /// Pokračovat v tréninku: the workout is under way again.
-    mutating func clearFinished() {
-        guard values.count > Self.timeRow else { return }
-        set(row: Self.timeRow, column: timeColumn + 2, "")
     }
 
     /// Minutes from the start to the end of a workout logged in the app.

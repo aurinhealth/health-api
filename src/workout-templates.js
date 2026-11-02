@@ -20,6 +20,7 @@ import { localToday } from "./user-time.js";
 import { siteLang } from "./site-pages.js";
 import { ENDURANCE_SPORTS, cleanEnduranceTemplate, enduranceStructure, templateFromStructure, blockLines, zwoFile, ZONES } from "./endurance-templates.js";
 import { totalMinutes } from "./workout-model.js";
+import { fitWorkoutFile } from "./fit-workout.js";
 import { stepRows } from "./workout-explanation.js";
 import { getWorkout, scheduleWorkoutInIntervals } from "./workout-library.js";
 import { SITE_ORIGIN } from "./app-origin.js";
@@ -237,14 +238,30 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
       if (!w || !structure.length) return json({ message: L("Trénink nemá úseky, které by šly uložit.", "The workout has no sections to save.") }, 404);
       return json({ status: "ok", template: templateFromStructure(ENDURANCE_SPORTS.includes(w.sport) ? w.sport : "ride", w.name, structure) });
     }
-    // "Send to" → Zwift, MyWhoosh: the planned ride as a .zwo file.
+    // "Export to" → .zwo: the planned ride or run as a Zwift file.
     if (path === "/app/api/my-workouts/from-planned.zwo" && request.method === "GET") {
       const w = await plannedWorkout(env, String(url.searchParams.get("id") || ""));
       let structure = [];
       try { structure = JSON.parse(w?.structure_json || "[]"); } catch { /* none */ }
-      if (!w || (w.sport && w.sport !== "ride") || !structure.length) return json({ message: L("Tenhle trénink jako soubor pro Zwift nejde.", "This workout can't be made into a Zwift file.") }, 404);
-      const template = templateFromStructure("ride", w.name, structure);
+      const sport = w?.sport || "ride";
+      if (!w || !["ride", "run"].includes(sport) || !structure.length) return json({ message: L("Tenhle trénink jako soubor pro Zwift nejde.", "This workout can't be made into a Zwift file.") }, 404);
+      const template = templateFromStructure(sport, w.name, structure);
       return new Response(zwoFile(template), { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "no-store" } });
+    }
+    // "Export to" → .fit: the planned ride, run or swim as a FIT workout
+    // (Garmin, Wahoo, Karoo, COROS). A run asks for the threshold pace so the
+    // steps get real paces; a ride stays in % FTP, a swim without targets.
+    if (path === "/app/api/my-workouts/from-planned.fit" && request.method === "GET") {
+      const w = await plannedWorkout(env, String(url.searchParams.get("id") || ""));
+      let structure = [];
+      try { structure = JSON.parse(w?.structure_json || "[]"); } catch { /* none */ }
+      const sport = ENDURANCE_SPORTS.includes(w?.sport) ? w.sport : "ride";
+      if (!w || !structure.length) return json({ message: L("Tenhle trénink jako soubor .fit nejde.", "This workout can't be made into a .fit file.") }, 404);
+      const template = templateFromStructure(sport, w.name, structure);
+      const thresholds = sport === "run" ? await athleteThresholds(env).catch(() => null) : null;
+      // No pool length: the watch uses the pool the swimmer set for the swim.
+      const file = fitWorkoutFile(template, { thresholdPace: thresholds?.runThresholdPace || null });
+      return new Response(file, { headers: { "content-type": "application/vnd.ant.fit", "cache-control": "no-store" } });
     }
     // A ride or run put together from the athlete's words; nothing is saved.
     if (path === "/app/api/my-workouts/describe" && request.method === "POST") {

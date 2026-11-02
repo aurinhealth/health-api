@@ -867,6 +867,3 @@ final class APIClient: @unchecked Sendable {
     }
 }
 
-extension String {
-    var nilIfBlank: String? { trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : self }
-}

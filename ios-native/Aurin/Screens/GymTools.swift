@@ -221,6 +221,8 @@ struct GymBuilderView: View {
     /// From Svaly: the proposal straight away, its length the usual one
     /// (capped by the day's free time); day, length and focus change on it.
     var quick = false
+    /// From the Odpočaté chip (Cviky): the focus is the rested muscles.
+    var rested = false
     @State private var day: Date = Date()
     @State private var minutes = 60
     @State private var focus = "auto"
@@ -288,6 +290,10 @@ struct GymBuilderView: View {
             }
             if template == nil, model.musclesStale { await model.loadMuscles() }
             // What is rested today picks the focus, until the athlete picks one.
+            if rested, template == nil, proposal == nil, !focusPreset, model.muscles?.restedFocus.isEmpty == false {
+                focusPreset = true
+                focus = "rested"
+            }
             if template == nil, proposal == nil, focus == "auto", !focusPreset, let preset = model.muscles?.focus {
                 focusPreset = true
                 focus = preset
@@ -348,6 +354,10 @@ struct GymBuilderView: View {
 
     private var form: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // The form has no Odpočaté: those muscles picked on the figure instead.
+            Color.clear.frame(height: 0).onAppear {
+                if focus == "rested" { let ids = restedIds; focus = "muscles"; muscles = Set(ids) }
+            }
             if let data = model.muscles { musclesCard(data).padding(.top, 20) }
             SectionLabel(text: "Kdy a jak dlouho").padding(.top, 26)
             Card {
@@ -487,7 +497,7 @@ struct GymBuilderView: View {
                 }
             } label: { SetupChip(text: "\(minutes) min") }
             Menu {
-                ForEach(["auto", "upper", "lower"], id: \.self) { f in
+                ForEach(["auto", "upper", "lower"] + (restedIds.isEmpty ? [] : ["rested"]), id: \.self) { f in
                     Button { focus = f; muscles = []; Task { await preview() } } label: {
                         if f == focus { Label(GymLength.focusTitle(f), systemImage: "checkmark") } else { Text(GymLength.focusTitle(f)) }
                     }
@@ -709,12 +719,16 @@ struct GymBuilderView: View {
         }
     }
 
+    /// The rested muscles the Odpočaté focus asks for (MuscleFatigue.restedFocus).
+    private var restedIds: [String] { model.muscles?.restedFocus ?? [] }
+
     private func preview() async {
         await run("preview") {
             let auto = quick && !showForm && !lengthPicked
             var next = try await model.api.previewGym(date: isoDay, minutes: minutes,
                                                       focus: focus == "upper" || focus == "lower" ? focus : nil,
-                                                      muscles: focus == "muscles" ? BodyFigure.muscles.map { $0.id }.filter(muscles.contains) : [],
+                                                      muscles: focus == "muscles" ? BodyFigure.muscles.map { $0.id }.filter(muscles.contains)
+                                                          : focus == "rested" ? restedIds : [],
                                                       autoLength: auto, usualMinutes: auto ? GymLength.usual : nil)
             next.groupSupersets()
             if auto, let settled = next.minutes { minutes = settled }
@@ -1228,6 +1242,7 @@ enum GymLength {
         case "upper": return L10n.tr("Horní část těla")
         case "lower": return L10n.tr("Nohy")
         case "muscles": return L10n.tr("Partie")
+        case "rested": return L10n.tr("Odpočaté")
         default: return L10n.tr("Celé tělo")
         }
     }

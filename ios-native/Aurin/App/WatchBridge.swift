@@ -143,10 +143,18 @@ final class WatchBridge: NSObject {
         Task { await updateAlarmBackup(alarm) }
         if let gym = gymContext { context[WatchGym.replyKey] = gym }
         guard !context.isEmpty else { return }
-        context[WatchSettings.contextKey] = Self.settings.encoded()
+        var settings = Self.settings
+        (settings.restSets, settings.restExercises) = Self.restSettings
+        context[WatchSettings.contextKey] = settings.encoded()
         if let signIn = Self.signIn()?.encoded() { context[WatchSession.contextKey] = signIn }
         try? session.updateApplicationContext(context)
         lastSent = Date()
+    }
+
+    /// Training mode started here: a watch app that is running opens the gym too.
+    func openWatchGym() {
+        guard let session, session.activationState == .activated, session.isWatchAppInstalled, session.isReachable else { return }
+        session.sendMessage([WatchGym.openKey: true], replyHandler: nil, errorHandler: nil)
     }
 
     /// Training mode finished on the iPhone: the watch ends its workout and saves it.
@@ -296,6 +304,7 @@ extension WatchBridge: WCSessionDelegate {
         let rated = (message[WatchGym.ratedKey] as? Data).flatMap(WatchGym.Rated.decode)
         let change = (message[WatchGym.changeKey] as? Data).flatMap(WatchGym.Change.decode)
         let options = (message[WatchGym.optionsKey] as? Data).flatMap(WatchGym.OptionsRequest.decode)
+        let sheet = (message[WatchGym.sheetKey] as? Data).flatMap(WatchGym.Sheet.decode)
         let water = message[WatchSnapshot.waterKey] as? Int
         let drinkKind = message[WatchSnapshot.drinkKindKey] as? String ?? "water"
         let alarmChange = (message[WatchSnapshot.AlarmChange.key] as? Data).flatMap(WatchSnapshot.AlarmChange.decode)
@@ -306,6 +315,7 @@ extension WatchBridge: WCSessionDelegate {
         let live = (message[WatchGym.liveKey] as? Data).flatMap(WatchGym.Live.decode)
         let gymEnded = message[WatchGym.watchEndKey] as? Bool == true
         let rest = (message[WatchGym.restKey] as? Data).flatMap(WatchGym.Rest.decode)
+        let draft = (message[WatchGym.draftKey] as? Data).flatMap(WatchGym.Draft.decode)
         let plan = (message[WatchPlan.requestKey] as? Data).flatMap { try? JSONDecoder().decode(WatchPlan.Request.self, from: $0) }
         Task { @MainActor in
             if let plan {
@@ -325,6 +335,11 @@ extension WatchBridge: WCSessionDelegate {
             }
             if let rest {
                 NotificationCenter.default.post(name: .watchRest, object: rest)
+                replyHandler(["ok": true])
+                return
+            }
+            if let draft {
+                NotificationCenter.default.post(name: .watchDraft, object: draft)
                 replyHandler(["ok": true])
                 return
             }
@@ -351,6 +366,11 @@ extension WatchBridge: WCSessionDelegate {
             }
             if let water {
                 await addWater(ml: water, kind: drinkKind)
+                replyHandler(["ok": true])
+                return
+            }
+            if let sheet {
+                await applyGym(sheet: sheet)
                 replyHandler(["ok": true])
                 return
             }
@@ -435,7 +455,10 @@ extension WatchBridge: WCSessionDelegate {
         let alarmStopped = userInfo[WatchSnapshot.alarmStoppedKey] as? Bool == true
         let alarmSnoozed = userInfo[WatchSnapshot.alarmSnoozedKey] as? Date
         let gymEnded = userInfo[WatchGym.watchEndKey] as? Bool == true
+        // The watch's gym workout, started while this iPhone was out of reach.
+        let live = (userInfo[WatchGym.liveKey] as? Data).flatMap(WatchGym.Live.decode)
         Task { @MainActor in
+            if let live, !gymEnded { LiveWorkout.shared.watch(live) }
             if let done { await applyGym(done) }
             if gymEnded { LiveWorkout.shared.watchEnded() }
             if let rated { await applyGym(rated) }

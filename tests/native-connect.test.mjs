@@ -52,6 +52,12 @@ test("the ticket continues straight on in a browser already signed in as that us
   assert.equal(response.headers.get("Location"), "/oauth/intervals");
   assert.match(response.headers.get("Set-Cookie"), /aurin_connect_return=app; .*HttpOnly/);
   assert.match(response.headers.get("Set-Cookie"), /HttpOnly; Secure/);
+  // A quarter-hour cookie good only for connecting, never a month-long session (dashboard-auth.js).
+  const session = response.headers.getSetCookie().find(cookie => cookie.startsWith("pfd_session="));
+  assert.match(session, /; Max-Age=900;/);
+  const payload = JSON.parse(Buffer.from(session.split(";")[0].slice("pfd_session=".length).split(".")[0], "base64url"));
+  assert.equal(payload.sc, "connect");
+  assert.ok(payload.exp - payload.iat === 900);
   // Used up: the same link never signs anyone in again.
   assert.equal((await handleNativeConnect(new Request(url), cenv, url, { user: { id: 3 }, signedIn: true })).headers.get("Location"), "https://aurin.health/auth/app/connected?event=expired");
   const google = new URL(origin + "/auth/app/connect?ticket=" + encodeURIComponent(await connectTicket(3, "google", env.SESSION_SECRET)));

@@ -727,7 +727,7 @@ ${body}
 <nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li></ul></nav>
 <nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/cs/privacy" hreflang="cs">Soukromí</a> · <a href="/cs/terms" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
-<div class="base"><span>© 2026 Aurin · run by ${OPERATOR.short}</span><span>Aurin is not a medical device.</span></div>
+<div class="base"><span>© 2026 Aurin</span><span>Aurin is not a medical device.</span></div>
 </div></footer>
 ${demoScript}
 ${siteScript}
@@ -756,11 +756,10 @@ const UPDATED = {cs: '1. listopadu 2026', en: '1 November 2026'};
 const CONTACT_EMAIL = 'support@aurin.health';
 // Who runs Aurin: a sole trader, so the privacy policy, the terms and the health data policy give the
 // name, registered office and IČO (§ 435 of the Czech Civil Code), as in the Trade Licensing Register.
+// The footer stays short (© 2026 Aurin) and links these pages under Documents.
 const OPERATOR = {
   en: 'Petr Bouma, a sole trader in the Czech Republic (Company ID (IČO) 30194202, registered office Vrchlického 142, Sedlec, 284 03 Kutná Hora, registered in the Czech Trade Licensing Register)',
-  cs: 'Petr Bouma, fyzická osoba podnikající v České republice (IČO 30194202, sídlo Vrchlického 142, Sedlec, 284 03 Kutná Hora, zapsán v živnostenském rejstříku)',
-  // The footer of every page (the website is English only).
-  short: 'Petr Bouma, IČO 30194202, Vrchlického 142, 284 03 Kutná Hora, Czech Republic'
+  cs: 'Petr Bouma, fyzická osoba podnikající v České republice (IČO 30194202, sídlo Vrchlického 142, Sedlec, 284 03 Kutná Hora, zapsán v živnostenském rejstříku)'
 };
 const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
 const HEALTH_POLICY = 'https://developers.google.com/health/policies/health-api-developer-user-data-policy';
@@ -816,17 +815,17 @@ export function overviewPage(request) {
     ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
       ['html:strain', 'strainMade', 200, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000]]],
     ['trenink', '', 'A plan that adapts.', 'An activity for every day, picked for how you recovered.', 'green', 'glow-today', [
-      ['training', 'week', 150, 'Your week at a glance.', 'Follow a plan for your race, from 5 km to a marathon, a gran fondo or a triathlon from sprint to full distance, or one that takes you to 1,500 m of swimming without stopping, or let the AI plan the week of rides, runs, swims and gym; for a triathlon your newest sport gets more short sessions, with a short run straight after a ride (a brick, which you can also put on any day yourself) that goes to your Apple Watch as one multisport workout, or apart, each at its own time. Give it the time you have each day, even two weeks in turn for shift work, and the plan fits it, with the long ride or run on the day you pick; give each ride, run and swim a time of day before it goes to your calendar; a busy day in your calendar gets a shorter workout. The library has bricks too, a ride and a run or a swim and a ride, one right after the other. Send a planned ride, run or pool swim to Intervals.icu or your Apple Watch, and a ride or run also to Wahoo or Zwift.', 9500]]],
+      ['training', 'week', 150, 'Your week at a glance.', 'Follow a plan for your race, from 5 km to a marathon, a gran fondo or a triathlon from sprint to full distance, or one that takes you to 1,500 m of swimming without stopping, or let the AI plan the week of rides, runs, swims and gym; for a triathlon your newest sport gets more short sessions, with a short run straight after a ride (a brick, which you can also put on any day yourself) that goes to your Apple Watch as one multisport workout, or apart, each at its own time. Give it the time you have each day, even two weeks in turn for shift work, and the plan fits it, with the long ride or run on the day you pick; give each ride, run and swim a time of day before it goes to your calendar; a busy day in your calendar gets a shorter workout. The library has bricks too, a ride and a run or a swim and a ride, one right after the other. Send a planned ride, run or pool swim to Intervals.icu or your Apple Watch, and a ride or run also to Wahoo; export a ride or run as a .zwo file for trainer apps, or any of them as a .fit file for Garmin, Karoo or COROS.', 9500]]],
     ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym.', 'amber', 'glow-training', [
       ['builder', 'builder', 200, 'Say how long and what.', 'Pick the day, the length and the focus, or take the workout your rested muscles suggest in one tap, at your usual length. Aurin builds it only from the equipment your gym has.', 8500],
-      ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, set their length or pick a warm-up of your own, and move them into the order you like. Then start.', 7000]]],
+      ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, set their length or pick a warm-up of your own, and move them into the order you like. Cardio has no set time unless you pick one: it just runs until you stop it. Then start.', 7000]]],
     ['rezim', 'Training mode', 'Log every set in a tap.', 'Weights from last time, a rest timer and your summary.', 'green', 'glow-today', [
       ['training-mode', 'tmOne', 220, 'Your weights, ready.', 'Every set is filled in with its weight, its reps and the plates for each side of the bar. Machine taken? Swap the exercise for a similar one.', 6000],
       ['training-set', 'tickOne', 300, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets. Miss your reps or hit failure and the next set comes lighter; breeze through and it comes heavier.', 6000],
       ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, longer after squats than after curls, and stays on your lock screen. The last seconds count down with a vibration you feel even with the phone on the bench.', 13500],
       ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume, new records and the muscles you tired when you finish, saved to Apple Health. Then say how it went.', 6000]]],
     ['vyziva', '', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
-      ['food-day', 'foodOne', 220, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.', 7500],
+      ['food-day', 'foodOne', 220, 'A target that moves.', 'Train harder and you get more to eat. See what makes up the target: your base, the workouts done and the ones still planned. The coach says what that means for your next meal.', 7500],
       ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000],
       ['food-day', 'drinks', 330, 'Drink to your goal.', 'Tap a drink, or the whale itself for your usual glass. At today’s goal it blows its spout. Keep Aurin’s goal, set your own, or build up to it day by day. Rather a bottle, a flower or an octopus? Pick one in Settings.', 9500],
       ['food-day', 'diet', 120, 'Eat your way.', 'Everything, vegetarian or vegan; balanced, high protein, lower carb or keto. Your protein, carbs and nutrients follow, or set your own.', 8000]]],

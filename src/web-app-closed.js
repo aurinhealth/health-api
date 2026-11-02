@@ -4,7 +4,7 @@
 // overview page.
 // Still open: the public pages, the browser sheets the iPhone app opens to sign
 // in with Google (/auth/google?app=…, back at /auth/app/return) and to connect Google Health or
-// Intervals.icu (/auth/app/connect, /oauth/…), the owner's API key, GitHub
+// Intervals.icu (/auth/app/connect, /oauth/…), GitHub
 // Actions and the cron jobs.
 import { appApiLevel } from "./app-version.js";
 import { verifyDashboardSession, sessionSecret } from "./dashboard-auth.js";

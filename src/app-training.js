@@ -263,7 +263,9 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   const isStrength = w => /weight|strength|gym|posil|síl/i.test(String(w?.type || "") + " " + String(w?.name || ""));
   const sessionOf = (d, w, plan) => {
     const gymCard = !!plan?.exercises?.length;
-    const sport = gymCard ? "strength" : String(w?.type || "").toLowerCase() || null;
+    // An indoor ride ("VirtualRide") is a ride for the card's icon too.
+    const group = groupOfType(w?.type);
+    const sport = gymCard ? "strength" : ["ride", "run", "swim", "walk"].includes(group) ? group : String(w?.type || "").toLowerCase() || null;
     return {
       date: d,
       time: w ? clockOf(w.start) : null,
@@ -276,7 +278,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
       // Each exercise with its sets × reps · weight, and the muscles it works most (gymPlanSummary).
       lines: gymCard && Array.isArray(plan.lines) ? plan.lines.slice(0, 30) : [],
       muscles: gymCard && Array.isArray(plan.muscles) ? plan.muscles : [],
-      description: w?.description ? String(w.description).split("\n").map(s => s.trim()).filter(Boolean).slice(0, 3).join(" ").slice(0, 240) : null,
+      description: cardDescription(w?.description),
       advice: d === date ? coachAdvice(coaches, sport) : null,
       // The calendar event, so the app opens the same detail as from the week's list.
       eventId: /^planned:/.test(String(w?.id || "")) ? String(w.id) : null
@@ -484,6 +486,17 @@ function strainBand(v) {
 // The coach's first tip for today's session (coach-engine.js).
 // The coach of the session's sport: the cycling coach's words for a ride, the
 // gym coach's for strength; another sport has none.
+// The card's few lines about a planned workout: the words before its step
+// text. The steps ("Warmup", "- 10m 55% 90rpm intensity=warmup") are for the
+// calendars and the workout's detail, never for the card.
+const STEP_LINE = /^-\s*\d|\bintensity=\w|^\d+\s*[x×]$/i, STEP_HEADER = /^(warm-?up|cool-?down|main set\b.*|\d+\s*[x×])$/i;
+export function cardDescription(text) {
+  const lines = String(text || "").split("\n").map(s => s.trim()).filter(Boolean);
+  const end = lines.findIndex(l => STEP_LINE.test(l));
+  const words = (end < 0 ? lines : lines.slice(0, end)).filter(l => !STEP_HEADER.test(l));
+  return words.slice(0, 3).join(" ").slice(0, 240) || null;
+}
+
 function coachAdvice(coaches, sport) {
   const id = sport === "strength" ? "gym" : /ride|cycl/.test(String(sport || "")) ? "cycling" : null;
   // The gym coach's list of today's exercises ("Dnes: Dřep (3 série), …", coach-engine.js)

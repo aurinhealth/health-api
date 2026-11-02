@@ -55,4 +55,30 @@ final class GymDayPartsTests: XCTestCase {
         XCTAssertEqual(back.routines?["warmup"]?.length, 10)
         XCTAssertEqual(back.minutes(.warmup, day: d), 10)
     }
+
+    /// Cardio has no set time unless Posilovna chose one: the time just runs.
+    func testCardioRunsWithoutALimitUnlessALengthIsChosen() {
+        let old = day(routines: #"{"warmup":"# + routine + #","cardio":{"type":"treadmill","start":10,"end":null}}"#)
+        let parts = GymDayParts.defaults(old)
+        XCTAssertEqual(parts.choice(.cardioStart).minutes, 0)
+        XCTAssertEqual(parts.routine(.cardioStart, day: old)?.items.first?.seconds, 0)
+        XCTAssertEqual(parts.subtitle(.cardioStart, day: old), GymCardio.name("treadmill") + " · " + L10n.tr("Bez limitu"))
+        XCTAssertEqual(parts.routine(.cardioStart, day: old)?.items.first?.duration, L10n.tr("Bez limitu"))
+        let timed = day(routines: #"{"warmup":"# + routine + #","cardio":{"type":"treadmill","start":12,"end":12,"length":12}}"#)
+        XCTAssertEqual(GymDayParts.defaults(timed).choice(.cardioEnd).minutes, 12)
+        XCTAssertEqual(GymDayParts.defaults(timed).routine(.cardioEnd, day: timed)?.items.first?.seconds, 720)
+    }
+
+    /// Stop keeps the cardio's length and its end for the day.
+    func testTheStoppedCardioIsKept() {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        let today = f.string(from: Date())
+        let entry = GymCardioLog.Entry(seconds: 432, end: Date())
+        let stored = GymCardioLog.saving(entry, date: today, id: "cardio-start", into: "")
+        XCTAssertEqual(GymCardioLog.entry(stored, date: today, id: "cardio-start"), entry)
+        XCTAssertNil(GymCardioLog.entry(stored, date: today, id: "cardio-end"))
+        XCTAssertTrue(entry.summary.hasPrefix("7 min · "))
+    }
 }

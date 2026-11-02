@@ -136,6 +136,62 @@ enum WatchAPI {
         return WatchPlan.parse(data, english: session.language == "en")
     }
 
+    // MARK: - The gym without the iPhone (GymStore)
+
+    /// A day's gym sheet, without the history the iPhone loads with it.
+    static func gymSheet(date: String) async -> GymDay? {
+        guard let data = await get("/app/api/gym?lite=1&date=" + date) else { return nil }
+        let day = try? JSONDecoder().decode(GymDay.self, from: data)
+        return day?.status == "partial" ? nil : day
+    }
+
+    /// Saves the day's sheet as the iPhone does (POST /app/api/gym): the sets
+    /// into the history, the whole sheet for the next load. False offline or on an error.
+    static func saveGym(_ day: GymDay, date: String) async -> Bool {
+        guard let session, var request = request("/app/api/gym", method: "POST", session: session) else { return false }
+        var body = day.saveBody
+        body["date"] = .string(date)
+        body["lite"] = .bool(true)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        guard let json = try? JSONEncoder().encode(body),
+              let (_, response) = try? await urlSession.upload(for: request, from: json) else { return false }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if status == 401 { store(nil) }
+        return (200..<300).contains(status)
+    }
+
+    /// Exercises to swap in for `exercise` that fit the athlete's gym, with
+    /// the load from their history (GET /app/api/gym/alternatives).
+    static func gymAlternatives(date: String, exercise: String, inPlan: [String]) async -> [WatchGym.Option] {
+        var query = URLComponents()
+        query.queryItems = [URLQueryItem(name: "date", value: date), URLQueryItem(name: "exercise", value: exercise)]
+        if let data = try? JSONEncoder().encode(inPlan), let json = String(data: data, encoding: .utf8) {
+            query.queryItems?.append(URLQueryItem(name: "inPlan", value: json))
+        }
+        struct Found: Decodable { let name: String; let kg: Double?; let sets: JSONValue?; let reps: JSONValue? }
+        struct Response: Decodable { let alternatives: [Found]? }
+        guard let q = query.percentEncodedQuery, let data = await get("/app/api/gym/alternatives?" + q),
+              let list = (try? JSONDecoder().decode(Response.self, from: data))?.alternatives else { return [] }
+        return list.prefix(20).map { option($0.name, kg: $0.kg, sets: $0.sets, reps: $0.reps) }
+    }
+
+    /// Exercises whose names hold `query`, the ones the gym allows first (GET /app/api/gym/exercises?q=).
+    static func gymSearch(_ text: String, inPlan: [String]) async -> [WatchGym.Option] {
+        var query = URLComponents()
+        query.queryItems = [URLQueryItem(name: "q", value: text)]
+        struct Found: Decodable { let name: String; let sets: JSONValue?; let reps: JSONValue? }
+        struct Response: Decodable { let exercises: [Found]? }
+        guard let q = query.percentEncodedQuery, let data = await get("/app/api/gym/exercises?" + q),
+              let list = (try? JSONDecoder().decode(Response.self, from: data))?.exercises else { return [] }
+        return list.filter { !inPlan.contains($0.name) }.map { option($0.name, kg: nil, sets: $0.sets, reps: $0.reps) }
+    }
+
+    private static func option(_ name: String, kg: Double?, sets: JSONValue?, reps: JSONValue?) -> WatchGym.Option {
+        WatchGym.Option(name: name, shown: ExerciseName.shown(name), kg: kg,
+                        sets: sets?.number.map { Int($0) },
+                        reps: reps?.string)
+    }
+
     /// The answer without Markdown, as Siri reads it (SiriAnswer.coach on the iPhone).
     static func plain(_ answer: String) -> String {
         var text = answer

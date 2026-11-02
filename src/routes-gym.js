@@ -3,7 +3,7 @@
 import { trainingSetup, updateTrainingSetup } from "./onboarding.js";
 import { fitsEquipment, EXERCISES, recommendedGoal, gymDayFacts } from "./strength-generator.js";
 import { buildStrengthContext } from "./strength-context.js";
-import { cardioFor, cardioMode, cardioOptions, cardioType, myRoutinesView, routineMoves, routinesFor, routineSize, typicalExtraMinutes, withRoutines } from "./stretching.js";
+import { cardioFavourites, cardioFor, cardioLength, cardioMode, cardioOptions, cardioType, myRoutinesView, routineMoves, routinesFor, routineSize, typicalExtraMinutes, withRoutines } from "./stretching.js";
 import app from "./strength-gateway.js";
 import { bumpCacheVersion } from "./api-cache.js";
 import { exercisePreferences, recentWorkoutRatings } from "./exercise-feedback.js";
@@ -71,7 +71,7 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
   if(url.pathname==='/app/api/gym/preferences'){
     // The goal "auto" follows the main sport (profile, else the training history).
     const sport=training=>mainSportOf(env,training);
-    const reply=async training=>Response.json({status:'ok',goal:training.goal||'auto',recommendedGoal:recommendedGoal(await sport(training),training.experience),experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.experienceBySport?.strength?.autoLevel||'beginner',experienceBySport:training.experienceBySport,warmup:training.warmup!==false,warmupCardio:['start','both'].includes(cardioMode(training)),cardio:cardioMode(training),cardioType:cardioType(training),cardioOptions:cardioOptions(training.stations),stretching:training.stretching!==false,warmupLength:lengthOf(training.warmupLength),stretchingLength:lengthOf(training.stretchingLength),warmupRoutine:training.warmupRoutine||'auto',stretchingRoutine:training.stretchingRoutine||'auto',myRoutines:myRoutinesView(training),extraMinutes:typicalExtraMinutes({warmup:training.warmup!==false,cardio:cardioMode(training),stretching:training.stretching!==false,warmupMinutes:ownMinutes(training,'warmup')||(lengthOf(training.warmupLength)!=='auto'?training.warmupLength:null),stretchingMinutes:ownMinutes(training,'stretching')||(lengthOf(training.stretchingLength)!=='auto'?training.stretchingLength:null)})},{headers:{'Cache-Control':'no-store'}});
+    const reply=async training=>Response.json({status:'ok',goal:training.goal||'auto',recommendedGoal:recommendedGoal(await sport(training),training.experience),experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.experienceBySport?.strength?.autoLevel||'beginner',experienceBySport:training.experienceBySport,warmup:training.warmup!==false,warmupCardio:['start','both'].includes(cardioMode(training)),cardio:cardioMode(training),cardioType:cardioType(training),cardioOptions:cardioOptions(training.stations),cardioLength:cardioLength(training.cardioLength),cardioFavourites:cardioFavourites(training.cardioFavourites),stretching:training.stretching!==false,warmupLength:lengthOf(training.warmupLength),stretchingLength:lengthOf(training.stretchingLength),warmupRoutine:training.warmupRoutine||'auto',stretchingRoutine:training.stretchingRoutine||'auto',myRoutines:myRoutinesView(training),extraMinutes:typicalExtraMinutes({warmup:training.warmup!==false,cardio:cardioMode(training),cardioLength:cardioLength(training.cardioLength),stretching:training.stretching!==false,warmupMinutes:ownMinutes(training,'warmup')||(lengthOf(training.warmupLength)!=='auto'?training.warmupLength:null),stretchingMinutes:ownMinutes(training,'stretching')||(lengthOf(training.stretchingLength)!=='auto'?training.stretchingLength:null)})},{headers:{'Cache-Control':'no-store'}});
     if(request.method==='GET')return reply(await trainingSetup(env.DB));
     if(request.method==='POST'){
       if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
@@ -84,6 +84,9 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
       if(typeof body.warmupCardio==='boolean'){input.warmupCardio=body.warmupCardio;if(body.cardio==null)input.cardio=body.warmupCardio?'start':'none';}
       if(['none','start','end','both'].includes(body.cardio))input.cardio=body.cardio;
       if(typeof body.cardioType==='string'&&body.cardioType.trim())input.cardioType=body.cardioType.trim().slice(0,40);
+      // The cardio's length (0 = no limit) and the favourite times (normalised in onboarding.js).
+      if(body.cardioLength!=null)input.cardioLength=cardioLength(body.cardioLength);
+      if(Array.isArray(body.cardioFavourites))input.cardioFavourites=cardioFavourites(body.cardioFavourites);
       // The own warm-ups and stretchings (each kind replaced whole), the one used by default and the automatic length.
       if(body.myRoutines&&typeof body.myRoutines==='object'){const old=(await trainingSetup(env.DB)).myRoutines||{};input.myRoutines={warmup:Array.isArray(body.myRoutines.warmup)?body.myRoutines.warmup:old.warmup,stretching:Array.isArray(body.myRoutines.stretching)?body.myRoutines.stretching:old.stretching};}
       for(const kind of ['warmup','stretching']){
@@ -106,6 +109,14 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
     // liked: the athlete's thumbs up (true) or down (false), so the picker offers the disliked ones last.
     const [setup,taste]=await Promise.all([trainingSetup(env.DB).catch(()=>null),exercisePreferences(env.DB)]);
     const liked=new Set(taste.liked),disliked=new Set(taste.disliked);
+    // ?q= (the Apple Watch's search): the 20 names that match, fitting ones first, without the muscles.
+    const q=String(url.searchParams.get('q')||'').trim().slice(0,60);
+    if(q){
+      const fold=t=>String(t).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(),key=fold(q);
+      const found=gymExerciseCatalog().filter(e=>fold(e.name).includes(key)).map(e=>({name:e.name,sets:e.sets??null,reps:e.reps??null,fits:fitsEquipment(e.name,setup)}))
+        .sort((a,b)=>(a.fits===false)-(b.fits===false)||a.name.localeCompare(b.name)).slice(0,20);
+      return Response.json({status:'ok',exercises:found},{headers:{'Cache-Control':'no-store'}});
+    }
     return Response.json({status:'ok',exercises:gymExerciseCatalog().map(e=>({...e,stations:EXERCISE_STATIONS[e.name]||[],muscles:exerciseMuscles(e.name),fits:fitsEquipment(e.name,setup),fatigue:EXERCISE_INTELLIGENCE[e.name]?.fatigue??null,liked:liked.has(e.name)?true:disliked.has(e.name)?false:null}))},{headers:{'Cache-Control':'no-store'}});
   }
   // Replacements for one exercise of a day's plan (workout mode, gym table).
@@ -186,11 +197,13 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       let data={status:"ok",values:[],videoLinks:[]};
       try { const plan=await readGymPlan(env.DB,date); data={status:"ok",date,values:plan.stored?plan.values:[],videoLinks:[],stored:plan.stored,cancelled:plan.cancelled,recoverable:plan.recoverable}; }
       catch(error) { console.error("Gym plan read failed",error); data={status:"partial",values:[],videoLinks:[],message:L("Plán se nepodařilo načíst.", "The plan couldn't be loaded.")}; }
+      // ?lite=1 (the Apple Watch): the sheet alone, without the 500 rows of history and the muscles.
+      const lite=url.searchParams.get('lite')==='1';
       let history=[];
-      try { history=await getStrengthHistory(env.DB,500,{drops:true}); } catch(error) { console.error("Gym history read failed",error); }
+      if(!lite)try { history=await getStrengthHistory(env.DB,500,{drops:true}); } catch(error) { console.error("Gym history read failed",error); }
       // Muscles each exercise of the day loads (plan and saved sets), for the body figure.
       const names=new Set([...(data.values||[]).slice(7).map(r=>r?.[1]),...history.filter(r=>String(r.workout_date||'').slice(0,10)===date).map(r=>r.exercise)].filter(Boolean));
-      const muscles=Object.fromEntries([...names].map(name=>[name,exerciseMuscles(name)]));
+      const muscles=lite?{}:Object.fromEntries([...names].map(name=>[name,exerciseMuscles(name)]));
       // The athlete's equipment, so the coach swaps exercises only for ones it allows.
       const setup=await trainingSetup(env.DB).catch(()=>null),equipment=setup?{equipment:setup.equipment||null,stations:setup.stations||[]}:null;
       // An older plan without its warm-up, cardio and stretching gets them from Posilovna.
@@ -286,7 +299,8 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
         const wrote=await syncGymActivity(env,date,{name}).catch(error=>{console.error('Gym activity failed',error?.message);return false;});
         if(wrote){const job=matchActivities(env,{days:2}).then(()=>bumpCacheVersion(env.DB)).catch(error=>console.error('Activity matching failed',error?.message));if(ctx?.waitUntil)ctx.waitUntil(job);else await job;}
       }
-      const history=await getStrengthHistory(env.DB,500);
+      // lite (the Apple Watch saving a set): no history back, 500 rows fewer read.
+      const history=body?.lite===true?[]:await getStrengthHistory(env.DB,500);
       return Response.json({status:"ok",storage:"d1",values:storedValues,history,historySaved:historyResult,message:sets.length?L("Workout uložen do interní databáze.", "Workout saved to the app database."):L("Změny plánu jsou uložené; dokončené série označ Hotovo.", "Plan changes are saved; mark completed sets as Done.")},{headers:{"Cache-Control":"no-store"}});
       } catch(error) {
         console.error("Gym save failed", error);

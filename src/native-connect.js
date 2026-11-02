@@ -2,8 +2,9 @@
 // provider's consent page opens in a system browser sheet, which does not
 // share the app's session cookie, so:
 // 1. the app asks POST /app/api/connect/start for a short-lived signed ticket,
-// 2. the sheet opens /auth/app/connect?ticket=…, which signs the browser in as
-//    the same user and continues to /oauth/<provider>. Only the
+// 2. the sheet opens /auth/app/connect?ticket=…, which gives the browser a
+//    quarter-hour cookie of the same user, good only for connecting, and
+//    continues to /oauth/<provider>. Only the
 //    app's own sheet gets through: it sends the ticket again in the
 //    X-Aurin-Connect header (iOS 17.4+, the app's minimum), which a link opened
 //    anywhere else cannot. A ticket link sent by another user would otherwise
@@ -11,10 +12,10 @@
 //    account (pentest 2026-10-25, L4), so such a link only expires. A browser
 //    already signed in as the ticket's user also continues. Each ticket works once,
 // 3. the provider's callback ends at https://<server>/auth/app/connected?event=…,
-//    which closes the sheet (connect-return.js), when the app asked for it
-//    (return: "https", kept in the ticket). A build from before 2026-11 gets
-//    loadwise://connected, which it waits for.
-import { signText, userSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
+//    which closes the sheet (connect-return.js) and clears that cookie, when the
+//    app asked for it (return: "https", kept in the ticket). A build from before
+//    2026-11 gets loadwise://connected, which it waits for.
+import { signText, connectSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
 import { L, lang } from "./lang.js";
 import { connectReturnCookie, connectReturnUrl } from "./connect-return.js";
 import { APP_CONNECTED_PATH } from "./app-origin.js";
@@ -75,7 +76,8 @@ async function continueToProvider(env, ticket, hl) {
   // Where the provider's callback returns, from the signed ticket only (connect-return.js).
   const headers = new Headers({ Location: location, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
   headers.append("Set-Cookie", connectReturnCookie(ticket.back));
-  headers.append("Set-Cookie", await userSessionCookie(env.DB, ticket.uid, sessionSecret(env)));
+  // A connect-only cookie (dashboard-auth.js), not a session: the sheet shares Safari's cookies.
+  headers.append("Set-Cookie", await connectSessionCookie(env.DB, ticket.uid, sessionSecret(env)));
   return new Response(null, { status: 303, headers });
 }
 

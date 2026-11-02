@@ -906,6 +906,12 @@ struct ExerciseCatalog: View {
             .scrollIndicators(.hidden)
             .padding(.top, 12)
 
+            // The rested muscles shown: a workout of them, the proposal straight away.
+            if rested, model.muscles?.restedFocus.isEmpty == false {
+                PrimaryButton(title: L10n.tr("Sestavit z odpočatých"), systemImage: "sparkles") { model.push(.gymRested) }
+                    .padding(.top, 12)
+            }
+
             PillToggle(title: "Jen s mým vybavením", subtitle: EquipmentView.summary(equipment), isOn: $mine)
                 .padding(.top, 12)
 
@@ -976,8 +982,11 @@ struct ExerciseCatalog: View {
     }
 
     /// The tired muscle behind the exercise's main muscle, nil when it is rested.
-    private func tired(_ ex: GymCatalogExercise) -> MuscleFatigue.Muscle? {
-        guard let data = model.muscles, let main = (ex.muscles ?? [:]).max(by: { $0.value < $1.value }), main.value >= 0.5 else { return nil }
+    private func tired(_ ex: GymCatalogExercise) -> MuscleFatigue.Muscle? { Self.tired(ex, model.muscles) }
+
+    /// The exercise's main muscle when it is not rested yet (Odpočaté leaves it out).
+    static func tired(_ ex: GymCatalogExercise, _ data: MuscleFatigue?) -> MuscleFatigue.Muscle? {
+        guard let data, let main = (ex.muscles ?? [:]).max(by: { $0.value < $1.value }), main.value >= 0.5 else { return nil }
         return data.tired(body: main.key)
     }
 
@@ -1015,23 +1024,8 @@ struct ExerciseCatalog: View {
         text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "cs_CZ"))
     }
 
-    /// A catalog name as a sentence: "Cable Single Arm Rear Delt Row" from the
-    /// exercise database reads "Cable single arm rear delt row", like "Face
-    /// pull". Names already written so, letters (EZ, DB, V) and digits stay.
-    static func shownName(_ name: String) -> String {
-        let words = name.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
-        let titled = words.dropFirst().filter { $0.first?.isLetter == true }
-        guard titled.count >= 2, titled.allSatisfy({ $0.first?.isUppercase == true }) else { return name }
-        // "Single-Arm" as a part of a word too: "Single-arm cable fly".
-        let lower: (String) -> String = { part in
-            part.count > 1 && part.dropFirst().allSatisfy({ !$0.isUppercase && !$0.isNumber }) ? part.lowercased() : part
-        }
-        return words.enumerated().map { index, word in
-            word.split(separator: "-", omittingEmptySubsequences: false).enumerated().map { at, part in
-                index == 0 && at == 0 ? String(part) : lower(String(part))
-            }.joined(separator: "-")
-        }.joined(separator: " ")
-    }
+    /// A catalog name as a sentence (WatchShared/GymSheet.swift).
+    static func shownName(_ name: String) -> String { ExerciseName.shown(name) }
 }
 
 /// One exercise: the muscles on the figure, then its technique.
