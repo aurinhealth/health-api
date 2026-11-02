@@ -790,6 +790,48 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// Settings → Aurin Pro in night violet: active, the free week on day 3,
+    /// the year paid monthly at payment 3 of 12, extra messages, the week running
+    /// low with none, and the packs page with purchases.
+    @MainActor
+    func testProSettings() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Prague"))
+        let day = { (m: Int, d: Int, y: Int) in calendar.date(from: DateComponents(year: y, month: m, day: d, hour: 9))! }
+        let extra = CoachAllowance(limit: 30, used: 12, left: 55, weekLeft: 18, extra: 37, resetsOn: "2026-11-09", near: false)
+        let low = CoachAllowance(limit: 30, used: 27, left: 3, weekLeft: 3, extra: 0, resetsOn: "2026-11-09", near: true)
+        let active = ProPageState(hasPro: true, unlocked: true, renewal: "Obnoví se 5. listopadu", allowance: extra, packsOnSale: true)
+        try render("pro-settings-active", height: 1100) { ProPage(state: active, calendar: calendar) }
+        var week = active
+        week.freeWeek = DateInterval(start: day(10, 29, 2026), end: day(11, 5, 2026))
+        week.firstPayment = "Čt 5. 11. · 149 Kč"
+        week.allowance = nil
+        try render("pro-settings-free-week", height: 1000) { ProPage(state: week, now: day(10, 31, 2026), calendar: calendar) }
+        var monthly = active
+        monthly.payments = ProStore.Payments(number: 3, total: 12, next: day(2, 5, 2027), ends: day(11, 5, 2027))
+        monthly.allowance = low
+        try render("pro-settings-paid-monthly", height: 1250) { ProPage(state: monthly, calendar: calendar) }
+        let free = ProPageState(pilot: true, plans: ProPlans.main)
+        try render("pro-settings-free", height: 950) { ProPage(state: free, calendar: calendar) }
+        let purchases = [
+            CoachPacks.Purchase(productId: "health.aurin.app.coach.messages100", messages: 100, counted: true, environment: "Production", price: 7.99, currency: "EUR", purchasedAt: "2026-11-02T00:12:00.000Z", refunded: false),
+            CoachPacks.Purchase(productId: "health.aurin.app.coach.messages40", messages: 40, counted: true, environment: "Production", price: 3.99, currency: "EUR", purchasedAt: "2026-10-12T10:00:00Z", refunded: false),
+            CoachPacks.Purchase(productId: "health.aurin.app.coach.messages40", messages: 40, counted: false, environment: "Sandbox", price: 3.99, currency: "EUR", purchasedAt: "2026-09-28T10:00:00Z", refunded: false)
+        ]
+        let prices = ["health.aurin.app.coach.messages40": "€3.99", "health.aurin.app.coach.messages100": "€7.99"]
+        try render("pro-packs", height: 900) {
+            CoachPacksPage(left: 137, purchases: purchases, price: { prices[$0] }, chosen: .constant("health.aurin.app.coach.messages100"), added: 100)
+        }
+    }
+
+    func testPaymentDotsMonths() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Prague"))
+        let ends = try XCTUnwrap(calendar.date(from: DateComponents(year: 2027, month: 11, day: 5)))
+        let first = try XCTUnwrap(calendar.date(byAdding: .month, value: -12, to: ends))
+        XCTAssertEqual(calendar.dateComponents([.year, .month], from: first), DateComponents(year: 2026, month: 11), "12 payments from Nov 2026")
+    }
+
     func testFreeWeekDates() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Prague"))

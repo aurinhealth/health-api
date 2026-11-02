@@ -2,13 +2,13 @@ import StoreKit
 import SwiftUI
 import UIKit
 
-// Aurin Pro, laid out like Bevel Pro: a row at the top of Settings, the
-// subscription page (what Free has ✓ and lacks ✗, "Přejít na Aurin Pro"),
-// and the offer over the whole screen: the app in a phone, then what Pro
-// brings and the plans, then how the free week goes. It is bought from the
-// App Store (ProStore.swift); during the invitation-only pilot everything is
-// free anyway and TestFlight buys with Apple's test purchases. The server
-// decides who has AI (src/subscription.js, src/app-store.js).
+// Aurin Pro: a row at the top of Settings, the subscription page in night
+// violet (ProPage in ProSettings.swift: the plan's state, extra coach
+// messages, what Pro brings) and the offer over the whole screen
+// (ProPaywall.swift). It is bought from the App Store (ProStore.swift);
+// during the invitation-only pilot everything is free anyway and TestFlight
+// buys with Apple's test purchases. The server decides who has AI
+// (src/subscription.js, src/app-store.js).
 
 /// The plans of the offer. The prices come from the App Store (ProStore), in
 /// the currency of the buyer's country; until it answers, the Czech ones with
@@ -76,10 +76,11 @@ struct ProFeature: Identifiable {
 }
 
 /// Settings → the first row: the logo and "Aurin Pro", a gold "Aktivní"
-/// once it is bought.
+/// once it is bought, and the extra coach messages when there are any.
 struct ProSettingsRow: View {
     @Environment(AppModel.self) private var model
     @State private var hasPro = false
+    @State private var extra = 0
 
     var body: some View {
         NavigationLink { SubscriptionView() } label: {
@@ -87,6 +88,9 @@ struct ProSettingsRow: View {
                 AurinMark(size: 22, gold: hasPro, glow: true)
                 AurinProTitle(size: 21, gold: hasPro)
                 Spacer()
+                if extra > 0 {
+                    Text(verbatim: L10n.f("%lld navíc", extra)).font(.subheadline).foregroundStyle(Palette.indigo)
+                }
                 if hasPro {
                     Text("Aktivní").font(.subheadline).foregroundStyle(AurinMark.goldTop)
                 }
@@ -103,14 +107,15 @@ struct ProSettingsRow: View {
         .buttonStyle(.plain)
         .task {
             guard !model.demo else { return }
-            hasPro = (try? await model.api.subscription())?.purchased == true || ProStore.shared.entitled
+            let status = try? await model.api.subscription()
+            hasPro = status?.purchased == true || ProStore.shared.entitled
+            extra = status?.coachAllowance?.extra ?? 0
         }
     }
 }
 
-/// Aurin Pro: the logo, the plan, a tile for each thing Pro brings (locked
-/// without it) and, without Pro, the plans and the way to the offer; with it,
-/// when it renews and Apple's sheet to change or cancel it.
+/// Aurin Pro in night violet (ProPage): loads the account's plan from the
+/// server and the App Store, opens the offer, the packs and Apple's sheet.
 struct SubscriptionView: View {
     @Environment(AppModel.self) private var model
     @State private var status: SubscriptionStatus?
@@ -118,129 +123,47 @@ struct SubscriptionView: View {
     @State private var manage = false
     @State private var restoring = false
     @State private var notice: String?
+    @State private var morePacks = false
     private let store = ProStore.shared
 
-    private var hasPro: Bool { status?.purchased == true || store.entitled }
-    private var unlocked: Bool { hasPro || status?.aiAccess == true }
-
     var body: some View {
-        SettingsPage(title: "Aurin Pro") {
-            VStack(spacing: 16) {
-                AurinMark(size: 92, gold: hasPro, glow: true)
-                AurinProTitle(size: 44, gold: hasPro)
-                if let badge {
-                    Text(badge).font(.footnote.weight(.semibold))
-                        .foregroundStyle(hasPro ? AurinMark.goldTop : Palette.secondary)
-                        .padding(.horizontal, 12).padding(.vertical, 6)
-                        .background((hasPro ? AurinMark.goldTop : Palette.ink).opacity(0.12), in: Capsule())
-                }
-                if hasPro, let line = renewal {
-                    Text(line).font(Typo.small).foregroundStyle(Palette.muted)
-                }
-                // The week's coach messages: nothing under 75 %, then one line.
-                if let line = status?.coachAllowance?.settingsLine {
-                    Text(line).font(Typo.small).foregroundStyle(Palette.muted)
-                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 12)
-
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                ForEach(ProFeature.pro) { feature in
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack(alignment: .top) {
-                            Image(systemName: feature.symbol)
-                                .scaledFont(16, weight: .medium, cap: .denseCap).foregroundStyle(feature.color)
-                                .frame(width: 36, height: 36)
-                                .background(feature.color.opacity(0.14), in: Circle())
-                            Spacer()
-                            if !unlocked {
-                                Image(systemName: "lock").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
-                            }
-                        }
-                        Spacer(minLength: 14)
-                        Text(feature.title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(16)
-                    .frame(maxWidth: .infinity, minHeight: 106, alignment: .leading)
-                    .cardSurface(cornerRadius: 20)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel(feature.title + (unlocked ? "" : ", " + L10n.tr("není v tarifu")))
-                }
-            }
-
-            if hasPro {
-                Button { manage = true } label: {
-                    Text("Spravovat předplatné").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                        .background(Palette.card, in: Capsule())
-                }
-                .buttonStyle(.plain)
-            } else if status != nil {
-                VStack(spacing: 14) {
-                    HStack(spacing: 10) {
-                        ForEach(ProPlans.priced(store)) { plan in
-                            Button { Paywall.present(model) } label: {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(plan.title).textCase(.uppercase).font(.caption.weight(.semibold))
-                                        .foregroundStyle(plan.best ? AurinMark.amber : Palette.muted)
-                                    if let price = plan.price { Text(price).font(.headline).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8) }
-                                    if let note = plan.note { Text(note).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1) }
-                                }
-                                .padding(14)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(plan.best ? AurinMark.amber.opacity(0.08) : Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                                .overlay { RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(plan.best ? AurinMark.amber : .clear, lineWidth: 1.5) }
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    Button { Paywall.present(model) } label: {
-                        Text("Přejít na Aurin Pro").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                            .frame(maxWidth: .infinity, minHeight: 52)
-                            .background(Palette.button, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-            } else if error == nil {
-                ProgressView().frame(maxWidth: .infinity)
-            }
-
-            HStack(spacing: 14) {
-                Link(destination: URL(string: "https://aurin.health/terms")!) {
-                    Text("Podmínky a ceny").font(Typo.caption).foregroundStyle(Palette.muted).underline()
-                }
-                Button {
+        ProPage(state: Self.state(status, store), error: error, restoring: restoring,
+                morePacks: { morePacks = true }, goPro: { Paywall.present(model) }, manage: { manage = true },
+                restore: {
                     restoring = true
                     Task { notice = await store.restore(); restoring = false; await load() }
-                } label: {
-                    Text("Obnovit nákup").font(Typo.caption).foregroundStyle(Palette.muted).underline()
-                }
-                .buttonStyle(.plain)
-                .disabled(restoring)
-            }
-            .frame(maxWidth: .infinity)
-            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-        }
-        .task { await load() }
-        .manageSubscriptionsSheet(isPresented: $manage)
-        .onChange(of: manage) { _, open in if !open { Task { await store.refresh(); await load() } } }
-        .alert(L10n.tr("Aurin Pro"), isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
-            Button("OK", role: .cancel) {}
-        } message: { Text(notice ?? "") }
+                })
+            .navigationTitle(L10n.tr("Aurin Pro"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .navigationDestination(isPresented: $morePacks) { CoachPacksView() }
+            .onAppear { ScreenTrail.visit("page/Aurin Pro") }
+            .task { await load() }
+            .onChange(of: morePacks) { _, open in if !open { Task { await load() } } }
+            .manageSubscriptionsSheet(isPresented: $manage)
+            .onChange(of: manage) { _, open in if !open { Task { await store.refresh(); await load() } } }
+            .alert(L10n.tr("Aurin Pro"), isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: { Text(notice ?? "") }
     }
 
-    private var badge: String? {
-        guard let status else { return nil }
-        if hasPro { return L10n.tr("Aktivní") }
-        if status.pilot { return L10n.tr("Pilot · vše zdarma") }
-        return nil
+    /// What the page shows, from the server's status and the App Store.
+    static func state(_ status: SubscriptionStatus?, _ store: ProStore) -> ProPageState {
+        let hasPro = status?.purchased == true || store.entitled
+        var firstPayment: String?
+        if let week = store.freeWeek {
+            let price = store.payments != nil ? store.commitment?.monthly : store.price(ProStore.yearlyID)
+            firstPayment = [PaywallView.weekday(week.end), price].compactMap { $0 }.joined(separator: " · ")
+        }
+        return ProPageState(hasPro: hasPro, unlocked: hasPro || status?.aiAccess == true, pilot: status?.pilot == true,
+                            renewal: renewal(status), freeWeek: store.freeWeek, firstPayment: firstPayment,
+                            payments: store.payments, allowance: status?.coachAllowance,
+                            packsOnSale: status?.checkoutAvailable == true,
+                            plans: status == nil ? nil : ProPlans.priced(store))
     }
 
     /// "Obnoví se 1. prosince" or "Platí do 1. prosince".
-    private var renewal: String? {
+    private static func renewal(_ status: SubscriptionStatus?) -> String? {
         guard let purchase = status?.purchase, purchase.active, let end = purchase.expiresAt, end.count >= 10 else { return nil }
         let day = Fmt.dayMonth(String(end.prefix(10)))
         return purchase.autoRenew == false ? L10n.f("Platí do %@", day) : L10n.f("Obnoví se %@", day)
