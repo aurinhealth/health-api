@@ -27,12 +27,17 @@ final class PluralTests: XCTestCase {
         XCTAssertEqual(L10n.plural("%@ bodů připravenosti", "−8", 8), "−8 bodů připravenosti")
         XCTAssertEqual(L10n.plural("%@ kroků", "8 432", 8432), "8 432 kroků")
         XCTAssertEqual(L10n.plural("%@ · %lld nových cviků", "Lavice", 2), "Lavice · 2 nové cviky")
+        XCTAssertEqual(L10n.plural("%lld věcí dnes", 1), "1 věc dnes")
+        XCTAssertEqual(L10n.plural("%lld věcí dnes", 3), "3 věci dnes")
+        XCTAssertEqual(L10n.plural("%lld věcí dnes", 5), "5 věcí dnes")
     }
 
     func testEnglishForms() {
         L10n.setLanguage("en")
         XCTAssertEqual(L10n.plural("%lld dní", 1), "1 day")
         XCTAssertEqual(L10n.plural("%lld dní", 2), "2 days")
+        XCTAssertEqual(L10n.plural("%lld věcí dnes", 1), "1 thing today")
+        XCTAssertEqual(L10n.plural("%lld věcí dnes", 4), "4 things today")
         XCTAssertEqual(L10n.plural("%lld dní", 0), "0 days")
         XCTAssertEqual(L10n.plural("dní", 1), "day")
         XCTAssertEqual(L10n.plural("%lld sérií", 1), "1 set")

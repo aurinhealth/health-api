@@ -26,6 +26,9 @@ struct WatchGym: Codable, Equatable, Sendable {
         /// As the app shows it (the English name in English).
         var shown: String?
         var lifts: [Lift]
+        /// The letter of its superset ("A"), nil when it is in none: a
+        /// superset goes round by round, one exercise after the other.
+        var superset: String? = nil
         var title: String { shown ?? name }
     }
 

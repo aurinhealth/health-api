@@ -42,7 +42,7 @@ export function heartRateZones(detail={},time=[],hr=[]){
   if(!total)return [];
   return bounds.map((b,i)=>({zone:i+1,min:i?Math.round(bounds[i-1])+1:null,max:i===bounds.length-1?null:Math.round(b),seconds:Math.round(seconds[i]),percent:seconds[i]/total*100}));
 }
-async function boundedJson(response,maxBytes=8*1024*1024){
+export async function boundedJson(response,maxBytes=8*1024*1024){
   if(!response.ok)throw new Error(L('Zdroj aktivity není dostupný.', 'The activity source isn\'t available.'));
   const reader=response.body.getReader(),chunks=[];let bytes=0;
   try{while(true){const {value,done}=await reader.read();if(done)break;bytes+=value.byteLength;if(bytes>maxBytes){await reader.cancel();throw new Error(L('Záznam aktivity je příliš velký.', 'The activity file is too large.'));}chunks.push(value);}}finally{reader.releaseLock();}

@@ -670,7 +670,7 @@ addEventListener('keydown',function(e){if(!card.classList.contains('on'))return;
 
 // The share image (link previews on X, Facebook, LinkedIn, Slack, iMessage). The networks keep an image
 // for days by its URL, so ?v= goes up whenever og-en.jpg is rendered again (a JPEG: a tenth of the PNG's size).
-const SHARE_IMAGE = '/site/og-en.jpg?v=11';
+const SHARE_IMAGE = '/site/og-en.jpg?v=12';
 const SHARE_IMAGE_ALT = 'Aurin: A coach that knows how you slept. The Today screen with readiness 78.';
 
 function sitePage({title, description, lang, origin, path, body, czech=false, index=true, jsonLd=null, status=200}) {
@@ -996,7 +996,7 @@ ${sun(72)}
 <div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">${day.hrv} ms</div><div class="d up">↑ ${day.hrv - day.hrvBaseline} ms above normal</div></div>
 <div class="glass g2" aria-hidden="true"><div class="k">Sleep</div><div class="v">${day.sleep}</div><div class="d sleep">score ${day.sleepScore}</div></div>
 <div class="glass g3" aria-hidden="true"><div class="k">Coach</div><div style="margin-top:4px">Go all in on strength today.</div></div>
-<div class="device" role="img" aria-label="Aurin on a phone: the Today screen with readiness ${day.readiness}, how you feel, the weather, sleep, strain and HRV"><div class="bezel"><div class="screen" aria-hidden="true"><div class="scr on">${shot('today', false)}</div></div></div></div>
+<div class="device" role="img" aria-label="Aurin on a phone: the Today screen with readiness ${day.readiness} and your status, sleep, strain and HRV, today’s workout and the weather"><div class="bezel"><div class="screen" aria-hidden="true"><div class="scr on">${shot('today', false)}</div></div></div></div>
 </div></div>
 </div>
 </div>

@@ -73,11 +73,11 @@ struct LiveGymView: View {
         .navBarVisibility(.hidden)
         .task { await load() }
         .onAppear {
-            UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true
+            ScreenAwake.hold("gymLive"); model.immersive = true
             GymActivityInbox.handler = { activityAction($0) }
         }
         .onDisappear {
-            UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) }
+            ScreenAwake.release("gymLive"); model.immersive = false; Task { await Reminders.restEnds(at: nil) }
             GymActivityInbox.handler = nil
             GymLiveActivity.end()
         }

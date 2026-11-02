@@ -160,14 +160,14 @@ struct TrainingModeView: View {
             day = change.day
         }
         .onAppear {
-            UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true
+            ScreenAwake.hold("training"); model.immersive = true
             GymActivityInbox.handler = { activityAction($0) }
             // The paired sensor connects already when the workout opens, so the
             // heart shows it before Začít trénink.
             if !model.demo { HeartRateSensor.shared.connectSaved() }
         }
         .onDisappear {
-            UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false
+            ScreenAwake.release("training"); model.immersive = false
             // Left another way than the arrow (the edge swipe, a link) while the
             // workout runs: it goes on hidden, as with the arrow.
             if !minimizing, live.running, !finishedSession, let day, current(day) != nil {
@@ -186,8 +186,9 @@ struct TrainingModeView: View {
             }
         }
         .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) }; syncActivity() }
-        .onChange(of: day) { _, _ in syncActivity() }
-        .onChange(of: index) { _, _ in syncActivity() }
+        // A set ticked or a change: "Still working out?" waits another 10 min (IdleWorkout).
+        .onChange(of: day) { _, _ in syncActivity(); live.worked() }
+        .onChange(of: index) { _, _ in syncActivity(); live.worked() }
         .onChange(of: finishedSession) { _, _ in syncActivity() }
         // Back from the lock screen after the rest ran out: straight to the set.
         .onChange(of: scenePhase) { _, phase in
@@ -294,32 +295,48 @@ struct TrainingModeView: View {
         }
     }
 
-    /// Under the header: sound and vibration, the heart rate, the coach and the plan.
+    /// Under the header: the heart rate, the coach, the plan and ⋯ (History, Sound and vibration).
     private func tools(_ day: GymDay, _ exercise: GymExercise) -> some View {
         HStack(spacing: 8) {
-            // Coach and Plan keep their words; the left chips drop theirs
-            // (first Vibrace, then Bez tepu) when the row is too narrow, e.g.
-            // with larger text, so nothing wraps or ends in "…". Coach stays
-            // outside ViewThatFits: a switch must not close its open chat.
-            ViewThatFits(in: .horizontal) {
-                signalsAndHeart(compactSignals: false, compactHeart: false)
-                signalsAndHeart(compactSignals: true, compactHeart: false)
-                signalsAndHeart(compactSignals: true, compactHeart: true)
+            // Heart, Coach and Plan from the left, ⋯ on the right. Coach, Plan and ⋯ keep
+            // their size; the heart drops "Bez tepu" when the row is too narrow, e.g. with
+            // larger text, so nothing wraps or ends in "…". Coach stays outside
+            // ViewThatFits: a switch must not close its open chat.
+            HStack(spacing: 8) {
+                ViewThatFits(in: .horizontal) {
+                    HeartSourceButton(live: live, compact: false) { sensors = true }.fixedSize()
+                    HeartSourceButton(live: live, compact: true) { sensors = true }.fixedSize()
+                }
+                CoachPill(subject: .workout(day, exercise: exercise, resting: restEnd != nil, restSeconds: restTotal, date: date), height: 34)
+                Button { editing = true } label: { ToolChip(systemImage: "list.bullet", title: L10n.tr("Plán")).fixedSize() }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.tr("Upravit plán"))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            CoachPill(subject: .workout(day, exercise: exercise, resting: restEnd != nil, restSeconds: restTotal, date: date), height: 34)
-            Button { editing = true } label: { ToolChip(systemImage: "list.bullet", title: L10n.tr("Plán")).fixedSize() }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.tr("Upravit plán"))
+            more(exercise)
         }
         .padding(.top, 12)
     }
 
-    private func signalsAndHeart(compactSignals: Bool, compactHeart: Bool) -> some View {
-        HStack(spacing: 8) {
-            GymSignalsMenu(compact: compactSignals).fixedSize()
-            HeartSourceButton(live: live, compact: compactHeart) { sensors = true }.fixedSize()
+    /// ⋯: what is seldom needed mid-set. History (the Last time column already shows the last
+    /// workout) and Sound and vibration (set once).
+    private func more(_ exercise: GymExercise) -> some View {
+        let count = history.exercise(exercise.name)?.sessions.filter { $0.date < date }.count ?? 0
+        return Menu {
+            Button { historyFor = exercise.name } label: {
+                Label {
+                    Text("Historie")
+                    if count > 0 { Text(verbatim: L10n.plural("%lld tréninků", count)) }
+                } icon: {
+                    Image(systemName: "chart.bar")
+                }
+            }
+            .accessibilityLabel(L10n.tr("Historie cviku"))
+            GymSignalsMenu(inMenu: true)
+        } label: {
+            ToolChip(systemImage: "ellipsis").fixedSize()
         }
+        .accessibilityLabel(L10n.tr("Další volby"))
     }
 
     private func title(_ day: GymDay) -> String {
@@ -349,14 +366,19 @@ struct TrainingModeView: View {
                     Button { swapping = exercise.name } label: { ToolChip(systemImage: "arrow.triangle.swap", title: L10n.tr("Vyměnit")) }
                         .buttonStyle(.plain).accessibilityLabel(L10n.tr("Nahradit cvik"))
                 }
-                Button { historyFor = exercise.name } label: { ToolChip(systemImage: "chart.bar", title: L10n.tr("Historie")) }
-                    .buttonStyle(.plain).accessibilityLabel(L10n.tr("Historie cviku"))
                 Button { technique = exercise.name } label: { ToolChip(systemImage: "info.circle", title: L10n.tr("Technika")) }
                     .buttonStyle(.plain)
+                // No note yet: + Poznámka in the row. A written note shows under it, tap to edit.
+                if notes.note(exercise.name) == nil {
+                    Button { noteFor = exercise.name } label: { ToolChip(systemImage: "plus", title: L10n.tr("Poznámka"), dashed: true) }
+                        .buttonStyle(.plain).accessibilityLabel(L10n.tr("Přidat poznámku ke cviku"))
+                }
             }
             .padding(.top, 10)
 
-            ExerciseNoteLine(note: notes.note(exercise.name)) { noteFor = exercise.name }.padding(.top, 8)
+            if notes.note(exercise.name) != nil {
+                ExerciseNoteLine(note: notes.note(exercise.name)) { noteFor = exercise.name }.padding(.top, 8)
+            }
 
             chips(day, exercise, set)
 
@@ -1388,25 +1410,28 @@ struct TrainingModeView: View {
 
     /// Finished on the Apple Watch (its summary): finished here too, with the
     /// summary and the rating, as with Dokončit.
+    /// Finished on the watch, or left without a set for 30 min (IdleWorkout):
+    /// the end at the last set then.
     private func finishIfEndedOnWatch() {
-        guard live.endedOnWatch, live.running, !finishedSession, !saving, day != nil else { return }
-        Task { await finish() }
+        guard live.endedOnWatch || live.idleEnd != nil, live.running, !finishedSession, !saving, day != nil else { return }
+        let end = live.idleEnd ?? Date()
+        Task { await finish(at: end) }
     }
 
     /// The sets are saved as they are ticked: the week shows the session done,
     /// then the rating.
-    private func finish() async {
+    private func finish(at end: Date = Date()) async {
         restEnd = nil
         // The start and end in the sheet: opened again, the workout shows its
         // summary (Ohodnotit, Pokračovat v tréninku) and can go on from its start.
         if var next = day {
             if next.startedAt == nil, let start = live.start { next.markStarted(start) }
-            next.markFinished(Date())
+            next.markFinished(end)
             day = next
         }
         if live.running {
-            let saved = await live.finish()
-            totals = (live.minutes, live.kcal, live.avgHeartRate, live.maxHeartRate, saved, live.zoneMinutes(lows: zoneLows))
+            let saved = await live.finish(at: end)
+            totals = (live.minutes(at: end), live.kcal, live.avgHeartRate, live.maxHeartRate, saved, live.zoneMinutes(lows: zoneLows))
             live.reset()
         }
         // The summary comes first, with Ohodnotit and Zahodit trénink.
@@ -1426,7 +1451,7 @@ struct TrainingModeView: View {
             // To Intervals.icu and Google Health as chosen in Zdroje dat (Aurin posílá);
             // Apple Health has the live workout already.
             let minutes = totals.map { max(1, $0.minutes) }
-            await model.shareGym(day, date: date, start: minutes.map { Date().addingTimeInterval(-Double($0) * 60) }, minutes: minutes,
+            await model.shareGym(day, date: date, start: minutes.map { end.addingTimeInterval(-Double($0) * 60) }, minutes: minutes,
                                  appleSaved: totals?.saved == true)
         }
     }
@@ -1686,6 +1711,7 @@ struct WatchGymHooks: View {
             .accessibilityHidden(true)
             .onChange(of: restEnd) { _, end in sendRest(end) }
             .onChange(of: live.endedOnWatch) { _, _ in ended() }
+            .onChange(of: live.idleEnd) { _, _ in ended() }
             .onReceive(NotificationCenter.default.publisher(for: .watchRest)) { note in
                 if let rest = note.object as? WatchGym.Rest { received(rest) }
             }

@@ -1157,5 +1157,25 @@
 			<string>zbývá %lld zpráv</string>
 		</dict>
 	</dict>
+	<key>%lld věcí dnes</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld věci dnes</string>
+			<key>many</key>
+			<string>%lld věcí dnes</string>
+			<key>one</key>
+			<string>%lld věc dnes</string>
+			<key>other</key>
+			<string>%lld věcí dnes</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

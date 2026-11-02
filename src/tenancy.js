@@ -455,6 +455,21 @@ export async function bumpSessionEpoch(db, id) {
   return Number(row?.session_epoch) || 0;
 }
 
+// The account the deploy smoke test (a GitHub Actions token, dashboard-auth.js)
+// acts as, never the owner's, so the public CI logs can never show anyone's
+// health data (security audit 2026-11, SEC-010). SMOKE_USER_EMAIL is an address
+// nobody receives mail at. The account is made on first use and disabled: no
+// sign-in, session, cron job or webhook reaches it, and it holds no data (the
+// smoke test only reads and previews). An address a real account already uses
+// is never taken over: then there is no smoke account and the check fails.
+export async function smokeUser(db, env) {
+  const address = normalizeEmail(env?.SMOKE_USER_EMAIL);
+  if (!address || address === ownerEmail(env)) return null;
+  await db.prepare("INSERT INTO users(email, name, role, disabled) VALUES(?, 'Deploy check', 'user', 1) ON CONFLICT(email) DO NOTHING").bind(address).run();
+  const row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(address).first();
+  return row?.disabled ? publicUser(row, env) : null;
+}
+
 export async function ownerUser(db, env) {
   const row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(ownerEmail(env)).first();
   return row && !row.disabled ? publicUser(row, env) : null;

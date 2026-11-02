@@ -76,9 +76,19 @@ struct WatchRoot: View {
             TabView(selection: $page) {
                 Group {
                     if let snapshot = store.snapshot, snapshot.date == WatchStore.localDate(WatchDemo.now) {
-                        ReadinessHome(s: snapshot)
+                        // Drawn again at noon, when the night stops being awaited.
+                        TimelineView(.explicit([WatchStore.noon()])) { _ in
+                            if let night = store.nightPending {
+                                ReadinessHome(s: night, stale: .night, today: snapshot)
+                            } else {
+                                ReadinessHome(s: snapshot)
+                            }
+                        }
+                    } else if let snapshot = store.snapshot {
+                        // The last day greyed while today comes (point 6 of the 2026-11-02 review).
+                        ReadinessHome(s: snapshot, stale: store.todayFailed ? .failed : .loading)
                     } else {
-                        WaitingView(stale: store.snapshot != nil)
+                        WaitingView()
                     }
                 }
                 .tag("readiness")
@@ -153,10 +163,8 @@ struct WatchRoot: View {
     }
 }
 
-/// Nothing from the iPhone yet today.
+/// Nothing from the iPhone yet (the first launch).
 struct WaitingView: View {
-    let stale: Bool
-
     var body: some View {
         VStack(spacing: 8) {
             Ring(fraction: 0, color: W.green, size: 64) {
@@ -167,8 +175,7 @@ struct WaitingView: View {
             Text(W.tr("Otevři Aurin v iPhonu", "Open Aurin on your iPhone"))
                 .font(W.serif(19))
                 .multilineTextAlignment(.center)
-            Text(stale ? W.tr("Hodinky čekají na dnešní data.", "Your watch is waiting for today's data.")
-                       : W.tr("Hodinky dostanou dnešek z iPhonu.", "Your watch gets today from your iPhone."))
+            Text(W.tr("Hodinky dostanou dnešek z iPhonu.", "Your watch gets today from your iPhone."))
                 .font(W.news(13))
                 .foregroundStyle(W.secondary)
                 .multilineTextAlignment(.center)

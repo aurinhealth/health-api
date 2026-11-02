@@ -148,7 +148,9 @@ enum DemoData {
         { "kind": "workout", "time": "07:30", "title": "Ranní běh", "detail": "42 min · 48 TSS", "done": true, "sport": "run", "status": "done", "strain": 5.1,
           "session": { "id": "activity:demo-run", "kind": "activity", "status": "done", "date": "2026-10-08", "time": "07:30", "title": "Ranní běh", "sport": "run",
                        "minutes": 42, "tss": 48, "activityId": null, "eventId": null, "kcal": 520, "distanceKm": 8.2 } },
-        { "kind": "workout", "time": "17:30", "title": "Silový trénink", "detail": "45 min · celé tělo", "done": false, "sport": "strength" },
+        { "kind": "workout", "time": "17:30", "title": "Silový trénink", "detail": "45 min · celé tělo", "done": false, "sport": "strength", "status": "planned",
+          "session": { "id": "gym:2026-10-08", "kind": "gym", "status": "planned", "date": "2026-10-08", "time": "17:30", "title": "Silový trénink", "sport": "strength",
+                       "minutes": 45, "tss": null, "activityId": null, "eventId": null } },
         { "kind": "bedtime", "time": "22:10", "end": "07:15", "title": "Do postele", "detail": "potřeba spánku 8 h 30 min", "done": false }
       ],
       "tonight": { "bedtime": "22:10", "wake": "07:15", "need": 510, "wakeSet": true },
