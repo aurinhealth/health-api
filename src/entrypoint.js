@@ -1129,7 +1129,16 @@ async function coachTextExtras(env,ctx,internalAuth,screen){
   if(screen==='today')return {...(coachTrends?{coachTrends}:{}),...(readiness?{readinessDetail:readiness}:{}),athleteState:state?.status||null};
   return {...(coachTrends?{coachTrends}:{}),...(readiness?{readiness}:{}),athleteState:state?.status||null};
 }
-function loadCoachInputs(env,ctx,internalAuth,date){return cached(env,ctx,'coach-inputs:'+date,()=>loadCoachInputsFresh(env,ctx,internalAuth,date));}
+// performance: the runs' and rides' trends, curves and laps (Intervals.icu
+// sport settings, power and pace curves, up to six activities' laps). Only the
+// coach's chat and the AI week plan read them; Today's coach cards (pick,
+// revision, check-in, week check) never did, yet each waited for those
+// Intervals.icu reads one after another (2026-11-02: up to 4 waits in a row).
+function loadCoachInputs(env,ctx,internalAuth,date,{performance=false}={}){
+  const inputs=cached(env,ctx,'coach-inputs:'+date,()=>loadCoachInputsFresh(env,ctx,internalAuth,date));
+  if(!performance)return inputs;
+  return Promise.all([inputs,cached(env,ctx,'coach-performance:'+date,()=>coachPerformance(env,ctx,date)).catch(()=>null)]).then(([loaded,perf])=>({...loaded,performance:perf}));
+}
 // Runs and rides for the coach: six weeks of trends, the Intervals.icu curves
 // and the laps of the last two weeks (performance-trends.js).
 async function coachPerformance(env,ctx,date){
@@ -1224,7 +1233,7 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   applyEnergyBudget(daily,profile,health);
   // Regenerace of today, as Today shows it (recovery-time.js).
   const regeneration=training?withRecoveryTime(buildToday({date,hour:localHour(),health,fitness,sleep,profile:profile||{},checkin}),training).recoveryTime:null;
-  return {date,daily,fitness,gym,fluids,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:await coachProfile(env,profile),athleteState:await getAthleteState(env.DB),cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin,recoveryTime:regeneration,journal:await journalForCoach(env.DB,date).catch(()=>null),upcomingTest:await getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null),performance:await coachPerformance(env,ctx,date)};
+  return {date,daily,fitness,gym,fluids,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:await coachProfile(env,profile),athleteState:await getAthleteState(env.DB),cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin,recoveryTime:regeneration,journal:await journalForCoach(env.DB,date).catch(()=>null),upcomingTest:await getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null)};
 }
 
 // Everything the coach's note looks at for one day: 5 weeks of activities
@@ -1414,7 +1423,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const note=typeof body.note==='string'?body.note.trim().slice(0,500):'',correction=typeof body.correction==='string'?body.correction.trim().slice(0,500):'';
       // "Opravit návrh": the athlete's correction of the AI's previous week.
       const previous=correction&&Array.isArray(body.previous)?body.previous.slice(0,28).filter(x=>validTrainingDay(x?.date)&&WEEK_SPORTS.includes(x?.sport)).map(x=>({date:x.date,sport:x.sport,minutes:Number(x.minutes)||null,environment:x.environment==='indoor'?'indoor':x.sport==='gym'?null:'outdoor',kind:KINDS.includes(x.kind)?x.kind:null})):[];
-      const [prefs,state,inputs]=await Promise.all([getWeekPlan(env.DB,start),getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,today)]);
+      const [prefs,state,inputs]=await Promise.all([getWeekPlan(env.DB,start),getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,today,{performance:true})]);
       if(!inputs.week.days.some(d=>d.date===start)){const extra=await handleDashboardApi(new Request('https://internal/app/api/week?start='+start),env,ctx,new URL('https://internal/app/api/week?start='+start));const data=await extra.json();inputs.week={...inputs.week,days:[...inputs.week.days,...(data.days||[])]};}
       const [weather,history,plan,triathlon,openWater]=await Promise.all([weekWeather(prefs.location,start,env),planningHistory(env,start<today?start:today,28),planForWeek(env,ctx,start),inputs.focus?.sport==='triathlon'?triathlonHistory(env):null,swimOpenWater(env,inputs.focus)]);
       // The rules see an empty week, so they propose every day the athlete has time for.
@@ -2092,7 +2101,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(task!=='simple'){
         ctx.waitUntil(reconcileWorkoutLibraryCompletions(env,ctx,internalAuth).catch(error=>console.error('Assistant reconciliation failed',error.message)));
         const [loaded,capabilities,athleteFeedback,notes,prefs,blockHistory,thresholds,earlierProposals]=await Promise.all([
-          loadCoachInputs(env,ctx,internalAuth,date),getCapabilities(env.DB),recentWorkoutFeedback(env.DB,shiftDate(date,-28)),listReflections(env.DB,{limit:5}).catch(()=>[]),
+          loadCoachInputs(env,ctx,internalAuth,date,{performance:true}),getCapabilities(env.DB),recentWorkoutFeedback(env.DB,shiftDate(date,-28)),listReflections(env.DB,{limit:5}).catch(()=>[]),
           getWeekPlan(env.DB,date).then(async prefs=>({...prefs,weather:task==='adjustment'?null:await weekWeather(prefs.location,mondayOfDate(date),env)})),
           task==='block'?planningHistory(env,date,84):null,
           cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>null),
