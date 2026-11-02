@@ -2951,7 +2951,8 @@
 "Nahlášeno" = "Reported";
 "Díky, nahlášeno." = "Thanks, reported.";
 "Opraveno" = "Fixed";
-"Uloženo. Díky, teď ho najdou i ostatní." = "Saved. Thanks, now others can find it too.";
+"Uloženo. Díky, po kontrole ho najdou i ostatní." = "Saved. Thanks, others will find it once it's checked.";
+"Navrhnout pro všechny" = "Suggest for everyone";
 "Co nesedí?" = "What's wrong?";
 "Energie nebo živiny" = "Energy or nutrients";
 "Název nebo značka" = "Name or brand";
@@ -2961,6 +2962,7 @@
 "Nahlásit" = "Report";
 "Opravy · %d" = "Corrections · %d";
 "Hlášení · %d" = "Reports · %d";
+"Nové · %d" = "New · %d";
 "Druh" = "Kind";
 "Hlášení" = "Report";
 "Co nesedí" = "What's wrong";
