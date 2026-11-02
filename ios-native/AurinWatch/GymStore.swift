@@ -237,7 +237,8 @@ final class GymStore: ObservableObject {
     /// What the watch wrote alone goes on its way: to the server when it has
     /// not yet, to the iPhone when it is in reach (its connection came up).
     func sync() {
-        sync()
+        upload()
+        handBack()
     }
 
     /// The newest sheet to the server, one save at a time; tried again with
