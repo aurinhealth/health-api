@@ -879,25 +879,38 @@ extension WatchGym.Exercise {
 }
 
 /// Exercises from the iPhone to swap in (similar to the one swapped) or to
-/// add; Search takes a name said or written on the watch.
+/// add; Search takes a name said or written on the watch. A swap shows the
+/// three kept with the day's plan at once ("Saved for offline") until the
+/// iPhone or the server answers, and keeps them when neither does.
 struct GymOptionsView: View {
     @Environment(\.dismiss) private var dismiss
     let title: String
     let exercise: String?
     let chosen: (WatchGym.Option) -> Void
     @State private var options: [WatchGym.Option] = []
+    /// The swaps kept with the day's plan, shown until a fresher list comes.
+    @State private var kept: [WatchGym.Option] = []
     @State private var loading = true
     @State private var query = ""
+    /// The newest load: an older one that answers late changes nothing.
+    @State private var asked = 0
+
+    private var saved: Bool { !kept.isEmpty && options == kept }
 
     var body: some View {
         List {
             TextField(W.tr("Hledat", "Search"), text: $query)
                 .onSubmit { Task { await load() } }
-            if loading {
+            if loading && options.isEmpty {
                 ProgressView().frame(maxWidth: .infinity)
             } else if options.isEmpty {
                 Text(W.tr("Nic jsem nenašel. Měj iPhone u sebe.", "Nothing found. Keep your iPhone close."))
                     .font(.system(size: 13)).foregroundStyle(W.secondary)
+            }
+            if saved, !options.isEmpty {
+                Text(W.tr("Uloženo pro offline", "Saved for offline"))
+                    .font(.system(size: 12)).foregroundStyle(W.secondary)
+                    .listRowBackground(Color.clear)
             }
             ForEach(options) { option in
                 Button {
@@ -925,8 +938,15 @@ struct GymOptionsView: View {
     }
 
     private func load() async {
+        asked += 1
+        let mine = asked
         loading = true
-        options = await GymStore.shared.options(exercise: exercise, query: query.isEmpty ? nil : query)
+        kept = query.isEmpty ? exercise.map { GymStore.shared.savedSwaps(for: $0) } ?? [] : []
+        options = kept
+        let found = await GymStore.shared.options(exercise: exercise, query: query.isEmpty ? nil : query)
+        guard mine == asked else { return }
+        // Neither the iPhone nor the server answered: the kept ones stay.
+        if !found.isEmpty || kept.isEmpty { options = found }
         loading = false
     }
 }

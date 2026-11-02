@@ -84,6 +84,8 @@ final class GymStore: ObservableObject {
     /// progress keeps what was done here, and a day the watch writes alone stays its own.
     func load() {
         let date = day
+        // A plan kept from before (a relaunch, a day written alone) gets its swaps too.
+        keepSwaps()
         if alone, gym?.date == date {
             sync()
             return
@@ -191,6 +193,7 @@ final class GymStore: ObservableObject {
         gym = fresh
         loadedAt = Date()
         save()
+        keepSwaps()
     }
 
     /// The sheet of the day, changed as on the iPhone and kept with the plan.
@@ -375,6 +378,7 @@ final class GymStore: ObservableObject {
         gym = fresh
         save()
         goAlone()
+        keepSwaps()
     }
 
     // MARK: - The parts around the exercises (warm-up, cardio, stretching)
@@ -517,6 +521,57 @@ final class GymStore: ObservableObject {
         return await WatchAPI.gymAlternatives(date: gym.date, exercise: name, inPlan: inPlan)
     }
 
+    // MARK: - Swaps kept for offline
+
+    private static let swapsKey = "watchGymSwaps"
+
+    /// Three exercises to swap in for each exercise of the day, kept when the
+    /// plan comes, so Swap works without the iPhone and without internet (an
+    /// occupied machine in a gym without Wi-Fi).
+    private struct Swaps: Codable {
+        var date: String
+        var byExercise: [String: [WatchGym.Option]]
+    }
+
+    private var swaps: Swaps? = UserDefaults.standard.data(forKey: GymStore.swapsKey)
+        .flatMap { try? JSONDecoder().decode(Swaps.self, from: $0) }
+    private var fetchingSwaps = false
+    /// Counts sign-outs: a fetch from before one is dropped.
+    private var swapsAccount = 0
+
+    /// Fetches the swaps of today's exercises that have none kept yet, in one
+    /// request (GET /app/api/gym/alternatives?exercises=); offline it fails at
+    /// once and the next plan or load tries again.
+    private func keepSwaps() {
+        guard let gym, gym.date == WatchStore.localDate(Date()), !fetchingSwaps, WatchAPI.signedIn else { return }
+        let kept = swaps?.date == gym.date ? swaps?.byExercise ?? [:] : [:]
+        var missing: [String] = []
+        for name in gym.exercises.map(\.name) where kept[name] == nil && !missing.contains(name) { missing.append(name) }
+        guard !missing.isEmpty else { return }
+        fetchingSwaps = true
+        let date = gym.date, inPlan = gym.exercises.map(\.name), account = swapsAccount
+        Task { @MainActor in
+            let store = GymStore.shared
+            let found = await WatchAPI.gymSwaps(date: date, exercises: missing, inPlan: inPlan)
+            store.fetchingSwaps = false
+            guard let found, store.swapsAccount == account else { return }
+            var value = (store.swaps?.date == date ? store.swaps : nil) ?? Swaps(date: date, byExercise: [:])
+            // Every name asked counts as kept, so none is asked again in a loop.
+            for name in missing { value.byExercise[name] = found[name] ?? [] }
+            store.swaps = value
+            if let data = try? JSONEncoder().encode(value) { UserDefaults.standard.set(data, forKey: GymStore.swapsKey) }
+            // Exercises that came with a plan during the request.
+            store.keepSwaps()
+        }
+    }
+
+    /// The swaps kept for an exercise of today, without those the plan has by now.
+    func savedSwaps(for exercise: String) -> [WatchGym.Option] {
+        guard let gym, let swaps, swaps.date == gym.date else { return [] }
+        let inPlan = Set(gym.exercises.map(\.name))
+        return (swaps.byExercise[exercise] ?? []).filter { !inPlan.contains($0.name) }
+    }
+
     /// Weight or reps changed before the set is done.
     func edit(row: Int, kg: Double, reps: Int) {
         guard var gym else { return }
@@ -532,8 +587,11 @@ final class GymStore: ObservableObject {
         failed = false
         alone = false
         unsent = false
+        swaps = nil
+        swapsAccount += 1
         UserDefaults.standard.removeObject(forKey: Self.savedKey)
         UserDefaults.standard.removeObject(forKey: Self.earlierKey)
+        UserDefaults.standard.removeObject(forKey: Self.swapsKey)
     }
 
     private func save() {
