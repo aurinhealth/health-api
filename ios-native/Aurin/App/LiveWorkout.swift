@@ -37,6 +37,13 @@ final class LiveWorkout: NSObject {
     /// The Apple Watch records this gym (AurinWatch's GymWorkout): its heart
     /// rate and calories show here, and the watch saves the one workout.
     private(set) var onWatch = false
+    /// When the watch's workout last sent a reading (every few seconds while it runs).
+    @ObservationIgnored private var watchHeard: Date?
+    /// The watch's workout runs now: a reading within the last 30 s. The
+    /// iPhone's screen may then sleep (ScreenAwake).
+    var watchLeads: Bool {
+        running && onWatch && watchHeard.map { Date().timeIntervalSince($0) < 30 } == true
+    }
     var running: Bool { start != nil }
     /// The gym started on the watch: the day whose Training mode opens here
     /// (RootView opens it and clears this).
@@ -283,6 +290,9 @@ final class LiveWorkout: NSObject {
             }
         }
         onWatch = true
+        let first = !watchLeads
+        watchHeard = Date()
+        if first { ScreenAwake.apply() }
         if sensor.liveBpm == nil, let bpm = live.heartRate, bpm > 0 {
             note(bpm)
             heartSource = "Apple Watch"
@@ -303,6 +313,9 @@ final class LiveWorkout: NSObject {
         guard let begun = start else { return false }
         poll?.cancel(); poll = nil
         stopSensor()
+        // The summary is read on the iPhone: its screen stays on again.
+        watchHeard = nil
+        ScreenAwake.apply()
         if onWatch {
             // The watch saves the workout; this one goes, and the watch ends too.
             if #available(iOS 26.0, *), let session = session as? HKWorkoutSession {
@@ -391,6 +404,8 @@ final class LiveWorkout: NSObject {
         paused = 0
         carried = nil
         Checkpoint.clear()
+        watchHeard = nil
+        ScreenAwake.apply()
     }
 
     /// Minutes per heart rate zone: `lows` are the zones' lower bounds (bpm),
@@ -423,7 +438,11 @@ final class LiveWorkout: NSObject {
 
     private func update() async {
         guard let start = clockStart else { return }
-        defer { keep() }
+        defer {
+            keep()
+            // The watch stopped sending (its workout ended, out of reach): the screen stays on again.
+            ScreenAwake.apply()
+        }
         if !liveKcal {
             // Strength training about 5 MET, 4 above rest: active kcal = 4 × kg × hours.
             kcal = 4.0 * weightKg * Date().timeIntervalSince(start) / 3600

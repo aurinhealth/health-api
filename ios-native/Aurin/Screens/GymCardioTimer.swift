@@ -218,9 +218,9 @@ struct CardioTimerView: View {
         .background { Palette.background.ignoresSafeArea() }
         .task { await load() }
         .task(id: started) { await watch() }
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
+        .onAppear { ScreenAwake.hold("cardio", watchMaySleep: false) }
         .onDisappear {
-            UIApplication.shared.isIdleTimerDisabled = false
+            ScreenAwake.release("cardio")
             if let end { GymSignals.stopRest(end) }
             // Ticked only now: in Režim tréninku a done part's card goes away, and this screen with it.
             if stopped != nil { onDone() }

@@ -160,14 +160,14 @@ struct TrainingModeView: View {
             day = change.day
         }
         .onAppear {
-            UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true
+            ScreenAwake.hold("training"); model.immersive = true
             GymActivityInbox.handler = { activityAction($0) }
             // The paired sensor connects already when the workout opens, so the
             // heart shows it before Začít trénink.
             if !model.demo { HeartRateSensor.shared.connectSaved() }
         }
         .onDisappear {
-            UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false
+            ScreenAwake.release("training"); model.immersive = false
             // Left another way than the arrow (the edge swipe, a link) while the
             // workout runs: it goes on hidden, as with the arrow.
             if !minimizing, live.running, !finishedSession, let day, current(day) != nil {
