@@ -7,7 +7,7 @@
 // request waited in the queue and never ran: after a lost connection or a
 // reset a write may already have happened, and running it twice could add a
 // row twice.
-import { noteD1 } from "./request-timing.js";
+import { d1Began, d1Ended, noteD1 } from "./request-timing.js";
 
 const TRANSIENT = /D1 DB is overloaded|Requests queued for too long|exceeded its CPU time limit and was reset|Network connection lost|storage caused object to be reset|transient issue|Cannot resolve D1 DB|internal error; reference/i;
 const NEVER_RAN = /D1 DB is overloaded|Requests queued for too long/i;
@@ -29,6 +29,7 @@ export function readOnlySql(sql) {
 
 export async function withD1Retry(run, { read = true, delays = D1_RETRY_DELAYS_MS, sleep = wait } = {}) {
   for (let attempt = 0; ; attempt++) {
+    d1Began();
     try {
       const started = Date.now();
       const result = await run();
@@ -40,5 +41,7 @@ export async function withD1Retry(run, { read = true, delays = D1_RETRY_DELAYS_M
       console.warn(JSON.stringify({ d1_retry: attempt + 1, read, why: messageOf(error).slice(0, 160) }));
       await sleep(delays[attempt]);
     }
+    // After the pause before another try: the request waits for D1 then too.
+    finally { d1Ended(); }
   }
 }

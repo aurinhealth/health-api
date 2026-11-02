@@ -648,7 +648,7 @@ export default {
 // and a slow one into the owner's morning report (request-timing.js).
 function withTiming(response, work, route, env, ctx) {
   if (route.includes(" /app/api/")) {
-    console.log(JSON.stringify({ timing: route, status: response.status, ms: elapsed(work), queries: work.queries, rows_read: work.rowsRead, db_ms: work.dbMs }));
+    console.log(JSON.stringify({ timing: route, status: response.status, ms: elapsed(work), queries: work.queries, rows_read: work.rowsRead, db_ms: work.dbMs, db_wait_ms: work.dbWaitMs }));
     const slow = slowness(work);
     if (slow) ctx?.waitUntil?.(recordOpsEvent(env.DB, "slow", route, slow));
   }
