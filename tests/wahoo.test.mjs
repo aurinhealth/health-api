@@ -406,12 +406,16 @@ test("a Wahoo FTP test ride without laps is measured from its FIT curve; Save re
   const { localToday } = await import("../src/user-time.js");
   const today = localToday();
   const e = env(db);
-  const payload = { id: "wahoo:77", type: "Ride", name: "FTP test", moving_time: 2400, icu_average_watts: 220, start_date_local: today + "T07:00:00" };
-  raw.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, start_time, end_time, payload_json) VALUES (1,'wahoo','activity','wahoo:77',?,?,?,?)").run(today + "T07:00:00", today + "T07:00:00", today + "T07:40:00", JSON.stringify(payload));
-  const time = [], watts = [];
-  for (let t = 0; t <= 2400; t += 2) { time.push(t); watts.push(t >= 600 && t < 1800 ? 280 : 140); }
-  raw.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, start_time, end_time, payload_json) VALUES (1,'wahoo','activity-streams','wahoo:77',?,?,?)").run(today + "T07:00:00", today + "T07:40:00", JSON.stringify({ streams: [{ type: "time", data: time }, { type: "watts", data: watts }] }));
+  // A short ride before the test is not the test: asked for, and the check waits for the test ride.
+  raw.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, start_time, end_time, payload_json) VALUES (1,'wahoo','activity','wahoo:76',?,?,?,?)").run(today + "T06:00:00", today + "T06:00:00", today + "T06:30:00", JSON.stringify({ id: "wahoo:76", type: "Ride", moving_time: 1800, start_date_local: today + "T06:00:00" }));
   await saveCheck(db, "ride", { status: "scheduled", testId: "test-ride-ftp20", testDate: today });
+  const before = await thresholdCheckState(e, { waitUntil() {} }, today);
+  assert.deepEqual([before.results.length, before.manual.map(m => m.sport)], [0, ["ride"]]);
+  const payload = { id: "wahoo:77", type: "Ride", name: "FTP test", moving_time: 3600, icu_average_watts: 220, start_date_local: today + "T07:00:00" };
+  raw.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, start_time, end_time, payload_json) VALUES (1,'wahoo','activity','wahoo:77',?,?,?,?)").run(today + "T07:00:00", today + "T07:00:00", today + "T08:00:00", JSON.stringify(payload));
+  const time = [], watts = [];
+  for (let t = 0; t <= 3600; t += 2) { time.push(t); watts.push(t >= 1200 && t < 2400 ? 280 : 140); }
+  raw.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, start_time, end_time, payload_json) VALUES (1,'wahoo','activity-streams','wahoo:77',?,?,?)").run(today + "T07:00:00", today + "T08:00:00", JSON.stringify({ streams: [{ type: "time", data: time }, { type: "watts", data: watts }] }));
   const state = await thresholdCheckState(e, { waitUntil() {} }, today);
   assert.deepEqual(state.results.map(r => [r.sport, r.result.ftp, r.result.power20, r.result.fromCurve]), [["ride", 266, 280, true]]);
   assert.deepEqual(state.connected, { intervals: false, wahoo: true });

@@ -39,18 +39,17 @@ export async function loadThresholdSessions(env,ctx,today){
   return {sessions,thresholds,athlete};
 }
 // The test ride's own curves (time, watts) when its laps hold no 20-min effort:
-// Intervals.icu's streams of the activity, or the Wahoo workout's FIT file
-// (wahoo-detail.js, read once and kept). Only for the 20-min FTP test.
+// Intervals.icu's streams of the activity (no per-ride power curve in its
+// API that the app uses), or the Wahoo workout's FIT file (wahoo-detail.js,
+// read once and kept).
 async function testCurves(env,id){
+  let streams=[];
   if(String(id||'').startsWith('wahoo:')){
     const row=await env.DB.prepare("SELECT external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family='wahoo' AND data_type='activity' AND external_id=?").bind(env.USER_ID,String(id)).first();
-    const streams=row?await wahooStreams(env,row):[];
-    const s=type=>streams.find(x=>x.type===type)?.data||[];
-    return {time:s('time'),watts:s('watts')};
+    if(row)streams=await wahooStreams(env,row);
+  }else if(env.INTERVALS_API_KEY&&/^[a-zA-Z0-9_-]{1,80}$/.test(id||'')){
+    streams=await intervalsReads(env)('https://intervals.icu/api/v1/activity/'+encodeURIComponent(id)+'/streams?types=time,watts',{headers:{Authorization:intervalsAuthorization(env.INTERVALS_API_KEY),Accept:'application/json'},signal:AbortSignal.timeout(10000)}).then(r=>boundedJson(r,4*1024*1024));
   }
-  if(!env.INTERVALS_API_KEY||!/^[a-zA-Z0-9_-]{1,80}$/.test(id||''))return null;
-  const r=await intervalsReads(env)('https://intervals.icu/api/v1/activity/'+encodeURIComponent(id)+'/streams?types=time,watts',{headers:{Authorization:intervalsAuthorization(env.INTERVALS_API_KEY),Accept:'application/json'},signal:AbortSignal.timeout(10000)});
-  const streams=await boundedJson(r,4*1024*1024);
   const s=type=>(Array.isArray(streams)?streams:[]).find(x=>x.type===type)?.data||[];
   return {time:s('time'),watts:s('watts')};
 }
@@ -98,8 +97,16 @@ export async function thresholdCheckState(env,ctx,today){
       if(done){
         const detail=done.id?await rideIntervals(env,done.id).catch(()=>null):null;
         let result=detail?testResult(check.testId,detail.intervals):null;
-        // No lap of about 20 minutes: the ride's best 20 minutes, still only a value to confirm.
-        if(!result&&done.id&&check.testId==='test-ride-ftp20'){const c=await testCurves(env,done.id).catch(()=>null);result=c?curveTestResult(check.testId,c.time,c.watts):null;}
+        // No lap of about 20 minutes (a 20-min FTP test): the ride's best 20
+        // minutes, still only a value to confirm. Tried once per ride (kept in
+        // the check), and only on a ride as long as the test: a short ride
+        // earlier that day leaves the test ride to come.
+        const w=getTestWorkout(check.testId),long=(done.minutes||0)>=(w?.duration_minutes||45)*0.8;
+        if(!result&&done.id&&check.testId==='test-ride-ftp20'&&long&&check.result?.curveTried!==done.id){
+          const c=await testCurves(env,done.id).catch(()=>null);
+          result=c?curveTestResult(c.time,c.watts,current.ftp):null;
+          if(!result){await saveCheck(env.DB,sport,{...check,result:{curveTried:done.id}});checks[sport]={...check,result:{curveTried:done.id}};}
+        }
         if(result){await saveCheck(env.DB,sport,{...check,status:'measured',result});checks[sport]={...check,status:'measured',result};}
         else {manual.push({sport,testId:check.testId,testDate:check.testDate});continue;}
       }else if(check.testDate<shiftDate(today,-3)){await saveCheck(env.DB,sport,{...check,status:'dismissed'});checks[sport]={...check,status:'dismissed',updatedAt:today};}

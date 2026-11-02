@@ -225,17 +225,22 @@ export function testResult(testId, intervals = [], activity = {}) {
 
 // The best average power over `seconds` from a ride's curves (time in s from
 // the start, watts), for a 20-min test whose effort is not one lap of its own
-// (Intervals.icu split it, or the head unit has no laps). Gaps over 10 s
-// (a pause) count as no power; null without enough time or power.
+// (Intervals.icu split it, or the head unit has no laps). A gap well over the
+// recording's usual spacing (a pause; at least 10 s, more for a thinned long
+// ride) counts as no power; null without enough time or power.
 export function bestPower(time = [], watts = [], seconds = 1200) {
   const n = Math.min(time.length, watts.length);
   if (n < 2) return null;
   const end = Number(time[n - 1]) - Number(time[0]);
-  if (!(end >= seconds) || end > 12 * 3600) return null;
+  if (!(end >= seconds) || end > 24 * 3600) return null;
+  const steps = [];
+  for (let i = 0; i < n - 1; i++) steps.push(Number(time[i + 1]) - Number(time[i]));
+  const usual = steps.filter(d => d > 0).sort((a, b) => a - b)[Math.floor(steps.length / 2)] || 1;
+  const pause = Math.max(10, usual * 3);
   const per = new Float64Array(Math.ceil(end) + 1);
   for (let i = 0; i < n - 1; i++) {
     const a = Math.round(Number(time[i]) - Number(time[0])), b = Math.round(Number(time[i + 1]) - Number(time[0])), w = Number(watts[i]);
-    if (!(b > a) || b - a > 10 || !(w > 0) || w > 3000) continue;
+    if (!(b > a) || b - a > pause || !(w > 0) || w > 3000) continue;
     for (let s = a; s < b; s++) per[s] = w;
   }
   let sum = 0, best = 0;
@@ -248,11 +253,14 @@ export function bestPower(time = [], watts = [], seconds = 1200) {
   return avg > 0 ? avg : null;
 }
 
-// A 20-min FTP test from the ride's best 20 minutes (bestPower).
-export function curveTestResult(testId, time, watts) {
-  if (testId !== "test-ride-ftp20") return null;
+// A 20-min FTP test from the ride's best 20 minutes (bestPower). Only when it
+// looks like a test: an FTP below 85 % of the current one is an easy ride (or
+// a ride before the test), not a result, and the athlete is asked instead.
+export function curveTestResult(time, watts, currentFtp = null) {
   const power20 = bestPower(time, watts, 1200);
-  return power20 ? { ftp: Math.round(power20 * 0.95), power20, fromCurve: true } : null;
+  if (!power20) return null;
+  const ftp = Math.round(power20 * 0.95);
+  return Number(currentFtp) > 0 && ftp < currentFtp * 0.85 ? null : { ftp, power20, fromCurve: true };
 }
 
 // ---- storage ---------------------------------------------------------------

@@ -47,6 +47,8 @@ struct ThresholdCheck: Decodable, Equatable {
         let runLthr: Double?
         /// A swim plan's CSS test: seconds per 100 m.
         var swimCss: Double? = nil
+        /// Read from the ride's best 20 minutes, not from a lap (src/threshold-check.js curveTestResult).
+        var fromCurve: Bool? = nil
     }
 
     struct Current: Decodable, Equatable {
@@ -279,6 +281,7 @@ struct ThresholdCheckCard: View {
         line("runThresholdPace", v.runThresholdPace, current?.runThresholdPace)
         line("swimCss", v.swimCss, current?.swimCss)
         if let hr = v.runLthr { out.append(L10n.f("%@: %@", metricName("lthr"), valueText("lthr", hr))) }
+        if v.fromCurve == true { out.append(L10n.tr("Podle nejlepších 20 minut jízdy.")) }
         return out
     }
 

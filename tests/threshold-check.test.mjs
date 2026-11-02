@@ -100,11 +100,17 @@ test("without a 20-min lap the test takes the ride's best 20 minutes", () => {
   const time = [], watts = [];
   for (let t = 0; t <= 2400; t += 2) { time.push(t); watts.push(t >= 600 && t < 1800 ? 300 : 150); }
   assert.equal(bestPower(time, watts), 300);
-  assert.deepEqual(curveTestResult("test-ride-ftp20", time, watts), { ftp: 285, power20: 300, fromCurve: true });
+  assert.deepEqual(curveTestResult(time, watts, 280), { ftp: 285, power20: 300, fromCurve: true });
+  // An easy ride is not a test: under 85 % of the current FTP the athlete is asked instead.
+  assert.equal(curveTestResult(time, watts.map(() => 160), 260), null);
+  // A long ride thinned to wide spacing (12 s) still counts; only gaps well over it are pauses.
+  const wide = [], wideW = [];
+  for (let t = 0; t <= 6 * 3600; t += 12) { wide.push(t); wideW.push(t >= 3600 && t < 4800 ? 250 : 120); }
+  assert.equal(bestPower(wide, wideW), 250);
   // A pause (gap over 10 s) counts as no power; too short or no power: nothing.
-  assert.equal(bestPower([0, 600, 1300], [300, 300, 300]), null);
+  const paused = [], pausedW = [];
+  for (let t = 0; t <= 1500; t += 1) if (t < 600 || t >= 700) { paused.push(t); pausedW.push(300); }
+  assert.ok(bestPower(paused, pausedW) < 300, "a 100-s stop counts as no power");
   assert.equal(bestPower(time.slice(0, 500), watts.slice(0, 500)), null);
   assert.equal(bestPower(time, watts.map(() => null)), null);
-  // Only the 20-min FTP test reads the curve.
-  assert.equal(curveTestResult("test-ride-lthr30", time, watts), null);
 });
