@@ -46,6 +46,8 @@ struct TrainingPage: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        // The sample day's screenshot (-bottom): the week and Continue whole.
+        .defaultScrollAnchor(WatchDemo.flag("-bottom") ? .bottom : .top)
         .onAppear { store.load() }
         .task(id: day) {
             if day == today { preview = nil } else { preview = await store.preview(date: day) }

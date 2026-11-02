@@ -70,7 +70,7 @@ struct ReadinessHome: View {
                 .lineLimit(1)
             } else {
                 Text(s.readiness.map { String($0) } ?? "–")
-                    .font(W.serif(58))
+                    .font(W.serif(52))
                     .foregroundStyle(W.ink)
                     .lineLimit(1)
             }
@@ -90,7 +90,9 @@ struct ReadinessHome: View {
                 }
             }
         }
-        .padding(.top, 4)
+        // In from the screen's edge and clear of the alarm button above.
+        .padding(.top, 6)
+        .padding(.leading, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }

@@ -192,9 +192,12 @@ struct GymSessionView: View {
                     }
                     // A few points short of the edge, where the screen's corners round off.
                     .frame(height: max(0, space.size.height - 4), alignment: .top)
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 5), GridItem(.flexible(), spacing: 5)], spacing: 5) {
-                        cell(W.tr("Objem", "Volume"), GymText.volume(gym.volume), nil, W.indigo, small: false)
-                        cell(W.tr("Kalorie", "Calories"), W.number(workout.calories), "kcal", W.amber, small: false)
+                    // Not in the sample day's screenshot, where their tops would show cut off.
+                    if !WatchDemo.on {
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 5), GridItem(.flexible(), spacing: 5)], spacing: 5) {
+                            cell(W.tr("Objem", "Volume"), GymText.volume(gym.volume), nil, W.indigo, small: false)
+                            cell(W.tr("Kalorie", "Calories"), W.number(workout.calories), "kcal", W.amber, small: false)
+                        }
                     }
                 }
             }

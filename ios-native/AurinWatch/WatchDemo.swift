@@ -5,7 +5,7 @@ import Foundation
 /// -demo, the watch draws the same Thursday as the iPhone's sample data
 /// (Aurin/Data/DemoData.swift) on this week's Thursday and never asks the iPhone or
 /// the server. -language en|cs picks the language (English without it);
-/// -page training|food opens that page, -open sleep|hrv|restingHR|strain a
+/// -page training|food opens that page (-bottom scrolled to its end), -open sleep|hrv|restingHR|strain a
 /// detail, -gym the gym session (with -rest, its rest), -face the watch face.
 enum WatchDemo {
     static let on = ProcessInfo.processInfo.arguments.contains("-demo")
