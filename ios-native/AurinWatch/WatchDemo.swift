@@ -3,7 +3,7 @@ import Foundation
 /// The sample day on the watch, for the App Store's and the website's
 /// screenshots (ios-native.yml, "Screenshot the Apple Watch"): launched with
 /// -demo, the watch draws the same Thursday as the iPhone's sample data
-/// (Aurin/Data/DemoData.swift) on today's date and never asks the iPhone or
+/// (Aurin/Data/DemoData.swift) on this week's Thursday and never asks the iPhone or
 /// the server. -language en|cs picks the language (English without it);
 /// -page training|food opens that page, -open sleep|hrv|restingHR|strain a
 /// detail, -gym the gym session (with -rest, its rest), -face the watch face.
@@ -18,12 +18,25 @@ enum WatchDemo {
 
     static func flag(_ name: String) -> Bool { on && ProcessInfo.processInfo.arguments.contains(name) }
 
+    /// Now, for the pages that ask what day it is: in the sample day, this
+    /// week's Thursday at 10:09 (the iPhone's sample day is a Thursday, and the
+    /// week then shows done days and planned days), otherwise the real time.
+    static var now: Date { on ? sampleNow : Date() }
+
+    private static let sampleNow: Date = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.firstWeekday = 2
+        let monday = calendar.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
+        let thursday = calendar.date(byAdding: .day, value: 3, to: monday) ?? Date()
+        return calendar.date(bySettingHour: 10, minute: 9, second: 0, of: thursday) ?? Date()
+    }()
+
     private static var english: Bool { value("-language") != "cs" }
     private static func tr(_ czech: String, _ englishText: String) -> String { english ? englishText : czech }
 
-    /// yyyy-MM-dd of today moved by a number of days.
+    /// yyyy-MM-dd of the sample day moved by a number of days.
     private static func day(_ offset: Int) -> String {
-        WatchStore.localDate(Calendar.current.date(byAdding: .day, value: offset, to: Date()) ?? Date())
+        WatchStore.localDate(Calendar.current.date(byAdding: .day, value: offset, to: now) ?? now)
     }
 
     /// The last days of a series, oldest first, ending today.
@@ -35,7 +48,7 @@ enum WatchDemo {
         let rhr = (0..<29).map { [53.0, 50, 51, 52][$0 % 4] } + [48]
         let hrv = (0..<29).map { [55.0, 62, 60, 58, 56, 54, 61, 59, 57][$0 % 9] } + [64]
         return WatchSnapshot(
-            date: day(0), updated: Date(), language: english ? "en" : "cs", readiness: 78, zone: "green",
+            date: day(0), updated: now, language: english ? "en" : "cs", readiness: 78, zone: "green",
             headline: tr("Jak dnes začít", "How to start today"),
             summary: tr("Spánek 7 h 12 min, kousek pod potřebou. HRV je třetí den nad normou.",
                         "Sleep 7 h 12 min, a little under your need. HRV is above normal for the third day."),

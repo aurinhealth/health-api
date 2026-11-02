@@ -15,7 +15,7 @@ struct DemoFace: View {
     }
 
     var body: some View {
-        let entry = DayEntry(date: Date(), snapshot: s)
+        let entry = DayEntry(date: WatchDemo.now, snapshot: s)
         VStack(alignment: .leading, spacing: 6) {
             Text(Self.day)
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
@@ -46,7 +46,7 @@ struct DemoFace: View {
         let formatter = DateFormatter()
         formatter.locale = W.locale
         formatter.setLocalizedDateFormatFromTemplate("EEEd")
-        return formatter.string(from: Date())
+        return formatter.string(from: WatchDemo.now)
     }
 
     private func small(_ metric: SmallMetric, _ entry: DayEntry) -> some View {

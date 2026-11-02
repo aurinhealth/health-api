@@ -37,7 +37,7 @@ final class GymStore: ObservableObject {
         }
         let defaults = UserDefaults.standard
         if let data = defaults.data(forKey: Self.savedKey), let saved = WatchGym.decode(data),
-           saved.date == WatchStore.localDate(Date()) {
+           saved.date == WatchStore.localDate(WatchDemo.now) {
             gym = saved
             alone = defaults.bool(forKey: Self.aloneKey)
             unsent = defaults.bool(forKey: Self.unsentKey)
@@ -47,7 +47,7 @@ final class GymStore: ObservableObject {
     /// The day worked on: today, or the day a workout still running began
     /// (a gym past midnight stays on its own day).
     private var day: String {
-        let today = WatchStore.localDate(Date())
+        let today = WatchStore.localDate(WatchDemo.now)
         guard GymWorkout.shared.running, let gym else { return today }
         return gym.date
     }

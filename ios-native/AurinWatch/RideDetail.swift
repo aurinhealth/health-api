@@ -157,8 +157,8 @@ struct RideDetail: View {
 
     /// "ZÍTRA · 60 MIN".
     private var when: String {
-        let today = WatchStore.localDate(Date())
-        let tomorrow = WatchStore.localDate(Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date())
+        let today = WatchStore.localDate(WatchDemo.now)
+        let tomorrow = WatchStore.localDate(Calendar.current.date(byAdding: .day, value: 1, to: WatchDemo.now) ?? WatchDemo.now)
         let day = session.date == today ? W.tr("dnes", "today") : session.date == tomorrow ? W.tr("zítra", "tomorrow") : W.dayName(session.date)
         let minutes = session.minutes ?? plan?.minutes
         return day + (session.time.map { " · " + W.clockText($0) } ?? "") + (minutes.map { " · \($0) min" } ?? "")

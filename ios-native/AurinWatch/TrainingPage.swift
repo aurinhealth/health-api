@@ -11,13 +11,13 @@ struct TrainingPage: View {
     @ObservedObject private var store = GymStore.shared
     @State private var running = false
     /// The sample day's screenshots show today at any hour (WatchDemo).
-    @State private var picked: String? = WatchDemo.on ? WatchStore.localDate(Date()) : nil
+    @State private var picked: String? = WatchDemo.on ? WatchStore.localDate(WatchDemo.now) : nil
     @State private var preview: WatchGym?
     /// Which of a day's workouts is open, by day (the first until a tap).
     @State private var chosen: [String: Int] = [:]
     @ObservedObject private var plans = PlanStore.shared
 
-    private var today: String { WatchStore.localDate(Date()) }
+    private var today: String { WatchStore.localDate(WatchDemo.now) }
     private var sessions: [WatchSnapshot.Session] {
         guard let s = watch.snapshot, s.date == today else { return [] }
         return s.week ?? []
@@ -57,7 +57,7 @@ struct TrainingPage: View {
     // MARK: The day shown
 
     private var tomorrow: String {
-        WatchStore.localDate(Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date())
+        WatchStore.localDate(Calendar.current.date(byAdding: .day, value: 1, to: WatchDemo.now) ?? WatchDemo.now)
     }
 
     /// Today; in the evening (from 18:00) or with today done, tomorrow when it has a plan.
@@ -65,7 +65,7 @@ struct TrainingPage: View {
         if let picked { return picked }
         let todays = sessions.filter { $0.date == today }
         let open = todays.contains { !$0.done } || (store.gym.map { $0.date == today && !$0.exercises.isEmpty && !$0.allDone } ?? false)
-        let evening = Calendar.current.component(.hour, from: Date()) >= 18
+        let evening = Calendar.current.component(.hour, from: WatchDemo.now) >= 18
         let next = sessions.contains { $0.date == tomorrow && !$0.done }
         if next, evening || (!open && !todays.isEmpty) { return tomorrow }
         return today
@@ -75,7 +75,7 @@ struct TrainingPage: View {
     private var weekDays: [String] {
         var calendar = Calendar(identifier: .gregorian)
         calendar.firstWeekday = 2
-        let start = calendar.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
+        let start = calendar.dateInterval(of: .weekOfYear, for: WatchDemo.now)?.start ?? WatchDemo.now
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start).map(WatchStore.localDate) }
     }
 

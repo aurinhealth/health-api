@@ -75,7 +75,7 @@ struct WatchRoot: View {
         NavigationStack(path: $path) {
             TabView(selection: $page) {
                 Group {
-                    if let snapshot = store.snapshot, snapshot.date == WatchStore.localDate(Date()) {
+                    if let snapshot = store.snapshot, snapshot.date == WatchStore.localDate(WatchDemo.now) {
                         ReadinessHome(s: snapshot)
                     } else {
                         WaitingView(stale: store.snapshot != nil)
