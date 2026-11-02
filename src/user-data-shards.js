@@ -89,6 +89,19 @@ export async function userDataEnvironment(env, user, prefetched = null, options 
   return userEnv({ ...catalogue, USER_DATA_DB: resolved.db, USER_DATA_SHARD: resolved.key }, user, options);
 }
 
+// Every database that holds users' personal rows (the core one and each ready
+// shard), each once, for nightly cleanups that go through all users' rows at once.
+export async function userDataDatabases(env) {
+  const out = [env.DB];
+  if (env.USER_DATA_ROUTING !== 'true') return out;
+  const rows = (await env.DB.prepare("SELECT binding_name FROM user_data_shards WHERE state='ready' ORDER BY shard_key").all()).results || [];
+  for (const { binding_name: name } of rows) {
+    const db = /^USER_DATA_\d{3}$/.test(name || '') ? env[name] : null;
+    if (db?.prepare && !out.includes(db)) out.push(db);
+  }
+  return out;
+}
+
 export async function deletionDatabase(env, userId) {
   const { db } = await resolveUserData(env, userId, { existingOnly: true });
   const catalogue = await foodCatalogEnvironment(env);

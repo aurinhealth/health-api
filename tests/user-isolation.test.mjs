@@ -38,6 +38,12 @@ const allowed = [/FROM workout_shares WHERE id=\?"$/, /^"DELETE FROM push_tokens
   /^"SELECT DISTINCT user_id FROM food_suggestions WHERE kind='report' AND status='pending' AND ref=\? AND id<>\?"$/, /^"UPDATE food_suggestions SET status=\?, after_json=\?, decided_at=CURRENT_TIMESTAMP WHERE id=\? AND status='pending'"$/,
   // Fixing a reported food settles every user's report of it.
   /^"UPDATE food_suggestions SET status='approved', decided_at=CURRENT_TIMESTAMP WHERE kind='report' AND status='pending' AND ref=\?"$/,
+  // The nightly removal of coach chat messages older than 30 days goes through all users
+  // of a database at once (assistant-chats.js forgetOldChatMessages).
+  /^"DELETE FROM assistant_messages WHERE created_at<datetime\('now',\?1\) AND chat_id IN \(SELECT id FROM assistant_chats WHERE created_at<datetime\('now',\?1\)\)"$/,
+  /^"DELETE FROM assistant_chats WHERE created_at<datetime\('now',\?1\) AND NOT EXISTS \(SELECT 1 FROM assistant_messages m WHERE m\.chat_id=assistant_chats\.id AND m\.user_id=assistant_chats\.user_id\)"$/,
+  /^`UPDATE assistant_chats SET created_at=\(SELECT MIN\(m\.created_at\) FROM assistant_messages m WHERE m\.chat_id=assistant_chats\.id AND m\.user_id=assistant_chats\.user_id\),[^`]*WHERE created_at<datetime\('now',\?1\)`$/,
+  /^"UPDATE athlete_state SET state_json=json_remove\(state_json,'\$\.conversation'\) WHERE json_valid\(state_json\) AND json_type\(state_json,'\$\.conversation'\) IS NOT NULL"$/,
   // Apple's refund notification names the pack's transaction, not the user (coach-packs.js).
   /^'UPDATE coach_pack_purchases SET refunded_at = \? WHERE transaction_id = \? AND refunded_at IS NULL'$/];
 

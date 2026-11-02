@@ -20,7 +20,7 @@ export async function getAthleteState(db,{date=localToday()}={}) {
   await ensure(db);
   const row = await db.prepare('SELECT state_json FROM athlete_state WHERE user_id=?').bind(db.userId).first();
   let state = {}; try { state = JSON.parse(row?.state_json || '{}'); } catch { /* defaults */ }
-  // `conversation` is no longer written (chats live in assistant_chats); old rows still read.
+  // `conversation` is no longer written (chats live in assistant_chats); the nightly chat cleanup removes it from old rows.
   return effectiveAthleteState({ status: 'active', note: '', statusUntil:null, memories: [], memoryMeta: {}, conversation: [], dismissed: [], ...state },date);
 }
 export async function updateAthleteState(db, patch,{date=localToday()}={}) {
@@ -35,7 +35,7 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
     state.statusUntil=patch.status==='active'?null:until;
   }
   if (patch.memory) remember(state, clean(patch.memory), date);
-  if (patch.forget != null) {state.memories = state.memories.filter(x => x !== patch.forget);delete state.memoryMeta[patch.forget];state.conversation=state.conversation.filter(t=>!String(t.content).includes(patch.forget));}
+  if (patch.forget != null) {state.memories = state.memories.filter(x => x !== patch.forget);delete state.memoryMeta[patch.forget];}
   // An edited memory keeps its place in the list and counts as new.
   if (patch.edit?.from != null && state.memories.includes(patch.edit.from)) {
     const to = clean(patch.edit.to);
@@ -63,6 +63,8 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
       .filter(c => c.at >= since).slice(-14);
   }
   if (patch.dismiss) state.dismissed = [...new Set([...state.dismissed, clean(patch.dismiss)])].slice(-30);
+  // The turns kept before chats existed are not written back (assistant-chats.js forgetOldChatMessages).
+  delete state.conversation;
   await db.prepare('INSERT INTO athlete_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json').bind(db.userId, JSON.stringify(state)).run();
   return state;
 }

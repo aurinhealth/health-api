@@ -105,7 +105,7 @@ import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
 import { reviewRefusal, isReviewAccount } from "./app-review.js";
 import { handleNativeAppleLogin, forgetUsedAppleTokens } from "./apple-login.js";
-import { chatContext, appendChatTurn, listChats, readChat, deleteChat, startChatWithCoach, lastAnswerId, ownedChat } from "./assistant-chats.js";
+import { chatContext, appendChatTurn, listChats, readChat, deleteChat, startChatWithCoach, lastAnswerId, ownedChat, forgetOldChatMessages } from "./assistant-chats.js";
 import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedReplyPush } from "./coach-push-reply.js";
 import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
@@ -129,7 +129,7 @@ import { wahooDetail } from "./wahoo-detail.js";
 import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, wahooRideExpected, readWahooTokens } from "./wahoo.js";
 import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed } from "./sync-destinations.js";
 import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, smokeUser, usersWithProviders, usersWithAccount, usersWithPushTokens, openSignup } from "./tenancy.js";
-import { userDataEnvironment, prefetchUserData, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
+import { userDataEnvironment, prefetchUserData, deletionDatabase, userDataDatabases, UserDataUnavailable } from './user-data-shards.js';
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
 import { handlePasskeyLogin } from "./passkeys.js";
 import { handleEmailLogin } from "./email-login.js";
@@ -447,6 +447,14 @@ const worker = {
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 0) {
       for (const user of await inactiveAccounts(env.DB, env).catch(error => { console.error("Inactive accounts read failed", error.message); return []; })) {
         await deleteAccount(await connectionEnvironment(await userDataEnvironment(env, user)), user, { budgetMs: 1000 }).catch(error => console.error("Inactive account deletion failed", user.id, error.message));
+      }
+    }
+    // Coach chat messages older than 30 days, in every user data database (assistant-chats.js,
+    // privacy policy). Tried at 2:09 and 2:39 UTC, as a cron minute can be missed; the
+    // second run finds nothing to delete.
+    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 30 === 9) {
+      for (const db of await userDataDatabases(env).catch(error => { console.error("User databases read failed", error.message); return []; })) {
+        await forgetOldChatMessages(db).catch(error => console.error("Chat retention failed", error.message));
       }
     }
     // Remembered AI limits of deleted accounts whose week and month are over (ai-limit-memory.js).
@@ -2292,7 +2300,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     // The proposals made in this chat, with how they were decided.
     if(chat){
       await ensureCoachInboxTable(env.DB);
-      const rows=(await env.DB.prepare("SELECT id,status,draft_json FROM coach_inbox WHERE user_id=? AND draft_json LIKE ? AND created_at>=datetime('now','-90 days') ORDER BY id").bind(env.USER_ID,'%"chatId":'+chat.id+',"messageId"%').all().catch(()=>({results:[]}))).results||[];
+      const rows=(await env.DB.prepare("SELECT id,status,draft_json FROM coach_inbox WHERE user_id=? AND draft_json LIKE ? AND created_at>=datetime('now','-30 days') ORDER BY id").bind(env.USER_ID,'%"chatId":'+chat.id+',"messageId"%').all().catch(()=>({results:[]}))).results||[];
       chat.actions=rows.map(r=>{try{const d=JSON.parse(r.draft_json);return d.kind==='coach_action'&&d.chatId===chat.id&&d.messageId?{...d.action,draftId:r.id,draftStatus:r.status,messageId:d.messageId}:null;}catch{return null;}}).filter(Boolean);
     }
     return chat?Response.json({status:'ok',chat},{headers:{'Cache-Control':'no-store'}}):Response.json({message:'Chat neexistuje.'},{status:404});
