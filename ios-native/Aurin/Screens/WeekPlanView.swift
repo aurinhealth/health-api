@@ -76,7 +76,9 @@ struct WeekSessionDraft: Identifiable, Equatable {
 
     /// The lengths the detail offers (src/week-planner.js SESSION_MINUTES).
     static func lengths(_ sport: String, including current: Int) -> [Int] {
-        let list = ["gym": [30, 45, 60, 75, 90], "run": [20, 30, 45, 60, 75, 90, 120]][sport] ?? [30, 45, 60, 75, 90, 120, 150, 180, 240]
+        let list = ["gym": [30, 45, 60, 75, 90], "run": [20, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300, 360],
+                    "swim": [20, 30, 45, 60, 75, 90]][sport]
+            ?? [30, 45, 60, 75, 90, 120, 150, 180, 240, 300, 360, 420, 480]
         return list.contains(current) ? list : (list + [current]).sorted()
     }
 

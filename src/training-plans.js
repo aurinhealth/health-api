@@ -1,5 +1,5 @@
 import { L, plural } from "./lang.js";
-import { buildWorkout, step } from "./workout-model.js";
+import { buildWorkout, step, MAX_MINUTES } from "./workout-model.js";
 import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
 import { SWIMMING_WORKOUTS, SWIMMING_WORKOUTS_EN } from "./swimming-workouts.js";
@@ -563,7 +563,7 @@ export const getTemplate = id => planTemplates().find(t => t.id === id) || null;
 
 // ---- the catalogue -------------------------------------------------------------
 const CATALOGUE = { ride: CYCLING_WORKOUTS, run: RUNNING_WORKOUTS, swim: SWIMMING_WORKOUTS };
-const LIMITS = { ride: [30, 360], run: [20, 240], swim: [15, 120] };
+const LIMITS = { ride: [30, MAX_MINUTES.ride], run: [20, MAX_MINUTES.run], swim: [15, 120] };
 const familyLevels = (sport, family) => [...new Set(CATALOGUE[sport].filter(w => w.family === family).map(w => w.level).filter(Number.isFinite))].sort((a, b) => a - b);
 // A key session one or two levels easier for a beginner, up to three harder for
 // a strong athlete (their capability in that energy system, level 3 = normal,
@@ -1298,7 +1298,7 @@ export function planEdit(plan, { date, op, to = null, minutes = null }, today) {
     edits[date] = { to };
   } else if (op === "minutes") {
     const m = Math.round(Number(minutes));
-    if (!(m >= 20 && m <= 360)) throw new Error(L("Délka musí být 20–360 minut.", "The length must be 20–360 minutes."));
+    if (!(m >= 20 && m <= MAX_MINUTES.ride)) throw new Error(L(`Délka musí být 20–${MAX_MINUTES.ride} minut.`, `The length must be 20–${MAX_MINUTES.ride} minutes.`));
     edits[date] = { ...(edits[date]?.to ? {} : edits[date]), minutes: m };
   } else if (op === "skip") edits[date] = { skip: true };
   else if (op === "reset") delete edits[date];
