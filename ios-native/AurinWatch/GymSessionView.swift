@@ -118,6 +118,16 @@ struct GymSessionView: View {
         }
         .task {
             if let current = store.gym?.current { exercise = current.exercise }
+            if WatchDemo.on {
+                workout.demo()
+                // -rest: the rest after the squat's first set.
+                if WatchDemo.flag("-rest") {
+                    restTotal = 150
+                    restEnd = Date().addingTimeInterval(84)
+                    rated = Rated(row: 8, kg: 80, before: nil, sameExercise: true, letter: "M")
+                }
+                return
+            }
             await workout.begin()
         }
         .onChange(of: store.endedOnPhone) { _, ended in

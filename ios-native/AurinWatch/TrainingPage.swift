@@ -10,7 +10,8 @@ struct TrainingPage: View {
     @EnvironmentObject private var watch: WatchStore
     @ObservedObject private var store = GymStore.shared
     @State private var running = false
-    @State private var picked: String?
+    /// The sample day's screenshots show today at any hour (WatchDemo).
+    @State private var picked: String? = WatchDemo.on ? WatchStore.localDate(Date()) : nil
     @State private var preview: WatchGym?
     /// Which of a day's workouts is open, by day (the first until a tap).
     @State private var chosen: [String: Int] = [:]

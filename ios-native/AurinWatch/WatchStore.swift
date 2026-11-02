@@ -17,13 +17,18 @@ final class WatchStore: NSObject, ObservableObject {
 
     override init() {
         super.init()
+        // The sample day for the screenshots, nothing from the iPhone or the server.
+        if WatchDemo.on {
+            snapshot = WatchDemo.snapshot
+            return
+        }
         if let data = UserDefaults.standard.data(forKey: Self.savedKey) {
             snapshot = WatchSnapshot.decode(data)
         }
     }
 
     func start() {
-        guard WCSession.isSupported() else { return }
+        guard WCSession.isSupported(), !WatchDemo.on else { return }
         let session = WCSession.default
         guard session.delegate == nil else { ask(); return }
         session.delegate = self
@@ -33,6 +38,7 @@ final class WatchStore: NSObject, ObservableObject {
     /// The newest Today from the iPhone, when it is in reach; else, or when
     /// it has nothing for today, from the server with the watch's sign-in.
     func ask() {
+        guard !WatchDemo.on else { return }
         guard WCSession.isSupported() else { Task { await fromServer() }; return }
         let session = WCSession.default
         guard session.activationState == .activated, session.isReachable else {
@@ -55,7 +61,7 @@ final class WatchStore: NSObject, ObservableObject {
     /// Today from the server when the watch has none for today (WatchToday).
     func fromServer() async {
         let today = Self.localDate(Date())
-        guard snapshot?.date != today, !loading, WatchAPI.signedIn else { return }
+        guard snapshot?.date != today, !loading, !WatchDemo.on, WatchAPI.signedIn else { return }
         loading = true
         defer { loading = false }
         guard let value = await WatchToday.load(over: snapshot), value.date == today, let data = value.encoded() else { return }

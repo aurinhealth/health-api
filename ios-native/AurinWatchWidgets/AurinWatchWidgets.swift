@@ -9,6 +9,9 @@ import WidgetKit
 /// today, the workout, food, drinks, the night and Aurin through the day.
 /// They draw the last Today the watch app got (ComplicationShelf); a tap
 /// opens the watch app on its page (widgetURL, WatchRoot.open).
+// The watch app compiles this file too, for the sample day's watch face
+// (AurinWatch/DemoFace.swift): it takes the views, not the widgets.
+#if !AURIN_WATCH_APP
 @main
 struct AurinWatchWidgets: WidgetBundle {
     var body: some Widget {
@@ -52,6 +55,7 @@ struct WideWorkout: Widget { var body: some WidgetConfiguration { WideComplicati
 struct WideFood: Widget { var body: some WidgetConfiguration { WideComplication.configuration(.food) } }
 struct WideDrinks: Widget { var body: some WidgetConfiguration { WideComplication.configuration(.drinks) } }
 struct WideNight: Widget { var body: some WidgetConfiguration { WideComplication.configuration(.night) } }
+#endif
 
 // MARK: - Timeline
 

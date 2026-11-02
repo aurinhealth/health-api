@@ -14,8 +14,10 @@ name: iOS native app
 #   from the sample data, plus simulator screenshots of the running app
 #   (site/: the English, light-mode shots the website uses; smoke/: each step
 #   of the smoke test Vydat relies on; site-dark/ and smoke-dark/: the website's
-#   shots again in dark mode, for its dark look), and preview/: the App Store preview
-#   videos in English and Czech (app-preview-en.mp4, app-preview-cs.mp4).
+#   shots again in dark mode, for its dark look), watch/ and watch-cs/: the Apple
+#   Watch app on the sample day in English and Czech (the watch is dark only), and
+#   preview/: the App Store preview videos in English and Czech (app-preview-en.mp4,
+#   app-preview-cs.mp4).
 
 on:
   workflow_dispatch:
@@ -220,6 +222,50 @@ jobs:
             -destination "id=$udid" -derivedDataPath build \
             -only-testing:AurinUITests/SmokeTests/test4WebsiteScenes \
             CODE_SIGNING_ALLOWED=NO test
+
+      # The Apple Watch app on the sample day (AurinWatch/WatchDemo.swift, -demo) for
+      # the App Store and the website: watch/ in English, watch-cs/ in Czech, each
+      # page by the crown, a detail, the gym and its rest, and the watch face with
+      # Aurin's complications (DemoFace). The watch is dark only. Not a release
+      # check: a missing watch simulator or shot never fails the run.
+      - name: Screenshot the Apple Watch
+        continue-on-error: true
+        run: |
+          watch=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          watches = [d for r in devices if "watchOS" in r for d in devices[r] if d["name"].startswith("Apple Watch")]
+          print("watches:", ", ".join(sorted({d["name"] for d in watches})), file=sys.stderr)
+          names = ("Apple Watch Series 11 (46mm)", "Apple Watch Ultra 3 (49mm)", "Apple Watch Series 10 (46mm)", "Apple Watch Ultra 2 (49mm)")
+          pick = next((d for n in names for d in reversed(watches) if d["name"] == n), watches[-1] if watches else None)
+          print(pick["name"] if pick else "no watch", file=sys.stderr)
+          print(pick["udid"] if pick else "")')
+          if [ -z "$watch" ]; then echo "No Apple Watch simulator on this image"; exit 0; fi
+          app=build/Build/Products/Debug-watchsimulator/AurinWatch.app
+          [ -d "$app" ] || app=$(find build/Build/Products -maxdepth 2 -name AurinWatch.app -path '*watchsimulator*' | head -1)
+          xcrun simctl boot "$watch" || true
+          xcrun simctl bootstatus "$watch" -b
+          xcrun simctl install "$watch" "$app"
+          xcrun simctl status_bar "$watch" override --time "9:41" || true
+          shoot() {
+            dir="$GITHUB_WORKSPACE/screens/$1"; name=$2; shift 2
+            mkdir -p "$dir"
+            xcrun simctl launch --terminate-running-process "$watch" health.aurin.app.watchkitapp -demo "$@"
+            sleep 6
+            xcrun simctl io "$watch" screenshot "$dir/$name.png"
+          }
+          for lang in en cs; do
+            dir=watch; [ "$lang" = cs ] && dir=watch-cs
+            shoot $dir 1-morning -language $lang
+            shoot $dir 2-training -language $lang -page training
+            shoot $dir 3-food -language $lang -page food
+            shoot $dir 4-gym -language $lang -gym
+            shoot $dir 5-rest -language $lang -gym -rest
+            shoot $dir 6-face -language $lang -face
+            shoot $dir 7-sleep -language $lang -open sleep
+            shoot $dir 8-strain -language $lang -open strain
+          done
+          xcrun simctl shutdown "$watch" || true
 
       # The App Store preview videos: the simulator's screen recorded while
       # AppPreviewTests walks the sample day in English and Czech, then the clips

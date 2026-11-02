@@ -255,6 +255,9 @@ targets:
       - path: Aurin/Resources/Fonts/Newsreader-Regular.ttf
         buildPhase: resources
       - path: AurinWatchWidgets/ComplicationShelf.swift
+      # The complications' views, for the sample day's watch face in the
+      # screenshots (AurinWatch/DemoFace.swift); the widgets stay out (AURIN_WATCH_APP).
+      - path: AurinWatchWidgets/AurinWatchWidgets.swift
     # The complications on the watch face, in the watch app's PlugIns.
     dependencies:
       - target: AurinWatchWidgets
@@ -262,6 +265,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: health.aurin.app.watchkitapp
         PRODUCT_NAME: AurinWatch
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) AURIN_WATCH_APP
         TARGETED_DEVICE_FAMILY: "4"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SKIP_INSTALL: YES
