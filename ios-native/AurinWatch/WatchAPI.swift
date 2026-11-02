@@ -72,11 +72,20 @@ enum WatchAPI {
 
     /// A GET with the watch's sign-in; nil without one, offline or on an error.
     static func get(_ path: String) async -> Data? {
-        guard let session, let request = request(path, session: session),
-              let (data, response) = try? await urlSession.data(for: request) else { return nil }
+        guard let session, let request = request(path, session: session) else { return nil }
+        guard let (data, response) = try? await urlSession.data(for: request) else {
+            WatchReport.failed("GET " + path, message: "no connection")
+            return nil
+        }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401 { store(nil) }
+        if status != 200 { WatchReport.failed("GET " + path, status: status, message: serverMessage(data)) }
         return status == 200 ? data : nil
+    }
+
+    /// The server's "message" in a refusal, for WatchReport.
+    private static func serverMessage(_ data: Data) -> String? {
+        (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["message"] as? String
     }
 
     /// The chat the app was written in during the last 6 hours, so the watch continues it.
@@ -107,11 +116,13 @@ enum WatchAPI {
         do {
             (data, response) = try await urlSession.data(for: request)
         } catch {
+            WatchReport.failed("POST /app/api/assistant", message: error.localizedDescription)
             throw Failure(text: W.tr("Hodinky nejsou připojené k internetu ani k iPhonu.", "The watch has no internet and no iPhone nearby."))
         }
         let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
+            WatchReport.failed("POST /app/api/assistant", status: status, message: object["message"] as? String)
             if status == 401 {
                 store(nil)
                 throw Failure(text: W.tr("Přihlášení vypršelo. Otevři Aurin v iPhonu.", "Your sign-in ran out. Open Aurin on your iPhone."))
@@ -130,9 +141,16 @@ enum WatchAPI {
         query.queryItems = [URLQueryItem(name: "id", value: plan.eventId)]
         if plan.date == WatchStore.localDate(Date()) { query.queryItems?.append(URLQueryItem(name: "date", value: plan.date)) }
         guard let session, let q = query.percentEncodedQuery,
-              let request = request("/app/api/workouts/planned?" + q, session: session),
-              let (data, response) = try? await urlSession.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+              let request = request("/app/api/workouts/planned?" + q, session: session) else { return nil }
+        guard let (data, response) = try? await urlSession.data(for: request) else {
+            WatchReport.failed("GET /app/api/workouts/planned", message: "no connection")
+            return nil
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard status == 200 else {
+            WatchReport.failed("GET /app/api/workouts/planned", status: status, message: serverMessage(data))
+            return nil
+        }
         return WatchPlan.parse(data, english: session.language == "en")
     }
 
@@ -153,10 +171,14 @@ enum WatchAPI {
         body["date"] = .string(date)
         body["lite"] = .bool(true)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        guard let json = try? JSONEncoder().encode(body),
-              let (_, response) = try? await urlSession.upload(for: request, from: json) else { return false }
+        guard let json = try? JSONEncoder().encode(body) else { return false }
+        guard let (data, response) = try? await urlSession.upload(for: request, from: json) else {
+            WatchReport.failed("POST /app/api/gym", message: "no connection")
+            return false
+        }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401 { store(nil) }
+        if !(200..<300).contains(status) { WatchReport.failed("POST /app/api/gym", status: status, message: serverMessage(data)) }
         return (200..<300).contains(status)
     }
 

@@ -195,10 +195,8 @@ export async function connectSessionCookie(db, uid, secret, now = Math.floor(Dat
   return SESSION_COOKIE+"="+payload+"."+await dashboardHmac(payload, secret)+"; Path=/; Max-Age="+CONNECT_SESSION_SECONDS+"; HttpOnly; Secure; SameSite=Lax";
 }
 
-// The service sent the user back to the app (https://<server>/auth/app/connected, or
-// loadwise://connected for builds from before 2026-11): the connect cookie goes.
+// The service sent the user back to the app (https://<server>/auth/app/connected): the connect cookie goes.
 const backInApp = location => {
-  if (location.startsWith("loadwise://")) return true;
   try { return new URL(location).pathname === APP_CONNECTED_PATH; } catch { return false; }
 };
 export function endConnectSession(response) {

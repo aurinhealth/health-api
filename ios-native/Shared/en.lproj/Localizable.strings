@@ -232,6 +232,7 @@
 "Jím obvykle" = "I usually eat";
 "Jízda" = "Ride";
 "K čemu" = "What for";
+"Kde se to stalo" = "Where did it happen";
 "Kalorie" = "Calories";
 "Kalorie, živiny a pití. Vodu přidáš jedním klepnutím." = "Calories, macros and drinks. Add water with one tap.";
 "Kapka" = "Drop";
@@ -2314,7 +2315,7 @@
 /* Wahoo in Zdroje dat */
 "Jízdy a běhy z Wahoo se v Aurinu smažou a plán do Wahoo přestane chodit." = "The Wahoo rides and runs will be deleted from Aurin and the plan will stop going to Wahoo.";
 "Hotové jízdy a běhy: čas, vzdálenost, výkon, TSS, tep a kadenci." = "Done rides and runs: time, distance, power, TSS, heart rate and cadence.";
-"Tréninky naplánované v Aurinu, do ELEMNT a KICKR." = "Workouts planned in Aurin, to the ELEMNT and KICKR.";
+"Tréninky naplánované v Aurinu, do ELEMNT a KICKR, a FTP s výkonovými zónami." = "Workouts planned in Aurin, to the ELEMNT and KICKR, and your FTP with power zones.";
 "Odpojit a smazat jízdy z Wahoo" = "Disconnect and delete the Wahoo rides";
 "Jen v Aurinu: Wahoo ho dál má, Aurin ho nepočítá." = "In Aurin only: Wahoo keeps it, Aurin stops counting it.";
 "Jen v Aurinu: aktivita přišla ze Stravy a smazat jde jen ve Stravě. Aurin ji přestane počítat." = "In Aurin only: this activity came from Strava and can only be deleted in Strava. Aurin stops counting it.";
@@ -2950,7 +2951,8 @@
 "Nahlášeno" = "Reported";
 "Díky, nahlášeno." = "Thanks, reported.";
 "Opraveno" = "Fixed";
-"Uloženo. Díky, teď ho najdou i ostatní." = "Saved. Thanks, now others can find it too.";
+"Uloženo. Díky, po kontrole ho najdou i ostatní." = "Saved. Thanks, others will find it once it's checked.";
+"Navrhnout pro všechny" = "Suggest for everyone";
 "Co nesedí?" = "What's wrong?";
 "Energie nebo živiny" = "Energy or nutrients";
 "Název nebo značka" = "Name or brand";
@@ -2960,6 +2962,7 @@
 "Nahlásit" = "Report";
 "Opravy · %d" = "Corrections · %d";
 "Hlášení · %d" = "Reports · %d";
+"Nové · %d" = "New · %d";
 "Druh" = "Kind";
 "Hlášení" = "Report";
 "Co nesedí" = "What's wrong";
@@ -3597,6 +3600,11 @@
 "Potáhni pruh u každého dne. Aurin plánuje v tomhle čase a když potřebuješ odpočinek, vezme si méně." = "Drag each bar. Aurin plans within it and uses less when you need rest.";
 "Kde posiluješ?" = "Where do you lift?";
 "Posilovna, doma nebo obojí · vybavení" = "Gym, home or both · equipment";
+"Zapisovat do Wahoo" = "Write to Wahoo";
+"FTP a výkonové zóny se po uložení pošlou do Wahoo" = "FTP and power zones are sent to Wahoo after saving";
+"Zapsáno do Wahoo" = "Written to Wahoo";
+"Wahoo zápis odmítlo. Připoj ho znovu a ulož zóny ještě jednou." = "Wahoo refused the write. Connect it again, then save the zones again.";
+"Do Wahoo se nepodařilo zapsat." = "Couldn't write to Wahoo.";
 
 /* Multisport plans (PlanScreens.swift, PlanTime.swift) */
 "Sporty" = "Sports";

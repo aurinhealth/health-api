@@ -6,6 +6,8 @@
 // "Hodnoty nesedí" (kind 'report'): a user who can't say the right values
 // only says what is wrong; the food shows as reported to everyone until the
 // owner fixes it (approve with the corrected values) or rejects the report.
+// "Suggest for everyone" (kind 'new_food'): a food the catalogue doesn't have,
+// read from its label by the user; approved, it enters the catalogue as checked.
 import { L } from "./lang.js";
 import { productFromLabel, normalizeBarcode } from "./food-sources.js";
 import { foodKey } from "./personal-foods.js";
@@ -13,7 +15,7 @@ import { saveSharedFood } from "./shared-foods.js";
 
 export const DAILY_SUGGESTIONS = 20;
 const STATUSES = ["pending", "approved", "rejected"];
-const KINDS = ["correction", "report"];
+const KINDS = ["correction", "report", "new_food"];
 export const REPORT_REASONS = ["values", "name", "serving", "other_product"];
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 
@@ -54,7 +56,8 @@ export const SUGGESTION_FIELDS = ["name", "brand", "serving_size", "serving_name
 function label(input) {
   const p = productFromLabel(input || {});
   if (!p) return null;
-  return Object.fromEntries(["barcode", "nutrition_basis", "catalog_key", ...SUGGESTION_FIELDS].map(k => [k, p[k] ?? null]));
+  // Text other than the name (checked by the callers) is cut to a label's length.
+  return Object.fromEntries(["barcode", "nutrition_basis", "catalog_key", ...SUGGESTION_FIELDS].map(k => [k, typeof p[k] === "string" && k !== "name" ? p[k].slice(0, 120) : p[k] ?? null]));
 }
 export function suggestionChanges(before, after) {
   return SUGGESTION_FIELDS.filter(k => String(before?.[k] ?? "") !== String(after?.[k] ?? ""));
@@ -75,6 +78,23 @@ export async function saveFoodSuggestion(db, body) {
   await db.prepare("DELETE FROM food_suggestions WHERE user_id=? AND status='pending' AND kind='correction' AND COALESCE(barcode,name)=?").bind(db.userId, key).run();
   const result = await db.prepare("INSERT INTO food_suggestions(user_id,barcode,name,before_json,after_json,ref) VALUES(?,?,?,?,?,?)")
     .bind(db.userId, barcode, before.name || after.name, JSON.stringify(before), JSON.stringify(after), foodRef(before)).run();
+  return { status: "ok", id: Number(result?.meta?.last_row_id) || null };
+}
+
+// "Suggest for everyone": the label values of a food the user saved, one
+// pending suggestion per user and food; a newer one replaces it. before_json
+// is empty, so every filled value shows as a change to the owner.
+export async function saveNewFoodSuggestion(db, body) {
+  const product = label(body?.product);
+  if (!product || !product.name || product.name.length > 180 || !["g", "ml"].includes(product.nutrition_basis)) throw fail(L("Potravina není platná.", "The food isn't valid."));
+  if (["calories_100g", "protein_100g", "carbs_100g", "fat_100g"].some(k => product[k] == null || product[k] < 0 || product[k] > (k === "calories_100g" ? 1000 : 100))) throw fail(L("Doplň platné nutriční hodnoty.", "Fill in valid nutrition values."));
+  const ref = foodRef(product);
+  await ensure(db);
+  const recent = await db.prepare("SELECT COUNT(*) AS n FROM food_suggestions WHERE user_id=? AND created_at>=datetime('now','-1 day')").bind(db.userId).first();
+  if (Number(recent?.n || 0) >= DAILY_SUGGESTIONS) throw fail(L("Dnešní limit návrhů je vyčerpaný. Zkus to zítra.", "You've reached today's limit of suggestions. Try again tomorrow."), 429);
+  await db.prepare("DELETE FROM food_suggestions WHERE user_id=? AND status='pending' AND kind='new_food' AND ref=?").bind(db.userId, ref).run();
+  const result = await db.prepare("INSERT INTO food_suggestions(user_id,barcode,name,before_json,after_json,kind,ref) VALUES(?,?,?,'{}',?,'new_food',?)")
+    .bind(db.userId, product.barcode || null, product.name, JSON.stringify(product), ref).run();
   return { status: "ok", id: Number(result?.meta?.last_row_id) || null };
 }
 
@@ -153,7 +173,7 @@ export async function decideFoodSuggestion(raw, catalog, { id, decision, after: 
   // everyone whose pending report of the same food it settles. A rejection says nothing.
   let notify = null;
   if (decision === "approve") {
-    const shared = await saveSharedFood(catalog, after, null, { verified: true });
+    const shared = await saveSharedFood(catalog, after);
     const reporters = row.ref ? (await raw.prepare("SELECT DISTINCT user_id FROM food_suggestions WHERE kind='report' AND status='pending' AND ref=? AND id<>?").bind(row.ref, row.id).all()).results || [] : [];
     const users = [{ userId: Number(row.user_id), kind: row.kind || "correction" }];
     for (const r of reporters) if (!users.some(u => u.userId === Number(r.user_id))) users.push({ userId: Number(r.user_id), kind: "report" });

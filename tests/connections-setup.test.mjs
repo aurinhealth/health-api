@@ -210,7 +210,7 @@ test("Google Health and Intervals.icu connections use PKCE: the code is exchange
     const started = await handle(new Request("https://aurin.health" + start));
     const to = new URL(started.headers.get("Location")), cookie = started.headers.get("Set-Cookie").split(";")[0];
     assert.equal(to.searchParams.get("code_challenge_method"), "S256", name);
-    const verifier = decodeURIComponent(cookie.split("=")[1]).split(".")[3];
+    const verifier = decodeURIComponent(cookie.split("=")[1]).split(".")[2];
     assert.match(verifier, /^[A-Za-z0-9_-]{43}$/, name);
     assert.equal(to.searchParams.get("code_challenge"), await s256(verifier), name);
     assert.ok(!to.toString().includes(verifier), name + ": the verifier never leaves the cookie");

@@ -98,28 +98,6 @@ struct PlannedChange: Decodable {
 
 /// The sheet itself is in WatchShared/GymSheet.swift, shared with the watch.
 extension GymDay {
-    /// The warm-up before and the stretching after the session (src/stretching.js), nil without them.
-    /// An older plan's warm-up began with easy cardio: that is the opening cardio now.
-    var warmup: GymStretching? {
-        guard let all = GymStretching.routines(values)?.warmup else { return nil }
-        let cardio = all.items.filter { $0.id == "cardio" }
-        guard !cardio.isEmpty else { return all }
-        let moves = all.items.filter { $0.id != "cardio" }
-        guard !moves.isEmpty else { return nil }
-        let seconds = cardio.reduce(0) { $0 + $1.seconds }
-        return GymStretching(minutes: max(1, all.minutes - Int((Double(seconds) / 60).rounded())), items: moves)
-    }
-    var stretching: GymStretching? { GymStretching.routines(values)?.stretching }
-    /// The warm-up and the stretching turned off in Nastavení → Posilovna ("warmup", "stretching"): offered switched off.
-    var routinesOff: [String] { GymStretching.routines(values)?.off ?? [] }
-    /// The cardio at the start and at the end (an older plan: its warm-up's easy cardio).
-    var cardio: GymStretching.Cardio? {
-        let routines = GymStretching.routines(values)
-        if let cardio = routines?.cardio { return cardio }
-        guard let old = routines?.warmup?.items.first(where: { $0.id == "cardio" }) else { return nil }
-        return GymStretching.Cardio(type: "exercise_bike", start: max(1, Int((Double(old.seconds) / 60).rounded())), end: nil)
-    }
-
     /// Joins the exercise with the next one into a superset, or takes its
     /// superset apart when it already is in one.
     mutating func toggleSuperset(at offset: Int) {

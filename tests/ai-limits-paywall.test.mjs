@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { grantAiConsent } from "./helpers/consent.mjs";
-import { scopedDb, mayCreateAccount, createAccount, signInEmailUser, signupOpenFor, SignupLimited, NEW_ACCOUNT_LIMITS, ensureTenancy, _resetTenancyForTest } from "../src/tenancy.js";
+import { scopedDb, mayCreateAccount, createAccount, signInEmailUser, SignupLimited, NEW_ACCOUNT_LIMITS, ensureTenancy, _resetTenancyForTest } from "../src/tenancy.js";
 import { handleEmailLogin } from "../src/email-login.js";
 import { callOpenAI } from "../src/coach-assistant.js";
 import { groupBrakeUsd, aiSpendingReport } from "../src/ai-total.js";
@@ -278,24 +278,27 @@ test("a network gets its place back when no account comes of the sign-in", async
   await assert.rejects(mayCreateAccount(db, open, "more@example.com", { request: from("203.0.113.5") }), SignupLimited);
 });
 
-test("a full network hears it before a sign-in code goes out; a code that met a full network still works", async () => {
+test("a full network gets the same answer for a new and a known address; the limit comes after the code, which still works (SEC-004)", async () => {
   _resetTenancyForTest();
   const ORIGIN = "https://aurin.health", sent = [];
   const env = { ...open, DB: createD1(), EMAIL: { send: async message => { sent.push(message); return { messageId: "m" }; } }, EMAIL_FROM: "noreply@aurin.health" };
   await ensureTenancy(env.DB, env);
   env.DB.sqlite.exec(["0014_passkeys_email_codes.sql", "0027_email_code_limits.sql"].map(name => readFileSync(new URL("../migrations/" + name, import.meta.url), "utf8")).join("\n"));
   const post = (path, body, ip = "203.0.113.5") => handleEmailLogin(new Request(ORIGIN + path, { method: "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json", "CF-Connecting-IP": ip }, body: JSON.stringify(body) }), env, path);
-  assert.equal((await post("/auth/email/start", { email: "late@example.com" })).status, 200);
-  const code = sent[0].text.match(/\b(\d{6})\b/)[1];
-  // The network opens its accounts for today while the code is on its way.
+  // The network opens its accounts for today.
   for (let i = 0; i < NEW_ACCOUNT_LIMITS.hour; i++) await signInEmailUser(env.DB, env, `n${i}@example.com`, { request: from("203.0.113.5") });
-  assert.equal(await signupOpenFor(env.DB, env, "late@example.com", from("203.0.113.5")), false);
-  assert.equal(await signupOpenFor(env.DB, env, "n0@example.com", from("203.0.113.5")), true, "an existing account is never held");
+  await assert.rejects(signInEmailUser(env.DB, env, "probe@example.com", { request: from("203.0.113.5") }), SignupLimited);
+  const fresh = await post("/auth/email/start", { email: "late@example.com" });
+  const known = await post("/auth/email/start", { email: "n0@example.com" });
+  assert.equal(fresh.status, 200);
+  assert.equal(known.status, fresh.status, "the same status for a new and a known address");
+  assert.deepEqual(await known.json(), await fresh.json(), "and the same body");
+  assert.deepEqual(sent.map(m => m.to).sort(), ["late@example.com", "n0@example.com"]);
+  const code = sent.find(m => m.to === "late@example.com").text.match(/\b(\d{6})\b/)[1];
+  // The new address hears of the full network only after the code, with today's message.
   const refused = await post("/auth/email/verify", { email: "late@example.com", code });
   assert.equal(refused.status, 429);
+  assert.match((await refused.json()).message, /příliš mnoho nových účtů|Too many new accounts/);
+  assert.equal(await env.DB.prepare("SELECT id FROM users WHERE email='late@example.com'").first(), null);
   assert.equal((await post("/auth/email/verify", { email: "late@example.com", code }, "198.51.100.7")).status, 200, "the same code signs in from another network");
-  const start = await post("/auth/email/start", { email: "other@example.com" });
-  assert.equal(start.status, 429, "no code for a new address from the full network");
-  assert.match((await start.json()).message, /příliš mnoho nových účtů|Too many new accounts/);
-  assert.equal(sent.length, 1);
 });
