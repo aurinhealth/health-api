@@ -428,9 +428,14 @@ function quote(name) {
 
 // Users and invitations.
 
+// The admin is whoever OWNER_EMAIL names now. users.role is not read for it: it
+// was written once for the owner of the day and never taken away, so an earlier
+// owner would have stayed an admin after OWNER_EMAIL changed (security audit
+// 2026-11, SEC-006).
 export function publicUser(row, env) {
   if (!row) return null;
-  return { id: row.id, email: row.email, name: row.name || null, role: row.role, isAdmin: row.role === "admin", isOwner: normalizeEmail(row.email) === ownerEmail(env) };
+  const isOwner = normalizeEmail(row.email) === ownerEmail(env);
+  return { id: row.id, email: row.email, name: row.name || null, role: isOwner ? "admin" : "user", isAdmin: isOwner, isOwner };
 }
 
 // With sessionEpoch: the epoch a session cookie has to carry (dashboard-auth.js).
@@ -697,14 +702,8 @@ export async function changeUserEmail(db, env, id, email) {
   return { email: address, previous: row.email };
 }
 
-export async function listUsersAndInvites(db) {
-  const [users, invites] = await Promise.all([
-    db.prepare("SELECT id, email, name, role, disabled, created_at, last_login_at FROM users ORDER BY id").all(),
-    db.prepare("SELECT email, created_at FROM user_invites ORDER BY created_at DESC").all()
-  ]);
-  return { users: users.results || [], invites: invites.results || [] };
-}
-
+// No route invites or blocks anyone any more (sign-up is open, OPEN_SIGNUP);
+// these two stay for the tests and for a change made by hand on the owner's request.
 export async function inviteUser(db, email, invitedBy) {
   const address = normalizeEmail(email);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) || address.length > 254) throw new Error(L("Zadej platný e-mail.", "Enter a valid e-mail."));
@@ -712,10 +711,6 @@ export async function inviteUser(db, email, invitedBy) {
   if (existing) throw new Error(L("Tento uživatel už má přístup.", "This user already has access."));
   await db.prepare("INSERT INTO user_invites(email, invited_by) VALUES(?, ?) ON CONFLICT(email) DO NOTHING").bind(address, Number(invitedBy) || null).run();
   return address;
-}
-
-export async function removeInvite(db, email) {
-  await db.prepare("DELETE FROM user_invites WHERE email=?").bind(normalizeEmail(email)).run();
 }
 
 export async function setUserDisabled(db, env, id, disabled) {
