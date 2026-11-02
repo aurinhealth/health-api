@@ -931,6 +931,19 @@ final class SnapshotTests: XCTestCase {
         try render("plan-result-gym", glow: Palette.Glow.today, height: 1100) {
             NavigationStack { PlanResultContent(result: gymResult).padding(.horizontal, 24) }.environment(model)
         }
+        // An open-water race: one swim leg, the time estimated from CSS.
+        let ow = #"{"id":"swim-open-water","sport":"swim","name":"Závod ve volné vodě","goal":"Závod 1,5 až 5 km ve volné vodě","description":"","level":"intermediate","weeksCount":12,"days":[3,4],"race":{"km":3.8,"options":[1.5,3.8,5],"swim":true},"weeks":[\#(weeks)]}"#
+        let owPlan = #"{"templates":[\#(ow)],"active":{"id":12,"templateId":"swim-open-water","name":"Závod ve volné vodě","startDate":"2026-10-19","raceDate":"2027-01-10","raceKm":3.8,"week":6,"weeksCount":12,"phaseLabel":"Budování","started":true,"paused":false,"shiftedWeeks":0,"returning":false,"race":{"km":3.8,"kind":"swim","minutes":76,"estimated":false,"legList":[{"sport":"swim","meters":3800,"minutes":76}]},"template":\#(ow)},"activeGym":null,"started":null}"#
+        let openWater = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(owPlan.utf8)).active)
+        try render("plan-race-open-water", glow: Palette.Glow.training, height: 700) {
+            NavigationStack { ActivePlanContent(active: openWater, preview: nil, week: nil).padding(.horizontal, 24) }.environment(model)
+        }
+        // Faster swimming: the result with CSS before and after.
+        let swimResultJSON = #"{"id":13,"templateId":"swim-css","name":"Rychlejší plavání","sport":"swim","startDate":"2026-10-19","endDate":"2026-12-27","ftpStart":null,"ftpEnd":null,"cssStart":112,"cssEnd":105,"ctlStart":31,"ctlEnd":38,"sessionsDone":28,"sessionsPlanned":30,"minutesDone":1290,"minutesPlanned":1350,"completion":{"1":100,"2":100,"3":67,"4":100,"5":100,"6":100,"7":100,"8":100},"weeks":[\#(weeks)],"next":[]}"#
+        let swimResult = try decoder.decode(PlanResult.self, from: Data(swimResultJSON.utf8))
+        try render("plan-result-swim", glow: Palette.Glow.today, height: 1150) {
+            NavigationStack { PlanResultContent(result: swimResult).padding(.horizontal, 24) }.environment(model)
+        }
     }
 
     private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, width: CGFloat = 390, typeSize: DynamicTypeSize = .large, @ViewBuilder _ content: () -> V) throws {

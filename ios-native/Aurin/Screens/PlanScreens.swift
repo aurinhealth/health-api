@@ -798,7 +798,7 @@ struct ActivePlanContent: View {
                     ForEach(legs.indices, id: \.self) { i in leg(legs[i].distance, legs[i].minutes) }
                     Spacer(minLength: 0)
                 }
-                Text("Odhad času z tvých prahových hodnot, bez depa.").font(Typo.caption).foregroundStyle(Palette.muted)
+                Text(L10n.tr(active.template.sport == "swim" ? "Odhad z tvého CSS, ve volné vodě." : "Odhad času z tvých prahových hodnot, bez depa.")).font(Typo.caption).foregroundStyle(Palette.muted)
             }
         }
     }
@@ -1315,6 +1315,25 @@ struct PlanResultContent: View {
                                 }
                                 let gain = end - start
                                 Text((gain >= 0 ? "+" : "−") + Fmt.int(abs(gain)) + " W · " + (gain >= 0 ? "+" : "−") + Fmt.int(abs(gain) / max(start, 1) * 100) + Fmt.percentSign)
+                                    .font(Typo.bodyStrong).foregroundStyle(gain >= 0 ? Palette.green : Palette.rust)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .padding(.top, 16)
+                    }
+                    // A swim plan: CSS at the start and the end, faster is less.
+                    if let start = result.cssStart, let end = result.cssEnd {
+                        Card {
+                            VStack(spacing: 4) {
+                                Text(verbatim: "CSS").font(Typo.caption).foregroundStyle(Palette.muted)
+                                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                    Text(verbatim: raceTime(Int(start))).font(Typo.number(30)).foregroundStyle(Palette.muted)
+                                    Image(systemName: "arrow.right").scaledFont(14).foregroundStyle(Palette.faint)
+                                    Text(verbatim: raceTime(Int(end))).font(Typo.number(52)).foregroundStyle(Palette.ink)
+                                    Text(verbatim: "/100 m").font(Typo.caption).foregroundStyle(Palette.muted)
+                                }
+                                let gain = start - end
+                                Text(L10n.f(gain >= 0 ? "o %@ s rychleji na 100 m · %@" : "o %@ s pomaleji na 100 m · %@", Fmt.int(abs(gain)), (gain >= 0 ? "−" : "+") + Fmt.int(abs(gain) / max(start, 1) * 100) + Fmt.percentSign))
                                     .font(Typo.bodyStrong).foregroundStyle(gain >= 0 ? Palette.green : Palette.rust)
                             }
                             .frame(maxWidth: .infinity)

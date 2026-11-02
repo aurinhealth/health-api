@@ -3,6 +3,7 @@ import { buildWorkout, step } from "./workout-model.js";
 import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
 import { SWIMMING_WORKOUTS, SWIMMING_WORKOUTS_EN } from "./swimming-workouts.js";
+import { testFor } from "./threshold-check.js";
 import { RACE_PACE, rideRace, RIDE_RACES, durationShare } from "./race-estimate.js";
 // Multi-week training plans: the plan sets the week, the data sets the day.
 // A plan is a list of weeks; each week has a phase, a load factor against the
@@ -54,6 +55,18 @@ const RUN_10K = [
   W("recovery", .75, [q("run-fartlek-pyramid", 2)], { long: long(55), strides: true }),
   W("peak", 1, [q("run-vo2", 5), q("run-cruise", 6)], { long: long(80) }),
   W("race", .5, [q("run-reps", 1)], { strides: true, race: true })
+];
+// Faster 5 km: one VO₂max and one threshold session a week (Daniels: at most
+// about 8 % of the week at VO₂max pace), a long run up to an hour.
+const RUN_5K = [
+  W("base", 1, [q("run-fartlek-pyramid", 1), q("run-cruise", 1)], { long: long(50), strides: true }),
+  W("build", 1.04, [q("run-vo2-short", 1), q("run-tempo", 1)], { long: long(55), strides: true }),
+  W("build", 1.07, [q("run-vo2", 2), q("run-cruise", 3)], { long: long(60) }),
+  W("recovery", .7, [q("run-30-30", 1)], { long: long(45), strides: true }),
+  W("build", 1.04, [q("run-vo2", 3), q("run-tempo", 3)], { long: long(60), strides: true }),
+  W("peak", 1.07, [q("run-vo2-short", 4), q("run-cruise", 5)], { long: long(65) }),
+  W("peak", 1, [q("run-reps", 2), q("run-tempo", 4)], { long: long(55), strides: true }),
+  W("race", .55, [q("run-reps", 1)], { strides: true, race: true })
 ];
 const RUN_HALF = [
   W("base", 1, [q("run-cruise", 1)], { long: long(60), strides: true }),
@@ -241,6 +254,18 @@ const RUNNER = [["DB Bulgarian split squat", "Smith machine split squat", "Bulga
   ["Single-leg calf raise", "Standing calf raise", "Eccentric Calf Lowers"],
   ["Nordic Hamstring Curl", "Seated leg curl", "Prone leg curl Prime", "Single Leg Glute Bridge"],
   ["Pallof press", "Dead bug"], ["Dead bug", "Bird Dog"]];
+// Posilovna pro plavce: pulling, the rotator cuff, the shoulder blades, the
+// trunk and the legs' push-off; little pressing. Water plus dry-land
+// resistance training improves swimming most (network meta-analysis of 36
+// RCTs, 2025); weak shoulders and trunk raise the risk of shoulder pain.
+const SWIMMER = [["Lat pulldown", "Pull-up", "Assisted pull-up", "Inverted Row", "One-arm DB row"],
+  ["Straight-Arm Lat Pulldown", "Cable pullover", "Dumbbell Pullover"],
+  ["Single-arm cable row", "One-arm DB row", "TRX row"],
+  ["Cable External Rotation", "Band External Rotation", "Prone Y-T Raises"],
+  ["Face pull", "Band pull-apart", "DB rear delt fly", "Prone Y-T Raises"],
+  ["Goblet squat", "Bodyweight squat"],
+  ["Squat Jump", "Box Jump"],
+  ["Pallof press", "Dead bug"], ["Dead bug", "Bird Dog"]];
 // Doma bez vybavení: body weight only, whatever the athlete has at home.
 const HOME = [["Bodyweight squat"], ["Push-up", "Bodyweight Knee Push Ups"], ["Forward Lunge", "Walking Lunge"], ["Single Leg Glute Bridge", "Glute bridge"],
   ["Supermans"], ["Diamond Push Ups", "Bodyweight Knee Push Ups"], ["Cossack Squat", "Bodyweight Alternating Lateral Lunge"], ["Eccentric Calf Lowers", "Bent-Knee Soleus Raise"], ["Dead bug"], ["Bicycle Crunches", "Reverse Crunch"]];
@@ -266,6 +291,12 @@ const GYM_RUNNING = () => [
   ...[2, 3, 3].map(n => G("build", L("Rozvoj", "Build"), n, "8–10", "6–7", RUNNER)),
   G("recovery", L("Odpočinek", "Recovery"), 2, "8–10", "5", RUNNER, 1),
   ...[3, 3, 2].map(n => G("peak", L("Síla", "Strength"), n, "5–6", "7–8", RUNNER))
+];
+const GYM_SWIMMING = () => [
+  ...[2, 2, 3].map(n => G("base", L("Základ", "Foundation"), n, "12–15", "5–6", SWIMMER)),
+  ...[2, 3, 3].map(n => G("build", L("Rozvoj", "Build"), n, "8–12", "6–7", SWIMMER)),
+  G("recovery", L("Odpočinek", "Recovery"), 2, "10", "5", SWIMMER, 1),
+  ...[3, 3, 2].map(n => G("peak", L("Síla", "Strength"), n, "6–8", "7–8", SWIMMER))
 ];
 const GYM_HOME = () => [
   ...[2, 3, 3].map(n => G("base", L("Základ", "Foundation"), n, "12–15", "6–7", HOME, 3)),
@@ -299,6 +330,42 @@ const SWIM_1500 = [
   W("peak", 1.05, [q("swim-css", 5)], { easy: { family: "swim-recovery", level: 2 }, long: { family: "swim-continuous", level: 6 } }),
   W("peak", .9, [q("swim-speed", 1)], { easy: { family: "swim-recovery", level: 1 }, long: { family: "swim-continuous", level: 7 } })
 ];
+// Faster swimming (CSS): a CSS test in weeks 1, 6 and 10 (retest every 4–6
+// weeks); threshold sets once or twice a week (Swim Smooth: 47 of 57 swimmers
+// faster after 10 weeks of one CSS set a week, 2.6 % on average), speed once.
+const SWIM_CSS = [
+  W("test", .8, [TEST], { easy: { family: "swim-technique", level: 1 }, long: { family: "swim-endurance", level: 1 } }),
+  W("build", 1, [q("swim-css", 1)], { easy: { family: "swim-recovery", level: 1 }, long: { family: "swim-endurance", level: 2 } }),
+  W("build", 1.04, [q("swim-css", 2), q("swim-speed", 1)], { easy: { family: "swim-technique", level: 2 }, long: { family: "swim-endurance", level: 2 } }),
+  W("recovery", .7, [q("swim-technique", 2)], { easy: { family: "swim-recovery", level: 1 }, long: { family: "swim-continuous", level: 3 } }),
+  W("build", 1.04, [q("swim-css", 3), q("swim-speed", 2)], { easy: { family: "swim-recovery", level: 2 }, long: { family: "swim-endurance", level: 3 } }),
+  W("test", .85, [TEST], { easy: { family: "swim-technique", level: 2 }, long: { family: "swim-endurance", level: 3 } }),
+  W("build", 1.06, [q("swim-css", 5), q("swim-sprint", 1)], { easy: { family: "swim-recovery", level: 2 }, long: { family: "swim-endurance", level: 4 } }),
+  W("recovery", .72, [q("swim-technique", 3)], { easy: { family: "swim-recovery", level: 1 }, long: { family: "swim-continuous", level: 4 } }),
+  W("peak", 1.06, [q("swim-css", 6), q("swim-speed", 4)], { easy: { family: "swim-recovery", level: 2 }, long: { family: "swim-endurance", level: 5 } }),
+  W("test", .8, [TEST], { easy: { family: "swim-recovery", level: 1 }, long: { family: "swim-technique", level: 1 } })
+];
+// Open-water race (TrainingPeaks open-water plans: 8–24 weeks, 3–4 swims a
+// week): CSS once a week, sighting in the pool, a long swim that grows to
+// about 80 % of the race (`share` of its metres), a taper week. Open water
+// itself once a week in the last 8 weeks, by the athlete's open-water setting
+// (adaptive-week.js withOpenWater).
+const OW = (phase, load, keys, share, easy = { family: "swim-recovery", level: 1 }) => W(phase, load, keys, { easy, long: { family: "swim-continuous", share } });
+const SWIM_OPEN_WATER = [
+  OW("base", 1, [q("swim-technique", 2)], .3),
+  OW("base", 1.03, [q("swim-endurance", 2)], .35),
+  OW("build", 1.06, [q("swim-css", 2), q("swim-sighting", 1)], .4),
+  OW("recovery", .7, [q("swim-technique", 2)], .3),
+  OW("build", 1.03, [q("swim-css", 3), q("swim-sighting", 2)], .45, { family: "swim-recovery", level: 2 }),
+  OW("build", 1.06, [q("swim-endurance", 4), q("swim-sighting", 2)], .5, { family: "swim-recovery", level: 2 }),
+  OW("build", 1.08, [q("swim-css", 5), q("swim-sighting", 3)], .55, { family: "swim-recovery", level: 2 }),
+  OW("recovery", .72, [q("swim-technique", 3)], .4),
+  OW("peak", 1.05, [q("swim-css", 6), q("swim-sighting", 3)], .65, { family: "swim-recovery", level: 3 }),
+  OW("peak", 1.08, [q("swim-endurance", 5), q("swim-sighting", 4)], .8, { family: "swim-recovery", level: 3 }),
+  OW("taper", .75, [q("swim-css", 3)], .4),
+  W("race", .5, [q("swim-speed", 1)], { easy: { family: "swim-recovery", level: 1 }, race: true })
+];
+
 // ---- triathlon -------------------------------------------------------------------
 // One plan for three sports: each week has its sessions per sport (swim, ride,
 // run, the app's order Ride, Run, Swim), each with at most one key session, and
@@ -343,6 +410,8 @@ export const TRI_RACES = { sprint: { swim: 750, ride: 20, run: 5, ride_kind: "tr
   "du-sprint": { legs: [["run", 5], ["ride", 20], ["run", 2.5]], ride_kind: "du-short" },
   "du-standard": { legs: [["run", 10], ["ride", 40], ["run", 5]], ride_kind: "du-short" },
   aquabike: { legs: [["swim", 1500], ["ride", 40]], ride_kind: "aquabike" },
+  "aquabike-half": { legs: [["swim", 1900], ["ride", 90]], ride_kind: "aquabike-half" },
+  "aquabike-full": { legs: [["swim", 3800], ["ride", 180]], ride_kind: "aquabike-full" },
   aquathlon: { legs: [["swim", 1000], ["run", 5]] } };
 // A race's legs in order: [sport, distance] (swim in metres, ride and run in km).
 export const raceLegs = r => r?.legs || (r ? [["swim", r.swim], ["ride", r.ride], ["run", r.run]] : []);
@@ -370,6 +439,14 @@ const TRI_TEMPLATES = () => [
   { id: "aquabike", sport: "triathlon", sports: ["ride", "swim"], weeks: triWeeks(12, { ride: [75, 150], run: [1, 1], swim: [3, 7], brick: 0, only: ["ride", "swim"] }), days: [4, 6], perSport: { ride: 3, swim: 3 }, level: "intermediate", race: { km: 41.5, tri: "aquabike" },
     name: L("Aquabike", "Aquabike"), goal: L("Plavání 1,5 km, kolo 40 km", "1.5 km swim, 40 km ride"),
     description: L("12 týdnů: tři plavání a tři jízdy, CSS v bazénu a práh na kole, bez běhu. Každý čtvrtý týden lehčí, týden ladění formy.", "12 weeks: three swims and three rides, CSS in the pool and threshold on the bike, no running. Every fourth week is lighter, a taper week.") },
+  // The long aquabikes (TrainingPeaks: 14–18 weeks for the half, about 22 for
+  // the full): the ride ends the race, so it can be harder than a triathlon's.
+  { id: "aquabike-half", sport: "triathlon", sports: ["ride", "swim"], weeks: triWeeks(16, { taper: 2, ride: [90, 210], run: [1, 1], swim: [4, 7], brick: 0, only: ["ride", "swim"] }), days: [5, 7], perSport: { ride: 3, swim: 3 }, level: "advanced", race: { km: 91.9, tri: "aquabike-half" },
+    name: L("Poloviční aquabike", "Half aquabike"), goal: L("Plavání 1,9 km, kolo 90 km", "1.9 km swim, 90 km ride"),
+    description: L("16 týdnů: tři plavání a tři jízdy, dlouhá jízda do tří a půl hodiny, CSS v bazénu a práh na kole. Každý čtvrtý týden lehčí, dva týdny ladění formy.", "16 weeks: three swims and three rides, a long ride up to three and a half hours, CSS in the pool and threshold on the bike. Every fourth week is lighter, a two-week taper.") },
+  { id: "aquabike-full", sport: "triathlon", sports: ["ride", "swim"], weeks: triWeeks(20, { taper: 2, ride: [120, 330], run: [1, 1], swim: [5, 7], brick: 0, only: ["ride", "swim"] }), days: [5, 7], perSport: { ride: 3, swim: 3 }, level: "advanced", race: { km: 183.8, tri: "aquabike-full" },
+    name: L("Dlouhý aquabike", "Full aquabike"), goal: L("Plavání 3,8 km, kolo 180 km", "3.8 km swim, 180 km ride"),
+    description: L("20 týdnů: tři plavání a tři jízdy, dlouhá jízda do pěti a půl hodiny a jídlo trénované na dlouhých dnech. Každý čtvrtý týden lehčí, dva týdny ladění formy.", "20 weeks: three swims and three rides, a long ride up to five and a half hours and fuelling practised on the long days. Every fourth week is lighter, a two-week taper.") },
   { id: "aquathlon", sport: "triathlon", sports: ["run", "swim"], weeks: triWeeks(10, { ride: [1, 1], run: [35, 60], swim: [2, 6], brick: 0, only: ["run", "swim"] }), days: [4, 6], perSport: { run: 3, swim: 3 }, level: "beginner", race: { km: 6, tri: "aquathlon" },
     name: L("Aquatlon", "Aquathlon"), goal: L("Plavání 1 km, běh 5 km", "1 km swim, 5 km run"),
     description: L("10 týdnů: tři plavání a tři běhy, CSS v bazénu a tempo v běhu. Každý čtvrtý týden lehčí, týden ladění formy.", "10 weeks: three swims and three runs, CSS in the pool and tempo running. Every fourth week is lighter, a taper week.") },
@@ -411,6 +488,9 @@ const TEMPLATES = () => [
   { id: "run-5k-start", sport: "run", weeks: RUN_START, days: [3, 3], level: "beginner", race: { km: 5 },
     name: L("Od nuly na 5 km", "Couch to 5 km"), goal: L("Uběhnout 5 km bez zastavení", "Run 5 km without stopping"),
     description: L("Tři běhy týdně, nejdřív s chůzí, na konci souvisle. Pátý týden je lehčí, desátý končí během na 5 km.", "Three runs a week, with walking at first and continuous at the end. Week five is lighter; week ten ends with a 5 km run.") },
+  { id: "run-5k", sport: "run", weeks: RUN_5K, days: [3, 5], level: "intermediate", race: { km: 5 },
+    name: L("Rychlejší 5 km", "Faster 5 km"), goal: L("Zaběhnout 5 km rychleji", "Run 5 km faster"),
+    description: L("8 týdnů: každý týden intervaly VO₂max a práh, dlouhý běh do hodiny a rovinky. Čtvrtý týden lehčí, poslední týden ladění formy a závod.", "8 weeks: VO₂max intervals and threshold every week, a long run up to an hour and strides. Week four is lighter, the last week a taper and the race.") },
   { id: "run-10k", sport: "run", weeks: RUN_10K, days: [3, 5], level: "intermediate", race: { km: 10 },
     name: L("10 km", "10 km"), goal: L("Rychlejší desítka", "A faster 10 km"),
     description: L("Jeden až dva klíčové tréninky týdně (práh, VO₂max), dlouhý běh do 80 minut, rovinky. Každý čtvrtý týden lehčí.", "One or two key sessions a week (threshold, VO₂max), a long run up to 80 minutes, strides. Every fourth week is lighter.") },
@@ -432,6 +512,12 @@ const TEMPLATES = () => [
   { id: "swim-1500", sport: "swim", weeks: SWIM_1500, days: [3, 4], level: "intermediate",
     name: L("1 500 m bez zastavení", "1,500 m without stopping"), goal: L("Uplavat 1 500 m vcelku", "Swim 1,500 m in one go"),
     description: L("10 týdnů, tři až čtyři plavání týdně: jednou týdně práh (CSS) nebo vytrvalost, souvislé plavání roste ze 400 na 1 500 m. Lehčí týdny 4 a 8.", "10 weeks, three to four swims a week: threshold (CSS) or endurance once a week, and the continuous swim grows from 400 to 1,500 m. Weeks 4 and 8 are lighter.") },
+  { id: "swim-css", sport: "swim", weeks: SWIM_CSS, days: [3, 4], level: "intermediate", tests: true,
+    name: L("Rychlejší plavání", "Faster swimming"), goal: L("Rychlejší CSS za 10 týdnů", "A faster CSS in 10 weeks"),
+    description: L("10 týdnů, tři až čtyři plavání: test CSS v prvním, šestém a desátém týdnu, mezi tím prahové série, které se zrychlují, a jednou týdně rychlost. Lehčí týdny 4 a 8.", "10 weeks, three to four swims: a CSS test in weeks one, six and ten, threshold sets that get faster in between and speed once a week. Lighter weeks 4 and 8.") },
+  { id: "swim-open-water", sport: "swim", weeks: SWIM_OPEN_WATER, days: [3, 4], level: "intermediate", race: { km: 3.8, options: [1.5, 3.8, 5], swim: true },
+    name: L("Závod ve volné vodě", "Open-water race"), goal: L("1,5, 3,8 nebo 5 km v jezeře či moři", "1.5, 3.8 or 5 km in a lake or the sea"),
+    description: L("12 týdnů, tři až čtyři plavání: jednou týdně práh, orientace v bazénu a dlouhé plavání, které roste k délce závodu. Posledních osm týdnů jednou týdně volná voda, nikdy ne sám. Týden ladění formy.", "12 weeks, three to four swims: threshold once a week, sighting in the pool and a long swim that grows towards the race. Open water once a week in the last eight weeks, never alone. A taper week.") },
   { id: "gym-cycling", sport: "gym", weeks: GYM_CYCLING(), days: [2, 4], level: "intermediate",
     name: L("Posilovna ke kolu", "Strength for cyclists"), goal: L("Silnější nohy a stabilní trup na kolo", "Stronger legs and a stable trunk for the bike"),
     description: L("18 týdnů, dva tréninky týdně: od stability a práce na jedné noze k těžké síle s málo opakováními. Zátěž podle RPE, nohy šetří den před náročnou jízdou.", "18 weeks, two sessions a week: from stability and single-leg work to heavy strength with few repetitions. Load by RPE; the legs are spared the day before a hard ride.") },
@@ -444,6 +530,9 @@ const TEMPLATES = () => [
   { id: "gym-running", sport: "gym", weeks: GYM_RUNNING(), days: [2, 3], level: "beginner",
     name: L("Posilovna k běhu", "Strength for runners"), goal: L("Silné nohy a trup na běh", "Strong legs and trunk for running"),
     description: L("10 týdnů, dva tréninky týdně: práce na jedné noze, lýtka, zadní strana stehen a trup. Nohy šetří den před klíčovým během.", "10 weeks, two sessions a week: single-leg work, calves, hamstrings and the trunk. The legs are spared the day before a key run.") },
+  { id: "gym-swimming", sport: "gym", weeks: GYM_SWIMMING(), days: [2, 3], level: "beginner",
+    name: L("Posilovna k plavání", "Strength for swimmers"), goal: L("Tahy, ramena, trup a odraz", "Pulling, shoulders, trunk and push-off"),
+    description: L("10 týdnů, dva tréninky týdně: stahování a přítahy, vnější rotace ramene, lopatky, trup a výskoky pro odraz od stěny. Hodí se i k triatlonu.", "10 weeks, two sessions a week: pulldowns and rows, shoulder external rotation, the shoulder blades, the trunk and jumps for the push-off from the wall. Suits triathletes too.") },
   { id: "gym-home", sport: "gym", weeks: GYM_HOME(), days: [3, 4], level: "beginner", equipment: "bodyweight",
     name: L("Doma bez vybavení", "At home, no equipment"), goal: L("Jen s vlastní vahou", "Body weight only"),
     description: L("8 týdnů, tři tréninky týdně jen s vlastní vahou, ať máš vybrané jakékoli vybavení. Přibývají série a opakování.", "8 weeks, three sessions a week with body weight only, whatever equipment you have chosen. Sets and repetitions grow.") },
@@ -474,7 +563,7 @@ export const getTemplate = id => planTemplates().find(t => t.id === id) || null;
 
 // ---- the catalogue -------------------------------------------------------------
 const CATALOGUE = { ride: CYCLING_WORKOUTS, run: RUNNING_WORKOUTS, swim: SWIMMING_WORKOUTS };
-const LIMITS = { ride: [30, 360], run: [20, 240], swim: [15, 90] };
+const LIMITS = { ride: [30, 360], run: [20, 240], swim: [15, 120] };
 const familyLevels = (sport, family) => [...new Set(CATALOGUE[sport].filter(w => w.family === family).map(w => w.level).filter(Number.isFinite))].sort((a, b) => a - b);
 // A key session one or two levels easier for a beginner, one harder for an
 // experienced athlete (their capability in that energy system, level 3 = normal).
@@ -515,6 +604,17 @@ export const planName = name => name == null ? name : L(String(name).replace(/ \
 // A swim is named in both languages in its catalogue (swimming-workouts.js).
 const baseName = id => { let w = Object.values(CATALOGUE).flat().find(x => x.id === String(id).replace(/~\d+$/, "")); if (w?.sport === "swim") w = L(w, SWIMMING_WORKOUTS_EN.find(x => x.id === w.id) || w); return w ? w.name.replace(/ · \d+ min$/, "") : null; };
 
+// A plan's test session by sport.
+const testLabel = sport => sport === "run" ? L("Běžecký test", "Run test") : sport === "swim" ? L("Test CSS", "CSS test") : L("Test FTP", "FTP test");
+// The level of a swim family whose main swim is the longest up to `meters`
+// (the open-water plan's long swim as a share of its race; "swim-continuous-3000"
+// swims 3000 m besides its warm-up); its first level when even that is longer.
+function swimLevelFor(family, meters) {
+  const list = CATALOGUE.swim.filter(w => w.family === family).sort((a, b) => a.level - b.level);
+  const main = w => Number(w.id.slice(family.length + 1)) || w.distance_meters;
+  return (list.filter(w => main(w) <= meters).at(-1) || list[0])?.level ?? null;
+}
+
 // ---- race day ----------------------------------------------------------------
 // Running: race pace against threshold speed (race-estimate.js RACE_PACE), or
 // the pace of the athlete's goal time. Without a threshold pace, 6:40/km: a
@@ -524,10 +624,16 @@ export const raceMinutes = (km, thresholdPace) => Math.round(km * (Number(thresh
 export const raceId = (km, minutes, pace = null) => `race-run-${String(km).replace(".", "_")}-${minutes}` + (pace ? `-p${pace}` : "");
 // Cycling: "race-ride-<race>-<km>-<minutes>"; the power follows the race (race-estimate.js rideRace).
 export const rideRaceId = (kind, km, minutes) => `race-ride-${kind}-${String(km).replace(".", "_")}-${minutes}`;
-const RIDE_RACE_NAMES = () => ({ granfondo: L("Gran fondo", "Gran fondo"), mtb: L("MTB maraton", "MTB marathon"), tt: L("Časovka", "Time trial"), climb: L("Závod do kopce", "Hill climb"), "du-short": L("Duatlon: kolo", "Duathlon: bike"), aquabike: L("Aquabike: kolo", "Aquabike: bike"), "tri-short": L("Triatlon: kolo", "Triathlon: bike"), "tri-half": L("Triatlon: kolo", "Triathlon: bike"), "tri-full": L("Triatlon: kolo", "Triathlon: bike") });
+const RIDE_RACE_NAMES = () => ({ granfondo: L("Gran fondo", "Gran fondo"), mtb: L("MTB maraton", "MTB marathon"), tt: L("Časovka", "Time trial"), climb: L("Závod do kopce", "Hill climb"), "du-short": L("Duatlon: kolo", "Duathlon: bike"), aquabike: L("Aquabike: kolo", "Aquabike: bike"), "aquabike-half": L("Aquabike: kolo", "Aquabike: bike"), "aquabike-full": L("Aquabike: kolo", "Aquabike: bike"), "tri-short": L("Triatlon: kolo", "Triathlon: bike"), "tri-half": L("Triatlon: kolo", "Triathlon: bike"), "tri-full": L("Triatlon: kolo", "Triathlon: bike") });
 // A triathlon's swim: "race-swim-<metres>-<minutes>", a little slower than CSS the longer it is.
 export const swimRaceId = (meters, minutes) => `race-swim-${meters}-${minutes}`;
-const swimRaceShare = meters => meters <= 750 ? 97 : meters <= 1500 ? 95 : meters <= 1900 ? 93 : 90;
+const swimRaceShare = meters => meters <= 750 ? 97 : meters <= 1500 ? 95 : meters <= 1900 ? 93 : meters <= 3800 ? 90 : 88;
+// A swim race on its own in open water: its share of CSS, about 3 % slower
+// without walls to push off (sighting, waves); without a CSS 2:00 /100 m.
+export const openWaterMinutes = (meters, swimCss = null) => {
+  const css = Number(swimCss) >= 60 && Number(swimCss) <= 240 ? Number(swimCss) : 120;
+  return Math.round(meters / 100 * css * 100 / swimRaceShare(meters) * 1.03 / 60);
+};
 // The run after the ride: about 6 % slower than the same race fresh; after a
 // swim about 3 %; a duathlon's first run held back about 2 % for what follows.
 const TRI_RUN = 1.06, RUN_AFTER = { ride: TRI_RUN, swim: 1.03, none: 1.02 };
@@ -556,7 +662,8 @@ export function triRaceDay(tri, { thresholdPace = null, ftp = null, weight = nul
 }
 // The race day of a plan: its minutes and workout. `target` is the goal time
 // in seconds of a running race.
-export function raceDay(template, km, { thresholdPace = null, ftp = null, weight = null, target = null } = {}) {
+export function raceDay(template, km, { thresholdPace = null, ftp = null, weight = null, target = null, swimCss = null } = {}) {
+  if (template?.sport === "swim") { const meters = Math.round(km * 1000), minutes = openWaterMinutes(meters, swimCss); return { minutes, workoutId: swimRaceId(meters, minutes) + "-ow" }; }
   const kind = template?.race?.ride;
   if (template?.sport === "ride" && RIDE_RACES[kind]) {
     const r = rideRace(kind, km, { ftp, weight });
@@ -570,9 +677,9 @@ export function raceDay(template, km, { thresholdPace = null, ftp = null, weight
   return { minutes, workoutId: raceId(km, minutes) };
 }
 export function raceWorkout(id) {
-  const swim = String(id).match(/^race-swim-(\d{3,4})-(\d{1,3})$/);
-  if (swim) return swimRaceWorkout(id, Number(swim[1]), Number(swim[2]));
-  const ride = String(id).match(/^race-ride-(granfondo|mtb|tt|climb|du-short|aquabike|tri-short|tri-half|tri-full)-(\d+(?:_\d)?)-(\d{1,3})$/);
+  const swim = String(id).match(/^race-swim-(\d{3,4})-(\d{1,3})(-ow)?$/);
+  if (swim) return swimRaceWorkout(id, Number(swim[1]), Number(swim[2]), Boolean(swim[3]));
+  const ride = String(id).match(/^race-ride-(granfondo|mtb|tt|climb|du-short|aquabike-half|aquabike-full|aquabike|tri-short|tri-half|tri-full)-(\d+(?:_\d)?)-(\d{1,3})$/);
   if (ride) return rideRaceWorkout(id, ride[1], Number(ride[2].replace("_", ".")), Number(ride[3]));
   const m = String(id).match(/^race-run-(\d+(?:_\d)?)-(\d{1,3})(?:-p(\d{2,3}))?$/);
   if (!m) return null;
@@ -587,12 +694,16 @@ export function raceWorkout(id) {
   });
 }
 // A multisport race's swim: steady at its share of CSS, the first 200 m calmer.
-function swimRaceWorkout(id, meters, minutes) {
+// The open-water race of a swim plan ("-ow"): the whole race, sighting and
+// food on the long ones.
+function swimRaceWorkout(id, meters, minutes, openWater = false) {
   const share = swimRaceShare(meters);
   return buildWorkout({
-    id, sport: "swim", name: L(`Závod: plavání ${meters} m`, `Race swim ${meters} m`), system: meters <= 1500 ? "threshold" : "endurance", family: "race", tags: ["race"],
-    structure: [{ ...step(minutes, share, null, L("závodní tempo, prvních 200 m klidně a najdi si místo", "race pace, the first 200 m calm while you find your space")), meters }],
-    description: L(`${meters} m kolem ${share} % CSS. Plav rovnoměrně, závod po plavání pokračuje.`, `${meters} m at about ${share} % of CSS. Swim evenly; the race goes on after the swim.`)
+    id, sport: "swim", name: openWater ? L(`Závod ve volné vodě ${meters} m`, `Open-water race ${meters} m`) : L(`Závod: plavání ${meters} m`, `Race swim ${meters} m`), system: meters <= 1500 ? "threshold" : "endurance", family: "race", tags: ["race"],
+    structure: [{ ...step(minutes, share, null, openWater ? L("závodní tempo, start klidně, dopředu se dívej každých 6–8 záběrů", "race pace, start calmly, look ahead every 6–8 strokes") : L("závodní tempo, prvních 200 m klidně a najdi si místo", "race pace, the first 200 m calm while you find your space")), meters }],
+    description: openWater
+      ? L(`${meters} m kolem ${share} % CSS. Začni klidně a najdi si místo, plav rovnoměrně za nohama rychlejšího plavce, když to jde.${meters >= 3800 ? " Na občerstvovacích bójkách pij a vezmi si sacharidy." : ""} Ve studené vodě neopren a pomalý start.`, `${meters} m at about ${share} % of CSS. Start calmly and find your space, swim evenly on the feet of a faster swimmer when you can.${meters >= 3800 ? " Drink and take carbs at the feed buoys." : ""} In cold water a wetsuit and a slow start.`)
+      : L(`${meters} m kolem ${share} % CSS. Plav rovnoměrně, závod po plavání pokračuje.`, `${meters} m at about ${share} % of CSS. Swim evenly; the race goes on after the swim.`)
   });
 }
 // A cycling race day: a gran fondo and an MTB marathon at their share of FTP
@@ -637,7 +748,7 @@ export function planWeek(plan, date) {
 export const planQuality = pw => pw ? pw.spec.q.length : null;
 
 // The phase as a heading: a test week of a ride plan is the FTP test.
-const phaseLabel = (phase, sport = null) => ({ base: L("Základ", "Base"), build: L("Budování", "Build"), peak: L("Vrchol", "Peak"), recovery: L("Odpočinek", "Recovery"), taper: L("Ladění", "Taper"), race: L("Závod", "Race"), test: sport === "ride" ? L("Test FTP", "FTP test") : sport === "run" ? L("Běžecký test", "Run test") : L("Test", "Test") })[phase] || phase;
+const phaseLabel = (phase, sport = null) => ({ base: L("Základ", "Base"), build: L("Budování", "Build"), peak: L("Vrchol", "Peak"), recovery: L("Odpočinek", "Recovery"), taper: L("Ladění", "Taper"), race: L("Závod", "Race"), test: sport === "ride" || sport === "run" || sport === "swim" ? testLabel(sport) : L("Test", "Test") })[phase] || phase;
 export { phaseLabel };
 
 // The plan on the week's load targets (week-planner.js weekTargets items):
@@ -660,7 +771,7 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
   const { template, spec } = pw, sport = template.sport;
   const race = template.race && plan.raceDate && plan.raceDate >= weekStart && plan.raceDate <= shift(weekStart, 6) ? plan.raceDate : null;
   const raceKm = Number(plan.raceKm) || template.race?.km;
-  const day = race ? raceDay(template, raceKm, { thresholdPace, ftp, weight, target: plan.target }) : null;
+  const day = race ? raceDay(template, raceKm, { thresholdPace, ftp, weight, target: plan.target, swimCss }) : null;
   const weekEnd = shift(weekStart, 7), inWeek = d => d >= weekStart && d < weekEnd;
   // Started mid-week: nothing of the plan before its first day.
   let items = targets.items.map(x => ({ ...x }));
@@ -699,13 +810,13 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
   let stridesLeft = spec.strides ? 1 : 0;
   const sessionFor = x => {
     if (x.date === race) return { kind: "race", km: raceKm, workoutId: day.workoutId, label: raceWorkout(day.workoutId)?.name };
-    if (race && daysBetween(x.date, race) === 1) return { kind: "easy", family: sport === "run" ? "run-easy-strides" : "z2-cadence", minutes: sport === "run" ? 25 : 45 };
+    if (race && daysBetween(x.date, race) === 1) return sport === "swim" ? { kind: "easy", family: "swim-recovery", level: 1 } : { kind: "easy", family: sport === "run" ? "run-easy-strides" : "z2-cadence", minutes: sport === "run" ? 25 : 45 };
     const k = quality.indexOf(x);
     if (k >= 0 && spec.q[k]) {
-      if (spec.q[k].test) { const testId = sport === "run" ? "test-run-tt30" : hasPower ? "test-ride-ftp20" : "test-ride-lthr30"; return { kind: "test", workoutId: testId }; }
+      if (spec.q[k].test) return { kind: "test", workoutId: testFor(sport, hasPower), ...(sport === "swim" ? { minutes: 45 } : {}) };
       return { kind: "quality", ...spec.q[k] };
     }
-    if (x === longDay && spec.long) return { kind: "long", family: spec.long.family || spec.easy?.family || LONG_FAMILY[sport], level: spec.long.level ?? spec.easy?.level ?? null, minutes: spec.long.minutes ?? spec.easy?.minutes ?? null };
+    if (x === longDay && spec.long) return { kind: "long", family: spec.long.family || spec.easy?.family || LONG_FAMILY[sport], level: spec.long.share ? swimLevelFor(spec.long.family, spec.long.share * raceKm * 1000) : spec.long.level ?? spec.easy?.level ?? null, minutes: spec.long.minutes ?? spec.easy?.minutes ?? null };
     if (x === longDay && spec.easy?.minutes) return { kind: "long", family: spec.easy.family, level: spec.easy.level ?? null, minutes: spec.easy.minutes };
     if (longDay && spec.backToBack && daysBetween(longDay.date, x.date) === 1) return { kind: "long", family: LONG_FAMILY[sport], minutes: spec.backToBack };
     if (x.role === "recovery" && !spec.easy) return { kind: "recovery", family: RECOVERY_FAMILY[sport] };
@@ -730,7 +841,7 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
     const s = moved.get(x) || sessionFor(x), shiftBy = s.kind === "quality" ? levelShift(shifts[systemOf(sport, s.family)]) : 0;
     const minutes = (s.kind !== "race" && shortened[x.date]) || (s.minutes ?? (s.kind === "race" ? day.minutes : s.kind === "quality" ? Math.max(x.minutes, minutesFor(sport, s, shiftBy) || 0) : s.kind === "test" ? Math.max(x.minutes, 60) : x.minutes));
     const workoutId = s.workoutId || (s.family ? planWorkoutId(sport, s, minutes, shiftBy) : null);
-    const label = s.kind === "test" ? (sport === "run" ? L("Běžecký test", "Run test") : L("Test FTP", "FTP test")) : s.label || (workoutId && planName(baseName(workoutId))) || x.label;
+    const label = s.kind === "test" ? testLabel(sport) : s.label || (workoutId && planName(baseName(workoutId))) || x.label;
     const role = roleOf(s), intensity = x.intensity || .7;
     return { ...x, role, label, minutes, tss: Math.round(minutes / 60 * intensity * intensity * 100), plan: { templateId: template.id, week: pw.week, weeks: pw.weeks, phase: spec.phase, kind: s.kind, family: s.family || null, level: s.level ?? null, workoutId, ...(s.movedFrom ? { movedFrom: s.movedFrom } : {}) } };
   });
@@ -1298,7 +1409,7 @@ export function planCompletion(plan, { days = [], doneDates = [], today }) {
 }
 
 // ---- what the app shows ----------------------------------------------------------
-const keyLabel = (sport, k) => k.test ? (sport === "run" ? L("Běžecký test", "Run test") : L("Test FTP", "FTP test")) : planName(baseName(planWorkoutId(sport, k, sport === "swim" ? 45 : sport === "run" ? 60 : 90))) || k.family;
+const keyLabel = (sport, k) => k.test ? testLabel(sport) : planName(baseName(planWorkoutId(sport, k, sport === "swim" ? 45 : sport === "run" ? 60 : 90))) || k.family;
 // A multisport race's legs for the app: `legList` in order; `legs` by sport for a triathlon (older apps read it).
 function raceLegsSummary(r) {
   if (!r) return {};

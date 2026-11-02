@@ -286,6 +286,9 @@ struct PlanResult: Decodable, Equatable {
     let next: [Next]
     /// A gym plan: the estimated max of its main lifts at the start and the end.
     var lifts: [Lift]? = nil
+    /// A swim plan: CSS in seconds per 100 m at the start and now.
+    var cssStart: Double? = nil
+    var cssEnd: Double? = nil
 
     struct Lift: Decodable, Equatable, Identifiable {
         var id: String { exercise }
