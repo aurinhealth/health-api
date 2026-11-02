@@ -8,6 +8,7 @@ import { handleWahooOAuth, handleWahooWebhook, wahooActivityRow, wahooPlan, waho
 import { storeLocalEvent, syncLocalWorkout, editLocalWorkout } from "../src/local-workouts.js";
 import { saveSyncPrefs, syncOverview } from "../src/sync-destinations.js";
 import { connectionStatus } from "../src/connections.js";
+import { readConnectionHealth } from "../src/connection-health.js";
 import { withTimeZone } from "../src/user-time.js";
 import { powerZones } from "../src/training-zones.js";
 import { changeActivityType } from "../src/activity-type.js";
@@ -117,19 +118,55 @@ test("the webhook needs our token and saves the workout for whoever has that Wah
   const { db, raw } = setup();
   const user = env(db);
   const forUser = async (id, fn) => id === "55" ? fn(user) : null;
-  const post = body => handleWahooWebhook(new Request("https://aurin.health/webhooks/wahoo", { method: "POST", body: JSON.stringify(body) }), { WAHOO_WEBHOOK_TOKEN: "tok" }, forUser);
+  // What Wahoo itself has for this user: the workout is read with the user's token.
+  const { calls, fetchImpl } = api({
+    "GET /v1/workouts/300": () => Response.json(workout(300, "2026-10-14T05:30:00Z", { name: "Ráno", workout_type_id: 0 })),
+    "GET /v1/workouts/301": () => new Response("{}", { status: 404 }),
+    "GET /v1/workouts/302": () => new Response("{}", { status: 403 })
+  });
+  const post = body => handleWahooWebhook(new Request("https://aurin.health/webhooks/wahoo", { method: "POST", body: JSON.stringify(body) }), { WAHOO_WEBHOOK_TOKEN: "tok" }, forUser, { fetchImpl, now: NOW });
   const { id, ...rest } = summary(); void id;
-  const event = token => ({ event_type: "workout_summary", webhook_token: token, user: { id: 55 }, workout_summary: { id: 4, ...rest, workout: { id: 300, starts: "2026-10-14T05:30:00Z", minutes: 85, name: "Ráno", workout_type_id: 0 } } });
+  const event = (token, workoutId = 300, extra = {}) => ({ event_type: "workout_summary", webhook_token: token, user: { id: 55 }, workout_summary: { id: 4, ...rest, ...extra, workout: { id: workoutId, starts: "2026-10-14T05:30:00Z", minutes: 85, name: "Ráno", workout_type_id: 0 } } });
   assert.equal((await post(event("bad"))).status, 401);
   assert.equal(rows(raw).length, 0);
-  assert.equal((await post(event("tok"))).status, 200);
+  assert.equal(calls.length, 0, "nothing is read for a refused message");
+  // The message's own numbers are not trusted (SEC-011): what is saved comes from Wahoo.
+  assert.equal((await post(event("tok", 300, { calories_accum: "99999.0", power_avg: "2400.0" }))).status, 200);
+  assert.equal(calls.filter(c => c.path === "/v1/workouts/300").at(-1).auth, "Bearer a");
   const saved = rows(raw, "source_family='wahoo'");
   assert.equal(saved.length, 1);
   assert.equal(saved[0].start_time, "2026-10-14T07:30:00");
-  assert.equal(JSON.parse(saved[0].payload_json).type, "Ride");
+  const payload = JSON.parse(saved[0].payload_json);
+  assert.equal(payload.type, "Ride");
+  assert.equal(payload.calories, 812);
+  assert.equal(payload.icu_average_watts, 212);
+  // A workout Wahoo does not have for this user (made up, or someone else's): nothing saved.
+  assert.equal((await post(event("tok", 301))).status, 200);
+  assert.equal((await post(event("tok", 302))).status, 200);
+  assert.equal(rows(raw, "source_family='wahoo'").length, 1);
+  assert.equal((await readConnectionHealth(user)).wahoo?.needsReconnect, false, "someone else's workout does not break this connection");
+  // Not a workout id: ignored without asking Wahoo.
+  const before = calls.length;
+  assert.deepEqual(await (await post(event("tok", "../users"))).json(), { status: "ignored" });
+  assert.equal(calls.length, before);
   // Someone we do not know: acknowledged, nothing saved.
   assert.equal((await post({ ...event("tok"), user: { id: 99 } })).status, 200);
   assert.equal(rows(raw).length, 1);
+});
+
+test("the webhook saves nothing when Wahoo does not answer; the summary is read when the workout lacks it", async () => {
+  const { db, raw } = setup();
+  const user = env(db);
+  const forUser = async (id, fn) => id === "55" ? fn(user) : null;
+  const down = api({ "GET /v1/workouts/300": () => { throw new Error("timeout"); } });
+  const message = { event_type: "workout_summary", webhook_token: "tok", user: { id: 55 }, workout_summary: { workout: { id: 300 } } };
+  const post = fetchImpl => handleWahooWebhook(new Request("https://aurin.health/webhooks/wahoo", { method: "POST", body: JSON.stringify(message) }), { WAHOO_WEBHOOK_TOKEN: "tok" }, forUser, { fetchImpl, now: NOW });
+  assert.equal((await post(down.fetchImpl)).status, 200);
+  assert.equal(rows(raw, "source_family='wahoo'").length, 0);
+  const { workout_summary: s, ...bare } = workout(300, "2026-10-14T05:30:00Z"); void s;
+  const split = api({ "GET /v1/workouts/300": () => Response.json(bare), "GET /v1/workouts/300/workout_summary": () => Response.json(summary()) });
+  assert.equal((await post(split.fetchImpl)).status, 200);
+  assert.equal(rows(raw, "source_family='wahoo'").length, 1);
 });
 
 test("a planned ride goes to Wahoo as a plan and a workout, follows edits and goes on deletion", async () => {

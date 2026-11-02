@@ -249,21 +249,40 @@ export async function wahooRideExpected(env, { now = Date.now() } = {}) {
 // POST /webhooks/wahoo: a finished workout. `forUser(wahooUserId, fn)` runs fn
 // with the env of the Aurin user connected to that Wahoo account. Anything
 // else than our token is refused; a workout of nobody we know is acknowledged,
-// so Wahoo does not keep sending it.
-export async function handleWahooWebhook(request, env, forUser) {
+// so Wahoo does not keep sending it. The message only says which workout to
+// read: the workout itself is read from Wahoo with that user's own token, so
+// whoever learned the shared webhook token cannot write a made-up workout into
+// anyone's account (security audit 2026-11, SEC-011). When Wahoo does not
+// answer, nothing is saved; the scheduled look (syncWahoo) brings it later.
+export async function handleWahooWebhook(request, env, forUser, { fetchImpl = fetch, now = Date.now() } = {}) {
   const expected = String(env.WAHOO_WEBHOOK_TOKEN || '');
   const body = await request.json().catch(() => null);
   if (!expected || !body || !timingSafeEqualString(String(body.webhook_token || ''), expected)) return new Response(null, { status: 401 });
-  const summary = body.workout_summary, workout = summary?.workout;
-  if (body.event_type !== 'workout_summary' || !workout || body.user?.id == null) return Response.json({ status: 'ignored' });
-  const row = wahooActivityRow(workout, summary);
-  if (!row) return Response.json({ status: 'ignored' });
+  const workoutId = String(body.workout_summary?.workout?.id ?? '');
+  if (body.event_type !== 'workout_summary' || !/^\d{1,15}$/.test(workoutId) || body.user?.id == null) return Response.json({ status: 'ignored' });
   await forUser(String(body.user.id), async scoped => {
     if (!(await pulling(scoped))) return { status: 'off' };
+    const row = await wahooWorkoutRow(scoped, workoutId, { fetchImpl, now });
     // Within the user's zone: wahooActivityRow reads the local start in it.
-    return { status: 'ok', saved: await saveRows(scoped, [wahooActivityRow(workout, summary)]) };
+    return row ? { status: 'ok', saved: await saveRows(scoped, [row]) } : { status: 'later' };
   });
   return Response.json({ status: 'ok' });
+}
+
+// The done workout as Wahoo has it for this user (with its summary), as a row; null
+// when Wahoo does not know it for this user, has no summary yet, or does not answer.
+async function wahooWorkoutRow(env, workoutId, { fetchImpl, now }) {
+  try {
+    // scoped: a 403 here is a workout of another Wahoo user (a made-up message),
+    // which must not mark this user's connection broken.
+    const workout = await wahooApi(env, '/v1/workouts/' + workoutId, { fetchImpl, now, scoped: true });
+    if (String(workout?.id ?? '') !== workoutId) return null;
+    const summary = workout.workout_summary ?? await wahooApi(env, '/v1/workouts/' + workoutId + '/workout_summary', { fetchImpl, now, scoped: true });
+    return wahooActivityRow(workout, summary);
+  } catch (error) {
+    console.warn('Wahoo webhook: the workout could not be read', error?.status || error?.message);
+    return null;
+  }
 }
 
 // ---- Planned workouts ----

@@ -36,6 +36,14 @@ const accounts = env => env.DB.sqlite.prepare("SELECT user_id, provider, externa
 const wahooRows = (env, id) => env.DB.sqlite.prepare("SELECT COUNT(*) AS n FROM health_datapoints WHERE user_id = ? AND source_family = 'wahoo'").get(id).n;
 const cacheVersion = (env, id) => env.DB.sqlite.prepare("SELECT version FROM api_cache_versions WHERE user_id = ?").get(id)?.version || 0;
 
+// The webhook reads the workout from Wahoo with the user's token (SEC-011): Wahoo's API here.
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (url, options) => {
+  const u = new URL(typeof url === "string" ? url : url.url);
+  const match = u.hostname === "api.wahooligan.com" && u.pathname.match(/^\/v1\/workouts\/(\d+)$/);
+  if (match) return Response.json({ id: Number(match[1]), starts: "2026-10-14T05:30:00Z", minutes: 60, name: "Ride", workout_type_id: 0, workout_summary: { duration_active_accum: "3600" } });
+  return realFetch(url, options);
+};
 const wahooEvent = (id, workout = 300) => new Request("https://aurin.health/webhooks/wahoo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event_type: "workout_summary", webhook_token: "wtok", user: { id }, workout_summary: { id: workout, duration_active_accum: "3600", workout: { id: workout, starts: "2026-10-14T05:30:00Z", minutes: 60, name: "Ride", workout_type_id: 0 } } }) });
 const intervalsEvent = athlete => new Request("https://aurin.health/webhooks/intervals", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer isec" }, body: JSON.stringify({ events: [{ athlete_id: athlete, type: "FITNESS_UPDATED" }] }) });
 
