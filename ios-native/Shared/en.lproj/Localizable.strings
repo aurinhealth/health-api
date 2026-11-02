@@ -3614,6 +3614,10 @@
 "Čas na 200 m (m:ss)" = "200 m time (m:ss)";
 "Nikdy neplav sám, výrazná čepice a bójka." = "Never alone, bright cap and a tow float.";
 "venku podle času" = "by time outside";
+"Po uložení se přepočítají tvoje zóny." = "Saving recalculates your zones.";
+"Po uložení se přepočítají tvoje zóny a pošlou do %@." = "Saving recalculates your zones and sends them to %@.";
+"Po uložení se přepočítají tvoje zóny a pošlou do %@ a %@." = "Saving recalculates your zones and sends them to %@ and %@.";
+"Podle nejlepších 20 minut jízdy." = "From the best 20 minutes of the ride.";
 
 "Ukončit trénink" = "End workout";
 "Ještě cvičím" = "Keep going";
