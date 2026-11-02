@@ -43,10 +43,17 @@ struct GymSessionView: View {
     @State private var selected: Field = .kg
     /// The side tapped in the set's LEFT / RIGHT (mockup "strany"): that side first.
     @State private var picked: Int?
+    /// The exercise whose technique and note are open (a tap on its name).
+    @State private var info: Info?
     /// The crown is on the tiles (not scrolling the screen).
     @FocusState private var crown: Bool
 
     private enum Field { case kg, reps }
+
+    struct Info: Identifiable {
+        let exercise: WatchGym.Exercise
+        var id: String { exercise.name }
+    }
 
     struct Rated {
         let row: Int
@@ -145,6 +152,9 @@ struct GymSessionView: View {
             }
             .sheet(isPresented: $coachOpen) {
                 NavigationStack { CoachView(view: "gym") }
+            }
+            .sheet(item: $info) { info in
+                GymExerciseInfo(exercise: info.exercise)
             }
             .alert(W.tr("iPhone je mimo dosah", "iPhone out of reach"), isPresented: $store.failedChange) {
                 Button("OK", role: .cancel) {}
@@ -286,8 +296,23 @@ struct GymSessionView: View {
                 Text(line).font(.system(size: 10, weight: .semibold)).foregroundStyle(W.amber)
                     .lineLimit(1).minimumScaleFactor(0.6)
             }
-            Text(ex.title).font(.system(size: fit.small ? 14 : 16, weight: .semibold)).foregroundStyle(W.ink)
-                .lineLimit(1).minimumScaleFactor(0.7)
+            // A tap on the name: its technique, the record and my note (mockup "u cviku" 5).
+            Button {
+                info = Info(exercise: ex)
+            } label: {
+                Text(ex.title).font(.system(size: fit.small ? 14 : 16, weight: .semibold)).foregroundStyle(W.ink)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(W.tr("Technika a poznámka", "Technique and note"))
+            // "Last time 97.5 × 6 · aim: hard" (mockup "u cviku" 4); the tightest
+            // fit keeps it only without the superset's line above.
+            if let line = GymText.info(lift), fit != .tight || supersetLine(gym, lift, e) == nil {
+                Text(line).font(.system(size: 10)).foregroundStyle(W.muted)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+            }
             // − set 2/4 +: one set fewer or one more of this exercise (mockup 20).
             HStack(spacing: 4) {
                 roundButton("minus", small: fit.small) { store.change(.removeSet, exercise: e) }
@@ -298,6 +323,7 @@ struct GymSessionView: View {
                             .font(.system(size: 12, weight: .medium)).foregroundStyle(W.secondary)
                             .lineLimit(1).minimumScaleFactor(0.7)
                         if lift.side != nil { sides(lift, in: gym, e) }
+                        if lift.work, let letter = lift.intensity { GymText.intensityPill(letter) }
                     }
                     if fit == .tight { liveLine }
                 }
@@ -1187,5 +1213,60 @@ struct GymSummary: View {
             Text(title).font(.system(size: 10)).foregroundStyle(W.secondary)
             Text(value).font(.system(size: 16, weight: .semibold)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
         }
+    }
+}
+
+/// Mockup "u cviku" 5, a tap on the exercise's name: the best set before
+/// today, the technique's steps (GET /app/api/gym/technique, kept on the
+/// watch) and my note on the exercise (Moje poznámka on the iPhone).
+struct GymExerciseInfo: View {
+    let exercise: WatchGym.Exercise
+    @State private var steps: [String]?
+    @State private var loading = true
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(exercise.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(W.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let record = exercise.record {
+                    Text(W.tr("Rekord ", "Record ") + GymText.lift(record))
+                        .font(.system(size: 11, weight: .semibold)).foregroundStyle(W.amber)
+                }
+                // An exercise outside the catalog has no steps: no heading either.
+                if loading || steps != [] {
+                    heading(W.tr("TECHNIKA", "TECHNIQUE"))
+                }
+                if loading {
+                    ProgressView().frame(maxWidth: .infinity)
+                } else if let steps {
+                    if !steps.isEmpty {
+                        Text(steps.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n"))
+                            .font(.system(size: 12)).foregroundStyle(W.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else {
+                    Text(W.tr("Bez připojení se technika nenačetla.", "No connection to load the technique."))
+                        .font(.system(size: 12)).foregroundStyle(W.muted)
+                }
+                if let note = exercise.note {
+                    heading(W.tr("MOJE POZNÁMKA", "MY NOTE"))
+                    Text(note).font(.system(size: 12, weight: .medium)).foregroundStyle(W.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(W.tile, in: RoundedRectangle(cornerRadius: 10))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .task {
+            steps = await GymStore.shared.technique(exercise.name)
+            loading = false
+        }
+    }
+
+    private func heading(_ text: String) -> some View {
+        Text(text).font(W.label()).foregroundStyle(W.muted).padding(.top, 6)
     }
 }

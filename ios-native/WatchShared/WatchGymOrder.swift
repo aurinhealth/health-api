@@ -96,3 +96,22 @@ extension WatchGym {
 
     var setsDone: Int { exercises.flatMap(\.lifts).filter { $0.done && !$0.warmup }.count }
 }
+
+extension WatchGym {
+    /// The note, the record and last time's sets of a plan built again from
+    /// the sheet alone (a change on the watch, the server's copy): kept from
+    /// the plan before, which had them from the iPhone.
+    mutating func keepInfo(from old: WatchGym) {
+        for e in exercises.indices {
+            guard let before = old.exercises.first(where: { $0.name == exercises[e].name }) else { continue }
+            if exercises[e].note == nil { exercises[e].note = before.note }
+            if exercises[e].record == nil { exercises[e].record = before.record }
+            for l in exercises[e].lifts.indices where exercises[e].lifts[l].last == nil {
+                let lift = exercises[e].lifts[l]
+                exercises[e].lifts[l].last = before.lifts.first {
+                    $0.number == lift.number && $0.side == lift.side && $0.warmup == lift.warmup && $0.drop == lift.drop
+                }?.last
+            }
+        }
+    }
+}

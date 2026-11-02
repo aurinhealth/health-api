@@ -127,4 +127,36 @@ final class WatchGymSheetTests: XCTestCase {
         XCTAssertEqual(gym.otherSide(of: lifts[0], in: 1)?.row, lifts[1].row)
         XCTAssertNil(gym.otherSide(of: gym.exercises[0].lifts[0], in: 0))
     }
+
+    func testEachExerciseOnTheWatchHasLastTimeItsRecordAndMyNote() throws {
+        var sheet = day()
+        var gym = WatchGym(sheet, date: "2026-11-01", restSets: 75, restExercises: 120)
+        func lift(_ kg: Double, _ reps: Double) -> GymHistory.Lift { GymHistory.Lift(kg: kg, reps: reps, target: nil, rpe: nil) }
+        let history = GymHistory(exercises: [GymHistory.Exercise(name: "Bench Press", sessions: [
+            // Today's own sets are neither last time nor the record to beat.
+            GymHistory.Session(date: "2026-11-01", sets: [lift(100, 5)]),
+            GymHistory.Session(date: "2026-10-28", sets: [lift(57.5, 8), lift(57.5, 7)]),
+            GymHistory.Session(date: "2026-10-20", sets: [lift(65, 5)])
+        ])])
+        WatchBridge.addInfo(&gym, day: sheet, date: "2026-11-01", history: history,
+                            notes: ["Bench Press": "Seat 4", "Seated Cable Row": "  "])
+        let bench = gym.exercises[0]
+        XCTAssertEqual(bench.note, "Seat 4")
+        XCTAssertEqual(bench.record, WatchGym.Last(kg: 65, reps: 5))
+        XCTAssertEqual(bench.lifts.map(\.last), [WatchGym.Last(kg: 57.5, reps: 8), WatchGym.Last(kg: 57.5, reps: 7)])
+        let row = gym.exercises[1]
+        XCTAssertNil(row.note)
+        XCTAssertNil(row.record)
+        XCTAssertNil(row.lifts[0].last)
+        // Sent and read back as the watch gets it.
+        XCTAssertEqual(try XCTUnwrap(gym.encoded().flatMap(WatchGym.decode)), gym)
+
+        // Built again from the sheet on the watch (a set added there): the info stays, a new set has none.
+        sheet.apply(WatchGym.Change(date: "2026-11-01", kind: .addSet, exercise: 0))
+        var fresh = WatchGym(sheet, date: "2026-11-01", restSets: 75, restExercises: 120)
+        fresh.keepInfo(from: gym)
+        XCTAssertEqual(fresh.exercises[0].note, "Seat 4")
+        XCTAssertEqual(fresh.exercises[0].record, WatchGym.Last(kg: 65, reps: 5))
+        XCTAssertEqual(fresh.exercises[0].lifts.map(\.last), [WatchGym.Last(kg: 57.5, reps: 8), WatchGym.Last(kg: 57.5, reps: 7), nil])
+    }
 }

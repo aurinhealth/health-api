@@ -532,7 +532,8 @@ const watchHome = `<div class="aw-s aw-home" style="--gw:#163A2E">${wTop(wBtn('a
 <div class="aw-g">${[['Sleep', '7:12', '', 28, WA.amber, '89%'], ['Strain', '8.4', '', 14, WA.amber, 'of 11–14'], ['HRV', '64', 'ms', 76, WA.green, 'high']].map(([k, v, u, pos, c, note]) => `<div><span class="aw-k">${k}</span><span class="aw-n aw-v">${v}${u ? `<small>${u}</small>` : ''}</span>${wRange(pos, c)}<b style="color:${c}">${note}</b></div>`).join('')}</div>
 <div class="aw-next"><span style="color:${WA.amber}">${ic('gym')}</span>Strength training, full body · 45′ at 5:30 PM</div></div>`;
 const watchGym = `<div class="aw-s" style="--gw:#3A2A17">${wTop(wBtn('pause', WA.ink), '5:41', `<span class="aw-ib">${ic('menu')}</span>`)}
-<div class="aw-ex"><b>Squat</b><span><i class="aw-ib aw-sm">${ic('minus')}</i>set 2/4<i class="aw-ib aw-sm">${ic('plus')}</i></span></div>
+<div class="aw-ex"><b>Squat</b><span><i class="aw-ib aw-sm">${ic('minus')}</i>set 2/4<i class="aw-pl" style="color:${WA.amber}">H</i><i class="aw-ib aw-sm">${ic('plus')}</i></span></div>
+<div class="aw-inf">Last time 77.5 × 8 · aim: hard</div>
 <div class="aw-two"><div class="aw-box on"><span class="aw-n">80</span><span class="aw-k">kg</span></div><div class="aw-box"><span class="aw-n">8</span><span class="aw-k">reps</span></div></div>
 <div class="aw-done">Set done</div>
 <div class="aw-two aw-tiles"><div><span class="aw-k">Time</span><b>12:40</b></div><div><span class="aw-k">Heart</span><b style="color:${WA.red}">128 <small>bpm</small></b></div></div>
@@ -573,7 +574,7 @@ const watchWarmup = `<div class="aw-s" style="--gw:#163A2E">${wTop(wBtn('pause',
 
 export const WATCH = [
   ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness, sleep, strain and HRV, as on Today, and what’s next today in one line.', watchHome],
-  ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown. Leave the iPhone in your locker: the watch keeps your sets, swaps a taken machine even without signal, and hands them over later. Your heart rate and calories go into the same workout.', watchGym],
+  ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown, last time’s set under the exercise and its technique a tap away. Leave the iPhone in your locker: the watch keeps your sets, swaps a taken machine even without signal, and hands them over later. Your heart rate and calories go into the same workout.', watchGym],
   ['glow-training', 'Rest, then a tap.', 'The rest counts down on the wrist and taps you when it’s time, with the next set ready.', watchRest],
   ['glow-training', 'Warm up and cool down too.', 'Cardio, the warm-up and the stretching run on the wrist with the sets: a countdown for each move, or a stopwatch on the bike. Switch them on or off and move them before or after your exercises, and your iPhone gets the same plan.', watchWarmup],
   ['glow-health', 'Water in one tap.', 'What’s left to eat today, the macros, and +250 for a glass of water. Your iPhone gets it at once.', watchFood],
@@ -1032,6 +1033,8 @@ html:not(.js) .stage1{display:none}
 .aw-rb b{position:absolute;top:-2px;width:8px;height:8px;margin-left:-4px;border-radius:50%;border:1.5px solid #000}
 .aw-next{display:flex;align-items:center;gap:5px;margin-top:7px;font-size:10.5px;font-weight:600;white-space:nowrap}
 .aw-ex{display:flex;align-items:center;justify-content:space-between;margin-top:2px}.aw-ex b{font-size:16px}.aw-ex>span{display:flex;align-items:center;gap:5px;font-weight:500}
+.aw-pl{display:inline-grid;place-items:center;min-width:16px;height:16px;border:1.2px dashed;border-radius:5px;font-size:10px;font-weight:700;font-style:normal}
+.aw-inf{margin-top:1px;font-size:10px;color:#9AA39F;white-space:nowrap}
 .aw-two{display:flex;gap:6px;margin-top:5px}.aw-two>div{flex:1}
 .aw-box{display:flex;flex-direction:column;align-items:center;padding:2px 0 2px;border-radius:13px;background:rgba(255,255,255,.08)}.aw-box .aw-n{font-size:28px}.aw-box .aw-k{font-size:10px}
 .aw-box.on{background:#16352B;box-shadow:inset 0 0 0 2px #8FE6C4}
