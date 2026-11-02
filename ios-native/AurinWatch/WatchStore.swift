@@ -11,6 +11,13 @@ final class WatchStore: NSObject, ObservableObject {
     private static let savedKey = "watchSnapshot"
 
     @Published private(set) var snapshot: WatchSnapshot?
+    /// The day before `snapshot`'s, kept for the morning: until last night's
+    /// sleep arrives the home page shows it greyed (ReadinessHome.Stale.night).
+    @Published private(set) var previous: WatchSnapshot?
+    /// The day neither the iPhone nor the server gave today when the watch
+    /// last asked: the home page says "No connection" instead of "Getting today…".
+    @Published private var failedDay: String?
+    var todayFailed: Bool { failedDay == Self.localDate(Date()) }
     /// Settings → Apple Watch on the iPhone.
     @Published private(set) var settings: WatchSettings = UserDefaults.standard.data(forKey: WatchSettings.contextKey)
         .flatMap(WatchSettings.decode) ?? WatchSettings()
@@ -20,6 +27,27 @@ final class WatchStore: NSObject, ObservableObject {
         if let data = UserDefaults.standard.data(forKey: Self.savedKey) {
             snapshot = WatchSnapshot.decode(data)
         }
+        if let data = UserDefaults.standard.data(forKey: Self.previousKey) {
+            previous = WatchSnapshot.decode(data)
+        }
+    }
+
+    private static let previousKey = "watchSnapshotPrevious"
+
+    /// Today came without last night's sleep and without a readiness number
+    /// (the wearable has not synced the night yet): until noon the home page
+    /// shows the day before, greyed, as long as that one had a number.
+    var nightPending: WatchSnapshot? {
+        guard let snapshot, snapshot.date == Self.localDate(Date()), snapshot.readiness == nil,
+              snapshot.learningDays == nil, (snapshot.sleep?.minutes ?? 0) <= 0,
+              let previous, previous.date < snapshot.date, previous.readiness != nil,
+              Date() < Self.noon() else { return nil }
+        return previous
+    }
+
+    /// Today at 12:00, when the night stops being awaited (WatchRoot redraws then).
+    static func noon() -> Date {
+        Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: Date()) ?? Date()
     }
 
     func start() {
@@ -55,10 +83,18 @@ final class WatchStore: NSObject, ObservableObject {
     /// Today from the server when the watch has none for today (WatchToday).
     func fromServer() async {
         let today = Self.localDate(Date())
-        guard snapshot?.date != today, !loading, WatchAPI.signedIn else { return }
+        guard snapshot?.date != today, !loading else { return }
+        guard WatchAPI.signedIn else {
+            failedDay = today
+            return
+        }
         loading = true
+        failedDay = nil
         defer { loading = false }
-        guard let value = await WatchToday.load(over: snapshot), value.date == today, let data = value.encoded() else { return }
+        guard let value = await WatchToday.load(over: snapshot), value.date == today, let data = value.encoded() else {
+            if snapshot?.date != today { failedDay = today }
+            return
+        }
         receive(data)
     }
 
@@ -80,8 +116,10 @@ final class WatchStore: NSObject, ObservableObject {
         guard let data else {
             // The iPhone signed out.
             snapshot = nil
+            previous = nil
             GymStore.shared.clear()
             UserDefaults.standard.removeObject(forKey: Self.savedKey)
+            UserDefaults.standard.removeObject(forKey: Self.previousKey)
             ComplicationShelf.clear()
             WidgetCenter.shared.reloadAllTimelines()
             return
@@ -95,6 +133,12 @@ final class WatchStore: NSObject, ObservableObject {
         }
         // The iPhone sends the same Today by context, reply and message: draw it once.
         if let snapshot, Self.same(snapshot, value) { return }
+        if value.date == Self.localDate(Date()) { failedDay = nil }
+        // A new day: the last one stays for the morning (nightPending).
+        if let old = snapshot, old.date < value.date {
+            previous = old
+            UserDefaults.standard.set(old.encoded(), forKey: Self.previousKey)
+        }
         snapshot = value
         UserDefaults.standard.set(data, forKey: Self.savedKey)
         WatchAlarm.shared.schedule()

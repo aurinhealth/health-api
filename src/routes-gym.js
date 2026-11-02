@@ -127,7 +127,18 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
     let sent=[];try{sent=JSON.parse(url.searchParams.get('inPlan')||'[]');}catch{/* none */}
     const inPlan=[...new Set([...(plan?.values||[]).slice(7).map(r=>r?.[1]),...(Array.isArray(sent)?sent:[])].filter(Boolean).map(String))];
     // Only what the athlete's gym has (the active place's stations).
-    return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan,taste).filter(a=>fitsEquipment(a.name,setup))},{headers:{'Cache-Control':'no-store'}});
+    const fits=n=>fitsEquipment(n,setup);
+    // ?exercises=[...] (the Apple Watch, when the day's plan comes): three
+    // for each exercise of the plan in one request, kept on the watch so a
+    // swap works without the iPhone and offline. The same reads as one swap.
+    let many=null;try{many=JSON.parse(url.searchParams.get('exercises')||'null');}catch{/* none */}
+    if(Array.isArray(many)){
+      const names=[...new Set(many.filter(n=>typeof n==='string'&&n).map(n=>n.slice(0,120)))].slice(0,20);
+      const byExercise=Object.fromEntries(names.map(name=>[name,gymAlternatives(name,history,inPlan,taste,fits).slice(0,3)
+        .map(a=>({name:a.name,sets:a.sets??null,reps:a.reps??null,kg:a.kg??null}))]));
+      return Response.json({status:'ok',byExercise},{headers:{'Cache-Control':'no-store'}});
+    }
+    return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan,taste,fits)},{headers:{'Cache-Control':'no-store'}});
   }
   // The work sets of the last months by exercise and day (the app's exercise
   // history, "minule 82,5 kg × 6" and the suggested load of the next sets).

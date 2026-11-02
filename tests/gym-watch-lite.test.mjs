@@ -58,3 +58,34 @@ test("the watch searches the exercise names, at most 20, without the muscles", a
   assert.ok(body.exercises.length > 0 && body.exercises.length <= 20);
   assert.ok(body.exercises.every(e => /press/i.test(e.name) && e.muscles === undefined));
 });
+
+test("the watch keeps three swaps for each exercise of the day, from one request", async () => {
+  const { env } = setup(), today = localToday();
+  await saveGymPlan(env.DB, today, planValues({ date: today, planName: "Upper Body", rows }));
+  // A full gym, so each has three that fit.
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS user_setup (user_id INTEGER PRIMARY KEY,completed_at TEXT,training_json TEXT NOT NULL DEFAULT '{}')").run();
+  await env.DB.prepare("INSERT OR REPLACE INTO user_setup(user_id,training_json) VALUES(1,?)").bind(JSON.stringify({ equipment: "gym" })).run();
+  const names = JSON.stringify(["Barbell bench press", "Back Squat", "No such exercise"]);
+  const url = new URL(ORIGIN + "/app/api/gym/alternatives?date=" + today + "&exercises=" + encodeURIComponent(names));
+  const response = await handleGymToolsApi(new Request(url), env, {}, url, { signedIn: true }, {});
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.deepEqual(Object.keys(body.byExercise).sort(), ["Back Squat", "Barbell bench press", "No such exercise"]);
+  for (const name of ["Barbell bench press", "Back Squat"]) {
+    const list = body.byExercise[name];
+    assert.equal(list.length, 3, name);
+    assert.ok(list.every(a => a.name && a.name !== name && "kg" in a && "sets" in a && a.muscle === undefined), name);
+  }
+  assert.deepEqual(body.byExercise["No such exercise"], []);
+});
+
+test("a small home gym still gets three swaps that fit it", async () => {
+  const { env } = setup(), today = localToday();
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS user_setup (user_id INTEGER PRIMARY KEY,completed_at TEXT,training_json TEXT NOT NULL DEFAULT '{}')").run();
+  await env.DB.prepare("INSERT OR REPLACE INTO user_setup(user_id,training_json) VALUES(1,?)").bind(JSON.stringify({ equipment: "dumbbells" })).run();
+  const names = JSON.stringify(["Barbell bench press"]);
+  const url = new URL(ORIGIN + "/app/api/gym/alternatives?date=" + today + "&exercises=" + encodeURIComponent(names));
+  const body = await (await handleGymToolsApi(new Request(url), env, {}, url, { signedIn: true }, {})).json();
+  assert.equal(body.byExercise["Barbell bench press"].length, 3);
+  assert.ok(body.byExercise["Barbell bench press"].every(a => !/barbell|smith|cable|machine/i.test(a.name)));
+});
