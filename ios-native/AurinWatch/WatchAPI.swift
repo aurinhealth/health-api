@@ -185,16 +185,40 @@ enum WatchAPI {
     /// Exercises to swap in for `exercise` that fit the athlete's gym, with
     /// the load from their history (GET /app/api/gym/alternatives).
     static func gymAlternatives(date: String, exercise: String, inPlan: [String]) async -> [WatchGym.Option] {
-        var query = URLComponents()
-        query.queryItems = [URLQueryItem(name: "date", value: date), URLQueryItem(name: "exercise", value: exercise)]
-        if let data = try? JSONEncoder().encode(inPlan), let json = String(data: data, encoding: .utf8) {
-            query.queryItems?.append(URLQueryItem(name: "inPlan", value: json))
-        }
-        struct Found: Decodable { let name: String; let kg: Double?; let sets: JSONValue?; let reps: JSONValue? }
         struct Response: Decodable { let alternatives: [Found]? }
-        guard let q = query.percentEncodedQuery, let data = await get("/app/api/gym/alternatives?" + q),
+        guard let data = await alternatives(date: date, inPlan: inPlan, [URLQueryItem(name: "exercise", value: exercise)]),
               let list = (try? JSONDecoder().decode(Response.self, from: data))?.alternatives else { return [] }
-        return list.prefix(20).map { option($0.name, kg: $0.kg, sets: $0.sets, reps: $0.reps) }
+        return list.prefix(20).map { option($0) }
+    }
+
+    /// Three swaps for each of `exercises` in one request, kept on the watch
+    /// for a swap without the iPhone or internet (GymStore.keepSwaps); nil
+    /// offline or from an older server.
+    static func gymSwaps(date: String, exercises: [String], inPlan: [String]) async -> [String: [WatchGym.Option]]? {
+        struct Response: Decodable { let byExercise: [String: [Found]]? }
+        guard let data = await alternatives(date: date, inPlan: inPlan, [URLQueryItem(name: "exercises", value: json(exercises))]),
+              let found = (try? JSONDecoder().decode(Response.self, from: data))?.byExercise else { return nil }
+        return found.mapValues { list in list.prefix(3).map { option($0) } }
+    }
+
+    /// An exercise in GET /app/api/gym/alternatives' answer.
+    private struct Found: Decodable { let name: String; let kg: Double?; let sets: JSONValue?; let reps: JSONValue? }
+
+    private static func option(_ found: Found) -> WatchGym.Option {
+        option(found.name, kg: found.kg, sets: found.sets, reps: found.reps)
+    }
+
+    /// GET /app/api/gym/alternatives with the day, the plan's exercises and `items`.
+    private static func alternatives(date: String, inPlan: [String], _ items: [URLQueryItem]) async -> Data? {
+        var query = URLComponents()
+        query.queryItems = [URLQueryItem(name: "date", value: date), URLQueryItem(name: "inPlan", value: json(inPlan))] + items
+        // "+" would reach the server as a space.
+        guard let q = query.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B") else { return nil }
+        return await get("/app/api/gym/alternatives?" + q)
+    }
+
+    private static func json(_ names: [String]) -> String {
+        (try? JSONEncoder().encode(names)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
     }
 
     /// Exercises whose names hold `query`, the ones the gym allows first (GET /app/api/gym/exercises?q=).

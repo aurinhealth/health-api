@@ -110,6 +110,7 @@ import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedR
 import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
 import { coachEvalPrincipal, handleCoachEval } from "./coach-eval.js";
+import { limitBody, publicBodyLimit } from "./body-limit.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleSignOut, endConnectSession, sessionSecret, foreignOriginChange, sessionMatchesUser, slidingSession } from "./dashboard-auth.js";
 import { appleAppSiteAssociation } from "./apple-app-site-association.js";
 import { handleWorkoutTemplatesApi, publicSharePage } from "./workout-templates.js";
@@ -133,6 +134,7 @@ import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog
 import { handlePasskeyLogin } from "./passkeys.js";
 import { handleEmailLogin } from "./email-login.js";
 import { handleWaitlistSignup, forgetOldWaitlist } from "./testflight-waitlist.js";
+import { forgetStaleRequestLimits } from "./ip-rate-limit.js";
 import { emailConfigured } from "./email-sender.js";
 import { needsAIAccess } from "./ai-routes.js";
 import { clearConnectionHealth, connectionProblems, withoutBrokenConnections } from "./connection-health.js";
@@ -451,6 +453,8 @@ const worker = {
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 5) await forgetExpiredAiLimits(env.DB).catch(error => console.error("AI limit memory cleanup failed", error.message));
     // Waitlist addresses older than a year (testflight-waitlist.js, privacy policy).
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 7) await forgetOldWaitlist(env.DB).catch(error => console.error("Waitlist cleanup failed", error.message));
+    // Request limits nobody has used for two days (ip-rate-limit.js).
+    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 3) await forgetStaleRequestLimits(env.DB).catch(error => console.error("Request limit cleanup failed", error.message));
     // Apple sign-in tokens past their expiry: they cannot sign in anyway (apple-login.js).
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 3) await forgetUsedAppleTokens(env.DB).catch(error => console.error("Apple token cleanup failed", error.message));
     // Yesterday's failed syncs, broken connections and server errors, to the owner (ops-report.js);
@@ -483,6 +487,12 @@ const worker = {
     // The coach evaluation workflow acts as the owner, on the test server only.
     if (!principal && url.pathname === "/automation/coach-eval") principal = await coachEvalPrincipal(request, env);
     const isPublic = isPublicPath(url.pathname);
+    // Nobody signed in: the body is read only up to a limit (body-limit.js, SEC-013).
+    if (isPublic && !principal) {
+      const limited = await limitBody(request, publicBodyLimit(url.pathname));
+      if (limited.response) return limited.response;
+      request = limited.request;
+    }
     if (!isPublic && !principal) {
       // A browser opening an address that isn't a page (a mistyped or old link) gets the site's 404 page.
       if ((request.method === 'GET' || request.method === 'HEAD') && /text\/html/.test(request.headers.get('Accept') || '')) {

@@ -573,7 +573,7 @@ const watchWarmup = `<div class="aw-s" style="--gw:#163A2E">${wTop(wBtn('pause',
 
 export const WATCH = [
   ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness, sleep, strain and HRV, as on Today, and what’s next today in one line.', watchHome],
-  ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown. Leave the iPhone in your locker: the watch keeps your sets and hands them over later. Your heart rate and calories go into the same workout.', watchGym],
+  ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown. Leave the iPhone in your locker: the watch keeps your sets, swaps a taken machine even without signal, and hands them over later. Your heart rate and calories go into the same workout.', watchGym],
   ['glow-training', 'Rest, then a tap.', 'The rest counts down on the wrist and taps you when it’s time, with the next set ready.', watchRest],
   ['glow-training', 'Warm up and cool down too.', 'Cardio, the warm-up and the stretching run on the wrist with the sets: a countdown for each move, or a stopwatch on the bike. Switch them on or off and move them before or after your exercises, and your iPhone gets the same plan.', watchWarmup],
   ['glow-health', 'Water in one tap.', 'What’s left to eat today, the macros, and +250 for a glass of water. Your iPhone gets it at once.', watchFood],

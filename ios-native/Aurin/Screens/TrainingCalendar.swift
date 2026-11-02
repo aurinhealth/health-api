@@ -382,7 +382,9 @@ struct CalendarDayList: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(heading).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 Spacer()
-                if let day, day.count > 0 {
+                // The day's total only once there is something to add up: with
+                // one activity it repeated the row's own numbers.
+                if let day, day.count > 1 {
                     Text(Fmt.hoursMinutesLong(day.minutes) + " · " + Fmt.int(dayKcal(day)) + " kcal").font(Typo.caption).foregroundStyle(Palette.muted)
                 }
             }

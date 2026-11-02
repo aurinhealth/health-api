@@ -46,22 +46,34 @@ enum DrinkFigureKind: String, CaseIterable, Identifiable {
     static func from(_ raw: String) -> DrinkFigureKind { DrinkFigureKind(rawValue: raw) ?? fallback }
 }
 
-/// The figure, `fraction` 0…1 of the goal. With `animate` the water moves and
-/// the goal effect plays; without it the picture stands still.
+/// The figure, `fraction` 0…1 of the goal. With `animate` the water moves for
+/// a few seconds when the figure appears and after each drink, and the goal
+/// effect plays when the goal is reached; then the picture stands still
+/// (drawing it 30 times a second the whole time the Food page was open cost
+/// battery). Without `animate`, and in Low Power Mode, it always stands still.
 struct DrinkFigure: View {
     let kind: DrinkFigureKind
     let fraction: Double
     var size: CGFloat = 96
     var animate = true
+    /// The water still moves (the seconds after appearing or a new drink).
+    @State private var stirred = false
 
     var body: some View {
         let done = fraction >= 0.999
-        let moving = animate && (done || fraction > 0)
+        let moving = animate && stirred && (done || fraction > 0) && !LowPower.shared.on
         TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !moving)) { context in
             DrinkFigureCanvas(kind: kind, fraction: min(max(fraction, 0), 1),
                               phase: moving ? context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 600) : 0)
         }
         .frame(width: size, height: size)
+        // A drink changes the fraction: the water moves again, the goal's effect a little longer.
+        .task(id: fraction) {
+            guard animate else { return }
+            stirred = true
+            try? await Task.sleep(for: .seconds(fraction >= 0.999 ? 4 : 3))
+            if !Task.isCancelled { stirred = false }
+        }
         .accessibilityElement()
         .accessibilityLabel(L10n.f("%@, %@ %% cíle", kind.label, Fmt.int(min(fraction, 9.99) * 100)))
     }

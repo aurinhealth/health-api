@@ -3257,7 +3257,6 @@
 "Nainstalovat" = "Install";
 
 /* Onboarding review 2026-10-28: invite, consent first, notifications page, first days. */
-"Aurin je zatím jen na pozvánku. [Nemáš ji? Přidej se na čekací listinu.](https://aurin.health/#join)" = "Aurin is invite-only for now. [No invite? Join the waitlist.](https://aurin.health/#join)";
 "Tento účet nemá do Aurinu pozvánku. Aurin je teď jen pro pozvané." = "This account has no invite to Aurin. Aurin is invite-only for now.";
 "Tento Google účet nemá do Aurinu pozvánku. Aurin je teď jen pro pozvané." = "This Google account has no invite to Aurin. Aurin is invite-only for now.";
 "Přidat se na čekací listinu" = "Join the waitlist";
@@ -3600,6 +3599,15 @@
 "Potáhni pruh u každého dne. Aurin plánuje v tomhle čase a když potřebuješ odpočinek, vezme si méně." = "Drag each bar. Aurin plans within it and uses less when you need rest.";
 "Kde posiluješ?" = "Where do you lift?";
 "Posilovna, doma nebo obojí · vybavení" = "Gym, home or both · equipment";
+/* One coach card on Today (CoachThingsCard.swift) */
+"Kouč se ptá" = "Check-in";
+"Po tréninku" = "After workout";
+"Podle jízd %@" = "Your rides say %@";
+"Podle běhů %@" = "Your runs say %@";
+"Podle tréninků %@" = "Your workouts say %@";
+"Podle plavání %@" = "Your swims say %@";
+"Měním…" = "Swapping…";
+"Nechat plán" = "Keep plan";
 "Zapisovat do Wahoo" = "Write to Wahoo";
 "FTP a výkonové zóny se po uložení pošlou do Wahoo" = "FTP and power zones are sent to Wahoo after saving";
 "Zapsáno do Wahoo" = "Written to Wahoo";
@@ -3618,3 +3626,8 @@
 "Čas na 200 m (m:ss)" = "200 m time (m:ss)";
 "Nikdy neplav sám, výrazná čepice a bójka." = "Never alone, bright cap and a tow float.";
 "venku podle času" = "by time outside";
+
+"Ukončit trénink" = "End workout";
+"Ještě cvičím" = "Keep going";
+"Pořád cvičíš?" = "Still working out?";
+"Žádná série 10 minut. Ukonči trénink, nebo pokračuj." = "No set for 10 min. End the workout or keep going.";

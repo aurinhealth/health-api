@@ -10,6 +10,8 @@ struct TrainingView: View {
     @State private var calendarDay: String?
     /// A day set from the pinned bar, for the calendar.
     @State private var jumpDay: DayJump?
+    /// Where today's Začít trénink is (NextSession writes, the floating copy reads).
+    @State private var startSpot = StartSpot()
 
     var body: some View {
         NavigationStack(path: model.path(.training)) {
@@ -41,6 +43,19 @@ struct TrainingView: View {
                     ProgressView()
                 }
             }
+            // One object for the whole screen: its identity never changes, so a
+            // redraw of Training does not redraw the cards that read it.
+            .environment(startSpot)
+            // The page's bottom from a background, which the floating button never moves.
+            .background {
+                Color.clear.onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY.rounded() } action: { bottom in
+                    let floor = bottom > 0 ? bottom - StartButtonSpot.barZone : 0
+                    if startSpot.floor != floor { startSpot.floor = floor }
+                }
+            }
+            .overlay(alignment: .bottom) {
+                floatingStartButton
+            }
             .navBarVisibility(.hidden)
             .appRoutes()
         }
@@ -64,6 +79,36 @@ struct TrainingView: View {
         // Every planned session of the week done: the App Store rating (AurinTips.swift).
         .reviewAfterFinishedWeek(model.training?.sessions, demo: model.demo)
         .sheet(isPresented: $addingWorkout) { ManualWorkoutSheet() }
+    }
+
+    /// Today's Začít trénink while its place in the card is under the tab bar
+    /// (or further down): the same button floats just above the bar. Not with
+    /// a hidden workout's bar there, nor over an undo toast.
+    private var floatingStart: String? {
+        guard toast == nil, model.minimizedGym == nil, !model.immersive else { return nil }
+        return startSpot.underBar
+    }
+
+    /// The animation only on the button itself: the page under it never animates
+    /// with it, so its own frames cannot flip the button back and forth.
+    private var floatingStartButton: some View {
+        ZStack(alignment: .bottom) {
+            if let date = floatingStart {
+                NavigationLink(value: AppRoute.trainingMode(date)) {
+                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
+                        .frame(maxWidth: .infinity).frame(height: 54)
+                        .background(Palette.green, in: Capsule())
+                        .shadow(color: Palette.green.opacity(0.3), radius: 12, y: 6)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 28)
+                .padding(.bottom, StartButtonSpot.barZone + 8)
+                // VoiceOver reaches the same button in the card.
+                .accessibilityHidden(true)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy, value: floatingStart == nil)
     }
 
     private func undo(_ t: PlanToast) {
@@ -365,6 +410,29 @@ struct TodaySessions: View {
     }
 }
 
+/// Today's Začít trénink on Training floats above the tab bar while its place
+/// in the card is under the bar or further down (review 2026-11-02, point 3).
+enum StartButtonSpot {
+    /// The tab bar (60 pt, Dynamic Type can grow it) and its gap above the
+    /// bottom of the safe area (RootView).
+    static let barZone: CGFloat = 76
+}
+
+/// Where today's Začít trénink is on Training: NextSession writes, TrainingView's
+/// floating copy reads. Writes happen only on a change, so scrolling redraws nothing.
+@MainActor @Observable
+final class StartSpot {
+    /// The day of the button while it sits under the tab bar or further down.
+    var underBar: String?
+    /// The top of the tab bar on screen (global), 0 before it is measured.
+    var floor: CGFloat = 0
+
+    func report(_ day: String, under: Bool) {
+        if under { if underBar != day { underBar = day } }
+        else if underBar == day { underBar = nil }
+    }
+}
+
 struct NextSession: View {
     let session: TrainingSnapshot.Session
     let today: String
@@ -374,6 +442,7 @@ struct NextSession: View {
     var strainNow: Double? = nil
     /// In the swiping card: as tall as the tallest of today's.
     var fill = false
+    @Environment(StartSpot.self) private var startSpot: StartSpot?
 
     // Its own card, so the gym tools below (today's) don't read as its buttons.
     var body: some View {
@@ -390,6 +459,10 @@ struct NextSession: View {
                         .background(Palette.green, in: Capsule())
                 }
                 .buttonStyle(.plain)
+                .onGeometryChange(for: Bool.self) { [floor = startSpot?.floor ?? 0] in floor > 0 && $0.frame(in: .global).maxY > floor } action: { under in
+                    startSpot?.report(session.date, under: under)
+                }
+                .onDisappear { startSpot?.report(session.date, under: false) }
                 .padding(.top, 4)
             }
             if fill { Spacer(minLength: 0) }
