@@ -77,7 +77,7 @@ test("a report without values marks the food for everyone until the owner fixes 
   // Corrections and reports are listed apart.
   assert.equal((await listFoodSuggestions(raw)).suggestions.length, 0);
   const { suggestions, pending } = await listFoodSuggestions(raw, { kind: "report" });
-  assert.deepEqual(pending, { correction: 0, report: 2 });
+  assert.deepEqual(pending, { correction: 0, report: 2, new_food: 0 });
   const first = suggestions.find(s => s.id === sent.id);
   assert.equal(first.reason, "values");
   assert.equal(first.note, "na obalu je 207 kcal na kus");
@@ -108,4 +108,51 @@ test("a verified food stays verified for everyone when another user logs, change
   assert.equal((await verified())?.confidence, "verified");
   await deletePersonalFood(b, own.id);
   assert.equal((await verified())?.confidence, "verified");
+});
+
+test("own foods stay private; 'Suggest for everyone' sends a new food the owner approves into the catalogue", async () => {
+  const { saveNewFoodSuggestion } = await import("../src/food-suggestions.js");
+  const { foodApprovedMessage } = await import("../src/push.js");
+  const raw = createD1(), a = scopedDb(raw, 3), b = scopedDb(raw, 4);
+  const bar = { name: "Protein bar Vanilla", brand: "Nutrend", barcode: "8594073175302", nutrition_basis: "g", serving_size: "40 g", serving_name: "bar", quantity: "40 g", calories_100g: 380, protein_100g: 32, carbs_100g: 38, sugars_100g: 4, fat_100g: 12, fiber_100g: 6, source: "package_label" };
+  await savePersonalFood(a, bar, { used: true });
+  assert.equal((await searchFoodCatalog(b, "", bar.barcode)).length, 0, "a saved food is not shared");
+  assert.equal((await searchFoodCatalog(b, "Protein bar Vanilla")).length, 0);
+
+  await assert.rejects(saveNewFoodSuggestion(a, { product: { ...bar, nutrition_basis: "portion" } }), e => e.status === 400);
+  await assert.rejects(saveNewFoodSuggestion(a, { product: { ...bar, calories_100g: null } }), e => e.status === 400);
+  await saveNewFoodSuggestion(a, { product: { ...bar, calories_100g: 370 } });
+  const sent = await saveNewFoodSuggestion(a, { product: bar });
+  const { suggestions, pending } = await listFoodSuggestions(raw, { kind: "new_food" });
+  assert.equal(suggestions.length, 1, "a newer suggestion of the same food replaces the older one");
+  assert.equal(pending.new_food, 1);
+  assert.equal(suggestions[0].kind, "new_food");
+  assert.deepEqual(suggestions[0].before, {});
+  assert.equal(suggestions[0].after.calories_100g, 380);
+  assert.ok(["name", "brand", "calories_100g", "serving_size"].every(k => suggestions[0].changes.includes(k)));
+  assert.equal((await listFoodSuggestions(raw)).suggestions.length, 0, "not among the corrections");
+  assert.equal((await searchFoodCatalog(b, "", bar.barcode)).length, 0, "nothing reaches others before the owner decides");
+
+  const decided = await decideFoodSuggestion(raw, scopedDb(raw, 1), { id: sent.id, decision: "approve" });
+  assert.deepEqual(decided.notify.users, [{ userId: 3, kind: "new_food" }]);
+  assert.match(foodApprovedMessage("new_food", bar).body, /katalogu|catalogue/);
+  const found = (await searchFoodCatalog(b, "", bar.barcode))[0];
+  assert.equal(found.confidence, "verified");
+  assert.equal(found.calories_100g, 380);
+  assert.equal(found.serving_size, "40 g");
+});
+
+test("unchecked foods earlier versions shared stay in the database but no longer reach other users", async () => {
+  const raw = createD1(), a = scopedDb(raw, 3), b = scopedDb(raw, 4);
+  const { saveSharedFood } = await import("../src/shared-foods.js");
+  await saveSharedFood(a, before);
+  raw.sqlite.prepare("INSERT INTO shared_foods(food_key,search_name,product_json) VALUES(?,?,?)").run("legacy-unchecked", "kefir bily bohusovicka", JSON.stringify({ name: "Kefír bílý", brand: "Bohušovická", barcode: "8594005012345", nutrition_basis: "ml", calories_100g: 50, protein_100g: 3, carbs_100g: 4, fat_100g: 2, source: "shared", confidence: "user", label_verified: false }));
+  raw.sqlite.prepare("INSERT INTO food_contributions(user_id,personal_id,catalog_id) VALUES(3,'kefir bily|bohusovicka','legacy-unchecked')").run();
+  assert.equal((await searchFoodCatalog(b, "", "8594005012345")).length, 0);
+  assert.equal((await searchFoodCatalog(b, "Kefír bílý")).length, 0);
+  assert.equal((await searchFoodCatalog(b, "", before.barcode)).length, 1, "approved foods are still found");
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) n FROM shared_foods").get().n, 2, "nothing is deleted");
+  // The author saving the food again takes its unchecked copy out.
+  await savePersonalFood(a, { name: "Kefír bílý", brand: "Bohušovická", nutrition_basis: "ml", calories_100g: 50, protein_100g: 3, carbs_100g: 4, fat_100g: 2 });
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) n FROM shared_foods").get().n, 1);
 });
