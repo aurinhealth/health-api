@@ -91,4 +91,12 @@ test("a duathlon's three race legs join in order, each starting when the one bef
   assert.equal((await event(ride)).start_date_local, "2026-11-08T09:29:00");
   assert.equal((await event(run2)).start_date_local, "2026-11-08T10:07:00");
   assert.equal((await event(run2)).race, true);
+  // Moving the first run takes the ride and the second run along, each right after the one before.
+  const fetchImpl = async () => new Response("{}");
+  await movePlannedEvent(env, { eventId: "planned:" + run1, date: "2026-11-09", time: "10:00" }, fetchImpl);
+  assert.deepEqual([(await event(ride)).start_date_local, (await event(run2)).start_date_local], ["2026-11-09T10:29:00", "2026-11-09T11:07:00"]);
+  assert.equal((await event(run2)).after, ride);
+  // Moving the ride on its own leaves all three apart.
+  await movePlannedEvent(env, { eventId: "planned:" + ride, date: "2026-11-10", time: "08:00" }, fetchImpl);
+  assert.deepEqual([(await event(run1)).next, (await event(ride)).after, (await event(ride)).next, (await event(run2)).after], [undefined, undefined, undefined, undefined]);
 });

@@ -61,6 +61,8 @@ struct WeekSessionDraft: Identifiable, Equatable {
     var workout: LibraryWorkout?
     var gym: GymProposal?
     var status: Status = .waiting
+    /// The calendar event once saved ("planned:…"), for joining the next race leg to it on a retry.
+    var eventId: String? = nil
 
     var built: Bool { status == .ready || status == .saved }
 
@@ -955,8 +957,15 @@ struct WeekPlanView: View {
         var rides: [String: String] = [:]
         /// The day's last saved race leg, which the next leg follows (a duathlon's run, ride, run).
         var raceLegs: [String: String] = [:]
-        for i in sessions.indices where sessions[i].status == .ready {
+        for i in sessions.indices {
             let s = sessions[i]
+            // Saved in an earlier try: the legs after it still join it.
+            if s.status == .saved {
+                if s.role == "race", let e = s.eventId { raceLegs[s.date] = e }
+                if s.sport == "ride", let e = s.eventId { rides[s.date] = e }
+                continue
+            }
+            guard s.status == .ready else { continue }
             do {
                 if s.sport == "stretch" {
                     try await model.api.addStretching(date: s.date)
@@ -970,14 +979,14 @@ struct WeekPlanView: View {
                     let raceLeg = s.role == "race" ? raceLegs[s.date] : nil
                     let event = try await model.api.scheduleWorkout(id: w.id, date: s.date, indoor: s.environment == "indoor",
                                                                     time: s.brick || raceLeg != nil ? nil : s.time)
+                    sessions[i].eventId = event
                     if s.sport == "ride", let event { rides[s.date] = event }
+                    // A race's legs joined in their order: the watch shows the race as one card.
+                    // The next leg follows this one even when joining this one fails (a retry joins it).
+                    if s.role == "race", let event { raceLegs[s.date] = event }
                     // Joined, it goes to the watch with the ride as one workout.
                     if s.brick, let event, let ride = rides[s.date] { try await model.api.linkPlanned(eventId: event, after: ride) }
-                    // A race's legs joined in their order: the watch shows the race as one card.
-                    if s.role == "race", let event {
-                        if let raceLeg { try await model.api.linkPlanned(eventId: event, after: raceLeg) }
-                        raceLegs[s.date] = event
-                    }
+                    if s.role == "race", let event, let raceLeg { try await model.api.linkPlanned(eventId: event, after: raceLeg) }
                 }
                 sessions[i].status = .saved
             } catch {

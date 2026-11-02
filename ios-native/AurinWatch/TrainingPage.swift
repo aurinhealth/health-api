@@ -89,10 +89,21 @@ struct TrainingPage: View {
         let gym = day == today ? store.gym : preview
         let gymPlanned = gym.map { !$0.exercises.isEmpty } ?? false
         if let race = RaceDay(planned) {
-            // Race day (mockup hodinky-zavod): the race as one card, anything else of the day under it.
+            // Race day (mockup hodinky-zavod): the race as one card, anything else of the day
+            // under it as it would show on its own (a ride or run with its start, the gym with Start).
+            let others = planned.filter { !race.legs.contains($0) }
             raceCard(race)
-            ForEach(Array(planned.filter { !race.legs.contains($0) }.enumerated()), id: \.offset) { _, other in
-                foldedCard(other).padding(.top, 6)
+            ForEach(Array(others.enumerated()), id: \.offset) { _, other in
+                if other.sport != "strength", other.eventId != nil {
+                    NavigationLink(value: other) { planCard(other) }
+                        .buttonStyle(.plain)
+                        .padding(.top, 6)
+                } else {
+                    sideCard(other, day: day, gym: gym)
+                }
+            }
+            if gymPlanned, !others.contains(where: { $0.sport == "strength" }), !done.contains(where: { $0.sport == "strength" }) {
+                sideCard(WatchSnapshot.Session(date: day, title: W.tr("Posilovna", "Gym"), sport: "strength", minutes: gym?.minutes, done: false), day: day, gym: gym)
             }
         } else if planned.count > 1 {
             // Two or more (mockup 23): each its own card, the picked one open
@@ -170,6 +181,15 @@ struct TrainingPage: View {
             Text(W.tr("Spustíš v aplikaci Cvičení.", "Start it in the Workout app."))
                 .font(.system(size: 12)).foregroundStyle(W.muted).padding(.top, 6)
         }
+    }
+
+    /// Another workout on race day, open on its own tile.
+    private func sideCard(_ s: WatchSnapshot.Session, day: String, gym: WatchGym?) -> some View {
+        VStack(alignment: .leading, spacing: 0) { single(s, day: day, gym: gym) }
+            .padding(.horizontal, 10).padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
+            .padding(.top, 6)
     }
 
     /// The picked one of a day's workouts, open, with an amber edge.

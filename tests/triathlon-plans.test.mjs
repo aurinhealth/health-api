@@ -54,11 +54,13 @@ test("race day: the three legs on the day, nothing after it", () => {
   assert.ok(!a.items.some(x => x.date > "2027-02-21"));
   const d = triRaceDay("olympic", { thresholdPace: 280, ftp: 250, swimCss: 110 });
   assert.equal(d.swim.workoutId, "race-swim-1500-" + d.swim.minutes);
-  assert.match(d.ride.workoutId, /^race-ride-tri-short-40-\d+$/);
+  assert.match(d.ride.workoutId, /^race-ride-tri-short-40-\d+-leg$/);
   assert.ok(d.run.minutes > 45, "the run after the ride is slower than fresh");
   const swim = raceWorkout(d.swim.workoutId), ride = raceWorkout(d.ride.workoutId);
   assert.equal(swim.sport, "swim");
   assert.equal(ride.sport, "ride");
+  // A leg is only the race: no warm-up, so the next leg starts when it ends.
+  for (const leg of d.legs) assert.equal(raceWorkout(leg.workoutId).duration_minutes, leg.minutes, leg.workoutId);
 });
 
 test("what the app shows: legs, sessions per sport and each sport's long session", () => {
@@ -89,7 +91,7 @@ test("multisport races with two sports: their legs in order, no third sport", as
   }
   // A 5 km run after the ride is slower than after a swim.
   const du = triRaceDay("du-standard", { thresholdPace: 280 }), aqua = triRaceDay("aquathlon", { thresholdPace: 280 });
-  assert.ok(du.legs[2].minutes >= aqua.legs[1].minutes && du.legs[2].workoutId.endsWith("-p98"), "slower after the ride");
+  assert.ok(du.legs[2].minutes >= aqua.legs[1].minutes && du.legs[2].workoutId.endsWith("-p98-leg"), "slower after the ride");
   assert.equal(chosenSports(["swim"]), null);
   assert.deepEqual(chosenSports(["swim", "ride"]), ["ride", "swim"], "the app's order");
 });

@@ -54,6 +54,7 @@ const P = {
   chat: '<path d="M4 5h11v8H8l-4 3ZM15 9h5v8l-3-2h-6v-2"/>',
   menu: '<path d="M6 8h12M6 12h12M6 16h12"/>',
   pause: '<path d="M9 6v12M15 6v12"/>',
+  flag: '<path d="M6 21V4M6 4h11l-2 4 2 4H6"/>',
 };
 const ic = (name, cls = '') => `<svg class="di${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true">${P[name]}</svg>`;
 const at = spec => ` data-at="${spec}"`;
@@ -571,11 +572,19 @@ const watchWarmup = `<div class="aw-s" style="--gw:#163A2E">${wTop(wBtn('pause',
 <div class="aw-pb"><span class="aw-done">Next</span><span>Skip all</span></div></div>
 <div class="aw-two aw-tiles"><div><span class="aw-k">Time</span><b>6:10</b></div><div><span class="aw-k">Heart</span><b style="color:${WA.red}">104 <small>bpm</small></b></div></div></div>`;
 
+// Race day (TrainingPage.raceCard, RaceDay.swift): a training plan's duathlon as one card, its legs in race
+// order with their distance and time, and one start for the whole race.
+const watchRace = `<div class="aw-s" style="--gw:#3A2A17">${wTop('', '8:31', '')}
+<div class="aw-race"><div class="aw-rh"><b>Today · 9:00</b><span>1 h 20</span></div><b class="aw-rn"><span style="color:${WA.amber}">${ic('flag')}</span>Duathlon</b>
+${[['run', '5 km', '24 min', WA.red], ['bike', '20 km', '33 min', WA.amber], ['run', '2.5 km', '13 min', WA.red]].map(([icon, d, t, c]) => `<div class="aw-leg"><span style="color:${c}">${ic(icon)}</span>${d}<i>${t}</i></div>`).join('')}
+<div class="aw-go">${ic('play')}Open in Workout</div></div></div>`;
+
 export const WATCH = [
   ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness, sleep, strain and HRV, as on Today, and what’s next today in one line.', watchHome],
   ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown. Leave the iPhone in your locker: the watch keeps your sets and hands them over later. Your heart rate and calories go into the same workout.', watchGym],
   ['glow-training', 'Rest, then a tap.', 'The rest counts down on the wrist and taps you when it’s time, with the next set ready.', watchRest],
   ['glow-training', 'Warm up and cool down too.', 'Cardio, the warm-up and the stretching run on the wrist with the sets: a countdown for each move, or a stopwatch on the bike. Switch them on or off and move them before or after your exercises, and your iPhone gets the same plan.', watchWarmup],
+  ['glow-training', 'Race day, one tap.', 'A duathlon, aquabike, aquathlon or triathlon from your plan shows as one card, its legs in race order, and starts as one multisport workout: the watch times each leg and each change. Tap it for each leg’s target.', watchRace],
   ['glow-health', 'Water in one tap.', 'What’s left to eat today, the macros, and +250 for a glass of water. Your iPhone gets it at once.', watchFood],
   ['glow-health', 'On your watch face.', 'Readiness, sleep and strain against today’s goal, a countdown to your workout, water, food, protein and your alarm sit around the time, so you don’t even open the app.', watchFace]];
 
@@ -1042,6 +1051,10 @@ html:not(.js) .stage1{display:none}
 .aw-rrow>div{display:flex;flex-direction:column;min-width:0}.aw-rrow .aw-k{font-size:10px}.aw-nx{font-size:15px}.aw-live{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}.aw-live .di{width:9px;height:9px;fill:currentColor;stroke:none}
 .aw-rate{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:10px}.aw-rate span{display:grid;place-items:center;height:36px;border-radius:12px;background:rgba(255,255,255,.09);font-size:14px;font-weight:600}
 .aw-lbl{margin-top:6px;font-size:11px;font-weight:600;letter-spacing:.04em}.aw-pt{display:block;font-size:16px}.aw-prow{margin-top:8px}.aw-pb{flex:1;gap:5px}.aw-pb .aw-done{margin-top:0}.aw-pb>span:last-child{display:grid;place-items:center;height:30px;border-radius:17px;background:rgba(255,255,255,.12);font-size:14px;font-weight:600}
+.aw-race{margin-top:4px;padding:8px 10px;border-radius:14px;background:rgba(255,255,255,.07)}.aw-rh{display:flex;justify-content:space-between;font-size:10.5px}.aw-rh b{color:#F2B46B}.aw-rh span{color:#9AA39F}
+.aw-rn{display:flex;align-items:center;gap:5px;margin:2px 0 2px;font-size:16px}.aw-rn .di{width:14px;height:14px}
+.aw-leg{display:flex;align-items:center;gap:6px;padding:3.5px 0;font-size:12px;font-weight:500}.aw-leg+.aw-leg{border-top:1px solid rgba(255,255,255,.08)}.aw-leg .di{width:13px;height:13px}.aw-leg i{margin-left:auto;font-style:normal;color:#9AA39F;font-weight:400}
+.aw-go{display:flex;align-items:center;justify-content:center;gap:5px;height:30px;margin-top:6px;border-radius:15px;background:#8FE6C4;color:#000;font-size:13px;font-weight:700}.aw-go .di{width:11px;height:11px}
 .aw-btns{display:flex;gap:4px;margin-top:8px}.aw-btns span{flex:1;display:grid;place-items:center;height:32px;border-radius:16px;background:rgba(255,255,255,.12);font-size:12px;font-weight:600}
 
 .aw-ring{position:relative;display:grid;place-items:center;flex:none}.aw-ring>svg{position:absolute;inset:0;fill:none}

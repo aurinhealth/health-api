@@ -145,11 +145,7 @@ struct RaceDetail: View {
 
     /// "dnes · 9:00".
     private var when: String {
-        let today = WatchStore.localDate(Date())
-        let tomorrow = WatchStore.localDate(Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date())
-        let s = race.first
-        let day = s.date == today ? W.tr("dnes", "today") : s.date == tomorrow ? W.tr("zítra", "tomorrow") : W.dayName(s.date)
-        return day + (s.time.map { " · " + W.clockText($0) } ?? "")
+        W.relativeDay(race.first.date) + (race.first.time.map { " · " + W.clockText($0) } ?? "")
     }
 
     private func row(_ leg: WatchSnapshot.Session) -> some View {

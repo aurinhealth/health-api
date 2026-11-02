@@ -2,6 +2,7 @@ import { trainingSetup } from './onboarding.js';
 import { ownLibraryWorkout } from "./endurance-templates.js";
 import { getAiWorkout } from "./ai-workout-compose.js";
 import { storeLocalEvent, syncLocalWorkout, ensureLocalWorkouts } from './local-workouts.js';
+import { read as readPlanned, setFields as setPlannedFields } from './planned-links.js';
 // Adaptive workout library: the shared catalog (built-in workouts plus any
 // rows in workout_library), per-user capability progression, ranking, "generate a
 // workout for this day" and scheduling to the user's Intervals.icu calendar.
@@ -603,6 +604,11 @@ export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, con
   let event = buildIntervalsEvent(workout, date, environmentOf(environment), { startTime });
   const existing = await db.prepare("SELECT intervals_event_id,status FROM workout_schedule_links WHERE user_id=? AND intervals_external_id=?").bind(db.userId, event.external_id).first();
   if (existing) {
+    // A race leg saved before the race mark existed gets it now (the watch's race card).
+    if (workout.family === "race" && existing.intervals_event_id) {
+      const item = await readPlanned(db, existing.intervals_event_id);
+      if (item && item.event.race !== true) await setPlannedFields(db, item, { race: true });
+    }
     // Saved before (a retry, or added from the library): the time picked now still applies.
     if (startTime && existing.intervals_event_id) {
       const row = await db.prepare("SELECT start_time FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(db.userId, 'planned:' + existing.intervals_event_id).first();

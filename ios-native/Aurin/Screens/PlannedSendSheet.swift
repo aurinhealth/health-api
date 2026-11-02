@@ -135,15 +135,22 @@ struct PlannedSendSheet: View {
         }
     }
 
-    /// The pair this session belongs to, with the other leg's steps.
+    /// The legs this session is joined with (a brick's two, a race's two or
+    /// three), with the other legs' steps.
     private func joined() async {
-        guard let pair = PlanLinks.pair(of: session, in: model.training?.sessions ?? []) else { return }
-        let other = pair.0.id == session.id ? pair.1 : pair.0
-        guard let otherId = other.eventId, let otherWorkout = try? await model.api.plannedWorkout(eventId: otherId).workout else { return }
-        let ordered = pair.0.id == session.id ? [workout, otherWorkout] : [otherWorkout, workout]
-        guard ordered.allSatisfy(WatchWorkout.steady) else { twoWorkouts = true; return }
-        multisport = WatchWorkout.multisport(ordered, title: pair.0.title + " + " + pair.1.title)
-        legs = L10n.f("Jeden trénink: %@", [pair.0, pair.1].map { L10n.tr(Self.sportWord($0.sport)) }.joined(separator: ", "))
+        let chain = PlanLinks.chain(of: session, in: model.training?.sessions ?? [])
+        guard chain.count >= 2 else { return }
+        var ordered: [PlannedWorkout.Workout] = []
+        for leg in chain {
+            if leg.id == session.id { ordered.append(workout); continue }
+            guard let id = leg.eventId, let other = try? await model.api.plannedWorkout(eventId: id).workout else { return }
+            ordered.append(other)
+        }
+        // A race goes as one workout whatever its steps: the watch times each leg and each change.
+        let race = chain.allSatisfy { $0.race == true }
+        guard race || ordered.allSatisfy(WatchWorkout.steady) else { twoWorkouts = true; return }
+        multisport = WatchWorkout.multisport(ordered, title: chain.map(\.title).joined(separator: " + "))
+        legs = L10n.f("Jeden trénink: %@", chain.map { L10n.tr(Self.sportWord($0.sport)) }.joined(separator: ", "))
     }
 
     private static func sportWord(_ sport: String) -> String {
