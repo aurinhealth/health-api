@@ -372,3 +372,12 @@ test('the price block follows the app’s Free and Pro list and says the US pric
   assert.ok(faq.includes(PRO_PRICE.month+' a month')&&faq.includes(PRO_PRICE.year+' a year'),'the FAQ says the same prices');
   assert.ok(html.indexOf('id="cena"')>html.indexOf('id="soukromi"')&&html.indexOf('id="cena"')<html.indexOf('id="faq"'));
 });
+
+// The Terms name what Aurin Pro adds as the app's Settings → Aurin Pro does, in both languages.
+test('the terms say what Aurin Pro adds, its plans and the extra coach messages, in English and Czech',async()=>{
+  const en=await (await termsPage(new Request('https://aurin.health/terms'))).text();
+  const cs=await (await termsPage(new Request('https://aurin.health/cs/terms'))).text();
+  for(const x of ['Aurin Intelligence','adaptive training plans','vitamins and minerals','your own macros and nutrient targets','12-month plan paid monthly','Extra coach messages'])assert.ok(en.includes(x),x);
+  for(const x of ['Aurin Intelligence','adaptivní tréninkové plány','vitamíny a minerály','vlastní makra a cíle živin','12měsíčního tarifu placeného měsíčně','Zprávy koučovi navíc'])assert.ok(cs.includes(x),x);
+  for(const t of [en,cs])assert.doesNotMatch(t,/Aurin Pro, (the coach|tedy kouč)/,'the old short list is gone');
+});
