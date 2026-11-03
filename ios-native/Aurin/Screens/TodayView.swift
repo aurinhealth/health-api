@@ -766,6 +766,10 @@ struct MorningCheckinCard: View {
 struct KeyNumbers: View {
     @Environment(AppModel.self) private var model
     let today: TodaySnapshot
+    /// Narrower than on any iPhone (iPhone Duo, Aurin on a third of the open
+    /// display): tighter cells and the bars without their band's values, which
+    /// would run into each other.
+    @State private var compact = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -777,6 +781,7 @@ struct KeyNumbers: View {
                 RouteLink(route: .metric(.hrv)) { cell("HRV", Fmt.int(today.hrv?.value), "ms", hrv) }
             }
             .fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: Bool.self) { $0.size.width < 300 } action: { compact = $0 }
             if sleepFailed {
                 Divider().overlay(Palette.hairline)
                 PartUnavailableNote(text: "Spánek se teď nepodařilo načíst")
@@ -841,11 +846,11 @@ struct KeyNumbers: View {
             }
             .lineLimit(1).minimumScaleFactor(0.7)
             if let bar = gauge.bar {
-                RangeBar(value: bar.value, low: bar.low, high: bar.high, color: gauge.color, edges: gauge.edges).padding(.vertical, 4)
+                RangeBar(value: bar.value, low: bar.low, high: bar.high, color: gauge.color, edges: compact ? nil : gauge.edges).padding(.vertical, 4)
             }
             Text(gauge.note ?? " ").font(Typo.caption.weight(.medium)).foregroundStyle(gauge.color).lineLimit(1).minimumScaleFactor(0.75)
         }
-        .padding(16)
+        .padding(compact ? 11 : 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)

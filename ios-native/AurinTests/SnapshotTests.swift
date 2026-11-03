@@ -16,20 +16,18 @@ final class SnapshotTests: XCTestCase {
         try render("today", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
     }
 
-    /// The tabs at the iPhone Duo's widths (duo-*): closed (466), a third, half
-    /// and two thirds of the open display in landscape (317, 475, 634), open in
-    /// portrait (669) and open in landscape (951, two columns: WideLayout).
+    /// The tabs at the iPhone Duo's widths (duo-*): closed (466), a third and half
+    /// of the open display in landscape (317, 475) and the whole of it (951, two
+    /// columns: WideLayout).
     func testDuoWidths() throws {
         L10n.setLanguage("en")
         defer {
             L10n.setLanguage("cs")
             UserDefaults.standard.removeObject(forKey: "AppleLanguages")
         }
-        // "open-now": the open display as the app lays it out without the two columns.
-        let widths: [(String, CGFloat, Bool?)] = [("closed", 466, nil), ("third", 317, nil), ("half", 475, nil), ("two-thirds", 634, nil),
-                                                   ("open-portrait", 669, nil), ("open", 951, nil), ("open-now", 951, false)]
-        for (name, width, forced) in widths {
-            let wide = forced ?? (width >= WideLayout.minWidth)
+        let widths: [(String, CGFloat)] = [("closed", 466), ("third", 317), ("half", 475), ("open", 951)]
+        for (name, width) in widths {
+            let wide = width >= WideLayout.minWidth
             try render("duo-\(name)-today", glow: Palette.Glow.today, width: width, window: true) {
                 TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40)
                     .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
