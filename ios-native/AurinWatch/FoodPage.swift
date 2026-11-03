@@ -12,7 +12,7 @@ struct FoodPage: View {
 
     var body: some View {
         Group {
-            if let s = store.snapshot, s.date == WatchStore.localDate(Date()), let food = s.food {
+            if let s = store.snapshot, s.date == WatchStore.localDate(WatchDemo.now), let food = s.food {
                 content(food)
             } else {
                 VStack(spacing: 6) {

@@ -397,7 +397,7 @@ const doneScreen = `<div class="app glow-training">${STATUS}
 <div class="grid3">${[['Time', '47 min', 0, 47, 'min'], ['Calories', '412 kcal', 0, 412, 'kcal'], ['Avg HR', '128 bpm', 0, 128, 'bpm'], ['Sets', '9', 0, 9, ''], ['Volume', '4.2 t', 0, 4.2, 't', '+0.6 t'], ['Max HR', '164 bpm', 0, 164, 'bpm']]
     .map(([k, v, f, t, u, d], i) => `<div><span class="mut s">${k}</span><span class="num tv"><span${n(f, t, 300 + i * 120, 1100, u === 't' ? '1' : 'i')}>${String(t)}</span>${u ? ' ' + u : ''}</span>${d ? `<span class="grn s"${at('1600')}>${d}</span>` : ''}</div>`).join('')}</div>
 <div class="card rec"${at('1900')}><span class="sc amb">${ic('spark')}</span><div><b>New record</b><span class="mut s">Squat 82.5 × 6</span></div></div>
-<div class="card chg"${at('2500')}>${[['Squat', '3 × 80 kg', '+2.5 kg', 'grn'], ['Bench press', '2 × 62.5 kg', '+1 reps', 'grn'], ['Bent-over rows', '2 × 50 kg', '=', 'mut']].map(([a, b, c, k]) => `<div class="li"><div><b>${a}</b><span class="mut s">${b}</span></div><span class="${k} s b">${c}</span></div>`).join('')}</div>
+<div class="card chg"${at('2500')}>${[['Squat', '4 × 80 kg', '+2.5 kg', 'grn'], ['Bench press', '3 × 62.5 kg', '+2.5 kg', 'grn'], ['Rows', '3 × 50 kg', '+2.5 kg', 'grn']].map(([a, b, c, k]) => `<div class="li"><div><b>${a}</b><span class="mut s">${b}</span></div><span class="${k} s b">${c}</span></div>`).join('')}</div>
 <div class="card mf"${at('2800')}><img src="/site/muscles/f00.webp" alt="" width="34" height="53" loading="lazy"><div><b>Muscle fatigue</b><span class="mut s">Quads and glutes rested in 2 days</span></div><span class="mut">${ic('chev')}</span></div>
 <div class="card hk"${at('3400')}><span class="rust">${ic('heart')}</span><b>Saved to Apple Health</b><span class="grn">${ic('check')}</span></div>
 <div class="btn dark big2">${ic('thumb')}Rate</div>
@@ -406,7 +406,7 @@ const doneScreen = `<div class="app glow-training">${STATUS}
 const tmDone = `<div class="dm pad">
 <div class="sent h2">How was the workout?</div>
 <div class="sl">Exercises</div>
-${[['Squat', 1], ['Bench press', 1], ['Bent-over rows', 0]].map(([k, up], i) => `<div class="li"><span>${k}</span><span class="thumbs"><i class="tu${up ? '' : ''}"${up ? at(String(900 + i * 500) + ':on') : ''}>${ic('thumb')}</i><i class="td">${ic('thumb', 'down')}</i></span></div>`).join('')}
+${[['Squat', 1], ['Bench press', 1], ['Rows', 0]].map(([k, up], i) => `<div class="li"><span>${k}</span><span class="thumbs"><i class="tu${up ? '' : ''}"${up ? at(String(900 + i * 500) + ':on') : ''}>${ic('thumb')}</i><i class="td">${ic('thumb', 'down')}</i></span></div>`).join('')}
 <div class="sl">Did the workout’s plan suit you?</div>
 <div class="suit"><span${at('2600:on')}>👍<b>Suited me</b></span><span>😐<b>It’s OK</b></span><span>👎<b>Didn’t suit me</b></span></div>
 </div>`;
@@ -483,7 +483,7 @@ const coachScreen = `<div class="app glow-today chat">${STATUS}
 <div class="act"${at('4400')}>
 <div class="al">${ic('wand')}Schedule · Thu, Oct 8</div>
 <div class="sent an">Strength, full body</div>
-${[['Squat', '3×8 · 80 kg'], ['Bench press', '3×8 · 62.5 kg'], ['Bent-over rows', '3×10 · 50 kg'], ['Romanian deadlift', '3×8 · 70 kg']].map(([a, b]) => `<div class="ar2"><span>${a}</span><span>${b}</span></div>`).join('')}
+${[['Squat', '3×8 · 80 kg'], ['Bench press', '3×8 · 62.5 kg'], ['Rows', '3×10 · 50 kg'], ['Romanian deadlift', '3×8 · 70 kg']].map(([a, b]) => `<div class="ar2"><span>${a}</span><span>${b}</span></div>`).join('')}
 <span class="mut s">+1 more · 1 h</span>
 <div class="ab"${at('6600:gone')}><span class="ok"${at('6200:press 6600-press')}>Confirm</span><span class="no">No</span><i class="br"></i>${['Shorter', 'Longer', 'Easier', 'Harder'].map(x => `<span class="q">${x}</span>`).join('')}<i class="br"></i><span class="q">Another day</span></div>
 <div class="conf"${at('6600')}>${ic('check')}Proposal confirmed.</div>
@@ -554,7 +554,7 @@ const gymRow = ([l, kg, done, cls, when]) => `<div class="w-row${cls}"${when ? a
 <span class="w-f num">${l === '3' ? `<b data-tx="0|80;5200|85">80</b>${tap(2300, 2600)}` : kg}</span><span class="w-f num">8</span><i class="w-rate${l === '1' ? ' w-m">M' : '">'}</i>
 <span class="w-sq">${done ? `<i class="w-ok"${at(String(done))}>${ic('check')}</i>` : ''}</span></div>`;
 const actTraining = `<div class="dm wc w-train">
-<div class="wcard w-gym"${rise(0)}><div class="row sp w-gh"><b>Squat</b><span class="mut s">Exercise 1 of 3</span></div>
+<div class="wcard w-gym"${rise(0)}><div class="row sp w-gh"><b>Squat</b><span class="mut s">Exercise 1 of 5</span></div>
 <div class="w-row w-th"><span>Sets</span><span>Last time</span><span>kg</span><span>Reps</span><i></i><i></i></div>
 ${G_ROWS.map(gymRow).join('\n')}
 <div class="w-go">${ic('check')}Set done${tap(1200, 1500)}</div></div>

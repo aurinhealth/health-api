@@ -22,8 +22,11 @@ flags app pull requests that leave the overview untouched.
   the sample day. Where a screenshot can't show a step, the phone's screen is built there too (strain, the
   planned ride, run, swim and brick, the finished workout, the coach). When a view a demo copies changes in the app, change the demo in the same
   pull request.
-- The Apple Watch section (`WATCH` in `src/site-demos.js`) rebuilds the watch app's screens in HTML, since
-  CI takes no watch screenshots; change it with the watch views.
+- The Apple Watch section (`WATCH` in `src/site-demos.js`) rebuilds the watch app's screens in HTML;
+  change it with the watch views. CI also shoots the watch app on the sample day (`watch/` in English,
+  `watch-cs/` in Czech in the Aurin-screens artifact: the morning, training, food, the gym and its rest,
+  the watch face with Aurin's complications, sleep and strain), to check the HTML against and for the
+  App Store.
 - The hero shows Today; below it one chapter per app area, whose steps take turns on the phone.
 - The muscles show the app's 3D figure, rendered ahead by `scripts/render-muscles-site.mjs` (the licensed
   model never goes on the website). When a screen they show changes, take them again.
