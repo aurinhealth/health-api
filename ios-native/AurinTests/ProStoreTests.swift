@@ -29,22 +29,33 @@ final class ProStoreTests: XCTestCase {
 
     private static var warmedUp = false
 
-    /// On the iOS 27 simulator the first purchase after it boots puts up a system
-    /// "Sign in to Apple Account" alert and never returns, while every purchase
-    /// after it goes straight to the test store (CI's screenshots, 2026-11-02).
-    /// That first purchase is made here and left waiting; the tests buy after it.
+    /// On the iOS 27 simulator every purchase in the first test process after the
+    /// simulator boots stops at a system "Sign in to Apple Account" alert and never
+    /// returns; in the next process they go straight to the test store (CI's
+    /// screenshots, 2026-11-02). ios-native.yml therefore runs one short test
+    /// first, whose process makes this purchase and leaves it waiting. A message
+    /// pack, so a late answer never touches the subscriptions' free week.
     private func warmUp() async throws {
         let session = try await makeSession()
         let store = ProStore()
         await store.load()
-        guard let product = store.products[ProStore.monthlyID] else { return }
+        guard let product = ProStore.packIDs.first.flatMap({ store.products[$0] }) else { return }
         let start = Date()
+        let answer = Answer()
         Task.detached {
             _ = try? await product.purchase()
-            print("ProStoreTests warm-up purchase answered after \(Int(Date().timeIntervalSince(start))) s")
+            await answer.set()
         }
-        try await Task.sleep(for: .seconds(15))
+        for _ in 0..<30 where !answer.done {
+            try await Task.sleep(for: .milliseconds(500))
+        }
+        print("ProStoreTests warm-up purchase after \(String(format: "%.1f", Date().timeIntervalSince(start))) s: \(answer.done ? "answered" : "still waiting")")
         session.clearTransactions()
+    }
+
+    @MainActor private final class Answer {
+        private(set) var done = false
+        func set() { done = true }
     }
 
     /// How long each StoreKit step took, in the CI log, so a slow one is named.

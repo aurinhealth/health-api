@@ -122,11 +122,21 @@ jobs:
           shots=$!
           set -o pipefail
           status=0
-          xcodebuild -project Aurin.xcodeproj -scheme Aurin -configuration Debug \
-            -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
-            -test-timeouts-enabled YES -default-test-execution-time-allowance 300 \
-            -maximum-test-execution-time-allowance 600 \
-            CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/build.log" || status=$?
+          run() {
+            xcodebuild -project Aurin.xcodeproj -scheme Aurin -configuration Debug \
+              -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
+              -test-timeouts-enabled YES -default-test-execution-time-allowance 300 \
+              -maximum-test-execution-time-allowance 600 \
+              CODE_SIGNING_ALLOWED=NO "$@" 2>&1 | tee -a "$RUNNER_TEMP/build.log"
+          }
+          run build-for-testing || status=$?
+          if [ "$status" = 0 ]; then
+            # On iOS 27 every purchase in the first test process after the simulator
+            # boots waits on a "Sign in to Apple Account" alert; one short test takes
+            # that process (ProStoreTests.warmUp), the real run gets the next one.
+            run test-without-building -only-testing:AurinTests/ProStoreTests/testTrialReminderOnDayFive || true
+            run test-without-building || status=$?
+          fi
           kill "$shots" || true
           exit $status
 
