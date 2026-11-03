@@ -43,7 +43,10 @@ final class ProStoreTests: XCTestCase {
         let start = Date()
         let answer = Answer()
         Task.detached {
-            _ = try? await product.purchase()
+            // Finished, so the pack test finds no transaction left open.
+            if case .success(.verified(let transaction)) = try? await product.purchase() {
+                await transaction.finish()
+            }
             await answer.set()
         }
         for _ in 0..<30 where !answer.done {
@@ -87,10 +90,8 @@ final class ProStoreTests: XCTestCase {
         session.resetToDefaultState()
         session.disableDialogs = true
         session.clearTransactions()
-        // On the iOS 27 simulator the first purchase after it boots went to the real
-        // App Store ("Sign in to Apple Account" on screen) and waited forever: the
-        // test store was not answering yet. Its storefront (CZE, Aurin.storekit)
-        // shows when it does; until then the tests wait.
+        // The test store answers with its storefront (CZE, Aurin.storekit); until
+        // then the tests wait.
         var storefront = await Storefront.current?.countryCode
         for _ in 0..<60 where storefront != "CZE" {
             try await Task.sleep(for: .seconds(1))
@@ -98,6 +99,16 @@ final class ProStoreTests: XCTestCase {
         }
         print("ProStoreTests storefront: \(storefront ?? "none")")
         XCTAssertEqual(storefront, "CZE", "StoreKit answers from Aurin.storekit, not the App Store")
+        // On iOS 27 the yearly plan's free week comes back a moment after the
+        // purchases are cleared (an earlier test bought the monthly plan).
+        var eligible = false
+        for _ in 0..<40 {
+            let yearly = try? await Product.products(for: [ProStore.yearlyID]).first
+            eligible = await yearly?.subscription?.isEligibleForIntroOffer ?? false
+            if eligible { break }
+            try await Task.sleep(for: .milliseconds(500))
+        }
+        print("ProStoreTests free week available: \(eligible)")
         return session
     }
 
