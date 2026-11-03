@@ -46,8 +46,9 @@ jobs:
     # only Xcode 27.1 and later build the app full screen on iPhone Duo.
     runs-on: xcode-27
     # On main the run also builds for iPhone and uploads it after the App Store
-    # preview; since the preview it takes over an hour (cancelled at 60 min).
-    timeout-minutes: 90
+    # preview and the iPhone Duo screenshots: about 85 minutes (cancelled at 60
+    # and then 90 min before), so 100.
+    timeout-minutes: 100
     defaults:
       run:
         working-directory: ios-native
@@ -304,9 +305,13 @@ jobs:
 
       # The app on iPhone Duo, Apple's foldable (Xcode 27.1 and later have its
       # simulator): the sample day in English and light mode, each display the
-      # simulator shows (duo/). Not a release check: never fails the run.
+      # simulator shows (duo/). Not a release check: never fails the run, and
+      # never holds it either: on main 2026-11-03 it hung for 28 minutes and the
+      # whole run hit its time limit before Build for iPhone, so no upload.
+      # Booting and seven screens take about 3 minutes.
       - name: Screenshot the app on iPhone Duo
         continue-on-error: true
+        timeout-minutes: 6
         run: |
           xcrun simctl shutdown "${{ steps.sim.outputs.udid }}" || true
           udid=$(xcrun simctl list devices available -j | python3 -c '
