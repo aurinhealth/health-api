@@ -74,17 +74,23 @@ struct TodayContent: View {
                 header
             }
             if wide && !editing {
+                // Petr, 2026-11-03: the three numbers and the coach's advice on the right,
+                // seen without scrolling; the readiness, food and the day on the left.
                 HStack(alignment: .top, spacing: WideLayout.gap) {
-                    VStack(alignment: .leading, spacing: 0) { dayCards }
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                    // One column of widgets: the right half is the column.
-                    board.environment(\.wideLayout, false)
+                    VStack(alignment: .leading, spacing: 0) {
+                        readiness
+                        // One column of widgets: the left half is the column.
+                        board.environment(\.wideLayout, false).padding(.top, 28)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    VStack(alignment: .leading, spacing: 0) { dayNumbers }
                         .padding(.top, 40)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             } else {
                 if !editing {
-                    dayCards
+                    readiness
+                    dayNumbers
                 }
                 board.padding(.top, editing ? 0 : 28)
             }
@@ -113,8 +119,8 @@ struct TodayContent: View {
         }
     }
 
-    /// Readiness, the key numbers, today's workout, weather and the coach.
-    @ViewBuilder private var dayCards: some View {
+    /// Readiness and, in the first two weeks, what fills Today.
+    @ViewBuilder private var readiness: some View {
         RouteLink(route: .readiness) {
             ReadinessHero(readiness: today.readiness, date: today.date, nightMissing: today.sleep == nil, isToday: today.steps.hour != nil)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -138,9 +144,14 @@ struct TodayContent: View {
         if selectedDate == nil && !model.demo {
             FirstDaysCard(today: today, openCoach: openCoach).padding(.top, 20)
         }
+    }
 
+    /// The key numbers, today's workout, weather and the coach. In a wide window
+    /// the coach's advice comes right under the numbers, so both show without scrolling.
+    @ViewBuilder private var dayNumbers: some View {
         KeyNumbers(today: today)
-            .padding(.top, 28)
+            .padding(.top, wide ? 0 : 28)
+        if wide { coachText(top: 12) }
 
         if selectedDate == nil {
             // Today's workout with Start, and the activity of the day when it
@@ -173,11 +184,15 @@ struct TodayContent: View {
                             openCoach: openCoach, top: today.trainingPlan == nil ? 24 : 10)
         }
 
-        // An earlier day shows only its data: the coach speaks about today.
+        if !wide { coachText(top: 32) }
+    }
+
+    /// An earlier day shows only its data: the coach speaks about today.
+    @ViewBuilder private func coachText(top: CGFloat) -> some View {
         if selectedDate == nil {
             CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation,
                           tip: RecoveryTipRows.hasTip(today, selectedDate: selectedDate) ? AnyView(RecoveryTipRows(today: today)) : nil)
-                .padding(.top, 32)
+                .padding(.top, top)
         }
     }
 }
