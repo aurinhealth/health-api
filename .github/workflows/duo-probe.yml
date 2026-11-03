@@ -1,5 +1,5 @@
-# Temporary: the app on the iPhone Duo simulator closed and open, for the
-# Duo layout mockups. Builds only the app (no tests).
+# Temporary: the tabs drawn at the iPhone Duo's widths (SnapshotTests.testDuoWidths)
+# for the Duo layout mockups. Runs only that test.
 name: Duo probe
 on:
   push:
@@ -34,45 +34,20 @@ jobs:
         env:
           APPLE_TEAM_ID: SIMULATOR
         run: brew install xcodegen && xcodegen generate
-      - name: Build and shoot
+      - name: Render
+        env:
+          TEST_RUNNER_SNAPSHOT_DIR: ${{ github.workspace }}/duo
         run: |
           udid=$(xcrun simctl list devices available -j | python3 -c '
           import json, sys
           d = json.load(sys.stdin)["devices"]
-          print(next(x["udid"] for r in d for x in d[r] if "Duo" in x["name"]))')
-          xcodebuild -project Aurin.xcodeproj -scheme Aurin -configuration Debug \
-            -destination "id=$udid" -derivedDataPath build CODE_SIGNING_ALLOWED=NO build -quiet
-          out="$GITHUB_WORKSPACE/duo"; mkdir -p "$out"
-          xcrun simctl boot "$udid" || true
-          xcrun simctl bootstatus "$udid" -b >/dev/null
-          xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/Aurin.app
-          xcrun simctl ui "$udid" appearance light
-          xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
-          go() { xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo "$@" -AppleLanguages "(en)" -AppleLocale en_US -language en >/dev/null; sleep 7; }
-          shoot() { # $1 state, $2 display
-            for s in "-tab today" "-tab training" "-tab health" "-tab food" "-open readiness" "-open gym/2026-10-08"; do
-              name=$(echo "$s" | sed -E 's/^-(tab|open) //; s#/.*##')
-              go $s
-              xcrun simctl io "$udid" screenshot --display="$2" "$out/$1-$name.png" || true
-            done
-          }
-          state() { xcrun simctl io "$udid" enumerate | grep -E "Default width|Default height|Power state" | paste - - - || true; }
-          echo "== closed"; state
-          shoot closed 1
-          echo "== open: outer display off, inner on"
-          xcrun simctl io "$udid" screenConfig --display=1 power off 2>&1 || true
-          xcrun simctl io "$udid" screenConfig --display=3 power on 2>&1 || true
-          sleep 5; state
-          xcrun simctl io "$udid" screenshot --display=3 "$out/open-home.png" 2>&1 || true
-          shoot open 3
-          echo "== half: inner display at half width"
-          for g in 1002x2853@3 1002x2853 2853x1002@3; do
-            echo "-- geometry $g"; xcrun simctl io "$udid" screenConfig --display=3 geometry "$g" 2>&1 || true
-          done
-          sleep 5; state
-          go -tab today
-          xcrun simctl io "$udid" screenshot --display=3 "$out/half-today.png" 2>&1 || true
-          ls -la "$out"
+          print(next(x["udid"] for r in ["com.apple.CoreSimulator.SimRuntime.iOS-27-0"] for x in d.get(r, []) if x["name"] == "iPhone 17 Pro"))')
+          mkdir -p "$TEST_RUNNER_SNAPSHOT_DIR"
+          set -o pipefail
+          xcodebuild -project Aurin.xcodeproj -scheme Aurin -configuration Debug -destination "id=$udid" -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO -only-testing:AurinTests/SnapshotTests/testDuoWidths test 2>&1 \
+            | grep -E "error:|warning: .*(WideLayout|WidgetBoard|TodayView|RootView)|Test Case|Executed|\*\*" || true
+          ls "$TEST_RUNNER_SNAPSHOT_DIR" | head -80
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: always()
         with:

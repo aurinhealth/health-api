@@ -16,6 +16,39 @@ final class SnapshotTests: XCTestCase {
         try render("today", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
     }
 
+    /// The tabs at the iPhone Duo's widths (duo-*): closed (466), a third, half
+    /// and two thirds of the open display in landscape (317, 475, 634), open in
+    /// portrait (669) and open in landscape (951, two columns: WideLayout).
+    func testDuoWidths() throws {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        // "open-now": the open display as the app lays it out without the two columns.
+        let widths: [(String, CGFloat, Bool?)] = [("closed", 466, nil), ("third", 317, nil), ("half", 475, nil), ("two-thirds", 634, nil),
+                                                   ("open-portrait", 669, nil), ("open", 951, nil), ("open-now", 951, false)]
+        for (name, width, forced) in widths {
+            let wide = forced ?? (width >= WideLayout.minWidth)
+            try render("duo-\(name)-today", glow: Palette.Glow.today, width: width) {
+                TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40)
+                    .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
+            }
+            try render("duo-\(name)-health", glow: Palette.Glow.health, width: width) {
+                NavigationStack { HealthContent(health: DemoData.health) }.padding(.top, 50).padding(.bottom, 40)
+                    .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
+            }
+            try render("duo-\(name)-food", glow: Palette.Glow.food, width: width) {
+                FoodContent(food: DemoData.food).padding(.top, 50).padding(.bottom, 40)
+                    .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
+            }
+            try render("duo-\(name)-training", glow: Palette.Glow.training, width: width) {
+                TrainingContent(training: DemoData.training).padding(.top, 50).padding(.bottom, 40)
+                    .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
+            }
+        }
+    }
+
     func testRecoveryTimeDays() {
         // Days only, never a clock time; after 22:00 it counts for the next morning.
         var parts = DateComponents(year: 2026, month: 10, day: 15, hour: 23, minute: 30)

@@ -65,24 +65,43 @@ struct TodayContent: View {
     @Environment(\.dayPage) private var page
     private var selectedDate: String? { page.map(\.selectedDate) ?? model.selectedDate }
 
+    /// iPhone Duo open: the day's cards on the left, the widgets on the right (WideLayout).
+    @Environment(\.wideLayout) private var wide
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if !editing {
                 header
             }
-
-            WidgetBoard(panel: .today,
-                        data: WidgetData(panel: .today, today: today, health: page.map(\.health) ?? model.health, training: model.training, food: page.map(\.food) ?? model.food),
-                        editing: $editing,
-                        editTitle: "Upravit přehled")
-                .padding(.top, editing ? 0 : 28)
+            if wide && !editing {
+                HStack(alignment: .top, spacing: WideLayout.gap) {
+                    VStack(alignment: .leading, spacing: 0) { dayCards }
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                    // One column of widgets: the right half is the column.
+                    board.environment(\.wideLayout, false)
+                        .padding(.top, 40)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+            } else {
+                if !editing {
+                    dayCards
+                }
+                board.padding(.top, editing ? 0 : 28)
+            }
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
         .daySwipe(date: today.date, enabled: !editing) { page in page.today.map { AnyView(TodayContent(today: $0)) } }
     }
 
-    /// Everything above the widgets: the day, readiness, weather and the coach.
+    private var board: some View {
+        WidgetBoard(panel: .today,
+                    data: WidgetData(panel: .today, today: today, health: page.map(\.health) ?? model.health, training: model.training, food: page.map(\.food) ?? model.food),
+                    editing: $editing,
+                    editTitle: "Upravit přehled")
+    }
+
+    /// The month, the week and the data's state, across the whole width.
     @ViewBuilder private var header: some View {
         // B3 (Petr, 2026-10-15): the month as the title and the week below it.
         TabHeader(date: today.date, share: openShare, coach: openCoach, settings: openSettings)
@@ -92,7 +111,10 @@ struct TodayContent: View {
             DataAgePill()
             ConnectionProblemCard()
         }
+    }
 
+    /// Readiness, the key numbers, today's workout, weather and the coach.
+    @ViewBuilder private var dayCards: some View {
         RouteLink(route: .readiness) {
             ReadinessHero(readiness: today.readiness, date: today.date, nightMissing: today.sleep == nil, isToday: today.steps.hour != nil)
                 .frame(maxWidth: .infinity, alignment: .leading)
