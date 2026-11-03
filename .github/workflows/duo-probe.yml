@@ -41,7 +41,8 @@ jobs:
           udid=$(xcrun simctl list devices available -j | python3 -c '
           import json, sys
           d = json.load(sys.stdin)["devices"]
-          print(next(x["udid"] for r in ["com.apple.CoreSimulator.SimRuntime.iOS-27-0"] for x in d.get(r, []) if x["name"] == "iPhone 17 Pro"))')
+          phones = [x for r in sorted(d, reverse=True) if "iOS" in r for x in d[r] if x["name"].startswith("iPhone") and "Duo" not in x["name"]]
+          print(phones[0]["udid"])')
           mkdir -p "$TEST_RUNNER_SNAPSHOT_DIR"
           set -o pipefail
           xcodebuild -project Aurin.xcodeproj -scheme Aurin -configuration Debug -destination "id=$udid" -derivedDataPath build \
