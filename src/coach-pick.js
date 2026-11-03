@@ -37,6 +37,9 @@ export function rankOptions({ ride, run, swim = null, mainSport = "general", spo
   const names = KIND_NAMES();
   const lowerTired = (ride?.load?.lowerBodyGymSignals48h || 0) > 0;
   const practised = new Set(sports), main = MAIN[mainSport] || [], trainedToday = today.some(k => k !== "walk");
+  // Without any known sport (a new account, general fitness) the gym and a
+  // run count as done, never the ride (adaptive-week.js fallbackSports).
+  if (!main.length && !["ride", "run", "swim", "strength"].some(k => practised.has(k))) { practised.add("run"); practised.add("strength"); }
   const session = coach => coach?.recommendation?.session || {};
   const endurance = (sport, coach) => {
     const s = session(coach), kind = s.kind || "endurance", minutes = Math.round(Number(s.durationMinutes) || (sport === "swim" ? 40 : sport === "run" ? 45 : 75));
@@ -77,7 +80,15 @@ export function rankOptions({ ride, run, swim = null, mainSport = "general", spo
   }
   // Signs of an oncoming illness (illness-check.js): no sauna, it only adds load.
   if (illness) options.splice(options.findIndex(o => o.kind === "sauna"), 1);
-  options.sort((a, b) => b.score - a.score);
+  // A sport the athlete does (the main one or done in the last 60 days) wins a
+  // tie, and one they never do is never the day's activity while there is one
+  // they do: four declined runs must not turn into a ride for someone who
+  // doesn't ride (Marie, 2026-11-02). It stays in Další možnosti.
+  const SPORT = { ride: "ride", run: "run", swim: "swim", gym: "strength" };
+  const known = o => !SPORT[o.kind] || main.includes(o.kind) || practised.has(SPORT[o.kind]);
+  options.sort((a, b) => b.score - a.score || Number(known(b)) - Number(known(a)));
+  const first = options.findIndex(known);
+  if (first > 0) options.unshift(...options.splice(first, 1));
   const best = options[0];
   // A day off on a bad morning comes with the sauna when it helps.
   if (best.kind === "rest" && status === "red" && !trainedToday && !illness) { best.title = L("Volno a sauna", "Day off and sauna"); best.detail = L("Procházka · sauna 3 × 12 min", "A walk · sauna 3 × 12 min"); best.lines = [[L("Procházka", "Walk"), "30 min"], [L("Sauna", "Sauna"), L("3 × 12 min", "3 × 12 min")]]; }

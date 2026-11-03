@@ -154,6 +154,18 @@ export function ownBrick(x, bricks, start, split = null) {
   const minutes = split?.brick?.minutes || BRICK_MINUTES;
   return { ...x, brick: true, role: 'recovery', label: L('Běh po kole', 'Brick run'), minutes, maxMinutes: minutes, tss: Math.round((x.tss || 0) * minutes / (x.minutes || minutes)) };
 }
+// Sports for a week without recent sessions: the ones the athlete did
+// regularly in the last year (focus.regular, training-history.js), else the
+// main sport with the gym. Nobody gets a ride they never do: general fitness
+// and the gym without any history get the gym and a run (Petr 2026-11-03).
+const MAIN_KIND = { cycling: 'ride', running: 'run', swimming: 'swim', strength: 'gym' };
+export function fallbackSports(focus = null) {
+  const regular = [...new Set((Array.isArray(focus?.regular) ? focus.regular : []).map(k => k === 'strength' ? 'gym' : k).filter(k => ['ride', 'run', 'swim', 'gym'].includes(k)))];
+  const main = MAIN_KIND[focus?.sport];
+  if (regular.length) return main ? [main, ...regular.filter(k => k !== main)] : regular;
+  if (main === 'ride' || main === 'run' || main === 'swim') return [main, 'gym'];
+  return ['gym', 'run'];
+}
 export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null, history: suppliedHistory = null, split = null }) {
   const days = prefs.days.map(d => [...d]);
   if (days.some(d => d.length)) return { ...prefs, days };
@@ -163,9 +175,9 @@ export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null,
   for (const d of history) for (const a of d.daily?.training?.completed || []) if(sportOf(a))frequency[sportOf(a)]++;
   const count = prefs.weeklyActivities ?? activityHistoryEstimate(history,reference).count;
   const existing = (week.days || []).filter(d => d.date >= start && d.date <= shift(start, 6)).reduce((n, d) => n + sessionsOn(d).length, 0);
-  const primary = focus?.sport === 'running' ? 'run' : focus?.sport === 'swimming' ? 'swim' : focus?.sport === 'strength' ? 'gym' : 'ride';
   const sports = Object.keys(frequency).filter(s=>frequency[s]>0).sort((a, b) => frequency[b] - frequency[a]);
-  if (!sports.length) sports.push(primary,...(primary === 'gym' ? ['ride'] : ['gym']));
+  if (!sports.length) sports.push(...fallbackSports(focus));
+  const primary = sports[0];
   const selected={ride:0,run:0,swim:0,gym:0};
   // A triathlete: the split's counts; the brick's run is added after, on a ride day.
   const wanted = split ? { ...split.sessions, run: Math.max(0, (split.sessions.run || 0) - (split.brick ? 1 : 0)), gym: frequency.gym > 0 && count >= 8 ? 1 : 0 } : null;

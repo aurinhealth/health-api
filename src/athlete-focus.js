@@ -70,6 +70,8 @@ export function athleteFocus(profile, today) {
   return {
     sport: f.mainSport || null, sportLabel: SPORTS[f.mainSport] ? L(SPORTS[f.mainSport].label, SPORT_LABEL_EN[f.mainSport]) : null,
     goal: f.sportGoal || null,
+    // Sports done regularly in the last year (effectiveProfile), none when unknown.
+    ...(Array.isArray(profile?.regularSports) && profile.regularSports.length ? { regular: profile.regularSports.filter(k => typeof k === "string").slice(0, 4) } : {}),
     ...(f.swims100 === false && ["swimming", "triathlon"].includes(f.mainSport) ? { cannotSwim100m: true } : {}),
     event: (f.eventName || f.eventDate) && (daysLeft == null || daysLeft >= 0) ? { name: f.eventName || null, date: f.eventDate || null, daysLeft } : null
   };

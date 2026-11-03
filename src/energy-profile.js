@@ -229,6 +229,9 @@ export function effectiveProfile(saved, suggested) {
   // A sport set to "auto" comes from the main race or the goal, else from the
   // last year of training; empty weekly hours from the recent activities.
   const history = suggested?.trainingHistory;
+  // The sports done regularly in the last year (training-history.js), so a
+  // week without recent sessions keeps to them (adaptive-week.js fallbackSports).
+  if (Array.isArray(history?.regularSports) && history.regularSports.length) profile.regularSports = history.regularSports.slice(0, 4);
   // A race that is over no longer decides (athleteFocus drops it too).
   const raceAhead = !profile.eventDate || profile.eventDate >= localToday();
   if (profile.mainSport === "auto") profile.mainSport = (raceAhead ? sportFromText(profile.eventName) : null) ?? sportFromText(profile.sportGoal)
