@@ -162,18 +162,11 @@ final class ProStoreTests: XCTestCase {
         // The pack bought here is finished. Another product still open is what an
         // earlier test left (CI, 3 Nov: one open transaction after the monthly test),
         // so it is named in the log, not counted.
-        // StoreKit's test session can list the pack as unfinished for a moment
-        // after finish() (CI, 3 Nov: 1 instead of 0), so it is read again for up to 3 s.
         var unfinished = 0
-        for attempt in 0..<30 {
-            unfinished = 0
-            for await result in Transaction.unfinished {
-                let transaction = result.unsafePayloadValue
-                if transaction.productID == "health.aurin.app.coach.messages100" { unfinished += 1 }
-                else if attempt == 0 { print("ProStoreTests open transaction left by another test: \(transaction.productID), bought \(transaction.purchaseDate)") }
-            }
-            if unfinished == 0 { break }
-            try await Task.sleep(nanoseconds: 100_000_000)
+        for await result in Transaction.unfinished {
+            let transaction = result.unsafePayloadValue
+            if transaction.productID == "health.aurin.app.coach.messages100" { unfinished += 1 }
+            else { print("ProStoreTests open transaction left by another test: \(transaction.productID), bought \(transaction.purchaseDate)") }
         }
         XCTAssertEqual(unfinished, 0, "the bought pack is finished")
         _ = session
