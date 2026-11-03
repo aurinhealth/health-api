@@ -1,7 +1,7 @@
 // Vitamins and minerals per 100 g for the world food catalogue
 // (src/world-foods.js), from the open composition tables the catalogue's
 // generic foods come from, plus estimates for single-ingredient products:
-//   node scripts/build-micronutrients.mjs <work-dir> <out-dir> [--upload] [--bucket name] [--version v]
+//   node scripts/build-micronutrients.mjs <work-dir> <out-dir> [--upload] [--bucket name] [--version v] [--catalogue <built version dir>]
 // Needs network access to the publishers and R2 (wrangler signed in, or
 // CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID), so it runs in
 // .github/workflows/food-micros.yml. The catalogue has only macros, so:
@@ -477,6 +477,13 @@ export async function fetchCatalogue(dir, bucket, log = console.log) {
   for (const f of meta.files) { const t0 = Date.now(); get(f); log(`  ${f}: ${(statSync(join(vdir, f)).size / 1048576).toFixed(0)} MB in ${((Date.now() - t0) / 1000).toFixed(0)} s`); }
   return { version: current.version, dir: vdir, meta, shards };
 }
+// A version already on disk (the catalogue refresh has just built it).
+export function localCatalogue(vdir, log = console.log) {
+  const meta = JSON.parse(readFileSync(join(vdir, 'meta.json'), 'utf8'));
+  if (meta.format !== WORLD_FOODS_FORMAT) throw new Error(`Catalogue format ${meta.format}, expected ${WORLD_FOODS_FORMAT}`);
+  log(`catalogue ${meta.version} (local): ${JSON.stringify(meta.counts)}`);
+  return { version: meta.version, dir: vdir, meta, shards: NAME_SHARDS.filter(s => existsSync(join(vdir, 'names', `${s}.json`))) };
+}
 // Every record of every name node and barcode bucket (gzip members located by
 // the indexes; a record repeats across name nodes).
 export function* catalogueRecords({ dir, shards }) {
@@ -651,15 +658,16 @@ if (process.argv[1]?.endsWith('build-micronutrients.mjs')) {
   const doUpload = args.includes('--upload'); if (doUpload) args.splice(args.indexOf('--upload'), 1);
   const bucket = flag('--bucket') || 'aurin-food-catalog';
   const version = flag('--version') || new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const localDir = flag('--catalogue');
   const [work, outDir] = args;
-  if (!work || !outDir) { console.error('Usage: node scripts/build-micronutrients.mjs <work-dir> <out-dir> [--upload] [--bucket name] [--version v]'); process.exit(2); }
+  if (!work || !outDir) { console.error('Usage: node scripts/build-micronutrients.mjs <work-dir> <out-dir> [--upload] [--bucket name] [--version v] [--catalogue <built version dir>]'); process.exit(2); }
   const t0 = Date.now(), log = (...a) => console.log(`[${((Date.now() - t0) / 1000).toFixed(0)}s]`, ...a);
   try {
     const { tables, used, errors, unavailable } = await loadTables(join(work, 'sources'), log);
     // Fail before the long catalogue download when a table or reference is missing.
     const early = [...errors, ...findRefs(tables).missing];
     if (early.length) throw new Error(`Build failed:\n${early.join('\n')}`);
-    const cat = await fetchCatalogue(join(work, 'catalogue'), bucket, log);
+    const cat = localDir ? localCatalogue(localDir, log) : await fetchCatalogue(join(work, 'catalogue'), bucket, log);
     let result;
     try { result = compute({ tables, records: catalogueRecords(cat), log }); } catch (e) { errors.push(e.message); }
     if (errors.length) throw new Error(`Build failed:\n${errors.join('\n')}`);

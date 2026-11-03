@@ -115,17 +115,21 @@ wide (60-70 characters). Headlines are one short sentence that ends with a full 
   you slept.*" (the last words in green italic) on the left, the app's Today on the right with up to three glass
   numbers, all over the sunrise tint.
 - Under the hero, **one morning** says the sample day as a sentence, its numbers set as tinted chips.
-- The page goes through the app in the welcome's order: **Readiness, Training, Nutrition, Sleep, Coach**. Each
-  part opens with the welcome's page: the title alone as the headline, the welcome's line in Newsreader, and
-  the welcome's cards (`ACTS` in `site-demos.js`) on the tinted glow. Its chapters follow; the first has no
-  eyebrow, since the part's title says it. While the reader is inside the parts, a pill at the bottom of the
-  window shows the part's name and the welcome's line of dots, the current one glowing.
+- The page goes through the app: **Readiness, Sleep, Training, Nutrition, Coach, Apple Watch**. Each part opens
+  with the welcome's page: the title alone as the headline, the welcome's line in Newsreader, and the welcome's
+  cards (`ACTS` in `site-demos.js`) on the tinted glow. Its chapters follow; the first has no eyebrow, since the
+  part's title says it. On phones the part's opening is only its title, set as the eyebrow of its first
+  chapter, so the page stays short. While the reader is inside the parts, a pill at the bottom of the window
+  shows the part's name and the welcome's line of dots, the current one glowing.
+- Keep the page short: one chapter per area, at most six steps in a chapter (Training has one step per sport,
+  the gym chapter runs from the builder to the finished workout), five on the watch. On phones the 3D muscles
+  give way to a step of the gym chapter with the app's screen.
 - A part of the app is a **chapter**: the words and the steps on one side, the phone with its glow on the
   other, sides alternating. Each step shows its own screen and lifts a piece of it beside the phone; steps
   take turns while the chapter is in view (a thin bar fills under the active step) until one is picked. On
   phones it stacks: headline, phone, steps.
-- Vary the rhythm: the Works with row under the hero (the services' names in one row, Google Health as its colour
-  logo), chapters, the muscle figure (split, figure on the right), the privacy promise (the welcome's lock, centred), questions (heading left, answers right). The privacy
+- Vary the rhythm: the Works with row right under the form (the watches and rings as plain names in one row),
+  chapters, the muscle figure (split, figure on the right), the privacy promise (the welcome's lock, centred), questions (heading left, answers right). The privacy
   promise and the final call to action are centred.
 - Never a row of three identical feature cards.
 

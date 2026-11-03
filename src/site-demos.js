@@ -55,6 +55,7 @@ const P = {
   menu: '<path d="M6 8h12M6 12h12M6 16h12"/>',
   pause: '<path d="M9 6v12M15 6v12"/>',
   flag: '<path d="M6 21V4M6 4h11l-2 4 2 4H6"/>',
+  swim: '<circle cx="16.5" cy="6" r="1.8" fill="currentColor" stroke="none"/><path d="M5 12.5l4.5-3 3 2.5 3-2M3 17c1.5 1 3 1 4.5 0s3-1 4.5 0 3 1 4.5 0 3-1 4.5 0"/>',
 };
 const ic = (name, cls = '') => `<svg class="di${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true">${P[name]}</svg>`;
 const at = spec => ` data-at="${spec}"`;
@@ -212,6 +213,59 @@ const week = `<div class="dm pad wk">
 <div class="ar"><span class="ci ok">${ic('run')}</span><div><b>Morning run</b><span class="src">${logo('apple')}Apple Health</span><span class="mut s">Run · 7:30 AM · 42 min · 8.2 km</span>${pct(98)}</div><span class="num">520<small>kcal</small></span></div>
 <div class="ar"><span class="ci up"${at('1400:done')}>${ic('gym')}</span><div><b>Strength, full body</b><span class="src"${at('2200')}>${AURIN}Aurin, Apple Watch</span><span class="mut s" data-tx="0|Planned · 5:30 PM · 45 min;1400|Strength · 5:30 PM · 47 min">Planned · 5:30 PM · 45 min</span>${pct(94, at('2200'))}</div><span class="num"${at('2200')}>320<small>kcal</small></span></div>
 </div></div>`;
+
+// ---- A plan for each sport (EnduranceWorkouts.swift, WorkoutProfile.swift, PlannedSendSheet.swift) ----
+// The phone shows one planned workout per sport as its detail does: the day, the goal, the numbers, the blocks
+// over time (the width the minutes, the height the intensity, the colour its zone, as WorkoutProfile draws
+// them) and the steps. Beside it: where Aurin sends it, only places the app really sends to.
+const ZONE = p => p < 56 ? 'z1' : p < 76 ? 'z2' : p < 91 ? 'z3' : p < 106 ? 'z4' : 'z5';
+// A swim's % of CSS is stretched to the bike's scale, as WorkoutProfile.shown does.
+const shownPct = (p, swim) => swim ? Math.max(5, 100 + (p - 100) * 2.5) : p;
+const profile = (blocks, swim, legs) => {
+  const total = blocks.reduce((t, [m]) => t + m, 0);
+  return `<div class="wpf">${blocks.map(([m, p, gap], i) => `<b class="${ZONE(shownPct(p, swim))}${gap ? ' leg' : ''}" style="flex:${m};height:${Math.min(100, shownPct(p, swim) / 1.2).toFixed(0)}%"${at(String(300 + Math.round(i * 900 / blocks.length)))}></b>`).join('')}</div>
+<div class="wpa">${legs || `<span>0</span><span>${total >= 60 ? `${Math.floor(total / 60)} h ${String(total % 60).padStart(2, '0')}` : `${total} min`}</span>`}</div>`;
+};
+const planScreen = ({icon, day, title, goal, stats, blocks, swim, legs, steps}) => `<div class="app glow-training">${STATUS}
+<div class="nav c"><span class="cb">${ic('chev', 'flip')}</span><span class="pill grn">${ic('spark')}Coach</span></div>
+<div class="sl">${day}</div>
+<div class="sent title wpt"><span class="ci ok">${ic(icon)}</span>${title}</div>
+<div class="mut">${goal}</div>
+<div class="grid3">${stats.map(([k, v]) => `<div><span class="mut s">${k}</span><span class="num tv">${v}</span></div>`).join('')}</div>
+<div class="card wp">${profile(blocks, swim, legs)}</div>
+<div class="card rows">${steps.map(([a, b]) => `<div class="li"><b>${a}</b><span class="mut s">${b}</span></div>`).join('')}</div>
+<div class="btn dark big2">${ic('up')}Send</div>
+</div>`;
+const sendCard = (rows, files) => `<div class="dm pad sendto">
+<div class="sl">Send to</div>
+${rows.map(([name, sub, done], i) => `<div class="li"><div><b>${name}</b><span class="mut s">${sub}</span></div>${done
+    ? `<span class="sent-ok"${at(`${700 + i * 600}:on`)}>${ic('check')}<span data-tx="0|Send;${700 + i * 600}|Sent">Sent</span></span>`
+    : `<span class="add"${at(`${700 + i * 600}:on`)}>Add</span>`}</div>`).join('')}
+${files ? `<div class="sl">Export to</div><div class="row gap">${files.map(f => `<span class="fchip">${f}</span>`).join('')}</div>` : ''}
+</div>`;
+const PLANS = {
+  ride: {icon: 'bike', day: 'Saturday · 8:00 AM', title: 'Long ride', goal: 'Gran fondo · 6 weeks to go',
+    stats: [['Time', '3 h 30'], ['Load', '176 TSS'], ['Calories', '2,240']],
+    blocks: [[15, 55], [40, 70], [20, 85], [10, 60], [40, 70], [20, 85], [10, 60], [45, 70], [10, 50]],
+    steps: [['Warm-up', '15 min · 55 % FTP'], ['Endurance', '3 × 40 min · 70 % FTP'], ['Tempo', '2 × 20 min · 85 % FTP'], ['Cool-down', '10 min · 50 % FTP']]},
+  run: {icon: 'run', day: 'Sunday · 9:00 AM', title: 'Long run', goal: 'Marathon · 10 weeks to go',
+    stats: [['Time', '1 h 50'], ['Distance', '20 km'], ['Load', '114 TSS']],
+    blocks: [[10, 65], [70, 78], [20, 88], [10, 65]],
+    steps: [['Warm-up', '10 min · easy'], ['Steady', '70 min · 78 % threshold'], ['Marathon pace', '20 min · 88 % threshold'], ['Cool-down', '10 min · easy']]},
+  swim: {icon: 'swim', day: 'Tuesday · 6:30 AM', title: 'CSS intervals', goal: 'Faster swim · CSS 1:45 /100 m', swim: true,
+    stats: [['Distance', '1,500 m'], ['Time', '32 min'], ['Pool', '25 m']],
+    blocks: [[8, 80], ...Array.from({length: 8}, () => [[1.75, 100], [.25, 0]]).flat(), [6, 80]],
+    steps: [['Warm-up', '400 m · easy'], ['Main set', '8 × 100 m at CSS · 15 s rest'], ['Cool-down', '300 m · easy']]},
+  brick: {icon: 'bike', day: 'Saturday · 8:00 AM', title: 'Brick', goal: 'Olympic triathlon · 8 weeks to go',
+    stats: [['Time', '1 h 35'], ['Load', '98 TSS'], ['Legs', '2']],
+    blocks: [[10, 55], [55, 80], [10, 60], [20, 86, 1]],
+    legs: '<span>Ride · 1 h 15</span><span>Run · 20 min</span>',
+    steps: [['Ride', '1 h 15 · 55 min at 80 % FTP'], ['Run straight after', '20 min · 86 % threshold']]}};
+const plan = Object.fromEntries(Object.entries(PLANS).map(([k, v]) => [k, planScreen(v)]));
+const sendRide = sendCard([['Wahoo', 'Planned workouts', 1], ['Intervals.icu', 'In your calendar', 1], ['Apple Watch', 'Workout app']], ['.zwo', '.fit']);
+const sendRun = sendCard([['Apple Watch', 'Workout app'], ['Intervals.icu', 'In your calendar', 1], ['Wahoo', 'Planned workouts', 1]], ['.zwo', '.fit']);
+const sendSwim = sendCard([['Apple Watch', 'Pool · 25 m'], ['Intervals.icu', 'In your calendar', 1]], ['.fit']);
+const sendBrick = sendCard([['Apple Watch · multisport', 'Ride + run as one workout']]);
 
 // ---- Gym (GymTools.swift GymBuilderView, GymDayParts.swift GymPartsCard) ----
 const seg = (opts, from, to, t) => `<div class="seg">${opts.map((o, i) => `<span${i === from ? ' class="on"' : ''}${i === from && to !== from ? at(`${t}-on`) : ''}${i === to && to !== from ? at(`${t}:on`) : ''}>${o}</span>`).join('')}</div>`;
@@ -559,13 +613,6 @@ const watchGym = `<div class="aw-s" style="--gw:#3A2A17">${wTop(wBtn('pause', WA
 <div class="aw-done">Set done</div>
 <div class="aw-two aw-tiles"><div><span class="aw-k">Time</span><b>12:40</b></div><div><span class="aw-k">Heart</span><b style="color:${WA.red}">128 <small>bpm</small></b></div></div>
 <div class="aw-two aw-tiles"><div><span class="aw-k">Volume</span><b style="color:${WA.indigo}">1.9 <small>t</small></b></div><div><span class="aw-k">Calories</span><b style="color:${WA.amber}">86 <small>kcal</small></b></div></div></div>`;
-// The rest (GymSessionView.rest): the countdown beside the next set with the workout's time and heart rate,
-// how the set just done went (the next weight follows it), −15 s, Skip and +15 s under it; the coach in the corner the pause takes during a set.
-const watchRest = `<div class="aw-s" style="--gw:#3A2A17">${wTop(wBtn('chat', WA.amber), '5:42', `<span class="aw-ib">${ic('menu')}</span>`)}
-<div class="aw-rrow"><span class="aw-rr"><svg viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="25.5" stroke="#2A2C2E" stroke-width="5"/><circle cx="28" cy="28" r="25.5" stroke="${WA.amber}" stroke-width="5" stroke-linecap="round" pathLength="100" stroke-dasharray="56 100" transform="rotate(-90 28 28)"/></svg><span class="aw-n">1:24</span></span>
-<div><span class="aw-k">Next · Squat</span><b class="aw-nx">80 kg × 8</b><span class="aw-live">12:58 <span style="color:#F59BB0">${ic('heart')} 112</span></span></div></div>
-<div class="aw-rate">${[['Easy', WA.green], ['Medium', WA.amber, 1], ['Hard', '#F0907A'], ['Failure', '#FF6B5B']].map(([k, c, on]) => `<span style="${on ? `background:${c};color:#000` : `color:${c}`}">${k}</span>`).join('')}</div>
-<div class="aw-btns"><span>−15 s</span><span>Skip</span><span>+15 s</span></div></div>`;
 const watchFood = `<div class="aw-s" style="--gw:#163047">${wTop('', '12:20', '')}
 <div class="aw-food">${wRing(70, 29, 7, .52, WA.amber, `<span class="aw-in"><span class="aw-n">1,380</span><small>OF 2,650</small></span>`)}<div><b style="color:${WA.amber}">Food</b><span class="aw-news">1,270 kcal left</span><span class="aw-k">lunch logged 12:30</span></div></div>
 <div class="aw-mac">${[['Carbs', 177, 330, '#FFC274'], ['Protein', 84, 150, '#83C7FF'], ['Fat', 36, 80, '#B3A1FF']].map(([k, v, t, c]) => `<div><b style="color:${c}">${k}</b>${v}/${t} g<i><b style="width:${Math.round(v / t * 100)}%;background:${c}"></b></i></div>`).join('')}</div>
@@ -585,14 +632,6 @@ const watchFace = `<div class="aw-s aw-face"><div class="aw-frow">${wArc(.35, WA
 <div class="aw-day">${[['READY', '78', WA.green, .78], ['SLEEP', '7:12', WA.amber, .76, [7, 9]], ['STRAIN', '8.4', WA.amber, .53, [6, 9]]].map(([k, v, c, f, g]) => `<div><span style="color:${c}">${k}</span><b>${v}</b>${wSteps(f, c, g)}</div>`).join('')}</div>
 <div class="aw-frow aw-fbot">${wArc(.52, '#FFC274', '1380', 'KCAL')}${wArc(.56, '#83C7FF', '84', 'PROTEIN')}${wArc(.84, WA.indigo, '6:30', 'ALARM')}</div></div>`;
 
-// The warm-up on the watch (GymPartView): move by move with a countdown each, Next and Skip all, the
-// workout's time and heart rate under it; the cardio and the stretching run the same way.
-const watchWarmup = `<div class="aw-s" style="--gw:#163A2E">${wTop(wBtn('pause', WA.ink), '6:06', `<span class="aw-ib">${ic('menu')}</span>`)}
-<div class="aw-lbl" style="color:${WA.green}">WARM-UP · 2/5</div><b class="aw-pt">Arm circles</b>
-<div class="aw-rrow aw-prow"><span class="aw-rr"><svg viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="25.5" stroke="#2A2C2E" stroke-width="5"/><circle cx="28" cy="28" r="25.5" stroke="${WA.green}" stroke-width="5" stroke-linecap="round" pathLength="100" stroke-dasharray="60 100" transform="rotate(-90 28 28)"/></svg><span class="aw-n">18</span></span>
-<div class="aw-pb"><span class="aw-done">Next</span><span>Skip all</span></div></div>
-<div class="aw-two aw-tiles"><div><span class="aw-k">Time</span><b>6:10</b></div><div><span class="aw-k">Heart</span><b style="color:${WA.red}">104 <small>bpm</small></b></div></div></div>`;
-
 // Race day (TrainingPage.raceCard, RaceDay.swift): a training plan's duathlon as one card, its legs in race
 // order with their distance and time, and one start for the whole race.
 const watchRace = `<div class="aw-s" style="--gw:#3A2A17">${wTop('', '8:31', '')}
@@ -602,9 +641,7 @@ ${[['run', '5 km', '24 min', WA.red], ['bike', '20 km', '33 min', WA.amber], ['r
 
 export const WATCH = [
   ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness, sleep, strain and HRV, as on Today, and what’s next today in one line.', watchHome],
-  ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown, last time’s set under the exercise and its technique a tap away. Leave the iPhone in your locker: the watch keeps your sets, swaps a taken machine even without signal, and hands them over later. Your heart rate and calories go into the same workout. Nothing planned? Repeat your last workout or build one for your rested muscles right on the watch.', watchGym],
-  ['glow-training', 'Rest, then a tap.', 'The rest counts down on the wrist and taps you when it’s time, with the next set ready.', watchRest],
-  ['glow-training', 'Warm up and cool down too.', 'Cardio, the warm-up and the stretching run on the wrist with the sets: a countdown for each move, or a stopwatch on the bike. Switch them on or off and move them before or after your exercises, and your iPhone gets the same plan.', watchWarmup],
+  ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown, and the rest counts down and taps you when it’s time. Leave the iPhone in your locker: the watch keeps your sets, even without signal, and hands them over later. Nothing planned? Build a workout for your rested muscles right on the watch.', watchGym],
   ['glow-training', 'Race day, one tap.', 'A duathlon, aquabike, aquathlon or triathlon from your plan shows as one card, its legs in race order, and starts as one multisport workout: the watch times each leg and each change. Tap it for each leg’s target.', watchRace],
   ['glow-health', 'Water in one tap.', 'What’s left to eat today, the macros, and +250 for a glass of water. Your iPhone gets it at once.', watchFood],
   ['glow-health', 'On your watch face.', 'Readiness, sleep and strain against today’s goal, a countdown to your workout, water, food, protein and your alarm sit around the time, so you don’t even open the app.', watchFace]];
@@ -613,8 +650,8 @@ export const WATCH = [
 const actWatch = `<div class="dm wc aw-act"><div class="aw-w">${watchFace}</div></div>`;
 export const ACTS = each({readiness: actReadiness, training: actTraining, food: actFood, sleep: actSleep, coach: actCoach, watch: actWatch});
 
-export const DEMOS = each({sleepNight, sleepNeed, dial, tonight, readyParts, journal, strainMade, week, builder, gymParts, tmTable, tmTick, tmRest, tmDone, foodTarget, foodAdd, drinks, diet, coachWeek, coachMemory, readyOne, tmOne, journalOne, tickOne, sleepOne, needOne, foodOne, cycleOne});
-export const SCREENS = each({strain: strainScreen, done: doneScreen, coach: coachScreen, memory: memoryScreen, cycle: cycleScreen});
+export const DEMOS = each({sendRide, sendRun, sendSwim, sendBrick, sleepNight, sleepNeed, dial, tonight, readyParts, journal, strainMade, week, builder, gymParts, tmTable, tmTick, tmRest, tmDone, foodTarget, foodAdd, drinks, diet, coachWeek, coachMemory, readyOne, tmOne, journalOne, tickOne, sleepOne, needOne, foodOne, cycleOne});
+export const SCREENS = each({ride: plan.ride, run: plan.run, swim: plan.swim, brick: plan.brick, strain: strainScreen, done: doneScreen, coach: coachScreen, memory: memoryScreen, cycle: cycleScreen});
 
 // The demos' look: the app's cards (radius 22), Instrument Serif for numbers, Newsreader for sentences.
 export const demoCss = `
@@ -1078,15 +1115,10 @@ html:not(.js) .stage1{display:none}
 .aw-box.on{background:#16352B;box-shadow:inset 0 0 0 2px #8FE6C4}
 .aw-done{display:grid;place-items:center;height:30px;margin-top:5px;border-radius:17px;background:#F4F2EE;color:#0A0B0C;font-size:14px;font-weight:700}
 .aw-tiles>div{padding:3px 9px;border-radius:11px;background:rgba(255,255,255,.07)}.aw-tiles .aw-k{font-size:10px}.aw-tiles b{display:block;font-size:15px;line-height:1.2}.aw-tiles small{font-size:10px}
-.aw-rrow{display:flex;align-items:center;gap:8px;margin-top:14px}.aw-rr{position:relative;display:grid;place-items:center;flex:none;width:56px;height:56px}.aw-rr svg{position:absolute;inset:0;fill:none}.aw-rr .aw-n{font-size:20px}
-.aw-rrow>div{display:flex;flex-direction:column;min-width:0}.aw-rrow .aw-k{font-size:10px}.aw-nx{font-size:15px}.aw-live{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}.aw-live .di{width:9px;height:9px;fill:currentColor;stroke:none}
-.aw-rate{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:10px}.aw-rate span{display:grid;place-items:center;height:36px;border-radius:12px;background:rgba(255,255,255,.09);font-size:14px;font-weight:600}
-.aw-lbl{margin-top:6px;font-size:11px;font-weight:600;letter-spacing:.04em}.aw-pt{display:block;font-size:16px}.aw-prow{margin-top:8px}.aw-pb{flex:1;gap:5px}.aw-pb .aw-done{margin-top:0}.aw-pb>span:last-child{display:grid;place-items:center;height:30px;border-radius:17px;background:rgba(255,255,255,.12);font-size:14px;font-weight:600}
 .aw-race{margin-top:4px;padding:8px 10px;border-radius:14px;background:rgba(255,255,255,.07)}.aw-rh{display:flex;justify-content:space-between;font-size:10.5px}.aw-rh b{color:#F2B46B}.aw-rh span{color:#9AA39F}
 .aw-rn{display:flex;align-items:center;gap:5px;margin:2px 0 2px;font-size:16px}.aw-rn .di{width:14px;height:14px}
 .aw-leg{display:flex;align-items:center;gap:6px;padding:3.5px 0;font-size:12px;font-weight:500}.aw-leg+.aw-leg{border-top:1px solid rgba(255,255,255,.08)}.aw-leg .di{width:13px;height:13px}.aw-leg i{margin-left:auto;font-style:normal;color:#9AA39F;font-weight:400}
 .aw-go{display:flex;align-items:center;justify-content:center;gap:5px;height:30px;margin-top:6px;border-radius:15px;background:#8FE6C4;color:#000;font-size:13px;font-weight:700}.aw-go .di{width:11px;height:11px}
-.aw-btns{display:flex;gap:4px;margin-top:8px}.aw-btns span{flex:1;display:grid;place-items:center;height:32px;border-radius:16px;background:rgba(255,255,255,.12);font-size:12px;font-weight:600}
 
 .aw-ring{position:relative;display:grid;place-items:center;flex:none}.aw-ring>svg{position:absolute;inset:0;fill:none}
 .aw-in{display:flex;flex-direction:column;align-items:center;line-height:1}.aw-in small{font-size:7.5px;color:#9AA39F;margin-top:2px}
@@ -1116,6 +1148,20 @@ html:not(.js) .stage1{display:none}
 .coach2 .w-wo{gap:12px;padding:12px}.coach2 .w-wo .ib{width:40px;height:40px;border-radius:12px;font-size:21px}.coach2 .w-wo>div{flex:1;display:flex;flex-direction:column}
 .coach2 .w-add{display:inline-flex;align-items:center;height:34px;padding:0 16px;border-radius:99px;background:var(--button);color:var(--on-button);font-size:13px;font-weight:600}
 @media (prefers-reduced-motion:reduce){.opener.on .w-code .w-beam{animation:none}}
+/* A planned workout (WorkoutProfile.swift): its blocks over time, the height the intensity, the colour its zone. */
+.wpt{display:flex;align-items:center;gap:12px}.wpt .ci{flex:none;width:40px;height:40px}
+.app .wp{padding:14px 16px 10px}
+.wpf{display:flex;align-items:flex-end;gap:2px;height:96px}
+.wpf b{display:block;min-width:2px;border-radius:3px 3px 1px 1px}
+.wpf .z1{background:color-mix(in srgb,var(--muted) 45%,transparent)}.wpf .z2{background:var(--blue)}.wpf .z3{background:var(--green)}.wpf .z4{background:var(--amber-bar)}.wpf .z5{background:var(--rust)}
+.wpf .leg{margin-left:8px}
+.wpa{display:flex;justify-content:space-between;margin-top:6px;font-size:11.5px;color:var(--muted)}
+.app .rows .li b{font-size:14.5px}
+/* Where a planned workout goes, as the app's Send to list shows it. */
+.sendto .li{min-height:54px}.sendto .li b{display:block;font-size:14.5px}
+.sent-ok{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:600;color:var(--muted)}.sent-ok .di{width:14px;height:14px;opacity:0;transition:opacity .3s}.sent-ok.on{color:var(--green)}.sent-ok.on .di{opacity:1}
+.sendto .add{display:inline-grid;place-items:center;height:30px;padding:0 14px;border-radius:999px;font-size:13px;font-weight:600;box-shadow:inset 0 0 0 1px var(--line);transition:.3s}.sendto .add.on{background:var(--button);color:var(--on-button);box-shadow:none}
+.fchip{display:inline-grid;place-items:center;height:30px;padding:0 14px;border-radius:999px;background:color-mix(in srgb,var(--text) 7%,transparent);font-size:13px;font-weight:600}
 `;
 
 // The player: AurinDemo.play(el) runs the timeline of every demo inside el from the start, stop(el) clears it,

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync,readdirSync,statSync} from 'node:fs';
 import worker from '../src/entrypoint.js';
-import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME,PARTNERS} from '../src/site-pages.js';
+import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME,WEARABLES} from '../src/site-pages.js';
 
 test('the overview keeps what Google verification reads on the homepage',async()=>{
   const html=await overviewPage().text();
@@ -30,12 +30,12 @@ test('public pages use the app’s light palette',async()=>{
 
 test('the overview follows the app section by section and every file it loads exists',async()=>{
   const html=await overviewPage(new Request('https://aurin.health/')).text();
-  for(const id of ['spanek','pripravenost','zatez','trenink','posilovna','rezim','svaly','vyziva','kouc','soukromi','faq'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
+  for(const id of ['pripravenost','spanek','trenink','posilovna','svaly','vyziva','kouc','soukromi','faq'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
   const files=[...new Set([...html.matchAll(/(?:src|href|content)="(?:https:\/\/aurin\.health)?\/site\/([^"?]+)(?:\?[^"]*)?"/g)].map(m=>m[1]))];
   assert.ok(files.includes('og-en.jpg'),'share image');
   assert.ok(files.includes('fonts/newsreader.woff2'));
   for(const file of files)assert.ok(existsSync(new URL(`../public/site/${file}`,import.meta.url)),file);
-  for(const name of ['today','sleep','readiness-parts','training','builder','training-mode','food-day'])assert.ok(files.includes('app/'+name+'.webp'),'the app’s screen '+name);
+  for(const name of ['today','sleep','readiness-parts','builder','training-set','muscles','food-day'])assert.ok(files.includes('app/'+name+'.webp'),'the app’s screen '+name);
   assert.ok(files.includes('fonts/instrument-serif.woff2'),'the app’s number font');
   // Every screenshot of the app says what it shows.
   for(const [img] of html.matchAll(/<img src="\/site\/app\/[^>]*>/g))assert.doesNotMatch(img,/alt=""/,img);
@@ -272,7 +272,7 @@ test('the Apple Watch chapter shows the watch app on the sample morning',async()
   assert.ok(section.includes('>'+clock(today.sleep.minutes)+'<'),'sleep');
   assert.ok(section.includes('>'+today.hrv.value+'<small>ms'),'HRV');
   assert.ok(section.includes('>'+today.strain.score+'<'),'strain');
-  assert.equal((section.match(/class="aw-s[ "]/g)||[]).length,7,'one watch, seven screens: race day too');
+  assert.equal((section.match(/class="aw-s[ "]/g)||[]).length,5,'one watch, five screens: race day too');
   assert.equal((section.match(/class="aw-w"/g)||[]).length,1);
 });
 
@@ -318,19 +318,33 @@ test('app screens on the site are real shots, not an empty screen', () => {
     assert.ok(statSync(new URL(f, dir)).size > 8000, `${f} looks blank (a shot taken before the screen drew)`);
 });
 
-// Under the hero, the services Aurin reads from, in Petr's order. Apple's logo and icon need Apple's licence on a
-// website and WHOOP's and Ultrahuman's logos their written OK, so those three stay names; Google Health is its
-// approved colour logo, with its name in dark mode (Google has no approved logo for dark backgrounds).
-test('the Works with row names the services Aurin reads, and no service it does not support',async()=>{
+// Right under the hero's form, the watches and rings Aurin reads, as plain names in one row: only devices the app
+// supports (Apple Watch through Apple Health, Fitbit and Pixel Watch through Google Health, WHOOP and Ultrahuman directly).
+test('the hero names the wearables Aurin reads under the form, and no device it does not support',async()=>{
   const html=await overviewPage().text();
-  const row=html.slice(html.indexOf('<section class="xw"'),html.indexOf('<section class="morning">'));
-  assert.ok(html.indexOf('<section class="xw"')>html.indexOf('<div class="hero">'),'the row comes after the hero');
-  assert.match(row,/>Works with</);
-  assert.deepEqual([...row.matchAll(/<li>(.*?)<\/li>/g)].map(m=>m[1]),PARTNERS);
-  assert.deepEqual(PARTNERS.slice(0,3),['Apple Health','WHOOP','Ultrahuman']);
-  assert.match(PARTNERS[3],/<img class="gh-l" src="\/site\/logos\/google-health-wordmark\.webp" alt="Google Health"/);
-  assert.match(PARTNERS[3],/<span class="gh-t">Google Health<\/span>/);
-  assert.ok(existsSync(new URL('../public/site/logos/google-health-wordmark.webp',import.meta.url)));
-  assert.doesNotMatch(row,/garmin|oura|strava|polar|coros|amazfit/i);
-  assert.doesNotMatch(html,/class="works"/,'the old device pills are gone');
+  const hero=html.slice(html.indexOf('<div class="hero">'),html.indexOf('<section class="morning">'));
+  const cta=hero.indexOf('<div class="cta">'),row=hero.indexOf('<div class="xw">');
+  assert.ok(cta>0&&row>cta&&row<hero.indexOf('<div class="stage">'),'the row sits right under the form, before the phone');
+  const list=hero.slice(row);
+  assert.deepEqual([...list.matchAll(/<li>([^<]+)<\/li>/g)].map(m=>m[1]),WEARABLES);
+  assert.deepEqual(WEARABLES,['Apple Watch','Fitbit','Pixel Watch','WHOOP','Ultrahuman']);
+  assert.doesNotMatch(hero,/garmin|oura|strava|polar|coros|amazfit/i);
+  assert.match(hero,/Works with what you already wear/);
+});
+
+test('the overview stays short: one training step per sport, one gym chapter, the muscles a phone step',async()=>{
+  const html=await overviewPage(new Request('https://aurin.health/')).text();
+  for(const id of ['zatez','rezim'])assert.doesNotMatch(html,new RegExp('<section id="'+id+'"'),id+' is a step now, not a chapter');
+  const section=id=>html.match(new RegExp('<section id="'+id+'"[\\s\\S]*?</section>'))[0];
+  const titles=id=>[...section(id).matchAll(/<span class="tt">([^<]+)<\/span>/g)].map(m=>m[1]);
+  assert.deepEqual(titles('trenink'),['For your ride.','For your run.','For your swim.','For your triathlon.'],'Ride, Run, Swim, then the triathlon');
+  assert.ok(titles('pripravenost').includes('Know when to push.'),'strain is a step of readiness');
+  const gym=section('posilovna');
+  assert.ok(titles('posilovna').length<=7);
+  assert.match(gym,/<li class="step phone"/,'the muscles step only a phone shows');
+  assert.ok(gym.lastIndexOf('class="step phone"')>gym.lastIndexOf('class="step'+'"'),'the phone step is last, since it has no piece');
+  // The parts in the app's order, Sleep right after Readiness.
+  const parts=[...html.matchAll(/<section id="a-([a-z]+)" class="opener"/g)].map(m=>m[1]);
+  assert.deepEqual(parts,['readiness','sleep','training','food','coach','watch']);
+  assert.doesNotMatch(section('trenink'),/garmin/i);
 });
