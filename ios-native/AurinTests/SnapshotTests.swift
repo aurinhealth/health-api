@@ -16,6 +16,39 @@ final class SnapshotTests: XCTestCase {
         try render("today", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
     }
 
+    /// The tabs at the iPhone Duo's widths (duo-*): closed (466), a third and half
+    /// of the open display in landscape (317, 475) and the whole of it (951, two
+    /// columns: WideLayout).
+    func testDuoWidths() throws {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        let widths: [(String, CGFloat)] = [("closed", 466), ("third", 317), ("half", 475), ("open", 951)]
+        for (name, width) in widths {
+            let wide = width >= WideLayout.minWidth
+            try render("duo-\(name)-today", glow: Palette.Glow.today, width: width, window: true) {
+                TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40)
+                    .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
+            }
+            // A NavigationStack does not measure its height, and a very tall window draws
+            // nothing: these two stop at a set height, their top as on the screen.
+            try render("duo-\(name)-health", glow: Palette.Glow.health, height: 1500, width: width, window: true) {
+                NavigationStack { ScrollView { HealthContent(health: DemoData.health) }.scrollIndicators(.hidden) }.padding(.top, 50).padding(.bottom, 40)
+                    .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
+            }
+            try render("duo-\(name)-food", glow: Palette.Glow.food, width: width, window: true) {
+                FoodContent(food: DemoData.food).padding(.top, 50).padding(.bottom, 40)
+                    .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
+            }
+            try render("duo-\(name)-training", glow: Palette.Glow.training, height: 1500, width: width, window: true) {
+                ScrollView { TrainingContent(training: DemoData.training).padding(.top, 50) }.scrollIndicators(.hidden)
+                    .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
+            }
+        }
+    }
+
     func testRecoveryTimeDays() {
         // Days only, never a clock time; after 22:00 it counts for the next morning.
         var parts = DateComponents(year: 2026, month: 10, day: 15, hour: 23, minute: 30)

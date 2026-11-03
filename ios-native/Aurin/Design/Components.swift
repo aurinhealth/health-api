@@ -470,12 +470,21 @@ private struct PinnedBarBackground: View {
 }
 
 /// On iOS 26 the pinned bar of a drill-down page sits above the page
-/// (safeAreaBar); before, it floats over the page's own title row.
-private var pinnedBarAbovePage: Bool {
+/// (safeAreaBar); before, it floats over the page's own title row. So it
+/// floats too where the top has no status bar (the closed iPhone Duo has it
+/// at the side): there the bar above the page went off the top edge.
+@MainActor private var pinnedBarAbovePage: Bool {
     #if compiler(>=6.2)
-    if #available(iOS 26, *) { return true }
+    if #available(iOS 26, *) { return !statusBarAtSide }
     #endif
     return false
+}
+
+/// No inset at the top of the window: the status bar stands at the side.
+@MainActor private var statusBarAtSide: Bool {
+    let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+    guard let window = windows.first(where: \.isKeyWindow) ?? windows.first else { return false }
+    return window.safeAreaInsets.top < 20
 }
 
 /// The pinned bar of a drill-down page: back on the left, the page's action
@@ -505,13 +514,17 @@ private struct PinnedTopBar: ViewModifier {
             })
         #if compiler(>=6.2)
         if #available(iOS 26, *) {
-            // The bar takes its place above the page, and the system's soft
-            // edge fades the page out under it.
-            page
-                .scrollEdgeEffectStyle(.soft, for: .top)
-                .safeAreaBar(edge: .top) {
-                    bar.padding(.top, 6).padding(.bottom, 10)
-                }
+            if pinnedBarAbovePage {
+                // The bar takes its place above the page, and the system's soft
+                // edge fades the page out under it.
+                page
+                    .scrollEdgeEffectStyle(.soft, for: .top)
+                    .safeAreaBar(edge: .top) {
+                        bar.padding(.top, 6).padding(.bottom, 10)
+                    }
+            } else {
+                pinned(page)
+            }
         } else {
             pinned(page)
         }
@@ -651,12 +664,17 @@ struct PageScroll<Content: View>: View {
     @ViewBuilder var content: Content
     @Environment(\.scrollReport) private var report
     @Environment(\.scrollDragReport) private var dragReport
+    /// The scroll view's own width. Not containerRelativeFrame: on the closed
+    /// iPhone Duo (status bar at the side) it gave a pushed page 42 pt more
+    /// than the screen, and the page sat cut off on the left.
+    @State private var width: CGFloat?
 
     var body: some View {
         ScrollView(.vertical) {
-            content.containerRelativeFrame(.horizontal)
+            content.frame(width: width)
                 .reportingOffset(report)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .coordinateSpace(.named("pageScroll"))
         .reportingInsetOffset(report)
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)

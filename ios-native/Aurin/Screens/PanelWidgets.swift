@@ -410,10 +410,20 @@ struct SizedWidgetBody<Value: View, Chart: View>: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         case .medium:
-            HStack(alignment: .bottom, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) { value }
-                    .frame(width: 120, alignment: .leading)
-                chart(mediumChart)
+            // Side by side; in a window narrower than any iPhone (iPhone Duo, Aurin on
+            // a third of the open display) the chart goes under the number instead of
+            // pushing the card past the screen's edge.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .bottom, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) { value }
+                        .frame(width: 120, alignment: .leading)
+                    chart(mediumChart)
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) { value }
+                    chart(mediumChart)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         case .large:
             VStack(alignment: .leading, spacing: 16) {

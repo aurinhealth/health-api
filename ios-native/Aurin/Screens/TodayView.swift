@@ -65,24 +65,49 @@ struct TodayContent: View {
     @Environment(\.dayPage) private var page
     private var selectedDate: String? { page.map(\.selectedDate) ?? model.selectedDate }
 
+    /// iPhone Duo open: the day's cards on the left, the widgets on the right (WideLayout).
+    @Environment(\.wideLayout) private var wide
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if !editing {
                 header
             }
-
-            WidgetBoard(panel: .today,
-                        data: WidgetData(panel: .today, today: today, health: page.map(\.health) ?? model.health, training: model.training, food: page.map(\.food) ?? model.food),
-                        editing: $editing,
-                        editTitle: "Upravit přehled")
-                .padding(.top, editing ? 0 : 28)
+            if wide && !editing {
+                // Petr, 2026-11-03: the three numbers and the coach's advice on the right,
+                // seen without scrolling; the readiness, food and the day on the left.
+                HStack(alignment: .top, spacing: WideLayout.gap) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        readiness
+                        // One column of widgets: the left half is the column.
+                        board.environment(\.wideLayout, false).padding(.top, 28)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    VStack(alignment: .leading, spacing: 0) { dayNumbers }
+                        .padding(.top, 40)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+            } else {
+                if !editing {
+                    readiness
+                    dayNumbers
+                }
+                board.padding(.top, editing ? 0 : 28)
+            }
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
         .daySwipe(date: today.date, enabled: !editing) { page in page.today.map { AnyView(TodayContent(today: $0)) } }
     }
 
-    /// Everything above the widgets: the day, readiness, weather and the coach.
+    private var board: some View {
+        WidgetBoard(panel: .today,
+                    data: WidgetData(panel: .today, today: today, health: page.map(\.health) ?? model.health, training: model.training, food: page.map(\.food) ?? model.food),
+                    editing: $editing,
+                    editTitle: "Upravit přehled")
+    }
+
+    /// The month, the week and the data's state, across the whole width.
     @ViewBuilder private var header: some View {
         // B3 (Petr, 2026-10-15): the month as the title and the week below it.
         TabHeader(date: today.date, share: openShare, coach: openCoach, settings: openSettings)
@@ -92,7 +117,10 @@ struct TodayContent: View {
             DataAgePill()
             ConnectionProblemCard()
         }
+    }
 
+    /// Readiness and, in the first two weeks, what fills Today.
+    @ViewBuilder private var readiness: some View {
         RouteLink(route: .readiness) {
             ReadinessHero(readiness: today.readiness, date: today.date, nightMissing: today.sleep == nil, isToday: today.steps.hour != nil)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -116,9 +144,14 @@ struct TodayContent: View {
         if selectedDate == nil && !model.demo {
             FirstDaysCard(today: today, openCoach: openCoach).padding(.top, 20)
         }
+    }
 
+    /// The key numbers, today's workout (the activity of the day), weather and the coach.
+    /// In a wide window they head the right column, the numbers and the workout's Start
+    /// seen without scrolling (Petr, 2026-11-03).
+    @ViewBuilder private var dayNumbers: some View {
         KeyNumbers(today: today)
-            .padding(.top, 28)
+            .padding(.top, wide ? 0 : 28)
 
         if selectedDate == nil {
             // Today's workout with Start, and the activity of the day when it
@@ -733,6 +766,10 @@ struct MorningCheckinCard: View {
 struct KeyNumbers: View {
     @Environment(AppModel.self) private var model
     let today: TodaySnapshot
+    /// Narrower than on any iPhone (iPhone Duo, Aurin on a third of the open
+    /// display): tighter cells and the bars without their band's values, which
+    /// would run into each other.
+    @State private var compact = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -744,6 +781,7 @@ struct KeyNumbers: View {
                 RouteLink(route: .metric(.hrv)) { cell("HRV", Fmt.int(today.hrv?.value), "ms", hrv) }
             }
             .fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: Bool.self) { $0.size.width < 300 } action: { compact = $0 }
             if sleepFailed {
                 Divider().overlay(Palette.hairline)
                 PartUnavailableNote(text: "Spánek se teď nepodařilo načíst")
@@ -808,11 +846,11 @@ struct KeyNumbers: View {
             }
             .lineLimit(1).minimumScaleFactor(0.7)
             if let bar = gauge.bar {
-                RangeBar(value: bar.value, low: bar.low, high: bar.high, color: gauge.color, edges: gauge.edges).padding(.vertical, 4)
+                RangeBar(value: bar.value, low: bar.low, high: bar.high, color: gauge.color, edges: compact ? nil : gauge.edges).padding(.vertical, 4)
             }
             Text(gauge.note ?? " ").font(Typo.caption.weight(.medium)).foregroundStyle(gauge.color).lineLimit(1).minimumScaleFactor(0.75)
         }
-        .padding(16)
+        .padding(compact ? 11 : 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
