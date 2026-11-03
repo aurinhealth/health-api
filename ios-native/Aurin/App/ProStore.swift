@@ -61,6 +61,9 @@ final class ProStore {
     private(set) var purchasing = false
     /// Plans the day-5 reminder when a free week starts (the tests plan nothing).
     @ObservationIgnored var trialReminder: @MainActor (Date, String) async -> Void = { await ProStore.remindTrialEnd(purchased: $0, price: $1) }
+    /// Finishes a pack's transaction. The pack test records it: StoreKit's test
+    /// session on iOS 27 can keep listing a finished pack in Transaction.unfinished.
+    @ObservationIgnored var finishTransaction: @MainActor (Transaction) async -> Void = { await $0.finish() }
 
     @ObservationIgnored private var api: APIClient?
     @ObservationIgnored private var updates: Task<Void, Never>?
@@ -222,12 +225,12 @@ final class ProStore {
             throw APIError.message(L10n.tr("App Store nákup nepotvrdil. Zkus to znovu."))
         }
         // Xcode's StoreKit testing: the server never accepts its signature.
-        if transaction.environment == .xcode { await transaction.finish(); return Self.packs[id] }
+        if transaction.environment == .xcode { await finishTransaction(transaction); return Self.packs[id] }
         guard let left = await sendPack(result) else {
             // Kept unfinished: it goes to the server on the next start.
             throw APIError.message(L10n.tr("Nákup proběhl, zprávy se přidají, jakmile bude spojení se serverem."))
         }
-        await transaction.finish()
+        await finishTransaction(transaction)
         return left
     }
 
