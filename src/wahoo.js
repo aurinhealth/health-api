@@ -75,7 +75,10 @@ async function tokenRequest(env, params, fetchImpl) {
     signal: AbortSignal.timeout(15000)
   }).catch(() => null);
   const data = response ? await response.json().catch(() => ({})) : {};
-  return response?.ok && data.access_token ? data : null;
+  if (response?.ok && data.access_token) return data;
+  // Wahoo said no to these keys (a refresh token of another app, revoked access);
+  // no answer at all is only an outage.
+  return { refused: response?.status === 400 || response?.status === 401 };
 }
 
 export async function handleWahooOAuth(request, env, pathname, fetchImpl = fetch) {
@@ -100,7 +103,7 @@ export async function handleWahooOAuth(request, env, pathname, fetchImpl = fetch
   if (url.searchParams.get('error') || !code) return back(connectReturnUrl('wahoo-cancelled', env));
   if (!wahooConfigured(env)) return back(connectReturnUrl('wahoo-failed', env));
   const data = await tokenRequest(env, { grant_type: 'authorization_code', code, redirect_uri: redirectUri(env, request) }, fetchImpl);
-  if (!data) { console.error('Wahoo OAuth token exchange failed'); return back(connectReturnUrl('wahoo-failed', env)); }
+  if (!data.access_token) { console.error('Wahoo OAuth token exchange failed'); return back(connectReturnUrl('wahoo-failed', env)); }
   // The Wahoo user id: the webhook says whose workout it brings by it.
   const user = await fetchImpl(API + '/v1/user', { headers: { Authorization: 'Bearer ' + data.access_token, Accept: 'application/json' }, signal: AbortSignal.timeout(15000) })
     .then(r => r.ok ? r.json() : null).catch(() => null);
@@ -118,10 +121,15 @@ export async function wahooAccessToken(env, { fetchImpl = fetch, now = Date.now(
   if (!tokensDue(tokens, now)) return tokens.access_token;
   if (!tokens.refresh_token || !wahooConfigured(env)) throw Object.assign(new Error('Wahoo HTTP 401'), { status: 401 });
   // One request refreshes at a time; the others take the pair it saved (connection-secrets.js).
+  let refused = false;
   const text = await refreshConnectionTokens(env, SOURCE, env.WAHOO_TOKEN, async t => {
-    const data = t?.refresh_token && await tokenRequest(env, { grant_type: 'refresh_token', refresh_token: t.refresh_token }, fetchImpl);
-    return data ? tokensText({ refresh_token: t.refresh_token, ...data }, t.user_id ?? tokens.user_id, now) : null;
+    const data = t?.refresh_token ? await tokenRequest(env, { grant_type: 'refresh_token', refresh_token: t.refresh_token }, fetchImpl) : null;
+    if (data?.refused) refused = true;
+    return data?.access_token ? tokensText({ refresh_token: t.refresh_token, ...data }, t.user_id ?? tokens.user_id, now) : null;
   }, { now });
+  // A refused refresh (also every connection made with the Sandbox app once the
+  // Production app is in) shows Reconnect instead of failing quietly.
+  if (!text && refused) await markConnectionBroken(env, SOURCE, 'Wahoo refresh refused');
   if (!text) throw Object.assign(new Error('Wahoo HTTP 401'), { status: 401 });
   env.WAHOO_TOKEN = text;
   return readWahooTokens(env).access_token;
