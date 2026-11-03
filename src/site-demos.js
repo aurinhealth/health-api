@@ -493,7 +493,8 @@ ${[['Squat', '3×8 · 80 kg'], ['Bench press', '3×8 · 62.5 kg'], ['Rows', '3×
 </div>`;
 
 // The coach's memory (CoachMemory.swift): a message that tells the coach something lasting, its answer with the
-// "Remembered: …" line under it (MemoryChipView), and beside the phone the list behind the chat's ⋯ menu.
+// "Remembered: …" line under it (MemoryChipView), and beside the phone the list in its groups with
+// New on what the coach just saved, and the "Use memory" switch (CoachMemoryView).
 const memoryScreen = `<div class="app glow-today chat">${STATUS}
 <div class="nav c"><span class="cb">${ic('x')}</span><b>Coach</b><span class="cb">⋯</span></div>
 <div class="msgs">
@@ -504,10 +505,11 @@ const memoryScreen = `<div class="app glow-today chat">${STATUS}
 </div>
 <div class="inp"><span class="cam">${ic('camera')}</span><span class="mut">Message the coach…</span><span class="snd">${ic('up')}</span></div>
 </div>`;
+const memoryGroups = [['Goals', [['Deadlift 140 kg by spring']]], ['Training', [['Trains in the evening after work']]], ['Health', [['Left knee hurts when running', 3300]]], ['Life', [['No dairy']]]];
 const coachMemory = `<div class="dm pad one mem">
-<div class="row sp"><span class="mut">Coach</span><b>What the coach remembers</b><span></span></div>
-<div class="ml">${[['Left knee hurts when running', 3300], ['Trains in the evening after work'], ['Wants to deadlift 140 kg by spring'], ['No dairy']].map(([t, ms]) => `<div class="mi2${ms ? ' new' : ''}"${ms ? at(String(ms)) : ''}><span>${t}</span>${ic('chev')}</div>`).join('')}</div>
-<div class="madd">${ic('plus')}Add</div>
+<div class="row sp"><span class="mut">Coach</span><b>What the coach remembers</b><span class="madd2">${ic('plus')}</span></div>
+${memoryGroups.map(([g, items]) => `<div class="mg">${g}</div><div class="ml">${items.map(([t, ms]) => `<div class="mi2${ms ? ' new' : ''}"${ms ? at(String(ms)) : ''}><span>${t}</span>${ms ? '<span class="mnew">New</span>' : ''}${ic('chev')}</div>`).join('')}</div>`).join('')}
+<div class="ml mon"><div class="mi2"><span>Use memory</span><span class="mtog"></span></div></div>
 </div>`;
 
 // Beside the phone: the confirmed workout lands in the week.
@@ -1079,7 +1081,10 @@ html:not(.js) .stage1{display:none}
 .mi2+.mi2{border-top:1px solid var(--line)}.js .mi2.new.wait:not(.in)+.mi2{border-top-color:transparent}.mi2 .di{width:13px;height:13px;color:var(--muted);stroke-width:2.6}
 .mi2.new.in{background:color-mix(in srgb,var(--green) 10%,transparent)}
 .js .mi2.new.wait:not(.in){max-height:0;padding-block:0;opacity:0}
-.madd{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:12px;padding:13px;border-radius:14px;background:var(--panel2);font-size:15px;font-weight:600}.madd .di{width:14px;height:14px;stroke-width:2.6}
+.madd2 .di{width:16px;height:16px;stroke-width:2.6}
+.mg{margin:14px 4px 6px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}.mem .mg+.ml{margin-top:0}
+.mi2 span:first-child{flex:1}.mnew{font-size:11px;font-weight:600;padding:3px 8px;border-radius:99px;color:var(--green);background:color-mix(in srgb,var(--green) 16%,transparent)}
+.mon{margin-top:14px}.mtog{width:42px;height:25px;border-radius:99px;background:#34C759;position:relative;flex:none}.mtog::after{content:"";position:absolute;width:21px;height:21px;border-radius:50%;background:#fff;top:2px;right:2px}
 /* Apple Watch: the case and its dark screens (WatchStyle.swift: Instrument Serif numbers, a glow at the top). */
 .aw-act{place-items:center}
 .aw-w>.scr{inset:12px;border-radius:50px;overflow:hidden}

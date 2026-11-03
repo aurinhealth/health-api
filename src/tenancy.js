@@ -53,6 +53,12 @@ export const PERSONAL_TABLES = {
   athlete_state: {},
   assistant_chats: {},
   assistant_messages: {},
+  // The coach's memory between chats (coach-notes.js): a note per day with
+  // chats, the summary of a long chat's older part, and the days waiting for
+  // their note (central, coach_note_queue).
+  coach_notes: { pk: ["user_id", "day"] },
+  assistant_chat_summaries: { pk: ["user_id", "chat_id"] },
+  coach_note_queue: { pk: ["user_id", "day"] },
   exercise_videos: {},
   api_cache_versions: {},
   ai_usage: {},

@@ -2069,6 +2069,12 @@
 "Co si kouč pamatuje" = "What the coach remembers";
 "Kouč si zatím nic nepamatuje." = "The coach doesn't remember anything yet.";
 "Co si má kouč pamatovat" = "What the coach should remember";
+"Život" = "Life";
+"Nedávné chaty" = "Recent chats";
+"Minulé" = "Past";
+"Používat paměť" = "Use memory";
+"Nové" = "New";
+"Upraveno" = "Updated";
 "Vráceno" = "Undone";
 "Zapamatováno" = "Remembered";
 "Zapamatováno: %@" = "Remembered: %@";

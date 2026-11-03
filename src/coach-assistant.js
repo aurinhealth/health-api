@@ -310,7 +310,7 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     ...(performance?{performance}:{}),
     gym:strengthSets.map(r=>compactObject({date:r.workout_date,exercise:r.exercise,set:num(r.set_no),...strengthSet(r),toFailure:r.toFailure||null,intensity:r.intensity||null,drop:String(r.type).toUpperCase()==='DROP'||null})),
     strengthProgress:strengthProgress(gym?.history,date),
-    todayGym:todayGymContext(gym,date,athleteState?.memories),
+    todayGym:todayGymContext(gym,date,athleteState?.memoryOff?[]:athleteState?.memories),
     strengthCoverage:strengthCoverage({date,strength:{recentCompletedSets:strengthSets}},EXERCISES),
     capabilities,
     // The athlete's own words after workouts and the coach's notes on them.
@@ -501,7 +501,7 @@ export function coachAnswerText(text,{actions=false,incomplete=false}={}){
   if(incomplete)answer=(answer?answer+'\n\n':'')+L(TRUNCATED_NOTE,'The answer was cut short. Write “continue” or narrow the question.');
   else if(!answer)answer=L('Odpověď se nepodařilo zpracovat. Zkus to prosím znovu.', 'The answer couldn\'t be processed. Please try again.');
   const visuals=Array.isArray(parsed?.visuals)?[...new Set(parsed.visuals.filter(v=>COACH_VISUALS.includes(v)))].slice(0,2):[];
-  const memory={forget:Array.isArray(parsed?.memory?.forget)?parsed.memory.forget:[],update:Array.isArray(parsed?.memory?.update)?parsed.memory.update:[]};
+  const memory={save:Array.isArray(parsed?.memory?.save)?parsed.memory.save:[],forget:Array.isArray(parsed?.memory?.forget)?parsed.memory.forget:[],update:Array.isArray(parsed?.memory?.update)?parsed.memory.update:[]};
   return {answer,visuals,actions:Array.isArray(parsed?.actions)?parsed.actions:[],memory};
 }
 
@@ -511,7 +511,7 @@ export async function askCoach(env, message, context, {model = null, focus = nul
   if (!env.OPENAI_API_KEY) return {status: 'unavailable', message: L('AI teď není dostupná. Zkus to později.', 'AI isn\'t available right now. Try again later.')};
   const started = Date.now();
   const light = task === 'simple' || task === 'quick', chosen = model || (light ? lightModel(env) : complexModel(env));
-  const data = task === 'simple' ? {date:context.date,now:context.now,athleteState:context.athleteState,statusNote:context.statusNote,preferenceMemory:context.preferenceMemory,...(context.sportsToSuggestChange?{sportsToSuggestChange:context.sportsToSuggestChange}:{})} : {...context};
+  const data = task === 'simple' ? {date:context.date,now:context.now,athleteState:context.athleteState,statusNote:context.statusNote,preferenceMemory:context.preferenceMemory,...(context.sportsToSuggestChange?{sportsToSuggestChange:context.sportsToSuggestChange}:{}),...['chatSoFar','recentChats','earlierToday','pastMemory'].reduce((o,k)=>context[k]?{...o,[k]:context[k]}:o,{})} : {...context};
   delete data.conversation;
   // Earlier turns go as real messages: the data first, the question last.
   const turns=(context?.conversation||[]).filter(t=>['user','assistant'].includes(t?.role)&&String(t.content||'').trim()).map(t=>({role:t.role,content:String(t.content).slice(0,8000)}));

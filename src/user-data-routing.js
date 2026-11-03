@@ -13,7 +13,9 @@ export const CENTRAL_PERSONAL_TABLES = new Set([
   // A phone's push token belongs to one account at a time (push.js).
   'push_tokens',
   // A shared workout is read by whoever has its link (workout-templates.js).
-  'workout_shares'
+  'workout_shares',
+  // The days waiting for the coach's night note, found without opening every user's database (coach-notes.js).
+  'coach_note_queue'
 ]);
 const CENTRAL_TABLES = new Set([
   ...CENTRAL_PERSONAL_TABLES, 'users', 'user_invites', 'schema_meta',
