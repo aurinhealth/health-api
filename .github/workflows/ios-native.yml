@@ -226,7 +226,8 @@ jobs:
           # stops on the system's "Open in Aurin?" question): readiness, strain, muscles, the gym session.
           for route in readiness strain muscles gym/2026-10-08; do
             xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -open "$route" -AppleLanguages "(en)" -AppleLocale en_US -language en
-            sleep 7
+            # The muscles 3D figure loads after launch: after 7 s the page once came out blank.
+            if [ "$route" = muscles ]; then sleep 15; else sleep 7; fi
             xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/site/${route%%/*}.png"
           done
 
@@ -262,7 +263,7 @@ jobs:
             xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/site-dark/$tab.png"
           done
           xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -open muscles -AppleLanguages "(en)" -AppleLocale en_US -language en -appearance dark
-          sleep 7
+          sleep 15
           xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/site-dark/muscles.png"
           xcodebuild -project Aurin.xcodeproj -scheme AurinSmoke -configuration Debug \
             -destination "id=$udid" -derivedDataPath build \
@@ -308,13 +309,13 @@ jobs:
       # simulator shows (duo/). Not a release check: never fails the run, and
       # never holds it either: on main 2026-11-03 it hung for 28 minutes and the
       # whole run hit its time limit before Build for iPhone, so no upload.
-      # Booting and seven screens take 3 to 9 minutes (a slow runner needs 1.5 min
-      # to boot and over 1.5 min to install).
+      # Booting and seven screens take 3 to 11 minutes (a slow runner needs 2 min
+      # to boot and 4 min to install).
       - name: Screenshot the app on iPhone Duo
         continue-on-error: true
         # Each simctl call below has its own limit too, so a stuck one is named
         # in the log and the rest still runs.
-        timeout-minutes: 12
+        timeout-minutes: 15
         run: |
           # Every simulator off first: the Duo boots with two displays and the
           # earlier steps' iPhone (and its recording) left running starved it.
@@ -366,7 +367,7 @@ jobs:
               echo "displays: $displays"
             fi
             for d in $displays; do
-              limit 45 xcrun simctl io "$udid" screenshot --display="${d%%:*}" "$dir/$1-${d#*:}.png" || true
+              limit 90 xcrun simctl io "$udid" screenshot --display="${d%%:*}" "$dir/$1-${d#*:}.png" || true
             done
           }
           # The first screenshot after boot is slow (over 45 s): one that is
@@ -380,9 +381,11 @@ jobs:
             sleep 7
             shoot "$tab"
           done
-          for route in readiness muscles gym/2026-10-08; do
+          # Muscles last and with a longer wait: its 3D figure loads after launch,
+          # and a screenshot taken meanwhile on the Duo hung past its limit.
+          for route in readiness gym/2026-10-08 muscles; do
             limit 30 xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -open "$route" -AppleLanguages "(en)" -AppleLocale en_US -language en || continue
-            sleep 7
+            if [ "$route" = muscles ]; then sleep 20; else sleep 7; fi
             shoot "${route%%/*}"
           done
           limit 60 xcrun simctl shutdown "$udid" || true
