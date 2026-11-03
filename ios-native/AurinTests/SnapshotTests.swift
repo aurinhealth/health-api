@@ -30,19 +30,19 @@ final class SnapshotTests: XCTestCase {
                                                    ("open-portrait", 669, nil), ("open", 951, nil), ("open-now", 951, false)]
         for (name, width, forced) in widths {
             let wide = forced ?? (width >= WideLayout.minWidth)
-            try render("duo-\(name)-today", glow: Palette.Glow.today, width: width) {
+            try render("duo-\(name)-today", glow: Palette.Glow.today, width: width, window: true) {
                 TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40)
                     .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
             }
-            try render("duo-\(name)-health", glow: Palette.Glow.health, width: width) {
+            try render("duo-\(name)-health", glow: Palette.Glow.health, width: width, window: true) {
                 NavigationStack { HealthContent(health: DemoData.health) }.padding(.top, 50).padding(.bottom, 40)
                     .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
             }
-            try render("duo-\(name)-food", glow: Palette.Glow.food, width: width) {
+            try render("duo-\(name)-food", glow: Palette.Glow.food, width: width, window: true) {
                 FoodContent(food: DemoData.food).padding(.top, 50).padding(.bottom, 40)
                     .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
             }
-            try render("duo-\(name)-training", glow: Palette.Glow.training, width: width) {
+            try render("duo-\(name)-training", glow: Palette.Glow.training, width: width, window: true) {
                 TrainingContent(training: DemoData.training).padding(.top, 50).padding(.bottom, 40)
                     .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
             }
@@ -1085,7 +1085,7 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
-    private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, width: CGFloat = 390, typeSize: DynamicTypeSize = .large, @ViewBuilder _ content: () -> V) throws {
+    private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, width: CGFloat = 390, typeSize: DynamicTypeSize = .large, window: Bool = false, @ViewBuilder _ content: () -> V) throws {
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         for (suffix, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
             let view = content()
@@ -1095,7 +1095,7 @@ final class SnapshotTests: XCTestCase {
                 .environment(\.colorScheme, scheme)
             let image: UIImage?
             let type = String(reflecting: V.self)
-            if type.contains("NavigationStack") || type.contains("Sheet") {
+            if window || type.contains("NavigationStack") || type.contains("Sheet") {
                 // ImageRenderer stops the whole test run on iOS 27 ("no current update
                 // to enqueue action to") when the view holds a NavigationStack, which it
                 // cannot flatten; such a screen, and every sheet (most open with their
