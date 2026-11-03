@@ -8,7 +8,7 @@ import WidgetKit
 /// The alarm from Nastavení → Spánek (App/SystemAlarm.swift) while it rings or
 /// is snoozed. iOS draws the alarm's Live Activity from here: without it the
 /// expanded Dynamic Island of a ringing alarm stays black, with no buttons.
-/// Ringing: the alarm's title with Snooze and "I'm up"; snoozed: "Snoozed"
+/// Ringing: the alarm's title with Snooze (when on) and "I'm up"; snoozed: "Snoozed"
 /// with the minutes left and "I'm up".
 @available(iOS 26, *)
 struct WakeAlarmWidget: Widget {
@@ -28,7 +28,7 @@ struct WakeAlarmWidget: Widget {
                     WakeAlarmTime(state: context.state, size: 28).padding(.trailing, 4)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    WakeAlarmButtons(state: context.state)
+                    WakeAlarmButtons(attributes: context.attributes, state: context.state)
                         .padding(.horizontal, 4).padding(.top, 10)
                         .environment(\.colorScheme, .dark)
                 }
@@ -90,14 +90,15 @@ struct WakeAlarmTime: View {
     }
 }
 
-/// Snooze (only while it rings) and "I'm up".
+/// Snooze (while it rings, when Snooze is on in Nastavení → Spánek) and "I'm up".
 @available(iOS 26, *)
 struct WakeAlarmButtons: View {
+    let attributes: AlarmAttributes<WakeAlarm>
     let state: AlarmPresentationState
 
     var body: some View {
         HStack(spacing: 8) {
-            if !WakeAlarmMode.snoozed(state) {
+            if !WakeAlarmMode.snoozed(state), attributes.presentation.alert.secondaryButton != nil {
                 Button(intent: WakeAlarmSnoozeIntent(alarmID: state.alarmID)) {
                     pill(L10n.tr("Odložit"), icon: "zzz", primary: false)
                 }
@@ -131,7 +132,7 @@ struct WakeAlarmCard: View {
                 Spacer(minLength: 8)
                 WakeAlarmTime(state: state, size: 26).foregroundStyle(Palette.ink)
             }
-            WakeAlarmButtons(state: state)
+            WakeAlarmButtons(attributes: attributes, state: state)
         }
     }
 }

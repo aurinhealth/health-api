@@ -91,10 +91,17 @@ enum SystemAlarm {
     /// same times (the app's start, AurinApp). Nothing goes to the server.
     static func upgrade() async {
         let key = "systemAlarmVersion", version = 2
-        let defaults = UserDefaults.standard
-        guard defaults.integer(forKey: key) < version else { return }
+        guard UserDefaults.standard.integer(forKey: key) < version else { return }
+        await reschedule()
+        UserDefaults.standard.set(version, forKey: key)
+    }
+
+    /// Snooze on or off, or its length changed (Nastavení → Spánek): the alarms
+    /// already set are set again at the same times, the watch's backup too.
+    static func reschedule() async {
         #if canImport(AlarmKit)
         if #available(iOS 26, *) {
+            let defaults = UserDefaults.standard
             let manager = AlarmManager.shared
             let saved = defaults.stringArray(forKey: idsKey) ?? []
             if !saved.isEmpty, manager.authorizationState == .authorized, let alarms = try? manager.alarms {
@@ -110,9 +117,19 @@ enum SystemAlarm {
                 }
                 defaults.set(ids, forKey: idsKey)
             }
+            if let time = backupTime, time > Date() { await backup(at: time) }
         }
         #endif
-        defaults.set(version, forKey: key)
+    }
+
+    /// Nastavení → Spánek: Snooze on (the default) and its length, 1–15 minutes (5).
+    static let snoozeKey = "systemAlarmSnooze"
+    static let snoozeMinutesKey = "systemAlarmSnoozeMinutes"
+    static let snoozeRange = 1...15
+    static var snoozeOn: Bool { UserDefaults.standard.object(forKey: snoozeKey) as? Bool ?? true }
+    static var snoozeMinutes: Int {
+        let value = UserDefaults.standard.integer(forKey: snoozeMinutesKey)
+        return snoozeRange.contains(value) ? value : 5
     }
 
     #if canImport(AlarmKit)
@@ -133,23 +150,21 @@ enum SystemAlarm {
         return id
     }
 
-    /// How long Snooze waits.
-    static let snooze: TimeInterval = 5 * 60
-
-    /// The ringing alarm: "I'm up" and Snooze, then while snoozed "Snoozed" with
-    /// the time left. iOS draws it through the widget extension's Live Activity
-    /// (WakeAlarmWidget); its buttons are the system's on the lock screen.
+    /// The ringing alarm: "I'm up" and, when on, Snooze; while snoozed "Snoozed"
+    /// with the time left. iOS draws it through the widget extension's Live
+    /// Activity (WakeAlarmWidget); its buttons are the system's on the lock screen.
     @available(iOS 26, *)
     private static func configuration(_ schedule: Alarm.Schedule, title: String) -> AlarmManager.AlarmConfiguration<WakeAlarm> {
+        let snooze = snoozeOn
         let alert = AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: title),
                                             stopButton: AlarmButton(text: LocalizedStringResource(stringLiteral: L10n.tr("Vstávám")), textColor: .white, systemImageName: "sun.max.fill"),
-                                            secondaryButton: AlarmButton(text: LocalizedStringResource(stringLiteral: L10n.tr("Odložit")), textColor: .white, systemImageName: "zzz"),
-                                            secondaryButtonBehavior: .countdown)
-        let countdown = AlarmPresentation.Countdown(title: LocalizedStringResource(stringLiteral: L10n.tr("Odloženo")))
+                                            secondaryButton: snooze ? AlarmButton(text: LocalizedStringResource(stringLiteral: L10n.tr("Odložit")), textColor: .white, systemImageName: "zzz") : nil,
+                                            secondaryButtonBehavior: snooze ? .countdown : nil)
+        let countdown = snooze ? AlarmPresentation.Countdown(title: LocalizedStringResource(stringLiteral: L10n.tr("Odloženo"))) : nil
         let presentation = AlarmPresentation(alert: alert, countdown: countdown, paused: nil)
         let attributes = AlarmAttributes<WakeAlarm>(presentation: presentation, tintColor: Palette.indigo)
-        return AlarmManager.AlarmConfiguration(countdownDuration: Alarm.CountdownDuration(preAlert: nil, postAlert: snooze),
-                                               schedule: schedule, attributes: attributes)
+        let duration = snooze ? Alarm.CountdownDuration(preAlert: nil, postAlert: TimeInterval(snoozeMinutes * 60)) : nil
+        return AlarmManager.AlarmConfiguration(countdownDuration: duration, schedule: schedule, attributes: attributes)
     }
     #endif
 }
