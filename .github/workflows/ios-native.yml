@@ -62,7 +62,9 @@ jobs:
       - name: Pick Xcode
         run: |
           ls -d /Applications/Xcode*.app || true
-          xcode=$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -vi -e beta -e release_candidate -e _rc | sort -V | tail -1)
+          # Xcode_27.2.app on the xcode-27 image is a link to Xcode_27.2_Release_Candidate.app:
+          # the real folder's name decides, so a release candidate is never picked.
+          xcode=$(for x in /Applications/Xcode_*.app; do [ -d "$x" ] && echo "$(cd "$x" && pwd -P)"; done | sort -u | grep -vi -e beta -e release_candidate -e _rc | sort -V | tail -1)
           if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode/Contents/Developer"; fi
           xcodebuild -version
           xcrun simctl list runtimes
