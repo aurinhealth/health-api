@@ -204,7 +204,7 @@ struct PillCard: View {
             HStack(spacing: 3) {
                 ForEach(1...max(pill.of, 1), id: \.self) { i in
                     let number = pill.number ?? 0
-                    let done = i < number || (i == number && pill.taken != nil)
+                    let done = pill.isTaken(i)
                     RoundedRectangle(cornerRadius: 3)
                         .fill(done ? Palette.indigo : i == number ? Color.clear : Palette.track)
                         .overlay { RoundedRectangle(cornerRadius: 3).stroke(i == number && !done ? Palette.indigo : Color.clear, lineWidth: 1.5) }

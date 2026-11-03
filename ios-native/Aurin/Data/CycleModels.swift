@@ -119,6 +119,17 @@ struct PillDay: Decodable, Equatable {
     var pauseDay: Int? = nil
     /// "HH:MM", "taken" or nil.
     var taken: String? = nil
+    /// For pills 1 to today's, whether that day's pill was logged (nil from an
+    /// older server).
+    var packTaken: [Bool]? = nil
+
+    /// Pill `number` of the pack logged as taken: only a logged pill counts,
+    /// a day left unlogged stays not taken.
+    func isTaken(_ number: Int) -> Bool {
+        if number == self.number { return taken != nil }
+        guard let packTaken else { return number < (self.number ?? 0) }
+        return number >= 1 && number <= packTaken.count && packTaken[number - 1]
+    }
 }
 
 /// One day of the calendar month.
