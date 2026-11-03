@@ -37,7 +37,7 @@ final class SnapshotTests: XCTestCase {
             // A NavigationStack does not measure its height, and a very tall window draws
             // nothing: these two stop at a set height, their top as on the screen.
             try render("duo-\(name)-health", glow: Palette.Glow.health, height: 1500, width: width, window: true) {
-                NavigationStack { HealthContent(health: DemoData.health).frame(maxHeight: .infinity, alignment: .top) }.padding(.top, 50).padding(.bottom, 40)
+                NavigationStack { HealthContent(health: DemoData.health).fixedSize(horizontal: false, vertical: true).frame(maxHeight: .infinity, alignment: .top) }.padding(.top, 50).padding(.bottom, 40)
                     .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
             }
             try render("duo-\(name)-food", glow: Palette.Glow.food, width: width, window: true) {
@@ -45,7 +45,7 @@ final class SnapshotTests: XCTestCase {
                     .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
             }
             try render("duo-\(name)-training", glow: Palette.Glow.training, height: 1500, width: width, window: true) {
-                TrainingContent(training: DemoData.training).padding(.top, 50).frame(maxHeight: .infinity, alignment: .top)
+                TrainingContent(training: DemoData.training).padding(.top, 50).fixedSize(horizontal: false, vertical: true).frame(maxHeight: .infinity, alignment: .top)
                     .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
             }
         }
