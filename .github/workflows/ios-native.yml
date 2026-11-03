@@ -104,7 +104,7 @@ jobs:
           print("runtimes:", ", ".join(runtimes), file=sys.stderr)
           # An ordinary iPhone, never the foldable iPhone Duo: it has two displays,
           # so plain screenshots fail (it gets its own step below). iOS 27.1 on
-          # the xcode-27 image is the Duo's own runtime (no other iPhone runs it),
+          # the xcode-27 image runs only the Duo (no other iPhone),
           # so the newest iOS that has an ordinary iPhone.
           ordinary = lambda r: [d for d in devices[r] if d["name"].startswith("iPhone") and "Duo" not in d["name"]]
           runtime = next(r for r in runtimes if ordinary(r))
