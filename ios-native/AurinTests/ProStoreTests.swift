@@ -172,4 +172,15 @@ final class ProStoreTests: XCTestCase {
         let fire = try XCTUnwrap(ProStore.trialReminderDate(purchased: bought, calendar: calendar))
         XCTAssertEqual(calendar.dateComponents([.month, .day, .hour, .minute], from: fire), DateComponents(month: 11, day: 17, hour: 10, minute: 0))
     }
+
+    func testAmountFromShownPrice() {
+        let cs = Locale(identifier: "cs_CZ"), de = Locale(identifier: "de_DE"), us = Locale(identifier: "en_US")
+        XCTAssertEqual(ProStore.amount("1\u{202F}490,00\u{00A0}Kč", locale: cs), 1490)
+        XCTAssertEqual(ProStore.amount("1 490 Kč", locale: cs), 1490)
+        XCTAssertEqual(ProStore.amount("1.490,00 €", locale: de), 1490)
+        XCTAssertEqual(ProStore.amount("5,99 €", locale: de), Decimal(string: "5.99"))
+        XCTAssertEqual(ProStore.amount("$59.99", locale: us), Decimal(string: "59.99"))
+        XCTAssertEqual(ProStore.amount("$1,490.00", locale: us), 1490)
+        XCTAssertNil(ProStore.amount("Kč", locale: cs))
+    }
 }

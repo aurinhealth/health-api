@@ -287,10 +287,28 @@ final class ProStore {
     /// The yearly price a month, in the store's currency: "124 Kč", "5,00 €".
     func perMonth(_ id: String) -> String? {
         guard let product = products[id] else { return nil }
-        let monthly = product.price / 12
+        let style = product.priceFormatStyle
+        var price = product.price
+        // StoreKit on iOS 27.1 can hand the price cut at the thousands separator (1 for "1 490,00 Kč"),
+        // so when the number does not match the shown price, the shown price wins.
+        if price.formatted(style) != product.displayPrice, let shown = Self.amount(product.displayPrice, locale: style.locale), shown > 0 {
+            price = shown
+        }
+        let monthly = price / 12
         // A whole yearly price (1 490 Kč) a month in whole units, else with cents.
-        let whole = NSDecimalNumber(decimal: product.price).doubleValue.truncatingRemainder(dividingBy: 1) == 0
-        return monthly.formatted(product.priceFormatStyle.precision(.fractionLength(whole ? 0 : 2)))
+        let whole = NSDecimalNumber(decimal: price).doubleValue.truncatingRemainder(dividingBy: 1) == 0
+        return monthly.formatted(style.precision(.fractionLength(whole ? 0 : 2)))
+    }
+
+    /// The number in a shown price: 1490 from "1 490,00 Kč", 59.99 from "$59.99", 1490 from "1.490,00 €" (de).
+    nonisolated static func amount(_ shown: String, locale: Locale) -> Decimal? {
+        let separator = locale.decimalSeparator ?? "."
+        var number = ""
+        for character in shown {
+            if let digit = character.wholeNumberValue, character.isNumber { number += String(digit) }
+            else if String(character) == separator, !number.isEmpty { number += "." }
+        }
+        return number.isEmpty ? nil : Decimal(string: number, locale: Locale(identifier: "en_US_POSIX"))
     }
 
     /// The App Store's commitment billing plan of the yearly product, if any.
