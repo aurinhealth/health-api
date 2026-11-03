@@ -43,22 +43,25 @@ struct TrainingPage: View {
                 }
                 WeekRow(days: weekDays, today: today, shown: day, sessions: sessions) { picked = $0 }
                     .padding(.top, 6)
+                    // Where the sample day's screenshot scrolls to (-week): 8 pt into
+                    // the week, so it stays whole under the clock and Continue whole
+                    // above the screen's edge. The id sits on the 1 pt line itself:
+                    // on the padded view it pointed at the row's top.
+                    .overlay(alignment: .top) { Color.clear.frame(height: 1).id("week").padding(.top, 8) }
                 content(day)
                 if day == today, noGymToday { noGym }
-                // The last button a little above the screen's rounded bottom edge;
-                // the sample day's screenshot (-week) scrolls down to here.
-                Color.clear.frame(height: 8).id("end")
+                // The last button a little above the screen's rounded bottom edge.
+                Color.clear.frame(height: 8)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             // Clear of the screen's rounded edges, as Food and Today are.
             .padding(.horizontal, 6)
         }
         .task {
-            // The sample day's screenshot (-week): Continue whole above the
-            // edge, the week whole under the clock.
+            // The sample day's screenshot (-week): the week and Continue both whole.
             guard WatchDemo.flag("-week") else { return }
             try? await Task.sleep(for: .milliseconds(400))
-            proxy.scrollTo("end", anchor: .bottom)
+            proxy.scrollTo("week", anchor: .top)
         }
         }
         // Each turn of the crown to this page shows it again: the plan only
