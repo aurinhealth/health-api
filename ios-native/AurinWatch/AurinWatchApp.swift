@@ -59,15 +59,23 @@ struct WatchRoot: View {
     @EnvironmentObject private var store: WatchStore
     @ObservedObject private var alarm = WatchAlarm.shared
     @ObservedObject private var gym = GymStore.shared
-    @State private var page = "readiness"
+    @State private var page = WatchDemo.value("-page") ?? "readiness"
     @State private var path = NavigationPath()
 
     var body: some View {
+        if WatchDemo.flag("-face"), let s = store.snapshot {
+            DemoFace(s: s)
+        } else {
+            pages
+        }
+    }
+
+    private var pages: some View {
         // By the crown: readiness, then the day's training (TrainingPage) and food and drink (FoodPage).
         NavigationStack(path: $path) {
             TabView(selection: $page) {
                 Group {
-                    if let snapshot = store.snapshot, snapshot.date == WatchStore.localDate(Date()) {
+                    if let snapshot = store.snapshot, snapshot.date == WatchStore.localDate(WatchDemo.now) {
                         // Drawn again at noon, when the night stops being awaited.
                         TimelineView(.explicit([WatchStore.noon()])) { _ in
                             if let night = store.nightPending {
@@ -129,6 +137,15 @@ struct WatchRoot: View {
         .fullScreenCover(isPresented: Binding(get: { alarm.ringing }, set: { if !$0 { alarm.stop() } })) {
             AlarmRinging().onAppear { WatchReport.visit("alarmRinging") }
         }
+        .task { openDemo() }
+    }
+
+    /// The sample day's screenshots (WatchDemo): a detail as its complication
+    /// opens it, or the gym session as Training mode on the iPhone does.
+    private func openDemo() {
+        guard WatchDemo.on else { return }
+        if let target = WatchDemo.value("-open"), let url = URL(string: "aurinwatch://open/" + target) { open(url) }
+        if WatchDemo.flag("-gym") { gym.openedFromPhone = true }
     }
 
     /// A tap on a complication (aurinwatch://open/<page>, AurinWatchWidgets Link):

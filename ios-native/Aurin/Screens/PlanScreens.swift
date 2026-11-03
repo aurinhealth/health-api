@@ -97,9 +97,13 @@ struct PlanPreviewContent: View {
                     }
                 }
                 .padding(.top, 16)
-                PrimaryButton(title: L10n.tr(replacing == nil ? "Začít plán" : "Začít tento plán"), systemImage: "flag", action: start)
-                    .disabled(!canStart).opacity(canStart ? 1 : 0.4)
-                    .padding(.top, 18)
+                if template.locked == true {
+                    ProPlanOffer().padding(.top, 18)
+                } else {
+                    PrimaryButton(title: L10n.tr(replacing == nil ? "Začít plán" : "Začít tento plán"), systemImage: "flag", action: start)
+                        .disabled(!canStart).opacity(canStart ? 1 : 0.4)
+                        .padding(.top, 18)
+                }
             }
     }
 

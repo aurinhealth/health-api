@@ -9,6 +9,9 @@ import WidgetKit
 /// today, the workout, food, drinks, the night and Aurin through the day.
 /// They draw the last Today the watch app got (ComplicationShelf); a tap
 /// opens the watch app on its page (widgetURL, WatchRoot.open).
+// The watch app compiles this file too, for the sample day's watch face
+// (AurinWatch/DemoFace.swift): it takes the views, not the widgets.
+#if !AURIN_WATCH_APP
 @main
 struct AurinWatchWidgets: WidgetBundle {
     var body: some Widget {
@@ -52,6 +55,7 @@ struct WideWorkout: Widget { var body: some WidgetConfiguration { WideComplicati
 struct WideFood: Widget { var body: some WidgetConfiguration { WideComplication.configuration(.food) } }
 struct WideDrinks: Widget { var body: some WidgetConfiguration { WideComplication.configuration(.drinks) } }
 struct WideNight: Widget { var body: some WidgetConfiguration { WideComplication.configuration(.night) } }
+#endif
 
 // MARK: - Timeline
 
@@ -648,10 +652,27 @@ struct WideView: View {
         }
     }
 
+    /// The time left until a moment, counting down by itself; in the watch
+    /// app's sample day (its screenshots, WatchDemo) from the sample's 10:09.
+    private func until(_ date: Date) -> Text {
+        #if AURIN_WATCH_APP
+        if WatchDemo.on {
+            let formatter = DateComponentsFormatter()
+            formatter.unitsStyle = .abbreviated
+            formatter.allowedUnits = [.hour, .minute]
+            var calendar = Calendar.current
+            calendar.locale = Locale(identifier: Lang.english ? "en_US" : "cs_CZ")
+            formatter.calendar = calendar
+            return Text(formatter.string(from: entry.date, to: date) ?? "")
+        }
+        #endif
+        return Text(date, style: .relative)
+    }
+
     /// "17:30 · in 1 hr, 23 min" while it is still to come.
     @ViewBuilder private func startLine(_ s: WatchSnapshot.Session, on key: String) -> some View {
         if let start = Days.at(s.time, on: key), start > entry.date {
-            (Text((s.time ?? "") + " · " + tr("za ", "in ")) + Text(start, style: .relative))
+            (Text((s.time ?? "") + " · " + tr("za ", "in ")) + until(start))
                 .font(.system(size: 11)).foregroundStyle(C.muted).lineLimit(1)
         } else {
             Text(Days.join([s.time, s.minutes.map(Days.minutes)]))
@@ -873,9 +894,9 @@ struct WideView: View {
             HStack(spacing: 4) {
                 Image(systemName: "moon.fill")
                 if let bed, bed > entry.date {
-                    Text(tr("Spát za ", "Bed in ")) + Text(bed, style: .relative)
+                    Text(tr("Spát za ", "Bed in ")) + until(bed)
                 } else if let wake, wake > entry.date {
-                    Text(tr("Budík za ", "Alarm in ")) + Text(wake, style: .relative)
+                    Text(tr("Budík za ", "Alarm in ")) + until(wake)
                 } else {
                     Text(tr("Noc", "Night"))
                 }

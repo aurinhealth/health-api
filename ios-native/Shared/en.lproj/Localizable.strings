@@ -3741,3 +3741,10 @@
 "7 dní zdarma na 12měsíčním tarifu" = "7 days free on the 12-month plan";
 "Podle tvé regenerace a pokroku." = "Shaped by your recovery and progress.";
 "Vyfoť talíř a hodnoty se doplní." = "Snap your plate and the values fill in.";
+
+/* Training plans of Aurin Pro without Pro */
+"PRO" = "PRO";
+"ZDARMA" = "FREE";
+"Adaptivní tréninkový plán" = "Adaptive training plan";
+"Každý trénink se řídí tvou regenerací, pokrokem a časem, který máš." = "Every session follows your recovery, your progress and the time you have.";
+"Začít s Aurin Pro" = "Start with Aurin Pro";

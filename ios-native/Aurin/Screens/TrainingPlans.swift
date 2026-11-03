@@ -54,6 +54,9 @@ struct TrainingPlans: Decodable, Equatable {
         var sports: [String]? = nil
         /// The athlete picks two or three sports (a multisport plan without a race).
         var choose: Bool? = nil
+        /// A plan of Aurin Pro and this account has no Pro (once payments are on):
+        /// the way to the offer instead of "Začít plán". Every sport has one free plan.
+        var locked: Bool? = nil
     }
 
     struct Active: Decodable, Equatable {
@@ -714,13 +717,14 @@ struct TrainingPlansSheet: View {
                     ForEach(Self.sports.indices, id: \.self) { i in sportTile(Self.sports[i]) }
                 }
                 let list = plans.templates.filter { $0.sport == sport }
+                let gated = plans.templates.contains { $0.locked == true }
                 let raced = list.filter { $0.race != nil }, open = list.filter { $0.race == nil }
                 // Plans with a race date apart from the others.
                 if !raced.isEmpty && !open.isEmpty {
-                    SettingsGroup(title: L10n.tr("Se závodem")) { rows(raced) }
-                    SettingsGroup(title: L10n.tr("Bez závodu")) { rows(open) }
+                    SettingsGroup(title: L10n.tr("Se závodem")) { rows(raced, gated) }
+                    SettingsGroup(title: L10n.tr("Bez závodu")) { rows(open, gated) }
                 } else {
-                    SettingsGroup { rows(list) }
+                    SettingsGroup { rows(list, gated) }
                 }
             }
             .toolbar {
@@ -730,7 +734,8 @@ struct TrainingPlansSheet: View {
         .onAppear { sport = plans.active?.template.sport ?? "ride" }
     }
 
-    @ViewBuilder private func rows(_ list: [TrainingPlans.Template]) -> some View {
+    /// gated: some plans need Pro, so every row says FREE or PRO.
+    @ViewBuilder private func rows(_ list: [TrainingPlans.Template], _ gated: Bool) -> some View {
         ForEach(Array(list.enumerated()), id: \.element.id) { index, template in
             if index > 0 { SettingsDivider() }
             NavigationLink {
@@ -739,7 +744,7 @@ struct TrainingPlansSheet: View {
                 } else {
                     PlanPreviewView(template: template, replacing: plans.active, done: { dismiss() })
                 }
-            } label: { row(template) }
+            } label: { row(template, gated) }
             .buttonStyle(.plain)
         }
     }
@@ -770,13 +775,14 @@ struct TrainingPlansSheet: View {
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
-    private func row(_ template: TrainingPlans.Template) -> some View {
+    private func row(_ template: TrainingPlans.Template, _ gated: Bool) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(template.name).font(.body).foregroundStyle(Palette.ink)
                 Text(template.goal).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
             }
             Spacer(minLength: 8)
+            if gated { PlanBadge(pro: template.locked == true) }
             Text(L10n.plural("%lld týdnů", template.weeksCount)).font(.body).foregroundStyle(Palette.muted)
             Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
         }
@@ -869,6 +875,7 @@ struct PlanDetailView: View {
                             .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                if template.locked == true { ProPlanOffer() } else {
                 PrimaryButton(title: L10n.tr(active == nil ? "Začít plán" : "Začít tento plán"), systemImage: "flag", busy: busy) {
                     var body: JSONObject = ["action": .string("start"), "templateId": .string(template.id)]
                     if !days.isEmpty { body["days"] = .array(days.map { .number(Double($0)) }) }
@@ -876,6 +883,7 @@ struct PlanDetailView: View {
                     Task { await act(body) }
                 }
                 .disabled(busy || model.demo)
+                }
             }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
         }
@@ -1166,6 +1174,53 @@ struct PlanSessionView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(LocalizedStringKey(title)).font(Typo.caption).foregroundStyle(Palette.muted)
             Text(value).font(Typo.number(22)).foregroundStyle(Palette.ink)
+        }
+    }
+}
+
+/// FREE or PRO beside a plan in the list, once some plans need Pro.
+struct PlanBadge: View {
+    let pro: Bool
+
+    var body: some View {
+        Text(verbatim: L10n.tr(pro ? "PRO" : "ZDARMA"))
+            .scaledFont(10.5, weight: .bold, cap: .denseCap).tracking(0.6)
+            .foregroundStyle(pro ? Night.lilac : Palette.green)
+            .padding(.horizontal, 7).padding(.vertical, 3)
+            .background((pro ? Night.lilac : Palette.green).opacity(0.16), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .accessibilityLabel(L10n.tr(pro ? "v Aurin Pro" : "zdarma"))
+    }
+}
+
+/// A plan of Aurin Pro without Pro, instead of "Začít plán": what an adaptive
+/// plan does and the way to the offer (approved mockup 2-zamcene-plany, 3 Nov 2026).
+struct ProPlanOffer: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    PlanBadge(pro: true)
+                    Text("Adaptivní tréninkový plán").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                }
+                Text("Každý trénink se řídí tvou regenerací, pokrokem a časem, který máš.")
+                    .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(LinearGradient(colors: [Night.lilac.opacity(0.2), Night.mint.opacity(0.08)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                        in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Night.lilac.opacity(0.3)))
+            Button { Paywall.present(model) } label: {
+                Text("Začít s Aurin Pro").font(Typo.bodyStrong).foregroundStyle(Night.violet)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(Night.lavender, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            if ProStore.shared.trialEligible {
+                Text("7 dní zdarma na 12měsíčním tarifu").font(.footnote).foregroundStyle(Palette.muted)
+            }
         }
     }
 }

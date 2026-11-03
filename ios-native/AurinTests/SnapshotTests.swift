@@ -181,11 +181,11 @@ final class SnapshotTests: XCTestCase {
         var day = DemoData.gym
         XCTAssertEqual(day.planName, "Celé tělo")
         let exercises = day.exercises
-        XCTAssertEqual(exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy v předklonu"])
-        XCTAssertEqual(exercises[0].sets.count, 4)
+        XCTAssertEqual(exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy", "Rumunský mrtvý tah", "Výpady"])
+        XCTAssertEqual(exercises[0].sets.count, 5)
         XCTAssertTrue(exercises[0].sets[0].warmup)
         XCTAssertEqual(exercises[0].doneCount, 1)
-        XCTAssertEqual(exercises[0].workCount, 3)
+        XCTAssertEqual(exercises[0].workCount, 4)
         XCTAssertEqual(exercises[1].superset, "A")
 
         let second = exercises[0].sets[2]
@@ -197,12 +197,12 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(day.exercises[0].doneCount, 1)
 
         day.replace(exercise: "Dřep", with: "Leg press")
-        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Leg press", "Tlak na lavici", "Přítahy v předklonu"], "done sets keep the old name")
+        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Leg press", "Tlak na lavici", "Přítahy", "Rumunský mrtvý tah", "Výpady"], "done sets keep the old name")
 
         let body = day.saveBody
         guard case .array(let rows) = body["values"], case .array(let full) = body["fullValues"] else { return XCTFail("body") }
         XCTAssertEqual(full.count, rows.count + 7)
-        XCTAssertEqual(rows.count, 8)
+        XCTAssertEqual(rows.count, 17)
     }
 
     func testTrainingSessionsDecode() {
@@ -496,9 +496,9 @@ final class SnapshotTests: XCTestCase {
     func testPlanEditing() {
         var day = DemoData.gym
         day.moveExercise(from: 2, to: 0)
-        XCTAssertEqual(day.exercises.map(\.name), ["Přítahy v předklonu", "Dřep", "Tlak na lavici"])
+        XCTAssertEqual(day.exercises.map(\.name), ["Přítahy", "Dřep", "Tlak na lavici", "Rumunský mrtvý tah", "Výpady"])
         day.moveExercise(from: 0, to: 3)
-        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy v předklonu"])
+        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy", "Rumunský mrtvý tah", "Výpady"])
         XCTAssertEqual(day.planName, "Celé tělo", "the head of the sheet stays")
 
         let sets = day.exercises[1].sets.count
@@ -981,6 +981,12 @@ final class SnapshotTests: XCTestCase {
         try render("plan-card", glow: Palette.Glow.training, height: 260) { ActivePlanSummary(active: active).padding(24) }
         try render("plan-preview", glow: Palette.Glow.training, height: 1150) {
             PlanPreviewContent(template: active.template, preview: preview) {}.padding(.horizontal, 24).environment(model)
+        }
+        // A plan of Aurin Pro without Pro: the adaptive plan card and "Začít s Aurin Pro" instead of "Začít plán".
+        var locked = active.template
+        locked.locked = true
+        try render("plan-preview-locked", glow: Palette.Glow.training, height: 1250) {
+            PlanPreviewContent(template: locked, preview: preview) {}.padding(.horizontal, 24).environment(model)
         }
         try render("plan-preview-failed", glow: Palette.Glow.training, height: 1150) {
             PlanPreviewContent(template: active.template, preview: nil, failed: true, canStart: false) {}.padding(.horizontal, 24).environment(model)
