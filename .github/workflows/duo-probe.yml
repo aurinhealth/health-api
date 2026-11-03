@@ -1,4 +1,5 @@
-# Temporary: how the iPhone Duo simulator opens and closes (no app build).
+# Temporary: the app on the iPhone Duo simulator closed and open, for the
+# Duo layout mockups. Builds only the app (no tests).
 name: Duo probe
 on:
   push:
@@ -6,33 +7,76 @@ on:
       - claude/project-thread-6xtv9j
     paths:
       - ".github/workflows/duo-probe.yml"
+      - "ios-native/**"
 permissions:
   contents: read
+concurrency:
+  group: duo-probe
+  cancel-in-progress: true
 jobs:
   probe:
     runs-on: xcode-27
-    timeout-minutes: 30
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: ios-native
     steps:
-      - name: Probe
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Xcode
+        run: sudo xcode-select -s /Applications/Xcode_27.1.app/Contents/Developer && xcodebuild -version
+      - name: Muscle model
+        env:
+          MUSCLE_MODEL_R2_KEY_ID: ${{ secrets.MUSCLE_MODEL_R2_KEY_ID }}
+          MUSCLE_MODEL_R2_SECRET: ${{ secrets.MUSCLE_MODEL_R2_SECRET }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: ../.github/scripts/fetch-muscle-model.sh
+      - name: Project
+        env:
+          APPLE_TEAM_ID: SIMULATOR
+        run: brew install xcodegen && xcodegen generate
+      - name: Build and shoot
         run: |
-          sudo xcode-select -s /Applications/Xcode_27.1.app/Contents/Developer
-          xcodebuild -version
-          xcrun simctl help | sed -n 1,80p
-          echo "== ui"; xcrun simctl help ui || true
-          echo "== io"; xcrun simctl help io || true
-          echo "== device type"
-          dt=$(find /Applications/Xcode_27.1.app /Library/Developer -maxdepth 14 -name "iPhone Duo.simdevicetype" 2>/dev/null | head -3); echo "$dt"
-          echo "$dt" | while read -r d; do [ -n "$d" ] && find "$d" -name "*.plist" | while read -r p; do echo "--- $p"; plutil -p "$p" | head -150; done; done
-          echo "== strings"
-          for b in "$(xcrun -f simctl)" /Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/CoreSimulator; do
-            echo "--- $b"; strings "$b" 2>/dev/null | grep -iE "fold|posture|hinge|closed|display ?mode" | sort -u | head -80
-          done
           udid=$(xcrun simctl list devices available -j | python3 -c '
           import json, sys
           d = json.load(sys.stdin)["devices"]
           print(next(x["udid"] for r in d for x in d[r] if "Duo" in x["name"]))')
-          xcrun simctl boot "$udid"; xcrun simctl bootstatus "$udid" -b >/dev/null
-          for c in "ui $udid posture" "ui $udid fold" "ui $udid hinge" "ui $udid posture open" "ui $udid posture unfolded" "ui $udid fold open" "ui $udid unfold" "io $udid fold" "io $udid posture"; do
-            echo "== simctl $c"; xcrun simctl $c 2>&1 | head -15 || true
+          xcodebuild -project Aurin.xcodeproj -scheme Aurin -configuration Debug \
+            -destination "id=$udid" -derivedDataPath build CODE_SIGNING_ALLOWED=NO build -quiet
+          out="$GITHUB_WORKSPACE/duo"; mkdir -p "$out"
+          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid" -b >/dev/null
+          xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/Aurin.app
+          xcrun simctl ui "$udid" appearance light
+          xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
+          go() { xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo "$@" -AppleLanguages "(en)" -AppleLocale en_US -language en >/dev/null; sleep 7; }
+          shoot() { # $1 state, $2 display
+            for s in "-tab today" "-tab training" "-tab health" "-tab food" "-open readiness" "-open gym/2026-10-08"; do
+              name=$(echo "$s" | sed -E 's/^-(tab|open) //; s#/.*##')
+              go $s
+              xcrun simctl io "$udid" screenshot --display="$2" "$out/$1-$name.png" || true
+            done
+          }
+          state() { xcrun simctl io "$udid" enumerate | grep -E "Default width|Default height|Power state" | paste - - - || true; }
+          echo "== closed"; state
+          shoot closed 1
+          echo "== open: outer display off, inner on"
+          xcrun simctl io "$udid" screenConfig --display=1 power off 2>&1 || true
+          xcrun simctl io "$udid" screenConfig --display=3 power on 2>&1 || true
+          sleep 5; state
+          xcrun simctl io "$udid" screenshot --display=3 "$out/open-home.png" 2>&1 || true
+          shoot open 3
+          echo "== half: inner display at half width"
+          for g in 1002x2853@3 1002x2853 2853x1002@3; do
+            echo "-- geometry $g"; xcrun simctl io "$udid" screenConfig --display=3 geometry "$g" 2>&1 || true
           done
-          xcrun simctl io "$udid" screenshot /tmp/x.png 2>&1 | head -8 || true
+          sleep 5; state
+          go -tab today
+          xcrun simctl io "$udid" screenshot --display=3 "$out/half-today.png" 2>&1 || true
+          ls -la "$out"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: always()
+        with:
+          name: duo-probe
+          path: duo
+          if-no-files-found: ignore
+          retention-days: 7
