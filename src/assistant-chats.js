@@ -1,9 +1,16 @@
 // Chats with the AI assistant. Each chat keeps its own messages; the coach
-// sees only the turns of the chat it answers in, so a new chat starts clean.
+// reads the last CONTEXT_MESSAGES of the chat it answers in, and what came
+// before them and in other chats through the notes of coach-notes.js.
 // Chats untouched for 90 days are removed when the list is read.
 import { L } from './lang.js';
+import { localToday } from './user-time.js';
+import { shiftDate } from './dashboard-shared.js';
+import { ensureCoachNotes, ensureNoteQueue } from './coach-notes.js';
 
-const KEEP_DAYS = 90, CONTEXT_TURNS = 12, MAX_CONTENT = 16000;
+// 60 messages are 30 questions with their answers, a whole week's allowance
+// (Petr 2026-11-03); CONTEXT_CHARS keeps a chat of very long answers in check.
+export const CONTEXT_MESSAGES = 60;
+const KEEP_DAYS = 90, CONTEXT_CHARS = 60000, MAX_CONTENT = 16000;
 
 export async function ensureAssistantChats(db) {
   await db.prepare('CREATE TABLE IF NOT EXISTS assistant_chats (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, title TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)').run();
@@ -22,12 +29,18 @@ export async function ownedChat(db, id) {
   return db.prepare('SELECT id,title,created_at,updated_at FROM assistant_chats WHERE user_id=? AND id=?').bind(db.userId, Number(id)).first();
 }
 
-// The last turns of the chat as context for the coach ([] for a new chat).
-export async function chatContext(db, chatId) {
+// The last messages of the chat as context for the coach ([] for a new chat),
+// newest kept within CONTEXT_CHARS. `firstId` is the oldest message read, so a
+// longer chat knows where its summary has to reach (coach-notes.js).
+export async function chatContext(db, chatId, { withIds = false } = {}) {
   await ensureAssistantChats(db);
-  if (!await ownedChat(db, chatId)) return [];
-  const rows = (await db.prepare('SELECT role,content FROM assistant_messages WHERE user_id=? AND chat_id=? ORDER BY id DESC LIMIT ?').bind(db.userId, Number(chatId), CONTEXT_TURNS).all()).results || [];
-  return rows.reverse().map(r => ({ role: r.role, content: r.content }));
+  if (!await ownedChat(db, chatId)) return withIds ? { turns: [], firstId: null, more: false } : [];
+  const rows = (await db.prepare('SELECT id,role,content FROM assistant_messages WHERE user_id=? AND chat_id=? ORDER BY id DESC LIMIT ?').bind(db.userId, Number(chatId), CONTEXT_MESSAGES + 1).all()).results || [];
+  let chars = 0, kept = [];
+  for (const r of rows.slice(0, CONTEXT_MESSAGES)) { chars += String(r.content || '').length; if (kept.length && chars > CONTEXT_CHARS) break; kept.push(r); }
+  const turns = kept.reverse().map(r => ({ role: r.role, content: r.content }));
+  if (!withIds) return turns;
+  return { turns, firstId: kept[0]?.id ?? null, more: rows.length > kept.length };
 }
 
 // Store one question and its answer; a missing or foreign chat becomes a new one.
@@ -79,9 +92,28 @@ export async function lastAnswerId(db, chatId) {
 export async function deleteChat(db, id) {
   await ensureAssistantChats(db);
   if (!validId(id)) return false;
+  const chat = await ownedChat(db, id);
   await db.batch([
     db.prepare('DELETE FROM assistant_messages WHERE user_id=? AND chat_id=?').bind(db.userId, Number(id)),
     db.prepare('DELETE FROM assistant_chats WHERE user_id=? AND id=?').bind(db.userId, Number(id))
   ]);
+  // The coach forgets the chat: its summary goes, and the notes of the days it
+  // ran are written again from the chats that remain (coach-notes.js).
+  if (chat) await forgetChatNotes(db, chat).catch(error => console.error('Chat notes not cleared', error.message));
   return true;
+}
+async function forgetChatNotes(db, chat) {
+  await ensureCoachNotes(db);
+  await db.prepare('DELETE FROM assistant_chat_summaries WHERE user_id=? AND chat_id=?').bind(db.userId, Number(chat.id)).run();
+  const day = at => localToday(new Date(String(at).replace(' ', 'T') + 'Z'));
+  const days = [];
+  for (let d = day(chat.created_at), last = day(chat.updated_at); d <= last && days.length < 31; d = shiftDate(d, 1)) days.push(d);
+  if (!days.length) return;
+  await ensureNoteQueue(db);
+  const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  for (const d of days) {
+    await db.prepare('DELETE FROM coach_notes WHERE user_id=? AND day=?').bind(db.userId, d).run();
+    // Today's note is written after midnight anyway; an earlier day is written again now.
+    if (d < localToday()) await db.prepare('INSERT INTO coach_note_queue (user_id, day, due_at) VALUES (?, ?, ?) ON CONFLICT(user_id, day) DO UPDATE SET due_at=excluded.due_at').bind(db.userId, d, now).run();
+  }
 }

@@ -854,9 +854,9 @@ export function overviewPage(request) {
       ['sleep-need', 'needOne', 220, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
       ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
       ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
-    ['kouc', '', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
+    ['kouc', '', 'Just ask. It knows your data.', 'It remembers what you tell it, in every new chat too, and you can see and edit what it remembers.', 'green', 'glow-today', [
       ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today or what to eat before a workout, or send a photo of your trainer’s plan. When it proposes a workout or a plan for your race, confirm it and it lands in your plan.', 11500],
-      ['html:memory', 'coachMemory', 140, 'It remembers you.', 'Tell it about a sore knee, your schedule or a goal and it keeps that in mind. See everything it remembers, edit it or delete it.', 7000]]],
+      ['html:memory', 'coachMemory', 140, 'It remembers you.', 'Tell it about a sore knee, your schedule or a goal and it keeps that in mind, in a new chat too. See what it remembers by goals, training, health and life, edit it or switch memory off.', 7000]]],
     ['hodinky', '', 'Aurin on your wrist.', 'Today’s readiness when you raise your wrist, your gym sets without your phone, water in one tap. It comes with the iPhone app.', 'green', 'glow-today',
       WATCH.map(([, title, text], i) => [`watch:${i}`, '', 0, title, text, 6000])]];
   // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides

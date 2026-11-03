@@ -542,7 +542,8 @@ struct CoachView: View {
         do {
             if yes {
                 switch chip.kind {
-                case .forgotten: try await model.api.forgetMemory(chip.text)
+                // A pain the athlete says has passed stays under Past.
+                case .forgotten: try await model.api.forgetMemory(chip.text, toPast: true)
                 case .updated: try await model.api.editMemory(from: chip.from ?? chip.text, to: chip.text)
                 case .saved: try await model.api.addMemory(chip.text)
                 }

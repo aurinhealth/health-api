@@ -178,7 +178,7 @@ test("the athlete's remembered wishes reach the week plan and the change of a se
   await adjustByText({}, { session: { date: "2026-10-17", sport: "ride", minutes: 70, environment: "outdoor", kind: "endurance" }, request: "Kratší", weekDays: ["2026-10-17"], prefs, today, preferenceMemory: ["žádný běh"] }, { ask });
   assert.match(calls[0].input, /žádný běh/);
   assert.match(calls[0].instructions, /preferenceMemory/);
-  assert.match(readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8"), /preferenceMemory:state\.memories\?\.length/);
+  assert.match(readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8"), /preferenceMemory:usedMemories\(state\)\.length/);
 });
 
 test("a TSS asked for reaches the AI with the current TSS and each kind's TSS an hour", async () => {

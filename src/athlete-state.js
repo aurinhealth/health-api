@@ -21,8 +21,11 @@ export async function getAthleteState(db,{date=localToday()}={}) {
   const row = await db.prepare('SELECT state_json FROM athlete_state WHERE user_id=?').bind(db.userId).first();
   let state = {}; try { state = JSON.parse(row?.state_json || '{}'); } catch { /* defaults */ }
   // `conversation` is no longer written (chats live in assistant_chats); old rows still read.
-  return effectiveAthleteState({ status: 'active', note: '', statusUntil:null, memories: [], memoryMeta: {}, conversation: [], dismissed: [], ...state },date);
+  return effectiveAthleteState({ status: 'active', note: '', statusUntil:null, memories: [], memoryMeta: {}, pastMemories: [], memoryOff: false, conversation: [], dismissed: [], ...state },date);
 }
+// The memories the coach and the other AI features use: none while the athlete
+// has "Use memory" off (the list stays and comes back when it is on again).
+export const usedMemories = state => state?.memoryOff ? [] : (state?.memories || []);
 export async function updateAthleteState(db, patch,{date=localToday()}={}) {
   const state = await getAthleteState(db,{date});
   if (patch.status != null) {
@@ -34,16 +37,31 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
     state.status = patch.status; state.note = clean(patch.note); state.changedAt = new Date().toISOString();
     state.statusUntil=patch.status==='active'?null:until;
   }
-  if (patch.memory) remember(state, clean(patch.memory), date);
-  if (patch.forget != null) {state.memories = state.memories.filter(x => x !== patch.forget);delete state.memoryMeta[patch.forget];state.conversation=state.conversation.filter(t=>!String(t.content).includes(patch.forget));}
+  // A memory added by hand ("memory", with its group) or saved by the coach from
+  // the athlete's own words ("saves", marked New in the list for a week).
+  if (patch.memory) remember(state, clean(patch.memory), date, { group: patch.group });
+  for (const save of Array.isArray(patch.saves) ? patch.saves : []) remember(state, clean(save?.text), date, { group: save?.group, by: 'coach' });
+  if (patch.forget != null) {
+    const meta = state.memoryMeta[patch.forget];
+    // "No longer true" about a pain or an illness keeps it under Past: the coach
+    // knows the history but does not coach on it. Deleting from the list erases it.
+    if (patch.toPast && state.memories.includes(patch.forget) && groupOf(patch.forget, meta) === 'health') state.pastMemories = [...state.pastMemories.filter(p => p.text !== patch.forget), { text: patch.forget, group: 'health', at: meta?.at || null, endedAt: date }].slice(-PAST_KEEP);
+    state.memories = state.memories.filter(x => x !== patch.forget);delete state.memoryMeta[patch.forget];state.conversation=state.conversation.filter(t=>!String(t.content).includes(patch.forget));
+  }
+  if (patch.forgetPast != null) state.pastMemories = state.pastMemories.filter(p => p.text !== patch.forgetPast);
   // An edited memory keeps its place in the list and counts as new.
   if (patch.edit?.from != null && state.memories.includes(patch.edit.from)) {
     const to = clean(patch.edit.to);
     if (!to) throw new Error(L('Napiš, co si má kouč pamatovat.', 'Write what the coach should remember.'));
+    const before = state.memoryMeta[patch.edit.from];
     delete state.memoryMeta[patch.edit.from];
     state.memories = [...new Set(state.memories.map(x => x === patch.edit.from ? to : x))];
-    state.memoryMeta[to] = memoryMeta(to, date);
+    state.memoryMeta[to] = { ...memoryMeta(to, date), group: validGroup(patch.edit.group) || groupOf(patch.edit.from, before), ...(patch.edit.by === 'coach' ? { changed: 'updated', changedAt: date } : {}) };
   }
+  // Only the group of a memory changes (the edit sheet's Goals, Training, Health, Life).
+  if (patch.regroup?.text != null && state.memories.includes(patch.regroup.text) && validGroup(patch.regroup.group)) state.memoryMeta[patch.regroup.text] = { ...(state.memoryMeta[patch.regroup.text] || memoryMeta(patch.regroup.text, date)), group: patch.regroup.group };
+  // "Use memory": off, the coach neither reads nor saves memories.
+  if (typeof patch.memoryOff === 'boolean') state.memoryOff = patch.memoryOff;
   // "Still true": the coach asks again in two weeks.
   if (patch.keep != null && state.memoryMeta[patch.keep]?.check) state.memoryMeta[patch.keep].check = shiftDate(date, CHECK_DAYS);
   // Settings → Oznámení: the morning readiness, the coach's own messages, the
@@ -73,16 +91,35 @@ const CHECK_DAYS = 14;
 const shiftDate = (day, days) => new Date(Date.parse(day + 'T12:00:00Z') + days * 864e5).toISOString().slice(0, 10);
 const PASSING = /bol[ií]|bolest|zran|natáh|natah|podvrt|výron|vyron|nateklé|natekl|nemoc|nachlaz|chřip|chrip|těhot|tehot|hurt|pain|sore|injur|sprain|strain|ill\b|sick|cold\b|flu\b|pregnan/i;
 const memoryMeta = (text, date) => ({ at: date, check: PASSING.test(text) ? shiftDate(date, CHECK_DAYS) : null });
-function remember(state, text, date) {
+// What the coach remembers, in four groups (the WHOOP-like sections of the list).
+export const MEMORY_GROUPS = ['goals', 'training', 'health', 'life'];
+const validGroup = group => MEMORY_GROUPS.includes(group) ? group : null;
+// A memory from before the groups: a pain or an illness is Health, the rest Training.
+const groupOf = (text, meta) => validGroup(meta?.group) || (PASSING.test(text) ? 'health' : 'training');
+// How many lasting memories and past ones are kept; the oldest go first.
+export const MEMORY_KEEP = 50;
+const PAST_KEEP = 20;
+// New and Updated show for a week after the coach saved or rewrote a memory itself.
+const BADGE_DAYS = 7;
+function remember(state, text, date, { group = null, by = null } = {}) {
   if (!text || state.memories.includes(text)) return;
-  state.memories = [...state.memories, text].slice(-30);
-  state.memoryMeta[text] = memoryMeta(text, date);
+  state.memories = [...state.memories, text].slice(-MEMORY_KEEP);
+  state.memoryMeta[text] = { ...memoryMeta(text, date), group: validGroup(group) || groupOf(text), ...(by === 'coach' ? { changed: 'new', changedAt: date } : {}) };
+  state.pastMemories = (state.pastMemories || []).filter(p => p.text !== text);
   for (const key of Object.keys(state.memoryMeta)) if (!state.memories.includes(key)) delete state.memoryMeta[key];
 }
-// The list for the app: each memory with the day it was saved.
-export const memoryList = state => (state.memories || []).map(text => ({ text, since: state.memoryMeta?.[text]?.at || null, check: state.memoryMeta?.[text]?.check || null }));
+// The list for the app: each memory with the day it was saved, its group and
+// whether the coach saved or rewrote it this week (New, Updated).
+export const memoryList = (state, date = localToday()) => (state.memories || []).map(text => {
+  const meta = state.memoryMeta?.[text] || {};
+  const badge = meta.changed && meta.changedAt && meta.changedAt > shiftDate(date, -BADGE_DAYS) ? meta.changed : null;
+  return { text, since: meta.at || null, check: meta.check || null, group: groupOf(text, meta), badge };
+});
+// What no longer holds: a past pain or illness, newest first.
+export const pastMemoryList = state => [...(state.pastMemories || [])].reverse().map(p => ({ text: p.text, group: p.group || 'health', since: p.at || null, ended: p.endedAt || null }));
 // The oldest passing memory whose check day has come: "Is this still true?"
 export function memoryCheck(state, date = localToday()) {
+  if (state?.memoryOff) return null;
   const due = memoryList(state).filter(m => m.check && m.check <= date).sort((a, b) => a.check.localeCompare(b.check))[0];
   return due ? { id: 'memory:' + due.check + ':' + due.text, kind: 'memory_check', memory: due.text, headline: L('Platí to pořád?', 'Is this still true?'), reasons: [due.text], message: null } : null;
 }
@@ -96,6 +133,16 @@ export function memoryChanges(proposed, memories = []) {
     if (known.has(u?.from) && !forgotten.includes(u.from) && to && to !== u.from && !updated.some(x => x.from === u.from)) updated.push({ from: u.from, to });
   }
   return { forgotten, updated };
+}
+// What the coach's answer saves from the athlete's own words: at most three
+// short new memories, each with its group (Training when it gave none).
+export function memorySaves(proposed, memories = []) {
+  const known = new Set(memories), saves = [];
+  for (const s of Array.isArray(proposed?.save) ? proposed.save : []) {
+    const text = clean(s?.text).slice(0, 200);
+    if (text && !known.has(text) && !saves.some(x => x.text === text)) saves.push({ text, group: validGroup(s?.group) || 'training' });
+  }
+  return saves.slice(0, 3);
 }
 // A lasting preference ("Nechci běhat"), not a remark about one day or a
 // question: "Nechci dnes nohy" or "Nechci zítra kolo?" are not remembered.
