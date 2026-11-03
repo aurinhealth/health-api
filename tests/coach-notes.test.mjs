@@ -183,3 +183,22 @@ test('the coach reads notes of the set days before today and the end of another 
     assert.deepEqual(await earlierToday(db, second, { today }), [{ role: 'user', content: 'Swap Thursday for a ride?' }, { role: 'assistant', content: 'Done, Thursday is a ride.' }]);
   });
 });
+
+test('the night skips users without consent: no health consent is never picked, no AI consent drops the day unasked', async () => {
+  const raw = createD1(), db = scopedDb(raw, 2);
+  const env = { DB: db, OPENAI_API_KEY: 'test', USER_ID: 2 };
+  await raw.prepare("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, name TEXT, role TEXT, disabled INTEGER DEFAULT 0)").run();
+  await raw.prepare("CREATE TABLE user_consents (user_id INTEGER, kind TEXT, version TEXT, granted_at TEXT, withdrawn_at TEXT, PRIMARY KEY (user_id, kind))").run();
+  await raw.prepare("INSERT INTO users (id, email, role) VALUES (2, 'b@example.com', 'user'), (3, 'c@example.com', 'user')").run();
+  await raw.prepare("INSERT INTO user_consents (user_id, kind, version, granted_at) VALUES (2, 'health', '1', '2026-10-01')").run();
+  await withTimeZone('Europe/Prague', async () => {
+    await queueDayNote(db, '2026-11-02');
+    await queueDayNote(scopedDb(raw, 3), '2026-11-02');
+    // User 3 never gave health consent.
+    assert.deepEqual((await usersWithNotesDue(raw, env, Date.parse('2026-11-03T05:00:00Z'))).map(u => u.id), [2]);
+    // User 2 has no AI consent: the day goes from the queue and the AI is never asked.
+    const r = await runCoachNotes(env, { now: Date.parse('2026-11-03T05:00:00Z'), ask: async () => { throw new Error('asked'); } });
+    assert.equal(r.days, 0);
+    assert.equal((await raw.prepare('SELECT COUNT(*) AS n FROM coach_note_queue WHERE user_id=2').first()).n, 0);
+  });
+});
