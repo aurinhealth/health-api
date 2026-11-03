@@ -297,7 +297,38 @@ final class ProStore {
         let monthly = price / 12
         // A whole yearly price (1 490 Kč) a month in whole units, else with cents.
         let whole = NSDecimalNumber(decimal: price).doubleValue.truncatingRemainder(dividingBy: 1) == 0
-        return monthly.formatted(style.precision(.fractionLength(whole ? 0 : 2)))
+        // Written like Apple's own price ("124 Kč" next to "1 490,00 Kč"): the format style's
+        // locale is the phone's, which can name the currency differently ("124 CZK").
+        return Self.reprice(product.displayPrice, monthly, fractionDigits: whole ? 0 : 2)
+            ?? monthly.formatted(style.precision(.fractionLength(whole ? 0 : 2)))
+    }
+
+    /// `value` written the way `shown` writes its amount: the same currency symbol, decimal
+    /// and thousands separators ("1 490,00 Kč", 124.17, 0 → "124 Kč"); nil without digits.
+    nonisolated static func reprice(_ shown: String, _ value: Decimal, fractionDigits: Int) -> String? {
+        let characters = Array(shown)
+        guard let first = characters.firstIndex(where: \.isNumber),
+              let last = characters.lastIndex(where: \.isNumber) else { return nil }
+        let span = Array(characters[first...last])
+        let separators = span.indices.filter { !span[$0].isNumber }
+        // The last separator is the decimal one when one or two digits follow it.
+        let decimal = separators.last.flatMap { span.count - $0 - 1 <= 2 ? span[$0] : nil }
+        let grouping = separators.map { span[$0] }.first { $0 != decimal } ?? (decimal == "," ? "\u{00A0}" : ",")
+        var input = value, rounded = Decimal()
+        NSDecimalRound(&rounded, &input, fractionDigits, .plain)
+        let parts = NSDecimalNumber(decimal: rounded).stringValue.split(separator: ".", omittingEmptySubsequences: false)
+        let whole = Array(parts[0])
+        var number = ""
+        for (index, digit) in whole.enumerated() {
+            if index > 0, (whole.count - index) % 3 == 0 { number.append(grouping) }
+            number.append(digit)
+        }
+        if fractionDigits > 0 {
+            let fraction = parts.count > 1 ? String(parts[1]) : ""
+            number.append(decimal ?? (grouping == "," ? "." : ","))
+            number += fraction.padding(toLength: fractionDigits, withPad: "0", startingAt: 0)
+        }
+        return String(characters[..<first]) + number + String(characters[(last + 1)...])
     }
 
     /// The number in a shown price: 1490 from "1 490,00 Kč", 59.99 from "$59.99", 1490 from "1.490,00 €" (de).

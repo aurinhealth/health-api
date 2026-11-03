@@ -1,7 +1,7 @@
 // Chats with the AI assistant. Each chat keeps its own messages; the coach
 // reads the last CONTEXT_MESSAGES of the chat it answers in, and what came
 // before them and in other chats through the notes of coach-notes.js.
-// Chats untouched for 90 days are removed when the list is read.
+// Chats stay until the athlete deletes them (or the account), as at WHOOP, Oura and Bevel.
 import { L } from './lang.js';
 import { localToday } from './user-time.js';
 import { shiftDate } from './dashboard-shared.js';
@@ -10,7 +10,7 @@ import { ensureCoachNotes, ensureNoteQueue } from './coach-notes.js';
 // 60 messages are 30 questions with their answers, a whole week's allowance
 // (Petr 2026-11-03); CONTEXT_CHARS keeps a chat of very long answers in check.
 export const CONTEXT_MESSAGES = 60;
-const KEEP_DAYS = 90, CONTEXT_CHARS = 60000, MAX_CONTENT = 16000;
+const CONTEXT_CHARS = 60000, MAX_CONTENT = 16000;
 
 export async function ensureAssistantChats(db) {
   await db.prepare('CREATE TABLE IF NOT EXISTS assistant_chats (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, title TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)').run();
@@ -58,8 +58,6 @@ export async function appendChatTurn(db, chatId, message, answer) {
 
 export async function listChats(db, limit = 50) {
   await ensureAssistantChats(db);
-  const old = (await db.prepare("SELECT id FROM assistant_chats WHERE user_id=? AND updated_at<datetime('now',?)").bind(db.userId, '-' + KEEP_DAYS + ' days').all()).results || [];
-  for (const row of old) await deleteChat(db, row.id);
   const rows = (await db.prepare('SELECT c.id,c.title,c.updated_at,(SELECT COUNT(*) FROM assistant_messages m WHERE m.chat_id=c.id AND m.user_id=c.user_id) AS messages FROM assistant_chats c WHERE c.user_id=? ORDER BY c.updated_at DESC, c.id DESC LIMIT ?').bind(db.userId, limit).all()).results || [];
   return rows.map(r => ({ id: r.id, title: r.title, updatedAt: r.updated_at, messages: Number(r.messages) || 0 }));
 }
@@ -107,7 +105,9 @@ async function forgetChatNotes(db, chat) {
   await db.prepare('DELETE FROM assistant_chat_summaries WHERE user_id=? AND chat_id=?').bind(db.userId, Number(chat.id)).run();
   const day = at => localToday(new Date(String(at).replace(' ', 'T') + 'Z'));
   const days = [];
-  for (let d = day(chat.created_at), last = day(chat.updated_at); d <= last && days.length < 31; d = shiftDate(d, 1)) days.push(d);
+  // Notes are kept 31 days (coach-notes.js), so an older day has none to clear.
+  const first = [day(chat.created_at), shiftDate(localToday(), -31)].sort()[1];
+  for (let d = first, last = day(chat.updated_at); d <= last && days.length < 32; d = shiftDate(d, 1)) days.push(d);
   if (!days.length) return;
   await ensureNoteQueue(db);
   const now = new Date().toISOString().slice(0, 19).replace('T', ' ');

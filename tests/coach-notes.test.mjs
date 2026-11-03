@@ -4,7 +4,7 @@ import { getAthleteState, updateAthleteState, memoryList, pastMemoryList, memory
 import { appendChatTurn, chatContext, deleteChat, ensureAssistantChats, CONTEXT_MESSAGES } from '../src/assistant-chats.js';
 import { queueDayNote, usersWithNotesDue, runCoachNotes, writeDayNote, recentNotes, forgetNote, nightChanges, earlierToday, summarizeChatStart, chatSummary, coachNoteDays, ensureCoachNotes } from '../src/coach-notes.js';
 import { scopedDb } from '../src/tenancy.js';
-import { withTimeZone } from '../src/user-time.js';
+import { withTimeZone, localToday } from '../src/user-time.js';
 import { createD1 } from './helpers/d1.mjs';
 
 const date = '2026-11-03';
@@ -200,5 +200,18 @@ test('the night skips users without consent: no health consent is never picked, 
     const r = await runCoachNotes(env, { now: Date.parse('2026-11-03T05:00:00Z'), ask: async () => { throw new Error('asked'); } });
     assert.equal(r.days, 0);
     assert.equal((await raw.prepare('SELECT COUNT(*) AS n FROM coach_note_queue WHERE user_id=2').first()).n, 0);
+  });
+});
+
+test('deleting a chat that runs for months clears the notes of its recent days', async () => {
+  const raw = createD1(), db = scopedDb(raw, 1);
+  await withTimeZone('Europe/Prague', async () => {
+    const chat = await appendChatTurn(db, null, 'Ahoj', 'Ahoj');
+    const yesterday = localToday(new Date(Date.now() - 864e5));
+    await raw.prepare("UPDATE assistant_chats SET created_at=datetime('now','-90 days'), updated_at=datetime('now','-1 day')").run();
+    await ensureCoachNotes(db);
+    await raw.prepare('INSERT INTO coach_notes (user_id, day, text) VALUES (1, ?, ?)').bind(yesterday, 'Note').run();
+    await deleteChat(db, chat);
+    assert.equal((await raw.prepare('SELECT COUNT(*) AS n FROM coach_notes').first()).n, 0);
   });
 });

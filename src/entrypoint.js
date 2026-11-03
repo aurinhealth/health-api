@@ -2321,10 +2321,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       await deleteChat(env.DB,chatPath[1]);return Response.json({status:'ok'},{headers:{'Cache-Control':'no-store'}});
     }
     const chat=await readChat(env.DB,chatPath[1]);
-    // The proposals made in this chat, with how they were decided.
+    // The proposals made in this chat, with how they were decided: none is older
+    // than the chat's first message, so only the rows since then are read.
     if(chat){
       await ensureCoachInboxTable(env.DB);
-      const rows=(await env.DB.prepare("SELECT id,status,draft_json FROM coach_inbox WHERE user_id=? AND draft_json LIKE ? AND created_at>=datetime('now','-90 days') ORDER BY id").bind(env.USER_ID,'%"chatId":'+chat.id+',"messageId"%').all().catch(()=>({results:[]}))).results||[];
+      const rows=(await env.DB.prepare("SELECT id,status,draft_json FROM coach_inbox WHERE user_id=? AND draft_json LIKE ? AND created_at>=? ORDER BY id").bind(env.USER_ID,'%"chatId":'+chat.id+',"messageId"%',chat.messages[0]?.createdAt||'9999').all().catch(()=>({results:[]}))).results||[];
       chat.actions=rows.map(r=>{try{const d=JSON.parse(r.draft_json);return d.kind==='coach_action'&&d.chatId===chat.id&&d.messageId?{...d.action,draftId:r.id,draftStatus:r.status,messageId:d.messageId}:null;}catch{return null;}}).filter(Boolean);
     }
     return chat?Response.json({status:'ok',chat},{headers:{'Cache-Control':'no-store'}}):Response.json({message:'Chat neexistuje.'},{status:404});
