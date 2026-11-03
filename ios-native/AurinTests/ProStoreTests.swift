@@ -21,6 +21,30 @@ final class ProStoreTests: XCTestCase {
         }
         XCTAssertNotNil(ProStore.anchorScene(), "the host app has no window scene for the purchase sheet")
         XCTAssertTrue(ProStore.hostsUnitTests, "the host app leaves the App Store alone while the tests buy")
+        if !Self.warmedUp {
+            Self.warmedUp = true
+            try await warmUp()
+        }
+    }
+
+    private static var warmedUp = false
+
+    /// On the iOS 27 simulator the first purchase after it boots puts up a system
+    /// "Sign in to Apple Account" alert and never returns, while every purchase
+    /// after it goes straight to the test store (CI's screenshots, 2026-11-02).
+    /// That first purchase is made here and left waiting; the tests buy after it.
+    private func warmUp() async throws {
+        let session = try await makeSession()
+        let store = ProStore()
+        await store.load()
+        guard let product = store.products[ProStore.monthlyID] else { return }
+        let start = Date()
+        Task.detached {
+            _ = try? await product.purchase()
+            print("ProStoreTests warm-up purchase answered after \(Int(Date().timeIntervalSince(start))) s")
+        }
+        try await Task.sleep(for: .seconds(15))
+        session.clearTransactions()
     }
 
     /// How long each StoreKit step took, in the CI log, so a slow one is named.
@@ -72,7 +96,7 @@ final class ProStoreTests: XCTestCase {
         var reminded: String?
         store.trialReminder = { _, price in reminded = price }
         await step("load") { await store.load() }
-        XCTAssertEqual(Set(store.products.keys), Set(ProStore.ids))
+        XCTAssertEqual(Set(store.products.keys), Set(ProStore.ids + ProStore.packIDs))
         XCTAssertTrue(store.trialEligible, "a new Apple ID starts the yearly plan with the free week")
         let yearly = try XCTUnwrap(store.price(ProStore.yearlyID))
         XCTAssertTrue(yearly.contains("490"), yearly)
@@ -98,6 +122,22 @@ final class ProStoreTests: XCTestCase {
         XCTAssertFalse(reminded)
         await step("refresh") { await store.refresh() }
         XCTAssertTrue(store.entitled)
+        _ = session
+    }
+
+    func testPackIsBoughtAndFinished() async throws {
+        let session = try await makeSession()
+        let store = ProStore()
+        await step("load") { await store.load() }
+        XCTAssertEqual(ProStore.packIDs, ["health.aurin.app.coach.messages40", "health.aurin.app.coach.messages100"])
+        XCTAssertTrue(try XCTUnwrap(store.price("health.aurin.app.coach.messages40")).contains("99"))
+        // Xcode's test purchase never reaches the server: the pack's own messages come back.
+        let left = try await step("buy pack") { try await store.buyPack("health.aurin.app.coach.messages100") }
+        XCTAssertEqual(left, 100)
+        XCTAssertFalse(store.entitled, "a pack is not Aurin Pro")
+        var unfinished = 0
+        for await _ in Transaction.unfinished { unfinished += 1 }
+        XCTAssertEqual(unfinished, 0)
         _ = session
     }
 

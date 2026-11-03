@@ -801,16 +801,79 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(parts[0].drinks.map(\.id), [11, 12])
     }
 
-    /// The offer: the app playing in the phone at moments of the tour, and
-    /// the list with the plans.
+    /// The offer in night violet: the opening at moments of its animation,
+    /// the offer with its phones, all plans and the free week.
     func testPaywallTour() throws {
-        for time in [0.6, 2.9, 5.0, 7.6, 10.2, 12.0, 14.6] {
+        for time in [0.5, 2.0, 3.6, 5.0, 8.0] {
             try render("paywall-\(Int(time * 10))", height: 844) { PaywallView(close: {}, frozenTime: time, store: ProStore()) }
         }
         try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore()) }
-        // A new Apple ID: the free-week switch under the plans, then the week as a timeline.
-        try render("paywall-plans-trial", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore(trialEligible: true)) }
+        try render("paywall-plans-trial", height: 844) { PaywallView(close: {}, frozenTime: 5.5, step: 1, store: ProStore(trialEligible: true)) }
         try render("paywall-free-week", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true)) }
+        try render("paywall-all-plans", height: 700) {
+            AllProPlans(offers: ProOffer.all(ProStore(trialEligible: true)), selected: .constant(.yearOnce), buying: false, start: {}, redeem: {}, restore: {})
+                .background(Night.bottom)
+        }
+    }
+
+    /// Settings → Aurin Pro in night violet: active, the free week on day 3,
+    /// the year paid monthly at payment 3 of 12, extra messages, the week running
+    /// low with none, and the packs page with purchases.
+    @MainActor
+    func testProSettings() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Prague"))
+        let day = { (m: Int, d: Int, y: Int) in calendar.date(from: DateComponents(year: y, month: m, day: d, hour: 9))! }
+        let extra = CoachAllowance(limit: 30, used: 12, left: 55, weekLeft: 18, extra: 37, resetsOn: "2026-11-09", near: false)
+        let low = CoachAllowance(limit: 30, used: 27, left: 3, weekLeft: 3, extra: 0, resetsOn: "2026-11-09", near: true)
+        let active = ProPageState(hasPro: true, unlocked: true, renewal: "Obnoví se 5. listopadu", allowance: extra, packsOnSale: true)
+        try render("pro-settings-active", height: 1100) { ProPage(state: active, calendar: calendar) }
+        var week = active
+        week.freeWeek = DateInterval(start: day(10, 29, 2026), end: day(11, 5, 2026))
+        week.firstPayment = "Čt 5. 11. · 149 Kč"
+        week.allowance = nil
+        try render("pro-settings-free-week", height: 1000) { ProPage(state: week, now: day(10, 31, 2026), calendar: calendar) }
+        var monthly = active
+        monthly.payments = ProStore.Payments(number: 3, total: 12, next: day(2, 5, 2027), ends: day(11, 5, 2027))
+        monthly.allowance = low
+        try render("pro-settings-paid-monthly", height: 1250) { ProPage(state: monthly, calendar: calendar) }
+        let free = ProPageState(pilot: true, plans: ProPlans.main)
+        try render("pro-settings-free", height: 950) { ProPage(state: free, calendar: calendar) }
+        let purchases = [
+            CoachPacks.Purchase(productId: "health.aurin.app.coach.messages100", messages: 100, counted: true, environment: "Production", price: 7.99, currency: "EUR", purchasedAt: "2026-11-02T00:12:00.000Z", refunded: false),
+            CoachPacks.Purchase(productId: "health.aurin.app.coach.messages40", messages: 40, counted: true, environment: "Production", price: 3.99, currency: "EUR", purchasedAt: "2026-10-12T10:00:00Z", refunded: false),
+            CoachPacks.Purchase(productId: "health.aurin.app.coach.messages40", messages: 40, counted: false, environment: "Sandbox", price: 3.99, currency: "EUR", purchasedAt: "2026-09-28T10:00:00Z", refunded: false)
+        ]
+        let prices = ["health.aurin.app.coach.messages40": "€3.99", "health.aurin.app.coach.messages100": "€7.99"]
+        try render("pro-packs", height: 900) {
+            CoachPacksPage(left: 137, purchases: purchases, price: { prices[$0] }, chosen: .constant("health.aurin.app.coach.messages100"), added: 100)
+        }
+    }
+
+    func testPaymentDotsMonths() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Prague"))
+        let ends = try XCTUnwrap(calendar.date(from: DateComponents(year: 2027, month: 11, day: 5)))
+        let first = try XCTUnwrap(calendar.date(byAdding: .month, value: -12, to: ends))
+        XCTAssertEqual(calendar.dateComponents([.year, .month], from: first), DateComponents(year: 2026, month: 11), "12 payments from Nov 2026")
+    }
+
+    func testFreeWeekDates() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Prague"))
+        let bought = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 29, hour: 21)))
+        let first = PaywallView.firstPayment(from: bought, calendar: calendar)
+        XCTAssertEqual(calendar.dateComponents([.month, .day], from: first), DateComponents(month: 11, day: 5), "Thursday to Thursday")
+        // The reminder (ProStore, day 5) comes before the first payment.
+        XCTAssertLessThan(try XCTUnwrap(ProStore.trialReminderDate(purchased: bought, calendar: calendar)), first)
+    }
+
+    @MainActor
+    func testOffersWithoutMonthlyPayments() throws {
+        // No "Monthly with 12-Month Commitment" here (older iOS, the US, the simulator): yearly and monthly.
+        let plans = ProOffer.main(ProStore(trialEligible: true))
+        XCTAssertEqual(plans.map(\.kind), [.yearOnce, .monthly])
+        XCTAssertEqual(plans.map(\.trial), [true, false], "the free week only on the yearly plan")
     }
 
     /// Training plans: before the start, the running plan, a week and the result.

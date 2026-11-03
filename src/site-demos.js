@@ -311,6 +311,17 @@ const foodOne = `<div class="dm pad one">
 <div class="tparts"${at('1500')}><i class="tbar"><b style="flex:2300;background:var(--brown)"></b><b style="flex:200;background:var(--green)"></b><b style="flex:150;background:repeating-linear-gradient(135deg,var(--amber) 0 3px,transparent 3px 6px)"></b></i><span class="mut s">Base 2,300 · <span class="grn">+200 done</span> · <span class="amb">+150 planned</span></span></div>
 </div>`;
 
+// Readiness in the luteal phase (recovery-model.js lutealOffset): the normal for resting heart rate moves up by the
+// athlete's own luteal rise. The sample day is day 21, so its "your normal 50–54 bpm" above is already this phase's
+// normal; on other days it is 48–52.
+const cycleOne = `<div class="dm pad one">
+<span class="pill pnk">Day 21 · Luteal</span>
+<b class="cy-k">Resting heart rate normal</b>
+<div class="row base one-v"><span class="num big" data-tx="0|48–52;1300|50–54">50–54</span><span class="mut">bpm</span></div>
+<div class="mut">48–52 bpm on other days</div>
+<div class="one-pt grn cy-p"${at('2000')}>A usual rise costs no points</div>
+</div>`;
+
 const LETTERS = [['W', 'Warm-up', 'muted'], ['T', 'Technique', 'blue'], ['E', 'Easy', 'green'], ['M', 'Moderate', 'indigo'], ['H', 'High', 'amber'], ['F', 'Failure', 'red'], ['PR', 'Personal record', 'gold'], ['D', 'Drop set', 'pink']];
 const tmTick = `<div class="dm pad tm">
 <div class="row sp"><div class="sent h">Squat</div><span class="tag rust">${ic('flame')}To failure</span></div>
@@ -459,6 +470,18 @@ const coachWeek = `<div class="dm pad wk"${at('6900')}>
 <div class="ar new"${at('8000')}><span class="ci up">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">Planned · 5:30 PM · 60 min</span></div>${ic('chev')}</div>
 </div></div>`;
 
+// The cycle calendar (CycleViews.swift CycleCalendarView) in October of the sample day: the period began on 18 September,
+// so Thursday 8 October is day 21 of a 28-day cycle. Ovulation on 1 October in amber, the next period forecast for
+// 15–17 October dashed in pink, today ringed. October 2026 starts on a Thursday: three empty cells.
+const CYCLE_DAY = d => d === 1 ? 'ov' : d >= 15 && d <= 17 ? 'cast' : '';
+const cycleScreen = `<div class="app glow-today cyc">${STATUS}
+<div class="nav"><span class="cb">${ic('chev', 'flip')}</span></div>
+<div class="mut s cy-l">Cycle</div>
+<div class="row sp cy-m"><span>${ic('chev', 'flip')}</span><span class="sent">October</span><span class="faint">${ic('chev')}</span></div>
+<div class="card cy-g">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d => `<span class="cy-w">${d}</span>`).join('')}${'<span></span>'.repeat(3)}${Array.from({length: 31}, (_, i) => i + 1).map(d => `<span class="cy-d ${CYCLE_DAY(d)}${d === 8 ? ' today' : ''}"><i>${d}</i></span>`).join('')}</div>
+<div class="cy-b">${ic('plus')}Log period</div>
+</div>`;
+
 const each = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, merge(v)]));
 // The welcome's pages (WelcomePages.swift), one before each part of the overview: a few of the app's own cards with
 // the sample day that rise into place and move once the part is on screen, as they do before the sign-in.
@@ -593,8 +616,8 @@ export const WATCH = [
 const actWatch = `<div class="dm wc aw-act"><div class="aw-w">${watchFace}</div></div>`;
 export const ACTS = each({readiness: actReadiness, training: actTraining, food: actFood, sleep: actSleep, coach: actCoach, watch: actWatch});
 
-export const DEMOS = each({sleepNight, sleepNeed, dial, tonight, readyParts, journal, strainMade, week, builder, gymParts, tmTable, tmTick, tmRest, tmDone, foodTarget, foodAdd, drinks, diet, coachWeek, coachMemory, readyOne, tmOne, journalOne, tickOne, sleepOne, needOne, foodOne});
-export const SCREENS = each({strain: strainScreen, done: doneScreen, coach: coachScreen, memory: memoryScreen});
+export const DEMOS = each({sleepNight, sleepNeed, dial, tonight, readyParts, journal, strainMade, week, builder, gymParts, tmTable, tmTick, tmRest, tmDone, foodTarget, foodAdd, drinks, diet, coachWeek, coachMemory, readyOne, tmOne, journalOne, tickOne, sleepOne, needOne, foodOne, cycleOne});
+export const SCREENS = each({strain: strainScreen, done: doneScreen, coach: coachScreen, memory: memoryScreen, cycle: cycleScreen});
 
 // The demos' look: the app's cards (radius 22), Instrument Serif for numbers, Newsreader for sentences.
 export const demoCss = `
@@ -703,8 +726,9 @@ html:not(.js) .tgt .fill{width:${(16.7 / 21 * 100).toFixed(1)}%}
 /* Training week. */
 .strip{display:grid;grid-template-columns:repeat(6,1fr);gap:2px}
 .dc{display:flex;flex-direction:column;align-items:center;gap:5px;transform:scale(.92)}.dc.sel{transform:none}
-/* The other days fade, but their names keep the muted colour so they stay readable (4.5:1). */
-.dc:not(.sel) .ci,.dc:not(.sel) .dn{opacity:.6}
+/* The other days fade, but their names keep the muted colour so they stay readable (4.5:1); their numbers fade
+   a little less than the icons so they stay above 4.5:1 on the card too (5.1:1). */
+.dc:not(.sel) .ci{opacity:.6}.dc:not(.sel) .dn{opacity:.64}
 .wd{font-size:11.5px;font-weight:500;color:var(--muted)}.wd.today{color:var(--amber);font-weight:700}
 .ci{position:relative;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;font-size:17px;--c:var(--muted);color:var(--c);background:color-mix(in srgb,var(--muted) 14%,transparent);box-shadow:inset 0 0 0 2px var(--c);transition:.5s cubic-bezier(.16,1,.3,1);transition-property:background-color,color,box-shadow,outline-color,opacity,transform}
 .ci.ok,.ci.done{background:color-mix(in srgb,var(--green) 14%,transparent)}.ci.off{background:color-mix(in srgb,var(--amber-bar) 14%,transparent)}.ci.out{background:color-mix(in srgb,var(--blue) 14%,transparent)}
@@ -1008,6 +1032,12 @@ html:not(.js) .stage1{display:none}
 .one-ip{margin-left:auto;transform:scale(1.5)}
 .one-pt.rst{background:color-mix(in srgb,var(--rust) 12%,transparent);color:var(--rust-ink)}.one-pt.ind{background:color-mix(in srgb,var(--indigo) 12%,transparent);color:var(--indigo)}.one-pt.amb{background:color-mix(in srgb,var(--amber) 16%,transparent);color:var(--sec)}
 .one-pt .di{width:16px;height:16px;vertical-align:-2px;margin-right:4px}.one .rst{color:var(--rust-ink)}.one-ft{margin-top:14px}
+.pill.pnk{color:var(--pink);background:var(--pink-soft)}.one .cy-k{display:block;margin-top:12px}.one .cy-p{margin-top:16px}.one-pt.pnk{background:var(--pink-soft);color:var(--pink)}
+.cy-l{margin-top:8px}.cy-m{margin-top:6px;align-items:center}.cy-m .sent{font-size:28px}.cy-m .di{width:20px;height:20px;stroke-width:2.4}.cy-m .faint{opacity:.35}
+.app .cy-g{display:grid;grid-template-columns:repeat(7,1fr);gap:8px 4px;margin-top:14px}.cy-w{font-size:12px;color:var(--muted);text-align:center}
+.cy-d{display:flex;justify-content:center;height:42px}.cy-d i{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;font:normal 500 13px/1 -apple-system,system-ui,sans-serif;color:var(--sec)}
+.cy-d.ov i{background:var(--amber-soft);color:var(--amber)}.cy-d.cast i{border:1.5px dashed var(--pink);color:var(--pink)}.cy-d.today i{box-shadow:inset 0 0 0 2px var(--text)}
+.cy-b{display:flex;align-items:center;justify-content:center;gap:6px;height:46px;margin-top:12px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--line);font-weight:600}
 /* The coach's memory: the green line under an answer and the list it keeps. */
 .mchip{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:var(--green-soft);color:var(--green);font-size:13px;font-weight:500;transition:opacity .3s,transform .3s!important}
 .mchip .di{width:13px;height:13px;stroke-width:2.8}.mchip .mut{margin-left:4px}

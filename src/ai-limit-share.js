@@ -5,6 +5,7 @@
 // (wrangler.jsonc) is the share; unset, every account has the whole limits.
 // The owner has the whole limits of a paying account.
 import { ensureStoreColumns } from "./app-store.js";
+import { packMessagesLeft } from "./coach-packs.js";
 
 const groupOnce = new WeakMap();
 // The share an unpaid account gets; 1 when unset or not a number below 1.
@@ -15,7 +16,8 @@ export const unpaidLimitShare = env => {
 
 // The group an account's AI spending is counted in (ai-total.js), from its
 // subscription now:
-// - "paid": a paid Production Pro;
+// - "paid": a paid Production Pro, or bought coach messages still left
+//   (coach-packs.js; a Sandbox pack counts only on the test server);
 // - "gift": Pro through an offer code or a promotional offer (the pilot's
 //   discount, a gift) and the owner: whole limits, counted apart;
 // - "trial": the free week (Apple's introductory offer, or a free promotional one);
@@ -54,6 +56,7 @@ export function aiGroup(env) {
   if (env.USER_IS_OWNER === true) return Promise.resolve("gift");
   if (!groupOnce.has(env)) groupOnce.set(env, (async () => {
     const group = groupOfSubscription(await subscriptionRow(env));
+    if (group !== "paid" && group !== "gift" && await packMessagesLeft(env).catch(() => 0) > 0) return "paid";
     if (group !== "free") return group;
     const user = await (env.RAW_DB || env.DB).prepare("SELECT created_at FROM users WHERE id = ?").bind(env.USER_ID).first();
     return user?.created_at && String(user.created_at) <= newAccountSince() ? "free" : "new";
