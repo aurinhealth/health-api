@@ -396,7 +396,8 @@ struct NutrientItem: Decodable, Equatable, Identifiable {
 
     var id: String { key }
 
-    /// Under half the target: shown in rust.
+    /// Under half the target: shown in rust in the 7-day average only, as a
+    /// day still going is not wrong yet.
     var low: Bool { !limit && !locked && (percent ?? 100) <= 50 }
     var over: Bool { limit && (eaten ?? 0) > (target ?? .infinity) }
 
@@ -423,7 +424,7 @@ struct NutrientsPage: Decodable, Equatable {
 }
 
 /// GET /app/api/food/nutrients?key=…: one nutrient with today's meals and rich foods.
-struct NutrientDetail: Decodable, Equatable {
+struct NutrientDetail: Decodable, Equatable, Identifiable {
     struct Source: Decodable, Equatable, Hashable { let name: String; let amount: Double }
     struct Rich: Decodable, Equatable, Hashable { let name: String; let per100: Double }
     let key: String
@@ -445,4 +446,6 @@ struct NutrientDetail: Decodable, Equatable {
     var autoBasis: String? = nil
     /// Aurin Pro: only then can the target be one's own.
     var pro: Bool? = nil
+
+    var id: String { key }
 }

@@ -11,6 +11,9 @@ struct NutrientsView: View {
     @State private var page: NutrientsPage?
     @State private var error: String?
     @State private var editing = false
+    /// The nutrient whose Target sheet is open (its gear), and the one loading for it.
+    @State private var target: NutrientDetail?
+    @State private var loadingTarget: String?
 
     var body: some View {
         ZStack {
@@ -19,7 +22,12 @@ struct NutrientsView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     NutrientsTopBar(title: "Živiny", back: { dismiss() })
                     if let page {
-                        NutrientsContent(page: page, week: $week, date: date).padding(.top, 20)
+                        NutrientsContent(page: page, week: $week, date: date, loadingTarget: loadingTarget,
+                                         editTarget: { item in Task { await openTarget(item) } })
+                            .padding(.top, 20)
+                        if let error {
+                            Text(error).font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 16)
+                        }
                     } else if let error {
                         Text(error).font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 24)
                     } else {
@@ -31,14 +39,26 @@ struct NutrientsView: View {
             }
         }
         .floatingBack(title: "Živiny",
-                      trailing: page?.pro == true ? ChromeAction(systemImage: "slider.horizontal.3", label: "Upravit živiny na Jídle", text: "Upravit") { editing = true } : nil) { dismiss() }
+                      trailing: page?.pro == true ? ChromeAction(systemImage: "slider.horizontal.3", label: "Upravit živiny na Jídle", text: "Upravit") { editing = true } : nil,
+                      pinTitle: true) { dismiss() }
         .navBarVisibility(.hidden)
         .navigationDestination(isPresented: $editing) { NutrientFavoritesView(items: page?.items ?? [], chosen: page?.favorites ?? []) }
         .task(id: week) { await load() }
+        .nutrientTargetEditing($target, saved: { await load() }, failed: { error = $0 })
     }
 
     private func load() async {
         do { page = try await model.api.nutrients(date: date, days: week ? 7 : 1); error = nil }
+        catch { self.error = error.localizedDescription }
+    }
+
+    /// The gear of a row: the nutrient's Target sheet, with what it needs
+    /// (Auto, the own target, the safe upper limit) from its detail.
+    private func openTarget(_ item: NutrientItem) async {
+        guard loadingTarget == nil else { return }
+        loadingTarget = item.key
+        defer { loadingTarget = nil }
+        do { target = try await model.api.nutrientDetail(key: item.key, date: date); error = nil }
         catch { self.error = error.localizedDescription }
     }
 }
@@ -48,6 +68,10 @@ struct NutrientsContent: View {
     let page: NutrientsPage
     @Binding var week: Bool
     let date: String
+    /// The row whose gear is loading its Target sheet.
+    var loadingTarget: String? = nil
+    /// The gear of a row; nil shows none.
+    var editTarget: ((NutrientItem) -> Void)? = nil
 
     private func group(_ id: String) -> [NutrientItem] { page.items.filter { $0.group == id } }
 
@@ -80,12 +104,33 @@ struct NutrientsContent: View {
             SectionLabel(text: title).padding(.top, 26).padding(.bottom, 2)
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                NavigationLink { NutrientDetailView(key: item.key, date: date) } label: {
-                    NutrientRow(item: item, chevron: true).padding(.vertical, 12)
+                HStack(spacing: 4) {
+                    NavigationLink { NutrientDetailView(key: item.key, date: date) } label: {
+                        NutrientRow(item: item, week: page.days > 1).padding(.vertical, 12)
+                    }
+                    .buttonStyle(.plain)
+                    if let editTarget, item.target != nil { gear(item, editTarget) }
                 }
-                .buttonStyle(.plain)
             }
         }
+    }
+
+    /// The row's settings: its daily target (Auto or one's own) in a sheet.
+    private func gear(_ item: NutrientItem, _ action: @escaping (NutrientItem) -> Void) -> some View {
+        Button { action(item) } label: {
+            ZStack {
+                if loadingTarget == item.key {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "gearshape").scaledFont(15).foregroundStyle(Palette.muted)
+                }
+            }
+            .frame(width: 32, height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(loadingTarget != nil)
+        .accessibilityLabel(L10n.f("Cíl: %@", item.name))
     }
 
     /// Minerals and vitamins without values, blurred, with the way to Pro.
@@ -140,18 +185,23 @@ struct NutrientsContent: View {
     }
 }
 
-/// "Železo ——— 9 / 18 mg": green when met, amber on the way, rust under half
-/// or over a limit. Fibre stays green and sugar and salt amber, like Jídlo.
+/// "Železo ——— 9 / 18 mg": green when met, amber on the way, rust only when
+/// something is wrong: over a limit, or the 7-day average under half. A day
+/// still going (nothing eaten yet in the morning) stays white.
+/// Fibre stays green and sugar and salt amber, like Jídlo.
 struct NutrientRow: View {
     let item: NutrientItem
-    var chevron = false
+    /// The 7-day average, not one day.
+    var week = false
+
+    private var warn: Bool { item.over || (week && item.low) }
 
     private var color: Color {
-        if item.over { return Palette.rust }
+        if warn { return Palette.rust }
         switch item.key {
         case "fiber": return Palette.green
         case "sugar", "salt": return Palette.amberBar
-        default: return item.low ? Palette.rust : (item.percent ?? 0) < 85 ? Palette.amberBar : Palette.green
+        default: return (item.percent ?? 0) < 85 ? Palette.amberBar : Palette.green
         }
     }
 
@@ -159,8 +209,7 @@ struct NutrientRow: View {
         HStack(spacing: 12) {
             Text(item.name).font(Typo.caption).foregroundStyle(Palette.muted).frame(width: 96, alignment: .leading)
             ProgressLine(fraction: (item.eaten ?? 0) / max(item.target ?? 1, 0.001), color: color, height: 3)
-            Text(item.text).font(Typo.number(16)).foregroundStyle(item.low || item.over ? Palette.rust : Palette.ink).lineLimit(1)
-            if chevron { Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.muted) }
+            Text(item.text).font(Typo.number(16)).foregroundStyle(warn ? Palette.rust : Palette.ink).lineLimit(1)
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
@@ -177,10 +226,8 @@ struct NutrientDetailView: View {
     let date: String
     @State private var detail: NutrientDetail?
     @State private var error: String?
-    @State private var editing = false
-    /// The own target in the sheet; nil is Auto.
-    @State private var own: Double?
-    @State private var ownBefore: Double?
+    /// The nutrient while its Target sheet is open.
+    @State private var editing: NutrientDetail?
 
     var body: some View {
         ZStack {
@@ -189,7 +236,7 @@ struct NutrientDetailView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     NutrientsTopBar(title: detail?.name ?? "", back: { dismiss() })
                     if let detail {
-                        NutrientDetailContent(detail: detail, editTarget: { editing = true })
+                        NutrientDetailContent(detail: detail, editTarget: { editing = detail })
                     } else if let error {
                         Text(error).font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 24)
                     } else {
@@ -200,34 +247,66 @@ struct NutrientDetailView: View {
                 .padding(.bottom, 100)
             }
         }
-        .floatingBack(title: detail?.name) { dismiss() }
+        .floatingBack(title: detail?.name, pinTitle: true) { dismiss() }
         .navBarVisibility(.hidden)
         .task {
             do { detail = try await model.api.nutrientDetail(key: key, date: date) }
             catch { self.error = error.localizedDescription }
         }
-        .sheet(isPresented: $editing, onDismiss: { Task { await saveTarget() } }) {
-            if let detail { NutrientTargetSheet(detail: detail, own: $own) }
-        }
-        .onChange(of: editing) { _, open in
-            if open { own = detail?.custom == true ? detail?.target : nil; ownBefore = own }
-        }
+        .nutrientTargetEditing($editing, saved: {
+            do { detail = try await model.api.nutrientDetail(key: key, date: date) }
+            catch { self.error = error.localizedDescription }
+        }, failed: { error = $0 })
+    }
+}
+
+/// The Target sheet of one nutrient, from Živiny's gear or the detail's
+/// Target row. When it closes, an own target (nil: back to Auto) is saved into
+/// the profile's nutrientTargets, then `saved` loads the page again.
+private struct NutrientTargetEditing: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Binding var editing: NutrientDetail?
+    let saved: () async -> Void
+    let failed: (String) -> Void
+    /// The own target in the sheet; nil is Auto.
+    @State private var own: Double?
+    @State private var ownBefore: Double?
+    @State private var key: String?
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(item: $editing, onDismiss: { Task { await save() } }) { detail in
+                NutrientTargetSheet(detail: detail, own: $own)
+            }
+            .onChange(of: editing?.key) { _, open in
+                guard open != nil, let detail = editing else { return }
+                key = detail.key
+                own = detail.custom == true ? detail.target : nil
+                ownBefore = own
+            }
     }
 
-    /// Saves an own target (nil: back to Auto) into the profile's
-    /// nutrientTargets and loads the nutrient again.
-    private func saveTarget() async {
-        guard own != ownBefore, !model.demo else { return }
+    private func save() async {
+        guard let key, own != ownBefore, !model.demo else { return }
         do {
             var profile = try await model.api.profile()
             var targets: JSONObject = [:]
-            if case .object(let saved)? = profile["nutrientTargets"] { targets = saved }
+            if case .object(let stored)? = profile["nutrientTargets"] { targets = stored }
             targets[key] = own.map { .number($0) }
             profile["nutrientTargets"] = .object(targets.filter { $0.value != .null })
             try await model.api.saveProfile(profile)
-            detail = try await model.api.nutrientDetail(key: key, date: date)
+            ownBefore = own
+            await saved()
             await model.refreshFood()
-        } catch { self.error = error.localizedDescription }
+        } catch { failed(error.localizedDescription) }
+    }
+}
+
+extension View {
+    /// Opens the Target sheet while `editing` holds a nutrient and saves it on close.
+    func nutrientTargetEditing(_ editing: Binding<NutrientDetail?>, saved: @escaping () async -> Void,
+                               failed: @escaping (String) -> Void) -> some View {
+        modifier(NutrientTargetEditing(editing: editing, saved: saved, failed: failed))
     }
 }
 
@@ -236,7 +315,6 @@ struct NutrientDetailContent: View {
     /// Opens the Target sheet; nil shows no Target row.
     var editTarget: (() -> Void)? = nil
 
-    private var low: Bool { !detail.limit && (detail.percent ?? 100) <= 50 }
     private var over: Bool { detail.limit && (detail.eaten ?? 0) > (detail.target ?? .infinity) }
 
     var body: some View {
@@ -249,7 +327,7 @@ struct NutrientDetailContent: View {
                 }
             }
             .padding(.top, 26)
-            ProgressLine(fraction: (detail.eaten ?? 0) / max(detail.target ?? 1, 0.001), color: low || over ? Palette.rust : Palette.green, height: 4)
+            ProgressLine(fraction: (detail.eaten ?? 0) / max(detail.target ?? 1, 0.001), color: over ? Palette.rust : Palette.green, height: 4)
                 .padding(.top, 8)
             if let week = detail.weekPercent {
                 Text(L10n.f("Průměr za 7 dní: %@ %%", Fmt.int(week))).font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 10)
@@ -290,18 +368,25 @@ struct NutrientDetailContent: View {
 
 /// The top of the Živiny pages, like Pití dnes and a meal's detail: back, the
 /// title as a section label in the middle, and an optional action on the right.
+/// Under a pinned bar (floatingBack) the bar holds the title, so it shows once.
 struct NutrientsTopBar<Trailing: View>: View {
     let title: String
     var back: () -> Void
     @ViewBuilder var trailing: () -> Trailing
+    @Environment(\.floatingBack) private var floating
 
     var body: some View {
-        HStack {
+        if floating {
+            // The pinned bar holds back, the title and the action; this keeps only its place.
             BackSlot(action: back)
-            Spacer()
-            SectionLabel(text: title).lineLimit(1)
-            Spacer()
-            trailing().frame(minWidth: 36, minHeight: 36, alignment: .trailing)
+        } else {
+            HStack {
+                BackSlot(action: back)
+                Spacer()
+                SectionLabel(text: title).lineLimit(1)
+                Spacer()
+                trailing().frame(minWidth: 36, minHeight: 36, alignment: .trailing)
+            }
         }
     }
 }
@@ -331,7 +416,7 @@ struct NutrientFavoritesView: View {
                 .padding(.bottom, 100)
             }
         }
-        .floatingBack(title: "Na obrazovce Jídlo") { dismiss() }
+        .floatingBack(title: "Na obrazovce Jídlo", pinTitle: true) { dismiss() }
         .navBarVisibility(.hidden)
         .onChange(of: chosen) { _, keys in
             Task {
