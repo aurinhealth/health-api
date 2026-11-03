@@ -39,6 +39,8 @@ struct BarcodeScanSheet: View {
     /// The label had no name: the front of the package, read for the name
     /// and the brand of this food.
     @State private var frontOf: FoodProduct?
+    /// The AI found nothing by the code: the field for what the food is shows.
+    @State private var askName = false
     /// "Navrhnout pro všechny" for a food read from its label (FoodProduct.canSuggestNew).
     @State private var suggestNew = true
 
@@ -245,28 +247,39 @@ struct BarcodeScanSheet: View {
                 }
             case .notFound:
                 Text("Kód \(code ?? "") neznám.").font(Typo.sentence(22)).foregroundStyle(Palette.ink)
-                // With a name AI can estimate the food when the code is nowhere on the web.
-                TextField("Co to je? Třeba „tyčinka Margot“", text: $guess)
-                    .font(.subheadline).textInputAutocapitalization(.never)
-                    .padding(.horizontal, 16).frame(height: 46)
-                    .background(Palette.background, in: Capsule())
-                HStack(spacing: 10) {
-                    Button("Skenovat znovu") { reset() }
-                        .font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
-                        .padding(.horizontal, 16).frame(height: 46)
-                        .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
-                    Button { Task { await lookUp() } } label: {
-                        Label(L10n.tr(guess.trimmingCharacters(in: .whitespaces).count >= 2 ? "Odhadnout AI" : "Dohledat AI"), systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                            .frame(maxWidth: .infinity).frame(height: 46).background(Palette.button, in: Capsule())
-                    }
-                }
+                // The label first: its values are exact and saved with the
+                // code for everyone; AI only estimates.
                 Button { labelOpen = true } label: {
-                    Label("Vyfotit etiketu", systemImage: "camera").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
-                        .frame(maxWidth: .infinity).frame(height: 46)
-                        .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+                    Label("Vyfotit etiketu", systemImage: "camera").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                        .frame(maxWidth: .infinity).frame(height: 46).background(Palette.button, in: Capsule())
                 }
                 .buttonStyle(.plain)
                 .disabled(model.demo)
+                if askName {
+                    Rectangle().fill(Palette.ink.opacity(0.08)).frame(height: 1)
+                    // With a name AI can estimate the food when the code is nowhere on the web.
+                    TextField("Co to je? Třeba „tyčinka Margot“", text: $guess)
+                        .font(.subheadline).textInputAutocapitalization(.never)
+                        .padding(.horizontal, 16).frame(height: 46)
+                        .background(Palette.background, in: Capsule())
+                }
+                HStack(spacing: 10) {
+                    Button { reset() } label: {
+                        Text("Skenovat znovu").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                            .padding(.horizontal, 16).frame(maxWidth: askName ? nil : .infinity).frame(height: 46)
+                            .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    Button { Task { await lookUp() } } label: {
+                        Label(L10n.tr(guess.trimmingCharacters(in: .whitespaces).count >= 2 ? "Odhadnout AI" : "Dohledat AI"), systemImage: "sparkles")
+                            .font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity).frame(height: 46)
+                            .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
             case .scanning:
                 EmptyView()
             }
@@ -326,6 +339,7 @@ struct BarcodeScanSheet: View {
     private func reset() {
         code = nil
         guess = ""
+        askName = false
         product = nil
         error = nil
         state = .scanning
@@ -376,7 +390,7 @@ struct BarcodeScanSheet: View {
         do {
             let name = guess.trimmingCharacters(in: .whitespaces)
             if let p = try await model.api.lookupFood(name: name, barcode: code) { show(p) }
-            else { state = .notFound; error = name.isEmpty ? "AI ten kód nezná. Napiš, co to je, a odhadne to." : "AI ji nedokázala dohledat ani odhadnout. Zadej ji ručně." }
+            else { state = .notFound; askName = true; error = name.isEmpty ? "AI ten kód nezná. Napiš, co to je, a odhadne to." : "AI ji nedokázala dohledat ani odhadnout. Zadej ji ručně." }
         } catch {
             self.error = error.localizedDescription
             state = .notFound
