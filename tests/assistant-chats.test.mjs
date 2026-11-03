@@ -27,13 +27,14 @@ test('a chat keeps its own turns; a new chat starts without the old context',asy
   assert.deepEqual((await listChats(db)).map(c=>c.id),[second]);
 });
 
-test('chats untouched for 90 days are removed and titles stay short',async()=>{
+test('old chats stay until the athlete deletes them and titles stay short',async()=>{
   const raw=createD1(),db=scopedDb(raw,1);
   const old=await appendChatTurn(db,null,'Starý dotaz','Odpověď');
-  await raw.prepare("UPDATE assistant_chats SET updated_at=datetime('now','-91 days') WHERE id=?").bind(old).run();
+  await raw.prepare("UPDATE assistant_chats SET updated_at=datetime('now','-400 days') WHERE id=?").bind(old).run();
   await appendChatTurn(db,null,'Nový dotaz','Odpověď');
-  assert.deepEqual((await listChats(db)).map(c=>c.title),['Nový dotaz']);
-  assert.equal(await readChat(db,old),null);
+  assert.deepEqual((await listChats(db)).map(c=>c.title),['Nový dotaz','Starý dotaz']);
+  assert.equal((await readChat(db,old)).messages.length,2);
+  assert.equal((await chatContext(db,old)).length,2);
   const title=chatTitle('Prober prosím celý můj týden a navrhni, jak rozložit intervaly, dlouhou jízdu i posilovnu');
   assert.ok(title.length<=60&&title.endsWith('…'));
   assert.equal(chatTitle('  '),'Nový chat');

@@ -159,13 +159,16 @@ final class ProStoreTests: XCTestCase {
         let left = try await step("buy pack") { try await store.buyPack("health.aurin.app.coach.messages100") }
         XCTAssertEqual(left, 100)
         XCTAssertFalse(store.entitled, "a pack is not Aurin Pro")
-        // Only this pack's: the warm-up's 40-message purchase from the process
-        // before (ios-native.yml) can land late and stay unfinished.
+        // The pack bought here is finished. Another product still open is what an
+        // earlier test left (CI, 3 Nov: one open transaction after the monthly test),
+        // so it is named in the log, not counted.
         var unfinished = 0
-        for await result in Transaction.unfinished where result.unsafePayloadValue.productID == "health.aurin.app.coach.messages100" {
-            unfinished += 1
+        for await result in Transaction.unfinished {
+            let transaction = result.unsafePayloadValue
+            if transaction.productID == "health.aurin.app.coach.messages100" { unfinished += 1 }
+            else { print("ProStoreTests open transaction left by another test: \(transaction.productID), bought \(transaction.purchaseDate)") }
         }
-        XCTAssertEqual(unfinished, 0)
+        XCTAssertEqual(unfinished, 0, "the bought pack is finished")
         _ = session
     }
 
@@ -186,5 +189,16 @@ final class ProStoreTests: XCTestCase {
         XCTAssertEqual(ProStore.amount("$59.99", locale: us), Decimal(string: "59.99"))
         XCTAssertEqual(ProStore.amount("$1,490.00", locale: us), 1490)
         XCTAssertNil(ProStore.amount("Kč", locale: cs))
+    }
+
+    func testMonthWrittenLikeApplesPrice() {
+        XCTAssertEqual(ProStore.reprice("1\u{202F}490,00\u{00A0}Kč", Decimal(1490) / 12, fractionDigits: 0), "124\u{00A0}Kč")
+        XCTAssertEqual(ProStore.reprice("69,99 €", Decimal(string: "69.99")! / 12, fractionDigits: 2), "5,83 €")
+        XCTAssertEqual(ProStore.reprice("$59.99", Decimal(string: "59.99")! / 12, fractionDigits: 2), "$5.00")
+        XCTAssertEqual(ProStore.reprice("$1,490.00", Decimal(string: "124.17")!, fractionDigits: 2), "$124.17")
+        XCTAssertEqual(ProStore.reprice("1.490,00 €", Decimal(1490), fractionDigits: 2), "1.490,00 €")
+        XCTAssertEqual(ProStore.reprice("¥12,000", Decimal(1000), fractionDigits: 0), "¥1,000")
+        XCTAssertEqual(ProStore.reprice("199,00 Kč", Decimal(1490), fractionDigits: 0), "1\u{00A0}490 Kč")
+        XCTAssertNil(ProStore.reprice("Kč", 1, fractionDigits: 0))
     }
 }
