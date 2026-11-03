@@ -125,7 +125,9 @@
     // Ultrahuman app (src/ultrahuman.js); public. ULTRAHUMAN_CLIENT_SECRET is a Worker secret.
     "ULTRAHUMAN_CLIENT_ID": "Aiv97cWQZNA3tShnPydr8NtxZXSVv4LCafZE89WBnP4",
     "WHOOP_CLIENT_ID": "0c14cf2e-d6d3-4c7c-8c0d-758b0b20a8aa",
-    "WAHOO_CLIENT_ID": "W-nkdGNWUzPdr3a1rN2Z5Wvm7IOXPv_bjdGGmfbToFs",
+    // Wahoo Production app "Aurin" (redirect https://aurin.health/oauth/wahoo/callback); public.
+    // WAHOO_CLIENT_SECRET and WAHOO_WEBHOOK_TOKEN are Worker secrets. Staging keeps "Aurin Sandbox".
+    "WAHOO_CLIENT_ID": "KDQQmjXgsLcxxjFFZgyLCnv7s0MngS2gEypjY6Y_o5k",
     // Last day (UTC) the fixed App Review sign-in code works; move it before each review.
     "APP_REVIEW_UNTIL": "2027-01-31"
   },
