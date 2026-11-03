@@ -159,8 +159,12 @@ final class ProStoreTests: XCTestCase {
         let left = try await step("buy pack") { try await store.buyPack("health.aurin.app.coach.messages100") }
         XCTAssertEqual(left, 100)
         XCTAssertFalse(store.entitled, "a pack is not Aurin Pro")
+        // Only this pack's: the warm-up's 40-message purchase from the process
+        // before (ios-native.yml) can land late and stay unfinished.
         var unfinished = 0
-        for await _ in Transaction.unfinished { unfinished += 1 }
+        for await result in Transaction.unfinished where result.unsafePayloadValue.productID == "health.aurin.app.coach.messages100" {
+            unfinished += 1
+        }
         XCTAssertEqual(unfinished, 0)
         _ = session
     }
