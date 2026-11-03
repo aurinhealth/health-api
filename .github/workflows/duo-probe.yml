@@ -65,8 +65,10 @@ jobs:
           # The first screenshot after boot is slow; take it before the real ones.
           xcrun simctl launch "$udid" health.aurin.app -demo; sleep 10; shot warmup
           go tab-health -tab health -duoProbe 0
-          for n in 0 1 2 3; do go "readiness-$n" -open readiness -duoProbe "$n"; done
-          go gym-0 -open gym/2026-10-08 -duoProbe 0
+          go readiness -open readiness -duoProbe 0
+          go gym -open gym/2026-10-08 -duoProbe 0
+          go muscles -open muscles
+          go readiness-plain -open readiness
           xcrun simctl shutdown "$udid" || true
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: always()

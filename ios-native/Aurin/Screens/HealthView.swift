@@ -47,41 +47,27 @@ struct DetailScreen<Content: View>: View {
     @ViewBuilder var content: Content
     @Environment(\.dismiss) private var dismiss
 
-    /// TEMPORARY Duo probe (-duoProbe N): 1 no pinned bar, 2 no background, 3 plain scroll view.
-    private var probe: Int {
-        #if DEBUG
-        UserDefaults.standard.integer(forKey: "duoProbe")
-        #else
-        0
-        #endif
-    }
-
     var body: some View {
-        let column = VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                BackSlot { dismiss() }
-                Spacer()
-                if let coach { CoachPill(subject: coach) }
+        ZStack {
+            ScreenBackground(glow: glow)
+            PageScroll {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        BackSlot { dismiss() }
+                        Spacer()
+                        if let coach { CoachPill(subject: coach) }
+                    }
+                    content
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 24)
+                .padding(.bottom, 100)
             }
-            content
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 24)
-        .padding(.bottom, 100)
-        let page = ZStack {
-            if probe != 2 { ScreenBackground(glow: glow) }
-            if probe == 3 {
-                ScrollView { column }.duoProbeGeometry("scroll")
-            } else {
-                PageScroll { column }.duoProbeGeometry("scroll")
-            }
+            .duoProbeGeometry("scroll")
         }
         .duoProbeGeometry("zstack")
-        if probe == 1 {
-            page.navBarVisibility(.hidden)
-        } else {
-            page.floatingBack(title: title) { dismiss() }.navBarVisibility(.hidden)
-        }
+        .floatingBack(title: title) { dismiss() }
+        .navBarVisibility(.hidden)
     }
 }
 
