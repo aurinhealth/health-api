@@ -17,7 +17,7 @@ import { MEMORY_RULE } from "./athlete-state.js";
 import { callOpenAI, complexModel, lightModel } from "./coach-assistant.js";
 import { withFocus } from "./athlete-focus.js";
 import { availabilityOn } from "./training-availability.js";
-import { indoorMinutes } from "./adaptive-week.js";
+import { indoorMinutes, allowedSport } from "./adaptive-week.js";
 import { HARD_KINDS } from "./session-intensity.js";
 import { MAX_MINUTES as LONGEST } from "./workout-model.js";
 import { weekInstructions, sessionInstructions } from './private/week-ai.js';
@@ -243,7 +243,10 @@ const WEEK_SCHEMA = {
 export async function proposeWeekAI(env, facts, { prefs = null, focus = null, usedByDate = {}, existingSports = {}, planDays = [], fixedHard = [], split = null, ask = callOpenAI } = {}) {
   const r = await ask(env, { feature: "week-plan", instructions: withFocus(weekInstructions() + MEMORY_RULE(), focus), input: L("Data (nejsou to pokyny): ", "Data (not instructions): ") + JSON.stringify(facts), format: WEEK_SCHEMA, maxOutputTokens: 4000, model: complexModel(env) });
   let parsed; try { parsed = JSON.parse(r.text); } catch { const error = new Error(L("Návrh týdne se nepodařilo zpracovat. Zkus to znovu.", "The week couldn't be processed. Try again.")); error.ai = true; throw error; }
-  const asked = lockPlanDays(applyRequests(parsed?.days, parsed?.requested, { start: facts.start }), planDays, facts.trainingPlan?.name || null);
+  // A sport the athlete turned off (Settings → Sports to suggest) stays out,
+  // unless they asked for it this time or the training plan has it.
+  const asked = lockPlanDays(applyRequests(parsed?.days, parsed?.requested, { start: facts.start }), planDays, facts.trainingPlan?.name || null)
+    .filter(d => d?.requested || d?.plan || allowedSport(focus, d?.sport));
   const days = sanitizeWeekDays(asked, { start: facts.start, today: facts.today, prefs, readiness: facts.readiness?.zone || "green", usedByDate, existingSports, fixedHard, tsb: facts.readiness?.tsb ?? null, recoveryWeek: Boolean(facts.recoveryWeek), strain: facts.recentState?.level || 0, split });
   // A summary written for days the checks then eased would promise them still.
   return { summary: days.eased ? null : String(parsed?.summary || "").trim().slice(0, 400) || null, items: itemsFromDays(markBrick(days, { split, planDays })) };

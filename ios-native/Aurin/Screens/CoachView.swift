@@ -405,13 +405,15 @@ struct CoachView: View {
                         if let a = result.answer ?? last { $0.text = a }
                         $0.actions = result.actions ?? []
                         $0.visuals = result.visuals ?? []
-                        $0.memory = (result.memoryChanges?.chips ?? []) + (result.memoryProposals?.proposals ?? [])
+                        $0.memory = (result.sportChanges?.chips ?? []) + (result.memoryChanges?.chips ?? []) + (result.memoryProposals?.proposals ?? [])
                         // A food sentence: the card says it all, the summary text is not shown.
                         if result.kind == "food_draft", let draft = result.draft, draft.items.contains(where: { $0.product != nil }) {
                             $0.food = draft
                             $0.text = ""
                         }
                     }
+                    // A sport turned off: Training and Aktivita dne without it.
+                    if result.sportChanges?.removed?.isEmpty == false { Task { await model.refreshTraining(); await model.reloadToday() } }
                     if let chat = result.chatId {
                         chatId = chat
                         if aboutSubject { keepChat(chat) }
@@ -527,6 +529,8 @@ struct CoachView: View {
             case .saved: try await model.api.forgetMemory(chip.text)
             case .forgotten: try await model.api.addMemory(chip.text)
             case .updated: try await model.api.editMemory(from: chip.text, to: chip.from ?? chip.text)
+            // The sport is suggested again (Sporty k navrhování).
+            case .sportOff: try await model.api.setSportSuggested(chip.text, true); await model.refreshTraining(); await model.reloadToday()
             }
             edit(bubble) { b in
                 if let i = b.memory.firstIndex(where: { $0.id == chip.id }) { b.memory[i].undone = true }
@@ -546,6 +550,7 @@ struct CoachView: View {
                 case .forgotten: try await model.api.forgetMemory(chip.text, toPast: true)
                 case .updated: try await model.api.editMemory(from: chip.from ?? chip.text, to: chip.text)
                 case .saved: try await model.api.addMemory(chip.text)
+                case .sportOff: break
                 }
             }
             edit(bubble) { b in

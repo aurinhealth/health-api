@@ -511,7 +511,7 @@ export async function askCoach(env, message, context, {model = null, focus = nul
   if (!env.OPENAI_API_KEY) return {status: 'unavailable', message: L('AI teď není dostupná. Zkus to později.', 'AI isn\'t available right now. Try again later.')};
   const started = Date.now();
   const light = task === 'simple' || task === 'quick', chosen = model || (light ? lightModel(env) : complexModel(env));
-  const data = task === 'simple' ? {date:context.date,now:context.now,athleteState:context.athleteState,statusNote:context.statusNote,preferenceMemory:context.preferenceMemory,...['chatSoFar','recentChats','earlierToday','pastMemory'].reduce((o,k)=>context[k]?{...o,[k]:context[k]}:o,{})} : {...context};
+  const data = task === 'simple' ? {date:context.date,now:context.now,athleteState:context.athleteState,statusNote:context.statusNote,preferenceMemory:context.preferenceMemory,...(context.sportsToSuggestChange?{sportsToSuggestChange:context.sportsToSuggestChange}:{}),...['chatSoFar','recentChats','earlierToday','pastMemory'].reduce((o,k)=>context[k]?{...o,[k]:context[k]}:o,{})} : {...context};
   delete data.conversation;
   // Earlier turns go as real messages: the data first, the question last.
   const turns=(context?.conversation||[]).filter(t=>['user','assistant'].includes(t?.role)&&String(t.content||'').trim()).map(t=>({role:t.role,content:String(t.content).slice(0,8000)}));

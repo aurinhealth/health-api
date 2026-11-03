@@ -22,3 +22,13 @@ test("own brick: the day's first run goes right after the ride, short and easy",
   assert.equal(ownBrick({ ...run, sport: 'ride' }, [5], '2026-11-02').brick, undefined);
   assert.equal(ownBrick({ ...run, slot: 1 }, [5], '2026-11-02').brick, undefined, 'only the first run of the day');
 });
+
+test('a week without recent sessions keeps to the sports the athlete does, never an unknown ride', async () => {
+  const { fallbackSports } = await import('../src/adaptive-week.js');
+  assert.deepEqual(fallbackSports({ sport: 'general', regular: ['run', 'strength'] }), ['run', 'gym']);
+  assert.deepEqual(fallbackSports({ sport: 'cycling', regular: ['strength'] }), ['ride', 'gym']);
+  assert.deepEqual(fallbackSports({ sport: 'general' }), ['gym', 'run']);
+  assert.deepEqual(fallbackSports({ sport: 'strength' }), ['gym', 'run']);
+  assert.deepEqual(fallbackSports({ sport: 'running' }), ['run', 'gym']);
+  assert.deepEqual(fallbackSports(null), ['gym', 'run']);
+});

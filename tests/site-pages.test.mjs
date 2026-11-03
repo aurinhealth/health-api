@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync,readdirSync,statSync} from 'node:fs';
 import worker from '../src/entrypoint.js';
-import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME,WEARABLES} from '../src/site-pages.js';
+import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME,WEARABLES,WORDMARKS,PRO_PRICE,PRO_CONTENTS} from '../src/site-pages.js';
 
 test('the overview keeps what Google verification reads on the homepage',async()=>{
   const html=await overviewPage().text();
@@ -326,7 +326,10 @@ test('the hero names the wearables Aurin reads under the form, and no device it 
   const cta=hero.indexOf('<div class="cta">'),row=hero.indexOf('<div class="xw">');
   assert.ok(cta>0&&row>cta&&row<hero.indexOf('<div class="stage">'),'the row sits right under the form, before the phone');
   const list=hero.slice(row);
-  assert.deepEqual([...list.matchAll(/<li>([^<]+)<\/li>/g)].map(m=>m[1]),WEARABLES);
+  // A name as text, or the brand's own wordmark with the name as its alt text (black and white files both there).
+  assert.deepEqual([...list.slice(0,list.indexOf('</ul>')).matchAll(/<li[^>]*>(?:([^<]+)|[\s\S]*?alt="([^"]+)"[\s\S]*?)<\/li>/g)].map(m=>m[1]||m[2]),WEARABLES);
+  for(const [file] of Object.values(WORDMARKS))for(const c of ['black','white'])assert.ok(existsSync(new URL(`../public/site/logos/${file}-${c}.svg`,import.meta.url)),file+'-'+c);
+  assert.deepEqual(Object.keys(WORDMARKS),['WHOOP','Ultrahuman'],'Apple and Google allow no device wordmark');
   assert.deepEqual(WEARABLES,['Apple Watch','Fitbit','Pixel Watch','WHOOP','Ultrahuman']);
   assert.doesNotMatch(hero,/garmin|oura|strava|polar|coros|amazfit/i);
   assert.match(hero,/Works with what you already wear/);
@@ -347,4 +350,35 @@ test('the overview stays short: one training step per sport, one gym chapter, th
   const parts=[...html.matchAll(/<section id="a-([a-z]+)" class="opener"/g)].map(m=>m[1]);
   assert.deepEqual(parts,['readiness','sleep','training','food','coach','watch']);
   assert.doesNotMatch(section('trenink'),/garmin/i);
+});
+
+// The price block lists what Settings → Aurin Pro lists, in the app's English, and the FAQ says the same prices.
+test('the price block follows the app’s Free and Pro list and says the US prices once',async()=>{
+  const swift=readFileSync(new URL('../ios-native/Aurin/Screens/SubscriptionView.swift',import.meta.url),'utf8');
+  const en=Object.fromEntries([...readFileSync(new URL('../ios-native/Shared/en.lproj/Localizable.strings',import.meta.url),'utf8').matchAll(/^"(.+)" = "(.+)";$/gm)].map(m=>[m[1],m[2]]));
+  const tr=k=>{assert.ok(en[k],'English for '+k);return en[k];};
+  const block=swift.slice(swift.indexOf('enum ProContents'));
+  const free=[...block.slice(block.indexOf('static let free'),block.indexOf('struct Group')).matchAll(/"([^"]+)"/g)].map(m=>tr(m[1]));
+  assert.deepEqual(PRO_CONTENTS.free,free);
+  const pro=[...block.slice(block.indexOf('static let pro')).matchAll(/Group\(title: "([^"]+)", items: \[([^\]]*)\]/g)].map(m=>[tr(m[1]),[...m[2].matchAll(/"([^"]+)"/g)].map(x=>tr(x[1]))]);
+  assert.deepEqual(PRO_CONTENTS.pro,pro);
+  const html=await overviewPage(new Request('https://aurin.health/')).text();
+  const price=html.match(/<section id="cena"[\s\S]*?<\/section>/)[0];
+  for(const x of [...free,...pro.flatMap(([t,i])=>[t,...i])])assert.ok(price.includes(x),x);
+  assert.ok(price.includes(PRO_PRICE.month)&&price.includes(PRO_PRICE.year));
+  assert.equal((price.match(/Free while we test/g)||[]).length,1);
+  assert.match(price,/href="#join"/);
+  const faq=html.match(/<summary>What does it cost\?<\/summary><p>([^<]*)/)[1];
+  assert.ok(faq.includes(PRO_PRICE.month+' a month')&&faq.includes(PRO_PRICE.year+' a year'),'the FAQ says the same prices');
+  assert.ok(html.indexOf('id="cena"')>html.indexOf('id="soukromi"')&&html.indexOf('id="cena"')<html.indexOf('id="faq"'));
+});
+
+// The Terms name what Aurin Pro adds as the app's Settings → Aurin Pro does, in both languages.
+test('the terms say what Aurin Pro adds, its plans and that extras can be bought, in English and Czech',async()=>{
+  const en=await (await termsPage(new Request('https://aurin.health/terms'))).text();
+  const cs=await (await termsPage(new Request('https://aurin.health/cs/terms'))).text();
+  for(const x of ['Aurin Intelligence','adaptive training plans','vitamins and minerals','your own macros and nutrient targets','12-month plan paid monthly','Some extras can also be bought in the app'])assert.ok(en.includes(x),x);
+  for(const x of ['Aurin Intelligence','adaptivní tréninkové plány','vitamíny a minerály','vlastní makra a cíle živin','12měsíčního tarifu placeného měsíčně','Některé doplňky jde v aplikaci i dokoupit'])assert.ok(cs.includes(x),x);
+  for(const t of [en,cs])assert.doesNotMatch(t,/Aurin Pro, (the coach|tedy kouč)/,'the old short list is gone');
+  for(const t of [en,cs])assert.doesNotMatch(t,/coach messages|zprávy koučovi|one-time purchase|jednorázov/i,'no message packs or limits in the terms');
 });

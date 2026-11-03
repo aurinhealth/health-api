@@ -117,6 +117,9 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .xw li{font-size:var(--fs-17);font-weight:600;letter-spacing:-.01em;line-height:1.3;color:var(--text);white-space:nowrap}
 /* A dot after each name: where the row breaks on a narrow phone, a line ends with it and names never run together. */
 .xw li:not(:last-child)::after{content:"·";margin:0 .55em;font-weight:400;color:var(--muted)}
+/* A wordmark stands about as tall as the names' capitals, on their line. */
+.xw .wm{display:inline-flex;align-items:center;height:1.3em}.xw .wm picture{display:contents}
+.xw .wm img{display:block;width:auto;height:.74em}.xw .wm.ultrahuman img{height:.6em}
 @media (max-width:359px){.xw li{font-size:var(--fs-14)}}
 /* The phone and its three numbers are drawn at one size (the rig) and scaled down where the column is narrower,
    so the numbers never leave the column and the coach sits under the phone, not over its tab bar. */
@@ -271,6 +274,19 @@ main:focus{outline:none}
 .privacy .more{display:inline-flex;align-items:center;gap:8px;margin-top:24px;color:var(--primary-text);font-weight:600;text-decoration:none}
 .privacy .more:hover{text-decoration:underline}
 .privacy .more .icon{width:16px;height:16px}
+/* Price: what stays free and what Pro adds, as Settings → Aurin Pro lists them, side by side; one call under them. */
+.price{padding:150px 0 0}
+.price .plans{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin-top:40px}
+.plan{padding:32px 32px 28px;border-radius:var(--r-22);background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)}
+.plan.pro{background:color-mix(in srgb,var(--green) 8%,var(--panel));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--green) 35%,var(--line))}
+.plan .pk{font-size:var(--fs-12);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}.plan.pro .pk{color:var(--green)}
+.plan h3{margin:10px 0 0;font:400 var(--fs-44)/1.1 var(--serif);letter-spacing:-.015em}.plan h3 small{font:500 var(--fs-17) var(--sans);color:var(--sec)}
+.plan .pl{margin:8px 0 0;color:var(--sec)}
+.plan ul{list-style:none;margin:20px 0 0;padding:0;display:grid;gap:10px}
+.plan li{position:relative;padding-left:20px}.plan li::before{content:"";position:absolute;left:2px;top:.62em;width:7px;height:7px;border-radius:50%;background:var(--green)}
+.plan li ul{margin:8px 0 2px;gap:6px}.plan li li{color:var(--sec);font-size:var(--fs-14)}.plan li li::before{width:5px;height:5px;background:var(--muted)}
+.plan .pn{margin:22px 0 0;font-size:var(--fs-14);color:var(--muted)}
+.price .go-join{height:48px;margin-top:32px;padding:0 24px;font-size:var(--fs-17)}
 .card{background:var(--panel);border-radius:var(--r-22);padding:24px;box-shadow:var(--shadow-card)}
 /* The Google Health disclosure, when it is on the homepage (GOOGLE_DISCLOSURE_ON_HOME), folded under one line
    (Petr 2026-11-03): its text is in the page, word for word, and opens on a tap without JS. */
@@ -408,7 +424,8 @@ main:focus{outline:none}
   .ac{grid-template-columns:1fr;gap:32px;justify-items:center}.opener .head{justify-self:stretch}
   .opener{padding-top:110px}.chapter.opens{padding-top:64px}
   .sun{margin:-16px auto -8px}
-  .muscles,.privacy,#faq{padding-top:110px}
+  .muscles,.privacy,.price,#faq{padding-top:110px}
+  .price .plans{grid-template-columns:1fr}
   .faq .side{position:static}
 }
 @media (max-width:560px){
@@ -439,6 +456,7 @@ main:focus{outline:none}
   .part,.flip .part{margin-top:-310px}
   /* A one-thing card only touches the phone's lower edge: the screen above it stays whole. */
   .part:has(>.one),.flip .part:has(>.one){margin-top:-56px}
+  .plan{padding:24px 22px 22px}.plan h3{font-size:var(--fs-28)}
   .site-foot .top{grid-template-columns:1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
 }
 `;
@@ -725,6 +743,27 @@ export const GOOGLE_DISCLOSURE_ON_HOME = false;
 // The watches and rings the "Works with" row under the form names: Apple Watch through Apple Health, Fitbit and
 // Pixel Watch through Google Health, the Ultrahuman Ring and WHOOP directly. Aurin does not support Garmin.
 export const WEARABLES = ['Apple Watch', 'Fitbit', 'Pixel Watch', 'WHOOP', 'Ultrahuman'];
+// Aurin Pro's US prices in App Store Connect (Petr, 2026-11-02); the App Store shows each country its own.
+export const PRO_PRICE = {month: '$6.99', year: '$59.99'};
+// What Aurin has for everyone and what Pro adds, as Settings → Aurin Pro lists them (ProContents in
+// SubscriptionView.swift, in the app's English). A Pro group with items lists them under its title.
+export const PRO_CONTENTS = {
+  free: ['Readiness, sleep and strain', 'Cycle tracking', 'Calorie target and macros', 'Food log, barcode and label', 'Gym log and exercise technique', 'A starter plan for every sport'],
+  pro: [['Aurin Intelligence', ['A coach just for you', 'Plan changes in your own words', 'Workout, day and week reviews', 'Food from a photo, words or the web', 'Gym equipment from a photo or web']],
+    ['Adaptive training plans', ['Plans for races and goals', 'Shaped by your recovery and progress', 'Fits the time you have each day']],
+    ['Vitamins and minerals', []], ['Own macros and nutrient targets', []]]};
+// WHOOP and Ultrahuman show their own wordmark, unaltered, from their brand files (WHOOP's developer design guidelines,
+// Ultrahuman's site), black on the light page and white on the dark one; Petr's call on 2026-11-03 while both
+// consent requests are open. Apple and Google allow no device wordmark without a licence, so those stay names.
+// [file, width, height] of the wordmark's viewBox.
+export const WORDMARKS = {WHOOP: ['whoop', 200, 32], Ultrahuman: ['ultrahuman', 1280, 118]};
+const wearable = w => {
+  const mark = WORDMARKS[w];
+  if (!mark) return `<li>${w}</li>`;
+  const [file, wd, ht] = mark;
+  const img = `<img src="/site/logos/${file}-black.svg" alt="${w}" width="${wd}" height="${ht}">`;
+  return `<li class="wm ${file}">${DARK_SITE ? `<picture><source srcset="/site/logos/${file}-white.svg" media="(prefers-color-scheme:dark)">${img}</picture>` : img}</li>`;
+};
 export const googleDisclosure = () => `<details class="disclosure reveal" lang="en"><summary>Google Health data disclosure</summary><div class="card">
 <p>Aurin is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
 <p>With your authorization, the service may read fitness, health-metric, sleep, and nutrition data from Google Health. It may also add nutrition logs to Google Health when you ask the service to record food or drinks. This data is used only for the requested training and nutrition features.</p>
@@ -773,7 +812,7 @@ export function overviewPage(request) {
       ['sleep-need', 'needOne', 220, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
       ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
       ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
-    ['trenink', '', 'A plan that adapts.', 'Tell Aurin your goal and the time you have. A busy day in your calendar gets a shorter workout.', 'green', 'glow-today', [
+    ['trenink', '', 'A plan that adapts.', 'Pick the sports you do, one or more as main, your goal and your time. The coach suggests only those sports, and a busy day in your calendar gets a shorter workout.', 'green', 'glow-today', [
       ['html:ride', 'sendRide', 260, 'For your ride.', 'From a first gran fondo to rides of up to 8 hours, with the long ride on the day you pick. Send each ride to Wahoo, Intervals.icu or your Apple Watch, or export it for trainer apps.', 7000],
       ['html:run', 'sendRun', 260, 'For your run.', 'From a faster 5 km to a marathon, with the long run on the day you pick. Each run goes to your Apple Watch, Intervals.icu or Wahoo.', 7000],
       ['html:swim', 'sendSwim', 300, 'For your swim.', 'Swim 1,500 m without stopping, get faster with a CSS test, or add strength for swimmers. Pool swims go to your Apple Watch.', 7000],
@@ -846,7 +885,7 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
   const faq = [
     ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit or Pixel Watch. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
     ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
-    ['What does it cost?', 'Nothing during testing. After the release, Aurin Intelligence (the coach, food from a photo, words or the web, and the reviews), every training plan beyond the free starter plan in each sport, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: $6.99 a month or $59.99 a year with the first week free, shown in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.'],
+    ['What does it cost?', `Nothing during testing. After the release, Aurin Intelligence (the coach, food from a photo, words or the web, and the reviews), every training plan beyond the free starter plan in each sport, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: ${PRO_PRICE.month} a month or ${PRO_PRICE.year} a year with the first week free, shown in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.`],
     ['Does Aurin know my cycle?', 'If you turn on cycle tracking in Settings → Cycle, yes. Your readiness then weighs your resting heart rate and temperature in the days before your period against your own days in that phase, and, if you allow it, the coach knows it too.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from, and under Health data see for each type where Aurin reads it from and sends it to, with a switch for each.'],
     ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
@@ -885,7 +924,7 @@ ${sun(72)}
 <h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w${i >= SLANT ? ' it' : ''}" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
 <p class="lede">Aurin reads your sleep, HRV and workouts from the watch or ring you wear, and every morning turns them into one number, one plan and one coach.</p>
 <div class="cta">${store('top')}<p class="note">Free early access on iPhone through TestFlight.</p></div>
-<div class="xw"><span class="xe" id="xw-t">Works with what you already wear</span><ul aria-labelledby="xw-t">${WEARABLES.map(w => `<li>${w}</li>`).join('')}</ul></div>
+<div class="xw"><span class="xe" id="xw-t">Works with what you already wear</span><ul aria-labelledby="xw-t">${WEARABLES.map(wearable).join('')}</ul></div>
 </div>
 <div class="stage"><div class="rig">
 <div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">${day.hrv} ms</div><div class="d up">↑ ${day.hrv - day.hrvBaseline} ms above normal</div></div>
@@ -909,6 +948,18 @@ ${actNav}
 <div class="promise reveal">${LOCK}<h2 class="big">Your data works only for you.</h2><p class="sub">We never sell it or use it for ads. Aurin reads only what you allow, and you can delete all of it in Settings at any time.</p>
 <a class="more" href="/privacy">Read the privacy policy <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a></div>
 ${GOOGLE_DISCLOSURE_ON_HOME ? googleDisclosure() : ''}
+</div></section>
+
+<section id="cena" class="price"><div class="wrap">
+<div class="head reveal"><div class="eyebrow">Price</div><h2 class="big">Free while we test.</h2></div>
+<div class="plans">
+<div class="plan reveal"><div class="pk">Aurin</div><h3>Free</h3><p class="pl">Now and after the release.</p>
+<ul>${PRO_CONTENTS.free.map(x => `<li>${x}</li>`).join('')}</ul></div>
+<div class="plan pro reveal"><div class="pk">Aurin Pro</div><h3>${PRO_PRICE.month}<small> a month</small></h3><p class="pl">or ${PRO_PRICE.year} a year with the first week free, once Aurin is in the App Store.</p>
+<ul>${PRO_CONTENTS.pro.map(([t, items]) => `<li>${t}${items.length ? `<ul>${items.map(x => `<li>${x}</li>`).join('')}</ul>` : ''}</li>`).join('')}</ul>
+<p class="pn">Prices vary by country. The App Store shows yours before you buy.</p></div>
+</div>
+<a class="nav-cta go-join" href="#join">Get early access</a>
 </div></section>
 
 <section id="faq"><div class="wrap faq">
@@ -1211,7 +1262,7 @@ ${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení sv
 }
 
 // Terms of Use. The English text is the reference version; the Czech one says the same.
-const TERMS_UPDATED = {cs: '30. října 2026', en: '30 October 2026'};
+const TERMS_UPDATED = {cs: '3. listopadu 2026', en: '3 November 2026'};
 const APPLE_EULA = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 
 export function termsPage(request) {
@@ -1249,11 +1300,13 @@ export function termsPage(request) {
 </ul>
 <h2>AI features</h2>
 <ul>
-<li>The coach, reading food photos and labels, looking up foods, planning the week, recognizing gym equipment and reviewing workouts use artificial intelligence. They have usage limits and work only with your consent, which you can withdraw in <strong>Settings → Privacy &amp; data → AI features</strong>. The rest of Aurin works without them.</li>
+<li>The coach, reading food photos and labels, looking up foods, planning the week, recognizing gym equipment and reviewing workouts use artificial intelligence. They work only with your consent, which you can withdraw in <strong>Settings → Privacy &amp; data → AI features</strong>. The rest of Aurin works without them.</li>
 <li>AI answers are generated automatically and can be incomplete or wrong, including nutrition values and ingredients. Check them before you rely on them, especially if you have an allergy or follow a medical diet.</li>
 </ul>
 <h2>Price</h2>
-<p>Aurin is currently free, AI features included. Aurin Pro, the coach, food from a photo and the AI reviews, is an auto-renewing subscription sold only through the App Store, where Apple handles payment, cancellation and refunds. The app shows its price, period and conditions before you buy; the yearly plan can start with a free week, once per Apple ID. A subscription renews until you cancel it in your Apple account’s subscriptions (in the app, Settings → Aurin Pro → Manage subscription) at least 24 hours before the period ends. While Aurin is in testing, purchases in TestFlight are Apple’s test purchases and cost nothing. Before Aurin Pro is needed for the AI features, we will tell you in advance. We never charge you without your purchase.</p>
+<p>Aurin is currently free, AI features included. After the release, Aurin Pro adds Aurin Intelligence (the coach, plan changes in your own words, workout, day and week reviews, food from a photo, words or the web, and gym equipment from a photo or the web), adaptive training plans for races and goals, vitamins and minerals, and your own macros and nutrient targets. Readiness, sleep and strain, cycle tracking, the calorie target and macros, the food and gym log and a starter plan for every sport stay free.</p>
+<p>Aurin Pro is an auto-renewing subscription sold only through the App Store, where Apple handles payment, cancellation and refunds. It runs monthly or for 12 months, paid at once or, where Apple offers it, monthly over the 12 months. The app shows the price, period and conditions before you buy; a 12-month plan can start with a free week, once per Apple ID. A subscription renews until you cancel it in your Apple account’s subscriptions (in the app, Settings → Aurin Pro → Manage subscription) at least 24 hours before the period ends. On the 12-month plan paid monthly, cancelling stops the next renewal and the remaining payments for the current 12 months are still due.</p>
+<p>Some extras can also be bought in the app. AI features can have usage limits, which may differ by plan and which we may change. While Aurin is in testing, purchases in TestFlight are Apple’s test purchases and cost nothing. Before Aurin Pro is needed for the features it includes, we will tell you in advance. We never charge you without your purchase.</p>
 <h2>Fair use</h2>
 <p>Do not try to get around Aurin’s security, access someone else’s account or data, overload the service, download it automatically, copy or resell it, or use it for anything unlawful. Reverse engineering is allowed only where the law permits it.</p>
 <h2>Availability and changes</h2>
@@ -1317,11 +1370,13 @@ export function termsPage(request) {
 </ul>
 <h2>AI funkce</h2>
 <ul>
-<li>Kouč, čtení fotek jídla a etiket, dohledání potravin, plánování týdne, rozpoznání vybavení posilovny a hodnocení tréninků používají umělou inteligenci. Mají limity použití a fungují jen s tvým souhlasem, který odvoláš v <strong>Nastavení → Soukromí a data → AI funkce</strong>. Zbytek Aurinu funguje i bez nich.</li>
+<li>Kouč, čtení fotek jídla a etiket, dohledání potravin, plánování týdne, rozpoznání vybavení posilovny a hodnocení tréninků používají umělou inteligenci. Fungují jen s tvým souhlasem, který odvoláš v <strong>Nastavení → Soukromí a data → AI funkce</strong>. Zbytek Aurinu funguje i bez nich.</li>
 <li>Odpovědi AI vznikají automaticky a můžou být neúplné nebo chybné, včetně nutričních hodnot a složení. Než se na ně spolehneš, zkontroluj je, hlavně když máš alergii nebo držíš léčebnou dietu.</li>
 </ul>
 <h2>Cena</h2>
-<p>Aurin je zatím zdarma, včetně AI funkcí. Aurin Pro, tedy kouč, jídlo z fotky a hodnocení od AI, je automaticky obnovované předplatné, které prodáváme jen přes App Store, kde platbu, zrušení i vrácení peněz řeší Apple. Cenu, období a podmínky ti aplikace ukáže před nákupem; roční tarif může začít týdnem zdarma, jednou na Apple ID. Předplatné se obnovuje, dokud ho nezrušíš v předplatných svého účtu Apple (v aplikaci Nastavení → Aurin Pro → Spravovat předplatné) aspoň 24 hodin před koncem období. Dokud je Aurin v testování, nákupy v TestFlightu jsou testovací nákupy Applu a nic nestojí. Než bude Aurin Pro pro AI funkce potřeba, dáme ti vědět předem. Bez tvého nákupu ti nikdy nic neúčtujeme.</p>
+<p>Aurin je zatím zdarma, včetně AI funkcí. Po vydání přidá Aurin Pro funkce Aurin Intelligence (kouče, změny plánu vlastními slovy, hodnocení tréninku, dne a týdne, jídlo z fotky, slov nebo webu a vybavení posilovny z fotky nebo webu), adaptivní tréninkové plány na závody a cíle, vitamíny a minerály a vlastní makra a cíle živin. Připravenost, spánek a zátěž, sledování cyklu, kalorický cíl a makra, zápis jídla a posilovny a úvodní plán pro každý sport zůstávají zdarma.</p>
+<p>Aurin Pro je automaticky obnovované předplatné, které prodáváme jen přes App Store, kde platbu, zrušení i vrácení peněz řeší Apple. Platí se měsíčně, nebo na 12 měsíců, a to najednou, nebo tam, kde to Apple nabízí, měsíčně po dobu 12 měsíců. Cenu, období a podmínky ti aplikace ukáže před nákupem; 12měsíční tarif může začít týdnem zdarma, jednou na Apple ID. Předplatné se obnovuje, dokud ho nezrušíš v předplatných svého účtu Apple (v aplikaci Nastavení → Aurin Pro → Spravovat předplatné) aspoň 24 hodin před koncem období. U 12měsíčního tarifu placeného měsíčně zrušení zastaví další obnovení a zbývající platby za běžících 12 měsíců se platí dál.</p>
+<p>Některé doplňky jde v aplikaci i dokoupit. AI funkce můžou mít limity použití, které se můžou lišit podle tarifu a které můžeme měnit. Dokud je Aurin v testování, nákupy v TestFlightu jsou testovací nákupy Applu a nic nestojí. Než bude Aurin Pro pro funkce, které obsahuje, potřeba, dáme ti vědět předem. Bez tvého nákupu ti nikdy nic neúčtujeme.</p>
 <h2>Férové používání</h2>
 <p>Nesnaž se obejít zabezpečení Aurinu, dostat se k cizímu účtu nebo datům, přetěžovat službu, automaticky ji stahovat, kopírovat ji nebo přeprodávat, ani ji používat k ničemu protiprávnímu. Zpětná analýza je dovolená jen tam, kde to povoluje zákon.</p>
 <h2>Dostupnost a změny</h2>

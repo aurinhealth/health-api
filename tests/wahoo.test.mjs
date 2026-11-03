@@ -482,3 +482,17 @@ test("a Wahoo FTP test ride without laps is measured from its FIT curve; Save re
     assert.equal((await apply(true)).length, 1);
   } finally { globalThis.fetch = real; }
 });
+
+test("a refresh Wahoo refuses (a Sandbox connection after the switch to Production) shows Reconnect; no answer does not", async () => {
+  const health = raw => raw.sqlite.prepare("SELECT status FROM sync_status WHERE sync_name='connection_wahoo'").get()?.status ?? null;
+  const due = { access_token: "old", refresh_token: "r", expires_at: 1, user_id: "55" };
+  const { db, raw } = setup();
+  const refused = api({ "POST /oauth/token": () => Response.json({ error: "invalid_grant" }, { status: 400 }) });
+  assert.equal((await syncWahoo(env(db, due), { days: 5, fetchImpl: refused.fetchImpl, now: NOW })).status, "error");
+  assert.equal(health(raw), "broken");
+  // Wahoo not answering is an outage, not a broken connection.
+  const { db: db2, raw: raw2 } = setup();
+  const offline = async () => { throw new TypeError("fetch failed"); };
+  assert.equal((await syncWahoo(env(db2, due), { days: 5, fetchImpl: offline, now: NOW })).status, "error");
+  assert.notEqual(health(raw2), "broken");
+});

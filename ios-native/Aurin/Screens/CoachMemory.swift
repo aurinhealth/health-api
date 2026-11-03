@@ -279,6 +279,7 @@ struct MemoryChipView: View {
         case .saved: return "checkmark"
         case .forgotten: return "xmark"
         case .updated: return "pencil"
+        case .sportOff: return "nosign"
         }
     }
 
@@ -289,6 +290,7 @@ struct MemoryChipView: View {
         case .saved: return chip.showsText ? L10n.f("Zapamatováno: %@", chip.text) : L10n.tr("Zapamatováno")
         case .forgotten: return L10n.f("Zapomenuto: %@", chip.text)
         case .updated: return L10n.f("Upraveno: %@", chip.text)
+        case .sportOff: return PickMenuText.never(chip.text == "strength" ? "gym" : chip.text)
         }
     }
 }

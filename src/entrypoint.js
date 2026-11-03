@@ -37,7 +37,7 @@ import {buildFood} from './app-food.js';
 import {buildFoodWeek} from './app-food-week.js';
 import {normalizeProfile,effectiveProfile} from './energy-profile.js';
 import {withoutProDiet} from './diet.js';
-import {athleteFocus} from './athlete-focus.js';
+import {athleteFocus,mainKindsOf,SPORT_KINDS} from './athlete-focus.js';
 import { splitFacts, triathlonSplit } from './triathlon-split.js';
 import { getTrainingProfile } from './training-profile.js';
 import { loadProfiles, refreshSuggestions } from './profile-suggestions.js';
@@ -77,6 +77,7 @@ import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './
 import { saveCalendarFree, clearCalendarFree } from './calendar-free.js';
 import { getCheckin, readinessCheckin, saveCheckin } from './morning-checkin.js';
 import { getChecks, upcomingTest } from './threshold-check.js';
+import { saveSportChoice, sportExclusion } from './sport-choice.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories } from './athlete-state.js';
 import { recentNotes, earlierToday, chatSummary, coachNoteDays, queueDayNote, summarizeChatStart, forgetNote, usersWithNotesDue, runCoachNotes } from './coach-notes.js';
 import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planWorkoutId, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
@@ -145,6 +146,7 @@ import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, p
 import { coachNudge, swapOffer, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
 import { waterNudge } from "./water-goal.js";
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
+import { cachedPage } from './page-cache.js';
 import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, L } from "./lang.js";
 import { appUpdateRequired } from "./app-version.js";
 import { compactOldData } from "./heart-rate-compaction.js";
@@ -478,7 +480,7 @@ const worker = {
     // Static pages stay independent of storage availability.
     // Crawlers and link checkers ask with HEAD too; a 401 there keeps the site out of search.
     if (STATIC_PATHS.has(url.pathname) && (request.method === 'GET' || request.method === 'HEAD')) {
-      const page = await staticRoute(url, request, env);
+      const page = await cachedPage(url, env, ctx, () => staticRoute(url, request, env));
       return request.method === 'HEAD' ? new Response(null, page) : page;
     }
     try { await ensureTenancy(env.DB, env, { request }); }
@@ -1384,12 +1386,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const [[ride,run],[profiles,recent,state,gym,less,place]]=await Promise.all([Promise.all([defaultDayCoach(env,{...inputs,athleteState:athlete},date,'ride',week),defaultDayCoach(env,{...inputs,athleteState:athlete},date,'run',week)]),around]);
       // The swim coach only for a swimmer: swimming as the main sport or a swim
       // in the last 60 days (one small capabilities read more, nobody else pays it).
-      const swims=['swimming','triathlon'].includes(profiles?.effective?.mainSport)||(recent.sports||[]).includes('swim');
+      const eff=profiles?.effective||{},allowed=Array.isArray(eff.sports)?eff.sports:null,mains=mainKindsOf(eff);
+      const swims=(['swimming','triathlon'].includes(eff.mainSport)||mains.includes('swim')||(recent.sports||[]).includes('swim'))&&(!allowed||allowed.includes('swim'));
       const swim=swims?await defaultDayCoach(env,{...inputs,athleteState:athlete},date,'swim',week).catch(()=>null):null;
       const planned=[...(swim?.constraints?.plannedToday&&activityKindOf(swim.constraints.plannedToday.type||swim.constraints.plannedToday.name)==='swim'?['swim']:[]),...(ride.constraints?.plannedToday&&activityKindOf(ride.constraints.plannedToday.type||ride.constraints.plannedToday.name)==='ride'?['ride']:[]),...(run.constraints?.plannedToday&&activityKindOf(run.constraints.plannedToday.type||run.constraints.plannedToday.name)==='run'?['run']:[]),...((gym?.values||[]).length>7?['gym']:[])];
       // Nemoc, Zranění or Pauza leaves only rest; signs of an illness drop the sauna.
       const illness=illnessSigns(readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile})).length>0;
-      const ranked=rankOptions({ride,run,swim,mainSport:profiles?.effective?.mainSport||'general',sports:recent.sports,today:recent.today,declines:state.declines,planned,done:recent.done,athleteStatus:athlete?.status||'active',illness});
+      const ranked=rankOptions({ride,run,swim,mainSport:eff.mainSport||'general',mains,allowed,sports:recent.sports,today:recent.today,declines:state.declines,less,planned,done:recent.done,athleteStatus:athlete?.status||'active',illness});
       // The ready workouts stay while the options do (pickSignature), so a sync
       // that changes nothing asks the AI nothing.
       const signature=pickSignature(ranked);
@@ -1743,6 +1746,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   {const r=await handleGymToolsApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
   {const r=await handleWorkoutTemplatesApi(request,env,url,session);if(r!==undefined)return r;}
   if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
+  // "Don't suggest rides" and Settings → Sports to suggest: one sport off or on (sport-choice.js).
+  if(url.pathname==='/app/api/sports'&&request.method==='POST'){const body=await request.json().catch(()=>({}));if(!SPORT_KINDS.includes(body.sport)||typeof body.suggest!=='boolean')return Response.json({message:L('Neznámý sport.', 'Unknown sport.')},{status:400});return Response.json({status:'ok',...await saveSportChoice(env.DB,env.USER_ID,body.sport,body.suggest)},{headers:{'Cache-Control':'no-store'}});}
   if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){let profile=normalizeProfile(await request.json().catch(()=>({})));
     // Custom macros, own protein and own nutrient targets are Aurin Pro (diet.js); checked only when one is set.
     if(profile.dietStyle==='custom'||profile.proteinPerKg!=null||Object.keys(profile.nutrientTargets).length){const pro=await subscriptionStatus(env).then(s=>s.plan==='ai').catch(()=>null);if(pro===false)profile=withoutProDiet(profile);else if(pro===null){const saved=await dashboardProfile(env).catch(()=>null);if(saved)profile={...profile,dietStyle:profile.dietStyle==='custom'&&saved.dietStyle!=='custom'?'balanced':profile.dietStyle,proteinPerKg:saved.proteinPerKg??null,nutrientTargets:saved.nutrientTargets||{}};}}if(profile.waterMode==='build'&&!profile.waterFrom)profile.waterFrom=localToday();await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();const suggestions=await refreshSuggestions(env,{googleToken}).catch(error=>{console.error('Profile suggestions failed',error.message);return null;});const profile=r?JSON.parse(r.profile_json):null;
@@ -2140,9 +2145,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     // The chat keeps only a mark where the photo was.
     const saved=image?L('[Fotka] ', '[Photo] ')+message:message;
     // A lasting preference is saved only once the request has been answered.
+    // "Nenavrhuj mi kolo" turns the sport off (sport-choice.js) before the answer,
+    // so the answer keeps to it; it is a setting with Undo, not a memory.
     // With AI the coach itself saves what to remember (memory.save); the
     // sentence rule is left for the answer without AI.
-    const athleteState=await getAthleteState(env.DB),memory=env.OPENAI_API_KEY||athleteState.memoryOff?null:explicitPreference(message);
+    const noSport=sportExclusion(message),athleteState=await getAthleteState(env.DB);
+    const memory=noSport||env.OPENAI_API_KEY||athleteState.memoryOff?null:explicitPreference(message);
     const saveMemory=()=>memory?updateAthleteState(env.DB,{memory}).catch(error=>{console.error('Preference save failed',error.message);}):null;
     // Each answer belongs to a chat; without a known chat id a new chat starts.
     const remember=async answer=>appendChatTurn(env.DB,body.chatId,saved,answer).catch(error=>{console.error('Chat save failed',error.message);return null;});
@@ -2213,7 +2221,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if(reviews.length)coachCtx.completedRideReviews=reviews;
         if(blockHistory)Object.assign(coachCtx,{blockHistory,blockFitness:inputs.fitness.wellness||[],historyPeriod:{from:shiftDate(date,-84),to:date,source:'cached activities; missing records remain unknown'}});
       }else focus=await dashboardProfile(env).then(profile=>athleteFocus(profile,date)).catch(()=>null);
-      Object.assign(coachCtx,{userInitiated:true,...(focus?.cannotSwim100m?{cannotSwim100m:true}:{}),athleteState:athleteState.status,statusNote:athleteState.note,statusUntil:athleteState.statusUntil,...(athleteState.cancelled?.length?{cancelledSessions:athleteState.cancelled}:{}),preferenceMemory:memory?[...new Set([...usedMemories(athleteState),memory])]:usedMemories(athleteState),...memoryCtx,conversation});
+      Object.assign(coachCtx,{userInitiated:true,...(focus?.cannotSwim100m?{cannotSwim100m:true}:{}),athleteState:athleteState.status,statusNote:athleteState.note,statusUntil:athleteState.statusUntil,...(athleteState.cancelled?.length?{cancelledSessions:athleteState.cancelled}:{}),preferenceMemory:memory?[...new Set([...usedMemories(athleteState),memory])]:usedMemories(athleteState),...memoryCtx,...(sportChanges?{sportsToSuggestChange:{turnedOff:noSport}}:{}),...(coachCtx.focus?{}:{focus}),conversation});
       const sport=engineSport(focus,selected?.appContext||appContext,message);
       // The library offer is for the day, length and kind the message asks
       // for (chat-ask.js; Revize doporučování tréninků 2026-10-16, nález 9).
@@ -2249,7 +2257,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // under the answer with Undo. What the answer says no longer holds is only
       // proposed: the athlete confirms it under the answer (Forget / Update), so
       // text from the data the coach reads cannot quietly change the memory.
-      const saves=remembers?memorySaves(answer.memory,athleteState.memories):[];
+      const saves=remembers&&!noSport?memorySaves(answer.memory,athleteState.memories):[];
       if(saves.length)await updateAthleteState(env.DB,{saves}).catch(error=>{console.error('Coach memory save failed',error.message);saves.length=0;});
       const changes=remembers?memoryChanges(answer.memory,athleteState.memories):{forgotten:[],updated:[]};
       // The chat keeps a one-line summary of the proposals, so later turns can refer to them.
@@ -2266,14 +2274,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const messageId=actions.length?await lastAnswerId(env.DB,chatId).catch(()=>null):null;
       for(const action of actions){const own=action.type==='workout'?quick:null,draft={kind:'coach_action',action,chatId,...(messageId?{messageId}:{}),...(own?{quick:own}:{})};const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling',message,JSON.stringify(draft)).run();const options=own?quickOptions(action,own):null;proposals.push({...action,draftId:ins.meta?.last_row_id,...(options?{quick:options}:{})});}
       delete answer.memory;
-      return {...answer,chatId,actions:proposals,coachAllowance,memorySaved:memory||saves[0]?.text||null,memoryChanges:{saved:memory||saves[0]?.text||null,saves:memory?[{text:memory,group:null}]:saves,forgotten:[],updated:[]},memoryProposals:changes,costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
+      return {...answer,chatId,actions:proposals,coachAllowance,memorySaved:memory||saves[0]?.text||null,memoryChanges:{saved:memory||saves[0]?.text||null,saves:memory?[{text:memory,group:null}]:saves,forgotten:[],updated:[]},memoryProposals:changes,...(sportChanges?{sportChanges}:{}),costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
     };
     // A message whose answer failed goes back to the allowance, unless part of
     // the answer already reached the chat.
-    const reply=(onAnswer,onProgress)=>{
+    // The sport turned off by the message goes back on when no answer came.
+    let sportChanges=null;
+    const reply=async (onAnswer,onProgress)=>{
       let shown=false;
       const show=onAnswer&&(text=>{if(text)shown=true;onAnswer(text);});
-      return answerMessage(show,onProgress).catch(async error=>{if(!shown)await releaseCoachMessage(env,claim).catch(e=>console.error('Coach message not released',e.message));throw error;});
+      if(noSport)sportChanges=await saveSportChoice(env.DB,env.USER_ID,noSport,false).then(async r=>{if(!r.changed)return null;await bumpCacheVersion(env.DB);return {removed:[noSport]};}).catch(error=>{console.error('Sport choice failed',error.message);return null;});
+      return answerMessage(show,onProgress).catch(async error=>{if(!shown)await releaseCoachMessage(env,claim).catch(e=>console.error('Coach message not released',e.message));if(sportChanges&&!shown)await saveSportChoice(env.DB,env.USER_ID,noSport,true).then(()=>bumpCacheVersion(env.DB)).catch(e=>console.error('Sport choice not undone',e.message));throw error;});
     };
     if(body.stream)return assistantStreamResponse(reply,{waitUntil:promise=>ctx.waitUntil(promise)});
     try{return Response.json(await reply(null),{headers:{'Cache-Control':'no-store'}});}
