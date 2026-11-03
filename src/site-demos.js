@@ -65,11 +65,6 @@ const merge = html => html.replace(/ data-n="([^"]*)" data-n="/g, ' data-n="$1;'
 // The service logos (the app's own files in public/site/logos/), as the app's IntegrationIcon draws them.
 const LOGO = {
   apple: '<img src="/site/logos/apple-health.png" alt="" width="15" height="15" loading="lazy">',
-  google: '<img src="/site/logos/google-health.png" alt="" width="15" height="15" loading="lazy" class="pad">',
-  intervals: '<img src="/site/logos/intervals.svg" alt="" width="15" height="15" loading="lazy">',
-  ultrahuman: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt="" width="15" height="15" loading="lazy"></span>',
-  whoop: '<img src="/site/logos/whoop.svg" alt="" width="15" height="15" loading="lazy">',
-  wahoo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt="" width="15" height="15" loading="lazy"></span>',
 };
 const logo = id => `<span class="lg">${LOGO[id]}</span>`;
 // The Aurin mark, as the app's own source tile for what it recorded.
@@ -647,7 +642,6 @@ export const demoCss = `
 .ib.rust{color:var(--rust);background:color-mix(in srgb,var(--rust) 14%,transparent)}.ib.ind{color:var(--indigo);background:color-mix(in srgb,var(--indigo) 14%,transparent)}
 .lg.au{background:var(--panel);box-shadow:inset 0 0 0 1px var(--line);padding:1px}.lg.au svg{width:100%;height:100%}
 .lg{display:inline-grid;width:15px;height:15px;border-radius:26%;overflow:hidden;vertical-align:-3px;margin-right:5px}.lg img{width:100%;height:100%}
-.dm .uh-tile{border-radius:26%}
 
 /* Timeline: an element waiting for "in" (the player marks it .wait) stays hidden until then. Without JS all shows. */
 .js .wait:not(.in){opacity:0;transform:translateY(8px)}
