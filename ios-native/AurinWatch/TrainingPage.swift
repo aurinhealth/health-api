@@ -45,7 +45,7 @@ struct TrainingPage: View {
                     .padding(.top, 6)
                     // Where the sample day's screenshot scrolls to (-week): the
                     // week just under the clock, Continue whole above the edge.
-                    .overlay(alignment: .top) { Color.clear.frame(height: 1).padding(.top, 16).id("week") }
+                    .overlay(alignment: .top) { Color.clear.frame(height: 1).padding(.top, 22).id("week") }
                 content(day)
                 if day == today, noGymToday { noGym }
             }
@@ -306,9 +306,15 @@ struct TrainingPage: View {
     private func header(_ s: WatchSnapshot.Session) -> some View {
         HStack(spacing: 5) {
             Image(systemName: W.sportSymbol(s.sport)).font(.system(size: 13)).foregroundStyle(W.amber)
-            Text(Self.name(s))
-                .font(.system(size: 16, weight: .semibold)).foregroundStyle(W.ink)
-                .lineLimit(2).minimumScaleFactor(0.7)
+            // One line when the name fits, if need be a little smaller
+            // ("Silový trénink, celé tělo"), else two lines.
+            ViewThatFits(in: .horizontal) {
+                Text(Self.name(s)).font(.system(size: 16, weight: .semibold)).lineLimit(1)
+                Text(Self.name(s)).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                Text(Self.name(s)).font(.system(size: 16, weight: .semibold))
+                    .lineLimit(2).minimumScaleFactor(0.7)
+            }
+            .foregroundStyle(W.ink)
         }
         .padding(.top, 2)
     }
