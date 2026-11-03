@@ -102,12 +102,22 @@ jobs:
           # Apple Account and never ends.)
           runtimes = sorted((r for r in devices if "iOS" in r), key=version, reverse=True)
           print("runtimes:", ", ".join(runtimes), file=sys.stderr)
-          phones = [d for r in runtimes for d in devices[r] if d["name"].startswith("iPhone")]
-          names = ("iPhone 17", "iPhone 16", "iPhone 17 Pro", "iPhone 16 Pro")
-          first = [d for d in devices[runtimes[0]] if d["name"].startswith("iPhone")] if runtimes else []
-          pick = next((d for n in names for d in first if d["name"] == n), first[0] if first else phones[0])
-          print(pick["name"], file=sys.stderr)
-          print(pick["udid"])')
+          # An ordinary iPhone, never the foldable iPhone Duo: it has two displays,
+          # so plain screenshots fail (it gets its own step below).
+          first = [d for d in devices[runtimes[0]] if d["name"].startswith("iPhone") and "Duo" not in d["name"]]
+          print("iPhones on", runtimes[0] + ":", ", ".join(d["name"] for d in first) or "none", file=sys.stderr)
+          names = ("iPhone 17", "iPhone 17 Pro", "iPhone 18 Pro", "iPhone 16", "iPhone 16 Pro")
+          pick = next((d for n in names for d in first if d["name"] == n), first[0] if first else None)
+          if pick:
+              print(pick["name"], file=sys.stderr)
+              print(pick["udid"])
+          else:
+              print("create:" + runtimes[0])')
+          case "$udid" in create:*)
+            # No ordinary iPhone on the newest iOS: make one.
+            udid=$(xcrun simctl create "iPhone 17" com.apple.CoreSimulator.SimDeviceType.iPhone-17 "${udid#create:}")
+            echo "created iPhone 17 $udid" ;;
+          esac
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
       # Unit tests render the screens to PNG (AurinTests/SnapshotTests.swift).
@@ -306,8 +316,10 @@ jobs:
           udid=$(xcrun simctl list devices available -j | python3 -c '
           import json, sys
           devices = json.load(sys.stdin)["devices"]
-          duo = [d for r in devices if "iOS" in r for d in devices[r] if "Duo" in d["name"]]
-          print(duo[-1]["udid"] if duo else "")')
+          version = lambda runtime: [int(n) for n in runtime.split("iOS-")[-1].split("-")]
+          runtimes = sorted((r for r in devices if "iOS" in r), key=version, reverse=True)
+          duo = [d for r in runtimes for d in devices[r] if "Duo" in d["name"]]
+          print(duo[0]["udid"] if duo else "")')
           if [ -z "$udid" ]; then
             type=$(xcrun simctl list devicetypes | grep -i "iPhone Duo" | head -1 | sed -E 's/.*\((com\.apple[^)]*)\).*/\1/')
             runtime=$(xcrun simctl list runtimes | grep -E "^iOS" | tail -1 | sed -E 's/.* - (com\.apple[^ ]*).*/\1/')
@@ -322,10 +334,16 @@ jobs:
           xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/Aurin.app
           xcrun simctl ui "$udid" appearance light
           xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
+          # The Duo simulator has two displays (outer LCD and the inner, unfolded
+          # LCD-1); a plain screenshot then asks to choose. Take each one: the
+          # file name says which display and its size.
+          displays=$(xcrun simctl io "$udid" screenshot "$RUNNER_TEMP/probe.png" 2>&1 | sed -nE 's/.*--display=([0-9]+) +([^ ]+).* ([0-9]+x[0-9]+).*/\1:\2-\3/p')
+          echo "displays: ${displays:-one}"
           shoot() {
-            xcrun simctl io "$udid" screenshot "$dir/$1.png"
-            # A second display (the foldable's other screen), when the simulator has one.
-            xcrun simctl io "$udid" screenshot --display=external "$dir/$1-external.png" 2>/dev/null || true
+            if [ -z "$displays" ]; then xcrun simctl io "$udid" screenshot "$dir/$1.png"; return; fi
+            for d in $displays; do
+              xcrun simctl io "$udid" screenshot --display="${d%%:*}" "$dir/$1-${d#*:}.png" || true
+            done
           }
           for tab in today training health food; do
             xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en
