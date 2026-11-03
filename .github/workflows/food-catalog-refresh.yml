@@ -1,0 +1,286 @@
+name: Food catalogue refresh
+
+# Every 14 days the world food catalogue in R2 (src/world-foods.js) gets the
+# current Open Food Facts products: scripts/export-off.py reads the OFF Parquet
+# export, scripts/refresh-world-foods.mjs builds a new version (USDA, Fineli,
+# Ciqual and CoFID foods carried over from the live version) and refuses one
+# much smaller than the live version. The vitamins and minerals are rebuilt for
+# it (scripts/build-micronutrients.mjs), the new version is switched on
+# (current.json written last) and versions older than the previous one are
+# deleted, so R2 holds two versions at most.
+#
+# R2 is reached with the S3 API and a token that can only read and write the
+# bucket aurin-food-catalog (secrets of the environment food-catalog, main
+# only, no approval). The test server's own bucket gets the same files when the
+# STAGING_R2_* secrets are set. A pull request touching the build runs a dry
+# run without R2: the export and a build from it alone.
+
+on:
+  schedule:
+    # Wednesdays 02:30 UTC; the gate lets every second one through.
+    - cron: "30 2 * * 3"
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: "Upload to R2 and switch to the new version (off = build and checks only)"
+        type: boolean
+        default: true
+  pull_request:
+    paths:
+      - "scripts/export-off.py"
+      - "scripts/refresh-world-foods.mjs"
+      - "scripts/build-world-foods.mjs"
+      - "src/world-foods.js"
+      - ".github/workflows/food-catalog-refresh.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: food-catalog
+  cancel-in-progress: false
+
+env:
+  DUCKDB_VERSION: "2.0.0"
+  BUCKET: aurin-food-catalog
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.week.outputs.run }}
+    steps:
+      - id: week
+        name: Every second week
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ] || [ $(( 10#$(date -u +%V) % 2 )) -eq 0 ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Odd ISO week: the catalogue was refreshed last week."; echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  refresh:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    # A pull request runs the dry run without the environment and its secrets.
+    environment: ${{ github.event_name != 'pull_request' && 'food-catalog' || '' }}
+    env:
+      UPLOAD: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.upload) }}
+      DRY_PR: ${{ github.event_name == 'pull_request' }}
+      AWS_DEFAULT_REGION: auto
+      AWS_EC2_METADATA_DISABLED: "true"
+      # R2 does not take the AWS CLI's default checksums on every request.
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      NODE_OPTIONS: --max-old-space-size=9216
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      # The catalogue's texts import src/lang.js, which needs the private prompts.
+      - name: Check out the private AI prompts
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: aurinhealth/aurin-prompts
+          token: ${{ secrets.PROMPTS_REPO_TOKEN }}
+          path: src/private
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24"
+
+      - name: Run tests
+        run: node --test tests/world-foods.test.mjs tests/refresh-world-foods.test.mjs tests/micronutrients.test.mjs
+
+      # Two catalogue versions, the export and the build's work database need
+      # about 25 GB; the runner's preinstalled SDKs make room.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h "$RUNNER_TEMP"
+
+      - name: Check the R2 secrets
+        if: env.DRY_PR != 'true'
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          missing=""
+          for s in R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT; do [ -n "${!s}" ] || missing="$missing $s"; done
+          if [ -n "$missing" ]; then echo "::error::Secrets missing in the environment food-catalog:$missing (docs/food-catalog-refresh.md)"; exit 1; fi
+          aws --version
+
+      - name: Download the live version
+        id: live
+        if: env.DRY_PR != 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          ep="${R2_ENDPOINT%/}"; ep="${ep%/$BUCKET}"
+          mkdir -p "$RUNNER_TEMP/live"
+          aws s3 cp "s3://$BUCKET/current.json" "$RUNNER_TEMP/live/current.json" --endpoint-url "$ep" --only-show-errors
+          version=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).version" "$RUNNER_TEMP/live/current.json")
+          micros=$( (aws s3 cp "s3://$BUCKET/micros/current.json" - --endpoint-url "$ep" 2>/dev/null || echo '{}') | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s||'{}').version||''))")
+          echo "Live catalogue $version, micronutrients ${micros:-none}"
+          aws s3 cp "s3://$BUCKET/$version/" "$RUNNER_TEMP/live/$version/" --recursive --endpoint-url "$ep" --only-show-errors
+          du -sh "$RUNNER_TEMP/live/$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "micros=$micros" >> "$GITHUB_OUTPUT"
+
+      - name: Export Open Food Facts
+        id: off
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet "duckdb==$DUCKDB_VERSION"
+          "$RUNNER_TEMP/venv/bin/python" -I scripts/export-off.py "$RUNNER_TEMP/off.ndjson.gz"
+          ls -l "$RUNNER_TEMP/off.ndjson.gz"
+          echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Build the new version
+        id: build
+        env:
+          LIVE: ${{ steps.live.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Never the live version's own name: its files are being read.
+          base=$(date -u +%Y%m%d); version=$base; n=1
+          while [ "$version" = "${LIVE:-}" ]; do n=$((n+1)); version="$base-$n"; done
+          previous="${LIVE:+$RUNNER_TEMP/live/$LIVE}"
+          node scripts/refresh-world-foods.mjs "${previous:-none}" "$RUNNER_TEMP/off.ndjson.gz" out --version "$version" --off-date "${{ steps.off.outputs.date }}"
+          rm -f "$RUNNER_TEMP/off.ndjson.gz"
+          du -sh "out/$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Keep the counts for inspection
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: food-catalog-meta
+          path: out/*/meta.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Upload and switch to the new version
+        if: env.UPLOAD == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          VERSION: ${{ steps.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          ep="${R2_ENDPOINT%/}"; ep="${ep%/$BUCKET}"
+          aws s3 cp "out/$VERSION/" "s3://$BUCKET/$VERSION/" --recursive --endpoint-url "$ep" --only-show-errors
+          printf '{"format":1,"version":"%s"}' "$VERSION" > "$RUNNER_TEMP/current.json"
+          aws s3 cp "$RUNNER_TEMP/current.json" "s3://$BUCKET/current.json" --content-type application/json --endpoint-url "$ep" --only-show-errors
+          echo "SWITCHED_AT=$(date +%s)" >> "$GITHUB_ENV"
+          echo "The app now searches $VERSION"
+
+      # The micronutrient tables come from their publishers; when this fails the
+      # new catalogue stays on with the previous vitamins (keys are stable),
+      # and the run is marked failed at the end.
+      - name: Build vitamins and minerals for the new version
+        id: micros
+        if: env.UPLOAD == 'true'
+        continue-on-error: true
+        env:
+          VERSION: ${{ steps.build.outputs.version }}
+        run: node scripts/build-micronutrients.mjs "$RUNNER_TEMP/micros-work" out/micros --version "$VERSION" --catalogue "out/$VERSION"
+
+      - name: Upload and switch the vitamins and minerals
+        id: micros_upload
+        if: env.UPLOAD == 'true' && steps.micros.outcome == 'success'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          VERSION: ${{ steps.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          ep="${R2_ENDPOINT%/}"; ep="${ep%/$BUCKET}"
+          aws s3 cp "out/micros/$VERSION/" "s3://$BUCKET/micros/$VERSION/" --recursive --exclude sample.json --endpoint-url "$ep" --only-show-errors
+          printf '{"format":1,"version":"%s"}' "$VERSION" > "$RUNNER_TEMP/micros-current.json"
+          aws s3 cp "$RUNNER_TEMP/micros-current.json" "s3://$BUCKET/micros/current.json" --content-type application/json --endpoint-url "$ep" --only-show-errors
+          echo "Vitamins and minerals now from $VERSION"
+
+      - name: Copy to the test server's bucket
+        id: staging
+        if: env.UPLOAD == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.STAGING_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.STAGING_R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.STAGING_R2_ENDPOINT }}
+          VERSION: ${{ steps.build.outputs.version }}
+          MICROS_OK: ${{ steps.micros_upload.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$R2_ENDPOINT" ]; then echo "::notice::No STAGING_R2_* secrets: the test server keeps its copy."; exit 0; fi
+          ep="${R2_ENDPOINT%/}"; ep="${ep%/$BUCKET}"
+          previous=$(aws s3 cp "s3://$BUCKET/current.json" - --endpoint-url "$ep" 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).version||'')}catch{console.log('')}})")
+          pmicros=$(aws s3 cp "s3://$BUCKET/micros/current.json" - --endpoint-url "$ep" 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).version||'')}catch{console.log('')}})")
+          aws s3 cp "out/$VERSION/" "s3://$BUCKET/$VERSION/" --recursive --endpoint-url "$ep" --only-show-errors
+          aws s3 cp "$RUNNER_TEMP/current.json" "s3://$BUCKET/current.json" --content-type application/json --endpoint-url "$ep" --only-show-errors
+          if [ "$MICROS_OK" = "true" ]; then
+            aws s3 cp "out/micros/$VERSION/" "s3://$BUCKET/micros/$VERSION/" --recursive --exclude sample.json --endpoint-url "$ep" --only-show-errors
+            aws s3 cp "$RUNNER_TEMP/micros-current.json" "s3://$BUCKET/micros/current.json" --content-type application/json --endpoint-url "$ep" --only-show-errors
+          fi
+          echo "previous=$previous" >> "$GITHUB_OUTPUT"
+          echo "micros=$pmicros" >> "$GITHUB_OUTPUT"
+          echo "The test server now searches $VERSION"
+
+      # The Worker keeps current.json for 10 minutes, so the old files stay
+      # readable for a while after the switch.
+      - name: Delete versions older than the previous one
+        if: env.UPLOAD == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          STAGING_KEY: ${{ secrets.STAGING_R2_ACCESS_KEY_ID }}
+          STAGING_SECRET: ${{ secrets.STAGING_R2_SECRET_ACCESS_KEY }}
+          STAGING_ENDPOINT: ${{ secrets.STAGING_R2_ENDPOINT }}
+          VERSION: ${{ steps.build.outputs.version }}
+          LIVE: ${{ steps.live.outputs.version }}
+          LIVE_MICROS: ${{ steps.live.outputs.micros }}
+          STAGING_LIVE: ${{ steps.staging.outputs.previous }}
+          STAGING_MICROS: ${{ steps.staging.outputs.micros }}
+          MICROS_OK: ${{ steps.micros_upload.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          wait=$(( ${SWITCHED_AT:-0} + 900 - $(date +%s) )); [ "$wait" -le 0 ] || { echo "Waiting ${wait} s for the Worker's cache"; sleep "$wait"; }
+          # Deletes <prefix><version>/ for every version name but the kept ones.
+          prune() {
+            local ep="$1" prefix="$2"; shift 2
+            local keep=" $* "
+            aws s3api list-objects-v2 --bucket "$BUCKET" --prefix "$prefix" --delimiter / --endpoint-url "$ep" --query 'CommonPrefixes[].Prefix' --output text \
+              | tr '\t' '\n' | while read -r p; do
+                v="${p#"$prefix"}"; v="${v%/}"
+                [[ "$v" =~ ^[0-9]{8}(-[0-9]+)?$ ]] || continue
+                case "$keep" in *" $v "*) echo "keep $prefix$v";; *) echo "delete $prefix$v"; aws s3 rm "s3://$BUCKET/$prefix$v/" --recursive --endpoint-url "$ep" --only-show-errors;; esac
+              done
+          }
+          micros_now="$LIVE_MICROS"; [ "$MICROS_OK" = "true" ] && micros_now="$VERSION"
+          ep="${R2_ENDPOINT%/}"; ep="${ep%/$BUCKET}"
+          prune "$ep" "" "$VERSION" "$LIVE"
+          prune "$ep" "micros/" "$micros_now" "$LIVE_MICROS"
+          if [ -n "$STAGING_KEY" ] && [ -n "$STAGING_ENDPOINT" ]; then
+            export AWS_ACCESS_KEY_ID="$STAGING_KEY" AWS_SECRET_ACCESS_KEY="$STAGING_SECRET"
+            sep="${STAGING_ENDPOINT%/}"; sep="${sep%/$BUCKET}"
+            smicros_now="$STAGING_MICROS"; [ "$MICROS_OK" = "true" ] && smicros_now="$VERSION"
+            prune "$sep" "" "$VERSION" "$STAGING_LIVE"
+            prune "$sep" "micros/" "$smicros_now" "$STAGING_MICROS"
+          fi
+
+      - name: Vitamins and minerals failed
+        if: env.UPLOAD == 'true' && steps.micros.outcome != 'success'
+        run: |
+          echo "::error::The new catalogue is live, but its vitamins and minerals were not rebuilt (see the step above); the previous ones stay on."
+          exit 1
