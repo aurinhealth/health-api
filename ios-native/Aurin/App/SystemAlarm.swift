@@ -133,8 +133,8 @@ enum SystemAlarm {
         return id
     }
 
-    /// How long Snooze waits, as the Clock app's alarm.
-    static let snooze: TimeInterval = 9 * 60
+    /// How long Snooze waits.
+    static let snooze: TimeInterval = 5 * 60
 
     /// The ringing alarm: "I'm up" and Snooze, then while snoozed "Snoozed" with
     /// the time left. iOS draws it through the widget extension's Live Activity
