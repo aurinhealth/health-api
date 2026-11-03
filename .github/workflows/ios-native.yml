@@ -308,12 +308,13 @@ jobs:
       # simulator shows (duo/). Not a release check: never fails the run, and
       # never holds it either: on main 2026-11-03 it hung for 28 minutes and the
       # whole run hit its time limit before Build for iPhone, so no upload.
-      # Booting and seven screens take 3 to 5 minutes.
+      # Booting and seven screens take 3 to 7 minutes (a slow runner needs 1.5 min
+      # to boot and over 1.5 min to install).
       - name: Screenshot the app on iPhone Duo
         continue-on-error: true
         # Each simctl call below has its own limit too, so a stuck one is named
         # in the log and the rest still runs.
-        timeout-minutes: 8
+        timeout-minutes: 10
         run: |
           # Every simulator off first: the Duo boots with two displays and the
           # earlier steps' iPhone (and its recording) left running starved it.
@@ -348,7 +349,7 @@ jobs:
           mkdir -p "$dir"
           limit 60 xcrun simctl boot "$udid" || true
           limit 180 xcrun simctl bootstatus "$udid" -b || exit 0
-          limit 90 xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/Aurin.app || exit 0
+          limit 240 xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/Aurin.app || exit 0
           limit 60 xcrun simctl ui "$udid" appearance light || true
           limit 30 xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
           # The Duo simulator has two displays (outer LCD and the inner, unfolded
