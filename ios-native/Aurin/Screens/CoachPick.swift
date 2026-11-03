@@ -122,6 +122,31 @@ extension APIClient {
         let _: JSONValue = try await send("/app/api/coach/pick/less", method: "POST",
                                           body: ["kind": JSONValue.string(kind), "less": .bool(less)])
     }
+
+    /// "Nenavrhovat kolo" and Sporty k navrhování: one sport (ride, run, swim,
+    /// strength) off or back on (src/sport-choice.js).
+    @discardableResult
+    func setSportSuggested(_ sport: String, _ suggest: Bool) async throws -> JSONValue {
+        try await send("/app/api/sports", method: "POST", body: ["sport": JSONValue.string(sport), "suggest": .bool(suggest)])
+    }
+}
+
+/// The ⋯ of Aurin's day's activity: its words per sport.
+enum PickMenuText {
+    /// The profile's sport for a pick's kind; none for the sauna, stretching or rest.
+    static func sport(_ kind: String) -> String? { ["ride": "ride", "run": "run", "swim": "swim", "gym": "strength"][kind] }
+    static func less(_ kind: String) -> String {
+        L10n.tr(["ride": "Navrhovat kolo méně často", "run": "Navrhovat běh méně často", "swim": "Navrhovat plavání méně často", "gym": "Navrhovat posilovnu méně často"][kind] ?? "Doporučovat méně")
+    }
+    static func never(_ kind: String) -> String {
+        L10n.tr(["ride": "Nenavrhovat kolo", "run": "Nenavrhovat běh", "swim": "Nenavrhovat plavání", "gym": "Nenavrhovat posilovnu"][kind] ?? "Nenavrhovat")
+    }
+    static func off(_ sport: String) -> String {
+        L10n.tr(["ride": "Kolo už nebudu navrhovat", "run": "Běh už nebudu navrhovat", "swim": "Plavání už nebudu navrhovat", "strength": "Posilovnu už nebudu navrhovat"][sport] ?? "Sport už nebudu navrhovat")
+    }
+    static func lessDone(_ kind: String) -> String {
+        L10n.tr(["ride": "Kolo budu navrhovat méně často", "run": "Běh budu navrhovat méně často", "swim": "Plavání budu navrhovat méně často", "gym": "Posilovnu budu navrhovat méně často"][kind] ?? "Budu to navrhovat méně často")
+    }
 }
 
 /// The option's sport in a ring, as on the training rows.
@@ -181,6 +206,8 @@ struct CoachPickCard: View {
     @State private var busy = false
     @State private var error: String?
     @State private var declined = false
+    /// After ⋯: what changed, with "Vrátit" for a moment.
+    @State private var notice: Notice?
     @AppStorage("activity-of-the-day-folded") private var folded = false
 
     /// The pick's kinds of today's planned workouts ("gym" for strength).
@@ -209,6 +236,8 @@ struct CoachPickCard: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint(Text(L10n.tr(folded ? "Rozbalit" : "Sbalit")))
+                    .padding(.trailing, 44)
+                    .overlay(alignment: .trailing) { moreMenu(best) }
                     if folded {
                         Button { withAnimation(.snappy) { folded = false } } label: {
                             HStack(spacing: 12) {
@@ -230,7 +259,12 @@ struct CoachPickCard: View {
                 .cardSurface(cornerRadius: 24)
                 .padding(.top, top)
                 .transition(.opacity)
-            } else if declined && planned.isEmpty {
+            }
+            if let notice {
+                undoBar(notice.text) { Task { await undoNotice(notice) } }
+                    .padding(.top, 10)
+                    .transition(.opacity)
+            } else if pick?.chosen != nil, declined && planned.isEmpty {
                 HStack(spacing: 10) {
                     Text("Aktivita dne odmítnuta").font(Typo.small).foregroundStyle(Palette.ink)
                     Spacer(minLength: 6)
@@ -256,6 +290,89 @@ struct CoachPickCard: View {
             try? await Task.sleep(for: .seconds(6))
             withAnimation(.easeOut(duration: 0.2)) { declined = false }
         }
+        .task(id: notice) {
+            guard notice != nil else { return }
+            try? await Task.sleep(for: .seconds(6))
+            withAnimation(.easeOut(duration: 0.2)) { notice = nil }
+        }
+    }
+
+    /// What ⋯ changed: a sport off (Sporty k navrhování) or suggested less often.
+    struct Notice: Equatable {
+        enum Kind: Equatable { case off(String), less(String) }
+        let id = UUID()
+        let kind: Kind
+        let text: String
+    }
+
+    /// ⋯: Dnes ne (Odmítnout), less often, and never this sport.
+    private func moreMenu(_ best: CoachPick.Option) -> some View {
+        Menu {
+            Button { Task { await decline(best) } } label: { Label("Dnes ne", systemImage: "xmark") }
+            if best.kind != "rest" {
+                Button { Task { await suggestLess(best.kind) } } label: { Label(PickMenuText.less(best.kind), systemImage: "minus.circle") }
+            }
+            if let sport = PickMenuText.sport(best.kind) {
+                Button(role: .destructive) { Task { await turnOff(sport) } } label: { Label(PickMenuText.never(best.kind), systemImage: "nosign") }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .scaledFont(15, weight: .semibold)
+                .foregroundStyle(Palette.muted)
+                .frame(width: 36, height: 36)
+                .background(Palette.ink.opacity(0.06), in: Circle())
+                .contentShape(Circle())
+        }
+        .accessibilityLabel(Text("Možnosti aktivity dne"))
+        .disabled(busy || model.demo)
+    }
+
+    /// A line with "Vrátit", as after Odmítnout.
+    private func undoBar(_ text: String, undo: @escaping () -> Void) -> some View {
+        HStack(spacing: 10) {
+            Text(verbatim: text).font(Typo.small).foregroundStyle(Palette.ink).lineLimit(2)
+            Spacer(minLength: 6)
+            Button(action: undo) {
+                Label("Vrátit", systemImage: "arrow.uturn.backward").font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink)
+                    .padding(.horizontal, 14).frame(height: 36)
+                    .background(Palette.ink.opacity(0.1), in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.leading, 18).padding(.trailing, 8).frame(minHeight: 52)
+        .background(Palette.card, in: Capsule())
+    }
+
+    /// "Nenavrhovat kolo": the sport is off everywhere and the next activity takes its place.
+    private func turnOff(_ sport: String) async {
+        error = nil
+        do {
+            try await model.api.setSportSuggested(sport, false)
+            withAnimation(.snappy) { notice = Notice(kind: .off(sport), text: PickMenuText.off(sport)) }
+            await model.refreshTraining()
+        } catch { self.error = error.localizedDescription }
+        await reload()
+    }
+
+    /// "Navrhovat kolo méně často": another activity goes first when it is close.
+    private func suggestLess(_ kind: String) async {
+        error = nil
+        do {
+            try await model.api.recommendLess(kind: kind, less: true)
+            withAnimation(.snappy) { notice = Notice(kind: .less(kind), text: PickMenuText.lessDone(kind)) }
+        } catch { self.error = error.localizedDescription }
+        await reload()
+    }
+
+    private func undoNotice(_ shown: Notice) async {
+        withAnimation(.easeOut(duration: 0.2)) { notice = nil }
+        do {
+            switch shown.kind {
+            case .off(let sport): try await model.api.setSportSuggested(sport, true); await model.refreshTraining()
+            case .less(let kind): try await model.api.recommendLess(kind: kind, less: false)
+            }
+        } catch { self.error = error.localizedDescription }
+        await reload()
     }
 
     @ViewBuilder private func expanded(_ best: CoachPick.Option, _ pick: CoachPick) -> some View {

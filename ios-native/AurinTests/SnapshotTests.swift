@@ -258,6 +258,7 @@ final class SnapshotTests: XCTestCase {
         try render("settings", height: 1700) { NavigationStack { SettingsMenu(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-profile", height: 900) { NavigationStack { ProfileSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-sources", height: 900) { NavigationStack { SourcesSettingsView(store: store) }.environment(AppModel(demo: true)) }
+        try render("settings-sports", height: 900) { NavigationStack { SportsSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-goals", height: 1300) { NavigationStack { GoalsSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-zones", height: 700) { NavigationStack { ZonesSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-gym", height: 700) { NavigationStack { GymSettingsView() }.environment(AppModel(demo: true)) }
@@ -391,14 +392,36 @@ final class SnapshotTests: XCTestCase {
             UserDefaults.standard.removeObject(forKey: "AppleLanguages")
         }
         var focus = SetupFocus(profile: ["mainSport": .string("triathlon"), "sportGoal": .string("závod"), "eventName": .string("Ironman 70.3"), "eventDate": .string("2027-06-13")])
-        XCTAssertEqual(focus.sport, "triathlon")
+        // A profile from before the list: its one main sport is ticked and main.
+        XCTAssertEqual(focus.sports.kinds, ["ride", "run", "swim"])
+        XCTAssertEqual(focus.sports.mainSport, "triathlon")
         XCTAssertEqual(focus.goal, "race")
         let saved = focus.applied(to: ["sex": .string("male")])
         XCTAssertEqual(saved["sex"], .string("male"))
         XCTAssertEqual(saved["mainSport"], .string("triathlon"))
+        XCTAssertEqual(saved["sports"], .array([.string("ride"), .string("run"), .string("swim")]))
         XCTAssertEqual(saved["eventDate"], .string("2027-06-13"))
+        // Ride and Run main without a duathlon, the gym too (Petr 2026-11-03).
+        var choice = SportsChoice()
+        choice.toggle("ride")
+        XCTAssertEqual(choice.mains, ["ride"], "the first sport ticked is the main one")
+        choice.toggleMain("run")
+        choice.toggle("strength")
+        XCTAssertEqual(choice.kinds, ["ride", "run", "strength"])
+        XCTAssertEqual(choice.mains, ["ride", "run"])
+        XCTAssertEqual(choice.mainSport, "cycling")
+        choice.toggle("ride")
+        XCTAssertEqual(choice.mains, ["run"], "a sport unticked stops being main")
+        choice.toggle("ride")
+        choice.toggleMain("ride")
+        XCTAssertEqual(SportsChoice(profile: choice.applied(to: [:])), choice)
+        focus.sports = choice
         focus.swims100 = true
         try render("setup-sport-en", height: 844) { SetupSportPage(focus: .constant(focus)).padding(24).padding(.top, 40).environment(\.locale, L10n.locale) }
+        try render("setup-sport-swim-en", height: 844) {
+            SetupSportPage(focus: .constant(SetupFocus(profile: ["sports": .array([.string("ride"), .string("swim"), .string("strength")]), "mainSports": .array([.string("ride")]), "swims100": .bool(true)])))
+                .padding(24).padding(.top, 40).environment(\.locale, L10n.locale)
+        }
         try render("setup-goal-en", height: 844) { SetupGoalPage(focus: .constant(focus)).padding(24).padding(.top, 40).environment(\.locale, L10n.locale) }
         try render("setup-time-en", height: 844) {
             SetupTimePage(minutes: .constant([60, 0, 75, 0, 45, 270, 120]), loading: false, lifts: true) {}

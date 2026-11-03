@@ -1,3 +1,4 @@
+import { sportAllowed } from './sport-choice.js';
 import { L } from './lang.js';
 import { validDay } from './training-availability.js';
 import { trainingStatus } from './training-status.js';
@@ -124,6 +125,8 @@ export function gymMusclesOf(a,message){
   return out;
 }
 export function validateCoachActions(actions,context,today,{userInitiated=false}={}){
+  // A sport off in Sports to suggest only when the athlete asks for it in this chat (sport-choice.js).
+  const allowed=sport=>sportAllowed(context.focus,sport,[context.userMessage,...(context.conversation||[]).filter(t=>t.role==='user').map(t=>t.content)]);
   const events=new Map((context.week||[]).flatMap(d=>(d.planned||[]).map(a=>[String(a.id),{date:d.date,...a}])));
   // A planned session on the proposed day itself is the one it replaces (a
   // workout on a planned day passes only when the athlete asked for it).
@@ -179,13 +182,14 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
     if(a.type==='plan'){
       const template=getTemplate(String(a.planId||''));
       if(!userInitiated||!template||template.choose||trainingStatus(context.athleteState).paused||taken().some(x=>x.type==='plan'))return [];
+      if(['ride','run','swim','gym'].includes(template.sport)&&!allowed(template.sport))return [];
       let when;try{when=planStart(template,{today,raceDate:template.race&&validDay(a.date)?a.date:null,startDate:!template.race&&validDay(a.date)&&a.date>today?a.date:null});}catch{return [];}
       const days=[...new Set((Array.isArray(a.days)?a.days:[]).map(Number).filter(n=>Number.isInteger(n)&&n>=0&&n<=6))].sort();
       const chosen=template.sport!=='gym'&&days.length>=template.days[0]&&days.length<=template.days[1]?days:null;
       const raceKm=template.race?.options?.includes(Number(a.raceKm))?Number(a.raceKm):template.race?.km??null;
       return [{type:'plan',planId:template.id,sport:template.sport,planName:template.name,weeksCount:template.weeks.length,date:when.raceDate&&template.race?when.raceDate:when.firstDay||when.startDate,startDate:when.startDate,...(when.firstDay?{firstDay:when.firstDay}:{}),...(template.race?{raceDate:when.raceDate,raceKm}:{}),...(!template.race&&validDay(a.date)&&a.date>today?{requestedStart:a.date}:{}),...(chosen?{days:chosen}:{}),reason}];
     }
-    if(a.type==='week_sport'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)){
+    if(a.type==='week_sport'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)&&allowed(a.sport)){
       return [{type:'week_sport',date:a.date,sport:a.sport,reason}];
     }
     if(a.type==='status'&&['active','sick','injured','on_break'].includes(a.status)){
@@ -213,6 +217,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
     if(a.type==='workout'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','swim','gym'].includes(a.sport)&&Number.isInteger(a.minutes)&&a.minutes>=(a.sport==='run'?20:a.sport==='swim'?15:30)&&a.minutes<=(a.sport==='swim'?90:MAX_MINUTES[a.sport]||360)){
       const openWater=a.sport==='swim'&&a.place==='open_water';
       if(openWater&&context.cannotSwim100m)return [];
+      if(!allowed(a.sport))return [];
       if(!userInitiated&&context.remainingPlanned?.some(x=>x.date===a.date))return [];
       const budget=context.availabilityByDate?.[a.date]?.minutes;if(!userInitiated&&budget!=null&&a.minutes>budget)return [];
       // Only a workout the coach was actually offered; the preview then shows exactly it.

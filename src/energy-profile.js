@@ -2,7 +2,7 @@
 // weight (Mifflin-St Jeor) times everyday activity, the weekly goal, and a
 // sport estimate for users whose training is not tracked by a connected source.
 import { bilingual } from "./lang.js";
-import { normalizeFocus, sportFromText } from "./athlete-focus.js";
+import { normalizeFocus, sportFromText, mainKindsOf } from "./athlete-focus.js";
 import { localToday } from "./user-time.js";
 import { normalizeDiet } from "./diet.js";
 
@@ -229,10 +229,15 @@ export function effectiveProfile(saved, suggested) {
   // A sport set to "auto" comes from the main race or the goal, else from the
   // last year of training; empty weekly hours from the recent activities.
   const history = suggested?.trainingHistory;
+  // The sports done regularly in the last year (training-history.js), so a
+  // week without recent sessions keeps to them (adaptive-week.js fallbackSports).
+  if (Array.isArray(history?.regularSports) && history.regularSports.length) profile.regularSports = history.regularSports.slice(0, 4);
   // A race that is over no longer decides (athleteFocus drops it too).
   const raceAhead = !profile.eventDate || profile.eventDate >= localToday();
   if (profile.mainSport === "auto") profile.mainSport = (raceAhead ? sportFromText(profile.eventName) : null) ?? sportFromText(profile.sportGoal)
     ?? (history?.recentCount || history?.yearCount ? suggested.mainSport ?? history.mainSport : "general");
+  // "auto" never lands on a sport the athlete turned off (Sports to suggest).
+  if (saved?.mainSport === "auto" && Array.isArray(profile.sports) && !mainKindsOf({ mainSport: profile.mainSport }).every(k => profile.sports.includes(k))) profile.mainSport = "general";
   const hours = Number(history?.weeklyHours);
   if ((profile.weeklyHours == null || profile.weeklyHours === "") && hours >= 1) profile.weeklyHours = Math.round(hours * 2) / 2;
   profile.mainSport = normalizeFocus(profile).mainSport;

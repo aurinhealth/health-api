@@ -812,7 +812,7 @@ export function overviewPage(request) {
       ['sleep-need', 'needOne', 220, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
       ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
       ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
-    ['trenink', '', 'A plan that adapts.', 'Tell Aurin your goal and the time you have. A busy day in your calendar gets a shorter workout.', 'green', 'glow-today', [
+    ['trenink', '', 'A plan that adapts.', 'Pick the sports you do, one or more as main, your goal and your time. The coach suggests only those sports, and a busy day in your calendar gets a shorter workout.', 'green', 'glow-today', [
       ['html:ride', 'sendRide', 260, 'For your ride.', 'From a first gran fondo to rides of up to 8 hours, with the long ride on the day you pick. Send each ride to Wahoo, Intervals.icu or your Apple Watch, or export it for trainer apps.', 7000],
       ['html:run', 'sendRun', 260, 'For your run.', 'From a faster 5 km to a marathon, with the long run on the day you pick. Each run goes to your Apple Watch, Intervals.icu or Wahoo.', 7000],
       ['html:swim', 'sendSwim', 300, 'For your swim.', 'Swim 1,500 m without stopping, get faster with a CSS test, or add strength for swimmers. Pool swims go to your Apple Watch.', 7000],

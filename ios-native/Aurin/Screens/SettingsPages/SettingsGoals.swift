@@ -4,7 +4,7 @@ import UserNotifications
 // MARK: - Goals
 
 /// Cíle: every goal in one place. Sleep (its own page with the alarm), the
-/// weight, what sets the calorie target, the sport and the main race.
+/// weight, what sets the calorie target, the sports and the main race.
 struct GoalsSettingsView: View {
     @Environment(AppModel.self) private var model
     let store: SettingsStore
@@ -12,7 +12,6 @@ struct GoalsSettingsView: View {
     @State private var targetWeight = ""
     @State private var activity = ""
     @State private var sportHours = ""
-    @State private var mainSport = "general"
     @State private var sportGoal = ""
     @State private var eventName = ""
     @State private var hasEvent = false
@@ -20,8 +19,6 @@ struct GoalsSettingsView: View {
     @State private var weeklyHours = ""
     @State private var original: JSONObject = [:]
     @State private var filled = false
-
-    static let sports = [("cycling", "cyklistika"), ("running", "běh"), ("swimming", "plavání"), ("triathlon", "triatlon"), ("strength", "silový trénink"), ("general", "všeobecná kondice")]
 
     var body: some View {
         SettingsPage(title: "Cíle") {
@@ -48,7 +45,10 @@ struct GoalsSettingsView: View {
                     .buttonStyle(.plain)
             }
             SettingsGroup(title: "Trénink") {
-                SettingsPicker(title: "Hlavní sport", selection: $mainSport, options: sportOptions)
+                NavigationLink { SportsSettingsView(store: store) } label: {
+                    SettingsRow(title: "Sporty", value: sportsValue)
+                }
+                .buttonStyle(.plain)
                 SettingsDivider()
                 SettingsField(title: "Hodin týdně", text: $weeklyHours, unit: "h", placeholder: recentHours.map { Fmt.decimal($0, digits: $0 < 10 ? 1 : 0) } ?? "–")
                 SettingsDivider()
@@ -58,7 +58,7 @@ struct GoalsSettingsView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
             }
-            if mainSport == "triathlon", !split.isEmpty {
+            if store.profile["mainSport"]?.string == "triathlon", !split.isEmpty {
                 SettingsGroup(title: "Jak je týden rozdělený", footer: splitReason) {
                     ForEach(Array(split.enumerated()), id: \.element.sport.id) { index, row in
                         if index > 0 { SettingsDivider() }
@@ -167,14 +167,11 @@ struct GoalsSettingsView: View {
         history["weeklyHours"]?.number.flatMap { $0 >= 1 ? $0 : nil }
     }
 
-    /// "automaticky · běh": the sport of the main race or goal, else of the last year of training.
-    private var sportOptions: [(String, String)] {
-        let trained = (history["recentCount"]?.number ?? 0) > 0 || (history["yearCount"]?.number ?? 0) > 0
-        // Plain "automaticky" while there is neither a goal's sport nor training to go by.
-        let auto = store.suggestions["autoMainSport"]?.string.flatMap { $0 == "general" && !trained ? nil : $0 }
-        let recent = auto ?? (trained ? store.suggestions["mainSport"]?.string ?? history["mainSport"]?.string : nil)
-        let label = recent.flatMap { id in Self.sports.first { $0.0 == id }?.1 }
-        return [("auto", label.map { L10n.tr("automaticky") + " · " + L10n.tr($0) } ?? L10n.tr("automaticky"))] + Self.sports
+    /// "Kolo, Běh, Posilovna", or "všechny" while the athlete never chose.
+    private var sportsValue: String {
+        guard case .array(_)? = store.profile["sports"] else { return L10n.tr("všechny") }
+        let kinds = SportsChoice(profile: store.profile).kinds
+        return kinds.isEmpty ? L10n.tr("žádný") : kinds.map(SportsChoice.name).joined(separator: ", ")
     }
 
     /// A triathlete's week (src/triathlon-split.js): "2× · 3 h" per sport, ride, run, swim.
@@ -208,7 +205,6 @@ struct GoalsSettingsView: View {
         } ?? ""
         activity = p["activity"]?.string ?? ""
         sportHours = p["sportHours"]?.string ?? ""
-        mainSport = p["mainSport"]?.string ?? "general"
         sportGoal = p["sportGoal"]?.string ?? ""
         eventName = p["eventName"]?.string ?? ""
         let date = p["eventDate"]?.string.flatMap { Self.isoDay.date(from: $0) }
@@ -222,7 +218,6 @@ struct GoalsSettingsView: View {
         [
             "goal": .string(goal), "targetWeight": Self.metric(targetWeight, Units.kg, scale: 10),
             "activity": .string(activity), "sportHours": .string(sportHours),
-            "mainSport": .string(mainSport),
             "sportGoal": .string(sportGoal),
             "eventName": .string(hasEvent ? eventName : ""),
             "eventDate": .string(hasEvent ? Self.isoDay.string(from: eventDate) : ""),
