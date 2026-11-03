@@ -190,4 +190,15 @@ final class ProStoreTests: XCTestCase {
         XCTAssertEqual(ProStore.amount("$1,490.00", locale: us), 1490)
         XCTAssertNil(ProStore.amount("Kč", locale: cs))
     }
+
+    func testMonthWrittenLikeApplesPrice() {
+        XCTAssertEqual(ProStore.reprice("1\u{202F}490,00\u{00A0}Kč", Decimal(1490) / 12, fractionDigits: 0), "124\u{00A0}Kč")
+        XCTAssertEqual(ProStore.reprice("69,99 €", Decimal(string: "69.99")! / 12, fractionDigits: 2), "5,83 €")
+        XCTAssertEqual(ProStore.reprice("$59.99", Decimal(string: "59.99")! / 12, fractionDigits: 2), "$5.00")
+        XCTAssertEqual(ProStore.reprice("$1,490.00", Decimal(string: "124.17")!, fractionDigits: 2), "$124.17")
+        XCTAssertEqual(ProStore.reprice("1.490,00 €", Decimal(1490), fractionDigits: 2), "1.490,00 €")
+        XCTAssertEqual(ProStore.reprice("¥12,000", Decimal(1000), fractionDigits: 0), "¥1,000")
+        XCTAssertEqual(ProStore.reprice("199,00 Kč", Decimal(1490), fractionDigits: 0), "1\u{00A0}490 Kč")
+        XCTAssertNil(ProStore.reprice("Kč", 1, fractionDigits: 0))
+    }
 }
