@@ -174,6 +174,8 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .part.on{opacity:1}
 .part:has(>.dm.wait:not(.in)){opacity:0!important}
 .step{border-top:1px solid var(--line)}
+/* A step only a phone shows (the muscles, where the 3D figure is hidden). */
+.step.phone{display:none}
 .step:last-child{border-bottom:1px solid var(--line)}
 .step>button,.step>div{display:grid;grid-template-columns:40px 1fr;column-gap:8px;width:100%;padding:20px 0;border:0;background:none;font:inherit;color:inherit;text-align:left}
 .step>button{cursor:pointer}
@@ -422,8 +424,13 @@ main:focus{outline:none}
   .hero .xw{order:1;margin-top:26px}.xw ul{justify-content:flex-start}
   .rig{width:322px;height:672px;--hz:.8}
   .rig .device{left:0}
-  /* On a phone a part opens with its title and line only: its chapters right under show the same day. */
-  .opener .cards{display:none}.opener .sub{font-size:var(--fs-20)}
+  /* On a phone a part opens with its title only, as the eyebrow of its first chapter: the chapter right under
+     shows the same day, so the part's line and cards would only make the page longer. */
+  .opener{padding:72px 0 0}.opener .cards,.opener .sub{display:none}
+  .opener h2.big{font:700 var(--fs-12)/1.2 var(--sans);letter-spacing:.18em;text-transform:uppercase;color:var(--green)}
+  .chapter.opens{padding-top:16px}
+  /* The 3D muscles give way to a step of the gym chapter, the app's own screen. */
+  #svaly{display:none}.step.phone{display:block}
   .acts-nav{bottom:12px;padding:9px 14px 9px 14px;gap:12px}
   /* On a phone the floating cards would cover the real screen's numbers. */
   .glass{display:none}
@@ -497,6 +504,7 @@ var D=window.AurinDemo;
 document.querySelectorAll('.chapter').forEach(function(ch){
  var steps=[].slice.call(ch.querySelectorAll('.step')),scr=[].slice.call(ch.querySelectorAll('.scr')),parts=[].slice.call(ch.querySelectorAll('.part')),cur=0,seen=false,loop=null,multi=ch.classList.contains('multi');
  function units(i){return [scr[i],parts[i]].filter(Boolean);}
+ function next(){for(var k=1;k<steps.length;k++){var j=(cur+k)%steps.length;if(steps[j].offsetParent)return j;}return cur;}
  function run(i){units(i).forEach(function(u){if(still||!seen)D.last(u);else D.play(u);});
   clearTimeout(loop);if(!multi&&seen&&!still&&!ch._touched)loop=setTimeout(function(){run(0);},+steps[0].dataset.dur+2500);}
  function show(i){units(cur).forEach(function(u){D.stop(u);});cur=i;
@@ -505,7 +513,7 @@ document.querySelectorAll('.chapter').forEach(function(ch){
  scr.concat(parts).forEach(function(u){if(still)D.last(u);else D.first(u);});
  ch.addEventListener('demo:touch',function(){ch._touched=true;ch.classList.remove('auto');clearTimeout(loop);});
  if(multi)steps.forEach(function(s,i){s.querySelector('button').addEventListener('click',function(){ch.classList.remove('auto');show(i);});
-  s.querySelector('.bar i').addEventListener('animationend',function(){if(ch.classList.contains('auto'))show((cur+1)%steps.length);});});
+  s.querySelector('.bar i').addEventListener('animationend',function(){if(ch.classList.contains('auto'))show(next());});});
  if(multi){var rail=ch.querySelector('.rail'),hold=rail.querySelector('.hold'),said=hold.querySelector('span'),held=false,over=false,inside=false;
   function sync(){ch.classList.toggle('held',held||over||inside);hold.classList.toggle('held',held);said.textContent=held?'Play':'Pause';}
   hold.addEventListener('click',function(){held=!held;sync();});
@@ -657,14 +665,14 @@ ${headScript}
 <a class="skip" href="#main">Skip to content</a>
 <header class="site-head"><nav class="pill-nav" aria-label="Main">
 <a class="logo" href="/">${mark(30)}<span translate="no">Aurin</span></a>
-<div class="links"><a href="/#a-readiness">Readiness</a><a href="/#a-training">Training</a><a href="/#a-food">Nutrition</a><a href="/#a-sleep">Sleep</a><a href="/#a-coach">Coach</a><a href="/#a-watch">Watch</a></div>
+<div class="links"><a href="/#a-readiness">Readiness</a><a href="/#a-sleep">Sleep</a><a href="/#a-training">Training</a><a href="/#a-food">Nutrition</a><a href="/#a-coach">Coach</a><a href="/#a-watch">Watch</a></div>
 <a class="nav-cta" href="/#join">Get early access</a>
 </nav></header>
 ${body}
 <footer class="site-foot"><div class="wrap">
 <div class="top">
 <div class="brand">${mark(40)}<p>Train for how you feel today.</p></div>
-<nav aria-label="Aurin"><h3 translate="no">Aurin</h3><ul><li><a href="/#a-readiness">Readiness</a></li><li><a href="/#a-training">Training</a></li><li><a href="/#a-food">Nutrition</a></li><li><a href="/#a-sleep">Sleep</a></li><li><a href="/#a-coach">Coach</a></li><li><a href="/#a-watch">Apple Watch</a></li></ul></nav>
+<nav aria-label="Aurin"><h3 translate="no">Aurin</h3><ul><li><a href="/#a-readiness">Readiness</a></li><li><a href="/#a-sleep">Sleep</a></li><li><a href="/#a-training">Training</a></li><li><a href="/#a-food">Nutrition</a></li><li><a href="/#a-coach">Coach</a></li><li><a href="/#a-watch">Apple Watch</a></li></ul></nav>
 <nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li><li><a href="https://x.com/aurin_health" rel="me noopener">Aurin on X</a></li></ul></nav>
 <nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/cs/privacy" hreflang="cs">Soukromí</a> · <a href="/cs/terms" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
@@ -743,7 +751,8 @@ export function overviewPage(request) {
     sleep: 'A night in Aurin: deep, REM and light sleep, when you fell asleep and woke up',
     'sleep-need': 'Aurin’s sleep need for tonight and what made it grow',
     bedtime: 'Aurin’s bedtime dial: the moon for bedtime, the sun for the alarm',
-    'bedtime-goal': 'Picking tonight’s sleep in Aurin: catch up, as usual or at least seven hours'};
+    'bedtime-goal': 'Picking tonight’s sleep in Aurin: catch up, as usual or at least seven hours',
+    muscles: 'Aurin’s muscles: legs and glutes tired, chest and back recovering, the rest rested'};
   // In dark mode (DARK_SITE) each phone shows CI's dark shot of the same screen (scripts/site-screens.mjs).
   const shot = (name, lazy = true) => {
     const img = `<img src="/site/app/${name}.webp" alt="${SHOT_ALT[name] || ''}" width="600" height="1305"${lazy ? ' loading="lazy" decoding="async"' : ' fetchpriority="high"'}>`;
@@ -756,31 +765,32 @@ export function overviewPage(request) {
   const scenes = [
     ['pripravenost', '', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal.', 'green', 'glow-today', [
       ['readiness-parts', 'readyOne', 330, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal. The morning notification brings the same numbers and what to do today, weighing the days before and tomorrow’s workout, and keeps them off your lock screen.', 7000],
+      ['html:strain', 'strainMade', 200, 'Know when to push.', 'Every workout and every step adds up. Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000],
       ['journal-impact', 'journalOne', 330, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000],
       ['html:cycle', 'cycleOne', 300, 'Readiness that knows your cycle.', 'Turn on cycle tracking and, in the days before your period, your resting heart rate and temperature are weighed against your own days in that phase. A usual rise costs no points.', 7000]]],
-    ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
-      ['html:strain', 'strainMade', 200, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000]]],
-    ['trenink', '', 'A plan that adapts.', 'An activity for every day, picked for how you recovered.', 'green', 'glow-today', [
-      ['training', 'week', 150, 'Your week at a glance.', 'Follow a plan for your race, from a faster 5 km to a marathon, a gran fondo, an open-water swim, a triathlon from sprint to full distance, a duathlon, an aquabike up to full distance or an aquathlon, or a multisport plan without a race in the two or three sports you pick; one that takes you to 1,500 m of swimming without stopping, one for a faster swim with a CSS test, or strength for swimmers; or let the AI plan the week of rides, runs, swims and gym; for a triathlon your newest sport gets more short sessions, with a short run straight after a ride (a brick, which you can also put on any day yourself) that goes to your Apple Watch as one multisport workout, or apart, each at its own time. On race day the watch shows the race as one card, its legs in order, and starts it as one multisport workout. Tell Aurin your main sport, your goal and the time you have each day when you first open it, up to 8 hours, even two weeks in turn for shift work, and the plan fits it, with the long ride or run on the day you pick, up to an 8 hour ride or a 6 hour run; give each ride, run and swim a time of day before it goes to your calendar; a busy day in your calendar gets a shorter workout. The library has bricks too, a ride and a run or a swim and a ride, one right after the other. Send a planned ride, run or pool swim to Intervals.icu or your Apple Watch, and a ride or run also to Wahoo; export a ride or run as a .zwo file for trainer apps, or any of them as a .fit file for Garmin, Karoo or COROS.', 9500]]],
-    ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym.', 'amber', 'glow-training', [
-      ['builder', 'builder', 200, 'Say how long and what.', 'Pick the day, the length and the focus, or take the workout your rested muscles suggest in one tap, at your usual length. Aurin builds it only from the equipment your gym has.', 8500],
-      ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, set their length or pick a warm-up of your own, and move them into the order you like. Cardio has no set time unless you pick one: it just runs until you stop it. Then start.', 7000]]],
-    ['rezim', 'Training mode', 'Log every set in a tap.', 'Weights from last time, a rest timer and your summary.', 'green', 'glow-today', [
-      ['training-mode', 'tmOne', 220, 'Your weights, ready.', 'Every set is filled in with its weight, its reps and the plates for each side of the bar. Machine taken? Swap the exercise for a similar one.', 6000],
-      ['training-set', 'tickOne', 300, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets. Miss your reps or hit failure and the next set comes lighter; breeze through and it comes heavier.', 6000],
-      ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, longer after squats than after curls, and stays on your lock screen. The last seconds count down with a vibration you feel even with the phone on the bench.', 13500],
-      ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume, new records and the muscles you tired when you finish, saved to Apple Health. Then say how it went.', 6000]]],
-    ['vyziva', '', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
-      ['food-day', 'foodOne', 220, 'A target that moves.', 'Train harder and you get more to eat. See what makes up the target: your base, the workouts done and the ones still planned. The coach says what that means for your next meal.', 7500],
-      ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000],
-      ['food-day', 'drinks', 330, 'Drink to your goal.', 'Tap a drink, or the whale itself for your usual glass. At today’s goal it blows its spout. Keep Aurin’s goal, set your own, or build up to it day by day. Rather a bottle, a flower or an octopus? Pick one in Settings.', 9500],
-      ['food-day', 'diet', 120, 'Eat your way.', 'Everything, vegetarian or vegan; balanced, high protein, lower carb or keto. Your protein, carbs and nutrients follow, or set your own.', 8000]]],
-
     ['spanek', '', 'Every night, in detail.', 'From any watch or ring you wear.', 'indigo', 'glow-health', [
       ['sleep', 'sleepOne', 330, 'See how you slept.', 'Deep, REM and light sleep, when you fell asleep and when you woke up.'],
       ['sleep-need', 'needOne', 220, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
       ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
       ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
+    ['trenink', '', 'A plan that adapts.', 'Tell Aurin your goal and the time you have. A busy day in your calendar gets a shorter workout.', 'green', 'glow-today', [
+      ['html:ride', 'sendRide', 260, 'For your ride.', 'From a first gran fondo to rides of up to 8 hours, with the long ride on the day you pick. Send each ride to Wahoo, Intervals.icu or your Apple Watch, or export it for trainer apps.', 7000],
+      ['html:run', 'sendRun', 260, 'For your run.', 'From a faster 5 km to a marathon, with the long run on the day you pick. Each run goes to your Apple Watch, Intervals.icu or Wahoo.', 7000],
+      ['html:swim', 'sendSwim', 300, 'For your swim.', 'Swim 1,500 m without stopping, get faster with a CSS test, or add strength for swimmers. Pool swims go to your Apple Watch.', 7000],
+      ['html:brick', 'sendBrick', 360, 'For your triathlon.', 'From sprint to full distance, or a duathlon, an aquabike or an aquathlon. A ride with a short run straight after goes to your Apple Watch as one multisport workout.', 7000]]],
+    ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym. Then log every set in a tap.', 'amber', 'glow-training', [
+      ['builder', 'builder', 200, 'Say how long and what.', 'Pick the day, the length and the focus, or take the workout your rested muscles suggest in one tap. Aurin builds it only from the equipment your gym has.', 8500],
+      ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, set their length and move them into the order you like. Then start.', 7000],
+      ['training-set', 'tickOne', 300, 'Tick off every set.', 'Every set comes filled in with its weight, reps and plates. One tap marks it done; miss your reps or hit failure and the next set comes lighter, breeze through and it comes heavier.', 6000],
+      ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, longer after squats than after curls, and stays on your lock screen. The last seconds count down with a vibration.', 13500],
+      ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume, new records and the muscles you tired, saved to Apple Health. Then say how it went.', 6000],
+      // On a phone the 3D figure gives way to this step (#svaly is hidden there); it has no piece, so it stays last.
+      ['muscles', '', 0, 'Know what’s recovered.', 'From the gym and from your rides, runs and swims, every muscle shows tired, recovering or rested.', 6000, 'phone']]],
+    ['vyziva', '', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
+      ['food-day', 'foodOne', 220, 'A target that moves.', 'Train harder and you get more to eat. See what makes up the target: your base, the workouts done and the ones still planned. The coach says what that means for your next meal.', 7500],
+      ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000],
+      ['food-day', 'drinks', 330, 'Drink to your goal.', 'Tap a drink, or the whale itself for your usual glass. At today’s goal it blows its spout. Keep Aurin’s goal, set your own, or build up to it day by day. Rather a bottle, a flower or an octopus? Pick one in Settings.', 9500],
+      ['food-day', 'diet', 120, 'Eat your way.', 'Everything, vegetarian or vegan; balanced, high protein, lower carb or keto. Your protein, carbs and nutrients follow, or set your own.', 8000]]],
     ['kouc', '', 'A coach just for you.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
       ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today or what to eat before a workout, or send a photo of your trainer’s plan. When it proposes a workout or a plan for your race, confirm it and it lands in your plan.', 11500],
       ['html:memory', 'coachMemory', 140, 'It remembers you.', 'Tell it about a sore knee, your schedule or a goal and it keeps that in mind. See everything it remembers, edit it or delete it.', 7000]]],
@@ -794,7 +804,7 @@ export function overviewPage(request) {
     const watch = list[0][0].startsWith('watch:');
     const subs = p.split('<span class="free">').map((t, j) => `<p class="sub${j ? ' free' : ''}">${t.replace('</span>', '')}</p>`).join('');
     const body = ([, , , title, text], i) => `${multi ? `<span class="n">0${i + 1}</span>` : ''}<span class="tt">${title}</span><span class="tx">${text}</span>`;
-    const steps = list.map((x, i) => `<li class="step${i === 0 ? ' on' : ''}" style="--dur:${x[5] || 6500}ms" data-dur="${x[5] || 6500}">${multi
+    const steps = list.map((x, i) => `<li class="step${i === 0 ? ' on' : ''}${x[6] ? ' ' + x[6] : ''}" style="--dur:${x[5] || 6500}ms" data-dur="${x[5] || 6500}">${multi
       ? `<button type="button" aria-pressed="${i === 0}">${body(x, i)}<span class="bar" aria-hidden="true"><i></i></span></button>`
       : `<div>${body(x, i)}</div>`}</li>`).join('');
     return `<section id="${id}" class="chapter${n % 2 ? ' flip' : ''}${multi ? ' multi' : ''}${eyebrow ? '' : ' opens'}" style="--tone:var(--${tone});--glow:var(--${glow})"><div class="wrap ch">
@@ -811,10 +821,10 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
   // the welcome's page (its title, its line and its cards that move) and then the chapters of that part, the first
   // without an eyebrow, since the part's title says it. A pill at the bottom of the window shows where the reader is.
   const ACT_LIST = [
-    ['readiness', 'Readiness', 'Know every morning how much your body can take today.', 'glow-today', ['pripravenost', 'zatez']],
-    ['training', 'Training', 'Workouts built around your fatigue, muscles and equipment.', 'glow-training', ['trenink', 'posilovna', 'rezim', 'svaly']],
-    ['food', 'Nutrition', 'Snap your plate or scan a barcode. AI fills in the values.', 'glow-food', ['vyziva']],
+    ['readiness', 'Readiness', 'Know every morning how much your body can take today.', 'glow-today', ['pripravenost']],
     ['sleep', 'Sleep', 'A bedtime from your alarm and the sleep you need tonight.', 'glow-health', ['spanek']],
+    ['training', 'Training', 'Workouts built around your fatigue, muscles and equipment.', 'glow-training', ['trenink', 'posilovna', 'svaly']],
+    ['food', 'Nutrition', 'Snap your plate or scan a barcode. AI fills in the values.', 'glow-food', ['vyziva']],
     ['coach', 'Coach', 'Ask anything. It knows your sleep, training and food.', 'glow-coach', ['kouc']],
     ['watch', 'Apple Watch', 'Your morning, your sets and your water, without taking out your phone. Comes with the iPhone app, on any Apple Watch with watchOS 10 or later.', 'glow-today', ['hodinky']]];
   const act = ([id, title, line, glow]) => `<section id="a-${id}" class="opener" style="--glow:var(--${glow})"><div class="wrap ac">
@@ -822,7 +832,7 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
 <div class="cards" aria-hidden="true">${ACTS[id]}</div>
 </div></section>`;
   const actNav = `<nav class="acts-nav" aria-label="Parts of Aurin"><span class="an-t" aria-hidden="true">${ACT_LIST[0][1]}</span><span class="an-l"><i class="an-fill"></i>${ACT_LIST.map(([id, title], i) => `<a href="#a-${id}" style="--k:${i}" aria-label="${title}"></a>`).join('')}<i class="an-dot"></i></span></nav>`;
-  // Muscles sit between training mode and food, as Svaly sits under Trénink in the app. The bubble's
+  // Muscles sit after the gym chapter, before food, as Svaly sits under Trénink in the app. The bubble's
   // words are the sample day's (DemoData.muscles), in English.
   const muscles = `<section id="svaly" class="muscles"><div class="wrap mu">
 <div class="copy reveal"><div class="eyebrow">Muscles</div><h3 class="big">Know what’s recovered.</h3><p class="sub">From the gym and from your rides, runs and swims. Turn the figure and tap a muscle.</p>
