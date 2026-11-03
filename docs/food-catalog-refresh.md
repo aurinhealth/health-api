@@ -19,7 +19,8 @@ Facts products every 14 days: `.github/workflows/food-catalog-refresh.yml`
    - Keys stay as they were (`gtin:<14 digits>`, `off:<code>`, `<source>:<id>`),
      so the vitamins and minerals and foods in users' diaries keep matching.
    - The build is refused when it has fewer than 90 % of the live version's foods
-     or barcodes, 85 % of its Czech products, 97 % of any carried source, or when
+     or barcodes, 85 % of its Czech products or 90 % of the other sources
+     together, when a carried food is missing from the build, or when
      20 Czech barcodes are not found in it.
 3. The files go to R2, `current.json` last. `scripts/build-micronutrients.mjs
    --catalogue out/<version>` then rebuilds the vitamins and minerals for it and
