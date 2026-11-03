@@ -346,17 +346,23 @@ jobs:
           limit 60 xcrun simctl boot "$udid" || true
           limit 180 xcrun simctl bootstatus "$udid" -b || exit 0
           limit 90 xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/Aurin.app || exit 0
-          limit 30 xcrun simctl ui "$udid" appearance light || true
+          limit 60 xcrun simctl ui "$udid" appearance light || true
           limit 30 xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
           # The Duo simulator has two displays (outer LCD and the inner, unfolded
-          # LCD-1); a plain screenshot then asks to choose. Take each one: the
-          # file name says which display and its size.
-          displays=$(limit 30 xcrun simctl io "$udid" screenshot "$RUNNER_TEMP/probe.png" 2>&1 | sed -nE 's/.*--display=([0-9]+) +([^ ]+).* ([0-9]+x[0-9]+).*/\1:\2-\3/p')
-          echo "displays: ${displays:-one}"
+          # LCD-1); a plain screenshot then refuses and lists them. Each shot
+          # tries the plain one and, when refused, takes every listed display:
+          # the file name says which display and its size. Asked per shot, not
+          # once up front: the first screenshot after boot can take over 30 s.
+          displays=""
           shoot() {
-            if [ -z "$displays" ]; then limit 30 xcrun simctl io "$udid" screenshot "$dir/$1.png" || true; return; fi
+            if [ -z "$displays" ]; then
+              local out; out=$(limit 45 xcrun simctl io "$udid" screenshot "$dir/$1.png" 2>&1) || true
+              displays=$(printf '%s\n' "$out" | sed -nE 's/.*--display=([0-9]+) +([^ ]+).* ([0-9]+x[0-9]+).*/\1:\2-\3/p')
+              [ -n "$displays" ] || return 0
+              echo "displays: $displays"
+            fi
             for d in $displays; do
-              limit 30 xcrun simctl io "$udid" screenshot --display="${d%%:*}" "$dir/$1-${d#*:}.png" || true
+              limit 45 xcrun simctl io "$udid" screenshot --display="${d%%:*}" "$dir/$1-${d#*:}.png" || true
             done
           }
           for tab in today training health food; do
