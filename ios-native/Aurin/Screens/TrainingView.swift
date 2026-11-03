@@ -135,6 +135,7 @@ struct TrainingContent: View {
     @Environment(\.tabActions) private var actions
     @State private var editing = false
     @State private var focusSheet = false
+    @Environment(\.wideLayout) private var wide
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -145,59 +146,68 @@ struct TrainingContent: View {
                           showToday: shownDay == training.date ? nil : showToday,
                           coach: actions.coach, settings: actions.settings)
 
-                // Until the main sport and goal are set (FocusSheet.swift).
-                if training.profileIncomplete == true {
-                    FocusPromptCard { focusSheet = true }
+                // A wide window: the week, today's workouts and the strain on the left, the widgets on the right.
+                WideColumns {
+                    // Until the main sport and goal are set (FocusSheet.swift).
+                    if training.profileIncomplete == true {
+                        FocusPromptCard { focusSheet = true }
+                            .padding(.top, 18)
+                    }
+
+                    TrainingCalendarCard(today: training.date, onPick: pickDay, jump: jumpDay,
+                                         plannedTodayBelow: Set(upcoming.filter { $0.date == training.date }.map(\.title)))
                         .padding(.top, 18)
-                }
 
-                TrainingCalendarCard(today: training.date, onPick: pickDay, jump: jumpDay,
-                                     plannedTodayBelow: Set(upcoming.filter { $0.date == training.date }.map(\.title)))
-                    .padding(.top, 18)
+                    // Right under the week (Petr, 2026-10-25): every workout left today,
+                    // else the next planned day's, with Začít trénink. It belongs to
+                    // today, not to a day looked back at.
+                    if shownDay == training.date, !upcoming.isEmpty {
+                        TodaySessions(sessions: upcoming, today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
+                            .padding(.top, 14)
+                    }
 
-                // Right under the week (Petr, 2026-10-25): every workout left today,
-                // else the next planned day's, with Začít trénink. It belongs to
-                // today, not to a day looked back at.
-                if shownDay == training.date, !upcoming.isEmpty {
-                    TodaySessions(sessions: upcoming, today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
-                        .padding(.top, 14)
-                }
+                    // Today's opens the same Námaha detail as Dnes, a past day its own;
+                    // a day ahead has no detail yet.
+                    if shownDay == training.date {
+                        RouteLink(route: .strain) { StrainHero(training: training) }
+                            .padding(.top, 26)
+                    } else if shownDay < training.date {
+                        RouteLink(route: .strainDay(shownDay)) { StrainHero(training: training, day: shownDay) }
+                            .padding(.top, 26)
+                    } else {
+                        StrainHero(training: training, day: shownDay)
+                            .padding(.top, 26)
+                    }
+                    CoachTextCard(screen: "training").padding(.top, 18)
 
-                // Today's opens the same Námaha detail as Dnes, a past day its own;
-                // a day ahead has no detail yet.
-                if shownDay == training.date {
-                    RouteLink(route: .strain) { StrainHero(training: training) }
-                        .padding(.top, 26)
-                } else if shownDay < training.date {
-                    RouteLink(route: .strainDay(shownDay)) { StrainHero(training: training, day: shownDay) }
-                        .padding(.top, 26)
-                } else {
-                    StrainHero(training: training, day: shownDay)
-                        .padding(.top, 26)
-                }
-                CoachTextCard(screen: "training").padding(.top, 18)
+                    WeekStrainBars(days: training.days)
+                        .padding(.top, 22)
 
-                WeekStrainBars(days: training.days)
-                    .padding(.top, 22)
+                    if let event = training.event {
+                        EventCard(event: event)
+                            .padding(.top, 28)
+                    }
 
-                if let event = training.event {
-                    EventCard(event: event)
+                    TrainingTools(today: training.date, gymPlanned: upcoming.contains { $0.date == training.date && $0.sport == "strength" },
+                                  addWorkout: addWorkout)
                         .padding(.top, 28)
+                } right: {
+                    // In a wide window the widgets stay one column beside the week.
+                    board.environment(\.wideLayout, false).padding(.top, wide ? 18 : 28)
                 }
-
-                TrainingTools(today: training.date, gymPlanned: upcoming.contains { $0.date == training.date && $0.sport == "strength" },
-                              addWorkout: addWorkout)
-                    .padding(.top, 28)
+            } else {
+                board
             }
-
-            WidgetBoard(panel: .training,
-                        data: WidgetData(panel: .training, today: model.today, health: model.health, training: training, food: model.food, planToast: toast),
-                        editing: $editing)
-                .padding(.top, editing ? 0 : 28)
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
         .sheet(isPresented: $focusSheet) { FocusSheet { Task { await model.refreshTraining() } } }
+    }
+
+    private var board: some View {
+        WidgetBoard(panel: .training,
+                    data: WidgetData(panel: .training, today: model.today, health: model.health, training: training, food: model.food, planToast: toast),
+                    editing: $editing)
     }
 
     private var shownDay: String { day ?? training.date }
