@@ -156,24 +156,19 @@ final class ProStoreTests: XCTestCase {
         XCTAssertEqual(ProStore.packIDs, ["health.aurin.app.coach.messages40", "health.aurin.app.coach.messages100"])
         XCTAssertTrue(try XCTUnwrap(store.price("health.aurin.app.coach.messages40")).contains("99"))
         // Xcode's test purchase never reaches the server: the pack's own messages come back.
+        let buying = Date().addingTimeInterval(-1)
         let left = try await step("buy pack") { try await store.buyPack("health.aurin.app.coach.messages100") }
         XCTAssertEqual(left, 100)
         XCTAssertFalse(store.entitled, "a pack is not Aurin Pro")
-        // The pack bought here is finished. Another product still open is what an
-        // earlier test left (CI, 3 Nov: one open transaction after the monthly test),
-        // so it is named in the log, not counted.
-        // StoreKit's test session can list the pack as unfinished for a moment
-        // after finish() (CI, 3 Nov: 1 instead of 0), so it is read again for up to 3 s.
+        // The pack bought here is finished. On CI (3 Nov, iOS 27) Transaction.unfinished
+        // still listed a messages100 transaction 3 s after buyPack had finished its
+        // own, so only a transaction bought during this step counts. Every open one
+        // is named in the log with its ID and date.
         var unfinished = 0
-        for attempt in 0..<30 {
-            unfinished = 0
-            for await result in Transaction.unfinished {
-                let transaction = result.unsafePayloadValue
-                if transaction.productID == "health.aurin.app.coach.messages100" { unfinished += 1 }
-                else if attempt == 0 { print("ProStoreTests open transaction left by another test: \(transaction.productID), bought \(transaction.purchaseDate)") }
-            }
-            if unfinished == 0 { break }
-            try await Task.sleep(nanoseconds: 100_000_000)
+        for await result in Transaction.unfinished {
+            let transaction = result.unsafePayloadValue
+            print("ProStoreTests open transaction: \(transaction.productID) \(transaction.id), bought \(transaction.purchaseDate), buying from \(buying)")
+            if transaction.productID == "health.aurin.app.coach.messages100", transaction.purchaseDate >= buying { unfinished += 1 }
         }
         XCTAssertEqual(unfinished, 0, "the bought pack is finished")
         _ = session
