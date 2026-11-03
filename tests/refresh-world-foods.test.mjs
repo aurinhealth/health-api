@@ -115,10 +115,11 @@ test('OFF products follow the export: new values, new products, deleted ones gon
 });
 
 test('a much smaller version is refused', () => {
-  const prev = { foods: 1000, barcodes: 800, czech_market: 100, by_source: { off: 700, fineli: 300 } };
-  assert.deepEqual(checkCounts(prev, { foods: 1000, barcodes: 800, czech_market: 100, by_source: { off: 700, fineli: 300 } }), []);
-  const problems = checkCounts(prev, { foods: 500, barcodes: 400, czech_market: 10, by_source: { fineli: 200 } });
-  assert.equal(problems.length, 5);
+  const prev = { foods: 1000, barcodes: 800, czech_market: 100, by_source: { off: 700, fineli: 200, usda_branded: 100 } };
+  // The kCalori release counted foods that share a key or were never stored: fewer carried is fine.
+  assert.deepEqual(checkCounts(prev, { foods: 1000, barcodes: 800, czech_market: 100, by_source: { off: 710, fineli: 200, usda_branded: 90 } }, { fineli: 200, usda_branded: 90 }), []);
+  const problems = checkCounts(prev, { foods: 500, barcodes: 400, czech_market: 10, by_source: { fineli: 150 } }, { fineli: 200, usda_branded: 50 });
+  assert.deepEqual(problems.map(p => p.split(':')[0]), ['foods', 'barcodes', 'czech_market', 'fineli', 'usda_branded', 'other sources', 'no Open Food Facts products']);
   assert.deepEqual(fixture.result.problems.filter(p => !/^(foods|barcodes|czech_market)/.test(p)), []);
 });
 

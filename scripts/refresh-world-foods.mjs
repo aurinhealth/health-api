@@ -24,7 +24,7 @@ export const OFF_SOURCE = {
   license: "ODbL-1.0", license_url: "https://opendatacommons.org/licenses/odbl/1-0/"
 };
 // Least share of the previous version a new one must keep.
-export const MIN_SHARE = { foods: 0.9, barcodes: 0.9, czech_market: 0.85, carried: 0.97 };
+export const MIN_SHARE = { foods: 0.9, barcodes: 0.9, czech_market: 0.85, carried: 0.9 };
 
 const clean = (v, max) => {
   const s = String(v ?? "").replace(/\s+/g, " ").trim();
@@ -84,7 +84,8 @@ export function rowOf(r) {
 // Every record of a built version once: the name nodes first, as their records
 // carry the rank, then the barcode buckets. A food whose words all sit only in
 // nodes too full to hold it (and that has no barcode) was never stored, so it
-// cannot be carried over either; checkCounts allows for that.
+// cannot be carried over either. A key the kCalori release gave two foods (one
+// GTIN in OFF and USDA Branded) is read once. checkCounts allows for both.
 export function* versionRecords(dir) {
   const slices = [];
   for (const s of NAME_SHARDS) {
@@ -124,7 +125,7 @@ export async function* ndjson(file) {
 // Rows of the new version: the carried-over records, then the OFF products.
 export async function collect(previous, products, log = console.log) {
   const carried = [], names = new Map(), taken = new Set();
-  const stats = { carried: 0, previous_off: 0, off: 0, off_skipped: 0, off_duplicate: 0, off_behind_other_source: 0, names_kept: 0 };
+  const stats = { carried: 0, previous_off: 0, off: 0, off_skipped: 0, off_duplicate: 0, off_behind_other_source: 0, names_kept: 0, carried_by_source: {} };
   for (const r of previous) {
     if (r.s === "off") {
       stats.previous_off++;
@@ -132,6 +133,7 @@ export async function collect(previous, products, log = console.log) {
       continue;
     }
     carried.push(rowOf(r)); taken.add(r.k); stats.carried++;
+    stats.carried_by_source[r.s] = (stats.carried_by_source[r.s] || 0) + 1;
   }
   log(`previous version: ${stats.carried} foods carried over, ${stats.previous_off} Open Food Facts products replaced by the export`);
   const off = [], seenOff = new Set();
@@ -154,18 +156,23 @@ export async function collect(previous, products, log = console.log) {
   return { rows, stats };
 }
 
-// Problems that stop the upload, compared with the previous version's counts.
-export function checkCounts(previous, next) {
+// Problems that stop the upload: totals compared with the previous version's
+// counts; each carried source must arrive whole (carried: the records read from
+// the previous version by source), and together they must be most of what the
+// previous version counted for them, or its download was incomplete.
+export function checkCounts(previous, next, carried = {}) {
   const problems = [];
   for (const key of ["foods", "barcodes", "czech_market"]) {
     const was = previous?.[key] || 0;
     if (was && (next[key] || 0) < was * MIN_SHARE[key]) problems.push(`${key}: ${next[key] || 0}, previous ${was} (needs ${Math.round(MIN_SHARE[key] * 100)} %)`);
   }
-  for (const [source, was] of Object.entries(previous?.by_source || {})) {
-    if (source === "off") continue;
+  for (const [source, read] of Object.entries(carried)) {
     const now = next.by_source?.[source] || 0;
-    if (now < was * MIN_SHARE.carried) problems.push(`${source}: ${now} foods, previous ${was}`);
+    if (now < read) problems.push(`${source}: ${now} foods in the build, ${read} carried over`);
   }
+  const was = Object.entries(previous?.by_source || {}).filter(([s]) => s !== "off").reduce((n, [, c]) => n + c, 0);
+  const read = Object.values(carried).reduce((n, c) => n + c, 0);
+  if (was && read < was * MIN_SHARE.carried) problems.push(`other sources: ${read} foods carried over, previous ${was} (needs ${Math.round(MIN_SHARE.carried * 100)} %)`);
   if (!next.by_source?.off) problems.push("no Open Food Facts products");
   return problems;
 }
@@ -205,7 +212,7 @@ export async function refresh({ previousDir, offFile, out, version, offDate, log
   rows.length = 0;
   built.meta.refresh = { previous: meta.version, ...stats };
   writeFileSync(join(built.dir, "meta.json"), JSON.stringify(built.meta, null, 1));
-  const problems = [...checkCounts(meta.counts, built.meta.counts), ...await smoke(built.dir, version, probes)];
+  const problems = [...checkCounts(meta.counts, built.meta.counts, stats.carried_by_source), ...await smoke(built.dir, version, probes)];
   return { ...built, previous: meta, stats, problems };
 }
 
