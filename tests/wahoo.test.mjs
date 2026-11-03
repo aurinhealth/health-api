@@ -8,6 +8,7 @@ import { handleWahooOAuth, handleWahooWebhook, wahooActivityRow, wahooPlan, waho
 import { storeLocalEvent, syncLocalWorkout, editLocalWorkout } from "../src/local-workouts.js";
 import { saveSyncPrefs, syncOverview } from "../src/sync-destinations.js";
 import { connectionStatus } from "../src/connections.js";
+import { readConnectionHealth } from "../src/connection-health.js";
 import { withTimeZone } from "../src/user-time.js";
 import { powerZones } from "../src/training-zones.js";
 import { changeActivityType } from "../src/activity-type.js";
@@ -117,19 +118,55 @@ test("the webhook needs our token and saves the workout for whoever has that Wah
   const { db, raw } = setup();
   const user = env(db);
   const forUser = async (id, fn) => id === "55" ? fn(user) : null;
-  const post = body => handleWahooWebhook(new Request("https://aurin.health/webhooks/wahoo", { method: "POST", body: JSON.stringify(body) }), { WAHOO_WEBHOOK_TOKEN: "tok" }, forUser);
+  // What Wahoo itself has for this user: the workout is read with the user's token.
+  const { calls, fetchImpl } = api({
+    "GET /v1/workouts/300": () => Response.json(workout(300, "2026-10-14T05:30:00Z", { name: "Ráno", workout_type_id: 0 })),
+    "GET /v1/workouts/301": () => new Response("{}", { status: 404 }),
+    "GET /v1/workouts/302": () => new Response("{}", { status: 403 })
+  });
+  const post = body => handleWahooWebhook(new Request("https://aurin.health/webhooks/wahoo", { method: "POST", body: JSON.stringify(body) }), { WAHOO_WEBHOOK_TOKEN: "tok" }, forUser, { fetchImpl, now: NOW });
   const { id, ...rest } = summary(); void id;
-  const event = token => ({ event_type: "workout_summary", webhook_token: token, user: { id: 55 }, workout_summary: { id: 4, ...rest, workout: { id: 300, starts: "2026-10-14T05:30:00Z", minutes: 85, name: "Ráno", workout_type_id: 0 } } });
+  const event = (token, workoutId = 300, extra = {}) => ({ event_type: "workout_summary", webhook_token: token, user: { id: 55 }, workout_summary: { id: 4, ...rest, ...extra, workout: { id: workoutId, starts: "2026-10-14T05:30:00Z", minutes: 85, name: "Ráno", workout_type_id: 0 } } });
   assert.equal((await post(event("bad"))).status, 401);
   assert.equal(rows(raw).length, 0);
-  assert.equal((await post(event("tok"))).status, 200);
+  assert.equal(calls.length, 0, "nothing is read for a refused message");
+  // The message's own numbers are not trusted (SEC-011): what is saved comes from Wahoo.
+  assert.equal((await post(event("tok", 300, { calories_accum: "99999.0", power_avg: "2400.0" }))).status, 200);
+  assert.equal(calls.filter(c => c.path === "/v1/workouts/300").at(-1).auth, "Bearer a");
   const saved = rows(raw, "source_family='wahoo'");
   assert.equal(saved.length, 1);
   assert.equal(saved[0].start_time, "2026-10-14T07:30:00");
-  assert.equal(JSON.parse(saved[0].payload_json).type, "Ride");
+  const payload = JSON.parse(saved[0].payload_json);
+  assert.equal(payload.type, "Ride");
+  assert.equal(payload.calories, 812);
+  assert.equal(payload.icu_average_watts, 212);
+  // A workout Wahoo does not have for this user (made up, or someone else's): nothing saved.
+  assert.equal((await post(event("tok", 301))).status, 200);
+  assert.equal((await post(event("tok", 302))).status, 200);
+  assert.equal(rows(raw, "source_family='wahoo'").length, 1);
+  assert.equal((await readConnectionHealth(user)).wahoo?.needsReconnect, false, "someone else's workout does not break this connection");
+  // Not a workout id: ignored without asking Wahoo.
+  const before = calls.length;
+  assert.deepEqual(await (await post(event("tok", "../users"))).json(), { status: "ignored" });
+  assert.equal(calls.length, before);
   // Someone we do not know: acknowledged, nothing saved.
   assert.equal((await post({ ...event("tok"), user: { id: 99 } })).status, 200);
   assert.equal(rows(raw).length, 1);
+});
+
+test("the webhook saves nothing when Wahoo does not answer; the summary is read when the workout lacks it", async () => {
+  const { db, raw } = setup();
+  const user = env(db);
+  const forUser = async (id, fn) => id === "55" ? fn(user) : null;
+  const down = api({ "GET /v1/workouts/300": () => { throw new Error("timeout"); } });
+  const message = { event_type: "workout_summary", webhook_token: "tok", user: { id: 55 }, workout_summary: { workout: { id: 300 } } };
+  const post = fetchImpl => handleWahooWebhook(new Request("https://aurin.health/webhooks/wahoo", { method: "POST", body: JSON.stringify(message) }), { WAHOO_WEBHOOK_TOKEN: "tok" }, forUser, { fetchImpl, now: NOW });
+  assert.equal((await post(down.fetchImpl)).status, 200);
+  assert.equal(rows(raw, "source_family='wahoo'").length, 0);
+  const { workout_summary: s, ...bare } = workout(300, "2026-10-14T05:30:00Z"); void s;
+  const split = api({ "GET /v1/workouts/300": () => Response.json(bare), "GET /v1/workouts/300/workout_summary": () => Response.json(summary()) });
+  assert.equal((await post(split.fetchImpl)).status, 200);
+  assert.equal(rows(raw, "source_family='wahoo'").length, 1);
 });
 
 test("a planned ride goes to Wahoo as a plan and a workout, follows edits and goes on deletion", async () => {
@@ -395,5 +432,53 @@ test("saving zones writes Wahoo only when the FTP or the power zones change and 
     const again = await save({ ftp: 260, powerZoneModel: "five", wahooAgain: true });
     assert.ok(seen.includes("POST /v1/power_zones"));
     assert.equal(again.wahoo.status, "ok");
+  } finally { globalThis.fetch = real; }
+});
+
+test("a Wahoo FTP test ride without laps is measured from its FIT curve; Save respects both switches", async () => {
+  const { db, raw } = setup();
+  const { thresholdCheckState } = await import("../src/threshold-check-state.js");
+  const { saveCheck } = await import("../src/threshold-check.js");
+  const { handleThresholdApi } = await import("../src/routes-training.js");
+  const { localToday } = await import("../src/user-time.js");
+  const today = localToday();
+  const e = env(db);
+  // A short ride before the test is not the test: asked for, and the check waits for the test ride.
+  raw.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, start_time, end_time, payload_json) VALUES (1,'wahoo','activity','wahoo:76',?,?,?,?)").run(today + "T06:00:00", today + "T06:00:00", today + "T06:30:00", JSON.stringify({ id: "wahoo:76", type: "Ride", moving_time: 1800, start_date_local: today + "T06:00:00" }));
+  await saveCheck(db, "ride", { status: "scheduled", testId: "test-ride-ftp20", testDate: today });
+  const before = await thresholdCheckState(e, { waitUntil() {} }, today);
+  assert.deepEqual([before.results.length, before.manual.map(m => m.sport)], [0, ["ride"]]);
+  const payload = { id: "wahoo:77", type: "Ride", name: "FTP test", moving_time: 3600, icu_average_watts: 220, start_date_local: today + "T07:00:00" };
+  raw.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, start_time, end_time, payload_json) VALUES (1,'wahoo','activity','wahoo:77',?,?,?,?)").run(today + "T07:00:00", today + "T07:00:00", today + "T08:00:00", JSON.stringify(payload));
+  const time = [], watts = [];
+  for (let t = 0; t <= 3600; t += 2) { time.push(t); watts.push(t >= 1200 && t < 2400 ? 280 : 140); }
+  raw.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, start_time, end_time, payload_json) VALUES (1,'wahoo','activity-streams','wahoo:77',?,?,?)").run(today + "T07:00:00", today + "T08:00:00", JSON.stringify({ streams: [{ type: "time", data: time }, { type: "watts", data: watts }] }));
+  const state = await thresholdCheckState(e, { waitUntil() {} }, today);
+  assert.deepEqual(state.results.map(r => [r.sport, r.result.ftp, r.result.power20, r.result.fromCurve]), [["ride", 266, 280, true]]);
+  assert.deepEqual(state.connected, { intervals: false, wahoo: true });
+
+  // Save with both switches off: Wahoo gets nothing (Intervals.icu is not connected here).
+  const seen = [], real = globalThis.fetch;
+  globalThis.fetch = async (url, opts = {}) => { const u = new URL(url); seen.push(u.hostname + " " + (opts.method || "GET") + " " + u.pathname); return Response.json([]); };
+  try {
+    const url = new URL("https://aurin.health/app/api/threshold-check"), waits = [];
+    const response = await handleThresholdApi(new Request(url, { method: "POST", headers: { Origin: url.origin }, body: JSON.stringify({ action: "apply", sport: "ride", values: { ftp: 266 }, writeIntervals: false, writeWahoo: false }) }), e, { waitUntil: p => waits.push(p) }, url, { signedIn: true }, false);
+    assert.equal(response.status, 200);
+    await Promise.all(waits);
+    assert.deepEqual(seen.filter(x => x.includes("power_zones")), []);
+    // With Intervals.icu connected, "Write to Intervals.icu" decides as in Nastavení → Zóny.
+    globalThis.fetch = async (url, opts = {}) => {
+      const u = new URL(url); seen.push(u.hostname + " " + (opts.method || "GET") + " " + u.pathname);
+      return u.pathname === "/api/v1/athlete/0" ? Response.json({ id: "i1", sportSettings: [{ id: 5, types: ["Ride"] }] }) : Response.json({});
+    };
+    const withIcu = { ...e, INTERVALS_API_KEY: "k" };
+    const apply = async writeIntervals => {
+      seen.length = 0;
+      const response = await handleThresholdApi(new Request(url, { method: "POST", headers: { Origin: url.origin }, body: JSON.stringify({ action: "apply", sport: "ride", values: { ftp: 266 }, writeIntervals, writeWahoo: false }) }), withIcu, { waitUntil: p => waits.push(p) }, url, { signedIn: true }, false);
+      assert.equal(response.status, 200);
+      return seen.filter(x => x.startsWith("intervals.icu PUT"));
+    };
+    assert.deepEqual(await apply(false), []);
+    assert.equal((await apply(true)).length, 1);
   } finally { globalThis.fetch = real; }
 });

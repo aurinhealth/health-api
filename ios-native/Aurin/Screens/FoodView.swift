@@ -140,9 +140,23 @@ struct FoodContent: View {
             Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
             if let target = food.target {
                 // With its parts the target opens where the numbers come from.
-                Text(L10n.f("z %@\nkcal", Fmt.int(target)) + (food.targetParts != nil ? " ›" : ""))
-                    .font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
-                    .onTapGesture { if food.targetParts != nil { showingParts = true } }
+                let more = food.targetParts != nil ? " ›" : ""
+                let over = (food.kcal ?? 0).rounded() - target.rounded()
+                Group {
+                    if over >= 1 {
+                        // Past the target (its workouts done and planned included): a calm note
+                        // in rust, as a limit past on the macros, not the number in red.
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(L10n.f("%@ kcal navíc", Fmt.int(over))).font(Typo.small.weight(.semibold)).foregroundStyle(Palette.rust)
+                            Text(L10n.f("z %@ kcal", Fmt.int(target)) + more).font(Typo.small).foregroundStyle(Palette.muted)
+                        }
+                        .lineLimit(1)
+                    } else {
+                        Text(L10n.f("z %@\nkcal", Fmt.int(target)) + more)
+                            .font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
+                    }
+                }
+                .onTapGesture { if food.targetParts != nil { showingParts = true } }
             }
         }
         .padding(.top, 30)
@@ -157,13 +171,8 @@ struct FoodContent: View {
                                      isToday: food.date == today, past: food.date < today)
                 }
         }
-        // An earlier day shows only its data; a day ahead keeps its sentence.
-        let day = page.map(\.selectedDate) ?? model.selectedDate
-        if day.map({ $0 > AppModel.localDate(Date()) }) ?? true {
-            CoachTextCard(screen: "food", fallbackText: food.sentence, live: day == nil).padding(.top, 16)
-        }
-
-        MacroCells(macros: food.macros).padding(.top, 26)
+        // The macros right under the target, so they show without scrolling; the coach's card under them.
+        MacroCells(macros: food.macros).padding(.top, 20)
         // Pro: the nutrients picked under Živiny → Upravit; the rest is one tap away.
         ForEach(food.nutrients ?? []) { item in
             NutrientRow(item: item).padding(.top, 8)
@@ -178,6 +187,12 @@ struct FoodContent: View {
         }
         .buttonStyle(.plain)
         .padding(.top, 8)
+
+        // An earlier day shows only its data; a day ahead keeps its sentence.
+        let day = page.map(\.selectedDate) ?? model.selectedDate
+        if day.map({ $0 > AppModel.localDate(Date()) }) ?? true {
+            CoachTextCard(screen: "food", fallbackText: food.sentence, live: day == nil).padding(.top, 10)
+        }
 
         board.padding(.top, 18)
 

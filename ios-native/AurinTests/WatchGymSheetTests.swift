@@ -82,4 +82,112 @@ final class WatchGymSheetTests: XCTestCase {
         XCTAssertEqual(ExerciseName.shown("Cable Single Arm Rear Delt Row"), "Cable single arm rear delt row")
         XCTAssertEqual(ExerciseName.shown("Face pull"), "Face pull")
     }
+
+    /// A superset on the watch goes round by round as in Training mode on the
+    /// iPhone: A1, B1 straight after, the rest, A2, B2, then the next exercise.
+    func testASupersetGoesRoundByRound() throws {
+        var sheet = day()
+        sheet.appendExercise("Plank", suggestion: GymSuggestion(warmups: [], work: [GymSuggestion.Planned(kg: 0, reps: 30)], line: ""))
+        sheet.toggleSuperset(at: 0)
+        var gym = WatchGym(sheet, date: "2026-11-01", restSets: 75, restExercises: 120)
+        XCTAssertEqual(gym.exercises.map(\.superset), ["A", "A", nil])
+        XCTAssertEqual(gym.superset(of: 1), [0, 1])
+        XCTAssertNil(gym.superset(of: 2))
+        let bench = gym.exercises[0].lifts.map(\.row), row = gym.exercises[1].lifts.map(\.row)
+        XCTAssertEqual(row.count, 2, "the shorter exercise takes sets up to the longer one")
+        var next = try XCTUnwrap(gym.next(after: bench[0]))
+        XCTAssertEqual(next.exercise, 1)
+        XCTAssertEqual(next.turn, .partner)
+        // The next set of the same exercise starts from this one's weight (not the partner's).
+        XCTAssertEqual(gym.nextInExercise(after: bench[0])?.row, bench[1])
+        gym.update(row: bench[0]) { $0.done = true }
+        next = try XCTUnwrap(gym.next(after: row[0]))
+        XCTAssertEqual(next.exercise, 0)
+        XCTAssertEqual(next.lift.row, bench[1])
+        XCTAssertEqual(next.turn, .round)
+        gym.update(row: row[0]) { $0.done = true }
+        gym.update(row: bench[1]) { $0.done = true }
+        next = try XCTUnwrap(gym.next(after: row[1]))
+        XCTAssertEqual(next.exercise, 2, "past the superset when all of it is done")
+        XCTAssertNil(next.turn)
+        XCTAssertTrue(next.newExercise)
+    }
+
+    /// A one-sided exercise: the right side tapped first, the left one comes
+    /// straight after it, then the next set.
+    func testTheOtherSideComesNext() throws {
+        var sheet = day()
+        sheet.setSides(at: 1, true)
+        let gym = WatchGym(sheet, date: "2026-11-01", restSets: 75, restExercises: 120)
+        let lifts = gym.exercises[1].lifts
+        XCTAssertEqual(lifts.map(\.side), ["L", "P"])
+        let next = try XCTUnwrap(gym.next(after: lifts[1].row))
+        XCTAssertEqual(next.lift.row, lifts[0].row)
+        XCTAssertFalse(next.newExercise)
+        XCTAssertEqual(gym.otherSide(of: lifts[0], in: 1)?.row, lifts[1].row)
+        XCTAssertNil(gym.otherSide(of: gym.exercises[0].lifts[0], in: 0))
+    }
+
+    func testEachExerciseOnTheWatchHasLastTimeItsRecordAndMyNote() throws {
+        var sheet = day()
+        var gym = WatchGym(sheet, date: "2026-11-01", restSets: 75, restExercises: 120)
+        func lift(_ kg: Double, _ reps: Double) -> GymHistory.Lift { GymHistory.Lift(kg: kg, reps: reps, target: nil, rpe: nil) }
+        let history = GymHistory(exercises: [GymHistory.Exercise(name: "Bench Press", sessions: [
+            // Today's own sets are neither last time nor the record to beat.
+            GymHistory.Session(date: "2026-11-01", sets: [lift(100, 5)]),
+            GymHistory.Session(date: "2026-10-28", sets: [lift(57.5, 8), lift(57.5, 7)]),
+            GymHistory.Session(date: "2026-10-20", sets: [lift(65, 5)])
+        ])])
+        WatchBridge.addInfo(&gym, day: sheet, date: "2026-11-01", history: history,
+                            notes: ["Bench Press": "Seat 4", "Seated Cable Row": "  "])
+        let bench = gym.exercises[0]
+        XCTAssertEqual(bench.note, "Seat 4")
+        XCTAssertEqual(bench.record, WatchGym.Last(kg: 65, reps: 5))
+        XCTAssertEqual(bench.lifts.map(\.last), [WatchGym.Last(kg: 57.5, reps: 8), WatchGym.Last(kg: 57.5, reps: 7)])
+        let row = gym.exercises[1]
+        XCTAssertNil(row.note)
+        XCTAssertNil(row.record)
+        XCTAssertNil(row.lifts[0].last)
+        // Sent and read back as the watch gets it.
+        XCTAssertEqual(try XCTUnwrap(gym.encoded().flatMap(WatchGym.decode)), gym)
+
+        // Built again from the sheet on the watch (a set added there): the info stays, a new set has none.
+        sheet.apply(WatchGym.Change(date: "2026-11-01", kind: .addSet, exercise: 0))
+        var fresh = WatchGym(sheet, date: "2026-11-01", restSets: 75, restExercises: 120)
+        fresh.keepInfo(from: gym)
+        XCTAssertEqual(fresh.exercises[0].note, "Seat 4")
+        XCTAssertEqual(fresh.exercises[0].record, WatchGym.Last(kg: 65, reps: 5))
+        XCTAssertEqual(fresh.exercises[0].lifts.map(\.last), [WatchGym.Last(kg: 57.5, reps: 8), WatchGym.Last(kg: 57.5, reps: 7), nil])
+    }
+
+    func testAnEmptyWorkoutStartsWithItsFirstExercise() {
+        var sheet = GymDay(date: "2026-11-02", values: [], cancelled: nil)
+        sheet.ensureHeader(date: "2026-11-02")
+        let empty = WatchGym(sheet, date: "2026-11-02", restSets: 75, restExercises: 120)
+        XCTAssertTrue(empty.exercises.isEmpty)
+        // Nothing to do yet is not done: the summary waits for a set.
+        XCTAssertFalse(empty.allDone)
+        sheet.apply(WatchGym.Change(date: "2026-11-02", kind: .addExercise, exercise: 0,
+                                    option: WatchGym.Option(name: "Bench Press", shown: "Bench press", kg: 60, sets: 3, reps: "8")))
+        XCTAssertEqual(sheet.exercises.map(\.name), ["Bench Press"])
+        XCTAssertEqual(sheet.exercises[0].sets.count, 3)
+        // Other changes still need an exercise at that place.
+        let before = sheet.values
+        sheet.apply(WatchGym.Change(date: "2026-11-02", kind: .removeExercise, exercise: 3))
+        XCTAssertEqual(sheet.values, before)
+    }
+
+    func testANewRecordIsTodaysBestPastTheBestBefore() {
+        var gym = WatchGym(day(), date: "2026-11-01", restSets: 75, restExercises: 120)
+        gym.exercises[0].record = WatchGym.Last(kg: 60, reps: 8)
+        // Seated row was never done before: no record however heavy.
+        gym.exercises[1].record = nil
+        let bench = gym.exercises[0].lifts
+        gym.update(row: bench[0].row) { $0.kg = 60; $0.reps = 8; $0.done = true }
+        XCTAssertTrue(gym.newRecords.isEmpty)
+        gym.update(row: bench[1].row) { $0.kg = 62.5; $0.reps = 8; $0.done = true }
+        gym.update(row: gym.exercises[1].lifts[0].row) { $0.kg = 80; $0.reps = 10; $0.done = true }
+        XCTAssertEqual(gym.newRecords, [WatchGym.NewRecord(name: "Bench Press", title: gym.exercises[0].title, set: WatchGym.Last(kg: 62.5, reps: 8))])
+    }
 }
+

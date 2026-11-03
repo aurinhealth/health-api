@@ -424,6 +424,8 @@ function sessionOf(w, date, status) {
     // Joined to the session before or after it, done one right after the other (planned-links.js).
     ...(!done && /^local-/.test(String(w.after ?? w.payload?.after ?? "")) ? { after: "planned:" + (w.after ?? w.payload.after) } : {}),
     ...(!done && /^local-/.test(String(w.next ?? w.payload?.next ?? "")) ? { next: "planned:" + (w.next ?? w.payload.next) } : {}),
+    // A training plan's race leg (workout-library.js): the watch shows the race day as one card.
+    ...(!done && (w.race ?? w.payload?.race) === true ? { race: true } : {}),
     // A workout from the watch opens its own detail (watch-detail.js), one from Wahoo too (wahoo-detail.js).
     ...(done && ["google-wearables", "apple-health"].includes(w.family) && w.id ? { watch: { source: w.family, id: String(w.id) } }
       : done && /^wahoo:\d+$/.test(String(w.id || "")) ? { watch: { source: "wahoo", id: String(w.id) } }

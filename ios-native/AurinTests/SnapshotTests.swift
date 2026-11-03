@@ -383,6 +383,32 @@ final class SnapshotTests: XCTestCase {
         try render("sleep-settings", height: 800) { NavigationStack { SleepSettingsView(given: SettingsStore(api: APIClient(), demo: true)) }.environment(AppModel(demo: true)) }
     }
 
+    /// The first-run setup's sport, goal and time pages, in English as the site and App Store show the app.
+    func testSetupFocusPages() throws {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        var focus = SetupFocus(profile: ["mainSport": .string("triathlon"), "sportGoal": .string("závod"), "eventName": .string("Ironman 70.3"), "eventDate": .string("2027-06-13")])
+        XCTAssertEqual(focus.sport, "triathlon")
+        XCTAssertEqual(focus.goal, "race")
+        let saved = focus.applied(to: ["sex": .string("male")])
+        XCTAssertEqual(saved["sex"], .string("male"))
+        XCTAssertEqual(saved["mainSport"], .string("triathlon"))
+        XCTAssertEqual(saved["eventDate"], .string("2027-06-13"))
+        focus.swims100 = true
+        try render("setup-sport-en", height: 844) { SetupSportPage(focus: .constant(focus)).padding(24).padding(.top, 40).environment(\.locale, L10n.locale) }
+        try render("setup-goal-en", height: 844) { SetupGoalPage(focus: .constant(focus)).padding(24).padding(.top, 40).environment(\.locale, L10n.locale) }
+        try render("setup-time-en", height: 844) {
+            SetupTimePage(minutes: .constant([60, 0, 75, 0, 45, 270, 120]), loading: false, lifts: true) {}
+                .padding(24).padding(.top, 40).environment(\.locale, L10n.locale)
+        }
+        XCTAssertEqual(AvailabilityBarRow.maxMinutes, 480)
+        XCTAssertEqual(WeekSessionDraft.lengths("ride", including: 60).last, 480)
+        XCTAssertEqual(WeekSessionDraft.lengths("run", including: 60).last, 360)
+    }
+
     func testCoachMarkdownBlocks() {
         let text = "## Shrnutí\nDnes **lehce**.\n\n- spánek\n- HRV\n\n1. rozjezd\n2. klid\n\n| den | km |\n|---|---|\n| po | 10 |\n\n---"
         let blocks = CoachMarkdown.blocks(text)

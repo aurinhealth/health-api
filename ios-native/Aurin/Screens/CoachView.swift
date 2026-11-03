@@ -83,7 +83,7 @@ struct CoachView: View {
                             if messages.isEmpty { welcome }
                             else if let subject = current { CoachSubjectCard(subject: subject) }
                             ForEach(messages) { bubble in
-                                BubbleView(bubble: bubble, writing: sending && bubble.id == messages.last?.id && !bubble.mine,
+                                BubbleView(bubble: bubble,
                                            decide: { action, confirm in Task { await decide(action, confirm: confirm, in: bubble.id) } },
                                            undoMemory: { chip in Task { await undo(chip, in: bubble.id) } },
                                            decideMemory: { chip, yes in Task { await decide(chip, yes, in: bubble.id) } },
@@ -638,8 +638,6 @@ struct CoachView: View {
 
 struct BubbleView: View {
     let bubble: CoachView.Bubble
-    /// The coach is still writing this answer: a dot pulses in its corner.
-    var writing = false
     var decide: (CoachAction, Bool) -> Void
     var undoMemory: (CoachMemoryChip) -> Void = { _ in }
     var decideMemory: (CoachMemoryChip, Bool) -> Void = { _, _ in }
@@ -684,10 +682,6 @@ struct BubbleView: View {
                     CoachMarkdown(text: bubble.text)
                         .equatable()
                         .padding(.horizontal, 16).padding(.vertical, 14)
-                        // In the corner, so the bubble keeps its size when the dot goes.
-                        .overlay(alignment: .bottomTrailing) {
-                            if writing { CoachDots(count: 1).padding(.trailing, 9).padding(.bottom, 7) }
-                        }
                         .cardSurface(cornerRadius: 18)
                         .textSelection(.enabled)
                 }
@@ -1132,54 +1126,47 @@ struct ChatsPanel: View {
     }
 }
 
-/// The coach's bubble while he prepares an answer: three dots and, smaller,
-/// what he is doing ("Kouč přemýšlí…", then the server's steps).
+/// The coach's bubble while he prepares an answer: what he is doing
+/// ("Kouč přemýšlí…", then the server's steps), text only.
 struct CoachThinking: View {
     let text: String
 
     var body: some View {
-        HStack(spacing: 12) {
-            CoachDots()
-            Text(text).font(Typo.small).foregroundStyle(Palette.muted)
-                .contentTransition(.opacity)
-                .animation(.easeInOut(duration: 0.25), value: text)
-        }
-        .padding(.horizontal, 16).padding(.vertical, 14)
-        .cardSurface(cornerRadius: 18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.trailing, 40)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(text)
+        Text(text).font(Typo.small).foregroundStyle(Palette.muted)
+            .contentTransition(.opacity)
+            .animation(.easeInOut(duration: 0.25), value: text)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .cardSurface(cornerRadius: 18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.trailing, 40)
+            .accessibilityLabel(text)
     }
 }
 
-/// The same inside a card that has its own background: dots and the text, no bubble.
+/// The same inside a card that has its own background: the text, no bubble.
 struct CoachThinkingLine: View {
     let text: String
 
     var body: some View {
-        HStack(spacing: 10) {
-            CoachDots()
-            Text(text).font(Typo.small).foregroundStyle(Palette.muted)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(text)
+        Text(text).font(Typo.small).foregroundStyle(Palette.muted)
     }
 }
 
-/// Dots that light up one after another; still with Reduce Motion.
+/// Dots that light up one after another (the welcome's demo, a food lookup);
+/// still with Reduce Motion and in Low Power Mode.
 struct CoachDots: View {
     var count = 3
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(paused: reduceMotion)) { context in
+        let still = reduceMotion || LowPower.shared.on
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: still)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
             HStack(spacing: 5) {
                 ForEach(0..<count, id: \.self) { i in
                     Circle().fill(Palette.ink)
                         .frame(width: 7, height: 7)
-                        .opacity(reduceMotion ? 0.55 : opacity(t, i))
+                        .opacity(still ? 0.55 : opacity(t, i))
                 }
             }
         }

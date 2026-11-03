@@ -7,6 +7,11 @@ import { L } from './lang.js';
 // rests `rest: true`; their minutes are at the athlete's pace per 100 m.
 // Blocks: a step, or {repeats, steps:[...]}.
 
+// The longest ride and run the generator, the coach, the chat cards, the week
+// plan and the training plans build (Petr 2026-11-02: an 8 h ride, a 6 h ultra
+// run). A 24 h challenge is an event in the calendar, not one structured workout.
+export const MAX_MINUTES = { ride: 480, run: 360 };
+
 export const n = (v, d = null) => v === null || v === undefined || v === "" ? d : Number.isFinite(Number(v)) ? Number(v) : d;
 export const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const round = (x, digits = 1) => Math.round(x * 10 ** digits) / 10 ** digits;

@@ -30,6 +30,11 @@ struct WatchPlan: Codable, Equatable, Sendable {
         var rest: Bool? = nil
         /// The plan calls it an interval.
         var interval: Bool? = nil
+        /// The athlete's own target: watts on a ride, seconds per km on a run
+        /// (per 100 m on a swim), as the race day shows each leg's.
+        var wattsLow: Double? = nil
+        var wattsHigh: Double? = nil
+        var pace: Double? = nil
     }
 
     struct Request: Codable, Sendable {
@@ -99,6 +104,14 @@ struct WatchPlan: Codable, Equatable, Sendable {
         guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let workout = object["workout"] as? [String: Any] else { return nil }
         let number = { (v: Any?) -> Double? in (v as? NSNumber)?.doubleValue ?? (v as? String).flatMap(Double.init) }
+        // A pace comes as "4:48" text from the library, as seconds from a plan.
+        let paceSeconds = { (v: Any?) -> Double? in
+            if let text = v as? String, text.contains(":") {
+                let parts = text.split(separator: ":").compactMap { Double($0) }
+                return parts.count == 2 ? parts[0] * 60 + parts[1] : nil
+            }
+            return number(v)
+        }
         let swim = workout["sport"] as? String == "swim"
         var steps: [Step] = []
         for block in workout["steps"] as? [[String: Any]] ?? [] {
@@ -106,7 +119,8 @@ struct WatchPlan: Codable, Equatable, Sendable {
             for (i, s) in (block["steps"] as? [[String: Any]] ?? []).enumerated() {
                 steps.append(step(seconds: number(s["durationSeconds"]), low: number(s["percentLow"]), high: number(s["percentHigh"]),
                                   note: s["note"] as? String, intensity: s["intensity"] as? String, meters: number(s["meters"]),
-                                  rest: s["rest"] as? Bool == true, swim: swim, english: english, repeats: repeats, first: i == 0))
+                                  rest: s["rest"] as? Bool == true, swim: swim, english: english, repeats: repeats, first: i == 0,
+                                  watts: (number(s["wattsLow"]), number(s["wattsHigh"])), pace: (paceSeconds(s["paceSlow"]), paceSeconds(s["paceFast"]))))
             }
         }
         // A plan without steps (a steady run after a ride) still comes back: a brick needs to know it.
@@ -117,13 +131,21 @@ struct WatchPlan: Codable, Equatable, Sendable {
 
     /// One step of the server's plan; a rest at the wall is zone 1.
     static func step(seconds: Double?, low: Double?, high: Double?, note: String?, intensity: String?, meters: Double?, rest: Bool,
-                     swim: Bool, english: Bool, repeats: Int, first: Bool) -> Step {
+                     swim: Bool, english: Bool, repeats: Int, first: Bool,
+                     watts: (low: Double?, high: Double?) = (nil, nil), pace: (slow: Double?, fast: Double?) = (nil, nil)) -> Step {
         let mid = low.flatMap { l in high.map { (l + $0) / 2 } } ?? high ?? low
+        let positive = { (v: Double?) in v.flatMap { $0 > 0 ? $0 : nil } }
+        let slow = positive(pace.slow), fast = positive(pace.fast)
+        let paceMid = slow.flatMap { s in fast.map { (s + $0) / 2 } } ?? slow ?? fast
         return Step(seconds: seconds ?? 60, zone: rest ? 1 : zone(percent: mid, swim: swim),
                     label: label(note: note, intensity: intensity, english: english, swim: swim, rest: rest),
                     repeats: repeats, first: first, meters: swim && !rest ? meters.flatMap { $0 > 0 ? $0 : nil } : nil, rest: rest ? true : nil,
-                    interval: intensity == "interval" ? true : nil)
+                    interval: intensity == "interval" ? true : nil,
+                    wattsLow: rest ? nil : positive(watts.low), wattsHigh: rest ? nil : positive(watts.high), pace: rest ? nil : paceMid)
     }
+
+    /// The step the race is: the longest, with its target ("176–194 W", "4:48 /km").
+    var main: Step? { ridden.filter { $0.rest != true }.max { $0.seconds < $1.seconds } }
 
     func encoded() -> Data? { try? JSONEncoder().encode(self) }
     static func decode(_ data: Data) -> WatchPlan? { try? JSONDecoder().decode(WatchPlan.self, from: data) }

@@ -26,6 +26,8 @@ struct WeekSession: Decodable, Hashable, Identifiable {
     /// (a brick): the event it follows, and the one that follows it.
     var after: String? = nil
     var next: String? = nil
+    /// A training plan's race leg: the watch shows the race day as one card.
+    var race: Bool? = nil
     /// A workout from the watch (Apple Health, Google Health): its detail
     /// (GET /app/api/activity-detail/watch).
     var watch: WatchRef? = nil

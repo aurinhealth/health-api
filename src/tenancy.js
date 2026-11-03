@@ -60,6 +60,9 @@ export const PERSONAL_TABLES = {
   coach_messages: {},
   // What a deleted account of the same person used this week (ai-limit-memory.js).
   coach_carryover: {},
+  // Extra coach messages bought in the app and how many were used (coach-packs.js).
+  coach_pack_purchases: {},
+  coach_pack_balance: {},
   user_setup: {}, subscriptions: {}, local_workouts: {}, workout_exports: {},
   personal_recipes: {}, recipe_contributions: {}, food_contributions: {}, food_reports: {},
   user_language: {}, user_time_zone: {}, recovery_sessions: {}, user_consents: {},
@@ -453,6 +456,21 @@ export async function findUser(db, id, env) {
 export async function bumpSessionEpoch(db, id) {
   const row = await db.prepare("UPDATE users SET session_epoch = session_epoch + 1 WHERE id=? RETURNING session_epoch").bind(Number(id)).first();
   return Number(row?.session_epoch) || 0;
+}
+
+// The account the deploy smoke test (a GitHub Actions token, dashboard-auth.js)
+// acts as, never the owner's, so the public CI logs can never show anyone's
+// health data (security audit 2026-11, SEC-010). SMOKE_USER_EMAIL is an address
+// nobody receives mail at. The account is made on first use and disabled: no
+// sign-in, session, cron job or webhook reaches it, and it holds no data (the
+// smoke test only reads and previews). An address a real account already uses
+// is never taken over: then there is no smoke account and the check fails.
+export async function smokeUser(db, env) {
+  const address = normalizeEmail(env?.SMOKE_USER_EMAIL);
+  if (!address || address === ownerEmail(env)) return null;
+  await db.prepare("INSERT INTO users(email, name, role, disabled) VALUES(?, 'Deploy check', 'user', 1) ON CONFLICT(email) DO NOTHING").bind(address).run();
+  const row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(address).first();
+  return row?.disabled ? publicUser(row, env) : null;
 }
 
 export async function ownerUser(db, env) {

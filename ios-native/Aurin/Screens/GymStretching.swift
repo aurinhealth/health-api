@@ -317,8 +317,14 @@ struct StretchTimerView: View {
         .padding(20)
         .background { Palette.background.ignoresSafeArea() }
         .task { await run() }
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .onAppear {
+            ScreenAwake.hold("stretching", watchMaySleep: false)
+            LiveWorkout.shared.partOpen("stretching", true)
+        }
+        .onDisappear {
+            ScreenAwake.release("stretching")
+            LiveWorkout.shared.partOpen("stretching", false)
+        }
     }
 
     /// "Série 1/2 · levá".
