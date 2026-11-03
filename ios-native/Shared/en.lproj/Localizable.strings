@@ -498,6 +498,12 @@
 "Přidat k večeři" = "Add to dinner";
 "Přidat ke snídani" = "Add to breakfast";
 "Přidat ke svačině" = "Add to snack";
+"Přidat a skenovat další" = "Add and scan next";
+"Přidáno ke snídani: %@" = "Added to breakfast: %@";
+"Přidáno k obědu: %@" = "Added to lunch: %@";
+"Přidáno k večeři: %@" = "Added to dinner: %@";
+"Přidáno k druhé večeři: %@" = "Added to late snack: %@";
+"Přidáno ke svačině: %@" = "Added to snack: %@";
 "Přidat pití" = "Add drink";
 "Přidat surovinu" = "Add ingredient";
 "Přidat vodu" = "Add water";

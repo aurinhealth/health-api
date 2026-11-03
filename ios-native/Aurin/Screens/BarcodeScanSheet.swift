@@ -41,6 +41,12 @@ struct BarcodeScanSheet: View {
     @State private var frontOf: FoodProduct?
     /// The AI found nothing by the code: the field for what the food is shows.
     @State private var askName = false
+    /// "Přidat a skenovat další": the last food added while the scanner stays
+    /// open, shown over the camera.
+    @State private var added: String?
+    /// A food was added with the scanner kept open: closing it closes the
+    /// food sheet under it too, as after a single add.
+    @State private var loggedAny = false
     /// "Navrhnout pro všechny" for a food read from its label (FoodProduct.canSuggestNew).
     @State private var suggestNew = true
 
@@ -55,7 +61,10 @@ struct BarcodeScanSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                circle("xmark", label: "Zavřít") { dismiss() }
+                circle("xmark", label: "Zavřít") {
+                    dismiss()
+                    if loggedAny { onLogged() }
+                }
                 Spacer()
                 Text("ČÁROVÝ KÓD").font(.caption.weight(.medium)).tracking(1.9).foregroundStyle(Palette.muted)
                 Spacer()
@@ -71,6 +80,14 @@ struct BarcodeScanSheet: View {
 
             ScrollView {
                 VStack(spacing: 20) {
+                    if let added, state == .scanning || state == .searching {
+                        Label(added, systemImage: "checkmark")
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.green).lineLimit(1)
+                            .padding(.horizontal, 16).frame(height: 36)
+                            .background(Palette.green.opacity(0.15), in: Capsule())
+                            .padding(.horizontal, 12)
+                            .transition(.opacity)
+                    }
                     if state == .scanning || state == .searching { finder }
                     if state != .scanning { resultCard }
                 }
@@ -141,6 +158,7 @@ struct BarcodeScanSheet: View {
                         guard state == .scanning else { return }
                         code = scanned
                         error = nil
+                        added = nil
                         state = .searching
                         Task { await find(scanned) }
                     }
@@ -243,6 +261,15 @@ struct BarcodeScanSheet: View {
                             .font(Typo.bodyStrong).foregroundStyle(Palette.onButton).lineLimit(1).minimumScaleFactor(0.8)
                             .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                     }
+                    .disabled(saving || amount <= 0)
+                    Button { Task { await save(product, next: true) } } label: {
+                        Label("Přidat a skenovat další", systemImage: "barcode.viewfinder")
+                            .font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                            .frame(maxWidth: .infinity).frame(height: 46)
+                            .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
                     .disabled(saving || amount <= 0)
                 }
             case .notFound:
@@ -435,7 +462,9 @@ struct BarcodeScanSheet: View {
         }
     }
 
-    private func save(_ product: FoodProduct) async {
+    /// `next`: the scanner stays open for the next code ("Přidat a skenovat
+    /// další"), with the food just added shown over the camera.
+    private func save(_ product: FoodProduct, next: Bool = false) async {
         let value = amount
         guard value > 0 else { return }
         saving = true
@@ -446,8 +475,16 @@ struct BarcodeScanSheet: View {
             error = message
         } else {
             if suggestNew { model.suggestNewFood(p) }
-            dismiss()
-            onLogged()
+            if next {
+                loggedAny = true
+                added = L10n.f("Přidáno " + MealSlot.toMeal(target) + ": %@", p.name)
+                suggestNew = true
+                portionKind = nil
+                reset()
+            } else {
+                dismiss()
+                onLogged()
+            }
         }
     }
 }
@@ -602,8 +639,10 @@ final class BarcodeCamera: @unchecked Sendable {
     }
 
     /// The main lens of newer iPhones focuses only from 15–20 cm, where a code
-    /// is small; zoom in so a 35 mm wide code fills most of the window there
-    /// (Apple's recipe from AVCamBarcode), at most 2.5× so it stays sharp.
+    /// is small; zoom in so a 35 mm wide code fills most of the window a bit
+    /// beyond that (Apple's recipe from AVCamBarcode). The earlier cap of 2.5×
+    /// filled the window only closer than the lens can focus, so the code was
+    /// blurred just as it looked big enough (Petr, 2026-11-03).
     private static func zoomForCodes(_ device: AVCaptureDevice) {
         guard (try? device.lockForConfiguration()) != nil else { return }
         defer { device.unlockForConfiguration() }
@@ -615,10 +654,12 @@ final class BarcodeCamera: @unchecked Sendable {
         let dims = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
         let wide = Double(device.activeFormat.videoFieldOfView) * .pi / 180
         let short = 2 * atan(tan(wide / 2) * Double(min(dims.width, dims.height)) / Double(max(dims.width, dims.height)))
-        let filled = 35 / 0.7
+        let filled = 35 / 0.6
         let distance = filled / 2 / tan(short / 2)
-        guard distance < closest else { return }
-        device.videoZoomFactor = CGFloat(min(closest / distance, 2.5, Double(device.activeFormat.videoMaxZoomFactor)))
+        // A fifth beyond the closest focus, where the picture is sharp.
+        let sharp = closest * 1.2
+        guard distance < sharp else { return }
+        device.videoZoomFactor = CGFloat(min(sharp / distance, 4, Double(device.activeFormat.videoMaxZoomFactor)))
     }
 }
 

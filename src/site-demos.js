@@ -422,7 +422,8 @@ const foodTarget = `<div class="dm pad">
 </div>`;
 
 // AddFoodSheet.swift ("Co přidáme?": the meal, the search, six tiles, the foods list), then BarcodeScanSheet.swift:
-// the finder with "Vybrat fotku", the found card with NutritionCells, the PortionWheel turned to 1½ servings, and "Přidat do oběda".
+// the finder with "Vybrat fotku", the found card with NutritionCells, the PortionWheel turned to 1½ servings, "Přidat do oběda"
+// and "Přidat a skenovat další" under it.
 const foodAdd = `<div class="dm pad fa">
 <div class="row sp"><span class="sent h">What are you adding?</span><span class="mut s">Close</span></div>
 <span class="meal">Lunch${ic('updown')}</span>
@@ -443,6 +444,7 @@ ${[['Plain Greek yogurt', 'Hollandia · 140 g', 205], ['Banana', '120 g', 105]].
 <div class="mut s">1 serving = 140 g · 205 kcal</div>
 <span class="meal">Lunch${ic('updown')}</span>
 <div class="btn dark"${at('5800:press 6100-press 6100:ok')}><span data-tx="0|Add to lunch · 1 serving;4500|Add to lunch · 1½ serving;6100|✓ Added to lunch">Add to lunch · 1½ serving</span></div>
+<div class="btn ol">${ic('barcode')}Add and scan next</div>
 </div></div></div>`;
 
 // FoodView.swift's drinks card (DrinkFigure.swift's whale, DrinkPresetRow in DrinkFavorites.swift) on the sample
@@ -902,7 +904,7 @@ html:not(.js) .stage1{display:none}
 .wheel .col{position:relative;flex:none;width:90px;text-align:center}.wheel .col.p{width:56px}.wheel .col.u{flex:1;padding-left:14px;text-align:left}
 .wheel ul{margin:0;padding:0;list-style:none;transition:transform 1s cubic-bezier(.16,1,.3,1)}.wheel li{height:32px;font-size:17px;font-weight:600;line-height:32px;white-space:nowrap}
 .js .wheel ul[data-at]{opacity:1!important;transform:none!important}.wheel ul.on,.js .wheel ul.on{transform:translateY(-96px)!important}
-.fa .res .meal{margin-top:10px}.fa .res .btn{margin-top:10px}
+.fa .res .meal{margin-top:10px}.fa .res .btn{margin-top:10px}.fa .res{margin-top:8px}.fa .nc{margin-top:8px}.fa .wf{margin-top:10px}.fa .res .btn.ol{margin-top:6px;height:34px;background:none;color:var(--text);font-weight:500;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 20%,transparent)}
 
 /* Screens built here, in the phone: drawn at the app's 390 pt and scaled to the screen. */
 .scr .app{position:absolute;left:0;top:0;width:390px;height:848px;zoom:calc(292 / 390);overflow:hidden;padding:0 20px;background:var(--bg);font:15px/1.35 -apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;color:var(--text);--num:"Instrument Serif","New York",Georgia,serif}
