@@ -55,7 +55,7 @@ enum WatchAPI {
         request.setValue(TimeZone.current.identifier, forHTTPHeaderField: "X-Time-Zone")
         request.setValue(session.language, forHTTPHeaderField: "X-Interface-Language")
         request.setValue(session.imperial ? "imperial" : "metric", forHTTPHeaderField: "X-Units")
-        request.setValue(String(session.apiLevel), forHTTPHeaderField: "X-Loadwise-Api")
+        request.setValue(String(session.apiLevel), forHTTPHeaderField: "X-Aurin-Api")
         // Writes with the session cookie must come from the site's own origin.
         if method != "GET" { request.setValue(session.server, forHTTPHeaderField: "Origin") }
         return request
@@ -72,11 +72,20 @@ enum WatchAPI {
 
     /// A GET with the watch's sign-in; nil without one, offline or on an error.
     static func get(_ path: String) async -> Data? {
-        guard let session, let request = request(path, session: session),
-              let (data, response) = try? await urlSession.data(for: request) else { return nil }
+        guard let session, let request = request(path, session: session) else { return nil }
+        guard let (data, response) = try? await urlSession.data(for: request) else {
+            WatchReport.failed("GET " + path, message: "no connection")
+            return nil
+        }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401 { store(nil) }
+        if status != 200 { WatchReport.failed("GET " + path, status: status, message: serverMessage(data)) }
         return status == 200 ? data : nil
+    }
+
+    /// The server's "message" in a refusal, for WatchReport.
+    private static func serverMessage(_ data: Data) -> String? {
+        (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["message"] as? String
     }
 
     /// The chat the app was written in during the last 6 hours, so the watch continues it.
@@ -107,11 +116,13 @@ enum WatchAPI {
         do {
             (data, response) = try await urlSession.data(for: request)
         } catch {
+            WatchReport.failed("POST /app/api/assistant", message: error.localizedDescription)
             throw Failure(text: W.tr("Hodinky nejsou připojené k internetu ani k iPhonu.", "The watch has no internet and no iPhone nearby."))
         }
         let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
+            WatchReport.failed("POST /app/api/assistant", status: status, message: object["message"] as? String)
             if status == 401 {
                 store(nil)
                 throw Failure(text: W.tr("Přihlášení vypršelo. Otevři Aurin v iPhonu.", "Your sign-in ran out. Open Aurin on your iPhone."))
@@ -130,10 +141,150 @@ enum WatchAPI {
         query.queryItems = [URLQueryItem(name: "id", value: plan.eventId)]
         if plan.date == WatchStore.localDate(Date()) { query.queryItems?.append(URLQueryItem(name: "date", value: plan.date)) }
         guard let session, let q = query.percentEncodedQuery,
-              let request = request("/app/api/workouts/planned?" + q, session: session),
-              let (data, response) = try? await urlSession.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+              let request = request("/app/api/workouts/planned?" + q, session: session) else { return nil }
+        guard let (data, response) = try? await urlSession.data(for: request) else {
+            WatchReport.failed("GET /app/api/workouts/planned", message: "no connection")
+            return nil
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard status == 200 else {
+            WatchReport.failed("GET /app/api/workouts/planned", status: status, message: serverMessage(data))
+            return nil
+        }
         return WatchPlan.parse(data, english: session.language == "en")
+    }
+
+    // MARK: - The gym without the iPhone (GymStore)
+
+    /// A day's gym sheet, without the history the iPhone loads with it.
+    static func gymSheet(date: String) async -> GymDay? {
+        guard let data = await get("/app/api/gym?lite=1&date=" + date) else { return nil }
+        let day = try? JSONDecoder().decode(GymDay.self, from: data)
+        return day?.status == "partial" ? nil : day
+    }
+
+    /// Saves the day's sheet as the iPhone does (POST /app/api/gym): the sets
+    /// into the history, the whole sheet for the next load. False offline or on an error.
+    static func saveGym(_ day: GymDay, date: String) async -> Bool {
+        guard let session, var request = request("/app/api/gym", method: "POST", session: session) else { return false }
+        var body = day.saveBody
+        body["date"] = .string(date)
+        body["lite"] = .bool(true)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        guard let json = try? JSONEncoder().encode(body) else { return false }
+        guard let (data, response) = try? await urlSession.upload(for: request, from: json) else {
+            WatchReport.failed("POST /app/api/gym", message: "no connection")
+            return false
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if status == 401 { store(nil) }
+        if !(200..<300).contains(status) { WatchReport.failed("POST /app/api/gym", status: status, message: serverMessage(data)) }
+        return (200..<300).contains(status)
+    }
+
+    /// A JSON POST with the watch's sign-in; false offline or on an error.
+    private static func post(_ path: String, _ body: [String: JSONValue]) async -> Bool {
+        guard let session, var request = request(path, method: "POST", session: session),
+              let json = try? JSONEncoder().encode(body) else { return false }
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        guard let (data, response) = try? await urlSession.upload(for: request, from: json) else {
+            WatchReport.failed("POST " + path, message: "no connection")
+            return false
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if status == 401 { store(nil) }
+        if !(200..<300).contains(status) { WatchReport.failed("POST " + path, status: status, message: serverMessage(data)) }
+        return (200..<300).contains(status)
+    }
+
+    /// The day's workout discarded without the iPhone, as Zahodit trénink does
+    /// (the plan, the logged sets and the Intervals.icu event go).
+    static func discardGym(date: String) async -> Bool {
+        await post("/app/api/gym", ["date": .string(date), "action": .string("discard")])
+    }
+
+    /// How well the workout's plan suited (good, ok, bad), as the iPhone's
+    /// rating after a workout (POST /app/api/feedback/workout).
+    static func rateGym(date: String, rating: String) async -> Bool {
+        await post("/app/api/feedback/workout", ["date": .string(date), "sessionId": .string("gym:" + date), "sport": .string("strength"),
+                                                 "rating": .string(rating), "text": .string("")])
+    }
+
+    /// Exercises to swap in for `exercise` that fit the athlete's gym, with
+    /// the load from their history (GET /app/api/gym/alternatives).
+    static func gymAlternatives(date: String, exercise: String, inPlan: [String]) async -> [WatchGym.Option] {
+        struct Response: Decodable { let alternatives: [Found]? }
+        guard let data = await alternatives(date: date, inPlan: inPlan, [URLQueryItem(name: "exercise", value: exercise)]),
+              let list = (try? JSONDecoder().decode(Response.self, from: data))?.alternatives else { return [] }
+        return list.prefix(20).map { option($0) }
+    }
+
+    /// Three swaps for each of `exercises` in one request, kept on the watch
+    /// for a swap without the iPhone or internet (GymStore.keepSwaps); nil
+    /// offline or from an older server.
+    static func gymSwaps(date: String, exercises: [String], inPlan: [String]) async -> [String: [WatchGym.Option]]? {
+        struct Response: Decodable { let byExercise: [String: [Found]]? }
+        guard let data = await alternatives(date: date, inPlan: inPlan, [URLQueryItem(name: "exercises", value: json(exercises))]),
+              let found = (try? JSONDecoder().decode(Response.self, from: data))?.byExercise else { return nil }
+        return found.mapValues { list in list.prefix(3).map { option($0) } }
+    }
+
+    /// An exercise in GET /app/api/gym/alternatives' answer.
+    private struct Found: Decodable { let name: String; let kg: Double?; let sets: JSONValue?; let reps: JSONValue? }
+
+    private static func option(_ found: Found) -> WatchGym.Option {
+        option(found.name, kg: found.kg, sets: found.sets, reps: found.reps)
+    }
+
+    /// GET /app/api/gym/alternatives with the day, the plan's exercises and `items`.
+    private static func alternatives(date: String, inPlan: [String], _ items: [URLQueryItem]) async -> Data? {
+        var query = URLComponents()
+        query.queryItems = [URLQueryItem(name: "date", value: date), URLQueryItem(name: "inPlan", value: json(inPlan))] + items
+        // "+" would reach the server as a space.
+        guard let q = query.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B") else { return nil }
+        return await get("/app/api/gym/alternatives?" + q)
+    }
+
+    private static func json(_ names: [String]) -> String {
+        (try? JSONEncoder().encode(names)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+    }
+
+    /// An exercise's technique steps (GET /app/api/gym/technique, the iPhone's
+    /// technique sheet): none for an exercise outside the catalog, nil offline.
+    static func gymTechnique(_ exercise: String) async -> [String]? {
+        var query = URLComponents()
+        query.queryItems = [URLQueryItem(name: "exercise", value: exercise)]
+        guard let session, let q = query.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B"),
+              let request = request("/app/api/gym/technique?" + q, session: session),
+              let (data, response) = try? await urlSession.data(for: request) else { return nil }
+        struct Response: Decodable {
+            struct Technique: Decodable { let steps: [String]? }
+            let technique: Technique?
+        }
+        switch (response as? HTTPURLResponse)?.statusCode ?? 0 {
+        case 200: return ((try? JSONDecoder().decode(Response.self, from: data))?.technique?.steps ?? []).filter { !$0.isEmpty }
+        // Not in the catalog: nothing to show, and nothing to ask again.
+        case 404: return []
+        case 401: store(nil); return nil
+        default: return nil
+        }
+    }
+
+    /// Exercises whose names hold `query`, the ones the gym allows first (GET /app/api/gym/exercises?q=).
+    static func gymSearch(_ text: String, inPlan: [String]) async -> [WatchGym.Option] {
+        var query = URLComponents()
+        query.queryItems = [URLQueryItem(name: "q", value: text)]
+        struct Found: Decodable { let name: String; let sets: JSONValue?; let reps: JSONValue? }
+        struct Response: Decodable { let exercises: [Found]? }
+        guard let q = query.percentEncodedQuery, let data = await get("/app/api/gym/exercises?" + q),
+              let list = (try? JSONDecoder().decode(Response.self, from: data))?.exercises else { return [] }
+        return list.filter { !inPlan.contains($0.name) }.map { option($0.name, kg: nil, sets: $0.sets, reps: $0.reps) }
+    }
+
+    private static func option(_ name: String, kg: Double?, sets: JSONValue?, reps: JSONValue?) -> WatchGym.Option {
+        WatchGym.Option(name: name, shown: ExerciseName.shown(name), kg: kg,
+                        sets: sets?.number.map { Int($0) },
+                        reps: reps?.string)
     }
 
     /// The answer without Markdown, as Siri reads it (SiriAnswer.coach on the iPhone).

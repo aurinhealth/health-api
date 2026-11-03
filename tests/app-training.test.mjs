@@ -116,7 +116,7 @@ test("Every workout left today is listed: the gym plan and a ride, each with its
   const both = days.map(d => d.date === DATE ? { ...d, daily: { training: { planned: [strength, later], completed: [], matched: [] } } } : d);
   const coaches = { coaches: [{ id: "cycling", actions: ["Drž vytrvalostní tempo."] }, { id: "gym", actions: ["Třetí den posilovny: méně sérií."] }] };
   const t = buildTraining({ ...input, days: both, coaches, gym: { [DATE]: { name: "Celé tělo", exercises: ["Dřep", "Přítahy"] } } });
-  assert.deepEqual(t.todaySessions.map(s => s.sport), ["strength", "virtualride"]);
+  assert.deepEqual(t.todaySessions.map(s => s.sport), ["strength", "ride"]);
   assert.deepEqual(t.todaySessions[0].exercises, ["Dřep", "Přítahy"]);
   assert.equal(t.todaySessions[0].advice, "Třetí den posilovny: méně sérií.");
   assert.equal(t.todaySessions[1].advice, "Drž vytrvalostní tempo.");
@@ -129,7 +129,7 @@ test("Every workout left today is listed: the gym plan and a ride, each with its
   // A gym plan without a strength event on the calendar is a card of its own, before the ride.
   const rideOnly = days.map(d => d.date === DATE ? { ...d, daily: { training: { planned: [later], completed: [], matched: [] } } } : d);
   const r = buildTraining({ ...input, days: rideOnly, coaches, gym: { [DATE]: { name: "Celé tělo", exercises: ["Dřep"] } } });
-  assert.deepEqual(r.todaySessions.map(s => [s.sport, s.title]), [["strength", "Celé tělo"], ["virtualride", "Sweet spot 3×12"]]);
+  assert.deepEqual(r.todaySessions.map(s => [s.sport, s.title]), [["strength", "Celé tělo"], ["ride", "Sweet spot 3×12"]]);
   // A run has no coach of its own: no cycling advice under it.
   const run = days.map(d => d.date === DATE ? { ...d, daily: { training: { planned: [{ name: "Běh", type: "Run", durationHours: 1 }], completed: [], matched: [] } } } : d);
   assert.equal(buildTraining({ ...input, days: run, coaches }).next.advice, null);
@@ -313,4 +313,31 @@ test("A gym plan done in the app leaves today's sessions, with the app's own cop
   const done = buildTraining({ ...input, days: today, gym: { [DATE]: { ...gym[DATE], logged: 13 } } });
   assert.deepEqual(done.todaySessions, []);
   assert.notEqual(done.next?.date, DATE);
+});
+
+test("A gym session done today does the day's strength plan when the gym plan was cancelled", () => {
+  const copy = { id: "planned:local-a4", name: "Strength — Upper Body", type: "WeightTraining", start: DATE + "T00:00:00", durationHours: 1.25 };
+  const aurin = { id: "aurin-gym:" + DATE, source: "local", type: "WeightTraining", name: "Upper Body", durationHours: 1.24, start: DATE + "T11:06:41" };
+  const walk = { id: "w1", type: "Walk", name: "Walk", durationHours: 0.8, start: DATE + "T12:25:00" };
+  // Cancelled: no gym plan for the day reaches daySessions.
+  const { sessions } = daySessions(DATE, DATE, { planned: [copy], completed: [aurin, walk], matched: [] });
+  assert.deepEqual(sessions.map(s => [s.kind, s.status, s.sport]), [["activity", "done", "strength"], ["activity", "done", "walk"]]);
+  assert.equal(sessions[0].adherence !== "offplan", true, "it kept to the plan");
+  assert.equal(sessions[0].plannedId, undefined, "no pairing on record to undo");
+  // A walk alone does not do it.
+  assert.deepEqual(daySessions(DATE, DATE, { planned: [copy], completed: [walk], matched: [] }).sessions.map(s => [s.kind, s.status]), [["activity", "done"], ["planned", "planned"]]);
+  // Unpaired by the user: the two stay apart.
+  assert.deepEqual(daySessions(DATE, DATE, { planned: [copy], completed: [aurin], matched: [] }, { unpaired: true }).sessions.map(s => s.status), ["done", "planned"]);
+  // The Training card: nothing left for today.
+  const today = days.map(d => d.date === DATE ? { ...d, daily: { training: { planned: [copy], completed: [aurin], matched: [] } } } : d);
+  assert.deepEqual(buildTraining({ ...input, days: today, gym: {} }).todaySessions, []);
+});
+
+test("a training plan's race leg tells the watch it is a race", () => {
+  const plan = { id: "planned:local-a1", source: "local", type: "Run", name: "Race 5 km", start: DATE + "T09:00:00", durationHours: 0.4, payload: { race: true, next: "local-b2" } };
+  const easy = { id: "planned:local-c3", source: "local", type: "Run", name: "Easy run", start: DATE + "T18:00:00", durationHours: 0.5, payload: {} };
+  const { sessions } = daySessions(DATE, DATE, { planned: [plan, easy], completed: [], matched: [] });
+  assert.equal(sessions.find(s => s.eventId === "planned:local-a1").race, true);
+  assert.equal(sessions.find(s => s.eventId === "planned:local-a1").next, "planned:local-b2");
+  assert.equal(sessions.find(s => s.eventId === "planned:local-c3").race, undefined);
 });

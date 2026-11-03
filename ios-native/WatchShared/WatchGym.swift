@@ -3,7 +3,9 @@ import Foundation
 /// The day's gym plan as the watch gets it (App/WatchGymBridge.swift): each
 /// exercise with its sets, the weight and reps to start from and the rest after
 /// each set. The watch asks for it when the training page opens and sends each
-/// set back when it is done; the iPhone writes it into the day's sheet.
+/// set back when it is done; the iPhone writes it into the day's sheet. Out of
+/// the iPhone's reach the watch loads and saves the sheet on the server itself
+/// (AurinWatch/GymStore.swift, WatchShared/GymSheet.swift).
 struct WatchGym: Codable, Equatable, Sendable {
     var date: String
     var title: String?
@@ -11,6 +13,12 @@ struct WatchGym: Codable, Equatable, Sendable {
     /// The rest before the next exercise (Nastavení → Posilovna → Pauzy).
     var restExercises: Int
     var exercises: [Exercise]
+    /// The day's sheet itself (GymDay.values), so the watch can go on without
+    /// the iPhone; nil from an older iPhone.
+    var sheet: [[JSONValue]]? = nil
+    /// The parts already done on the iPhone today (GymDayPart raw values: the
+    /// warm-up ticked off, the cardio stopped); nil from an older iPhone.
+    var partsDone: [String]? = nil
 
     struct Exercise: Codable, Equatable, Sendable {
         /// As in the sheet; changes name it.
@@ -18,6 +26,13 @@ struct WatchGym: Codable, Equatable, Sendable {
         /// As the app shows it (the English name in English).
         var shown: String?
         var lifts: [Lift]
+        /// The letter of its superset ("A"), nil when it is in none: a
+        /// superset goes round by round, one exercise after the other.
+        var superset: String? = nil
+        /// Moje poznámka: the athlete's own note on the exercise ("seat 4, narrow grip").
+        var note: String? = nil
+        /// The best set before today by the estimated one-rep max: a set past it is a record.
+        var record: Last? = nil
         var title: String { shown ?? name }
     }
 
@@ -37,8 +52,22 @@ struct WatchGym: Codable, Equatable, Sendable {
         var rest: Int
         /// The letter it is planned or rated at (GymIntensity on the iPhone).
         var intensity: String? = nil
+        /// The same set last time (Training mode's "Minule 97,5 × 6").
+        var last: Last? = nil
         /// Not a warm-up nor a drop set.
         var work: Bool { !warmup && !drop }
+    }
+
+    /// A set from the history: its weight (nil with body weight) and reps.
+    struct Last: Codable, Equatable, Sendable {
+        var kg: Double?
+        var reps: Int
+
+        /// The estimated one-rep max, as on the iPhone (GymSessionMath.e1rm).
+        var e1rm: Double {
+            guard let kg, kg > 0, reps > 0 else { return 0 }
+            return reps == 1 ? kg : kg * (1 + Double(reps) / 30)
+        }
     }
 
     /// A set done on the watch.
@@ -56,10 +85,81 @@ struct WatchGym: Codable, Equatable, Sendable {
         var letter: String
     }
 
+    /// The rest between sets, the same on both devices: started by Set done
+    /// on either, moved by −15 s / +15 s, ended by Skip (end nil). Sent only
+    /// while in reach: an old rest is no use later.
+    struct Rest: Codable, Equatable, Sendable {
+        var date: String
+        var end: Date?
+        var total: Int
+        /// The exercise the rest leads to, by its sheet name.
+        var exercise: String?
+
+        func encoded() -> Data? { try? JSONEncoder().encode(self) }
+        static func decode(_ data: Data) -> Rest? { try? JSONDecoder().decode(Rest.self, from: data) }
+
+        /// The same rest within a second (an echo of one just received).
+        func same(_ other: Rest?) -> Bool {
+            guard let other, other.date == date else { return false }
+            switch (end, other.end) {
+            case (nil, nil): return true
+            case let (a?, b?): return abs(a.timeIntervalSince(b)) < 1
+            default: return false
+            }
+        }
+    }
+
+    /// The weight and reps of the set at hand while they are being set, before
+    /// Set done: the other device shows the same at once. Sent only while in
+    /// reach (an old draft is no use later).
+    struct Draft: Codable, Equatable, Sendable {
+        var date: String
+        var row: Int
+        /// In kg.
+        var kg: Double
+        var reps: Int
+
+        func encoded() -> Data? { try? JSONEncoder().encode(self) }
+        static func decode(_ data: Data) -> Draft? { try? JSONDecoder().decode(Draft.self, from: data) }
+
+        /// The same set at the same numbers (an echo of one just received).
+        func same(_ other: Draft?) -> Bool {
+            guard let other else { return false }
+            return other.date == date && other.row == row && abs(other.kg - kg) < 0.05 && other.reps == reps
+        }
+    }
+
+    /// The sheet the watch worked on alone and saved to the server itself,
+    /// handed to the iPhone once it is in reach again: the iPhone takes it as
+    /// the day's and the watch goes on through the iPhone.
+    struct Sheet: Codable, Equatable, Sendable {
+        var date: String
+        var values: [[JSONValue]]
+
+        func encoded() -> Data? { try? JSONEncoder().encode(self) }
+        static func decode(_ data: Data) -> Sheet? { try? JSONDecoder().decode(Sheet.self, from: data) }
+    }
+
+    /// A part done on the watch (the warm-up, stretching or cardio), so Training
+    /// mode on the iPhone shows it done: the moves ticked off (their ids as the
+    /// iPhone keeps them, StretchingCard) and the cardio's length and end.
+    struct PartDone: Codable, Equatable, Sendable {
+        var date: String
+        var part: String
+        var ticks: [String]
+        var seconds: Int? = nil
+        var end: Date? = nil
+        /// The cardio's item id ("cardio-start", "cardio-end").
+        var cardio: String? = nil
+
+        func encoded() -> Data? { try? JSONEncoder().encode(self) }
+        static func decode(_ data: Data) -> PartDone? { try? JSONDecoder().decode(PartDone.self, from: data) }
+    }
+
     /// A change of the plan from the watch (the menu under ≡); the iPhone
     /// writes it into the sheet and answers with the new plan.
     struct Change: Codable, Equatable, Sendable {
-        enum Kind: String, Codable, Sendable { case addSet, removeSet, removeExercise, swap, addExercise, move }
+        enum Kind: String, Codable, Sendable { case addSet, removeSet, removeExercise, swap, addExercise, move, parts }
         var date: String
         var kind: Kind
         /// The exercise's place in `exercises`.
@@ -68,6 +168,8 @@ struct WatchGym: Codable, Equatable, Sendable {
         var option: Option?
         /// move: the place it goes to, as List.onMove reports it.
         var to: Int?
+        /// parts: the day's parts as changed on the watch (on or off, the order).
+        var parts: GymDayParts? = nil
     }
 
     /// An exercise offered for a swap or to add, with what it would start from.
@@ -87,16 +189,52 @@ struct WatchGym: Codable, Equatable, Sendable {
         var query: String?
     }
 
+    /// No gym planned today (mockup "jen hodinky" 6): the watch asks the
+    /// iPhone to put one in the day; the answer is the new plan.
+    struct Start: Codable, Equatable, Sendable {
+        enum Kind: String, Codable, Sendable {
+            /// The last workout's exercises with the next loads (Zopakovat minulou).
+            case repeatLast
+            /// Put together for the rested muscles (Sestavit z odpočatých).
+            case rested
+            /// Nothing yet: the exercises are added one by one (Prázdný trénink).
+            case empty
+        }
+        var date: String
+        var kind: Kind
+
+        func encoded() -> Data? { try? JSONEncoder().encode(self) }
+        static func decode(_ data: Data) -> Start? { try? JSONDecoder().decode(Start.self, from: data) }
+    }
+
+    /// Watch → iPhone: Start, answered with the plan (replyKey).
+    static let startKey = "gymStart"
+    /// Watch → iPhone: the day (its date) whose workout was discarded on the watch.
+    static let discardKey = "gymDiscard"
     static let requestKey = "gymRequest"
     static let replyKey = "gym"
     static let doneKey = "gymDone"
     static let ratedKey = "gymRated"
     static let changeKey = "gymChange"
-    /// Watch → iPhone every few seconds of the gym: the heart rate and calories
-    /// (Live) for Training mode, which then leaves Apple Health to the watch.
+    /// Watch → iPhone at the start and every few seconds of the gym: the heart
+    /// rate and calories (Live) for Training mode, which then leaves Apple
+    /// Health to the watch. Started on the watch, it opens Training mode there.
     static let liveKey = "gymLive"
     /// iPhone → watch: Training mode finished, the watch ends and saves the workout.
     static let endKey = "gymEnd"
+    /// Training mode started on the iPhone: a watch app that is running opens the gym
+    /// (besides HKHealthStore.startWatchApp, which fails quietly with the watch locked or asleep).
+    static let openKey = "gymOpen"
+    /// WatchGym.Draft, both ways.
+    static let draftKey = "gymDraft"
+    /// Watch → iPhone: the gym finished on the watch, Training mode ends too.
+    static let watchEndKey = "gymWatchEnd"
+    /// Both ways: the rest between sets (Rest).
+    static let restKey = "gymRest"
+    /// Watch → iPhone: the sheet the watch saved alone (Sheet), with a reply once taken.
+    static let sheetKey = "gymSheet"
+    /// Watch → iPhone: a part done on the watch (PartDone), queued when out of reach.
+    static let partDoneKey = "gymPartDone"
 
     struct Live: Codable, Equatable, Sendable {
         var start: Date

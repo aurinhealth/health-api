@@ -105,7 +105,7 @@ struct StepsWidget: View {
                         highlighted: hours.firstIndex(of: now),
                         spacing: size == .small ? 1.5 : 2.5,
                         height: height,
-                        targetLabel: goalLabel)
+                        targetTag: goalTag)
     }
 
     private func weekChart(height: CGFloat) -> some View {
@@ -119,11 +119,11 @@ struct StepsWidget: View {
                  labels: steps.week.map { Fmt.weekdayShort($0.date) },
                  highlighted: steps.week.count - 1,
                  height: height,
-                 targetLabel: goalLabel)
+                 targetTag: goalTag)
     }
 
-    /// "cíl 10 000" over the dashed line.
-    private var goalLabel: String { L10n.f("cíl %@", Fmt.int(steps.goal)) }
+    /// "cíl" over "10 000" beside the dashed line.
+    private var goalTag: (name: String, value: String) { (name: L10n.tr("cíl"), value: Fmt.int(steps.goal)) }
 
     private var percent: String {
         guard let today = steps.today, steps.goal > 0 else { return "" }
@@ -144,9 +144,12 @@ struct RestingHRWidget: View {
                     TileRange(value: value, low: range.lowerBound, high: range.upperBound, worseAbove: true, edges: (Fmt.int(range.lowerBound), Fmt.int(range.upperBound)))
                 }
             } chart: { height in
-                LineChart(values: values, color: Palette.rust,
-                          lo: (values.min() ?? 40) - 3, hi: (values.max() ?? 60) + 3,
-                          band: range, height: height)
+                VStack(spacing: 6) {
+                    LineChart(values: values, color: Palette.rust,
+                              lo: (values.min() ?? 40) - 3, hi: (values.max() ?? 60) + 3,
+                              band: range, height: height)
+                    ChartSpan(dates: restingHR.series.map(\.date))
+                }
             }
         }
     }
@@ -173,9 +176,12 @@ struct HRVWidget: View {
                     Text(note).font(Typo.caption).foregroundStyle(Palette.green).lineLimit(1)
                 }
             } chart: { height in
-                LineChart(values: values, color: Palette.green,
-                          lo: min(values.min() ?? 40, hrv.low ?? 40) - 4, hi: max(values.max() ?? 70, hrv.high ?? 70) + 4,
-                          band: band, height: height)
+                VStack(spacing: 6) {
+                    LineChart(values: values, color: Palette.green,
+                              lo: min(values.min() ?? 40, hrv.low ?? 40) - 4, hi: max(values.max() ?? 70, hrv.high ?? 70) + 4,
+                              band: band, height: height)
+                    ChartSpan(dates: hrv.series.map(\.date))
+                }
             }
         }
     }

@@ -2,18 +2,22 @@
 // provider's consent page opens in a system browser sheet, which does not
 // share the app's session cookie, so:
 // 1. the app asks POST /app/api/connect/start for a short-lived signed ticket,
-// 2. the sheet opens /auth/app/connect?ticket=…, which signs the browser in as
-//    the same user and continues to /oauth/<provider>?return=native. Only the
+// 2. the sheet opens /auth/app/connect?ticket=…, which gives the browser a
+//    quarter-hour cookie of the same user, good only for connecting, and
+//    continues to /oauth/<provider>. Only the
 //    app's own sheet gets through: it sends the ticket again in the
 //    X-Aurin-Connect header (iOS 17.4+, the app's minimum), which a link opened
 //    anywhere else cannot. A ticket link sent by another user would otherwise
 //    sign the reader in as that user and put their health data in the sender's
 //    account (pentest 2026-10-25, L4), so such a link only expires. A browser
 //    already signed in as the ticket's user also continues. Each ticket works once,
-// 3. the provider's callback ends at loadwise://connected?event=…, which
-//    closes the sheet (connect-return.js).
-import { signText, userSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
+// 3. the provider's callback ends at https://<server>/auth/app/connected?event=…,
+//    which closes the sheet (connect-return.js) and clears that cookie.
+import { signText, connectSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
 import { L, lang } from "./lang.js";
+import { connectReturnUrl } from "./connect-return.js";
+import { APP_CONNECTED_PATH } from "./app-origin.js";
+import { appPage } from "./google-login.js";
 
 const TICKET_SECONDS = 120;
 // "google-extra": the optional Google scopes (writing weight and workouts).
@@ -50,7 +54,8 @@ async function useTicket(db, ticket) {
   return Number(used?.meta?.changes) > 0;
 }
 
-const expired = () => new Response(null, { status: 302, headers: { Location: "loadwise://connected?event=expired", "Cache-Control": "no-store" } });
+const CONNECTED_PAGE = { cs: ["Pokračuj v aplikaci", "Vrať se do aplikace Aurin. Pokud se nic nestane, aktualizuj Aurin na nejnovější verzi."], en: ["Continue in the app", "Go back to the Aurin app. If nothing happens, update Aurin to the latest version."] };
+const expired = env => new Response(null, { status: 302, headers: { Location: connectReturnUrl("expired", env), "Cache-Control": "no-store" } });
 
 // The app's language rides along from /app/api/connect/start (hl=en|cs): the
 // browser's own language can differ from the one chosen in Aurin.
@@ -58,13 +63,14 @@ const pageLang = (url, request) => ["en", "cs"].includes(url.searchParams.get("h
   : /^en\b/i.test(request.headers.get("Accept-Language") || "") ? "en" : "cs";
 
 async function continueToProvider(env, ticket, hl) {
-  if (!(await useTicket(env.DB, ticket))) return expired();
+  if (!(await useTicket(env.DB, ticket))) return expired(env);
   // Google's data policy: the app showed its own disclosure right before this (consent=1).
-  const next = { google: "/oauth/google?consent=1&return=native", "google-extra": "/oauth/google?consent=1&extra=1&return=native", ultrahuman: "/oauth/ultrahuman?return=native", whoop: "/oauth/whoop?return=native", wahoo: "/oauth/wahoo?return=native" }[ticket.provider] || "/oauth/intervals?return=native";
+  const next = { google: "/oauth/google?consent=1", "google-extra": "/oauth/google?consent=1&extra=1", ultrahuman: "/oauth/ultrahuman", whoop: "/oauth/whoop", wahoo: "/oauth/wahoo" }[ticket.provider] || "/oauth/intervals";
   // Google shows its consent page in the app's language (hl).
   const location = ticket.provider.startsWith("google") ? next + "&hl=" + hl : next;
   const headers = new Headers({ Location: location, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
-  headers.append("Set-Cookie", await userSessionCookie(env.DB, ticket.uid, sessionSecret(env)));
+  // A connect-only cookie (dashboard-auth.js), not a session: the sheet shares Safari's cookies.
+  headers.append("Set-Cookie", await connectSessionCookie(env.DB, ticket.uid, sessionSecret(env)));
   return new Response(null, { status: 303, headers });
 }
 
@@ -80,13 +86,15 @@ export async function handleNativeConnect(request, env, url, { user, signedIn })
   if (url.pathname === "/auth/app/connect" && request.method === "GET") {
     const ticketText = url.searchParams.get("ticket");
     const ticket = await readConnectTicket(ticketText, sessionSecret(env));
-    if (!ticket) return expired();
+    if (!ticket) return expired(env);
     const hl = pageLang(url, request);
     // Already signed in here as the ticket's user: nothing to confirm.
     if (signedIn && Number(user?.id) === ticket.uid) return continueToProvider(env, ticket, hl);
     // Opened by the app's own sheet (Auth.swift): nobody else's link can add this header.
     if (request.headers.get("X-Aurin-Connect") === ticketText) return continueToProvider(env, ticket, hl);
-    return expired();
+    return expired(env);
   }
+  // Seen only when the app's browser sheet did not catch the address (it never carries a secret).
+  if (url.pathname === APP_CONNECTED_PATH && (request.method === "GET" || request.method === "HEAD")) return appPage(request, CONNECTED_PAGE, 200);
   return null;
 }

@@ -10,6 +10,8 @@ struct TrainingView: View {
     @State private var calendarDay: String?
     /// A day set from the pinned bar, for the calendar.
     @State private var jumpDay: DayJump?
+    /// Where today's Začít trénink is (NextSession writes, the floating copy reads).
+    @State private var startSpot = StartSpot()
 
     var body: some View {
         NavigationStack(path: model.path(.training)) {
@@ -41,6 +43,24 @@ struct TrainingView: View {
                     ProgressView()
                 }
             }
+            // One object for the whole screen: its identity never changes, so a
+            // redraw of Training does not redraw the cards that read it.
+            .environment(startSpot)
+            // The page's bottom from a background, which the floating button never moves.
+            .background {
+                Color.clear.onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY.rounded() } action: { bottom in
+                    let floor = bottom > 0 ? bottom - StartButtonSpot.barZone : 0
+                    if startSpot.floor != floor { startSpot.floor = floor }
+                }
+            }
+            .overlay(alignment: .bottom) {
+                floatingStartButton
+            }
+            // The card's own button steps aside while the floating one stands in,
+            // so the two never show at once.
+            .onChange(of: floatingStart, initial: true) { _, day in
+                if startSpot.floating != day { startSpot.floating = day }
+            }
             .navBarVisibility(.hidden)
             .appRoutes()
         }
@@ -64,6 +84,34 @@ struct TrainingView: View {
         // Every planned session of the week done: the App Store rating (AurinTips.swift).
         .reviewAfterFinishedWeek(model.training?.sessions, demo: model.demo)
         .sheet(isPresented: $addingWorkout) { ManualWorkoutSheet() }
+    }
+
+    /// Today's Začít trénink while its place in the card is under the tab bar
+    /// (or further down): the same button floats just above the bar. Not with
+    /// a hidden workout's bar there, nor over an undo toast.
+    private var floatingStart: String? {
+        guard toast == nil, model.minimizedGym == nil, !model.immersive else { return nil }
+        return startSpot.underBar
+    }
+
+    /// The animation only on the button itself: the page under it never animates
+    /// with it, so its own frames cannot flip the button back and forth.
+    private var floatingStartButton: some View {
+        ZStack(alignment: .bottom) {
+            if let date = floatingStart {
+                NavigationLink(value: AppRoute.trainingMode(date)) {
+                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
+                        .frame(maxWidth: .infinity).frame(height: 54)
+                        .background(Palette.green, in: Capsule())
+                        .shadow(color: Palette.green.opacity(0.3), radius: 12, y: 6)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 28)
+                .padding(.bottom, StartButtonSpot.barZone + StartButtonSpot.gap)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy, value: floatingStart == nil)
     }
 
     private func undo(_ t: PlanToast) {
@@ -365,6 +413,34 @@ struct TodaySessions: View {
     }
 }
 
+/// Today's Začít trénink on Training floats above the tab bar while its place
+/// in the card is under the bar or further down (review 2026-11-02, point 3).
+enum StartButtonSpot {
+    /// The tab bar (60 pt, Dynamic Type can grow it) and its gap above the
+    /// bottom of the safe area (RootView).
+    static let barZone: CGFloat = 76
+    /// The floating button's gap above the bar. The card's button hands over
+    /// at the same line, so the swap happens where the two would overlap.
+    static let gap: CGFloat = 8
+}
+
+/// Where today's Začít trénink is on Training: NextSession writes, TrainingView's
+/// floating copy reads. Writes happen only on a change, so scrolling redraws nothing.
+@MainActor @Observable
+final class StartSpot {
+    /// The day of the button while it sits under the tab bar or further down.
+    var underBar: String?
+    /// The top of the tab bar on screen (global), 0 before it is measured.
+    var floor: CGFloat = 0
+    /// The day whose button floats right now: its button in the card is hidden.
+    var floating: String?
+
+    func report(_ day: String, under: Bool) {
+        if under { if underBar != day { underBar = day } }
+        else if underBar == day { underBar = nil }
+    }
+}
+
 struct NextSession: View {
     let session: TrainingSnapshot.Session
     let today: String
@@ -374,6 +450,9 @@ struct NextSession: View {
     var strainNow: Double? = nil
     /// In the swiping card: as tall as the tallest of today's.
     var fill = false
+    @Environment(StartSpot.self) private var startSpot: StartSpot?
+    /// The floating copy above the tab bar stands in for this card's button.
+    private var standIn: Bool { startSpot?.floating == session.date }
 
     // Its own card, so the gym tools below (today's) don't read as its buttons.
     var body: some View {
@@ -390,6 +469,17 @@ struct NextSession: View {
                         .background(Palette.green, in: Capsule())
                 }
                 .buttonStyle(.plain)
+                // While the floating copy is up, this one is hidden: scrolled to just
+                // behind the bar it would otherwise peek out under the floating one.
+                .opacity(standIn ? 0 : 1)
+                .allowsHitTesting(!standIn)
+                .accessibilityHidden(standIn)
+                .onGeometryChange(for: Bool.self) { [floor = startSpot?.floor ?? 0] in
+                    floor > 0 && $0.frame(in: .global).maxY > floor - StartButtonSpot.gap
+                } action: { under in
+                    startSpot?.report(session.date, under: under)
+                }
+                .onDisappear { startSpot?.report(session.date, under: false) }
                 .padding(.top, 4)
             }
             if fill { Spacer(minLength: 0) }
@@ -746,8 +836,7 @@ struct ActiveCaloriesWidget: View {
                          highlighted: active.week.count - 1,
                          spacing: size == .small ? 3 : 4,
                          height: height,
-                         targetLabel: active.usual.map { L10n.f("obvykle %@", Fmt.int($0)) },
-                         targetLabelAlignment: .leading)
+                         targetTag: active.usual.map { (name: L10n.tr("obvykle"), value: Fmt.int($0)) })
             }
         }
     }
@@ -780,7 +869,7 @@ struct ZonesWidget: View {
                     ZoneWeekBars(weeks: weeks, height: 52)
                 }
                 ZoneLegend(week: week)
-                Text(L10n.f("doporučení WHO 150 min týdně · lehká aktivita %@", Fmt.hoursMinutesLong(week.light)))
+                Text(L10n.f("lehká aktivita %@ · WHO 150 min týdně", Fmt.hoursMinutesLong(week.light)))
                     .font(Typo.tiny).foregroundStyle(Palette.faint)
             } else {
                 // An answer from before the weeks were sent.
@@ -817,7 +906,7 @@ enum ZoneStyle {
 
 /// The weeks' active minutes as stacked bars: moderate, then vigorous and peak
 /// twice (as WHO counts them). The current week is the last one, highlighted;
-/// the 150-minute recommendation is the dashed line.
+/// the 150-minute recommendation is the dashed line, its tag beside the bars.
 struct ZoneWeekBars: View {
     let weeks: [TrainingSnapshot.ZoneWeek]
     var height: CGFloat = 52
@@ -829,6 +918,7 @@ struct ZoneWeekBars: View {
         VStack(spacing: 4) {
             GeometryReader { geo in
                 let h = geo.size.height
+                let w = geo.size.width - tagWidth
                 ZStack(alignment: .bottomLeading) {
                     HStack(alignment: .bottom, spacing: spacing) {
                         ForEach(weeks.indices, id: \.self) { i in
@@ -836,16 +926,15 @@ struct ZoneWeekBars: View {
                                 .opacity(i == weeks.count - 1 ? 1 : 0.5)
                         }
                     }
+                    .frame(width: w)
                     DashedLine()
                         .stroke(Palette.green, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                        .frame(height: 1)
+                        .frame(width: w, height: 1)
                         .offset(y: -h * scaled(target, 0, top))
-                    Text(verbatim: L10n.f("cíl %@", Fmt.int(target)))
-                        .scaledFont(9, weight: .medium, cap: .denseCap)
-                        .foregroundStyle(Palette.green)
-                        .lineLimit(1).fixedSize()
-                        .frame(width: geo.size.width, alignment: .trailing)
-                        .offset(y: -h * scaled(target, 0, top) - 3)
+                    LineTag(name: L10n.tr("cíl"), value: Fmt.int(target), color: Palette.green)
+                        .frame(height: 28)
+                        .offset(x: w + 6, y: LineTag.center(h * (1 - scaled(target, 0, top)), height: h) - 14)
+                        .frame(width: geo.size.width, height: h, alignment: .topLeading)
                 }
                 .frame(width: geo.size.width, height: h, alignment: .bottomLeading)
             }
@@ -853,13 +942,14 @@ struct ZoneWeekBars: View {
             HStack(spacing: spacing) {
                 ForEach(weeks.indices, id: \.self) { i in
                     Text(verbatim: Self.label(weeks[i]))
-                        .scaledFont(9, weight: i == weeks.count - 1 ? .semibold : .regular)
+                        .scaledFont(chartText, weight: i == weeks.count - 1 ? .semibold : .regular, cap: .denseCap)
                         .foregroundStyle(i == weeks.count - 1 ? Palette.ink : Palette.faint)
                         .lineLimit(1)
                         .fixedSize()
                         .frame(maxWidth: .infinity)
                 }
             }
+            .padding(.trailing, tagWidth)
         }
         .accessibilityHidden(true)
     }

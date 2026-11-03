@@ -5,6 +5,7 @@ import { hardDayConflict, holdBackToday } from './coach-actions.js';
 import { trainingStatus } from './training-status.js';
 import { trimGymPlan } from './gym-trim.js';
 import { EASIER, HARDER, MIN_MINUTES, MAX_MINUTES, kindOfSystem } from './week-ai.js';
+import { MAX_MINUTES as LONGEST } from './workout-model.js';
 import { shiftDate } from './dashboard-shared.js';
 
 // "Kratší · Delší · Lehčí · Těžší · Jiný den" under the coach's workout card
@@ -31,7 +32,7 @@ export function quickSnapshot(context, today) {
   const planned = week.filter(d => d.date >= today).flatMap(d => (d.planned || []).map(a => ({ date: d.date, sport: eventSportOf(a) })).filter(p => p.sport));
   return { today, days, budget, hard, planned, red: holdBackToday(context), paused: trainingStatus(context?.athleteState).paused };
 }
-const eventSportOf = a => { const t = String(a?.type || ''); return /run/i.test(t) ? 'run' : /ride|cycl|bike/i.test(t) ? 'ride' : ''; };
+const eventSportOf = a => { const t = String(a?.type || ''); return /swim/i.test(t) ? 'swim' : /run/i.test(t) ? 'run' : /ride|cycl|bike/i.test(t) ? 'ride' : ''; };
 
 // The kind of the card's ride or run: the one asked for, else the workout's system.
 export const kindOf = a => a.kind && RANK[a.kind] != null ? a.kind : kindOfSystem(a.preview?.workout?.primary_system, 'endurance');
@@ -39,7 +40,7 @@ export const kindOf = a => a.kind && RANK[a.kind] != null ? a.kind : kindOfSyste
 const shorterMinutes = a => Math.max(MIN_MINUTES[a.sport] || 20, round5(a.minutes * 0.75));
 function longerMinutes(a, quick) {
   const budget = quick?.budget?.[a.date];
-  return Math.min(MAX_MINUTES[a.sport] || 300, round5(a.minutes * 1.25), budget > 0 ? budget : Infinity);
+  return Math.min(LONGEST[a.sport] || MAX_MINUTES[a.sport] || 300, round5(a.minutes * 1.25), budget > 0 ? budget : Infinity);
 }
 // A hard ride or run on a day: never on a red or ill morning, never next to another hard day.
 const hardFits = (date, quick) => !(date === quick.today && quick.red) && !hardDayConflict(date, (quick.hard || []).filter(d => d !== date));
@@ -54,8 +55,9 @@ export function quickOptions(a, quick) {
   return {
     shorter: shorterMinutes(a) < a.minutes,
     longer: !a.trim && longerMinutes(a, quick) > a.minutes,
-    easier: gym ? true : EASIER[kind] !== kind,
-    harder: !(gym ? quick.red && a.date === quick.today : HARDER[kind] === kind || !hardFits(a.date, quick)),
+    // Open water is one steady swim by time: only its length changes.
+    easier: gym ? true : !a.openWater && EASIER[kind] !== kind,
+    harder: !a.openWater && !(gym ? quick.red && a.date === quick.today : HARDER[kind] === kind || !hardFits(a.date, quick)),
     day: !a.trim && days.some(d => d.fits),
     days
   };

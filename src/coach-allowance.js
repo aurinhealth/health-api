@@ -1,7 +1,8 @@
 // The weekly allowance of messages to the coach (audit/aurin-pro-ai-limity-plan-2026-10-18.md).
 // Every answered message the user writes to the coach counts; food sentences,
 // generated plans, buttons and failed answers do not. The week is Monday to
-// Sunday in the user's time and a new one starts on Monday at midnight.
+// Sunday in the user's time and a new one starts on Monday at midnight (in the
+// account's zone for limits, limitToday in user-time.js).
 // - A conversation started within WORKOUT_CHAT_HOURS after the end of a
 //   workout counts as one message up to COACH_WORKOUT_CHAT_MESSAGES messages;
 //   any further one counts as usual.
@@ -9,12 +10,16 @@
 //   COACH_EXTRA_MESSAGES more, so it does not stop mid-thought.
 // - A new account of someone who deleted their account this week starts with
 //   the messages the deleted one used (coach_carryover, ai-limit-memory.js).
-// The owner has no allowance. The numbers are Worker settings (wrangler.jsonc).
+// - Then messages bought in the app (coach-packs.js), which never run out with the week.
+// The owner has one on the live server, none on the test server (ownerUnlimited,
+// ai-usage.js). The numbers are Worker settings (wrangler.jsonc).
 import { L } from './lang.js';
-import { localToday } from './user-time.js';
+import { limitToday } from './user-time.js';
 import { aiLimitShare } from './ai-limit-share.js';
 import { mondayOfDate, shiftDate } from './dashboard-shared.js';
 import { sessionOf } from './activity-match.js';
+import { ownerUnlimited } from './ai-usage.js';
+import { packMessagesLeft, takePackMessage, returnPackMessage } from './coach-packs.js';
 
 const n = (value, fallback) => { const v = Number(value); return value !== undefined && value !== null && value !== '' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : fallback; };
 export const coachWeeklyMessages = env => n(env.COACH_WEEKLY_MESSAGES, 30);
@@ -28,11 +33,12 @@ const RUNNING_MINUTES = 30;
 // The app says how many are left from 75 % on: 7 of 30, 4 of 15.
 export const nearAt = limit => Math.floor(limit / 4 + 0.25);
 
-const tracked = env => Boolean(env?.DB && Number(env.USER_ID) > 0) && env.USER_IS_OWNER !== true;
+const tracked = env => Boolean(env?.DB && Number(env.USER_ID) > 0) && !ownerUnlimited(env);
 const sqlTime = text => Date.parse(String(text || '').replace(' ', 'T') + 'Z');
 
 // kind: 'message' (counts), 'workout' (a conversation after a workout: its
-// first message counts, the next ones up to the cap do not) or 'extra'.
+// first message counts, the next ones up to the cap do not), 'extra' or 'pack'
+// (a bought message, taken from coach_pack_balance).
 async function ensure(db) {
   await db.prepare('CREATE TABLE IF NOT EXISTS coach_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, week TEXT NOT NULL, chat_id INTEGER, kind TEXT NOT NULL, counted INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)').run();
   await db.prepare('CREATE INDEX IF NOT EXISTS coach_messages_user_week ON coach_messages(user_id, week)').run();
@@ -50,14 +56,21 @@ async function carriedOver(env, week) {
   return Number(row?.used) || 0;
 }
 
-// { limit, used, left, resetsOn, near } for this week; null when there is none.
-export async function coachAllowance(env, today = localToday()) {
+// { limit, used, left, weekLeft, extra, resetsOn, near } for this week; null
+// when there is none. left counts the bought messages too (extra), so the app
+// warns only when the week's and the bought ones together run low.
+export async function coachAllowance(env, today) {
   if (!tracked(env)) return null;
+  today ??= await limitToday(env);
   await ensure(env.DB);
   const week = mondayOfDate(today), limit = await weeklyLimit(env);
-  const row = await env.DB.prepare('SELECT COUNT(*) AS used FROM coach_messages WHERE user_id = ? AND week = ? AND counted = 1').bind(env.USER_ID, week).first();
-  const used = (Number(row?.used) || 0) + await carriedOver(env, week), left = Math.max(0, limit - used);
-  return { limit, used, left, resetsOn: shiftDate(week, 7), near: left <= nearAt(limit) };
+  const [row, carried, extra] = await Promise.all([
+    env.DB.prepare('SELECT COUNT(*) AS used FROM coach_messages WHERE user_id = ? AND week = ? AND counted = 1').bind(env.USER_ID, week).first(),
+    carriedOver(env, week),
+    packMessagesLeft(env).catch(error => { console.error('Coach packs read failed', error?.message || error); return 0; })
+  ]);
+  const used = (Number(row?.used) || 0) + carried, weekLeft = Math.max(0, limit - used), left = weekLeft + extra;
+  return { limit, used, left, weekLeft, extra, resetsOn: shiftDate(week, 7), near: left <= nearAt(limit) };
 }
 
 // This week's messages of one conversation: how many, what kind it started as,
@@ -94,12 +107,14 @@ async function nextKind(env, chatId, today, now) {
 
 // Whether the next message may go and how it will count, without taking it.
 // Throws (status 429, coachAllowance) when the week's messages are used up.
-export async function checkCoachMessage(env, chatId, { today = localToday(), now = Date.now() } = {}) {
+export async function checkCoachMessage(env, chatId, { today, now = Date.now() } = {}) {
+  today ??= await limitToday(env);
   const allowance = await coachAllowance(env, today);
   if (!allowance) return null;
   const { chat, kind } = await nextKind(env, chatId, today, now);
-  if (kind === 'workout-free' || allowance.left > 0) return { kind, before: allowance };
+  if (kind === 'workout-free' || allowance.weekLeft > 0) return { kind, before: allowance };
   if (chat && chat.last > now - RUNNING_MINUTES * 60000 && chat.extras < coachExtraMessages(env)) return { kind: 'extra', before: allowance };
+  if (allowance.extra > 0) return { kind: 'pack', before: allowance };
   const error = new Error(L('Zprávy koučovi na tento týden jsou vyčerpané.', 'Your coach messages for this week are used up.'));
   Object.assign(error, { limit: true, status: 429, coachAllowance: { ...allowance, exhausted: true } });
   throw error;
@@ -112,12 +127,21 @@ const countedKind = kind => kind === 'message' || kind === 'workout' ? 1 : 0;
 // statement whose condition is the limit itself, so messages sent at once
 // cannot all pass a count none of them is in yet. A row whose answer failed is
 // given back (releaseCoachMessage); one left by a Worker that died stays.
-export async function claimCoachMessage(env, chatId, { today = localToday(), now = Date.now() } = {}) {
+export async function claimCoachMessage(env, chatId, { today, now = Date.now() } = {}) {
+  today ??= await limitToday(env);
   const week = mondayOfDate(today), chat = Number(chatId) > 0 ? Number(chatId) : null;
   for (let attempt = 0; ; attempt++) {
     const claim = await checkCoachMessage(env, chatId, { today, now });
     if (!claim) return null;
     const kind = storedKind(claim.kind), counted = countedKind(claim.kind);
+    if (claim.kind === 'pack') {
+      // Another message took the last bought one in between: ask again.
+      if (!await takePackMessage(env)) { if (attempt >= 2) throw usedUp(await coachAllowance(env, today)); continue; }
+      try {
+        const row = await env.DB.prepare('INSERT INTO coach_messages (user_id, week, chat_id, kind, counted) VALUES (?, ?, ?, ?, 0) RETURNING id').bind(env.USER_ID, week, chat, kind).first();
+        return { ...claim, id: row?.id };
+      } catch (error) { await returnPackMessage(env); throw error; }
+    }
     const [condition, ...values] = counted
       ? ['SELECT COUNT(*) FROM coach_messages WHERE user_id = ? AND week = ? AND counted = 1', env.USER_ID, week, await weeklyLimit(env) - await carriedOver(env, week)]
       : claim.kind === 'extra'
@@ -127,22 +151,25 @@ export async function claimCoachMessage(env, chatId, { today = localToday(), now
       .bind(env.USER_ID, week, chat, kind, counted, ...values).first();
     if (row?.id) return { ...claim, id: row.id };
     // Another message took the last one in between: ask again how this one counts.
-    if (attempt >= 2) throw Object.assign(new Error(L('Zprávy koučovi na tento týden jsou vyčerpané.', 'Your coach messages for this week are used up.')), { limit: true, status: 429, coachAllowance: { ...await coachAllowance(env, today), exhausted: true } });
+    if (attempt >= 2) throw usedUp(await coachAllowance(env, today));
   }
 }
+const usedUp = allowance => Object.assign(new Error(L('Zprávy koučovi na tento týden jsou vyčerpané.', 'Your coach messages for this week are used up.')), { limit: true, status: 429, coachAllowance: { ...allowance, exhausted: true } });
 
 // The answer failed before it was logged: the message is not counted.
 export async function releaseCoachMessage(env, claim) {
-  if (!tracked(env) || !claim?.id || claim.recorded) return;
-  await env.DB.prepare('DELETE FROM coach_messages WHERE id = ? AND user_id = ?').bind(claim.id, env.USER_ID).run();
+  if (!tracked(env) || claim?.recorded || !(claim?.id || claim?.kind === 'pack')) return;
+  if (claim.kind === 'pack') await returnPackMessage(env);
+  if (claim.id) await env.DB.prepare('DELETE FROM coach_messages WHERE id = ? AND user_id = ?').bind(claim.id, env.USER_ID).run();
 }
 
 // After the coach answered: the message is logged under its chat. Returns the
 // allowance to show, with `notice` on the message that crossed into the last
 // quarter and `more: false` once not even this conversation can go on (the
 // app then shows the used-up card instead of waiting for a refused message).
-export async function recordCoachMessage(env, chatId, claim, { today = localToday(), now = Date.now() } = {}) {
+export async function recordCoachMessage(env, chatId, claim, { today, now = Date.now() } = {}) {
   if (!tracked(env) || !claim) return null;
+  today ??= await limitToday(env);
   const before = claim.before || await coachAllowance(env, today), chat = Number(chatId) > 0 ? Number(chatId) : null;
   // A claim without a row (its read failed) is logged here, as before.
   if (claim.id) await env.DB.prepare('UPDATE coach_messages SET chat_id = ?, created_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(chat, claim.id, env.USER_ID).run();

@@ -1,5 +1,5 @@
 import { L } from './lang.js';
-import { KEEP_TYPE_SQL, watchType } from "./activity-type.js";
+import { KEEP_TYPE_SQL, watchType, mark } from "./activity-type.js";
 import { healthPointJson } from './health-point-json.js';
 import {localExportIndex} from './local-workouts.js';
 import {hasRecentActivityData} from './onboarding.js';
@@ -9,6 +9,7 @@ import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck,settleEne
 import {energyChoices,applyEnergyChoice} from './activity-energy-choices.js';
 import { sleepSessionFromRow, joinSplitNights } from "./sleep-sessions.js";
 import { energyBaseline, MISSING_LABELS, proteinReferenceKg, trendAdjustment, TREND_REASONS } from "./energy-profile.js";
+import { dayMacros, dietSummary } from "./diet.js";
 import { d1WeightTrend } from "./strength-context.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { writeIntervalsWeight, importIntervalsWeights } from "./weight-sync.js";
@@ -21,12 +22,14 @@ import { heldMerges, mergedSpan, sourcesOf } from "./workout-merge.js";
 import { afterGoogleSync, flushGoogleSync } from "./apple-health.js";
 import { pickBuckets, BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE, HEART_RATE_HOUR_TYPE } from "./heart-rate-compaction.js";
 import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
+import { bumpCacheVersion, closedDay } from "./api-cache.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { markConnectionBroken, markConnectionOk, isGoogleAuthFailure, isIntervalsAuthFailure } from "./connection-health.js";
 import { manualPairs } from "./manual-pairs.js";
+import { readDay } from "./day-reads.js";
 import { matchPlannedWorkouts } from "./plan-match.js";
 export { matchPlannedWorkouts };
-import { readSyncPrefs, healthAllowed, sentIntervalsIds, sentByLoadwise } from "./sync-destinations.js";
+import { readSyncPrefs, healthAllowed, sentIntervalsIds, sentByAurin } from "./sync-destinations.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -219,8 +222,6 @@ const CONFIG = {
 
   // The rest-day baseline, weekly goal and target weight are personal: see
   // energyBaseline in energy-profile.js.
-  proteinGramsPerKg: 2.0,
-
   defaultRideCarbsPerHour: 90,
   preRideCarbsPerKg: 1.0,
   preRideWindowHours: 2,
@@ -877,10 +878,31 @@ async function saveGooglePointsBatch(env, family, type, points, { raw = false } 
   if (type === "exercise" && env.GOOGLE_CLIENT_ID) points = points.filter(p => p?.dataSource?.application?.googleWebClientId !== env.GOOGLE_CLIENT_ID);
   if (!points.length) return 0;
 
-  const statements = points.map(point => {
+  // The recent sync reads the same two days every 5 minutes. D1 bills an upsert
+  // that changes nothing as a row written (~250k a day per user, measured on
+  // 2026-10-31 with ~140 rows really changed an hour), so the stored rows are
+  // read first, ~90 ids a query on the unique index, and only new or changed
+  // points are written.
+  const rows = points.map(point => {
     const i = googleInfo(type, point);
-    const fallbackId = point?.name || `${type}:${i.sample || i.start || crypto.randomUUID()}`;
+    return { point, i, id: point?.name || `${type}:${i.sample || i.start || crypto.randomUUID()}`, payload: healthPointJson(point) };
+  });
+  const stored = new Map();
+  const ids = [...new Set(rows.map(r => r.id))];
+  const reads = [];
+  for (let k = 0; k < ids.length; k += 90) reads.push(env.DB.prepare(`SELECT external_id, sample_time, start_time, end_time, value_numeric, value_unit, payload_json FROM health_datapoints
+    WHERE user_id = ? AND source_family = ? AND data_type = ? AND external_id IN (${ids.slice(k, k + 90).map(() => '?').join(',')})`).bind(env.USER_ID, family, type, ...ids.slice(k, k + 90)));
+  for (let k = 0; k < reads.length; k += 50) for (const result of await env.DB.batch(reads.slice(k, k + 50))) for (const row of result?.results || []) stored.set(row.external_id, row);
+  // As the upsert's own check (IS NOT): a number stored from a numeric string is equal.
+  const same = (a, b) => (a ?? null) === (b ?? null) || (typeof a === 'number' && b !== '' && b != null && Number(b) === a);
+  const changedRows = rows.filter(({ id, i, payload }) => {
+    const old = stored.get(id);
+    return !old || !(same(old.sample_time, i.sample) && same(old.start_time, i.start) && same(old.end_time, i.end)
+      && same(old.value_numeric, i.value) && same(old.value_unit, i.unit) && old.payload_json === payload);
+  });
+  if (!changedRows.length) return points.length;
 
+  const statements = changedRows.map(({ i, id: fallbackId, payload }) => {
     return env.DB.prepare(
       `INSERT INTO health_datapoints (
         user_id,
@@ -920,7 +942,7 @@ async function saveGooglePointsBatch(env, family, type, points, { raw = false } 
       i.end,
       i.value,
       i.unit,
-      healthPointJson(point)
+      payload
     );
   });
 
@@ -933,7 +955,7 @@ async function saveGooglePointsBatch(env, family, type, points, { raw = false } 
       const rows=Number(result?.meta?.changes||0);
       if(!rows)return;
       changed+=rows;
-      const info=googleInfo(type,points[i+j]);
+      const info=changedRows[i+j].i;
       // The hour, so the summary after the sync rebuilds only the hours written.
       const day=String(info.sample||info.start||info.end||'').slice(0,13);
       if(/^\d{4}-\d{2}-\d{2}(T\d{2})?$/.test(day)&&(!oldest||day<oldest))oldest=day;
@@ -943,6 +965,9 @@ async function saveGooglePointsBatch(env, family, type, points, { raw = false } 
   // Only when a row changed: the recent sync reads the same two days every
   // 5 minutes, and choosing the source again read ~1 B rows a day for nothing.
   if(changed)await afterGoogleSync(env, type, points, {since:oldest});
+  // A changed row on a closed day (a late upload, the nightly look back): the
+  // days kept in the cache (api-cache.js closedDay) are read again.
+  if(changed&&oldest&&closedDay(/T\d{2}$/.test(oldest)?localDate(oldest+':00:00Z'):oldest,localToday()))await bumpCacheVersion(env.DB);
   return points.length;
 }
 // Google heart rate arrives as a sample every few seconds (~36k a day). Written
@@ -1250,8 +1275,13 @@ async function removeIntervalsActivities(env, externalIds) {
     const ids = externalIds.slice(i, i + 50), marks = ids.map(() => "?").join(",");
     statements.push(
       env.DB.prepare(`DELETE FROM health_datapoints WHERE user_id = ? AND source_family = 'intervals' AND data_type = 'activity' AND external_id IN (${marks})`).bind(env.USER_ID, ...ids),
+      // Only workouts pair with an activity (matchActivities), so the copies are
+      // looked for among them: by source and type the index finds them, where
+      // matched_activity_id alone went through every row the user has (1.37 M
+      // rows read for one removal on 2026-10-30).
       env.DB.prepare(`UPDATE health_datapoints SET record_role = 'primary', matched_activity_id = NULL, match_confidence = NULL, updated_at = CURRENT_TIMESTAMP
-        WHERE user_id = ? AND matched_activity_id IN (${marks})`).bind(env.USER_ID, ...ids.map(id => "intervals:" + id))
+        WHERE user_id = ? AND source_family IN ('intervals','local','wahoo','google-wearables','apple-health') AND data_type IN ('activity','exercise')
+          AND matched_activity_id IN (${marks})`).bind(env.USER_ID, ...ids.map(id => "intervals:" + id))
     );
   }
   if (statements.length) await env.DB.batch(statements);
@@ -1292,7 +1322,7 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays,del
 
   for (const sourceActivity of activities) {
     const id = String(sourceActivity.id);
-    if (sentByLoadwise(sourceActivity) || sentHere.has(id)) continue;
+    if (sentByAurin(sourceActivity) || sentHere.has(id)) continue;
     let a = sourceActivity;
     if (sourceActivity?._note && !sourceActivity.name && !sourceActivity.type) {
       const existing = existingById.get("activity:"+id);
@@ -1558,7 +1588,8 @@ export async function matchActivities(env, { days = null } = {}) {
   // A merged copy written again under a new id (workout-merge.js heldMerges):
   // the kept record points to the new one, so deleting it takes both.
   for (const { row, with: copy } of merges.moved) updates.push(env.DB.prepare(
-    `UPDATE health_datapoints SET payload_json = json_set(payload_json, '$.loadwiseMerge.with', ?), updated_at = CURRENT_TIMESTAMP
+    // A mark still under the old name (activity-type.js mark) moves over whole.
+    `UPDATE health_datapoints SET payload_json = json_remove(json_set(payload_json, '$.aurinMerge', json_set(COALESCE(json_extract(payload_json, '$.aurinMerge'), json_extract(payload_json, '$.loadwiseMerge'), '{}'), '$.with', ?)), '$.loadwiseMerge'), updated_at = CURRENT_TIMESTAMP
      WHERE user_id = ? AND source_family = ? AND data_type = ? AND external_id = ?`
   ).bind(copy, env.USER_ID, row.source_family, row.data_type, row.external_id));
   for (let i = 0; i < updates.length; i += 50) await env.DB.batch(updates.slice(i, i + 50));
@@ -1871,42 +1902,21 @@ function activityKcalPerHourFor(type, weightKg) {
   return WEIGHT_BEARING.test(type) && kg > 0 ? Math.round(base * Math.min(1.3, Math.max(0.6, kg / 88))) : base;
 }
 
+function activityIsEndurance(activity) {
+  const text = `${activity?.type || ""} ${activity?.name || ""} ${activity?.payload?.type || ""} ${activity?.payload?.name || ""}`.toLowerCase();
+  // One-word types too: AlpineSki, BackcountrySki, VirtualRow, VirtualRun.
+  return /(run|running|swim|swimming|row|rowing)\b|nordic|ski(ing)?\b|běh|plav/.test(text);
+}
+
 function activityIsStrength(activity) {
   const text = `${activity?.type || ""} ${activity?.name || ""} ${activity?.payload?.type || ""} ${activity?.payload?.name || ""}`.toLowerCase();
   return ["weight", "strength", "gym", "lifting", "bodybuilding"].some(x => text.includes(x));
 }
 
-function dailyMacroTargets(weightKg, calorieTarget, context = {}) {
-  // Macros are per kg of body weight: without a weight or a target there are none.
-  const kg = Number(weightKg);
-  const kcal = Number(calorieTarget);
-  if (!(kg > 0) || !(kcal > 0)) return null;
-  const protein = Math.round(kg * CONFIG.proteinGramsPerKg);
-  // The calories and macros must describe the same plan.  Protein stays
-  // stable for recovery; fat moves slightly with the training sequence and
-  // carbohydrates receive the remainder of the available energy.
-  let fatPerKg = 0.90; // ordinary rest day: more satiating, lower carbohydrate
-  if (context.endurance) fatPerKg = 0.70;
-  else if (context.preRide) fatPerKg = 0.70; // make room for glycogen before the ride
-  else if (context.recoveryRide) fatPerKg = 0.75;
-  else if (context.strength) fatPerKg = 0.85;
-  const fat = Math.round(kg * fatPerKg);
-  const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
-
-  return { protein_g: protein, carbs_g: carbs, fat_g: fat };
-}
-
 async function nearbyRideContext(env, date) {
   const start = dateDaysFromDate(date, 1);
   const end = dateDaysFromDate(date, 3);
-  const rows = await env.DB.prepare(`
-    SELECT payload_json, start_time
-    FROM health_datapoints
-    WHERE user_id = ? AND source_family IN ('intervals','local')
-      AND data_type = 'planned-workout'
-      AND start_time >= ? AND start_time < ?
-    ORDER BY start_time
-  `).bind(env.USER_ID, start, end).all();
+  const rows = await readDay(env.DB, env.USER_ID, "planned", start, end);
   const nextRide = rows.results.map(row => {
     try { return plannedWorkoutInfo(JSON.parse(row.payload_json || '{}')); } catch { return null; }
   }).find(workout => workout?.cycling && Number(workout.durationHours || 0) >= 1);
@@ -1925,8 +1935,10 @@ function nutritionContext(energy) {
   const planned = energy.unmatchedPlannedWorkouts || [];
   const cycling = actual.find(activityIsCycling) || planned.find(x => x.cycling);
   const strength = actual.some(activityIsStrength) || planned.some(activityIsStrength);
-  const totalEnduranceHours = actual.filter(activityIsCycling).reduce((sum, a) => sum + Number(a.durationHours || 0), 0) +
-    planned.filter(x => x.cycling).reduce((sum, x) => sum + Number(x.durationHours || 0), 0);
+  // Runs, swims and rows are endurance days as much as rides are.
+  const enduring = x => activityIsCycling(x) || x.cycling || activityIsEndurance(x);
+  const totalEnduranceHours = actual.filter(enduring).reduce((sum, a) => sum + Number(a.durationHours || 0), 0) +
+    planned.filter(enduring).reduce((sum, x) => sum + Number(x.durationHours || 0), 0);
 
   const cyclingActivities = actual.filter(activityIsCycling);
   const latestRide = cyclingActivities.filter(a => a.end).sort((a,b) => new Date(b.end).getTime() - new Date(a.end).getTime())[0];
@@ -1950,44 +1962,13 @@ async function energyForDate(env, date) {
   // Google Health stores UTC: the user's day runs from local midnight to midnight.
   const dayStart = dayStartUtc(date), dayEnd = dayStartUtc(nextDate);
   // The day's reads don't depend on each other, so they run together.
-  const [google, planned, activities, googleExercises, weight, profile, activityTracked] = await Promise.all([env.DB.prepare(`
-    SELECT value_numeric, sample_time
-    FROM health_datapoints
-    WHERE user_id = ? AND data_type = 'total-calories'
-      AND sample_time >= ?
-      AND sample_time < ?
-    ORDER BY sample_time DESC, id DESC
-    LIMIT 1
-  `).bind(env.USER_ID, date, nextDate).first(),
-  env.DB.prepare(`
-    SELECT *
-    FROM health_datapoints
-    WHERE user_id = ? AND source_family IN ('intervals','local')
-      AND data_type = 'planned-workout'
-      AND start_time >= ?
-      AND start_time < ?
-    ORDER BY start_time
-  `).bind(env.USER_ID, date, nextDate).all(),
-  env.DB.prepare(`
-    SELECT *
-    FROM health_datapoints
-    WHERE user_id = ? AND source_family IN ('intervals','local','wahoo')
-      AND data_type = 'activity'
-      AND start_time >= ?
-      AND start_time < ?
-      AND (record_role IS NULL OR record_role != 'duplicate')
-    ORDER BY start_time
-  `).bind(env.USER_ID, date, nextDate).all(),
-  env.DB.prepare(`
-    SELECT *
-    FROM health_datapoints
-    WHERE user_id = ? AND source_family IN ('google-wearables','apple-health')
-      AND data_type = 'exercise'
-      AND start_time >= ?
-      AND start_time < ?
-      AND (record_role IS NULL OR record_role != 'duplicate')
-    ORDER BY start_time
-  `).bind(env.USER_ID, dayStart, dayEnd).all(),
+  // While a week is analysed, each read comes from one read of the whole week
+  // (day-reads.js), in the same order; otherwise the day asks for its own.
+  const [google, planned, activities, googleExercises, weight, profile, activityTracked] = await Promise.all([
+  readDay(env.DB, env.USER_ID, "calories", date, nextDate).then(r => r.results?.[0] ?? null),
+  readDay(env.DB, env.USER_ID, "planned", date, nextDate),
+  readDay(env.DB, env.USER_ID, "activities", date, nextDate),
+  readDay(env.DB, env.USER_ID, "exercises", dayStart, dayEnd),
   latestStoredWeight(env.DB, env.USER_ID),
   loadEffectiveProfile(env.DB, env.USER_ID),
   // Sport is estimated from the profile only when no source tracks activities.
@@ -2057,7 +2038,7 @@ async function energyForDate(env, date) {
     })
     .sort((a, b) => new Date(a.start || 0).getTime() - new Date(b.start || 0).getTime());
   // Calories the user set in Aurin (activity-edits.js) are not checked again.
-  const edited=a=>a.payload?.loadwiseKcal!=null;
+  const edited=a=>mark(a.payload,'Kcal')!=null;
   const walking=completed.filter(a=>/^(Walk|Walking)$/i.test(a.type||'')&&!edited(a));
   if(walking.length){
     const telemetry=(await env.DB.prepare("SELECT start_time,end_time,value_numeric FROM health_datapoints WHERE user_id=? AND source_family IN ('google-wearables','apple-health') AND data_type='active-energy-burned' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,dayStart,dayEnd).all().catch(()=>({results:[]}))).results||[];
@@ -2118,23 +2099,29 @@ async function energyForDate(env, date) {
   const isCompleteDay = date < nowDate;
   const observed = google?.value_numeric != null ? Number(google.value_numeric) : null;
 
+  // What each workout of the day burns: a completed one by its own number (or
+  // its length), a plan still ahead by its length.  The Food screen shows them
+  // as the parts of the target (targetParts in app-food.js).
+  const workoutCalories = [];
+  let activityAdjustment = 0;
+  for (const a of completed) {
+    const rate = CONFIG.activityKcalPerHour[a.type] ? activityKcalPerHourFor(a.type, weight?.value_numeric) : (a.payload && a.payload.category === "Ride" ? CONFIG.activityKcalPerHour.Ride : 400);
+    const actual = Number(a.caloriesForPlanning??a.calories), kcal = actual > 0 ? actual : (a.durationHours || 0) * rate;
+    activityAdjustment += kcal;
+    workoutCalories.push({ kind: "done", id: a.id ?? null, type: a.type || null, name: a.name || null, minutes: Math.round((a.durationHours || 0) * 60), kcal: Math.round(kcal) });
+  }
+  for (const w of unmatchedPlanned) {
+    if (!w.durationHours) continue;
+    const type = w.type === "Ride" || w.cycling ? "Ride" : w.type;
+    const rate = type === "Ride" || w.cycling ? cyclingKcalPerHour(w) : activityKcalPerHourFor(type, weight?.value_numeric);
+    activityAdjustment += w.durationHours * rate;
+    workoutCalories.push({ kind: "planned", id: w.id ?? null, type: type || null, name: w.name || null, minutes: Math.round(w.durationHours * 60), kcal: Math.round(w.durationHours * rate) });
+  }
+
   let estimatedTDEE = null;
   if (isCompleteDay && observed != null && observed > 1000) {
     estimatedTDEE = Math.round(observed);
   } else if (baseline.ready) {
-    let activityAdjustment = 0;
-    for (const a of completed) {
-      const rate = CONFIG.activityKcalPerHour[a.type] ? activityKcalPerHourFor(a.type, weight?.value_numeric) : (a.payload && a.payload.category === "Ride" ? CONFIG.activityKcalPerHour.Ride : 400);
-      const actual = Number(a.caloriesForPlanning??a.calories);
-      activityAdjustment += actual > 0 ? actual : (a.durationHours || 0) * rate;
-    }
-    for (const w of unmatchedPlanned) {
-      if (w.durationHours) {
-        const type = w.type === "Ride" || w.cycling ? "Ride" : w.type;
-        const rate = type === "Ride" || w.cycling ? cyclingKcalPerHour(w) : activityKcalPerHourFor(type, weight?.value_numeric);
-        activityAdjustment += w.durationHours * rate;
-      }
-    }
     estimatedTDEE = Math.round(baseline.baselineRestTDEE + baseline.sportDaily + activityAdjustment);
   }
 
@@ -2157,7 +2144,9 @@ async function energyForDate(env, date) {
     ...(await nearbyRideContext(env, date))
   };
   const proteinKg = proteinReferenceKg(weight ? Number(weight.value_numeric) : null, profile?.height);
-  const macroTargets = dailyMacroTargets(proteinKg, target, context);
+  // Protein, carbs and fat by the athlete's diet (diet.js); the same split
+  // for the Food screen, Today, the coach and the meal ideas.
+  const macroTargets = dayMacros(proteinKg, target, context, profile);
 
   return {
     date,
@@ -2189,13 +2178,15 @@ async function energyForDate(env, date) {
       floorApplied: floorGapKcal > 0,
       floorGapKcal,
       trendAdjustment: trend.adjustment,
-      trendReason: trend.reason
+      trendReason: trend.reason,
+      workouts: workoutCalories
     },
     proteinReferenceKg: proteinKg,
     energyProfile: { ready: baseline.ready, source: baseline.source, missing: baseline.missing, targetWeightKg: baseline.targetWeightKg ?? null, floor: baseline.floor ?? null },
     estimatedTDEE,
     calorieTarget: target,
     macroTargets,
+    diet: dietSummary(profile, macroTargets),
     nutritionContext: context
   };
 }
@@ -2241,13 +2232,8 @@ async function analysisDaily(
       30
     );
 
-  const protein =
-    energy.proteinReferenceKg
-      ? Math.round(
-          energy.proteinReferenceKg *
-          CONFIG.proteinGramsPerKg
-        )
-      : null;
+  // The day's protein target as the macros have it (diet.js).
+  const protein = energy.macroTargets?.protein_g ?? null;
 
   const actualRide = energy.completedActivities.find(activityIsCycling);
   const plannedRide =
@@ -2305,6 +2291,7 @@ async function analysisDaily(
       protein: protein,
       calorieBreakdown: energy.calorieBreakdown,
       macros: energy.macroTargets,
+      diet: energy.diet,
       calorieTarget: energy.calorieTarget,
       targetWeightKg: energy.energyProfile.targetWeightKg,
       missing: energy.energyProfile.missing,
@@ -2380,7 +2367,11 @@ async function analysisEnergy(
         energy.estimatedPlannedActivityCalories,
 
       suppressedPlannedWorkouts:
-        energy.suppressedPlannedWorkouts
+        energy.suppressedPlannedWorkouts,
+
+      // The day's macros by the athlete's diet (diet.js), for the meal ideas.
+      macroTargets: energy.macroTargets,
+      diet: energy.diet
     },
 
     energyProfile:
@@ -2551,11 +2542,7 @@ function scaleRecipe(recipe, servings) {
 
 async function foodLogForDate(env, date) {
   // Planned or cancelled food (ChatGPT can plan a meal) is not eaten.
-  const rows = await env.DB.prepare(`
-    SELECT * FROM food_logs
-    WHERE user_id = ? AND consumed_date = ? AND (status IS NULL OR status='eaten')
-    ORDER BY consumed_at, id
-  `).bind(env.USER_ID, date).all();
+  const rows = await readDay(env.DB, env.USER_ID, "food", date);
 
   const entries = rows.results || [];
   const totals = entries.reduce((sum, row) => {

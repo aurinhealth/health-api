@@ -93,3 +93,24 @@ test("the cron leaves a refused Google or Intervals.icu connection out, except o
   await markConnectionOk(env, "google");
   assert.deepEqual((await withoutBrokenConnections(env, at(5))).CONNECTED_PROVIDERS, ["google", "intervals"]);
 });
+
+test("a D1 reset while writing the connection's state is tried again, not reported as a failed sync", async () => {
+  const db = createD1(), env = envFor(db);
+  await markConnectionOk(env, "google");
+  const realPrepare = env.DB.prepare.bind(env.DB);
+  let failures = 1;
+  env.DB = Object.assign(Object.create(env.DB), {
+    prepare: sql => {
+      const statement = realPrepare(sql);
+      if (!/INSERT INTO sync_status/.test(sql)) return statement;
+      return { bind: (...args) => { const bound = statement.bind(...args); return { run: async () => { if (failures-- > 0) throw new Error("D1_ERROR: Internal error in D1 DB storage caused object to be reset"); return bound.run(); } }; } };
+    }
+  });
+  const errors = [], realError = console.error;
+  console.error = (...args) => errors.push(args.join(" "));
+  try { await markConnectionBroken(env, "google", "Token has been expired or revoked."); }
+  finally { console.error = realError; }
+  assert.deepEqual(errors.filter(e => /Connection health/.test(e)), []);
+  assert.equal(failures, -1);
+  assert.equal((await readConnectionHealth({ ...env, DB: scopedDb(db, 4) })).google.needsReconnect, true);
+});

@@ -24,14 +24,14 @@ export function followingTime(first) {
   return String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0');
 }
 
-async function read(db, id) {
+export async function read(db, id) {
   const row = id ? await localWorkout(db, id) : null;
   if (!row || row.status !== 'scheduled') return null;
   try { return { id: row.id, event: JSON.parse(row.event_json) }; } catch { return null; }
 }
 
 // The link fields only: no new revision, so nothing is exported again.
-async function setFields(db, item, fields) {
+export async function setFields(db, item, fields) {
   const event = { ...item.event };
   for (const [k, v] of Object.entries(fields)) { if (v == null) delete event[k]; else event[k] = v; }
   item.event = event;
@@ -79,22 +79,32 @@ export async function linkPlanned(env, { eventId, after }, move) {
   return { status: 'ok', eventId: 'planned:' + id, after: 'planned:' + first.id, time };
 }
 
-// After a move: the first leg takes the second with it (same day, right
-// after); the second moved on its own is done separately.
+// After a move: the first leg takes the ones after it along (same day, each
+// right after the one before: a duathlon's ride and second run too); a later
+// leg moved on its own is done separately, the legs on both sides of it too.
 export async function followMove(env, id, previous, moved, move) {
   const db = env.DB, item = await read(db, id);
   if (!item) return null;
   if (previous?.after) {
     const before = await read(db, previous.after);
     if (before && before.event.next === id) await setFields(db, before, { next: null });
-    await setFields(db, item, { after: null });
+    const after = previous.next ? await read(db, previous.next) : null;
+    if (after && after.event.after === id) await setFields(db, after, { after: null });
+    await setFields(db, item, { after: null, next: null });
     return { unlinked: true };
   }
   if (previous?.next) {
-    const second = await read(db, previous.next);
-    if (!second || second.event.after !== id) { await setFields(db, item, { next: null }); return null; }
-    await move(second.id, dateOf(moved), followingTime(moved));
-    return { followed: 'planned:' + second.id };
+    let first = item, from = moved, nextId = previous.next, followed = null;
+    for (let guard = 0; nextId && guard < 5; guard++) {
+      const leg = await read(db, nextId);
+      if (!leg || leg.event.after !== first.id) { await setFields(db, first, { next: null }); break; }
+      await move(leg.id, dateOf(from), followingTime(from));
+      followed ??= 'planned:' + leg.id;
+      first = await read(db, leg.id) || leg;
+      from = first.event;
+      nextId = first.event.next;
+    }
+    return followed ? { followed } : null;
   }
   return null;
 }

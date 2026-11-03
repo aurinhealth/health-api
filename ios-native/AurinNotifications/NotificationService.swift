@@ -7,7 +7,8 @@ import UserNotifications
 /// extension draws the readiness ring with its score, coloured by the zone
 /// like Today's dial, on the welcome screen's sunrise, and attaches it, so the notification shows it on the
 /// right (and large when opened). Any other push, or a failed drawing, passes
-/// through unchanged.
+/// through unchanged. With the values hidden (Settings → Oznámení → Skrýt
+/// zdravotní údaje) the score comes only in `private`, so no ring is drawn.
 final class NotificationService: UNNotificationServiceExtension {
     private var contentHandler: ((UNNotificationContent) -> Void)?
     private var content: UNMutableNotificationContent?

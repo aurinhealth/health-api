@@ -1,7 +1,7 @@
 import SwiftUI
 
 // "Kdy mám čas": the time for training on each weekday, one bar per day set by
-// a tap or a drag (0–4 h), for the usual week or just one week
+// a tap or a drag (0–8 h), for the usual week or just one week
 // (GET/POST/DELETE /app/api/week-plan, src/week-planner.js). The week's plan
 // and the generator keep to it. The sports per day and the number of workouts
 // go back as they came. "Kalendář v iPhonu" (App/CalendarTime.swift) caps each
@@ -70,6 +70,12 @@ enum WeekPlanPrefs {
     /// "week" when the week has its own plan, else "default".
     static func source(_ prefs: JSONValue?) -> String? {
         object(prefs)["source"]?.string
+    }
+
+    /// The weekdays whose run goes right after the ride (chip "Brick", prefs.bricks).
+    static func bricks(_ prefs: JSONValue?) -> Set<Int> {
+        guard case .array(let list)? = object(prefs)["bricks"] else { return [] }
+        return Set(list.compactMap { $0.number.map { Int($0) } }.filter { (0..<7).contains($0) })
     }
 
     static func daysValue(_ days: [[String]]) -> JSONValue {
@@ -282,8 +288,9 @@ struct AvailabilityView: View {
     }
 }
 
-/// One weekday: "Po", a bar to tap or drag (0–4 h in quarter hours) and the
-/// time on the right ("1 h 30", "volno", "–" while not set). With the
+/// One weekday: "Po", a bar to tap or drag (0–8 h in quarter hours, so a
+/// long ride fits) and the time on the right ("1 h 30", "volno", "–" while
+/// not set). With the
 /// calendar's `free` minutes the bar fills to what is left; the rest of the
 /// athlete's own time is hatched, and the own time stands under the day.
 struct AvailabilityBarRow: View {
@@ -296,7 +303,7 @@ struct AvailabilityBarRow: View {
     private var shown: Int { CalendarTime.capped(minutes, free: free) }
     private var cut: Bool { free != nil && minutes > 0 && shown < minutes }
 
-    static let maxMinutes = 240
+    static let maxMinutes = 480
     static let step = 15
 
     var body: some View {
@@ -374,6 +381,32 @@ struct AvailabilityBarRow: View {
         if m == 0 { return L10n.tr("volno") }
         if m < 60 { return "\(m) min" }
         return "\(m / 60) h" + (m % 60 > 0 ? " \(m % 60)" : "")
+    }
+}
+
+/// "0  2 h  4 h  6 h  8 h" under a card of AvailabilityBarRow, lined up with the bars.
+struct AvailabilityAxis: View {
+    private static let marks = [0, 120, 240, 360, 480]
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Color.clear.frame(width: 44, height: 1)
+            GeometryReader { geo in
+                ZStack(alignment: .topLeading) {
+                    ForEach(Self.marks, id: \.self) { m in
+                        let f = CGFloat(m) / CGFloat(AvailabilityBarRow.maxMinutes)
+                        Text(verbatim: m == 0 ? "0" : "\(m / 60) h")
+                            .font(Typo.tiny).foregroundStyle(Palette.faint)
+                            .fixedSize()
+                            .alignmentGuide(.leading) { d in f == 0 ? 0 : f == 1 ? d.width : d.width / 2 }
+                            .offset(x: geo.size.width * f)
+                    }
+                }
+            }
+            .frame(height: 14)
+            Color.clear.frame(width: 64, height: 1)
+        }
+        .accessibilityHidden(true)
     }
 }
 

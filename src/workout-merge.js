@@ -8,7 +8,7 @@
 //
 // The record whose calories and heart rate were chosen stays; the other one
 // becomes record_role 'duplicate' pointing to it, and activity matching keeps
-// that (index.js matchActivities). The kept record carries loadwiseMerge in
+// that (index.js matchActivities). The kept record carries aurinMerge in
 // its payload: the chosen time, every device that recorded it and whose
 // calories count; the syncs keep it (activity-type.js KEEP_TYPE_SQL).
 // A copy already forwarded to Intervals.icu (watch-forward.js) is deleted
@@ -18,6 +18,7 @@ import { localDateTime } from "./user-time.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { L } from "./lang.js";
 import { watchRecorder } from "./activity-origin.js";
+import { mark, renameMarks } from "./activity-type.js";
 
 const parse = json => { if (json && typeof json === "object") return json; try { return JSON.parse(json || "{}") || {}; } catch { return {}; } };
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -36,14 +37,14 @@ export function recorderOf(row, payload = parse(row.payload_json)) {
 
 // The devices behind a watch workout: both after a merge, else its own.
 export function sourcesOf(row, payload = parse(row.payload_json)) {
-  const merged = payload.loadwiseMerge;
+  const merged = mark(payload, "Merge");
   if (Array.isArray(merged?.sources) && merged.sources.length) return merged.sources.filter(s => s && s.name).slice(0, 4);
   return [recorderOf(row, payload)];
 }
 
 // The time a merged workout keeps: { start, end } instants, else null.
 export function mergedSpan(payload) {
-  const m = payload?.loadwiseMerge;
+  const m = mark(payload, "Merge");
   return m?.start && m?.end && Date.parse(m.end) > Date.parse(m.start) ? { start: m.start, end: m.end } : null;
 }
 
@@ -69,8 +70,8 @@ function summary(row) {
 // (or one unnamed) for most of the time, neither merged nor kept apart yet.
 function mergeable(a, b) {
   if (a.recorder.name === b.recorder.name) return false;
-  if (a.payload.loadwiseMerge?.with || b.payload.loadwiseMerge?.with) return false;
-  if ((a.payload.loadwiseMerge?.separate || []).includes(b.key) || (b.payload.loadwiseMerge?.separate || []).includes(a.key)) return false;
+  if (mark(a.payload, "Merge")?.with || mark(b.payload, "Merge")?.with) return false;
+  if ((mark(a.payload, "Merge")?.separate || []).includes(b.key) || (mark(b.payload, "Merge")?.separate || []).includes(a.key)) return false;
   if (a.kind !== b.kind && a.kind !== "other" && b.kind !== "other") return false;
   return overlapShare(a.row, b.row) >= MERGE_SHARE;
 }
@@ -151,7 +152,7 @@ export async function mergeWorkouts(env, { ids, energy, span = "both" } = {}, { 
   const start = own ? own.start_time : [a.start_time, b.start_time].sort()[0];
   const end = own ? own.end_time : [a.end_time, b.end_time].sort()[1];
   const sources = order([recorderOf(keep, keepPayload), recorderOf(drop, dropPayload)]);
-  keepPayload.loadwiseMerge = { with: keyOf(drop), start, end, sources, energy: recorderOf(keep, keepPayload).name };
+  renameMarks(keepPayload).aurinMerge = { with: keyOf(drop), start, end, sources, energy: recorderOf(keep, keepPayload).name };
   await env.DB.batch([
     env.DB.prepare("UPDATE health_datapoints SET payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?").bind(JSON.stringify(keepPayload), keep.id, env.USER_ID),
     env.DB.prepare("UPDATE health_datapoints SET record_role = 'duplicate', matched_activity_id = ?, match_confidence = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?").bind(keyOf(keep), drop.id, env.USER_ID)
@@ -165,8 +166,8 @@ export async function mergeWorkouts(env, { ids, energy, span = "both" } = {}, { 
 export async function keepWorkoutsApart(env, { ids } = {}) {
   const [a, b] = await pairOf(env, ids);
   const put = (row, other) => {
-    const p = parse(row.payload_json);
-    p.loadwiseMerge = { ...(p.loadwiseMerge || {}), separate: [...new Set([...(p.loadwiseMerge?.separate || []), keyOf(other)])] };
+    const p = renameMarks(parse(row.payload_json));
+    p.aurinMerge = { ...(p.aurinMerge || {}), separate: [...new Set([...(p.aurinMerge?.separate || []), keyOf(other)])] };
     return env.DB.prepare("UPDATE health_datapoints SET payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?").bind(JSON.stringify(p), row.id, env.USER_ID);
   };
   await env.DB.batch([put(a, b), put(b, a)]);
@@ -183,7 +184,7 @@ export async function keepWorkoutsApart(env, { ids } = {}) {
 export function heldMerges(rows = []) {
   const out = new Map(), moved = [];
   const keys = new Set(rows.map(keyOf));
-  const merges = rows.map(row => ({ row, merged: parse(row.payload_json).loadwiseMerge }))
+  const merges = rows.map(row => ({ row, merged: mark(parse(row.payload_json), "Merge") }))
     .filter(({ row, merged }) => WATCH.includes(row.source_family) && typeof merged?.with === "string");
   const taken = new Set(merges.flatMap(({ row, merged }) => [keyOf(row), merged.with]));
   for (const { row, merged } of merges) {
@@ -191,7 +192,7 @@ export function heldMerges(rows = []) {
     const own = recorderOf(row).name;
     const others = (Array.isArray(merged.sources) ? merged.sources : []).map(s => s?.name).filter(name => name && name !== own);
     const standIn = rows.find(other => WATCH.includes(other.source_family) && other.data_type === "exercise" && !taken.has(keyOf(other))
-      && !parse(other.payload_json).loadwiseMerge?.with && others.includes(recorderOf(other).name) && overlapShare(row, other) >= MERGE_SHARE);
+      && !mark(parse(other.payload_json), "Merge")?.with && others.includes(recorderOf(other).name) && overlapShare(row, other) >= MERGE_SHARE);
     if (!standIn) continue;
     taken.add(keyOf(standIn));
     out.set(keyOf(standIn), keyOf(row));

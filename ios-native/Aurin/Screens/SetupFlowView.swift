@@ -5,10 +5,11 @@ import UserNotifications
 /// to the AI features ("Tvoje data o zdraví"), where the data comes from
 /// ("Odkud brát data": Apple Health, Google Health, the Ultrahuman Ring, WHOOP,
 /// Intervals.icu, Wahoo), who you are ("O tobě": sex, year of birth, height and
-/// weight, filled in from Apple Health or the server's suggestions) and what
-/// the notifications bring, before iOS asks once. Everything else (the day,
-/// goals, training, sleep) lives in Settings. An account set up earlier that
-/// still owes the consent sees only the consent page.
+/// weight, filled in from Apple Health or the server's suggestions), the main
+/// sport, the goal and the time for training on each day (SetupFocusPages,
+/// each can be skipped) and what the notifications bring, before iOS asks
+/// once. Everything else (the day, sleep, food) lives in Settings. An account
+/// set up earlier that still owes the consent sees only the consent page.
 struct SetupFlowView: View {
     @Environment(AppModel.self) private var model
     @State private var index = 0
@@ -45,13 +46,26 @@ struct SetupFlowView: View {
     @State private var suggested: [String: String] = [:]
     /// The weight as prefilled; unchanged it is not saved again as today's.
     @State private var prefilledWeight: String?
+    // Sport, goal and time (SetupFocusPages): what was chosen against what the
+    // server had, the saved profile they go into and the usual week.
+    @State private var focus = SetupFocus()
+    @State private var focusSaved = SetupFocus()
+    @State private var focusProfile: JSONObject?
+    @State private var focusLoaded = false
+    @State private var weekPrefs: JSONValue?
+    @State private var minutes = Array(repeating: -1, count: 7)
+    @State private var minutesSaved = Array(repeating: -1, count: 7)
+    @State private var equipment = false
 
-    private enum Page: Equatable { case consent, sources, about, notifications }
+    private enum Page: Equatable { case consent, sources, about, sport, goal, time, notifications }
 
     private var pages: [Page] {
         if consentOnly { return [.consent] }
-        return (consentFirst ? [.consent] : []) + [.sources, .about] + (askNotifications ? [.notifications] : [])
+        return (consentFirst ? [.consent] : []) + [.sources, .about, .sport, .goal, .time] + (askNotifications ? [.notifications] : [])
     }
+
+    /// The pages that can be skipped: the sport, the goal and the time.
+    private var skippable: Bool { [Page.sport, .goal, .time].contains(page) }
     private var page: Page { pages[min(index, pages.count - 1)] }
     private var health: AppleHealth { AppleHealth.shared }
 
@@ -66,9 +80,15 @@ struct SetupFlowView: View {
                         CircleButton(systemImage: "chevron.left", label: "Zpět") { withAnimation { index -= 1 } }
                     }
                     Spacer()
-                    // Without the consent the app cannot be used: the way out is signing out.
-                    if page == .consent {
+                    // Without the consent the app cannot be used: the way out is signing out,
+                    // or back to the paused screen when health data was paused (HealthPausedView).
+                    if page == .consent && model.resumingHealth {
+                        Button("Zrušit") { model.resumingHealth = false; model.needsSetup = false }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                    } else if page == .consent {
                         Button("Odhlásit") { Task { await model.logout() } }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                    } else if skippable {
+                        Button("Přeskočit") { Task { await skip() } }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                            .disabled(saving)
                     }
                 }
                 .frame(height: 40)
@@ -79,6 +99,7 @@ struct SetupFlowView: View {
                         .padding(.bottom, 20)
                 }
                 .scrollDismissesKeyboard(.interactively)
+                .sheet(isPresented: $equipment) { NavigationStack { EquipmentView() } }
 
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.bottom, 8) }
                 if page == .consent && ready && !agree {
@@ -88,7 +109,8 @@ struct SetupFlowView: View {
                         .padding(.bottom, 10)
                 }
                 PrimaryButton(title: buttonTitle, busy: saving || appleWorking) { Task { await next() } }
-                    .disabled(saving || appleWorking || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree))
+                    .disabled(saving || appleWorking || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree)
+                              || (page == .sport && focus.sport.isEmpty) || (page == .goal && focus.goal.isEmpty))
                 if page == .sources {
                     // "Teď ne" skips connecting, not "O tobě": without age, height and
                     // weight nothing (calories, strain, recovery) can be worked out.
@@ -109,7 +131,10 @@ struct SetupFlowView: View {
         }
         .task { await load() }
         .task(id: syncRun) { if syncRun > 0 { await followSync() } }
-        .task(id: index) { if page == .about { await readAppleProfile() } }
+        .task(id: index) {
+            if page == .about { await readAppleProfile() }
+            if skippable { await loadFocus() }
+        }
         .sheet(item: $connecting) { target in ServiceConnectSheet(target: target) { await loadProviders(); syncRun += 1 } }
         .interactiveDismissDisabled()
     }
@@ -118,7 +143,7 @@ struct SetupFlowView: View {
         if saving { return "Ukládám…" }
         if appleWorking { return "Moment…" }
         switch page {
-        case .about: return "Hotovo"
+        case .time: return askNotifications ? "Pokračovat" : "Hotovo"
         case .notifications: return "Zapnout"
         default: return "Pokračovat"
         }
@@ -130,6 +155,9 @@ struct SetupFlowView: View {
         case .consent: consentPage
         case .sources: sourcesPage
         case .about: aboutPage
+        case .sport: SetupSportPage(focus: $focus)
+        case .goal: SetupGoalPage(focus: $focus)
+        case .time: SetupTimePage(minutes: $minutes, loading: !focusLoaded, lifts: focus.sport == "strength") { equipment = true }
         case .notifications: notificationsPage
         }
     }
@@ -142,7 +170,7 @@ struct SetupFlowView: View {
         ("Odkud", "Ze služeb, které připojíš (Apple Health, Google Health, Intervals.icu), a z toho, co zadáš sám."),
         ("K čemu", "Jen k přehledům, výpočtům a plánům v Aurinu. Data neprodáváme a nepoužíváme k reklamě."),
         ("AI", "Když použiješ AI funkci (asistent, rozpoznání jídla z fotky, hodnocení tréninku a týdne), pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI v USA."),
-        ("Odvolání", "Smazáním účtu v Nastavení → Účet, kde si předtím můžeš stáhnout všechna svoje data.")
+        ("Odvolání", "Pozastavením zdravotních dat, nebo smazáním účtu v Nastavení → Soukromí a data, kde si předtím můžeš stáhnout všechna svoje data.")
     ]
 
     @ViewBuilder
@@ -435,9 +463,111 @@ struct SetupFlowView: View {
             withAnimation { index += 1 }
         case .about:
             guard await saveProfile() else { return }
-            if askNotifications { withAnimation { index += 1 } } else { await done(notifications: false) }
+            // Back from the sport and "O tobě" saved again: the focus goes into the new profile.
+            focusProfile = nil
+            withAnimation { index += 1 }
+        case .sport:
+            withAnimation { index += 1 }
+        case .goal:
+            guard await saveFocus() else { return }
+            withAnimation { index += 1 }
+        case .time:
+            guard await saveTime() else { return }
+            await afterTime()
         case .notifications:
             await done(notifications: true)
+        }
+    }
+
+    /// "Přeskočit": the page's answer goes back to what the server has and
+    /// nothing of it is saved (the sport chosen before a skipped goal still is).
+    private func skip() async {
+        error = nil
+        switch page {
+        case .sport:
+            focus.sport = focusSaved.sport
+            focus.swims100 = focusSaved.swims100
+            withAnimation { index += 1 }
+        case .goal:
+            focus.goal = focusSaved.goal
+            focus.eventName = focusSaved.eventName
+            focus.eventDate = focusSaved.eventDate
+            guard await saveFocus() else { return }
+            withAnimation { index += 1 }
+        case .time:
+            minutes = minutesSaved
+            await afterTime()
+        default: break
+        }
+    }
+
+    /// After the time: the notifications page, or the end when iOS asked already.
+    private func afterTime() async {
+        if askNotifications { withAnimation { index += 1 } } else { await done(notifications: false) }
+    }
+
+    /// The saved profile and the usual week, once, when the sport page opens
+    /// (after "O tobě" saved the profile, so the week has its automatic time).
+    private func loadFocus() async {
+        guard !focusLoaded else { return }
+        defer { focusLoaded = true }
+        guard !model.demo else { return }
+        let api = model.api
+        async let profile = try? api.profile()
+        async let week = try? api.weekPlan(start: nil)
+        if let p = await profile {
+            focusProfile = p
+            // Only what was not chosen already (back from the goal) is filled in.
+            let saved = SetupFocus(profile: p)
+            if focus == SetupFocus() { focus = saved }
+            focusSaved = saved
+        }
+        if let r = await week {
+            weekPrefs = r.prefs
+            minutes = WeekPlanPrefs.minutes(r.prefs)
+            minutesSaved = minutes
+        }
+    }
+
+    /// The main sport and the goal into the profile, as Zaměření saves them;
+    /// nothing when they are as the server has them.
+    private func saveFocus() async -> Bool {
+        guard !model.demo, focus != focusSaved else { return true }
+        saving = true
+        defer { saving = false }
+        do {
+            let base: JSONObject
+            if let focusProfile { base = focusProfile } else { base = try await model.api.profile() }
+            let next = focus.applied(to: base)
+            try await model.api.saveProfile(next)
+            try await FocusSheet.saveSwimLevel(model.api, sport: focus.sport, swims100: focus.swims100)
+            focusProfile = next
+            focusSaved = focus
+            return true
+        } catch {
+            self.error = error.localizedDescription
+            return false
+        }
+    }
+
+    /// The time on each day into the usual week, as Zaměření and Kdy mám čas
+    /// save it; left as it came, the week keeps its automatic time.
+    private func saveTime() async -> Bool {
+        guard !model.demo, minutes != minutesSaved else { return true }
+        saving = true
+        defer { saving = false }
+        do {
+            let prefs: JSONValue?
+            if let weekPrefs { prefs = weekPrefs } else { prefs = try await model.api.weekPlan(start: nil).prefs }
+            let days = WeekPlanPrefs.days(prefs).map { Array($0.prefix(WeekPlanPrefs.maxPerDay)) }
+            let body = WeekPlanPrefs.edited(prefs, minutes: minutes, days: days, weeklyActivities: WeekPlanPrefs.weeklyActivities(prefs))
+            let r = try await model.api.saveWeekPlan(start: nil, prefs: body)
+            weekPrefs = r.prefs
+            minutesSaved = minutes
+            return true
+        } catch {
+            self.error = error.localizedDescription
+            return false
         }
     }
 
@@ -446,6 +576,13 @@ struct SetupFlowView: View {
     private func load() async {
         guard !loaded else { return }
         loaded = true
+        // Health data paused: only the consent again; the profile and the services stay as they were.
+        if model.resumingHealth {
+            consentFirst = true
+            consentOnly = true
+            ready = true
+            return
+        }
         let api = model.api
         // All three at once, and the page shows when all have answered, so the
         // services do not pop in one after another.
@@ -514,7 +651,7 @@ struct SetupFlowView: View {
         guard health.isAvailable, !health.enabled, !appleWorking else { return }
         appleWorking = true
         do {
-            try await AppleHealthProfile.requestAccess(Set(HealthCategory.allCases))
+            try await AppleHealthProfile.requestAccess(HealthCategory.defaults)
         } catch {
             appleWorking = false
             health.message = error.localizedDescription
@@ -523,7 +660,7 @@ struct SetupFlowView: View {
         appleWorking = false
         appleRead = false
         let api = model.api
-        Task { _ = await health.connect(Set(HealthCategory.allCases), api: api) }
+        Task { _ = await health.connect(HealthCategory.defaults, api: api) }
     }
 
     /// "O tobě" opens: sex, year of birth, height and weight from Apple Health
@@ -586,7 +723,7 @@ struct SetupFlowView: View {
         }
     }
 
-    /// "Hotovo" on "O tobě": the profile goes to the server. False when it could not (the error is shown).
+    /// "Pokračovat" on "O tobě": the profile goes to the server. False when it could not (the error is shown).
     private func saveProfile() async -> Bool {
         saving = true
         defer { saving = false }

@@ -325,7 +325,12 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     connectionProblems: Array.isArray(connectionProblems) ? connectionProblems : [],
     // provisional: the baseline is carried over from another source until the
     // new one has 14 days of its own (recovery-model.js sourceBaseline).
-    readiness: { score: readiness.score, zone: readiness.zone, missing: readiness.missing || [], flags: readiness.flags || [], provisional: !!readiness.provisional, provisionalDays: readiness.provisional ? readiness.provisionalDays ?? null : null },
+    readiness: { score: readiness.score, zone: readiness.zone, missing: readiness.missing || [], flags: readiness.flags || [], provisional: !!readiness.provisional, provisionalDays: readiness.provisional ? readiness.provisionalDays ?? null : null,
+      // Days of baseline so far while a new athlete has under 14 (recovery-model.js).
+      learningDays: readiness.learningDays ?? null,
+      // Nights with HRV or resting heart rate in the 30 days before today: an
+      // account with the watch's history skips "Wear your watch tonight" (FirstDaysCard).
+      pastNights: rows.filter(r => r.id < date && r.id > shift(date, -30) && (num(r.hrv) > 0 || num(r.restingHR) > 0)).length },
     week,
     // The morning check-in: fresh, normal, tired, sick or null (not answered).
     checkin: checkin || null,
@@ -350,11 +355,13 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     nutrition: {
       kcal: round(num(totals.kcal)),
       target: num(nutrition.calorieTarget),
+      autoTarget: num("autoCalorieTarget" in nutrition ? nutrition.autoCalorieTarget : nutrition.calorieTarget),
       trainingBonus: bonus,
       protein: { eaten: round(num(totals.protein_g)), target: num(macros.protein_g) },
-      carbs: { eaten: round(num(totals.carbs_g)), target: num(macros.carbs_g) },
+      carbs: { eaten: round(num(totals.carbs_g)), target: num(macros.carbs_g), ...(macros.carbs_max ? { limit: true } : {}), ...(macros.net_carbs ? { net: true } : {}) },
       fat: { eaten: round(num(totals.fat_g)), target: num(macros.fat_g) },
-      water: { ml: num(fluids.hydrationMl ?? fluids.totalMl), target: num(fluids.target?.ml) }
+      water: { ml: num(fluids.hydrationMl ?? fluids.totalMl), target: num(fluids.target?.ml), autoTarget: num(fluids.target?.autoMl ?? fluids.target?.ml),
+        mode: fluids.target?.mode || "auto", ...(fluids.target?.build ? { build: fluids.target.build } : {}) }
     },
     plan: ordered,
     // Cycle tracking, null when off: the morning question, the day's log, the

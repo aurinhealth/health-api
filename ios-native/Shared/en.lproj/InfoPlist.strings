@@ -1,10 +1,10 @@
 /* The permission prompts in English; the Czech originals are in project.yml. */
 
-"NSCameraUsageDescription" = "Aurin reads the barcodes on food packaging so it can log the food in your diary, takes the background photo for an image you share and the photos you send to the coach.";
-"NSPhotoLibraryUsageDescription" = "Aurin loads the photo of a meal, the gym, for the coach or a background to share that you pick.";
+"NSCameraUsageDescription" = "Aurin scans barcodes, photographs nutrition labels and meals to log them, takes photos you send the coach and backgrounds for images you share. With AI turned on, label, meal and coach photos are sent to OpenAI to be read.";
+"NSPhotoLibraryUsageDescription" = "Aurin loads the photo you pick: a meal or a nutrition label for your food diary, the gym, a photo for the coach or a background to share. With AI turned on, meal, label and coach photos are sent to OpenAI to be read.";
 "NSLocationWhenInUseUsageDescription" = "Aurin uses your location only when you ask, to show the weather and let the coach advise training outdoors or indoors.";
-"NSHealthShareUsageDescription" = "Aurin reads sleep, workouts, heart rate, HRV, wrist temperature, steps, weight, food and water from other apps, for the journal mindful minutes, time in daylight, noise in sleep, symptoms and sexual activity and, with cycle tracking on, periods, ovulation tests and contraception from Apple Health to work out your recovery, strain and calorie target and fill in your journal.";
-"NSHealthUpdateUsageDescription" = "Aurin writes to Apple Health only what you log in the app yourself and turn on in Sync, such as workouts, weight, food and drinks.";
+"NSHealthShareUsageDescription" = "Aurin reads sleep, workouts and their routes (shown only on your iPhone), heart rate, HRV, blood oxygen, breathing, temperature, steps, weight, body fat, height, age and sex, food and water to work out your recovery, strain and calorie target. If you turn them on: your mood, symptoms, mindful minutes and sexual activity for the journal, and your cycle. Data goes to Aurin's server in the EU; to AI only if you allow it.";
+"NSHealthUpdateUsageDescription" = "Aurin writes to Apple Health only what you log in the app yourself and turn on in Sync, such as workouts, weight, food and drinks, and the mood you log in the journal.";
 "NSAlarmKitUsageDescription" = "Aurin wakes you at your alarm time, which it uses to work out your bedtime.";
 "NSFaceIDUsageDescription" = "Aurin asks for Face ID before it deletes your account.";
 "NSBluetoothAlwaysUsageDescription" = "Aurin connects to the heart rate sensor you pair, to show your heart rate in workout mode.";

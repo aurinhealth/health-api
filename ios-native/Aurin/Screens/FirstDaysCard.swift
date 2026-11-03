@@ -30,7 +30,8 @@ enum FirstDays {
 }
 
 /// "První dny": wear the watch tonight, log a meal, ask the coach. Each row
-/// opens its place and ticks itself off; the card goes when all three are done.
+/// opens its place and ticks itself off; the card goes when all are done. With
+/// the watch's history already in, the first row and the 14 nights note go.
 struct FirstDaysCard: View {
     let today: TodaySnapshot
     var openCoach: () -> Void = {}
@@ -39,14 +40,19 @@ struct FirstDaysCard: View {
     @AppStorage(FirstDays.mealKey) private var meal = false
     @AppStorage(FirstDays.coachKey) private var coach = false
 
-    private var night: Bool { today.readiness.score != nil }
-    private var doneCount: Int { [night, meal, coach].filter { $0 }.count }
+    /// Readiness has a number, or it has started learning the normal (a measured night).
+    private var night: Bool { today.readiness.score != nil || (today.readiness.learningDays ?? 0) > 0 }
+    /// The watch's history came in (nights before today): no need to ask for
+    /// tonight, nor to explain the 14 nights.
+    private var history: Bool { (today.readiness.pastNights ?? 0) > 0 }
+    private var steps: [Bool] { (history ? [] : [night]) + [meal, coach] }
+    private var doneCount: Int { steps.filter { $0 }.count }
 
     /// Within two weeks of the setup and not everything done yet.
     private var showing: Bool {
         guard since > 0 else { return false }
         let age = Date().timeIntervalSince1970 - since
-        return age < Double(FirstDays.days) * 86_400 && doneCount < 3
+        return age < Double(FirstDays.days) * 86_400 && doneCount < steps.count
     }
 
     var body: some View {
@@ -55,13 +61,15 @@ struct FirstDaysCard: View {
                 HStack {
                     Text("První dny").font(Typo.bodyStrong).foregroundStyle(Palette.green)
                     Spacer()
-                    Text(L10n.f("%@ ze 3", String(doneCount))).font(Typo.caption).foregroundStyle(Palette.muted)
+                    Text(L10n.f(history ? "%@ ze 2" : "%@ ze 3", String(doneCount))).font(Typo.caption).foregroundStyle(Palette.muted)
                 }
                 VStack(spacing: 0) {
-                    RouteLink(route: .readiness) {
-                        row("Nos dnes v noci hodinky", "Ráno uvidíš připravenost.", done: night)
+                    if !history {
+                        RouteLink(route: .readiness) {
+                            row("Nos dnes v noci hodinky", "Ráno uvidíš připravenost.", done: night)
+                        }
+                        Divider().overlay(Palette.hairline)
                     }
-                    Divider().overlay(Palette.hairline)
                     Button { model.tab = .food } label: {
                         row("Zapiš jídlo", "Vyfoť talíř nebo naskenuj kód.", done: meal)
                     }
@@ -72,9 +80,11 @@ struct FirstDaysCard: View {
                     }
                     .buttonStyle(PressableCardStyle())
                 }
-                Text("S historií z hodinek budou čísla hotová zítra. Bez ní potřebuje připravenost asi 14 nocí, než se ustálí.")
-                    .font(Typo.caption).foregroundStyle(Palette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
+                if !history {
+                    Text("S historií z hodinek budou čísla hotová zítra. Bez ní potřebuje připravenost asi 14 nocí, než se ustálí.")
+                        .font(Typo.caption).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }

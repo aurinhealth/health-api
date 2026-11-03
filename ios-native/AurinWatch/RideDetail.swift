@@ -4,16 +4,50 @@ import WidgetKit
 
 /// A planned ride's or run's steps (mockup 44): asked from the iPhone when it
 /// is in reach, else from the server with the watch's own sign-in, and kept
-/// while the app runs.
+/// on the watch for the day, so a relaunch shows them without asking again.
+/// A session whose name or length changed (the coach swapped it) is asked again.
 @MainActor
 final class PlanStore: ObservableObject {
     static let shared = PlanStore()
+    private static let savedKey = "watchPlans"
     @Published private(set) var plans: [String: WatchPlan] = [:]
     @Published private(set) var failed: Set<String> = []
     private var asking: Set<String> = []
+    /// Plans asked for without the complication (a brick's next leg), and the one it has.
+    private var quiet: Set<String> = []
+    private var shelved: String?
+    /// The session each plan was asked for (its name and length), by event.
+    private var stamps: [String: String] = [:]
 
-    func load(_ session: WatchSnapshot.Session) {
-        guard let id = session.eventId, plans[id] == nil, !asking.contains(id) else { return }
+    private struct Saved: Codable {
+        var date: String
+        var plans: [String: WatchPlan]
+        var stamps: [String: String]
+    }
+
+    init() {
+        guard let data = UserDefaults.standard.data(forKey: Self.savedKey),
+              let saved = try? JSONDecoder().decode(Saved.self, from: data),
+              saved.date == WatchStore.localDate(Date()) else { return }
+        plans = saved.plans
+        stamps = saved.stamps
+    }
+
+    /// "|2": plans kept from before the steps had their targets (watts, pace) load again.
+    private static func stamp(_ session: WatchSnapshot.Session) -> String {
+        "\(session.title)|\(session.minutes ?? 0)|2"
+    }
+
+    /// The session's plan; with shelf, also the complication's (the next workout's steps).
+    func load(_ session: WatchSnapshot.Session, shelf: Bool = true) {
+        guard let id = session.eventId else { return }
+        if let plan = plans[id], stamps[id] == Self.stamp(session) {
+            if shelf, shelved != id { save(plan, id: id) }
+            return
+        }
+        if shelf { quiet.remove(id) } else if !asking.contains(id) { quiet.insert(id) }
+        guard !asking.contains(id) else { return }
+        stamps[id] = Self.stamp(session)
         asking.insert(id)
         failed.remove(id)
         let request = WatchPlan.Request(eventId: id, date: session.date)
@@ -42,12 +76,26 @@ final class PlanStore: ObservableObject {
         asking.remove(id)
         if let plan {
             plans[id] = plan
-            ComplicationShelf.save(plan: plan, id: id)
-            WidgetCenter.shared.reloadTimelines(ofKind: "aurin.wide.workout")
-            WidgetCenter.shared.reloadTimelines(ofKind: "aurin.wide.aurin")
+            if !quiet.contains(id) { save(plan, id: id) }
+            keep()
         } else {
             failed.insert(id)
         }
+        quiet.remove(id)
+    }
+
+    /// The day's plans on the watch; another day's are dropped.
+    private func keep() {
+        let saved = Saved(date: WatchStore.localDate(Date()), plans: plans, stamps: stamps.filter { plans[$0.key] != nil })
+        if let data = try? JSONEncoder().encode(saved) { UserDefaults.standard.set(data, forKey: Self.savedKey) }
+    }
+
+    private func save(_ plan: WatchPlan, id: String) {
+        guard !plan.steps.isEmpty else { return }
+        shelved = id
+        ComplicationShelf.save(plan: plan, id: id)
+        WidgetCenter.shared.reloadTimelines(ofKind: "aurin.wide.workout")
+        WidgetCenter.shared.reloadTimelines(ofKind: "aurin.wide.aurin")
     }
 
     static func color(_ zone: Int) -> Color {
@@ -105,7 +153,7 @@ struct RideDetail: View {
                     .foregroundStyle(W.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 2)
-                if let plan {
+                if let plan, !plan.steps.isEmpty {
                     PlanBars(plan: plan).frame(height: 40).padding(.top, 10)
                     axis(plan).padding(.top, 3)
                     VStack(spacing: 0) {
@@ -123,7 +171,7 @@ struct RideDetail: View {
                 } else if let id = session.eventId, plans.failed.contains(id) {
                     Text(W.tr("Kroky teď nejdou načíst. Otevři Aurin v iPhonu.", "The steps won't load right now. Open Aurin on your iPhone."))
                         .font(.system(size: 12)).foregroundStyle(W.secondary).padding(.top, 10)
-                } else if session.eventId != nil {
+                } else if session.eventId != nil, plan == nil {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 16)
                 } else {
                     Text(W.tr("Tenhle trénink nemá kroky.", "This session has no steps."))
@@ -140,9 +188,7 @@ struct RideDetail: View {
 
     /// "ZÍTRA · 60 MIN".
     private var when: String {
-        let today = WatchStore.localDate(Date())
-        let tomorrow = WatchStore.localDate(Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date())
-        let day = session.date == today ? W.tr("dnes", "today") : session.date == tomorrow ? W.tr("zítra", "tomorrow") : W.dayName(session.date)
+        let day = W.relativeDay(session.date)
         let minutes = session.minutes ?? plan?.minutes
         return day + (session.time.map { " · " + W.clockText($0) } ?? "") + (minutes.map { " · \($0) min" } ?? "")
     }
@@ -156,7 +202,7 @@ struct RideDetail: View {
             Spacer()
             Text("\(total)")
         }
-        .font(.system(size: 9))
+        .font(.system(size: 10))
         .foregroundStyle(W.muted)
     }
 

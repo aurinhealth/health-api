@@ -73,6 +73,9 @@ function wellnessWindow(url, now) {
 // their own limits: one cut short may still have happened there.
 export const INTERVALS_TIMEOUT_MS = 8000;
 
+// Reads on their way in this isolate, by cache key (cachedGet).
+const inFlight = new Map();
+
 function withTimeout(fetchImpl, timeoutMs) {
   return (input, init = {}) => {
     const url = typeof input === "string" ? input : input?.url;
@@ -96,13 +99,25 @@ export function intervalsReads(env, ctx, { fetchImpl: rawFetch = fetch, store = 
     const key = "https://cache.internal/intervals/" + (await scoped()) + "/" + (await generation(kinds)) + "/" + encodeURIComponent(url.href);
     const hit = await store.match(key).catch(() => null);
     if (hit) return hit;
-    const response = await fetchImpl(url.href, init);
-    if (!response.ok) return response;
-    const body = await response.arrayBuffer();
-    const headers = { "Content-Type": response.headers.get("Content-Type") || "application/json" };
-    const put = store.put(key, new Response(body, { headers: { ...headers, "Cache-Control": "max-age=" + TTL } })).catch(() => {});
-    if (ctx?.waitUntil) ctx.waitUntil(put); else await put;
-    return new Response(body, { status: response.status, headers });
+    // The same read already on its way (Today asks for the wellness window
+    // three times at once): one request to Intervals.icu, an answer for each.
+    let pending = inFlight.get(key);
+    if (!pending) {
+      pending = (async () => {
+        const response = await fetchImpl(url.href, init);
+        const body = await response.arrayBuffer();
+        const headers = { "Content-Type": response.headers.get("Content-Type") || "application/json" };
+        if (response.ok) {
+          const put = store.put(key, new Response(body, { headers: { ...headers, "Cache-Control": "max-age=" + TTL } })).catch(() => {});
+          if (ctx?.waitUntil) ctx.waitUntil(put); else await put;
+        }
+        return { body, status: response.status, headers };
+      })();
+      inFlight.set(key, pending);
+      pending.finally(() => inFlight.delete(key)).catch(() => {});
+    }
+    const { body, status, headers } = await pending;
+    return new Response(body.slice(0), { status, headers });
   }
 
   return async (input, init = {}) => {

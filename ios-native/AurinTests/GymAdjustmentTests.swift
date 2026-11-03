@@ -93,4 +93,49 @@ final class GymAdjustmentTests: XCTestCase {
         let next = set(2, "2", kg: nil, reps: nil, done: false, letter: "M")
         XCTAssertNil(GymSessionMath.adjustment(next, after: done))
     }
+
+    func testEasyAtThePlansRepsGoesHeavier() {
+        // Petr 2026-11-01: a first try, 30 kg × 12 of 12 rated E before an M set.
+        let done = set(1, "1", kg: "30", reps: "12", done: true, letter: "E")
+        let next = set(2, "2", kg: nil, reps: nil, done: false, letter: "M")
+        XCTAssertEqual(GymSessionMath.adjustment(next, after: done), GymSessionMath.Adjustment(kg: "32.5", lighter: false))
+        XCTAssertEqual(GymSessionMath.carried(next, in: exercise([done, next]))?.kg, "32.5")
+    }
+
+    func testFirstTryWithoutAPlannedWeightGoesHeavier() {
+        // An exercise new to the app: no planned weight, the test set planned E,
+        // the sets after it M. The weight typed in set 1 is the start.
+        let done = GymSet(row: 1, warmup: false, number: "1", plannedKg: nil, plannedReps: "12", kg: "15", reps: "12",
+                          rpe: nil, done: true, note: nil, intensity: "E")
+        let next = GymSet(row: 2, warmup: false, number: "2", plannedKg: nil, plannedReps: "12", kg: nil, reps: nil,
+                          rpe: nil, done: false, note: nil, intensity: "M")
+        let later = GymSet(row: 3, warmup: false, number: "3", plannedKg: nil, plannedReps: "12", kg: nil, reps: nil,
+                           rpe: nil, done: false, note: nil, intensity: "M")
+        let all = exercise([done, next, later])
+        XCTAssertEqual(GymSessionMath.carried(next, in: all)?.kg, "17.5")
+        // Set 2 done at the new weight as planned: set 3 copies it.
+        let second = GymSet(row: 2, warmup: false, number: "2", plannedKg: nil, plannedReps: "12", kg: "17.5", reps: "12",
+                            rpe: nil, done: true, note: nil, intensity: "M")
+        XCTAssertEqual(GymSessionMath.carried(later, in: exercise([done, second, later]))?.kg, "17.5")
+    }
+
+    func testFarTooLightTakesMoreThanOneStep() {
+        // 30 kg × 25 of 12 at E: up to the weight for 12, at most a quarter more.
+        let done = set(1, "1", kg: "30", reps: "25", done: true, letter: "E")
+        let next = set(2, "2", kg: nil, reps: nil, done: false, letter: "M")
+        XCTAssertEqual(GymSessionMath.adjustment(next, after: done)?.kg, "37.5")
+    }
+
+    func testModerateBeforeTheLastHardSetStays() {
+        // The plan's M sets and its last H set share the weight: M at all reps is on plan.
+        let done = set(1, "1", kg: "30", reps: "12", done: true, letter: "M")
+        let next = set(2, "2", kg: nil, reps: nil, done: false, letter: "H")
+        XCTAssertNil(GymSessionMath.adjustment(next, after: done))
+    }
+
+    func testEasyBeforeAnEasySetStays() {
+        let done = set(1, "1", kg: "30", reps: "12", done: true, letter: "E")
+        let next = set(2, "2", kg: nil, reps: nil, done: false, letter: "E")
+        XCTAssertNil(GymSessionMath.adjustment(next, after: done))
+    }
 }

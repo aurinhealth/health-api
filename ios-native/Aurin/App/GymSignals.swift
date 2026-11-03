@@ -201,8 +201,13 @@ import SwiftUI
     }
 }
 
-/// The Vibrace button in Režim tréninku: what sounds, and the countdown.
+/// The Vibrace button (stretching, the cardio timer) and the "Zvuk a vibrace" row in Režim tréninku's ⋯
+/// menu: what sounds, and the countdown.
 struct GymSignalsMenu: View {
+    /// Only the icon, when the row is too narrow for the word (its icon shows the mode).
+    var compact = false
+    /// A row inside another menu (Režim tréninku's ⋯): "Zvuk a vibrace" with the mode under it.
+    var inMenu = false
     @AppStorage(GymSignals.vibrationKey) private var vibration = true
     @AppStorage(GymSignals.soundKey) private var sound = false
     @AppStorage(GymSignals.countdownKey) private var countdown = 3
@@ -224,7 +229,17 @@ struct GymSignalsMenu: View {
             }
             .pickerStyle(.inline)
         } label: {
-            ToolChip(systemImage: icon, title: L10n.tr(title))
+            if inMenu {
+                // A menu row shows the second Text as its subtitle.
+                Label {
+                    Text("Zvuk a vibrace")
+                    Text(verbatim: L10n.tr(title))
+                } icon: {
+                    Image(systemName: icon)
+                }
+            } else {
+                ToolChip(systemImage: icon, title: compact ? nil : L10n.tr(title))
+            }
         }
         .accessibilityLabel(L10n.tr("Zvuk a vibrace"))
     }
@@ -247,16 +262,22 @@ struct GymSignalsMenu: View {
 struct ToolChip: View {
     let systemImage: String
     var tint: Color = Palette.ink
-    var title: String
+    /// nil: only the icon, in a capsule at least 44 pt wide.
+    var title: String?
+    /// A dashed outline in muted ink: something to add (+ Poznámka), not yet there.
+    var dashed = false
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: systemImage).scaledFont(13, weight: .medium).foregroundStyle(tint)
-            Text(verbatim: title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
+            Image(systemName: systemImage).scaledFont(13, weight: .medium).foregroundStyle(dashed ? Palette.muted : tint)
+            if let title {
+                Text(verbatim: title).font(.subheadline.weight(.medium)).foregroundStyle(dashed ? Palette.muted : Palette.ink).lineLimit(1)
+            }
         }
         .padding(.horizontal, 12)
+        .frame(minWidth: 44)
         .frame(height: 34)
-        .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
+        .overlay { Capsule().stroke(Palette.ink.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: dashed ? [4, 3] : [])) }
         .contentShape(Capsule())
     }
 }

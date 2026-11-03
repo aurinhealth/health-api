@@ -13,7 +13,7 @@ struct WatchSession: Codable, Equatable, Sendable {
     var name: String
     var value: String
     var expires: Date?
-    /// X-Loadwise-Api, so the server answers the watch like the app.
+    /// X-Aurin-Api, so the server answers the watch like the app.
     var apiLevel: Int
     var language: String
     var imperial: Bool

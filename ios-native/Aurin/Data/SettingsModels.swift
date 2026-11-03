@@ -107,6 +107,10 @@ struct TrainingProfileResponse: Decodable, Equatable {
     /// The write to Intervals.icu after a save (src/intervals-zones.js).
     let intervals: IntervalsWrite?
     let intervalsConnected: Bool?
+    /// The write of the FTP and power zones to Wahoo after a save (src/wahoo.js
+    /// writeWahooZones): only when they changed; absent from older servers.
+    let wahoo: IntervalsWrite?
+    let wahooConnected: Bool?
     let resolved: Resolved
     let powerZones: [PowerZone]
     let hrZones: [HRZone]
@@ -194,4 +198,10 @@ struct SourcePriority: Codable, Equatable {
     var day: String
 
     static let auto = SourcePriority(night: "auto", day: "auto")
+}
+
+/// GET /app/api/sources/sending: per service, the app types it sent in the last `days` days.
+struct SourcesSending: Decodable {
+    let days: Int?
+    let sending: [String: [String]]?
 }

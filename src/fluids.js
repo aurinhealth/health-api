@@ -156,19 +156,29 @@ export async function foodDrinks(db, userId, date) {
 // Training and walking hours of a day: done sessions, or the planned ones when
 // more is planned than done yet.
 export async function dayActivityHours(db, userId, date) {
-  const next = new Date(Date.parse(date + "T12:00:00Z") + 86400000).toISOString().slice(0, 10);
-  const prev = new Date(Date.parse(date + "T12:00:00Z") - 86400000).toISOString().slice(0, 10);
+  return (await activityHoursByDay(db, userId, date, shiftDay(date, 1)))[date];
+}
+
+const shiftDay = (date, n) => new Date(Date.parse(date + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
+
+// The same for each day from `from` to the day before `to`, in one read.
+export async function activityHoursByDay(db, userId, from, to) {
   const rows = (await db.prepare(`SELECT data_type,start_time,end_time,payload_json FROM health_datapoints
     WHERE user_id=? AND data_type IN ('activity','exercise','planned-workout') AND start_time>=? AND start_time<?
-      AND (record_role IS NULL OR record_role!='duplicate')`).bind(userId, prev, next + "T23:59").all().catch(() => ({ results: [] }))).results || [];
-  const done = dedupeActivities(rows.filter(r => r.data_type !== "planned-workout").map(activityFromRow)).filter(a => a.date === date);
+      AND (record_role IS NULL OR record_role!='duplicate')`).bind(userId, shiftDay(from, -1), to + "T23:59").all().catch(() => ({ results: [] }))).results || [];
+  const done = dedupeActivities(rows.filter(r => r.data_type !== "planned-workout").map(activityFromRow));
   const hours = list => list.reduce((s, a) => s + (Number(a.minutes) || 0), 0) / 60;
-  let planned = 0;
+  const planned = {};
   for (const r of rows.filter(r => r.data_type === "planned-workout")) {
-    if (localDateTime(r.start_time).slice(0, 10) !== date) continue;
+    const day = localDateTime(r.start_time).slice(0, 10);
     let p = {}; try { p = JSON.parse(r.payload_json || "{}"); } catch { p = {}; }
     const seconds = Number(p.moving_time ?? p.duration ?? p.duration_seconds ?? p.elapsed_time);
-    if (seconds > 0 && seconds <= 8 * 3600 && !/nutrition/i.test(String(p.name || p.type || ""))) planned += seconds / 3600;
+    if (seconds > 0 && seconds <= 8 * 3600 && !/nutrition/i.test(String(p.name || p.type || ""))) planned[day] = (planned[day] || 0) + seconds / 3600;
   }
-  return { trainingHours: Math.max(hours(done.filter(a => a.kind !== "walk")), planned), walkHours: hours(done.filter(a => a.kind === "walk")) };
+  const out = {};
+  for (let day = from; day < to; day = shiftDay(day, 1)) {
+    const today = done.filter(a => a.date === day);
+    out[day] = { trainingHours: Math.max(hours(today.filter(a => a.kind !== "walk")), planned[day] || 0), walkHours: hours(today.filter(a => a.kind === "walk")) };
+  }
+  return out;
 }

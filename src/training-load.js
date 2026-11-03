@@ -1,6 +1,6 @@
 // Training load without Intervals.icu: the fitness (CTL), fatigue (ATL) and
 // form (TSB) the coaches read, computed from the workouts the watch recorded
-// (Apple Health or Google Health) and the gym days logged in Loadwise.
+// (Apple Health or Google Health) and the gym days logged in Aurin.
 // GET /app/api/fitness returns these rows when Intervals.icu is not connected,
 // so the ride, run and gym coaches, the week plan and the Zátěž screen work the
 // same for an athlete with only an Apple Watch.
@@ -152,7 +152,7 @@ export function dailyLoads(sessions, athlete = {}) {
 
 // Watch workouts (health_datapoints rows, already parsed by activityFromRow and
 // deduplicated) plus their heart rate and power from the payload, and the gym
-// sessions logged in Loadwise (gymSessions; a bare date is a one-hour session).
+// sessions logged in Aurin (gymSessions; a bare date is a one-hour session).
 // A watch strength workout on a gym day keeps its own length and takes the
 // day's RPE and volume; a gym day without one counts as its sets estimate.
 export function sessionsFrom(activities, rowsById, gymDays = []) {

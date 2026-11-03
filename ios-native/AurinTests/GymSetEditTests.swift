@@ -29,6 +29,36 @@ final class GymSetEditTests: XCTestCase {
         XCTAssertEqual(d.exercises[0].sets.count, 2)
     }
 
+    func testBySidesBothLegsWarmUp() {
+        var d = day([row("WARMUP", "Bulgarian split squat", "1", "6"), row("WORK", "Bulgarian split squat", "1", "10"),
+                     row("WORK", "Bulgarian split squat", "2", "10")])
+        d.setSides(at: 0, true)
+        XCTAssertEqual(d.exercises[0].sets.filter(\.warmup).map(\.side), ["L", "P"])
+        XCTAssertEqual(d.exercises[0].sets.filter { !$0.warmup }.map(\.side), ["L", "P", "L", "P"])
+        // Swiping one side's warm-up away takes the pair.
+        d.deleteSet(row: d.exercises[0].sets[1].row)
+        XCTAssertEqual(d.exercises[0].sets.filter(\.warmup).count, 0)
+        // Back to both at once: one row per warm-up and set.
+        var e = day([row("WARMUP", "Lunge", "1", "6", side: "L"), row("WARMUP", "Lunge", "1", "6", side: "P"),
+                     row("WORK", "Lunge", "1", "10", done: true, side: "L"), row("WORK", "Lunge", "1", "10", side: "P"),
+                     row("WORK", "Lunge", "2", "10", side: "L"), row("WORK", "Lunge", "2", "10", side: "P")])
+        e.setSides(at: 0, false)
+        XCTAssertEqual(e.exercises[0].sets.map(\.warmup), [true, false, false, false])
+        XCTAssertEqual(e.exercises[0].sets.map(\.number), ["1", "1", "1", "2"])
+    }
+
+    func testBySidesWarmupsFollowTheOrderOnBothSides() {
+        var d = day([row("WARMUP", "Bench", "1", "35"), row("WORK", "Bench", "1", "55"),
+                     row("WARMUP", "Lunge", "1", "13", side: "L"), row("WARMUP", "Lunge", "1", "13", side: "P"),
+                     row("WORK", "Lunge", "1", "20", side: "L"), row("WORK", "Lunge", "1", "20", side: "P")])
+        // The lunge goes first: three ramp-up steps, each for L and P.
+        d.moveExercise(from: 1, to: 0)
+        let warms = d.exercises[0].sets.filter(\.warmup)
+        XCTAssertEqual(warms.map(\.side), ["L", "P", "L", "P", "L", "P"])
+        XCTAssertEqual(warms.map(\.number), ["1", "1", "2", "2", "3", "3"])
+        XCTAssertEqual(warms.map(\.plannedKg), ["8", "8", "13", "13", "16", "16"])
+    }
+
     func testDeletingTheSetSwipedNotTheFirst() {
         var d = day([row("WORK", "Bench", "1", "50", done: true), row("WORK", "Bench", "2", "55", done: true), row("WORK", "Bench", "3", "60")])
         d.deleteSet(row: d.exercises[0].sets[1].row)
@@ -82,6 +112,21 @@ final class GymSetEditTests: XCTestCase {
         XCTAssertEqual(e.exercises.map(\.name), ["Row"])
     }
 
+    func testDeletingAnExerciseTakesItsDoneSetsToo() {
+        var d = day([row("WORK", "Standing Dumbbell Press", "1", "17,5", done: true), row("WORK", "Row", "1", "40")])
+        d.deleteExercise(at: 0)
+        XCTAssertEqual(d.exercises.map(\.name), ["Row"])
+        d.deleteExercise(at: 0)
+        XCTAssertTrue(d.exercises.isEmpty)
+        // A superset partner left alone is no superset any more.
+        var p = day([row("WORK", "Curl", "1", "12"), row("WORK", "Dips", "1", ""), row("WORK", "Row", "1", "40")])
+        p.toggleSuperset(at: 0)
+        XCTAssertNotNil(ExerciseOrder.letter(p.exercises[1].superset))
+        p.deleteExercise(at: 0)
+        XCTAssertEqual(p.exercises.map(\.name), ["Dips", "Row"])
+        XCTAssertNil(ExerciseOrder.letter(p.exercises[0].superset))
+    }
+
     func testWarmupsFollowTheOrder() {
         var d = day([row("WARMUP", "Leg press", "1", "60"), row("WARMUP", "Leg press", "2", "95"), row("WARMUP", "Leg press", "3", "115"),
                      row("WORK", "Leg press", "1", "145"),
@@ -123,6 +168,16 @@ final class GymSetEditTests: XCTestCase {
         XCTAssertNil(ExerciseOrder.letter(d.exercises[1].superset))
         XCTAssertEqual(ExerciseOrder.letter(d.exercises[2].superset), ExerciseOrder.letter(d.exercises[3].superset))
         XCTAssertNotNil(ExerciseOrder.letter(d.exercises[3].superset))
+    }
+
+    func testASupersetTakesTheSameNumberOfSets() {
+        var d = day([row("WORK", "Pullover", "1", "27,5"), row("WORK", "Pullover", "2", "27,5"),
+                     row("WORK", "Shrug", "1", "15"), row("WORK", "Shrug", "2", "15"), row("WORK", "Shrug", "3", "15"), row("WORK", "Shrug", "4", "15")])
+        d.superset(0, with: 1)
+        XCTAssertEqual(d.exercises.map(\.workCount), [4, 4])
+        XCTAssertEqual(d.exercises[0].sets.map(\.number), ["1", "2", "3", "4"])
+        XCTAssertEqual(d.exercises[0].sets.last?.plannedKg, "27,5", "the new sets copy the last one")
+        XCTAssertEqual(d.exercises.map { ExerciseOrder.letter($0.superset) }, ["A", "A"])
     }
 
     func testReadyMadePlacesComeOnceToAnAccountWithPlaces() {

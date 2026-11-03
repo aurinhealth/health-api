@@ -140,18 +140,15 @@ enum WeatherText {
     }
 }
 
-/// Today's card above the key numbers: the athlete's status as its first
-/// row, then the place with the location arrow and the day's temperatures
-/// and a few hours of the forecast.
+/// Today's weather: the place with the location arrow and the day's
+/// temperatures, and a few hours of the forecast. The athlete's status, once
+/// its first row, sits beside the readiness (Petr, 2026-11-02).
 struct TodayWeatherCard: View {
     let weather: TodaySnapshot.Weather?
     @State private var open = false
 
     var body: some View {
         Card {
-            // The athlete's status first, always visible (Petr, 2026-10-15: no frame).
-            AthleteStatusRow()
-            Divider().overlay(Palette.hairline)
             Button { open = true } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "location.fill").scaledFont(10, weight: .semibold).foregroundStyle(Palette.blue)

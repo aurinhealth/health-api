@@ -23,8 +23,10 @@
 // - ride without power: Friel's 30 min time trial, LTHR = the average heart
 //   rate of its last 20 minutes;
 // - run: Friel's 30 min time trial, threshold pace ≈ its average pace and
-//   LTHR = the heart rate of its last 20 minutes.
-import { buildWorkout, step, rep, sec } from "./workout-model.js";
+//   LTHR = the heart rate of its last 20 minutes;
+// - swim (the Faster swimming plan): 400 m and 200 m all out, CSS =
+//   (t400 − t200) / 2 per 100 m (Swim Smooth).
+import { buildWorkout, step, rep, sec, swimMinutes } from "./workout-model.js";
 import { DEFAULT_THRESHOLD_HRR } from "./training-load.js";
 import { L } from "./lang.js";
 
@@ -56,11 +58,24 @@ export function testWorkouts() {
       citation: "Friel J. The Triathlete's Training Bible. 4th ed. VeloPress; 2016.",
       structure: [step(12, 78, null, L("rozklus", "warm-up jog")), rep(4, [step(sec(20), 115, null, L("rovinka – svižně, uvolněně", "stride – quick and relaxed")), step(sec(40), 65, null, L("volně / chůze", "easy / walk"))]), step(3, 72, null, L("klus", "jog")), step(30, 100, null, L("30 min naplno, rovnoměrně", "30 min all out, evenly")), step(10, 72, null, L("výklus", "cool-down jog"))],
       description: L("30 minut naplno a rovnoměrně, ideálně na rovině. Prahové tempo je průměr celých 30 minut, prahový tep průměr posledních 20 minut.", "30 minutes all out and evenly, ideally on the flat. Threshold pace is the average of the whole 30 minutes, the threshold heart rate the average of the last 20.")
-    })
+    }),
+    swimTest()
   ];
 }
+// The CSS test in the pool: lengths in metres like the swim catalogue (swimming-workouts.js).
+function swimTest() {
+  const swim = (meters, pace, note) => ({ durationMinutes: swimMinutes(meters, pace), power: pace, meters, note });
+  return buildWorkout({
+    id: "test-swim-css", sport: "swim", name: L("Test CSS · 400 + 200 m", "CSS test · 400 + 200 m"), system: "threshold", family: "test", tags: ["test"], sourceKind: "research", sourceName: L("Publikovaný protokol", "Published protocol"),
+    citation: "Wakayoshi K et al. Determination and validity of critical velocity as an index of swimming performance. Int J Sports Med. 1992;13(5):367-371.",
+    structure: [swim(300, 86, L("rozplavání, volně", "warm-up, easy")), rep(4, [swim(50, 95, L("postupně rychleji", "build up")), { durationMinutes: sec(20), power: 0, rest: true, note: null }]),
+      swim(400, 104, L("400 m naplno, rovnoměrně, zapiš si čas", "400 m all out and even, note the time")), swim(200, 82, L("5 min volně", "5 min easy")),
+      swim(200, 106, L("200 m naplno, zapiš si čas", "200 m all out, note the time")), swim(200, 84, L("vyplavání", "cool-down"))],
+    description: L("Po rozplavání 400 m naplno, pět minut volně a 200 m naplno. Oba časy zapiš do aplikace: CSS je rozdíl časů děleno dvěma na 100 m.", "After the warm-up, 400 m all out, five minutes easy and 200 m all out. Enter both times in the app: CSS is the difference of the times divided by two, per 100 m.")
+  });
+}
 export const getTestWorkout = id => testWorkouts().find(w => w.id === id) || null;
-export const testFor = (sport, hasPower) => (sport === "run" ? "test-run-tt30" : hasPower ? "test-ride-ftp20" : "test-ride-lthr30");
+export const testFor = (sport, hasPower) => (sport === "swim" ? "test-swim-css" : sport === "run" ? "test-run-tt30" : hasPower ? "test-ride-ftp20" : "test-ride-lthr30");
 
 // ---- sessions --------------------------------------------------------------
 // Rides and runs (activityFromRow, deduplicated) with what the estimates need
@@ -188,6 +203,8 @@ export function recommendTestDay({ today, sport, days = [], minutes = 60 }) {
 // The test's effort from the activity's intervals (Intervals.icu): the
 // longest-average interval of 18–22 min (FTP test) or 27–33 min (time trial).
 export function testResult(testId, intervals = [], activity = {}) {
+  // The CSS test is read from the two times the athlete enters (manualTestResult).
+  if (testId === "test-swim-css") return null;
   const want = testId === "test-ride-ftp20" ? [18, 22] : [27, 33];
   const pick = (intervals || []).filter(i => i.seconds >= want[0] * 60 && i.seconds <= want[1] * 60)
     .sort((a, b) => (testId === "test-run-tt30" ? (b.speed || 0) - (a.speed || 0) : (b.watts || b.hr || 0) - (a.watts || a.hr || 0)))[0];
@@ -204,6 +221,46 @@ export function testResult(testId, intervals = [], activity = {}) {
   if (!speed) return null;
   const pace = Math.round(1000 / speed);
   return pace >= 150 && pace <= 600 ? { runThresholdPace: pace, runLthr: pick.hr ? Math.round(pick.hr + 2) : null, distance: finite(pick.distance) } : null;
+}
+
+// The best average power over `seconds` from a ride's curves (time in s from
+// the start, watts), for a 20-min test whose effort is not one lap of its own
+// (Intervals.icu split it, or the head unit has no laps). A gap well over the
+// recording's usual spacing (a pause; at least 10 s, more for a thinned long
+// ride) counts as no power; null without enough time or power.
+export function bestPower(time = [], watts = [], seconds = 1200) {
+  const n = Math.min(time.length, watts.length);
+  if (n < 2) return null;
+  const end = Number(time[n - 1]) - Number(time[0]);
+  if (!(end >= seconds) || end > 24 * 3600) return null;
+  const steps = [];
+  for (let i = 0; i < n - 1; i++) steps.push(Number(time[i + 1]) - Number(time[i]));
+  const usual = steps.filter(d => d > 0).sort((a, b) => a - b)[Math.floor(steps.length / 2)] || 1;
+  const pause = Math.max(10, usual * 3);
+  const per = new Float64Array(Math.ceil(end) + 1);
+  for (let i = 0; i < n - 1; i++) {
+    const a = Math.round(Number(time[i]) - Number(time[0])), b = Math.round(Number(time[i + 1]) - Number(time[0])), w = Number(watts[i]);
+    if (!(b > a) || b - a > pause || !(w > 0) || w > 3000) continue;
+    for (let s = a; s < b; s++) per[s] = w;
+  }
+  let sum = 0, best = 0;
+  for (let s = 0; s < per.length; s++) {
+    sum += per[s];
+    if (s >= seconds) sum -= per[s - seconds];
+    if (s >= seconds - 1) best = Math.max(best, sum);
+  }
+  const avg = Math.round(best / seconds);
+  return avg > 0 ? avg : null;
+}
+
+// A 20-min FTP test from the ride's best 20 minutes (bestPower). Only when it
+// looks like a test: an FTP below 85 % of the current one is an easy ride (or
+// a ride before the test), not a result, and the athlete is asked instead.
+export function curveTestResult(time, watts, currentFtp = null) {
+  const power20 = bestPower(time, watts, 1200);
+  if (!power20) return null;
+  const ftp = Math.round(power20 * 0.95);
+  return Number(currentFtp) > 0 && ftp < currentFtp * 0.85 ? null : { ftp, power20, fromCurve: true };
 }
 
 // ---- storage ---------------------------------------------------------------

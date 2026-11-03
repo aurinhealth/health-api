@@ -43,6 +43,9 @@ struct CoachView: View {
     @State private var allowance: CoachAllowance?
     /// Used up and this conversation can't go on: the card and a dimmed field.
     @State private var usedUp = false
+    /// Packs of extra messages can be bought (the App Store is set up on the server).
+    @State private var packsOnSale = false
+    @State private var morePacks = false
     @FocusState private var focused: Bool
 
     struct Bubble: Identifiable, Equatable {
@@ -80,13 +83,15 @@ struct CoachView: View {
                             if messages.isEmpty { welcome }
                             else if let subject = current { CoachSubjectCard(subject: subject) }
                             ForEach(messages) { bubble in
-                                BubbleView(bubble: bubble, writing: sending && bubble.id == messages.last?.id && !bubble.mine,
+                                BubbleView(bubble: bubble,
                                            decide: { action, confirm in Task { await decide(action, confirm: confirm, in: bubble.id) } },
                                            undoMemory: { chip in Task { await undo(chip, in: bubble.id) } },
+                                           decideMemory: { chip, yes in Task { await decide(chip, yes, in: bubble.id) } },
                                            undoAction: { action in Task { await undo(action, in: bubble.id) } },
                                            adjust: { action, chip, date in Task { await adjust(action, chip: chip, date: date, in: bubble.id) } },
                                            logFood: { items, meal in Task { await logFood(items, meal: meal, in: bubble.id) } },
-                                           openPlan: openPlan)
+                                           openPlan: openPlan,
+                                           more: (bubble.note && packsOnSale) ? { morePacks = true } : nil)
                                     .id(bubble.id)
                             }
                             // Until the first words arrive: the coach's bubble with dots and what he is doing.
@@ -140,6 +145,7 @@ struct CoachView: View {
                 }
             }
             .navigationDestination(isPresented: $showMemory) { CoachMemoryView() }
+            .navigationDestination(isPresented: $morePacks) { CoachPacksView() }
         }
         .overlay {
             if showChats {
@@ -156,7 +162,9 @@ struct CoachView: View {
             guard !model.demo, home == nil else { return }
             if let openChat, chatId == nil { await open(openChat) }
             home = try? await model.api.coaches(date: AppModel.localDate(Date()))
-            allowance = (try? await model.api.subscription())?.coachAllowance
+            let status = try? await model.api.subscription()
+            allowance = status?.coachAllowance
+            packsOnSale = status?.checkoutAvailable == true
             if allowance?.usedUp == true { usedUp = true }
         }
     }
@@ -256,6 +264,13 @@ struct CoachView: View {
             Text("Zprávy koučovi na tento týden jsou vyčerpané.").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
             Text(CoachAllowance.comesBack).font(Typo.small).foregroundStyle(Palette.muted)
+            if packsOnSale {
+                Button { morePacks = true } label: {
+                    Text("Získat další zprávy").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                        .frame(maxWidth: .infinity).frame(height: 46).background(Palette.button, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
@@ -390,7 +405,7 @@ struct CoachView: View {
                         if let a = result.answer ?? last { $0.text = a }
                         $0.actions = result.actions ?? []
                         $0.visuals = result.visuals ?? []
-                        $0.memory = result.memoryChanges?.chips ?? []
+                        $0.memory = (result.memoryChanges?.chips ?? []) + (result.memoryProposals?.proposals ?? [])
                         // A food sentence: the card says it all, the summary text is not shown.
                         if result.kind == "food_draft", let draft = result.draft, draft.items.contains(where: { $0.product != nil }) {
                             $0.food = draft
@@ -521,6 +536,25 @@ struct CoachView: View {
         }
     }
 
+    /// "Zapomenout" or "Přepsat" under an answer changes the memory as the coach
+    /// proposed and leaves the usual line with "Zpět"; "Nechat" keeps it as it is.
+    private func decide(_ chip: CoachMemoryChip, _ yes: Bool, in bubble: UUID) async {
+        do {
+            if yes {
+                switch chip.kind {
+                case .forgotten: try await model.api.forgetMemory(chip.text)
+                case .updated: try await model.api.editMemory(from: chip.from ?? chip.text, to: chip.text)
+                case .saved: try await model.api.addMemory(chip.text)
+                }
+            }
+            edit(bubble) { b in
+                if let i = b.memory.firstIndex(where: { $0.id == chip.id }) { b.memory[i].proposed = false; b.memory[i].kept = !yes }
+            }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     /// Logs the confirmed foods (nil items: "Ne"), then says what is left of the day.
     private func logFood(_ items: [(product: FoodProduct, amount: Double, meal: String)]?, meal: String, in bubble: UUID) async {
         guard let draft = messages.first(where: { $0.id == bubble })?.food else { return }
@@ -604,14 +638,15 @@ struct CoachView: View {
 
 struct BubbleView: View {
     let bubble: CoachView.Bubble
-    /// The coach is still writing this answer: a dot pulses in its corner.
-    var writing = false
     var decide: (CoachAction, Bool) -> Void
     var undoMemory: (CoachMemoryChip) -> Void = { _ in }
+    var decideMemory: (CoachMemoryChip, Bool) -> Void = { _, _ in }
     var undoAction: (CoachAction) -> Void = { _ in }
     var adjust: (CoachAction, String, String?) -> Void = { _, _, _ in }
     var logFood: ([(product: FoodProduct, amount: Double, meal: String)]?, String) -> Void = { _, _ in }
     var openPlan: () -> Void = {}
+    /// On the line about the week's messages: "Získat další" opens the packs.
+    var more: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: bubble.mine ? .trailing : .leading, spacing: 8) {
@@ -627,8 +662,14 @@ struct BubbleView: View {
                     .background(Palette.card, in: Capsule())
             }
             if bubble.note {
-                Text(bubble.text).font(Typo.caption).foregroundStyle(Palette.muted)
-                    .multilineTextAlignment(.center).frame(maxWidth: .infinity)
+                HStack(spacing: 6) {
+                    Text(bubble.text).font(Typo.caption).foregroundStyle(Palette.muted)
+                        .multilineTextAlignment(.center)
+                    if let more {
+                        Button("Získat další", action: more).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.green)
+                    }
+                }
+                .frame(maxWidth: .infinity)
             } else if !bubble.text.isEmpty {
                 if bubble.mine {
                     Text(bubble.text)
@@ -641,10 +682,6 @@ struct BubbleView: View {
                     CoachMarkdown(text: bubble.text)
                         .equatable()
                         .padding(.horizontal, 16).padding(.vertical, 14)
-                        // In the corner, so the bubble keeps its size when the dot goes.
-                        .overlay(alignment: .bottomTrailing) {
-                            if writing { CoachDots(count: 1).padding(.trailing, 9).padding(.bottom, 7) }
-                        }
                         .cardSurface(cornerRadius: 18)
                         .textSelection(.enabled)
                 }
@@ -653,7 +690,11 @@ struct BubbleView: View {
                 CoachVisual(kind: kind)
             }
             ForEach(bubble.memory) { chip in
-                MemoryChipView(chip: chip) { undoMemory(chip) }
+                if chip.proposed {
+                    MemoryProposalCard(chip: chip) { decideMemory(chip, $0) }
+                } else {
+                    MemoryChipView(chip: chip) { undoMemory(chip) }
+                }
             }
             ForEach(bubble.actions) { action in
                 ActionCard(action: action, result: action.draftId.flatMap { bubble.decided[$0] },
@@ -908,6 +949,9 @@ struct WorkoutPreviewBlock: View {
                     WorkoutProfile(blocks: blocks, sport: action.sport ?? "ride", compact: true)
                 }
                 Text(verbatim: numbers(workout)).font(Typo.caption).foregroundStyle(Palette.secondary)
+                if action.openWater == true {
+                    Text("Nikdy neplav sám, výrazná čepice a bójka.").font(Typo.caption).foregroundStyle(Palette.amber)
+                }
             } else if let plan = preview.plan {
                 let exercises = GymProposal(draftId: nil, planName: plan.planName ?? "", rationale: nil, rows: plan.rows, muscles: [:]).exercises
                 Text(verbatim: plan.planName.flatMap { $0.isEmpty ? nil : $0 } ?? L10n.tr("Posilovna")).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
@@ -934,9 +978,20 @@ struct WorkoutPreviewBlock: View {
     }
 
     /// "1 h · 62 TSS · 88–93 % FTP": the length, the load and the hardest step.
+    /// A swim: "45 min · 1 900 m · 1:48 /100 m" in the pool, "1 h · ≈ 2 000 m · by time outside" in open water.
     private func numbers(_ w: LibraryWorkout) -> String {
         var parts: [String] = []
         if let m = w.duration_minutes ?? action.minutes, m > 0 { parts.append(Fmt.duration(Int(m.rounded()))) }
+        if action.sport == "swim" {
+            let open = action.openWater == true
+            if let meters = w.distance_meters, meters > 0 { parts.append((open ? "≈ " : "") + Fmt.int(meters) + " m") }
+            if open { parts.append(L10n.tr("venku podle času")) }
+            else if let top = WorkoutProfile.segments(w.steps ?? []).filter({ $0.step.rest != true }).max(by: { $0.percent < $1.percent })?.step,
+                    let slow = top.paceSlow, let fast = top.paceFast {
+                parts.append(ZonesSettingsView.pace((slow + fast) / 2) + " /100 m")
+            }
+            return parts.joined(separator: " · ")
+        }
         if let tss = w.target_load, tss > 0 { parts.append("\(Int(tss.rounded())) TSS") }
         if (action.sport ?? "ride") == "ride", let top = WorkoutProfile.segments(w.steps ?? []).max(by: { $0.percent < $1.percent })?.step,
            let hi = top.percentHigh ?? top.percentLow {
@@ -1071,54 +1126,47 @@ struct ChatsPanel: View {
     }
 }
 
-/// The coach's bubble while he prepares an answer: three dots and, smaller,
-/// what he is doing ("Kouč přemýšlí…", then the server's steps).
+/// The coach's bubble while he prepares an answer: what he is doing
+/// ("Kouč přemýšlí…", then the server's steps), text only.
 struct CoachThinking: View {
     let text: String
 
     var body: some View {
-        HStack(spacing: 12) {
-            CoachDots()
-            Text(text).font(Typo.small).foregroundStyle(Palette.muted)
-                .contentTransition(.opacity)
-                .animation(.easeInOut(duration: 0.25), value: text)
-        }
-        .padding(.horizontal, 16).padding(.vertical, 14)
-        .cardSurface(cornerRadius: 18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.trailing, 40)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(text)
+        Text(text).font(Typo.small).foregroundStyle(Palette.muted)
+            .contentTransition(.opacity)
+            .animation(.easeInOut(duration: 0.25), value: text)
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .cardSurface(cornerRadius: 18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.trailing, 40)
+            .accessibilityLabel(text)
     }
 }
 
-/// The same inside a card that has its own background: dots and the text, no bubble.
+/// The same inside a card that has its own background: the text, no bubble.
 struct CoachThinkingLine: View {
     let text: String
 
     var body: some View {
-        HStack(spacing: 10) {
-            CoachDots()
-            Text(text).font(Typo.small).foregroundStyle(Palette.muted)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(text)
+        Text(text).font(Typo.small).foregroundStyle(Palette.muted)
     }
 }
 
-/// Dots that light up one after another; still with Reduce Motion.
+/// Dots that light up one after another (the welcome's demo, a food lookup);
+/// still with Reduce Motion and in Low Power Mode.
 struct CoachDots: View {
     var count = 3
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(paused: reduceMotion)) { context in
+        let still = reduceMotion || LowPower.shared.on
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: still)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
             HStack(spacing: 5) {
                 ForEach(0..<count, id: \.self) { i in
                     Circle().fill(Palette.ink)
                         .frame(width: 7, height: 7)
-                        .opacity(reduceMotion ? 0.55 : opacity(t, i))
+                        .opacity(still ? 0.55 : opacity(t, i))
                 }
             }
         }

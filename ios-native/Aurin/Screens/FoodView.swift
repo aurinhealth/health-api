@@ -106,6 +106,7 @@ struct FoodContent: View {
     var scan: () -> Void = {}
     @Environment(\.tabActions) private var actions
     @State private var editing = false
+    @State private var showingParts = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -138,17 +139,40 @@ struct FoodContent: View {
         HStack(alignment: .lastTextBaseline, spacing: 12) {
             Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
             if let target = food.target {
-                Text(L10n.f("z %@\nkcal", Fmt.int(target))).font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
+                // With its parts the target opens where the numbers come from.
+                let more = food.targetParts != nil ? " ›" : ""
+                let over = (food.kcal ?? 0).rounded() - target.rounded()
+                Group {
+                    if over >= 1 {
+                        // Past the target (its workouts done and planned included): a calm note
+                        // in rust, as a limit past on the macros, not the number in red.
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(L10n.f("%@ kcal navíc", Fmt.int(over))).font(Typo.small.weight(.semibold)).foregroundStyle(Palette.rust)
+                            Text(L10n.f("z %@ kcal", Fmt.int(target)) + more).font(Typo.small).foregroundStyle(Palette.muted)
+                        }
+                        .lineLimit(1)
+                    } else {
+                        Text(L10n.f("z %@\nkcal", Fmt.int(target)) + more)
+                            .font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
+                    }
+                }
+                .onTapGesture { if food.targetParts != nil { showingParts = true } }
             }
         }
         .padding(.top, 30)
-        // An earlier day shows only its data; a day ahead keeps its sentence.
-        let day = page.map(\.selectedDate) ?? model.selectedDate
-        if day.map({ $0 > AppModel.localDate(Date()) }) ?? true {
-            CoachTextCard(screen: "food", fallbackText: food.sentence, live: day == nil).padding(.top, 16)
+        // The target's parts: the base, the workouts done and the planned ones.
+        if let parts = food.targetParts {
+            Button { showingParts = true } label: { TargetPartsRow(parts: parts) }
+                .buttonStyle(.plain)
+                .padding(.top, 20)
+                .sheet(isPresented: $showingParts) {
+                    let today = AppModel.localDate(Date())
+                    TargetPartsSheet(parts: parts, target: food.target ?? parts.base + parts.workouts + parts.planned,
+                                     isToday: food.date == today, past: food.date < today)
+                }
         }
-
-        MacroCells(macros: food.macros).padding(.top, 26)
+        // The macros right under the target, so they show without scrolling; the coach's card under them.
+        MacroCells(macros: food.macros).padding(.top, 20)
         // Pro: the nutrients picked under Živiny → Upravit; the rest is one tap away.
         ForEach(food.nutrients ?? []) { item in
             NutrientRow(item: item).padding(.top, 8)
@@ -163,6 +187,12 @@ struct FoodContent: View {
         }
         .buttonStyle(.plain)
         .padding(.top, 8)
+
+        // An earlier day shows only its data; a day ahead keeps its sentence.
+        let day = page.map(\.selectedDate) ?? model.selectedDate
+        if day.map({ $0 > AppModel.localDate(Date()) }) ?? true {
+            CoachTextCard(screen: "food", fallbackText: food.sentence, live: day == nil).padding(.top, 10)
+        }
 
         board.padding(.top, 18)
 
@@ -204,7 +234,8 @@ struct MacroCells: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            cell("Sacharidy", macros.carbs, Palette.carbs, first: true)
+            // Keto: net carbs against a limit (src/diet.js).
+            cell(macros.carbs.net == true ? "Čisté sacharidy" : "Sacharidy", macros.carbs, Palette.carbs, first: true)
             Rectangle().fill(Palette.hairline).frame(width: 1)
             cell("Bílkoviny", macros.protein, Palette.protein)
             Rectangle().fill(Palette.hairline).frame(width: 1)
@@ -221,17 +252,25 @@ struct MacroCells: View {
     }
 
     private func cell(_ title: String, _ amount: FoodSnapshot.Amount, _ color: Color, first: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let limit = amount.limit == true
+        let over = limit && (amount.eaten ?? 0) > (amount.target ?? .infinity)
+        return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 5) {
                 Circle().fill(color).frame(width: 7, height: 7)
-                Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
+                Text(title).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
             }
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(Fmt.int(amount.eaten ?? 0)).font(Typo.number(28)).foregroundStyle(Palette.ink)
-                if let target = amount.target { Text("/ " + Fmt.int(target) + " g").font(Typo.number(15)).foregroundStyle(Palette.faint) }
+                if let target = amount.target {
+                    Text(verbatim: (limit ? "/ max " : "/ ") + Fmt.int(target) + " g").font(Typo.number(15)).foregroundStyle(Palette.faint)
+                }
             }
             .lineLimit(1).minimumScaleFactor(0.7)
-            ProgressLine(fraction: share(amount), color: color, height: 3)
+            // A limit ends in a tick and turns rust once it is passed.
+            ProgressLine(fraction: share(amount), color: over ? Palette.rust : color, height: 3)
+                .overlay(alignment: .trailing) {
+                    if limit { Rectangle().fill(Palette.ink).frame(width: 2, height: 9) }
+                }
                 .padding(.trailing, 14)
         }
         .padding(.vertical, 16)

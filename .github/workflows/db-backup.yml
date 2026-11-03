@@ -1,7 +1,8 @@
 name: Database backup
 
 # Every Sunday at night: the central database and every user data database
-# go to the R2 bucket aurin-db-backups (EU), kept 28 days. A D1 export makes
+# go to the R2 bucket aurin-db-backups (EU), kept 28 days, encrypted with age
+# on the runner before upload (scripts/backup-recipients.txt). A D1 export makes
 # the database wait for a moment, so it runs when nobody trains.
 on:
   workflow_dispatch:
@@ -30,6 +31,9 @@ jobs:
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: "22"
+
+      - name: Install age
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq age && age --version
 
       - name: Export databases to R2
         env:

@@ -73,7 +73,10 @@ enum Reminders {
     /// Off by default: the reminders added later that nobody asked for yet.
     private static let offByDefault = Set([weightKey, weekKey]).union(meals.filter { !$0.on }.map { mealKey($0.id) })
 
-    private static let prefix = "loadwise."
+    private static let prefix = "aurin."
+    /// Reminders planned by a version from before 2026-11, taken away and planned again under the new prefix.
+    private static let legacyPrefix = "loadwise."
+    private static func ours(_ id: String) -> Bool { id.hasPrefix(prefix) || id.hasPrefix(legacyPrefix) }
 
     static func isOn(_ key: String) -> Bool {
         UserDefaults.standard.object(forKey: key) as? Bool ?? !offByDefault.contains(key)
@@ -94,7 +97,7 @@ enum Reminders {
         let settings = await center.notificationSettings()
         guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
         let all = await center.pendingNotificationRequests().map(\.identifier)
-        let pending = all.filter { $0.hasPrefix(prefix) }
+        let pending = all.filter(ours)
         center.removePendingNotificationRequests(withIdentifiers: pending)
         var planned: [UNNotificationRequest] = []
         defer { addSoonest(planned, room: limit - (all.count - pending.count), to: center) }
@@ -112,7 +115,8 @@ enum Reminders {
                 let remind = (at - offset + 1440) % 1440
                 // A bedtime after midnight (00:40) reminds at 00:10 tonight, which is "earlier" than now.
                 add(&planned, "bedtime", at: remind, title: offset >= 60 ? L10n.tr("Za hodinu do postele") : L10n.f("Za %@ min do postele", String(offset)),
-                    body: L10n.f("Na dnešní noc potřebuješ %@. Jdi spát do %@.", Fmt.duration(need), ClockText.format(bed)), afterMidnight: remind < 6 * 60)
+                    body: hidesValues ? L10n.tr("Dobrý spánek je základ regenerace.")
+                        : L10n.f("Na dnešní noc potřebuješ %@. Jdi spát do %@.", Fmt.duration(need), ClockText.format(bed)), afterMidnight: remind < 6 * 60)
             }
         }
         // Today's workouts not done yet (on the chosen days): an hour before
@@ -139,7 +143,8 @@ enum Reminders {
                                    mode: UserDefaults.standard.string(forKey: waterModeKey) ?? "every",
                                    every: minute(waterEveryKey, 3 * 60), count: minute(waterCountKey, 4))
             for at in times {
-                add(&planned, "water.\(at)", at: at, title: L10n.tr("Napij se"), body: L10n.f("Dnešní cíl je %@ vody.", amount))
+                add(&planned, "water.\(at)", at: at, title: L10n.tr("Napij se"),
+                    body: hidesValues ? L10n.tr("Dej si sklenici vody.") : L10n.f("Dnešní cíl je %@ vody.", amount))
             }
         }
         // Each chosen meal at its time, on the chosen days.
@@ -184,7 +189,7 @@ enum Reminders {
                 guard let number = pillNumber(on: date, packStart: pill.packStart, active: pill.active) else { continue }
                 if number == 0 && !pill.inPause { continue }
                 addOnce(&planned, "pill.\(offset)", day: day, at: pill.minute, title: L10n.tr("Čas na prášek"),
-                        body: number == 0 ? L10n.tr("Pauza mezi baleními") : L10n.f("%@. prášek z %@", String(number), String(pill.active)),
+                        body: hidesValues ? "" : number == 0 ? L10n.tr("Pauza mezi baleními") : L10n.f("%@. prášek z %@", String(number), String(pill.active)),
                         category: pillCategory, info: ["date": date])
             }
         }
@@ -203,7 +208,7 @@ enum Reminders {
         restCall += 1
         let call = restCall
         let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: [restId])
+        center.removePendingNotificationRequests(withIdentifiers: [restId, "loadwise-rest"])
         guard let end, end.timeIntervalSinceNow > 1 else { return }
         var status = await center.notificationSettings().authorizationStatus
         if status == .notDetermined { status = await requestPermission() ? .authorized : .denied }
@@ -218,14 +223,14 @@ enum Reminders {
         try? await center.add(UNNotificationRequest(identifier: restId, content: content, trigger: trigger))
     }
 
-    /// Outside the "loadwise." prefix, so planning the day keeps it.
-    private static let restId = "loadwise-rest"
+    /// Outside the "aurin." prefix, so planning the day keeps it.
+    private static let restId = "aurin-rest"
     @MainActor private static var restCall = 0
 
     static func cancelAll() {
         let center = UNUserNotificationCenter.current()
         center.getPendingNotificationRequests { requests in
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: requests.map(\.identifier).filter { $0.hasPrefix(prefix) })
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: requests.map(\.identifier).filter(ours))
         }
     }
 
@@ -293,21 +298,32 @@ enum Reminders {
         planned.append(UNNotificationRequest(identifier: prefix + id, content: content, trigger: trigger))
     }
 
+    /// Settings → Oznámení → Skrýt zdravotní údaje: the night's need, the
+    /// water target and the pill's number stay out of the reminders.
+    private static var hidesValues: Bool { PushRegistration.hideValuesOn }
+
     // MARK: - The pill
 
     /// The notification's category with "Vzato" and "Za 30 minut"
     /// (AppDelegate registers it and handles the answer).
-    static let pillCategory = "loadwise.pill"
-    static let pillTakenAction = "loadwise.pill.taken"
-    static let pillSnoozeAction = "loadwise.pill.snooze"
+    static let pillCategory = "aurin.pill"
+    static let pillTakenAction = "aurin.pill.taken"
+    static let pillSnoozeAction = "aurin.pill.snooze"
     private static let pillKey = "cycle.pill"
 
-    static var pillNotificationCategory: UNNotificationCategory {
-        UNNotificationCategory(identifier: pillCategory, actions: [
-            UNNotificationAction(identifier: pillTakenAction, title: L10n.tr("Vzato"), options: []),
-            UNNotificationAction(identifier: pillSnoozeAction, title: L10n.tr("Za 30 minut"), options: [])
-        ], intentIdentifiers: [], options: [])
+    /// The category under both prefixes: a pill reminder planned or shown before
+    /// 2026-11 (legacyPrefix) keeps its buttons.
+    static var pillNotificationCategories: [UNNotificationCategory] {
+        [prefix, legacyPrefix].map { at in
+            UNNotificationCategory(identifier: at + "pill", actions: [
+                UNNotificationAction(identifier: at + "pill.taken", title: L10n.tr("Vzato"), options: [.authenticationRequired]),
+                UNNotificationAction(identifier: at + "pill.snooze", title: L10n.tr("Za 30 minut"), options: [])
+            ], intentIdentifiers: [], options: [])
+        }
     }
+    static func isPill(_ category: String) -> Bool { category == pillCategory || category == legacyPrefix + "pill" }
+    static func isPillTaken(_ action: String) -> Bool { action == pillTakenAction || action == legacyPrefix + "pill.taken" }
+    static func isPillSnooze(_ action: String) -> Bool { action == pillSnoozeAction || action == legacyPrefix + "pill.snooze" }
 
     struct StoredPill: Codable, Equatable {
         var on: Bool
@@ -347,7 +363,7 @@ enum Reminders {
         return index < active ? index + 1 : 0
     }
 
-    /// "Za 30 minut": the same reminder once more (outside the "loadwise."
+    /// "Za 30 minut": the same reminder once more (outside the "aurin."
     /// prefix, so planning the day keeps it).
     static func snoozePill(date: String, title: String, body: String) async {
         let content = UNMutableNotificationContent()
@@ -360,12 +376,12 @@ enum Reminders {
         try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: pillSnoozeId, content: content, trigger: trigger))
     }
 
-    private static let pillSnoozeId = "loadwise-pill-snooze"
+    private static let pillSnoozeId = "aurin-pill-snooze"
 
     /// Signing out or another account: no pill of the last one, and none of its reminders.
     static func forgetPill() {
         UserDefaults.standard.removeObject(forKey: pillKey)
-        let ids = (0..<8).map { prefix + "pill.\($0)" } + [pillSnoozeId]
+        let ids = (0..<8).flatMap { [prefix + "pill.\($0)", legacyPrefix + "pill.\($0)"] } + [pillSnoozeId, "loadwise-pill-snooze"]
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
     }
 

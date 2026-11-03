@@ -11,7 +11,7 @@ import { matchPlannedWorkouts } from "./plan-match.js";
 import { daySessions, dayPlanState } from "./app-training.js";
 import { localDate, localDateTime } from "./user-time.js";
 import { bilingual, L } from "./lang.js";
-import { groupOfType, typeName, watchType } from "./activity-type.js";
+import { groupOfType, typeName, watchType, mark } from "./activity-type.js";
 import { mergeProposal, mergedSpan, sourcesOf } from "./workout-merge.js";
 import { intervalsOrigin } from "./activity-origin.js";
 
@@ -116,7 +116,7 @@ function googleActivity(row) {
     kcal: round(num(metrics.caloriesKcal)) || null,
     activityId: null, eventId: null,
     sources: sourcesOf(row, p),
-    ...(p.loadwiseMerge?.energy ? { mergeEnergy: String(p.loadwiseMerge.energy) } : {}),
+    ...(mark(p, "Merge")?.energy ? { mergeEnergy: String(mark(p, "Merge").energy) } : {}),
     summary: googleSummary(row, metrics, span),
     pair: { id: String(row.external_id), source: "google", type, name: ex.displayName || "", start: row.start_time, payload: p, durationHours: minutes > 0 ? minutes / 60 : null, tss: null, pairedEventId: null }
   };
@@ -145,7 +145,7 @@ function plannedWorkout(row) {
     tss: num(p.icu_training_load ?? p.training_load),
     pair: { id: String(row.external_id), name, type: p.type || "", start, durationHours: hours > 0 && hours < 12 ? hours : null, tss: num(p.icu_training_load ?? p.training_load),
       // A joined pair, one right after the other (planned-links.js).
-      ...(p.after ? { after: String(p.after) } : {}), ...(p.next ? { next: String(p.next) } : {}) },
+      ...(p.after ? { after: String(p.after) } : {}), ...(p.next ? { next: String(p.next) } : {}), ...(p.race === true ? { race: true } : {}) },
     // "Weekly" notes, nutrition and plain notes are no workouts.
     weekly: (/^weekly$/i.test(name) && !hours) || /nutrition/i.test(name + " " + (p.category || "")) || /^(NOTE|HOLIDAY|SICK|INJURED|SET_EFTP|FITNESS_DAYS|TARGET)$/i.test(String(p.category || ""))
   };

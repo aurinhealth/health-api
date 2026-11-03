@@ -17,7 +17,7 @@ struct GymEquipment: Decodable, Equatable {
     /// follows the active one ("bodyweight": none).
     var places: [GymPlace]? = nil
     var activePlace: String? = nil
-    /// The picker's body parts and kinds of equipment, in order (nil from an older server).
+    /// The picker's kinds of equipment, in order (nil from an older server).
     var sections: [Section]? = nil
 
     struct Station: Decodable, Equatable, Identifiable, Hashable {
@@ -28,6 +28,10 @@ struct GymEquipment: Decodable, Equatable {
         var sections: [String]? = nil
         /// One line on what it is.
         var description: String? = nil
+        /// The muscles it is for, shown under its name (STATION_USE; nil from an older server).
+        var uses: String? = nil
+        /// Words to search it by beyond its name, in both languages.
+        var keywords: String? = nil
 
         /// Its sections; an older server has only the group.
         var sectionIds: [String] { (sections ?? []).isEmpty ? [group] : sections ?? [] }
@@ -118,6 +122,8 @@ struct GymProposal: Equatable {
     var rationale: String?
     var rows: [[JSONValue]]
     var muscles: [String: [String: Double]]
+    /// The length the server settled on, when it chose it (autoLength).
+    var minutes: Int? = nil
 
     /// The exercises in order with their work sets, "3 × 8–10 · 40 kg".
     var exercises: [(name: String, sets: Int, reps: String, kg: String)] {
@@ -206,6 +212,8 @@ struct GymPreviewResponse: Decodable {
     let plan: Plan?
     let muscles: [String: [String: Double]]?
     let message: String?
+    /// The length the server settled on (the usual one capped by the day's free time).
+    let minutes: Int?
 
     struct Plan: Decodable, Equatable {
         let planName: String?
@@ -339,6 +347,27 @@ struct GeneratedWorkout: Decodable {
         let focus: String?
         let why: String?
     }
+}
+
+/// Knihovna → Tri: a brick, two legs one right after the other (src/brick-workouts.js).
+struct LibraryBrick: Decodable, Identifiable {
+    let id: String
+    let name: String
+    let note: String
+    let minutes: Int
+    let legs: [Leg]
+
+    struct Leg: Decodable {
+        let sport: String
+        let workoutId: String
+        let minutes: Int
+        var meters: Double? = nil
+        let steps: [PlannedWorkout.Block]
+    }
+}
+
+struct BricksResponse: Decodable {
+    let bricks: [LibraryBrick]
 }
 
 struct WorkoutSearchResponse: Decodable {

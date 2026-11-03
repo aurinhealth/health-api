@@ -71,9 +71,26 @@ export async function allowRequest(db, key, limits = {}, now = Date.now()) {
       AND (request_limits.hour IS NOT excluded.hour OR request_limits.hour_count < ?)
       AND (request_limits.day IS NOT excluded.day OR request_limits.day_count < ?)`)
     .bind(key, time.slice(0, 16), time.slice(0, 13), time.slice(0, 10), seconds, cap(limits.minute), cap(limits.hour), cap(limits.day)).run();
-  const allowed = Number(claimed.meta?.changes) > 0;
-  if (allowed) await db.prepare("DELETE FROM request_limits WHERE updated_at < ?").bind(seconds - STALE_SECONDS).run().catch(() => {});
-  return allowed;
+  return Number(claimed.meta?.changes) > 0;
+}
+
+// Rows nobody has used for two days, removed by the nightly cron (entrypoint.js).
+// It used to run with every allowed request, and without an index on updated_at
+// each run read the whole table (security review 2026-11-02, SEC-013).
+export async function forgetStaleRequestLimits(db, now = Date.now()) {
+  try { return Number((await db.prepare("DELETE FROM request_limits WHERE updated_at < ?").bind(Math.floor(now / 1000) - STALE_SECONDS).run())?.meta?.changes) || 0; }
+  catch (error) { if (/no such table/i.test(String(error?.message))) return 0; throw error; }
+}
+
+// Gives back a request claimed for `key` that did not happen after all.
+export async function releaseRequest(db, key, now = Date.now()) {
+  await ensureTable(db);
+  const time = new Date(now).toISOString();
+  await db.prepare(`UPDATE request_limits SET
+      minute_count = CASE WHEN minute = ? THEN MAX(minute_count - 1, 0) ELSE minute_count END,
+      hour_count = CASE WHEN hour = ? THEN MAX(hour_count - 1, 0) ELSE hour_count END,
+      day_count = CASE WHEN day = ? THEN MAX(day_count - 1, 0) ELSE day_count END
+    WHERE key = ?`).bind(time.slice(0, 16), time.slice(0, 13), time.slice(0, 10), key).run();
 }
 
 // What one caller may start per minute and per hour (sign-in codes, passkey
@@ -82,3 +99,4 @@ export const CLIENT_LIMITS = { minute: 5, hour: 30 };
 export async function allowClient(db, request, secret, scope, now = Date.now(), limits = CLIENT_LIMITS) {
   return allowRequest(db, scope + ":" + await clientKey(request, secret), limits, now);
 }
+export const releaseClient = async (db, request, secret, scope, now = Date.now()) => releaseRequest(db, scope + ":" + await clientKey(request, secret), now);

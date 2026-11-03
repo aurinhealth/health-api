@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { planWeightSync, syncWeights } from "../src/weight-sync.js";
 import { EXTRA_SCOPES } from "../src/google-scopes.js";
+import { saveSyncPrefs } from "../src/sync-destinations.js";
 import { ageFrom, normalizeProfile, effectiveProfile } from "../src/energy-profile.js";
 
 const both = { googleConnected: true, intervalsConnected: true };
@@ -40,6 +41,8 @@ test("one sync pass writes, remembers, and does not repeat", async () => {
     return Response.json({});
   };
   const env = { DB: db, USER_ID: 7, INTERVALS_API_KEY: "k", CONNECTED_PROVIDERS: ["google", "intervals"], GOOGLE_SCOPES: [EXTRA_SCOPES.weightWrite] };
+  // Weight goes to Intervals.icu only once the athlete turned it on.
+  await saveSyncPrefs(db, 7, "intervals", { health: ["weight"] });
   const deps = { googleToken: async () => "t", fetchImpl, now: Date.parse("2026-10-02T10:00:00Z") };
   const first = await syncWeights(env, deps);
   assert.deepEqual(first.written.map(a => `${a.target} ${a.date}`).sort(), ["google 2026-09-30", "intervals 2026-10-01"]);

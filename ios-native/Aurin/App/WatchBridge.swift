@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import WatchConnectivity
 
 /// Hands Today to the Apple Watch app (AurinWatch) over WatchConnectivity:
@@ -64,6 +65,7 @@ final class WatchBridge: NSObject {
         training = nil
         healthLoaded = nil
         gymDays = [:]
+        lastContext = nil
         guard let session, session.activationState == .activated else { return }
         try? session.updateApplicationContext([:])
     }
@@ -74,19 +76,30 @@ final class WatchBridge: NSObject {
     }
 
     /// The 90 days of resting HR and HRV live in Health only: loaded once an
-    /// hour while the watch app is installed.
+    /// hour while the watch app is installed and the app is open. In the
+    /// background (HealthKit wakes, the refresh task) once a day: the history
+    /// changes with the night, and each load was two requests on the radio.
     private func loadHealthIfNeeded(for date: String) {
         guard watchReady, !loadingHealth else { return }
-        if let health, health.date == date, let healthLoaded, Date().timeIntervalSince(healthLoaded) < 3600 { return }
+        let background = UIApplication.shared.applicationState != .active
+        // Woken without the app: the history the app saved today will do.
+        if background, health == nil, let saved = SnapshotCache.load(HealthSnapshot.self, key: "health")?.value, saved.date == date {
+            health = saved
+        }
+        let fresh = healthLoaded.map { Date().timeIntervalSince($0) < 3600 } ?? false
+        if let health, health.date == date, background || fresh { return }
         loadingHealth = true
         Task { @MainActor in
             defer { loadingHealth = false }
             let api = AppModel.live?.api ?? APIClient()
             guard api.hasSession else { return }
-            // The week for the Training page, when the app has not loaded it yet.
+            // The week for the Training page (when the app has not loaded it
+            // yet), the wake times and health: at once, not one after another.
+            async let profileLoad = api.profile()
+            async let healthLoad = api.health()
             if training == nil, let week = try? await api.training() { training = week }
-            if let loaded = try? await api.profile() { profile = loaded }
-            guard let loaded = try? await api.health() else { send(); return }
+            if let loaded = try? await profileLoad { profile = loaded }
+            guard let loaded = try? await healthLoad else { send(); return }
             update(loaded)
         }
     }
@@ -134,19 +147,49 @@ final class WatchBridge: NSObject {
         guard watchReady, let session else { return }
         var context: [String: Any] = [:]
         var alarm: WatchSnapshot.Alarm?
+        var sentSnapshot: WatchSnapshot?
         if let today {
             let snapshot = Self.snapshot(today, health: health, training: training, profile: profile)
             alarm = snapshot.alarm
+            sentSnapshot = snapshot
             if let data = snapshot.encoded() { context[WatchSnapshot.contextKey] = data }
         }
         // The iPhone's backup for the watch's alarm follows the wake times.
         Task { await updateAlarmBackup(alarm) }
         if let gym = gymContext { context[WatchGym.replyKey] = gym }
         guard !context.isEmpty else { return }
-        context[WatchSettings.contextKey] = Self.settings.encoded()
+        var settings = Self.settings
+        (settings.restSets, settings.restExercises) = Self.restSettings
+        (settings.lastGym, settings.lastGymExercises) = Self.lastGym
+        context[WatchSettings.contextKey] = settings.encoded()
         if let signIn = Self.signIn()?.encoded() { context[WatchSession.contextKey] = signIn }
-        try? session.updateApplicationContext(context)
+        // The same Today again (a refresh with nothing new; only the time it
+        // was made differs): the watch already has it. Sent, it woke the watch
+        // in the background just to throw it away.
+        let rest = [WatchGym.replyKey, WatchSettings.contextKey, WatchSession.contextKey].map { context[$0] as? Data }
+        var unchanged = sentSnapshot
+        unchanged?.updated = lastContext?.snapshot?.updated ?? .distantPast
+        if let lastContext, lastContext.snapshot == unchanged, lastContext.rest == rest,
+           !session.applicationContext.isEmpty {
+            lastSent = Date()
+            return
+        }
+        do {
+            try session.updateApplicationContext(context)
+            lastContext = (sentSnapshot, rest)
+        } catch {
+            lastContext = nil
+        }
         lastSent = Date()
+    }
+
+    /// What the watch got last (sendContext), to leave out the same again.
+    private var lastContext: (snapshot: WatchSnapshot?, rest: [Data?])?
+
+    /// Training mode started here: a watch app that is running opens the gym too.
+    func openWatchGym() {
+        guard let session, session.activationState == .activated, session.isWatchAppInstalled, session.isReachable else { return }
+        session.sendMessage([WatchGym.openKey: true], replyHandler: nil, errorHandler: nil)
     }
 
     /// Training mode finished on the iPhone: the watch ends its workout and saves it.
@@ -185,6 +228,14 @@ final class WatchBridge: NSObject {
     var watchState: (paired: Bool, installed: Bool, reachable: Bool) {
         guard let session, session.activationState == .activated else { return (false, false, false) }
         return (session.isPaired, session.isWatchAppInstalled, session.isReachable)
+    }
+
+    /// What the watch app last said about itself (AurinWatch/WatchReport.swift),
+    /// for "Nahlásit problém"; nil before a watch app that sends it.
+    var watchDiagnostics: WatchDiagnostics? {
+        guard let session, session.activationState == .activated,
+              let data = session.receivedApplicationContext[WatchDiagnostics.contextKey] as? Data else { return nil }
+        return WatchDiagnostics.decode(data)
     }
 
     /// The saved Today when the app was woken only for the watch.
@@ -226,10 +277,10 @@ final class WatchBridge: NSObject {
                                           planned: today.strain.planned, nextTitle: next?.title, nextTime: next?.time)
         let week = training?.sessions?.filter { $0.status != "missed" }.map {
             WatchSnapshot.Session(date: $0.date, time: $0.time, title: $0.title, sport: $0.sport, minutes: $0.minutes, done: $0.status == "done",
-                                  eventId: $0.eventId)
+                                  eventId: $0.eventId, after: $0.after, next: $0.next, race: $0.race)
         }
         let n = today.nutrition
-        let macro = { (m: TodaySnapshot.Macro) in WatchSnapshot.Macro(eaten: m.eaten, target: m.target) }
+        let macro = { (m: TodaySnapshot.Macro) in WatchSnapshot.Macro(eaten: m.eaten, target: m.target, limit: m.limit) }
         let food = WatchSnapshot.Food(kcal: n.kcal, target: n.target, carbs: macro(n.carbs), protein: macro(n.protein), fat: macro(n.fat),
                                       water: n.water.ml, waterTarget: n.water.target)
         let tonight = health?.sleep.tonight
@@ -239,7 +290,7 @@ final class WatchBridge: NSObject {
             evening: tonight?.date, wake: tonight?.wake.map(clock), wakeOnce: tonight?.wakeOnce,
             bedtime: tonight?.bedtime.map(clock), inBed: tonight?.inBed, sleep: tonight?.sleep ?? tonight?.need) : nil
         return WatchSnapshot(date: today.date, updated: Date(), language: L10n.language,
-                             readiness: today.readiness.score, zone: today.readiness.zone,
+                             readiness: today.readiness.score, zone: today.readiness.zone, learningDays: today.readiness.learningDays,
                              headline: today.summary?.headline, summary: today.summary?.text,
                              sleep: sleep, restingHR: restingHR, hrv: hrv, strain: strain, steps: today.steps.today,
                              week: week, food: food, alarm: alarm, imperial: Units.imperial, drinks: watchDrinks())
@@ -296,6 +347,10 @@ extension WatchBridge: WCSessionDelegate {
         let rated = (message[WatchGym.ratedKey] as? Data).flatMap(WatchGym.Rated.decode)
         let change = (message[WatchGym.changeKey] as? Data).flatMap(WatchGym.Change.decode)
         let options = (message[WatchGym.optionsKey] as? Data).flatMap(WatchGym.OptionsRequest.decode)
+        let sheet = (message[WatchGym.sheetKey] as? Data).flatMap(WatchGym.Sheet.decode)
+        let partDone = (message[WatchGym.partDoneKey] as? Data).flatMap(WatchGym.PartDone.decode)
+        let start = (message[WatchGym.startKey] as? Data).flatMap(WatchGym.Start.decode)
+        let discard = message[WatchGym.discardKey] as? String
         let water = message[WatchSnapshot.waterKey] as? Int
         let drinkKind = message[WatchSnapshot.drinkKindKey] as? String ?? "water"
         let alarmChange = (message[WatchSnapshot.AlarmChange.key] as? Data).flatMap(WatchSnapshot.AlarmChange.decode)
@@ -304,6 +359,9 @@ extension WatchBridge: WCSessionDelegate {
         let alarmSnoozed = message[WatchSnapshot.alarmSnoozedKey] as? Date
         let coach = (message[WatchCoach.askKey] as? Data).flatMap(WatchCoach.Ask.decode)
         let live = (message[WatchGym.liveKey] as? Data).flatMap(WatchGym.Live.decode)
+        let gymEnded = message[WatchGym.watchEndKey] as? Bool == true
+        let rest = (message[WatchGym.restKey] as? Data).flatMap(WatchGym.Rest.decode)
+        let draft = (message[WatchGym.draftKey] as? Data).flatMap(WatchGym.Draft.decode)
         let plan = (message[WatchPlan.requestKey] as? Data).flatMap { try? JSONDecoder().decode(WatchPlan.Request.self, from: $0) }
         Task { @MainActor in
             if let plan {
@@ -313,6 +371,21 @@ extension WatchBridge: WCSessionDelegate {
             }
             if let live {
                 LiveWorkout.shared.watch(live)
+                replyHandler(["ok": true])
+                return
+            }
+            if gymEnded {
+                LiveWorkout.shared.watchEnded()
+                replyHandler(["ok": true])
+                return
+            }
+            if let rest {
+                NotificationCenter.default.post(name: .watchRest, object: rest)
+                replyHandler(["ok": true])
+                return
+            }
+            if let draft {
+                NotificationCenter.default.post(name: .watchDraft, object: draft)
                 replyHandler(["ok": true])
                 return
             }
@@ -340,6 +413,26 @@ extension WatchBridge: WCSessionDelegate {
             if let water {
                 await addWater(ml: water, kind: drinkKind)
                 replyHandler(["ok": true])
+                return
+            }
+            if let partDone {
+                applyGym(partDone)
+                replyHandler(["ok": true])
+                return
+            }
+            if let start {
+                let gym = await startGym(start)
+                replyHandler(gym?.encoded().map { [WatchGym.replyKey: $0] } ?? [:])
+                return
+            }
+            if let discard {
+                replyHandler(["ok": true])
+                await discardGym(date: discard)
+                return
+            }
+            if let sheet {
+                let gym = await applyGym(sheet: sheet)
+                replyHandler(gym.encoded().map { [WatchGym.replyKey: $0, "ok": true] } ?? ["ok": true])
                 return
             }
             if let change {
@@ -379,13 +472,19 @@ extension WatchBridge: WCSessionDelegate {
         }
     }
 
-    /// Today, the week and health from the server, when the app has none for today.
+    /// Today, the week and health from the server, when the app has none for
+    /// today: all three at once (each takes seconds), not one after another,
+    /// so the answer reaches the watch before its message gives up.
     private func loadTodayForWatch() async {
         let api = AppModel.live?.api ?? APIClient()
-        guard api.hasSession, let loaded = try? await api.today() else { return }
+        guard api.hasSession else { return }
+        async let todayLoad = api.today()
+        async let weekLoad = api.training()
+        async let healthLoad = api.health()
+        guard let loaded = try? await todayLoad else { return }
         today = loaded
-        if let week = try? await api.training() { training = week }
-        if let fresh = try? await api.health(), fresh.date == loaded.date {
+        if let week = try? await weekLoad { training = week }
+        if let fresh = try? await healthLoad, fresh.date == loaded.date {
             health = fresh
             healthLoaded = Date()
         }
@@ -404,12 +503,14 @@ extension WatchBridge: WCSessionDelegate {
             for (i, s) in (block.steps ?? []).enumerated() {
                 steps.append(WatchPlan.step(seconds: s.durationSeconds, low: s.percentLow, high: s.percentHigh, note: s.note, intensity: s.intensity,
                                             meters: s.meters, rest: s.rest == true, swim: swim, english: L10n.isEnglish,
-                                            repeats: max(1, block.repeats ?? 1), first: i == 0))
+                                            repeats: max(1, block.repeats ?? 1), first: i == 0,
+                                            watts: (s.wattsLow, s.wattsHigh), pace: (s.paceSlow, s.paceFast)))
             }
         }
-        guard !steps.isEmpty else { return nil }
+        // Without steps too: a brick's steady leg goes to the watch as one multisport workout.
         return WatchPlan(name: workout.name, minutes: workout.duration_minutes.map { Int($0.rounded()) }, steps: steps,
-                         openWater: swim && workout.environment == "outdoor" ? true : nil)
+                         openWater: swim && workout.environment == "outdoor" ? true : nil,
+                         indoor: !swim && workout.environment == "indoor" ? true : nil)
     }
 
     /// A set, a drink or the alarm's place sent while the iPhone was out of reach.
@@ -421,9 +522,19 @@ extension WatchBridge: WCSessionDelegate {
         let onWatch = userInfo[WatchSnapshot.alarmOnWatchKey] as? Bool
         let alarmStopped = userInfo[WatchSnapshot.alarmStoppedKey] as? Bool == true
         let alarmSnoozed = userInfo[WatchSnapshot.alarmSnoozedKey] as? Date
+        let gymEnded = userInfo[WatchGym.watchEndKey] as? Bool == true
+        // The watch's gym workout, started while this iPhone was out of reach.
+        let live = (userInfo[WatchGym.liveKey] as? Data).flatMap(WatchGym.Live.decode)
+        let partDone = (userInfo[WatchGym.partDoneKey] as? Data).flatMap(WatchGym.PartDone.decode)
+        let discard = userInfo[WatchGym.discardKey] as? String
         Task { @MainActor in
+            if let partDone { applyGym(partDone) }
+            if let live, !gymEnded { LiveWorkout.shared.watch(live) }
             if let done { await applyGym(done) }
+            if gymEnded { LiveWorkout.shared.watchEnded() }
             if let rated { await applyGym(rated) }
+            // After the sets sent before it, so none of them brings the day back.
+            if let discard { await discardGym(date: discard) }
             if let water { await addWater(ml: water, kind: drinkKind) }
             if let onWatch { await alarmOnWatch(onWatch) }
             if alarmStopped || alarmSnoozed != nil { await watchAlarm(stopped: alarmStopped, snoozedUntil: alarmSnoozed) }

@@ -13,6 +13,9 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
     var readiness: Int?
     /// green, yellow or red.
     var zone: String?
+    /// A new athlete's days of baseline so far (1–14) while readiness has no
+    /// number yet (TodaySnapshot.Readiness.learningDays).
+    var learningDays: Int? = nil
     /// Today's summary from the server (src/app-today.js), in the app's language.
     var headline: String?
     var summary: String?
@@ -42,6 +45,8 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
     struct Macro: Codable, Equatable, Sendable {
         var eaten: Double?
         var target: Double?
+        /// Keto and less carbs on the iPhone: the target is a limit not to pass.
+        var limit: Bool? = nil
     }
 
     /// The alarm from Settings → Sleep on the iPhone, for the watch's alarm.
@@ -112,6 +117,13 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
         var done: Bool
         /// The calendar event, for the steps of a ride or run (WatchPlan).
         var eventId: String? = nil
+        /// A brick (Week plan → Back to back): the eventId of the leg it
+        /// follows right after, and of the leg that follows it.
+        var after: String? = nil
+        var next: String? = nil
+        /// A training plan's race leg (duathlon, aquabike, an open-water race…):
+        /// its legs, joined like a brick, show as one race card.
+        var race: Bool? = nil
 
         /// The title without the length the server's plan already ends it with
         /// ("Endurance with cadence drills · 60 min"), which the screens show apart.

@@ -190,6 +190,22 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// The coach's swim cards: 8×100 m at CSS in the pool, and open water with the safety line.
+    func testCoachSwimCards() throws {
+        func step(_ meters: Int, _ pct: Double, css: Double = 108, rest: Bool = false) -> String {
+            let pace = css * 100 / pct
+            return rest ? #"{"durationSeconds":15,"percentLow":0,"percentHigh":0,"rest":true}"# : #"{"durationSeconds":\#(Double(meters) / 100 * pace),"percentLow":\#(pct - 2),"percentHigh":\#(pct + 2),"paceSlow":\#(pace + 2),"paceFast":\#(pace - 2),"meters":\#(meters)}"#
+        }
+        let css = "[" + [#"{"repeats":1,"steps":[\#(step(300, 86))]}"#, #"{"repeats":8,"steps":[\#(step(100, 100)),\#(step(0, 0, rest: true))]}"#, #"{"repeats":1,"steps":[\#(step(200, 86)),\#(step(100, 84))]}"#].joined(separator: ",") + "]"
+        let lake = "[" + [#"{"repeats":1,"steps":[\#(step(200, 86))]}"#, #"{"repeats":6,"steps":[\#(step(50, 96)),\#(step(50, 88))]}"#, #"{"repeats":1,"steps":[\#(step(1100, 95)),\#(step(100, 84))]}"#].joined(separator: ",") + "]"
+        let json = #"{"status":"ok","answer":"Prahové série v CSS.","chatId":13,"actions":[{"type":"workout","date":"2026-11-06","sport":"swim","minutes":45,"kind":"threshold","draftId":460,"reason":"CSS","preview":{"workout":{"id":"swim-css-8x100","name":"Práh 8×100 m","primary_system":"threshold","duration_minutes":45,"distance_meters":1900,"environment":"indoor","steps":\#(css)}}},{"type":"workout","date":"2026-11-07","sport":"swim","minutes":45,"kind":"endurance","openWater":true,"draftId":461,"reason":"Volná voda","preview":{"workout":{"id":"swim-open-water-2000","name":"Volná voda 2000 m","primary_system":"endurance","duration_minutes":45,"distance_meters":2000,"environment":"outdoor","steps":\#(lake)}}}]}"#
+        let result = try JSONDecoder().decode(AssistantResult.self, from: Data(json.utf8))
+        XCTAssertEqual(result.actions?[1].openWater, true)
+        try render("coach-swim-cards", height: 640) {
+            VStack(spacing: 14) { ForEach(result.actions ?? []) { ActionCard(action: $0, result: nil, decide: { _ in }) } }.padding(24)
+        }
+    }
+
     func testEnglishAndImperial() throws {
         L10n.setLanguage("en")
         Units.setSystem("imperial")
@@ -367,6 +383,32 @@ final class SnapshotTests: XCTestCase {
         try render("sleep-settings", height: 800) { NavigationStack { SleepSettingsView(given: SettingsStore(api: APIClient(), demo: true)) }.environment(AppModel(demo: true)) }
     }
 
+    /// The first-run setup's sport, goal and time pages, in English as the site and App Store show the app.
+    func testSetupFocusPages() throws {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        var focus = SetupFocus(profile: ["mainSport": .string("triathlon"), "sportGoal": .string("závod"), "eventName": .string("Ironman 70.3"), "eventDate": .string("2027-06-13")])
+        XCTAssertEqual(focus.sport, "triathlon")
+        XCTAssertEqual(focus.goal, "race")
+        let saved = focus.applied(to: ["sex": .string("male")])
+        XCTAssertEqual(saved["sex"], .string("male"))
+        XCTAssertEqual(saved["mainSport"], .string("triathlon"))
+        XCTAssertEqual(saved["eventDate"], .string("2027-06-13"))
+        focus.swims100 = true
+        try render("setup-sport-en", height: 844) { SetupSportPage(focus: .constant(focus)).padding(24).padding(.top, 40).environment(\.locale, L10n.locale) }
+        try render("setup-goal-en", height: 844) { SetupGoalPage(focus: .constant(focus)).padding(24).padding(.top, 40).environment(\.locale, L10n.locale) }
+        try render("setup-time-en", height: 844) {
+            SetupTimePage(minutes: .constant([60, 0, 75, 0, 45, 270, 120]), loading: false, lifts: true) {}
+                .padding(24).padding(.top, 40).environment(\.locale, L10n.locale)
+        }
+        XCTAssertEqual(AvailabilityBarRow.maxMinutes, 480)
+        XCTAssertEqual(WeekSessionDraft.lengths("ride", including: 60).last, 480)
+        XCTAssertEqual(WeekSessionDraft.lengths("run", including: 60).last, 360)
+    }
+
     func testCoachMarkdownBlocks() {
         let text = "## Shrnutí\nDnes **lehce**.\n\n- spánek\n- HRV\n\n1. rozjezd\n2. klid\n\n| den | km |\n|---|---|\n| po | 10 |\n\n---"
         let blocks = CoachMarkdown.blocks(text)
@@ -388,16 +430,16 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testDeepLinks() {
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/sleep")!), .sleep)
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/heart")!), .metric(.hrv))
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/metric/temperature")!), .metric(.temperature))
-        XCTAssertNil(AppRoute(url: URL(string: "loadwise://open/metric/nope")!))
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/gym/2026-10-08")!), .gym("2026-10-08"))
-        XCTAssertNil(AppRoute(url: URL(string: "loadwise://open/food")!))
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/sleep")!), .sleep)
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/heart")!), .metric(.hrv))
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/metric/temperature")!), .metric(.temperature))
+        XCTAssertNil(AppRoute(url: URL(string: "aurin://open/metric/nope")!))
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/gym/2026-10-08")!), .gym("2026-10-08"))
+        XCTAssertNil(AppRoute(url: URL(string: "aurin://open/food")!))
         XCTAssertNil(AppRoute(url: URL(string: "https://open/sleep")!))
-        XCTAssertEqual(TabLink.tab(URL(string: "loadwise://open/food")!), .food)
+        XCTAssertEqual(TabLink.tab(URL(string: "aurin://open/food")!), .food)
         let model = AppModel(demo: true)
-        model.handle(URL(string: "loadwise://open/sleep")!)
+        model.handle(URL(string: "aurin://open/sleep")!)
         XCTAssertEqual(model.tab, .health)
         XCTAssertEqual(model.paths[.health], [.sleep])
     }
@@ -472,8 +514,24 @@ final class SnapshotTests: XCTestCase {
         XCTAssertFalse(ExerciseCatalog.works(press, "calves"))
         XCTAssertEqual(EquipmentView.summary(home), "Domácí posilovna · 2 věci")
         XCTAssertEqual(EquipmentView.kg(2.5), "2,5 kg")
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/vo2max")!), .vo2max)
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/library/run")!), .workoutLibrary("run"))
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/vo2max")!), .vo2max)
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/library/run")!), .workoutLibrary("run"))
+        // The equipment picker: every station once, by kind, with the muscles it is for.
+        let stations = try JSONDecoder().decode([GymEquipment.Station].self, from: Data(#"""
+        [{"id":"dumbbells","group":"Volné váhy","label":"Jednoručky","sections":["free_weights"],"uses":"Celé tělo","keywords":"cinky"},
+         {"id":"chest_press","group":"Prsa","label":"Tlaky na prsa (stroj)","sections":["upper_machines"],"uses":"Prsa · triceps"},
+         {"id":"pec_deck","group":"Záda a ramena","label":"Pec deck (rozpažování a zadní ramena)","sections":["upper_machines"],"uses":"Prsa · zadní ramena","keywords":"butterfly motýlek"},
+         {"id":"cables","group":"Kladky","label":"Kladky (kabelový stroj)","sections":["cables"],"uses":"Celé tělo"},
+         {"id":"sled","group":"Kardio","label":"Saně","sections":[]}]
+        """#.utf8))
+        let sections = [GymEquipment.Section(id: "free_weights", label: "Volné váhy"), GymEquipment.Section(id: "cables", label: "Kladky"),
+                        GymEquipment.Section(id: "upper_machines", label: "Stroje – horní část těla")]
+        let place = GymPlace(id: "p", kind: "gym", name: "METAGYM Kutná Hora", stations: ["dumbbells", "pec_deck"], url: "", dumbbellWeights: [])
+        XCTAssertEqual(GymPlaceView.folded("Motýlek"), "motylek")
+        try render("gym-place", glow: Palette.Glow.training, height: 1100) {
+            GymPlaceView(place: .constant(place), stations: stations, sections: sections, catalog: .constant([curl, press]), onDelete: {}, scrolls: false)
+                .frame(maxHeight: .infinity, alignment: .top)
+        }
     }
 
     func testRoundTwoScreens() throws {
@@ -587,16 +645,20 @@ final class SnapshotTests: XCTestCase {
         try render("library-widget", glow: Palette.Glow.training, height: 220) {
             NavigationStack { LibraryWidget().padding(24) }
         }
+        try render("watch-settings", glow: Palette.Glow.training, height: 1100) {
+            NavigationStack { WatchSettingsView() }
+        }
     }
 
     func testRoundFourLogic() {
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/library")!), .library)
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/library/gym")!), .workoutLibrary("gym"))
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/library")!), .library)
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/library/gym")!), .workoutLibrary("gym"))
         let presets = DrinkPrefs.presets(favorites: ["water", "coffee", "tea"], saved: { $0 == "tea" ? [300, 400, 500] : nil })
         XCTAssertEqual(presets.map(\.id), ["water.250", "water.500", "coffee.200", "tea.300", "tea.400"])
         XCTAssertEqual(DrinkPrefs.presets(favorites: DrinkKind.all.map(\.id), saved: { _ in nil }).count, 8, "at most eight choices")
         XCTAssertEqual(LibrarySport.find("run")?.label, "Běh")
-        XCTAssertEqual(LibrarySport.all.map(\.id), ["ride", "run", "swim", "gym"], "the app's order of sports")
+        XCTAssertEqual(LibrarySport.all.map(\.id), ["ride", "run", "swim", "tri", "gym"], "the app's order of sports")
+        XCTAssertEqual(LibrarySport.single.map(\.id), ["ride", "run", "swim", "gym"], "one workout: no bricks")
         XCTAssertNil(LibrarySport.find("rowing"))
         XCTAssertEqual(DrinkFigureKind.from("octopus"), .octopus)
         XCTAssertEqual(DrinkFigureKind.from("dragon"), .whale, "an unknown figure falls back to the whale")
@@ -695,8 +757,8 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(ZoneStyle.status(weeks[3]), "chybí 54 min")
         XCTAssertEqual(ZoneStyle.status(weeks[0]), "doporučení splněno")
         XCTAssertEqual(DemoData.training.activeCalories?.days?.count, 27)
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/zones")!), .zones)
-        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/active-energy")!), .activeEnergy)
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/zones")!), .zones)
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/active-energy")!), .activeEnergy)
         let weather = try XCTUnwrap(DemoData.today.weather)
         XCTAssertEqual(weather.place, "Praha")
         XCTAssertTrue(AppleWeather.credited(weather))
@@ -739,16 +801,79 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(parts[0].drinks.map(\.id), [11, 12])
     }
 
-    /// The offer: the app playing in the phone at moments of the tour, and
-    /// the list with the plans.
+    /// The offer in night violet: the opening at moments of its animation,
+    /// the offer with its phones, all plans and the free week.
     func testPaywallTour() throws {
-        for time in [0.6, 2.9, 5.0, 7.6, 10.2, 12.0, 14.6] {
+        for time in [0.5, 2.0, 3.6, 5.0, 8.0] {
             try render("paywall-\(Int(time * 10))", height: 844) { PaywallView(close: {}, frozenTime: time, store: ProStore()) }
         }
         try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore()) }
-        // A new Apple ID: the free-week switch under the plans, then the week as a timeline.
-        try render("paywall-plans-trial", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore(trialEligible: true)) }
+        try render("paywall-plans-trial", height: 844) { PaywallView(close: {}, frozenTime: 5.5, step: 1, store: ProStore(trialEligible: true)) }
         try render("paywall-free-week", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true)) }
+        try render("paywall-all-plans", height: 700) {
+            AllProPlans(offers: ProOffer.all(ProStore(trialEligible: true)), selected: .constant(.yearOnce), buying: false, start: {}, redeem: {}, restore: {})
+                .background(Night.bottom)
+        }
+    }
+
+    /// Settings → Aurin Pro in night violet: active, the free week on day 3,
+    /// the year paid monthly at payment 3 of 12, extra messages, the week running
+    /// low with none, and the packs page with purchases.
+    @MainActor
+    func testProSettings() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Prague"))
+        let day = { (m: Int, d: Int, y: Int) in calendar.date(from: DateComponents(year: y, month: m, day: d, hour: 9))! }
+        let extra = CoachAllowance(limit: 30, used: 12, left: 55, weekLeft: 18, extra: 37, resetsOn: "2026-11-09", near: false)
+        let low = CoachAllowance(limit: 30, used: 27, left: 3, weekLeft: 3, extra: 0, resetsOn: "2026-11-09", near: true)
+        let active = ProPageState(hasPro: true, unlocked: true, renewal: "Obnoví se 5. listopadu", allowance: extra, packsOnSale: true)
+        try render("pro-settings-active", height: 1100) { ProPage(state: active, calendar: calendar) }
+        var week = active
+        week.freeWeek = DateInterval(start: day(10, 29, 2026), end: day(11, 5, 2026))
+        week.firstPayment = "Čt 5. 11. · 149 Kč"
+        week.allowance = nil
+        try render("pro-settings-free-week", height: 1000) { ProPage(state: week, now: day(10, 31, 2026), calendar: calendar) }
+        var monthly = active
+        monthly.payments = ProStore.Payments(number: 3, total: 12, next: day(2, 5, 2027), ends: day(11, 5, 2027))
+        monthly.allowance = low
+        try render("pro-settings-paid-monthly", height: 1250) { ProPage(state: monthly, calendar: calendar) }
+        let free = ProPageState(pilot: true, plans: ProPlans.main)
+        try render("pro-settings-free", height: 950) { ProPage(state: free, calendar: calendar) }
+        let purchases = [
+            CoachPacks.Purchase(productId: "health.aurin.app.coach.messages100", messages: 100, counted: true, environment: "Production", price: 7.99, currency: "EUR", purchasedAt: "2026-11-02T00:12:00.000Z", refunded: false),
+            CoachPacks.Purchase(productId: "health.aurin.app.coach.messages40", messages: 40, counted: true, environment: "Production", price: 3.99, currency: "EUR", purchasedAt: "2026-10-12T10:00:00Z", refunded: false),
+            CoachPacks.Purchase(productId: "health.aurin.app.coach.messages40", messages: 40, counted: false, environment: "Sandbox", price: 3.99, currency: "EUR", purchasedAt: "2026-09-28T10:00:00Z", refunded: false)
+        ]
+        let prices = ["health.aurin.app.coach.messages40": "€3.99", "health.aurin.app.coach.messages100": "€7.99"]
+        try render("pro-packs", height: 900) {
+            CoachPacksPage(left: 137, purchases: purchases, price: { prices[$0] }, chosen: .constant("health.aurin.app.coach.messages100"), added: 100)
+        }
+    }
+
+    func testPaymentDotsMonths() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Prague"))
+        let ends = try XCTUnwrap(calendar.date(from: DateComponents(year: 2027, month: 11, day: 5)))
+        let first = try XCTUnwrap(calendar.date(byAdding: .month, value: -12, to: ends))
+        XCTAssertEqual(calendar.dateComponents([.year, .month], from: first), DateComponents(year: 2026, month: 11), "12 payments from Nov 2026")
+    }
+
+    func testFreeWeekDates() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Prague"))
+        let bought = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 29, hour: 21)))
+        let first = PaywallView.firstPayment(from: bought, calendar: calendar)
+        XCTAssertEqual(calendar.dateComponents([.month, .day], from: first), DateComponents(month: 11, day: 5), "Thursday to Thursday")
+        // The reminder (ProStore, day 5) comes before the first payment.
+        XCTAssertLessThan(try XCTUnwrap(ProStore.trialReminderDate(purchased: bought, calendar: calendar)), first)
+    }
+
+    @MainActor
+    func testOffersWithoutMonthlyPayments() throws {
+        // No "Monthly with 12-Month Commitment" here (older iOS, the US, the simulator): yearly and monthly.
+        let plans = ProOffer.main(ProStore(trialEligible: true))
+        XCTAssertEqual(plans.map(\.kind), [.yearOnce, .monthly])
+        XCTAssertEqual(plans.map(\.trial), [true, false], "the free week only on the yearly plan")
     }
 
     /// Training plans: before the start, the running plan, a week and the result.
@@ -831,6 +956,29 @@ final class SnapshotTests: XCTestCase {
             NavigationStack { PlanWeekContent(week: active.template.weeks[2], sport: "ride", detail: week).padding(.horizontal, 24) }.environment(model)
         }
         try render("plan-week-days", height: 700) { WeekDaysSheet(week: week, usual: 4).environment(model) }
+        // Free time by weekday, two weeks in turn, this week only and the plan's days.
+        let timeJSON = #"{"days":[45,60,0,60,0,180,240],"total":585,"daysB":[0,90,90,0,90,240,120],"totalB":630,"alternate":"2026-10-26","suits":[300,420],"short":false}"#
+        let time = try decoder.decode(PlanPreview.Time.self, from: Data(timeJSON.utf8))
+        try render("plan-free-time", height: 900) { FreeTimeSheet(time: time, planDays: [1, 3, 5, 6]).environment(model) }
+        let weekWithTime = try decoder.decode(PlanWeekDetail.self, from: Data(weekJSON.replacingOccurrences(of: #""weekDays":null,"#, with: #""weekDays":null,"time":{"days":[45,60,0,45,0,120,180],"own":true,"weekB":false},"#).utf8))
+        try render("plan-time-this-week", height: 900) { TimeThisWeekSheet(week: weekWithTime, planDays: [1, 3, 5, 6], usual: 4).environment(model) }
+        let long = try decoder.decode(PlanPreview.Long.self, from: Data(#"{"day":5,"auto":5,"own":false}"#.utf8))
+        try render("plan-days-and-time", height: 700) { DaysAndTimeSheet(sport: "ride", range: 3...6, initial: [1, 3, 5, 6], time: time, long: long).environment(model) }
+        try render("plan-long-day", height: 600) { NavigationStack { LongDayPicker(sport: "run", days: [1, 3, 5, 6], time: time, auto: 5, selection: .constant(6)) } }
+        try render("plan-time-short", height: 120) { PlanTimeNote(text: L10n.tr("Na tento plán je času málo. Klíčové jízdy zůstanou, lehké se zkrátí a odhad cíle bude opatrnější.")).padding(16) }
+        // The "Úpravy" tiles must fit: an iPhone SE in both languages, and the largest text (one tile a row).
+        let language = L10n.language
+        defer { L10n.setLanguage(language) }
+        for name in ["cs", "en"] {
+            L10n.setLanguage(name)
+            try render("plan-active-se-\(name)", glow: Palette.Glow.training, height: 1500, width: 320) {
+                NavigationStack { ActivePlanContent(active: active, preview: preview, week: weekWithTime).padding(.horizontal, 16) }.environment(model).environment(\.locale, L10n.locale)
+            }
+            try render("plan-active-xxxl-\(name)", glow: Palette.Glow.training, height: 2600, width: 320, typeSize: .accessibility3) {
+                NavigationStack { ActivePlanContent(active: active, preview: preview, week: weekWithTime).padding(.horizontal, 16) }.environment(model).environment(\.locale, L10n.locale)
+            }
+        }
+        try render("plan-choose", height: 900) { TrainingPlansSheet(plans: plans).environment(model) }
         try render("plan-move", height: 340) { MoveSessionSheet(session: week.sessions[2], detail: week) { _ in } }
         try render("plan-result", glow: Palette.Glow.today, height: 1150) {
             NavigationStack { PlanResultContent(result: result, plans: plans).padding(.horizontal, 24) }.environment(model)
@@ -856,6 +1004,17 @@ final class SnapshotTests: XCTestCase {
             NavigationStack { ActivePlanContent(active: run, preview: nil, week: nil, editGoal: {}).padding(.horizontal, 24) }.environment(model)
         }
         try render("plan-goal-time", height: 620) { GoalTimeSheet(km: 21.1, estimate: 6270, weeks: 10, initial: 6120) { _ in } }
+        // Multisport: a duathlon (its race's sports, run, ride, run on race day) and a plan without a race with picked sports.
+        let du = #"{"id":"du-standard","sport":"triathlon","name":"Standardní duatlon","goal":"Běh 10 km, kolo 40 km, běh 5 km","description":"","level":"intermediate","weeksCount":12,"days":[5,7],"race":{"km":55,"options":null,"kind":"du-standard","legList":[{"sport":"run","km":10},{"sport":"ride","km":40},{"sport":"run","km":5}]},"perSport":{"ride":3,"run":3},"sports":["ride","run"],"weeks":[\#(weeks)]}"#
+        let duPlan = #"{"templates":[\#(du)],"active":{"id":11,"templateId":"du-standard","name":"Standardní duatlon","startDate":"2026-10-19","raceDate":"2027-01-10","raceKm":55,"week":6,"weeksCount":12,"phaseLabel":"Budování","started":true,"paused":false,"shiftedWeeks":0,"returning":false,"sports":["ride","run"],"perSport":{"ride":3,"run":3},"race":{"km":55,"kind":"du-standard","minutes":131,"legList":[{"sport":"run","km":10,"minutes":44},{"sport":"ride","km":40,"minutes":66},{"sport":"run","km":5,"minutes":21}]},"template":\#(du)},"activeGym":null,"started":null}"#
+        let duathlon = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(duPlan.utf8)).active)
+        try render("plan-race-duathlon", glow: Palette.Glow.training, height: 700) {
+            NavigationStack { ActivePlanContent(active: duathlon, preview: nil, week: nil).padding(.horizontal, 24) }.environment(model)
+        }
+        try render("plan-start-duathlon", height: 900) { StartPlanSheet(template: duathlon.template).environment(model) }
+        let multi = try decoder.decode(TrainingPlans.Template.self, from: Data(#"{"id":"multi-base","sport":"triathlon","name":"Multisport","goal":"Kondice ve dvou nebo třech sportech","description":"","level":"intermediate","weeksCount":12,"days":[4,7],"race":null,"perSport":{"ride":2,"run":2,"swim":2},"sports":["ride","run","swim"],"choose":true,"weeks":[\#(weeks)]}"#.utf8))
+        try render("plan-start-multisport", height: 900) { StartPlanSheet(template: multi).environment(model) }
+        try render("plan-sports", height: 420) { PlanSportsSheet(initial: ["ride", "swim"]).environment(model) }
         // A gym plan with its strength tests, and its result with the lifts before and after.
         let testKeys = "\"Dřep, bench, mrtvý tah: odhad maxima\",\"3× týdně\"", workKeys = "\"3× týdně\",\"5 × 5\",\"RPE 8\""
         let strengthWeeks = (1...12).map { (i: Int) -> String in
@@ -867,24 +1026,87 @@ final class SnapshotTests: XCTestCase {
         try render("plan-gym-strength", height: 1500) {
             NavigationStack { PlanDetailView(template: strength, active: nil, days: [0, 2, 4]) }.environment(model)
         }
+        // Gym five times a week: push, pull and legs, each day's time up to 90 minutes.
+        let gymPreviewJSON = #"{"startDate":"2026-11-02","endDate":"2027-01-24","days":[0,1,2,3,4],"weeks":[],"totals":{"sessions":0,"minutes":0,"tss":0},"added":[1,3],"gym":{"perWeek":5,"usual":3,"range":[2,7],"split":"Tlaky / tahy / nohy","days":[{"day":0,"part":"push","label":"tlaky","minutes":60},{"day":1,"part":"pull","label":"tahy","minutes":45},{"day":2,"part":"legs","label":"nohy","minutes":90},{"day":3,"part":"push","label":"tlaky","minutes":60},{"day":4,"part":"pull","label":"tahy","minutes":75}]}}"#
+        let gymPreview = try decoder.decode(PlanPreview.self, from: Data(gymPreviewJSON.utf8))
+        try render("plan-gym-five", height: 2000) {
+            NavigationStack { PlanDetailView(template: strength, active: nil, days: [0, 1, 2, 3, 4], gymPreview: gymPreview) }.environment(model)
+        }
         let gymResultJSON = #"{"id":10,"templateId":"gym-strength","name":"Síla","sport":"gym","startDate":"2026-10-19","endDate":"2027-01-10","ftpStart":null,"ftpEnd":null,"ctlStart":null,"ctlEnd":null,"sessionsDone":33,"sessionsPlanned":34,"minutesDone":0,"minutesPlanned":null,"completion":{"1":100,"2":100,"3":67,"4":100,"5":100,"6":100,"7":100,"8":100,"9":67,"10":100,"11":100,"12":100},"weeks":[\#(strengthWeeks)],"next":[],"lifts":[{"exercise":"Barbell back squat","before":136,"after":148},{"exercise":"Barbell bench press","before":104,"after":110},{"exercise":"Barbell Deadlift","before":158,"after":171}]}"#
         let gymResult = try decoder.decode(PlanResult.self, from: Data(gymResultJSON.utf8))
         try render("plan-result-gym", glow: Palette.Glow.today, height: 1100) {
             NavigationStack { PlanResultContent(result: gymResult).padding(.horizontal, 24) }.environment(model)
         }
+        // An open-water race: one swim leg, the time estimated from CSS.
+        let ow = #"{"id":"swim-open-water","sport":"swim","name":"Závod ve volné vodě","goal":"Závod 1,5 až 5 km ve volné vodě","description":"","level":"intermediate","weeksCount":12,"days":[3,4],"race":{"km":3.8,"options":[1.5,3.8,5],"swim":true},"weeks":[\#(weeks)]}"#
+        let owPlan = #"{"templates":[\#(ow)],"active":{"id":12,"templateId":"swim-open-water","name":"Závod ve volné vodě","startDate":"2026-10-19","raceDate":"2027-01-10","raceKm":3.8,"week":6,"weeksCount":12,"phaseLabel":"Budování","started":true,"paused":false,"shiftedWeeks":0,"returning":false,"race":{"km":3.8,"kind":"swim","minutes":76,"estimated":false,"legList":[{"sport":"swim","meters":3800,"minutes":76}]},"template":\#(ow)},"activeGym":null,"started":null}"#
+        let openWater = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(owPlan.utf8)).active)
+        try render("plan-race-open-water", glow: Palette.Glow.training, height: 700) {
+            NavigationStack { ActivePlanContent(active: openWater, preview: nil, week: nil).padding(.horizontal, 24) }.environment(model)
+        }
+        // Faster swimming: the result with CSS before and after.
+        let swimResultJSON = #"{"id":13,"templateId":"swim-css","name":"Rychlejší plavání","sport":"swim","startDate":"2026-10-19","endDate":"2026-12-27","ftpStart":null,"ftpEnd":null,"cssStart":112,"cssEnd":105,"ctlStart":31,"ctlEnd":38,"sessionsDone":28,"sessionsPlanned":30,"minutesDone":1290,"minutesPlanned":1350,"completion":{"1":100,"2":100,"3":67,"4":100,"5":100,"6":100,"7":100,"8":100},"weeks":[\#(weeks)],"next":[]}"#
+        let swimResult = try decoder.decode(PlanResult.self, from: Data(swimResultJSON.utf8))
+        try render("plan-result-swim", glow: Palette.Glow.today, height: 1150) {
+            NavigationStack { PlanResultContent(result: swimResult).padding(.horizontal, 24) }.environment(model)
+        }
     }
 
-    private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, @ViewBuilder _ content: () -> V) throws {
+    private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, width: CGFloat = 390, typeSize: DynamicTypeSize = .large, @ViewBuilder _ content: () -> V) throws {
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         for (suffix, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
             let view = content()
-                .frame(width: 390, height: height)
+                .dynamicTypeSize(typeSize)
+                .frame(width: width, height: height)
                 .background { ScreenBackground(glow: glow) }
                 .environment(\.colorScheme, scheme)
-            let renderer = ImageRenderer(content: view)
-            renderer.scale = 2
-            let data = try XCTUnwrap(renderer.uiImage?.pngData(), "\(name) did not render")
+            let image: UIImage?
+            let type = String(reflecting: V.self)
+            if type.contains("NavigationStack") || type.contains("Sheet") {
+                // ImageRenderer stops the whole test run on iOS 27 ("no current update
+                // to enqueue action to") when the view holds a NavigationStack, which it
+                // cannot flatten; such a screen, and every sheet (most open with their
+                // own NavigationStack), is drawn from a window instead.
+                image = hosted(view, width: width, height: height, scheme: scheme)
+            } else {
+                let renderer = ImageRenderer(content: view)
+                renderer.scale = 2
+                image = renderer.uiImage
+            }
+            let data = try XCTUnwrap(image?.pngData(), "\(name) did not render")
             try data.write(to: outputDirectory.appending(path: "\(name)-\(suffix).png"))
+        }
+    }
+
+    /// The view in a window of the test host, drawn as the screen shows it.
+    private func hosted<V: View>(_ view: V, width: CGFloat, height: CGFloat?, scheme: ColorScheme) -> UIImage? {
+        let controller = UIHostingController(rootView: view)
+        controller.safeAreaRegions = []
+        controller.overrideUserInterfaceStyle = scheme == .dark ? .dark : .light
+        controller.view.backgroundColor = .clear
+        // Without a set height the view's own height, as ImageRenderer measured it;
+        // a view that takes any height it gets stops at a long phone screen.
+        let fitted = height ?? controller.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        let size = CGSize(width: width, height: fitted.isFinite && fitted > 0 ? min(ceil(fitted), 4000) : 1600)
+        guard let scene = ProStore.anchorScene() else { return nil }
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(origin: .zero, size: size)
+        window.rootViewController = controller
+        window.isHidden = false
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+        }
+        controller.view.frame = window.bounds
+        controller.view.layoutIfNeeded()
+        // SwiftUI's first update and the async images settle.
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        controller.view.layoutIfNeeded()
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 2
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            _ = controller.view.drawHierarchy(in: CGRect(origin: .zero, size: size), afterScreenUpdates: true)
         }
     }
 }

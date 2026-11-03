@@ -16,6 +16,8 @@ final class SettingsStore {
     /// Health data → Reads from: the types switched off per service and what each can give.
     private(set) var readOff: [String: [String]] = [:]
     private(set) var readTypes: [String: [String]] = [:]
+    /// Per service the server reads, the types it sent in the last week (nil until loaded).
+    private(set) var sending: [String: [String]]?
     private(set) var sync: SyncStatus?
     private(set) var loaded = false
     /// The profile really came from the server. The server replaces the whole
@@ -30,6 +32,8 @@ final class SettingsStore {
     private(set) var owner = false
     /// Food corrections waiting for the owner, for the row's badge.
     var pendingFoodSuggestions = 0
+    /// What AI cost today (UTC day), for the owner's Útraty AI row.
+    var aiSpentToday: Double?
     /// People from the website's waitlist waiting for the owner (Testování → Zájemci).
     var pendingWaitlist = 0
     let demo: Bool
@@ -77,6 +81,7 @@ final class SettingsStore {
                 owner = roles.owner
                 if owner { pendingFoodSuggestions = (try? await api.foodSuggestions()).map { $0.pending.map { $0.values.reduce(0, +) } ?? $0.counts?["pending"] ?? 0 } ?? 0 }
                 if owner { pendingWaitlist = (try? await api.waitlist())?.pending.count ?? 0 }
+                if owner { aiSpentToday = (try? await api.aiSpending())?.today }
             }
             errorMessage = nil
         } catch {
@@ -110,7 +115,10 @@ final class SettingsStore {
         next.merge(changes) { $1 }
         do {
             try await api.saveProfile(next)
-            profile = try await api.profile()
+            // The suggestions too: "automaticky · …" follows the saved goal and race.
+            let response = try await api.profileWithSuggestions()
+            profile = response.profile ?? [:]
+            if let fresh = response.suggestions { suggestions = fresh }
             // New wake times for the watch's alarm.
             WatchBridge.shared.update(profile: profile)
             errorMessage = nil
@@ -121,13 +129,16 @@ final class SettingsStore {
         }
     }
 
-    func saveTraining(_ changes: JSONObject, writeIntervals: Bool) async -> Bool {
+    /// `wahooAgain`: write Wahoo even without a changed FTP or zones (after it refused the last write).
+    func saveTraining(_ changes: JSONObject, writeIntervals: Bool, writeWahoo: Bool = true, wahooAgain: Bool = false) async -> Bool {
         guard !demo else { return true }
         saving = true
         defer { saving = false }
         var next = training?.profile ?? [:]
         next.merge(changes) { $1 }
         next["writeIntervals"] = .bool(writeIntervals)
+        next["writeWahoo"] = .bool(writeWahoo)
+        if wahooAgain { next["wahooAgain"] = .bool(true) }
         do {
             training = try await api.saveTrainingProfile(next)
             errorMessage = nil
@@ -169,6 +180,17 @@ final class SettingsStore {
             readTypes = response.readTypes ?? [:]
         }
         if let status = try? await api.syncStatus() { sync = status }
+    }
+
+    /// Loaded when Zdroje dat opens; the server works it out at most once an hour.
+    func loadSending() async {
+        guard !demo else { return }
+        if let response = try? await api.sourcesSending() { sending = response.sending ?? [:] }
+    }
+
+    /// Whether a service sent data of this type in the last week.
+    func sent(_ provider: String, _ type: String) -> Bool {
+        sending?[provider]?.contains(type) == true
     }
 
     /// Whether a service gives this type at all, and whether Aurin reads it now.

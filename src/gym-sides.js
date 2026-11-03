@@ -22,9 +22,9 @@ export function lastSideChoice(sets) {
   return Object.fromEntries([...latest].map(([name, v]) => [name, v.sides ? 'sides' : 'both']));
 }
 
-// Plan rows (the sheet's columns, 13 = Strana): the work sets of an exercise
+// Plan rows (the sheet's columns, 13 = Strana): the sets of an exercise
 // done by sides (last time, else one-sided by its name) become an L and a P
-// row each. weaker: exercise → 'L'|'P', the side that gets one set more
+// row each, warm-ups too, so both legs (arms) warm up. weaker: exercise → 'L'|'P', the side that gets one set more
 // (sideBalance) while it lags.
 export function splitSides(rows, { columns = 14, weaker = {}, choice = {} } = {}) {
   const out = [];
@@ -32,8 +32,9 @@ export function splitSides(rows, { columns = 14, weaker = {}, choice = {} } = {}
   rows.forEach((row, i) => {
     const r = pad(row, columns), name = String(r[1] || '');
     const sides = choice[name] ? choice[name] === 'sides' : oneSided(name);
-    if (!WORK(r) || !sides || String(r[13] || '').trim()) { out.push(r); return; }
+    if (!sides || String(r[13] || '').trim()) { out.push(r); return; }
     out.push([...r.slice(0, 13), 'L', ...r.slice(14)], [...r.slice(0, 13), 'P', ...r.slice(14)]);
+    if (!WORK(r)) return;
     // After the exercise's last set: one more for the weaker side.
     const next = rows[i + 1];
     const side = weaker[name];

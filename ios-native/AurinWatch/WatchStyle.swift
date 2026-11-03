@@ -18,6 +18,8 @@ enum W {
     static let indigo = Color(hex: 0xA5A1FF)
     static let pink = Color(hex: 0xF59BB0)
     static let red = Color(hex: 0xFF6B5B)
+    /// Palette.rust (dark): a carbs limit passed.
+    static let rust = Color(hex: 0xF0907A)
     /// The iPhone's dark macro and water colours (Shared/Palette.swift).
     static let carbs = Color(hex: 0xFFC274)
     static let protein = Color(hex: 0x83C7FF)
@@ -172,6 +174,13 @@ enum W {
     static func dayName(_ text: String) -> String {
         guard let date = day(text) else { return text }
         return dateFormatter("EEEE").string(from: date)
+    }
+
+    /// "dnes", "zítra" or the day's name ("sobota"), as a workout's detail says when it is.
+    static func relativeDay(_ text: String) -> String {
+        let today = WatchStore.localDate(Date())
+        let tomorrow = WatchStore.localDate(Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date())
+        return text == today ? tr("dnes", "today") : text == tomorrow ? tr("zítra", "tomorrow") : dayName(text)
     }
 
     /// "pá", "Fri".

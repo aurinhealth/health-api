@@ -1,25 +1,37 @@
 import SwiftUI
 import UserNotifications
 
-/// A service to connect in the grid: its icon, name and how.
-struct IntegrationTile: View {
+/// A service not connected yet: its icon, name, what it gives Aurin and Connect.
+struct IntegrationOfferCard: View {
     let id: String
     let name: String
-    let note: String
+    let detail: String
+    var working = false
+    let connect: () -> Void
 
     var body: some View {
-        VStack(spacing: 8) {
-            IntegrationIcon(id: id, size: 50)
-            VStack(spacing: 1) {
-                Text(verbatim: name).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
-                Text(verbatim: note).font(Typo.tiny).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
+        Button(action: connect) {
+            HStack(spacing: 14) {
+                IntegrationIcon(id: id, size: 50)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(verbatim: name).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                    if !detail.isEmpty {
+                        Text(verbatim: detail).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 8)
+                Text(working ? L10n.tr("připojuji…") : L10n.tr("Připojit"))
+                    .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+                    .padding(.horizontal, 14).frame(height: 30)
+                    .background(Palette.ink.opacity(0.07), in: Capsule())
             }
+            .padding(14)
+            .cardSurface(cornerRadius: 18)
+            .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, 16).padding(.horizontal, 6)
-        .frame(maxWidth: .infinity)
-        .cardSurface(cornerRadius: 18)
-        .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
+        .disabled(working)
         .accessibilityElement(children: .combine)
     }
 }
@@ -238,82 +250,3 @@ struct IntegrationDetailView: View {
     }
 }
 
-/// "+": the services that can still be connected, in sections.
-struct AddIntegrationSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let available: [ConnectionsResponse.Provider]
-    var appleConnected = false
-    let connect: (String) -> Void
-
-    var body: some View {
-        NavigationStack {
-            SettingsPage(title: "Přidat propojení") {
-                let health = available.filter { $0.id == "google" }
-                let training = available.filter { $0.id == "intervals" }
-                SettingsGroup(title: "Zdraví a spánek") {
-                    ForEach(health) { provider in
-                        row(provider, subtitle: L10n.tr("spánek, tep, HRV, kroky, váha a jídlo"))
-                        SettingsDivider()
-                    }
-                    if appleConnected {
-                        SettingsRow(icon: SettingsIcon(systemImage: "heart.fill", color: Color(light: 0xE5484D, dark: 0xF2777A)), title: "Apple Health",
-                                    subtitle: L10n.tr("připojeno"), chevron: false)
-                    } else if AppleHealth.shared.isAvailable {
-                        appleRow
-                    }
-                }
-                // A connected Intervals.icu is in Zdroje dat already; nothing to add here then.
-                if !training.isEmpty {
-                    SettingsGroup(title: "Tréninky") {
-                        ForEach(Array(training.enumerated()), id: \.element.id) { index, provider in
-                            if index > 0 { SettingsDivider() }
-                            row(provider, subtitle: L10n.tr("aktivity, plán tréninků, forma a wellness"))
-                        }
-                    }
-                }
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").scaledFont(14, weight: .semibold) }
-                        .accessibilityLabel("Zavřít")
-                }
-            }
-        }
-        .tint(Palette.ink)
-    }
-
-    /// Apple Health is read on the phone, so it is not in the server's list until connected.
-    private var appleRow: some View {
-        HStack(spacing: 12) {
-            IntegrationIcon(id: "apple", size: 32)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Apple Health").font(.body).foregroundStyle(Palette.ink)
-                Text("spánek, tréninky, tep, HRV, kroky a váha").font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 8)
-            Button(L10n.tr("Připojit")) { connect("apple") }
-                .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
-                .padding(.horizontal, 12).frame(height: 30)
-                .background(Palette.ink.opacity(0.07), in: Capsule())
-                .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 50)
-    }
-
-    private func row(_ provider: ConnectionsResponse.Provider, subtitle: String) -> some View {
-        HStack(spacing: 12) {
-            IntegrationIcon(id: provider.id, size: 32)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: provider.name ?? provider.id).font(.body).foregroundStyle(Palette.ink)
-                Text(subtitle).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 8)
-            Button(L10n.tr("Připojit")) { connect(provider.id) }
-                .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
-                .padding(.horizontal, 12).frame(height: 30)
-                .background(Palette.ink.opacity(0.07), in: Capsule())
-                .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 50)
-    }
-}

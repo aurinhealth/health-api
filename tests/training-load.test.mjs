@@ -55,7 +55,7 @@ test("watch workouts carry their heart rate and power; gym days without a workou
 
 test("/app/api/fitness falls back to the athlete's own load without Intervals.icu", () => {
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
-  assert.match(entry, /if \(!apiKey\) return Response\.json\(\{status:"ok",source:"loadwise",connected:false,days,wellness:await ownFitness\(env,from,to\)\}/);
+  assert.match(entry, /if \(!apiKey\) return Response\.json\(\{status:"ok",source:"aurin",connected:false,days,wellness:await ownFitness\(env,from,to\)\}/);
 });
 
 test("a gym session's load follows its RPE and length from the logged sets, not a fixed 36", async () => {

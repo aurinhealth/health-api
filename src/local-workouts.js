@@ -1,6 +1,6 @@
 import { L } from './lang.js';
 import { intervalsAuthorization } from './intervals-auth.js';
-import { readSyncPrefs } from './sync-destinations.js';
+import { readSyncPrefs, EXTERNAL_PREFIX } from './sync-destinations.js';
 import { syncWahooWorkout, readWahooTokens } from './wahoo.js';
 import { athleteThresholds } from './intervals-athlete.js';
 import { exportDue, failedExport } from './export-retry.js';
@@ -20,7 +20,8 @@ export async function storeLocalEvent(db,event,{key=event.external_id,id=null}={
   if(id&&!existing)throw new Error(L('Trénink nebyl nalezen.', 'The workout wasn\'t found.'));
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(db.userId+':'+key));
   id=existing?.id||'local-'+Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('').slice(0,40);
-  const payload={...event,id,external_id:'loadwise:'+db.userId+':'+id};
+  // A workout sent before 2026-11 keeps its old id (LEGACY_EXTERNAL_PREFIX), which Intervals.icu knows it by.
+  const payload={...event,id,external_id:(existing&&JSON.parse(existing.event_json||'{}').external_id)||EXTERNAL_PREFIX+db.userId+':'+id};
   await db.batch([
     db.prepare("INSERT INTO local_workouts(user_id,id,event_key,event_json) VALUES(?,?,?,?) ON CONFLICT(user_id,id) DO UPDATE SET event_key=excluded.event_key,event_json=excluded.event_json,status='scheduled',revision=local_workouts.revision+1,updated_at=CURRENT_TIMESTAMP").bind(db.userId,id,key,JSON.stringify(payload)),
     await projection(db,id,payload),
@@ -72,8 +73,8 @@ export async function syncIntervalsWorkout(env,id,fetchImpl=fetch,{force=false}=
       if(remoteId){const r=await fetchImpl('https://intervals.icu/api/v1/athlete/0/events/'+encodeURIComponent(remoteId),{method:'DELETE',headers});if(!r.ok&&r.status!==404)throw new Error('Intervals.icu HTTP '+r.status);}
     }else{
       // Keep a provider event id through date/environment edits.
-      // Joined pairs (planned-links.js) stay in the app.
-      const {id:ignoredId,after:ignoredAfter,next:ignoredNext,...providerEvent}=event;void ignoredId;void ignoredAfter;void ignoredNext;
+      // Joined pairs (planned-links.js) and the race mark stay in the app.
+      const {id:ignoredId,after:ignoredAfter,next:ignoredNext,race:ignoredRace,...providerEvent}=event;void ignoredId;void ignoredAfter;void ignoredNext;void ignoredRace;
       const put=remoteId=>fetchImpl(remoteId?'https://intervals.icu/api/v1/athlete/0/events/'+encodeURIComponent(remoteId):'https://intervals.icu/api/v1/athlete/0/events/bulk?upsert=true',{method:remoteId?'PUT':'POST',headers,body:JSON.stringify(remoteId?providerEvent:[providerEvent])});
       let r=await put(remoteId);
       // Deleted in Intervals.icu (404): sent again by hand, it is made anew.

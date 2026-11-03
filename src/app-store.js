@@ -19,6 +19,7 @@
 //   notifications must name this app.
 // APP_STORE_BUNDLE_ID: optional, health.aurin.app unless set.
 import { L } from './lang.js';
+import { packProducts, savePackTransaction, refundPackTransaction } from './coach-packs.js';
 
 // SHA-256 of Apple Root CA - G3 (https://www.apple.com/certificateauthority/).
 export const APPLE_ROOT_CA_G3 = '63343abfb89a6a03ebb57e9b3f5fa7be7c4f5c756f3017b3a8c488c3653e9179';
@@ -143,9 +144,13 @@ export async function verifyAppStoreJws(jws, { roots = [APPLE_ROOT_CA_G3] } = {}
 }
 
 // ---- The subscriptions row ----
-// free_trial: the transaction is Apple's introductory offer (the free week),
-// which gets the reduced AI limits (ai-limit-share.js).
-const COLUMNS = ['app_account_token TEXT', 'original_transaction_id TEXT', 'product_id TEXT', 'store_environment TEXT', 'store_signed_at INTEGER', 'auto_renew INTEGER', 'updated_at TEXT', 'free_trial INTEGER'];
+// free_trial: the transaction is a free week (Apple's introductory offer, or a
+// free promotional one), which gets the reduced AI limits (ai-limit-share.js).
+// offer_type: Apple's offerType of the transaction (2 promotional, 3 offer code:
+// the pilot's discount or a gift), whose AI spending is counted apart.
+// testflight: 1 while the app the account last used is a TestFlight build
+// (Apple's signed AppTransaction says Sandbox), its AI counted with TestFlight's.
+const COLUMNS = ['app_account_token TEXT', 'original_transaction_id TEXT', 'product_id TEXT', 'store_environment TEXT', 'store_signed_at INTEGER', 'auto_renew INTEGER', 'updated_at TEXT', 'free_trial INTEGER', 'offer_type INTEGER', 'testflight INTEGER'];
 // The columns are added the first time a statement misses them, so a request
 // costs no schema statements once they are there.
 export async function ensureStoreColumns(db) {
@@ -185,10 +190,13 @@ export async function storePurchase(env) {
 
 const ENVIRONMENTS = new Set(['Production', 'Sandbox']);
 
+// A pack of extra coach messages (coach-packs.js), not the subscription.
+const isPack = (env, tx) => packProducts(bundleId(env)).includes(tx.productId);
+
 // Checks a decoded transaction belongs to this app and plan.
 function checkTransaction(env, tx) {
   if (tx.bundleId !== bundleId(env)) throw refuse(L('Nákup patří jiné aplikaci.', 'The purchase belongs to another app.'));
-  if (!proProducts(env).includes(tx.productId)) throw refuse(L('Neznámý tarif.', 'Unknown plan.'));
+  if (!proProducts(env).includes(tx.productId) && !isPack(env, tx)) throw refuse(L('Neznámý tarif.', 'Unknown plan.'));
   // Xcode's local StoreKit testing signs with its own key, which never verifies above.
   if (!ENVIRONMENTS.has(tx.environment)) throw refuse(L('Nákup z neznámého prostředí.', 'Purchase from an unknown environment.'));
   if (!tx.originalTransactionId) throw refuse(L('Neplatný doklad o nákupu.', 'Invalid purchase record.'));
@@ -209,8 +217,8 @@ async function write(db, userId, tx, renewal, type) {
   const { plan, validUntil } = planOf(tx, renewal, type);
   const signedAt = Number(tx.signedDate) || Date.now();
   const autoRenew = renewal && renewal.autoRenewStatus != null ? (Number(renewal.autoRenewStatus) === 1 ? 1 : 0) : null;
-  await db.prepare("INSERT INTO subscriptions(user_id,plan,valid_until,original_transaction_id,product_id,store_environment,store_signed_at,auto_renew,updated_at,free_trial) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,valid_until=excluded.valid_until,original_transaction_id=excluded.original_transaction_id,product_id=excluded.product_id,store_environment=excluded.store_environment,store_signed_at=excluded.store_signed_at,auto_renew=COALESCE(excluded.auto_renew,subscriptions.auto_renew),updated_at=excluded.updated_at,free_trial=excluded.free_trial WHERE subscriptions.store_signed_at IS NULL OR subscriptions.store_signed_at<=excluded.store_signed_at OR subscriptions.original_transaction_id IS NOT excluded.original_transaction_id")
-    .bind(userId, plan, validUntil, String(tx.originalTransactionId), tx.productId, tx.environment, signedAt, autoRenew, new Date().toISOString(), Number(tx.offerType) === 1 ? 1 : 0).run();
+  await withColumns(db, () => db.prepare("INSERT INTO subscriptions(user_id,plan,valid_until,original_transaction_id,product_id,store_environment,store_signed_at,auto_renew,updated_at,free_trial,offer_type) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,valid_until=excluded.valid_until,original_transaction_id=excluded.original_transaction_id,product_id=excluded.product_id,store_environment=excluded.store_environment,store_signed_at=excluded.store_signed_at,auto_renew=COALESCE(excluded.auto_renew,subscriptions.auto_renew),updated_at=excluded.updated_at,free_trial=excluded.free_trial,offer_type=excluded.offer_type WHERE subscriptions.store_signed_at IS NULL OR subscriptions.store_signed_at<=excluded.store_signed_at OR subscriptions.original_transaction_id IS NOT excluded.original_transaction_id")
+    .bind(userId, plan, validUntil, String(tx.originalTransactionId), tx.productId, tx.environment, signedAt, autoRenew, new Date().toISOString(), Number(tx.offerType) === 1 || tx.offerDiscountType === 'FREE_TRIAL' ? 1 : 0, Number(tx.offerType) > 0 ? Number(tx.offerType) : null).run());
   return { plan, validUntil };
 }
 
@@ -221,12 +229,27 @@ export async function saveAppTransaction(env, body, options = {}) {
   checkTransaction(env, tx);
   const mine = await appAccountToken(env);
   if (tx.appAccountToken && String(tx.appAccountToken).toLowerCase() !== mine.toLowerCase()) throw refuse(L('Tento nákup patří jinému účtu Aurin.', 'This purchase belongs to another Aurin account.'), 409);
+  if (isPack(env, tx)) return savePackTransaction(env, tx);
   // An offer code redeemed outside the app has no token: the first account to send it keeps it.
   const raw = env.RAW_DB || env.DB;
   const holder = await raw.prepare('SELECT user_id FROM subscriptions WHERE original_transaction_id=?').bind(String(tx.originalTransactionId)).first();
   if (holder && Number(holder.user_id) !== Number(env.USER_ID)) throw refuse(L('Tento nákup patří jinému účtu Aurin.', 'This purchase belongs to another Aurin account.'), 409);
   const saved = await write(env.DB, env.USER_ID, tx, null, null);
   return { status: 'ok', plan: saved.plan, validUntil: saved.validUntil, productId: tx.productId, environment: tx.environment };
+}
+
+// POST /app/api/subscription/install {signedAppTransaction}: the app's
+// AppTransaction, signed by Apple, says whether this install came from
+// TestFlight (receiptType Sandbox) or the App Store (Production). A TestFlight
+// tester without a test purchase is then counted with TestFlight, not with the
+// accounts without a purchase. Written only when it changes.
+export async function saveAppInstall(env, body, options = {}) {
+  const app = await verifyAppStoreJws(body?.signedAppTransaction, options);
+  if (app.bundleId !== bundleId(env)) throw refuse(L('Doklad patří jiné aplikaci.', 'The record belongs to another app.'));
+  if (!ENVIRONMENTS.has(app.receiptType)) throw refuse(L('Doklad z neznámého prostředí.', 'Record from an unknown environment.'));
+  const testflight = app.receiptType === 'Sandbox' ? 1 : 0;
+  await withColumns(env.DB, () => env.DB.prepare("INSERT INTO subscriptions(user_id,plan,testflight) VALUES(?,'free',?) ON CONFLICT(user_id) DO UPDATE SET testflight=excluded.testflight WHERE subscriptions.testflight IS NOT excluded.testflight").bind(env.USER_ID, testflight).run());
+  return { status: 'ok', testflight: testflight === 1 };
 }
 
 // POST /webhooks/app-store: App Store Server Notifications V2 ({signedPayload}).
@@ -245,6 +268,8 @@ export async function handleAppStoreNotification(request, env, options = {}) {
     const tx = await verifyAppStoreJws(data.signedTransactionInfo, options);
     const renewal = data.signedRenewalInfo ? await verifyAppStoreJws(data.signedRenewalInfo, options) : null;
     checkTransaction(env, tx);
+    // A refunded pack stops counting; nothing else about a pack needs the server.
+    if (isPack(env, tx)) return Response.json({ status: 'ok', refunded: tx.revocationDate || note.notificationType === 'REFUND' ? await refundPackTransaction(env.DB, tx) : false });
     const row = await withColumns(env.DB, async () => (tx.appAccountToken ? await env.DB.prepare('SELECT user_id FROM subscriptions WHERE app_account_token=?').bind(String(tx.appAccountToken).toLowerCase()).first() : null)
       || await env.DB.prepare('SELECT user_id FROM subscriptions WHERE original_transaction_id=?').bind(String(tx.originalTransactionId)).first());
     if (!row) return Response.json({ status: 'ok', unknown: true });
