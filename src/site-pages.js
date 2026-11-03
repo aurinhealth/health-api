@@ -110,12 +110,14 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .hero .wl{align-items:flex-start}.hero .wl .tf{text-align:left}
 .hero .note{margin-top:16px;font-size:var(--fs-14);color:var(--muted)}
 /* Works with, right under the form on the first screen: the watches and rings Aurin reads (through Apple Health,
-   Google Health or directly), as plain names in one row, Bevel-like. Brand logos need their makers' written OK. On
-   a phone the row scales with the screen so the names stay side by side. */
+   Google Health or directly), as plain names, Bevel-like. Brand logos need their makers' written OK. */
 .xw{margin-top:34px}
 .xw .xe{display:block;font-size:var(--fs-12);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
-.xw ul{list-style:none;margin:12px 0 0;padding:0;display:flex;align-items:center;gap:24px}
-.xw li{flex:none;font-size:var(--fs-17);font-weight:600;letter-spacing:-.01em;line-height:1.2;color:var(--text);white-space:nowrap}
+.xw ul{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-wrap:wrap;align-items:center;row-gap:6px}
+.xw li{font-size:var(--fs-17);font-weight:600;letter-spacing:-.01em;line-height:1.3;color:var(--text);white-space:nowrap}
+/* A dot after each name: where the row breaks on a narrow phone, a line ends with it and names never run together. */
+.xw li:not(:last-child)::after{content:"·";margin:0 .55em;font-weight:400;color:var(--muted)}
+@media (max-width:359px){.xw li{font-size:var(--fs-14)}}
 /* The phone and its three numbers are drawn at one size (the rig) and scaled down where the column is narrower,
    so the numbers never leave the column and the coach sits under the phone, not over its tab bar. */
 .stage{position:relative;display:flex;justify-content:center}
@@ -417,7 +419,7 @@ main:focus{outline:none}
   .hero .grid{gap:0;text-align:left}.hero .copy{display:contents}.hero .kicker{justify-self:start}.hero .lede{margin-left:0}
   .hero .cta{order:1;margin-top:28px}.hero .stage{order:2;margin-top:40px}
   .hero .wl{align-items:flex-start}.hero .wl .tf{text-align:left}
-  .hero .xw{order:1;margin-top:26px}.xw ul{justify-content:flex-start;gap:min(16px,2.6vw)}.xw li{font-size:min(var(--fs-17),3.3vw)}
+  .hero .xw{order:1;margin-top:26px}.xw ul{justify-content:flex-start}
   .rig{width:322px;height:672px;--hz:.8}
   .rig .device{left:0}
   /* On a phone a part opens with its title and line only: its chapters right under show the same day. */
