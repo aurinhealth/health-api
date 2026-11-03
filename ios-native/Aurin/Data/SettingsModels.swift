@@ -33,8 +33,12 @@ struct ConnectionsResponse: Decodable, Equatable {
         var lastSuccessAt: String? = nil
 
         /// Connected, but the access was refused or Google permissions are missing.
+        /// Written step by step: the one-line `&&`/`??` form crashed Xcode 27.1's
+        /// optimiser (SemanticARCOpts) in the Release build for iPhone.
         var needsAttention: Bool {
-            connected == true && (needsReconnect == true || !(missingPermissions ?? []).isEmpty)
+            guard connected == true else { return false }
+            if needsReconnect == true { return true }
+            return missingPermissions?.isEmpty == false
         }
 
         /// What is wrong, in a few words (Today card, Settings).
