@@ -79,6 +79,15 @@ struct BarcodeScanSheet: View {
         }
         .background { Palette.background.ignoresSafeArea() }
         .task { await askCamera() }
+        // A tap when a code is read, then whether its food was found.
+        .sensoryFeedback(trigger: state) { old, new in
+            switch new {
+            case .searching where old == .scanning: .impact(weight: .medium)
+            case .found where old == .searching: .success
+            case .notFound where old == .searching: .warning
+            default: nil
+            }
+        }
         .onChange(of: torch) { Self.setTorch(torch) }
         .onChange(of: state) { if state != .scanning && state != .searching { torch = false } }
         .onDisappear { if torch { Self.setTorch(false) } }
@@ -355,7 +364,7 @@ struct BarcodeScanSheet: View {
     nonisolated private static func barcode(in data: Data) async -> String? {
         await Task.detached(priority: .userInitiated) {
             let request = VNDetectBarcodesRequest()
-            request.symbologies = [.ean13, .ean8, .upce, .code128]
+            request.symbologies = BarcodeScanner.visionSymbologies
             try? VNImageRequestHandler(data: data).perform([request])
             return request.results?.compactMap(\.payloadStringValue).first { !$0.isEmpty }
         }.value
@@ -454,13 +463,20 @@ struct BarcodeScanner: UIViewRepresentable {
     var paused: Bool
     let onCode: (String) -> Void
 
+    /// The codes on food packages (UPC-A arrives as EAN-13 with a leading 0).
+    /// No Code 128: shelf and shipping labels use it, foods do not.
+    nonisolated static let symbologies: [AVMetadataObject.ObjectType] = [.ean13, .ean8, .upce]
+    nonisolated static let visionSymbologies: [VNBarcodeSymbology] = [.ean13, .ean8, .upce]
+
     /// The lens the scanner films with, and the light belongs to.
     nonisolated(unsafe) static let device: AVCaptureDevice? = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
 
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
         view.previewLayer.videoGravity = .resizeAspectFill
-        context.coordinator.camera.start(on: view.previewLayer)
+        let camera = context.coordinator.camera
+        view.onLayout = { [weak view] in if let view { camera.readOnlyInside(view.previewLayer) } }
+        camera.start(on: view.previewLayer) { [weak view] in if let view { camera.readOnlyInside(view.previewLayer) } }
         return view
     }
 
@@ -479,13 +495,24 @@ struct BarcodeScanner: UIViewRepresentable {
     final class PreviewView: UIView {
         override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
         var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+        var onLayout: (() -> Void)?
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            onLayout?()
+        }
     }
 
     @MainActor
     final class Coordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate {
         var onCode: (String) -> Void
-        var paused = false
+        var paused = false {
+            didSet { if paused != oldValue { candidate = nil } }
+        }
         let camera = BarcodeCamera()
+        /// The code read last: a code counts once two reads in a row give
+        /// the same digits, so one misread frame adds nothing.
+        private var candidate: String?
 
         init(onCode: @escaping (String) -> Void) {
             self.onCode = onCode
@@ -500,6 +527,7 @@ struct BarcodeScanner: UIViewRepresentable {
             // code on every frame: one is enough until the sheet scans again.
             MainActor.assumeIsolated {
                 guard !paused else { return }
+                guard candidate == code else { candidate = code; return }
                 paused = true
                 onCode(code)
             }
@@ -519,12 +547,27 @@ final class BarcodeCamera: @unchecked Sendable {
         output.setMetadataObjectsDelegate(delegate, queue: .main)
     }
 
-    func start(on layer: AVCaptureVideoPreviewLayer) {
+    /// `running` comes on the main thread once the camera films, when the
+    /// preview can say where its window lies in the camera's picture.
+    func start(on layer: AVCaptureVideoPreviewLayer, running: @escaping @MainActor () -> Void) {
         layer.session = session
         queue.async { [self] in
             if !configured { configured = configure() }
             if configured && !session.isRunning { session.startRunning() }
+            if session.isRunning { DispatchQueue.main.async { MainActor.assumeIsolated { running() } } }
         }
+    }
+
+    /// Codes only inside the window: the preview fills it and crops the
+    /// picture, and a code outside it (the next product on the shelf) was
+    /// read too (Apple's AVCamBarcode does the same). Before the camera runs
+    /// the layer has no picture to measure, so the whole picture stays.
+    @MainActor
+    func readOnlyInside(_ layer: AVCaptureVideoPreviewLayer) {
+        guard !layer.bounds.isEmpty, session.isRunning else { return }
+        let rect = layer.metadataOutputRectConverted(fromLayerRect: layer.bounds).intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+        guard !rect.isNull, rect.width > 0.05, rect.height > 0.05 else { return }
+        queue.async { [self] in output.rectOfInterest = rect }
     }
 
     func stop() {
@@ -539,7 +582,7 @@ final class BarcodeCamera: @unchecked Sendable {
         guard session.canAddInput(input), session.canAddOutput(output) else { return false }
         session.addInput(input)
         session.addOutput(output)
-        output.metadataObjectTypes = ([.ean13, .ean8, .upce, .code128] as [AVMetadataObject.ObjectType]).filter(output.availableMetadataObjectTypes.contains)
+        output.metadataObjectTypes = BarcodeScanner.symbologies.filter(output.availableMetadataObjectTypes.contains)
         Self.zoomForCodes(device)
         return true
     }
