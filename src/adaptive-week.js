@@ -154,18 +154,26 @@ export function ownBrick(x, bricks, start, split = null) {
   const minutes = split?.brick?.minutes || BRICK_MINUTES;
   return { ...x, brick: true, role: 'recovery', label: L('Běh po kole', 'Brick run'), minutes, maxMinutes: minutes, tss: Math.round((x.tss || 0) * minutes / (x.minutes || minutes)) };
 }
-// Sports for a week without recent sessions: the ones the athlete did
-// regularly in the last year (focus.regular, training-history.js), else the
-// main sport with the gym. Nobody gets a ride they never do: general fitness
-// and the gym without any history get the gym and a run (Petr 2026-11-03).
-const MAIN_KIND = { cycling: 'ride', running: 'run', swimming: 'swim', strength: 'gym' };
+// Sports for a week without recent sessions: the ones the athlete does
+// (focus.sports, Settings → Sports to suggest) with the main ones first, else
+// the ones done regularly in the last year (focus.regular, training-history.js),
+// else the main sports with the gym. Nobody gets a ride they never do: general
+// fitness and the gym without any history get the gym and a run (Petr 2026-11-03).
+const asWeek = k => k === 'strength' ? 'gym' : k;
+const MAIN_KIND = { cycling: ['ride'], running: ['run'], swimming: ['swim'], strength: ['gym'], triathlon: ['ride', 'run', 'swim'] };
+const kindsOf = list => [...new Set((Array.isArray(list) ? list : []).map(asWeek).filter(k => ['ride', 'run', 'swim', 'gym'].includes(k)))];
+const mainsOf = focus => Array.isArray(focus?.mains) && focus.mains.length ? kindsOf(focus.mains) : MAIN_KIND[focus?.sport] || [];
+const mainsFirst = (list, mains) => [...mains.filter(k => list.includes(k)), ...list.filter(k => !mains.includes(k))];
 export function fallbackSports(focus = null) {
-  const regular = [...new Set((Array.isArray(focus?.regular) ? focus.regular : []).map(k => k === 'strength' ? 'gym' : k).filter(k => ['ride', 'run', 'swim', 'gym'].includes(k)))];
-  const main = MAIN_KIND[focus?.sport];
-  if (regular.length) return main ? [main, ...regular.filter(k => k !== main)] : regular;
-  if (main === 'ride' || main === 'run' || main === 'swim') return [main, 'gym'];
+  const mains = mainsOf(focus);
+  if (Array.isArray(focus?.sports)) return mainsFirst(kindsOf(focus.sports), mains);
+  const regular = kindsOf(focus?.regular);
+  if (regular.length) return [...new Set([...mains, ...regular])];
+  if (mains.length && !(mains.length === 1 && mains[0] === 'gym')) return [...mains, 'gym'];
   return ['gym', 'run'];
 }
+// The sports the athlete lets the coach suggest (all when never chosen).
+export const allowedSport = (focus, sport) => !Array.isArray(focus?.sports) || kindsOf(focus.sports).includes(sport);
 export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null, history: suppliedHistory = null, split = null }) {
   const days = prefs.days.map(d => [...d]);
   if (days.some(d => d.length)) return { ...prefs, days };
@@ -175,9 +183,11 @@ export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null,
   for (const d of history) for (const a of d.daily?.training?.completed || []) if(sportOf(a))frequency[sportOf(a)]++;
   const count = prefs.weeklyActivities ?? activityHistoryEstimate(history,reference).count;
   const existing = (week.days || []).filter(d => d.date >= start && d.date <= shift(start, 6)).reduce((n, d) => n + sessionsOn(d).length, 0);
-  const sports = Object.keys(frequency).filter(s=>frequency[s]>0).sort((a, b) => frequency[b] - frequency[a]);
+  const sports = Object.keys(frequency).filter(s=>frequency[s]>0&&allowedSport(focus,s)).sort((a, b) => frequency[b] - frequency[a]);
   if (!sports.length) sports.push(...fallbackSports(focus));
   const primary = sports[0];
+  // Nothing the athlete does: the week stays empty.
+  if (!primary) return { ...prefs, days };
   const selected={ride:0,run:0,swim:0,gym:0};
   // A triathlete: the split's counts; the brick's run is added after, on a ride day.
   const wanted = split ? { ...split.sessions, run: Math.max(0, (split.sessions.run || 0) - (split.brick ? 1 : 0)), gym: frequency.gym > 0 && count >= 8 ? 1 : 0 } : null;

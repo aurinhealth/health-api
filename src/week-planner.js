@@ -186,7 +186,7 @@ export async function resetWeekPlan(db, date) {
 // With the free time of every endurance day known (`minutes`, Monday first),
 // the long session goes to the longest day and quality to days with an hour or more.
 // avoid: sports that get no key session (a triathlete's disciplines being learnt).
-// mainSport (ride, run, swim or gym): the athlete's main sport; the other
+// mainSport (ride, run, swim or gym, or a list of them): the athlete's main sport(s); the other
 // endurance sports only support it: no long or quality session, a smaller
 // share. With the gym as main sport every endurance day supports it.
 export function planWeekRoles(days = [], { readiness = "green", quality = null, prefer = null, minutes = null, avoid = null, longDay = null, mainSport = null } = {}) {
@@ -194,16 +194,19 @@ export function planWeekRoles(days = [], { readiness = "green", quality = null, 
   const endurance = [0, 1, 2, 3, 4, 5, 6].filter(i => has(i, "ride") || has(i, "run") || has(i, "swim"));
   // A sport that supports the main one: every endurance sport when the gym is
   // main, else the other endurance sports while the week has a main-sport day.
-  const leads = ["ride", "run", "swim"].includes(mainSport) && endurance.some(j => has(j, mainSport));
-  const supporting = sport => sport !== "gym" && (mainSport === "gym" || (leads && sport !== mainSport));
+  // Several main sports (ride and run, say) all lead: none supports another.
+  const mains = [].concat(mainSport || []).filter(s => ["ride", "run", "swim", "gym"].includes(s));
+  const enduranceMains = mains.filter(s => s !== "gym");
+  const leads = enduranceMains.length > 0 && endurance.some(j => enduranceMains.some(m => has(j, m)));
+  const supporting = sport => sport !== "gym" && ((mains.includes("gym") && !enduranceMains.length) || (leads && !enduranceMains.includes(sport)));
   // A day's role goes to its main-sport session when it has one.
-  const sportsOf = i => { const list = (days[i] || []).filter(s => s !== "gym"); return leads && list.includes(mainSport) ? [mainSport, ...list.filter(s => s !== mainSport)] : list; };
+  const sportsOf = i => { const list = (days[i] || []).filter(s => s !== "gym"); return leads ? [...list.filter(s => enduranceMains.includes(s)), ...list.filter(s => !enduranceMains.includes(s))] : list; };
   const main = i => sportsOf(i)[0];
   const supports = i => supporting(main(i));
   const avoidedSport = i => [].concat(avoid || []).includes(main(i));
   const avoided = i => avoidedSport(i) || supports(i);
   // The long day and the quality days are counted from the main sport's days only.
-  const keyDays = mainSport ? endurance.filter(i => !supports(i)) : endurance;
+  const keyDays = mains.length ? endurance.filter(i => !supports(i)) : endurance;
   const role = {};
   const timed = Array.isArray(minutes) && endurance.length > 0 && endurance.every(i => Number(minutes[i]) > 0);
   const free = i => timed ? Number(minutes[i]) : 0;

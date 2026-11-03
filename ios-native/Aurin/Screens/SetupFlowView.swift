@@ -110,7 +110,7 @@ struct SetupFlowView: View {
                 }
                 PrimaryButton(title: buttonTitle, busy: saving || appleWorking) { Task { await next() } }
                     .disabled(saving || appleWorking || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree)
-                              || (page == .sport && focus.sport.isEmpty) || (page == .goal && focus.goal.isEmpty))
+                              || (page == .sport && focus.sports.kinds.isEmpty) || (page == .goal && focus.goal.isEmpty))
                 if page == .sources {
                     // "Teď ne" skips connecting, not "O tobě": without age, height and
                     // weight nothing (calories, strain, recovery) can be worked out.
@@ -157,7 +157,7 @@ struct SetupFlowView: View {
         case .about: aboutPage
         case .sport: SetupSportPage(focus: $focus)
         case .goal: SetupGoalPage(focus: $focus)
-        case .time: SetupTimePage(minutes: $minutes, loading: !focusLoaded, lifts: focus.sport == "strength") { equipment = true }
+        case .time: SetupTimePage(minutes: $minutes, loading: !focusLoaded, lifts: focus.sports.kinds.contains("strength")) { equipment = true }
         case .notifications: notificationsPage
         }
     }
@@ -485,7 +485,7 @@ struct SetupFlowView: View {
         error = nil
         switch page {
         case .sport:
-            focus.sport = focusSaved.sport
+            focus.sports = focusSaved.sports
             focus.swims100 = focusSaved.swims100
             withAnimation { index += 1 }
         case .goal:
@@ -540,7 +540,7 @@ struct SetupFlowView: View {
             if let focusProfile { base = focusProfile } else { base = try await model.api.profile() }
             let next = focus.applied(to: base)
             try await model.api.saveProfile(next)
-            try await FocusSheet.saveSwimLevel(model.api, sport: focus.sport, swims100: focus.swims100)
+            try await FocusSheet.saveSwimLevel(model.api, sports: focus.sports, swims100: focus.swims100)
             focusProfile = next
             focusSaved = focus
             return true

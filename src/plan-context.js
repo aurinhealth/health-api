@@ -10,6 +10,7 @@ import { latestStoredWeight } from "./athlete-weight.js";
 import { getWeekPlan, planWeekRoles, roleTime, planRoleOptions } from "./week-planner.js";
 import { getAthleteState } from "./athlete-state.js";
 import { loadProfiles } from "./profile-suggestions.js";
+import { sportKinds } from "./athlete-focus.js";
 import { reviewPlan, planWeek, planQuality, planLoad, applyPlan, activePlan, planSports, planDoneSports } from "./training-plans.js";
 import { weekWeather, dayHours } from "./adaptive-week.js";
 import { weatherKitConfigured, weatherKitDetail } from "./weatherkit.js";
@@ -55,6 +56,8 @@ export async function weekRoleOptions(env,ctx,plan,pw){
 }
 async function profileMainSport(env){
   const {saved,effective}=await loadProfiles(env.DB,env.USER_ID);
+  // Several main sports chosen (Settings → Sports): each leads (ride and run, say).
+  if(Array.isArray(saved?.mainSports)&&saved.mainSports.length>1&&effective?.mainSport!=='triathlon')return sportKinds(saved.mainSports).map(k=>k==='strength'?'gym':k);
   const sport={cycling:'ride',running:'run',swimming:'swim',strength:'gym'}[effective?.mainSport]||null;
   const chosen=saved?.mainSport&&saved.mainSport!=='auto';
   return chosen||['ride','run','swim'].includes(sport)?sport:null;

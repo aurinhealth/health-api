@@ -3708,3 +3708,35 @@
 "Ještě cvičím" = "Keep going";
 "Pořád cvičíš?" = "Still working out?";
 "Žádná série 10 minut. Ukonči trénink, nebo pokračuj." = "No set for 10 min. End the workout or keep going.";
+
+/* Sports to suggest: the sports picker, Settings → Goals → Sports, ⋯ on Activity of the day, the coach chat */
+"Jaké sporty děláš?" = "Which sports do you do?";
+"Zaškrtni všechny, které děláš, a u těch, na které trénuješ nejvíc, klepni na Hlavní. Kouč navrhuje jen tyhle." = "Tick all you do and tap Main on what you train for most. The coach only suggests these.";
+"Bez hlavního sportu je to obecná kondice. Hlavní kolo, běh i plavání je příprava na triatlon. Závod (duatlon, triatlon, maraton) nastavíš v cíli." = "No Main = general fitness. Main on Ride, Run and Swim = triathlon training. A race (duathlon, triathlon, marathon) goes in your goal.";
+"Hlavní sport: %@" = "Main sport: %@";
+"Sporty k navrhování" = "Sports to suggest";
+"Kouč navrhuje" = "The coach suggests";
+"Platí pro aktivitu dne, týdenní plán i kouče. Tréninky, které si přidáš sám nebo přijdou z hodinek, se ukazují dál." = "Applies to the activity of the day, the week plan and the coach. Workouts you add yourself and ones from your watch still show.";
+"Navrhuji méně často" = "Suggested less often";
+"všechny" = "all";
+"Dnes ne" = "Not today";
+"Možnosti aktivity dne" = "Activity of the day options";
+"Navrhovat kolo méně často" = "Suggest rides less often";
+"Navrhovat běh méně často" = "Suggest runs less often";
+"Navrhovat plavání méně často" = "Suggest swims less often";
+"Navrhovat posilovnu méně často" = "Suggest the gym less often";
+"Nenavrhovat kolo" = "Don't suggest rides";
+"Nenavrhovat běh" = "Don't suggest runs";
+"Nenavrhovat plavání" = "Don't suggest swims";
+"Nenavrhovat posilovnu" = "Don't suggest the gym";
+"Nenavrhovat" = "Don't suggest";
+"Kolo už nebudu navrhovat" = "Rides won't be suggested";
+"Běh už nebudu navrhovat" = "Runs won't be suggested";
+"Plavání už nebudu navrhovat" = "Swims won't be suggested";
+"Posilovnu už nebudu navrhovat" = "The gym won't be suggested";
+"Sport už nebudu navrhovat" = "This sport won't be suggested";
+"Kolo budu navrhovat méně často" = "Rides will be suggested less often";
+"Běh budu navrhovat méně často" = "Runs will be suggested less often";
+"Plavání budu navrhovat méně často" = "Swims will be suggested less often";
+"Posilovnu budu navrhovat méně často" = "The gym will be suggested less often";
+"Budu to navrhovat méně často" = "It will be suggested less often";

@@ -21,6 +21,15 @@ struct AssistantResult: Decodable, Equatable {
     var memoryProposals: MemoryChanges? = nil
     /// This week's messages to the coach after this answer (src/coach-allowance.js).
     var coachAllowance: CoachAllowance? = nil
+    /// "Nenavrhuj mi kolo": the sport turned off in Sporty k navrhování (src/sport-choice.js).
+    var sportChanges: SportChanges? = nil
+
+    struct SportChanges: Decodable, Equatable {
+        let removed: [String]?
+
+        /// "Nenavrhovat kolo · Zpět" under the answer.
+        var chips: [CoachMemoryChip] { (removed ?? []).map { CoachMemoryChip(kind: .sportOff, text: $0) } }
+    }
 
     struct MemoryChanges: Decodable, Equatable {
         let saved: String?
@@ -46,9 +55,10 @@ struct AssistantResult: Decodable, Equatable {
     }
 }
 
-/// "Zapamatováno", "Zapomenuto" or "Upraveno" under an answer.
+/// "Zapamatováno", "Zapomenuto", "Upraveno" or "Nenavrhovat kolo" under an answer.
 struct CoachMemoryChip: Identifiable, Equatable {
-    enum Kind { case saved, forgotten, updated }
+    /// sportOff: `text` is the sport (ride, run, swim, strength) turned off.
+    enum Kind { case saved, forgotten, updated, sportOff }
     let id = UUID()
     let kind: Kind
     let text: String
