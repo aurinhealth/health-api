@@ -10,13 +10,14 @@ struct TrainingPage: View {
     @EnvironmentObject private var watch: WatchStore
     @ObservedObject private var store = GymStore.shared
     @State private var running = false
-    @State private var picked: String?
+    /// The sample day's screenshots show today at any hour (WatchDemo).
+    @State private var picked: String? = WatchDemo.on ? WatchStore.localDate(WatchDemo.now) : nil
     @State private var preview: WatchGym?
     /// Which of a day's workouts is open, by day (the first until a tap).
     @State private var chosen: [String: Int] = [:]
     @ObservedObject private var plans = PlanStore.shared
 
-    private var today: String { WatchStore.localDate(Date()) }
+    private var today: String { WatchStore.localDate(WatchDemo.now) }
     private var sessions: [WatchSnapshot.Session] {
         guard let s = watch.snapshot, s.date == today else { return [] }
         return s.week ?? []
@@ -24,6 +25,7 @@ struct TrainingPage: View {
 
     var body: some View {
         let day = shownDay
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
@@ -41,10 +43,26 @@ struct TrainingPage: View {
                 }
                 WeekRow(days: weekDays, today: today, shown: day, sessions: sessions) { picked = $0 }
                     .padding(.top, 6)
+                    // Where the sample day's screenshot scrolls to (-week): 8 pt into
+                    // the week, so it stays whole under the clock and Continue whole
+                    // above the screen's edge. The id sits on the 1 pt line itself:
+                    // on the padded view it pointed at the row's top.
+                    .overlay(alignment: .top) { Color.clear.frame(height: 1).id("week").padding(.top, 8) }
                 content(day)
                 if day == today, noGymToday { noGym }
+                // The last button a little above the screen's rounded bottom edge.
+                Color.clear.frame(height: 8)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            // Clear of the screen's rounded edges, as Food and Today are.
+            .padding(.horizontal, 6)
+        }
+        .task {
+            // The sample day's screenshot (-week): the week and Continue both whole.
+            guard WatchDemo.flag("-week") else { return }
+            try? await Task.sleep(for: .milliseconds(400))
+            proxy.scrollTo("week", anchor: .top)
+        }
         }
         // Each turn of the crown to this page shows it again: the plan only
         // when there is none for today or it is older than 10 minutes (the
@@ -121,7 +139,7 @@ struct TrainingPage: View {
     // MARK: The day shown
 
     private var tomorrow: String {
-        WatchStore.localDate(Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date())
+        WatchStore.localDate(Calendar.current.date(byAdding: .day, value: 1, to: WatchDemo.now) ?? WatchDemo.now)
     }
 
     /// Today; in the evening (from 18:00) or with today done, tomorrow when it has a plan.
@@ -129,7 +147,7 @@ struct TrainingPage: View {
         if let picked { return picked }
         let todays = sessions.filter { $0.date == today }
         let open = todays.contains { !$0.done } || (store.gym.map { $0.date == today && !$0.exercises.isEmpty && !$0.allDone } ?? false)
-        let evening = Calendar.current.component(.hour, from: Date()) >= 18
+        let evening = Calendar.current.component(.hour, from: WatchDemo.now) >= 18
         let next = sessions.contains { $0.date == tomorrow && !$0.done }
         if next, evening || (!open && !todays.isEmpty) { return tomorrow }
         return today
@@ -139,7 +157,7 @@ struct TrainingPage: View {
     private var weekDays: [String] {
         var calendar = Calendar(identifier: .gregorian)
         calendar.firstWeekday = 2
-        let start = calendar.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
+        let start = calendar.dateInterval(of: .weekOfYear, for: WatchDemo.now)?.start ?? WatchDemo.now
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start).map(WatchStore.localDate) }
     }
 
@@ -232,6 +250,8 @@ struct TrainingPage: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(W.green)
+                    // The button's own width, centred in the page.
+                    .frame(maxWidth: .infinity)
                     .padding(.top, 8)
                 }
             }
@@ -290,9 +310,15 @@ struct TrainingPage: View {
     private func header(_ s: WatchSnapshot.Session) -> some View {
         HStack(spacing: 5) {
             Image(systemName: W.sportSymbol(s.sport)).font(.system(size: 13)).foregroundStyle(W.amber)
-            Text(Self.name(s))
-                .font(.system(size: 16, weight: .semibold)).foregroundStyle(W.ink)
-                .lineLimit(2).minimumScaleFactor(0.7)
+            // One line when the name fits, if need be a little smaller
+            // ("Silový trénink, celé tělo"), else two lines.
+            ViewThatFits(in: .horizontal) {
+                Text(Self.name(s)).font(.system(size: 16, weight: .semibold)).lineLimit(1)
+                Text(Self.name(s)).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                Text(Self.name(s)).font(.system(size: 16, weight: .semibold))
+                    .lineLimit(2).minimumScaleFactor(0.7)
+            }
+            .foregroundStyle(W.ink)
         }
         .padding(.top, 2)
     }

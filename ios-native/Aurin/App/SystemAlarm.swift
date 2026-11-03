@@ -79,15 +79,57 @@ enum SystemAlarm {
             UserDefaults.standard.removeObject(forKey: backupKey)
             UserDefaults.standard.removeObject(forKey: backupKey + "Time")
             guard let date, date > Date(), manager.authorizationState == .authorized else { return }
-            let alert = AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: L10n.tr("Budík · záloha hodinek")),
-                                                stopButton: AlarmButton(text: LocalizedStringResource(stringLiteral: L10n.tr("Vstávám")), textColor: .white, systemImageName: "sun.max.fill"))
-            let attributes = AlarmAttributes<WakeAlarm>(presentation: AlarmPresentation(alert: alert), tintColor: Palette.indigo)
             let id = UUID()
-            guard (try? await manager.schedule(id: id, configuration: .alarm(schedule: .fixed(date), attributes: attributes))) != nil else { return }
+            guard (try? await manager.schedule(id: id, configuration: configuration(.fixed(date), title: L10n.tr("Budík · záloha hodinek")))) != nil else { return }
             UserDefaults.standard.set(id.uuidString, forKey: backupKey)
             UserDefaults.standard.set(date, forKey: backupKey + "Time")
         }
         #endif
+    }
+
+    /// Alarms set by an older version have no Snooze: they are set again once, at the
+    /// same times (the app's start, AurinApp). Nothing goes to the server.
+    static func upgrade() async {
+        let key = "systemAlarmVersion", version = 2
+        guard UserDefaults.standard.integer(forKey: key) < version else { return }
+        await reschedule()
+        UserDefaults.standard.set(version, forKey: key)
+    }
+
+    /// Snooze on or off, or its length changed (Nastavení → Spánek): the alarms
+    /// already set are set again at the same times, the watch's backup too.
+    static func reschedule() async {
+        #if canImport(AlarmKit)
+        if #available(iOS 26, *) {
+            let defaults = UserDefaults.standard
+            let manager = AlarmManager.shared
+            let saved = defaults.stringArray(forKey: idsKey) ?? []
+            if !saved.isEmpty, manager.authorizationState == .authorized, let alarms = try? manager.alarms {
+                var ids: [String] = []
+                for alarm in alarms where saved.contains(alarm.id.uuidString) {
+                    guard case .relative(let relative)? = alarm.schedule, case .weekly(let days) = relative.repeats else { continue }
+                    try? manager.cancel(id: alarm.id)
+                    let title = days.contains(.saturday) ? L10n.tr("Budík · víkend") : L10n.tr("Budík · pracovní den")
+                    let id = UUID()
+                    if (try? await manager.schedule(id: id, configuration: configuration(.relative(relative), title: title))) != nil {
+                        ids.append(id.uuidString)
+                    }
+                }
+                defaults.set(ids, forKey: idsKey)
+            }
+            if let time = backupTime, time > Date() { await backup(at: time) }
+        }
+        #endif
+    }
+
+    /// Nastavení → Spánek: Snooze on (the default) and its length, 1–15 minutes (5).
+    static let snoozeKey = "systemAlarmSnooze"
+    static let snoozeMinutesKey = "systemAlarmSnoozeMinutes"
+    static let snoozeRange = 1...15
+    static var snoozeOn: Bool { UserDefaults.standard.object(forKey: snoozeKey) as? Bool ?? true }
+    static var snoozeMinutes: Int {
+        let value = UserDefaults.standard.integer(forKey: snoozeMinutesKey)
+        return snoozeRange.contains(value) ? value : 5
     }
 
     #if canImport(AlarmKit)
@@ -103,18 +145,26 @@ enum SystemAlarm {
         let parts = time.split(separator: ":").compactMap { Int($0) }
         guard parts.count == 2 else { return nil }
         let schedule = Alarm.Schedule.relative(.init(time: .init(hour: parts[0], minute: parts[1]), repeats: .weekly(days)))
-        let alert = AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: title),
-                                            stopButton: AlarmButton(text: LocalizedStringResource(stringLiteral: L10n.tr("Vstávám")), textColor: .white, systemImageName: "sun.max.fill"))
-        let attributes = AlarmAttributes<WakeAlarm>(presentation: AlarmPresentation(alert: alert), tintColor: Palette.indigo)
         let id = UUID()
-        _ = try await manager.schedule(id: id, configuration: .alarm(schedule: schedule, attributes: attributes))
+        _ = try await manager.schedule(id: id, configuration: configuration(schedule, title: title))
         return id
+    }
+
+    /// The ringing alarm: "I'm up" and, when on, Snooze; while snoozed "Snoozed"
+    /// with the time left. iOS draws it through the widget extension's Live
+    /// Activity (WakeAlarmWidget); its buttons are the system's on the lock screen.
+    @available(iOS 26, *)
+    private static func configuration(_ schedule: Alarm.Schedule, title: String) -> AlarmManager.AlarmConfiguration<WakeAlarm> {
+        let snooze = snoozeOn
+        let alert = AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: title),
+                                            stopButton: AlarmButton(text: LocalizedStringResource(stringLiteral: L10n.tr("Vstávám")), textColor: .white, systemImageName: "sun.max.fill"),
+                                            secondaryButton: snooze ? AlarmButton(text: LocalizedStringResource(stringLiteral: L10n.tr("Odložit")), textColor: .white, systemImageName: "zzz") : nil,
+                                            secondaryButtonBehavior: snooze ? .countdown : nil)
+        let countdown = snooze ? AlarmPresentation.Countdown(title: LocalizedStringResource(stringLiteral: L10n.tr("Odloženo"))) : nil
+        let presentation = AlarmPresentation(alert: alert, countdown: countdown, paused: nil)
+        let attributes = AlarmAttributes<WakeAlarm>(presentation: presentation, tintColor: Palette.indigo)
+        let duration = snooze ? Alarm.CountdownDuration(preAlert: nil, postAlert: TimeInterval(snoozeMinutes * 60)) : nil
+        return AlarmManager.AlarmConfiguration(countdownDuration: duration, schedule: schedule, attributes: attributes)
     }
     #endif
 }
-
-#if canImport(AlarmKit)
-/// No data travels with the alarm.
-@available(iOS 26, *)
-struct WakeAlarm: AlarmMetadata {}
-#endif

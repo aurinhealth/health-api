@@ -24,6 +24,8 @@ enum Night {
     static let violet = Color(red: 0.333, green: 0.302, blue: 0.588)
     static let mint = Color(red: 0.561, green: 0.902, blue: 0.769)
     static let amber = Color(red: 0.949, green: 0.706, blue: 0.420)
+    /// The sparkle of what Pro adds.
+    static let lilac = Color(red: 0.647, green: 0.631, blue: 1.0)
 
     static var background: some View {
         LinearGradient(colors: [top, bottom], startPoint: .top, endPoint: .bottom).ignoresSafeArea()
@@ -462,19 +464,21 @@ struct NightSky: View {
 
 // MARK: - The app's screens
 
-/// One of the app's screens in a phone, with the sample day.
+/// One of the app's screens in a phone, with the sample day. The offer opens on
+/// what Pro adds (the coach, then the race plan), then the day it works from
+/// (approved mockup pro-nabidka-obrazovky, 3 Nov 2026).
 enum ProScreen: CaseIterable {
-    case training, today, food, readiness, sleep, health
+    case coach, plan, training, food, readiness, sleep
 
     @ViewBuilder
     var content: some View {
         ZStack(alignment: .top) {
             ScreenBackground(glow: glow)
             switch self {
-            case .today: TodayContent(today: DemoData.today).padding(.top, 54)
+            case .coach: ProCoachSample().padding(.top, 54)
+            case .plan: ProPlanSample().padding(.horizontal, 24).padding(.top, 70)
             case .training: TrainingContent(training: DemoData.training).padding(.top, 54)
             case .food: FoodContent(food: DemoData.food).padding(.top, 54)
-            case .health: HealthContent(health: DemoData.health).padding(.horizontal, 24).padding(.top, 70)
             case .readiness: ReadinessDetailContent(health: DemoData.health).padding(.horizontal, 24).padding(.top, 70)
             case .sleep: SleepDetailContent(health: DemoData.health, detail: DemoData.night).padding(.horizontal, 24).padding(.top, 70)
             }
@@ -485,44 +489,73 @@ enum ProScreen: CaseIterable {
 
     private var glow: Color {
         switch self {
-        case .today: return Palette.Glow.today
-        case .training: return Palette.Glow.training
+        case .coach: return Palette.Glow.today
+        case .plan, .training: return Palette.Glow.training
         case .food: return Palette.Glow.food
-        default: return Palette.Glow.health
+        case .readiness, .sleep: return Palette.Glow.health
         }
     }
 
     var title: String {
         switch self {
+        case .coach: return L10n.tr("Kouč jen pro tebe")
+        case .plan: return L10n.tr("Plány na závody a cíle")
         case .training: return L10n.tr("Tréninky postavené na dnešek")
-        case .today: return L10n.tr("Plán, který jde s tvým tělem")
         case .food: return L10n.tr("Jídlo, které kouč dopočítá")
         case .readiness: return L10n.tr("Víš, kdy přidat")
         case .sleep: return L10n.tr("Spánek, který chystá zítřek")
-        case .health: return L10n.tr("Všechna data na jednom místě")
         }
     }
 
     var subtitle: String {
         switch self {
+        case .coach: return L10n.tr("Zeptej se na cokoli. Zná tvůj spánek, trénink i jídlo.")
+        case .plan: return L10n.tr("Podle tvé regenerace a pokroku.")
         case .training: return L10n.tr("Podle tvého času a unavených svalů.")
-        case .today: return L10n.tr("Každý den vysvětlený podle připravenosti.")
-        case .food: return L10n.tr("Vyfoť talíř nebo etiketu, hodnoty doplní AI.")
+        case .food: return L10n.tr("Vyfoť talíř a hodnoty se doplní.")
         case .readiness: return L10n.tr("HRV, spánek a zátěž v jednom čísle.")
         case .sleep: return L10n.tr("Kolik spánku potřebuješ po dnešní zátěži.")
-        case .health: return L10n.tr("Z hodinek bez přepisování.")
         }
     }
 
     /// The short name under a phone in the free week's belt.
     var label: String {
         switch self {
+        case .coach: return L10n.tr("Kouč")
+        case .plan: return L10n.tr("Plán")
         case .training: return L10n.tr("Tréninky")
-        case .today: return L10n.tr("Připravenost")
         case .food: return L10n.tr("Jídelní kouč")
         case .readiness: return L10n.tr("Regenerace")
         case .sleep: return L10n.tr("Spánek")
-        case .health: return L10n.tr("Zdraví")
+        }
+    }
+}
+
+/// The coach mid-conversation on the sample day: two of the questions the demo
+/// answers (DemoData.coachAnswer), in the chat's own bubbles.
+struct ProCoachSample: View {
+    private static let questions = ["Jak mám dnes trénovat?", "Co sníst po tréninku?"]
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Text("Kouč").font(.headline).foregroundStyle(Palette.ink).padding(.bottom, 4)
+            ForEach(Self.questions, id: \.self) { question in
+                let asked = L10n.tr(question)
+                BubbleView(bubble: CoachView.Bubble(mine: true, text: asked), decide: { _, _ in })
+                BubbleView(bubble: CoachView.Bubble(mine: false, text: DemoData.coachAnswer(asked)), decide: { _, _ in })
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+}
+
+/// The sample day's race and the weeks' load: what a plan for a race looks like.
+struct ProPlanSample: View {
+    var body: some View {
+        let training = DemoData.training
+        VStack(alignment: .leading, spacing: 0) {
+            if let event = training.event { EventCard(event: event) }
+            WeekStrainBars(days: training.days).padding(.top, 22)
         }
     }
 }
@@ -531,7 +564,7 @@ enum ProScreen: CaseIterable {
 /// it; they move on by themselves every 2.5 s and can be swiped.
 struct ScreenCarousel: View {
     let time: Double
-    static let screens: [ProScreen] = [.training, .today, .food, .readiness, .sleep]
+    static let screens: [ProScreen] = ProScreen.allCases
     @State private var chosen: Int?
     @State private var shownAt: Double = 0
 
@@ -581,7 +614,7 @@ struct ScreenCarousel: View {
 /// The free week's belt: small phones of the app sliding by, round and round.
 struct ScreenBelt: View {
     let time: Double
-    static let screens: [ProScreen] = [.today, .training, .food, .readiness, .sleep, .health]
+    static let screens: [ProScreen] = ProScreen.allCases
     private static let width: CGFloat = 92
 
     var body: some View {

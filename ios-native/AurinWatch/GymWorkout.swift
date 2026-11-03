@@ -45,6 +45,14 @@ final class GymWorkout: NSObject, ObservableObject {
     var running: Bool { session != nil }
     private var lastLive = Date.distantPast
 
+    /// The sample day's gym (WatchDemo): 12 minutes in, without HealthKit
+    /// (its question would cover the screenshot).
+    func demo() {
+        start = Date().addingTimeInterval(-760)
+        heartRate = 128
+        calories = 86
+    }
+
     func begin() async {
         // The iPhone hears of the start at once (Training mode opens there),
         // not only with the first heart rate.

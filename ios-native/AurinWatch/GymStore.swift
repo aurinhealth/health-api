@@ -31,6 +31,11 @@ final class GymStore: ObservableObject {
     private var uploading = false
 
     init() {
+        // The sample day's gym for the screenshots (WatchDemo).
+        if WatchDemo.on {
+            gym = WatchDemo.gym
+            return
+        }
         let defaults = UserDefaults.standard
         if let data = defaults.data(forKey: Self.savedKey), let saved = WatchGym.decode(data) {
             if saved.date == WatchStore.localDate(Date()) {
@@ -67,7 +72,7 @@ final class GymStore: ObservableObject {
     /// The day worked on: today, or the day a workout still running began
     /// (a gym past midnight stays on its own day).
     private var day: String {
-        let today = WatchStore.localDate(Date())
+        let today = WatchStore.localDate(WatchDemo.now)
         guard GymWorkout.shared.running, let gym else { return today }
         return gym.date
     }
@@ -83,6 +88,7 @@ final class GymStore: ObservableObject {
     /// The plan: from the iPhone in reach, else from the server; a session in
     /// progress keeps what was done here, and a day the watch writes alone stays its own.
     func load() {
+        guard !WatchDemo.on else { return }
         let date = day
         // A plan kept from before (a relaunch, a day written alone) gets its swaps too.
         keepSwaps()
@@ -140,6 +146,7 @@ final class GymStore: ObservableObject {
     /// in its row), not kept: only today's is worked on.
     func preview(date: String) async -> WatchGym? {
         if let gym, gym.date == date { return gym }
+        guard !WatchDemo.on else { return nil }
         guard let session = phone, session.isReachable else {
             return await WatchAPI.gymSheet(date: date).map { built($0, date: date) }
         }
