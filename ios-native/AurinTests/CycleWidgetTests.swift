@@ -22,6 +22,22 @@ final class CycleWidgetTests: XCTestCase {
         XCTAssertTrue(CycleWidget.logged(menopause))
     }
 
+    /// The pack's strip fills only the pills that were logged: yesterday's
+    /// unlogged pill stays empty (a tester saw it marked as taken).
+    func testPillStripShowsOnlyLoggedPills() throws {
+        let json = #"{"pack":"21+7","number":7,"of":21,"pause":false,"taken":null,"packTaken":[true,true,true,true,true,false,false]}"#
+        let pill = try JSONDecoder().decode(PillDay.self, from: Data(json.utf8))
+        XCTAssertEqual((1...7).map(pill.isTaken), [true, true, true, true, true, false, false])
+        XCTAssertFalse(pill.isTaken(8))
+        var today = pill
+        today.taken = "08:10"
+        XCTAssertTrue(today.isTaken(7))
+        XCTAssertFalse(today.isTaken(6))
+        // An older server without packTaken keeps the old strip.
+        let older = try JSONDecoder().decode(PillDay.self, from: Data(#"{"pack":"21+7","number":3,"of":21,"pause":false}"#.utf8))
+        XCTAssertEqual((1...4).map(older.isTaken), [true, true, false, false])
+    }
+
     private func decode(_ json: String) throws -> TodayCycle {
         try JSONDecoder().decode(TodayCycle.self, from: Data(json.utf8))
     }

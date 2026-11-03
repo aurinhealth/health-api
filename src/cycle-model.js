@@ -128,7 +128,7 @@ export function cycleState(input) {
   const hormonal = HORMONAL.has(settings.contraception);
   const lastStart = starts.at(-1) || null;
   const lastBleed = [...days].reverse().find(d => d.flow > 0)?.date || (lastStart && settings.lastPeriod === lastStart ? lastStart : null);
-  const out = { date, contraception: settings.contraception, hormonal, lifeStage: settings.lifeStage, hrt: settings.hrt, adaptTraining: settings.adaptTraining, today, pill: pillState(settings, date, today) };
+  const out = { date, contraception: settings.contraception, hormonal, lifeStage: settings.lifeStage, hrt: settings.hrt, adaptTraining: settings.adaptTraining, today, pill: pillState(settings, date, today, byDate) };
   if (hormonal || settings.lifeStage === "menopause") return { ...out, daysSinceBleeding: lastBleed ? between(lastBleed, date) : null };
   if (!lastStart) return { ...out, cycleDay: null, phase: null, next: null };
   const { length, spread, learned, cycles, shortest, longest } = cycleLength(starts, settings);
@@ -154,13 +154,17 @@ export function cycleState(input) {
 }
 
 // The pill pack on `date`: which pill (1 of 21) or a pause day, from the day
-// the pack started. Null unless the contraception is the pill.
-export function pillState(settings, date, today) {
+// the pack started. Null unless the contraception is the pill. With the
+// logged days by date also `packTaken`: for pills 1 to today's, whether that
+// day's pill was logged (only a logged pill counts, never one assumed).
+export function pillState(settings, date, today, byDate) {
   if (!settings || settings.contraception !== "pill" || !isDate(settings.packStart) || !isDate(date) || date < settings.packStart) return null;
   const active = PILL_PACKS[settings.pillPack] || 21, total = 28;
   const index = between(settings.packStart, date) % total;
   const pause = index >= active;
-  return { pack: settings.pillPack, number: pause ? null : index + 1, of: active, pause, pauseDay: pause ? index - active + 1 : null, taken: today ? today.pill : null };
+  const out = { pack: settings.pillPack, number: pause ? null : index + 1, of: active, pause, pauseDay: pause ? index - active + 1 : null, taken: today ? today.pill : null };
+  if (byDate && !pause) out.packTaken = Array.from({ length: index + 1 }, (_, i) => !!byDate.get(shift(date, i - index))?.pill);
+  return out;
 }
 
 // Ask "Has your period started?" in the morning: a natural cycle, the forecast
