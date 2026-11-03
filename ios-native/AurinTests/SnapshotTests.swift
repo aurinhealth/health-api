@@ -107,8 +107,8 @@ final class SnapshotTests: XCTestCase {
         var pinned = DemoData.food
         pinned.nutrients = DemoData.pinnedNutrients
         try render("food-nutrients-pinned", glow: Palette.Glow.food) { FoodContent(food: pinned).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
-        try render("nutrients", glow: Palette.Glow.food) { VStack(spacing: 0) { NutrientsTopBar(title: "Živiny", back: {}) { Text("Upravit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted) }; NutrientsContent(page: DemoData.nutrients, week: .constant(false), date: "2026-10-08").padding(.top, 20) }.padding(24).padding(.top, 30).environment(AppModel(demo: true)) }
-        try render("nutrients-free", glow: Palette.Glow.food) { VStack(spacing: 0) { NutrientsTopBar(title: "Živiny", back: {}); NutrientsContent(page: DemoData.nutrientsFree, week: .constant(false), date: "2026-10-08").padding(.top, 20) }.padding(24).padding(.top, 30).environment(AppModel(demo: true)) }
+        try render("nutrients", glow: Palette.Glow.food) { VStack(spacing: 0) { NutrientsTopBar(title: "Živiny", back: {}) { Text("Upravit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted) }; NutrientsContent(page: DemoData.nutrients, week: .constant(false), date: "2026-10-08", editTarget: { _ in }).padding(.top, 20) }.padding(24).padding(.top, 30).environment(AppModel(demo: true)) }
+        try render("nutrients-free", glow: Palette.Glow.food) { VStack(spacing: 0) { NutrientsTopBar(title: "Živiny", back: {}); NutrientsContent(page: DemoData.nutrientsFree, week: .constant(false), date: "2026-10-08", editTarget: { _ in }).padding(.top, 20) }.padding(24).padding(.top, 30).environment(AppModel(demo: true)) }
         try render("nutrient-detail", glow: Palette.Glow.food) { VStack(spacing: 0) { NutrientsTopBar(title: DemoData.nutrientDetail.name, back: {}); NutrientDetailContent(detail: DemoData.nutrientDetail) }.padding(24).padding(.top, 30) }
         try render("nutrient-favorites", glow: Palette.Glow.food) { VStack(spacing: 0) { NutrientsTopBar(title: "Na obrazovce Jídlo", back: {}); NutrientFavoritesList(items: DemoData.nutrients.items, chosen: .constant(DemoData.nutrients.favorites)).padding(.top, 24) }.padding(24).padding(.top, 30) }
         try render("food-amount", height: 700) { NavigationStack { FoodAmountView(product: DemoData.foods[0], meal: "snack_pm") }.environment(AppModel(demo: true)) }
@@ -148,11 +148,11 @@ final class SnapshotTests: XCTestCase {
         var day = DemoData.gym
         XCTAssertEqual(day.planName, "Celé tělo")
         let exercises = day.exercises
-        XCTAssertEqual(exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy v předklonu"])
-        XCTAssertEqual(exercises[0].sets.count, 4)
+        XCTAssertEqual(exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy", "Rumunský mrtvý tah", "Výpady"])
+        XCTAssertEqual(exercises[0].sets.count, 5)
         XCTAssertTrue(exercises[0].sets[0].warmup)
         XCTAssertEqual(exercises[0].doneCount, 1)
-        XCTAssertEqual(exercises[0].workCount, 3)
+        XCTAssertEqual(exercises[0].workCount, 4)
         XCTAssertEqual(exercises[1].superset, "A")
 
         let second = exercises[0].sets[2]
@@ -164,12 +164,12 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(day.exercises[0].doneCount, 1)
 
         day.replace(exercise: "Dřep", with: "Leg press")
-        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Leg press", "Tlak na lavici", "Přítahy v předklonu"], "done sets keep the old name")
+        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Leg press", "Tlak na lavici", "Přítahy", "Rumunský mrtvý tah", "Výpady"], "done sets keep the old name")
 
         let body = day.saveBody
         guard case .array(let rows) = body["values"], case .array(let full) = body["fullValues"] else { return XCTFail("body") }
         XCTAssertEqual(full.count, rows.count + 7)
-        XCTAssertEqual(rows.count, 8)
+        XCTAssertEqual(rows.count, 17)
     }
 
     func testTrainingSessionsDecode() {
@@ -486,9 +486,9 @@ final class SnapshotTests: XCTestCase {
     func testPlanEditing() {
         var day = DemoData.gym
         day.moveExercise(from: 2, to: 0)
-        XCTAssertEqual(day.exercises.map(\.name), ["Přítahy v předklonu", "Dřep", "Tlak na lavici"])
+        XCTAssertEqual(day.exercises.map(\.name), ["Přítahy", "Dřep", "Tlak na lavici", "Rumunský mrtvý tah", "Výpady"])
         day.moveExercise(from: 0, to: 3)
-        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy v předklonu"])
+        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy", "Rumunský mrtvý tah", "Výpady"])
         XCTAssertEqual(day.planName, "Celé tělo", "the head of the sheet stays")
 
         let sets = day.exercises[1].sets.count
@@ -850,25 +850,28 @@ final class SnapshotTests: XCTestCase {
         let extra = CoachAllowance(limit: 30, used: 12, left: 55, weekLeft: 18, extra: 37, resetsOn: "2026-11-09", near: false)
         let low = CoachAllowance(limit: 30, used: 27, left: 3, weekLeft: 3, extra: 0, resetsOn: "2026-11-09", near: true)
         let active = ProPageState(hasPro: true, unlocked: true, renewal: "Obnoví se 5. listopadu", allowance: extra, packsOnSale: true)
-        try render("pro-settings-active", height: 1100) { ProPage(state: active, calendar: calendar) }
+        try render("pro-settings-active", height: 1100, window: true) { ProPage(state: active, calendar: calendar) }
         var week = active
         week.freeWeek = DateInterval(start: day(10, 29, 2026), end: day(11, 5, 2026))
         week.firstPayment = "Čt 5. 11. · 149 Kč"
         week.allowance = nil
-        try render("pro-settings-free-week", height: 1000) { ProPage(state: week, now: day(10, 31, 2026), calendar: calendar) }
+        try render("pro-settings-free-week", height: 1000, window: true) { ProPage(state: week, now: day(10, 31, 2026), calendar: calendar) }
         var monthly = active
         monthly.payments = ProStore.Payments(number: 3, total: 12, next: day(2, 5, 2027), ends: day(11, 5, 2027))
         monthly.allowance = low
-        try render("pro-settings-paid-monthly", height: 1250) { ProPage(state: monthly, calendar: calendar) }
-        let free = ProPageState(pilot: true, plans: ProPlans.main)
-        try render("pro-settings-free", height: 950) { ProPage(state: free, calendar: calendar) }
+        try render("pro-settings-paid-monthly", height: 1250, window: true) { ProPage(state: monthly, calendar: calendar) }
+        // Without Pro (the list with sparkles, the way to the offer) and during the pilot (all ticked).
+        let free = ProPageState(loaded: true, trial: true)
+        try render("pro-settings-free", height: 1150, window: true) { ProPage(state: free, calendar: calendar) }
+        let pilot = ProPageState(unlocked: true, pilot: true, loaded: true)
+        try render("pro-settings-pilot", height: 1150, window: true) { ProPage(state: pilot, calendar: calendar) }
         let purchases = [
             CoachPacks.Purchase(productId: "health.aurin.app.coach.messages100", messages: 100, counted: true, environment: "Production", price: 7.99, currency: "EUR", purchasedAt: "2026-11-02T00:12:00.000Z", refunded: false),
             CoachPacks.Purchase(productId: "health.aurin.app.coach.messages40", messages: 40, counted: true, environment: "Production", price: 3.99, currency: "EUR", purchasedAt: "2026-10-12T10:00:00Z", refunded: false),
             CoachPacks.Purchase(productId: "health.aurin.app.coach.messages40", messages: 40, counted: false, environment: "Sandbox", price: 3.99, currency: "EUR", purchasedAt: "2026-09-28T10:00:00Z", refunded: false)
         ]
         let prices = ["health.aurin.app.coach.messages40": "€3.99", "health.aurin.app.coach.messages100": "€7.99"]
-        try render("pro-packs", height: 900) {
+        try render("pro-packs", height: 900, window: true) {
             CoachPacksPage(left: 137, purchases: purchases, price: { prices[$0] }, chosen: .constant("health.aurin.app.coach.messages100"), added: 100)
         }
     }
@@ -968,6 +971,12 @@ final class SnapshotTests: XCTestCase {
         try render("plan-card", glow: Palette.Glow.training, height: 260) { ActivePlanSummary(active: active).padding(24) }
         try render("plan-preview", glow: Palette.Glow.training, height: 1150) {
             PlanPreviewContent(template: active.template, preview: preview) {}.padding(.horizontal, 24).environment(model)
+        }
+        // A plan of Aurin Pro without Pro: the adaptive plan card and "Začít s Aurin Pro" instead of "Začít plán".
+        var locked = active.template
+        locked.locked = true
+        try render("plan-preview-locked", glow: Palette.Glow.training, height: 1250) {
+            PlanPreviewContent(template: locked, preview: preview) {}.padding(.horizontal, 24).environment(model)
         }
         try render("plan-preview-failed", glow: Palette.Glow.training, height: 1150) {
             PlanPreviewContent(template: active.template, preview: nil, failed: true, canStart: false) {}.padding(.horizontal, 24).environment(model)
@@ -1075,7 +1084,9 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
-    private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, width: CGFloat = 390, typeSize: DynamicTypeSize = .large, @ViewBuilder _ content: () -> V) throws {
+    /// `window`: draw from a window, as for a NavigationStack; ImageRenderer leaves a
+    /// ScrollView empty (the Aurin Pro pages showed only their background).
+    private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, width: CGFloat = 390, typeSize: DynamicTypeSize = .large, window: Bool = false, @ViewBuilder _ content: () -> V) throws {
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         for (suffix, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
             let view = content()
@@ -1085,7 +1096,7 @@ final class SnapshotTests: XCTestCase {
                 .environment(\.colorScheme, scheme)
             let image: UIImage?
             let type = String(reflecting: V.self)
-            if type.contains("NavigationStack") || type.contains("Sheet") {
+            if window || type.contains("NavigationStack") || type.contains("Sheet") {
                 // ImageRenderer stops the whole test run on iOS 27 ("no current update
                 // to enqueue action to") when the view holds a NavigationStack, which it
                 // cannot flatten; such a screen, and every sheet (most open with their

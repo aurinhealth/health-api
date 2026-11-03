@@ -1,6 +1,7 @@
 import { L } from './lang.js';
 import { consentStatus } from './consent.js';
 import { storeConfigured } from './app-store.js';
+import { FREE_PLANS } from './training-plans.js';
 // Aurin Pro can be bought in the app (app-store.js); AI still needs it only once
 // AI_PAYWALL_ENABLED is on. Until then (the pilot) everyone has AI.
 export const SUBSCRIPTION_FEATURES = [
@@ -47,6 +48,19 @@ export async function subscriptionStatus(env) {
   const aiConsent=env.DB||env.RAW_DB||env.CONSENT_REQUIRED||env.USER_ID!=null?(await consentStatus(env)).aiAllowed:true;
   return {status:'ok',mode:enforced?'paid':'pilot',plan,introSeen:await introSeen(env),aiConsent,aiAccess:aiConsent&&(!enforced||plan==='ai'),billingActive:enforced,checkoutAvailable:storeConfigured(env),features:SUBSCRIPTION_FEATURES.map(f=>({...f,name:L(f.name,FEATURES_EN[f.name]||f.name)})),
     terms:L('Zatím jsou všechny dostupné funkce zdarma. Není potřeba platební karta a nic se automaticky neúčtuje. Budoucí AI předplatné, cenu, limity a podmínky oznámíme před spuštěním; placený tarif si zvolíš výslovně. Propojené služby mohou mít vlastní podmínky a ceny.', 'For now, all available features are free. No payment card is needed and nothing is charged automatically. We\'ll announce the future AI subscription, its price, limits and terms before it launches; you\'ll choose a paid plan explicitly. Connected services may have their own terms and prices.')};
+}
+// Training plans beyond the free starter ones (training-plans.js FREE_PLANS)
+// need Pro once AI_PAYWALL_ENABLED is on. No AI consent here: a plan sends
+// nothing to an AI model. No query during the pilot, one row read after.
+export async function plansUnlocked(env){
+  if(env.AI_PAYWALL_ENABLED!=='true')return true;
+  if(!env.DB)return false;
+  const row=await env.DB.prepare('SELECT plan,valid_until FROM subscriptions WHERE user_id=?').bind(env.USER_ID ?? env.DB.userId).first().catch(()=>null);
+  return row?.plan==='ai'&&Boolean(row.valid_until)&&Date.parse(row.valid_until)>Date.now();
+}
+export async function assertPlanAccess(env,template){
+  if(FREE_PLANS.has(template.id)||await plansUnlocked(env))return;
+  const error=new Error(L('Tento plán je součástí Aurin Pro.', 'This plan is part of Aurin Pro.'));error.status=402;throw error;
 }
 export async function assertAIAccess(env){
   const status=await subscriptionStatus(env);

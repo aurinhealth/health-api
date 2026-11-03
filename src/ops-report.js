@@ -9,9 +9,11 @@ import { emailConfigured, sendEmail } from "./email-sender.js";
 import { accountCapacity, openReserveShards, reserveCapacity, RESERVE_OPEN_BELOW, RESERVE_SHARD_USERS } from "./tenancy.js";
 import { aiMonthlyLimitUsd, ensureAiUsage } from "./ai-usage.js";
 import { ensureStoreColumns } from "./app-store.js";
-import { unpaidLimitShare, groupOfSubscription } from "./ai-limit-share.js";
+import { unpaidLimitShare, groupOfSubscription, newAccountSince } from "./ai-limit-share.js";
 import { GROUP_NAMES, aiSpendByGroup } from "./ai-total.js";
 import { MANY_QUERIES, MANY_ROWS, SLOW_REQUEST_MS, slowness, timed } from "./request-timing.js";
+import { opsReportHtml, money } from "./ops-report-html.js";
+export { money };
 
 const scope = new AsyncLocalStorage();
 const day = (date = new Date()) => date.toISOString().slice(0, 10);
@@ -75,26 +77,45 @@ const FEATURE_NAMES = {
 };
 const usd = value => `${(Number(value) || 0).toFixed(2)} $`;
 
-// rows: one per user and feature for yesterday ({email, feature, calls, cost,
+// rows: one per user and feature for yesterday ({who, feature, calls, cost,
 // input, cached}: input tokens and the part of them OpenAI had cached);
-// month: one per user since the 1st ({email, cost}).
-export function aiReport(rows, month, limit) {
+// month: one per user since the 1st ({who, cost, owner}). who is "Ty" for
+// the owner and "Účet #id · group" for everyone else: the report is an
+// e-mail, and an account number is all it needs (no e-mail addresses).
+export function aiSummary(rows, month, limit) {
   if (!rows.length) return null;
   const users = new Map();
   for (const row of rows) {
-    const user = users.get(row.email) || { cost: 0, calls: 0, features: [] };
+    const who = row.who ?? row.email;
+    const user = users.get(who) || { who, cost: 0, calls: 0, features: [] };
     user.cost += Number(row.cost) || 0; user.calls += Number(row.calls) || 0; user.features.push(row);
-    users.set(row.email, user);
+    users.set(who, user);
   }
-  const total = [...users.values()].reduce((sum, u) => sum + u.cost, 0), calls = [...users.values()].reduce((sum, u) => sum + u.calls, 0);
+  const list = [...users.values()].sort((a, b) => b.cost - a.cost);
+  for (const u of list) u.features = u.features.sort((a, b) => (Number(b.cost) || 0) - (Number(a.cost) || 0) || (Number(b.calls) || 0) - (Number(a.calls) || 0)).slice(0, 3)
+    .map(f => ({ name: FEATURE_NAMES[f.feature] || f.feature || "jiné", calls: Number(f.calls) || 0 }));
   const sum = key => rows.reduce((acc, row) => acc + (Number(row[key]) || 0), 0), input = sum("input");
-  const cache = input > 0 ? ` · z cache ${Math.round(sum("cached") / input * 100)} % vstupu` : "";
-  const lines = [...users.entries()].sort((a, b) => b[1].cost - a[1].cost).map(([email, u]) => {
-    const top = u.features.sort((a, b) => b.cost - a.cost).slice(0, 3).map(f => `${FEATURE_NAMES[f.feature] || f.feature || "jiné"} ${usd(f.cost)}`).join(", ");
-    return `- ${email}: ${usd(u.cost)} (${u.calls} dotazů) · ${top}`;
-  });
-  const monthLines = month.sort((a, b) => b.cost - a.cost).map(m => `- ${m.email}: ${usd(m.cost)}${limit ? ` z ${usd(limit)} (${Math.round(m.cost / limit * 100)} %)` : ""}`);
-  return `Útrata AI včera: ${usd(total)}, ${calls} dotazů${cache}\n${lines.join("\n")}\n\nOd začátku měsíce${limit ? ` (strop ${usd(limit)} na účet)` : ""}\n${monthLines.join("\n")}`;
+  const months = month.map(m => ({ who: m.who ?? m.email, cost: Number(m.cost) || 0, owner: Boolean(m.owner), share: limit ? Math.round((Number(m.cost) || 0) / limit * 100) : null }));
+  // By name only the owner and accounts past half the cap; the rest as one sum.
+  const named = months.filter(m => m.owner || (m.share != null && m.share >= 50)).sort((a, b) => b.cost - a.cost);
+  const others = months.filter(m => !named.includes(m));
+  return {
+    total: list.reduce((acc, u) => acc + u.cost, 0), calls: list.reduce((acc, u) => acc + u.calls, 0),
+    cachedShare: input > 0 ? Math.round(sum("cached") / input * 100) : null,
+    users: list, limit: limit || null, named, others: { count: others.length, cost: others.reduce((acc, m) => acc + m.cost, 0) }
+  };
+}
+
+const accountsWord = n => n === 1 ? "účet" : n >= 2 && n <= 4 ? "účty" : "účtů";
+export const aiReport = (rows, month, limit) => aiText(aiSummary(rows, month, limit));
+export function aiText(ai) {
+  if (!ai) return null;
+  const cache = ai.cachedShare != null ? ` · z cache ${ai.cachedShare} % vstupu` : "";
+  const lines = ai.users.map(u => `- ${u.who}: ${money(u.cost)} · ${u.features.map(f => `${f.name} ${f.calls}×`).join(", ")}`);
+  const named = ai.named.map(m => `${m.who} ${money(m.cost)}${m.share != null ? ` (${m.share} %)` : ""}`);
+  const others = ai.others.count ? `${ai.named.length ? "ostatní " : ""}${ai.others.count} ${accountsWord(ai.others.count)} dohromady ${money(ai.others.cost)}` : "";
+  const monthLine = [...named, others].filter(Boolean).join(" · ");
+  return `Útrata AI včera: ${money(ai.total)}, ${ai.calls} dotazů${cache}\n${lines.join("\n")}\n\nZa měsíc${ai.limit ? ` (strop ${usd(ai.limit)} na účet)` : ""}: ${monthLine}`;
 }
 
 // Account deletions the cron has failed at least this many times in a row
@@ -189,6 +210,7 @@ export async function accountStats(env, date, { now = Date.now() } = {}) {
   return stats;
 }
 
+// ai: aiSummary (or its text); accounts: accountsReport's text.
 export function opsReport(rows, capacity, date, ai = null, stuckDeletions = [], accounts = null) {
   const of = kind => rows.filter(row => row.kind === kind).sort((a, b) => b.count - a.count);
   const sections = [];
@@ -200,14 +222,19 @@ export function opsReport(rows, capacity, date, ai = null, stuckDeletions = [], 
   // capacity.reserve: the databases kept in reserve (tenancy.js openReserveShards opens them).
   const reserve = capacity?.reserve || null, spare = reserve?.places ? ` V záloze ${reserve.databases} ${reserve.databases === 1 ? "databáze" : reserve.databases < 5 ? "databáze" : "databází"} (${reserve.places} míst), otevřou se samy, až zbude méně než ${RESERVE_OPEN_BELOW} volných.` : "";
   const low = Boolean(reserve && capacity?.places && capacity.free + reserve.places < 2 * RESERVE_OPEN_BELOW);
-  if (capacity?.places && (capacity.used / capacity.places >= 0.8 || low)) sections.push(`Místo pro účty\n- Obsazeno ${capacity.used} z ${capacity.places} (${Math.round(capacity.used / capacity.places * 100)} %). Nové registrace se po zaplnění řadí do čekací listiny.${spare}${low ? `\n- Záloha databází dochází (volných ${capacity.free}, v záloze ${reserve.places}): ve wrangler.jsonc zvyšte USER_DATA_SHARD_COUNT o 10 (každá databáze ${RESERVE_SHARD_USERS} míst) a vydejte, nasazení nové databáze založí samo.` : ""}`);
-  if (stuckDeletions?.length) sections.push(`Nedokončená smazání účtů (cron je opakuje, data zatím zůstávají)\n${stuckDeletions.map(row => `- účet #${row.user_id} smazaný ${String(row.requested_at || "").slice(0, 10)}: ${row.attempts}× selhalo${row.last_error ? ` (naposledy: ${row.last_error})` : ""}`).join("\n")}`);
+  const room = capacity?.places && (capacity.used / capacity.places >= 0.8 || low)
+    ? `- Obsazeno ${capacity.used} z ${capacity.places} (${Math.round(capacity.used / capacity.places * 100)} %). Nové registrace se po zaplnění řadí do čekací listiny.${spare}${low ? `\n- Záloha databází dochází (volných ${capacity.free}, v záloze ${reserve.places}): ve wrangler.jsonc zvyšte USER_DATA_SHARD_COUNT o 10 (každá databáze ${RESERVE_SHARD_USERS} míst) a vydejte, nasazení nové databáze založí samo.` : ""}` : null;
+  if (room) sections.push(`Místo pro účty\n${room}`);
+  const stuck = stuckDeletions?.length ? stuckDeletions.map(row => `- účet #${row.user_id} smazaný ${String(row.requested_at || "").slice(0, 10)}: ${row.attempts}× selhalo${row.last_error ? ` (naposledy: ${row.last_error})` : ""}`).join("\n") : null;
+  if (stuck) sections.push(`Nedokončená smazání účtů (cron je opakuje, data zatím zůstávají)\n${stuck}`);
   if (accounts) sections.push(accounts);
-  if (ai) sections.push(ai);
+  const aiLines = typeof ai === "string" ? ai : aiText(ai);
+  if (aiLines) sections.push(aiLines);
   if (!sections.length) return null;
   return {
     subject: `Aurin: přehled za ${date}`,
-    text: `Přehled za ${date} (UTC).\n\n${sections.join("\n\n")}\n\nPodrobnosti jsou v Cloudflare → Workers → health-api → Logs.\n`
+    text: `Přehled za ${date} (UTC).\n\n${sections.join("\n\n")}\n\nPodrobnosti jsou v Cloudflare → Workers → health-api → Logs.\n`,
+    html: opsReportHtml({ date, rows, room, stuck, accounts, ai: typeof ai === "string" ? null : ai, aiLines, label })
   };
 }
 
@@ -224,26 +251,49 @@ export async function sendDailyOpsReport(env, now = new Date()) {
   // The test server keeps two databases and no reserve on purpose.
   const reserve = room && env.ENVIRONMENT !== "staging" ? await reserveCapacity(env.DB) : null;
   const capacity = room ? { ...room, ...(reserve ? { reserve } : {}) } : null;
-  const ai = await aiSection(env, yesterday).catch(error => { console.warn("AI usage report failed", error?.message || error); return null; });
+  const ai = await aiData(env, yesterday, now.getTime()).then(({ rows: used, month }) => aiSummary(used, month, aiMonthlyLimitUsd(env))).catch(error => { console.warn("AI usage report failed", error?.message || error); return null; });
   const stuck = await stuckAccountDeletions(env.DB).catch(error => { console.warn("Stuck account deletions read failed", error?.message || error); return []; });
   const setting = value => value == null || value === "" || !Number.isFinite(Number(value)) ? null : Number(value);
   const accounts = await accountStats(env, yesterday).then(stats => accountsReport(stats, { monthly: aiMonthlyLimitUsd(env), unpaidShare: unpaidLimitShare(env), totalAlert: setting(env.AI_TOTAL_DAILY_ALERT_USD), totalLimit: setting(env.AI_TOTAL_DAILY_LIMIT_USD) }))
     .catch(error => { console.warn("Accounts report failed", error?.message || error); return null; });
   const report = opsReport(rows, capacity, yesterday, ai, stuck, accounts);
   const to = String(env.OWNER_EMAIL || "").trim();
-  if (report && to && emailConfigured(env)) await sendEmail(env, { to, subject: report.subject, text: report.text });
+  if (report && to && emailConfigured(env)) await sendEmail(env, { to, subject: report.subject, text: report.text, html: report.html });
   await env.DB.prepare("INSERT INTO ops_events(day,kind,service,count) VALUES(?,'report','-',1) ON CONFLICT(day,kind,service) DO NOTHING").bind(today).run();
   await env.DB.prepare("DELETE FROM ops_events WHERE day<?").bind(day(new Date(now.getTime() - 30 * 86400000))).run();
   return { sent: Boolean(report && to && emailConfigured(env)), report };
 }
 
-async function aiSection(env, date) {
+// Yesterday's AI per account and feature, and the month per account. The
+// owner is "Ty", everyone else "Účet #id · group" (no e-mail addresses).
+export async function aiData(env, date, now = Date.now()) {
   const exists = await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ai_usage'").first();
-  if (!exists) return null;
+  if (!exists) return { rows: [], month: [] };
   await ensureAiUsage(env.DB);
-  const rows = (await env.DB.prepare(`SELECT COALESCE(u.email, '#' || a.user_id) AS email, a.feature, COUNT(*) AS calls, SUM(a.cost_usd) AS cost, SUM(a.input_tokens) AS input, SUM(a.cached_tokens) AS cached
-    FROM ai_usage a LEFT JOIN users u ON u.id = a.user_id WHERE a.day = ? AND a.model NOT IN ('pending', 'carried-over') GROUP BY a.user_id, a.feature`).bind(date).all()).results || [];
-  const month = (await env.DB.prepare(`SELECT COALESCE(u.email, '#' || a.user_id) AS email, SUM(a.cost_usd) AS cost
-    FROM ai_usage a LEFT JOIN users u ON u.id = a.user_id WHERE a.day >= ? AND a.day <= ? AND a.model NOT IN ('pending', 'carried-over') GROUP BY a.user_id`).bind(date.slice(0, 8) + "01", date).all()).results || [];
-  return aiReport(rows, month, aiMonthlyLimitUsd(env));
+  await ensureStoreColumns(env.DB);
+  const rows = (await env.DB.prepare(`SELECT a.user_id, a.feature, COUNT(*) AS calls, SUM(a.cost_usd) AS cost, SUM(a.input_tokens) AS input, SUM(a.cached_tokens) AS cached
+    FROM ai_usage a WHERE a.day = ? AND a.model NOT IN ('pending', 'carried-over') GROUP BY a.user_id, a.feature`).bind(date).all()).results || [];
+  const month = (await env.DB.prepare(`SELECT a.user_id, SUM(a.cost_usd) AS cost
+    FROM ai_usage a WHERE a.day >= ? AND a.day <= ? AND a.model NOT IN ('pending', 'carried-over') GROUP BY a.user_id`).bind(date.slice(0, 8) + "01", date).all()).results || [];
+  const ids = [...new Set([...rows, ...month].map(r => Number(r.user_id)).filter(id => id > 0))];
+  const owner = String(env.OWNER_EMAIL || "").trim().toLowerCase();
+  const users = new Map(), subs = new Map();
+  if (ids.length) {
+    const list = JSON.stringify(ids);
+    for (const u of (await env.DB.prepare("SELECT id, email, created_at FROM users WHERE id IN (SELECT value FROM json_each(?))").bind(list).all()).results || []) users.set(Number(u.id), u);
+    for (const s of (await env.DB.prepare("SELECT user_id, plan, valid_until, store_environment, free_trial, offer_type, testflight FROM subscriptions WHERE user_id IN (SELECT value FROM json_each(?))").bind(list).all()).results || []) subs.set(Number(s.user_id), s);
+  }
+  const isOwner = id => Boolean(owner) && String(users.get(id)?.email || "").trim().toLowerCase() === owner;
+  const who = id => {
+    if (isOwner(id)) return "Ty";
+    const user = users.get(id), sub = subs.get(id);
+    if (!user) return `Účet #${id} · smazaný`;
+    const group = sub ? groupOfSubscription(sub, now) : String(user.created_at || "").replace("T", " ").slice(0, 19) >= newAccountSince(now) ? "new" : "free";
+    return `Účet #${id} · ${ACCOUNT_GROUPS[group] || group}`;
+  };
+  return {
+    rows: rows.map(r => ({ who: who(Number(r.user_id)), feature: r.feature, calls: r.calls, cost: r.cost, input: r.input, cached: r.cached })),
+    month: month.map(m => ({ who: who(Number(m.user_id)), cost: m.cost, owner: isOwner(Number(m.user_id)) }))
+  };
 }
+const ACCOUNT_GROUPS = { paid: "Pro", gift: "pilot nebo dárek", trial: "týden zdarma", testflight: "TestFlight", free: "bez nákupu", new: "nový účet", system: "server" };

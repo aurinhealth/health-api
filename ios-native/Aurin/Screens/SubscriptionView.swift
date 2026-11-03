@@ -51,27 +51,40 @@ enum ProPlans {
     }
 }
 
-/// One thing Pro adds, with its icon.
-struct ProFeature: Identifiable {
-    let symbol: String
-    let color: Color
-    let title: String
-    let subtitle: String
-    var id: String { title }
-
-    static let pro: [ProFeature] = [
-        ProFeature(symbol: "bubble.left.and.text.bubble.right.fill", color: Palette.indigo, title: "AI kouč", subtitle: "Ptej se kdykoli, odpoví z tvých dat."),
-        ProFeature(symbol: "calendar.badge.clock", color: Palette.rust, title: "Plán vlastními slovy", subtitle: "Řekni, co se změnilo, a týden se přizpůsobí."),
-        ProFeature(symbol: "chart.line.uptrend.xyaxis", color: Palette.green, title: "Hodnocení tréninků a dne", subtitle: "Co se povedlo a co příště jinak."),
-        ProFeature(symbol: "camera.fill", color: Palette.amberBar, title: "Jídlo z fotky", subtitle: "Vyfoť talíř nebo etiketu, hodnoty doplní AI."),
-        ProFeature(symbol: "text.bubble.fill", color: Palette.blue, title: "Jídlo vlastními slovy", subtitle: "Napiš, co máš na talíři, a najde se i to, co katalog nezná."),
-        ProFeature(symbol: "figure.strengthtraining.traditional", color: Palette.brown, title: "Technika každého cviku", subtitle: "Popis provedení i pro cviky mimo katalog.")
+/// What Aurin has for everyone and what Pro adds, on Settings → Aurin Pro. Pro is
+/// "Aurin Intelligence" (everything that asks an AI model) and the plans that
+/// adapt; without it there is one starter plan in every sport (Petr, 3 Nov 2026).
+enum ProContents {
+    static let free = [
+        "Připravenost, spánek a zátěž",
+        "Sledování cyklu",
+        "Kalorický cíl a makra",
+        "Zápis jídla, čárový kód a etiketa",
+        "Zápis posilovny a technika cviků",
+        "Úvodní plán pro každý sport"
     ]
-    static let included: [ProFeature] = [
-        ProFeature(symbol: "heart.fill", color: Palette.rust, title: "Regenerace a spánek", subtitle: "Připravenost, HRV a potřeba spánku každý den."),
-        ProFeature(symbol: "flame.fill", color: Palette.amberBar, title: "Kalorický cíl a makra", subtitle: "Cíl, který roste s tím, jak se hýbeš."),
-        ProFeature(symbol: "dumbbell.fill", color: Palette.brown, title: "Plán posilovny a tréninků", subtitle: "Týden podle času, který máš."),
-        ProFeature(symbol: "arrow.triangle.2.circlepath", color: Palette.indigo, title: "Google Health a Intervals.icu", subtitle: "Data z hodinek bez přepisování.")
+
+    struct Group: Identifiable {
+        let title: String
+        let items: [String]
+        var id: String { title }
+    }
+
+    static let pro = [
+        Group(title: "Aurin Intelligence", items: [
+            "Kouč jen pro tebe",
+            "Změny plánu vlastními slovy",
+            "Hodnocení tréninku, dne a týdne",
+            "Jídlo z fotky, slov nebo webu",
+            "Vybavení posilovny z fotky nebo webu"
+        ]),
+        Group(title: "Adaptivní tréninkové plány", items: [
+            "Plány na závody a cíle",
+            "Podle tvé regenerace a pokroku",
+            "Podle času, který každý den máš"
+        ]),
+        Group(title: "Vitamíny a minerály", items: []),
+        Group(title: "Vlastní makra a cíle živin", items: [])
     ]
 }
 
@@ -124,18 +137,34 @@ struct SubscriptionView: View {
     @State private var restoring = false
     @State private var notice: String?
     @State private var morePacks = false
+    @State private var redeemCode = false
     private let store = ProStore.shared
 
     var body: some View {
-        ProPage(state: Self.state(status, store), error: error, restoring: restoring,
-                morePacks: { morePacks = true }, goPro: { Paywall.present(model) }, manage: { manage = true },
-                restore: {
-                    restoring = true
-                    Task { notice = await store.restore(); restoring = false; await load() }
-                })
+        ProPage(state: Self.state(status, store), error: error,
+                morePacks: { morePacks = true }, goPro: { Paywall.present(model) }, manage: { manage = true })
             .navigationTitle(L10n.tr("Aurin Pro"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("Uplatnit promo kód") { redeemCode = true }
+                        Button("Obnovit nákup") {
+                            restoring = true
+                            Task { notice = await store.restore(); restoring = false; await load() }
+                        }
+                        .disabled(restoring)
+                    } label: {
+                        Image(systemName: "ellipsis").accessibilityLabel(L10n.tr("Další možnosti"))
+                    }
+                }
+            }
+            // Apple's own sheet for an offer code; what it redeems comes through Transaction.updates (ProStore).
+            .offerCodeRedemption(isPresented: $redeemCode) { result in
+                if case .failure(let error) = result { notice = error.localizedDescription }
+                Task { await store.refresh(); await load() }
+            }
             .navigationDestination(isPresented: $morePacks) { CoachPacksView() }
             .onAppear { ScreenTrail.visit("page/Aurin Pro") }
             .task { await load() }
@@ -159,7 +188,7 @@ struct SubscriptionView: View {
                             renewal: renewal(status), freeWeek: store.freeWeek, firstPayment: firstPayment,
                             payments: store.payments, allowance: status?.coachAllowance,
                             packsOnSale: status?.checkoutAvailable == true,
-                            plans: status == nil ? nil : ProPlans.priced(store))
+                            loaded: status != nil, trial: store.trialEligible)
     }
 
     /// "Obnoví se 1. prosince" or "Platí do 1. prosince".
@@ -231,7 +260,7 @@ struct AISubscriptionCard: View {
     var body: some View {
         Card {
             Label("AI je součástí Aurin Pro", systemImage: "sparkles").font(.headline).foregroundStyle(Palette.ink)
-            Text("Kouč, jídlo z fotky a hodnocení tréninků patří do Aurin Pro. Zápisy, přehledy a plány zůstávají zdarma.")
+            Text("Kouč, jídlo z fotky a hodnocení tréninků patří do Aurin Pro. Zápisy a přehledy zůstávají zdarma.")
                 .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             Button(action: open) {
                 Text("Zobrazit Aurin Pro").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)

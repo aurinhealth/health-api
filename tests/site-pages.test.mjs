@@ -30,7 +30,7 @@ test('public pages use the app’s light palette',async()=>{
 
 test('the overview follows the app section by section and every file it loads exists',async()=>{
   const html=await overviewPage(new Request('https://aurin.health/')).text();
-  for(const id of ['spanek','pripravenost','zatez','trenink','posilovna','rezim','svaly','vyziva','kouc','connections','soukromi','faq'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
+  for(const id of ['spanek','pripravenost','zatez','trenink','posilovna','rezim','svaly','vyziva','kouc','soukromi','faq'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
   const files=[...new Set([...html.matchAll(/(?:src|href|content)="(?:https:\/\/aurin\.health)?\/site\/([^"?]+)(?:\?[^"]*)?"/g)].map(m=>m[1]))];
   assert.ok(files.includes('og-en.jpg'),'share image');
   assert.ok(files.includes('fonts/newsreader.woff2'));
@@ -184,7 +184,7 @@ test('the support page follows the app’s Settings and every page has the foote
     assert.doesNotMatch(await page(new Request('https://aurin.health/x?lang='+lang)).text(),/Nastavení → Účet,|Settings → Account(?!;)|Settings → Account you|Nastavení → Propojení|Settings → Connections/);
   for(const page of [overviewPage,privacyPage,termsPage,supportPage]){
     const html=await page().text();
-    for(const href of ['/#a-readiness','/#connections','/support#problem','mailto:support@aurin.health','/privacy','/terms'])assert.ok(html.includes('href="'+href+'"'),href);
+    for(const href of ['/#a-readiness','/#a-watch','/support#problem','mailto:support@aurin.health','/privacy','/terms'])assert.ok(html.includes('href="'+href+'"'),href);
     assert.match(html,/Aurin is not a medical device\./);
   }
   assert.match(support,/<h2 id="problem">/);
@@ -203,28 +203,15 @@ test('robots.txt and the sitemap list the public pages on the host they are serv
   for(const path of ['/','/support','/privacy','/terms','/health-data','/cs/privacy','/cs/terms'])assert.ok(map.includes('<loc>https://aurin.health'+path+'</loc>'),path);
 });
 
-// Connections show only the services the app offers to connect, each with the app's own logo file
-// (Assets.xcassets), and say what Aurin sends back only where the app can sync to that service.
-test('the connections use the app’s own logos and only the services the app offers',async()=>{
+// The service logos in public/site/logos/ are the app's own files (Assets.xcassets), unchanged. The Connections
+// section is gone (Petr 2026-11-03): the Works with row under the hero names the services.
+test('the site’s service logos are the app’s own files, and the Connections section is gone',async()=>{
   const html=await overviewPage().text();
-  const section=html.slice(html.indexOf('<section id="connections"'),html.indexOf('<section id="soukromi"'));
   const asset=path=>readFileSync(new URL('../ios-native/Aurin/Resources/Assets.xcassets/'+path,import.meta.url));
   const site=file=>readFileSync(new URL('../public/site/logos/'+file,import.meta.url));
-  for(const [file,source] of [['apple-health.png','AppleHealthLogo.imageset/apple-health.png'],['google-health.png','GoogleHealthLogo.imageset/google-health.png'],['intervals.svg','IntervalsLogo.imageset/intervals.svg'],['ultrahuman.svg','UltrahumanMark.imageset/ultrahuman-white.svg'],['whoop.svg','WhoopLogo.imageset/whoop-black.svg'],['wahoo.png','WahooLogo.imageset/wahoo-wordmark-white.png']]){
+  for(const [file,source] of [['apple-health.png','AppleHealthLogo.imageset/apple-health.png'],['google-health.png','GoogleHealthLogo.imageset/google-health.png'],['intervals.svg','IntervalsLogo.imageset/intervals.svg'],['ultrahuman.svg','UltrahumanMark.imageset/ultrahuman-white.svg'],['whoop.svg','WhoopLogo.imageset/whoop-black.svg'],['wahoo.png','WahooLogo.imageset/wahoo-wordmark-white.png']])
     assert.ok(site(file).equals(asset(source)),file+' is the app’s logo, unchanged');
-    assert.ok(section.includes('/site/logos/'+file),file);
-  }
-  assert.deepEqual([...section.matchAll(/id="tab-(\w+)"/g)].map(m=>m[1]),['apple','google','intervals','ultrahuman','whoop','wahoo']);
-  assert.doesNotMatch(section,/strava|garmin|oura/i,'only services the app offers');
-  const sync=readFileSync(new URL('../ios-native/Aurin/Screens/SyncViews.swift',import.meta.url),'utf8');
-  for(const id of ['apple','google','intervals'])assert.match(sync,new RegExp('SyncDestination\\(id: "'+id+'"'),id);
-  for(const id of ['ultrahuman','whoop'])assert.doesNotMatch(sync,new RegExp('SyncDestination\\(id: "'+id+'"'),id);
-  assert.match(section,/nothing, Aurin only reads the ring/);
-  assert.match(section,/nothing, Aurin only reads WHOOP/);
-  // Wahoo gets the planned workouts, as its connect sheet says (SettingsConnectFlow.swift).
-  const connect=readFileSync(new URL('../ios-native/Aurin/Screens/SettingsPages/SettingsConnectFlow.swift',import.meta.url),'utf8');
-  assert.match(connect,/Tréninky naplánované v Aurinu, do ELEMNT a KICKR/);
-  assert.match(section,/planned workouts, to ELEMNT and KICKR/);
+  assert.doesNotMatch(html,/id="connections"|class="connect"|href="\/#connections"/);
 });
 
 test('the questions open without JS and name the app’s real Settings paths',async()=>{
@@ -331,13 +318,16 @@ test('app screens on the site are real shots, not an empty screen', () => {
     assert.ok(statSync(new URL(f, dir)).size > 8000, `${f} looks blank (a shot taken before the screen drew)`);
 });
 
-// Under the hero's form, the watches and rings Aurin reads, as names: only devices the app supports.
-test('the hero names the wearables Aurin reads, and no device it does not support',async()=>{
+// Right under the hero's form, the watches and rings Aurin reads, as plain names in one row: only devices the app
+// supports (Apple Watch through Apple Health, Fitbit and Pixel Watch through Google Health, WHOOP and Ultrahuman directly).
+test('the hero names the wearables Aurin reads under the form, and no device it does not support',async()=>{
   const html=await overviewPage().text();
   const hero=html.slice(html.indexOf('<div class="hero">'),html.indexOf('<section class="morning">'));
-  const list=hero.slice(hero.indexOf('<div class="works">'));
+  const cta=hero.indexOf('<div class="cta">'),row=hero.indexOf('<div class="xw">');
+  assert.ok(cta>0&&row>cta&&row<hero.indexOf('<div class="stage">'),'the row sits right under the form, before the phone');
+  const list=hero.slice(row);
   assert.deepEqual([...list.matchAll(/<li>([^<]+)<\/li>/g)].map(m=>m[1]),WEARABLES);
   assert.deepEqual(WEARABLES,['Apple Watch','Fitbit','Pixel Watch','WHOOP','Ultrahuman']);
-  assert.doesNotMatch(hero,/garmin|oura|strava|polar|coros/i);
+  assert.doesNotMatch(hero,/garmin|oura|strava|polar|coros|amazfit/i);
   assert.match(hero,/Works with what you already wear/);
 });

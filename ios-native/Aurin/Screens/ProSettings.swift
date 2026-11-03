@@ -5,7 +5,9 @@ import SwiftUI
 // podle-paywallu/1c-nastaveni-pro-nocni and balicky-zprav/5-cesta-k-balickum):
 // the mark, the plan's state (the free week as a calendar, the year paid
 // monthly as a line of 12 dots), the extra coach messages and the way to buy
-// more, what Pro brings, and Apple's sheet to manage it. The packs page lists
+// more, what Aurin has for free and what Pro adds (approved mockup
+// pro-bez-predplatneho/1-stranka-pro-v2, 3 Nov 2026: a list like Bevel's, the
+// promo code and restore in the ⋯ menu), and Apple's sheet to manage it. The packs page lists
 // the two packs and what this account bought. Pure views here; SubscriptionView
 // and CoachPacksView load what they show.
 
@@ -24,8 +26,10 @@ struct ProPageState: Equatable {
     var allowance: CoachAllowance?
     /// Packs can be bought (the App Store is set up on the server).
     var packsOnSale = false
-    /// The plans while the account has no Pro; nil while loading.
-    var plans: [ProPlans.Plan]?
+    /// The server answered: the way to Pro can be shown.
+    var loaded = false
+    /// The App Store gives this Apple Account the free week on the 12-month plans.
+    var trial = false
 }
 
 /// The page itself, without loading: SubscriptionView feeds it, the snapshot tests too.
@@ -34,11 +38,9 @@ struct ProPage: View {
     var now = Date()
     var calendar: Calendar = .current
     var error: String?
-    var restoring = false
     var morePacks: () -> Void = {}
     var goPro: () -> Void = {}
     var manage: () -> Void = {}
-    var restore: () -> Void = {}
 
     var body: some View {
         ScrollView {
@@ -52,7 +54,7 @@ struct ProPage: View {
                 if let allowance = state.allowance, (allowance.extra ?? 0) > 0 || allowance.near {
                     ExtraMessagesCard(allowance: allowance, onSale: state.packsOnSale, more: morePacks)
                 }
-                tiles
+                contents
                 actions
                 if let error { Text(error).font(Typo.small).foregroundStyle(Night.amber) }
             }
@@ -86,30 +88,47 @@ struct ProPage: View {
         return nil
     }
 
-    private var tiles: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-            ForEach(ProFeature.pro) { feature in
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(alignment: .top) {
-                        Circle().fill(feature.color).frame(width: 10, height: 10)
-                            .frame(width: 30, height: 30)
-                            .background(feature.color.opacity(0.18), in: Circle())
-                        Spacer()
-                        if !state.unlocked {
-                            Image(systemName: "lock").scaledFont(12, weight: .semibold).foregroundStyle(Night.faint)
-                        }
-                    }
-                    Spacer(minLength: 14)
-                    Text(L10n.tr(feature.title)).font(.subheadline).foregroundStyle(Night.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(16)
-                .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
-                .background(Night.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(L10n.tr(feature.title) + (state.unlocked ? "" : ", " + L10n.tr("není v tarifu")))
+    /// What Aurin has for everyone, then what Pro adds: with a sparkle while it is
+    /// locked, ticked once the account has it (Pro, or everything during the pilot).
+    private var contents: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(verbatim: state.unlocked ? "Aurin Pro" : "Aurin Free").font(Typo.sentence(28)).foregroundStyle(Night.ink)
+            Text(verbatim: cardLine).font(.subheadline).foregroundStyle(Night.muted).padding(.top, 2).padding(.bottom, 10)
+            ForEach(ProContents.free, id: \.self) { row($0, sub: false) }
+            Text(verbatim: L10n.tr(state.unlocked ? "TAKÉ V CENĚ" : "S AURIN PRO"))
+                .scaledFont(11, weight: .semibold, cap: .denseCap).tracking(0.7).foregroundStyle(Night.lilac)
+                .padding(.top, 12).padding(.bottom, 2)
+            ForEach(ProContents.pro) { group in
+                row(group.title, sub: false, pro: true)
+                ForEach(group.items, id: \.self) { row($0, sub: true, pro: true) }
             }
         }
+        .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Night.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private var cardLine: String {
+        if !state.unlocked { return L10n.tr("Zatím nemáš Pro.") }
+        return L10n.tr(state.pilot && !state.hasPro ? "Během pilotu je všechno zdarma." : "Všechno je odemčené.")
+    }
+
+    private func row(_ title: String, sub: Bool, pro: Bool = false) -> some View {
+        let locked = pro && !state.unlocked
+        return HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Image(systemName: locked ? "sparkle" : "checkmark")
+                .scaledFont(sub ? 11 : 13, weight: .bold)
+                .foregroundStyle(locked ? Night.lilac : Night.mint)
+                .frame(width: 18)
+            Text(verbatim: L10n.tr(title))
+                .font(sub ? .subheadline : .body)
+                .foregroundStyle(sub ? Night.muted : Night.ink)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.leading, sub ? 30 : 0)
+        .padding(.vertical, 5)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(L10n.tr(title) + (locked ? ", " + L10n.tr("v Aurin Pro") : ""))
     }
 
     @ViewBuilder private var actions: some View {
@@ -121,42 +140,22 @@ struct ProPage: View {
                     .overlay(Capsule().stroke(Night.line))
             }
             .buttonStyle(.plain)
-        } else if let plans = state.plans {
-            HStack(spacing: 10) {
-                ForEach(plans) { plan in
-                    Button(action: goPro) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(L10n.tr(plan.title)).textCase(.uppercase).font(.caption.weight(.semibold))
-                                .foregroundStyle(plan.best ? Night.lavender : Night.muted)
-                            if let price = plan.price { Text(price).font(.headline).foregroundStyle(Night.ink).lineLimit(1).minimumScaleFactor(0.8) }
-                            if let note = plan.note { Text(note).font(Typo.caption).foregroundStyle(Night.muted).lineLimit(1) }
-                        }
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Night.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                        .overlay { RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(plan.best ? Night.lavender : Night.line, lineWidth: plan.best ? 1.5 : 1) }
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+        } else if !state.unlocked, state.loaded {
             Button(action: goPro) {
                 Text("Přejít na Aurin Pro").font(Typo.bodyStrong).foregroundStyle(Night.violet)
-                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .frame(maxWidth: .infinity, minHeight: 56)
                     .background(Night.lavender, in: Capsule())
             }
             .buttonStyle(.plain)
-        } else if error == nil {
+            .padding(.top, 2)
+            if state.trial {
+                Text("7 dní zdarma na 12měsíčním tarifu").font(.footnote).foregroundStyle(Night.muted)
+            }
+        } else if !state.loaded, error == nil {
             ProgressView().tint(Night.ink).frame(maxWidth: .infinity)
         }
-        HStack(spacing: 14) {
-            Link(destination: URL(string: "https://aurin.health/terms")!) {
-                Text("Podmínky a ceny").font(Typo.caption).foregroundStyle(Night.muted).underline()
-            }
-            Button(action: restore) {
-                Text("Obnovit nákup").font(Typo.caption).foregroundStyle(Night.muted).underline()
-            }
-            .buttonStyle(.plain)
-            .disabled(restoring)
+        Link(destination: URL(string: "https://aurin.health/terms")!) {
+            Text("Podmínky a ceny").font(Typo.caption).foregroundStyle(Night.muted).underline()
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)

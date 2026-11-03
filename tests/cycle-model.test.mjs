@@ -52,7 +52,7 @@ test("hormonal contraception has no phases, ovulation or forecast", () => {
   assert.equal(st.phase, undefined);
   assert.equal(st.next, undefined);
   assert.equal(st.daysSinceBleeding, 8);
-  assert.deepEqual(st.pill, { pack: "21+7", number: 7, of: 21, pause: false, pauseDay: null, taken: null });
+  assert.deepEqual(st.pill, { pack: "21+7", number: 7, of: 21, pause: false, pauseDay: null, taken: null, packTaken: [false, false, false, false, false, false, false] });
   assert.equal(askPeriodToday(st), false);
   // A copper IUD leaves the natural cycle.
   assert.equal(cycleState({ settings: on({ contraception: "copper_iud" }), days: bleed("2026-10-03"), date: "2026-10-12" }).phase, "follicular");
@@ -64,6 +64,24 @@ test("the pill pack counts pills and pause days", () => {
   assert.deepEqual([pillState(s, "2026-10-30", null).pause, pillState(s, "2026-10-30", null).pauseDay], [true, 1]);
   assert.equal(pillState(s, "2026-11-03", null).number, 1);
   assert.equal(pillState(s, "2026-10-05", null), null);
+});
+
+test("a pill counts as taken only on the days it was logged", () => {
+  const settings = on({ contraception: "pill", packStart: "2026-10-27" });
+  // Pills 1-5 logged, pill 6 (yesterday) not, pill 7 is today and not yet.
+  const days = ["2026-10-27", "2026-10-28", "2026-10-29", "2026-10-30", "2026-10-31"].map(date => ({ date, pill: "21:00" }));
+  const st = cycleState({ settings, days, date: "2026-11-02" });
+  assert.equal(st.pill.number, 7);
+  assert.equal(st.pill.taken, null);
+  assert.deepEqual(st.pill.packTaken, [true, true, true, true, true, false, false]);
+  // Today's pill logged: the last one fills, yesterday's stays missed.
+  const later = cycleState({ settings, days: [...days, { date: "2026-11-02", pill: "08:10" }], date: "2026-11-02" });
+  assert.deepEqual(later.pill.packTaken, [true, true, true, true, true, false, true]);
+  // A second pack starts over.
+  assert.deepEqual(cycleState({ settings, days, date: "2026-11-24" }).pill.packTaken, [false]);
+  // A pause day has no pills, the calendar month needs none.
+  assert.equal(cycleState({ settings, days, date: "2026-11-18" }).pill.packTaken, undefined);
+  assert.equal(pillState(normalizeCycleSettings(settings), "2026-11-02", null).packTaken, undefined);
 });
 
 test("the morning question comes in the forecast range until a period or a 'not yet'", () => {

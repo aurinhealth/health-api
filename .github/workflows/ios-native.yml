@@ -14,9 +14,10 @@ name: iOS native app
 #   from the sample data, plus simulator screenshots of the running app
 #   (site/: the English, light-mode shots the website uses; smoke/: each step
 #   of the smoke test Vydat relies on; site-dark/ and smoke-dark/: the website's
-#   shots again in dark mode, for its dark look), and preview/: the App Store preview
-#   videos in English and Czech (app-preview-en.mp4, app-preview-cs.mp4), and
-#   duo/: the sample day on the iPhone Duo simulator.
+#   shots again in dark mode, for its dark look), watch/ and watch-cs/: the Apple
+#   Watch app on the sample day in English and Czech (the watch is dark only),
+#   preview/: the App Store preview videos in English and Czech (app-preview-en.mp4,
+#   app-preview-cs.mp4), and duo/: the sample day on the iPhone Duo simulator.
 
 on:
   workflow_dispatch:
@@ -46,8 +47,9 @@ jobs:
     # only Xcode 27.1 and later build the app full screen on iPhone Duo.
     runs-on: xcode-27
     # On main the run also builds for iPhone and uploads it after the App Store
-    # preview; since the preview it takes over an hour (cancelled at 60 min).
-    timeout-minutes: 90
+    # preview and the iPhone Duo screenshots: about 85 minutes (cancelled at 60
+    # and then 90 min before), so 100.
+    timeout-minutes: 100
     defaults:
       run:
         working-directory: ios-native
@@ -268,6 +270,54 @@ jobs:
             -only-testing:AurinUITests/SmokeTests/test4WebsiteScenes \
             CODE_SIGNING_ALLOWED=NO test
 
+      # The Apple Watch app on the sample day (AurinWatch/WatchDemo.swift, -demo) for
+      # the App Store and the website: watch/ in English, watch-cs/ in Czech, each
+      # page by the crown, a detail, the gym and its rest, and the watch face with
+      # Aurin's complications (DemoFace). The watch is dark only. Not a release
+      # check: a missing watch simulator or shot never fails the run.
+      - name: Screenshot the Apple Watch
+        continue-on-error: true
+        run: |
+          watch=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          watches = [d for r in devices if "watchOS" in r for d in devices[r] if d["name"].startswith("Apple Watch")]
+          print("watches:", ", ".join(sorted({d["name"] for d in watches})), file=sys.stderr)
+          names = ("Apple Watch Series 12 (46mm)", "Apple Watch Series 11 (46mm)", "Apple Watch Ultra 3 (49mm)", "Apple Watch Series 10 (46mm)", "Apple Watch Ultra 2 (49mm)")
+          # The App Store takes 416x496 (46 mm); a newer image may only have a newer 46 mm watch.
+          pick = next((d for n in names for d in reversed(watches) if d["name"] == n), None) \
+              or next((d for d in reversed(watches) if "(46mm)" in d["name"]), watches[-1] if watches else None)
+          print(pick["name"] if pick else "no watch", file=sys.stderr)
+          print(pick["udid"] if pick else "")')
+          if [ -z "$watch" ]; then echo "No Apple Watch simulator on this image"; exit 0; fi
+          app=build/Build/Products/Debug-watchsimulator/AurinWatch.app
+          [ -d "$app" ] || app=$(find build/Build/Products -maxdepth 2 -name AurinWatch.app -path '*watchsimulator*' | head -1)
+          xcrun simctl boot "$watch" || true
+          xcrun simctl bootstatus "$watch" -b
+          xcrun simctl install "$watch" "$app"
+          shoot() {
+            local out="$GITHUB_WORKSPACE/screens/$1" name=$2; shift 2
+            mkdir -p "$out"
+            xcrun simctl launch --terminate-running-process "$watch" health.aurin.app.watchkitapp -demo "$@"
+            sleep 6
+            xcrun simctl io "$watch" screenshot "$out/$name.png"
+          }
+          for lang in en cs; do
+            # The system's own texts (the time to the next workout, the clock) in
+            # the shot's language too, not the simulator's English.
+            dir=watch locale=en_US; [ "$lang" = cs ] && dir=watch-cs locale=cs_CZ
+            set -- -language $lang -AppleLanguages "($lang)" -AppleLocale $locale
+            shoot $dir 1-morning "$@"
+            shoot $dir 2-training "$@" -page training -week
+            shoot $dir 3-food "$@" -page food
+            shoot $dir 4-gym "$@" -gym
+            shoot $dir 5-rest "$@" -gym -rest
+            shoot $dir 6-face "$@" -face
+            shoot $dir 7-sleep "$@" -open sleep
+            shoot $dir 8-strain "$@" -open strain
+          done
+          xcrun simctl shutdown "$watch" || true
+
       # The App Store preview videos: the simulator's screen recorded while
       # AppPreviewTests walks the sample day in English and Czech, then the clips
       # it marks cut into one 15–30 s video per language (scripts/app-preview.mjs).
@@ -304,9 +354,13 @@ jobs:
 
       # The app on iPhone Duo, Apple's foldable (Xcode 27.1 and later have its
       # simulator): the sample day in English and light mode, each display the
-      # simulator shows (duo/). Not a release check: never fails the run.
+      # simulator shows (duo/). Not a release check: never fails the run, and
+      # never holds it either: on main 2026-11-03 it hung for 28 minutes and the
+      # whole run hit its time limit before Build for iPhone, so no upload.
+      # Booting and seven screens take about 3 minutes.
       - name: Screenshot the app on iPhone Duo
         continue-on-error: true
+        timeout-minutes: 6
         run: |
           xcrun simctl shutdown "${{ steps.sim.outputs.udid }}" || true
           udid=$(xcrun simctl list devices available -j | python3 -c '

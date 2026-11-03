@@ -156,12 +156,21 @@ final class ProStoreTests: XCTestCase {
         XCTAssertEqual(ProStore.packIDs, ["health.aurin.app.coach.messages40", "health.aurin.app.coach.messages100"])
         XCTAssertTrue(try XCTUnwrap(store.price("health.aurin.app.coach.messages40")).contains("99"))
         // Xcode's test purchase never reaches the server: the pack's own messages come back.
+        let buying = Date().addingTimeInterval(-1)
         let left = try await step("buy pack") { try await store.buyPack("health.aurin.app.coach.messages100") }
         XCTAssertEqual(left, 100)
         XCTAssertFalse(store.entitled, "a pack is not Aurin Pro")
+        // The pack bought here is finished. On CI (3 Nov, iOS 27) Transaction.unfinished
+        // still listed a messages100 transaction 3 s after buyPack had finished its
+        // own, so only a transaction bought during this step counts. Every open one
+        // is named in the log with its ID and date.
         var unfinished = 0
-        for await _ in Transaction.unfinished { unfinished += 1 }
-        XCTAssertEqual(unfinished, 0)
+        for await result in Transaction.unfinished {
+            let transaction = result.unsafePayloadValue
+            print("ProStoreTests open transaction: \(transaction.productID) \(transaction.id), bought \(transaction.purchaseDate), buying from \(buying)")
+            if transaction.productID == "health.aurin.app.coach.messages100", transaction.purchaseDate >= buying { unfinished += 1 }
+        }
+        XCTAssertEqual(unfinished, 0, "the bought pack is finished")
         _ = session
     }
 
@@ -182,5 +191,16 @@ final class ProStoreTests: XCTestCase {
         XCTAssertEqual(ProStore.amount("$59.99", locale: us), Decimal(string: "59.99"))
         XCTAssertEqual(ProStore.amount("$1,490.00", locale: us), 1490)
         XCTAssertNil(ProStore.amount("Kč", locale: cs))
+    }
+
+    func testMonthWrittenLikeApplesPrice() {
+        XCTAssertEqual(ProStore.reprice("1\u{202F}490,00\u{00A0}Kč", Decimal(1490) / 12, fractionDigits: 0), "124\u{00A0}Kč")
+        XCTAssertEqual(ProStore.reprice("69,99 €", Decimal(string: "69.99")! / 12, fractionDigits: 2), "5,83 €")
+        XCTAssertEqual(ProStore.reprice("$59.99", Decimal(string: "59.99")! / 12, fractionDigits: 2), "$5.00")
+        XCTAssertEqual(ProStore.reprice("$1,490.00", Decimal(string: "124.17")!, fractionDigits: 2), "$124.17")
+        XCTAssertEqual(ProStore.reprice("1.490,00 €", Decimal(1490), fractionDigits: 2), "1.490,00 €")
+        XCTAssertEqual(ProStore.reprice("¥12,000", Decimal(1000), fractionDigits: 0), "¥1,000")
+        XCTAssertEqual(ProStore.reprice("199,00 Kč", Decimal(1490), fractionDigits: 0), "1\u{00A0}490 Kč")
+        XCTAssertNil(ProStore.reprice("Kč", 1, fractionDigits: 0))
     }
 }
