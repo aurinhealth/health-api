@@ -146,54 +146,22 @@ struct TrainingContent: View {
                           showToday: shownDay == training.date ? nil : showToday,
                           coach: actions.coach, settings: actions.settings)
 
-                // A wide window: the week, today's workouts and the strain on the left, the widgets on the right.
-                WideColumns {
-                    // Until the main sport and goal are set (FocusSheet.swift).
-                    if training.profileIncomplete == true {
-                        FocusPromptCard { focusSheet = true }
-                            .padding(.top, 18)
+                if wide {
+                    // Petr, 2026-11-03: today's workout with its Start at the top on the
+                    // right, seen without scrolling; the week and the strain on the left.
+                    HStack(alignment: .top, spacing: WideLayout.gap) {
+                        VStack(alignment: .leading, spacing: 0) { week }
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                        VStack(alignment: .leading, spacing: 0) {
+                            sessions(top: 18)
+                            // One column of widgets beside the week.
+                            board.environment(\.wideLayout, false).padding(.top, upcomingShown ? 14 : 18)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
-
-                    TrainingCalendarCard(today: training.date, onPick: pickDay, jump: jumpDay,
-                                         plannedTodayBelow: Set(upcoming.filter { $0.date == training.date }.map(\.title)))
-                        .padding(.top, 18)
-
-                    // Right under the week (Petr, 2026-10-25): every workout left today,
-                    // else the next planned day's, with Začít trénink. It belongs to
-                    // today, not to a day looked back at.
-                    if shownDay == training.date, !upcoming.isEmpty {
-                        TodaySessions(sessions: upcoming, today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
-                            .padding(.top, 14)
-                    }
-
-                    // Today's opens the same Námaha detail as Dnes, a past day its own;
-                    // a day ahead has no detail yet.
-                    if shownDay == training.date {
-                        RouteLink(route: .strain) { StrainHero(training: training) }
-                            .padding(.top, 26)
-                    } else if shownDay < training.date {
-                        RouteLink(route: .strainDay(shownDay)) { StrainHero(training: training, day: shownDay) }
-                            .padding(.top, 26)
-                    } else {
-                        StrainHero(training: training, day: shownDay)
-                            .padding(.top, 26)
-                    }
-                    CoachTextCard(screen: "training").padding(.top, 18)
-
-                    WeekStrainBars(days: training.days)
-                        .padding(.top, 22)
-
-                    if let event = training.event {
-                        EventCard(event: event)
-                            .padding(.top, 28)
-                    }
-
-                    TrainingTools(today: training.date, gymPlanned: upcoming.contains { $0.date == training.date && $0.sport == "strength" },
-                                  addWorkout: addWorkout)
-                        .padding(.top, 28)
-                } right: {
-                    // In a wide window the widgets stay one column beside the week.
-                    board.environment(\.wideLayout, false).padding(.top, wide ? 18 : 28)
+                } else {
+                    week
+                    board.padding(.top, 28)
                 }
             } else {
                 board
@@ -203,6 +171,60 @@ struct TrainingContent: View {
         .padding(.top, 16)
         .sheet(isPresented: $focusSheet) { FocusSheet { Task { await model.refreshTraining() } } }
     }
+
+    /// The calendar, the strain, the coach and the tools.
+    @ViewBuilder private var week: some View {
+        // Until the main sport and goal are set (FocusSheet.swift).
+        if training.profileIncomplete == true {
+            FocusPromptCard { focusSheet = true }
+                .padding(.top, 18)
+        }
+
+        TrainingCalendarCard(today: training.date, onPick: pickDay, jump: jumpDay,
+                             plannedTodayBelow: Set(upcoming.filter { $0.date == training.date }.map(\.title)))
+            .padding(.top, 18)
+
+        // Right under the week (Petr, 2026-10-25): every workout left today,
+        // else the next planned day's, with Začít trénink. In a wide window
+        // it heads the right column instead.
+        if !wide { sessions(top: 14) }
+
+        // Today's opens the same Námaha detail as Dnes, a past day its own;
+        // a day ahead has no detail yet.
+        if shownDay == training.date {
+            RouteLink(route: .strain) { StrainHero(training: training) }
+                .padding(.top, 26)
+        } else if shownDay < training.date {
+            RouteLink(route: .strainDay(shownDay)) { StrainHero(training: training, day: shownDay) }
+                .padding(.top, 26)
+        } else {
+            StrainHero(training: training, day: shownDay)
+                .padding(.top, 26)
+        }
+        CoachTextCard(screen: "training").padding(.top, 18)
+
+        WeekStrainBars(days: training.days)
+            .padding(.top, 22)
+
+        if let event = training.event {
+            EventCard(event: event)
+                .padding(.top, 28)
+        }
+
+        TrainingTools(today: training.date, gymPlanned: upcoming.contains { $0.date == training.date && $0.sport == "strength" },
+                      addWorkout: addWorkout)
+            .padding(.top, 28)
+    }
+
+    /// Today's workouts still to do with Začít trénink. It belongs to today, not to a day looked back at.
+    @ViewBuilder private func sessions(top: CGFloat) -> some View {
+        if upcomingShown {
+            TodaySessions(sessions: upcoming, today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
+                .padding(.top, top)
+        }
+    }
+
+    private var upcomingShown: Bool { shownDay == training.date && !upcoming.isEmpty }
 
     private var board: some View {
         WidgetBoard(panel: .training,
