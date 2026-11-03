@@ -30,6 +30,7 @@
 // risk (MDR): the ages say how fit, never how ill.
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { activityKindOf } from "./activity-match.js";
+import { zoneOffsetMs } from "./user-time.js";
 
 export const MODEL_VERSION = 1;
 export const WINDOW_DAYS = 56;
@@ -239,10 +240,10 @@ export function sleepHabits(nights) {
   const list = [...byDate.values()];
   if (list.length < 10) return { hours: null, spreadMin: null, nights: list.length };
   const hours = list.reduce((sum, s) => sum + s.durationMin, 0) / list.length / 60;
-  // Minutes from noon to the middle of the night, so midnight is no edge. Local
-  // wall-clock: the offset of the stored instant is not known here, so the
-  // spread (not the clock time) is what counts.
-  const mids = list.map(s => { const a = Date.parse(s.startTime), b = Date.parse(s.endTime); return Number.isFinite(a) && Number.isFinite(b) ? (((a + b) / 2 / 60000 - 720) % 1440 + 1440) % 1440 : null; }).filter(v => v != null);
+  // The middle of the night on the user's wall clock (a change to summer time or
+  // a trip moves the UTC instant, not the habit), in minutes from noon so that
+  // midnight is no edge.
+  const mids = list.map(s => { const a = Date.parse(s.startTime), b = Date.parse(s.endTime); if (!Number.isFinite(a) || !Number.isFinite(b)) return null; const mid = (a + b) / 2, local = (mid + zoneOffsetMs(mid)) / 60000; return ((local - 720) % 1440 + 1440) % 1440; }).filter(v => v != null);
   const mean = mids.reduce((x, y) => x + y, 0) / mids.length;
   const spread = mids.length >= 10 ? Math.sqrt(mids.reduce((x, y) => x + (y - mean) ** 2, 0) / mids.length) : null;
   return { hours: round2(hours), spreadMin: spread == null ? null : Math.round(spread), nights: list.length };
@@ -293,12 +294,16 @@ export function estimateDay(inputs) {
   if (resting) { sum += REST_WEIGHT * resting.value; weightSum += REST_WEIGHT; }
   if (!(weightSum > 0)) return null;
   const raw = sum / weightSum;
-  // Real VO2max moves slowly: at most WEEKLY_CHANGE a week from the last stored value
-  // (none after four weeks without one).
-  const prev = inputs.previous, gap = prev?.date && prev.date < date ? daysBetween(prev.date, date) : null;
-  const limit = gap && gap <= 28 && n(prev.vo2max) ? WEEKLY_CHANGE * gap / 7 : null;
-  const value = limit == null ? raw : clamp(raw, prev.vo2max - limit, prev.vo2max + limit);
   const confidence = workoutWeight >= 2 && estimates.length >= 4 && maxHrSource !== "age" ? "high" : workoutWeight >= 0.5 || (resting && maxHrSource !== "age") ? "medium" : "low";
+  // Real VO2max moves slowly: at most WEEKLY_CHANGE a week from the last stored
+  // value. Not after four weeks without one, not from another model version, and
+  // not when today's estimate stands on better data than the stored one (a first
+  // row from the resting layer alone must not hold back the workouts for months).
+  const prev = inputs.previous, gap = prev?.date && prev.date < date ? daysBetween(prev.date, date) : null;
+  const rank = c => ["low", "medium", "high"].indexOf(c);
+  const anchored = gap && gap <= 28 && n(prev.vo2max) && (prev.model == null || prev.model === MODEL_VERSION) && (prev.confidence == null || rank(prev.confidence) >= rank(confidence));
+  const limit = anchored ? WEEKLY_CHANGE * gap / 7 : null;
+  const value = limit == null ? raw : clamp(raw, prev.vo2max - limit, prev.vo2max + limit);
   const fit = fitnessAge(value, sex);
   const habitsActivity = activityHabits(recent, athlete), sleep = sleepHabits(inputs.sleep);
   const bmi = resting?.bmi ?? (height > 100 && weight > 30 ? weight / (height / 100) ** 2 : null);
@@ -326,7 +331,8 @@ export function inputsFromRows({ date, profile = {}, activityRows = [], dailyRow
   const sorted = [...dailyRows].filter(r => day(r) && day(r) < end).sort((a, b) => String(a.sample_time).localeCompare(String(b.sample_time)));
   const latest = (type, lo, hi, since = null) => { const r = sorted.filter(x => x.data_type === type && n(x.value_numeric) >= lo && n(x.value_numeric) <= hi && (!since || day(x) >= since)).at(-1); return r ? n(r.value_numeric) : null; };
   const birth = /^\d{4}-\d{2}-\d{2}$/.test(String(profile.birthDate || "")) ? profile.birthDate : null;
-  const age = birth ? Math.floor((Date.parse(date) - Date.parse(birth)) / (365.2425 * DAY)) : n(profile.age);
+  // Full years on the day: one more from the birthday on.
+  const age = birth ? Number(date.slice(0, 4)) - Number(birth.slice(0, 4)) - (date.slice(5) < birth.slice(5) ? 1 : 0) : n(profile.age);
   return {
     date, age, sex: profile.sex === "male" || profile.sex === "female" ? profile.sex : null, height: n(profile.height),
     weight: latest("weight", 30, 300), bodyFat: latest("body-fat", 3, 60, fatFrom),

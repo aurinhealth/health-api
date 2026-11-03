@@ -13,7 +13,7 @@
 // data up to that day and the previous day's row; the watches' values are
 // compared with it, never fed into it. Prints a Markdown summary.
 import { readFileSync, writeFileSync } from "node:fs";
-import { estimateDay, inputsFromRows, observedMaxHr, sessionsFromRows } from "../src/own-vo2max.js";
+import { estimateDay, inputsFromRows, observedMaxHr, sessionsFromRows, MODEL_VERSION } from "../src/own-vo2max.js";
 import { sleepSessionFromRow, joinSplitNights } from "../src/sleep-sessions.js";
 
 const args = process.argv.slice(2);
@@ -43,7 +43,7 @@ for (let d = from; d <= to; d = shift(d, 1)) {
   const window = activityRows.filter(r => day(r) >= shift(d, -60) && day(r) <= d);
   const hrmax = observedMaxHr(allSessions.filter(s => s.date >= shift(d, -183) && s.date <= d)) ?? data.profile?.hrmax ?? null;
   const result = estimateDay(inputsFromRows({ date: d, profile: { ...data.profile, hrmax }, activityRows: window, dailyRows, nights, previous }));
-  if (result) { series.push(result); previous = { date: d, vo2max: result.vo2max, rideFactor: result.rideFactor }; }
+  if (result) { series.push(result); previous = { date: d, vo2max: result.vo2max, confidence: result.confidence, model: MODEL_VERSION, rideFactor: result.rideFactor }; }
 }
 
 const round1 = v => (v == null ? null : Math.round(v * 10) / 10);

@@ -5,6 +5,7 @@ import { workoutEstimate, activityIndex, restingEstimate, fitnessAge, normVo2, c
 import { updateFitnessEstimate, latestFitnessEstimate, profileInputs, FITNESS_ESTIMATES_TABLE } from "../src/own-vo2max-store.js";
 import { PERSONAL_TABLES } from "../src/tenancy.js";
 import { withTimeZone } from "../src/user-time.js";
+import { MODEL_VERSION } from "../src/own-vo2max.js";
 
 const athlete = { restHr: 50, maxHr: 190, weight: 80 };
 const near = (actual, expected, tolerance = 0.15) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} ≠ ${expected}`);
@@ -123,8 +124,15 @@ test("a day's estimate fuses the layers and never reads the watch's own VO2max",
   const withWatch = estimateDay(inputsFromRows({ date: day, profile, activityRows: rides, dailyRows: [...rest, ...weight, { data_type: "daily-vo2-max", value_numeric: 30, sample_time: day }] }));
   assert.deepEqual(withWatch, result);
   // Real VO2max moves slowly: a day after 45.0 it is at most 1/7 higher.
-  const next = estimateDay({ ...input, previous: { date: shift(day, -1), vo2max: 45, rideFactor: 1.05 } });
+  const next = estimateDay({ ...input, previous: { date: shift(day, -1), vo2max: 45, confidence: "high", model: MODEL_VERSION, rideFactor: 1.05 } });
   near(next.vo2max, 45.1, 0.05);
+  // Not held back by a row from weaker data, another model version or a month ago.
+  assert.equal(estimateDay({ ...input, previous: { date: shift(day, -1), vo2max: 45, confidence: "low", model: MODEL_VERSION } }).vo2max, result.vo2max);
+  assert.equal(estimateDay({ ...input, previous: { date: shift(day, -1), vo2max: 45, confidence: "high", model: MODEL_VERSION - 1 } }).vo2max, result.vo2max);
+  assert.equal(estimateDay({ ...input, previous: { date: shift(day, -40), vo2max: 45, confidence: "high", model: MODEL_VERSION } }).vo2max, result.vo2max);
+  // The age counts full years: one more from the birthday on.
+  assert.equal(inputsFromRows({ date: "2026-05-01", profile }).age, 40);
+  assert.equal(inputsFromRows({ date: "2026-04-30", profile }).age, 39);
 });
 
 test("a swimmer or gym-goer without rides or runs gets the resting layer, with less confidence", () => {
@@ -146,6 +154,9 @@ test("sessions: one workout from two sources once; HRmax skips a sensor spike", 
   assert.equal(sessions[0].avgPower, 200);
   assert.equal(observedMaxHr([{ maxHr: 230 }, { maxHr: 188 }, { maxHr: 185 }]), 188);
   assert.equal(sleepHabits([{ date: day, durationMin: 400 }]).hours, null);
+  // 23:00–07:00 in Prague every night across the change to winter time: no spread.
+  const nights = Array.from({ length: 20 }, (_, i) => shift("2026-10-15", i)).filter(d => d !== "2026-10-25").map(d => { const summer = d < "2026-10-25"; const startZ = summer ? "21:00" : "22:00", endZ = summer ? "05:00" : "06:00"; return { date: d, startTime: shift(d, -1) + "T" + startZ + ":00Z", endTime: d + "T" + endZ + ":00Z", durationMin: 480 }; });
+  assert.equal(withTimeZone("Europe/Prague", () => sleepHabits(nights)).spreadMin, 0);
 });
 
 test("the profile's HRmax counts only when typed or seen in workouts", () => {
@@ -162,6 +173,8 @@ test("the daily job stores one row a day and is exported and deleted with the ac
   for (const r of rest) insert.run(7, "apple-health", r.data_type, null, null, r.sample_time, r.value_numeric, null);
   insert.run(7, "apple-health", "weight", null, null, "2026-10-10T07:00:00Z", 80, null);
   insert.run(7, "apple-health", "daily-vo2-max", null, null, day, 30, null);
+  // Weighed daily after the day: a later run for that day still finds the weight before it.
+  for (const d of ["2026-10-30", "2026-10-31", "2026-11-01"]) insert.run(7, "apple-health", "weight", null, null, d + "T07:00:00Z", 95, null);
   for (let i = 0; i < 6; i++) { const r = ride(shift(day, -i * 5), 200, 134); insert.run(7, "intervals", "activity", r.start_time, null, null, null, r.payload_json); }
   // Another user's rows stay out.
   insert.run(8, "apple-health", "daily-resting-heart-rate", null, null, day, 90, null);
@@ -170,6 +183,7 @@ test("the daily job stores one row a day and is exported and deleted with the ac
   const first = await withTimeZone("Europe/Prague", () => updateFitnessEstimate(env, { date: day }));
   assert.equal(first.status, "saved");
   assert.equal(first.estimate.details.restHr, 50);
+  assert.equal(first.estimate.details.resting.bmi, 24.7);
   assert.equal((await updateFitnessEstimate(env, { date: day })).status, "done");
   const stored = await latestFitnessEstimate(db, 7);
   assert.equal(stored.date, day);
