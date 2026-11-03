@@ -124,8 +124,8 @@ wide (60-70 characters). Headlines are one short sentence that ends with a full 
   other, sides alternating. Each step shows its own screen and lifts a piece of it beside the phone; steps
   take turns while the chapter is in view (a thin bar fills under the active step) until one is picked. On
   phones it stacks: headline, phone, steps.
-- Vary the rhythm: the Works with row under the hero (the services' names in one row, Google Health as its colour
-  logo), chapters, the muscle figure (split, figure on the right), the privacy promise (the welcome's lock, centred), questions (heading left, answers right). The privacy
+- Vary the rhythm: the Works with row right under the form (the watches and rings as plain names in one row),
+  chapters, the muscle figure (split, figure on the right), the privacy promise (the welcome's lock, centred), questions (heading left, answers right). The privacy
   promise and the final call to action are centred.
 - Never a row of three identical feature cards.
 
