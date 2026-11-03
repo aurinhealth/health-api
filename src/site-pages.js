@@ -52,7 +52,8 @@ p{margin:0}
 .wl .go svg,.wl .done svg{fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .wl .go svg{width:16px;height:16px;stroke:var(--on-button)}
 /* On the smallest phones the button drops its arrow so the address keeps room. */
-@media (max-width:360px){.wl .field{padding-left:16px}.wl .go{padding:0 14px}.wl .go svg{display:none}}
+/* Up to 375px (iPhone SE and mini) the address gets the whole width and the button goes under it. */
+@media (max-width:375px){.wl .field{flex-wrap:wrap;height:auto;padding:6px;border-radius:var(--r-22)}.wl input{flex:1 1 100%;height:46px;padding:0 12px}.wl .go{flex:1 1 100%}}
 .wl .done{align-items:center;gap:10px;height:56px;padding:0 26px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--green) 13%,var(--panel));color:var(--green);font-size:var(--fs-17);font-weight:600}
 .wl .done svg{width:20px;height:20px;stroke:currentColor}
 .wl .err{margin-top:10px;font-size:var(--fs-14);color:var(--rust-ink)}.wl .err:empty{display:none}
@@ -108,18 +109,15 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .hero .cta{margin-top:36px}
 .hero .wl{align-items:flex-start}.hero .wl .tf{text-align:left}
 .hero .note{margin-top:16px;font-size:var(--fs-14);color:var(--muted)}
-/* Works with: the services Aurin reads from, in one row under the hero, as Bevel-like marks. Apple Health, WHOOP
-   and Ultrahuman are their names in text: Apple's logo and icon need Apple's written licence on a website, WHOOP's
-   and Ultrahuman's logos their written OK (asked 2026-11). Google Health is its approved colour logo, unaltered;
-   Google has no approved version for dark backgrounds, so dark mode shows its name like the others. On a phone the
-   row scales with the screen so the four stay side by side. */
-.xw{padding:44px 0 56px;text-align:center}
-.xw .xe{font-size:var(--fs-12);font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--green)}
-.xw ul{list-style:none;margin:24px 0 0;padding:0;display:flex;align-items:center;justify-content:center;gap:64px}
-.xw li{flex:none;display:flex;align-items:center;font-size:var(--fs-28);font-weight:600;letter-spacing:-.02em;line-height:1;color:var(--text);white-space:nowrap}
-.xw li img{display:block;height:32px;width:auto}
-.xw .gh-t{display:none}
-${DARK_SITE ? '@media (prefers-color-scheme:dark){.xw .gh-l{display:none}.xw .gh-t{display:inline}}' : ''}
+/* Works with, right under the form on the first screen: the watches and rings Aurin reads (through Apple Health,
+   Google Health or directly), as plain names, Bevel-like. Brand logos need their makers' written OK. */
+.xw{margin-top:34px}
+.xw .xe{display:block;font-size:var(--fs-12);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.xw ul{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-wrap:wrap;align-items:center;row-gap:6px}
+.xw li{font-size:var(--fs-17);font-weight:600;letter-spacing:-.01em;line-height:1.3;color:var(--text);white-space:nowrap}
+/* A dot after each name: where the row breaks on a narrow phone, a line ends with it and names never run together. */
+.xw li:not(:last-child)::after{content:"·";margin:0 .55em;font-weight:400;color:var(--muted)}
+@media (max-width:359px){.xw li{font-size:var(--fs-14)}}
 /* The phone and its three numbers are drawn at one size (the rig) and scaled down where the column is narrower,
    so the numbers never leave the column and the coach sits under the phone, not over its tab bar. */
 .stage{position:relative;display:flex;justify-content:center}
@@ -386,8 +384,7 @@ main:focus{outline:none}
   .hero .sun{display:none}
   .lede{margin-left:auto;margin-right:auto}
   .hero .wl{align-items:center}.hero .wl .tf{text-align:center}
-  /* The four stay in one row: below the desktop sizes they scale with the screen. */
-  .xw ul{gap:min(36px,2.3vw)}.xw li{font-size:min(var(--fs-20),3.4vw)}.xw li img{height:min(23px,3.85vw)}
+  .xw ul{justify-content:center}
   .stage{margin-top:48px}
   .morning{padding-top:32px}
   /* Chapters: the words, then the phone with its piece over the lower part, then the steps. */
@@ -422,7 +419,7 @@ main:focus{outline:none}
   .hero .grid{gap:0;text-align:left}.hero .copy{display:contents}.hero .kicker{justify-self:start}.hero .lede{margin-left:0}
   .hero .cta{order:1;margin-top:28px}.hero .stage{order:2;margin-top:40px}
   .hero .wl{align-items:flex-start}.hero .wl .tf{text-align:left}
-  .xw{padding:28px 0 36px}.xw ul{margin-top:18px}
+  .hero .xw{order:1;margin-top:26px}.xw ul{justify-content:flex-start}
   .rig{width:322px;height:672px;--hz:.8}
   .rig .device{left:0}
   /* On a phone a part opens with its title and line only: its chapters right under show the same day. */
@@ -717,10 +714,9 @@ const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 // The Limited Use statements stay in the privacy policy either way.
 // The text stays word for word (tests/site-pages.test.mjs).
 export const GOOGLE_DISCLOSURE_ON_HOME = false;
-// The services Aurin reads from, in the "Works with" row under the hero (Petr's order). Apple Watch comes through
-// Apple Health, Fitbit and Pixel Watch through Google Health. Aurin does not support Garmin.
-export const PARTNERS = ['Apple Health', 'WHOOP', 'Ultrahuman',
-  '<img class="gh-l" src="/site/logos/google-health-wordmark.webp" alt="Google Health" width="242" height="32" loading="lazy" decoding="async"><span class="gh-t">Google Health</span>'];
+// The watches and rings the "Works with" row under the form names: Apple Watch through Apple Health, Fitbit and
+// Pixel Watch through Google Health, the Ultrahuman Ring and WHOOP directly. Aurin does not support Garmin.
+export const WEARABLES = ['Apple Watch', 'Fitbit', 'Pixel Watch', 'WHOOP', 'Ultrahuman'];
 export const googleDisclosure = () => `<details class="disclosure reveal" lang="en"><summary>Google Health data disclosure</summary><div class="card">
 <p>Aurin is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
 <p>With your authorization, the service may read fitness, health-metric, sleep, and nutrition data from Google Health. It may also add nutrition logs to Google Health when you ask the service to record food or drinks. This data is used only for the requested training and nutrition features.</p>
@@ -879,6 +875,7 @@ ${sun(72)}
 <h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w${i >= SLANT ? ' it' : ''}" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
 <p class="lede">Aurin reads your sleep, HRV and workouts from the watch or ring you wear, and every morning turns them into one number, one plan and one coach.</p>
 <div class="cta">${store('top')}<p class="note">Free early access on iPhone through TestFlight.</p></div>
+<div class="xw"><span class="xe" id="xw-t">Works with what you already wear</span><ul aria-labelledby="xw-t">${WEARABLES.map(w => `<li>${w}</li>`).join('')}</ul></div>
 </div>
 <div class="stage"><div class="rig">
 <div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">${day.hrv} ms</div><div class="d up">↑ ${day.hrv - day.hrvBaseline} ms above normal</div></div>
@@ -889,7 +886,6 @@ ${sun(72)}
 </div>
 </div>
 
-<section class="xw" aria-labelledby="xw-t"><div class="wrap"><div class="xe" id="xw-t">Works with</div><ul>${PARTNERS.map(p => `<li>${p}</li>`).join('')}</ul></div></section>
 
 <section class="morning"><div class="wrap"><div class="eyebrow">One morning with Aurin</div>
 <p class="say">You slept <b class="sleep">${day.sleep}</b>, your HRV is <b class="up">${day.hrv - day.hrvBaseline} ms above normal</b> and your readiness is <b class="up">${day.readiness}</b>. So the coach says: <em>go all in on strength today.</em></p>
