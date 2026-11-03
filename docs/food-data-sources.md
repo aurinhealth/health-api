@@ -24,6 +24,9 @@ Food values come from:
   shared foods. Built with `scripts/build-world-foods.mjs <foods.sqlite> <out>`
   and uploaded with `scripts/upload-world-foods.mjs <out>/<version>`; the
   upload writes `current.json` last, so a new version switches over at once.
+  Every 14 days `.github/workflows/food-catalog-refresh.yml` replaces the Open
+  Food Facts products with the current OFF export and carries the other sources
+  over ([food-catalog-refresh.md](food-catalog-refresh.md)).
   Sources without a licence to pass data on (the uploaded kCalori list,
   NutriDatabaze) are left out. Attributions are on the privacy page.
 

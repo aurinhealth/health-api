@@ -3,7 +3,8 @@
 // writes it as a few large pack files, so it costs no D1 rows: a barcode is one
 // ranged read, a name one index read plus one ranged read. The catalogue is
 // read only; foods users add or correct stay in D1 (personal-foods.js,
-// shared-foods.js) and are listed before it.
+// shared-foods.js) and are listed before it. Its Open Food Facts products are
+// replaced every 14 days (scripts/refresh-world-foods.mjs).
 import { lang } from './lang.js';
 
 export const WORLD_FOODS_FORMAT = 1;
