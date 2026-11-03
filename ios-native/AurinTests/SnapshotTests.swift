@@ -45,7 +45,7 @@ final class SnapshotTests: XCTestCase {
                     .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
             }
             try render("duo-\(name)-training", glow: Palette.Glow.training, height: 1500, width: width, window: true) {
-                TrainingContent(training: DemoData.training).padding(.top, 50).fixedSize(horizontal: false, vertical: true).frame(maxHeight: .infinity, alignment: .top)
+                ScrollView { TrainingContent(training: DemoData.training).padding(.top, 50) }.scrollIndicators(.hidden)
                     .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
             }
         }
