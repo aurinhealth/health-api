@@ -526,15 +526,12 @@ extension WatchBridge: WCSessionDelegate {
         // The watch's gym workout, started while this iPhone was out of reach.
         let live = (userInfo[WatchGym.liveKey] as? Data).flatMap(WatchGym.Live.decode)
         let partDone = (userInfo[WatchGym.partDoneKey] as? Data).flatMap(WatchGym.PartDone.decode)
-        let discard = userInfo[WatchGym.discardKey] as? String
         Task { @MainActor in
             if let partDone { applyGym(partDone) }
             if let live, !gymEnded { LiveWorkout.shared.watch(live) }
             if let done { await applyGym(done) }
             if gymEnded { LiveWorkout.shared.watchEnded() }
             if let rated { await applyGym(rated) }
-            // After the sets sent before it, so none of them brings the day back.
-            if let discard { await discardGym(date: discard) }
             if let water { await addWater(ml: water, kind: drinkKind) }
             if let onWatch { await alarmOnWatch(onWatch) }
             if alarmStopped || alarmSnoozed != nil { await watchAlarm(stopped: alarmStopped, snoozedUntil: alarmSnoozed) }
