@@ -50,6 +50,8 @@ struct TrainingPage: View {
                 if day == today, noGymToday { noGym }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            // Clear of the screen's rounded edges, as Food and Today are.
+            .padding(.horizontal, 6)
         }
         .task {
             // The sample day's screenshot (-week): the week and Continue both whole.
@@ -244,6 +246,8 @@ struct TrainingPage: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(W.green)
+                    // The button's own width, centred in the page.
+                    .frame(maxWidth: .infinity)
                     .padding(.top, 8)
                 }
             }

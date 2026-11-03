@@ -78,7 +78,12 @@ struct GymSessionView: View {
         case tight
 
         var small: Bool { self != .roomy }
+        /// Set done: lower only as far as the screen needs.
+        var button: CGFloat { self == .roomy ? 38 : self == .compact ? 34 : 30 }
     }
+    /// Room left under the set screen above the screen's bottom edge, where its
+    /// corners round off: the Time and Heart tiles stay whole.
+    private static let bottomClear: CGFloat = 20
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -275,6 +280,8 @@ struct GymSessionView: View {
         let ex = gym.exercises[e]
         // The height under the top bar (the clock, pause and ≡) differs by watch
         // and by watchOS: measured here, not guessed from the screen size.
+        // Measured down to the screen's own bottom edge: the safe area's bottom
+        // inset left a third of the screen unused and always chose .tight.
         return GeometryReader { space in
             ScrollView {
                 VStack(alignment: .leading, spacing: 5) {
@@ -285,8 +292,8 @@ struct GymSessionView: View {
                         setStack(gym, lift, ex, e, .compact)
                         setStack(gym, lift, ex, e, .tight)
                     }
-                    // A few points short of the edge, where the screen's corners round off.
-                    .frame(height: max(0, space.size.height - 4), alignment: .top)
+                    // Short of the bottom edge, where the screen's corners round off.
+                    .frame(height: max(0, space.size.height - Self.bottomClear), alignment: .top)
                     // Not in the sample day's screenshot, where their tops would show cut off.
                     if !WatchDemo.on {
                         LazyVGrid(columns: [GridItem(.flexible(), spacing: 5), GridItem(.flexible(), spacing: 5)], spacing: 5) {
@@ -295,8 +302,12 @@ struct GymSessionView: View {
                         }
                     }
                 }
+                // The end of the list clear of the corners when scrolled down.
+                .padding(.bottom, Self.bottomClear)
             }
+            .ignoresSafeArea(.container, edges: .bottom)
         }
+        .ignoresSafeArea(.container, edges: .bottom)
         // The crown starts on the weight, also when the tiles come back after a rest.
         .defaultFocus($crown, true)
         .onAppear { load(lift) }
@@ -378,7 +389,7 @@ struct GymSessionView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.black)
                     .frame(maxWidth: .infinity)
-                    .frame(height: fit.small ? 30 : 38)
+                    .frame(height: fit.button)
                     .background(W.ink, in: Capsule())
                     .contentShape(Capsule())
             }
