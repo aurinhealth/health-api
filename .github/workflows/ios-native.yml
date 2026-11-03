@@ -103,21 +103,17 @@ jobs:
           runtimes = sorted((r for r in devices if "iOS" in r), key=version, reverse=True)
           print("runtimes:", ", ".join(runtimes), file=sys.stderr)
           # An ordinary iPhone, never the foldable iPhone Duo: it has two displays,
-          # so plain screenshots fail (it gets its own step below).
-          first = [d for d in devices[runtimes[0]] if d["name"].startswith("iPhone") and "Duo" not in d["name"]]
-          print("iPhones on", runtimes[0] + ":", ", ".join(d["name"] for d in first) or "none", file=sys.stderr)
+          # so plain screenshots fail (it gets its own step below). iOS 27.1 on
+          # the xcode-27 image is the Duo's own runtime (no other iPhone runs it),
+          # so the newest iOS that has an ordinary iPhone.
+          ordinary = lambda r: [d for d in devices[r] if d["name"].startswith("iPhone") and "Duo" not in d["name"]]
+          runtime = next(r for r in runtimes if ordinary(r))
+          first = ordinary(runtime)
+          print("iPhones on", runtime + ":", ", ".join(d["name"] for d in first), file=sys.stderr)
           names = ("iPhone 17", "iPhone 17 Pro", "iPhone 18 Pro", "iPhone 16", "iPhone 16 Pro")
-          pick = next((d for n in names for d in first if d["name"] == n), first[0] if first else None)
-          if pick:
-              print(pick["name"], file=sys.stderr)
-              print(pick["udid"])
-          else:
-              print("create:" + runtimes[0])')
-          case "$udid" in create:*)
-            # No ordinary iPhone on the newest iOS: make one.
-            udid=$(xcrun simctl create "iPhone 17" com.apple.CoreSimulator.SimDeviceType.iPhone-17 "${udid#create:}")
-            echo "created iPhone 17 $udid" ;;
-          esac
+          pick = next((d for n in names for d in first if d["name"] == n), first[0])
+          print(pick["name"], file=sys.stderr)
+          print(pick["udid"])')
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
       # Unit tests render the screens to PNG (AurinTests/SnapshotTests.swift).
