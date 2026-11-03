@@ -45,6 +45,7 @@ struct TrainingPage: View {
                     .padding(.top, 6)
                     .id("week")
                 content(day)
+                if day == today, noGymToday { noGym }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -67,6 +68,65 @@ struct TrainingPage: View {
             GymSessionView().onAppear { WatchReport.visit("gym") }
         }
         .containerBackground(W.glow(W.Glow.strain), for: .tabView)
+        .alert(W.tr("Trénink se nepodařilo sestavit", "Couldn't put the workout together"), isPresented: $store.failedStart) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(W.tr("Sestaví ho iPhone. Měj ho u sebe a zkus to znovu.", "Your iPhone puts it together. Keep it close and try again."))
+        }
+    }
+
+    // MARK: No gym planned today (mockup "jen hodinky" 6)
+
+    /// Today's Today is here and has no gym in it, planned or done, and the
+    /// watch has none with exercises.
+    private var noGymToday: Bool {
+        guard let s = watch.snapshot, s.date == today else { return false }
+        if sessions.contains(where: { $0.date == today && $0.sport == "strength" }) { return false }
+        if let gym = store.gym, gym.date == today, !gym.exercises.isEmpty { return false }
+        return true
+    }
+
+    /// Repeat last workout, Build from rested, Empty workout: the iPhone puts
+    /// it in the day (an empty one starts here alone too) and it opens.
+    private var noGym: some View {
+        let settings = watch.settings
+        return VStack(alignment: .leading, spacing: 5) {
+            Text(W.tr("Posilovna není v plánu", "No gym planned"))
+                .font(.system(size: 15, weight: .semibold)).foregroundStyle(W.ink)
+            if let last = settings.lastGym {
+                Text(W.tr("Minule: ", "Last: ") + W.dayName(last) + (settings.lastGymExercises.map { " · " + Self.exercises($0) } ?? ""))
+                    .font(.system(size: 12)).foregroundStyle(W.secondary)
+            }
+            if store.starting {
+                ProgressView().frame(maxWidth: .infinity).padding(.top, 6)
+            } else {
+                if settings.lastGym != nil {
+                    startButton(.repeatLast, W.tr("Zopakovat minulý", "Repeat last workout"), prominent: true)
+                }
+                startButton(.rested, W.tr("Sestavit z odpočatých", "Build from rested"), prominent: settings.lastGym == nil)
+                startButton(.empty, W.tr("Prázdný trénink", "Empty workout"), prominent: false)
+            }
+        }
+        .padding(.top, 12)
+    }
+
+    private func startButton(_ kind: WatchGym.Start.Kind, _ title: String, prominent: Bool) -> some View {
+        Button {
+            Task { if await store.start(kind) { running = true } }
+        } label: {
+            Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(prominent ? .black : W.ink)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(prominent ? W.ink : W.tile)
+        .padding(.top, 3)
+    }
+
+    /// "5 cviků", "5 exercises".
+    static func exercises(_ count: Int) -> String {
+        guard !W.english else { return count == 1 ? "1 exercise" : "\(count) exercises" }
+        return "\(count) " + (count == 1 ? "cvik" : (2...4).contains(count) ? "cviky" : "cviků")
     }
 
     // MARK: The day shown
@@ -99,7 +159,24 @@ struct TrainingPage: View {
         let done = sessions.filter { $0.date == day && $0.done }
         let gym = day == today ? store.gym : preview
         let gymPlanned = gym.map { !$0.exercises.isEmpty } ?? false
-        if planned.count > 1 {
+        if let race = RaceDay(planned) {
+            // Race day (mockup hodinky-zavod): the race as one card, anything else of the day
+            // under it as it would show on its own (a ride or run with its start, the gym with Start).
+            let others = planned.filter { !race.legs.contains($0) }
+            raceCard(race)
+            ForEach(Array(others.enumerated()), id: \.offset) { _, other in
+                if other.sport != "strength", other.eventId != nil {
+                    NavigationLink(value: other) { planCard(other) }
+                        .buttonStyle(.plain)
+                        .padding(.top, 6)
+                } else {
+                    sideCard(other, day: day, gym: gym)
+                }
+            }
+            if gymPlanned, !others.contains(where: { $0.sport == "strength" }), !done.contains(where: { $0.sport == "strength" }) {
+                sideCard(WatchSnapshot.Session(date: day, title: W.tr("Posilovna", "Gym"), sport: "strength", minutes: gym?.minutes, done: false), day: day, gym: gym)
+            }
+        } else if planned.count > 1 {
             // Two or more (mockup 23): each its own card, the picked one open
             // with its steps or exercises and its button, a tap picks another.
             let pick = min(chosen[day] ?? 0, planned.count - 1)
@@ -175,6 +252,15 @@ struct TrainingPage: View {
             Text(W.tr("Spustíš v aplikaci Cvičení.", "Start it in the Workout app."))
                 .font(.system(size: 12)).foregroundStyle(W.muted).padding(.top, 6)
         }
+    }
+
+    /// Another workout on race day, open on its own tile.
+    private func sideCard(_ s: WatchSnapshot.Session, day: String, gym: WatchGym?) -> some View {
+        VStack(alignment: .leading, spacing: 0) { single(s, day: day, gym: gym) }
+            .padding(.horizontal, 10).padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
+            .padding(.top, 6)
     }
 
     /// The picked one of a day's workouts, open, with an amber edge.
@@ -280,6 +366,88 @@ struct TrainingPage: View {
             // The next leg's plan only for the multisport start: the complication keeps this one's.
             if let leg = nextLeg(s) { plans.load(leg, shelf: false) }
         }
+    }
+
+    /// A race (mockup hodinky-zavod): when and how long, its name, each leg
+    /// with its distance and time, and today one start for the whole race.
+    private func raceCard(_ race: RaceDay) -> some View {
+        NavigationLink(value: race) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text(subtitle(race.first, day: race.first.date, length: false)).font(.system(size: 11, weight: .semibold)).foregroundStyle(W.amber)
+                    Spacer(minLength: 4)
+                    if let minutes = race.minutes { Text(RaceDay.length(minutes)).font(.system(size: 11)).foregroundStyle(W.muted) }
+                }
+                HStack(spacing: 6) {
+                    Image(systemName: race.legs.count == 1 ? W.sportSymbol(race.first.sport) : "flag.fill")
+                        .font(.system(size: 14)).foregroundStyle(W.amber)
+                    Text(race.name).font(.system(size: 17, weight: .semibold)).foregroundStyle(W.ink)
+                        .lineLimit(2).minimumScaleFactor(0.75)
+                }
+                .padding(.top, 3)
+                VStack(spacing: 0) {
+                    ForEach(Array(race.legs.enumerated()), id: \.offset) { index, leg in
+                        if index > 0 { Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1) }
+                        HStack(spacing: 7) {
+                            Image(systemName: W.sportSymbol(leg.sport)).font(.system(size: 12))
+                                .foregroundStyle(RaceDay.color(leg.sport)).frame(width: 16)
+                            Text(RaceDay.distance(leg) ?? RaceDay.sportName(leg.sport))
+                                .font(.system(size: 13, weight: .medium)).foregroundStyle(W.ink).lineLimit(1)
+                            Spacer(minLength: 4)
+                            if let minutes = leg.minutes { Text(RaceDay.length(minutes)).font(.system(size: 12)).foregroundStyle(W.muted) }
+                        }
+                        .padding(.vertical, 5)
+                    }
+                }
+                .padding(.top, 4)
+                // One leg (an open-water race): its target right on the card.
+                if race.legs.count == 1, let target = RaceDay.target(race.first.eventId.flatMap { plans.plans[$0] }, sport: race.first.sport) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(target.value).font(W.news(22)).foregroundStyle(W.ink)
+                        Text(target.unit).font(.system(size: 11)).foregroundStyle(W.muted)
+                    }
+                }
+                if canStart(race) {
+                    Button {
+                        Task { await start(race) }
+                    } label: {
+                        Label(W.tr("Otevřít ve Cvičení", "Open in Workout"), systemImage: "play.fill")
+                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(W.green)
+                    .padding(.top, 6)
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 8)
+        // The first leg's plan also for the complication; the others only for the start.
+        .onAppear { for (index, leg) in race.legs.enumerated() { plans.load(leg, shelf: index == 0) } }
+    }
+
+    /// Today, once every leg's plan is known (one that won't load leaves the race to its first leg).
+    private func canStart(_ race: RaceDay) -> Bool {
+        guard race.first.date == today, let first = race.first.eventId, plans.plans[first] != nil else { return false }
+        return race.legs.allSatisfy { leg in leg.eventId.map { plans.plans[$0] != nil || plans.failed.contains($0) } ?? false }
+    }
+
+    /// The whole race as one multisport workout: the Workout app times each
+    /// leg and each change. One leg, or sports this watch can't put in this
+    /// order, opens the first leg with its steps.
+    private func start(_ race: RaceDay) async {
+        let legs = race.legs.compactMap { leg in leg.eventId.flatMap { plans.plans[$0] }.map { (sport: leg.sport, plan: $0) } }
+        var workout: WorkoutPlan?
+        if race.legs.count > 1, legs.count == race.legs.count { workout = WorkoutOpener.multisport(legs, name: race.name) }
+        if workout == nil, let first = race.first.eventId.flatMap({ plans.plans[$0] }) {
+            workout = WorkoutOpener.workout(first, sport: race.first.sport, name: race.legs.count == 1 ? race.name : Self.name(race.first))
+        }
+        guard let workout else { return }
+        try? await workout.openInWorkoutApp()
     }
 
     /// Open in Workout shows today once what it starts is known: a brick
@@ -493,6 +661,62 @@ enum GymText {
     static func volume(_ kg: Double) -> String {
         if W.imperial { return W.number(W.weight(kg)) + " lb" }
         return kg >= 1000 ? W.number(kg / 1000, digits: 1) + " t" : W.number(kg) + " kg"
+    }
+
+    /// "97,5 × 6", "12 op." with body weight: a set from the history, in the athlete's units.
+    static func lift(_ set: WatchGym.Last) -> String {
+        guard let kg = set.kg, kg > 0 else { return W.tr("\(set.reps) op.", "\(set.reps) reps") }
+        return Self.kg(W.weight(kg)) + " × \(set.reps)"
+    }
+
+    /// Under the exercise's name: "Minule 97,5 × 6 · cíl: těžká" (Training
+    /// mode's "Minule" and the set's planned letter); nil with neither.
+    static func info(_ lift: WatchGym.Lift) -> String? {
+        guard lift.work else { return nil }
+        var parts: [String] = []
+        if let last = lift.last { parts.append(W.tr("Minule ", "Last time ") + Self.lift(last)) }
+        if let letter = lift.intensity, let aim = aim(letter) {
+            parts.append((parts.isEmpty ? W.tr("Cíl: ", "Aim: ") : W.tr("cíl: ", "aim: ")) + aim)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// The planned letter in words (GymIntensity.name on the iPhone); none for a warm-up or drop set.
+    static func aim(_ letter: String) -> String? {
+        switch letter {
+        case "T": return W.tr("technika", "technique")
+        case "E": return W.tr("snadná", "easy")
+        case "M": return W.tr("střední", "medium")
+        case "H": return W.tr("těžká", "hard")
+        case "F": return W.tr("selhání", "failure")
+        case "PR": return W.tr("osobní rekord", "personal record")
+        default: return nil
+        }
+    }
+
+    /// The colour of a letter, as on the iPhone (GymIntensity.color).
+    static func intensityColor(_ letter: String) -> Color {
+        switch letter {
+        case "T": return W.blue
+        case "E": return W.green
+        case "M": return W.indigo
+        case "H": return W.amber
+        case "F": return W.red
+        case "PR": return Color(hex: 0xE8C25A)
+        case "D": return W.pink
+        default: return W.muted
+        }
+    }
+
+    /// The set's planned letter in a dashed box, as the iPhone's table shows a plan's letter.
+    static func intensityPill(_ letter: String) -> some View {
+        let color = intensityColor(letter)
+        return Text(letter).font(.system(size: 10, weight: .bold)).foregroundStyle(color)
+            .lineLimit(1).fixedSize()
+            .padding(.horizontal, 4)
+            .frame(minWidth: 18, minHeight: 18)
+            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(color, style: StrokeStyle(lineWidth: 1.2, dash: [2.5, 2])))
+            .accessibilityLabel(W.tr("Cíl: ", "Aim: ") + (aim(letter) ?? letter))
     }
 
     static func elapsed(_ seconds: TimeInterval) -> String {

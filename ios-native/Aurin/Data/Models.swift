@@ -92,6 +92,8 @@ struct TodaySnapshot: Decodable, Equatable {
         /// days measured so far, today included (1–14). Nil once readiness has
         /// its baseline (src/recovery-model.js recoveryReadiness).
         var learningDays: Int? = nil
+        /// Nights measured in the 30 days before today (the watch's history); nil from an older server.
+        var pastNights: Int? = nil
     }
 
     struct Sleep: Decodable, Equatable {

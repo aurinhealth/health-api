@@ -475,16 +475,6 @@ enum GymCoach {
 // MARK: - The gym sheet for a logged workout
 
 extension GymDay {
-    /// The header rows, the date and the column names, for a day without a plan.
-    mutating func ensureHeader(date: String) {
-        while values.count < Self.firstSetRow { values.append([]) }
-        if text(2, 0) == nil {
-            set(row: 2, column: 0, "Datum")
-            set(row: 2, column: 1, date)
-        }
-        if values[6].count < Self.columns.count { values[6] = Self.columns.map { JSONValue.string($0) } }
-    }
-
     mutating func setName(_ name: String) {
         guard values.count > 2 else { return }
         set(row: 2, column: 3, name)

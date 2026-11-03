@@ -114,6 +114,9 @@ struct WatchRoot: View {
             .navigationDestination(for: WatchSnapshot.Session.self) { session in
                 RideDetail(session: session).onAppear { WatchReport.visit("training/session") }
             }
+            .navigationDestination(for: RaceDay.self) { race in
+                RaceDetail(race: race).onAppear { WatchReport.visit("training/race") }
+            }
             .navigationDestination(for: ReadinessHome.Page.self) { page in
                 Group {
                     if let s = store.snapshot {

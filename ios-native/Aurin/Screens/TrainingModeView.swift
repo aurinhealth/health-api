@@ -159,6 +159,12 @@ struct TrainingModeView: View {
             guard let change = note.object as? WatchBridge.GymChange, change.date == date else { return }
             day = change.day
         }
+        // Discarded on the Apple Watch: the day has no workout any more.
+        .onReceive(NotificationCenter.default.publisher(for: .watchGymDiscarded)) { note in
+            guard note.object as? String == date else { return }
+            restEnd = nil
+            dismiss()
+        }
         .onAppear {
             ScreenAwake.hold("training"); model.immersive = true
             GymActivityInbox.handler = { activityAction($0) }

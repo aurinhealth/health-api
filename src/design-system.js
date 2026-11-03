@@ -8,6 +8,8 @@ export const themeTokens = `
   /* App hues: readiness green, strain amber, coach indigo, macros. */
   --green:#1F6B52;--green-soft:#D3EADF;--amber:#A35A12;--amber-bar:#C4782A;--amber-soft:#F3E1C6;--sand:#E6D3B5;--brown:#8A6D3B;
   --indigo:#4F46C8;--lilac:#D9D6F3;--rust:#B4532F;--rust-ink:#A3482A;--blue:#1D6FA3;--protein:#2F7FD8;--carbs:#D98A06;--fat:#7C5CE0;
+  /* Cycle pink (CycleViews.swift), and the set letters' failure red and record gold (GymIntensity.swift). */
+  --pink:#B83A6E;--pink-soft:#F6DCE6;--red:#C2362B;--gold:#D9A521;
   --primary:#1F6B52;--primary-text:#1F6B52;--primary-ink:#FFFFFF;--primary-surface:#D3EADF;
   --button:#15140F;--on-button:#F3EFE8;--frame:#DCD5CA;--health-red:#FF2D55;--google-blue:#4285F4;
   /* The Aurin mark (Rovnováha): the load half over the recovery half. */
@@ -46,6 +48,7 @@ export const darkTokens = `
   --line:rgba(236,234,230,.1);--track:rgba(236,234,230,.08);
   --green:#8FE6C4;--green-soft:#1D3B33;--amber:#F2B46B;--amber-bar:#E09A55;--amber-soft:#3A2A17;--sand:#4A3B28;--brown:#CFB07A;
   --indigo:#A5A1FF;--lilac:#34325A;--rust:#F0907A;--rust-ink:#F0907A;--blue:#7CC3F0;--protein:#83C7FF;--carbs:#FFC274;--fat:#B3A1FF;
+  --pink:#F0A0C0;--pink-soft:#4A2A38;--red:#FF6B5B;--gold:#E8C25A;
   --primary:#8FE6C4;--primary-text:#8FE6C4;--primary-ink:#0A0B0C;--primary-surface:#1D3B33;
   --button:#F4F2EE;--on-button:#0A0B0C;--frame:#2E3132;
   --aurora-lilac:#34325A;--device-hi:#8E8A84;--device-mid:#55524E;--device-lo:#34322F;

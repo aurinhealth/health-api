@@ -6,7 +6,7 @@ import { L } from "./lang.js";
 import { buildWorkout, zoneOf, zonesFor, flattenSteps, totalMinutes, swimMinutes, DEFAULT_SWIM_PACE } from "./workout-model.js";
 
 export const ENDURANCE_SPORTS = ["ride", "run", "swim"];
-const MAX_BLOCKS = 20, MAX_STEPS = 6, MAX_REPEATS = 30, MAX_MINUTES = 360;
+const MAX_BLOCKS = 20, MAX_STEPS = 6, MAX_REPEATS = 30, MAX_MINUTES = 480;
 // Without the athlete's threshold pace a kilometre takes 5:00 at 100 %.
 const DEFAULT_PACE = 300;
 
@@ -76,7 +76,7 @@ export function cleanEnduranceTemplate(input = {}) {
     return { repeats, steps: list.map(s => cleanStep(s, sport)) };
   });
   const template = { sport, name, blocks };
-  if (totalMinutes(enduranceStructure(template)) > MAX_MINUTES) throw new Error(L("Trénink může trvat nejvýše 6 hodin.", "A workout can last at most 6 hours."));
+  if (totalMinutes(enduranceStructure(template)) > MAX_MINUTES) throw new Error(L("Trénink může trvat nejvýše 8 hodin.", "A workout can last at most 8 hours."));
   return template;
 }
 

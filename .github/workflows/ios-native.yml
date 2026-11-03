@@ -15,9 +15,9 @@ name: iOS native app
 #   (site/: the English, light-mode shots the website uses; smoke/: each step
 #   of the smoke test Vydat relies on; site-dark/ and smoke-dark/: the website's
 #   shots again in dark mode, for its dark look), watch/ and watch-cs/: the Apple
-#   Watch app on the sample day in English and Czech (the watch is dark only), and
+#   Watch app on the sample day in English and Czech (the watch is dark only),
 #   preview/: the App Store preview videos in English and Czech (app-preview-en.mp4,
-#   app-preview-cs.mp4).
+#   app-preview-cs.mp4), and duo/: the sample day on the iPhone Duo simulator.
 
 on:
   workflow_dispatch:
@@ -43,7 +43,9 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-latest
+    # Xcode 27 lives on its own image (macos-latest still stops at Xcode 26.6):
+    # only Xcode 27.1 and later build the app full screen on iPhone Duo.
+    runs-on: xcode-27
     # On main the run also builds for iPhone and uploads it after the App Store
     # preview; since the preview it takes over an hour (cancelled at 60 min).
     timeout-minutes: 90
@@ -54,14 +56,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      # The newest stable Xcode on the newest macOS runner (macos-latest moves to
-      # each new image; macos-15 stopped at Xcode 26.3). Xcode 26 and later bring
+      # The newest stable Xcode on the image (no beta or release candidate), and
+      # what it carries: the run's log shows the Xcode, the iOS runtimes and
+      # whether the iPhone Duo simulator is there. Xcode 26 and later bring
       # AlarmKit (the alarm in Nastavení → Spánek).
       - name: Pick Xcode
         run: |
-          xcode=$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -vi -e beta -e release_candidate -e _rc | sort -V | tail -1)
+          ls -d /Applications/Xcode*.app || true
+          # Xcode_27.2.app on the xcode-27 image is a link to Xcode_27.2_Release_Candidate.app:
+          # the real folder's name decides, so a release candidate is never picked.
+          xcode=$(for x in /Applications/Xcode_*.app; do [ -d "$x" ] && echo "$(cd "$x" && pwd -P)"; done | sort -u | grep -vi -e beta -e release_candidate -e _rc | sort -V | tail -1)
           if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode/Contents/Developer"; fi
           xcodebuild -version
+          xcrun simctl list runtimes
+          xcrun simctl list devicetypes | grep -i -e duo -e "iPhone 1[78]" || true
 
       # The licensed 3D muscle figure, from R2 into the bundle (never in the repository):
       # the sample day's screens and the App Store preview show it.
@@ -89,14 +97,22 @@ jobs:
           import json, sys
           devices = json.load(sys.stdin)["devices"]
           version = lambda runtime: [int(n) for n in runtime.split("iOS-")[-1].split("-")]
-          # The oldest iOS on the image first: StoreKit testing (ProStoreTests) loads
-          # no products from xcodebuild on the iOS 26.4/26.5 simulators.
-          runtimes = sorted((r for r in devices if "iOS" in r), key=version)
+          # The newest iOS on the image first. (On the Xcode 26 image the oldest went
+          # first: StoreKit testing loaded no products on the iOS 26.4/26.5 simulators.
+          # On iOS 27.0 the first test purchase after boot asks to sign in to an
+          # Apple Account and never ends.)
+          runtimes = sorted((r for r in devices if "iOS" in r), key=version, reverse=True)
           print("runtimes:", ", ".join(runtimes), file=sys.stderr)
-          phones = [d for r in runtimes for d in devices[r] if d["name"].startswith("iPhone")]
-          names = ("iPhone 17", "iPhone 16", "iPhone 17 Pro", "iPhone 16 Pro")
-          first = [d for d in devices[runtimes[0]] if d["name"].startswith("iPhone")] if runtimes else []
-          pick = next((d for n in names for d in first if d["name"] == n), first[0] if first else phones[0])
+          # An ordinary iPhone, never the foldable iPhone Duo: it has two displays,
+          # so plain screenshots fail (it gets its own step below). iOS 27.1 on
+          # the xcode-27 image runs only the Duo (no other iPhone),
+          # so the newest iOS that has an ordinary iPhone.
+          ordinary = lambda r: [d for d in devices[r] if d["name"].startswith("iPhone") and "Duo" not in d["name"]]
+          runtime = next(r for r in runtimes if ordinary(r))
+          first = ordinary(runtime)
+          print("iPhones on", runtime + ":", ", ".join(d["name"] for d in first), file=sys.stderr)
+          names = ("iPhone 17", "iPhone 17 Pro", "iPhone 18 Pro", "iPhone 16", "iPhone 16 Pro")
+          pick = next((d for n in names for d in first if d["name"] == n), first[0])
           print(pick["name"], file=sys.stderr)
           print(pick["udid"])')
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
@@ -108,13 +124,30 @@ jobs:
         env:
           TEST_RUNNER_SNAPSHOT_DIR: ${{ github.workspace }}/screens
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/screens"
+          mkdir -p "$GITHUB_WORKSPACE/screens/during-tests"
+          # The simulator's screen once a minute while the tests run (during-tests/):
+          # a system sheet that holds a test purchase up shows there.
+          (set +e; while sleep 60; do xcrun simctl io "${{ steps.sim.outputs.udid }}" screenshot "$GITHUB_WORKSPACE/screens/during-tests/$(date +%H%M%S).png" >/dev/null 2>&1; done) &
+          shots=$!
           set -o pipefail
-          xcodebuild -project Aurin.xcodeproj -scheme Aurin -configuration Debug \
-            -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
-            -test-timeouts-enabled YES -default-test-execution-time-allowance 300 \
-            -maximum-test-execution-time-allowance 600 \
-            CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/build.log"
+          status=0
+          run() {
+            xcodebuild -project Aurin.xcodeproj -scheme Aurin -configuration Debug \
+              -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
+              -test-timeouts-enabled YES -default-test-execution-time-allowance 300 \
+              -maximum-test-execution-time-allowance 600 \
+              CODE_SIGNING_ALLOWED=NO "$@" 2>&1 | tee -a "$RUNNER_TEMP/build.log"
+          }
+          run build-for-testing || status=$?
+          if [ "$status" = 0 ]; then
+            # On iOS 27 every purchase in the first test process after the simulator
+            # boots waits on a "Sign in to Apple Account" alert; one short test takes
+            # that process (ProStoreTests.warmUp), the real run gets the next one.
+            run test-without-building -only-testing:AurinTests/ProStoreTests/testTrialReminderOnDayFive || true
+            run test-without-building || status=$?
+          fi
+          kill "$shots" || true
+          exit $status
 
       # Warnings that are always a bug stop the run: Swift only warns about a
       # function that calls itself forever (GymStore.sync() did, and the watch
@@ -315,6 +348,57 @@ jobs:
           node "$GITHUB_WORKSPACE/scripts/app-preview.mjs" "$dir"
           rm -f "$dir/recording.mp4"
           exit $status
+
+      # The app on iPhone Duo, Apple's foldable (Xcode 27.1 and later have its
+      # simulator): the sample day in English and light mode, each display the
+      # simulator shows (duo/). Not a release check: never fails the run.
+      - name: Screenshot the app on iPhone Duo
+        continue-on-error: true
+        run: |
+          xcrun simctl shutdown "${{ steps.sim.outputs.udid }}" || true
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          version = lambda runtime: [int(n) for n in runtime.split("iOS-")[-1].split("-")]
+          runtimes = sorted((r for r in devices if "iOS" in r), key=version, reverse=True)
+          duo = [d for r in runtimes for d in devices[r] if "Duo" in d["name"]]
+          print(duo[0]["udid"] if duo else "")')
+          if [ -z "$udid" ]; then
+            type=$(xcrun simctl list devicetypes | grep -i "iPhone Duo" | head -1 | sed -E 's/.*\((com\.apple[^)]*)\).*/\1/')
+            runtime=$(xcrun simctl list runtimes | grep -E "^iOS" | tail -1 | sed -E 's/.* - (com\.apple[^ ]*).*/\1/')
+            if [ -z "$type" ]; then echo "::warning::No iPhone Duo simulator on this image"; exit 0; fi
+            udid=$(xcrun simctl create "iPhone Duo" "$type" "$runtime")
+          fi
+          dir="$GITHUB_WORKSPACE/screens/duo"
+          mkdir -p "$dir"
+          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl io "$udid" enumerate || true
+          xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/Aurin.app
+          xcrun simctl ui "$udid" appearance light
+          xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
+          # The Duo simulator has two displays (outer LCD and the inner, unfolded
+          # LCD-1); a plain screenshot then asks to choose. Take each one: the
+          # file name says which display and its size.
+          displays=$(xcrun simctl io "$udid" screenshot "$RUNNER_TEMP/probe.png" 2>&1 | sed -nE 's/.*--display=([0-9]+) +([^ ]+).* ([0-9]+x[0-9]+).*/\1:\2-\3/p')
+          echo "displays: ${displays:-one}"
+          shoot() {
+            if [ -z "$displays" ]; then xcrun simctl io "$udid" screenshot "$dir/$1.png"; return; fi
+            for d in $displays; do
+              xcrun simctl io "$udid" screenshot --display="${d%%:*}" "$dir/$1-${d#*:}.png" || true
+            done
+          }
+          for tab in today training health food; do
+            xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en
+            sleep 7
+            shoot "$tab"
+          done
+          for route in readiness muscles gym/2026-10-08; do
+            xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -open "$route" -AppleLanguages "(en)" -AppleLocale en_US -language en
+            sleep 7
+            shoot "${route%%/*}"
+          done
+          xcrun simctl shutdown "$udid" || true
 
       # Unsigned: Sideloadly signs it with the user's Apple ID.
       - name: Build for iPhone

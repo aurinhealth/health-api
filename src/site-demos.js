@@ -54,6 +54,7 @@ const P = {
   chat: '<path d="M4 5h11v8H8l-4 3ZM15 9h5v8l-3-2h-6v-2"/>',
   menu: '<path d="M6 8h12M6 12h12M6 16h12"/>',
   pause: '<path d="M9 6v12M15 6v12"/>',
+  flag: '<path d="M6 21V4M6 4h11l-2 4 2 4H6"/>',
 };
 const ic = (name, cls = '') => `<svg class="di${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true">${P[name]}</svg>`;
 const at = spec => ` data-at="${spec}"`;
@@ -310,6 +311,17 @@ const foodOne = `<div class="dm pad one">
 <div class="tparts"${at('1500')}><i class="tbar"><b style="flex:2300;background:var(--brown)"></b><b style="flex:200;background:var(--green)"></b><b style="flex:150;background:repeating-linear-gradient(135deg,var(--amber) 0 3px,transparent 3px 6px)"></b></i><span class="mut s">Base 2,300 · <span class="grn">+200 done</span> · <span class="amb">+150 planned</span></span></div>
 </div>`;
 
+// Readiness in the luteal phase (recovery-model.js lutealOffset): the normal for resting heart rate moves up by the
+// athlete's own luteal rise. The sample day is day 21, so its "your normal 50–54 bpm" above is already this phase's
+// normal; on other days it is 48–52.
+const cycleOne = `<div class="dm pad one">
+<span class="pill pnk">Day 21 · Luteal</span>
+<b class="cy-k">Resting heart rate normal</b>
+<div class="row base one-v"><span class="num big" data-tx="0|48–52;1300|50–54">50–54</span><span class="mut">bpm</span></div>
+<div class="mut">48–52 bpm on other days</div>
+<div class="one-pt grn cy-p"${at('2000')}>A usual rise costs no points</div>
+</div>`;
+
 const LETTERS = [['W', 'Warm-up', 'muted'], ['T', 'Technique', 'blue'], ['E', 'Easy', 'green'], ['M', 'Moderate', 'indigo'], ['H', 'High', 'amber'], ['F', 'Failure', 'red'], ['PR', 'Personal record', 'gold'], ['D', 'Drop set', 'pink']];
 const tmTick = `<div class="dm pad tm">
 <div class="row sp"><div class="sent h">Squat</div><span class="tag rust">${ic('flame')}To failure</span></div>
@@ -458,6 +470,18 @@ const coachWeek = `<div class="dm pad wk"${at('6900')}>
 <div class="ar new"${at('8000')}><span class="ci up">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">Planned · 5:30 PM · 60 min</span></div>${ic('chev')}</div>
 </div></div>`;
 
+// The cycle calendar (CycleViews.swift CycleCalendarView) in October of the sample day: the period began on 18 September,
+// so Thursday 8 October is day 21 of a 28-day cycle. Ovulation on 1 October in amber, the next period forecast for
+// 15–17 October dashed in pink, today ringed. October 2026 starts on a Thursday: three empty cells.
+const CYCLE_DAY = d => d === 1 ? 'ov' : d >= 15 && d <= 17 ? 'cast' : '';
+const cycleScreen = `<div class="app glow-today cyc">${STATUS}
+<div class="nav"><span class="cb">${ic('chev', 'flip')}</span></div>
+<div class="mut s cy-l">Cycle</div>
+<div class="row sp cy-m"><span>${ic('chev', 'flip')}</span><span class="sent">October</span><span class="faint">${ic('chev')}</span></div>
+<div class="card cy-g">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d => `<span class="cy-w">${d}</span>`).join('')}${'<span></span>'.repeat(3)}${Array.from({length: 31}, (_, i) => i + 1).map(d => `<span class="cy-d ${CYCLE_DAY(d)}${d === 8 ? ' today' : ''}"><i>${d}</i></span>`).join('')}</div>
+<div class="cy-b">${ic('plus')}Log period</div>
+</div>`;
+
 const each = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, merge(v)]));
 // The welcome's pages (WelcomePages.swift), one before each part of the overview: a few of the app's own cards with
 // the sample day that rise into place and move once the part is on screen, as they do before the sign-in.
@@ -532,7 +556,8 @@ const watchHome = `<div class="aw-s aw-home" style="--gw:#163A2E">${wTop(wBtn('a
 <div class="aw-g">${[['Sleep', '7:12', '', 28, WA.amber, '89%'], ['Strain', '8.4', '', 14, WA.amber, 'of 11–14'], ['HRV', '64', 'ms', 76, WA.green, 'high']].map(([k, v, u, pos, c, note]) => `<div><span class="aw-k">${k}</span><span class="aw-n aw-v">${v}${u ? `<small>${u}</small>` : ''}</span>${wRange(pos, c)}<b style="color:${c}">${note}</b></div>`).join('')}</div>
 <div class="aw-next"><span style="color:${WA.amber}">${ic('gym')}</span>Strength training, full body · 45′ at 5:30 PM</div></div>`;
 const watchGym = `<div class="aw-s" style="--gw:#3A2A17">${wTop(wBtn('pause', WA.ink), '5:41', `<span class="aw-ib">${ic('menu')}</span>`)}
-<div class="aw-ex"><b>Squat</b><span><i class="aw-ib aw-sm">${ic('minus')}</i>set 2/4<i class="aw-ib aw-sm">${ic('plus')}</i></span></div>
+<div class="aw-ex"><b>Squat</b><span><i class="aw-ib aw-sm">${ic('minus')}</i>set 2/4<i class="aw-pl" style="color:${WA.amber}">H</i><i class="aw-ib aw-sm">${ic('plus')}</i></span></div>
+<div class="aw-inf">Last time 77.5 × 8 · aim: hard</div>
 <div class="aw-two"><div class="aw-box on"><span class="aw-n">80</span><span class="aw-k">kg</span></div><div class="aw-box"><span class="aw-n">8</span><span class="aw-k">reps</span></div></div>
 <div class="aw-done">Set done</div>
 <div class="aw-two aw-tiles"><div><span class="aw-k">Time</span><b>12:40</b></div><div><span class="aw-k">Heart</span><b style="color:${WA.red}">128 <small>bpm</small></b></div></div>
@@ -571,11 +596,19 @@ const watchWarmup = `<div class="aw-s" style="--gw:#163A2E">${wTop(wBtn('pause',
 <div class="aw-pb"><span class="aw-done">Next</span><span>Skip all</span></div></div>
 <div class="aw-two aw-tiles"><div><span class="aw-k">Time</span><b>6:10</b></div><div><span class="aw-k">Heart</span><b style="color:${WA.red}">104 <small>bpm</small></b></div></div></div>`;
 
+// Race day (TrainingPage.raceCard, RaceDay.swift): a training plan's duathlon as one card, its legs in race
+// order with their distance and time, and one start for the whole race.
+const watchRace = `<div class="aw-s" style="--gw:#3A2A17">${wTop('', '8:31', '')}
+<div class="aw-race"><div class="aw-rh"><b>Today · 9:00</b><span>1 h 20</span></div><b class="aw-rn"><span style="color:${WA.amber}">${ic('flag')}</span>Duathlon</b>
+${[['run', '5 km', '24 min', WA.red], ['bike', '20 km', '33 min', WA.amber], ['run', '2.5 km', '13 min', WA.red]].map(([icon, d, t, c]) => `<div class="aw-leg"><span style="color:${c}">${ic(icon)}</span>${d}<i>${t}</i></div>`).join('')}
+<div class="aw-go">${ic('play')}Open in Workout</div></div></div>`;
+
 export const WATCH = [
   ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness, sleep, strain and HRV, as on Today, and what’s next today in one line.', watchHome],
-  ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown. Leave the iPhone in your locker: the watch keeps your sets, swaps a taken machine even without signal, and hands them over later. Your heart rate and calories go into the same workout.', watchGym],
+  ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown, last time’s set under the exercise and its technique a tap away. Leave the iPhone in your locker: the watch keeps your sets, swaps a taken machine even without signal, and hands them over later. Your heart rate and calories go into the same workout. Nothing planned? Repeat your last workout or build one for your rested muscles right on the watch.', watchGym],
   ['glow-training', 'Rest, then a tap.', 'The rest counts down on the wrist and taps you when it’s time, with the next set ready.', watchRest],
   ['glow-training', 'Warm up and cool down too.', 'Cardio, the warm-up and the stretching run on the wrist with the sets: a countdown for each move, or a stopwatch on the bike. Switch them on or off and move them before or after your exercises, and your iPhone gets the same plan.', watchWarmup],
+  ['glow-training', 'Race day, one tap.', 'A duathlon, aquabike, aquathlon or triathlon from your plan shows as one card, its legs in race order, and starts as one multisport workout: the watch times each leg and each change. Tap it for each leg’s target.', watchRace],
   ['glow-health', 'Water in one tap.', 'What’s left to eat today, the macros, and +250 for a glass of water. Your iPhone gets it at once.', watchFood],
   ['glow-health', 'On your watch face.', 'Readiness, sleep and strain against today’s goal, a countdown to your workout, water, food, protein and your alarm sit around the time, so you don’t even open the app.', watchFace]];
 
@@ -583,8 +616,8 @@ export const WATCH = [
 const actWatch = `<div class="dm wc aw-act"><div class="aw-w">${watchFace}</div></div>`;
 export const ACTS = each({readiness: actReadiness, training: actTraining, food: actFood, sleep: actSleep, coach: actCoach, watch: actWatch});
 
-export const DEMOS = each({sleepNight, sleepNeed, dial, tonight, readyParts, journal, strainMade, week, builder, gymParts, tmTable, tmTick, tmRest, tmDone, foodTarget, foodAdd, drinks, diet, coachWeek, coachMemory, readyOne, tmOne, journalOne, tickOne, sleepOne, needOne, foodOne});
-export const SCREENS = each({strain: strainScreen, done: doneScreen, coach: coachScreen, memory: memoryScreen});
+export const DEMOS = each({sleepNight, sleepNeed, dial, tonight, readyParts, journal, strainMade, week, builder, gymParts, tmTable, tmTick, tmRest, tmDone, foodTarget, foodAdd, drinks, diet, coachWeek, coachMemory, readyOne, tmOne, journalOne, tickOne, sleepOne, needOne, foodOne, cycleOne});
+export const SCREENS = each({strain: strainScreen, done: doneScreen, coach: coachScreen, memory: memoryScreen, cycle: cycleScreen});
 
 // The demos' look: the app's cards (radius 22), Instrument Serif for numbers, Newsreader for sentences.
 export const demoCss = `
@@ -693,8 +726,9 @@ html:not(.js) .tgt .fill{width:${(16.7 / 21 * 100).toFixed(1)}%}
 /* Training week. */
 .strip{display:grid;grid-template-columns:repeat(6,1fr);gap:2px}
 .dc{display:flex;flex-direction:column;align-items:center;gap:5px;transform:scale(.92)}.dc.sel{transform:none}
-/* The other days fade, but their names keep the muted colour so they stay readable (4.5:1). */
-.dc:not(.sel) .ci,.dc:not(.sel) .dn{opacity:.6}
+/* The other days fade, but their names keep the muted colour so they stay readable (4.5:1); their numbers fade
+   a little less than the icons so they stay above 4.5:1 on the card too (5.1:1). */
+.dc:not(.sel) .ci{opacity:.6}.dc:not(.sel) .dn{opacity:.64}
 .wd{font-size:11.5px;font-weight:500;color:var(--muted)}.wd.today{color:var(--amber);font-weight:700}
 .ci{position:relative;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;font-size:17px;--c:var(--muted);color:var(--c);background:color-mix(in srgb,var(--muted) 14%,transparent);box-shadow:inset 0 0 0 2px var(--c);transition:.5s cubic-bezier(.16,1,.3,1);transition-property:background-color,color,box-shadow,outline-color,opacity,transform}
 .ci.ok,.ci.done{background:color-mix(in srgb,var(--green) 14%,transparent)}.ci.off{background:color-mix(in srgb,var(--amber-bar) 14%,transparent)}.ci.out{background:color-mix(in srgb,var(--blue) 14%,transparent)}
@@ -998,6 +1032,12 @@ html:not(.js) .stage1{display:none}
 .one-ip{margin-left:auto;transform:scale(1.5)}
 .one-pt.rst{background:color-mix(in srgb,var(--rust) 12%,transparent);color:var(--rust-ink)}.one-pt.ind{background:color-mix(in srgb,var(--indigo) 12%,transparent);color:var(--indigo)}.one-pt.amb{background:color-mix(in srgb,var(--amber) 16%,transparent);color:var(--sec)}
 .one-pt .di{width:16px;height:16px;vertical-align:-2px;margin-right:4px}.one .rst{color:var(--rust-ink)}.one-ft{margin-top:14px}
+.pill.pnk{color:var(--pink);background:var(--pink-soft)}.one .cy-k{display:block;margin-top:12px}.one .cy-p{margin-top:16px}.one-pt.pnk{background:var(--pink-soft);color:var(--pink)}
+.cy-l{margin-top:8px}.cy-m{margin-top:6px;align-items:center}.cy-m .sent{font-size:28px}.cy-m .di{width:20px;height:20px;stroke-width:2.4}.cy-m .faint{opacity:.35}
+.app .cy-g{display:grid;grid-template-columns:repeat(7,1fr);gap:8px 4px;margin-top:14px}.cy-w{font-size:12px;color:var(--muted);text-align:center}
+.cy-d{display:flex;justify-content:center;height:42px}.cy-d i{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;font:normal 500 13px/1 -apple-system,system-ui,sans-serif;color:var(--sec)}
+.cy-d.ov i{background:var(--amber-soft);color:var(--amber)}.cy-d.cast i{border:1.5px dashed var(--pink);color:var(--pink)}.cy-d.today i{box-shadow:inset 0 0 0 2px var(--text)}
+.cy-b{display:flex;align-items:center;justify-content:center;gap:6px;height:46px;margin-top:12px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--line);font-weight:600}
 /* The coach's memory: the green line under an answer and the list it keeps. */
 .mchip{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:var(--green-soft);color:var(--green);font-size:13px;font-weight:500;transition:opacity .3s,transform .3s!important}
 .mchip .di{width:13px;height:13px;stroke-width:2.8}.mchip .mut{margin-left:4px}
@@ -1032,6 +1072,8 @@ html:not(.js) .stage1{display:none}
 .aw-rb b{position:absolute;top:-2px;width:8px;height:8px;margin-left:-4px;border-radius:50%;border:1.5px solid #000}
 .aw-next{display:flex;align-items:center;gap:5px;margin-top:7px;font-size:10.5px;font-weight:600;white-space:nowrap}
 .aw-ex{display:flex;align-items:center;justify-content:space-between;margin-top:2px}.aw-ex b{font-size:16px}.aw-ex>span{display:flex;align-items:center;gap:5px;font-weight:500}
+.aw-pl{display:inline-grid;place-items:center;min-width:16px;height:16px;border:1.2px dashed;border-radius:5px;font-size:10px;font-weight:700;font-style:normal}
+.aw-inf{margin-top:1px;font-size:10px;color:#9AA39F;white-space:nowrap}
 .aw-two{display:flex;gap:6px;margin-top:5px}.aw-two>div{flex:1}
 .aw-box{display:flex;flex-direction:column;align-items:center;padding:2px 0 2px;border-radius:13px;background:rgba(255,255,255,.08)}.aw-box .aw-n{font-size:28px}.aw-box .aw-k{font-size:10px}
 .aw-box.on{background:#16352B;box-shadow:inset 0 0 0 2px #8FE6C4}
@@ -1041,6 +1083,10 @@ html:not(.js) .stage1{display:none}
 .aw-rrow>div{display:flex;flex-direction:column;min-width:0}.aw-rrow .aw-k{font-size:10px}.aw-nx{font-size:15px}.aw-live{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}.aw-live .di{width:9px;height:9px;fill:currentColor;stroke:none}
 .aw-rate{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:10px}.aw-rate span{display:grid;place-items:center;height:36px;border-radius:12px;background:rgba(255,255,255,.09);font-size:14px;font-weight:600}
 .aw-lbl{margin-top:6px;font-size:11px;font-weight:600;letter-spacing:.04em}.aw-pt{display:block;font-size:16px}.aw-prow{margin-top:8px}.aw-pb{flex:1;gap:5px}.aw-pb .aw-done{margin-top:0}.aw-pb>span:last-child{display:grid;place-items:center;height:30px;border-radius:17px;background:rgba(255,255,255,.12);font-size:14px;font-weight:600}
+.aw-race{margin-top:4px;padding:8px 10px;border-radius:14px;background:rgba(255,255,255,.07)}.aw-rh{display:flex;justify-content:space-between;font-size:10.5px}.aw-rh b{color:#F2B46B}.aw-rh span{color:#9AA39F}
+.aw-rn{display:flex;align-items:center;gap:5px;margin:2px 0 2px;font-size:16px}.aw-rn .di{width:14px;height:14px}
+.aw-leg{display:flex;align-items:center;gap:6px;padding:3.5px 0;font-size:12px;font-weight:500}.aw-leg+.aw-leg{border-top:1px solid rgba(255,255,255,.08)}.aw-leg .di{width:13px;height:13px}.aw-leg i{margin-left:auto;font-style:normal;color:#9AA39F;font-weight:400}
+.aw-go{display:flex;align-items:center;justify-content:center;gap:5px;height:30px;margin-top:6px;border-radius:15px;background:#8FE6C4;color:#000;font-size:13px;font-weight:700}.aw-go .di{width:11px;height:11px}
 .aw-btns{display:flex;gap:4px;margin-top:8px}.aw-btns span{flex:1;display:grid;place-items:center;height:32px;border-radius:16px;background:rgba(255,255,255,.12);font-size:12px;font-weight:600}
 
 .aw-ring{position:relative;display:grid;place-items:center;flex:none}.aw-ring>svg{position:absolute;inset:0;fill:none}

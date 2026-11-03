@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync,readdirSync,statSync} from 'node:fs';
 import worker from '../src/entrypoint.js';
-import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME} from '../src/site-pages.js';
+import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME,WEARABLES} from '../src/site-pages.js';
 
 test('the overview keeps what Google verification reads on the homepage',async()=>{
   const html=await overviewPage().text();
@@ -285,7 +285,7 @@ test('the Apple Watch chapter shows the watch app on the sample morning',async()
   assert.ok(section.includes('>'+clock(today.sleep.minutes)+'<'),'sleep');
   assert.ok(section.includes('>'+today.hrv.value+'<small>ms'),'HRV');
   assert.ok(section.includes('>'+today.strain.score+'<'),'strain');
-  assert.equal((section.match(/class="aw-s[ "]/g)||[]).length,6,'one watch, six screens');
+  assert.equal((section.match(/class="aw-s[ "]/g)||[]).length,7,'one watch, seven screens: race day too');
   assert.equal((section.match(/class="aw-w"/g)||[]).length,1);
 });
 
@@ -329,4 +329,15 @@ test('app screens on the site are real shots, not an empty screen', () => {
   const dir = new URL('../public/site/app/', import.meta.url);
   for (const f of readdirSync(dir).filter(f => f.endsWith('.webp')))
     assert.ok(statSync(new URL(f, dir)).size > 8000, `${f} looks blank (a shot taken before the screen drew)`);
+});
+
+// Under the hero's form, the watches and rings Aurin reads, as names: only devices the app supports.
+test('the hero names the wearables Aurin reads, and no device it does not support',async()=>{
+  const html=await overviewPage().text();
+  const hero=html.slice(html.indexOf('<div class="hero">'),html.indexOf('<section class="morning">'));
+  const list=hero.slice(hero.indexOf('<div class="works">'));
+  assert.deepEqual([...list.matchAll(/<li>([^<]+)<\/li>/g)].map(m=>m[1]),WEARABLES);
+  assert.deepEqual(WEARABLES,['Apple Watch','Fitbit','Pixel Watch','WHOOP','Ultrahuman']);
+  assert.doesNotMatch(hero,/garmin|oura|strava|polar|coros/i);
+  assert.match(hero,/Works with what you already wear/);
 });

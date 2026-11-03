@@ -33,8 +33,9 @@ final class PlanStore: ObservableObject {
         stamps = saved.stamps
     }
 
+    /// "|2": plans kept from before the steps had their targets (watts, pace) load again.
     private static func stamp(_ session: WatchSnapshot.Session) -> String {
-        "\(session.title)|\(session.minutes ?? 0)"
+        "\(session.title)|\(session.minutes ?? 0)|2"
     }
 
     /// The session's plan; with shelf, also the complication's (the next workout's steps).
@@ -187,9 +188,7 @@ struct RideDetail: View {
 
     /// "ZÍTRA · 60 MIN".
     private var when: String {
-        let today = WatchStore.localDate(WatchDemo.now)
-        let tomorrow = WatchStore.localDate(Calendar.current.date(byAdding: .day, value: 1, to: WatchDemo.now) ?? WatchDemo.now)
-        let day = session.date == today ? W.tr("dnes", "today") : session.date == tomorrow ? W.tr("zítra", "tomorrow") : W.dayName(session.date)
+        let day = W.relativeDay(session.date)
         let minutes = session.minutes ?? plan?.minutes
         return day + (session.time.map { " · " + W.clockText($0) } ?? "") + (minutes.map { " · \($0) min" } ?? "")
     }

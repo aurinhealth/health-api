@@ -318,6 +318,12 @@ final class LiveWorkout: NSObject {
         endedOnWatch = true
     }
 
+    /// The watch's workout discarded there: stopped here too, nothing saved.
+    func watchDiscarded() {
+        guard running, onWatch else { return }
+        reset()
+    }
+
     /// Ends the clock. On iOS 26 the workout goes to Apple Health; returns
     /// whether it did.
     @discardableResult

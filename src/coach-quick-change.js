@@ -5,6 +5,7 @@ import { hardDayConflict, holdBackToday } from './coach-actions.js';
 import { trainingStatus } from './training-status.js';
 import { trimGymPlan } from './gym-trim.js';
 import { EASIER, HARDER, MIN_MINUTES, MAX_MINUTES, kindOfSystem } from './week-ai.js';
+import { MAX_MINUTES as LONGEST } from './workout-model.js';
 import { shiftDate } from './dashboard-shared.js';
 
 // "Kratší · Delší · Lehčí · Těžší · Jiný den" under the coach's workout card
@@ -39,7 +40,7 @@ export const kindOf = a => a.kind && RANK[a.kind] != null ? a.kind : kindOfSyste
 const shorterMinutes = a => Math.max(MIN_MINUTES[a.sport] || 20, round5(a.minutes * 0.75));
 function longerMinutes(a, quick) {
   const budget = quick?.budget?.[a.date];
-  return Math.min(MAX_MINUTES[a.sport] || 300, round5(a.minutes * 1.25), budget > 0 ? budget : Infinity);
+  return Math.min(LONGEST[a.sport] || MAX_MINUTES[a.sport] || 300, round5(a.minutes * 1.25), budget > 0 ? budget : Infinity);
 }
 // A hard ride or run on a day: never on a red or ill morning, never next to another hard day.
 const hardFits = (date, quick) => !(date === quick.today && quick.red) && !hardDayConflict(date, (quick.hard || []).filter(d => d !== date));

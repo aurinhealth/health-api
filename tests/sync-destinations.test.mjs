@@ -256,3 +256,15 @@ test("Plánované tréninky off: a new plan stays in the app", async () => {
   await saveSyncPrefs(scoped, 7, "intervals", { pushPlanned: true });
   assert.equal((await syncLocalWorkout({ DB: scoped, USER_ID: 7, INTERVALS_API_KEY: "k" }, saved.id, fetchImpl)).status, "synced");
 });
+
+test("a race leg's mark stays in the app: Intervals.icu gets the event without it", async () => {
+  const d = db();
+  const scoped = { ...d, userId: 7 };
+  await saveSyncPrefs(scoped, 7, "intervals", { pushPlanned: true });
+  const saved = await storeLocalEvent(scoped, { external_id: "pfd-library:race-run-5-24:2099-01-01", category: "WORKOUT", name: "Race 5 km", type: "Run", start_date_local: "2099-01-01T09:00:00", moving_time: 1440, race: true });
+  const { calls, fetchImpl } = recorder(() => Response.json([{ id: 1 }]));
+  assert.equal((await syncLocalWorkout({ DB: scoped, USER_ID: 7, INTERVALS_API_KEY: "k" }, saved.id, fetchImpl)).status, "synced");
+  const sent = calls.find(c => c.method !== "GET" && c.body);
+  assert.equal(Array.isArray(sent.body) ? sent.body[0].race : sent.body.race, undefined);
+  assert.equal((Array.isArray(sent.body) ? sent.body[0] : sent.body).name, "Race 5 km");
+});

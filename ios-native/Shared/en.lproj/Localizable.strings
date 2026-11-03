@@ -1288,6 +1288,9 @@
 "Připomeneme ti, že týden zdarma končí." = "We'll remind you that your free week is ending.";
 "Začne roční předplatné za %@. Do té doby ho zrušíš jedním klepnutím." = "Your yearly plan starts at %@. Cancel before then with one tap.";
 "App Store teď tarify nenačetl. Zkus to za chvíli znovu." = "The App Store didn't load the plans just now. Try again in a moment.";
+"App Store teď balíčky nenačetl. Zkus to za chvíli znovu." = "The App Store hasn't loaded the packs yet. Try again in a moment.";
+"App Store nákup nepotvrdil. Zkus to znovu." = "The App Store didn't confirm the purchase. Try again.";
+"Nákup proběhl, zprávy se přidají, jakmile bude spojení se serverem." = "The purchase went through. The messages will be added once Aurin can reach the server.";
 "App Store nákup nepotvrdil. Zkus Obnovit nákup." = "The App Store didn't confirm the purchase. Try Restore purchase.";
 "Obnovení nákupu bylo zrušeno." = "Restoring the purchase was cancelled.";
 "Nákupy se nepodařilo obnovit: %@" = "Couldn't restore purchases: %@";
@@ -3277,6 +3280,7 @@
 "Na budík v %@ potřebuješ jít spát do %@." = "To wake at %@ rested, be in bed by %@.";
 "První dny" = "First days";
 "%@ ze 3" = "%@ of 3";
+"%@ ze 2" = "%@ of 2";
 "Nos dnes v noci hodinky" = "Wear your watch tonight";
 "Ráno uvidíš připravenost." = "Readiness comes in the morning.";
 "Vyfoť talíř nebo naskenuj kód." = "Snap a photo or scan a barcode.";
@@ -3587,6 +3591,18 @@
 "běží" = "running";
 "Uloží délku a konec kardia" = "Saves the cardio's length and end";
 
+/* First-run setup: main sport, goal and time (SetupFocusPages) */
+"Jaký je tvůj hlavní sport?" = "What's your main sport?";
+"Aurin podle něj plánuje. Ostatní sporty z hodinek se počítají dál." = "Aurin plans around it. Other sports from your watch still count.";
+"Jaký je tvůj cíl?" = "What's your goal?";
+"Kouč podle něj skládá tvůj týden. Změníš ho kdykoli." = "The coach builds your week around it. You can change it any time.";
+"Víc energie, postupné zlepšení" = "More energy, steady progress";
+"Datum a vzdálenost" = "A date and a distance";
+"Jídlo i trénink k tomu" = "Eat and train for it";
+"Kdy můžeš trénovat?" = "When can you train?";
+"Potáhni pruh u každého dne. Aurin plánuje v tomhle čase a když potřebuješ odpočinek, vezme si méně." = "Drag each bar. Aurin plans within it and uses less when you need rest.";
+"Kde posiluješ?" = "Where do you lift?";
+"Posilovna, doma nebo obojí · vybavení" = "Gym, home or both · equipment";
 /* One coach card on Today (CoachThingsCard.swift) */
 "Kouč se ptá" = "Check-in";
 "Po tréninku" = "After workout";
@@ -3614,6 +3630,75 @@
 "Čas na 200 m (m:ss)" = "200 m time (m:ss)";
 "Nikdy neplav sám, výrazná čepice a bójka." = "Never alone, bright cap and a tow float.";
 "venku podle času" = "by time outside";
+
+/* Aurin Pro offer in night violet (ProPaywall.swift) */
+"%@ měsíčně po 12 měsíců (%@). Obnovuje se každých 12 měsíců, dokud ho nezrušíš; zrušení zastaví obnovení, platby za rok běží dál." = "%@ a month for 12 months (%@). Renews every 12 months unless cancelled; cancelling stops the renewal, the year’s payments continue.";
+"%@ ročně" = "%@ a year";
+"/měs." = "/mo";
+"/rok" = "/yr";
+"12 měsíců" = "12 months";
+"12 plateb · %@" = "12 payments · %@";
+"7 DNÍ ZDARMA" = "7 DAYS FREE";
+"Aurin Pro" = "Aurin Pro";
+"Celé Aurin Pro zdarma do %@." = "All of Pro, free until %@.";
+"DNES" = "TODAY";
+"Dnes se nic neúčtuje. Po 7 dnech " = "Nothing is charged today. After 7 days ";
+"Dnes zdarma, připomínka za 4 dny, první platba %@." = "Free today, a reminder in 4 days, first payment %@.";
+"Dobré ráno. Spal jsi 7:12 a HRV je nahoře. Dnes klidně naplno." = "Good morning. You slept 7:12 and your HRV is up. Go for full today.";
+"HRV ↑" = "HRV ↑";
+"HRV, spánek a zátěž v jednom čísle." = "HRV, sleep and strain in one number.";
+"Jídelní kouč" = "Food coach";
+"Jídlo, které kouč dopočítá" = "Food the coach works out";
+"Každý den vysvětlený podle připravenosti." = "Each day explained by your readiness.";
+"Klepnutím přejdeš na nabídku." = "Tap to see the offer.";
+"Kolik spánku potřebuješ po dnešní zátěži." = "How much sleep you need after today’s load.";
+"Od %@ %@" = "From %@ %@";
+"Placeno měsíčně" = "Paid monthly";
+"Placeno najednou" = "Paid once";
+"Plán, který jde s tvým tělem" = "A plan that follows your body";
+"Podle tvého času a unavených svalů." = "Fitted to your time and tired muscles.";
+"PŘIPRAVENOST" = "READINESS";
+"Připomínka" = "Reminder";
+"Ročně, placeno měsíčně" = "Yearly, paid monthly";
+"Ročně, placeno najednou" = "Yearly, paid once";
+"Spánek, který chystá zítřek" = "Sleep that sets up tomorrow";
+"Tréninky postavené na dnešek" = "Workouts built for today";
+"Tvůj týden zdarma" = "Your free week";
+"VYZKOUŠEJ TENTO TÝDEN" = "TRY THIS WEEK";
+"Víš, kdy přidat" = "Know when to push";
+"Všechna data na jednom místě" = "All your data in one place";
+"Z hodinek bez přepisování." = "From your watch, nothing to type.";
+"Zdarma" = "Free";
+"Zdarma do %@, pak %@" = "Free until %@, then %@";
+"Zobrazit další tarify" = "View more plans";
+"Zrušíš kterýkoli měsíc" = "Cancel any month";
+"klidový tep" = "resting HR";
+"zátěž" = "strain";
+"Začít 7denní zkoušku zdarma" = "Start 7-day free trial";
+"VYZKOUŠEJ 7 DNÍ ZDARMA" = "TRY 7 DAYS FREE";
+"12MĚSÍČNÍ TARIF · VYZKOUŠEJ 7 DNÍ ZDARMA" = "12-MONTH PLAN · TRY 7 DAYS FREE";
+
+/* Settings → Aurin Pro in night violet and the coach message packs (ProSettings.swift) */
+"%lld navíc" = "%lld extra";
+"Zdarma ještě %@" = "%@ left";
+"Platba %lld z %lld" = "Payment %lld of %lld";
+"Další · %@" = "Next · %@";
+"ZPRÁVY KOUČOVI NAVÍC" = "EXTRA COACH MESSAGES";
+"zbývá · nepropadnou" = "left · never expire";
+"Zatím žádné" = "None yet";
+"Použijí se, až dojdou zprávy na tento týden." = "Used only after this week’s messages run out.";
+"Získat další zprávy" = "Get more messages";
+"Další zprávy koučovi" = "More coach messages";
+"Máš %lld navíc. Nepropadnou." = "You have %lld extra. They never expire.";
+"Koupit %lld zpráv" = "Buy %lld messages";
+"TVOJE NÁKUPY" = "YOUR PURCHASES";
+"NEJVÝHODNĚJŠÍ" = "BEST VALUE";
+"+%lld zpráv" = "+%lld messages";
+"Přidáno %lld zpráv" = "%lld messages added";
+"Testovací nákup" = "Test purchase";
+"Získat další" = "Get more";
+"Jednorázové nákupy přes Apple. Zprávy navíc patří tomuto účtu a nejdou převést na nový." = "One-time purchases through Apple. Extra messages belong to this account and can’t be moved to a new one.";
+"Peníze vráceny" = "Refunded";
 "Po uložení se přepočítají tvoje zóny." = "Saving recalculates your zones.";
 "Po uložení se přepočítají tvoje zóny a pošlou do %@." = "Saving recalculates your zones and sends them to %@.";
 "Po uložení se přepočítají tvoje zóny a pošlou do %@ a %@." = "Saving recalculates your zones and sends them to %@ and %@.";

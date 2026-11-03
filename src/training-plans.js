@@ -1,5 +1,5 @@
 import { L, plural } from "./lang.js";
-import { buildWorkout, step } from "./workout-model.js";
+import { buildWorkout, step, MAX_MINUTES } from "./workout-model.js";
 import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
 import { SWIMMING_WORKOUTS, SWIMMING_WORKOUTS_EN } from "./swimming-workouts.js";
@@ -563,7 +563,7 @@ export const getTemplate = id => planTemplates().find(t => t.id === id) || null;
 
 // ---- the catalogue -------------------------------------------------------------
 const CATALOGUE = { ride: CYCLING_WORKOUTS, run: RUNNING_WORKOUTS, swim: SWIMMING_WORKOUTS };
-const LIMITS = { ride: [30, 360], run: [20, 240], swim: [15, 120] };
+const LIMITS = { ride: [30, MAX_MINUTES.ride], run: [20, MAX_MINUTES.run], swim: [15, 120] };
 const familyLevels = (sport, family) => [...new Set(CATALOGUE[sport].filter(w => w.family === family).map(w => w.level).filter(Number.isFinite))].sort((a, b) => a - b);
 // A key session one or two levels easier for a beginner, up to three harder for
 // a strong athlete (their capability in that energy system, level 3 = normal,
@@ -651,10 +651,11 @@ export function triRaceDay(tri, { thresholdPace = null, ftp = null, weight = nul
     }
     if (sport === "ride") {
       const ride = rideRace(r.ride_kind, distance, { ftp, weight });
-      return { sport, km: distance, minutes: ride.minutes, workoutId: rideRaceId(r.ride_kind, distance, ride.minutes) };
+      return { sport, km: distance, minutes: ride.minutes, workoutId: rideRaceId(r.ride_kind, distance, ride.minutes) + "-leg" };
     }
     const slower = RUN_AFTER[all[i - 1]?.[0] || "none"], minutes = Math.round(raceMinutes(distance, thresholdPace) * slower);
-    return { sport, km: distance, minutes, workoutId: raceId(distance, minutes, Math.round(RACE_PACE(distance) / slower)) };
+    // "-leg": only the race, so the next leg starts when this one ends (planned-links.js).
+    return { sport, km: distance, minutes, workoutId: raceId(distance, minutes, Math.round(RACE_PACE(distance) / slower)) + "-leg" };
   });
   return {
     legs, ...Object.fromEntries(TRI_SPORTS.map(s => [s, legs.find(x => x.sport === s)]).filter(([, x]) => x)),
@@ -680,11 +681,17 @@ export function raceDay(template, km, { thresholdPace = null, ftp = null, weight
 export function raceWorkout(id) {
   const swim = String(id).match(/^race-swim-(\d{3,4})-(\d{1,3})(-ow)?$/);
   if (swim) return swimRaceWorkout(id, Number(swim[1]), Number(swim[2]), Boolean(swim[3]));
-  const ride = String(id).match(/^race-ride-(granfondo|mtb|tt|climb|du-short|aquabike-half|aquabike-full|aquabike|tri-short|tri-half|tri-full)-(\d+(?:_\d)?)-(\d{1,3})$/);
-  if (ride) return rideRaceWorkout(id, ride[1], Number(ride[2].replace("_", ".")), Number(ride[3]));
-  const m = String(id).match(/^race-run-(\d+(?:_\d)?)-(\d{1,3})(?:-p(\d{2,3}))?$/);
+  const ride = String(id).match(/^race-ride-(granfondo|mtb|tt|climb|du-short|aquabike-half|aquabike-full|aquabike|tri-short|tri-half|tri-full)-(\d+(?:_\d)?)-(\d{1,3})(-leg)?$/);
+  if (ride) return rideRaceWorkout(id, ride[1], Number(ride[2].replace("_", ".")), Number(ride[3]), Boolean(ride[4]));
+  const m = String(id).match(/^race-run-(\d+(?:_\d)?)-(\d{1,3})(?:-p(\d{2,3}))?(-leg)?$/);
   if (!m) return null;
-  const km = Number(m[1].replace("_", ".")), minutes = Number(m[2]), goal = m[3] ? Number(m[3]) : null, pace = goal || RACE_PACE(km), short = km <= 21.1;
+  const km = Number(m[1].replace("_", ".")), minutes = Number(m[2]), goal = m[3] ? Number(m[3]) : null, pace = goal || RACE_PACE(km), short = km <= 21.1, leg = Boolean(m[4]);
+  // A multisport race's run ("-leg"): the race itself, the clock already running.
+  if (leg) return buildWorkout({
+    id, sport: "run", name: L(`Závod ${km} km`, `Race ${km} km`), system: km <= 10 ? "threshold" : km <= 21.1 ? "tempo" : "endurance", family: "race", tags: ["race"],
+    structure: [step(minutes, pace, null, L("závodní tempo, první kilometr na nohy z předchozí části", "race pace, the first kilometre to find your legs after the last leg"))],
+    description: L(`${km} km v závodním tempu. Prvním kilometrem si najdi krok, pak drž tempo.`, `${km} km at race pace. Find your stride in the first kilometre, then hold the pace.`)
+  });
   const label = km === 42.2 ? L("Maraton", "Marathon") : km === 21.1 ? L("Půlmaraton", "Half marathon") : L(`Závod ${km} km`, `Race ${km} km`);
   return buildWorkout({
     id, sport: "run", name: label, system: km <= 10 ? "threshold" : km <= 21.1 ? "tempo" : "endurance", family: "race", tags: ["race"],
@@ -710,10 +717,11 @@ function swimRaceWorkout(id, meters, minutes, openWater = false) {
 // A cycling race day: a gran fondo and an MTB marathon at their share of FTP
 // with food every hour; a time trial and a hill climb after a warm-up with a
 // short effort, at the power the duration allows.
-function rideRaceWorkout(id, kind, km, minutes) {
+// leg: a multisport race's ride, only the race itself (no warm-up, the clock is running).
+function rideRaceWorkout(id, kind, km, minutes, leg = false) {
   const race = RIDE_RACES[kind], name = RIDE_RACE_NAMES()[kind] + " " + km + " km";
   const steady = Boolean(race.low), share = steady ? Math.round((race.low + race.high) * 50) : Math.round(durationShare(minutes) * 100);
-  const structure = steady
+  const structure = leg && !steady ? [step(minutes, share, null, L("závod: rovnoměrně, posledních pár minut naplno", "race: even, the last few minutes all out"))] : steady
     ? [step(minutes, share, null, L("závodní tempo, první hodinu u spodní hranice", "race pace, the first hour at the low end"))]
     : [step(15, 55, null, L("rozjetí", "warm-up")), step(3, 95, null, L("krátce v závodním tempu", "briefly at race pace")), step(5, 50, null, L("volně", "easy")),
        step(minutes, share, null, L("závod: rovnoměrně, posledních pár minut naplno", "race: even, the last few minutes all out")), step(10, 50, null, L("vyjetí", "cool-down"))];
@@ -1290,7 +1298,7 @@ export function planEdit(plan, { date, op, to = null, minutes = null }, today) {
     edits[date] = { to };
   } else if (op === "minutes") {
     const m = Math.round(Number(minutes));
-    if (!(m >= 20 && m <= 360)) throw new Error(L("Délka musí být 20–360 minut.", "The length must be 20–360 minutes."));
+    if (!(m >= 20 && m <= MAX_MINUTES.ride)) throw new Error(L(`Délka musí být 20–${MAX_MINUTES.ride} minut.`, `The length must be 20–${MAX_MINUTES.ride} minutes.`));
     edits[date] = { ...(edits[date]?.to ? {} : edits[date]), minutes: m };
   } else if (op === "skip") edits[date] = { skip: true };
   else if (op === "reset") delete edits[date];

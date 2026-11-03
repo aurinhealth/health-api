@@ -57,10 +57,14 @@ p{margin:0}
 .wl .done{align-items:center;gap:10px;height:56px;padding:0 26px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--green) 13%,var(--panel));color:var(--green);font-size:var(--fs-17);font-weight:600}
 .wl .done svg{width:20px;height:20px;stroke:currentColor}
 .wl .err{margin-top:10px;font-size:var(--fs-14);color:var(--rust-ink)}.wl .err:empty{display:none}
+/* The link to install comes from Apple with "TestFlight" as its sender, not from Aurin, so say so where people look for it.
+   The line about TestFlight under the form has said its part by then. */
+.hero .cta:has(.wl.sent) .note{display:none}
+.wl .tf{display:none;max-width:420px;margin-top:12px;font:var(--fs-14)/1.45 var(--sans);color:var(--sec);text-align:center}.wl.sent .tf{display:block}
 .wl.sent .field{display:none}.wl.sent .done{display:inline-flex}
 /* After joining: pass Aurin on (the phone's own sharing, or the link copied). Nothing about it is stored. */
 .wl .share{display:none;align-items:center;gap:8px;margin-top:12px;padding:8px 14px;border:0;border-radius:var(--r-pill);background:transparent;font:inherit;font-size:var(--fs-14);font-weight:600;color:var(--sec);cursor:pointer}
-.wl .share:hover{background:var(--panel)}.wl .share svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.wl .share{box-shadow:inset 0 0 0 1px var(--line)}.wl .share:hover{background:var(--panel)}.wl .share svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .wl.sent .share{display:inline-flex}
 /* Cloudflare's "Verify you are human", only when Cloudflare asks for it. */
 .wl .ts{display:flex;justify-content:center}.wl .ts iframe{margin-top:12px}.wl.sent .ts{display:none}
@@ -103,8 +107,14 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .hero h1 .it{font-style:italic;color:var(--green)}
 .lede{max-width:500px;margin-top:26px;font-size:var(--fs-20);color:var(--sec)}
 .hero .cta{margin-top:36px}
-.hero .wl{align-items:flex-start}
+.hero .wl{align-items:flex-start}.hero .wl .tf{text-align:left}
 .hero .note{margin-top:16px;font-size:var(--fs-14);color:var(--muted)}
+/* What Aurin reads from, right under the form: the watches and rings people already wear, as names (not their
+   makers' logos). Only devices the app reads, through Apple Health or Google Health or directly. */
+.works{margin-top:34px}
+.works .wk{display:block;font-size:var(--fs-12);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.works ul{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.works li{display:inline-flex;align-items:center;height:32px;padding:0 13px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--panel) 70%,transparent);box-shadow:inset 0 0 0 1px var(--line);font-size:var(--fs-14);font-weight:600;color:var(--sec)}
 /* The phone and its three numbers are drawn at one size (the rig) and scaled down where the column is narrower,
    so the numbers never leave the column and the coach sits under the phone, not over its tab bar. */
 .stage{position:relative;display:flex;justify-content:center}
@@ -208,8 +218,9 @@ main:focus{outline:none}
 .an-l{position:relative;width:160px;height:12px}
 .an-l::before,.an-fill{content:"";position:absolute;left:0;right:0;top:5px;height:2px;border-radius:2px;background:var(--track)}
 .an-fill{right:auto;width:calc(var(--i,0) * 20%);background:linear-gradient(90deg,color-mix(in srgb,var(--sun) 40%,transparent),var(--sun));transition:width .45s cubic-bezier(.16,1,.3,1)}
-.an-l a{position:absolute;left:calc(var(--k) * 20%);top:0;width:12px;height:12px;margin-left:-6px;border-radius:50%}
-.an-l a::after{content:"";position:absolute;left:3px;top:3px;width:6px;height:6px;border-radius:50%;background:color-mix(in srgb,var(--text) 18%,transparent);transition:background .3s}
+/* Each dot is a 24 px target (WCAG 2.2), wider than the 6 px dot it draws. */
+.an-l a{position:absolute;left:calc(var(--k) * 20%);top:-6px;width:24px;height:24px;margin-left:-12px;border-radius:50%}
+.an-l a::after{content:"";position:absolute;left:9px;top:9px;width:6px;height:6px;border-radius:50%;background:color-mix(in srgb,var(--text) 18%,transparent);transition:background .3s}
 .an-l a.done::after{background:var(--sun)}
 .an-dot{position:absolute;left:calc(var(--i,0) * 20%);top:0;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:var(--sun);box-shadow:0 0 0 2px var(--panel),0 0 10px var(--sun);pointer-events:none;transition:left .45s cubic-bezier(.16,1,.3,1)}
 
@@ -427,11 +438,13 @@ main:focus{outline:none}
 @media (max-width:960px){
   /* Hero: the words first, the phone under them. */
   .hero{padding-top:120px}
-  .hero .grid{grid-template-columns:1fr;text-align:center}
+  /* minmax(0,…): the phone's stage must not widen the column past the screen (it cut off the words and the button). */
+  .hero .grid{grid-template-columns:minmax(0,1fr);text-align:center}
   /* The mark is already in the nav: on a tablet and a phone the hero starts with the words. */
   .hero .sun{display:none}
   .lede{margin-left:auto;margin-right:auto}
-  .hero .wl{align-items:center}
+  .works ul{justify-content:center}
+  .hero .wl{align-items:center}.hero .wl .tf{text-align:center}
   .stage{margin-top:48px}
   .morning{padding-top:32px}
   /* Chapters: the words, then the phone with its piece over the lower part, then the steps. */
@@ -465,6 +478,8 @@ main:focus{outline:none}
   /* Left-aligned on a phone: four centred lines read badly. */
   .hero .grid{gap:0;text-align:left}.hero .copy{display:contents}.hero .kicker{justify-self:start}.hero .lede{margin-left:0}
   .hero .cta{order:1;margin-top:28px}.hero .stage{order:2;margin-top:40px}
+  .hero .wl{align-items:flex-start}.hero .wl .tf{text-align:left}
+  .hero .works{order:1;margin-top:26px}.works ul{justify-content:flex-start;gap:6px}.works li{height:30px;padding:0 11px}
   .rig{width:322px;height:672px;--hz:.8}
   .rig .device{left:0}
   /* On a phone a part opens with its title and line only: its chapters right under show the same day. */
@@ -517,7 +532,7 @@ const turnstileScript = `<script src="${TURNSTILE}/turnstile/v0/api.js?render=ex
 const store = id => `<form class="wl" action="/waitlist" method="post" novalidate>
 <span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" spellcheck="false" required><button type="submit" class="go">Get early access${ARROW}</button></span>
 <span class="ts" data-key="${TURNSTILE_SITE_KEY}"></span>
-<span class="done" role="status">${CHECK}<span>You’re on the list</span></span>
+<span class="done" role="status">${CHECK}<span>You’re on the list</span></span><p class="tf">Apple’s TestFlight will email you a link to install Aurin. If it doesn’t arrive, check your spam.</p>
 <button type="button" class="share">${SHARE}<span>Know someone who trains? Share Aurin</span></button>
 <span class="err" role="alert"></span>
 </form>`;
@@ -724,7 +739,7 @@ ${body}
 <div class="top">
 <div class="brand">${mark(40)}<p>Train for how you feel today.</p></div>
 <nav aria-label="Aurin"><h3 translate="no">Aurin</h3><ul><li><a href="/#a-readiness">Readiness</a></li><li><a href="/#a-training">Training</a></li><li><a href="/#a-food">Nutrition</a></li><li><a href="/#a-sleep">Sleep</a></li><li><a href="/#a-coach">Coach</a></li><li><a href="/#a-watch">Apple Watch</a></li><li><a href="/#connections">Connections</a></li></ul></nav>
-<nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li></ul></nav>
+<nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li><li><a href="https://x.com/aurin_health" rel="me noopener">Aurin on X</a></li></ul></nav>
 <nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/cs/privacy" hreflang="cs">Soukromí</a> · <a href="/cs/terms" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
 <div class="base"><span>© 2026 Aurin</span><span>Aurin is not a medical device.</span></div>
@@ -772,6 +787,9 @@ const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 // verifies the app (submitted 2026-10-25); after that this can go back to false.
 // The text stays word for word (tests/site-pages.test.mjs).
 export const GOOGLE_DISCLOSURE_ON_HOME = true;
+// The watches and rings the hero names under the form: Apple Watch through Apple Health, Fitbit and Pixel Watch
+// through Google Health, the Ultrahuman Ring and WHOOP directly. Aurin does not support Garmin.
+export const WEARABLES = ['Apple Watch', 'Fitbit', 'Pixel Watch', 'WHOOP', 'Ultrahuman'];
 export const googleDisclosure = () => `<div class="card disclosure reveal" lang="en"><h3>Google Health data disclosure</h3>
 <p>Aurin is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
 <p>With your authorization, the service may read fitness, health-metric, sleep, and nutrition data from Google Health. It may also add nutrition logs to Google Health when you ask the service to record food or drinks. This data is used only for the requested training and nutrition features.</p>
@@ -811,11 +829,12 @@ export function overviewPage(request) {
   const scenes = [
     ['pripravenost', '', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal.', 'green', 'glow-today', [
       ['readiness-parts', 'readyOne', 330, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal. The morning notification brings the same numbers and what to do today, weighing the days before and tomorrow’s workout, and keeps them off your lock screen.', 7000],
-      ['journal-impact', 'journalOne', 330, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000]]],
+      ['journal-impact', 'journalOne', 330, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000],
+      ['html:cycle', 'cycleOne', 300, 'Readiness that knows your cycle.', 'Turn on cycle tracking and, in the days before your period, your resting heart rate and temperature are weighed against your own days in that phase. A usual rise costs no points.', 7000]]],
     ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
       ['html:strain', 'strainMade', 200, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000]]],
     ['trenink', '', 'A plan that adapts.', 'An activity for every day, picked for how you recovered.', 'green', 'glow-today', [
-      ['training', 'week', 150, 'Your week at a glance.', 'Follow a plan for your race, from a faster 5 km to a marathon, a gran fondo, an open-water swim, a triathlon from sprint to full distance, a duathlon, an aquabike up to full distance or an aquathlon, or a multisport plan without a race in the two or three sports you pick; one that takes you to 1,500 m of swimming without stopping, one for a faster swim with a CSS test, or strength for swimmers; or let the AI plan the week of rides, runs, swims and gym; for a triathlon your newest sport gets more short sessions, with a short run straight after a ride (a brick, which you can also put on any day yourself) that goes to your Apple Watch as one multisport workout, or apart, each at its own time. Give it the time you have each day, even two weeks in turn for shift work, and the plan fits it, with the long ride or run on the day you pick; give each ride, run and swim a time of day before it goes to your calendar; a busy day in your calendar gets a shorter workout. The library has bricks too, a ride and a run or a swim and a ride, one right after the other. Send a planned ride, run or pool swim to Intervals.icu or your Apple Watch, and a ride or run also to Wahoo; export a ride or run as a .zwo file for trainer apps, or any of them as a .fit file for Garmin, Karoo or COROS.', 9500]]],
+      ['training', 'week', 150, 'Your week at a glance.', 'Follow a plan for your race, from a faster 5 km to a marathon, a gran fondo, an open-water swim, a triathlon from sprint to full distance, a duathlon, an aquabike up to full distance or an aquathlon, or a multisport plan without a race in the two or three sports you pick; one that takes you to 1,500 m of swimming without stopping, one for a faster swim with a CSS test, or strength for swimmers; or let the AI plan the week of rides, runs, swims and gym; for a triathlon your newest sport gets more short sessions, with a short run straight after a ride (a brick, which you can also put on any day yourself) that goes to your Apple Watch as one multisport workout, or apart, each at its own time. On race day the watch shows the race as one card, its legs in order, and starts it as one multisport workout. Tell Aurin your main sport, your goal and the time you have each day when you first open it, up to 8 hours, even two weeks in turn for shift work, and the plan fits it, with the long ride or run on the day you pick, up to an 8 hour ride or a 6 hour run; give each ride, run and swim a time of day before it goes to your calendar; a busy day in your calendar gets a shorter workout. The library has bricks too, a ride and a run or a swim and a ride, one right after the other. Send a planned ride, run or pool swim to Intervals.icu or your Apple Watch, and a ride or run also to Wahoo; export a ride or run as a .zwo file for trainer apps, or any of them as a .fit file for Garmin, Karoo or COROS.', 9500]]],
     ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym.', 'amber', 'glow-training', [
       ['builder', 'builder', 200, 'Say how long and what.', 'Pick the day, the length and the focus, or take the workout your rested muscles suggest in one tap, at your usual length. Aurin builds it only from the equipment your gym has.', 8500],
       ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, set their length or pick a warm-up of your own, and move them into the order you like. Cardio has no set time unless you pick one: it just runs until you stop it. Then start.', 7000]]],
@@ -951,9 +970,10 @@ ${layer('wide')}${layer('tall')}
 </div>`).join('');
 
   const faq = [
-    ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit, Pixel Watch or Garmin. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
+    ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit or Pixel Watch. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
     ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
     ['What does it cost?', 'Nothing during testing. After the release, the coach, food from a photo, reviews, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: $6.99 a month or $59.99 a year with the first week free, shown in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.'],
+    ['Does Aurin know my cycle?', 'If you turn on cycle tracking in Settings → Cycle, yes. Your readiness then weighs your resting heart rate and temperature in the days before your period against your own days in that phase, and, if you allow it, the coach knows it too.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from, and under Health data see for each type where Aurin reads it from and sends it to, with a switch for each.'],
     ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
     ['Where is my data and who sees it?', 'In Aurin’s database in Europe, encrypted. We never sell it or use it for ads. AI features get only what a question needs, and only once you allow them. <a href="/privacy">More in the privacy policy</a>.'],
@@ -991,6 +1011,7 @@ ${sun(72)}
 <h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w${i >= SLANT ? ' it' : ''}" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
 <p class="lede">Aurin reads your sleep, HRV and workouts from the watch or ring you wear, and every morning turns them into one number, one plan and one coach.</p>
 <div class="cta">${store('top')}<p class="note">Free early access on iPhone through TestFlight.</p></div>
+<div class="works"><span class="wk" id="works-t">Works with what you already wear</span><ul aria-labelledby="works-t">${WEARABLES.map(w => `<li>${w}</li>`).join('')}</ul></div>
 </div>
 <div class="stage"><div class="rig">
 <div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">${day.hrv} ms</div><div class="d up">↑ ${day.hrv - day.hrvBaseline} ms above normal</div></div>

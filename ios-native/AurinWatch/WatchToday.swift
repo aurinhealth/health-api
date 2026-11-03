@@ -41,7 +41,7 @@ enum WatchToday {
         var sessions: [Session]?
         struct Session: Decodable {
             var status: String?; var date: String; var time: String?; var title: String; var sport: String?; var minutes: Int?; var eventId: String?
-            var after: String?; var next: String?
+            var after: String?; var next: String?; var race: Bool?
         }
     }
 
@@ -75,7 +75,7 @@ enum WatchToday {
         let week = training?.sessions?.filter { $0.status != "missed" }.map {
             WatchSnapshot.Session(date: $0.date, time: $0.time, title: $0.title, sport: $0.sport ?? "other", minutes: $0.minutes,
                                   done: $0.status == "done", eventId: $0.eventId,
-                                  after: $0.after, next: $0.next)
+                                  after: $0.after, next: $0.next, race: $0.race)
         } ?? last?.week
         let macro = { (m: Today.Macro?) in WatchSnapshot.Macro(eaten: m?.eaten, target: m?.target, limit: m?.limit) }
         let n = today.nutrition

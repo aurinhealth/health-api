@@ -2,11 +2,12 @@ import { trainingSetup } from './onboarding.js';
 import { ownLibraryWorkout } from "./endurance-templates.js";
 import { getAiWorkout } from "./ai-workout-compose.js";
 import { storeLocalEvent, syncLocalWorkout, ensureLocalWorkouts } from './local-workouts.js';
+import { read as readPlanned, setFields as setPlannedFields } from './planned-links.js';
 // Adaptive workout library: the shared catalog (built-in workouts plus any
 // rows in workout_library), per-user capability progression, ranking, "generate a
 // workout for this day" and scheduling to the user's Intervals.icu calendar.
 // Every query on personal tables filters by db.userId (see tenancy.js).
-import { renderForEnvironment, buildWorkout, totalMinutes, step, n, clamp, zoneOf, zonesFor } from "./workout-model.js";
+import { renderForEnvironment, buildWorkout, totalMinutes, step, n, clamp, zoneOf, zonesFor, MAX_MINUTES } from "./workout-model.js";
 import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
 import { SWIMMING_WORKOUTS, SWIMMING_WORKOUTS_EN } from "./swimming-workouts.js";
@@ -231,7 +232,7 @@ export async function generateWorkout(db, { sport = "ride", environment = "indoo
   if (sport === "run" && kind === "sweet_spot") kind = "threshold";
   // The swim catalog has endurance, threshold (CSS), speed and sprints.
   if (sport === "swim") kind = { tempo: "threshold", sweet_spot: "threshold", anaerobic: "vo2max" }[kind] || kind;
-  const minutes = sport === "swim" ? clamp(n(availabilityMinutes, n(rec.durationMinutes, 40)), 15, 90) : sport === "run" ? clamp(n(availabilityMinutes, n(rec.durationMinutes, 60)), 20, 240) : clamp(n(availabilityMinutes, n(rec.durationMinutes, 90)), 30, 360);
+  const minutes = sport === "swim" ? clamp(n(availabilityMinutes, n(rec.durationMinutes, 40)), 15, 90) : sport === "run" ? clamp(n(availabilityMinutes, n(rec.durationMinutes, 60)), 20, MAX_MINUTES.run) : clamp(n(availabilityMinutes, n(rec.durationMinutes, 90)), 30, MAX_MINUTES.ride);
   const context = { readiness: coach.readiness?.status || "green", hardBikeDaysRolling7d: coach.load?.hardBikeDaysRolling7d ?? 0, phase: coach.constraints?.phase === "auto" ? "" : coach.constraints?.phase, targetDifficulty: coach.recommendation?.progression?.targetDifficulty };
   let result = await searchWorkoutLibrary(db, { sport, environment, system: kind, durationMinutes: minutes, durationTolerance: 15, limit: 12 }, context);
   if (!result.workouts.length) result = await searchWorkoutLibrary(db, { sport, environment, system: kind, durationMinutes: minutes, durationTolerance: 45, limit: 12 }, context);
@@ -371,7 +372,7 @@ export function resizeWorkout(base, minutes, { maxDifficulty = null, easyOnly = 
     const best = (builtIn().swim || []).filter(w => w.family === base.family && (!Number.isFinite(Number(maxDifficulty)) || n(w.difficulty, 0) <= Number(maxDifficulty) || w.id === base.id)).sort((a, b) => off(a) - off(b))[0];
     return !best || best.id === base.id ? base : { ...best, resized_from: base.id, resize_notes: [L("stejný typ plavání v délce ", "the same kind of swim at ") + best.duration_minutes + L(" min z knihovny", " min from the library")] };
   }
-  const target = Math.round(clamp(n(minutes, n(base.duration_minutes, 60)), run ? 20 : 30, run ? 240 : 360));
+  const target = Math.round(clamp(n(minutes, n(base.duration_minutes, 60)), run ? 20 : 30, MAX_MINUTES[sport]));
   if (Math.abs(target - n(base.duration_minutes, 0)) <= 1) return base;
   const fits = w => Math.abs(n(w.duration_minutes, 0) - target) <= 2;
   const library = builtIn()[sport] || [];
@@ -603,6 +604,11 @@ export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, con
   let event = buildIntervalsEvent(workout, date, environmentOf(environment), { startTime });
   const existing = await db.prepare("SELECT intervals_event_id,status FROM workout_schedule_links WHERE user_id=? AND intervals_external_id=?").bind(db.userId, event.external_id).first();
   if (existing) {
+    // A race leg saved before the race mark existed gets it now (the watch's race card).
+    if (workout.family === "race" && existing.intervals_event_id) {
+      const item = await readPlanned(db, existing.intervals_event_id);
+      if (item && item.event.race !== true) await setPlannedFields(db, item, { race: true });
+    }
     // Saved before (a retry, or added from the library): the time picked now still applies.
     if (startTime && existing.intervals_event_id) {
       const row = await db.prepare("SELECT start_time FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(db.userId, 'planned:' + existing.intervals_event_id).first();
@@ -615,6 +621,8 @@ export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, con
   event = buildIntervalsEvent(workout, date, environmentOf(environment), { thresholds, startTime });
   const rendered=renderForEnvironment(workout,environmentOf(environment));
   event.moving_time=Math.round(rendered.duration_minutes*60);event.icu_training_load=event.load_target;
+  // A plan's race leg: the watch shows the race day as one card (stays in the app, local-workouts.js).
+  if(workout.family==='race')event.race=true;
   const local=await storeLocalEvent(db,event);
   await db.prepare(`INSERT INTO workout_schedule_links(user_id,sport,workout_id,family,scheduled_date,environment,intervals_external_id,intervals_event_id,status) VALUES(?,?,?,?,?,?,?,?,?)
     ON CONFLICT(user_id,intervals_external_id) DO NOTHING`)

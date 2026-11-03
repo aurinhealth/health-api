@@ -3,6 +3,7 @@ import { personalBaseline } from "./recovery-model.js";
 import { normalizeAvailability, ensureWeekOverrides, weekStartOf, validDay } from './training-availability.js';
 import {trainingHistory,starterPlan} from './training-history.js';
 import { weekWithCalendar } from './calendar-free.js';
+import { MAX_MINUTES } from './workout-model.js';
 // Weekly planner: which sports the athlete wants on which weekdays, the
 // weather location, and the role of each training day (long, quality, easy,
 // recovery, gym upper/full body) so the load is spread sensibly over the week.
@@ -86,14 +87,14 @@ export const usualFor = (prefs, date) => isWeekB(prefs, date) ? { ...prefs, avai
 
 // The athlete's own length or place for one plan chip, keyed "weekday|sport|slot"
 // (slot = the n-th session of that sport that day). Gym has no place to choose.
-export const SESSION_MINUTES = { gym: [30, 45, 60, 75, 90], ride: [30, 45, 60, 75, 90, 120, 150, 180, 240, 300], run: [20, 30, 45, 60, 75, 90, 120], swim: [20, 30, 45, 60, 75, 90] };
+export const SESSION_MINUTES = { gym: [30, 45, 60, 75, 90], ride: [30, 45, 60, 75, 90, 120, 150, 180, 240, 300, 360, 420, 480], run: [20, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300, 360], swim: [20, 30, 45, 60, 75, 90] };
 export function sanitizeSessions(raw, days) {
   const out = {};
   for (const [key, value] of Object.entries(raw && typeof raw === "object" ? raw : {})) {
     const m = String(key).match(/^([0-6])\|(ride|run|swim|gym)\|([0-3])$/);
     if (!m || (days[m[1]] || []).filter(s => s === m[2]).length <= Number(m[3])) continue;
     const minutes = Number(value?.minutes), entry = {};
-    if (Number.isInteger(minutes) && minutes >= 20 && minutes <= 360 && minutes % 5 === 0) entry.minutes = minutes;
+    if (Number.isInteger(minutes) && minutes >= 20 && minutes <= (MAX_MINUTES[m[2]] || MAX_MINUTES.ride) && minutes % 5 === 0) entry.minutes = minutes;
     if (m[2] !== "gym" && ["indoor", "outdoor"].includes(value?.environment)) entry.environment = value.environment;
     if (Object.keys(entry).length) out[key] = entry;
   }
