@@ -20,7 +20,7 @@ flags app pull requests that leave the overview untouched.
 - Beside each phone stands a live demo (`src/site-demos.js`): a piece of the app rebuilt in HTML that
   moves (the dial turns, the rest timer counts down, the coach answers), following the app's own view and
   the sample day. Where a screenshot can't show a step, the phone's screen is built there too (strain, the
-  finished workout, the coach). When a view a demo copies changes in the app, change the demo in the same
+  planned ride, run, swim and brick, the finished workout, the coach). When a view a demo copies changes in the app, change the demo in the same
   pull request.
 - The Apple Watch section (`WATCH` in `src/site-demos.js`) rebuilds the watch app's screens in HTML;
   change it with the watch views. CI also shoots the watch app on the sample day (`watch/` in English,
