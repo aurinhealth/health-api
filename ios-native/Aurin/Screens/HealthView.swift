@@ -30,6 +30,7 @@ struct HealthView: View {
                 }
             }
             .navBarVisibility(.hidden)
+            .duoProbeGeometry("tab")
             .appRoutes()
         }
         .task { await model.refreshIfStale(.health) }
@@ -46,25 +47,65 @@ struct DetailScreen<Content: View>: View {
     @ViewBuilder var content: Content
     @Environment(\.dismiss) private var dismiss
 
+    /// TEMPORARY Duo probe (-duoProbe N): 1 no pinned bar, 2 no background, 3 plain scroll view.
+    private var probe: Int {
+        #if DEBUG
+        UserDefaults.standard.integer(forKey: "duoProbe")
+        #else
+        0
+        #endif
+    }
+
     var body: some View {
-        ZStack {
-            ScreenBackground(glow: glow)
-            PageScroll {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        BackSlot { dismiss() }
-                        Spacer()
-                        if let coach { CoachPill(subject: coach) }
-                    }
-                    content
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 24)
-                .padding(.bottom, 100)
+        let column = VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                BackSlot { dismiss() }
+                Spacer()
+                if let coach { CoachPill(subject: coach) }
+            }
+            content
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 24)
+        .padding(.bottom, 100)
+        let page = ZStack {
+            if probe != 2 { ScreenBackground(glow: glow) }
+            if probe == 3 {
+                ScrollView { column }.duoProbeGeometry("scroll")
+            } else {
+                PageScroll { column }.duoProbeGeometry("scroll")
             }
         }
-        .floatingBack(title: title) { dismiss() }
-        .navBarVisibility(.hidden)
+        .duoProbeGeometry("zstack")
+        if probe == 1 {
+            page.navBarVisibility(.hidden)
+        } else {
+            page.floatingBack(title: title) { dismiss() }.navBarVisibility(.hidden)
+        }
+    }
+}
+
+extension View {
+    /// TEMPORARY Duo probe: the view's size, place and safe area, drawn on it.
+    @ViewBuilder func duoProbeGeometry(_ name: String) -> some View {
+        #if DEBUG
+        if UserDefaults.standard.object(forKey: "duoProbe") != nil {
+            overlay(alignment: name == "zstack" ? .center : .bottom) {
+                GeometryReader { g in
+                    let f = g.frame(in: .global), i = g.safeAreaInsets
+                    Text("\(name) \(Int(f.minX)),\(Int(f.minY)) \(Int(f.width))x\(Int(f.height)) safe t\(Int(i.top)) l\(Int(i.leading)) b\(Int(i.bottom)) r\(Int(i.trailing))")
+                        .font(.system(size: 13, weight: .bold).monospaced())
+                        .foregroundStyle(.white).padding(4).background(.red)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: name == "zstack" ? .center : .bottom)
+                        .padding(.bottom, name == "zstack" ? 0 : 140)
+                }
+            }
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
     }
 }
 

@@ -1,0 +1,77 @@
+# Temporary: why the drill-down pages sit too far up and left on the closed
+# iPhone Duo. Builds the app, opens one detail on the Duo simulator with a few
+# variants (-duoProbe N) and screenshots the outer display. Removed before merge.
+name: Duo probe
+on:
+  push:
+    branches:
+      - claude/project-thread-6xtv9j
+    paths:
+      - ".github/workflows/duo-probe.yml"
+      - "ios-native/**"
+permissions:
+  contents: read
+concurrency:
+  group: duo-probe
+  cancel-in-progress: true
+jobs:
+  probe:
+    runs-on: xcode-27
+    timeout-minutes: 50
+    defaults:
+      run:
+        working-directory: ios-native
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Xcode
+        run: sudo xcode-select -s /Applications/Xcode_27.1.app/Contents/Developer && xcodebuild -version
+      - name: Muscle model
+        env:
+          MUSCLE_MODEL_R2_KEY_ID: ${{ secrets.MUSCLE_MODEL_R2_KEY_ID }}
+          MUSCLE_MODEL_R2_SECRET: ${{ secrets.MUSCLE_MODEL_R2_SECRET }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: ../.github/scripts/fetch-muscle-model.sh
+      - name: Project
+        env:
+          APPLE_TEAM_ID: SIMULATOR
+        run: brew install xcodegen && xcodegen generate
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild -project Aurin.xcodeproj -scheme Aurin -configuration Debug \
+            -destination "generic/platform=iOS Simulator" -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build 2>&1 | grep -E "error:|\*\*" || true
+          ls build/Build/Products/Debug-iphonesimulator/Aurin.app >/dev/null
+      - name: Duo
+        timeout-minutes: 15
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)["devices"]
+          duo = [x for r in sorted(d, reverse=True) if "iOS" in r for x in d[r] if "Duo" in x["name"]]
+          print(duo[0]["udid"])')
+          out="$GITHUB_WORKSPACE/duo"; mkdir -p "$out"
+          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/Aurin.app
+          xcrun simctl ui "$udid" appearance light || true
+          shot() { xcrun simctl io "$udid" screenshot --display=1 "$out/$1.png" || true; }
+          go() {
+            name=$1; shift
+            xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo "$@" -AppleLanguages "(en)" -AppleLocale en_US -language en
+            sleep 8
+            shot "$name"
+          }
+          # The first screenshot after boot is slow; take it before the real ones.
+          xcrun simctl launch "$udid" health.aurin.app -demo; sleep 10; shot warmup
+          go tab-health -tab health -duoProbe 0
+          for n in 0 1 2 3; do go "readiness-$n" -open readiness -duoProbe "$n"; done
+          go gym-0 -open gym/2026-10-08 -duoProbe 0
+          xcrun simctl shutdown "$udid" || true
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: always()
+        with:
+          name: duo-probe
+          path: duo
+          if-no-files-found: ignore
+          retention-days: 7
