@@ -140,7 +140,13 @@ jobs:
           set -euo pipefail
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install --quiet "duckdb==$DUCKDB_VERSION"
-          "$RUNNER_TEMP/venv/bin/python" -I scripts/export-off.py "$RUNNER_TEMP/off.ndjson.gz"
+          # One download of the whole file: Hugging Face answers DuckDB's many
+          # ranged requests from shared runner addresses with HTTP 429.
+          curl -fL --retry 6 --retry-all-errors --retry-delay 30 -C - -A "aurin-food-catalog-refresh" \
+            -o "$RUNNER_TEMP/food.parquet" "https://huggingface.co/datasets/openfoodfacts/product-database/resolve/main/food.parquet"
+          ls -l "$RUNNER_TEMP/food.parquet"
+          "$RUNNER_TEMP/venv/bin/python" -I scripts/export-off.py "$RUNNER_TEMP/off.ndjson.gz" "$RUNNER_TEMP/food.parquet"
+          rm -f "$RUNNER_TEMP/food.parquet"
           ls -l "$RUNNER_TEMP/off.ndjson.gz"
           echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
 

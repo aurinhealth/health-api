@@ -5,7 +5,7 @@ Facts products every 14 days: `.github/workflows/food-catalog-refresh.yml`
 (Wednesdays 02:30 UTC, every second week; also by hand under Actions).
 
 1. `scripts/export-off.py` reads the OFF Parquet export on Hugging Face
-   (`openfoodfacts/product-database`, refreshed daily) with DuckDB and keeps code,
+   (`openfoodfacts/product-database`, refreshed daily; downloaded whole, 8 GB) with DuckDB and keeps code,
    names (main, Czech, English), brand, quantity, serving, unit, sold in Czechia
    and energy and macros per 100 g. About 4.9 million products, 300 MB of gzip
    NDJSON, three to four minutes.

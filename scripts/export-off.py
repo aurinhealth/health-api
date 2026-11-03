@@ -1,9 +1,10 @@
 # Projects the Open Food Facts Parquet export to the few fields the world food
 # catalogue needs, as gzip NDJSON (one product per line):
 #   python -I scripts/export-off.py <out.ndjson.gz> [parquet url or path]
-# Runs in .github/workflows/food-catalog-refresh.yml (pip install duckdb).
-# DuckDB reads only these columns with ranged requests, so about a quarter of
-# the 8 GB file crosses the network. scripts/refresh-world-foods.mjs reads the result.
+# Runs in .github/workflows/food-catalog-refresh.yml (pip install duckdb), which
+# downloads the 8 GB file first: Hugging Face rate-limits the many ranged
+# requests DuckDB makes for a URL (HTTP 429 on GitHub's runners).
+# scripts/refresh-world-foods.mjs reads the result.
 import sys
 import duckdb
 
