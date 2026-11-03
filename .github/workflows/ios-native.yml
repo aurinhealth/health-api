@@ -308,13 +308,13 @@ jobs:
       # simulator shows (duo/). Not a release check: never fails the run, and
       # never holds it either: on main 2026-11-03 it hung for 28 minutes and the
       # whole run hit its time limit before Build for iPhone, so no upload.
-      # Booting and seven screens take 3 to 7 minutes (a slow runner needs 1.5 min
+      # Booting and seven screens take 3 to 9 minutes (a slow runner needs 1.5 min
       # to boot and over 1.5 min to install).
       - name: Screenshot the app on iPhone Duo
         continue-on-error: true
         # Each simctl call below has its own limit too, so a stuck one is named
         # in the log and the rest still runs.
-        timeout-minutes: 10
+        timeout-minutes: 12
         run: |
           # Every simulator off first: the Duo boots with two displays and the
           # earlier steps' iPhone (and its recording) left running starved it.
@@ -360,7 +360,7 @@ jobs:
           displays=""
           shoot() {
             if [ -z "$displays" ]; then
-              local out; out=$(limit 45 xcrun simctl io "$udid" screenshot "$dir/$1.png" 2>&1) || true
+              local out; out=$(limit 90 xcrun simctl io "$udid" screenshot "$dir/$1.png" 2>&1) || true
               displays=$(printf '%s\n' "$out" | sed -nE 's/.*--display=([0-9]+) +([^ ]+).* ([0-9]+x[0-9]+).*/\1:\2-\3/p')
               [ -n "$displays" ] || return 0
               echo "displays: $displays"
@@ -369,6 +369,12 @@ jobs:
               limit 45 xcrun simctl io "$udid" screenshot --display="${d%%:*}" "$dir/$1-${d#*:}.png" || true
             done
           }
+          # The first screenshot after boot is slow (over 45 s): one that is
+          # thrown away, so Today's is not the one that waits.
+          limit 30 xcrun simctl launch "$udid" health.aurin.app -demo || true
+          sleep 7
+          shoot warmup
+          rm -f "$dir"/warmup*.png
           for tab in today training health food; do
             limit 30 xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en || continue
             sleep 7

@@ -30,7 +30,6 @@ struct HealthView: View {
                 }
             }
             .navBarVisibility(.hidden)
-            .duoProbeGeometry("tab")
             .appRoutes()
         }
         .task { await model.refreshIfStale(.health) }
@@ -63,35 +62,9 @@ struct DetailScreen<Content: View>: View {
                 .padding(.top, 24)
                 .padding(.bottom, 100)
             }
-            .duoProbeGeometry("scroll")
         }
-        .duoProbeGeometry("zstack")
         .floatingBack(title: title) { dismiss() }
         .navBarVisibility(.hidden)
-    }
-}
-
-extension View {
-    /// TEMPORARY Duo probe: the view's size, place and safe area, drawn on it.
-    @ViewBuilder func duoProbeGeometry(_ name: String) -> some View {
-        #if DEBUG
-        if UserDefaults.standard.object(forKey: "duoProbe") != nil {
-            overlay(alignment: name == "zstack" ? .center : .bottom) {
-                GeometryReader { g in
-                    let f = g.frame(in: .global), i = g.safeAreaInsets
-                    Text("\(name) \(Int(f.minX)),\(Int(f.minY)) \(Int(f.width))x\(Int(f.height)) safe t\(Int(i.top)) l\(Int(i.leading)) b\(Int(i.bottom)) r\(Int(i.trailing))")
-                        .font(.system(size: 13, weight: .bold).monospaced())
-                        .foregroundStyle(.white).padding(4).background(.red)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: name == "zstack" ? .center : .bottom)
-                        .padding(.bottom, name == "zstack" ? 0 : 140)
-                }
-            }
-        } else {
-            self
-        }
-        #else
-        self
-        #endif
     }
 }
 
