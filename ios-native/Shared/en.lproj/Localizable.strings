@@ -3677,6 +3677,28 @@
 "Začít 7denní zkoušku zdarma" = "Start 7-day free trial";
 "VYZKOUŠEJ 7 DNÍ ZDARMA" = "TRY 7 DAYS FREE";
 "12MĚSÍČNÍ TARIF · VYZKOUŠEJ 7 DNÍ ZDARMA" = "12-MONTH PLAN · TRY 7 DAYS FREE";
+
+/* Settings → Aurin Pro in night violet and the coach message packs (ProSettings.swift) */
+"%lld navíc" = "%lld extra";
+"Zdarma ještě %@" = "%@ left";
+"Platba %lld z %lld" = "Payment %lld of %lld";
+"Další · %@" = "Next · %@";
+"ZPRÁVY KOUČOVI NAVÍC" = "EXTRA COACH MESSAGES";
+"zbývá · nepropadnou" = "left · never expire";
+"Zatím žádné" = "None yet";
+"Použijí se, až dojdou zprávy na tento týden." = "Used only after this week’s messages run out.";
+"Získat další zprávy" = "Get more messages";
+"Další zprávy koučovi" = "More coach messages";
+"Máš %lld navíc. Nepropadnou." = "You have %lld extra. They never expire.";
+"Koupit %lld zpráv" = "Buy %lld messages";
+"TVOJE NÁKUPY" = "YOUR PURCHASES";
+"NEJVÝHODNĚJŠÍ" = "BEST VALUE";
+"+%lld zpráv" = "+%lld messages";
+"Přidáno %lld zpráv" = "%lld messages added";
+"Testovací nákup" = "Test purchase";
+"Získat další" = "Get more";
+"Jednorázové nákupy přes Apple. Zprávy navíc patří tomuto účtu a nejdou převést na nový." = "One-time purchases through Apple. Extra messages belong to this account and can’t be moved to a new one.";
+"Peníze vráceny" = "Refunded";
 "Po uložení se přepočítají tvoje zóny." = "Saving recalculates your zones.";
 "Po uložení se přepočítají tvoje zóny a pošlou do %@." = "Saving recalculates your zones and sends them to %@.";
 "Po uložení se přepočítají tvoje zóny a pošlou do %@ a %@." = "Saving recalculates your zones and sends them to %@ and %@.";

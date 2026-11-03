@@ -43,6 +43,9 @@ struct CoachView: View {
     @State private var allowance: CoachAllowance?
     /// Used up and this conversation can't go on: the card and a dimmed field.
     @State private var usedUp = false
+    /// Packs of extra messages can be bought (the App Store is set up on the server).
+    @State private var packsOnSale = false
+    @State private var morePacks = false
     @FocusState private var focused: Bool
 
     struct Bubble: Identifiable, Equatable {
@@ -87,7 +90,8 @@ struct CoachView: View {
                                            undoAction: { action in Task { await undo(action, in: bubble.id) } },
                                            adjust: { action, chip, date in Task { await adjust(action, chip: chip, date: date, in: bubble.id) } },
                                            logFood: { items, meal in Task { await logFood(items, meal: meal, in: bubble.id) } },
-                                           openPlan: openPlan)
+                                           openPlan: openPlan,
+                                           more: (bubble.note && packsOnSale) ? { morePacks = true } : nil)
                                     .id(bubble.id)
                             }
                             // Until the first words arrive: the coach's bubble with dots and what he is doing.
@@ -141,6 +145,7 @@ struct CoachView: View {
                 }
             }
             .navigationDestination(isPresented: $showMemory) { CoachMemoryView() }
+            .navigationDestination(isPresented: $morePacks) { CoachPacksView() }
         }
         .overlay {
             if showChats {
@@ -157,7 +162,9 @@ struct CoachView: View {
             guard !model.demo, home == nil else { return }
             if let openChat, chatId == nil { await open(openChat) }
             home = try? await model.api.coaches(date: AppModel.localDate(Date()))
-            allowance = (try? await model.api.subscription())?.coachAllowance
+            let status = try? await model.api.subscription()
+            allowance = status?.coachAllowance
+            packsOnSale = status?.checkoutAvailable == true
             if allowance?.usedUp == true { usedUp = true }
         }
     }
@@ -257,6 +264,13 @@ struct CoachView: View {
             Text("Zprávy koučovi na tento týden jsou vyčerpané.").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
             Text(CoachAllowance.comesBack).font(Typo.small).foregroundStyle(Palette.muted)
+            if packsOnSale {
+                Button { morePacks = true } label: {
+                    Text("Získat další zprávy").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                        .frame(maxWidth: .infinity).frame(height: 46).background(Palette.button, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
@@ -631,6 +645,8 @@ struct BubbleView: View {
     var adjust: (CoachAction, String, String?) -> Void = { _, _, _ in }
     var logFood: ([(product: FoodProduct, amount: Double, meal: String)]?, String) -> Void = { _, _ in }
     var openPlan: () -> Void = {}
+    /// On the line about the week's messages: "Získat další" opens the packs.
+    var more: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: bubble.mine ? .trailing : .leading, spacing: 8) {
@@ -646,8 +662,14 @@ struct BubbleView: View {
                     .background(Palette.card, in: Capsule())
             }
             if bubble.note {
-                Text(bubble.text).font(Typo.caption).foregroundStyle(Palette.muted)
-                    .multilineTextAlignment(.center).frame(maxWidth: .infinity)
+                HStack(spacing: 6) {
+                    Text(bubble.text).font(Typo.caption).foregroundStyle(Palette.muted)
+                        .multilineTextAlignment(.center)
+                    if let more {
+                        Button("Získat další", action: more).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.green)
+                    }
+                }
+                .frame(maxWidth: .infinity)
             } else if !bubble.text.isEmpty {
                 if bubble.mine {
                     Text(bubble.text)

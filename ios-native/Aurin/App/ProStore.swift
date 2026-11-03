@@ -46,6 +46,18 @@ final class ProStore {
     }
     /// An Aurin Pro subscription is active on this Apple ID.
     private(set) var entitled = false
+    /// The free week running on this Apple ID: from the purchase to its end.
+    private(set) var freeWeek: DateInterval?
+    /// The yearly plan paid monthly: payment 3 of 12, the next one and the end.
+    private(set) var payments: Payments?
+    struct Payments: Equatable {
+        let number: Int
+        let total: Int
+        /// When the next payment is due (the end of this month's period).
+        let next: Date?
+        /// The end of the 12 months.
+        let ends: Date
+    }
     private(set) var purchasing = false
     /// Plans the day-5 reminder when a free week starts (the tests plan nothing).
     @ObservationIgnored var trialReminder: @MainActor (Date, String) async -> Void = { await ProStore.remindTrialEnd(purchased: $0, price: $1) }
@@ -138,13 +150,19 @@ final class ProStore {
     /// What is active now; also sends it to the server again, in case the
     /// last time had no signal.
     func refresh() async {
-        var active = false
+        var active = false, week: DateInterval?, paid: Payments?
         for await result in Transaction.currentEntitlements {
             guard case .verified(let transaction) = result, Self.ids.contains(transaction.productID) else { continue }
-            if transaction.revocationDate == nil { active = true }
+            if transaction.revocationDate == nil {
+                active = true
+                week = week ?? Self.freeWeek(transaction)
+                paid = paid ?? Self.payments(transaction)
+            }
             await send(result, transaction)
         }
         entitled = active
+        freeWeek = week
+        payments = paid
         // The renewal turned off before the free week ended: no reminder that it ends.
         if let statuses = try? await products[Self.yearlyID]?.subscription?.status,
            statuses.contains(where: { if case .verified(let info) = $0.renewalInfo { return !info.willAutoRenew } else { return false } }) {
@@ -219,6 +237,21 @@ final class ProStore {
     private static func presentPurchase(_ product: Product, options: Set<Product.PurchaseOption>) async throws -> Product.PurchaseResult {
         if let scene = anchorScene() { return try await product.purchase(confirmIn: scene, options: options) }
         return try await product.purchase(options: options)
+    }
+
+    /// The free week of a transaction still in it.
+    nonisolated static func freeWeek(_ transaction: Transaction) -> DateInterval? {
+        guard transaction.offer?.type == .introductory, transaction.offer?.paymentMode == .freeTrial,
+              let end = transaction.expirationDate, end > transaction.purchaseDate else { return nil }
+        return DateInterval(start: transaction.purchaseDate, end: end)
+    }
+
+    /// Where a yearly plan paid monthly is in its 12 payments (iOS 26.4 and later).
+    nonisolated static func payments(_ transaction: Transaction) -> Payments? {
+        guard #available(iOS 26.4, *), let info = transaction.commitmentInfo, info.totalBillingPeriods > 0 else { return nil }
+        return Payments(number: Int(info.billingPeriodNumber), total: Int(info.totalBillingPeriods),
+                        next: Int(info.billingPeriodNumber) < Int(info.totalBillingPeriods) ? transaction.expirationDate : nil,
+                        ends: info.expirationDate)
     }
 
     /// The window scene the purchase sheet appears over: the one in front,
