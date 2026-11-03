@@ -145,6 +145,7 @@ import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, p
 import { coachNudge, swapOffer, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
 import { waterNudge } from "./water-goal.js";
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
+import { cachedPage } from './page-cache.js';
 import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, L } from "./lang.js";
 import { appUpdateRequired } from "./app-version.js";
 import { compactOldData } from "./heart-rate-compaction.js";
@@ -473,7 +474,7 @@ const worker = {
     // Static pages stay independent of storage availability.
     // Crawlers and link checkers ask with HEAD too; a 401 there keeps the site out of search.
     if (STATIC_PATHS.has(url.pathname) && (request.method === 'GET' || request.method === 'HEAD')) {
-      const page = await staticRoute(url, request, env);
+      const page = await cachedPage(url, env, ctx, () => staticRoute(url, request, env));
       return request.method === 'HEAD' ? new Response(null, page) : page;
     }
     try { await ensureTenancy(env.DB, env, { request }); }
