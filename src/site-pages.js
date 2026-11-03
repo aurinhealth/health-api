@@ -274,6 +274,19 @@ main:focus{outline:none}
 .privacy .more{display:inline-flex;align-items:center;gap:8px;margin-top:24px;color:var(--primary-text);font-weight:600;text-decoration:none}
 .privacy .more:hover{text-decoration:underline}
 .privacy .more .icon{width:16px;height:16px}
+/* Price: what stays free and what Pro adds, as Settings → Aurin Pro lists them, side by side; one call under them. */
+.price{padding:150px 0 0}
+.price .plans{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin-top:40px}
+.plan{padding:32px 32px 28px;border-radius:var(--r-22);background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)}
+.plan.pro{background:color-mix(in srgb,var(--green) 8%,var(--panel));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--green) 35%,var(--line))}
+.plan .pk{font-size:var(--fs-12);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}.plan.pro .pk{color:var(--green)}
+.plan h3{margin:10px 0 0;font:400 var(--fs-44)/1.1 var(--serif);letter-spacing:-.015em}.plan h3 small{font:500 var(--fs-17) var(--sans);color:var(--sec)}
+.plan .pl{margin:8px 0 0;color:var(--sec)}
+.plan ul{list-style:none;margin:20px 0 0;padding:0;display:grid;gap:10px}
+.plan li{position:relative;padding-left:20px}.plan li::before{content:"";position:absolute;left:2px;top:.62em;width:7px;height:7px;border-radius:50%;background:var(--green)}
+.plan li ul{margin:8px 0 2px;gap:6px}.plan li li{color:var(--sec);font-size:var(--fs-14)}.plan li li::before{width:5px;height:5px;background:var(--muted)}
+.plan .pn{margin:22px 0 0;font-size:var(--fs-14);color:var(--muted)}
+.price .go-join{height:48px;margin-top:32px;padding:0 24px;font-size:var(--fs-17)}
 .card{background:var(--panel);border-radius:var(--r-22);padding:24px;box-shadow:var(--shadow-card)}
 /* The Google Health disclosure, when it is on the homepage (GOOGLE_DISCLOSURE_ON_HOME), folded under one line
    (Petr 2026-11-03): its text is in the page, word for word, and opens on a tap without JS. */
@@ -411,7 +424,8 @@ main:focus{outline:none}
   .ac{grid-template-columns:1fr;gap:32px;justify-items:center}.opener .head{justify-self:stretch}
   .opener{padding-top:110px}.chapter.opens{padding-top:64px}
   .sun{margin:-16px auto -8px}
-  .muscles,.privacy,#faq{padding-top:110px}
+  .muscles,.privacy,.price,#faq{padding-top:110px}
+  .price .plans{grid-template-columns:1fr}
   .faq .side{position:static}
 }
 @media (max-width:560px){
@@ -442,6 +456,7 @@ main:focus{outline:none}
   .part,.flip .part{margin-top:-310px}
   /* A one-thing card only touches the phone's lower edge: the screen above it stays whole. */
   .part:has(>.one),.flip .part:has(>.one){margin-top:-56px}
+  .plan{padding:24px 22px 22px}.plan h3{font-size:var(--fs-28)}
   .site-foot .top{grid-template-columns:1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
 }
 `;
@@ -728,6 +743,15 @@ export const GOOGLE_DISCLOSURE_ON_HOME = false;
 // The watches and rings the "Works with" row under the form names: Apple Watch through Apple Health, Fitbit and
 // Pixel Watch through Google Health, the Ultrahuman Ring and WHOOP directly. Aurin does not support Garmin.
 export const WEARABLES = ['Apple Watch', 'Fitbit', 'Pixel Watch', 'WHOOP', 'Ultrahuman'];
+// Aurin Pro's US prices in App Store Connect (Petr, 2026-11-02); the App Store shows each country its own.
+export const PRO_PRICE = {month: '$6.99', year: '$59.99'};
+// What Aurin has for everyone and what Pro adds, as Settings → Aurin Pro lists them (ProContents in
+// SubscriptionView.swift, in the app's English). A Pro group with items lists them under its title.
+export const PRO_CONTENTS = {
+  free: ['Readiness, sleep and strain', 'Cycle tracking', 'Calorie target and macros', 'Food log, barcode and label', 'Gym log and exercise technique', 'A starter plan for every sport'],
+  pro: [['Aurin Intelligence', ['A coach just for you', 'Plan changes in your own words', 'Workout, day and week reviews', 'Food from a photo, words or the web', 'Gym equipment from a photo or web']],
+    ['Adaptive training plans', ['Plans for races and goals', 'Shaped by your recovery and progress', 'Fits the time you have each day']],
+    ['Vitamins and minerals', []], ['Own macros and nutrient targets', []]]};
 // WHOOP and Ultrahuman show their own wordmark, unaltered, from their brand files (WHOOP's developer design guidelines,
 // Ultrahuman's site), black on the light page and white on the dark one; Petr's call on 2026-11-03 while both
 // consent requests are open. Apple and Google allow no device wordmark without a licence, so those stay names.
@@ -861,7 +885,7 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
   const faq = [
     ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit or Pixel Watch. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
     ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
-    ['What does it cost?', 'Nothing during testing. After the release, Aurin Intelligence (the coach, food from a photo, words or the web, and the reviews), every training plan beyond the free starter plan in each sport, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: $6.99 a month or $59.99 a year with the first week free, shown in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.'],
+    ['What does it cost?', `Nothing during testing. After the release, Aurin Intelligence (the coach, food from a photo, words or the web, and the reviews), every training plan beyond the free starter plan in each sport, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: ${PRO_PRICE.month} a month or ${PRO_PRICE.year} a year with the first week free, shown in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.`],
     ['Does Aurin know my cycle?', 'If you turn on cycle tracking in Settings → Cycle, yes. Your readiness then weighs your resting heart rate and temperature in the days before your period against your own days in that phase, and, if you allow it, the coach knows it too.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from, and under Health data see for each type where Aurin reads it from and sends it to, with a switch for each.'],
     ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
@@ -924,6 +948,18 @@ ${actNav}
 <div class="promise reveal">${LOCK}<h2 class="big">Your data works only for you.</h2><p class="sub">We never sell it or use it for ads. Aurin reads only what you allow, and you can delete all of it in Settings at any time.</p>
 <a class="more" href="/privacy">Read the privacy policy <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a></div>
 ${GOOGLE_DISCLOSURE_ON_HOME ? googleDisclosure() : ''}
+</div></section>
+
+<section id="cena" class="price"><div class="wrap">
+<div class="head reveal"><div class="eyebrow">Price</div><h2 class="big">Free while we test.</h2></div>
+<div class="plans">
+<div class="plan reveal"><div class="pk">Aurin</div><h3>Free</h3><p class="pl">Now and after the release.</p>
+<ul>${PRO_CONTENTS.free.map(x => `<li>${x}</li>`).join('')}</ul></div>
+<div class="plan pro reveal"><div class="pk">Aurin Pro</div><h3>${PRO_PRICE.month}<small> a month</small></h3><p class="pl">or ${PRO_PRICE.year} a year with the first week free, once Aurin is in the App Store.</p>
+<ul>${PRO_CONTENTS.pro.map(([t, items]) => `<li>${t}${items.length ? `<ul>${items.map(x => `<li>${x}</li>`).join('')}</ul>` : ''}</li>`).join('')}</ul>
+<p class="pn">Prices vary by country. The App Store shows yours before you buy.</p></div>
+</div>
+<a class="nav-cta go-join" href="#join">Get early access</a>
 </div></section>
 
 <section id="faq"><div class="wrap faq">

@@ -129,7 +129,7 @@ wide (60-70 characters). Headlines are one short sentence that ends with a full 
   take turns while the chapter is in view (a thin bar fills under the active step) until one is picked. On
   phones it stacks: headline, phone, steps.
 - Vary the rhythm: the Works with row right under the form (the watches and rings in one row: names, WHOOP and Ultrahuman as their own wordmarks),
-  chapters, the muscle figure (split, figure on the right), the privacy promise (the welcome's lock, centred), questions (heading left, answers right). The privacy
+  chapters, the muscle figure (split, figure on the right), the privacy promise (the welcome's lock, centred), the price (Free and Aurin Pro side by side, the lists of Settings → Aurin Pro, the US prices from `PRO_PRICE`), questions (heading left, answers right). The privacy
   promise and the final call to action are centred.
 - Never a row of three identical feature cards.
 
