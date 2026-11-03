@@ -1,0 +1,38 @@
+# Temporary: how the iPhone Duo simulator opens and closes (no app build).
+name: Duo probe
+on:
+  push:
+    branches:
+      - claude/project-thread-6xtv9j
+    paths:
+      - ".github/workflows/duo-probe.yml"
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - name: Probe
+        run: |
+          sudo xcode-select -s /Applications/Xcode_27.1.app/Contents/Developer
+          xcodebuild -version
+          xcrun simctl help | sed -n 1,80p
+          echo "== ui"; xcrun simctl help ui || true
+          echo "== io"; xcrun simctl help io || true
+          echo "== device type"
+          dt=$(find /Applications/Xcode_27.1.app /Library/Developer -maxdepth 14 -name "iPhone Duo.simdevicetype" 2>/dev/null | head -3); echo "$dt"
+          echo "$dt" | while read -r d; do [ -n "$d" ] && find "$d" -name "*.plist" | while read -r p; do echo "--- $p"; plutil -p "$p" | head -150; done; done
+          echo "== strings"
+          for b in "$(xcrun -f simctl)" /Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/CoreSimulator; do
+            echo "--- $b"; strings "$b" 2>/dev/null | grep -iE "fold|posture|hinge|closed|display ?mode" | sort -u | head -80
+          done
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)["devices"]
+          print(next(x["udid"] for r in d for x in d[r] if "Duo" in x["name"]))')
+          xcrun simctl boot "$udid"; xcrun simctl bootstatus "$udid" -b >/dev/null
+          for c in "ui $udid posture" "ui $udid fold" "ui $udid hinge" "ui $udid posture open" "ui $udid posture unfolded" "ui $udid fold open" "ui $udid unfold" "io $udid fold" "io $udid posture"; do
+            echo "== simctl $c"; xcrun simctl $c 2>&1 | head -15 || true
+          done
+          xcrun simctl io "$udid" screenshot /tmp/x.png 2>&1 | head -8 || true
