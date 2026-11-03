@@ -1254,7 +1254,7 @@
 "cena bude oznámena" = "price to be announced";
 "Nejvýhodnější" = "Best value";
 "AI je součástí Aurin Pro" = "AI is part of Aurin Pro";
-"Kouč, jídlo z fotky a hodnocení tréninků patří do Aurin Pro. Zápisy, přehledy a plány zůstávají zdarma." = "The coach, food from a photo and workout reviews are part of Aurin Pro. Logging, overviews and plans stay free.";
+"Kouč, jídlo z fotky a hodnocení tréninků patří do Aurin Pro. Zápisy a přehledy zůstávají zdarma." = "The coach, food from a photo and workout reviews are part of Aurin Pro. Logging and overviews stay free.";
 "Zobrazit Aurin Pro" = "See Aurin Pro";
 "Další možnosti" = "More options";
 "1 490 Kč / rok" = "CZK 1,490 / year";
@@ -3708,3 +3708,31 @@
 "Ještě cvičím" = "Keep going";
 "Pořád cvičíš?" = "Still working out?";
 "Žádná série 10 minut. Ukonči trénink, nebo pokračuj." = "No set for 10 min. End the workout or keep going.";
+
+/* Settings → Aurin Pro: what Aurin has for free and what Pro adds; the offer's coach and plan */
+"Připravenost, spánek a zátěž" = "Readiness, sleep and strain";
+"Sledování cyklu" = "Cycle tracking";
+"Zápis jídla, čárový kód a etiketa" = "Food log, barcode and label";
+"Zápis posilovny a technika cviků" = "Gym log and exercise technique";
+"Úvodní plán pro každý sport" = "A starter plan for every sport";
+"Aurin Intelligence" = "Aurin Intelligence";
+"Kouč jen pro tebe" = "A coach just for you";
+"Změny plánu vlastními slovy" = "Plan changes in your own words";
+"Hodnocení tréninku, dne a týdne" = "Workout, day and week reviews";
+"Jídlo z fotky, slov nebo webu" = "Food from a photo, words or the web";
+"Vybavení posilovny z fotky nebo webu" = "Gym equipment from a photo or web";
+"Adaptivní tréninkové plány" = "Adaptive training plans";
+"Plány na závody a cíle" = "Plans for races and goals";
+"Podle tvé regenerace a pokroku" = "Shaped by your recovery and progress";
+"Podle času, který každý den máš" = "Fits the time you have each day";
+"Vitamíny a minerály" = "Vitamins and minerals";
+"Vlastní makra a cíle živin" = "Own macros and nutrient targets";
+"Všechno je odemčené." = "Everything is unlocked.";
+"Během pilotu je všechno zdarma." = "Everything is free during the pilot.";
+"Zatím nemáš Pro." = "You don’t have Pro yet.";
+"TAKÉ V CENĚ" = "ALSO INCLUDED";
+"S AURIN PRO" = "WITH AURIN PRO";
+"v Aurin Pro" = "in Aurin Pro";
+"7 dní zdarma na 12měsíčním tarifu" = "7 days free on the 12-month plan";
+"Podle tvé regenerace a pokroku." = "Shaped by your recovery and progress.";
+"Vyfoť talíř a hodnoty se doplní." = "Snap your plate and the values fill in.";

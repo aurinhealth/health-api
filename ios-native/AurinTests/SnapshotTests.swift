@@ -837,8 +837,11 @@ final class SnapshotTests: XCTestCase {
         monthly.payments = ProStore.Payments(number: 3, total: 12, next: day(2, 5, 2027), ends: day(11, 5, 2027))
         monthly.allowance = low
         try render("pro-settings-paid-monthly", height: 1250, window: true) { ProPage(state: monthly, calendar: calendar) }
-        let free = ProPageState(pilot: true, plans: ProPlans.main)
-        try render("pro-settings-free", height: 950, window: true) { ProPage(state: free, calendar: calendar) }
+        // Without Pro (the list with sparkles, the way to the offer) and during the pilot (all ticked).
+        let free = ProPageState(loaded: true, trial: true)
+        try render("pro-settings-free", height: 1150, window: true) { ProPage(state: free, calendar: calendar) }
+        let pilot = ProPageState(unlocked: true, pilot: true, loaded: true)
+        try render("pro-settings-pilot", height: 1150, window: true) { ProPage(state: pilot, calendar: calendar) }
         let purchases = [
             CoachPacks.Purchase(productId: "health.aurin.app.coach.messages100", messages: 100, counted: true, environment: "Production", price: 7.99, currency: "EUR", purchasedAt: "2026-11-02T00:12:00.000Z", refunded: false),
             CoachPacks.Purchase(productId: "health.aurin.app.coach.messages40", messages: 40, counted: true, environment: "Production", price: 3.99, currency: "EUR", purchasedAt: "2026-10-12T10:00:00Z", refunded: false),
