@@ -307,8 +307,27 @@ jobs:
       # simulator shows (duo/). Not a release check: never fails the run.
       - name: Screenshot the app on iPhone Duo
         continue-on-error: true
+        # Booting the Duo and seven screens take about 3 minutes; each simctl call
+        # below has its own limit too, so a stuck one is named in the log and the
+        # rest still runs.
+        timeout-minutes: 8
         run: |
-          xcrun simctl shutdown "${{ steps.sim.outputs.udid }}" || true
+          # Every simulator off first: the Duo boots with two displays and the
+          # earlier steps' iPhone (and its recording) left running starved it.
+          xcrun simctl shutdown all || true
+          # A simctl call that does not end in $1 seconds is stopped and named.
+          # The guard writes only to fd 3 (the log), never to a $(...) it runs in,
+          # so a capture does not wait for its sleep.
+          exec 3>&2
+          limit() {
+            local secs=$1; shift
+            echo "$(date +%H:%M:%S) $*" >&3
+            "$@" & local pid=$!
+            ( sleep "$secs"; kill -9 "$pid" 2>/dev/null && echo "::warning::Stopped after ${secs}s: $*" >&3 ) >/dev/null 2>&1 & local guard=$!
+            wait "$pid"; local status=$?
+            kill "$guard" 2>/dev/null; wait "$guard" 2>/dev/null
+            return $status
+          }
           udid=$(xcrun simctl list devices available -j | python3 -c '
           import json, sys
           devices = json.load(sys.stdin)["devices"]
@@ -324,34 +343,33 @@ jobs:
           fi
           dir="$GITHUB_WORKSPACE/screens/duo"
           mkdir -p "$dir"
-          xcrun simctl boot "$udid" || true
-          xcrun simctl bootstatus "$udid" -b
-          xcrun simctl io "$udid" enumerate || true
-          xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/Aurin.app
-          xcrun simctl ui "$udid" appearance light
-          xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
+          limit 60 xcrun simctl boot "$udid" || true
+          limit 180 xcrun simctl bootstatus "$udid" -b || exit 0
+          limit 90 xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/Aurin.app || exit 0
+          limit 30 xcrun simctl ui "$udid" appearance light || true
+          limit 30 xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
           # The Duo simulator has two displays (outer LCD and the inner, unfolded
           # LCD-1); a plain screenshot then asks to choose. Take each one: the
           # file name says which display and its size.
-          displays=$(xcrun simctl io "$udid" screenshot "$RUNNER_TEMP/probe.png" 2>&1 | sed -nE 's/.*--display=([0-9]+) +([^ ]+).* ([0-9]+x[0-9]+).*/\1:\2-\3/p')
+          displays=$(limit 30 xcrun simctl io "$udid" screenshot "$RUNNER_TEMP/probe.png" 2>&1 | sed -nE 's/.*--display=([0-9]+) +([^ ]+).* ([0-9]+x[0-9]+).*/\1:\2-\3/p')
           echo "displays: ${displays:-one}"
           shoot() {
-            if [ -z "$displays" ]; then xcrun simctl io "$udid" screenshot "$dir/$1.png"; return; fi
+            if [ -z "$displays" ]; then limit 30 xcrun simctl io "$udid" screenshot "$dir/$1.png" || true; return; fi
             for d in $displays; do
-              xcrun simctl io "$udid" screenshot --display="${d%%:*}" "$dir/$1-${d#*:}.png" || true
+              limit 30 xcrun simctl io "$udid" screenshot --display="${d%%:*}" "$dir/$1-${d#*:}.png" || true
             done
           }
           for tab in today training health food; do
-            xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en
+            limit 30 xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en || continue
             sleep 7
             shoot "$tab"
           done
           for route in readiness muscles gym/2026-10-08; do
-            xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -open "$route" -AppleLanguages "(en)" -AppleLocale en_US -language en
+            limit 30 xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -open "$route" -AppleLanguages "(en)" -AppleLocale en_US -language en || continue
             sleep 7
             shoot "${route%%/*}"
           done
-          xcrun simctl shutdown "$udid" || true
+          limit 60 xcrun simctl shutdown "$udid" || true
 
       # Unsigned: Sideloadly signs it with the user's Apple ID.
       - name: Build for iPhone
