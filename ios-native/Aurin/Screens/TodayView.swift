@@ -146,12 +146,12 @@ struct TodayContent: View {
         }
     }
 
-    /// The key numbers, today's workout, weather and the coach. In a wide window
-    /// the coach's advice comes right under the numbers, so both show without scrolling.
+    /// The key numbers, today's workout (the activity of the day), weather and the coach.
+    /// In a wide window they head the right column, the numbers and the workout's Start
+    /// seen without scrolling (Petr, 2026-11-03).
     @ViewBuilder private var dayNumbers: some View {
         KeyNumbers(today: today)
             .padding(.top, wide ? 0 : 28)
-        if wide { coachText(top: 12) }
 
         if selectedDate == nil {
             // Today's workout with Start, and the activity of the day when it
@@ -184,15 +184,11 @@ struct TodayContent: View {
                             openCoach: openCoach, top: today.trainingPlan == nil ? 24 : 10)
         }
 
-        if !wide { coachText(top: 32) }
-    }
-
-    /// An earlier day shows only its data: the coach speaks about today.
-    @ViewBuilder private func coachText(top: CGFloat) -> some View {
+        // An earlier day shows only its data: the coach speaks about today.
         if selectedDate == nil {
             CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation,
                           tip: RecoveryTipRows.hasTip(today, selectedDate: selectedDate) ? AnyView(RecoveryTipRows(today: today)) : nil)
-                .padding(.top, top)
+                .padding(.top, 32)
         }
     }
 }
