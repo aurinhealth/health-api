@@ -19,7 +19,7 @@ palette changes, change `design-system.js` and this file together.
    one phone. The steps inside a section carry the detail.
 3. **Colour means a part of the app.** The page itself is paper and ink, and green is the site's one accent: eyebrows,
    step numbers, links, labels, focus. Amber, indigo and rust appear only in data: the app's screens and demos,
-   the numbers they carry (sleep 7:12 in indigo), the bars, dots and lines of a chart or the connections. Never
+   the numbers they carry (sleep 7:12 in indigo), the bars, dots and lines of a chart. Never
    on link text, eyebrows or labels.
 4. **Warm, not clinical.** Paper instead of white, serif headlines, soft tinted glows. Never cold grey, never
    neon on black.
@@ -35,7 +35,7 @@ palette changes, change `design-system.js` and this file together.
 |---|---|---|
 | `--bg` | #F3EFE8 | Page background (the app's paper) |
 | `--panel` | #FBFAF7 | Cards, the nav pill, the waitlist field, lifted app parts |
-| `--panel2` | #EAE5DC | Recessed areas (the connections hub) |
+| `--panel2` | #EAE5DC | Recessed areas |
 | `--text` | #1B1A17 | Headlines and body |
 | `--sec` | #3B3832 | Secondary body text in long passages |
 | `--muted` | #6D6A63 | Sub-lines, captions, nav links (about 4.7:1 on paper) |
@@ -124,19 +124,19 @@ wide (60-70 characters). Headlines are one short sentence that ends with a full 
   other, sides alternating. Each step shows its own screen and lifts a piece of it beside the phone; steps
   take turns while the chapter is in view (a thin bar fills under the active step) until one is picked. On
   phones it stacks: headline, phone, steps.
-- Vary the rhythm: chapters, the muscle figure (split, figure on the right), the connections (a recessed box
-  with a row of logos), the privacy promise (the welcome's lock, centred), questions (heading left, answers right). The privacy
+- Vary the rhythm: the Works with row under the hero (the services' names in one row, Google Health as its colour
+  logo), chapters, the muscle figure (split, figure on the right), the privacy promise (the welcome's lock, centred), questions (heading left, answers right). The privacy
   promise and the final call to action are centred.
 - Never a row of three identical feature cards.
 
 ## Shape and depth
 
 - **Corners** (`--r-*`): 8 (fields inside cards, small tiles), 12 (thumbnails),
-  16 (bubbles, the connection nodes, inner panels), 22 (the app's cards, glass cards, lifted app parts, big boxes:
-  the connections, the panels, the muscle card), `--r-pill` (buttons, nav, chips, the kicker). The phone keeps its
+  16 (bubbles, inner panels), 22 (the app's cards, glass cards, lifted app parts, big boxes:
+  the panels, the muscle card, the Google Health disclosure), `--r-pill` (buttons, nav, chips, the kicker). The phone keeps its
   real 58px corner, thin bars 2px.
 - **Two shadows**, warm (brown-tinted, never pure black):
-  - `--shadow-card`: a card resting on the paper (a 1px `--line` ring and a hairline shadow). Panels, chips that travel the connections, the picked service.
+  - `--shadow-card`: a card resting on the paper (a 1px `--line` ring and a hairline shadow). Panels, the Google Health disclosure.
   - `--shadow-float`: anything floating over the page: the nav, the progress pill, the hero's glass numbers, the
     lifted app parts, the muscle bubble and card, the waitlist field (with a `--line` ring), the lock.
   - The phone keeps its own titanium shadow; the ink pill and glows are not shadows.
@@ -181,9 +181,6 @@ wide (60-70 characters). Headlines are one short sentence that ends with a full 
 - **Live demo:** a card 380px wide, 22px radius, `--panel`, floating shadow, overlapping the phone's edge. It
   plays its step's timeline while the chapter is in view and shows its last frame with reduced motion. Numbers
   in Instrument Serif (the app's number face, `/site/fonts/instrument-serif.woff2`), sentences in Newsreader.
-- **Connections flow:** services on the left send chips (sleep, HRV, workouts…) along curves into the Aurin
-  mark, and what Aurin sends back runs out to the services on the right. Services take turns being lit; the
-  panel below lists everything for the lit one.
 - **Glass metric card (hero only):** label in meta `--muted`, value in metric style, change in 13px 600 coloured
   by meaning (green up, rust down, indigo for sleep).
 - **Step:** "01" in `--tone`, a Newsreader title, one or two sentences of body; inactive steps show only

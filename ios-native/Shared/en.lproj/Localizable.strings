@@ -3708,6 +3708,11 @@
 "Ještě cvičím" = "Keep going";
 "Pořád cvičíš?" = "Still working out?";
 "Žádná série 10 minut. Ukonči trénink, nebo pokračuj." = "No set for 10 min. End the workout or keep going.";
+"Odložit" = "Snooze";
+"Odloženo" = "Snoozed";
+"Odložit budík" = "Snooze alarm";
+"Vypnout budík" = "Stop alarm";
+"Délka odložení" = "Snooze Duration";
 
 /* Settings → Aurin Pro: what Aurin has for free and what Pro adds; the offer's coach and plan */
 "Připravenost, spánek a zátěž" = "Readiness, sleep and strain";

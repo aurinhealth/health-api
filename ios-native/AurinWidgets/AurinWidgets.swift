@@ -22,6 +22,12 @@ struct AurinWidgetBundle: WidgetBundle {
             StartGymControl()
             SkipRestControl()
         }
+        #if canImport(AlarmKit)
+        // The ringing alarm from Nastavení → Spánek, also in the Dynamic Island.
+        if #available(iOS 26.0, *) {
+            WakeAlarmWidget()
+        }
+        #endif
     }
 }
 

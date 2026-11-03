@@ -44,6 +44,11 @@ struct SleepSettingsForm: View {
     @State private var original: JSONObject = [:]
     @State private var saved = false
     @AppStorage("systemAlarm") private var systemAlarm = false
+    @AppStorage(SystemAlarm.snoozeKey) private var snoozeOn = true
+    @AppStorage(SystemAlarm.snoozeMinutesKey) private var snoozeMinutes = 5
+    /// The row whose wheel is open, as the Clock app's: "work", "weekend" or "snooze".
+    @State private var open: String?
+    @State private var snoozeTask: Task<Void, Never>?
     @State private var alarmNote: String?
     @State private var alarmOK = false
     @State private var plannerSaving = false
@@ -77,14 +82,31 @@ struct SleepSettingsForm: View {
             }
 
             SettingsGroup(title: "Budík") {
-                alarmRow("Pracovní dny", subtitle: "pondělí až pátek", isOn: $workAlarm, time: $workTime)
+                alarmRow("Pracovní dny", subtitle: "pondělí až pátek", isOn: $workAlarm, time: $workTime, key: "work")
                 SettingsDivider()
-                alarmRow("Víkend", subtitle: "sobota a neděle", isOn: $weekendAlarm, time: $weekendTime)
+                alarmRow("Víkend", subtitle: "sobota a neděle", isOn: $weekendAlarm, time: $weekendTime, key: "weekend")
             }
 
             if SystemAlarm.supported {
                 SettingsGroup {
-                    SettingsToggle(title: "Budit mě v iPhonu", isOn: $systemAlarm)
+                    SettingsToggle(title: "Budit mě v iPhonu", isOn: $systemAlarm.animation(.easeOut(duration: 0.2)))
+                    // Snooze and its length, as the Clock app's alarm (iOS 26).
+                    if systemAlarm {
+                        SettingsDivider()
+                        SettingsToggle(title: "Odložit", isOn: $snoozeOn.animation(.easeOut(duration: 0.2)))
+                        if snoozeOn {
+                            SettingsDivider()
+                            wheelRow("Délka odložení", value: "\(snoozeMinutes) min", key: "snooze")
+                            if open == "snooze" {
+                                Picker("Délka odložení", selection: $snoozeMinutes) {
+                                    ForEach(Array(SystemAlarm.snoozeRange), id: \.self) { Text(verbatim: "\($0) min").tag($0) }
+                                }
+                                .pickerStyle(.wheel)
+                                .labelsHidden()
+                                .padding(.horizontal, 16).padding(.bottom, 8)
+                            }
+                        }
+                    }
                 }
                 if let alarmNote {
                     Text(alarmNote).font(Typo.small).foregroundStyle(alarmOK ? Palette.green : Palette.rust)
@@ -104,18 +126,58 @@ struct SleepSettingsForm: View {
         .onAppear(perform: fill)
         .task { if model.health == nil { await model.refreshHealth() } }
         .onChange(of: systemAlarm) { _, on in Task { await syncAlarm(on) } }
+        .onChange(of: snoozeOn) { _, _ in snoozeChanged() }
+        .onChange(of: snoozeMinutes) { _, _ in snoozeChanged() }
     }
 
-    private func alarmRow(_ title: String, subtitle: String, isOn: Binding<Bool>, time: Binding<Date>) -> some View {
+    private func alarmRow(_ title: String, subtitle: String, isOn: Binding<Bool>, time: Binding<Date>, key: String) -> some View {
         VStack(spacing: 0) {
             SettingsToggle(title: title, subtitle: subtitle, isOn: isOn.animation(.easeOut(duration: 0.2)))
             if isOn.wrappedValue {
-                DatePicker("Vstávám v", selection: time, displayedComponents: .hourAndMinute)
-                    .environment(\.locale, Fmt.locale)
-                    .font(.body)
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: 50)
+                wheelRow("Vstávám v", value: ClockText.format(Self.text(time.wrappedValue)), key: key)
+                if open == key {
+                    DatePicker("Vstávám v", selection: time, displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.wheel)
+                        .labelsHidden()
+                        .environment(\.locale, Self.pickerLocale)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 16).padding(.bottom, 8)
+                }
             }
+        }
+    }
+
+    /// A row with its value in amber; a tap opens its wheel below (and closes any other).
+    private func wheelRow(_ title: String, value: String, key: String) -> some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.2)) { open = open == key ? nil : key }
+        } label: {
+            HStack {
+                Text(title).font(.body).foregroundStyle(Palette.ink)
+                Spacer(minLength: 8)
+                Text(verbatim: value).font(.body).foregroundStyle(Palette.amber).monospacedDigit()
+            }
+            .padding(.horizontal, 16)
+            .frame(minHeight: 50)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// The app's language with the phone's 12/24-hour setting: "6:00 AM" or "6:00".
+    static var pickerLocale: Locale {
+        var parts = Locale.Components(locale: Fmt.locale)
+        parts.hourCycle = ClockText.isTwelveHour ? .oneToTwelve : .zeroToTwentyThree
+        return Locale(components: parts)
+    }
+
+    /// The alarms already set take the new Snooze once the wheel stops.
+    private func snoozeChanged() {
+        snoozeTask?.cancel()
+        snoozeTask = Task {
+            try? await Task.sleep(for: .milliseconds(700))
+            guard !Task.isCancelled else { return }
+            await SystemAlarm.reschedule()
         }
     }
 
