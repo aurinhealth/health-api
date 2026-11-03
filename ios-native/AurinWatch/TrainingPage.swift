@@ -43,15 +43,16 @@ struct TrainingPage: View {
                 }
                 WeekRow(days: weekDays, today: today, shown: day, sessions: sessions) { picked = $0 }
                     .padding(.top, 6)
-                    .id("week")
+                    // Where the sample day's screenshot scrolls to (-week): the
+                    // week just under the clock, Continue whole above the edge.
+                    .overlay(alignment: .top) { Color.clear.frame(height: 1).padding(.top, 16).id("week") }
                 content(day)
                 if day == today, noGymToday { noGym }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .task {
-            // The sample day's screenshot (-week): scrolled by the title's
-            // height, so the week and Continue are both whole.
+            // The sample day's screenshot (-week): the week and Continue both whole.
             guard WatchDemo.flag("-week") else { return }
             try? await Task.sleep(for: .milliseconds(400))
             proxy.scrollTo("week", anchor: .top)
