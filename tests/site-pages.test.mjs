@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync,readdirSync,statSync} from 'node:fs';
 import worker from '../src/entrypoint.js';
-import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME,WEARABLES} from '../src/site-pages.js';
+import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME,WEARABLES,WORDMARKS} from '../src/site-pages.js';
 
 test('the overview keeps what Google verification reads on the homepage',async()=>{
   const html=await overviewPage().text();
@@ -326,7 +326,10 @@ test('the hero names the wearables Aurin reads under the form, and no device it 
   const cta=hero.indexOf('<div class="cta">'),row=hero.indexOf('<div class="xw">');
   assert.ok(cta>0&&row>cta&&row<hero.indexOf('<div class="stage">'),'the row sits right under the form, before the phone');
   const list=hero.slice(row);
-  assert.deepEqual([...list.matchAll(/<li>([^<]+)<\/li>/g)].map(m=>m[1]),WEARABLES);
+  // A name as text, or the brand's own wordmark with the name as its alt text (black and white files both there).
+  assert.deepEqual([...list.slice(0,list.indexOf('</ul>')).matchAll(/<li[^>]*>(?:([^<]+)|[\s\S]*?alt="([^"]+)"[\s\S]*?)<\/li>/g)].map(m=>m[1]||m[2]),WEARABLES);
+  for(const [file] of Object.values(WORDMARKS))for(const c of ['black','white'])assert.ok(existsSync(new URL(`../public/site/logos/${file}-${c}.svg`,import.meta.url)),file+'-'+c);
+  assert.deepEqual(Object.keys(WORDMARKS),['WHOOP','Ultrahuman'],'Apple and Google allow no device wordmark');
   assert.deepEqual(WEARABLES,['Apple Watch','Fitbit','Pixel Watch','WHOOP','Ultrahuman']);
   assert.doesNotMatch(hero,/garmin|oura|strava|polar|coros|amazfit/i);
   assert.match(hero,/Works with what you already wear/);

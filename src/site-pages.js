@@ -117,6 +117,9 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .xw li{font-size:var(--fs-17);font-weight:600;letter-spacing:-.01em;line-height:1.3;color:var(--text);white-space:nowrap}
 /* A dot after each name: where the row breaks on a narrow phone, a line ends with it and names never run together. */
 .xw li:not(:last-child)::after{content:"·";margin:0 .55em;font-weight:400;color:var(--muted)}
+/* A wordmark stands about as tall as the names' capitals, on their line. */
+.xw .wm{display:inline-flex;align-items:center;height:1.3em}.xw .wm picture{display:contents}
+.xw .wm img{display:block;width:auto;height:.74em}.xw .wm.ultrahuman img{height:.6em}
 @media (max-width:359px){.xw li{font-size:var(--fs-14)}}
 /* The phone and its three numbers are drawn at one size (the rig) and scaled down where the column is narrower,
    so the numbers never leave the column and the coach sits under the phone, not over its tab bar. */
@@ -725,6 +728,18 @@ export const GOOGLE_DISCLOSURE_ON_HOME = false;
 // The watches and rings the "Works with" row under the form names: Apple Watch through Apple Health, Fitbit and
 // Pixel Watch through Google Health, the Ultrahuman Ring and WHOOP directly. Aurin does not support Garmin.
 export const WEARABLES = ['Apple Watch', 'Fitbit', 'Pixel Watch', 'WHOOP', 'Ultrahuman'];
+// WHOOP and Ultrahuman show their own wordmark, unaltered, from their brand files (WHOOP's developer design guidelines,
+// Ultrahuman's site), black on the light page and white on the dark one; Petr's call on 2026-11-03 while both
+// consent requests are open. Apple and Google allow no device wordmark without a licence, so those stay names.
+// [file, width, height] of the wordmark's viewBox.
+export const WORDMARKS = {WHOOP: ['whoop', 200, 32], Ultrahuman: ['ultrahuman', 1280, 118]};
+const wearable = w => {
+  const mark = WORDMARKS[w];
+  if (!mark) return `<li>${w}</li>`;
+  const [file, wd, ht] = mark;
+  const img = `<img src="/site/logos/${file}-black.svg" alt="${w}" width="${wd}" height="${ht}">`;
+  return `<li class="wm ${file}">${DARK_SITE ? `<picture><source srcset="/site/logos/${file}-white.svg" media="(prefers-color-scheme:dark)">${img}</picture>` : img}</li>`;
+};
 export const googleDisclosure = () => `<details class="disclosure reveal" lang="en"><summary>Google Health data disclosure</summary><div class="card">
 <p>Aurin is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
 <p>With your authorization, the service may read fitness, health-metric, sleep, and nutrition data from Google Health. It may also add nutrition logs to Google Health when you ask the service to record food or drinks. This data is used only for the requested training and nutrition features.</p>
@@ -885,7 +900,7 @@ ${sun(72)}
 <h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w${i >= SLANT ? ' it' : ''}" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
 <p class="lede">Aurin reads your sleep, HRV and workouts from the watch or ring you wear, and every morning turns them into one number, one plan and one coach.</p>
 <div class="cta">${store('top')}<p class="note">Free early access on iPhone through TestFlight.</p></div>
-<div class="xw"><span class="xe" id="xw-t">Works with what you already wear</span><ul aria-labelledby="xw-t">${WEARABLES.map(w => `<li>${w}</li>`).join('')}</ul></div>
+<div class="xw"><span class="xe" id="xw-t">Works with what you already wear</span><ul aria-labelledby="xw-t">${WEARABLES.map(wearable).join('')}</ul></div>
 </div>
 <div class="stage"><div class="rig">
 <div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">${day.hrv} ms</div><div class="d up">↑ ${day.hrv - day.hrvBaseline} ms above normal</div></div>
