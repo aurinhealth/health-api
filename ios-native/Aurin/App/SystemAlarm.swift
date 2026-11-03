@@ -79,15 +79,40 @@ enum SystemAlarm {
             UserDefaults.standard.removeObject(forKey: backupKey)
             UserDefaults.standard.removeObject(forKey: backupKey + "Time")
             guard let date, date > Date(), manager.authorizationState == .authorized else { return }
-            let alert = AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: L10n.tr("Budík · záloha hodinek")),
-                                                stopButton: AlarmButton(text: LocalizedStringResource(stringLiteral: L10n.tr("Vstávám")), textColor: .white, systemImageName: "sun.max.fill"))
-            let attributes = AlarmAttributes<WakeAlarm>(presentation: AlarmPresentation(alert: alert), tintColor: Palette.indigo)
             let id = UUID()
-            guard (try? await manager.schedule(id: id, configuration: .alarm(schedule: .fixed(date), attributes: attributes))) != nil else { return }
+            guard (try? await manager.schedule(id: id, configuration: configuration(.fixed(date), title: L10n.tr("Budík · záloha hodinek")))) != nil else { return }
             UserDefaults.standard.set(id.uuidString, forKey: backupKey)
             UserDefaults.standard.set(date, forKey: backupKey + "Time")
         }
         #endif
+    }
+
+    /// Alarms set by an older version have no Snooze: they are set again once, at the
+    /// same times (the app's start, AurinApp). Nothing goes to the server.
+    static func upgrade() async {
+        let key = "systemAlarmVersion", version = 2
+        let defaults = UserDefaults.standard
+        guard defaults.integer(forKey: key) < version else { return }
+        #if canImport(AlarmKit)
+        if #available(iOS 26, *) {
+            let manager = AlarmManager.shared
+            let saved = defaults.stringArray(forKey: idsKey) ?? []
+            if !saved.isEmpty, manager.authorizationState == .authorized, let alarms = try? manager.alarms {
+                var ids: [String] = []
+                for alarm in alarms where saved.contains(alarm.id.uuidString) {
+                    guard case .relative(let relative)? = alarm.schedule, case .weekly(let days) = relative.repeats else { continue }
+                    try? manager.cancel(id: alarm.id)
+                    let title = days.contains(.saturday) ? L10n.tr("Budík · víkend") : L10n.tr("Budík · pracovní den")
+                    let id = UUID()
+                    if (try? await manager.schedule(id: id, configuration: configuration(.relative(relative), title: title))) != nil {
+                        ids.append(id.uuidString)
+                    }
+                }
+                defaults.set(ids, forKey: idsKey)
+            }
+        }
+        #endif
+        defaults.set(version, forKey: key)
     }
 
     #if canImport(AlarmKit)
@@ -103,18 +128,28 @@ enum SystemAlarm {
         let parts = time.split(separator: ":").compactMap { Int($0) }
         guard parts.count == 2 else { return nil }
         let schedule = Alarm.Schedule.relative(.init(time: .init(hour: parts[0], minute: parts[1]), repeats: .weekly(days)))
-        let alert = AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: title),
-                                            stopButton: AlarmButton(text: LocalizedStringResource(stringLiteral: L10n.tr("Vstávám")), textColor: .white, systemImageName: "sun.max.fill"))
-        let attributes = AlarmAttributes<WakeAlarm>(presentation: AlarmPresentation(alert: alert), tintColor: Palette.indigo)
         let id = UUID()
-        _ = try await manager.schedule(id: id, configuration: .alarm(schedule: schedule, attributes: attributes))
+        _ = try await manager.schedule(id: id, configuration: configuration(schedule, title: title))
         return id
+    }
+
+    /// How long Snooze waits, as the Clock app's alarm.
+    static let snooze: TimeInterval = 9 * 60
+
+    /// The ringing alarm: "I'm up" and Snooze, then while snoozed "Snoozed" with
+    /// the time left. iOS draws it through the widget extension's Live Activity
+    /// (WakeAlarmWidget); its buttons are the system's on the lock screen.
+    @available(iOS 26, *)
+    private static func configuration(_ schedule: Alarm.Schedule, title: String) -> AlarmManager.AlarmConfiguration<WakeAlarm> {
+        let alert = AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: title),
+                                            stopButton: AlarmButton(text: LocalizedStringResource(stringLiteral: L10n.tr("Vstávám")), textColor: .white, systemImageName: "sun.max.fill"),
+                                            secondaryButton: AlarmButton(text: LocalizedStringResource(stringLiteral: L10n.tr("Odložit")), textColor: .white, systemImageName: "zzz"),
+                                            secondaryButtonBehavior: .countdown)
+        let countdown = AlarmPresentation.Countdown(title: LocalizedStringResource(stringLiteral: L10n.tr("Odloženo")))
+        let presentation = AlarmPresentation(alert: alert, countdown: countdown, paused: nil)
+        let attributes = AlarmAttributes<WakeAlarm>(presentation: presentation, tintColor: Palette.indigo)
+        return AlarmManager.AlarmConfiguration(countdownDuration: Alarm.CountdownDuration(preAlert: nil, postAlert: snooze),
+                                               schedule: schedule, attributes: attributes)
     }
     #endif
 }
-
-#if canImport(AlarmKit)
-/// No data travels with the alarm.
-@available(iOS 26, *)
-struct WakeAlarm: AlarmMetadata {}
-#endif
