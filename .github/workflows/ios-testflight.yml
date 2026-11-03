@@ -47,7 +47,8 @@ permissions:
 
 jobs:
   testflight:
-    runs-on: macos-latest
+    # The same image as ios-native.yml: Xcode 27 is only there.
+    runs-on: xcode-27
     timeout-minutes: 40
     environment: ${{ github.event_name == 'pull_request' && 'testflight-pr' || 'testflight' }}
     # One upload at a time; the notes job below doesn't hold the next one up.
@@ -87,12 +88,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The same Xcode as ios-native.yml (the newest stable one): the newest SDK, which
-      # App Store Connect also requires for new uploads.
+      # The same Xcode as ios-native.yml (the newest stable one on the xcode-27 image):
+      # the newest SDK, which App Store Connect also requires for new uploads.
       - name: Pick Xcode
         if: steps.secrets.outputs.ready == 'true'
         run: |
-          xcode=$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -vi -e beta -e release_candidate -e _rc | sort -V | tail -1)
+          # Xcode_27.2.app on the xcode-27 image is a link to Xcode_27.2_Release_Candidate.app:
+          # the real folder's name decides, so a release candidate is never picked.
+          xcode=$(for x in /Applications/Xcode_*.app; do [ -d "$x" ] && echo "$(cd "$x" && pwd -P)"; done | sort -u | grep -vi -e beta -e release_candidate -e _rc | sort -V | tail -1)
           if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode/Contents/Developer"; fi
           xcodebuild -version
 
