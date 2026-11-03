@@ -122,7 +122,9 @@ final class ProStoreTests: XCTestCase {
         XCTAssertTrue(store.trialEligible, "a new Apple ID starts the yearly plan with the free week")
         let yearly = try XCTUnwrap(store.price(ProStore.yearlyID))
         XCTAssertTrue(yearly.contains("490"), yearly)
-        XCTAssertTrue(try XCTUnwrap(store.perMonth(ProStore.yearlyID)).contains("124"))
+        let perMonth = try XCTUnwrap(store.perMonth(ProStore.yearlyID))
+        let yearlyProduct = try XCTUnwrap(store.products[ProStore.yearlyID])
+        XCTAssertTrue(perMonth.contains("124"), "\(perMonth): price \(yearlyProduct.price), shown \(yearlyProduct.displayPrice)")
         XCTAssertEqual(ProPlans.priced(store).first?.price, L10n.f("%@ / rok", yearly))
 
         let outcome = try await step("purchase yearly") { try await store.purchase(ProStore.yearlyID) }
