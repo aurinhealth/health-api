@@ -282,8 +282,10 @@ jobs:
           devices = json.load(sys.stdin)["devices"]
           watches = [d for r in devices if "watchOS" in r for d in devices[r] if d["name"].startswith("Apple Watch")]
           print("watches:", ", ".join(sorted({d["name"] for d in watches})), file=sys.stderr)
-          names = ("Apple Watch Series 11 (46mm)", "Apple Watch Ultra 3 (49mm)", "Apple Watch Series 10 (46mm)", "Apple Watch Ultra 2 (49mm)")
-          pick = next((d for n in names for d in reversed(watches) if d["name"] == n), watches[-1] if watches else None)
+          names = ("Apple Watch Series 12 (46mm)", "Apple Watch Series 11 (46mm)", "Apple Watch Ultra 3 (49mm)", "Apple Watch Series 10 (46mm)", "Apple Watch Ultra 2 (49mm)")
+          # The App Store takes 416x496 (46 mm); a newer image may only have a newer 46 mm watch.
+          pick = next((d for n in names for d in reversed(watches) if d["name"] == n), None) \
+              or next((d for d in reversed(watches) if "(46mm)" in d["name"]), watches[-1] if watches else None)
           print(pick["name"] if pick else "no watch", file=sys.stderr)
           print(pick["udid"] if pick else "")')
           if [ -z "$watch" ]; then echo "No Apple Watch simulator on this image"; exit 0; fi
