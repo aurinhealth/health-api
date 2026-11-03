@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync,readdirSync,statSync} from 'node:fs';
 import worker from '../src/entrypoint.js';
-import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME,WEARABLES,WORDMARKS} from '../src/site-pages.js';
+import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME,WEARABLES,WORDMARKS,PRO_PRICE,PRO_CONTENTS} from '../src/site-pages.js';
 
 test('the overview keeps what Google verification reads on the homepage',async()=>{
   const html=await overviewPage().text();
@@ -350,4 +350,25 @@ test('the overview stays short: one training step per sport, one gym chapter, th
   const parts=[...html.matchAll(/<section id="a-([a-z]+)" class="opener"/g)].map(m=>m[1]);
   assert.deepEqual(parts,['readiness','sleep','training','food','coach','watch']);
   assert.doesNotMatch(section('trenink'),/garmin/i);
+});
+
+// The price block lists what Settings → Aurin Pro lists, in the app's English, and the FAQ says the same prices.
+test('the price block follows the app’s Free and Pro list and says the US prices once',async()=>{
+  const swift=readFileSync(new URL('../ios-native/Aurin/Screens/SubscriptionView.swift',import.meta.url),'utf8');
+  const en=Object.fromEntries([...readFileSync(new URL('../ios-native/Shared/en.lproj/Localizable.strings',import.meta.url),'utf8').matchAll(/^"(.+)" = "(.+)";$/gm)].map(m=>[m[1],m[2]]));
+  const tr=k=>{assert.ok(en[k],'English for '+k);return en[k];};
+  const block=swift.slice(swift.indexOf('enum ProContents'));
+  const free=[...block.slice(block.indexOf('static let free'),block.indexOf('struct Group')).matchAll(/"([^"]+)"/g)].map(m=>tr(m[1]));
+  assert.deepEqual(PRO_CONTENTS.free,free);
+  const pro=[...block.slice(block.indexOf('static let pro')).matchAll(/Group\(title: "([^"]+)", items: \[([^\]]*)\]/g)].map(m=>[tr(m[1]),[...m[2].matchAll(/"([^"]+)"/g)].map(x=>tr(x[1]))]);
+  assert.deepEqual(PRO_CONTENTS.pro,pro);
+  const html=await overviewPage(new Request('https://aurin.health/')).text();
+  const price=html.match(/<section id="cena"[\s\S]*?<\/section>/)[0];
+  for(const x of [...free,...pro.flatMap(([t,i])=>[t,...i])])assert.ok(price.includes(x),x);
+  assert.ok(price.includes(PRO_PRICE.month)&&price.includes(PRO_PRICE.year));
+  assert.equal((price.match(/Free while we test/g)||[]).length,1);
+  assert.match(price,/href="#join"/);
+  const faq=html.match(/<summary>What does it cost\?<\/summary><p>([^<]*)/)[1];
+  assert.ok(faq.includes(PRO_PRICE.month+' a month')&&faq.includes(PRO_PRICE.year+' a year'),'the FAQ says the same prices');
+  assert.ok(html.indexOf('id="cena"')>html.indexOf('id="soukromi"')&&html.indexOf('id="cena"')<html.indexOf('id="faq"'));
 });
