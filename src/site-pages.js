@@ -272,8 +272,8 @@ main:focus{outline:none}
 .privacy .more:hover{text-decoration:underline}
 .privacy .more .icon{width:16px;height:16px}
 .card{background:var(--panel);border-radius:var(--r-22);padding:24px;box-shadow:var(--shadow-card)}
-/* The Google Health disclosure stays on the homepage for Google's verification, folded under one line (Petr
-   2026-11-03): its text is in the page, word for word, and opens on a tap without JS. */
+/* The Google Health disclosure, when it is on the homepage (GOOGLE_DISCLOSURE_ON_HOME), folded under one line
+   (Petr 2026-11-03): its text is in the page, word for word, and opens on a tap without JS. */
 .disclosure{max-width:680px;margin:28px auto 0;text-align:left}
 .disclosure summary{display:flex;justify-content:center;align-items:center;gap:8px;font-size:var(--fs-14);font-weight:600;color:var(--muted);cursor:pointer;list-style:none}
 .disclosure summary::-webkit-details-marker{display:none}
@@ -712,10 +712,11 @@ const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 // The overview follows the app: Today in the hero, one morning said as a sentence, then a chapter per area
 // of the app (its words on one side, a phone with its screens on the other), the muscles, privacy and
 // questions. The numbers are one believable morning, the same everywhere.
-// Google's app verification reads this disclosure on the homepage, so it stays on the overview while Google
-// verifies the app (submitted 2026-10-25), folded under its title; after that this can go back to false.
+// Google's app verification reads this disclosure on the homepage (submitted 2026-10-25). Petr put the
+// verification aside on 2026-11-03, so it is off the overview; true brings it back, folded under its title.
+// The Limited Use statements stay in the privacy policy either way.
 // The text stays word for word (tests/site-pages.test.mjs).
-export const GOOGLE_DISCLOSURE_ON_HOME = true;
+export const GOOGLE_DISCLOSURE_ON_HOME = false;
 // The services Aurin reads from, in the "Works with" row under the hero (Petr's order). Apple Watch comes through
 // Apple Health, Fitbit and Pixel Watch through Google Health. Aurin does not support Garmin.
 export const PARTNERS = ['Apple Health', 'WHOOP', 'Ultrahuman',
