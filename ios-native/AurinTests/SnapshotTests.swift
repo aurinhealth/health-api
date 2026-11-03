@@ -949,6 +949,12 @@ final class SnapshotTests: XCTestCase {
         try render("plan-preview", glow: Palette.Glow.training, height: 1150) {
             PlanPreviewContent(template: active.template, preview: preview) {}.padding(.horizontal, 24).environment(model)
         }
+        // A plan of Aurin Pro without Pro: the adaptive plan card and "Začít s Aurin Pro" instead of "Začít plán".
+        var locked = active.template
+        locked.locked = true
+        try render("plan-preview-locked", glow: Palette.Glow.training, height: 1250) {
+            PlanPreviewContent(template: locked, preview: preview) {}.padding(.horizontal, 24).environment(model)
+        }
         try render("plan-preview-failed", glow: Palette.Glow.training, height: 1150) {
             PlanPreviewContent(template: active.template, preview: nil, failed: true, canStart: false) {}.padding(.horizontal, 24).environment(model)
         }

@@ -86,3 +86,23 @@ test("the long aquabikes: swim then ride, the ride a little harder than a triath
   const full = triRaceDay("aquabike-full", { ftp: 250, weight: 72, swimCss: 105 });
   assert.deepEqual(full.legs.map(x => [x.sport, x.meters || x.km]), [["swim", 3800], ["ride", 180]]);
 });
+
+test("one free starter plan in every sport; the rest need Pro once payments are on", async () => {
+  const { FREE_PLANS, planTemplates } = await import("../src/training-plans.js");
+  const { plansUnlocked, assertPlanAccess } = await import("../src/subscription.js");
+  const ids = new Set(planTemplates().map(t => t.id));
+  for (const id of FREE_PLANS) assert.ok(ids.has(id), id + " exists");
+  assert.deepEqual([...FREE_PLANS].map(id => getTemplate(id).sport).sort(), ["gym", "ride", "run", "swim", "triathlon"]);
+  // The pilot: everything open, no query.
+  assert.equal(await plansUnlocked({}), true);
+  await assertPlanAccess({}, getTemplate("run-marathon"));
+  // Payments on: a row with the paid plan opens them, none (or an expired one) does not.
+  const db = row => ({ userId: 7, prepare: () => ({ bind: () => ({ first: async () => row }) }) });
+  const future = new Date(Date.now() + 86400000).toISOString(), past = new Date(Date.now() - 86400000).toISOString();
+  assert.equal(await plansUnlocked({ AI_PAYWALL_ENABLED: "true", DB: db({ plan: "ai", valid_until: future }) }), true);
+  assert.equal(await plansUnlocked({ AI_PAYWALL_ENABLED: "true", DB: db({ plan: "ai", valid_until: past }) }), false);
+  assert.equal(await plansUnlocked({ AI_PAYWALL_ENABLED: "true", DB: db(null) }), false);
+  const paywall = { AI_PAYWALL_ENABLED: "true", DB: db(null) };
+  await assertPlanAccess(paywall, getTemplate("ride-base"));
+  await assert.rejects(assertPlanAccess(paywall, getTemplate("ride-ftp")), e => e.status === 402);
+});

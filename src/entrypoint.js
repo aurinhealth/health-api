@@ -2,7 +2,7 @@ import {initialImport,recentDashboardImport} from './account-sync.js';
 import { recordOpsEvent, routeName, sendDailyOpsReport, withOpsScope } from "./ops-report.js";
 import { elapsed, serverTiming, slowness, timed } from "./request-timing.js";
 import { trainingSetup } from './onboarding.js';
-import { subscriptionStatus, assertAIAccess } from './subscription.js';
+import { subscriptionStatus, assertAIAccess, plansUnlocked, assertPlanAccess } from './subscription.js';
 import { claimCoachMessage, recordCoachMessage, releaseCoachMessage } from './coach-allowance.js';
 import { buildNutrients, buildNutrientDetail, nutrientFavorites, saveNutrientFavorites, microTop, FREE_KEYS } from './micronutrients.js';
 import { listRecipes, saveRecipe, deleteRecipe } from './personal-recipes.js';
@@ -78,7 +78,7 @@ import { saveCalendarFree, clearCalendarFree } from './calendar-free.js';
 import { getCheckin, readinessCheckin, saveCheckin } from './morning-checkin.js';
 import { getChecks, upcomingTest } from './threshold-check.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, memoryCheck, memoryChanges } from './athlete-state.js';
-import { triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planWorkoutId, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
+import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planWorkoutId, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
 import { chatLibraryQuery, askedSession } from './chat-ask.js';
 import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
@@ -1975,6 +1975,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         else if(body.action==='start'){
           const template=getTemplate(String(body.templateId||''));
           if(!template)throw new Error(L('Neznámý plán.', 'Unknown plan.'));
+          await assertPlanAccess(env,template);
           const when=planStart(template,{today,raceDate:body.raceDate?String(body.raceDate):null,startDate:!template.race&&body.startDate?String(body.startDate):null});
           // The days the athlete chose for the sport, or (too few days in the usual week) the freest days added.
           const prefs=await getWeekPlan(env.DB),chosen=chosenDays(body.days);
@@ -2020,8 +2021,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       }
       if(!active)finished=await planResult(env,ctx,today).catch(error=>{console.error('Plan result failed',error.message);return null;});
       if(!gym)finishedGym=await gymPlanResult(env,today).catch(error=>{console.error('Gym plan result failed',error.message);return null;});
-      return Response.json({status:'ok',templates:planTemplates().map(templateSummary),active:summary,activeGym:gymSummary,...(finished?{finished}:{}),...(finishedGym?{finishedGym}:{}),...(started?{started}:{})},{headers:{'Cache-Control':'no-store'}});
-    }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
+      // Without Pro (once payments are on) every plan but the starter ones is locked.
+      const unlocked=await plansUnlocked(env);
+      const templates=planTemplates().map(t=>({...templateSummary(t),...(!unlocked&&!FREE_PLANS.has(t.id)?{locked:true}:{})}));
+      return Response.json({status:'ok',templates,active:summary,activeGym:gymSummary,...(finished?{finished}:{}),...(finishedGym?{finishedGym}:{}),...(started?{started}:{})},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({status:'error',message:error.message},{status:error.status||400})}
   }
   // What a plan will look like before it starts: its weeks with sessions and
   // time, and the totals (training-plans.js planPreview).

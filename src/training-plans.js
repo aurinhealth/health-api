@@ -559,6 +559,10 @@ const TEMPLATES = () => [
     description: L("Hodně lehké jízdy, tempo a sweet spot jednou až dvakrát týdně, dlouhá jízda s tempem na konci.", "Plenty of easy riding, tempo and sweet spot once or twice a week, a long ride with tempo at the end.") }
 ];
 export const planTemplates = () => [...TEMPLATES(), ...TRI_TEMPLATES()];
+// The starter plan of every sport is free; every other plan is an Aurin Pro
+// "adaptive training plan" once AI_PAYWALL_ENABLED is on (Petr, 3 Nov 2026).
+// A plan already running goes on to its end.
+export const FREE_PLANS = new Set(["ride-base", "run-5k-start", "swim-400", "gym-muscle", "tri-sprint"]);
 export const getTemplate = id => planTemplates().find(t => t.id === id) || null;
 
 // ---- the catalogue -------------------------------------------------------------
