@@ -161,20 +161,12 @@ final class ProStoreTests: XCTestCase {
         XCTAssertFalse(store.entitled, "a pack is not Aurin Pro")
         // The pack bought here is finished. Another product still open is what an
         // earlier test left (CI, 3 Nov: one open transaction after the monthly test),
-        // so it is named in the log, not counted. On the iOS 27 simulator the
-        // finish reaches Transaction.unfinished a moment later (CI, 3 Nov: the pack
-        // itself still open right after buyPack), so the test waits up to 5 s.
+        // so it is named in the log, not counted.
         var unfinished = 0
-        for attempt in 0..<10 {
-            unfinished = 0
-            for await result in Transaction.unfinished {
-                let transaction = result.unsafePayloadValue
-                if transaction.productID == "health.aurin.app.coach.messages100" { unfinished += 1 }
-                else if attempt == 0 { print("ProStoreTests open transaction left by another test: \(transaction.productID), bought \(transaction.purchaseDate)") }
-            }
-            if unfinished == 0 { break }
-            print("ProStoreTests pack still open after \(attempt * 500) ms")
-            try await Task.sleep(for: .milliseconds(500))
+        for await result in Transaction.unfinished {
+            let transaction = result.unsafePayloadValue
+            if transaction.productID == "health.aurin.app.coach.messages100" { unfinished += 1 }
+            else { print("ProStoreTests open transaction left by another test: \(transaction.productID), bought \(transaction.purchaseDate)") }
         }
         XCTAssertEqual(unfinished, 0, "the bought pack is finished")
         _ = session
