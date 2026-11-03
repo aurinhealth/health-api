@@ -124,6 +124,6 @@ test("every new exercise has a video; photos only from the Free Exercise DB, Rep
 });
 
 test("near-variant videos are marked as a similar exercise", () => {
-  const SIMILAR = ["Dumbbell Neutral High Incline Bench Press", "One-Arm Kettlebell Military Press To Side", "Banded Eccentric Tibialis Raise", "B-stance Back Extension", "Prone Y-T Raises"];
+  const SIMILAR = ["Dumbbell Neutral High Incline Bench Press", "One-Arm Kettlebell Military Press To Side", "Banded Eccentric Tibialis Raise", "Prone Y-T Raises"];
   for (const name of ADDED) assert.equal(techniqueFor(name).video.similar, SIMILAR.includes(name), name);
 });
