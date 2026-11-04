@@ -45,6 +45,12 @@ export async function chatContext(db, chatId, { withIds = false } = {}) {
 
 // Store one question and its answer; a missing or foreign chat becomes a new one.
 export async function appendChatTurn(db, chatId, message, answer) {
+  return (await appendChatTurnIds(db, chatId, message, answer)).chatId;
+}
+
+// The same, with the id of the stored answer: the copy and thumbs under it
+// point to it (saveAnswerFeedback), and the coach's proposals too.
+export async function appendChatTurnIds(db, chatId, message, answer) {
   await ensureAssistantChats(db);
   let chat = await ownedChat(db, chatId);
   if (!chat) {
@@ -52,8 +58,9 @@ export async function appendChatTurn(db, chatId, message, answer) {
     chat = { id: created.meta?.last_row_id };
   }
   const insert = (role, content) => db.prepare('INSERT INTO assistant_messages(chat_id,user_id,role,content) VALUES(?,?,?,?)').bind(chat.id, db.userId, role, String(content || '').slice(0, MAX_CONTENT));
-  await db.batch([insert('user', message), insert('assistant', answer), db.prepare('UPDATE assistant_chats SET updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?').bind(db.userId, chat.id)]);
-  return chat.id;
+  const results = await db.batch([insert('user', message), insert('assistant', answer), db.prepare('UPDATE assistant_chats SET updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?').bind(db.userId, chat.id)]);
+  const messageId = Number(results?.[1]?.meta?.last_row_id) || null;
+  return { chatId: chat.id, messageId };
 }
 
 export async function listChats(db, limit = 50) {
@@ -67,7 +74,49 @@ export async function readChat(db, id) {
   const chat = await ownedChat(db, id);
   if (!chat) return null;
   const rows = (await db.prepare('SELECT id,role,content,created_at FROM assistant_messages WHERE user_id=? AND chat_id=? ORDER BY id').bind(db.userId, chat.id).all()).results || [];
-  return { id: chat.id, title: chat.title, updatedAt: chat.updated_at, messages: rows.map(r => ({ id: r.id, role: r.role, content: r.content, createdAt: r.created_at })) };
+  const ratings = await chatRatings(db, chat.id, rows);
+  return { id: chat.id, title: chat.title, updatedAt: chat.updated_at, messages: rows.map(r => ({ id: r.id, role: r.role, content: r.content, createdAt: r.created_at, ...(ratings.has(r.id) ? { rating: ratings.get(r.id) } : {}) })) };
+}
+
+// Thumbs up or down under the coach's answers. Only the answer's id, the chat
+// it is in, up or down and a reason picked from a short list are kept: no text
+// of the chat. A chat that goes takes its ratings with it.
+export const FEEDBACK_REASONS = ['numbers', 'unhelpful', 'other'];
+
+export async function ensureAssistantFeedback(db) {
+  await db.prepare('CREATE TABLE IF NOT EXISTS assistant_feedback (user_id INTEGER NOT NULL, message_id INTEGER NOT NULL, chat_id INTEGER NOT NULL, rating TEXT NOT NULL, reason TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, message_id))').run();
+}
+
+const feedbackError = (cs, en) => Object.assign(new Error(L(cs, en)), { status: 400 });
+
+// { messageId, rating: 'up' | 'down' | null, reason? }; null takes the thumb back.
+export async function saveAnswerFeedback(db, body) {
+  const messageId = Number(body?.messageId);
+  if (!validId(messageId)) throw feedbackError('Chybí odpověď kouče.', 'The coach\'s answer is missing.');
+  const rating = body?.rating ?? null;
+  if (rating !== null && rating !== 'up' && rating !== 'down') throw feedbackError('Hodnocení je palec nahoru, nebo dolů.', 'A rating is thumbs up or down.');
+  const reason = body?.reason ?? null;
+  if (reason !== null && (rating !== 'down' || !FEEDBACK_REASONS.includes(reason))) throw feedbackError('Neplatný důvod.', 'Invalid reason.');
+  // One read by the primary key: the answer has to be the user's own coach answer.
+  const message = await db.prepare("SELECT chat_id FROM assistant_messages WHERE user_id=? AND id=? AND role='assistant'").bind(db.userId, messageId).first();
+  if (!message) throw Object.assign(new Error(L('Odpověď neexistuje.', 'The answer doesn\'t exist.')), { status: 404 });
+  await ensureAssistantFeedback(db);
+  if (rating === null) await db.prepare('DELETE FROM assistant_feedback WHERE user_id=? AND message_id=?').bind(db.userId, messageId).run();
+  else await db.prepare('INSERT INTO assistant_feedback(user_id,message_id,chat_id,rating,reason,updated_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id,message_id) DO UPDATE SET rating=excluded.rating,reason=excluded.reason,updated_at=excluded.updated_at').bind(db.userId, messageId, Number(message.chat_id), rating, reason).run();
+  return { status: 'ok', messageId, rating, reason };
+}
+
+// The thumbs of one chat's answers, read by the primary key between its first
+// and last message; no ratings yet (no table) is an empty map.
+async function chatRatings(db, chatId, rows) {
+  if (!rows.length) return new Map();
+  try {
+    const found = (await db.prepare('SELECT message_id,rating FROM assistant_feedback WHERE user_id=? AND message_id BETWEEN ? AND ? AND chat_id=?').bind(db.userId, rows[0].id, rows[rows.length - 1].id, Number(chatId)).all()).results || [];
+    return new Map(found.map(r => [Number(r.message_id), r.rating]));
+  } catch (error) {
+    if (!/no such table/i.test(String(error?.message || error))) console.error('Answer ratings read failed', error.message);
+    return new Map();
+  }
 }
 
 // A chat that starts with the coach's own push ("Tři krátké noci za sebou"),
@@ -95,6 +144,8 @@ export async function deleteChat(db, id) {
     db.prepare('DELETE FROM assistant_messages WHERE user_id=? AND chat_id=?').bind(db.userId, Number(id)),
     db.prepare('DELETE FROM assistant_chats WHERE user_id=? AND id=?').bind(db.userId, Number(id))
   ]);
+  if (chat) await db.prepare('DELETE FROM assistant_feedback WHERE user_id=? AND chat_id=?').bind(db.userId, Number(id)).run()
+    .catch(error => { if (!/no such table/i.test(String(error?.message || error))) console.error('Answer ratings not cleared', error.message); });
   // The coach forgets the chat: its summary goes, and the notes of the days it
   // ran are written again from the chats that remain (coach-notes.js).
   if (chat) await forgetChatNotes(db, chat).catch(error => console.error('Chat notes not cleared', error.message));

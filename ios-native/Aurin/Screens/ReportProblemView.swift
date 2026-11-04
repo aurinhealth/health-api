@@ -10,7 +10,12 @@ struct ReportProblemView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let store: SettingsStore
+    /// Opened from "Report this answer…" under a coach answer: the answer is
+    /// already in the description, and nothing goes until Odeslat.
+    var startText: String? = nil
+    var title = "Nahlásit problém"
     @State private var text = ""
+    @State private var started = false
     @State private var photo: PhotosPickerItem?
     @State private var screenshot: Data?
     @State private var preview: UIImage?
@@ -25,7 +30,7 @@ struct ReportProblemView: View {
     private static let maxScreenshotBytes = 1_000_000
 
     var body: some View {
-        SettingsPage(title: "Nahlásit problém", trail: false) {
+        SettingsPage(title: title, trail: false) {
             if sent {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("Díky, hlášení odešlo.").font(Typo.sentence(24)).foregroundStyle(Palette.ink)
@@ -37,6 +42,11 @@ struct ReportProblemView: View {
             }
         }
         .onChange(of: photo) { _, item in Task { await load(item) } }
+        .onAppear {
+            guard !started else { return }
+            started = true
+            if let startText, text.isEmpty { text = startText }
+        }
     }
 
     @ViewBuilder private var form: some View {

@@ -3816,3 +3816,14 @@
 "V %@ nic nového." = "Nothing new in %@.";
 "%@ z %@." = "%@ from %@.";
 "%@ a %@ z %@." = "%@ and %@ from %@.";
+"Zkopírováno" = "Copied";
+"Dobrá odpověď" = "Good answer";
+"Špatná odpověď" = "Bad answer";
+"Co v odpovědi nesedělo?" = "What was off?";
+"Uloží se jen důvod, ne text chatu." = "Only the reason is saved, not the text of the chat.";
+"Čísla nesedí" = "The numbers don't match";
+"Nepomohlo to" = "It didn't help";
+"Nahlásit tuto odpověď…" = "Report this answer…";
+"Nahlásit odpověď" = "Report answer";
+"Odpověď kouče, kterou hlásím:" = "The coach's answer I'm reporting:";
+"Co je na ní špatně: " = "What's wrong with it: ";

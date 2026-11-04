@@ -53,6 +53,8 @@ export const PERSONAL_TABLES = {
   athlete_state: {},
   assistant_chats: {},
   assistant_messages: {},
+  // Thumbs up/down under the coach's answers: the answer's id and a reason, no text (assistant-chats.js).
+  assistant_feedback: {},
   // The coach's memory between chats (coach-notes.js): a note per day with
   // chats, the summary of a long chat's older part, and the days waiting for
   // their note (central, coach_note_queue).

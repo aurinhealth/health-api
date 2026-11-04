@@ -107,7 +107,7 @@ import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
 import { reviewRefusal, isReviewAccount } from "./app-review.js";
 import { handleNativeAppleLogin, forgetUsedAppleTokens } from "./apple-login.js";
-import { chatContext, appendChatTurn, listChats, readChat, deleteChat, startChatWithCoach, lastAnswerId, ownedChat } from "./assistant-chats.js";
+import { chatContext, appendChatTurnIds, listChats, readChat, deleteChat, startChatWithCoach, ownedChat, saveAnswerFeedback } from "./assistant-chats.js";
 import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedReplyPush } from "./coach-push-reply.js";
 import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
@@ -2162,11 +2162,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const memory=noSport||env.OPENAI_API_KEY||athleteState.memoryOff?null:explicitPreference(message);
     const saveMemory=()=>memory?updateAthleteState(env.DB,{memory}).catch(error=>{console.error('Preference save failed',error.message);}):null;
     // Each answer belongs to a chat; without a known chat id a new chat starts.
-    const remember=async answer=>appendChatTurn(env.DB,body.chatId,saved,answer).catch(error=>{console.error('Chat save failed',error.message);return null;});
-    if(!env.OPENAI_API_KEY){if(!memory)return Response.json({status:'unavailable',message:L('AI teď není dostupná. Zkus to později.', 'AI isn\'t available right now. Try again later.')},{status:503});await saveMemory();return Response.json({status:'ok',answer:L('Zapamatoval jsem si: ','I\'ll remember: ')+memory,memorySaved:memory,chatId:await remember('Zapamatoval jsem si: '+memory)});}
+    // The answer's id comes back as messageId: copy and the thumbs under it point to it.
+    const remember=async answer=>appendChatTurnIds(env.DB,body.chatId,saved,answer).catch(error=>{console.error('Chat save failed',error.message);return {chatId:null,messageId:null};});
+    if(!env.OPENAI_API_KEY){if(!memory)return Response.json({status:'unavailable',message:L('AI teď není dostupná. Zkus to později.', 'AI isn\'t available right now. Try again later.')},{status:503});await saveMemory();return Response.json({status:'ok',answer:L('Zapamatoval jsem si: ','I\'ll remember: ')+memory,memorySaved:memory,...await remember('Zapamatoval jsem si: '+memory)});}
     // "Měl jsem snickers": a draft of food entries to confirm, not a coach answer.
     if(body.mode!=='coach'&&!image&&isFoodLogMessage(message)){
-      try{const draft=await buildFoodDraft(env,message,localToday());if(draft.items.length){const answer=foodDraftSummary(draft);return Response.json({status:'ok',kind:'food_draft',draft,answer,chatId:await remember(answer)},{headers:{'Cache-Control':'no-store'}});}}
+      try{const draft=await buildFoodDraft(env,message,localToday());if(draft.items.length){const answer=foodDraftSummary(draft);return Response.json({status:'ok',kind:'food_draft',draft,answer,...await remember(answer)},{headers:{'Cache-Control':'no-store'}});}}
       catch(error){console.error('Food sentence failed',error.message);}
     }
     // A message to the coach counts against the week's allowance (coach-allowance.js).
@@ -2270,7 +2271,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(saves.length)await updateAthleteState(env.DB,{saves}).catch(error=>{console.error('Coach memory save failed',error.message);saves.length=0;});
       const changes=remembers?memoryChanges(answer.memory,athleteState.memories):{forgotten:[],updated:[]};
       // The chat keeps a one-line summary of the proposals, so later turns can refer to them.
-      const note=actionsNote(actions),chatId=await remember(answer.answer+(note?'\n\n'+note:''));
+      const note=actionsNote(actions),{chatId,messageId}=await remember(answer.answer+(note?'\n\n'+note:''));
       // The day gets its note after midnight; a long chat's older part its summary, after the answer.
       if(remembers)await queueDayNote(env.DB,date).catch(error=>console.error('Day note not queued',error.message));
       if(chat.more&&chatId&&chat.firstId)ctx.waitUntil(summarizeChatStart(env,chatId,chat.firstId).catch(error=>console.error('Chat summary failed',error.message)));
@@ -2279,11 +2280,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       await env.DB.prepare("UPDATE coach_inbox SET status='expired' WHERE user_id=? AND status='draft' AND created_at<? AND draft_json LIKE '%\"coach_action\"%'").bind(env.USER_ID,dayStartSql(date)).run().catch(error=>console.error('Draft expiry failed',error.message));
       // A workout card keeps the context its quick changes check (coach-quick-change.js).
       const quick=actions.some(a=>a.type==='workout')?quickSnapshot(coachCtx,date):null;
-      // Each proposal points to the answer it came with, so a reopened chat shows it there.
-      const messageId=actions.length?await lastAnswerId(env.DB,chatId).catch(()=>null):null;
+      // Each proposal points to the answer it came with (messageId), so a reopened chat shows it there.
       for(const action of actions){const own=action.type==='workout'?quick:null,draft={kind:'coach_action',action,chatId,...(messageId?{messageId}:{}),...(own?{quick:own}:{})};const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling',message,JSON.stringify(draft)).run();const options=own?quickOptions(action,own):null;proposals.push({...action,draftId:ins.meta?.last_row_id,...(options?{quick:options}:{})});}
       delete answer.memory;
-      return {...answer,chatId,actions:proposals,coachAllowance,memorySaved:memory||saves[0]?.text||null,memoryChanges:{saved:memory||saves[0]?.text||null,saves:memory?[{text:memory,group:null}]:saves,forgotten:[],updated:[]},memoryProposals:changes,...(sportChanges?{sportChanges}:{}),costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
+      return {...answer,chatId,messageId,actions:proposals,coachAllowance,memorySaved:memory||saves[0]?.text||null,memoryChanges:{saved:memory||saves[0]?.text||null,saves:memory?[{text:memory,group:null}]:saves,forgotten:[],updated:[]},memoryProposals:changes,...(sportChanges?{sportChanges}:{}),costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
     };
     // A message whose answer failed goes back to the allowance, unless part of
     // the answer already reached the chat.
@@ -2353,6 +2353,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       chat.actions=rows.map(r=>{try{const d=JSON.parse(r.draft_json);return d.kind==='coach_action'&&d.chatId===chat.id&&d.messageId?{...d.action,draftId:r.id,draftStatus:r.status,messageId:d.messageId}:null;}catch{return null;}}).filter(Boolean);
     }
     return chat?Response.json({status:'ok',chat},{headers:{'Cache-Control':'no-store'}}):Response.json({message:'Chat neexistuje.'},{status:404});
+  }
+  // The thumbs under a coach answer: the answer's id, up or down and a reason
+  // from a short list; no AI, no message counted (assistant-chats.js).
+  if(url.pathname==='/app/api/assistant/feedback'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    const raw=await request.text().catch(()=>'');
+    if(raw.length>500)return Response.json({message:L('Požadavek je moc velký.', 'The request is too large.')},{status:413});
+    let body;try{body=JSON.parse(raw)||{};}catch{body={};}
+    try{return Response.json(await saveAnswerFeedback(env.DB,body),{headers:{'Cache-Control':'no-store'}});}
+    catch(error){return Response.json({message:error.message},{status:error.status||400});}
   }
   // "Vrátit" under a confirmed delete, merge or time change of a done activity.
   if(url.pathname==='/app/api/activity/undo'&&request.method==='POST'){
