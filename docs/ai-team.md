@@ -16,6 +16,7 @@ roles are sub agents defined in `.claude/agents/`:
 | Performance & Cost Engineer | `performance-cost` | yes, tests, local and timing on staging |
 | Monetization & Unit Economics Analyst | `monetization-analyst` | read-only commands |
 | Critic | `critic` | no |
+| Marketing | `marketing` | read-only commands, public web |
 
 ## Rules
 - Every role is read-only: no role edits files, commits or pushes. Changes are made only after the
@@ -34,6 +35,8 @@ roles are sub agents defined in `.claude/agents/`:
   sport-science literature, guidelines, news and studies, each claim with a source. The other roles
   build their proposals on that brief.
 - Every team run: `critic` reviews the proposals before the owner's document.
+- Social posts and replies on X: `marketing` drafts and reviews them. The Product Manager schedules
+  posts in Typefully; replies under other people's posts the owner posts himself.
 - A full team run (all roles, two rounds) costs a lot of credits: only when the owner asks for it.
   Usually 2–3 roles are enough.
 
