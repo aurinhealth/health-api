@@ -6,7 +6,9 @@ import Foundation
 /// (Aurin/Data/DemoData.swift) on this week's Thursday and never asks the iPhone or
 /// the server. -language en|cs picks the language (English without it);
 /// -page training|food opens that page (training with -week scrolled to its week), -open sleep|hrv|restingHR|strain a
-/// detail, -gym the gym session (with -rest, its rest), -face the watch face.
+/// detail, -gym the gym session (with -rest, its rest), -face the watch face;
+/// -race makes today a race day: a sprint duathlon (run 5 km, bike 20 km,
+/// run 2.5 km) instead of the morning run and the gym, ready to open in Workout.
 enum WatchDemo {
     static let on = ProcessInfo.processInfo.arguments.contains("-demo")
 
@@ -17,6 +19,9 @@ enum WatchDemo {
     }
 
     static func flag(_ name: String) -> Bool { on && ProcessInfo.processInfo.arguments.contains(name) }
+
+    /// Today is the duathlon's race day (-race): no gym, the race's legs instead.
+    static var race: Bool { flag("-race") }
 
     /// Now, for the pages that ask what day it is: in the sample day, this
     /// week's Thursday at 10:09 (the iPhone's sample day is a Thursday, and the
@@ -90,12 +95,49 @@ enum WatchDemo {
         var sessions = before.enumerated().reversed().map {
             S(date: day(-$0.offset - 1), time: nil, title: tr($0.element.0, $0.element.1), sport: $0.element.2, minutes: $0.element.3, done: true)
         }
-        sessions.append(S(date: day(0), time: "07:30", title: tr("Ranní běh", "Morning run"), sport: "run", minutes: 42, done: true))
-        sessions.append(S(date: day(0), time: "17:30", title: tr("Silový trénink, celé tělo", "Strength, full body"), sport: "strength", minutes: 45, done: false))
+        if race {
+            sessions += raceLegs
+        } else {
+            sessions.append(S(date: day(0), time: "07:30", title: tr("Ranní běh", "Morning run"), sport: "run", minutes: 42, done: true))
+            sessions.append(S(date: day(0), time: "17:30", title: tr("Silový trénink, celé tělo", "Strength, full body"), sport: "strength", minutes: 45, done: false))
+        }
         sessions += after.enumerated().map {
             S(date: day($0.offset + 1), time: nil, title: tr($0.element.0, $0.element.1), sport: $0.element.2, minutes: $0.element.3, done: false)
         }
         return sessions
+    }
+
+    /// The race's legs (-race) as the server saves a training plan's race day:
+    /// joined like a brick, each marked as a race leg, the distance last in its name.
+    private static var raceLegs: [WatchSnapshot.Session] {
+        let legs: [(id: String, time: String, czech: String, english: String, sport: String, minutes: Int)] = [
+            ("demo-race-1", "10:30", "Duatlon: běh 5 km", "Duathlon: run 5 km", "run", 22),
+            ("demo-race-2", "10:57", "Duatlon: kolo 20 km", "Duathlon: bike 20 km", "ride", 36),
+            ("demo-race-3", "11:38", "Duatlon: běh 2,5 km", "Duathlon: run 2.5 km", "run", 12)]
+        return legs.enumerated().map { index, leg in
+            WatchSnapshot.Session(date: day(0), time: leg.time, title: tr(leg.czech, leg.english), sport: leg.sport, minutes: leg.minutes, done: false,
+                                  eventId: leg.id, after: index > 0 ? legs[index - 1].id : nil,
+                                  next: index + 1 < legs.count ? legs[index + 1].id : nil, race: true)
+        }
+    }
+
+    /// Each race leg's plan, as the iPhone would send it: the race at its
+    /// pace or watts, the second run held back for what came before.
+    static func plan(_ eventId: String) -> WatchPlan? {
+        typealias Step = WatchPlan.Step
+        switch eventId {
+        case "demo-race-1":
+            return WatchPlan(name: tr("Duatlon: běh 5 km", "Duathlon: run 5 km"), minutes: 22,
+                             steps: [Step(seconds: 1300, zone: 4, label: tr("Závod", "Race"), pace: 260)])
+        case "demo-race-2":
+            return WatchPlan(name: tr("Duatlon: kolo 20 km", "Duathlon: bike 20 km"), minutes: 36,
+                             steps: [Step(seconds: 2160, zone: 4, label: tr("Závod", "Race"), wattsLow: 225, wattsHigh: 240)])
+        case "demo-race-3":
+            return WatchPlan(name: tr("Duatlon: běh 2,5 km", "Duathlon: run 2.5 km"), minutes: 12,
+                             steps: [Step(seconds: 700, zone: 4, label: tr("Závod", "Race"), pace: 276)])
+        default:
+            return nil
+        }
     }
 
     /// Today's gym (the iPhone's sample sheet, DemoData.gymJSON): the squat's

@@ -285,11 +285,14 @@ jobs:
 
       # The Apple Watch app on the sample day (AurinWatch/WatchDemo.swift, -demo) for
       # the App Store and the website: watch/ in English, watch-cs/ in Czech, each
-      # page by the crown, a detail, the gym and its rest, and the watch face with
-      # Aurin's complications (DemoFace). The watch is dark only. Not a release
+      # page by the crown, a detail, the gym and its rest, the watch face with
+      # Aurin's complications (DemoFace) and a race day (a duathlon, -race). The watch is dark only. Not a release
       # check: a missing watch simulator or shot never fails the run.
       - name: Screenshot the Apple Watch
         continue-on-error: true
+        # Usually 5 minutes. A stuck simulator call must not hold the whole run
+        # past its time limit (a cancelled run keeps no log); the log names each shot.
+        timeout-minutes: 15
         run: |
           watch=$(xcrun simctl list devices available -j | python3 -c '
           import json, sys
@@ -311,6 +314,7 @@ jobs:
           shoot() {
             local out="$GITHUB_WORKSPACE/screens/$1" name=$2; shift 2
             mkdir -p "$out"
+            echo "$(date +%H:%M:%S) ${out##*/}/$name $*"
             xcrun simctl launch --terminate-running-process "$watch" health.aurin.app.watchkitapp -demo "$@"
             sleep 6
             xcrun simctl io "$watch" screenshot "$out/$name.png"
@@ -328,6 +332,8 @@ jobs:
             shoot $dir 6-face "$@" -face
             shoot $dir 7-sleep "$@" -open sleep
             shoot $dir 8-strain "$@" -open strain
+            # Race day: a sprint duathlon as one card with Open in Workout (WatchDemo -race).
+            shoot $dir 9-race "$@" -page training -race
           done
           xcrun simctl shutdown "$watch" || true
 
