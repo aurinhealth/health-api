@@ -449,6 +449,15 @@ jobs:
               limit 30 xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en || continue
               sleep 7
               shoot "open-$tab"
+              # A blank (white, under 300 kB) inner shot, as on the iPhone above
+              # (Training once came out so): taken again, up to twice, 10 s apart.
+              for try in 1 2; do
+                inner=$(ls -S "$dir/open-$tab"-*.png 2>/dev/null | head -1)
+                [ -n "$inner" ] && [ "$(stat -f%z "$inner")" -lt 300000 ] || break
+                echo "Blank, again in 10 s: $inner"
+                sleep 10
+                shoot "open-$tab"
+              done
             done
             DEVELOPER_DIR="$(xcode-select -p)" limit 30 "$RUNNER_TEMP/duo-hinge" -d "$udid" closed || true
             sleep 3
