@@ -830,9 +830,9 @@ export function overviewPage(request) {
       ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000],
       ['food-day', 'drinks', 330, 'Drink to your goal.', 'Tap a drink, or the whale itself for your usual glass. At today’s goal it blows its spout. Keep Aurin’s goal, set your own, or build up to it day by day. Rather a bottle, a flower or an octopus? Pick one in Settings.', 9500],
       ['food-day', 'diet', 120, 'Eat your way.', 'Everything, vegetarian or vegan; balanced, high protein, lower carb or keto. Your protein, carbs and nutrients follow, or set your own.', 8000]]],
-    ['kouc', '', 'A coach just for you.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
+    ['kouc', '', 'A coach just for you.', 'It remembers what you tell it, in every new chat too, and you can see and edit what it remembers.', 'green', 'glow-today', [
       ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today or what to eat before a workout, or send a photo of your trainer’s plan. When it proposes a workout or a plan for your race, confirm it and it lands in your plan.', 11500],
-      ['html:memory', 'coachMemory', 140, 'It remembers you.', 'Tell it about a sore knee, your schedule or a goal and it keeps that in mind. See everything it remembers, edit it or delete it.', 7000]]],
+      ['html:memory', 'coachMemory', 140, 'It remembers you.', 'Tell it about a sore knee, your schedule or a goal and it keeps that in mind, in a new chat too. See what it remembers by goals, training, health and life, edit it or switch memory off.', 7000]]],
     ['hodinky', '', 'Aurin on your wrist.', 'Today’s readiness when you raise your wrist, your gym sets without your phone, water in one tap. It comes with the iPhone app.', 'green', 'glow-today',
       WATCH.map(([, title, text], i) => [`watch:${i}`, '', 0, title, text, 6000])]];
   // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides

@@ -53,6 +53,12 @@ export const PERSONAL_TABLES = {
   athlete_state: {},
   assistant_chats: {},
   assistant_messages: {},
+  // The coach's memory between chats (coach-notes.js): a note per day with
+  // chats, the summary of a long chat's older part, and the days waiting for
+  // their note (central, coach_note_queue).
+  coach_notes: { pk: ["user_id", "day"] },
+  assistant_chat_summaries: { pk: ["user_id", "chat_id"] },
+  coach_note_queue: { pk: ["user_id", "day"] },
   exercise_videos: {},
   api_cache_versions: {},
   ai_usage: {},
@@ -239,6 +245,39 @@ function memoStatement(statement, sql, memo, values = []) {
   };
 }
 
+// The second line of the guard below (security check 2026-11-04, N7): a
+// statement on personal tables should also be bound to this user's id. For
+// now it only logs, once per statement text in an isolate, so the owner can
+// see in the Worker logs whether any query would be refused before it is
+// switched on. Checking costs no database read.
+const ID_GUARD_LOGGED = new Set();
+const ID_GUARD_LOG_LIMIT = 200;
+const boundToUser = (values, id) => values.some(v => (typeof v === "number" || typeof v === "bigint" || (typeof v === "string" && /^\d+$/.test(v))) && Number(v) === id);
+export function unboundUserQuery(sql, values, id) {
+  if (/^\s*(CREATE|ALTER|DROP|PRAGMA)\b/i.test(sql) || !PERSONAL_TABLE_PATTERN.test(sql)) return false;
+  return !boundToUser(values || [], id);
+}
+function noteUnboundUser(sql, values, id) {
+  if (!unboundUserQuery(sql, values, id)) return;
+  const text = sql.replace(/\s+/g, " ").slice(0, 160);
+  if (ID_GUARD_LOGGED.has(text) || ID_GUARD_LOGGED.size >= ID_GUARD_LOG_LIMIT) return;
+  ID_GUARD_LOGGED.add(text);
+  console.warn("Personal-data query not bound to the user's id (log only):", text);
+}
+const GUARDED = Symbol("guarded");
+function idGuardStatement(statement, sql, id, values = []) {
+  const checked = kind => (...args) => { noteUnboundUser(sql, values, id); return statement[kind](...args); };
+  return {
+    [REAL]: statement?.[REAL] || statement,
+    [GUARDED]: { sql, values },
+    bind: (...next) => idGuardStatement(statement.bind(...next), sql, id, next),
+    run: checked("run"),
+    first: checked("first"),
+    all: checked("all"),
+    raw: checked("raw")
+  };
+}
+
 // A D1 facade that refuses statements touching personal tables unless they
 // mention user_id, so a missed WHERE clause fails instead of leaking data.
 export function scopedDb(db, userId, { memo = false } = {}) {
@@ -261,9 +300,10 @@ export function scopedDb(db, userId, { memo = false } = {}) {
       check(query);
       const statement = db.prepare(query);
       const retried = retriedStatement(IDEMPOTENT_SCHEMA.test(query) ? schemaStatement(statement, String(query), schemaDone) : statement, query);
-      return reads ? memoStatement(retried, String(query), reads) : retried;
+      return idGuardStatement(reads ? memoStatement(retried, String(query), reads) : retried, String(query), id);
     },
     async batch(statements) {
+      for (const s of statements) if (s?.[GUARDED]) noteUnboundUser(s[GUARDED].sql, s[GUARDED].values, id);
       reads?.clear();
       try { return await withD1Retry(() => db.batch(statements.map(s => s?.[REAL] || s)), { read: false }); } finally { reads?.clear(); }
     },

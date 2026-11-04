@@ -47,9 +47,9 @@ jobs:
     # only Xcode 27.1 and later build the app full screen on iPhone Duo.
     runs-on: xcode-27
     # On main the run also builds for iPhone and uploads it after the App Store
-    # preview and the iPhone Duo screenshots: about 85 minutes (cancelled at 60
-    # and then 90 min before), so 100.
-    timeout-minutes: 100
+    # preview and the iPhone Duo screenshots: 81 to 97 minutes (cancelled at 60
+    # and then 90 min before; the open Duo shots add 1 to 2), so 110.
+    timeout-minutes: 110
     defaults:
       run:
         working-directory: ios-native
@@ -213,6 +213,19 @@ jobs:
         run: |
           udid=${{ steps.sim.outputs.udid }}
           mkdir -p "$GITHUB_WORKSPACE/screens/site"
+          # Now and then a page opened from the launch comes out blank (an empty
+          # white screen, under 300 kB) though it shows fine 7 s later in a
+          # separate run: such a shot is taken again, up to twice, 10 s apart.
+          shoot() {
+            local f=$1 tries
+            for tries in 1 2 3; do
+              xcrun simctl io "$udid" screenshot "$f"
+              [ "$(stat -f%z "$f")" -gt 300000 ] && return 0
+              echo "Blank, again in 10 s: $f"
+              sleep 10
+            done
+            echo "::warning::Still blank: $f"
+          }
           xcrun simctl ui "$udid" appearance light
           xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
           # The switch back from the dark shots above takes a while: without the wait
@@ -221,14 +234,14 @@ jobs:
           for tab in today training health food; do
             xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en
             sleep 6
-            xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/site/$tab.png"
+            shoot "$GITHUB_WORKSPACE/screens/site/$tab.png"
           done
           # Screens one tap deeper, opened as their link would (-open; simctl openurl
           # stops on the system's "Open in Aurin?" question): readiness, strain, muscles, the gym session.
           for route in readiness strain muscles gym/2026-10-08; do
             xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -open "$route" -AppleLanguages "(en)" -AppleLocale en_US -language en
             sleep 7
-            xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/site/${route%%/*}.png"
+            shoot "$GITHUB_WORKSPACE/screens/site/${route%%/*}.png"
           done
 
       # Before a release (Vydat checks this run): the app tapped through like a
@@ -272,11 +285,14 @@ jobs:
 
       # The Apple Watch app on the sample day (AurinWatch/WatchDemo.swift, -demo) for
       # the App Store and the website: watch/ in English, watch-cs/ in Czech, each
-      # page by the crown, a detail, the gym and its rest, and the watch face with
-      # Aurin's complications (DemoFace). The watch is dark only. Not a release
+      # page by the crown, a detail, the gym and its rest, the watch face with
+      # Aurin's complications (DemoFace) and a race day (a duathlon, -race). The watch is dark only. Not a release
       # check: a missing watch simulator or shot never fails the run.
       - name: Screenshot the Apple Watch
         continue-on-error: true
+        # Usually 5 minutes. A stuck simulator call must not hold the whole run
+        # past its time limit (a cancelled run keeps no log); the log names each shot.
+        timeout-minutes: 15
         run: |
           watch=$(xcrun simctl list devices available -j | python3 -c '
           import json, sys
@@ -298,6 +314,7 @@ jobs:
           shoot() {
             local out="$GITHUB_WORKSPACE/screens/$1" name=$2; shift 2
             mkdir -p "$out"
+            echo "$(date +%H:%M:%S) ${out##*/}/$name $*"
             xcrun simctl launch --terminate-running-process "$watch" health.aurin.app.watchkitapp -demo "$@"
             sleep 6
             xcrun simctl io "$watch" screenshot "$out/$name.png"
@@ -315,6 +332,8 @@ jobs:
             shoot $dir 6-face "$@" -face
             shoot $dir 7-sleep "$@" -open sleep
             shoot $dir 8-strain "$@" -open strain
+            # Race day: a sprint duathlon as one card with Open in Workout (WatchDemo -race).
+            shoot $dir 9-race "$@" -page training -race
           done
           xcrun simctl shutdown "$watch" || true
 
@@ -354,15 +373,33 @@ jobs:
 
       # The app on iPhone Duo, Apple's foldable (Xcode 27.1 and later have its
       # simulator): the sample day in English and light mode, each display the
-      # simulator shows (duo/). Not a release check: never fails the run, and
-      # never holds it either: on main 2026-11-03 it hung for 28 minutes and the
-      # whole run hit its time limit before Build for iPhone, so no upload.
-      # Booting and seven screens take about 3 minutes.
+      # simulator shows (duo/), Today and Training also unfolded (duo/open-*).
+      # Not a release check: never fails the run, and never holds it either: on
+      # main 2026-11-03 it hung for 28 minutes and the whole run hit its time
+      # limit before Build for iPhone, so no upload. Booting and nine screens
+      # take 4 to 12 minutes (a slow runner needs 2 min to boot and 4 to install).
       - name: Screenshot the app on iPhone Duo
         continue-on-error: true
-        timeout-minutes: 6
+        # Each simctl call below has its own limit too, so a stuck one is named
+        # in the log and the rest still runs.
+        timeout-minutes: 15
         run: |
-          xcrun simctl shutdown "${{ steps.sim.outputs.udid }}" || true
+          # Every simulator off first: the Duo boots with two displays and the
+          # earlier steps' iPhone (and its recording) left running starved it.
+          xcrun simctl shutdown all || true
+          # A simctl call that does not end in $1 seconds is stopped and named.
+          # The guard writes only to fd 3 (the log), never to a $(...) it runs in,
+          # so a capture does not wait for its sleep.
+          exec 3>&2
+          limit() {
+            local secs=$1; shift
+            echo "$(date +%H:%M:%S) $*" >&3
+            "$@" & local pid=$!
+            ( sleep "$secs"; kill -9 "$pid" 2>/dev/null && echo "::warning::Stopped after ${secs}s: $*" >&3 ) >/dev/null 2>&1 & local guard=$!
+            wait "$pid"; local status=$?
+            kill "$guard" 2>/dev/null; wait "$guard" 2>/dev/null
+            return $status
+          }
           udid=$(xcrun simctl list devices available -j | python3 -c '
           import json, sys
           devices = json.load(sys.stdin)["devices"]
@@ -378,34 +415,74 @@ jobs:
           fi
           dir="$GITHUB_WORKSPACE/screens/duo"
           mkdir -p "$dir"
-          xcrun simctl boot "$udid" || true
-          xcrun simctl bootstatus "$udid" -b
-          xcrun simctl io "$udid" enumerate || true
-          xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/Aurin.app
-          xcrun simctl ui "$udid" appearance light
-          xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
+          limit 60 xcrun simctl boot "$udid" || true
+          limit 180 xcrun simctl bootstatus "$udid" -b || exit 0
+          limit 240 xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/Aurin.app || exit 0
+          limit 60 xcrun simctl ui "$udid" appearance light || true
+          limit 30 xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
           # The Duo simulator has two displays (outer LCD and the inner, unfolded
-          # LCD-1); a plain screenshot then asks to choose. Take each one: the
-          # file name says which display and its size.
-          displays=$(xcrun simctl io "$udid" screenshot "$RUNNER_TEMP/probe.png" 2>&1 | sed -nE 's/.*--display=([0-9]+) +([^ ]+).* ([0-9]+x[0-9]+).*/\1:\2-\3/p')
-          echo "displays: ${displays:-one}"
+          # LCD-1); a plain screenshot then refuses and lists them. Each shot
+          # tries the plain one and, when refused, takes every listed display:
+          # the file name says which display and its size. Asked per shot, not
+          # once up front: the first screenshot after boot can take over 30 s.
+          displays=""
           shoot() {
-            if [ -z "$displays" ]; then xcrun simctl io "$udid" screenshot "$dir/$1.png"; return; fi
+            if [ -z "$displays" ]; then
+              local out; out=$(limit 90 xcrun simctl io "$udid" screenshot "$dir/$1.png" 2>&1) || true
+              displays=$(printf '%s\n' "$out" | sed -nE 's/.*--display=([0-9]+) +([^ ]+).* ([0-9]+x[0-9]+).*/\1:\2-\3/p')
+              [ -n "$displays" ] || return 0
+              echo "displays: $displays"
+            fi
             for d in $displays; do
-              xcrun simctl io "$udid" screenshot --display="${d%%:*}" "$dir/$1-${d#*:}.png" || true
+              limit 90 xcrun simctl io "$udid" screenshot --display="${d%%:*}" "$dir/$1-${d#*:}.png" || true
             done
           }
+          # The first screenshot after boot is slow (over 45 s): one that is
+          # thrown away, so Today's is not the one that waits.
+          limit 30 xcrun simctl launch "$udid" health.aurin.app -demo || true
+          sleep 7
+          shoot warmup
+          rm -f "$dir"/warmup*.png
+          # The open Duo (inner display, landscape 951x669 pt): simctl has no fold
+          # command, so .github/scripts/duo-hinge.m sends the hinge event Device
+          # Hub's "Open" sends (vendored, MIT). Today and Training first, so a
+          # slow runner still gets them; then folded again for the cover shots.
+          # Files open-<tab>-<display>.png: the inner display is the larger one.
+          if limit 60 clang -fobjc-arc -framework Foundation -o "$RUNNER_TEMP/duo-hinge" "$GITHUB_WORKSPACE/.github/scripts/duo-hinge.m" \
+            && DEVELOPER_DIR="$(xcode-select -p)" limit 30 "$RUNNER_TEMP/duo-hinge" -d "$udid" flat; then
+            sleep 3
+            for tab in today training; do
+              limit 30 xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en || continue
+              sleep 7
+              shoot "open-$tab"
+              # A blank (white, under 300 kB) inner shot, as on the iPhone above
+              # (Training once came out so): taken again, up to twice, 10 s apart.
+              for try in 1 2; do
+                inner=$(ls -S "$dir/open-$tab"-*.png 2>/dev/null | head -1)
+                [ -n "$inner" ] && [ "$(stat -f%z "$inner")" -lt 300000 ] || break
+                echo "Blank, again in 10 s: $inner"
+                sleep 10
+                shoot "open-$tab"
+              done
+            done
+            DEVELOPER_DIR="$(xcode-select -p)" limit 30 "$RUNNER_TEMP/duo-hinge" -d "$udid" closed || true
+            sleep 3
+          else
+            echo "::warning::Could not unfold the iPhone Duo simulator; open shots skipped"
+          fi
           for tab in today training health food; do
-            xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en
+            limit 30 xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en || continue
             sleep 7
             shoot "$tab"
           done
-          for route in readiness muscles gym/2026-10-08; do
-            xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -open "$route" -AppleLanguages "(en)" -AppleLocale en_US -language en
-            sleep 7
+          # Muscles last and with a longer wait: its 3D figure loads after launch,
+          # and a screenshot taken meanwhile on the Duo hung past its limit.
+          for route in readiness gym/2026-10-08 muscles; do
+            limit 30 xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -open "$route" -AppleLanguages "(en)" -AppleLocale en_US -language en || continue
+            if [ "$route" = muscles ]; then sleep 20; else sleep 7; fi
             shoot "${route%%/*}"
           done
-          xcrun simctl shutdown "$udid" || true
+          limit 60 xcrun simctl shutdown "$udid" || true
 
       # Unsigned: Sideloadly signs it with the user's Apple ID.
       - name: Build for iPhone

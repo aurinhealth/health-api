@@ -193,7 +193,7 @@ test('passing remarks are not remembered and preferences are saved after the ans
 });
 
 test('a reply cut off by the token limit keeps its answer and never shows raw JSON',async()=>{
-  assert.deepEqual(coachAnswerText('{"answer":"Začni lehce","actions":[{"type":"re',{actions:true,incomplete:true}),{answer:'Začni lehce\n\n'+TRUNCATED_NOTE,visuals:[],actions:[],memory:{forget:[],update:[]}});
+  assert.deepEqual(coachAnswerText('{"answer":"Začni lehce","actions":[{"type":"re',{actions:true,incomplete:true}),{answer:'Začni lehce\n\n'+TRUNCATED_NOTE,visuals:[],actions:[],memory:{save:[],forget:[],update:[]}});
   assert.doesNotMatch(coachAnswerText('{"actions":[{"type":"rest"',{actions:true}).answer,/[{}]/);
   assert.equal(coachAnswerText('Obyčejný text',{actions:true}).answer,'Obyčejný text');
   const original=globalThis.fetch,calls=[];
@@ -387,5 +387,5 @@ test('the engine sport reads whole words only', () => {
 test('memory the coach would forget or rewrite waits for the athlete to confirm it',()=>{
   const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8'),start=entry.indexOf("url.pathname==='/app/api/assistant'&&request.method==='POST'"),block=entry.slice(start,entry.indexOf("if(body.stream)return assistantStreamResponse(reply",start));
   assert.doesNotMatch(block,/updateAthleteState\(env\.DB,\{forget:/);assert.doesNotMatch(block,/updateAthleteState\(env\.DB,\{edit:/);
-  assert.match(block,/memoryChanges:\{saved:memory\|\|null,forgotten:\[\],updated:\[\]\},memoryProposals:changes/);
+  assert.match(block,/memoryChanges:\{saved:memory\|\|saves\[0\]\?\.text\|\|null,saves:memory\?\[\{text:memory,group:null\}\]:saves,forgotten:\[\],updated:\[\]\},memoryProposals:changes/);
 });

@@ -33,6 +33,8 @@ struct AssistantResult: Decodable, Equatable {
 
     struct MemoryChanges: Decodable, Equatable {
         let saved: String?
+        /// Everything the coach saved with this answer (up to three); `saved` is the first.
+        var saves: [Save]? = nil
         let forgotten: [String]?
         let updated: [Update]?
 
@@ -41,9 +43,15 @@ struct AssistantResult: Decodable, Equatable {
             let to: String
         }
 
+        struct Save: Decodable, Equatable {
+            let text: String
+            let group: String?
+        }
+
         /// One line under the answer per change, each with "Zpět".
         var chips: [CoachMemoryChip] {
-            (saved.map { [CoachMemoryChip(kind: .saved, text: $0)] } ?? [])
+            let savedTexts = saves.map { $0.map(\.text) } ?? (saved.map { [$0] } ?? [])
+            return savedTexts.map { CoachMemoryChip(kind: .saved, text: $0) }
                 + (forgotten ?? []).map { CoachMemoryChip(kind: .forgotten, text: $0) }
                 + (updated ?? []).map { CoachMemoryChip(kind: .updated, text: $0.to, from: $0.from) }
         }
@@ -96,7 +104,57 @@ struct CoachMemory: Decodable, Equatable, Identifiable {
     let text: String
     let since: String?
     let check: String?
+    /// goals, training, health or life.
+    var group: String? = nil
+    /// "new" or "updated" for a week after the coach saved or rewrote it itself.
+    var badge: String? = nil
     var id: String { text }
+}
+
+/// The groups of the memory list, in their order on the screen.
+enum CoachMemoryGroup: String, CaseIterable, Identifiable {
+    case goals, training, health, life
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .goals: return L10n.tr("Cíle")
+        case .training: return L10n.tr("Trénink")
+        case .health: return L10n.tr("Zdraví")
+        case .life: return L10n.tr("Život")
+        }
+    }
+}
+
+/// The memory screen as the server keeps it: the memories, what no longer holds
+/// (Past), the notes of the last days (Recent chats) and "Use memory".
+struct CoachMemoryScreen: Decodable, Equatable {
+    var memories: [CoachMemory] = []
+    var pastMemories: [PastMemory] = []
+    var recentChats: [RecentChatNote] = []
+    var memoryOff = false
+
+    struct PastMemory: Decodable, Equatable, Identifiable {
+        let text: String
+        let since: String?
+        let ended: String?
+        var id: String { text }
+    }
+
+    struct RecentChatNote: Decodable, Equatable, Identifiable {
+        let day: String
+        let note: String
+        var id: String { day }
+    }
+
+    enum CodingKeys: String, CodingKey { case memories, pastMemories, recentChats, memoryOff }
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        memories = try c.decodeIfPresent([CoachMemory].self, forKey: .memories) ?? []
+        pastMemories = try c.decodeIfPresent([PastMemory].self, forKey: .pastMemories) ?? []
+        recentChats = try c.decodeIfPresent([RecentChatNote].self, forKey: .recentChats) ?? []
+        memoryOff = try c.decodeIfPresent(Bool.self, forKey: .memoryOff) ?? false
+    }
 }
 
 /// A change the coach proposes; nothing happens until it is confirmed

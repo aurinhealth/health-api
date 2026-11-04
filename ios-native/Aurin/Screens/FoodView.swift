@@ -107,6 +107,7 @@ struct FoodContent: View {
     @Environment(\.tabActions) private var actions
     @State private var editing = false
     @State private var showingParts = false
+    @Environment(\.wideLayout) private var wide
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -136,96 +137,100 @@ struct FoodContent: View {
         WeekStrip(date: food.date, week: WeekStrip.week(of: food.date, in: page.map(\.today) ?? model.today), ahead: true)
             .padding(.top, 14)
 
-        HStack(alignment: .lastTextBaseline, spacing: 12) {
-            Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
-            if let target = food.target {
-                // With its parts the target opens where the numbers come from.
-                let more = food.targetParts != nil ? " ›" : ""
-                let over = (food.kcal ?? 0).rounded() - target.rounded()
-                Group {
-                    if over >= 1 {
-                        // Past the target (its workouts done and planned included): a calm note
-                        // in rust, as a limit past on the macros, not the number in red.
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(L10n.f("%@ kcal navíc", Fmt.int(over))).font(Typo.small.weight(.semibold)).foregroundStyle(Palette.rust)
-                            Text(L10n.f("z %@ kcal", Fmt.int(target)) + more).font(Typo.small).foregroundStyle(Palette.muted)
+        // A wide window: the day's numbers and the widgets on the left, the meals on the right.
+        WideColumns {
+            HStack(alignment: .lastTextBaseline, spacing: 12) {
+                Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
+                if let target = food.target {
+                    // With its parts the target opens where the numbers come from.
+                    let more = food.targetParts != nil ? " ›" : ""
+                    let over = (food.kcal ?? 0).rounded() - target.rounded()
+                    Group {
+                        if over >= 1 {
+                            // Past the target (its workouts done and planned included): a calm note
+                            // in rust, as a limit past on the macros, not the number in red.
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(L10n.f("%@ kcal navíc", Fmt.int(over))).font(Typo.small.weight(.semibold)).foregroundStyle(Palette.rust)
+                                Text(L10n.f("z %@ kcal", Fmt.int(target)) + more).font(Typo.small).foregroundStyle(Palette.muted)
+                            }
+                            .lineLimit(1)
+                        } else {
+                            Text(L10n.f("z %@\nkcal", Fmt.int(target)) + more)
+                                .font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
                         }
-                        .lineLimit(1)
-                    } else {
-                        Text(L10n.f("z %@\nkcal", Fmt.int(target)) + more)
-                            .font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
                     }
+                    .onTapGesture { if food.targetParts != nil { showingParts = true } }
                 }
-                .onTapGesture { if food.targetParts != nil { showingParts = true } }
             }
-        }
-        .padding(.top, 30)
-        // The target's parts: the base, the workouts done and the planned ones.
-        if let parts = food.targetParts {
-            Button { showingParts = true } label: { TargetPartsRow(parts: parts) }
-                .buttonStyle(.plain)
-                .padding(.top, 20)
-                .sheet(isPresented: $showingParts) {
-                    let today = AppModel.localDate(Date())
-                    TargetPartsSheet(parts: parts, target: food.target ?? parts.base + parts.workouts + parts.planned,
-                                     isToday: food.date == today, past: food.date < today)
+            .padding(.top, 30)
+            // The target's parts: the base, the workouts done and the planned ones.
+            if let parts = food.targetParts {
+                Button { showingParts = true } label: { TargetPartsRow(parts: parts) }
+                    .buttonStyle(.plain)
+                    .padding(.top, 20)
+                    .sheet(isPresented: $showingParts) {
+                        let today = AppModel.localDate(Date())
+                        TargetPartsSheet(parts: parts, target: food.target ?? parts.base + parts.workouts + parts.planned,
+                                         isToday: food.date == today, past: food.date < today)
+                    }
+            }
+            // The macros right under the target, so they show without scrolling; the coach's card under them.
+            MacroCells(macros: food.macros).padding(.top, 20)
+            // Pro: the nutrients picked under Živiny → Upravit; the rest is one tap away.
+            ForEach(food.nutrients ?? []) { item in
+                NutrientRow(item: item).padding(.top, 8)
+            }
+            NavigationLink { NutrientsView(date: food.date) } label: {
+                HStack(spacing: 6) {
+                    Text("Všechny živiny").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+                    Image(systemName: "chevron.right").font(.caption2.weight(.semibold)).foregroundStyle(Palette.muted)
                 }
-        }
-        // The macros right under the target, so they show without scrolling; the coach's card under them.
-        MacroCells(macros: food.macros).padding(.top, 20)
-        // Pro: the nutrients picked under Živiny → Upravit; the rest is one tap away.
-        ForEach(food.nutrients ?? []) { item in
-            NutrientRow(item: item).padding(.top, 8)
-        }
-        NavigationLink { NutrientsView(date: food.date) } label: {
-            HStack(spacing: 6) {
-                Text("Všechny živiny").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
-                Image(systemName: "chevron.right").font(.caption2.weight(.semibold)).foregroundStyle(Palette.muted)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
             }
-            .padding(.vertical, 6)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(.top, 8)
+            .buttonStyle(.plain)
+            .padding(.top, 8)
 
-        // An earlier day shows only its data; a day ahead keeps its sentence.
-        let day = page.map(\.selectedDate) ?? model.selectedDate
-        if day.map({ $0 > AppModel.localDate(Date()) }) ?? true {
-            CoachTextCard(screen: "food", fallbackText: food.sentence, live: day == nil).padding(.top, 10)
-        }
+            // An earlier day shows only its data; a day ahead keeps its sentence.
+            let day = page.map(\.selectedDate) ?? model.selectedDate
+            if day.map({ $0 > AppModel.localDate(Date()) }) ?? true {
+                CoachTextCard(screen: "food", fallbackText: food.sentence, live: day == nil).padding(.top, 10)
+            }
 
-        board.padding(.top, 18)
+            // In a wide window the widgets stay one column under the numbers.
+            board.environment(\.wideLayout, false).padding(.top, 18)
+        } right: {
+            HStack(alignment: .firstTextBaseline) {
+                SectionLabel(text: "Jídla dne")
+                Spacer()
+                NavigationLink { MealSlotsSettingsView() } label: {
+                    Text("Upravit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+                }
+                .accessibilityLabel("Upravit jídla dne")
+            }
+            .padding(.top, wide ? 30 : 28)
+            VStack(spacing: 0) {
+                ForEach(Array(food.meals.enumerated()), id: \.element.id) { index, meal in
+                    MealRow(meal: meal, add: { add(meal.type) })
+                    if index < food.meals.count - 1 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                }
+                if food.meals.isEmpty {
+                    Text("Zatím nic. Přidej první jídlo dne.").font(Typo.small).foregroundStyle(Palette.muted).padding(.vertical, 14)
+                }
+            }
+            .padding(.top, 6)
 
-        HStack(alignment: .firstTextBaseline) {
-            SectionLabel(text: "Jídla dne")
-            Spacer()
-            NavigationLink { MealSlotsSettingsView() } label: {
-                Text("Upravit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+            VStack(spacing: 28) {
+                Button { add(MealSlot.now(slots: food.mealSlots)) } label: {
+                    Label("Přidat jídlo", systemImage: "plus")
+                        .font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                        .frame(maxWidth: .infinity).frame(height: 50)
+                        .background(Palette.button, in: Capsule())
+                }
+                WidgetEditButton { editing = true }
             }
-            .accessibilityLabel("Upravit jídla dne")
+            .padding(.top, 22)
         }
-        .padding(.top, 28)
-        VStack(spacing: 0) {
-            ForEach(Array(food.meals.enumerated()), id: \.element.id) { index, meal in
-                MealRow(meal: meal, add: { add(meal.type) })
-                if index < food.meals.count - 1 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-            }
-            if food.meals.isEmpty {
-                Text("Zatím nic. Přidej první jídlo dne.").font(Typo.small).foregroundStyle(Palette.muted).padding(.vertical, 14)
-            }
-        }
-        .padding(.top, 6)
-
-        VStack(spacing: 28) {
-            Button { add(MealSlot.now(slots: food.mealSlots)) } label: {
-                Label("Přidat jídlo", systemImage: "plus")
-                    .font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                    .frame(maxWidth: .infinity).frame(height: 50)
-                    .background(Palette.button, in: Capsule())
-            }
-            WidgetEditButton { editing = true }
-        }
-        .padding(.top, 22)
     }
 }
 
@@ -325,6 +330,11 @@ struct DrinksCard: View {
     @Environment(AppModel.self) private var model
     let water: FoodSnapshot.Water
     var size: WidgetSize = .medium
+    /// The panel the card is on: on Jídlo the figure moves now and then, elsewhere once.
+    var panel: WidgetPanel = .food
+    /// On a panel (not while editing or in the gallery): the figure may move on its own.
+    var live = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var other = false
     @State private var choosing = false
     @State private var pop = false
@@ -336,6 +346,18 @@ struct DrinksCard: View {
     @AppStorage(DrinkFigureKind.animateKey) private var animate = true
 
     private var figure: DrinkFigureKind { DrinkFigureKind.from(figureRaw) }
+
+    private var idle: DrinkFigureIdle {
+        if !live || !animate { return .off }
+        return panel == .food ? .fidget : .once
+    }
+
+    /// The card's tab is open with nothing pushed over it (hidden tabs stay built).
+    private var shown: Bool {
+        let tab = panel.tab
+        if model.tab != tab { return false }
+        return model.paths[tab]?.isEmpty ?? true
+    }
     private var target: Double { max(water.target ?? 2500, 1) }
     private var fraction: Double { (water.ml ?? 0) / target }
     private var reached: Bool { fraction >= 1 }
@@ -412,7 +434,7 @@ struct DrinksCard: View {
                 ProgressLine(fraction: fraction, color: Palette.blue, height: 5)
             } else {
                 HStack(spacing: 16) {
-                    DrinkFigure(kind: figure, fraction: fraction, size: 96, animate: animate)
+                    DrinkFigure(kind: figure, fraction: fraction, size: 96, animate: animate, idle: idle, shown: shown)
                         .scaleEffect(pop ? 1.12 : 1)
                         .contentShape(Rectangle())
                         .onTapGesture { Task { await quickAdd() } }
@@ -455,9 +477,9 @@ struct DrinksCard: View {
             DrinkPresetRow(add: { ml, kind in await model.addDrink(ml: ml, kind: kind) })
         }
         .sensoryFeedback(.impact(weight: .light), trigger: adds)
-        .animation(.easeInOut(duration: 0.6), value: water.ml)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.6), value: water.ml)
         .onChange(of: reached) { _, now in
-            guard now, animate else { return }
+            guard now, animate, !reduceMotion else { return }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.45)) { pop = true }
             withAnimation(.spring(response: 0.4, dampingFraction: 0.6).delay(0.35)) { pop = false }
         }

@@ -3,6 +3,7 @@ import { intervalsTypeOf } from './activity-type.js';
 import { intervalsAuthorization } from './intervals-auth.js';
 import { localDateTime, zonedTime, zoneOffsetMs } from './user-time.js';
 import { grantedExtras, hasGoogleScope, HEALTH_PERMISSIONS } from './google-scopes.js';
+import { MIN_MINUTES as GYM_MIN_MINUTES } from './gym-session-activity.js';
 // Synchronizace: where Aurin sends what the user records, chosen per
 // destination in the app (Settings → Synchronizace): Apple Health (written by
 // the iPhone, which keeps its part of the preferences here too), Google
@@ -242,16 +243,41 @@ async function intervalsActivityId(headers, body, fetchImpl) {
   return match?.id == null ? null : String(match.id);
 }
 
-async function pushIntervals(env, row, { fetchImpl }) {
+async function pushIntervals(env, row, { fetchImpl, absent = false }) {
   const activity = JSON.parse(row.payload_json || '{}'), body = intervalsActivity(env.USER_ID, activity);
   const headers = { Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: 'application/json', 'Content-Type': 'application/json' };
-  // Sent before: the same activity is updated instead of made twice.
-  const known = row.remote_id || await intervalsActivityId(headers, body, fetchImpl);
-  const url = known ? 'https://intervals.icu/api/v1/activity/' + encodeURIComponent(known) : 'https://intervals.icu/api/v1/athlete/0/activities/manual';
-  const response = await reach(fetchImpl, url, { method: known ? 'PUT' : 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
-  if (!response.ok) throw new Error('Intervals.icu HTTP ' + response.status);
-  const saved = await response.json().catch(() => null);
-  const id = saved?.id ?? known;
+  // Sent before: the same activity is updated instead of made twice. `absent`:
+  // the caller has just read those days from Intervals.icu without our
+  // external_id (intervals-catchup.js), so the day is not asked again.
+  const known = row.remote_id || (absent ? null : await intervalsActivityId(headers, body, fetchImpl));
+  const create = async () => {
+    const response = await reach(fetchImpl, 'https://intervals.icu/api/v1/athlete/0/activities/manual', { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error('Intervals.icu HTTP ' + response.status);
+    return (await response.json().catch(() => null))?.id;
+  };
+  let id;
+  if (!known) id = await create();
+  else {
+    const url = 'https://intervals.icu/api/v1/activity/' + encodeURIComponent(known);
+    const response = await reach(fetchImpl, url, { method: 'PUT', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+    // Deleted there meanwhile (or by the replace below before its POST went through): made again.
+    if (response.status === 404) id = await create();
+    else {
+      if (!response.ok) throw new Error('Intervals.icu HTTP ' + response.status);
+      const saved = await response.json().catch(() => null);
+      id = saved?.id ?? known;
+      // Intervals.icu answers a PUT with the activity but keeps a manual
+      // activity's length (a gym session finished at 1 min, resumed and finished
+      // at 76 min stayed 1 min, 2026-11-01). A length it did not take: the
+      // activity is made again, under the same external_id.
+      const kept = Number(saved?.moving_time);
+      if (Number.isFinite(kept) && kept !== body.moving_time) {
+        const removed = await reach(fetchImpl, url, { method: 'DELETE', headers, signal: AbortSignal.timeout(15000) });
+        if (!removed.ok && removed.status !== 404) throw new Error('Intervals.icu HTTP ' + removed.status);
+        id = await create();
+      }
+    }
+  }
   if (id == null) throw new Error(L('Intervals.icu nepotvrdilo uložení.', 'Intervals.icu didn\'t confirm the save.'));
   return String(id);
 }
@@ -379,8 +405,12 @@ async function deliver(env, row, options) {
 // one entry per destination it went to (sent or error); Apple Health is
 // written by the iPhone and is not in the list. `googleToken` makes the
 // Google access token (index.js googleToken); `only` limits the destinations.
-export async function sendActivity(env, input, { fetchImpl = fetch, googleToken = null, only = SERVER_DESTINATIONS, pollMs } = {}) {
+export async function sendActivity(env, input, { fetchImpl = fetch, googleToken = null, only = SERVER_DESTINATIONS, pollMs, absent = false } = {}) {
   const activity = normalizeActivity(input);
+  // A gym session finished within minutes of its start (ended on the watch, by
+  // the idle end, a mistaken Dokončit) is not sent: the real finish sends it with
+  // its length (gym-session-activity.js keeps the same minimum).
+  if (activity.key.startsWith('gym:') && activity.minutes < GYM_MIN_MINUTES) return { status: 'ok', key: activity.key, sends: [], short: true };
   await ensureSyncTables(env.DB);
   const sends = [];
   for (const destination of SERVER_DESTINATIONS.filter(d => only.includes(d))) {
@@ -394,7 +424,7 @@ export async function sendActivity(env, input, { fetchImpl = fetch, googleToken 
         message = CASE WHEN sync_sends.status = 'unknown' AND sync_sends.remote_id IS NULL THEN sync_sends.message ELSE NULL END, attempts = 0, updated_at = CURRENT_TIMESTAMP`)
       .bind(env.USER_ID, activity.key, destination, JSON.stringify(activity)).run();
     const row = await env.DB.prepare('SELECT * FROM sync_sends WHERE user_id = ? AND activity_key = ? AND destination = ?').bind(env.USER_ID, activity.key, destination).first();
-    sends.push(await deliver(env, row, { fetchImpl, googleToken, pollMs }));
+    sends.push(await deliver(env, row, { fetchImpl, googleToken, pollMs, absent }));
   }
   return { status: 'ok', key: activity.key, sends };
 }

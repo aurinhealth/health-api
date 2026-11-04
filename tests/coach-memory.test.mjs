@@ -51,5 +51,5 @@ test('the reply format carries memory changes and the parser reads them', () => 
   assert.ok(COACH_ACTION_FORMAT.schema.required.includes('memory'));
   const reply = coachAnswerText(JSON.stringify({ answer: 'Super, běhy vracím.', visuals: [], actions: [], memory: { forget: ['Nechci běhat, bolí mě koleno'], update: [] } }), { actions: true });
   assert.deepEqual(reply.memory.forget, ['Nechci běhat, bolí mě koleno']);
-  assert.deepEqual(coachAnswerText('plain', { actions: true }).memory, { forget: [], update: [] });
+  assert.deepEqual(coachAnswerText('plain', { actions: true }).memory, { save: [], forget: [], update: [] });
 });

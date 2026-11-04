@@ -30,6 +30,8 @@ struct RootView: View {
     /// Tabs opened since sign-in, kept built (screens) and whether each is scrolled down.
     @State private var visited: Set<AppTab> = []
     @State private var scrolledTabs: Set<AppTab> = []
+    /// iPhone Duo open, or a wide window beside another app: two columns (WideLayout).
+    @State private var wide = false
     private static let tabs: [AppTab] = [.today, .training, .food, .health]
     @Environment(\.scenePhase) private var scenePhase
 
@@ -38,6 +40,8 @@ struct RootView: View {
             UpdateRequiredView()
         } else {
             screens
+                .onGeometryChange(for: Bool.self) { $0.size.width >= WideLayout.minWidth } action: { wide = $0 }
+                .environment(\.wideLayout, wide)
         }
     }
 
@@ -191,6 +195,7 @@ struct RootView: View {
                         // A workout hidden with its arrow (TrainingModeView): back to it.
                         if let gym = model.minimizedGym {
                             MinimizedGymBar(gym: gym, live: LiveWorkout.shared) { model.open(.trainingMode(gym.date)) }
+                                .frame(maxWidth: wide ? WideLayout.tabBarWidth : .infinity)
                                 .padding(.horizontal, 28)
                                 .dynamicTypeSize(Self.textSizes)
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -202,6 +207,7 @@ struct RootView: View {
                                        barHeld = true
                                        withAnimation(.snappy) { compactBar = false }
                                    }, onAdd: { showAdd = true })
+                                .frame(maxWidth: wide ? WideLayout.tabBarWidth : .infinity)
                                 .padding(.horizontal, 20)
                                 .padding(.bottom, 8)
                                 .dynamicTypeSize(Self.textSizes)

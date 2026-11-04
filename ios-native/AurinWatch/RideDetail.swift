@@ -26,7 +26,7 @@ final class PlanStore: ObservableObject {
     }
 
     init() {
-        guard let data = UserDefaults.standard.data(forKey: Self.savedKey),
+        guard !WatchDemo.on, let data = UserDefaults.standard.data(forKey: Self.savedKey),
               let saved = try? JSONDecoder().decode(Saved.self, from: data),
               saved.date == WatchStore.localDate(Date()) else { return }
         plans = saved.plans
@@ -41,6 +41,11 @@ final class PlanStore: ObservableObject {
     /// The session's plan; with shelf, also the complication's (the next workout's steps).
     func load(_ session: WatchSnapshot.Session, shelf: Bool = true) {
         guard let id = session.eventId else { return }
+        // The sample day's race (WatchDemo -race): its plans without the iPhone or the server.
+        if WatchDemo.on {
+            if plans[id] == nil, let plan = WatchDemo.plan(id) { plans[id] = plan }
+            return
+        }
         if let plan = plans[id], stamps[id] == Self.stamp(session) {
             if shelf, shelved != id { save(plan, id: id) }
             return

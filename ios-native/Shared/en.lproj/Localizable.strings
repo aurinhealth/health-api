@@ -788,7 +788,7 @@
 "Večeře" = "Dinner";
 "Vlastní" = "Custom";
 "Vlastní váha" = "Bodyweight";
-"Vlnky ve vodě a efekt po splnění cíle" = "Ripples in the water and an effect at your goal";
+"Občas se pohne, vlnky a efekt v cíli" = "Moves now and then, ripples and a goal effect";
 "Vláknina" = "Fiber";
 "Voda" = "Water";
 "Volno" = "Day off";
@@ -2069,6 +2069,12 @@
 "Co si kouč pamatuje" = "What the coach remembers";
 "Kouč si zatím nic nepamatuje." = "The coach doesn't remember anything yet.";
 "Co si má kouč pamatovat" = "What the coach should remember";
+"Život" = "Life";
+"Nedávné chaty" = "Recent chats";
+"Minulé" = "Past";
+"Používat paměť" = "Use memory";
+"Nové" = "New";
+"Upraveno" = "Updated";
 "Vráceno" = "Undone";
 "Zapamatováno" = "Remembered";
 "Zapamatováno: %@" = "Remembered: %@";
@@ -3780,3 +3786,33 @@
 "Adaptivní tréninkový plán" = "Adaptive training plan";
 "Každý trénink se řídí tvou regenerací, pokrokem a časem, který máš." = "Every session follows your recovery, your progress and the time you have.";
 "Začít s Aurin Pro" = "Start with Aurin Pro";
+
+/* Nastavení → Zóny: typing where each zone starts */
+"Začátek zóny v" = "Zone starts in";
+"% prahu" = "% threshold";
+"% prahového tepu" = "% threshold HR";
+"prahového tepu" = "of threshold HR";
+"%@ a víc" = "%@ and up";
+"a rychleji" = "and faster";
+"do" = "up to";
+"Vrátit na %@" = "Reset to %@";
+"Musí navazovat na zónu před ní." = "Must follow on from the zone before.";
+"Začátek zóny %@" = "Start of zone %@";
+"Napiš, kde každá zóna začíná; zóna pod ní končí těsně pod tím. Z1 začíná vždy na 0. Zóny drží svá % FTP, takže se s novým FTP posunou." = "Type where each zone starts; the zone below ends just under it. Z1 always starts at 0. Your zones keep their % of FTP, so a new FTP moves them with it.";
+"Napiš, kde každá zóna začíná; zóna před ní končí těsně před tím. Zóny drží svá % prahového tempa, takže se s novým prahem posunou." = "Type where each zone starts; the zone before ends just short of it. Your zones keep their % of threshold pace, so a new threshold moves them with it.";
+"Napiš, kde každá zóna začíná; zóna pod ní končí o tep níž. Poslední zóna končí na maximálním tepu. Tepové zóny zůstanou v tepech, jak je napíšeš, nový prahový tep je neposune." = "Type where each zone starts; the zone below ends one beat lower. The last zone ends at your max heart rate. Heart-rate zones stay in bpm as you type them, so a new threshold heart rate does not move them.";
+"Napiš, kde každá zóna začíná; zóna před ní končí o sekundu pomaleji. Zóny se drží CSS, takže se s novým CSS posunou." = "Type where each zone starts; the zone before ends a second slower. Your zones stay tied to CSS, so a new CSS moves them with it.";
+
+/* Wahoo page in Zdroje dat (SyncViews.swift) */
+"FTP a výkonové zóny" = "FTP and power zones";
+"Zapnuto" = "On";
+
+/* Settings → a service → Synchronizovat znovu: the result line (SyncStatus.pageLine) */
+"Pořád se synchronizuje na pozadí. Nová data se ukážou na Dnes, až to doběhne." = "Still syncing in the background. New data shows up on Today when it's done.";
+"Synchronizace %@ se nepovedla. Zkus to za pár minut." = "Syncing %@ didn't work. Try again in a few minutes.";
+"Synchronizováno." = "Synced.";
+"Synchronizováno %@." = "Synced %@.";
+"Google Health se dotahuje na pozadí." = "Google Health is still loading in the background.";
+"V %@ nic nového." = "Nothing new in %@.";
+"%@ z %@." = "%@ from %@.";
+"%@ a %@ z %@." = "%@ and %@ from %@.";

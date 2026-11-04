@@ -21,6 +21,8 @@ struct WidgetBoard: View {
     /// How far "+" and "Hotovo" come down so they stay on screen while the page scrolls.
     @State private var pinned: CGFloat = 0
     @Environment(\.widgetEditingReport) private var report
+    /// A wide window (iPhone Duo open): the rows in two columns, outside editing.
+    @Environment(\.wideLayout) private var wide
 
     init(panel: WidgetPanel, data: WidgetData, editing: Binding<Bool>, editTitle: String? = "Upravit widgety") {
         self.panel = panel
@@ -43,9 +45,24 @@ struct WidgetBoard: View {
                     .padding(.bottom, 22)
                     .zIndex(1)
             }
-            VStack(spacing: 12) {
-                ForEach(WidgetLayoutStore.rows(shown)) { row in
-                    rowView(row)
+            let rows = WidgetLayoutStore.rows(shown)
+            if wide && !editing {
+                // Every other row to the right column, so both columns stay about as long.
+                HStack(alignment: .top, spacing: WideLayout.gap) {
+                    ForEach(0..<2, id: \.self) { column in
+                        VStack(spacing: 12) {
+                            ForEach(rows.indices.filter { $0 % 2 == column }.map { rows[$0] }) { row in
+                                rowView(row)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .top)
+                    }
+                }
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(rows) { row in
+                        rowView(row)
+                    }
                 }
             }
             if !editing, let title = editTitle {

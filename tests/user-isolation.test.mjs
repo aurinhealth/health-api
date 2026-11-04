@@ -39,7 +39,9 @@ const allowed = [/FROM workout_shares WHERE id=\?"$/, /^"DELETE FROM push_tokens
   // Fixing a reported food settles every user's report of it.
   /^"UPDATE food_suggestions SET status='approved', decided_at=CURRENT_TIMESTAMP WHERE kind='report' AND status='pending' AND ref=\?"$/,
   // Apple's refund notification names the pack's transaction, not the user (coach-packs.js).
-  /^'UPDATE coach_pack_purchases SET refunded_at = \? WHERE transaction_id = \? AND refunded_at IS NULL'$/];
+  /^'UPDATE coach_pack_purchases SET refunded_at = \? WHERE transaction_id = \? AND refunded_at IS NULL'$/,
+  // The night's job finds the users with a coach day note due (coach-notes.js).
+  /FROM users u WHERE u\.disabled = 0 AND u\.id IN \(SELECT q\.user_id FROM coach_note_queue q WHERE q\.due_at <= \?\)/];
 
 test("personal tables are known", () => {
   for (const name of ["health_datapoints", "food_logs", "dashboard_profile", "connection_credentials"]) assert.ok(personal.includes(name), name);

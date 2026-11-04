@@ -13,7 +13,7 @@ import { gymExerciseCatalog, gymAlternatives } from "./gym-catalog.js";
 import { EXERCISE_STATIONS, stationSections } from "./gym-equipment.js";
 import { equipmentCatalog, detectGymEquipment } from "./gym-equipment-ai.js";
 import { getStrengthHistory, strengthSessions, importStrengthHistory, removeManualSets } from "./strength-history.js";
-import { assertTrainingAllowed, getAthleteState } from "./athlete-state.js";
+import { assertTrainingAllowed, getAthleteState, usedMemories } from "./athlete-state.js";
 import { isStrengthEvent, deletePlannedEvent } from "./planned-events.js";
 import { exerciseMuscles } from "./fitness-insights.js";
 import { EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
@@ -192,7 +192,7 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
       const minutes=Number(body.minutes)>0&&Number(body.minutes)<=240?Number(body.minutes):null;
       // Today's readiness, status and leg load, as the generator has them (Revize 2026-10-16, nález 27).
       const day=await buildStrengthContext(env,localToday()).then(gymDayFacts).catch(()=>null);
-      const result=await adjustGymPlan(env,{rows,request:text,history,taste:{...taste,memories:state.memories||[]},ratings,equipment:setup?name=>fitsEquipment(name,setup):null,dumbbells:setup?.dumbbellWeights||null,minutes,day});
+      const result=await adjustGymPlan(env,{rows,request:text,history,taste:{...taste,memories:usedMemories(state)},ratings,equipment:setup?name=>fitsEquipment(name,setup):null,dumbbells:setup?.dumbbellWeights||null,minutes,day});
       const muscles=Object.fromEntries([...new Set(result.rows.map(r=>r[1]))].map(name=>[name,exerciseMuscles(name)]));
       return Response.json({status:'ok',...result,muscles},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.limit?error.message:error.ai?L('AI úprava se nepovedla: ', 'The AI edit failed: ')+error.message:error.message},{status:error.limit?(error.status||429):error.ai?502:400})}

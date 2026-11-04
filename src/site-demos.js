@@ -493,7 +493,8 @@ ${[['Squat', '3×8 · 80 kg'], ['Bench press', '3×8 · 62.5 kg'], ['Rows', '3×
 </div>`;
 
 // The coach's memory (CoachMemory.swift): a message that tells the coach something lasting, its answer with the
-// "Remembered: …" line under it (MemoryChipView), and beside the phone the list behind the chat's ⋯ menu.
+// "Remembered: …" line under it (MemoryChipView), and beside the phone the list in its groups with
+// New on what the coach just saved, and the "Use memory" switch (CoachMemoryView).
 const memoryScreen = `<div class="app glow-today chat">${STATUS}
 <div class="nav c"><span class="cb">${ic('x')}</span><b>Coach</b><span class="cb">⋯</span></div>
 <div class="msgs">
@@ -504,10 +505,11 @@ const memoryScreen = `<div class="app glow-today chat">${STATUS}
 </div>
 <div class="inp"><span class="cam">${ic('camera')}</span><span class="mut">Message the coach…</span><span class="snd">${ic('up')}</span></div>
 </div>`;
+const memoryGroups = [['Goals', [['Deadlift 140 kg by spring']]], ['Training', [['Trains in the evening after work']]], ['Health', [['Left knee hurts when running', 3300]]], ['Life', [['No dairy']]]];
 const coachMemory = `<div class="dm pad one mem">
-<div class="row sp"><span class="mut">Coach</span><b>What the coach remembers</b><span></span></div>
-<div class="ml">${[['Left knee hurts when running', 3300], ['Trains in the evening after work'], ['Wants to deadlift 140 kg by spring'], ['No dairy']].map(([t, ms]) => `<div class="mi2${ms ? ' new' : ''}"${ms ? at(String(ms)) : ''}><span>${t}</span>${ic('chev')}</div>`).join('')}</div>
-<div class="madd">${ic('plus')}Add</div>
+<div class="row sp"><span class="mut">Coach</span><b>What the coach remembers</b><span class="madd2">${ic('plus')}</span></div>
+${memoryGroups.map(([g, items]) => `<div class="mg">${g}</div><div class="ml">${items.map(([t, ms]) => `<div class="mi2${ms ? ' new' : ''}"${ms ? at(String(ms)) : ''}><span>${t}</span>${ms ? '<span class="mnew">New</span>' : ''}${ic('chev')}</div>`).join('')}</div>`).join('')}
+<div class="ml mon"><div class="mi2"><span>Use memory</span><span class="mtog"></span></div></div>
 </div>`;
 
 // Beside the phone: the confirmed workout lands in the week.
@@ -1024,8 +1026,12 @@ html:not(.js) .stage1{display:none}
 /* The goal reached: the whale blows its spout (DrinkFigure.swift), bobbing a little. */
 .w-spout{transform-origin:48px 32px;transition:transform .5s cubic-bezier(.34,1.6,.5,1),opacity .3s!important;animation:w-blow 1.6s ease-in-out infinite}.js .w-spout.wait:not(.in){opacity:0;transform:scale(.2)}
 @keyframes w-blow{50%{translate:0 -1.5px}}@media (prefers-reduced-motion:reduce){.w-spout{animation:none}}.js .w-whale .w-water.wait:not(.in){opacity:1}
-.w-wv{animation:w-wave 3s linear infinite}.w-wv2{animation-duration:4.4s}@keyframes w-wave{to{transform:translateX(-55px)}}.w-wv2{animation-name:w-wave2}@keyframes w-wave2{from{transform:translate(0,6px)}to{transform:translate(-36.67px,6px)}}
-@media (prefers-reduced-motion:reduce){.w-wv{animation:none}}
+/* As in DrinkFigure.swift: the water stands still and sloshes only for a few seconds after each drink. */
+.w-wv{transition:transform 2.6s cubic-bezier(.3,.6,.4,1)!important}.w-wv2{transform:translate(0,6px)}
+.w-whale .w-water.in .w-wv,.dw-w.a .w-wv{transform:translateX(-27.5px)}.w-whale .w-water.in .w-wv2,.dw-w.a .w-wv2{transform:translate(-18.34px,6px)}
+.w-whale .w-water.full .w-wv,.dw-w.b .w-wv{transform:translateX(-55px)}.w-whale .w-water.full .w-wv2,.dw-w.b .w-wv2{transform:translate(-36.67px,6px)}
+.dw-w.c .w-wv{transform:translateX(-82.5px)}.dw-w.c .w-wv2{transform:translate(-55px,6px)}
+@media (prefers-reduced-motion:reduce){.w-wv{transition:none!important}}
 .w-drink .row.base{flex-wrap:wrap;column-gap:6px}.w-drink .row.base .mut{white-space:nowrap}
 /* Drinks: the card in Výživa with the whale (DrinkFigure.swift), its colours in light and dark. */
 .dk{--wt:#4FA3D9;--wd:rgba(46,134,193,.35);--we:#EAF3F9;--wi:#1B4F72;--wf:#1B1A17;--wb:#F28AA0}
@@ -1049,6 +1055,8 @@ html:not(.js) .stage1{display:none}
 .js .dw-w.wait:not(.in){opacity:1}
 .dw-ink{fill:none;stroke:var(--wi);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}.dw-thin{stroke-width:2}.dw-face{fill:var(--wf)}
 .dw-lid{fill:none;stroke:var(--wf);stroke-width:2.4;stroke-linecap:round}.dw-blush{fill:var(--wb);opacity:.45}
+/* Now and then the whale blinks (the app's idle move). */
+.dw-eye circle{transform-origin:30px 56px;animation:dw-blink 6.5s ease-in-out 2.2s infinite}@keyframes dw-blink{0%,95%,100%{transform:scaleY(1)}97.5%{transform:scaleY(.15)}}
 .dw-happy,.dw.goal .dw-eye{opacity:0}.dw.goal .dw-happy{opacity:1}.dw-eye,.dw-happy{transition:opacity .2s!important}
 .dw-drop{fill:var(--wt);opacity:0}.js .dw-drop.in{animation:dw-fall .45s ease-in forwards}@keyframes dw-fall{from{opacity:1;transform:translate(48px,-14px) scale(1.5)}90%{opacity:1}to{opacity:0;transform:translate(48px,32px) scale(1.5)}}
 .dw-ring{fill:none;stroke:#fff;stroke-width:1.6;opacity:0;transform-origin:48px 31px}.js .dw-ring.in{animation:dw-ring .7s ease-out forwards}@keyframes dw-ring{from{opacity:.9;transform:scale(.6)}to{opacity:0;transform:scale(3.2,2.4)}}
@@ -1079,7 +1087,10 @@ html:not(.js) .stage1{display:none}
 .mi2+.mi2{border-top:1px solid var(--line)}.js .mi2.new.wait:not(.in)+.mi2{border-top-color:transparent}.mi2 .di{width:13px;height:13px;color:var(--muted);stroke-width:2.6}
 .mi2.new.in{background:color-mix(in srgb,var(--green) 10%,transparent)}
 .js .mi2.new.wait:not(.in){max-height:0;padding-block:0;opacity:0}
-.madd{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:12px;padding:13px;border-radius:14px;background:var(--panel2);font-size:15px;font-weight:600}.madd .di{width:14px;height:14px;stroke-width:2.6}
+.madd2 .di{width:16px;height:16px;stroke-width:2.6}
+.mg{margin:14px 4px 6px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}.mem .mg+.ml{margin-top:0}
+.mi2 span:first-child{flex:1}.mnew{font-size:11px;font-weight:600;padding:3px 8px;border-radius:99px;color:var(--green);background:color-mix(in srgb,var(--green) 16%,transparent)}
+.mon{margin-top:14px}.mtog{width:42px;height:25px;border-radius:99px;background:#34C759;position:relative;flex:none}.mtog::after{content:"";position:absolute;width:21px;height:21px;border-radius:50%;background:#fff;top:2px;right:2px}
 /* Apple Watch: the case and its dark screens (WatchStyle.swift: Instrument Serif numbers, a glow at the top). */
 .aw-act{place-items:center}
 .aw-w>.scr{inset:12px;border-radius:50px;overflow:hidden}
@@ -1134,7 +1145,7 @@ html:not(.js) .stage1{display:none}
 .aw-st{display:flex;gap:1.5px;margin-top:2px}.aw-st b{flex:1;height:5px;border-radius:1px}
 .aw-home .aw-hero .aw-n{font-size:70px}.aw-home .aw-hero{margin-top:4px}.aw-home .aw-g{margin-top:10px}.aw-home .aw-g>div{padding:8px 6px 8px 8px}.aw-home .aw-v{font-size:23px}.aw-home .aw-next{align-items:flex-start;margin-top:12px;font-size:12.5px;line-height:1.3;white-space:normal}.aw-home .aw-next .di{margin-top:2px}
 .aw-face{display:flex;flex-direction:column;justify-content:space-between}.aw-fbot{padding:0 2px 4px}
-@media (prefers-reduced-motion:reduce){.dw-spout,.js .dw.goal,.js .dw-burst.in path,.js .dw-drop.in,.js .dw-ring.in{animation:none}.dw-drop,.dw-ring{display:none}}
+@media (prefers-reduced-motion:reduce){.dw-eye circle,.dw-spout,.js .dw.goal,.js .dw-burst.in path,.js .dw-drop.in,.js .dw-ring.in{animation:none}.dw-drop,.dw-ring{display:none}}
 .wc .th .di{font-size:12px}.wc .chips3 .ch3{border-radius:16px;transition:background .35s,border-color .35s}.wc .ch3 b{font-weight:600;font-size:15px}
 .wc .hg{margin-bottom:0}.hgt.w-draw{transition:clip-path 1.6s ease-in-out!important;clip-path:inset(0 0 0 0)}.js .hgt.w-draw.wait:not(.in){opacity:1;transform:none;clip-path:inset(0 100% 0 0)}
 .coach2{gap:12px}.coach2 .w-q{justify-self:end;padding:10px 14px;border-radius:18px;background:var(--button);color:var(--on-button);font-size:16px}
