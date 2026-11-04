@@ -105,7 +105,8 @@ import { assistantStreamResponse } from './assistant-stream.js';
 import legacyHealthApi, { googleToken, matchActivities } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
-import { reviewRefusal, isReviewAccount } from "./app-review.js";
+import { reviewRefusal, isReviewAccount, reviewCodeActive } from "./app-review.js";
+import { ensureReviewSample } from "./review-sample.js";
 import { handleNativeAppleLogin, forgetUsedAppleTokens } from "./apple-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat, startChatWithCoach, lastAnswerId, ownedChat } from "./assistant-chats.js";
 import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedReplyPush } from "./coach-push-reply.js";
@@ -631,6 +632,9 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (emailLogin) return emailLogin;
     if (url.pathname.startsWith("/app/api/")) {
       if (!user) return unauthorizedResponse();
+      // The App Review account shows a sample athlete's Apple Health (review-sample.js);
+      // one row read an hour, no query at all for anyone else. Paused health data stays paused.
+      if (isReviewAccount(rawEnv, user) && reviewCodeActive(rawEnv) && !user.healthPaused) await ensureReviewSample(env).catch(error => console.error("Review sample failed", error.message));
       if (foodCatalogRequestPaused(request, env, url.pathname)) return Response.json({status:'catalog_upgrade',message:new FoodCatalogUnavailable().message},{status:503,headers:{'Retry-After':'30','Cache-Control':'no-store'}});
       // A write the app replays after a lost signal is stored once (idempotency.js).
       const response = await withIdempotency(request, env, url, r => handleDashboardApi(r, env, ctx, url, { user, signedIn }));
