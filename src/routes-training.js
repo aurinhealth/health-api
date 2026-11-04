@@ -12,7 +12,7 @@ import { setPlannedEnvironment, movePlannedEvent, deletePlannedEvent } from "./p
 import { plannedDestinations, sendPlanned } from "./planned-send.js";
 import { linkPlanned } from "./planned-links.js";
 import { saveTrainingProfile, getTrainingProfile } from "./training-profile.js";
-import { estimateThresholdPace, estimateFtp, FTP_METHODS, PACE_METHODS, PACE_ZONE_MODELS, POWER_ZONE_MODELS, HR_ZONE_MODELS } from "./training-zones.js";
+import { estimateThresholdPace, estimateFtp, FTP_METHODS, PACE_METHODS, PACE_ZONE_MODELS, POWER_ZONE_MODELS, HR_ZONE_MODELS, SWIM_ZONE_OFFSETS, swimZoneNames } from "./training-zones.js";
 import { writeIntervalsZones } from "./intervals-zones.js";
 import { writeWahooZones, writeWahooZonesLater } from "./wahoo.js";
 import { L } from "./lang.js";
@@ -157,10 +157,12 @@ export async function handleThresholdApi(request,env,ctx,url,session,internalAut
       const toWahoo=Boolean(body&&env.WAHOO_TOKEN&&body.writeWahoo!==false&&(body.wahooAgain===true||powerKey(t.profile)!==powerBefore));
       const wahoo=toWahoo?await writeWahooZones(env,t).catch(error=>({status:'error',message:error.message})):null;
       return Response.json({status:'ok',intervals,intervalsConnected:Boolean(env.INTERVALS_API_KEY),wahoo,wahooConnected:Boolean(env.WAHOO_TOKEN),profile:t.profile,resolved:{ftp:t.ftp,ftpSource:t.source,indoorFtp:t.indoorFtp,intervalsFtp:t.intervalsFtp,latestRideFtp:t.latestRideFtp,lthr:t.lthr,maxHr:t.maxHr,restHr:t.restHr,runThresholdPace:t.runThresholdPace,runPaceSource:t.runPaceSource,intervalsRunPace:t.intervalsRunPace,runLthr:t.runLthr,swimCss:t.swimCss,swimCssSource:t.swimCssSource,poolLength:t.poolLength,poolLengthSource:t.poolLengthSource,openWater:t.openWater},swimZones:t.swimZones,powerZones:t.powerZones,hrZones:t.hrZones,paceZones:t.paceZones,runHrZones:t.runHrZones,
+        // For working the zones out on the phone while a value is typed: the thresholds without the athlete's own, the models in use and the swim zones' defaults.
+        preview:t.preview,hrModel:t.hrModel,runHrModel:t.runHrModel,runHrAuto:t.runHrAuto,runMaxHr:t.runMaxHr,swimZoneModel:{offsets:SWIM_ZONE_OFFSETS,names:swimZoneNames()},
         ftpMethods:Object.entries(FTP_METHODS).map(([id,m])=>({id,label:m.label,inputs:m.inputs.map(([key,label])=>({key,label}))})),
         paceMethods:Object.entries(PACE_METHODS).map(([id,m])=>({id,label:m.label,inputs:m.inputs.map(([key,label])=>({key,label}))})),
-        paceZoneModels:Object.entries(PACE_ZONE_MODELS).map(([id,m])=>({id,label:m.label,bounds:m.bounds})),
-        powerZoneModels:Object.entries(POWER_ZONE_MODELS).map(([id,m])=>({id,label:m.label,bounds:m.bounds})),hrZoneModels:Object.entries(HR_ZONE_MODELS).map(([id,m])=>({id,label:m.label,reference:m.reference}))},{headers:{'Cache-Control':'no-store'}});
+        paceZoneModels:Object.entries(PACE_ZONE_MODELS).map(([id,m])=>({id,label:m.label,bounds:m.bounds,names:m.names})),
+        powerZoneModels:Object.entries(POWER_ZONE_MODELS).map(([id,m])=>({id,label:m.label,bounds:m.bounds,names:m.names})),hrZoneModels:Object.entries(HR_ZONE_MODELS).map(([id,m])=>({id,label:m.label,reference:m.reference,bounds:m.bounds,names:m.names}))},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
 }

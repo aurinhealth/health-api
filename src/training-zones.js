@@ -45,6 +45,22 @@ export const HR_ZONE_MODELS = {
 function validBounds(bounds, max) {
   return Array.isArray(bounds) && bounds.length >= 1 && bounds.length <= 9 && bounds.every((b, i) => Number.isFinite(Number(b)) && Number(b) > 0 && Number(b) <= max && (i === 0 || Number(b) > Number(bounds[i - 1])));
 }
+// Heart-rate zone tops in bpm, rising: the bike's and the run's own zones.
+function validHrBounds(bounds) {
+  return Array.isArray(bounds) && bounds.length >= 1 && bounds.length <= 9 && bounds.every((b, i, a) => Number(b) >= 60 && Number(b) <= 230 && (i === 0 || Number(b) > Number(a[i - 1])));
+}
+// A zone edge typed in watts or pace is a fractional %: two decimals keep the
+// same watts and seconds when the zones are worked out again.
+const hundredth = x => Math.round(Number(x) * 100) / 100;
+// The preset an athlete's own zones were made from: its zone names stay.
+function baseOf(models, id) { return models[id] ? id : null; }
+// The names of custom zones: the preset they were made from when it has as
+// many zones, else a preset with that many, else Z1, Z2, …
+function customNames(models, base, count, skip = null) {
+  const from = models[base];
+  if (from && from.bounds.length + 1 === count) return from.names;
+  return Object.values(models).find(m => m !== skip && m.bounds.length + 1 === count)?.names || Array.from({ length: count }, (_, i) => "Z" + (i + 1));
+}
 
 // Stored profile (sanitised), from the settings form.
 export function sanitizeTrainingProfile(input = {}) {
@@ -56,7 +72,9 @@ export function sanitizeTrainingProfile(input = {}) {
   out.powerZoneModel = POWER_ZONE_MODELS[powerModel] || powerModel === "custom" ? powerModel : "coggan7";
   if (out.powerZoneModel === "custom") {
     if (!validBounds(input.powerZoneBounds, 400)) throw new Error(L("Hranice výkonových zón musí být rostoucí čísla v % FTP.", "Power zone limits must be increasing numbers in % of FTP."));
-    out.powerZoneBounds = input.powerZoneBounds.map(Number);
+    out.powerZoneBounds = input.powerZoneBounds.map(hundredth);
+    const base = baseOf(POWER_ZONE_MODELS, input.powerZoneBase);
+    if (base) out.powerZoneBase = base;
   }
   for (const [key, lo, hi, label] of [["lthr", 100, 220, "LTHR"], ["maxHr", 110, 230, L("Max. tep", "Max HR")], ["restHr", 30, 100, L("Klidový tep", "Resting HR")]]) {
     const v = positive(input[key]);
@@ -65,8 +83,19 @@ export function sanitizeTrainingProfile(input = {}) {
   const hrModel = String(input.hrZoneModel || "frielLthr");
   out.hrZoneModel = HR_ZONE_MODELS[hrModel] || hrModel === "custom" ? hrModel : "frielLthr";
   if (out.hrZoneModel === "custom") {
-    if (!Array.isArray(input.hrZoneBounds) || !input.hrZoneBounds.every((b, i, a) => Number(b) >= 60 && Number(b) <= 230 && (i === 0 || Number(b) > Number(a[i - 1])))) throw new Error(L("Hranice tepových zón musí být rostoucí tepy (bpm).", "Heart rate zone limits must be increasing heart rates (bpm)."));
-    out.hrZoneBounds = input.hrZoneBounds.map(Number);
+    if (!validHrBounds(input.hrZoneBounds)) throw new Error(L("Hranice tepových zón musí být rostoucí tepy (bpm).", "Heart rate zone limits must be increasing heart rates (bpm)."));
+    out.hrZoneBounds = input.hrZoneBounds.map(b => round(Number(b)));
+    const base = baseOf(HR_ZONE_MODELS, input.hrZoneBase);
+    if (base) out.hrZoneBase = base;
+  }
+  // Running heart-rate zones follow the bike's model (intervals-athlete.js)
+  // unless the athlete set their own, in bpm.
+  if (input.runHrZoneModel === "custom") {
+    if (!validHrBounds(input.runHrZoneBounds)) throw new Error(L("Hranice tepových zón pro běh musí být rostoucí tepy (bpm).", "Running heart rate zone limits must be increasing heart rates (bpm)."));
+    out.runHrZoneModel = "custom";
+    out.runHrZoneBounds = input.runHrZoneBounds.map(b => round(Number(b)));
+    const base = baseOf(HR_ZONE_MODELS, input.runHrZoneBase);
+    if (base) out.runHrZoneBase = base;
   }
   const pace = parsePace(input.runThresholdPace);
   if (pace != null) { if (pace < 150 || pace > 600) throw new Error(L("Prahové tempo musí být 2:30–10:00 /km.", "Threshold pace must be 2:30–10:00 /km.")); out.runThresholdPace = round(pace); }
@@ -77,13 +106,24 @@ export function sanitizeTrainingProfile(input = {}) {
   out.paceZoneModel = PACE_ZONE_MODELS[paceModel] || paceModel === "custom" ? paceModel : "friel";
   if (out.paceZoneModel === "custom") {
     if (!validBounds(input.paceZoneBounds, 200)) throw new Error(L("Hranice tempových zón musí být rostoucí čísla v % prahové rychlosti.", "Pace zone limits must be increasing numbers in % of threshold speed."));
-    out.paceZoneBounds = input.paceZoneBounds.map(Number);
+    out.paceZoneBounds = input.paceZoneBounds.map(hundredth);
+    const base = baseOf(PACE_ZONE_MODELS, input.paceZoneBase);
+    if (base) out.paceZoneBase = base;
   }
   const css = parsePace(input.swimCss);
   if (css != null) { if (css < 60 || css > 240) throw new Error(L("Prahové tempo v plavání musí být 1:00–4:00 /100 m.", "Swim threshold pace must be 1:00–4:00 /100 m.")); out.swimCss = round(css); }
   const pool = Number(input.poolLength);
   if (POOL_LENGTHS.includes(pool)) out.poolLength = pool;
   if (OPEN_WATER.includes(input.openWater)) out.openWater = input.openWater;
+  // Swim zones of the athlete's own: the fast end of each zone but the last,
+  // seconds per 100 m off CSS (as SWIM_ZONE_OFFSETS), so they follow the CSS.
+  if (input.swimZoneModel === "custom") {
+    const o = input.swimZoneBounds;
+    if (!Array.isArray(o) || o.length !== SWIM_ZONE_OFFSETS.length || !o.every((x, i) => Number.isInteger(Number(x)) && Number(x) >= -60 && Number(x) <= 90 && (i === 0 || Number(x) < Number(o[i - 1]))))
+      throw new Error(L("Hranice plaveckých zón musí jít od pomalé po rychlou.", "Swim zone limits must go from slow to fast."));
+    out.swimZoneModel = "custom";
+    out.swimZoneBounds = o.map(Number);
+  }
   return out;
 }
 
@@ -105,16 +145,22 @@ export function cssFromTest(t400, t200) {
 // The zones as offsets from CSS per 100 m (seconds; null = open end) and the
 // % of CSS speed Intervals.icu stores as pace zones.
 // [zone, name, slowest offset, fastest offset]; null is the open end.
-const SWIM_ZONES = () => [["Z1", L("Regenerace", "Recovery"), null, 12], ["Z2", L("Vytrvalost", "Endurance"), 11, 6], ["Z3", "Tempo", 5, 3], ["Z4", L("Práh", "Threshold"), 2, -2], ["Z5", L("Rychlost", "Speed"), -3, null]];
-export function swimZones(css = null) {
-  return SWIM_ZONES().map(([zone, name, slow, fast], i) => ({
-    zone: i + 1, name: zone + " " + name, offsetSlow: slow, offsetFast: fast,
-    paceSlow: css && slow != null ? formatPace(css + slow) : null, paceFast: css && fast != null ? formatPace(css + fast) : null
-  }));
+// The fast end of each zone but the last; a zone starts a second slower than
+// the one before ends.
+export const SWIM_ZONE_OFFSETS = [12, 6, 3, -2];
+export const swimZoneNames = () => ["Z1 " + L("Regenerace", "Recovery"), "Z2 " + L("Vytrvalost", "Endurance"), "Z3 Tempo", "Z4 " + L("Práh", "Threshold"), "Z5 " + L("Rychlost", "Speed")];
+const swimOffsets = profile => profile?.swimZoneModel === "custom" && Array.isArray(profile.swimZoneBounds) && profile.swimZoneBounds.length === SWIM_ZONE_OFFSETS.length ? profile.swimZoneBounds : SWIM_ZONE_OFFSETS;
+export function swimZones(css = null, profile = {}) {
+  const fastEnds = swimOffsets(profile);
+  return swimZoneNames().map((name, i) => {
+    const slow = i === 0 ? null : fastEnds[i - 1] - 1, fast = i < fastEnds.length ? fastEnds[i] : null;
+    return { zone: i + 1, name, offsetSlow: slow, offsetFast: fast,
+      paceSlow: css && slow != null ? formatPace(css + slow) : null, paceFast: css && fast != null ? formatPace(css + fast) : null };
+  });
 }
 // The upper bound of each zone as % of CSS speed at this CSS, for Intervals.icu.
-export function swimZoneBounds(css = 120) {
-  return SWIM_ZONES().slice(0, -1).map(([, , , fast]) => Math.round(css / (css + fast) * 1000) / 10);
+export function swimZoneBounds(css = 120, profile = {}) {
+  return swimOffsets(profile).map(fast => Math.round(css / (css + fast) * 1000) / 10);
 }
 
 // Power zones in % FTP and watts.
@@ -122,8 +168,8 @@ export function powerZones(profile = {}, ftp = null) {
   const custom = profile.powerZoneModel === "custom" && profile.powerZoneBounds;
   const model = custom ? null : POWER_ZONE_MODELS[profile.powerZoneModel] || POWER_ZONE_MODELS.coggan7;
   const bounds = custom ? profile.powerZoneBounds : model.bounds;
-  // Custom bounds keep the names of the preset with the same number of zones.
-  const names = model?.names || Object.values(POWER_ZONE_MODELS).find(m => m.bounds.length === bounds.length && m !== POWER_ZONE_MODELS.sweetSpot)?.names || bounds.concat([null]).map((_, i) => "Z" + (i + 1));
+  // Custom bounds keep the names of the preset they were made from.
+  const names = model?.names || customNames(POWER_ZONE_MODELS, profile.powerZoneBase, bounds.length + 1, POWER_ZONE_MODELS.sweetSpot);
   return names.slice(0, bounds.length + 1).map((name, i) => {
     const low = i === 0 ? 0 : bounds[i - 1] + 1, high = i < bounds.length ? bounds[i] : null;
     // Watt ranges follow on from the previous zone's top, so bounds typed in
@@ -136,7 +182,9 @@ export function powerZones(profile = {}, ftp = null) {
 // Heart-rate zones in bpm.
 export function hrZones(profile = {}) {
   if (profile.hrZoneModel === "custom" && profile.hrZoneBounds) {
-    return profile.hrZoneBounds.concat([null]).map((high, i) => ({ zone: i + 1, name: "Z" + (i + 1), bpmLow: i === 0 ? null : profile.hrZoneBounds[i - 1] + 1, bpmHigh: high }));
+    const tops = profile.hrZoneBounds, names = customNames(HR_ZONE_MODELS, profile.hrZoneBase, tops.length + 1);
+    // The last zone ends at the max heart rate, as with the presets.
+    return names.map((name, i) => ({ zone: i + 1, name, bpmLow: i === 0 ? null : tops[i - 1] + 1, bpmHigh: i < tops.length ? tops[i] : profile.maxHr || null }));
   }
   const model = HR_ZONE_MODELS[profile.hrZoneModel] || HR_ZONE_MODELS.frielLthr;
   const reserve = profile.maxHr && profile.restHr ? profile.maxHr - profile.restHr : null;
@@ -212,7 +260,7 @@ export function paceZones(profile = {}, thresholdPace = null) {
   const custom = profile.paceZoneModel === "custom" && profile.paceZoneBounds;
   const model = custom ? null : PACE_ZONE_MODELS[profile.paceZoneModel] || PACE_ZONE_MODELS.friel;
   const bounds = custom ? profile.paceZoneBounds : model.bounds;
-  const names = model?.names || Object.values(PACE_ZONE_MODELS).find(m => m.bounds.length === bounds.length)?.names || bounds.concat([null]).map((_, i) => "Z" + (i + 1));
+  const names = model?.names || customNames(PACE_ZONE_MODELS, profile.paceZoneBase, bounds.length + 1);
   const paceAt = pct => thresholdPace && pct ? round(thresholdPace * 100 / pct) : null;
   return names.slice(0, bounds.length + 1).map((name, i) => {
     const low = i === 0 ? 0 : bounds[i - 1], high = i < bounds.length ? bounds[i] : null;

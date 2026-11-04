@@ -44,6 +44,17 @@ test("Thresholds from Intervals.icu itself are not written back", () => {
   assert.equal(Ride.power_zone_names[3], "Sweet spot");
 });
 
+test("Own power zones typed in watts go to Intervals.icu as whole %", () => {
+  // Z2 typed from 143 W at FTP 260 is a top of 54.62 %; Intervals.icu takes only
+  // whole numbers and refused the whole write.
+  const p = { ftp: 260, powerZoneModel: "custom", powerZoneBounds: [54.62, 75, 90, 105, 120, 153.46] };
+  const { Ride } = intervalsSportSettings({ profile: p, powerZones: powerZones(p, 260), hrZones: [], paceZones: [] });
+  assert.deepEqual(Ride.power_zones, [55, 75, 90, 105, 120, 153, 999]);
+  assert.ok(Ride.power_zones.every(Number.isInteger));
+  const close = { powerZoneModel: "custom", powerZoneBounds: [55.2, 55.4, 90] };
+  assert.deepEqual(intervalsSportSettings({ profile: close, powerZones: [], hrZones: [], paceZones: [] }).Ride.power_zones, [55, 56, 90, 999], "still rising");
+});
+
 test("Both sport settings are written with PUT", async () => {
   const calls = [];
   const fetchImpl = async (url, init = {}) => {
@@ -73,4 +84,13 @@ test("The OAuth connection asks for SETTINGS:WRITE and saving zones writes them"
   assert.ok(!INTERVALS_SCOPES.includes("SETTINGS:READ"));
   const src = serverSource();
   assert.match(src, /body&&body\.writeIntervals!==false\?await writeIntervalsZones\(env,t\):null/);
+});
+
+test("Own swim and running heart-rate zones go to Intervals.icu as set", async () => {
+  const { swimZones } = await import("../src/training-zones.js");
+  const p = { swimCss: 100, swimZoneModel: "custom", swimZoneBounds: [10, 5, 2, -3] };
+  const { Swim } = intervalsSportSettings({ profile: p, powerZones: powerZones(p, 250), hrZones: [], paceZones: paceZones(p, 300), swimZones: swimZones(100, p), runHrZones: hrZones({ hrZoneModel: "custom", hrZoneBounds: [140, 150], maxHr: 190 }) });
+  assert.deepEqual(Swim.pace_zones, [90.9, 95.2, 98, 103.1, 999]);
+  const { Run } = intervalsSportSettings({ profile: p, powerZones: powerZones(p, 250), hrZones: [], paceZones: paceZones(p, 300), runHrZones: hrZones({ hrZoneModel: "custom", hrZoneBounds: [140, 150], maxHr: 190 }) });
+  assert.deepEqual(Run.hr_zones, [140, 150, 190]);
 });

@@ -70,6 +70,46 @@ struct SyncStatus: Decodable, Equatable {
         let message: String?
         /// When this result came, ISO.
         var at: String? = nil
+        /// Intervals.icu's counts (src/index.js syncIntervalsActivities, syncIntervalsEvents).
+        var parts: Parts? = nil
+
+        struct Parts: Decodable, Equatable {
+            var activities: Counts? = nil
+            var planned: Counts? = nil
+        }
+        /// Only what was not in Aurin before; absent from older servers.
+        struct Counts: Decodable, Equatable {
+            var activities_new: Int? = nil
+            var events_new: Int? = nil
+        }
+    }
+
+    /// The line under "Synchronizovat znovu" on a service's page: what this sync
+    /// brought from that service, or what went wrong with it. `failed`: the
+    /// request itself failed (offline). Other services' problems stay in Zdroje dat.
+    @MainActor
+    func pageLine(source: String, name: String, failed: String?) -> (text: String, problem: Bool) {
+        if let failed { return (failed, true) }
+        if status == "running" { return (L10n.tr("Pořád se synchronizuje na pozadí. Nová data se ukážou na Dnes, až to doběhne."), false) }
+        let result = (results ?? []).first { $0.source == source }
+        if let result, result.status == "error" || result.status == "partial" {
+            return (result.message ?? L10n.f("Synchronizace %@ se nepovedla. Zkus to za pár minut.", name), true)
+        }
+        var line = L10n.tr("Synchronizováno.")
+        if let at = finishedAt.flatMap(SourceActions.date) { line = L10n.f("Synchronizováno %@.", SourceActions.when(at)) }
+        if source == "google", googleStatus == "running" || result?.status == "queued" {
+            return (line + " " + L10n.tr("Google Health se dotahuje na pozadí."), false)
+        }
+        guard let parts = result?.parts, let activities = parts.activities?.activities_new else { return (line, false) }
+        let plans = parts.planned?.events_new ?? 0
+        var new: [String] = []
+        if activities > 0 { new.append(L10n.plural("%lld nových aktivit", activities)) }
+        if plans > 0 { new.append(L10n.plural("%lld nových plánů", plans)) }
+        switch new.count {
+        case 0: return (line + " " + L10n.f("V %@ nic nového.", name), false)
+        case 1: return (line + " " + L10n.f("%@ z %@.", new[0], name), false)
+        default: return (line + " " + L10n.f("%@ a %@ z %@.", new[0], new[1], name), false)
+        }
     }
 
     /// One source whose last sync failed: its name, what failed and when.
@@ -125,6 +165,13 @@ struct TrainingProfileResponse: Decodable, Equatable {
     let powerZoneModels: [Model]
     let hrZoneModels: [Model]
     let paceZoneModels: [Model]
+    var preview: Preview? = nil
+    /// The heart-rate models the server uses now (after its fallbacks) and the
+    /// running one without the athlete's own zones.
+    var hrModel: String? = nil
+    var runHrModel: String? = nil
+    var runHrAuto: String? = nil
+    var swimZoneModel: SwimZoneModel? = nil
 
     struct IntervalsWrite: Decodable, Equatable {
         /// "ok", "needs-permission", "not-connected" or "error".
@@ -193,6 +240,34 @@ struct TrainingProfileResponse: Decodable, Equatable {
     struct Model: Decodable, Equatable, Identifiable {
         let id: String
         let label: String
+        /// The zone tops (% of the reference) and names, for working the zones
+        /// out while typing (ZoneMath); absent from older servers.
+        var bounds: [Double]? = nil
+        var names: [String]? = nil
+        /// Heart rate: "lthr", "maxHr" or "reserve".
+        var reference: String? = nil
+    }
+
+    /// The thresholds without the athlete's own values (Intervals.icu, the
+    /// latest ride, the calibrated max and resting rate): what a cleared field
+    /// falls back to. Absent from older servers.
+    struct Preview: Decodable, Equatable {
+        let ftp: Double?
+        let lthr: Double?
+        let maxHr: Double?
+        let runMaxHr: Double?
+        let restHr: Double?
+        /// Seconds per km.
+        let runThresholdPace: Double?
+        let runLthr: Double?
+        /// Seconds per 100 m.
+        let swimCss: Double?
+    }
+
+    /// The swim zones' default fast ends (seconds per 100 m off CSS) and names.
+    struct SwimZoneModel: Decodable, Equatable {
+        let offsets: [Double]
+        let names: [String]
     }
 }
 
