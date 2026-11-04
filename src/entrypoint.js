@@ -358,9 +358,14 @@ const USER_JOBS = [
     await legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent", { method: "POST" }), scoped, ctx);
     await forwardWatchWorkouts(scoped).catch(error => console.error("Watch workout forward failed", error.message));
   } },
-  // Hourly at :45: done workouts and plans that missed Intervals.icu while it was
-  // disconnected or refusing (intervals-catchup.js); idle, one sync_status row.
-  { name: "intervals-catchup", providers: ["intervals"], due: (cron, now) => minute(cron, now, m => m === 45), run: (scoped, ctx, controller) => runIntervalsCatchUp(scoped, { now: controller?.scheduledTime || Date.now() }) },
+  // Done workouts and plans that missed Intervals.icu while it was disconnected
+  // or refusing (intervals-catchup.js): every five minutes while one is pending
+  // (a reconnect schedules it), hourly at :45 it also looks for sends refused
+  // for good. Idle, one sync_status read.
+  { name: "intervals-catchup", providers: ["intervals"], due: every5, run: (scoped, ctx, controller) => {
+    const now = controller?.scheduledTime || Date.now();
+    return runIntervalsCatchUp(scoped, { now, pendingOnly: new Date(now).getUTCMinutes() !== 45 });
+  } },
   // Hourly at :50 until it is done: one more year of older Intervals.icu activities
   // (index.js syncIntervalsHistory), one request a run; then a single read of sync_status.
   { name: "intervals-history", providers: ["intervals"], due: (cron, now) => minute(cron, now, m => m === 50), run: async (scoped, ctx) => {

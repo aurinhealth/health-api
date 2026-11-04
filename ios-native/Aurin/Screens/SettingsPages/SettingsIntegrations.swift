@@ -113,6 +113,8 @@ struct IntegrationDetailView: View {
     let actions: SourceActions
     @State private var flow = ConnectFlowState()
     @State private var syncing = false
+    /// What "Synchronizovat znovu" brought, until the page is left (SyncStatus.pageLine).
+    @State private var syncLine: (text: String, problem: Bool, at: Date)? = nil
     @State private var sync: SyncSettingsStore?
 
     /// The live state after a reconnect or a sync.
@@ -162,7 +164,7 @@ struct IntegrationDetailView: View {
                         SettingsDivider()
                     }
                     Button {
-                        Task { syncing = true; await store.syncNow(); await store.load(); syncing = false }
+                        Task { await syncAgain() }
                     } label: {
                         HStack {
                             Text(syncing ? "Synchronizuji…" : "Synchronizovat znovu").font(.body).foregroundStyle(Palette.ink)
@@ -173,6 +175,15 @@ struct IntegrationDetailView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(syncing || store.demo)
+                }
+                if let line = syncLine {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Circle().fill(line.problem ? Palette.rust : Palette.green).frame(width: 7, height: 7)
+                        Text(verbatim: line.text).font(Typo.small).foregroundStyle(line.problem ? Palette.rust : Palette.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 6)
+                    .accessibilityElement(children: .combine)
                 }
             }
 
@@ -199,12 +210,27 @@ struct IntegrationDetailView: View {
         }
     }
 
-    /// "propojeno · před 2 min", or what is wrong.
+    /// "propojeno · před 2 min", or what is wrong. After "Synchronizovat znovu"
+    /// that went fine, its time (the server notes a success at most every 10 min).
     private var state: String {
         guard current.connected == true else { return L10n.tr("nepřipojeno") }
         if let problem = current.problemText { return problem }
+        if let line = syncLine, !line.problem { return L10n.tr("propojeno") + " · " + SourceActions.when(line.at) }
         if let at = current.lastSuccessAt.flatMap(SourceActions.when) { return L10n.tr("propojeno") + " · " + at }
         return L10n.tr("propojeno")
+    }
+
+    /// "Synchronizovat znovu": the sync, then one line on what it brought from this service.
+    private func syncAgain() async {
+        syncing = true
+        syncLine = nil
+        await store.syncNow()
+        let failed = store.errorMessage
+        await store.load()
+        let status = store.sync ?? SyncStatus(status: nil, updatedAt: nil, results: nil, googleStatus: nil)
+        let line = status.pageLine(source: current.id, name: current.name ?? current.id, failed: failed)
+        withAnimation { syncLine = (line.text, line.problem, Date()) }
+        syncing = false
     }
 
     /// "Aurin čte": Google's permissions, Apple Health's switches, or what the service gives.

@@ -1309,8 +1309,16 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays,del
 
   if (!Array.isArray(activities)) throw new Error('Invalid Intervals activity response');
   const statements = [];
-  const previous = activities.some(a => a?._note && !a.name && !a.type)
-    ? (await env.DB.prepare("SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='activity' AND start_time>=?").bind(env.USER_ID,oldest).all()).results || [] : [];
+  // What the window already has: a note-only answer keeps the stored name and
+  // type, and "Synchronizovat znovu" says how many are new (activities_new).
+  // By id (the unique index), 90 a query: a stored start may be UTC or local.
+  const notes = activities.some(a => a?._note && !a.name && !a.type);
+  const ids = [...new Set(activities.filter(a => a?.id != null && a.id !== '').map(a => 'activity:' + String(a.id)))];
+  const previous = [];
+  for (let i = 0; i < ids.length; i += 90) {
+    const part = ids.slice(i, i + 90);
+    previous.push(...((await env.DB.prepare(`SELECT external_id${notes ? ",payload_json" : ""} FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='activity' AND external_id IN (${part.map(() => "?").join(",")})`).bind(env.USER_ID, ...part).all()).results || []));
+  }
   const existingById = new Map(previous.map(row => [row.external_id, row]));
   // Activities the app logged and sent there (Synchronizace): the app keeps
   // its own copy, a second one from Intervals.icu would count them twice.
@@ -1318,11 +1326,12 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays,del
   // Settings → Synchronizace → Intervals.icu → Stahovat hotové aktivity off.
   if (!(await readSyncPrefs(env.DB, env.USER_ID, "intervals")).pullActivities) return { activities_found: activities.length, activities_saved: 0, skipped: "off" };
 
-  let saved = 0;
+  let saved = 0, added = 0;
 
   for (const sourceActivity of activities) {
     const id = String(sourceActivity.id);
     if (sentByAurin(sourceActivity) || sentHere.has(id)) continue;
+    if (!existingById.has("activity:" + id)) added++;
     let a = sourceActivity;
     if (sourceActivity?._note && !sourceActivity.name && !sourceActivity.type) {
       const existing = existingById.get("activity:"+id);
@@ -1380,6 +1389,9 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays,del
 
     activities_saved:
       saved,
+
+    activities_new:
+      added,
 
     ...(removed ? { activities_removed: removed } : {})
   };
@@ -1443,7 +1455,8 @@ async function syncIntervalsEvents(env) {
   ).bind(env.USER_ID, oldest, rangeEnd);
   const statements = [];
 
-  let saved = 0;
+  let saved = 0, added = 0;
+  const known = new Set(previous.map(row => row.external_id));
 
   const appEvents=await localExportIndex(env.DB,env.USER_ID);
   for (const e of events) {
@@ -1480,6 +1493,7 @@ async function syncIntervalsEvents(env) {
     ));
 
     saved++;
+    if (!known.has(`planned:${id}`)) added++;
   }
 
   // Replace atomically so a storage failure preserves the previous calendar.
@@ -1492,6 +1506,9 @@ async function syncIntervalsEvents(env) {
 
     events_saved:
       saved,
+
+    events_new:
+      added,
 
     reconciled_from:
       oldest
