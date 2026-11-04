@@ -89,38 +89,40 @@ struct TrainingCalendarCard: View {
 
     // MARK: Strip
 
+    // The strip scrolls only through its scrollPosition, never a ScrollViewProxy:
+    // proxy.scrollTo also moves the page's own scroll view, and on the iPhone Duo
+    // (status bar at the side, PageScroll takes its own width) that left the
+    // page's scroll view 0 pt wide, so Training showed nothing but its Start button.
     private var strip: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal) {
-                LazyHStack(spacing: 0) {
-                    ForEach(stripDays, id: \.self) { date in
-                        Button { pick(date, scroll: true, proxy: proxy) } label: {
-                            DayCircle(date: date, today: today, selected: date == day, day: model.calendar[date])
-                        }
-                        .buttonStyle(.plain)
-                        .containerRelativeFrame(.horizontal, count: 6, spacing: 0)
-                        .scrollTransition(.interactive, axis: .horizontal) { content, phase in
-                            content
-                                .blur(radius: phase.isIdentity ? 0 : 2.5)
-                                .opacity(phase.isIdentity ? 1 : 0.45)
-                                .scaleEffect(phase.isIdentity ? 1 : 0.88)
-                        }
-                        .id(date)
+        ScrollView(.horizontal) {
+            LazyHStack(spacing: 0) {
+                ForEach(stripDays, id: \.self) { date in
+                    Button { pick(date, scroll: true) } label: {
+                        DayCircle(date: date, today: today, selected: date == day, day: model.calendar[date])
                     }
+                    .buttonStyle(.plain)
+                    .containerRelativeFrame(.horizontal, count: 6, spacing: 0)
+                    .scrollTransition(.interactive, axis: .horizontal) { content, phase in
+                        content
+                            .blur(radius: phase.isIdentity ? 0 : 2.5)
+                            .opacity(phase.isIdentity ? 1 : 0.45)
+                            .scaleEffect(phase.isIdentity ? 1 : 0.88)
+                    }
+                    .id(date)
                 }
-                .scrollTargetLayout()
             }
-            .scrollIndicators(.hidden)
-            .scrollTargetBehavior(.viewAligned)
-            .scrollPosition(id: $centered, anchor: .center)
-            // Room for the letter, the selected ring and the date; the percent
-            // of the plan shows in the ring's colour and in the day's list.
-            .frame(height: stripHeight)
-            .onAppear { proxy.scrollTo(day, anchor: .center) }
-            .onChange(of: centered) { _, date in
-                // The day in the middle is the chosen one, as in a picker.
-                if let date, date != day { selected = date }
-            }
+            .scrollTargetLayout()
+        }
+        .scrollIndicators(.hidden)
+        .scrollTargetBehavior(.viewAligned)
+        .scrollPosition(id: $centered, anchor: .center)
+        // Room for the letter, the selected ring and the date; the percent
+        // of the plan shows in the ring's colour and in the day's list.
+        .frame(height: stripHeight)
+        .onAppear { centered = day }
+        .onChange(of: centered) { _, date in
+            // The day in the middle is the chosen one, as in a picker.
+            if let date, date != day { selected = date }
         }
     }
 
@@ -143,9 +145,9 @@ struct TrainingCalendarCard: View {
         if expanded, let month { Task { await model.loadCalendar(from: month, to: ISODay.monthEnd(month)) } }
     }
 
-    private func pick(_ date: String, scroll: Bool, proxy: ScrollViewProxy? = nil) {
+    private func pick(_ date: String, scroll: Bool) {
         selected = date
-        if scroll, let proxy { withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(date, anchor: .center) } }
+        if scroll { withAnimation(.easeOut(duration: 0.25)) { centered = date } }
         else { centered = date }
     }
 
