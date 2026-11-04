@@ -882,12 +882,14 @@ struct PlanCard: View {
                     .lineLimit(1).minimumScaleFactor(0.6)
                     .padding(.top, 8)
                 VStack(alignment: .leading, spacing: 1) {
-                    ForEach(lines, id: \.self) { Text(verbatim: $0) }
+                    // Wrap, never cut: the 12 months' total must show whole (App Store 3.1.2).
+                    ForEach(lines, id: \.self) { Text(verbatim: $0).fixedSize(horizontal: false, vertical: true) }
                 }
                 .font(.caption).opacity(0.85).padding(.top, 4)
             }
             .foregroundStyle(selected ? Night.violet : Night.ink)
-            .padding(.horizontal, 12).padding(.top, 16).padding(.bottom, 12)
+            // Room under the SAVE pill on the card's top edge, also with large text.
+            .padding(.horizontal, 12).padding(.top, 22).padding(.bottom, 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(selected ? Night.lavender : Night.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(selected ? .clear : Night.line))
