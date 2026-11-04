@@ -125,6 +125,13 @@ struct TrainingProfileResponse: Decodable, Equatable {
     let powerZoneModels: [Model]
     let hrZoneModels: [Model]
     let paceZoneModels: [Model]
+    var preview: Preview? = nil
+    /// The heart-rate models the server uses now (after its fallbacks) and the
+    /// running one without the athlete's own zones.
+    var hrModel: String? = nil
+    var runHrModel: String? = nil
+    var runHrAuto: String? = nil
+    var swimZoneModel: SwimZoneModel? = nil
 
     struct IntervalsWrite: Decodable, Equatable {
         /// "ok", "needs-permission", "not-connected" or "error".
@@ -193,6 +200,34 @@ struct TrainingProfileResponse: Decodable, Equatable {
     struct Model: Decodable, Equatable, Identifiable {
         let id: String
         let label: String
+        /// The zone tops (% of the reference) and names, for working the zones
+        /// out while typing (ZoneMath); absent from older servers.
+        var bounds: [Double]? = nil
+        var names: [String]? = nil
+        /// Heart rate: "lthr", "maxHr" or "reserve".
+        var reference: String? = nil
+    }
+
+    /// The thresholds without the athlete's own values (Intervals.icu, the
+    /// latest ride, the calibrated max and resting rate): what a cleared field
+    /// falls back to. Absent from older servers.
+    struct Preview: Decodable, Equatable {
+        let ftp: Double?
+        let lthr: Double?
+        let maxHr: Double?
+        let runMaxHr: Double?
+        let restHr: Double?
+        /// Seconds per km.
+        let runThresholdPace: Double?
+        let runLthr: Double?
+        /// Seconds per 100 m.
+        let swimCss: Double?
+    }
+
+    /// The swim zones' default fast ends (seconds per 100 m off CSS) and names.
+    struct SwimZoneModel: Decodable, Equatable {
+        let offsets: [Double]
+        let names: [String]
     }
 }
 

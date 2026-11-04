@@ -60,7 +60,7 @@ export function intervalsSportSettings(t) {
   // CSS as speed (m/s) and Swim Smooth's zones as % of it, pace per 100 m.
   const swim = {
     threshold_pace: Math.round(100 / profile.swimCss * 1000) / 1000,
-    pace_zones: [...swimZoneBounds(profile.swimCss), OPEN],
+    pace_zones: [...swimZoneBounds(profile.swimCss, profile), OPEN],
     pace_zone_names: (t.swimZones || []).map(z => bare(z.name)),
     pace_units: "SECS_100M",
     // Swim load from pace (sTSS = IF³ × hours × 100), never from wrist heart
