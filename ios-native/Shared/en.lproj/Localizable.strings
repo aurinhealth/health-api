@@ -3786,3 +3786,7 @@
 "Adaptivní tréninkový plán" = "Adaptive training plan";
 "Každý trénink se řídí tvou regenerací, pokrokem a časem, který máš." = "Every session follows your recovery, your progress and the time you have.";
 "Začít s Aurin Pro" = "Start with Aurin Pro";
+
+/* Wahoo page in Zdroje dat (SyncViews.swift) */
+"FTP a výkonové zóny" = "FTP and power zones";
+"Zapnuto" = "On";

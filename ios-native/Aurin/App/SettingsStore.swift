@@ -71,6 +71,7 @@ final class SettingsStore {
             }
             let status = try? await connections
             self.connections = status?.providers ?? []
+            if let status { ConnectionProblems.checked(status.providers) }
             priority = status?.priority ?? .auto
             readOff = status?.readOff ?? [:]
             readTypes = status?.readTypes ?? [:]
@@ -163,7 +164,7 @@ final class SettingsStore {
                 guard sync?.status == "running" else { break }
                 try? await Task.sleep(for: .seconds(3))
             }
-            if let response = try? await api.connections() { connections = response.providers }
+            if let response = try? await api.connections() { connections = response.providers; ConnectionProblems.checked(response.providers) }
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -175,6 +176,7 @@ final class SettingsStore {
         guard !demo else { return }
         if let response = try? await api.connections() {
             connections = response.providers
+            ConnectionProblems.checked(response.providers)
             priority = response.priority ?? .auto
             readOff = response.readOff ?? [:]
             readTypes = response.readTypes ?? [:]
@@ -238,4 +240,13 @@ final class SettingsStore {
 
     /// Connected sources to connect again or grant permissions (Settings badge).
     var problems: [ConnectionsResponse.Provider] { connections.filter(\.needsAttention) }
+}
+
+/// The connections as another screen just read them (Zdroje dat, Sync again):
+/// Today's card shows a broken one at once instead of after Today reloads.
+enum ConnectionProblems {
+    static let name = Notification.Name("AurinConnectionsChecked")
+    static func checked(_ providers: [ConnectionsResponse.Provider]) {
+        NotificationCenter.default.post(name: name, object: providers.filter(\.needsAttention))
+    }
 }

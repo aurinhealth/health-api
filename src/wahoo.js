@@ -129,7 +129,7 @@ export async function wahooAccessToken(env, { fetchImpl = fetch, now = Date.now(
   }, { now });
   // A refused refresh (also every connection made with the Sandbox app once the
   // Production app is in) shows Reconnect instead of failing quietly.
-  if (!text && refused) await markConnectionBroken(env, SOURCE, 'Wahoo refresh refused');
+  if (!text && refused) await markConnectionBroken(env, SOURCE, L('Wahoo už nepřijímá uložené přihlášení.', 'Wahoo no longer accepts the saved sign-in.'));
   if (!text) throw Object.assign(new Error('Wahoo HTTP 401'), { status: 401 });
   env.WAHOO_TOKEN = text;
   return readWahooTokens(env).access_token;
