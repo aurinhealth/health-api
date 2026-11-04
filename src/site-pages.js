@@ -746,9 +746,9 @@ export const GOOGLE_DISCLOSURE_ON_HOME = false;
 export const WEARABLES = ['Apple Watch', 'Fitbit', 'Pixel Watch', 'WHOOP', 'Ultrahuman'];
 // Aurin Pro's US prices in App Store Connect (Petr, 2026-11-02); the App Store shows each country its own.
 export const PRO_PRICE = {month: '$6.99', year: '$59.99'};
-// What the year saves against 12 months paid monthly, in whole percent, as the app's plans show it
+// What the year saves against 12 months paid monthly, in whole percent rounded down, as the app's plans show it
 // (ProOffer.saving, variant 8c of the paywall, Petr 2026-11-04): 28 for $59.99 against 12 × $6.99.
-export const PRO_SAVE = Math.round((1 - parseFloat(PRO_PRICE.year.slice(1)) / (12 * parseFloat(PRO_PRICE.month.slice(1)))) * 100);
+export const PRO_SAVE = Math.floor((1 - parseFloat(PRO_PRICE.year.slice(1)) / (12 * parseFloat(PRO_PRICE.month.slice(1)))) * 100);
 // What Aurin has for everyone and what Pro adds, as Settings → Aurin Pro lists them (ProContents in
 // SubscriptionView.swift, in the app's English). A Pro group with items lists them under its title.
 export const PRO_CONTENTS = {

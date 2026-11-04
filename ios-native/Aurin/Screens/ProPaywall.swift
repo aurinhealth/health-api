@@ -53,17 +53,17 @@ struct ProOffer: Identifiable, Equatable {
     /// Yearly paid monthly (where the App Store offers it), yearly paid once, monthly.
     @MainActor
     static func all(_ store: ProStore) -> [ProOffer] {
-        let locale = store.priceLocale
-        return plans(yearly: store.price(ProStore.yearlyID) ?? L10n.tr("1 490 Kč"),
-                     monthly: store.price(ProStore.monthlyID) ?? L10n.tr("199 Kč"),
-                     perMonth: store.perMonth(ProStore.yearlyID), commitment: store.commitment,
-                     trial: store.trialEligible, amount: { ProStore.amount($0, locale: locale) })
+        plans(yearly: store.price(ProStore.yearlyID) ?? L10n.tr("1 490 Kč"),
+              monthly: store.price(ProStore.monthlyID) ?? L10n.tr("199 Kč"),
+              perMonth: store.perMonth(ProStore.yearlyID), commitment: store.commitment,
+              trial: store.trialEligible)
     }
 
-    /// The plans from the shown prices; `amount` reads the number in a shown price
-    /// (ProStore.amount), for what each plan saves against paying monthly.
+    /// The plans from the shown prices; what each saves against paying monthly
+    /// comes from the numbers in them (ProStore.number, whatever the phone's locale).
     static func plans(yearly: String, monthly: String, perMonth: String?, commitment: ProStore.Commitment?,
-                      trial: Bool, amount: (String) -> Decimal?) -> [ProOffer] {
+                      trial: Bool) -> [ProOffer] {
+        let amount = ProStore.number
         let month = amount(monthly)
         var plans: [ProOffer] = []
         if let c = commitment {
@@ -80,16 +80,18 @@ struct ProOffer: Identifiable, Equatable {
     }
 
     /// What `price` for `months` saves against paying `monthly` for as many months,
-    /// in whole percent (approved mockup 8c, 4 Nov 2026): 149 against 199 is 25,
-    /// 1 490 against 12 × 199 is 38, $59.99 against 12 × $6.99 is 28. Nil when it
-    /// saves nothing or a price has no number.
+    /// in whole percent rounded down, so the label never promises more than the
+    /// prices give (monetization review, 4 Nov 2026): 149 against 199 is 25,
+    /// 1 490 against 12 × 199 is 37 (37.6), $59.99 against 12 × $6.99 is 28.
+    /// Nil when it saves nothing, a price has no number or the saving is beyond
+    /// belief (over 90 %: a price read wrong, never a label).
     static func saving(_ price: Decimal?, months: Int, against monthly: Decimal?) -> Int? {
         guard let price, let monthly, monthly > 0, price > 0 else { return nil }
         let full = monthly * Decimal(months)
         var share = (full - price) / full * 100, whole = Decimal()
-        NSDecimalRound(&whole, &share, 0, .plain)
+        NSDecimalRound(&whole, &share, 0, .down)
         let percent = NSDecimalNumber(decimal: whole).intValue
-        return percent >= 1 ? percent : nil
+        return (1...90).contains(percent) ? percent : nil
     }
 
     /// The two plans on the offer: the 12-month ones, or yearly and monthly where Apple has no monthly payments.
@@ -727,7 +729,8 @@ struct AllProPlans: View {
     /// What Pro includes: the offer's first four screens, in the same words.
     static let included: [ProScreen] = [.coach, .plan, .training, .food]
 
-    private var chosen: ProOffer? { offers.first { $0.kind == selected } }
+    /// The chosen plan; the yearly one while the year paid monthly is chosen where it isn't sold (the US, before the offer resets it).
+    private var chosen: ProOffer? { offers.first { $0.kind == selected } ?? offers.first { $0.kind == .yearOnce } }
     /// The two cards: the 12-month plans where the year can be paid monthly, else yearly and monthly.
     private var cards: [ProOffer] { offers.count > 2 ? offers.filter { $0.kind != .monthly } : offers }
     /// The month without commitment under the cards, when it is not one of them.
@@ -741,6 +744,7 @@ struct AllProPlans: View {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark").scaledFont(14, weight: .semibold, cap: .denseCap).foregroundStyle(Night.ink)
                             .frame(width: 36, height: 36).background(Night.card, in: Circle())
+                            .frame(width: 44, height: 44).contentShape(Circle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(L10n.tr("Zavřít"))
@@ -751,7 +755,7 @@ struct AllProPlans: View {
                 includedList.padding(.top, 18)
                 HStack(alignment: .top, spacing: 10) {
                     ForEach(cards) { o in
-                        PlanCard(offer: o, selected: selected == o.kind) { selected = o.kind }
+                        PlanCard(offer: o, selected: chosen?.kind == o.kind) { selected = o.kind }
                     }
                 }
                 .fixedSize(horizontal: false, vertical: true)
@@ -788,6 +792,8 @@ struct AllProPlans: View {
             .padding(.horizontal, 20)
         }
         .scrollBounceBehavior(.basedOnSize)
+        // Half-width cards: the price stays whole up to the size the app's screens stop at.
+        .dynamicTypeSize(...DynamicTypeSize.screenCap)
         .environment(\.colorScheme, .dark)
     }
 
@@ -878,7 +884,7 @@ struct PlanCard: View {
                 VStack(alignment: .leading, spacing: 1) {
                     ForEach(lines, id: \.self) { Text(verbatim: $0) }
                 }
-                .font(.caption2).opacity(0.72).padding(.top, 4)
+                .font(.caption).opacity(0.85).padding(.top, 4)
             }
             .foregroundStyle(selected ? Night.violet : Night.ink)
             .padding(.horizontal, 12).padding(.top, 16).padding(.bottom, 12)
@@ -888,9 +894,11 @@ struct PlanCard: View {
             .overlay(alignment: .topLeading) {
                 if let save = offer.save {
                     Text(verbatim: L10n.f("UŠETŘÍŠ %d %%", save)).scaledFont(10, weight: .bold, cap: .denseCap).foregroundStyle(Night.bottom)
+                        .lineLimit(1).fixedSize()
                         .padding(.horizontal, 9).padding(.vertical, 3)
                         .background(Night.mint, in: Capsule())
                         .offset(x: 12, y: -9)
+                        .accessibilityLabel(L10n.f("Ušetříš %d %% proti měsíčnímu tarifu", save))
                 }
             }
         }

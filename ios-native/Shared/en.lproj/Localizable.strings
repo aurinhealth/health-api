@@ -3691,6 +3691,7 @@
 "v přepočtu" = "equivalent";
 "zrušíš kterýkoli měsíc" = "cancel any month";
 "UŠETŘÍŠ %d %%" = "SAVE %d%%";
+"Ušetříš %d %% proti měsíčnímu tarifu" = "Saves %d%% compared with the monthly plan";
 
 /* Settings → Aurin Pro in night violet and the coach message packs (ProSettings.swift) */
 "%lld navíc" = "%lld extra";
