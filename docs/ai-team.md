@@ -37,6 +37,8 @@ roles are sub agents defined in `.claude/agents/`:
 - Every team run: `critic` reviews the proposals before the owner's document.
 - Social posts and replies on X: `marketing` drafts and reviews them. The Product Manager schedules
   posts in Typefully; replies under other people's posts the owner posts himself.
+- Texts for people (release notes, App Store, web copy): `marketing` runs its plain-writing check
+  on them before they go out.
 - A full team run (all roles, two rounds) costs a lot of credits: only when the owner asks for it.
   Usually 2–3 roles are enough.
 
