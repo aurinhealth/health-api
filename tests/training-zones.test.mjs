@@ -6,6 +6,7 @@ import { athleteThresholds } from "../src/intervals-athlete.js";
 import { buildCyclingCoachV2 } from "../src/cycling-coach-v2.js";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
+import { grantedExtras } from "../src/google-scopes.js";
 
 test("FTP methods", () => {
   assert.equal(estimateFtp("test20", { power20: 300 }).ftp, 285);
@@ -110,4 +111,45 @@ test("Intervals.icu slow or down: the sport settings read last time are used, an
     assert.equal(other.lthr, null);
     assert.equal(errors.filter(e => /Intervals athlete settings unavailable/.test(e)).length, 1);
   } finally { console.error = error; console.warn = warn; }
+});
+
+test("own zones keep the preset's names; running heart rate and swim zones of the athlete's own", async () => {
+  // Power typed from the sweet-spot preset keeps its names; watts round-trip through two decimals.
+  const p = sanitizeTrainingProfile({ powerZoneModel: "custom", powerZoneBase: "sweetSpot", powerZoneBounds: [160 / 2.85, 75, 87, 94, 105, 120] });
+  assert.equal(p.powerZoneBounds[0], 56.14);
+  const power = powerZones(p, 285);
+  assert.equal(power[3].name, "SS Sweet spot");
+  assert.deepEqual([power[0].wattsHigh, power[1].wattsLow], [160, 161]);
+  assert.equal(sanitizeTrainingProfile({ powerZoneModel: "custom", powerZoneBase: "nope", powerZoneBounds: [60, 80] }).powerZoneBase, undefined);
+  // Bike heart rate in bpm: named after its preset, the last zone ends at max.
+  const hr = hrZones(sanitizeTrainingProfile({ hrZoneModel: "custom", hrZoneBase: "hrMax5", hrZoneBounds: [120, 140, 155, 170], maxHr: 190 }));
+  assert.deepEqual(hr.map(z => [z.bpmLow, z.bpmHigh]), [[null, 120], [121, 140], [141, 155], [156, 170], [171, 190]]);
+  assert.equal(hr[4].name, "Z5 Maximum");
+  // Run heart rate: own zones only with valid bounds; otherwise nothing is stored.
+  assert.throws(() => sanitizeTrainingProfile({ runHrZoneModel: "custom", runHrZoneBounds: [150, 140] }), /běh/);
+  assert.equal(sanitizeTrainingProfile({ runHrZoneModel: "auto", runHrZoneBounds: [140] }).runHrZoneModel, undefined);
+  const raw = createD1(), db = scopedDb(raw, 7);
+  await saveTrainingProfile(db, { runLthr: 172, runHrZoneModel: "custom", runHrZoneBounds: [145, 155, 162, 170, 175, 182], maxHr: 192, swimCss: 100, swimZoneModel: "custom", swimZoneBounds: [10, 5, 2, -3] });
+  const t = await athleteThresholds({ DB: db, USER_ID: 7 });
+  assert.equal(t.runHrModel, "custom");
+  assert.equal(t.runHrAuto, "frielRun");
+  assert.deepEqual(t.runHrZones.map(z => z.bpmHigh), [145, 155, 162, 170, 175, 182, 192]);
+  assert.equal(t.runHrZones[1].name, "Z2 Aerobní");
+  // Swim: Z2 starts a second slower than Z1 ends, all off CSS.
+  assert.deepEqual(t.swimZones.map(z => [z.paceSlow, z.paceFast]), [[null, "1:50"], ["1:49", "1:45"], ["1:44", "1:42"], ["1:41", "1:37"], ["1:36", null]]);
+  assert.throws(() => sanitizeTrainingProfile({ swimZoneModel: "custom", swimZoneBounds: [5, 10, 2, -3] }), /pomalé/);
+  // The thresholds the phone works from when a field is cleared: none of the athlete's own.
+  assert.deepEqual([t.preview.runLthr, t.preview.swimCss, t.preview.maxHr], [null, null, null]);
+});
+
+test("the preview thresholds are Intervals.icu's and the calibrated ones", async () => {
+  const raw = createD1(), db = scopedDb(raw, 8);
+  await db.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();
+  await db.prepare("INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(8,1,?)").bind(JSON.stringify({ hrmax: 191, rhr: 44 })).run();
+  await db.prepare("INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(8,2,?)").bind(JSON.stringify({ hrmax: 185, rhr: 50, fetchedAt: new Date().toISOString(), permissions: JSON.stringify(grantedExtras({})), trainingHistory: { recentCount: 1 } })).run();
+  await saveTrainingProfile(db, { ftp: 300, lthr: 170 });
+  const fetchImpl = async () => Response.json({ sportSettings: [{ types: ["Ride"], ftp: 280, lthr: 165 }, { types: ["Run"], max_hr: 183, lthr: 175 }] });
+  const t = await athleteThresholds({ DB: db, USER_ID: 8, INTERVALS_API_KEY: "k" }, fetchImpl);
+  assert.deepEqual([t.ftp, t.lthr, t.maxHr, t.restHr], [300, 170, 191, 44]);
+  assert.deepEqual(t.preview, { ftp: 280, lthr: 165, maxHr: 185, runMaxHr: 183, restHr: 50, runThresholdPace: null, runLthr: 175, swimCss: null });
 });

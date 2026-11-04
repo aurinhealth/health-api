@@ -12,8 +12,16 @@ import { intervalsReads } from "./intervals-reads.js";
 const bare = name => String(name || "").replace(/^(Z\d+[a-c+]?|SS|[EMTIR])\s+/, "").trim() || String(name || "");
 const OPEN = 999;
 
+// Intervals.icu keeps power zones as whole % FTP (int32 in its API) and turns
+// down the whole write over a decimal one: an own zone typed in watts (54.62 %)
+// goes as the nearest whole % (55), the watts there may differ by one or two.
 function powerBounds(profile) {
-  if (profile.powerZoneModel === "custom" && Array.isArray(profile.powerZoneBounds)) return profile.powerZoneBounds;
+  if (profile.powerZoneModel === "custom" && Array.isArray(profile.powerZoneBounds)) {
+    const whole = profile.powerZoneBounds.map(b => Math.round(Number(b)));
+    // Two tops that round to the same % keep their order a step apart.
+    for (let i = 1; i < whole.length; i++) if (whole[i] <= whole[i - 1]) whole[i] = whole[i - 1] + 1;
+    return whole;
+  }
   return (POWER_ZONE_MODELS[profile.powerZoneModel] || POWER_ZONE_MODELS.coggan7).bounds;
 }
 
@@ -60,7 +68,7 @@ export function intervalsSportSettings(t) {
   // CSS as speed (m/s) and Swim Smooth's zones as % of it, pace per 100 m.
   const swim = {
     threshold_pace: Math.round(100 / profile.swimCss * 1000) / 1000,
-    pace_zones: [...swimZoneBounds(profile.swimCss), OPEN],
+    pace_zones: [...swimZoneBounds(profile.swimCss, profile), OPEN],
     pace_zone_names: (t.swimZones || []).map(z => bare(z.name)),
     pace_units: "SECS_100M",
     // Swim load from pace (sTSS = IF³ × hours × 100), never from wrist heart

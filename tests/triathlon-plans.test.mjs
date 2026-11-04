@@ -158,3 +158,20 @@ test("review: picked sports reach the week, the summary and the roles", async ()
   const { days } = planDays(getTemplate("du-standard"), sanitizeWeekPlan({ availability: short }), null, null, [0, 1, 3, 5]);
   assert.ok(days[1].length > 0, "Tuesday is used");
 });
+
+test("English plans name their run and ride sessions in English (week keys and session labels)", async () => {
+  const { withLang } = await import("../src/lang.js");
+  const czech = /[áčďéěíňóřšťúůýž]|Kopce|pyramida|Prahové|Tempový/i;
+  for (const id of ["du-sprint", "du-standard", "multi-base", "tri-sprint"]) {
+    const keys = withLang("en", () => templateSummary(getTemplate(id))).weeks.flatMap(w => w.keys);
+    for (const key of keys) assert.doesNotMatch(key, czech, `${id}: ${key}`);
+    for (const n of [1, 2, 6]) {
+      const labels = withLang("en", () => week(id, n)).items.filter(x => x.plan).map(x => x.label);
+      assert.ok(labels.length > 0, `${id} week ${n}`);
+      for (const label of labels) assert.doesNotMatch(label, czech, `${id} week ${n}: ${label}`);
+    }
+  }
+  // Czech stays Czech.
+  assert.ok(templateSummary(getTemplate("du-sprint")).weeks[0].keys.some(k => k.startsWith("Fartlek pyramida")));
+  assert.equal(withLang("en", () => getTemplate("du-sprint").name), "Sprint duathlon");
+});

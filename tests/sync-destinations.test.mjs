@@ -111,6 +111,51 @@ test("Intervals.icu gets the activity as a manual one, recorded; a retry updates
   assert.deepEqual((await activitySends(env, activity.key)).map(s => [s.destination, s.status, s.remoteId]), [["intervals", "sent", "i777"]]);
 });
 
+test("Intervals.icu keeps a manual activity's length on PUT: it is made again with the new one", async () => {
+  const d = db();
+  const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "k" };
+  // 2026-11-01: finished at 1 min, resumed, finished at 76 min; the PUT answered with the old length.
+  const { calls, fetchImpl } = recorder((url, opts) => {
+    const method = opts.method || "GET";
+    if (method === "GET") return Response.json([]);
+    if (method === "POST") return Response.json({ id: calls.filter(c => c.method === "POST").length === 1 ? "i1" : "i2", moving_time: JSON.parse(opts.body).moving_time });
+    if (method === "PUT") return Response.json({ id: "i1", moving_time: 60 });
+    return new Response(null, { status: 200 });
+  });
+  await sendActivity(env, { ...activity, minutes: 12 }, { fetchImpl });
+  const result = await sendActivity(env, { ...activity, minutes: 76 }, { fetchImpl });
+  assert.deepEqual(calls.slice(2).map(c => [c.method, c.url]), [
+    ["PUT", "https://intervals.icu/api/v1/activity/i1"],
+    ["DELETE", "https://intervals.icu/api/v1/activity/i1"],
+    ["POST", "https://intervals.icu/api/v1/athlete/0/activities/manual"]
+  ]);
+  assert.equal(calls[4].body.moving_time, 4560);
+  assert.equal(calls[4].body.external_id, "aurin:7:gym:2026-10-10", "the same external_id");
+  assert.deepEqual(result.sends, [{ destination: "intervals", status: "sent", remoteId: "i2" }]);
+  // A PUT that took the length (or a name change) stays one request.
+  const taken = recorder((url, opts) => (opts.method || "GET") === "PUT" ? Response.json({ id: "i2", moving_time: 4560 }) : Response.json([]));
+  await sendActivity(env, { ...activity, minutes: 76, name: "Push A" }, { fetchImpl: taken.fetchImpl });
+  assert.deepEqual(taken.calls.map(c => c.method), ["PUT"]);
+  // Deleted in Intervals.icu meanwhile: made again instead of failing for good.
+  const gone = recorder((url, opts) => (opts.method || "GET") === "PUT" ? new Response("", { status: 404 }) : Response.json({ id: "i3" }));
+  const again = await sendActivity(env, { ...activity, minutes: 77 }, { fetchImpl: gone.fetchImpl });
+  assert.deepEqual(gone.calls.map(c => c.method), ["PUT", "POST"]);
+  assert.equal(again.sends[0].remoteId, "i3");
+});
+
+test("A gym session finished within minutes of its start is not sent", async () => {
+  const d = db();
+  const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "k" };
+  const { calls, fetchImpl } = recorder(() => Response.json({ id: "i9" }));
+  const result = await sendActivity(env, { ...activity, minutes: 1 }, { fetchImpl });
+  assert.deepEqual(result.sends, []);
+  assert.equal(result.short, true);
+  assert.equal(calls.length, 0);
+  // A short workout typed in is not a gym session: it goes.
+  const typed = await sendActivity(env, { ...activity, key: "manual:abc", minutes: 5 }, { fetchImpl });
+  assert.equal(typed.sends[0].status, "sent");
+});
+
 const timeout = () => { throw Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" }); };
 
 test("Intervals.icu: a first send without an answer is 'unknown'; the retry finds the activity by external_id and updates it", async () => {
