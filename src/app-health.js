@@ -100,8 +100,9 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   // Today (applyCheckin); what it took off is its own part.
   const readinessOn = d => readinessFor({ date: d, rows, sessions, profile });
   const readiness = readinessFor({ date, rows, sessions, profile, checkin }), body = readiness.body;
-  const history = Array.from({ length: 14 }, (_, i) => shift(date, i - 13))
-    .map(d => ({ date: d, value: d === date ? readiness.score : readinessOn(d).score }))
+  const pastDays = Array.from({ length: 14 }, (_, i) => shift(date, i - 13)).map(d => ({ date: d, r: d === date ? readiness : readinessOn(d) }));
+  const history = pastDays
+    .map(({ date: d, r }) => ({ date: d, value: r.score }))
     .filter(p => p.value != null);
 
   // Last night, the week of nights and the coming night.
@@ -123,9 +124,10 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const week = Array.from({ length: 7 }, (_, i) => shift(date, i - 6)).map(d => ({ date: d, value: round(num(nights.get(d)?.durationMin)) })).filter(p => p.value != null);
   // The sleep index of the last 14 nights with its average and the user's
   // usual range (the middle half of them, from 7 nights). No database reads:
-  // the 30 days of nights are loaded already.
-  const indexNights = Array.from({ length: 14 }, (_, i) => shift(date, i - 13))
-    .map(d => ({ date: d, value: nights.get(d) ? sleepIndexFor(nights.get(d), d === date ? needToday.need : needOn(d).need) : null }))
+  // the 30 days of nights are loaded already. A past night's need is the one
+  // its own readiness used, as Today showed its index that morning.
+  const indexNights = pastDays
+    .map(({ date: d, r }) => ({ date: d, value: nights.get(d) ? sleepIndexFor(nights.get(d), d === date ? needToday.need : r.need.need) : null }))
     .filter(p => p.value != null);
   const indexUsual = indexNights.length >= USUAL_NIGHTS ? middleHalf(indexNights.map(p => p.value)) : null;
 
