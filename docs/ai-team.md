@@ -24,6 +24,12 @@ roles are sub agents defined in `.claude/agents/`:
 - Tests and attacks run only on the test server `staging.aurin.health` or a local `wrangler dev`,
   never on production (aurin.health). A production test is a separate step the owner approves.
 - Roles do not talk to each other directly. The Product Manager passes their findings between them.
+- Merging and deploying are held by code, not only by this text: `.claude/settings.json` makes Claude
+  Code ask the owner before it merges a pull request, turns on auto-merge or runs `wrangler deploy`,
+  even in auto mode. The production deploy also waits for the owner's approval in the GitHub
+  `production` environment. The rule binds sessions opened in this repository; a session that
+  loads no project settings (for example a cloud project with more than one repository) is held by
+  the owner's "mergni" and "vydej" alone.
 
 ## Who checks what
 - Every pull request that changes the server or how data loads: `performance-cost` writes the
@@ -59,3 +65,11 @@ roles are sub agents defined in `.claude/agents/`:
 8. The owner gets one document with numbered points (severity, who found it, proposal, effort,
    sources) and approves them ("1, 3, 5 yes, 2 no").
 9. Only approved points are implemented, each in its own pull request.
+
+## Sources
+The "promises against the code" check (`privacy-compliance`), the four-point checklist
+(`performance-cost`) and the merge and deploy rule in `.claude/settings.json` adapt ideas from the
+`intended-vs-implemented`, `performance-audit-static` and `guardrail-hooks` skills in
+[phuryn/product-engineering](https://github.com/phuryn/product-engineering) (MIT, Pawel Huryn), read
+on 2026-11-04. The skills themselves are not installed here: they target another stack and would
+clash with this process.
