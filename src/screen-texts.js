@@ -49,7 +49,9 @@ export function screenFacts(screen, data) {
 
 function todayFacts(d) {
   const sleep = d.sleep || null, hrv = d.hrv || null, rhr = d.restingHR || null, n = d.nutrition || {};
-  const plan = (Array.isArray(d.plan) ? d.plan : []).filter(i => i && i.kind !== "bedtime");
+  const shown = (Array.isArray(d.plan) ? d.plan : []).filter(i => i && i.kind !== "bedtime");
+  // The hormonal pill ("Pill 6 of 21") is cycle data: the AI gets it only with the cycle shared.
+  const plan = d.coachCycle ? shown : shown.filter(i => i.kind !== "pill");
   const facts = {
     readiness: d.readiness?.score ?? null,
     readinessZone: d.readiness?.zone ?? null,
@@ -83,7 +85,7 @@ function todayFacts(d) {
     facts.hrv != null && { label: "HRV", value: Math.round(facts.hrv) + " ms" + (facts.hrvBaseline != null ? L(", obvykle ", ", usually ") + Math.round(facts.hrvBaseline) : "") },
     facts.restingHR != null && { label: L("Klidový tep", "Resting HR"), value: Math.round(facts.restingHR) + (facts.restingHRBaseline != null ? L(", obvykle ", ", usually ") + Math.round(facts.restingHRBaseline) : "") },
     facts.strainPlanned != null && { label: L("Plánovaná námaha", "Planned strain"), value: decimal(facts.strainPlanned) },
-    plan.length > 0 && { label: L("Plán dne", "Day plan"), value: plan.map(i => i.title + (i.done ? " ✓" : "")).join(", ") }
+    shown.length > 0 && { label: L("Plán dne", "Day plan"), value: shown.map(i => i.title + (i.done ? " ✓" : "")).join(", ") }
   ].filter(Boolean);
   const chips = [
     facts.sleepMinutes != null && L("Spánek ", "Sleep ") + hm(facts.sleepMinutes),
@@ -100,7 +102,11 @@ function todayFacts(d) {
     // The numbers it quotes too, in steps that matter (readiness by 5, sleep
     // by 15 minutes, HRV and resting HR by 3), so "Proč?" never shows a
     // number the new ring has left behind.
-    fingerprint: [sleep ? 1 : 0, facts.readinessZone || "", step(facts.readiness, 5), step(facts.sleepMinutes, 15), step(facts.hrv, 3), step(facts.restingHR, 3), facts.readinessFlags.join(","), facts.checkin || "", facts.athleteState || "", plan.map(i => i.title + (i.done ? "✓" : "")).sort().join("|"), facts.ruleBasedSummary || ""].join(":").slice(0, 800)
+    fingerprint: [sleep ? 1 : 0, facts.readinessZone || "", step(facts.readiness, 5), step(facts.sleepMinutes, 15), step(facts.hrv, 3), step(facts.restingHR, 3), facts.readinessFlags.join(","), facts.checkin || "", facts.athleteState || "", plan.map(i => i.title + (i.done ? "✓" : "")).sort().join("|"), facts.ruleBasedSummary || "",
+      // Sharing the cycle turned on or off, or an injury noted, writes a new
+      // text, so a withdrawn cycle leaves today's text too. Added only when
+      // there, so other users' fingerprints stay as they were.
+      ...(facts.cycle ? ["cycle" + (facts.cycle.eased ? "-eased" : "")] : []), ...(facts.injuryNoted ? ["injury"] : [])].join(":").slice(0, 800)
   };
 }
 
@@ -295,9 +301,10 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
     await env.DB.prepare(`INSERT INTO ai_screen_texts (user_id, day, screen, lang, fingerprint, text, advice, basis_json, generations, failed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?)
       ON CONFLICT(user_id, day, screen, lang) DO UPDATE SET fingerprint=excluded.fingerprint, text=excluded.text, advice=excluded.advice, basis_json=excluded.basis_json, generations=ai_screen_texts.generations+1, failed_at=NULL, created_at=excluded.created_at`)
       .bind(userId, day, screen, language, info.fingerprint, text, advice || null, JSON.stringify({ chips: info.chips, basis: info.basis }), createdAt).run();
-    // The day's first text of the screen also deletes the user's texts older
-    // than KEEP_DAYS (primary key user_id, day: a few rows, once a day).
-    if (!row?.text) await env.DB.prepare("DELETE FROM ai_screen_texts WHERE user_id=? AND day<?").bind(userId, daysBefore(day, KEEP_DAYS)).run().catch(() => {});
+    // The day's first text of the screen also deletes this screen's texts
+    // older than KEEP_DAYS (primary key user_id, day: one row a day each, so
+    // no call of the day deletes nothing in steady state).
+    if (!row?.text) await env.DB.prepare("DELETE FROM ai_screen_texts WHERE user_id=? AND day<? AND screen=? AND lang=?").bind(userId, daysBefore(day, KEEP_DAYS), screen, language).run().catch(() => {});
     return answer("ai", { text, advice: advice || null, chips: info.chips, basis: info.basis, createdAt });
   } catch (error) {
     if (error?.busy) return cached || fallback();

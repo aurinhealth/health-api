@@ -22,9 +22,9 @@ const today = (extra = {}) => ({
   date, readiness: { score: 71, zone: "yellow" }, sleep: { minutes: 420, need: 450 }, hrv: { value: 52, baseline: 58 }, restingHR: { value: 52, baseline: 49 },
   summary: { text: "Sleep 7 h.", recommendation: "Nothing planned. A good day for a harder session. Keep in mind: Knee pain since Sunday.", remember: "Keep in mind: Knee pain since Sunday." },
   readinessDetail: { parts: [{ key: "restingHR", points: -2, cycle: true }, { key: "hrv", points: -4 }] },
-  plan: [], cycle: todayCard, ...extra
+  plan: [{ kind: "pill", title: "Pill 6 of 21", done: false }, { kind: "workout", title: "Endurance", done: false }], cycle: todayCard, ...extra
 });
-const CYCLE_WORDS = /menstru|period|cycle|cramps|luteal|"phase"|cycleDay/i;
+const CYCLE_WORDS = /menstru|period|cycle|cramps|luteal|"phase"|cycleDay|pill|prášek/i;
 
 test("Today's sentence: no cycle without 'Coach knows my cycle', only the shared view with it", () => {
   const hidden = screenFacts("today", today({ coachCycle: null }));
@@ -34,6 +34,14 @@ test("Today's sentence: no cycle without 'Coach knows my cycle', only the shared
   const shared = screenFacts("today", today({ coachCycle }));
   assert.deepEqual(shared.facts.cycle, { phase: "menstrual", cycleDay: 2, eased: true, symptoms: ["cramps"] });
   assert.equal(cycleForCoach({ ...cycleOf(false), date }), null);
+  // The pill is cycle data too: only with sharing; the user still sees it under Proč?.
+  assert.deepEqual(hidden.facts.plan.map(i => i.title), ["Endurance"]);
+  assert.match(hidden.basis.find(b => b.label === "Plán dne").value, /Pill 6 of 21/);
+  assert.deepEqual(shared.facts.plan.map(i => i.title), ["Pill 6 of 21", "Endurance"]);
+  // Turning sharing off (or on) changes the fingerprint, so today's text is written again.
+  assert.notEqual(hidden.fingerprint, shared.fingerprint);
+  const none = screenFacts("today", today({ coachCycle: null, summary: { text: "Sleep 7 h.", recommendation: "Go." } }));
+  assert.doesNotMatch(none.fingerprint, /cycle|injury/);
 });
 
 test("Today's sentence: the injury's words stay out, the AI only knows there is one", () => {
@@ -94,9 +102,12 @@ test("the sentence's records of earlier days go after KEEP_DAYS", async () => {
   await screenText(env, { screen: "today", load: async () => today(), ask });
   const day = localToday(), back = n => new Date(Date.parse(day + "T12:00:00Z") - n * 86400000).toISOString().slice(0, 10);
   for (const d of [back(KEEP_DAYS + 3), back(KEEP_DAYS + 1), back(KEEP_DAYS), back(1)]) await env.DB.prepare("INSERT INTO ai_screen_texts (user_id, day, screen, lang, text, generations) VALUES (1, ?, 'food', 'cs', 'x', 1)").bind(d).run();
+  await env.DB.prepare("INSERT INTO ai_screen_texts (user_id, day, screen, lang, text, generations) VALUES (1, ?, 'training', 'cs', 'x', 1)").bind(back(KEEP_DAYS + 3)).run();
   await screenText(env, { screen: "food", load: async () => ({ kcal: 0, target: 2600, macros: {}, meals: [] }), ask });
-  const days = (await env.DB.prepare("SELECT day FROM ai_screen_texts WHERE user_id=1 ORDER BY day").all()).results.map(r => r.day);
+  const days = (await env.DB.prepare("SELECT day FROM ai_screen_texts WHERE user_id=1 AND screen IN ('today','food') ORDER BY day").all()).results.map(r => r.day);
   assert.deepEqual(days, [back(KEEP_DAYS), back(1), day, day].sort());
+  // Another screen's old text goes with that screen's next first text of a day.
+  assert.ok(await env.DB.prepare("SELECT 1 FROM ai_screen_texts WHERE user_id=1 AND screen='training'").first());
 });
 
 test("'Sign in' follows the app's language before the user is known", async () => {
