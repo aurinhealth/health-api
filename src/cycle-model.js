@@ -191,7 +191,7 @@ export function cycleTrainingCaution(state) {
   return reasons.length ? { reasons, cycleDay: state.cycleDay ?? null } : null;
 }
 
-// Does the athlete let the AI coach know the cycle ("Kouč zná můj cyklus")?
+// Does the athlete let the AI coach know the cycle ("Kouč ví o cyklu")?
 // `cycle` is profile.cycle ({settings, days}).
 export function cycleShared(cycle) {
   const settings = normalizeCycleSettings(cycle && cycle.settings);

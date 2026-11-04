@@ -254,7 +254,7 @@ const CYCLE_TEXTS=()=>({
 });
 const NEUTRAL_TEXTS=()=>({cap:L("lehčí den","an easier day"),adaptation:L("dnes lehce a krátce","easy and short today")});
 // The engine's result as the AI may see it. Without the cycle shared
-// ("Kouč zná můj cyklus", cycle-model.js cycleShared), a period day keeps its
+// ("Kouč ví o cyklu", cycle-model.js cycleShared), a period day keeps its
 // easy session but says no reason, and the readiness parts lose their luteal
 // mark. With it shared nothing changes.
 export function engineForAI(engine,{cycleShared=false}={}){

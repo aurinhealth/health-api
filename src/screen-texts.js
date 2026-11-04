@@ -50,8 +50,9 @@ export function screenFacts(screen, data) {
 function todayFacts(d) {
   const sleep = d.sleep || null, hrv = d.hrv || null, rhr = d.restingHR || null, n = d.nutrition || {};
   const shown = (Array.isArray(d.plan) ? d.plan : []).filter(i => i && i.kind !== "bedtime");
-  // The hormonal pill ("Pill 6 of 21") is cycle data: the AI gets it only with the cycle shared.
-  const plan = d.coachCycle ? shown : shown.filter(i => i.kind !== "pill");
+  // The hormonal pill ("Pill 6 of 21") is cycle data the sentence does not
+  // need: never for the AI, shared or not (it stays under "Proč?").
+  const plan = shown.filter(i => i.kind !== "pill");
   const facts = {
     readiness: d.readiness?.score ?? null,
     readinessZone: d.readiness?.zone ?? null,
@@ -63,7 +64,7 @@ function todayFacts(d) {
     checkin: d.checkin || null,
     athleteState: d.athleteState && d.athleteState !== "active" ? d.athleteState : null,
     // The cycle only as cycle-model.js cycleForCoach gives it, so only with
-    // "Kouč zná můj cyklus" on (the route adds it as coachCycle). Today's own
+    // "Kouč ví o cyklu" on (the route adds it as coachCycle). Today's own
     // cycle card (d.cycle) is shown with tracking on, shared or not.
     ...(cycleFact(d) ? { cycle: cycleFact(d) } : {}),
     sleepMinutes: num(sleep?.minutes), sleepNeedMinutes: num(sleep?.need), sleepIndex: num(sleep?.index),
@@ -301,10 +302,10 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
     await env.DB.prepare(`INSERT INTO ai_screen_texts (user_id, day, screen, lang, fingerprint, text, advice, basis_json, generations, failed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?)
       ON CONFLICT(user_id, day, screen, lang) DO UPDATE SET fingerprint=excluded.fingerprint, text=excluded.text, advice=excluded.advice, basis_json=excluded.basis_json, generations=ai_screen_texts.generations+1, failed_at=NULL, created_at=excluded.created_at`)
       .bind(userId, day, screen, language, info.fingerprint, text, advice || null, JSON.stringify({ chips: info.chips, basis: info.basis }), createdAt).run();
-    // The day's first text of the screen also deletes this screen's texts
-    // older than KEEP_DAYS (primary key user_id, day: one row a day each, so
-    // no call of the day deletes nothing in steady state).
-    if (!row?.text) await env.DB.prepare("DELETE FROM ai_screen_texts WHERE user_id=? AND day<? AND screen=? AND lang=?").bind(userId, daysBefore(day, KEEP_DAYS), screen, language).run().catch(() => {});
+    // The day's first text of a screen also deletes all the user's texts
+    // older than KEEP_DAYS, of every screen and language, also one no longer
+    // used (primary key user_id, day: a few rows; a later call finds none).
+    if (!row?.text) await env.DB.prepare("DELETE FROM ai_screen_texts WHERE user_id=? AND day<?").bind(userId, daysBefore(day, KEEP_DAYS)).run().catch(() => {});
     return answer("ai", { text, advice: advice || null, chips: info.chips, basis: info.basis, createdAt });
   } catch (error) {
     if (error?.busy) return cached || fallback();

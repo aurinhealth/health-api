@@ -37,7 +37,7 @@ test("Today's sentence: no cycle without 'Coach knows my cycle', only the shared
   // The pill is cycle data too: only with sharing; the user still sees it under Proč?.
   assert.deepEqual(hidden.facts.plan.map(i => i.title), ["Endurance"]);
   assert.match(hidden.basis.find(b => b.label === "Plán dne").value, /Pill 6 of 21/);
-  assert.deepEqual(shared.facts.plan.map(i => i.title), ["Pill 6 of 21", "Endurance"]);
+  assert.deepEqual(shared.facts.plan.map(i => i.title), ["Endurance"], "not even shared: the sentence does not need it");
   // Turning sharing off (or on) changes the fingerprint, so today's text is written again.
   assert.notEqual(hidden.fingerprint, shared.fingerprint);
   const none = screenFacts("today", today({ coachCycle: null, summary: { text: "Sleep 7 h.", recommendation: "Go." } }));
@@ -104,10 +104,9 @@ test("the sentence's records of earlier days go after KEEP_DAYS", async () => {
   for (const d of [back(KEEP_DAYS + 3), back(KEEP_DAYS + 1), back(KEEP_DAYS), back(1)]) await env.DB.prepare("INSERT INTO ai_screen_texts (user_id, day, screen, lang, text, generations) VALUES (1, ?, 'food', 'cs', 'x', 1)").bind(d).run();
   await env.DB.prepare("INSERT INTO ai_screen_texts (user_id, day, screen, lang, text, generations) VALUES (1, ?, 'training', 'cs', 'x', 1)").bind(back(KEEP_DAYS + 3)).run();
   await screenText(env, { screen: "food", load: async () => ({ kcal: 0, target: 2600, macros: {}, meals: [] }), ask });
-  const days = (await env.DB.prepare("SELECT day FROM ai_screen_texts WHERE user_id=1 AND screen IN ('today','food') ORDER BY day").all()).results.map(r => r.day);
+  // Every screen's and language's old texts go, also of a screen no longer opened.
+  const days = (await env.DB.prepare("SELECT day FROM ai_screen_texts WHERE user_id=1 ORDER BY day").all()).results.map(r => r.day);
   assert.deepEqual(days, [back(KEEP_DAYS), back(1), day, day].sort());
-  // Another screen's old text goes with that screen's next first text of a day.
-  assert.ok(await env.DB.prepare("SELECT 1 FROM ai_screen_texts WHERE user_id=1 AND screen='training'").first());
 });
 
 test("'Sign in' follows the app's language before the user is known", async () => {
@@ -116,4 +115,12 @@ test("'Sign in' follows the app's language before the user is known", async () =
   const cookie = await unauthorizedResponse(new Request("https://x/", { headers: { cookie: "a=1; lw-lang=en" } })).json();
   assert.equal(cookie.message, "Sign in to the app.");
   assert.equal((await unauthorizedResponse().json()).message, "Přihlas se do dashboardu.");
+});
+
+test("block planning gets wellness only as the coach reads it: no raw Intervals.icu fields", async () => {
+  const { compactWellness } = await import("../src/coach-assistant.js");
+  const rows = [{ id: "2026-11-03", ctl: 50, atl: 60, hrv: 55, restingHR: 48, menstrualPhase: "LUTEAL", menstrualPhasePredicted: "LUTEAL", comments: "Knee hurts", injury: 2 }];
+  const out = compactWellness(rows, { date, days: 90 });
+  assert.doesNotMatch(JSON.stringify(out), /menstrual|LUTEAL|Knee|comments/i);
+  assert.equal(out[0].ctl, 50);
 });

@@ -44,7 +44,7 @@ import { loadProfiles, refreshSuggestions } from './profile-suggestions.js';
 import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
 import {forwardWatchWorkouts} from './watch-forward.js';
-import {askCoach,coachContext,lightModel,assistantTask,engineSport} from './coach-assistant.js';
+import {askCoach,coachContext,lightModel,assistantTask,engineSport,compactWellness} from './coach-assistant.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
 import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates } from './coach-actions.js';
 import { QUICK_CHIPS, quickSnapshot, quickOptions, quickChange, previewFollows, scaleGymRows, quickMemory, quickEntry } from './coach-quick-change.js';
@@ -1165,7 +1165,7 @@ async function coachTextExtras(env,ctx,internalAuth,screen){
   // Today has its own readiness on screen; the coach adds why (parts) and the athlete's status.
   // Sick, injured or on a break holds the text back on Trénink too (screen-texts.js holdBack).
   const state=await getAthleteState(env.DB).catch(()=>null);
-  // The cycle only as the coach may know it: null unless "Kouč zná můj cyklus" is on (cycle-model.js cycleForCoach).
+  // The cycle only as the coach may know it: null unless "Kouč ví o cyklu" is on (cycle-model.js cycleForCoach).
   const coachCycle=profile?.cycle?cycleForCoach({...profile.cycle,date}):null;
   if(screen==='today')return {...(coachTrends?{coachTrends}:{}),...(readiness?{readinessDetail:readiness}:{}),athleteState:state?.status||null,coachCycle};
   return {...(coachTrends?{coachTrends}:{}),...(readiness?{readiness}:{}),athleteState:state?.status||null,coachCycle};
@@ -2225,7 +2225,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const reviewDay=selected.appContext.date<=date&&selected.selectedDay?selected.appContext.date:date;
         const reviews=await rideReviewsForCoach(env,ctx,reviewDay===date?inputs.daily?.training:selected.selectedDay,reviewDay,inputs.fitness?.wellness,thresholds).catch(()=>[]);
         if(reviews.length)coachCtx.completedRideReviews=reviews;
-        if(blockHistory)Object.assign(coachCtx,{blockHistory,blockFitness:inputs.fitness.wellness||[],historyPeriod:{from:shiftDate(date,-84),to:date,source:'cached activities; missing records remain unknown'}});
+        if(blockHistory)Object.assign(coachCtx,{blockHistory,blockFitness:compactWellness(inputs.fitness.wellness,{date,days:90})||[],historyPeriod:{from:shiftDate(date,-84),to:date,source:'cached activities; missing records remain unknown'}});
       }else focus=await dashboardProfile(env).then(profile=>athleteFocus(profile,date)).catch(()=>null);
       Object.assign(coachCtx,{userInitiated:true,...(focus?.cannotSwim100m?{cannotSwim100m:true}:{}),athleteState:athleteState.status,statusNote:athleteState.note,statusUntil:athleteState.statusUntil,...(athleteState.cancelled?.length?{cancelledSessions:athleteState.cancelled}:{}),preferenceMemory:memory?[...new Set([...usedMemories(athleteState),memory])]:usedMemories(athleteState),...memoryCtx,...(sportChanges?{sportsToSuggestChange:{turnedOff:noSport}}:{}),...(coachCtx.focus?{}:{focus}),conversation});
       const sport=engineSport(focus,selected?.appContext||appContext,message);
