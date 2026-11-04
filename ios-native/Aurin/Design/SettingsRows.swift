@@ -8,14 +8,26 @@ import SwiftUI
 struct SettingsGroup<Content: View>: View {
     var title: String? = nil
     var footer: String? = nil
+    /// A small button at the right of the title ("Upravit" on Zóny).
+    var action: SettingsGroupAction? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let title {
-                Text(title).font(.caption.weight(.medium)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted)
-                    .padding(.horizontal, 4)
-                    .accessibilityAddTraits(.isHeader)
+                HStack(spacing: 8) {
+                    Text(title).font(.caption.weight(.medium)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted)
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 8)
+                    if let action {
+                        Button(action: action.run) {
+                            Text(action.title).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.amber)
+                                .frame(minHeight: 32).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 4)
             }
             VStack(spacing: 0) { content }
             .cardSurface(cornerRadius: 22)
@@ -26,6 +38,12 @@ struct SettingsGroup<Content: View>: View {
             }
         }
     }
+}
+
+/// The button at the right of a group's title.
+struct SettingsGroupAction {
+    let title: String
+    let run: () -> Void
 }
 
 /// The hairline between two rows of a group (iOS 17 has no API to put it there

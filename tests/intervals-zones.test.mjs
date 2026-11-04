@@ -74,3 +74,12 @@ test("The OAuth connection asks for SETTINGS:WRITE and saving zones writes them"
   const src = serverSource();
   assert.match(src, /body&&body\.writeIntervals!==false\?await writeIntervalsZones\(env,t\):null/);
 });
+
+test("Own swim and running heart-rate zones go to Intervals.icu as set", async () => {
+  const { swimZones } = await import("../src/training-zones.js");
+  const p = { swimCss: 100, swimZoneModel: "custom", swimZoneBounds: [10, 5, 2, -3] };
+  const { Swim } = intervalsSportSettings({ profile: p, powerZones: powerZones(p, 250), hrZones: [], paceZones: paceZones(p, 300), swimZones: swimZones(100, p), runHrZones: hrZones({ hrZoneModel: "custom", hrZoneBounds: [140, 150], maxHr: 190 }) });
+  assert.deepEqual(Swim.pace_zones, [90.9, 95.2, 98, 103.1, 999]);
+  const { Run } = intervalsSportSettings({ profile: p, powerZones: powerZones(p, 250), hrZones: [], paceZones: paceZones(p, 300), runHrZones: hrZones({ hrZoneModel: "custom", hrZoneBounds: [140, 150], maxHr: 190 }) });
+  assert.deepEqual(Run.hr_zones, [140, 150, 190]);
+});
