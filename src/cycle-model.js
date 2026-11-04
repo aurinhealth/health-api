@@ -191,8 +191,28 @@ export function cycleTrainingCaution(state) {
   return reasons.length ? { reasons, cycleDay: state.cycleDay ?? null } : null;
 }
 
+// Does the athlete let the AI coach know the cycle ("Kouč ví o cyklu")?
+// `cycle` is profile.cycle ({settings, days}).
+export function cycleShared(cycle) {
+  const settings = normalizeCycleSettings(cycle && cycle.settings);
+  return settings.enabled && settings.shareWithCoach;
+}
+
+// Readiness parts (app-health.js readinessParts) as the AI may get them: a
+// part weighed against the luteal normal says `cycle: true`, which tells the
+// phase; without sharing that mark is left out (the points stay).
+export function partsForAI(parts, shared) {
+  if (!Array.isArray(parts)) return [];
+  return shared ? parts : parts.map(p => {
+    if (!p || typeof p !== "object" || !("cycle" in p)) return p;
+    const { cycle, ...rest } = p;
+    return rest;
+  });
+}
+
 // What the AI coach may know about today's cycle, with shareWithCoach on:
-// today only, no dates or history. Null otherwise.
+// today only, no dates or history. Null otherwise. Every AI text gets the
+// cycle only through here (screen-texts.js, entrypoint.js loadCoachInputs).
 export function cycleForCoach(input) {
   const settings = normalizeCycleSettings(input && input.settings);
   if (!settings.enabled || !settings.shareWithCoach) return null;

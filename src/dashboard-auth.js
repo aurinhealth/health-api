@@ -1,4 +1,4 @@
-import { L } from './lang.js';
+import { L, withLang } from './lang.js';
 import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { bumpSessionEpoch } from "./tenancy.js";
 import { APP_RETURN_PATH, APP_CONNECTED_PATH } from "./app-origin.js";
@@ -112,11 +112,16 @@ export async function isAuthorizedRequest(request, env, verifyOidc = verifyGitHu
   return Boolean(await resolvePrincipal(request, env, verifyOidc));
 }
 
-export function unauthorizedResponse() {
-  return Response.json(
+// With the request, before its language is set (entrypoint.js): the app's
+// X-Interface-Language or the site's lw-lang cookie, so an English user is
+// not told to sign in in Czech.
+export function unauthorizedResponse(request = null) {
+  const respond = () => Response.json(
     { status: "error", message: L("Přihlas se do dashboardu.", "Sign in to the app.") },
     { status: 401, headers: { "WWW-Authenticate": 'Bearer realm="health-api"', "Cache-Control": "no-store" } }
   );
+  const asked = request ? request.headers.get("X-Interface-Language") || /(?:^|;\s*)lw-lang=(cs|en)/.exec(request.headers.get("cookie") || "")?.[1] : null;
+  return asked ? withLang(asked, respond) : respond();
 }
 
 export const CLEARED_SESSION_COOKIE = SESSION_COOKIE+"=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax";
