@@ -10,7 +10,8 @@
 // same way every time (a seeded random per day), so a second write changes
 // nothing. The sample grows by itself: the first request of each hour adds
 // the hours that passed and, in the morning, last night. Only the review
-// account, only while its fixed code works (reviewCodeActive), and the
+// account, only while its fixed code works (reviewCode), never after Apple
+// Health was switched off in the app, and the
 // Review Notes tell App Review the data is a sample.
 import { saveAppleHealth } from "./apple-health.js";
 import { bumpCacheVersion } from "./api-cache.js";
@@ -81,7 +82,7 @@ function workout(date, plan, random) {
     heartRate.push([s, Math.round(95 + (plan.avgHr - 95) * warm + wave + (random() - 0.5) * 6)]);
   }
   const record = {
-    type: "exercise", id: ID + "workout:" + date, activity: plan.activity, name: plan.name, sourceName: "Apple Watch",
+    type: "exercise", id: ID + "workout:" + date, activity: plan.activity, name: plan.name, sourceName: "Sample data",
     start: iso(start), end: iso(start + seconds * 1000), activeSeconds: seconds,
     kcal: round(plan.kcal * (0.92 + random() * 0.16)), avgHr: plan.avgHr + Math.round((random() - 0.5) * 4), maxHr: plan.maxHr, heartRate
   };
@@ -164,21 +165,31 @@ const written = new Map(), writing = new Map();
 
 // Fills the review account's sample: everything the first time (or after it
 // was deleted), then today and yesterday. env is the account's own (env.DB
-// scoped to it); the caller checks it is the review account.
-export async function ensureReviewSample(env, { now = Date.now() } = {}) {
+// scoped to it); the caller checks it is the review account. The first fill
+// is awaited, so the first screens already show it; the hourly top-up goes to
+// `later` (ctx.waitUntil) and the request does not wait for it.
+export async function ensureReviewSample(env, { now = Date.now(), later = null } = {}) {
   if (!env?.DB || env.USER_ID == null) return null;
   const hour = localToday(new Date(now)) + "T" + pad(localHour(new Date(now)));
   if (written.get(env.USER_ID) === hour) return null;
   const key = env.USER_ID + "@" + hour;
-  if (!writing.has(key)) writing.set(key, write(env, now).then(result => { written.set(env.USER_ID, hour); return result; }).finally(() => writing.delete(key)));
-  return writing.get(key);
-}
-
-async function write(env, now) {
+  if (writing.has(key)) return writing.get(key);
+  // Apple Health switched off in the app (DELETE /app/api/health/apple): no
+  // more sample, or the next hour would show it connected again.
+  const status = await env.DB.prepare("SELECT status FROM sync_status WHERE user_id = ? AND sync_name = 'apple_health'").bind(env.USER_ID).first().catch(() => null);
+  if (status?.status === "disconnected") { written.set(env.USER_ID, hour); return null; }
   const oldest = addDays(localToday(new Date(now)), -(SAMPLE_DAYS - 2));
   const full = !(await env.DB.prepare("SELECT 1 AS found FROM health_datapoints WHERE user_id = ? AND source_family = 'apple-health' AND data_type = 'sleep' AND external_id = ?")
     .bind(env.USER_ID, "apple:" + ID + "sleep:" + addDays(oldest, -1)).first());
-  const result = await saveAppleHealth(env.DB, env.USER_ID, { records: sampleRecords(now, full ? SAMPLE_DAYS : 2), categories: CATEGORIES }, { now });
+  if (writing.has(key)) return writing.get(key);
+  const job = write(env, now, full ? SAMPLE_DAYS : 2).then(result => { written.set(env.USER_ID, hour); return result; }).finally(() => writing.delete(key));
+  writing.set(key, job);
+  if (!full && later) { later(job.catch(error => console.error("Review sample failed", error.message))); return null; }
+  return job;
+}
+
+async function write(env, now, days) {
+  const result = await saveAppleHealth(env.DB, env.USER_ID, { records: sampleRecords(now, days), categories: CATEGORIES }, { now });
   if (result?.changed) await bumpCacheVersion(env.DB);
   return result;
 }

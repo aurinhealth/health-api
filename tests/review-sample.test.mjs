@@ -5,7 +5,7 @@ import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { withTimeZone } from "../src/user-time.js";
 import { ensureReviewSample, sampleRecords, sampleDay, forgetWritten, SAMPLE_DAYS } from "../src/review-sample.js";
-import { appleRow } from "../src/apple-health.js";
+import { appleRow, disconnectAppleHealth } from "../src/apple-health.js";
 
 const schema = readFileSync(new URL("../staging/schema.sql", import.meta.url), "utf8");
 function setup() {
@@ -92,4 +92,34 @@ test("the app's first screens at once wait for one write", async () => {
   await withTimeZone("America/Los_Angeles", () => Promise.all([1, 2, 3].map(() => ensureReviewSample(env, { now: NOW }))));
   assert.equal(count(raw, "sleep"), SAMPLE_DAYS);
   assert.ok(batches < 15, "one upload's batches, not three: " + batches);
+});
+
+test("the hourly top-up runs after the response, the first fill before it", async () => {
+  forgetWritten();
+  const { raw, env } = setup();
+  const later = [];
+  await withTimeZone("America/Los_Angeles", async () => {
+    const first = await ensureReviewSample(env, { now: NOW, later: job => later.push(job) });
+    assert.equal(first.status, "ok", "the first fill is awaited");
+    assert.equal(later.length, 0);
+    const energy = count(raw, "active-energy-burned");
+    assert.equal(await ensureReviewSample(env, { now: NOW + 3600000, later: job => later.push(job) }), null, "the request goes on");
+    assert.equal(later.length, 1);
+    await later[0];
+    assert.equal(count(raw, "active-energy-burned"), energy + 1);
+  });
+});
+
+test("Apple Health switched off in the app stays off: no more sample", async () => {
+  forgetWritten();
+  const { raw, env } = setup();
+  await withTimeZone("America/Los_Angeles", async () => {
+    await ensureReviewSample(env, { now: NOW });
+    await disconnectAppleHealth(env.DB, 7);
+    const energy = count(raw, "active-energy-burned");
+    assert.equal(await ensureReviewSample(env, { now: NOW + 3600000 }), null);
+    assert.equal(await ensureReviewSample(env, { now: NOW + 86400000 }), null);
+    assert.equal(count(raw, "active-energy-burned"), energy);
+  });
+  assert.equal(raw.sqlite.prepare("SELECT status FROM sync_status WHERE user_id = 7 AND sync_name = 'apple_health'").get().status, "disconnected");
 });
