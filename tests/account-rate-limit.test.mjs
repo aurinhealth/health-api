@@ -16,7 +16,8 @@ test("which requests count against which limit", () => {
   assert.equal(limiterFor("/app/api/sync/recent", "POST"), "SYNC_RATE_LIMITER");
   assert.equal(limiterFor("/app/api/sync", "GET"), "API_RATE_LIMITER", "reading the sync state is no sync");
   assert.equal(limiterFor("/app/api/sync/activity", "POST"), "API_RATE_LIMITER", "the outbox sends activities one after another");
-  assert.equal(limiterFor("/app/api/health/apple", "POST"), null, "a first Apple Health import sends many uploads");
+  assert.equal(limiterFor("/app/api/health/apple", "POST"), "APPLE_RATE_LIMITER", "a first Apple Health import has a bucket of its own");
+  assert.equal(limiterFor("/app/api/health/apple", "GET"), "API_RATE_LIMITER");
   assert.equal(limiterFor("/", "GET"), null);
   assert.equal(limiterFor("/auth/email/start", "POST"), null);
 });
@@ -37,6 +38,14 @@ test("a manual sync has its own, smaller limit", async () => {
   assert.equal(await accountRateLimit(req("/app/api/sync", "POST"), env, 3), null);
   assert.equal((await accountRateLimit(req("/app/api/sync", "POST"), env, 3)).status, 429);
   assert.equal(await accountRateLimit(req("/app/api/today"), env, 3), null);
+});
+
+test("Apple Health uploads count only against their own limit", async () => {
+  const env = { API_RATE_LIMITER: limiter(1), APPLE_RATE_LIMITER: limiter(2) };
+  assert.equal(await accountRateLimit(req("/app/api/health/apple", "POST"), env, 4), null);
+  assert.equal(await accountRateLimit(req("/app/api/health/apple", "POST"), env, 4), null);
+  assert.equal((await accountRateLimit(req("/app/api/health/apple", "POST"), env, 4)).status, 429);
+  assert.equal(await accountRateLimit(req("/app/api/today"), env, 4), null, "an import does not use up the API limit");
 });
 
 test("no binding or a failing one never stops the app", async () => {
@@ -60,6 +69,14 @@ test("both servers have the rate limit bindings", () => {
   const config = JSON.parse(text.replace(/^\s*\/\/.*$/gm, "").replace(/,(\s*[}\]])/g, "$1"));
   for (const target of [config, config.env.staging]) {
     const names = (target.ratelimits || []).map(r => r.name).sort();
-    assert.deepEqual(names, ["API_RATE_LIMITER", "SYNC_RATE_LIMITER"]);
+    assert.deepEqual(names, ["API_RATE_LIMITER", "APPLE_RATE_LIMITER", "SYNC_RATE_LIMITER"]);
   }
+});
+
+test("a stale or orphaned cookie on a public route gets the public body limit", () => {
+  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const stale = entry.indexOf("if (user && !sessionMatchesUser(principal, user)) { user = null; principal = null; }");
+  const limited = entry.indexOf("if (!user && !publicLimited) {", stale);
+  assert.ok(stale > 0 && limited > stale && limited - stale < 400, "the limit follows the stale-cookie check");
+  assert.match(entry.slice(limited, limited + 200), /limitBody\(request, publicBodyLimit\(url\.pathname\)\)/);
 });

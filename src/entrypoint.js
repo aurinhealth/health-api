@@ -506,10 +506,12 @@ const worker = {
     if (!principal && url.pathname === "/automation/coach-eval") principal = await coachEvalPrincipal(request, env);
     const isPublic = isPublicPath(url.pathname);
     // Nobody signed in: the body is read only up to a limit (body-limit.js, SEC-013).
+    let publicLimited = false;
     if (isPublic && !principal) {
       const limited = await limitBody(request, publicBodyLimit(url.pathname));
       if (limited.response) return limited.response;
       request = limited.request;
+      publicLimited = true;
     }
     if (!isPublic && !principal) {
       // A browser opening an address that isn't a page (a mistyped or old link) gets the site's 404 page.
@@ -527,6 +529,13 @@ const worker = {
       // A cookie from before the user signed out everywhere (or changed the e-mail, removed a passkey or the Apple ID) is no cookie.
       if (user && !sessionMatchesUser(principal, user)) { user = null; principal = null; }
       if (!user && !isPublic) return unauthorizedResponse();
+      // A stale or orphaned cookie on a public route is nobody signed in: the same body limit (SEC-013).
+      if (!user && !publicLimited) {
+        const limited = await limitBody(request, publicBodyLimit(url.pathname));
+        if (limited.response) return limited.response;
+        request = limited.request;
+        publicLimited = true;
+      }
     } else if (principal?.kind === "system") {
       // The deploy smoke test acts as its own empty account, never as the owner (tenancy.js smokeUser).
       user = await smokeUser(env.DB, env);
