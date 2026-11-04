@@ -290,6 +290,9 @@ jobs:
       # check: a missing watch simulator or shot never fails the run.
       - name: Screenshot the Apple Watch
         continue-on-error: true
+        # Usually 5 minutes. A stuck simulator call must not hold the whole run
+        # past its time limit (a cancelled run keeps no log); the log names each shot.
+        timeout-minutes: 15
         run: |
           watch=$(xcrun simctl list devices available -j | python3 -c '
           import json, sys
@@ -311,6 +314,7 @@ jobs:
           shoot() {
             local out="$GITHUB_WORKSPACE/screens/$1" name=$2; shift 2
             mkdir -p "$out"
+            echo "$(date +%H:%M:%S) ${out##*/}/$name $*"
             xcrun simctl launch --terminate-running-process "$watch" health.aurin.app.watchkitapp -demo "$@"
             sleep 6
             xcrun simctl io "$watch" screenshot "$out/$name.png"
