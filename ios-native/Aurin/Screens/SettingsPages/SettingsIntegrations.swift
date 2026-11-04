@@ -152,8 +152,9 @@ struct IntegrationDetailView: View {
                         .buttonStyle(.plain)
                         .disabled(actions.working != nil || store.demo)
                         SettingsDivider()
-                    } else if current.id == "intervals" {
-                        Button { flow.start("intervals") } label: {
+                    } else {
+                        // Intervals.icu, Wahoo, WHOOP, Ultrahuman: the same connect screen, the history stays.
+                        Button { flow.start(current.id) } label: {
                             SettingsRow(title: "Připojit znovu", chevron: false, titleColor: Palette.blue)
                         }
                         .buttonStyle(.plain)

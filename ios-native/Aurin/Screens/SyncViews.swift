@@ -163,6 +163,8 @@ struct SyncSendGroup: View {
     @State private var asking = false
     @State private var connecting = false
     @State private var note: String?
+    /// Nastavení → Tréninkové zóny → Zapisovat do Wahoo.
+    @AppStorage("writeWahoo") private var writeWahoo = true
 
     private var destination: SyncDestination? { sync.destination(id) }
 
@@ -185,6 +187,14 @@ struct SyncSendGroup: View {
                 if s.pushActivities {
                     if s.pushPlanned { SettingsDivider() }
                     SettingsToggle(title: "Hotové tréninky", isOn: binding(\.pushActivities))
+                }
+                // Wahoo: FTP and power zones go with the switch in Tréninkové zóny (ZonesSettingsView).
+                if id == "wahoo" {
+                    if s.pushActivities || s.pushPlanned { SettingsDivider() }
+                    NavigationLink { ZonesSettingsView(store: store) } label: {
+                        SettingsRow(title: "FTP a výkonové zóny", value: L10n.tr(writeWahoo ? "Zapnuto" : "Vypnuto"))
+                    }
+                    .buttonStyle(.plain)
                 }
                 if s.health {
                     if s.pushActivities || s.pushPlanned { SettingsDivider() }
