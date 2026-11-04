@@ -22,3 +22,6 @@ __pycache__/
 scripts/muscles-v1.bin
 # The same model CI puts in the app's bundle (.github/scripts/fetch-muscle-model.sh).
 ios-native/Aurin/Resources/Models/
+# Local review notes (never in the repository).
+security/
+review/
