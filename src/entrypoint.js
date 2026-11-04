@@ -114,7 +114,8 @@ import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedR
 import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
 import { coachEvalPrincipal, handleCoachEval } from "./coach-eval.js";
-import { limitBody, publicBodyLimit } from "./body-limit.js";
+import { limitBody, publicBodyLimit, SIGNED_IN_BODY_LIMIT } from "./body-limit.js";
+import { accountRateLimit } from "./account-rate-limit.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleSignOut, endConnectSession, sessionSecret, foreignOriginChange, sessionMatchesUser, slidingSession } from "./dashboard-auth.js";
 import { appleAppSiteAssociation } from "./apple-app-site-association.js";
 import { handleWorkoutTemplatesApi, publicSharePage } from "./workout-templates.js";
@@ -513,10 +514,12 @@ const worker = {
     if (!principal && url.pathname === "/automation/coach-eval") principal = await coachEvalPrincipal(request, env);
     const isPublic = isPublicPath(url.pathname);
     // Nobody signed in: the body is read only up to a limit (body-limit.js, SEC-013).
+    let publicLimited = false;
     if (isPublic && !principal) {
       const limited = await limitBody(request, publicBodyLimit(url.pathname));
       if (limited.response) return limited.response;
       request = limited.request;
+      publicLimited = true;
     }
     if (!isPublic && !principal) {
       // A browser opening an address that isn't a page (a mistyped or old link) gets the site's 404 page.
@@ -534,6 +537,13 @@ const worker = {
       // A cookie from before the user signed out everywhere (or changed the e-mail, removed a passkey or the Apple ID) is no cookie.
       if (user && !sessionMatchesUser(principal, user)) { user = null; principal = null; }
       if (!user && !isPublic) return unauthorizedResponse(request);
+      // A stale or orphaned cookie on a public route is nobody signed in: the same body limit (SEC-013).
+      if (!user && !publicLimited) {
+        const limited = await limitBody(request, publicBodyLimit(url.pathname));
+        if (limited.response) return limited.response;
+        request = limited.request;
+        publicLimited = true;
+      }
     } else if (principal?.kind === "system") {
       // The deploy smoke test acts as its own empty account, never as the owner (tenancy.js smokeUser).
       user = await smokeUser(env.DB, env);
@@ -574,6 +584,14 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // Every change made with the session cookie, whatever the route.
     if (foreignOriginChange(request, principal)) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     const signedIn = principal?.kind === "user" && Boolean(user);
+    if (signedIn) {
+      // Requests per account (account-rate-limit.js) and the size of what it sends (body-limit.js).
+      const limited = await accountRateLimit(request, rawEnv, user.id);
+      if (limited) return limited;
+      const sized = await limitBody(request, SIGNED_IN_BODY_LIMIT);
+      if (sized.response) return sized.response;
+      request = sized.request;
+    }
     // Routes only the old web dashboard used: the owner's (owner-only-routes.js).
     const ownerOnly = ownerOnlyRefusal(url.pathname, { signedIn, user });
     if (ownerOnly) return ownerOnly;
