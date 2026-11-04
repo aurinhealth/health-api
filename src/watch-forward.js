@@ -16,7 +16,7 @@
 // matchActivities), so it is not sent a second time. Of two records of one
 // workout from apps that are both on (a ride on the Wahoo and the watch), only
 // the one the matching kept goes; the other only when its app is off.
-import { sendActivity, ensureSyncTables, readSyncPrefs, healthAllowed, forwardSince, BACKFILL_DAYS, EXTERNAL_PREFIX, LEGACY_EXTERNAL_PREFIX } from "./sync-destinations.js";
+import { sendActivity, ensureSyncTables, readSyncPrefs, healthAllowed, normalizeActivity, BACKFILL_DAYS, EXTERNAL_PREFIX, LEGACY_EXTERNAL_PREFIX } from "./sync-destinations.js";
 import { intervalsActivities, recordSent } from "./intervals-catchup.js";
 import { sameSession } from "./activity-match.js";
 import { localDate } from "./user-time.js";
@@ -26,6 +26,9 @@ import { typeName, watchType } from "./activity-type.js";
 const WAIT_MS = 2 * 3600000;
 const DAYS = 3;
 const LIMIT = 10;
+// At most this many sends a day (an OAuth app has 100 requests per athlete a
+// day, shared with the plan, the wellness and the import).
+export const PER_DAY = 25;
 const shiftDay = (day, days) => new Date(Date.parse(day + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 
 // Google's exerciseType (as apple-health.js stores HealthKit's) as Intervals.icu's type.
@@ -115,7 +118,7 @@ export async function forwardWatchWorkouts(env, { now = Date.now(), fetchImpl = 
     ...(prefs.forward || []).filter(source => (env.CONNECTED_PROVIDERS || []).includes(source))
   ];
   if (!on.length) return { status: "skipped", reason: "off" };
-  const since = on.some(source => source !== "apple") ? await forwardSince(env.DB, env.USER_ID) : {};
+  const since = prefs.since || {};
   const recent = now - DAYS * 86400000, oldest = now - (BACKFILL_DAYS + 1) * 86400000;
   // Each app from its start: three days back, further only while a start of
   // the last two weeks asks for it.
@@ -136,11 +139,20 @@ export async function forwardWatchWorkouts(env, { now = Date.now(), fetchImpl = 
   });
   if (!due.length) return { status: "ok", sent: [] };
   const keyOf = row => SOURCES[FAMILY_SOURCE[row.source_family]].key(row.external_id);
-  const keys = due.map(keyOf);
-  const done = new Set(((await env.DB.prepare(`SELECT activity_key FROM sync_sends WHERE user_id = ? AND destination = 'intervals' AND activity_key IN (${keys.map(() => "?").join(",")})`)
-    .bind(env.USER_ID, ...keys).all().catch(() => ({ results: [] }))).results || []).map(r => r.activity_key));
+  const keys = due.map(keyOf), done = new Set();
+  // D1 takes at most 100 bound values a query.
+  for (let i = 0; i < keys.length; i += 90) {
+    const part = keys.slice(i, i + 90);
+    const found = (await env.DB.prepare(`SELECT activity_key FROM sync_sends WHERE user_id = ? AND destination = 'intervals' AND activity_key IN (${part.map(() => "?").join(",")})`)
+      .bind(env.USER_ID, ...part).all()).results || [];
+    for (const r of found) done.add(r.activity_key);
+  }
   const open = due.filter(row => !done.has(keyOf(row)));
   if (!open.length) return { status: "ok", sent: [] };
+  const today = (await env.DB.prepare(`SELECT COUNT(*) AS n FROM sync_sends WHERE user_id = ? AND destination = 'intervals' AND created_at >= date('now')
+    AND (activity_key LIKE 'apple:%' OR activity_key LIKE 'wahoo:%' OR activity_key LIKE 'google:%') AND status NOT IN ('same', 'skipped')`).bind(env.USER_ID).first())?.n || 0;
+  const allowed = Math.min(limit, PER_DAY - today);
+  if (allowed <= 0) return { status: "ok", sent: [], capped: true };
   // One look at those days in Intervals.icu instead of one per workout (an
   // OAuth app has 100 requests per athlete a day): what is there under our
   // external_id is only recorded, what is there from elsewhere is left.
@@ -152,25 +164,50 @@ export async function forwardWatchWorkouts(env, { now = Date.now(), fetchImpl = 
     console.error("Workout forward read failed", error.message);
     return { status: "error", sent: [] };
   }
+  // A record that can never go (no time, no length) is marked, so it is not looked at again.
+  const mark = (key, status) => env.DB.prepare(`INSERT INTO sync_sends (user_id, activity_key, destination, status, payload_json) VALUES (?, ?, 'intervals', ?, '{}') ON CONFLICT(user_id, activity_key, destination) DO NOTHING`)
+    .bind(env.USER_ID, key, status).run();
   const sent = [];
+  let sends = 0;
   for (const row of open) {
-    if (sent.length >= limit) break;
-    const activity = row.source_family === "wahoo" ? wahooActivity(row) : watchActivity(row, keyOf(row));
-    if (!activity) continue;
+    if (sends >= allowed) break;
+    const raw = row.source_family === "wahoo" ? wahooActivity(row) : watchActivity(row, keyOf(row));
+    let activity = null;
+    try { activity = raw && normalizeActivity(raw); } catch { activity = null; }
+    if (!activity) { await mark(keyOf(row), "skipped"); continue; }
     const ours = list.find(a => [EXTERNAL_PREFIX, LEGACY_EXTERNAL_PREFIX].some(prefix => a?.external_id === prefix + env.USER_ID + ":" + activity.key));
     if (ours?.id != null) { await recordSent(env, activity, ours.id); sent.push({ key: activity.key, status: "there" }); continue; }
     // There already, from elsewhere or sent by Aurin from another app (the
     // watch's copy of a Wahoo ride once Wahoo is off). Not looked at again.
     if (list.some(a => sameSession({ payload: a }, row))) {
-      await env.DB.prepare(`INSERT INTO sync_sends (user_id, activity_key, destination, status, payload_json) VALUES (?, ?, 'intervals', 'same', '{}') ON CONFLICT(user_id, activity_key, destination) DO NOTHING`)
-        .bind(env.USER_ID, activity.key).run();
+      await mark(activity.key, "same");
       sent.push({ key: activity.key, status: "same" });
       continue;
     }
+    // Claimed first: a second pass running at the same time (the switch
+    // turned on during the five-minute run) finds it taken and leaves it.
+    const claim = await env.DB.prepare(`INSERT INTO sync_sends (user_id, activity_key, destination, status, payload_json) VALUES (?, ?, 'intervals', 'pending', ?) ON CONFLICT(user_id, activity_key, destination) DO NOTHING`)
+      .bind(env.USER_ID, activity.key, JSON.stringify(activity)).run();
+    if (!(claim.meta?.changes > 0)) continue;
+    sends++;
     try {
-      const result = await sendActivity(env, activity, { fetchImpl, only: ["intervals"], absent: true, forwarded: true });
+      const result = await sendActivity(env, raw, { fetchImpl, only: ["intervals"], absent: true, forwarded: true });
       sent.push({ key: activity.key, status: result.sends[0]?.status || "off" });
     } catch (error) { console.error("Workout forward failed", error.message); }
   }
   return { status: "ok", sent };
+}
+
+// An app's workouts just turned on: the first ones go now, not at the next
+// run. At most once in ten minutes, so switching on and off again and again
+// does not use up Intervals.icu's requests.
+export async function kickForward(env, { fetchImpl = fetch } = {}) {
+  try {
+    const claim = await env.DB.prepare(`INSERT INTO sync_status (user_id, sync_name, status, updated_at) VALUES (?, 'workout_forward_kick', 'done', datetime('now'))
+      ON CONFLICT(user_id, sync_name) DO UPDATE SET updated_at = excluded.updated_at WHERE sync_status.updated_at < datetime('now', '-10 minutes')`).bind(env.USER_ID).run();
+    if (!(claim.meta?.changes > 0)) return { status: "skipped", reason: "recent" };
+  } catch (error) {
+    if (!/no such table/i.test(error.message)) throw error;
+  }
+  return forwardWatchWorkouts(env, { fetchImpl, limit: 5 });
 }

@@ -417,7 +417,8 @@ struct ForwardConsentSheet: View {
     @Environment(\.dismiss) private var dismiss
     let source: String
     let go: (Bool) -> Void
-    @State private var backfill = true
+    /// Off at first: a ticked box is no consent (GDPR, Planet49).
+    @State private var backfill = false
 
     private var since: String {
         Calendar.current.date(byAdding: .day, value: -14, to: Date())
@@ -436,8 +437,8 @@ struct ForwardConsentSheet: View {
                 .font(Typo.sentence(24, relativeTo: .title)).foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
             Text(verbatim: L10n.tr(source == "wahoo"
-                 ? "Aurin zkopíruje každou dokončenou jízdu a běh z Wahoo do tvého účtu Intervals.icu, s výkonem, tepem, kadencí a trasou."
-                 : "Aurin zkopíruje každý dokončený trénink z Google Health do tvého účtu Intervals.icu, s délkou, vzdáleností a tepem."))
+                 ? "Aurin zkopíruje každý dokončený trénink z Wahoo do tvého účtu Intervals.icu jako jeho soubor: čas, délku, vzdálenost, trasu, výkon, tep, kadenci a kalorie."
+                 : "Aurin zkopíruje každý dokončený trénink z Google Health do tvého účtu Intervals.icu: typ, název, čas, délku, vzdálenost, tep a kalorie."))
                 .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             Text("Vypnout to můžeš kdykoli. Co už v Intervals.icu je, tam zůstane.")
                 .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)

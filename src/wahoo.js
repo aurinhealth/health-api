@@ -554,12 +554,9 @@ export async function disconnectWahoo(env, { fetchImpl = fetch } = {}) {
     env.DB.prepare("UPDATE health_datapoints SET record_role='primary',matched_activity_id=NULL,match_confidence=NULL WHERE user_id=? AND matched_activity_id LIKE 'wahoo:%' AND record_role='duplicate'").bind(userId)
   ]);
   await env.DB.prepare("DELETE FROM workout_exports WHERE user_id=? AND provider='wahoo'").bind(userId).run().catch(() => null);
-  // Rides passed on to Intervals.icu (watch-forward.js): what Aurin kept of
-  // them goes too, only the Intervals.icu id stays (so a reconnect does not
-  // send them twice), and sending Wahoo's workouts there ends with the
-  // connection: a new one asks again.
-  await env.DB.prepare("UPDATE sync_sends SET payload_json='{}', message=NULL WHERE user_id=? AND activity_key LIKE 'wahoo:%'").bind(userId).run().catch(() => null);
-  await stopForwarding(env.DB, userId, 'wahoo').catch(() => null);
+  // Rides passed on to Intervals.icu (watch-forward.js): Aurin's record of
+  // them goes too, and sending Wahoo's workouts there ends with the connection.
+  await stopForwarding(env.DB, userId, 'wahoo').catch(error => console.error('Wahoo forward stop failed', error.message));
   await deleteConnectionSecret(env, SOURCE);
   await clearConnectionHealth(env, SOURCE);
   delete env.WAHOO_TOKEN;

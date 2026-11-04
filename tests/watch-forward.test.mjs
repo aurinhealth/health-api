@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
-import { forwardWatchWorkouts, watchActivity, forwardable } from "../src/watch-forward.js";
-import { saveSyncPrefs } from "../src/sync-destinations.js";
+import { forwardWatchWorkouts, watchActivity, forwardable, PER_DAY, kickForward } from "../src/watch-forward.js";
+import { saveSyncPrefs, forwardConsent, stopForwarding } from "../src/sync-destinations.js";
 
 const NOW = Date.parse("2026-10-16T12:00:00Z");
 function db() {
@@ -151,4 +151,57 @@ test("a Google Health workout goes as a manual activity under a key without its 
   assert.deepEqual(result.sent.map(s => s.key), ["google:G1", "google:987"]);
   assert.equal(posts[1].type, "Walk");
   assert.equal(posts[1].external_id, "aurin:7:google:987");
+});
+
+test("two passes at once send a workout once; one that can never go is not looked at again", async () => {
+  const NOW_W = Date.parse("2026-11-04T20:00:00Z");
+  const d = wahooDb();
+  let posts = 0, gets = 0;
+  const fetchImpl = async (url, init = {}) => {
+    url = String(url);
+    if (url.startsWith("https://cdn.wahoo.example/")) return new Response(new Uint8Array([1, 2, 3]), { status: 200 });
+    if (init.method === "POST") { posts++; await new Promise(r => setTimeout(r, 5)); return Response.json({ activities: [{ id: "i" + posts }] }, { status: 201 }); }
+    gets++;
+    return Response.json([]);
+  };
+  // A Wahoo record without a length.
+  d.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, start_time, end_time, payload_json, record_role) VALUES (7, 'wahoo', 'activity', 'wahoo:9', '2026-11-03T10:00:00', '2026-11-03T10:00:00', '2026-11-03T10:00:00', ?, 'primary')")
+    .run(JSON.stringify({ start_date: "2026-11-03T09:00:00Z", wahoo: { workoutId: 9 } }));
+  const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "Bearer t", CONNECTED_PROVIDERS: ["intervals", "wahoo"] };
+  await saveSyncPrefs(d, 7, "intervals", { forward: ["wahoo"], backfill: true }, { now: NOW_W });
+  await Promise.all([forwardWatchWorkouts(env, { now: NOW_W, fetchImpl }), forwardWatchWorkouts(env, { now: NOW_W, fetchImpl })]);
+  assert.equal(posts, 1);
+  assert.equal(d.sqlite.prepare("SELECT status FROM sync_sends WHERE activity_key = 'wahoo:9'").get().status, "skipped");
+  gets = 0;
+  assert.deepEqual((await forwardWatchWorkouts(env, { now: NOW_W, fetchImpl })).sent, []);
+  assert.equal(gets, 0);
+});
+
+test("consent is recorded; switching off drops what has not gone; a day has a ceiling", async () => {
+  const NOW_W = Date.parse("2026-11-04T20:00:00Z");
+  const d = wahooDb();
+  await saveSyncPrefs(d, 7, "intervals", { forward: ["wahoo"], backfill: true }, { now: NOW_W });
+  assert.deepEqual(await forwardConsent(d, 7), { wahoo: "2026-11-04T20:00:00.000Z" });
+  d.sqlite.prepare("INSERT INTO sync_sends (user_id, activity_key, destination, status, payload_json) VALUES (7, 'wahoo:5', 'intervals', 'error', '{}'), (7, 'wahoo:6', 'intervals', 'sent', '{}')").run();
+  await saveSyncPrefs(d, 7, "intervals", { forward: [] }, { now: NOW_W });
+  assert.deepEqual(d.sqlite.prepare("SELECT activity_key FROM sync_sends WHERE activity_key LIKE 'wahoo:%'").all().map(r => r.activity_key), ["wahoo:6"]);
+  assert.deepEqual(await forwardConsent(d, 7), {});
+  // Disconnecting deletes the rest of the record.
+  await stopForwarding(d, 7, "wahoo");
+  assert.equal(d.sqlite.prepare("SELECT COUNT(*) AS n FROM sync_sends WHERE activity_key LIKE 'wahoo:%'").get().n, 0);
+  // The ceiling: a day's sends already used up, nothing more goes.
+  await saveSyncPrefs(d, 7, "intervals", { forward: ["wahoo"], backfill: true }, { now: NOW_W });
+  const insert = d.sqlite.prepare("INSERT INTO sync_sends (user_id, activity_key, destination, status, payload_json) VALUES (7, ?, 'intervals', 'sent', '{}')");
+  for (let i = 0; i < PER_DAY; i++) insert.run("apple:X" + i);
+  const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "Bearer t", CONNECTED_PROVIDERS: ["intervals", "wahoo"] };
+  const result = await forwardWatchWorkouts(env, { now: NOW_W, fetchImpl: async () => Response.json([]) });
+  assert.equal(result.capped, true);
+});
+
+test("turning a source on starts a pass at most once in ten minutes", async () => {
+  const d = wahooDb();
+  d.sqlite.exec("CREATE TABLE sync_status (user_id INTEGER NOT NULL, sync_name TEXT NOT NULL, status TEXT, started_at TEXT, finished_at TEXT, details_json TEXT, updated_at TEXT, PRIMARY KEY (user_id, sync_name))");
+  const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "Bearer t", CONNECTED_PROVIDERS: ["intervals"] };
+  assert.equal((await kickForward(env, { fetchImpl: async () => Response.json([]) })).reason, "off");
+  assert.equal((await kickForward(env, { fetchImpl: async () => Response.json([]) })).reason, "recent");
 });

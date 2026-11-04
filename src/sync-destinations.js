@@ -73,12 +73,15 @@ const DEFAULTS = {
 // Wahoo's rides go as their FIT file, Google Health's as a manual activity.
 // Each starts off and goes only after the user said yes in the app: Google's
 // and Wahoo's API terms let their data go to another service only as the user
-// asks for it. Stored in health_json as "from:<source>@<since>",
-// <since> being the time sending starts from (the switch's moment, or 14 days
-// before it when the user also wanted the last two weeks).
+// asks for it. Stored in health_json as "from:<source>@<since>", <since> being
+// the time sending starts from (the switch's moment, or 14 days before it when
+// the user also wanted the last two weeks), and "consent:<source>@<at>", when
+// the user said yes (GDPR art. 7(1)).
 export const FORWARD_SOURCES = ['wahoo', 'google'];
 export const BACKFILL_DAYS = 14;
-const FORWARD = /^from:(wahoo|google)@(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z)$/;
+const FORWARD = /^(from|consent):(wahoo|google)@(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z)$/;
+// The keys other apps' workouts are sent under (watch-forward.js).
+const FORWARD_KEY = { apple: 'apple:', wahoo: 'wahoo:', google: 'google:' };
 
 // Intervals.icu wellness field → the health type that allows it.
 const WELLNESS_TYPE = { restingHR: 'restingHR', hrv: 'hrv', hrvSDNN: 'hrv', spO2: 'spO2', respiration: 'respiration', vo2max: 'vo2max', bodyFat: 'bodyFat', steps: 'steps', sleepSecs: 'sleep', avgSleepingHR: 'sleep', weight: 'weight' };
@@ -112,24 +115,28 @@ export function normalizeSyncPrefs(destination, input = {}, base = defaultSyncPr
   return out;
 }
 
-// The saved "from:<source>@<since>" entries apart from the health types.
+// The saved "from:" and "consent:" entries apart from the health types.
 function splitHealth(stored) {
   const list = Array.isArray(stored) ? stored.map(String) : stored === 'all' ? ['all'] : [];
-  const since = {};
-  for (const item of list) { const m = FORWARD.exec(item); if (m) since[m[1]] = m[2]; }
+  const since = {}, consent = {};
+  for (const item of list) { const m = FORWARD.exec(item); if (m) (m[1] === 'from' ? since : consent)[m[2]] = m[3]; }
   const rest = list.filter(item => !FORWARD.test(item));
-  return { health: rest.includes('all') ? 'all' : rest, since };
+  return { health: rest.includes('all') ? 'all' : rest, since, consent };
 }
 
-// When sending each source's workouts starts from ({ wahoo: ISO, … }).
-export async function forwardSince(db, userId) {
+async function forwardEntries(db, userId) {
   try {
     const row = await db.prepare("SELECT health_json FROM sync_preferences WHERE user_id = ? AND destination = 'intervals'").bind(userId).first();
     let stored = [];
     try { stored = JSON.parse(row?.health_json || '[]'); } catch { stored = []; }
-    return splitHealth(stored).since;
-  } catch { return {}; }
+    return splitHealth(stored);
+  } catch { return { since: {}, consent: {} }; }
 }
+
+// When sending each source's workouts starts from ({ wahoo: ISO, … }).
+export const forwardSince = async (db, userId) => (await forwardEntries(db, userId)).since;
+// When the user said yes to each ({ wahoo: ISO, … }).
+export const forwardConsent = async (db, userId) => (await forwardEntries(db, userId)).consent;
 
 // Apple Health's workouts went to Intervals.icu with no choice of their own
 // until they became one (watch-forward.js). A list saved before then that
@@ -142,7 +149,7 @@ const fromRow = (destination, row) => {
   try { stored = JSON.parse(row.health_json || '[]'); } catch { stored = []; }
   let { health, since } = splitHealth(stored);
   if (destination === 'intervals' && Array.isArray(health) && health.length && !health.includes('workouts') && savedAt(row.updated_at) < WORKOUTS_CHOICE) health = [...health, 'workouts'];
-  return normalizeSyncPrefs(destination, { pushPlanned: Boolean(row.push_planned), pushActivities: Boolean(row.push_activities), pullActivities: Boolean(row.pull_activities), health, forward: Object.keys(since) });
+  return { prefs: normalizeSyncPrefs(destination, { pushPlanned: Boolean(row.push_planned), pushActivities: Boolean(row.push_activities), pullActivities: Boolean(row.pull_activities), health, forward: Object.keys(since) }), since };
 };
 
 // One destination's preferences; the defaults when there is no row (or no
@@ -150,7 +157,11 @@ const fromRow = (destination, row) => {
 export async function readSyncPrefs(db, userId, destination) {
   try {
     const row = await db.prepare('SELECT push_planned, push_activities, pull_activities, health_json, updated_at FROM sync_preferences WHERE user_id = ? AND destination = ?').bind(userId, destination).first();
-    return row ? { ...fromRow(destination, row), stored: true } : { ...defaultSyncPrefs(destination), stored: false };
+    if (!row) return { ...defaultSyncPrefs(destination), stored: false };
+    const { prefs, since } = fromRow(destination, row), out = { ...prefs, stored: true };
+    // Not in the answer the app reads: where each app's workouts start (watch-forward.js).
+    if (destination === 'intervals') Object.defineProperty(out, 'since', { value: since, enumerable: false });
+    return out;
   } catch (error) {
     if (!/no such table/i.test(error.message)) console.error('Sync preferences read failed', error.message);
     return { ...defaultSyncPrefs(destination), stored: false };
@@ -164,27 +175,35 @@ export async function saveSyncPrefs(db, userId, destination, input, { now = Date
   const next = normalizeSyncPrefs(destination, input, current);
   // A source kept on keeps its start; one turned on now starts now, or
   // BACKFILL_DAYS before when the user also wanted the last two weeks.
-  let health = next.health, started = [];
+  let health = next.health, started = [], stopped = [];
   if (destination === 'intervals') {
-    const before = await forwardSince(db, userId);
-    const from = new Date(now - (input?.backfill === true ? BACKFILL_DAYS * 86400000 : 0)).toISOString();
+    const { since: before, consent } = await forwardEntries(db, userId);
+    const at = new Date(now).toISOString(), from = new Date(now - (input?.backfill === true ? BACKFILL_DAYS * 86400000 : 0)).toISOString();
     started = next.forward.filter(source => !before[source]);
-    const entries = next.forward.map(source => 'from:' + source + '@' + (before[source] || from));
+    stopped = Object.keys(before).filter(source => !next.forward.includes(source));
+    if (healthAllowed(current, 'workouts') && !healthAllowed(next, 'workouts')) stopped.push('apple');
+    const entries = next.forward.flatMap(source => ['from:' + source + '@' + (before[source] || from), 'consent:' + source + '@' + (consent[source] || at)]);
     if (entries.length) health = [...(health === 'all' ? ['all'] : health), ...entries];
   }
   await db.prepare(`INSERT INTO sync_preferences (user_id, destination, push_planned, push_activities, pull_activities, health_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, destination) DO UPDATE SET push_planned = excluded.push_planned, push_activities = excluded.push_activities, pull_activities = excluded.pull_activities, health_json = excluded.health_json, updated_at = excluded.updated_at`)
     .bind(userId, destination, next.pushPlanned ? 1 : 0, next.pushActivities ? 1 : 0, next.pullActivities ? 1 : 0, JSON.stringify(health), new Date(now).toISOString()).run();
+  // Turned off: what of that app has not gone yet does not go (consent withdrawn).
+  for (const source of stopped) await db.prepare("DELETE FROM sync_sends WHERE user_id = ? AND destination = 'intervals' AND activity_key LIKE ? AND status IN ('pending', 'error', 'unknown')").bind(userId, FORWARD_KEY[source] + '%').run();
   // Not part of the answer the app reads: which sources were just turned on.
   Object.defineProperty(next, 'started', { value: started, enumerable: false });
   return next;
 }
 
-// Disconnecting an app ends sending its workouts to Intervals.icu: a new
-// connection asks again.
+// Disconnecting an app ends sending its workouts to Intervals.icu (a new
+// connection asks again) and deletes Aurin's record of what went: Wahoo's
+// terms count the workout ids as personal data, Google's Limited Use wants
+// the data gone. A reconnect does not send twice: the next pass finds the
+// ones already there by our external_id (watch-forward.js).
 export async function stopForwarding(db, userId, source) {
   const prefs = await readSyncPrefs(db, userId, 'intervals');
   if (prefs.forward?.includes(source)) await saveSyncPrefs(db, userId, 'intervals', { forward: prefs.forward.filter(s => s !== source) });
+  await db.prepare("DELETE FROM sync_sends WHERE user_id = ? AND destination = 'intervals' AND activity_key LIKE ?").bind(userId, FORWARD_KEY[source] + '%').run().catch(error => { if (!/no such table/i.test(error.message)) throw error; });
 }
 
 export const healthAllowed = (prefs, type) => prefs?.health === 'all' || (Array.isArray(prefs?.health) && prefs.health.includes(type));

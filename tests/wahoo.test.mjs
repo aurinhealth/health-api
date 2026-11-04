@@ -262,8 +262,8 @@ test("the same ride from Wahoo and Intervals.icu counts once; Wahoo's ride stand
   raw.sqlite.prepare("INSERT INTO sync_sends (user_id, activity_key, destination, status, remote_id, payload_json) VALUES (1, 'wahoo:1', 'intervals', 'sent', 'i77', '{\"name\":\"Evening ride\"}')").run();
   // Disconnecting deletes the Wahoo rides; the watch's ride counts again.
   await disconnectWahoo(env(db), { fetchImpl: api().fetchImpl });
-  // What Aurin kept of the sent ride goes, the Intervals.icu id stays; the switch is off.
-  assert.deepEqual({ ...raw.sqlite.prepare("SELECT payload_json, remote_id FROM sync_sends WHERE activity_key = 'wahoo:1'").get() }, { payload_json: "{}", remote_id: "i77" });
+  // Aurin's record of the sent ride goes (Wahoo counts its ids as personal data); the switch is off.
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM sync_sends WHERE activity_key = 'wahoo:1'").get().n, 0);
   assert.deepEqual((await readSyncPrefs(db, 1, "intervals")).forward, []);
   assert.equal(rows(raw, "source_family='wahoo'").length, 0);
   assert.equal(role("g2"), "primary");
