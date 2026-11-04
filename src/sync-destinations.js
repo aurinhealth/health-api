@@ -242,11 +242,13 @@ async function intervalsActivityId(headers, body, fetchImpl) {
   return match?.id == null ? null : String(match.id);
 }
 
-async function pushIntervals(env, row, { fetchImpl }) {
+async function pushIntervals(env, row, { fetchImpl, absent = false }) {
   const activity = JSON.parse(row.payload_json || '{}'), body = intervalsActivity(env.USER_ID, activity);
   const headers = { Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: 'application/json', 'Content-Type': 'application/json' };
-  // Sent before: the same activity is updated instead of made twice.
-  const known = row.remote_id || await intervalsActivityId(headers, body, fetchImpl);
+  // Sent before: the same activity is updated instead of made twice. `absent`:
+  // the caller has just read those days from Intervals.icu without our
+  // external_id (intervals-catchup.js), so the day is not asked again.
+  const known = row.remote_id || (absent ? null : await intervalsActivityId(headers, body, fetchImpl));
   const url = known ? 'https://intervals.icu/api/v1/activity/' + encodeURIComponent(known) : 'https://intervals.icu/api/v1/athlete/0/activities/manual';
   const response = await reach(fetchImpl, url, { method: known ? 'PUT' : 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
   if (!response.ok) throw new Error('Intervals.icu HTTP ' + response.status);
@@ -379,7 +381,7 @@ async function deliver(env, row, options) {
 // one entry per destination it went to (sent or error); Apple Health is
 // written by the iPhone and is not in the list. `googleToken` makes the
 // Google access token (index.js googleToken); `only` limits the destinations.
-export async function sendActivity(env, input, { fetchImpl = fetch, googleToken = null, only = SERVER_DESTINATIONS, pollMs } = {}) {
+export async function sendActivity(env, input, { fetchImpl = fetch, googleToken = null, only = SERVER_DESTINATIONS, pollMs, absent = false } = {}) {
   const activity = normalizeActivity(input);
   await ensureSyncTables(env.DB);
   const sends = [];
@@ -394,7 +396,7 @@ export async function sendActivity(env, input, { fetchImpl = fetch, googleToken 
         message = CASE WHEN sync_sends.status = 'unknown' AND sync_sends.remote_id IS NULL THEN sync_sends.message ELSE NULL END, attempts = 0, updated_at = CURRENT_TIMESTAMP`)
       .bind(env.USER_ID, activity.key, destination, JSON.stringify(activity)).run();
     const row = await env.DB.prepare('SELECT * FROM sync_sends WHERE user_id = ? AND activity_key = ? AND destination = ?').bind(env.USER_ID, activity.key, destination).first();
-    sends.push(await deliver(env, row, { fetchImpl, googleToken, pollMs }));
+    sends.push(await deliver(env, row, { fetchImpl, googleToken, pollMs, absent }));
   }
   return { status: 'ok', key: activity.key, sends };
 }

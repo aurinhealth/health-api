@@ -30,3 +30,9 @@ Modules in `src/` import them from `./private/<same file name>`. Change prompt t
 request to `aurin-prompts`, never in this public repository. A change that needs both repositories merges
 `aurin-prompts` first; an `aurin-prompts`-only change goes live by running "Deploy Cloudflare Worker" on
 `main` (workflow_dispatch).
+
+## AI team
+
+Claude Code works here as a product team: the main conversation is the Product Manager, the nine roles
+are read-only sub agents in `.claude/agents/`. Tests and attacks only on staging.aurin.health or local,
+never production; nothing changes before the owner approves. See [docs/ai-team.md](docs/ai-team.md).

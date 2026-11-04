@@ -950,6 +950,9 @@ struct ConnectionProblemCard: View {
             }
         }
         .onChange(of: model.todayRevision) { checked = nil }
+        .onReceive(NotificationCenter.default.publisher(for: ConnectionProblems.name)) { note in
+            if let found = note.object as? [ConnectionsResponse.Provider] { withAnimation { checked = found } }
+        }
         .sheet(item: $connecting) { target in ServiceConnectSheet(target: target) { await load() } }
     }
 

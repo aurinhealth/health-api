@@ -3802,3 +3802,7 @@
 "Napiš, kde každá zóna začíná; zóna před ní končí těsně před tím. Zóny drží svá % prahového tempa, takže se s novým prahem posunou." = "Type where each zone starts; the zone before ends just short of it. Your zones keep their % of threshold pace, so a new threshold moves them with it.";
 "Napiš, kde každá zóna začíná; zóna pod ní končí o tep níž. Poslední zóna končí na maximálním tepu. Tepové zóny zůstanou v tepech, jak je napíšeš, nový prahový tep je neposune." = "Type where each zone starts; the zone below ends one beat lower. The last zone ends at your max heart rate. Heart-rate zones stay in bpm as you type them, so a new threshold heart rate does not move them.";
 "Napiš, kde každá zóna začíná; zóna před ní končí o sekundu pomaleji. Zóny se drží CSS, takže se s novým CSS posunou." = "Type where each zone starts; the zone before ends a second slower. Your zones stay tied to CSS, so a new CSS moves them with it.";
+
+/* Wahoo page in Zdroje dat (SyncViews.swift) */
+"FTP a výkonové zóny" = "FTP and power zones";
+"Zapnuto" = "On";
