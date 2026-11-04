@@ -287,6 +287,10 @@ final class ProStore {
     /// "1 490 Kč" from the App Store, or the fixed one.
     func price(_ id: String) -> String? { products[id]?.displayPrice }
 
+    /// The locale to read the offer's prices in (`amount`): the App Store's, like
+    /// perMonth reads them, or the app's for the fixed ones before it answers.
+    var priceLocale: Locale { products[Self.yearlyID]?.priceFormatStyle.locale ?? L10n.locale }
+
     /// The yearly price a month, in the store's currency: "124 Kč", "5,00 €".
     func perMonth(_ id: String) -> String? {
         guard let product = products[id] else { return nil }

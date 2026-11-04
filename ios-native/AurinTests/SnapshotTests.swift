@@ -866,10 +866,43 @@ final class SnapshotTests: XCTestCase {
         try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore()) }
         try render("paywall-plans-trial", height: 844) { PaywallView(close: {}, frozenTime: 5.5, step: 1, store: ProStore(trialEligible: true)) }
         try render("paywall-free-week", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true)) }
-        try render("paywall-all-plans", height: 700) {
-            AllProPlans(offers: ProOffer.all(ProStore(trialEligible: true)), selected: .constant(.yearOnce), buying: false, start: {}, redeem: {}, restore: {})
+        // "View more plans" (variant 8c): where the year can be paid monthly (CZ) and where it can't (US).
+        let cs = Locale(identifier: "cs_CZ")
+        let czech = ProOffer.plans(yearly: "1 490 Kč", monthly: "199 Kč", perMonth: "124 Kč",
+                                   commitment: ProStore.Commitment(monthly: "149 Kč", total: "1 788 Kč"), trial: true,
+                                   amount: { ProStore.amount($0, locale: cs) })
+        try render("paywall-all-plans", height: 900, window: true) {
+            AllProPlans(offers: czech, selected: .constant(.yearMonthly), buying: false, start: {}, redeem: {}, restore: {})
                 .background(Night.bottom)
         }
+        try render("paywall-all-plans-monthly", height: 900, window: true) {
+            AllProPlans(offers: czech, selected: .constant(.monthly), buying: false, start: {}, redeem: {}, restore: {})
+                .background(Night.bottom)
+        }
+        L10n.setLanguage("en")
+        defer { L10n.setLanguage("cs"); UserDefaults.standard.removeObject(forKey: "AppleLanguages") }
+        let us = Locale(identifier: "en_US")
+        let american = ProOffer.plans(yearly: "$59.99", monthly: "$6.99", perMonth: "$5.00", commitment: nil, trial: true,
+                                      amount: { ProStore.amount($0, locale: us) })
+        try render("paywall-all-plans-us-en", height: 900, window: true) {
+            AllProPlans(offers: american, selected: .constant(.yearOnce), buying: false, start: {}, redeem: {}, restore: {})
+                .background(Night.bottom).environment(\.locale, L10n.locale)
+        }
+    }
+
+    /// What each plan saves against paying monthly (variant 8c): only the yearly plans, in whole percent.
+    func testPlanSavings() throws {
+        let cs = Locale(identifier: "cs_CZ"), us = Locale(identifier: "en_US")
+        let czech = ProOffer.plans(yearly: "1\u{202F}490,00\u{00A0}Kč", monthly: "199,00\u{00A0}Kč", perMonth: "124\u{00A0}Kč",
+                                   commitment: ProStore.Commitment(monthly: "149,00\u{00A0}Kč", total: "1\u{202F}788,00\u{00A0}Kč"), trial: true,
+                                   amount: { ProStore.amount($0, locale: cs) })
+        XCTAssertEqual(czech.map(\.kind), [.yearMonthly, .yearOnce, .monthly])
+        XCTAssertEqual(czech.map(\.save), [25, 38, nil], "149 vs 199, 1 490 vs 12 × 199, monthly none")
+        let american = ProOffer.plans(yearly: "$59.99", monthly: "$6.99", perMonth: "$5.00", commitment: nil, trial: true,
+                                      amount: { ProStore.amount($0, locale: us) })
+        XCTAssertEqual(american.map(\.save), [28, nil])
+        XCTAssertNil(ProOffer.saving(Decimal(199), months: 1, against: Decimal(199)), "no saving, no label")
+        XCTAssertNil(ProOffer.saving(nil, months: 12, against: Decimal(199)), "a price without a number, no label")
     }
 
     /// Settings → Aurin Pro in night violet: active, the free week on day 3,

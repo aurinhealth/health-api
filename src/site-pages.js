@@ -282,6 +282,7 @@ main:focus{outline:none}
 .plan .pk{font-size:var(--fs-12);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}.plan.pro .pk{color:var(--green)}
 .plan h3{margin:10px 0 0;font:400 var(--fs-44)/1.1 var(--serif);letter-spacing:-.015em}.plan h3 small{font:500 var(--fs-17) var(--sans);color:var(--sec)}
 .plan .pl{margin:8px 0 0;color:var(--sec)}
+.plan h3 .save{display:inline-block;vertical-align:middle;margin-left:6px;padding:3px 10px;border-radius:var(--r-pill);background:var(--green-soft);color:var(--green);font:700 var(--fs-12)/1.4 var(--sans);letter-spacing:.06em;text-transform:uppercase}
 .plan ul{list-style:none;margin:20px 0 0;padding:0;display:grid;gap:10px}
 .plan li{position:relative;padding-left:20px}.plan li::before{content:"";position:absolute;left:2px;top:.62em;width:7px;height:7px;border-radius:50%;background:var(--green)}
 .plan li ul{margin:8px 0 2px;gap:6px}.plan li li{color:var(--sec);font-size:var(--fs-14)}.plan li li::before{width:5px;height:5px;background:var(--muted)}
@@ -745,6 +746,9 @@ export const GOOGLE_DISCLOSURE_ON_HOME = false;
 export const WEARABLES = ['Apple Watch', 'Fitbit', 'Pixel Watch', 'WHOOP', 'Ultrahuman'];
 // Aurin Pro's US prices in App Store Connect (Petr, 2026-11-02); the App Store shows each country its own.
 export const PRO_PRICE = {month: '$6.99', year: '$59.99'};
+// What the year saves against 12 months paid monthly, in whole percent, as the app's plans show it
+// (ProOffer.saving, variant 8c of the paywall, Petr 2026-11-04): 28 for $59.99 against 12 × $6.99.
+export const PRO_SAVE = Math.round((1 - parseFloat(PRO_PRICE.year.slice(1)) / (12 * parseFloat(PRO_PRICE.month.slice(1)))) * 100);
 // What Aurin has for everyone and what Pro adds, as Settings → Aurin Pro lists them (ProContents in
 // SubscriptionView.swift, in the app's English). A Pro group with items lists them under its title.
 export const PRO_CONTENTS = {
@@ -885,7 +889,7 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
   const faq = [
     ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit or Pixel Watch. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
     ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
-    ['What does it cost?', `Nothing during testing. After the release, Aurin Intelligence (the coach, food from a photo, words or the web, and the reviews), every training plan beyond the free starter plan in each sport, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: ${PRO_PRICE.month} a month or ${PRO_PRICE.year} a year with the first week free, shown in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.`],
+    ['What does it cost?', `Nothing during testing. After the release, Aurin Intelligence (the coach, food from a photo, words or the web, and the reviews), every training plan beyond the free starter plan in each sport, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: ${PRO_PRICE.year} a year with the first week free (${PRO_SAVE}% less than monthly) or ${PRO_PRICE.month} a month, shown in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.`],
     ['Does Aurin know my cycle?', 'If you turn on cycle tracking in Settings → Cycle, yes. Your readiness then weighs your resting heart rate and temperature in the days before your period against your own days in that phase, and, if you allow it, the coach knows it too.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from, and under Health data see for each type where Aurin reads it from and sends it to, with a switch for each.'],
     ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
@@ -955,7 +959,7 @@ ${GOOGLE_DISCLOSURE_ON_HOME ? googleDisclosure() : ''}
 <div class="plans">
 <div class="plan reveal"><div class="pk">Aurin</div><h3>Free</h3><p class="pl">Now and after the release.</p>
 <ul>${PRO_CONTENTS.free.map(x => `<li>${x}</li>`).join('')}</ul></div>
-<div class="plan pro reveal"><div class="pk">Aurin Pro</div><h3>${PRO_PRICE.month}<small> a month</small></h3><p class="pl">or ${PRO_PRICE.year} a year with the first week free, once Aurin is in the App Store.</p>
+<div class="plan pro reveal"><div class="pk">Aurin Pro</div><h3>${PRO_PRICE.year}<small> a year</small> <span class="save">Save ${PRO_SAVE}%</span></h3><p class="pl">with the first week free, or ${PRO_PRICE.month} a month, cancel any month. Once Aurin is in the App Store.</p>
 <ul>${PRO_CONTENTS.pro.map(([t, items]) => `<li>${t}${items.length ? `<ul>${items.map(x => `<li>${x}</li>`).join('')}</ul>` : ''}</li>`).join('')}</ul>
 <p class="pn">Prices vary by country. The App Store shows yours before you buy.</p></div>
 </div>
