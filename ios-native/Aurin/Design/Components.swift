@@ -673,13 +673,12 @@ struct PageScroll<Content: View>: View {
     @State private var width: CGFloat?
 
     var body: some View {
-        let ownWidth = statusBarAtSide && !Probe.has("-probeNoOwnWidth") ? width : nil
+        let ownWidth = statusBarAtSide ? width : nil
         ScrollView(.vertical) {
             content
                 .containerRelativeFrame(.horizontal) { length, _ in ownWidth ?? length }
                 .reportingOffset(report)
         }
-        .probeScroll(side: statusBarAtSide)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .coordinateSpace(.named("pageScroll"))
         .reportingInsetOffset(report)
@@ -719,33 +718,5 @@ private extension View {
         } else {
             self
         }
-    }
-}
-
-/// TEMPORARY probe (iPhone Duo, empty Training): launch arguments "-probe 1"
-/// print geometry; "-probeNoStripScroll 1" and "-probeNoOwnWidth 1" switch off
-/// one suspect each. To be removed with the fix.
-enum Probe {
-    static let args = ProcessInfo.processInfo.arguments
-    static func has(_ flag: String) -> Bool { args.contains(flag) }
-    static var on: Bool { has("-probe") }
-    static func log(_ text: @autoclosure () -> String) {
-        if on { print("PROBE \(text())") }
-    }
-}
-
-extension View {
-    @ViewBuilder func probeScroll(side: Bool) -> some View {
-        if #available(iOS 18, *) {
-            onScrollGeometryChange(for: String.self) { g in
-                "side=\(side) off=\(g.contentOffset) size=\(g.contentSize) cont=\(g.containerSize) ins=\(g.contentInsets)"
-            } action: { _, v in Probe.log("scroll \(v)") }
-        } else {
-            self
-        }
-    }
-
-    func probeFrame(_ name: String) -> some View {
-        onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { Probe.log("\(name) \($0)") }
     }
 }
