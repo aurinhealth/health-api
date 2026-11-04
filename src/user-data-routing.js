@@ -27,9 +27,8 @@ const TARGET = Symbol('database target');
 const STATEMENT = Symbol('database statement');
 const routers = new WeakMap();
 
-// The personal tables a user's data database holds; the router and the account move
-// (scripts/move-legacy-users.mjs) both take them from here.
-export const shardTableNames = personalTables => Object.keys(personalTables).filter(t => !CENTRAL_PERSONAL_TABLES.has(t));
+// The personal tables a user's data database holds.
+const shardTableNames = personalTables => Object.keys(personalTables).filter(t => !CENTRAL_PERSONAL_TABLES.has(t));
 
 export function routedUserDb(core, personal, personalTables, foods = core) {
   if (core === personal && foods === core) return core;
