@@ -2,6 +2,7 @@ import XCTest
 @testable import Aurin
 
 /// The line under "Synchronizovat znovu" on a service's page (SyncStatus.pageLine).
+@MainActor
 final class SyncPageLineTests: XCTestCase {
     private func decode(_ json: String) throws -> SyncStatus {
         try JSONDecoder().decode(SyncStatus.self, from: Data(json.utf8))

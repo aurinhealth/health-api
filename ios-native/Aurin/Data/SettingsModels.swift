@@ -87,6 +87,7 @@ struct SyncStatus: Decodable, Equatable {
     /// The line under "Synchronizovat znovu" on a service's page: what this sync
     /// brought from that service, or what went wrong with it. `failed`: the
     /// request itself failed (offline). Other services' problems stay in Zdroje dat.
+    @MainActor
     func pageLine(source: String, name: String, failed: String?) -> (text: String, problem: Bool) {
         if let failed { return (failed, true) }
         if status == "running" { return (L10n.tr("Pořád se synchronizuje na pozadí. Nová data se ukážou na Dnes, až to doběhne."), false) }
