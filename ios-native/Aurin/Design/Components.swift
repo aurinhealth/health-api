@@ -664,14 +664,19 @@ struct PageScroll<Content: View>: View {
     @ViewBuilder var content: Content
     @Environment(\.scrollReport) private var report
     @Environment(\.scrollDragReport) private var dragReport
-    /// The scroll view's own width. Not containerRelativeFrame: on the closed
-    /// iPhone Duo (status bar at the side) it gave a pushed page 42 pt more
-    /// than the screen, and the page sat cut off on the left.
+    /// The scroll view's own width, used only on the closed iPhone Duo (status
+    /// bar at the side): there containerRelativeFrame gave a pushed page 42 pt
+    /// more than the screen, and the page sat cut off on the left. On every
+    /// other iPhone the page keeps containerRelativeFrame: with the scroll
+    /// view's own width the tabs (build 452) came out only as wide as their
+    /// content, a narrow column in the middle of the screen.
     @State private var width: CGFloat?
 
     var body: some View {
+        let ownWidth = statusBarAtSide ? width : nil
         ScrollView(.vertical) {
-            content.frame(width: width)
+            content
+                .containerRelativeFrame(.horizontal) { length, _ in ownWidth ?? length }
                 .reportingOffset(report)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
