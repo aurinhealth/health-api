@@ -16,11 +16,15 @@ final class CoachStore: ObservableObject {
         var answer: String?
         var failed = false
         var proposal = false
+        /// The seconds the answer took: "Odpověď za 8 s".
+        var seconds: Int?
     }
 
     @Published private(set) var turns: [Turn] = []
     @Published private(set) var progress: String?
     @Published private(set) var waiting = false
+    /// When the question went: the seconds while waiting.
+    @Published private(set) var askedAt: Date?
 
     /// The chat the watch continues, for the rest of the day.
     private var chatId: Int? {
@@ -43,6 +47,7 @@ final class CoachStore: ObservableObject {
         turns.append(Turn(id: id, question: question))
         waiting = true
         progress = nil
+        askedAt = Date()
         guard WCSession.isSupported(), WCSession.default.activationState == .activated, WCSession.default.isReachable,
               let data = WatchCoach.Ask(id: id, text: question, chatId: chatId, view: view).encoded() else {
             askServer(id, question, view: view)
@@ -86,6 +91,7 @@ final class CoachStore: ObservableObject {
         turns[index].answer = answer.text
         turns[index].failed = answer.failed
         turns[index].proposal = answer.proposal
+        if let askedAt { turns[index].seconds = max(1, Int(Date().timeIntervalSince(askedAt).rounded())) }
         if let chat = answer.chatId { chatId = chat }
         waiting = false
         progress = nil

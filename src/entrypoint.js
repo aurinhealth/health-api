@@ -158,7 +158,7 @@ import { shiftDate, googleHealthFor, dashboardProfile, mondayOfDate, dayStartSql
 import { recentCoachProposals, ensureCoachInboxTable } from "./coach-inbox.js";
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
 import { planningHistory, triathlonHistory, planForWeek, syncedPlans, planSportDates, planSportMinutes, todayPlace, trainingGymPlans, weightKg } from "./plan-context.js";
-import { rideReviewsForCoach, rideDetailsFor } from "./coach-ride-reviews.js";
+import { rideReviewsForCoach, rideDetailsFor, isRideType } from "./coach-ride-reviews.js";
 import { planComplianceRoute } from "./plan-compliance-route.js";
 import { activityCompareRoute } from "./activity-compare.js";
 import { heatAdvice } from "./heat-advice.js";
@@ -2194,7 +2194,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const goal=null,preferences={};
     const answerMessage=async (onAnswer,onProgress=()=>{})=>{
       let inputs={},coachCtx={date,now:localNow()},selected=null,focus=null;
-      onProgress(L('Trenér připravuje odpověď…', 'The coach is preparing an answer…'));
+      // The steps the app shows under the question (CoachThinking), each one
+      // what the server really does: the data, the day's ride or run review when
+      // there is one, then the model writing. Never a step the model writes.
+      onProgress(L('Kouč čte tvoje data…', 'The coach is reading your data…'));
       if(task!=='simple'){
         ctx.waitUntil(reconcileWorkoutLibraryCompletions(env,ctx,internalAuth).catch(error=>console.error('Assistant reconciliation failed',error.message)));
         const [loaded,capabilities,athleteFeedback,notes,prefs,blockHistory,thresholds,earlierProposals]=await Promise.all([
@@ -2226,7 +2229,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if(targets?.plan)coachCtx.trainingPlan={name:targets.plan.name,week:targets.plan.week,weeks:targets.plan.weeks,phase:targets.plan.phaseLabel||targets.plan.phase,sessions:(targets.items||[]).filter(x=>x.plan).map(x=>({date:x.date,sport:x.sport,kind:x.plan.kind,label:x.label,minutes:x.minutes}))};
         Object.assign(coachCtx,{appContext:selected.appContext,selectedGym:selected.selectedGym,selectedDay:selected.selectedDay,selectedWeek:selected.selectedWeek},selected.selectedActivity?{selectedActivity:selected.selectedActivity}:{},selected.selectedSession?{selectedSession:selected.selectedSession}:{});
         const reviewDay=selected.appContext.date<=date&&selected.selectedDay?selected.appContext.date:date;
-        const reviews=await rideReviewsForCoach(env,ctx,reviewDay===date?inputs.daily?.training:selected.selectedDay,reviewDay,inputs.fitness?.wellness,thresholds).catch(()=>[]);
+        const reviewTraining=reviewDay===date?inputs.daily?.training:selected.selectedDay,reviewed=(reviewTraining?.completed||[]).filter(isRideType);
+        if(reviewed.length){const runs=reviewed.filter(a=>/run|treadmill/i.test(a.type||'')).length;onProgress(runs===reviewed.length?L('Kouč se dívá na tvůj poslední běh…', 'Looking at your last run…'):runs?L('Kouč se dívá na tvoje poslední aktivity…', 'Looking at your last activities…'):L('Kouč se dívá na tvoji poslední jízdu…', 'Looking at your last ride…'));}
+        const reviews=await rideReviewsForCoach(env,ctx,reviewTraining,reviewDay,inputs.fitness?.wellness,thresholds).catch(()=>[]);
         if(reviews.length)coachCtx.completedRideReviews=reviews;
         if(blockHistory)Object.assign(coachCtx,{blockHistory,blockFitness:inputs.fitness.wellness||[],historyPeriod:{from:shiftDate(date,-84),to:date,source:'cached activities; missing records remain unknown'}});
       }else focus=await dashboardProfile(env).then(profile=>athleteFocus(profile,date)).catch(()=>null);
@@ -2241,8 +2246,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const libraryAsk=searched?chatLibraryQuery({message,date,inputs,sport,todayCoach:coachCtx.gymDay?null:coachCtx.cyclingCoachV2,availabilityMinutes}):null;
       const library=searched?await searchWorkoutLibrary(env.DB,libraryAsk.query,libraryAsk.filters):{workouts:[]};
       coachCtx.workoutLibraryRecommendations=(library.workouts||[]).map(w=>({id:w.id,name:w.name,sport:w.sport||sport,source:w.source_name,sourceKind:w.source_kind,system:w.primary_system,durationMinutes:w.duration_minutes,targetLoad:w.target_load,difficulty:w.difficulty,suitability:w.suitability,challengeGap:w.challenge_gap,structure:w.intervals_description,reasons:w.reasons}));
+      onProgress(L('Kouč píše…', 'The coach is writing…'));
       const contextMs=Date.now()-started,answer=await askCoach(env,message,coachCtx,{focus,actions:true,task,onAnswer,image});
-      onProgress(L('Kontroluji návrhy pro aplikaci…', 'Checking the proposals for the app…'));
+      // The answer is written; the app keeps the line under it while the proposals are checked.
+      if(Array.isArray(answer.actions)&&answer.actions.length)onProgress(L('Kontroluji návrhy…', 'Checking the proposals…'));
       coachCtx.userMessage=message;coachCtx.appContext=coachCtx.appContext||appContext;coachCtx.gymPlan=appContext.sport==='gym'?selected?.gymPlan:inputs.gym;
       const actions=validateCoachActions(answer.actions,coachCtx,date,{userInitiated:true}),proposals=[];await ensureCoachInboxTable(env.DB);
       // A proposed workout is prepared right away, so the chat shows it (profile,

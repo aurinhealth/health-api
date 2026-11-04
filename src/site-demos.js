@@ -59,6 +59,11 @@ const P = {
 };
 const ic = (name, cls = '') => `<svg class="di${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true">${P[name]}</svg>`;
 const at = spec => ` data-at="${spec}"`;
+// The coach's wait (CoachThinking, CoachView.swift): the dots and the server's real steps, reading the data,
+// then writing (the seconds show only from 3 s, longer than any wait here). "Answered in N s" above the
+// answer once it is finished (CoachAnsweredIn).
+const coachWait = (from, to) => `<div class="dots"${at(`${from} ${to}-in`)}><i class="cdots" aria-hidden="true"><b></b><b></b><b></b></i><span data-tx="0|The coach is reading your data…;${Math.round((from + to) / 2)}|The coach is writing…">The coach is reading your data…</span></div>`;
+const answeredIn = (ms, seconds) => `<div class="ansd"${at(String(ms))}>Answered in ${seconds} s</div>`;
 const n = (from, to, start, len, fmt) => ` data-n="${from},${to},${start},${len},${fmt}"`;
 // Several counts on one element go into one attribute.
 const merge = html => html.replace(/ data-n="([^"]*)" data-n="/g, ' data-n="$1;').replace(/ data-n="([^"]*)" data-n="/g, ' data-n="$1;');
@@ -478,7 +483,8 @@ const coachScreen = `<div class="app glow-today chat">${STATUS}
 <div class="u">How should I train today?</div>
 <div class="c1"><span>Readiness is 78 and HRV is above normal for the third day. Your upper body is rested, so today is a good day for strength. Keep squats moderate after this morning’s run.</span></div>
 <div class="u"${at('1300')}>I’d like a gym workout this evening, about an hour.</div>
-<div class="dots"${at('2100 3200-in')}><span>Coach is thinking…</span></div>
+${coachWait(1300, 3200)}
+${answeredIn(4300, 3)}
 <div class="c1"${at('3200')}><span data-type="3200,900">Here’s a full-body session for 5:30 PM:</span></div>
 <div class="act"${at('4400')}>
 <div class="al">${ic('wand')}Schedule · Thu, Oct 8</div>
@@ -499,7 +505,8 @@ const memoryScreen = `<div class="app glow-today chat">${STATUS}
 <div class="nav c"><span class="cb">${ic('x')}</span><b>Coach</b><span class="cb">⋯</span></div>
 <div class="msgs">
 <div class="u">My left knee hurts when I run. No running for a few weeks, please.</div>
-<div class="dots"${at('500 1500-in')}><span>Coach is thinking…</span></div>
+${coachWait(0, 1500)}
+${answeredIn(2700, 3)}
 <div class="c1"${at('1500')}><span data-type="1500,1100">Got it, no running until your knee is better. I’ll swap Saturday’s run for an easy ride and keep lunges out of your gym days.</span></div>
 <div class="mchip"${at('2900')}>${ic('check')}Remembered: left knee hurts when running<span class="mut">Back</span></div>
 </div>
@@ -585,12 +592,12 @@ const actSleep = `<div class="dm wc">
 <div class="wcard"${rise(360)}><div class="row sp base"><span class="mut">Last night</span><span class="num md">7:12</span></div>
 <div class="hg" aria-hidden="true"><div class="hgl"><span>Awake</span><span>REM</span><span>Light</span><span>Deep</span></div><div class="hgt w-draw"${at('600')}>${NIGHT.map(([t, s, e]) => `<i class="${t}" style="left:${(s / 449 * 100).toFixed(2)}%;width:${Math.max(0.5, (e - s) / 449 * 100).toFixed(2)}%"></i>`).join('')}</div></div></div>
 </div>`;
-// Coach: the question, "Coach is thinking…" for a moment (CoachThinking, text only), the answer typed out, then its workout.
+// Coach: the question, the coach's wait for a moment (CoachThinking: dots and the steps), the answer typed out, then its workout.
 const COACH_SAYS = ['Readiness is 61 after 5 h 40 of sleep. ', 'Keep legs, go lighter:', ' squat 3 × 8 at 70 kg.'];
 const typed = (() => { let t = 1600; return COACH_SAYS.map(x => { const at0 = t; t += x.length * 26; return [x, at0, x.length * 26]; }); })();
 const actCoach = `<div class="dm wc coach2">
 <div class="w-q"${rise(100)}>Bad night. Legs today?</div>
-<div class="dots"${at('700 1600-in')}><span>Coach is thinking…</span></div>
+${coachWait(100, 1600)}
 <div class="wcard w-a"${at('1600')}><p class="sent">${typed.map(([x, start, len], i) => `<span${i === 1 ? ' class="grn w-it"' : ''} data-type="${start},${len}">${x}</span>`).join('')}</p></div>
 <div class="wcard row w-wo"${at(String(typed[2][1] + typed[2][2] + 200))}><span class="ib amb">${ic('lift')}</span><div><b>Legs, lighter</b><span class="mut s">40 min · 4 exercises</span></div><span class="w-add">Add</span></div>
 </div>`;
@@ -940,8 +947,11 @@ html:not(.js) .stage1{display:none}
 .msgs{flex:1;display:flex;flex-direction:column;gap:12px;padding:10px 0;justify-content:flex-start}
 .msgs .u{align-self:flex-end;max-width:80%;padding:10px 14px;border-radius:18px;background:var(--button);color:var(--on-button);font-size:15.5px}
 .msgs .c1{align-self:flex-start;max-width:86%;padding:12px 16px;border-radius:18px;background:var(--panel);font-size:15.5px;line-height:1.45}
-.dots{align-self:flex-start;display:flex;align-items:center;padding:14px 16px;border-radius:18px;background:var(--panel)}.dots span{font-size:13px;color:var(--muted)}
+.dots{align-self:flex-start;display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:18px;background:var(--panel)}.dots span{font-size:13px;color:var(--muted)}
 .js .dots[data-at]:not(.in){display:none}
+.cdots{display:flex;gap:4px}.cdots b{width:6px;height:6px;border-radius:50%;background:var(--text);opacity:.25;animation:cdot 1s linear infinite}.cdots b:nth-child(2){animation-delay:.18s}.cdots b:nth-child(3){animation-delay:.36s}
+@keyframes cdot{0%{opacity:.25}50%{opacity:1}100%{opacity:.25}}@media (prefers-reduced-motion:reduce){.cdots b{animation:none;opacity:.55}}
+.ansd{align-self:flex-start;margin:0 0 -6px 4px;font-size:12px;color:var(--faint,var(--muted))}.js .ansd[data-at]:not(.in){display:none}
 .act{align-self:stretch;padding:14px;border-radius:16px;background:color-mix(in srgb,var(--amber-soft) 60%,transparent)}
 .al{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600}.an{font-size:22px;margin:6px 0 4px}
 .ar2{display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line);font-size:12.5px}

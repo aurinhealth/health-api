@@ -1220,10 +1220,10 @@ struct FeedbackSheet: View {
 
     @ViewBuilder private var coachNote: some View {
         if waiting {
-            CoachThinking(text: L10n.tr("Trenér píše zpětnou vazbu…")).padding(.top, 8)
+            CoachThinking(text: L10n.tr("Kouč píše zpětnou vazbu…")).padding(.top, 8)
         } else if let text = reflection?.text {
             VStack(alignment: .leading, spacing: 10) {
-                SectionLabel(text: "Trenér")
+                SectionLabel(text: "Kouč")
                 CoachMarkdown(text: text)
             }
             .padding(16)

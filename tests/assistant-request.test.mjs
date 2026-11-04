@@ -47,3 +47,19 @@ test("a message carries at most one checked photo, which reaches the AI but neve
     assert.equal(calls[0].input.filter(m => Array.isArray(m.content)).length, 1);
   } finally { globalThis.fetch = original; }
 });
+
+test("the steps under the question are the server's real ones: data, the day's ride or run, writing, proposals", () => {
+  const read = route.indexOf("onProgress(L('Kouč čte tvoje data…', 'The coach is reading your data…'));");
+  const ride = route.indexOf("if(reviewed.length){");
+  const review = route.indexOf("await rideReviewsForCoach(env,ctx,reviewTraining,");
+  const write = route.indexOf("onProgress(L('Kouč píše…', 'The coach is writing…'));");
+  const ask = route.indexOf("answer=await askCoach(env,message,coachCtx,");
+  const check = route.indexOf("if(Array.isArray(answer.actions)&&answer.actions.length)onProgress(L('Kontroluji návrhy…', 'Checking the proposals…'));");
+  assert.ok(read > 0 && read < ride && ride < review && review < write && write < ask && ask < check, "in the order the work happens");
+  // The ride step only when the reviewed day has a ride or run, with its own word.
+  assert.match(route, /reviewed=\(reviewTraining\?\.completed\|\|\[\]\)\.filter\(isRideType\)/);
+  assert.match(route, /'Looking at your last run…'/);
+  assert.match(route, /'Looking at your last ride…'/);
+  // The coach is "Kouč" everywhere the athlete reads it.
+  assert.doesNotMatch(route, /L\('Trenér/);
+});

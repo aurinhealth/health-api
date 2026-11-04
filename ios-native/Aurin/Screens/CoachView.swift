@@ -22,6 +22,8 @@ struct CoachView: View {
     /// Proposals whose Potvrdit or Odmítnout is on its way: a second tap does nothing.
     @State private var deciding: Set<Int> = []
     @State private var progress: String?
+    /// When the question went: the seconds under it and "Odpověď za 8 s".
+    @State private var askedAt: Date?
     @State private var error: String?
     @State private var needsConsent = false
     /// The coach needs Aurin Pro (402): the offer instead of an error.
@@ -71,6 +73,8 @@ struct CoachView: View {
         /// The photo sent with this question; a reopened chat has only `photoMark`.
         var photo: UIImage? = nil
         var photoMark = false
+        /// The seconds the answer took, for one given while the chat was open.
+        var answeredIn: Int? = nil
     }
 
     var body: some View {
@@ -94,9 +98,14 @@ struct CoachView: View {
                                            more: (bubble.note && packsOnSale) ? { morePacks = true } : nil)
                                     .id(bubble.id)
                             }
-                            // Until the first words arrive: the coach's bubble with dots and what he is doing.
-                            if let progress, sending, waiting {
-                                CoachThinking(text: progress).id("thinking")
+                            // Until the first words arrive: the coach's bubble with dots and what he is doing;
+                            // then the same row under the words while the answer is finished (proposals, preview).
+                            if let progress, sending {
+                                if waiting {
+                                    CoachThinking(text: progress, since: askedAt).id("thinking")
+                                } else {
+                                    CoachThinkingLine(text: progress, since: askedAt).padding(.leading, 4).id("thinking")
+                                }
                             }
                             if needsConsent { consentCard }
                             if needsSubscription { AISubscriptionCard { Paywall.present(model) } }
@@ -369,6 +378,8 @@ struct CoachView: View {
         let id = reply.id
         sending = true
         progress = L10n.tr("Kouč přemýšlí…")
+        let asked = Date()
+        askedAt = asked
         defer { sending = false; progress = nil }
         // Made smaller first: the server takes one JPEG up to about 1.8 MB.
         var image: String?
@@ -403,6 +414,7 @@ struct CoachView: View {
                     unshown = nil
                     edit(id) {
                         if let a = result.answer ?? last { $0.text = a }
+                        $0.answeredIn = max(1, Int(Date().timeIntervalSince(asked).rounded()))
                         $0.actions = result.actions ?? []
                         $0.visuals = result.visuals ?? []
                         $0.memory = (result.sportChanges?.chips ?? []) + (result.memoryChanges?.chips ?? []) + (result.memoryProposals?.proposals ?? [])
@@ -461,14 +473,20 @@ struct CoachView: View {
         let reply = Bubble(mine: false, text: "")
         messages.append(reply)
         sending = true
-        progress = L10n.tr("Kouč přemýšlí…")
+        let asked = Date()
+        askedAt = asked
+        // The server's steps, as a real question shows them.
+        progress = L10n.tr("Kouč čte tvoje data…")
         defer { sending = false; progress = nil }
-        try? await Task.sleep(for: .seconds(1.2))
+        try? await Task.sleep(for: .seconds(0.7))
+        progress = L10n.tr("Kouč píše…")
+        try? await Task.sleep(for: .seconds(0.5))
         let words = DemoData.coachAnswer(text).split(separator: " ")
         for i in words.indices {
             try? await Task.sleep(for: .milliseconds(60))
             edit(reply.id) { $0.text = words[...i].joined(separator: " ") }
         }
+        edit(reply.id) { $0.answeredIn = max(1, Int(Date().timeIntervalSince(asked).rounded())) }
     }
 
     private func edit(_ id: UUID, _ change: (inout Bubble) -> Void) {
@@ -656,6 +674,7 @@ struct BubbleView: View {
 
     var body: some View {
         VStack(alignment: bubble.mine ? .trailing : .leading, spacing: 8) {
+            if !bubble.mine, !bubble.note, let seconds = bubble.answeredIn { CoachAnsweredIn(seconds: seconds) }
             if let photo = bubble.photo {
                 Image(uiImage: photo).resizable().scaledToFill()
                     .frame(width: 210, height: 210)
@@ -1132,46 +1151,86 @@ struct ChatsPanel: View {
     }
 }
 
-/// The coach's bubble while he prepares an answer: what he is doing
-/// ("Kouč přemýšlí…", then the server's steps), text only.
+/// The coach's bubble while he prepares an answer: the dots, what he is doing
+/// ("Kouč čte tvoje data…", then the server's next steps) and, from 3 s, the
+/// seconds, so a long wait never looks stuck.
 struct CoachThinking: View {
     let text: String
+    /// When the wait began; nil: when the bubble appeared.
+    var since: Date? = nil
 
     var body: some View {
-        Text(text).font(Typo.small).foregroundStyle(Palette.muted)
-            .contentTransition(.opacity)
-            .animation(.easeInOut(duration: 0.25), value: text)
+        CoachWaitRow(text: text, since: since)
             .padding(.horizontal, 16).padding(.vertical, 14)
             .cardSurface(cornerRadius: 18)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.trailing, 40)
-            .accessibilityLabel(text)
     }
 }
 
-/// The same inside a card that has its own background: the text, no bubble.
+/// The same inside a card that has its own background (or under an answer
+/// still being finished): the row, no bubble.
 struct CoachThinkingLine: View {
     let text: String
+    var since: Date? = nil
 
     var body: some View {
-        Text(text).font(Typo.small).foregroundStyle(Palette.muted)
+        CoachWaitRow(text: text, since: since)
     }
 }
 
-/// Dots that light up one after another (the welcome's demo, a food lookup);
+/// One row wherever the app waits for AI: the dots, the step and "· 4 s" from
+/// 3 s. VoiceOver reads the step only, not the seconds.
+struct CoachWaitRow: View {
+    let text: String
+    var since: Date? = nil
+    @State private var appeared = Date()
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            CoachDots(size: 6, spacing: 4)
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let seconds = Int(context.date.timeIntervalSince(since ?? appeared))
+                (Text(verbatim: text).foregroundColor(Palette.muted)
+                    + Text(verbatim: seconds >= 3 ? " · " + L10n.f("%lld s", seconds) : "").foregroundColor(Palette.faint))
+                    .font(Typo.small)
+                    .contentTransition(.opacity)
+                    .animation(.easeInOut(duration: 0.25), value: text)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
+    }
+}
+
+/// "Answered in 8 s" above an answer given while the chat was open: the whole
+/// wait, most of it reading the data, so not "Thought for".
+struct CoachAnsweredIn: View {
+    let seconds: Int
+
+    var body: some View {
+        Text(verbatim: L10n.f("Odpověď za %lld s", seconds))
+            .font(Typo.caption).foregroundStyle(Palette.faint)
+            .padding(.leading, 4)
+    }
+}
+
+/// Dots that light up one after another (every AI wait, the welcome's demo);
 /// still with Reduce Motion and in Low Power Mode.
 struct CoachDots: View {
     var count = 3
+    var size: CGFloat = 7
+    var spacing: CGFloat = 5
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let still = reduceMotion || LowPower.shared.on
         TimelineView(.animation(minimumInterval: 1.0 / 30, paused: still)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
-            HStack(spacing: 5) {
+            HStack(spacing: spacing) {
                 ForEach(0..<count, id: \.self) { i in
                     Circle().fill(Palette.ink)
-                        .frame(width: 7, height: 7)
+                        .frame(width: size, height: size)
                         .opacity(still ? 0.55 : opacity(t, i))
                 }
             }
