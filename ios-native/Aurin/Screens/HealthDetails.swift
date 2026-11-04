@@ -63,6 +63,7 @@ struct SleepDetailContent: View {
                     SectionLabel(text: "Z čeho se skládá index").padding(.top, 30).id(Self.partsAnchor)
                     Card { SleepIndexParts(night: night, wakeups: detail?.night?.stats?.wakeups) }.padding(.top, 14)
                 }
+                // The window is the last 14 nights, however many of them were measured.
                 if let index = sleep.index, index.nights.count >= 2 {
                     SectionLabel(text: L10n.f("Posledních %@ nocí · průměr %@", "14", String(index.average))).padding(.top, 30)
                     Card { SleepIndexNights(index: index, date: health.date) }.padding(.top, 14)
@@ -430,7 +431,8 @@ struct SleepIndexNights: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.f("Index spánku za posledních %@ nocí, průměr %@.", String(index.nights.count), String(index.average)))
+        .accessibilityLabel(L10n.f("Index spánku za posledních %@ nocí, průměr %@.", String(index.nights.count), String(index.average))
+            + (index.low.flatMap { low in index.high.map { " " + L10n.f("Pás je tvoje obvyklé rozmezí, %@ až %@.", Fmt.int(low), Fmt.int($0)) } } ?? ""))
     }
 }
 
