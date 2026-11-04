@@ -106,6 +106,7 @@ import legacyHealthApi, { googleToken, matchActivities } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
 import { reviewRefusal, isReviewAccount } from "./app-review.js";
+import { updateFitnessEstimate } from "./own-vo2max-store.js";
 import { ensureReviewSample } from "./review-sample.js";
 import { handleNativeAppleLogin, forgetUsedAppleTokens } from "./apple-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat, startChatWithCoach, lastAnswerId, ownedChat } from "./assistant-chats.js";
@@ -132,7 +133,7 @@ import { handleWhoopOAuth, disconnectWhoop, syncWhoop } from "./whoop.js";
 import { wahooDetail } from "./wahoo-detail.js";
 import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, wahooRideExpected, readWahooTokens } from "./wahoo.js";
 import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed } from "./sync-destinations.js";
-import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, smokeUser, usersWithProviders, usersWithAccount, usersWithPushTokens, openSignup } from "./tenancy.js";
+import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, smokeUser, usersWithProviders, usersWithAccount, usersWithPushTokens, usersWithHealthConsent, openSignup } from "./tenancy.js";
 import { userDataEnvironment, prefetchUserData, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
 import { handlePasskeyLogin } from "./passkeys.js";
@@ -308,6 +309,10 @@ async function forIntervalsAthlete(env, ctx, athlete, parts, kinds, deleted = []
 const minute = (cron, now, test) => cron === "* * * * *" && test(now.getUTCMinutes(), now.getUTCHours());
 const every5 = (cron, now) => minute(cron, now, m => m % 5 === 0);
 const USER_JOBS = [
+  // Aurin's own VO2max and ages from the stored data, once a day at 4:47 UTC (a
+  // minute no five-minute job shares), for everyone who consented, whatever they
+  // connected; nothing is fetched from a service (own-vo2max-store.js).
+  { name: "fitness-estimate", providers: [], everyone: true, due: (cron, now) => minute(cron, now, (m, h) => h === 4 && m === 47), run: scoped => updateFitnessEstimate(scoped) },
   // After the user's midnight (0:00–6:00 in their zone), old Google data gets
   // thinner a step a minute: a workout's heart-rate samples older than a week become 5-minute
   // rows, those older than a month hourly rows, zone minutes hourly rows
@@ -389,7 +394,7 @@ export function dueUserJobs(cron, now) { return USER_JOBS.filter(job => job.due(
 export async function runUserJobs(env, ctx, { cron, scheduledTime }, user, names) {
   const scoped = await withoutBrokenConnections(await connectionEnvironment(await userDataEnvironment(env, user)), new Date(scheduledTime || Date.now()));
   const connected = scoped.CONNECTED_PROVIDERS || [];
-  const jobs = USER_JOBS.filter(job => names.includes(job.name) && (job.push || job.notes || job.providers.some(p => connected.includes(p))));
+  const jobs = USER_JOBS.filter(job => names.includes(job.name) && (job.push || job.notes || job.everyone || job.providers.some(p => connected.includes(p))));
   if (!jobs.length) return;
   const [language, zone] = await Promise.all([storedLanguage(env.DB, user.id, { fresh: true }), storedTimeZone(env.DB, user.id, { fresh: true })]), unitsChoice = await storedUnits(env.DB, user.id);
   const controller = { cron, scheduledTime };
@@ -426,7 +431,9 @@ export async function fanOutUserJobs(env, ctx, controller, { concurrency = 10 } 
   const notified = due.some(job => job.push) && pushConfigured(env) ? await usersWithPushTokens(env.DB, env) : [];
   // The coach's night note goes to the users who chatted, whatever they connected.
   const chatted = due.some(job => job.notes) ? await usersWithNotesDue(env.DB, env, scheduledTime) : [];
-  const byId = new Map([...(await usersWithProviders(env.DB, env, providers)), ...notified, ...chatted].map(user => [user.id, user]));
+  // A job for everyone (once a day) goes to every consenting user.
+  const everyone = due.some(job => job.everyone) ? await usersWithHealthConsent(env.DB, env) : [];
+  const byId = new Map([...(await usersWithProviders(env.DB, env, providers)), ...notified, ...chatted, ...everyone].map(user => [user.id, user]));
   // The App Review demo account syncs with no third-party service (app-review.js).
   const users = [...byId.values()].filter(user => !isReviewAccount(env, user));
   const binding = env.USER_JOBS && typeof env.USER_JOBS.run === "function" ? env.USER_JOBS : null;

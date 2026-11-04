@@ -134,6 +134,8 @@ export const PERSONAL_TABLES = {
   app_settings: {},
   // The profile photo (profile-photo.js).
   profile_photos: {},
+  // Aurin's own VO2max and ages, one row a day (own-vo2max-store.js).
+  fitness_estimates: { pk: ["user_id", "date"] },
   // One row a week of training per sport (training-history.js trainingWeeks).
   training_weeks: { pk: ["user_id", "week"] }
 };
@@ -799,6 +801,17 @@ export async function usersWithAccount(db, env, provider, externalId) {
 export async function usersWithPushTokens(db, env) {
   const rows = await db.prepare("SELECT u.id, u.email, u.name, u.role, u.disabled, EXISTS (SELECT 1 FROM user_consents k WHERE k.user_id = u.id AND k.kind = 'health' AND k.withdrawn_at IS NULL) AS consented FROM users u WHERE u.disabled = 0 AND EXISTS (SELECT 1 FROM push_tokens t WHERE t.user_id = u.id) ORDER BY u.id").all().catch(() => ({ results: [] }));
   return (rows.results || []).map(row => ({ row, user: publicUser(row, env) })).filter(({ row, user }) => user.isOwner || row.consented).map(({ user }) => user);
+}
+
+// Every user whose health data the background jobs may touch (enabled and
+// consenting, or the owner), whatever they connected: Apple Health only, a ring,
+// nothing yet. For the once-a-day jobs that work on stored data only.
+export async function usersWithHealthConsent(db, env) {
+  const rows = await db.prepare("SELECT u.id, u.email, u.name, u.role, u.disabled FROM users u WHERE u.disabled = 0 AND EXISTS (SELECT 1 FROM user_consents k WHERE k.user_id = u.id AND k.kind = 'health' AND k.withdrawn_at IS NULL) ORDER BY u.id").all().catch(() => ({ results: [] }));
+  const list = (rows.results || []).map(row => publicUser(row, env));
+  const owner = await ownerUser(db, env);
+  if (owner && !list.some(u => u.id === owner.id)) list.unshift(owner);
+  return list;
 }
 
 export function _resetTenancyForTest() { tenancyReady = false; }
