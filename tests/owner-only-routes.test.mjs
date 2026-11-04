@@ -7,7 +7,7 @@ const owner = { id: 1, isOwner: true, isAdmin: true };
 const friend = { id: 2, isOwner: false, isAdmin: false };
 
 test("routes only the old web dashboard used are the owner's", () => {
-  for (const path of ["/app/api/daily", "/app/api/sleep", "/app/api/activities", "/app/api/nutrition", "/app/api/nutrition/log", "/app/api/fitness", "/app/api/week", "/app/api/food/recipe", "/app/api/me/apple", "/app/api/training-profile/estimate", "/cookbook/page", "/cookbook/search", "/food/today", "/food/log", "/food/recommend", "/sync/google", "/sync/google/status", "/sync/intervals", "/health/sleep", "/analysis/daily", "/strength/write-plan"]) {
+  for (const path of ["/app/api/daily", "/app/api/sleep", "/app/api/activities", "/app/api/nutrition", "/app/api/nutrition/log", "/app/api/fitness", "/app/api/week", "/app/api/me/apple", "/app/api/training-profile/estimate", "/food/today", "/food/log", "/food/recommend", "/sync/google", "/sync/google/status", "/sync/intervals", "/health/sleep", "/analysis/daily", "/strength/write-plan"]) {
     assert.equal(ownerOnlyPath(path), true, path);
   }
 });
@@ -32,5 +32,5 @@ test("only a signed-in user other than the owner is refused", async () => {
   // The owner's API key and GitHub Actions are not a signed-in session.
   assert.equal(ownerOnlyRefusal("/app/api/daily", { signedIn: false, user: owner }), null);
   assert.equal(ownerOnlyRefusal("/app/api/today", { signedIn: true, user: friend }), null);
-  assert.equal(ownerOnlyRefusal("/cookbook/page", { signedIn: true, user: friend }).status, 404);
+  assert.equal(ownerOnlyRefusal("/food/today", { signedIn: true, user: friend }).status, 404);
 });

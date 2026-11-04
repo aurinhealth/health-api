@@ -1,5 +1,5 @@
-// Food values the user enters: a package label, a saved personal food
-// (personal-foods.js) or a cookbook recipe. Search also lists the read-only
+// Food values the user enters: a package label or a saved personal food
+// (personal-foods.js). Search also lists the read-only
 // world catalogue in R2 (world-foods.js) in the same product shape.
 import { cleanMicros } from "./micronutrients.js";
 const num = (v) => v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v)) ? Number(v) : null;

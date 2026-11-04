@@ -22,7 +22,6 @@ import { cached, cachedOnly, bumpCacheVersion, FOOD_WRITE, UNCHANGED_HEADER, clo
 import { manualPairs } from './manual-pairs.js';
 import { activityDetail, rideIntervals } from './activity-detail.js';
 import { watchDetail, withWatch } from './watch-detail.js';
-import { useCookbookDatabase } from './cookbook.js';
 import {googleDashboard} from './google-dashboard.js';
 import {applyEnergyBudget} from './energy-budget.js';
 import {buildToday,todayUnavailable} from './app-today.js';
@@ -284,7 +283,6 @@ async function intervalsWebhookFor(env, ctx, message) {
 export async function runIntervalsWebhookInvocation(env, ctx, { athlete, parts = [], kinds = [], deleted = [] } = {}) {
   try {
     await ensureTenancy(env.DB, env);
-    useCookbookDatabase(env.DB);
     await forIntervalsAthlete(env, ctx, String(athlete || ""), parts, kinds, deleted);
     return { ok: true };
   } catch (error) {
@@ -412,7 +410,6 @@ export async function runUserJobs(env, ctx, { cron, scheduledTime }, user, names
 export async function runUserJobsInvocation(env, ctx, { user, names, cron, scheduledTime }) {
   try {
     await ensureTenancy(env.DB, env);
-    useCookbookDatabase(env.DB);
     await runUserJobs(env, ctx, { cron, scheduledTime }, user, names);
     return { ok: true };
   } catch (error) {
@@ -463,7 +460,6 @@ export async function fanOutUserJobs(env, ctx, controller, { concurrency = 10 } 
 const worker = {
   async scheduled(controller, env, ctx) {
     await ensureTenancy(env.DB, env);
-    useCookbookDatabase(env.DB);
     // Data of deleted accounts that the delete request had no time for.
     // The rest of paused health data, and the last pass after a pause (health-pause.js).
     if (controller.cron === "* * * * *") await finishHealthPauses(env.DB, env.USER_DATA_ROUTING === 'true' || env.FOOD_CATALOG_ROUTING === 'true' ? { databaseForUser: id => deletionDatabase(env, id) } : {}).catch(error => console.error("Health data deletion failed", error.message));
@@ -506,7 +502,6 @@ const worker = {
       if (error instanceof TenancyUpgradeInProgress) return Response.json({status:"error",message:error.message},{status:503,headers:{"Retry-After":"30","Cache-Control":"no-store"}});
       throw error;
     }
-    useCookbookDatabase(env.DB);
     const rawEnv = env;
     // Deny by default: only allowlisted routes are reachable without a session or API key.
     let principal = await resolvePrincipal(request, env);

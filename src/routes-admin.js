@@ -1,7 +1,6 @@
 // Admin routes (/app/api/admin/*) and the deploy smoke test of the gym generator.
 import app from "./strength-gateway.js";
 import { verifyGitHubActionsToken } from "./github-oidc.js";
-import { saveCookbook } from "./cookbook.js";
 import { internalHeaders } from "./internal-auth.js";
 import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
@@ -28,11 +27,6 @@ export async function handleAdminApi(request, env, url, session) {
     }
     // Nastavení → Správa → Útraty AI (ai-total.js): today's spending by group against its brake.
     if (url.pathname === "/app/api/admin/ai-spending" && request.method === "GET") return Response.json({status:"ok",...await aiSpendingReport(env)},{headers:{"Cache-Control":"no-store"}});
-    // The owner's private copy of his printed cookbook (cookbook.js); it never goes into the repository.
-    if (url.pathname === "/app/api/admin/cookbook" && request.method === "POST") {
-      const {recipes} = await saveCookbook(db, await request.json().catch(() => ({})));
-      return Response.json({status:"ok",recipes,message:L(`Kuchařka je nahraná: ${recipes} receptů.`, `The cookbook is uploaded: ${recipes} recipes.`)});
-    }
   } catch (error) { return Response.json({status:"error",message:error.message},{status:400}); }
   return Response.json({status:"error",message:"Not found"},{status:404});
 }

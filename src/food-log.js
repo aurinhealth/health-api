@@ -1,4 +1,3 @@
-import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { normalizeBarcode } from "./food-sources.js";
 import { localToday } from "./user-time.js";
 
@@ -8,7 +7,7 @@ const n = (v, fallback = null) => v == null || v === "" ? fallback : Number.isFi
 const text = v => v == null ? "" : String(v).trim();
 
 // ---- One food diary -----------------------------------------------------------
-// The coach inbox and the cookbook log into the app's own diary (food_logs),
+// The coach inbox logs into the app's own diary (food_logs),
 // so a meal shows up in the app and counts once. Eaten food has no status, like
 // every meal logged in the app; a planned ("planned") or cancelled one stays out
 // of the app's totals. The meal, salt, grams, brand and barcode live in the
@@ -22,25 +21,6 @@ export async function ensureFoodLogTable(db) {
   diaryReady = true;
 }
 
-function recipeId(recipe) {
-  return text(recipe?.id || recipe?.recipe_id || recipe?.slug || String(recipe?.page || "recipe") + "-" + text(recipe?.name || recipe?.title));
-}
-function searchableRecipeText(recipe) {
-  const fields = ["name","title","recipe_name","description","category","meal","keywords","tags","ingredients"];
-  return fields.flatMap(k => { const v = recipe?.[k]; return Array.isArray(v) ? v.map(x => typeof x === "object" ? JSON.stringify(x) : String(x)) : [v]; }).join(" ").toLowerCase();
-}
-function nutritionFromRecipe(recipe) {
-  const source = recipe?.nutrition || recipe?.nutrients || recipe?.macros || recipe || {};
-  return {
-    calories: n(source.calories ?? source.kcal ?? source.energy_kcal ?? recipe?.calories),
-    protein_g: n(source.protein_g ?? source.protein ?? recipe?.protein_g ?? recipe?.protein),
-    carbs_g: n(source.carbs_g ?? source.carbohydrates_g ?? source.carbohydrates ?? recipe?.carbs_g ?? recipe?.carbs),
-    fat_g: n(source.fat_g ?? source.fat ?? recipe?.fat_g ?? recipe?.fat)
-  };
-}
-function publicRecipe(recipe, requestedPage = null) {
-  return { id:recipeId(recipe), name:text(recipe?.name || recipe?.title || recipe?.recipe_name) || null, page:n(recipe?.page), requested_page:requestedPage, ...nutritionFromRecipe(recipe), ingredients:recipe?.ingredients || null, description:recipe?.description || null, raw:recipe };
-}
 const DIARY_MEALS = [[/break|snída|snida/i, "breakfast"], [/lunch|oběd|obed/i, "lunch"], [/dinner|supper|večeř|veceř|vecer/i, "dinner"], [/snack|svač|svac/i, null]];
 // The app's meal for a free-text meal type ("oběd", "snack") and time.
 function diaryMealType(type, time) {
@@ -69,54 +49,22 @@ function consumedAt(date, time) {
 }
 const compactNote = note => JSON.stringify(Object.fromEntries(Object.entries(note).filter(([, v]) => v != null && v !== "")));
 
-export async function searchCookbookRecipes({ page, name, limit = 10 } = {}) {
-  const data = await getCookbook();
-  const recipes = Array.isArray(data?.recipes) ? data.recipes : [];
-  const pageNumber = page == null || page === "" ? null : Number(page);
-  const query = text(name).toLowerCase();
-  const results = recipes.map(r => {
-    const exactPage = Number.isInteger(pageNumber) && Number(r?.page) === pageNumber;
-    const canonicalPage = Number.isInteger(pageNumber) && Number(data?.page_aliases?.[String(pageNumber)]) === Number(r?.page);
-    const recipeText = searchableRecipeText(r);
-    const nameExact = query && text(r?.name || r?.title || r?.recipe_name).toLowerCase() === query;
-    const nameMatch = query && recipeText.includes(query);
-    let score = exactPage ? 100 : canonicalPage ? 60 : 0;
-    if (nameExact) score += 80; else if (nameMatch) score += 40;
-    if (!pageNumber && !query) score = 1;
-    return { r, score };
-  }).filter(x => x.score > 0).sort((a,b) => b.score - a.score).slice(0, Math.max(1, Math.min(50, Number(limit) || 10)));
-  return { status:"ok", count:results.length, recipes:results.map(x => publicRecipe(x.r, pageNumber)) };
-}
-export async function getCookbookRecipe({ page, name, recipeId: wantedId } = {}) {
-  if (page != null && page !== "") {
-    const recipe = await getCookbookRecipeByPage(page);
-    if (recipe && (!name || searchableRecipeText(recipe).includes(text(name).toLowerCase()))) return publicRecipe(recipe, Number(page));
-  }
-  const result = await searchCookbookRecipes({ page, name, limit:10 });
-  return wantedId ? result.recipes.find(r => r.id === wantedId) || null : result.recipes[0] || null;
-}
 function normalizeStatus(status) { const s=text(status).toLowerCase(); return ["planned","eaten","cancelled"].includes(s) ? s : "eaten"; }
 export async function logFood(db, input = {}) {
   await ensureFoodLogTable(db);
   const date=text(input.date) || localToday(), servings=Math.max(0.01,n(input.servings,1)), status=normalizeStatus(input.status);
-  const sourceText = text(input.source).toLowerCase();
-  // Own nutrition values make it a manual entry: a loose name match must not
-  // turn "Tvaroh, 200 kcal" into "Zapečené palačinky s tvarohem".
-  const ownValues = [input.calories, input.protein_g, input.carbs_g, input.fat_g].some(v => v != null && v !== "");
-  const useCookbook = input.page != null || input.recipeId || sourceText === "cookbook" || (sourceText === "" && !ownValues);
-  const recipe = useCookbook && (input.page != null || input.name || input.recipeId) ? await getCookbookRecipe({page:input.page,name:useCookbook ? input.name : null,recipeId:input.recipeId}) : null;
-  if (!recipe && input.calories == null && input.protein_g == null && input.carbs_g == null && input.fat_g == null) throw new Error("Recipe not found and no nutrition values were supplied");
-  const calories=n(input.calories,recipe?.calories), protein=n(input.protein_g,recipe?.protein_g), carbs=n(input.carbs_g,recipe?.carbs_g), fat=n(input.fat_g,recipe?.fat_g);
+  if (input.calories == null && input.protein_g == null && input.carbs_g == null && input.fat_g == null) throw new Error("No nutrition values were supplied");
+  const calories=n(input.calories), protein=n(input.protein_g), carbs=n(input.carbs_g), fat=n(input.fat_g);
   const each = (v, scale = servings) => v == null ? null : v * scale;
-  const page = recipe?.page ?? n(input.page), meal = diaryMealType(input.meal_type || input.mealType, input.meal_time || input.mealTime);
+  const meal = diaryMealType(input.meal_type || input.mealType, input.meal_time || input.mealTime);
   const note = compactNote({ mealType: meal, salt_g: each(n(input.salt_g, null)), amount_g: n(input.amount_g ?? input.grams, null), brand: text(input.brand) || null, barcode: normalizeBarcode(input.barcode) || null, text: text(input.note) || null });
   const result=await db.prepare("INSERT INTO food_logs (user_id,consumed_date,consumed_at,cookbook_page,recipe_title,servings,kcal,protein_g,carbs_g,fat_g,fiber_g,source,note,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(db.userId,
-    date,consumedAt(date,input.meal_time||input.mealTime),page,recipe?.name||text(input.name)||"Jídlo",servings,
+    date,consumedAt(date,input.meal_time||input.mealTime),null,text(input.name)||"Jídlo",servings,
     each(calories)??0,each(protein)??0,each(carbs)??0,each(fat)??0,each(n(input.fiber_g,null))??0,
-    text(input.source)||(recipe?"cookbook":"manual"),note,status==="eaten"?null:status
+    text(input.source)||"manual",note,status==="eaten"?null:status
   ).run();
   const nutrition={calories:each(calories),protein_g:each(protein),carbs_g:each(carbs),fat_g:each(fat),fiber_g:each(n(input.fiber_g,null)),salt_g:each(n(input.salt_g,null))};
-  return {status:"ok",id:result.meta?.last_row_id ?? null,date,entryStatus:status,servings,recipe,nutrition};
+  return {status:"ok",id:result.meta?.last_row_id ?? null,date,entryStatus:status,servings,nutrition};
 }
 async function diaryRow(db, id) {
   const key = n(id); if (!key) throw new Error("Missing food log id");
