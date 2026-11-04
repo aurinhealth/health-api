@@ -106,6 +106,7 @@ import legacyHealthApi, { googleToken, matchActivities } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
 import { reviewRefusal, isReviewAccount } from "./app-review.js";
+import { ensureReviewSample } from "./review-sample.js";
 import { handleNativeAppleLogin, forgetUsedAppleTokens } from "./apple-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat, startChatWithCoach, lastAnswerId, ownedChat } from "./assistant-chats.js";
 import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedReplyPush } from "./coach-push-reply.js";
@@ -135,7 +136,7 @@ import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, smokeUser
 import { userDataEnvironment, prefetchUserData, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
 import { handlePasskeyLogin } from "./passkeys.js";
-import { handleEmailLogin } from "./email-login.js";
+import { handleEmailLogin, reviewCode } from "./email-login.js";
 import { handleWaitlistSignup, forgetOldWaitlist } from "./testflight-waitlist.js";
 import { forgetStaleRequestLimits } from "./ip-rate-limit.js";
 import { emailConfigured } from "./email-sender.js";
@@ -631,6 +632,10 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (emailLogin) return emailLogin;
     if (url.pathname.startsWith("/app/api/")) {
       if (!user) return unauthorizedResponse();
+      // The App Review account shows a sample athlete's Apple Health (review-sample.js);
+      // only while its fixed code works; two rows read an hour, no query at all for anyone
+      // else. Paused health data stays paused.
+      if (isReviewAccount(rawEnv, user) && reviewCode(rawEnv, String(user.email || "").trim().toLowerCase()) && !user.healthPaused) await ensureReviewSample(env, { later: job => ctx.waitUntil(job) }).catch(error => console.error("Review sample failed", error.message));
       if (foodCatalogRequestPaused(request, env, url.pathname)) return Response.json({status:'catalog_upgrade',message:new FoodCatalogUnavailable().message},{status:503,headers:{'Retry-After':'30','Cache-Control':'no-store'}});
       // A write the app replays after a lost signal is stored once (idempotency.js).
       const response = await withIdempotency(request, env, url, r => handleDashboardApi(r, env, ctx, url, { user, signedIn }));
