@@ -31,10 +31,10 @@ export function limiterFor(pathname, method) {
   return "API_RATE_LIMITER";
 }
 
-let missingLogged = false;
+const missingLogged = new Set();
 async function allowed(binding, key, name) {
   if (!binding?.limit) {
-    if (!missingLogged) { missingLogged = true; console.warn("Rate limiter binding missing:", name); }
+    if (!missingLogged.has(name)) { missingLogged.add(name); console.warn("Rate limiter binding missing:", name); }
     return true;
   }
   try { return (await binding.limit({ key })).success !== false; }
