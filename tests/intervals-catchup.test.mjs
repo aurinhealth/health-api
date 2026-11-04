@@ -154,3 +154,42 @@ test("coming plans whose export gave up are tried again with the catch-up", asyn
   assert.deepEqual({ ...state(plan.id) }, { status: "pending", attempts: 0 });
   assert.equal(state(far.id).status, "failed");
 });
+
+test("a gym session still going on waits for the app's own send", async () => {
+  const { env, gym, sends } = await setup();
+  // NOW is 10:45 in Prague: sets since 09:30, the last a quarter of an hour ago.
+  gym("2026-11-04", "2026-11-04T09:30:00", 60);
+  gym("2026-11-02", "2026-11-02T17:00:00", 60);
+  const { calls, fetchImpl } = intervals([]);
+  const r = await runIntervalsCatchUp(env, { now: NOW, fetchImpl });
+  assert.deepEqual(calls.posts.map(p => p.external_id), ["aurin:7:gym:2026-11-02"]);
+  assert.deepEqual(sends().map(s => s.activity_key), ["gym:2026-11-02"]);
+  assert.equal(r.status, "done");
+});
+
+test("every five minutes only while pending; a refusal or the day's sends stop it", async () => {
+  const { env, gym, status } = await setup();
+  // Nothing pending: the five-minute run reads its row and stops.
+  await runIntervalsCatchUp(env, { now: NOW, fetchImpl: intervals([]).fetchImpl });
+  assert.equal(status().status, "done");
+  assert.deepEqual(await runIntervalsCatchUp(env, { now: NOW + 300000, pendingOnly: true, fetchImpl: () => { throw new Error("no request"); } }), { status: "idle" });
+  // A reconnect: three missed sessions; Intervals.icu answers the first send with 429.
+  for (const day of ["2026-10-30", "2026-10-31", "2026-11-01"]) gym(day, day + "T17:00:00", 60);
+  await scheduleIntervalsCatchUp(env, { now: NOW });
+  const posts = [];
+  const busy = async (url, init = {}) => {
+    if (init.method === "POST") { posts.push(url); return new Response("", { status: 429 }); }
+    return Response.json([]);
+  };
+  const r = await runIntervalsCatchUp(env, { now: NOW + 600000, pendingOnly: true, fetchImpl: busy });
+  assert.equal(r.status, "pending");
+  assert.equal(posts.length, 1, "no further sends after a 429");
+  // The five-minute runs wait an hour, the :45 one tries.
+  assert.deepEqual(await runIntervalsCatchUp(env, { now: NOW + 900000, pendingOnly: true, fetchImpl: busy }), { status: "waiting" });
+  // The day's sends used up: no request until the next UTC day.
+  const state = JSON.parse(status().details_json);
+  await env.DB.prepare("UPDATE sync_status SET details_json = ? WHERE user_id = ? AND sync_name = 'intervals_catchup'").bind(JSON.stringify({ ...state, sent: 24, wait: 0 }), 7).run();
+  const quiet = await runIntervalsCatchUp(env, { now: NOW + 3600000, fetchImpl: () => { throw new Error("no request"); } });
+  assert.equal(quiet.status, "pending");
+  assert.ok(JSON.parse(status().details_json).wait >= Date.parse("2026-11-05T00:00:00Z"));
+});
