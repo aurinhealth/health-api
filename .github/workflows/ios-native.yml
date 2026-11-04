@@ -47,9 +47,9 @@ jobs:
     # only Xcode 27.1 and later build the app full screen on iPhone Duo.
     runs-on: xcode-27
     # On main the run also builds for iPhone and uploads it after the App Store
-    # preview and the iPhone Duo screenshots: about 85 minutes (cancelled at 60
-    # and then 90 min before), so 100.
-    timeout-minutes: 100
+    # preview and the iPhone Duo screenshots: 81 to 97 minutes (cancelled at 60
+    # and then 90 min before; the open Duo shots add 1 to 2), so 110.
+    timeout-minutes: 110
     defaults:
       run:
         working-directory: ios-native
@@ -367,11 +367,11 @@ jobs:
 
       # The app on iPhone Duo, Apple's foldable (Xcode 27.1 and later have its
       # simulator): the sample day in English and light mode, each display the
-      # simulator shows (duo/). Not a release check: never fails the run, and
-      # never holds it either: on main 2026-11-03 it hung for 28 minutes and the
-      # whole run hit its time limit before Build for iPhone, so no upload.
-      # Booting and seven screens take 3 to 11 minutes (a slow runner needs 2 min
-      # to boot and 4 min to install).
+      # simulator shows (duo/), Today and Training also unfolded (duo/open-*).
+      # Not a release check: never fails the run, and never holds it either: on
+      # main 2026-11-03 it hung for 28 minutes and the whole run hit its time
+      # limit before Build for iPhone, so no upload. Booting and nine screens
+      # take 4 to 12 minutes (a slow runner needs 2 min to boot and 4 to install).
       - name: Screenshot the app on iPhone Duo
         continue-on-error: true
         # Each simctl call below has its own limit too, so a stuck one is named
@@ -437,6 +437,24 @@ jobs:
           sleep 7
           shoot warmup
           rm -f "$dir"/warmup*.png
+          # The open Duo (inner display, landscape 951x669 pt): simctl has no fold
+          # command, so .github/scripts/duo-hinge.m sends the hinge event Device
+          # Hub's "Open" sends (vendored, MIT). Today and Training first, so a
+          # slow runner still gets them; then folded again for the cover shots.
+          # Files open-<tab>-<display>.png: the inner display is the larger one.
+          if limit 60 clang -fobjc-arc -framework Foundation -o "$RUNNER_TEMP/duo-hinge" "$GITHUB_WORKSPACE/.github/scripts/duo-hinge.m" \
+            && DEVELOPER_DIR="$(xcode-select -p)" limit 30 "$RUNNER_TEMP/duo-hinge" -d "$udid" flat; then
+            sleep 3
+            for tab in today training; do
+              limit 30 xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en || continue
+              sleep 7
+              shoot "open-$tab"
+            done
+            DEVELOPER_DIR="$(xcode-select -p)" limit 30 "$RUNNER_TEMP/duo-hinge" -d "$udid" closed || true
+            sleep 3
+          else
+            echo "::warning::Could not unfold the iPhone Duo simulator; open shots skipped"
+          fi
           for tab in today training health food; do
             limit 30 xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en || continue
             sleep 7
