@@ -116,7 +116,11 @@ struct TrainingCalendarCard: View {
             // Room for the letter, the selected ring and the date; the percent
             // of the plan shows in the ring's colour and in the day's list.
             .frame(height: stripHeight)
-            .onAppear { proxy.scrollTo(day, anchor: .center) }
+            .onAppear {
+                Probe.log("strip onAppear day=\(day) noScroll=\(Probe.has("-probeNoStripScroll"))")
+                if Probe.has("-probeNoStripScroll") { centered = day } else { proxy.scrollTo(day, anchor: .center) }
+            }
+            .probeFrame("strip")
             .onChange(of: centered) { _, date in
                 // The day in the middle is the chosen one, as in a picker.
                 if let date, date != day { selected = date }

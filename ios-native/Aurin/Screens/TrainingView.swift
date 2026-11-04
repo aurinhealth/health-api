@@ -43,6 +43,7 @@ struct TrainingView: View {
                     ProgressView()
                 }
             }
+            .onAppear { Probe.log("TrainingView training=\(model.training != nil) error=\(model.trainingError ?? "-")") }
             // One object for the whole screen: its identity never changes, so a
             // redraw of Training does not redraw the cards that read it.
             .environment(startSpot)
@@ -169,6 +170,7 @@ struct TrainingContent: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
+        .probeFrame("trainingContent wide=\(wide)")
         .sheet(isPresented: $focusSheet) { FocusSheet { Task { await model.refreshTraining() } } }
     }
 
@@ -509,8 +511,10 @@ struct NextSession: View {
                 .onGeometryChange(for: Bool.self) { [floor = startSpot?.floor ?? 0] in
                     floor > 0 && $0.frame(in: .global).maxY > floor - StartButtonSpot.gap
                 } action: { under in
+                    Probe.log("start under=\(under) floor=\(startSpot?.floor ?? -1)")
                     startSpot?.report(session.date, under: under)
                 }
+                .probeFrame("startButton")
                 .onDisappear { startSpot?.report(session.date, under: false) }
                 .padding(.top, 4)
             }
