@@ -1495,7 +1495,6 @@
 "Pozastavit" = "Pause";
 "Ukončit časovač" = "Stop the timer";
 "Proč?" = "Why?";
-"Text podle pravidel aplikace, AI je vypnutá nebo nedostupná." = "Text from the app's rules; AI is off or unavailable.";
 
 /* Gym: logged workout, live logging, calories to check */
 "tlaky" = "pushes";

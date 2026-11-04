@@ -150,13 +150,8 @@ struct CoachTextCard: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
-                        // The AI's text needs no note (Petr 2026-11-04: the AI consent says it);
-                        // the app's own words say why there is no AI text.
-                        if ai == nil {
-                            Text("Text podle pravidel aplikace, AI je vypnutá nebo nedostupná.")
-                                .font(Typo.tiny).foregroundStyle(Palette.faint)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                        // No note under the numbers, for the AI's text or the app's own
+                        // (Petr 2026-11-04: the AI consent says it, and it only takes space).
                     }
                     .transition(.opacity)
                 }
