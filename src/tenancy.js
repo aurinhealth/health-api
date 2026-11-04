@@ -134,6 +134,8 @@ export const PERSONAL_TABLES = {
   app_settings: {},
   // The profile photo (profile-photo.js).
   profile_photos: {},
+  // Aurin's own VO2max and ages, one row a day (own-vo2max-store.js).
+  fitness_estimates: { pk: ["user_id", "date"] },
   // One row a week of training per sport (training-history.js trainingWeeks).
   training_weeks: { pk: ["user_id", "week"] }
 };
@@ -243,6 +245,39 @@ function memoStatement(statement, sql, memo, values = []) {
   };
 }
 
+// The second line of the guard below (security check 2026-11-04, N7): a
+// statement on personal tables should also be bound to this user's id. For
+// now it only logs, once per statement text in an isolate, so the owner can
+// see in the Worker logs whether any query would be refused before it is
+// switched on. Checking costs no database read.
+const ID_GUARD_LOGGED = new Set();
+const ID_GUARD_LOG_LIMIT = 200;
+const boundToUser = (values, id) => values.some(v => (typeof v === "number" || typeof v === "bigint" || (typeof v === "string" && /^\d+$/.test(v))) && Number(v) === id);
+export function unboundUserQuery(sql, values, id) {
+  if (/^\s*(CREATE|ALTER|DROP|PRAGMA)\b/i.test(sql) || !PERSONAL_TABLE_PATTERN.test(sql)) return false;
+  return !boundToUser(values || [], id);
+}
+function noteUnboundUser(sql, values, id) {
+  if (!unboundUserQuery(sql, values, id)) return;
+  const text = sql.replace(/\s+/g, " ").slice(0, 160);
+  if (ID_GUARD_LOGGED.has(text) || ID_GUARD_LOGGED.size >= ID_GUARD_LOG_LIMIT) return;
+  ID_GUARD_LOGGED.add(text);
+  console.warn("Personal-data query not bound to the user's id (log only):", text);
+}
+const GUARDED = Symbol("guarded");
+function idGuardStatement(statement, sql, id, values = []) {
+  const checked = kind => (...args) => { noteUnboundUser(sql, values, id); return statement[kind](...args); };
+  return {
+    [REAL]: statement?.[REAL] || statement,
+    [GUARDED]: { sql, values },
+    bind: (...next) => idGuardStatement(statement.bind(...next), sql, id, next),
+    run: checked("run"),
+    first: checked("first"),
+    all: checked("all"),
+    raw: checked("raw")
+  };
+}
+
 // A D1 facade that refuses statements touching personal tables unless they
 // mention user_id, so a missed WHERE clause fails instead of leaking data.
 export function scopedDb(db, userId, { memo = false } = {}) {
@@ -265,9 +300,10 @@ export function scopedDb(db, userId, { memo = false } = {}) {
       check(query);
       const statement = db.prepare(query);
       const retried = retriedStatement(IDEMPOTENT_SCHEMA.test(query) ? schemaStatement(statement, String(query), schemaDone) : statement, query);
-      return reads ? memoStatement(retried, String(query), reads) : retried;
+      return idGuardStatement(reads ? memoStatement(retried, String(query), reads) : retried, String(query), id);
     },
     async batch(statements) {
+      for (const s of statements) if (s?.[GUARDED]) noteUnboundUser(s[GUARDED].sql, s[GUARDED].values, id);
       reads?.clear();
       try { return await withD1Retry(() => db.batch(statements.map(s => s?.[REAL] || s)), { read: false }); } finally { reads?.clear(); }
     },
@@ -765,6 +801,17 @@ export async function usersWithAccount(db, env, provider, externalId) {
 export async function usersWithPushTokens(db, env) {
   const rows = await db.prepare("SELECT u.id, u.email, u.name, u.role, u.disabled, EXISTS (SELECT 1 FROM user_consents k WHERE k.user_id = u.id AND k.kind = 'health' AND k.withdrawn_at IS NULL) AS consented FROM users u WHERE u.disabled = 0 AND EXISTS (SELECT 1 FROM push_tokens t WHERE t.user_id = u.id) ORDER BY u.id").all().catch(() => ({ results: [] }));
   return (rows.results || []).map(row => ({ row, user: publicUser(row, env) })).filter(({ row, user }) => user.isOwner || row.consented).map(({ user }) => user);
+}
+
+// Every user whose health data the background jobs may touch (enabled and
+// consenting, or the owner), whatever they connected: Apple Health only, a ring,
+// nothing yet. For the once-a-day jobs that work on stored data only.
+export async function usersWithHealthConsent(db, env) {
+  const rows = await db.prepare("SELECT u.id, u.email, u.name, u.role, u.disabled FROM users u WHERE u.disabled = 0 AND EXISTS (SELECT 1 FROM user_consents k WHERE k.user_id = u.id AND k.kind = 'health' AND k.withdrawn_at IS NULL) ORDER BY u.id").all().catch(() => ({ results: [] }));
+  const list = (rows.results || []).map(row => publicUser(row, env));
+  const owner = await ownerUser(db, env);
+  if (owner && !list.some(u => u.id === owner.id)) list.unshift(owner);
+  return list;
 }
 
 export function _resetTenancyForTest() { tenancyReady = false; }
