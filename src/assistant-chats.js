@@ -129,13 +129,6 @@ export async function startChatWithCoach(db, title, text) {
   return id;
 }
 
-// The id of the chat's last answer, which the proposals made with it point to.
-export async function lastAnswerId(db, chatId) {
-  if (!validId(chatId)) return null;
-  const row = await db.prepare("SELECT MAX(id) AS id FROM assistant_messages WHERE user_id=? AND chat_id=? AND role='assistant'").bind(db.userId, Number(chatId)).first();
-  return row?.id ?? null;
-}
-
 export async function deleteChat(db, id) {
   await ensureAssistantChats(db);
   if (!validId(id)) return false;

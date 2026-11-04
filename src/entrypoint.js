@@ -2359,9 +2359,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if(url.pathname==='/app/api/assistant/feedback'&&request.method==='POST'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-    const raw=await request.text().catch(()=>'');
-    if(raw.length>500)return Response.json({message:L('Požadavek je moc velký.', 'The request is too large.')},{status:413});
-    let body;try{body=JSON.parse(raw)||{};}catch{body={};}
+    // Refused by its declared length before anything is read (body-limit.js).
+    const limited=await limitBody(request,1024);
+    if(limited.response)return limited.response;
+    let body;try{body=JSON.parse(await limited.request.text())||{};}catch{body={};}
     try{return Response.json(await saveAnswerFeedback(env.DB,body),{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({message:error.message},{status:error.status||400});}
   }

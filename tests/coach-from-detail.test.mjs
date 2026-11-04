@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { assistantAppContext, selectedSubject, selectedAssistantContext } from '../src/assistant-app-context.js';
 import { COACH_MOMENT_KEYS } from '../src/coach-assistant.js';
 import { replyPush, failedReplyPush, pushOpening, plainText, shortBody, COACH_ACTION_CATEGORY, COACH_REPLY_CATEGORY } from '../src/coach-push-reply.js';
-import { appendChatTurn, readChat, startChatWithCoach, lastAnswerId, chatContext } from '../src/assistant-chats.js';
+import { appendChatTurnIds, readChat, startChatWithCoach, chatContext } from '../src/assistant-chats.js';
 import { createD1 } from './helpers/d1.mjs';
 import { scopedDb } from '../src/tenancy.js';
 
@@ -60,12 +60,14 @@ test('the coach answers a notification with a notification', () => {
 test('a chat answered from a push starts with the push and keeps message ids', async () => {
   const raw = createD1(), db = scopedDb(raw, 1), other = scopedDb(raw, 2);
   const id = await startChatWithCoach(db, 'Tři krátké noci za sebou', pushOpening('Tři krátké noci za sebou', 'Zítřejší práh vyměním?'));
-  assert.equal(await appendChatTurn(db, id, 'Mám jen 40 minut', 'Dám ti sweet spot.'), id);
+  const turn = await appendChatTurnIds(db, id, 'Mám jen 40 minut', 'Dám ti sweet spot.');
+  assert.equal(turn.chatId, id);
   const chat = await readChat(db, id);
   assert.equal(chat.title, 'Tři krátké noci za sebou');
   assert.deepEqual(chat.messages.map(m => m.role), ['assistant', 'user', 'assistant']);
   assert.ok(chat.messages.every(m => Number.isInteger(m.id)));
-  assert.equal(await lastAnswerId(db, id), chat.messages[2].id);
-  assert.equal(await lastAnswerId(other, id), null);
+  // The answer's id, which the proposals and the thumbs under it point to.
+  assert.equal(turn.messageId, chat.messages[2].id);
+  assert.equal(await readChat(other, id), null);
   assert.deepEqual((await chatContext(db, id)).map(t => t.role), ['assistant', 'user', 'assistant']);
 });
