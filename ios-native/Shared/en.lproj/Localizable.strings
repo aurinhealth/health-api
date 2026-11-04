@@ -245,7 +245,7 @@
 "Kdy jít spát?" = "When to go to bed?";
 "Kdy mám čas" = "When I have time";
 "Kdykoli" = "Anytime";
-"Když použiješ AI funkci (asistent, rozpoznání jídla z fotky, hodnocení tréninku a týdne), pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI v USA." = "When you use an AI feature (the assistant, food recognition from photos, workout and week reviews), Aurin sends the data it needs, including health data and the photos you send, to OpenAI in the USA.";
+"Když použiješ AI funkci (kouč, rozpoznání jídla z fotky, hodnocení tréninku a týdne), a každý den kvůli krátkému shrnutí kouče na Dnes, Tréninku a Jídle, pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI v USA. Cyklus jen po zapnutí „Kouč ví o cyklu“." = "When you use an AI feature (the coach, food recognition from photos, workout and week reviews), and every day for the coach's short summary on Today, Training and Food, Aurin sends the data it needs, including health data and the photos you send, to OpenAI in the USA. Your cycle only if you turn on “Coach knows my cycle”.";
 "Klidový tep" = "Resting heart rate";
 "Klidový tep po dnech" = "Resting heart rate by day";
 "Knihovna" = "Library";
@@ -267,7 +267,7 @@
 "Kouč přemýšlí…" = "Coach is thinking…";
 "Kouč teď neodpověděl." = "The coach didn't answer.";
 "Kouč čte tvůj den…" = "Coach is reading your day…";
-"Kouč včetně fotek v chatu, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál." = "The coach including photos in the chat, food photo reading and food lookup send the data they need to AI. Without consent, the rest of the app keeps working.";
+"Kouč včetně fotek v chatu, jeho denní shrnutí na Dnes, Tréninku a Jídle, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál." = "The coach, including photos in chat, its daily summary on Today, Training and Food, reading food photos and looking up foods send the data they need to AI. Without consent, the rest of the app keeps working.";
 "Kuřecí rizoto" = "Chicken risotto";
 "Květina" = "Flower";
 "Kyslík v krvi" = "Blood oxygen";
@@ -1495,7 +1495,7 @@
 "Pozastavit" = "Pause";
 "Ukončit časovač" = "Stop the timer";
 "Proč?" = "Why?";
-"Kouč vychází jen z těchto čísel. Text se píše jednou denně." = "The coach uses only these numbers. The text is written once a day.";
+"Napsal AI kouč (OpenAI) z těchto čísel, plánu, jídla a trendů. Přepíše se, když se tvůj den změní." = "Written by the AI coach (OpenAI) from these numbers, your plan, food and trends. It's rewritten when your day changes.";
 "Text podle pravidel aplikace, AI je vypnutá nebo nedostupná." = "Text from the app's rules; AI is off or unavailable.";
 
 /* Gym: logged workout, live logging, calories to check */
@@ -3272,7 +3272,7 @@
 "Přidat se na čekací listinu" = "Join the waitlist";
 "Zaškrtni první políčko, ať můžeš pokračovat." = "Tick the first box to continue.";
 "Později" = "Later";
-"Nepovinné. Potřebuje je kouč a rozpoznání jídla. Jde to vypnout v Nastavení." = "Optional. The coach and food recognition need it. You can turn it off in Settings.";
+"Nepovinné. Potřebuje je kouč, jeho denní shrnutí a rozpoznání jídla. Jde to vypnout v Nastavení." = "Optional. The coach, its daily summary and food recognition need it. You can turn it off in Settings.";
 "Čte spánek, tep, HRV, tréninky, váhu a jídlo. Bez zeptání nic nezapisuje." = "Reads sleep, heart rate, HRV, workouts, weight and food. Writes nothing without asking.";
 "Aurin potřebuje věk, výšku a váhu, aby spočítal kalorie, námahu a zotavení. Pohlaví mění výpočet kalorií a tepových zón." = "Aurin needs your age, height and weight to work out calories, strain and recovery. Sex changes how calories and heart rate zones are worked out.";
 "Zadej výšku mezi %@ a %@." = "Enter a height between %@ and %@.";

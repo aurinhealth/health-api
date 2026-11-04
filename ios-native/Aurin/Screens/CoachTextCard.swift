@@ -150,7 +150,7 @@ struct CoachTextCard: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
-                        Text(ai != nil ? "Kouč vychází jen z těchto čísel. Text se píše jednou denně." : "Text podle pravidel aplikace, AI je vypnutá nebo nedostupná.")
+                        Text(ai != nil ? "Napsal AI kouč (OpenAI) z těchto čísel, plánu, jídla a trendů. Přepíše se, když se tvůj den změní." : "Text podle pravidel aplikace, AI je vypnutá nebo nedostupná.")
                             .font(Typo.tiny).foregroundStyle(Palette.faint)
                             .fixedSize(horizontal: false, vertical: true)
                     }

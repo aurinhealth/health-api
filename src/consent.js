@@ -6,6 +6,11 @@
 import { L } from './lang.js';
 
 export const CONSENT_VERSION = '2026-10-11';
+// The AI text has its own version, stored with each AI consent, so it shows
+// which text was agreed to (art. 7(1) GDPR). 2026-11-04: the coach's daily
+// summary on Today, Training and Food named in the text (Today audit point 11).
+// A new AI version does not ask again: only the health version does.
+export const AI_CONSENT_VERSION = '2026-11-04';
 export const CONSENT_KINDS = ['health', 'ai'];
 
 async function consentRows(db, userId) {
@@ -52,11 +57,11 @@ export async function saveConsent(env, input = {}) {
   if (input.health === undefined && input.ai === undefined) throw new Error(L('Chybí volba souhlasu.', 'No consent choice given.'));
   if (input.ai !== undefined && !input.health && !(await consentStatus(env)).health) throw new Error(L('Nejdřív je potřeba souhlas se zpracováním údajů o zdraví.', 'Consent to process health data comes first.'));
   const now = new Date().toISOString();
-  const grant = kind => env.DB.prepare('INSERT INTO user_consents (user_id, kind, version, granted_at, withdrawn_at) VALUES (?, ?, ?, ?, NULL) ON CONFLICT(user_id, kind) DO UPDATE SET version = excluded.version, granted_at = excluded.granted_at, withdrawn_at = NULL').bind(userId, kind, CONSENT_VERSION, now);
+  const grant = kind => env.DB.prepare('INSERT INTO user_consents (user_id, kind, version, granted_at, withdrawn_at) VALUES (?, ?, ?, ?, NULL) ON CONFLICT(user_id, kind) DO UPDATE SET version = excluded.version, granted_at = excluded.granted_at, withdrawn_at = NULL').bind(userId, kind, kind === 'ai' ? AI_CONSENT_VERSION : CONSENT_VERSION, now);
   const statements = [];
   if (input.health === true) statements.push(grant('health'));
   if (input.ai === true) statements.push(grant('ai'));
-  if (input.ai === false) statements.push(env.DB.prepare("INSERT INTO user_consents (user_id, kind, version, granted_at, withdrawn_at) VALUES (?, 'ai', ?, ?, ?) ON CONFLICT(user_id, kind) DO UPDATE SET withdrawn_at = excluded.withdrawn_at").bind(userId, CONSENT_VERSION, now, now));
+  if (input.ai === false) statements.push(env.DB.prepare("INSERT INTO user_consents (user_id, kind, version, granted_at, withdrawn_at) VALUES (?, 'ai', ?, ?, ?) ON CONFLICT(user_id, kind) DO UPDATE SET withdrawn_at = excluded.withdrawn_at").bind(userId, AI_CONSENT_VERSION, now, now));
   await env.DB.batch(statements);
   return { status: 'ok', consent: await consentStatus(env) };
 }
