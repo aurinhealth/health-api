@@ -186,7 +186,8 @@ struct SyncSendGroup: View {
                 }
                 if s.pushActivities {
                     if s.pushPlanned { SettingsDivider() }
-                    SettingsToggle(title: "Hotové tréninky", isOn: binding(\.pushActivities))
+                    // Intervals.icu: other apps' workouts have their own switches below.
+                    SettingsToggle(title: "Hotové tréninky", subtitle: id == "intervals" ? L10n.tr("Zapsané v Aurinu") : nil, isOn: binding(\.pushActivities))
                 }
                 // Wahoo: FTP and power zones go with the switch in Tréninkové zóny (ZonesSettingsView).
                 if id == "wahoo" {
@@ -201,7 +202,7 @@ struct SyncSendGroup: View {
                     NavigationLink {
                         SyncHealthView(id: id, sync: sync, saved: { await ask() })
                     } label: {
-                        SettingsRow(title: "Zdravotní data", value: SyncApp.healthValue(destination.prefs.health, of: destination.healthTypes))
+                        SettingsRow(title: "Zdravotní data", value: SyncApp.healthValue(destination.prefs.health, of: SyncHealthView.listed(destination)))
                     }
                     .buttonStyle(.plain)
                 }
@@ -323,6 +324,147 @@ struct GoogleWriteSheet: View {
     }
 }
 
+// MARK: - Intervals.icu: workouts from other apps
+
+/// "Tréninky z jiných aplikací" on Intervals.icu's page: a switch for each
+/// connected app whose workouts Aurin can pass on (src/watch-forward.js).
+/// Apple Health's is its health type "workouts"; Wahoo's and Google's ask
+/// first (their API terms want the user's yes) and can bring the last 14 days.
+struct SyncForwardGroup: View {
+    let sync: SyncSettingsStore
+    @State private var asking: String?
+
+    private var destination: SyncDestination? { sync.destination("intervals") }
+    private var sources: [String] {
+        guard let destination, destination.connected == true else { return [] }
+        let others = (destination.forwardSources ?? []).filter { ["wahoo", "google"].contains($0) }
+        return (AppleHealth.shared.isAvailable && destination.healthTypes.contains("workouts") ? ["apple"] : []) + others
+    }
+
+    var body: some View {
+        if let destination, !sources.isEmpty {
+            SettingsGroup(title: L10n.tr("Tréninky z jiných aplikací"), footer: L10n.tr("Posílá se dvě hodiny po konci tréninku a jen když ho Intervals.icu ještě nemá. Aplikaci, která do Intervals.icu posílá sama, nech vypnutou.")) {
+                ForEach(Array(sources.enumerated()), id: \.element) { index, id in
+                    if index > 0 { SettingsDivider() }
+                    HStack(spacing: 14) {
+                        IntegrationIcon(id: id, size: 30)
+                        SettingsToggle(title: Self.name(id), subtitle: L10n.tr(Self.subtitle(id)), isOn: binding(id, destination))
+                            .padding(.leading, -16)
+                    }
+                    .padding(.leading, 16)
+                }
+            }
+            .disabled(sync.working == "intervals" || sync.demo)
+            .sheet(item: Binding(get: { asking.map(SourceID.init) }, set: { asking = $0?.id })) { source in
+                ForwardConsentSheet(source: source.id) { backfill in
+                    asking = nil
+                    save(source.id, on: true, backfill: backfill)
+                }
+            }
+        }
+    }
+
+    private struct SourceID: Identifiable { let id: String }
+
+    static func name(_ id: String) -> String {
+        id == "apple" ? L10n.tr("Apple Health") : SyncApp.name(id)
+    }
+
+    static func subtitle(_ id: String) -> String {
+        switch id {
+        case "apple": return "Apple Watch a další aplikace"
+        case "wahoo": return "Jízdy s výkonem, tepem a trasou"
+        default: return "Fitbit a Pixel Watch"
+        }
+    }
+
+    private func isOn(_ id: String, _ destination: SyncDestination) -> Bool {
+        id == "apple" ? destination.prefs.health.allows("workouts") : (destination.prefs.forward ?? []).contains(id)
+    }
+
+    private func binding(_ id: String, _ destination: SyncDestination) -> Binding<Bool> {
+        Binding(get: { isOn(id, destination) },
+                set: { on in
+                    // Wahoo and Google: first the question, the switch moves on its yes.
+                    if on && id != "apple" { asking = id } else { save(id, on: on, backfill: false) }
+                })
+    }
+
+    private func save(_ id: String, on: Bool, backfill: Bool) {
+        guard var prefs = sync.destination("intervals")?.prefs else { return }
+        if id == "apple" {
+            var chosen: [String]
+            switch prefs.health {
+            case .all: chosen = destination?.healthTypes ?? []
+            case .some(let types): chosen = types
+            }
+            chosen.removeAll { $0 == "workouts" }
+            if on { chosen.append("workouts") }
+            prefs.health = on && prefs.health == .all ? .all : .some(chosen)
+        } else {
+            var list = prefs.forward ?? []
+            list.removeAll { $0 == id }
+            if on { list.append(id) }
+            prefs.forward = list
+            prefs.backfill = on && backfill ? true : nil
+        }
+        Task { [prefs] in await sync.save("intervals", prefs) }
+    }
+}
+
+/// The yes before an app's workouts go to Intervals.icu, with the last 14 days if wanted.
+struct ForwardConsentSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let source: String
+    let go: (Bool) -> Void
+    @State private var backfill = true
+
+    private var since: String {
+        Calendar.current.date(byAdding: .day, value: -14, to: Date())
+            .map { $0.formatted(Date.FormatStyle().weekday(.abbreviated).month(.abbreviated).day().locale(L10n.locale)) } ?? ""
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                IntegrationIcon(id: source, size: 40)
+                Image(systemName: "arrow.right").scaledFont(15, weight: .semibold).foregroundStyle(Palette.faint)
+                IntegrationIcon(id: "intervals", size: 40)
+            }
+            .padding(.top, 8)
+            Text(verbatim: L10n.f("Posílat tréninky z %@ do Intervals.icu?", SyncForwardGroup.name(source)))
+                .font(Typo.sentence(24, relativeTo: .title)).foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(verbatim: L10n.tr(source == "wahoo"
+                 ? "Aurin zkopíruje každou dokončenou jízdu a běh z Wahoo do tvého účtu Intervals.icu, s výkonem, tepem, kadencí a trasou."
+                 : "Aurin zkopíruje každý dokončený trénink z Google Health do tvého účtu Intervals.icu, s délkou, vzdáleností a tepem."))
+                .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("Vypnout to můžeš kdykoli. Co už v Intervals.icu je, tam zůstane.")
+                .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            Button { backfill.toggle() } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: backfill ? "checkmark.square.fill" : "square")
+                        .font(.title3).foregroundStyle(backfill ? Palette.blue : Palette.faint)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Poslat i posledních 14 dní").font(.body).foregroundStyle(Palette.ink)
+                        Text(verbatim: L10n.f("Od %@", since)).font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(14)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            PrimaryButton(title: L10n.tr("Poslat do Intervals.icu")) { go(backfill) }
+            Button("Teď ne") { dismiss() }.font(.subheadline.weight(.medium)).foregroundStyle(Palette.muted)
+                .frame(maxWidth: .infinity)
+        }
+        .padding(24)
+        .presentationDetents([.large])
+        .glassSheetBackground(Palette.settingsBackground)
+    }
+}
+
 // MARK: - Zdravotní data
 
 struct SyncHealthView: View {
@@ -337,11 +479,12 @@ struct SyncHealthView: View {
             if let destination {
                 SettingsGroup {
                     // Off sends none: it used to keep every type ticked (only no longer the ones added later).
-                    SettingsToggle(title: "Vše", isOn: Binding(get: { destination.healthTypes.allSatisfy(destination.prefs.health.allows) },
-                                                              set: { on in set(on ? .all : .some([])) }))
+                    let types = Self.listed(destination)
+                    SettingsToggle(title: "Vše", isOn: Binding(get: { types.allSatisfy(destination.prefs.health.allows) },
+                                                              set: { on in set(on ? all(destination) : .some(kept(destination))) }))
                 }
                 SettingsGroup(footer: footer) {
-                    ForEach(Array(destination.healthTypes.enumerated()), id: \.element) { index, type in
+                    ForEach(Array(Self.listed(destination).enumerated()), id: \.element) { index, type in
                         if index > 0 { SettingsDivider() }
                         Button { toggle(type, in: destination) } label: {
                             HStack(spacing: 12) {
@@ -369,6 +512,21 @@ struct SyncHealthView: View {
         case "intervals": return "Z Google Health a Apple Health do wellness v Intervals.icu. Co tam už je odjinud, Aurin nepřepíše."
         default: return nil
         }
+    }
+
+    /// The types this list shows. Intervals.icu's Apple Health workouts are
+    /// under Tréninky z jiných aplikací (SyncForwardGroup), not here.
+    static func listed(_ destination: SyncDestination) -> [String] {
+        destination.id == "intervals" ? destination.healthTypes.filter { $0 != "workouts" } : destination.healthTypes
+    }
+
+    /// What Vše and its switch-off leave as it is: the types not listed here.
+    private func kept(_ destination: SyncDestination) -> [String] {
+        destination.healthTypes.filter { !Self.listed(destination).contains($0) && destination.prefs.health.allows($0) }
+    }
+
+    private func all(_ destination: SyncDestination) -> SyncHealth {
+        kept(destination).count == destination.healthTypes.count - Self.listed(destination).count ? .all : .some(Self.listed(destination) + kept(destination))
     }
 
     private func toggle(_ type: String, in destination: SyncDestination) {

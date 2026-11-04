@@ -29,6 +29,18 @@ async function download(url, fetchImpl) {
   return bytes.length && bytes.length <= MAX_FILE ? bytes : null;
 }
 
+// The workout's FIT file as Wahoo keeps it (the link kept with the activity,
+// else asked of Wahoo again), or null: what goes on to Intervals.icu
+// (watch-forward.js, sync-destinations.js pushIntervals).
+export async function wahooFitFile(env, workoutId, { fetchImpl = fetch } = {}) {
+  if (!/^\d{1,15}$/.test(String(workoutId || ''))) return null;
+  const row = await env.DB.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family='wahoo' AND data_type='activity' AND external_id=?")
+    .bind(env.USER_ID, 'wahoo:' + workoutId).first().catch(() => null);
+  if (!row) return null;
+  return await download(parse(row.payload_json).wahoo?.file, fetchImpl)
+    || await download(await wahooFileUrl(env, workoutId, { fetchImpl }).catch(() => null), fetchImpl);
+}
+
 // The workout's curves: kept from an earlier read, else from the FIT file (the
 // link kept with the activity, or asked of Wahoo again when that one is gone).
 export async function wahooStreams(env, row, { fetchImpl = fetch } = {}) {

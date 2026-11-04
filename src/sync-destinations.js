@@ -67,13 +67,26 @@ const DEFAULTS = {
   wahoo: { pushPlanned: true, pushActivities: false, pullActivities: true, health: [] }
 };
 
+// Workouts other apps recorded that Aurin can pass on to Intervals.icu, each
+// with its own switch under "Workouts from other apps" (watch-forward.js).
+// Apple Health's is the health type 'workouts' (it was one before this list).
+// Wahoo's rides go as their FIT file, Google Health's as a manual activity.
+// Each starts off and goes only after the user said yes in the app: Google's
+// and Wahoo's API terms let their data go to another service only as the user
+// asks for it. Stored in health_json as "from:<source>@<since>",
+// <since> being the time sending starts from (the switch's moment, or 14 days
+// before it when the user also wanted the last two weeks).
+export const FORWARD_SOURCES = ['wahoo', 'google'];
+export const BACKFILL_DAYS = 14;
+const FORWARD = /^from:(wahoo|google)@(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z)$/;
+
 // Intervals.icu wellness field → the health type that allows it.
 const WELLNESS_TYPE = { restingHR: 'restingHR', hrv: 'hrv', hrvSDNN: 'hrv', spO2: 'spO2', respiration: 'respiration', vo2max: 'vo2max', bodyFat: 'bodyFat', steps: 'steps', sleepSecs: 'sleep', avgSleepingHR: 'sleep', weight: 'weight' };
 
 const KEY = /^[A-Za-z0-9:._-]{3,120}$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
-export const defaultSyncPrefs = destination => structuredClone(DEFAULTS[destination] || { pushPlanned: false, pushActivities: false, pullActivities: false, health: [] });
+export const defaultSyncPrefs = destination => ({ ...structuredClone(DEFAULTS[destination] || { pushPlanned: false, pushActivities: false, pullActivities: false, health: [] }), ...(destination === 'intervals' ? { forward: [] } : {}) });
 
 export async function ensureSyncTables(db) {
   await db.prepare("CREATE TABLE IF NOT EXISTS sync_preferences (user_id INTEGER NOT NULL, destination TEXT NOT NULL, push_planned INTEGER NOT NULL DEFAULT 0, push_activities INTEGER NOT NULL DEFAULT 0, pull_activities INTEGER NOT NULL DEFAULT 0, health_json TEXT NOT NULL DEFAULT '[]', updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, destination))").run();
@@ -90,7 +103,32 @@ export function normalizeSyncPrefs(destination, input = {}, base = defaultSyncPr
   const out = { pushPlanned: flag('pushPlanned'), pushActivities: flag('pushActivities'), pullActivities: flag('pullActivities'), health };
   const supports = SUPPORTS[destination] || {};
   for (const name of ['pushPlanned', 'pushActivities', 'pullActivities']) if (!supports[name]) out[name] = false;
+  // Workouts from other apps (Intervals.icu only). An app that does not send
+  // the list (an older build) keeps what is saved.
+  if (destination === 'intervals') {
+    const list = Array.isArray(input?.forward) ? input.forward : base.forward || [];
+    out.forward = FORWARD_SOURCES.filter(source => list.map(String).includes(source));
+  }
   return out;
+}
+
+// The saved "from:<source>@<since>" entries apart from the health types.
+function splitHealth(stored) {
+  const list = Array.isArray(stored) ? stored.map(String) : stored === 'all' ? ['all'] : [];
+  const since = {};
+  for (const item of list) { const m = FORWARD.exec(item); if (m) since[m[1]] = m[2]; }
+  const rest = list.filter(item => !FORWARD.test(item));
+  return { health: rest.includes('all') ? 'all' : rest, since };
+}
+
+// When sending each source's workouts starts from ({ wahoo: ISO, … }).
+export async function forwardSince(db, userId) {
+  try {
+    const row = await db.prepare("SELECT health_json FROM sync_preferences WHERE user_id = ? AND destination = 'intervals'").bind(userId).first();
+    let stored = [];
+    try { stored = JSON.parse(row?.health_json || '[]'); } catch { stored = []; }
+    return splitHealth(stored).since;
+  } catch { return {}; }
 }
 
 // Apple Health's workouts went to Intervals.icu with no choice of their own
@@ -100,10 +138,11 @@ const WORKOUTS_CHOICE = Date.parse('2026-10-31T00:00:00Z');
 const savedAt = text => Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(String(text)) ? text : `${String(text).replace(' ', 'T')}Z`);
 
 const fromRow = (destination, row) => {
-  let health = [];
-  try { health = JSON.parse(row.health_json || '[]'); } catch { health = []; }
+  let stored = [];
+  try { stored = JSON.parse(row.health_json || '[]'); } catch { stored = []; }
+  let { health, since } = splitHealth(stored);
   if (destination === 'intervals' && Array.isArray(health) && health.length && !health.includes('workouts') && savedAt(row.updated_at) < WORKOUTS_CHOICE) health = [...health, 'workouts'];
-  return normalizeSyncPrefs(destination, { pushPlanned: Boolean(row.push_planned), pushActivities: Boolean(row.push_activities), pullActivities: Boolean(row.pull_activities), health });
+  return normalizeSyncPrefs(destination, { pushPlanned: Boolean(row.push_planned), pushActivities: Boolean(row.push_activities), pullActivities: Boolean(row.pull_activities), health, forward: Object.keys(since) });
 };
 
 // One destination's preferences; the defaults when there is no row (or no
@@ -118,15 +157,34 @@ export async function readSyncPrefs(db, userId, destination) {
   }
 }
 
-export async function saveSyncPrefs(db, userId, destination, input) {
+export async function saveSyncPrefs(db, userId, destination, input, { now = Date.now() } = {}) {
   if (!DESTINATIONS.includes(destination)) throw Object.assign(new Error(L('Neznámá aplikace.', 'Unknown app.')), { status: 404 });
   await ensureSyncTables(db);
   const { stored, ...current } = await readSyncPrefs(db, userId, destination); void stored;
   const next = normalizeSyncPrefs(destination, input, current);
+  // A source kept on keeps its start; one turned on now starts now, or
+  // BACKFILL_DAYS before when the user also wanted the last two weeks.
+  let health = next.health, started = [];
+  if (destination === 'intervals') {
+    const before = await forwardSince(db, userId);
+    const from = new Date(now - (input?.backfill === true ? BACKFILL_DAYS * 86400000 : 0)).toISOString();
+    started = next.forward.filter(source => !before[source]);
+    const entries = next.forward.map(source => 'from:' + source + '@' + (before[source] || from));
+    if (entries.length) health = [...(health === 'all' ? ['all'] : health), ...entries];
+  }
   await db.prepare(`INSERT INTO sync_preferences (user_id, destination, push_planned, push_activities, pull_activities, health_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, destination) DO UPDATE SET push_planned = excluded.push_planned, push_activities = excluded.push_activities, pull_activities = excluded.pull_activities, health_json = excluded.health_json, updated_at = excluded.updated_at`)
-    .bind(userId, destination, next.pushPlanned ? 1 : 0, next.pushActivities ? 1 : 0, next.pullActivities ? 1 : 0, JSON.stringify(next.health), new Date().toISOString()).run();
+    .bind(userId, destination, next.pushPlanned ? 1 : 0, next.pushActivities ? 1 : 0, next.pullActivities ? 1 : 0, JSON.stringify(health), new Date(now).toISOString()).run();
+  // Not part of the answer the app reads: which sources were just turned on.
+  Object.defineProperty(next, 'started', { value: started, enumerable: false });
   return next;
+}
+
+// Disconnecting an app ends sending its workouts to Intervals.icu: a new
+// connection asks again.
+export async function stopForwarding(db, userId, source) {
+  const prefs = await readSyncPrefs(db, userId, 'intervals');
+  if (prefs.forward?.includes(source)) await saveSyncPrefs(db, userId, 'intervals', { forward: prefs.forward.filter(s => s !== source) });
 }
 
 export const healthAllowed = (prefs, type) => prefs?.health === 'all' || (Array.isArray(prefs?.health) && prefs.health.includes(type));
@@ -171,6 +229,8 @@ export async function syncOverview(env) {
   for (const id of DESTINATIONS.filter(d => offered(env, d))) {
     const { stored, ...prefs } = await readSyncPrefs(env.DB, env.USER_ID, id);
     const row = { id, connected: destinationConnected(env, id), stored, prefs, supports: SUPPORTS[id], healthTypes: HEALTH_TYPES[id] };
+    // The apps whose workouts can go on to Intervals.icu: the connected ones.
+    if (id === 'intervals') row.forwardSources = FORWARD_SOURCES.filter(source => destinationConnected(env, source) && offered(env, source));
     if (id === 'google' && row.connected) row.missingScopes = googleMissingScopes(env, prefs);
     destinations.push(row);
   }
@@ -198,7 +258,9 @@ export function normalizeActivity(input = {}) {
     const v = Number(input[field]);
     if (input[field] != null && Number.isFinite(v) && v > 0 && v <= hi) measured[field] = Math.round(v);
   }
-  return { key, sport, ...(type ? { type } : {}), name, date, startLocal, startUtc, minutes: Math.round(minutes), notes: String(input.notes || '').slice(0, 2000), rpe: Number.isInteger(rpe) && rpe >= 1 && rpe <= 10 ? rpe : null, ...measured };
+  // A Wahoo workout (watch-forward.js) goes to Intervals.icu as its FIT file.
+  const wahoo = /^\d{1,15}$/.test(String(input.wahoo ?? '')) ? String(input.wahoo) : null;
+  return { key, sport, ...(type ? { type } : {}), name, date, startLocal, startUtc, minutes: Math.round(minutes), notes: String(input.notes || '').slice(0, 2000), rpe: Number.isInteger(rpe) && rpe >= 1 && rpe <= 10 ? rpe : null, ...measured, ...(wahoo ? { wahoo } : {}) };
 }
 
 const intervalsType = sport => ({ gym: 'WeightTraining', strength: 'WeightTraining', run: 'Run', ride: 'Ride', walk: 'Walk', swim: 'Swim', yoga: 'Yoga' }[sport] || 'Workout');
@@ -243,6 +305,28 @@ async function intervalsActivityId(headers, body, fetchImpl) {
   return match?.id == null ? null : String(match.id);
 }
 
+// A Wahoo workout as its FIT file, so Intervals.icu has the power, heart
+// rate, cadence and route and works out the load itself. Intervals.icu skips
+// a file it already has (Wahoo's own upload of the same ride) and answers
+// with that activity. Null when Wahoo no longer gives the file: the summary
+// goes as a manual activity instead.
+async function uploadFit(env, activity, body, fetchImpl) {
+  const { wahooFitFile } = await import('./wahoo-detail.js');
+  const bytes = await wahooFitFile(env, activity.wahoo, { fetchImpl });
+  if (!bytes) return null;
+  const form = new FormData();
+  form.append('file', new Blob([bytes], { type: 'application/octet-stream' }), 'wahoo-' + activity.wahoo + '.fit');
+  const query = new URLSearchParams({ name: body.name, external_id: body.external_id, device_name: 'Wahoo' });
+  const response = await reach(fetchImpl, 'https://intervals.icu/api/v1/athlete/0/activities?' + query, {
+    method: 'POST', headers: { Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: 'application/json' }, body: form, signal: AbortSignal.timeout(30000)
+  });
+  if (!response.ok) throw new Error('Intervals.icu HTTP ' + response.status);
+  const saved = await response.json().catch(() => null);
+  const id = saved?.activities?.[0]?.id ?? saved?.id;
+  if (id == null) throw new Error(L('Intervals.icu nepotvrdilo uložení.', 'Intervals.icu didn\'t confirm the save.'));
+  return String(id);
+}
+
 async function pushIntervals(env, row, { fetchImpl, absent = false }) {
   const activity = JSON.parse(row.payload_json || '{}'), body = intervalsActivity(env.USER_ID, activity);
   const headers = { Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: 'application/json', 'Content-Type': 'application/json' };
@@ -250,6 +334,12 @@ async function pushIntervals(env, row, { fetchImpl, absent = false }) {
   // the caller has just read those days from Intervals.icu without our
   // external_id (intervals-catchup.js), so the day is not asked again.
   const known = row.remote_id || (absent ? null : await intervalsActivityId(headers, body, fetchImpl));
+  // A Wahoo ride is never changed in Aurin: once there, it stays as it is.
+  if (activity.wahoo) {
+    if (known) return String(known);
+    const id = await uploadFit(env, activity, body, fetchImpl);
+    if (id) return id;
+  }
   const create = async () => {
     const response = await reach(fetchImpl, 'https://intervals.icu/api/v1/athlete/0/activities/manual', { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
     if (!response.ok) throw new Error('Intervals.icu HTTP ' + response.status);
@@ -405,7 +495,9 @@ async function deliver(env, row, options) {
 // one entry per destination it went to (sent or error); Apple Health is
 // written by the iPhone and is not in the list. `googleToken` makes the
 // Google access token (index.js googleToken); `only` limits the destinations.
-export async function sendActivity(env, input, { fetchImpl = fetch, googleToken = null, only = SERVER_DESTINATIONS, pollMs, absent = false } = {}) {
+// `forwarded`: another app's workout (watch-forward.js), which has its own
+// switch, so "Hotové tréninky" (what the user logs in Aurin) does not count.
+export async function sendActivity(env, input, { fetchImpl = fetch, googleToken = null, only = SERVER_DESTINATIONS, pollMs, absent = false, forwarded = false } = {}) {
   const activity = normalizeActivity(input);
   // A gym session finished within minutes of its start (ended on the watch, by
   // the idle end, a mistaken Dokončit) is not sent: the real finish sends it with
@@ -415,7 +507,7 @@ export async function sendActivity(env, input, { fetchImpl = fetch, googleToken 
   const sends = [];
   for (const destination of SERVER_DESTINATIONS.filter(d => only.includes(d))) {
     const prefs = await readSyncPrefs(env.DB, env.USER_ID, destination);
-    if (!prefs.pushActivities || !offered(env, destination) || !destinationConnected(env, destination)) continue;
+    if (!(prefs.pushActivities || forwarded) || !offered(env, destination) || !destinationConnected(env, destination)) continue;
     // A changed activity (the same key) is sent again with its new content; a
     // first send nobody answered stays 'unknown', so Google Health is not sent twice.
     await env.DB.prepare(`INSERT INTO sync_sends (user_id, activity_key, destination, status, payload_json) VALUES (?, ?, ?, 'pending', ?)

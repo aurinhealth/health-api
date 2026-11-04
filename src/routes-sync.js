@@ -1,5 +1,6 @@
 // Synchronizace routes of the dashboard API (sync-destinations.js).
 import { syncLocalWorkout } from "./local-workouts.js";
+import { forwardWatchWorkouts } from "./watch-forward.js";
 import { googleToken } from "./index.js";
 import { syncOverview, DESTINATIONS, saveSyncPrefs, googleMissingScopes, sendActivity, activitySends, retrySend } from "./sync-destinations.js";
 import { L } from "./lang.js";
@@ -21,6 +22,9 @@ export async function handleSyncApi(request,env,ctx,url,session,internalAuth){
     if(!DESTINATIONS.includes(destination))return Response.json({message:L('Neznámá aplikace.', 'Unknown app.')},{status:404});
     try{
       const prefs=await saveSyncPrefs(env.DB,env.USER_ID,destination,await request.json().catch(()=>({})));
+      // An app's workouts just turned on for Intervals.icu (with the last two
+      // weeks, maybe): the first ones go now, not at the next five-minute run.
+      if(destination==='intervals'&&prefs.started?.length)ctx?.waitUntil?.(forwardWatchWorkouts(env,{limit:20}).catch(error=>console.error('Workout forward failed',error.message)));
       return Response.json({status:'ok',destination,prefs,...(destination==='google'&&env.GOOGLE_REFRESH_TOKEN?{missingScopes:googleMissingScopes(env,prefs)}:{})},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:error.status||400});}
   }

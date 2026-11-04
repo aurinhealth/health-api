@@ -3816,3 +3816,18 @@
 "V %@ nic nového." = "Nothing new in %@.";
 "%@ z %@." = "%@ from %@.";
 "%@ a %@ z %@." = "%@ and %@ from %@.";
+
+/* Intervals.icu: workouts from other apps (SyncForwardGroup) */
+"Zapsané v Aurinu" = "Logged in Aurin";
+"Tréninky z jiných aplikací" = "Workouts from other apps";
+"Posílá se dvě hodiny po konci tréninku a jen když ho Intervals.icu ještě nemá. Aplikaci, která do Intervals.icu posílá sama, nech vypnutou." = "Sent two hours after a workout ends, only if Intervals.icu doesn’t have it yet. Leave an app off if it already sends to Intervals.icu itself.";
+"Apple Watch a další aplikace" = "Apple Watch and other apps";
+"Jízdy s výkonem, tepem a trasou" = "Rides with power, heart rate, route";
+"Fitbit a Pixel Watch" = "Fitbit and Pixel Watch";
+"Posílat tréninky z %@ do Intervals.icu?" = "Send %@ workouts to Intervals.icu?";
+"Aurin zkopíruje každou dokončenou jízdu a běh z Wahoo do tvého účtu Intervals.icu, s výkonem, tepem, kadencí a trasou." = "Aurin copies each finished Wahoo ride and run to your Intervals.icu account, with power, heart rate, cadence and route.";
+"Aurin zkopíruje každý dokončený trénink z Google Health do tvého účtu Intervals.icu, s délkou, vzdáleností a tepem." = "Aurin copies each finished Google Health workout to your Intervals.icu account, with its duration, distance and heart rate.";
+"Vypnout to můžeš kdykoli. Co už v Intervals.icu je, tam zůstane." = "You can turn this off any time. Copies already in Intervals.icu stay there.";
+"Poslat i posledních 14 dní" = "Also send the last 14 days";
+"Od %@" = "Since %@";
+"Poslat do Intervals.icu" = "Send to Intervals.icu";
