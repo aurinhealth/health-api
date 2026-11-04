@@ -1,7 +1,7 @@
 # AI team (Claude Code sub agents)
 
 Claude Code works on Aurin as a product team. The main conversation is the **Product Manager**; the
-nine roles are sub agents defined in `.claude/agents/`:
+roles are sub agents defined in `.claude/agents/`:
 
 | Role | Agent | Can run commands |
 |---|---|---|
@@ -14,6 +14,7 @@ nine roles are sub agents defined in `.claude/agents/`:
 | Tester (QA) | `qa-tester` | yes, tests, local and staging only |
 | Performance & Cost Engineer | `performance-cost` | yes, tests, local and timing on staging |
 | Monetization & Unit Economics Analyst | `monetization-analyst` | read-only commands |
+| Critic | `critic` | no |
 
 ## Rules
 - Every role is read-only: no role edits files, commits or pushes. Changes are made only after the
@@ -28,6 +29,7 @@ nine roles are sub agents defined in `.claude/agents/`:
 - Security, payments, user data and accounts: `security-red-team` and `privacy-compliance` review it.
 - AI features, AI limits, the paywall and prices: `monetization-analyst` checks they never block a
   normal user and that every user earns more than they cost.
+- Every team run: `critic` reviews the proposals before the owner's document.
 - A full team run (all roles, two rounds) costs a lot of credits: only when the owner asks for it.
   Usually 2–3 roles are enough.
 
@@ -39,6 +41,9 @@ nine roles are sub agents defined in `.claude/agents/`:
    (severity, where, evidence, proposal, effort, confidence).
 4. Round 2, cross-check: the PM sends findings to the role that can challenge them (Security reviews
    engineering proposals, the Scientist reviews coach advice, the Tester reproduces claims).
-5. The PM merges, removes duplicates, settles conflicts and ranks by severity.
-6. The owner gets one document with numbered points and approves them ("1, 3, 5 yes, 2 no").
-7. Only approved points are implemented, each in its own pull request.
+5. Critic: `critic` looks for the "but" in every proposal (risks, costs, MDR, privacy, edge cases, a
+   simpler alternative, weak evidence) and rates it Drží / Drží s úpravou / Nedrží with a sourced
+   objection. It has no veto; the author of the proposal answers and the owner sees both.
+6. The PM merges, removes duplicates, settles conflicts and ranks by severity.
+7. The owner gets one document with numbered points and approves them ("1, 3, 5 yes, 2 no").
+8. Only approved points are implemented, each in its own pull request.
