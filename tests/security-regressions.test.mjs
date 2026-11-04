@@ -47,12 +47,16 @@ test("the Intervals sync answers with counts, not the activities or planned work
     : [{ id: 9, name: "Posilovna", category: "WORKOUT", start_date_local: "2026-10-07T17:00:00" }]));
   const response = await legacy.fetch(new Request("https://internal/sync/intervals/recent", { method: "POST" }), { DB: d, USER_ID: 7, INTERVALS_API_KEY: "key" }, ctx);
   const body = await response.json();
-  assert.deepEqual(body.activities, { activities_found: 1, activities_saved: 1 });
+  assert.deepEqual(body.activities, { activities_found: 1, activities_saved: 1, activities_new: 1 });
   assert.equal(body.planned.events_found, 1);
+  assert.equal(body.planned.events_new, 1);
   assert.equal(body.planned.events, undefined);
   assert.doesNotMatch(JSON.stringify(body), /Ranní jízda|Posilovna|142/);
   // Still stored for the app.
   assert.equal((await d.prepare("SELECT count(*) n FROM health_datapoints").first()).n, 2);
+  // The same again: stored once more, nothing new ("Synchronizovat znovu" says so).
+  const again = await (await legacy.fetch(new Request("https://internal/sync/intervals/recent", { method: "POST" }), { DB: d, USER_ID: 7, INTERVALS_API_KEY: "key" }, ctx)).json();
+  assert.deepEqual(again.activities, { activities_found: 1, activities_saved: 1, activities_new: 0 });
 });
 
 test("a sheet-era video formula becomes a link only when it is http(s)", () => {

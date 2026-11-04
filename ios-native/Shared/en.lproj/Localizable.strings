@@ -3804,3 +3804,13 @@
 /* Wahoo page in Zdroje dat (SyncViews.swift) */
 "FTP a výkonové zóny" = "FTP and power zones";
 "Zapnuto" = "On";
+
+/* Settings → a service → Synchronizovat znovu: the result line (SyncStatus.pageLine) */
+"Pořád se synchronizuje na pozadí. Nová data se ukážou na Dnes, až to doběhne." = "Still syncing in the background. New data shows up on Today when it's done.";
+"Synchronizace %@ se nepovedla. Zkus to za pár minut." = "Syncing %@ didn't work. Try again in a few minutes.";
+"Synchronizováno." = "Synced.";
+"Synchronizováno %@." = "Synced %@.";
+"Google Health se dotahuje na pozadí." = "Google Health is still loading in the background.";
+"V %@ nic nového." = "Nothing new in %@.";
+"%@ z %@." = "%@ from %@.";
+"%@ a %@ z %@." = "%@ and %@ from %@.";

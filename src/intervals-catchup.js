@@ -10,7 +10,8 @@
 //   at most CATCHUP_DAYS back (scheduleIntervalsCatchUp);
 // - after sends that failed for good: from the first of them;
 // - once for everyone connected before it existed: CATCHUP_DAYS back.
-// Otherwise the hourly job only reads its own sync_status row.
+// Otherwise the job (every five minutes while one is pending, else hourly) only
+// reads its own sync_status row.
 //
 // No copies: Intervals.icu's activities of those days are read once, and a
 // workout is left out when one of them carries our external_id (then it is
@@ -36,6 +37,12 @@ const NAME = "intervals_catchup";
 const BATCH = 40, SENDS = 8;
 // A watch workout waits for other apps to upload it first (watch-forward.js).
 const WATCH_WAIT_MS = 2 * 3600000;
+// A gym session is sent by the app when it is finished; one written while its
+// sets are still coming would go with part of its length.
+const GYM_WAIT_MS = 2 * 3600000;
+// Sends a UTC day, so a long gap does not use up the OAuth app's 100 requests
+// a day: three runs' worth, the rest the next day.
+const SENDS_A_DAY = 24;
 // How far ahead given-up plans are tried again (as Wahoo's, wahoo.js retryWahooExports).
 const PLAN_DAYS = 14;
 
@@ -51,10 +58,11 @@ async function ensureStatus(db) {
   ensured.add(db);
 }
 
-async function savePending(env, since, cursor = null) {
+// `day`/`sent`: the sends of that UTC day (SENDS_A_DAY).
+async function savePending(env, since, cursor = null, count = null) {
   await env.DB.prepare(`INSERT INTO sync_status(user_id,sync_name,status,details_json,updated_at) VALUES(?,?,'pending',?,datetime('now'))
     ON CONFLICT(user_id,sync_name) DO UPDATE SET status='pending',details_json=excluded.details_json,updated_at=excluded.updated_at`)
-    .bind(env.USER_ID, NAME, JSON.stringify({ since, cursor })).run();
+    .bind(env.USER_ID, NAME, JSON.stringify({ since, cursor, ...(count ? { day: count.day, sent: count.sent } : {}), ...(count?.wait ? { wait: count.wait } : {}) })).run();
 }
 async function saveDone(env, now) {
   await env.DB.prepare(`INSERT INTO sync_status(user_id,sync_name,status,finished_at,details_json,updated_at) VALUES(?,?,'done',?,'{}',datetime('now'))
@@ -76,7 +84,7 @@ async function lastSent(env) {
 
 // Intervals.icu (re)connected: a catch-up from the last activity that reached
 // it (a day earlier, for one saved just before that failed), at most
-// CATCHUP_DAYS back. The hourly job does the work.
+// CATCHUP_DAYS back. The job does the work within five minutes.
 export async function scheduleIntervalsCatchUp(env, { now = Date.now() } = {}) {
   if (!env?.DB || env.USER_ID == null) return null;
   await ensureStatus(env.DB);
@@ -106,6 +114,9 @@ async function candidates(env, from, now, prefs) {
       if (!(at > from) || !(minutes > 0)) continue;
       const start = new Date(at).toISOString(), date = String(p.start_date_local || row.start_time).slice(0, 10);
       if (row.external_id.startsWith(GYM_ACTIVITY_PREFIX)) {
+        // A session still going on (its last set within GYM_WAIT_MS) waits: the
+        // app sends it with its full length when it is finished.
+        if (at + minutes * 60000 > now - GYM_WAIT_MS) continue;
         out.push({ key: "gym:" + row.external_id.slice(GYM_ACTIVITY_PREFIX.length), at, session: { payload: p },
           input: { key: "gym:" + row.external_id.slice(GYM_ACTIVITY_PREFIX.length), sport: "gym", type: "WeightTraining", name: p.name || "Gym", date, start, minutes, kcal: p.calories } });
       } else if (String(row.origin || "").startsWith("manual:") && !p.pairedWith) {
@@ -171,14 +182,28 @@ export async function reviveFailedPlans(env, { now = Date.now() } = {}) {
   return Number(result?.meta?.changes) || 0;
 }
 
-// The hourly job for a user with Intervals.icu connected.
-export async function runIntervalsCatchUp(env, { now = Date.now(), fetchImpl = fetch } = {}) {
+// The job for a user with Intervals.icu connected: every five minutes while a
+// catch-up is pending (after a reconnect it starts within minutes, not at the
+// next :45), hourly (`pendingOnly` false) it also looks for sends refused for good.
+export async function runIntervalsCatchUp(env, { now = Date.now(), fetchImpl = fetch, pendingOnly = false } = {}) {
   if (!env?.DB || !env.INTERVALS_API_KEY) return { status: "skipped" };
   await ensureStatus(env.DB);
   const rows = (await env.DB.prepare("SELECT sync_name, status, details_json, finished_at FROM sync_status WHERE user_id = ? AND sync_name IN (?, 'connection_intervals')").bind(env.USER_ID, NAME).all()).results || [];
   const state = rows.find(r => r.sync_name === NAME);
   // Refused access: a reconnect schedules it again (and clears this).
   if (rows.some(r => r.sync_name === "connection_intervals" && r.status === "broken")) return { status: "waiting" };
+  if (pendingOnly && state?.status !== "pending") return { status: "idle" };
+  const today = new Date(now).toISOString().slice(0, 10);
+  const before = state?.status === "pending" ? parse(state.details_json) : {};
+  const count = { day: today, sent: before.day === today ? Number(before.sent) || 0 : 0 };
+  // After a refusal or "too many", or with the day's sends used up, the
+  // five-minute runs wait (an hour, or the next UTC day) instead of asking again.
+  if (pendingOnly && Number(before.wait) > now) return { status: "waiting" };
+  if (count.sent >= SENDS_A_DAY) {
+    count.wait = Date.parse(today + "T00:00:00Z") + DAY_MS;
+    await savePending(env, Number(before.since) || now - CATCHUP_DAYS * DAY_MS, before.cursor ?? null, count);
+    return { status: "pending", plans: 0, sent: [] };
+  }
   let since, cursor = null;
   if (!state) since = now - CATCHUP_DAYS * DAY_MS;
   else if (state.status === "pending") ({ since, cursor = null } = parse(state.details_json));
@@ -201,7 +226,7 @@ export async function runIntervalsCatchUp(env, { now = Date.now(), fetchImpl = f
   const done = await handled(env, found.map(c => c.key));
   const open = found.filter(c => !done.has(c.key));
   if (!open.length) {
-    if (found.length >= BATCH) { await savePending(env, since, found[found.length - 1].at); return { status: "pending", plans, sent: [] }; }
+    if (found.length >= BATCH) { await savePending(env, since, found[found.length - 1].at, count); return { status: "pending", plans, sent: [] }; }
     await saveDone(env, now);
     return { status: "done", plans, sent: [] };
   }
@@ -211,24 +236,32 @@ export async function runIntervalsCatchUp(env, { now = Date.now(), fetchImpl = f
   } catch (error) {
     // Tried again next hour.
     console.error("Intervals.icu catch-up read failed", error.message);
-    await savePending(env, since, cursor);
+    await savePending(env, since, cursor, count);
     return { status: "error", plans, sent: [] };
   }
   const sent = [];
   let last = cursor, sends = 0, stopped = false;
+  // The answer to the last request: a refusal (401, 403) or "too many" (429)
+  // ends the run, the rest waits for the next one.
+  let answered = 0;
+  const watched = async (url, init) => { const response = await fetchImpl(url, init); answered = response.status; return response; };
+  const allowed = Math.min(SENDS, SENDS_A_DAY - count.sent);
   for (const item of open) {
     const ours = list.find(a => [EXTERNAL_PREFIX, LEGACY_EXTERNAL_PREFIX].some(prefix => a?.external_id === prefix + env.USER_ID + ":" + item.key));
     if (ours?.id != null) { await recordSent(env, item, ours.id); sent.push({ key: item.key, status: "there" }); }
     else if (list.some(a => !sentByAurin(a) && sameSession({ payload: a }, item.session))) sent.push({ key: item.key, status: "same" });
-    else if (sends >= SENDS) { stopped = true; break; }
+    else if (sends >= allowed) { stopped = true; break; }
     else {
       sends++;
-      const result = await sendActivity(env, item.input, { fetchImpl, only: ["intervals"], absent: true }).catch(error => ({ sends: [{ status: "error", message: error.message }] }));
+      count.sent++;
+      answered = 0;
+      const result = await sendActivity(env, item.input, { fetchImpl: watched, only: ["intervals"], absent: true }).catch(error => ({ sends: [{ status: "error", message: error.message }] }));
       sent.push({ key: item.key, status: result.sends?.[0]?.status || "off" });
+      if ([401, 403, 429].includes(answered)) { stopped = true; count.wait = now + 3600000; break; }
     }
     last = item.at;
   }
-  if (stopped || found.length >= BATCH) { await savePending(env, since, last); return { status: "pending", plans, sent }; }
+  if (stopped || found.length >= BATCH) { await savePending(env, since, last, count); return { status: "pending", plans, sent }; }
   await saveDone(env, now);
   return { status: "done", plans, sent };
 }
