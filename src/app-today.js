@@ -351,7 +351,8 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") }
       : num(rows.find(r => r.id === date)?.hrv) > 0 ? { value: round(num(rows.find(r => r.id === date).hrv)), baseline: null, low: null, high: null, trend: null, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") } : null,
     restingHR: restingHR ? { value: round(restingHR.value), baseline: round(restingHR.baseline, 1), low: round(restingHR.low, 1), high: round(restingHR.high, 1), series: last(14, "restingHR") } : null,
-    summary: summary ? { headline: summary.headline || null, text: summary.text || null, recommendation: summary.recommendation || null } : null,
+    // remember: the injury sentence inside the recommendation (push.js), which the coach's AI text leaves out (screen-texts.js).
+    summary: summary ? { headline: summary.headline || null, text: summary.text || null, recommendation: summary.recommendation || null, ...(summary.remember && String(summary.recommendation || "").includes(summary.remember) ? { remember: summary.remember } : {}) } : null,
     nutrition: {
       kcal: round(num(totals.kcal)),
       target: num(nutrition.calorieTarget),

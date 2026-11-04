@@ -6,6 +6,7 @@ import { callOpenAI, lightModel, compactWellness } from "./coach-assistant.js";
 import { withFocus } from "./athlete-focus.js";
 import { readinessFor } from "./readiness.js";
 import { readinessParts } from "./app-health.js";
+import { cycleShared, partsForAI } from "./cycle-model.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const r1 = v => (n(v) == null ? null : Math.round(n(v) * 10) / 10);
@@ -26,7 +27,8 @@ export { MODEL_PRICES, usageCost } from "./ai-usage.js";
 export function dayReadiness({ date, fitness = {}, health = {}, profile = null, checkin = null }) {
   const r = readinessFor({ date, google: health?.wellness, intervals: fitness?.wellness, sessions: Array.isArray(health?.sleep) ? health.sleep : [], profile, checkin });
   if (r.zone == null && !r.checkin) return null;
-  return { date, score: r.score, zone: r.zone, parts: readinessParts(r), flags: r.flags || [], missing: r.missing || [], checkin: r.checkin || null, provisional: !!r.provisional };
+  // Only for the AI: a luteal mark on a part only when the cycle is shared (cycle-model.js).
+  return { date, score: r.score, zone: r.zone, parts: partsForAI(readinessParts(r), cycleShared(profile?.cycle)), flags: r.flags || [], missing: r.missing || [], checkin: r.checkin || null, provisional: !!r.provisional };
 }
 
 // The data for one day's review, kept compact.

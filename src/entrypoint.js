@@ -511,7 +511,7 @@ const worker = {
         const page = notFoundPage(request);
         return request.method === 'HEAD' ? new Response(null, page) : page;
       }
-      return unauthorizedResponse();
+      return unauthorizedResponse(request);
     }
     let user = null, prefetched = null;
     if (principal?.kind === "user") {
@@ -520,7 +520,7 @@ const worker = {
       user = await findUser(env.DB, principal.userId, env);
       // A cookie from before the user signed out everywhere (or changed the e-mail, removed a passkey or the Apple ID) is no cookie.
       if (user && !sessionMatchesUser(principal, user)) { user = null; principal = null; }
-      if (!user && !isPublic) return unauthorizedResponse();
+      if (!user && !isPublic) return unauthorizedResponse(request);
     } else if (principal?.kind === "system") {
       // The deploy smoke test acts as its own empty account, never as the owner (tenancy.js smokeUser).
       user = await smokeUser(env.DB, env);
@@ -1165,8 +1165,10 @@ async function coachTextExtras(env,ctx,internalAuth,screen){
   // Today has its own readiness on screen; the coach adds why (parts) and the athlete's status.
   // Sick, injured or on a break holds the text back on Trénink too (screen-texts.js holdBack).
   const state=await getAthleteState(env.DB).catch(()=>null);
-  if(screen==='today')return {...(coachTrends?{coachTrends}:{}),...(readiness?{readinessDetail:readiness}:{}),athleteState:state?.status||null};
-  return {...(coachTrends?{coachTrends}:{}),...(readiness?{readiness}:{}),athleteState:state?.status||null};
+  // The cycle only as the coach may know it: null unless "Kouč zná můj cyklus" is on (cycle-model.js cycleForCoach).
+  const coachCycle=profile?.cycle?cycleForCoach({...profile.cycle,date}):null;
+  if(screen==='today')return {...(coachTrends?{coachTrends}:{}),...(readiness?{readinessDetail:readiness}:{}),athleteState:state?.status||null,coachCycle};
+  return {...(coachTrends?{coachTrends}:{}),...(readiness?{readiness}:{}),athleteState:state?.status||null,coachCycle};
 }
 // performance: the runs' and rides' trends, curves and laps (Intervals.icu
 // sport settings, power and pace curves, up to six activities' laps). Only the

@@ -1,7 +1,8 @@
 import {assertAIAccess} from './subscription.js';
 import { assertAiTotal } from './ai-total.js';
 import { weekCheckForCoach } from './week-check.js';
-import { buildCyclingCoachV2, CYCLING_COACH_V2_META } from "./cycling-coach-v2.js";
+import { buildCyclingCoachV2, CYCLING_COACH_V2_META, engineForAI } from "./cycling-coach-v2.js";
+import { cycleShared } from "./cycle-model.js";
 import { withFocus } from "./athlete-focus.js";
 import { COACH_ACTION_FORMAT, actionInstructions, COACH_VISUALS } from './coach-actions.js';
 import { EXERCISES } from './strength-generator.js';
@@ -281,7 +282,9 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
   // One place for every caller (chat, week planning, coach evaluation): a
   // strength athlete's day is a gym day unless a ride, run or swim is asked or planned.
   const gymFirst = gymDay(focus, { appContext, message, daily });
-  const cyclingCoachV2 = gymFirst ? strengthDay(engine, { availabilityMinutes, dayMinutes, week, date }) : engine;
+  // The AI sees why a period day is easy only when the athlete shares the
+  // cycle (`cycle` is cycle-model.js cycleForCoach, null otherwise).
+  const cyclingCoachV2 = engineForAI(gymFirst ? strengthDay(engine, { availabilityMinutes, dayMinutes, week, date }) : engine, { cycleShared: Boolean(cycle) || cycleShared(profile?.cycle) });
   return {
     date,...(now?{now}:{}),weekday:weekdayOf(date),...(gymFirst?{gymDay:true}:{}),
     athleteState:cyclingCoachV2.athleteState.status,statusNote:cyclingCoachV2.athleteState.note,
