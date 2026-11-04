@@ -34,12 +34,22 @@ struct SleepDetailContent: View {
 
     var body: some View {
         let sleep = health.sleep
+        ScrollViewReader { proxy in
         VStack(alignment: .leading, spacing: 0) {
             SectionLabel(text: L10n.f("Spánek · noc na %@", weekday(health.date))).padding(.top, 24)
             if let night = sleep.night {
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
                     Text(Fmt.hoursMinutes(night.minutes)).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
-                    if let index = night.index { Pill(text: L10n.f("index %@", String(index)), foreground: Palette.indigo, background: Palette.lilac) }
+                    if let index = night.index {
+                        // Taps down to what makes up the index.
+                        Button { withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(Self.partsAnchor, anchor: .top) } } label: {
+                            Pill(text: L10n.f("index %@", String(index)) + " ›", foreground: Palette.indigo, background: Palette.lilac)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(L10n.f("Index spánku %d.", index))
+                        .accessibilityHint(L10n.tr("Ukáže, z čeho se index skládá."))
+                        .accessibilityIdentifier("sleep.index")
+                    }
                 }
                 .padding(.top, 12)
             } else {
@@ -49,6 +59,14 @@ struct SleepDetailContent: View {
             if let night = sleep.night {
                 ThreeCells(cells: [("Usnutí", ClockText.format(optional: night.start) ?? "–"), ("Probuzení", ClockText.format(optional: night.end) ?? "–"), ("V posteli", Fmt.hoursMinutes(night.inBedMinutes))])
                     .padding(.top, 26)
+                if night.index != nil {
+                    SectionLabel(text: "Z čeho se skládá index").padding(.top, 30).id(Self.partsAnchor)
+                    Card { SleepIndexParts(night: night, wakeups: detail?.night?.stats?.wakeups) }.padding(.top, 14)
+                }
+                if let index = sleep.index, index.nights.count >= 2 {
+                    SectionLabel(text: L10n.f("Posledních %@ nocí · průměr %@", "14", String(index.average))).padding(.top, 30)
+                    Card { SleepIndexNights(index: index, date: health.date) }.padding(.top, 14)
+                }
                 if let stages = night.stages {
                     SectionLabel(text: "Fáze spánku").padding(.top, 30)
                     Card {
@@ -63,7 +81,7 @@ struct SleepDetailContent: View {
                             }
                             .padding(.leading, 56)
                         }
-                        StageTotals(stages: stages, wakeups: detail?.night?.stats?.wakeups)
+                        StageTotals(stages: stages, wakeups: detail?.night?.stats?.wakeups, usual: night.usual)
                     }
                     .padding(.top, 14)
                 } else if failed && detail == nil {
@@ -150,7 +168,10 @@ struct SleepDetailContent: View {
                 .padding(.top, 18)
             }
         }
+        }
     }
+
+    static let partsAnchor = "sleep.indexParts"
 
     private func weekday(_ iso: String) -> String {
         if L10n.isEnglish {
@@ -269,13 +290,17 @@ struct Hypnogram: View {
 struct StageTotals: View {
     let stages: HealthSnapshot.Stages
     let wakeups: Int?
+    /// "obvykle 15–20 %" under deep and REM sleep, from the user's own nights.
+    var usual: HealthSnapshot.UsualStages? = nil
 
     var body: some View {
         let asleep = max(stages.deep + stages.light + stages.rem, 1)
         let longest = max(stages.deep, stages.light, stages.rem, stages.awake, 1)
         VStack(spacing: 12) {
             row("DEEP", "Hluboký", stages.deep, share: stages.deep / asleep, longest: longest)
+            if let range = usual?.deep { usually(range) }
             row("REM", "REM", stages.rem, share: stages.rem / asleep, longest: longest)
+            if let range = usual?.rem { usually(range) }
             row("LIGHT", "Lehký", stages.light, share: stages.light / asleep, longest: longest)
             row("AWAKE", "Bdění", stages.awake, share: nil, longest: longest)
         }
@@ -300,10 +325,112 @@ struct StageTotals: View {
         .accessibilityLabel(L10n.tr(label) + " " + Fmt.hoursMinutes(minutes) + ", " + Self.note(share: share, wakeups: wakeups))
     }
 
+    /// Under the stage's bar: the middle half of the user's nights. Words, no
+    /// colour: a share outside it is no verdict (stages are the least precise).
+    private func usually(_ range: HealthSnapshot.UsualStages.Range) -> some View {
+        Text(L10n.f("obvykle %@–%@", String(range.low), String(range.high) + Fmt.percentSign))
+            .font(Typo.caption).foregroundStyle(Palette.muted)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 74)
+            .padding(.top, -8)
+    }
+
     /// "19 %", or the awakenings for the awake row ("3×").
     static func note(share: Double?, wakeups: Int?) -> String {
         if let share { return Fmt.int(share * 100) + Fmt.percentSign }
         return wakeups.map { "\($0)×" } ?? ""
+    }
+}
+
+/// "Z čeho se skládá index": length against the need, quality and the share
+/// of deep and REM sleep, each with the night's own values and a bar for how
+/// full the part is (src/recovery-model.js sleepIndexParts). No points and no
+/// good or bad: the parts don't always add up (a night without stages is
+/// rescaled). A device's own score has no parts, only the note.
+struct SleepIndexParts: View {
+    let night: HealthSnapshot.Night
+    let wakeups: Int?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let parts = night.parts {
+                part("Délka", value: L10n.f("%@ z %@", Fmt.hoursMinutes(parts.length.minutes), Fmt.hoursMinutes(parts.length.need)),
+                     note: L10n.tr("spánek proti potřebě na minulou noc"), fill: parts.length.fill, first: true)
+                part("Kvalita", value: L10n.f("efektivita %@", String(parts.quality.efficiency) + Fmt.percentSign),
+                     note: qualityNote(parts.quality), fill: parts.quality.fill)
+                if let stages = parts.stages {
+                    part("Fáze", value: L10n.f("%@ spánku", String(stages.share) + Fmt.percentSign),
+                         note: L10n.tr("hluboký a REM spánek dohromady"), fill: stages.fill)
+                }
+                Text(verbatim: L10n.tr(parts.stages == nil
+                     ? "Index 0–100: délka proti tvé potřebě a kvalita. Tahle noc nemá fáze, tak se počítá jen z nich."
+                     : "Index 0–100: délka proti tvé potřebě, kvalita a podíl hlubokého a REM spánku. Fáze váží nejméně, hodinky je měří nejméně přesně."))
+                    .font(Typo.small).foregroundStyle(Palette.secondary).padding(.top, 16)
+            } else {
+                Text("Index téhle noci spočítalo tvoje zařízení, Aurin k němu nemá části.")
+                    .font(Typo.small).foregroundStyle(Palette.secondary)
+            }
+        }
+    }
+
+    /// "usnutí za 9 min · probuzení 3× · 22 min vzhůru", whatever the night has.
+    private func qualityNote(_ q: HealthSnapshot.IndexParts.Quality) -> String {
+        var bits: [String] = []
+        if let latency = q.latency ?? night.latencyMinutes { bits.append(L10n.f("usnutí za %@ min", Fmt.int(latency))) }
+        if let wakeups { bits.append(L10n.f("probuzení %@×", String(wakeups))) }
+        if let awake = q.waso ?? night.stages?.awake { bits.append(L10n.f("%@ min vzhůru", Fmt.int(awake))) }
+        return bits.isEmpty ? L10n.tr("čas v posteli, kdy spíš") : bits.joined(separator: " · ")
+    }
+
+    private func part(_ title: String, value: String, note: String, fill: Double, first: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(verbatim: L10n.tr(title)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                Spacer(minLength: 8)
+                Text(verbatim: value).font(.body).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            Text(verbatim: note).font(Typo.small).foregroundStyle(Palette.secondary)
+            ProgressLine(fraction: fill, color: Palette.indigo).padding(.top, 8)
+        }
+        .padding(.vertical, 12)
+        .overlay(alignment: .top) { if !first { Rectangle().fill(Palette.hairline).frame(height: 1) } }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.tr(title) + ", " + value + ", " + note)
+    }
+}
+
+/// "Posledních 14 nocí": the index of each night as a bar, last night in full
+/// indigo, the user's usual range (the middle half of the nights) as a band.
+struct SleepIndexNights: View {
+    let index: HealthSnapshot.IndexNights
+    let date: String
+
+    var body: some View {
+        let values = index.nights.map(\.value)
+        // From a round step under the lowest night, so the nights differ visibly.
+        let lo = max(0, ((values.min() ?? 0) - 15) / 10).rounded(.down) * 10
+        let height: CGFloat = 64
+        VStack(alignment: .leading, spacing: 6) {
+            ZStack(alignment: .bottomLeading) {
+                if let low = index.low, let high = index.high {
+                    let at = { (v: Double) in height * min(max((v - lo) / (100 - lo), 0), 1) }
+                    Rectangle().fill(Palette.indigo.opacity(0.1))
+                        .frame(height: max(2, at(high) - at(low)))
+                        .offset(y: -at(low))
+                }
+                BarChart(values: values, styles: index.nights.map { BarStyle(fill: $0.date == date ? Palette.indigo : Palette.indigo.opacity(0.35)) },
+                         lo: lo, hi: 100, height: height)
+            }
+            .frame(height: height)
+            ChartSpan(start: index.nights.first.map { Fmt.dayMonthShort($0.date) } ?? "",
+                      end: index.nights.last?.date == date ? L10n.tr("dnes") : index.nights.last.map { Fmt.dayMonthShort($0.date) } ?? "")
+            if let low = index.low, let high = index.high {
+                Text(L10n.f("Pás je tvoje obvyklé rozmezí, %@ až %@.", Fmt.int(low), Fmt.int(high)))
+                    .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 4)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.f("Index spánku za posledních %@ nocí, průměr %@.", String(index.nights.count), String(index.average)))
     }
 }
 

@@ -91,6 +91,18 @@ enum Reminders {
         (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
     }
 
+    /// "Keep your charged watch on so the night gets measured." under the
+    /// bedtime reminder: only when Apple Watch measures the nights (a paired
+    /// watch, and the latest night from Apple Health or none yet), and only in
+    /// the first 14 days after the setup or after a night without data. Every
+    /// evening it would be noise. The line says nothing about the night, so it
+    /// stays when the values are hidden.
+    static func asksForWatch(paired: Bool, source: String?, lastNight: Bool, since: Double, now: Date = Date()) -> Bool {
+        guard paired, source == nil || source == "apple-health" else { return false }
+        let firstDays = since > 0 && now.timeIntervalSince1970 - since < Double(FirstDays.days) * 86_400
+        return firstDays || !lastNight
+    }
+
     /// Plans today's reminders again from the latest Today screen.
     static func reschedule(from today: TodaySnapshot) async {
         let center = UNUserNotificationCenter.current()
@@ -104,19 +116,24 @@ enum Reminders {
 
         let weekday = Calendar.current.component(.weekday, from: Date())
         // Bedtime: a fixed time on the chosen days, or the chosen time before
-        // tonight's bedtime (30 minutes), with the night's need.
+        // tonight's bedtime (30 minutes), with the night's need. A second line
+        // asks for a charged watch when it is worth saying (asksForWatch).
         if isOn(bedtimeKey) {
             let bedDays = days(bedtimeKey)
+            let paired = await WatchBridge.shared.watchState.paired
+            let watchLine = asksForWatch(paired: paired, source: today.tonight?.source, lastNight: today.sleep?.minutes != nil,
+                                         since: UserDefaults.standard.double(forKey: FirstDays.sinceKey))
+                ? "\n" + L10n.tr("Měj na ruce nabité hodinky, ať se noc změří.") : ""
             if UserDefaults.standard.string(forKey: bedtimeModeKey) == "custom" {
                 addRepeating(&planned, "bedtime", at: minute(bedtimeTimeKey, 22 * 60), days: bedDays,
-                             title: L10n.tr("Čas do postele"), body: L10n.tr("Dobrý spánek je základ regenerace."))
+                             title: L10n.tr("Čas do postele"), body: L10n.tr("Dobrý spánek je základ regenerace.") + watchLine)
             } else if has(bedDays, weekday), let bed = today.tonight?.bedtime, let need = today.tonight?.need, let at = minutes(bed) {
                 let offset = minute(bedtimeOffsetKey, 30)
                 let remind = (at - offset + 1440) % 1440
                 // A bedtime after midnight (00:40) reminds at 00:10 tonight, which is "earlier" than now.
                 add(&planned, "bedtime", at: remind, title: offset >= 60 ? L10n.tr("Za hodinu do postele") : L10n.f("Za %@ min do postele", String(offset)),
-                    body: hidesValues ? L10n.tr("Dobrý spánek je základ regenerace.")
-                        : L10n.f("Na dnešní noc potřebuješ %@. Jdi spát do %@.", Fmt.duration(need), ClockText.format(bed)), afterMidnight: remind < 6 * 60)
+                    body: (hidesValues ? L10n.tr("Dobrý spánek je základ regenerace.")
+                        : L10n.f("Na dnešní noc potřebuješ %@. Jdi spát do %@.", Fmt.duration(need), ClockText.format(bed))) + watchLine, afterMidnight: remind < 6 * 60)
             }
         }
         // Today's workouts not done yet (on the chosen days): an hour before

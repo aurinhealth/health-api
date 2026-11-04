@@ -3,7 +3,7 @@
 // heart (HRV, resting heart rate), breathing, skin temperature, oxygen and
 // weight. The same recovery model as Today and the web (recovery-model.js).
 // Pure: GET /app/api/health loads the inputs.
-import { sleepNeedFor, sleepNeedMinutes, weekSleepDebt, bedtimePlan, hrvMetric, wristTempDeviation } from "./recovery-model.js";
+import { sleepNeedFor, sleepNeedMinutes, weekSleepDebt, bedtimePlan, hrvMetric, wristTempDeviation, sleepIndexParts } from "./recovery-model.js";
 import { clockOf, minutesOf, dayStrain } from "./app-today.js";
 import { readinessFor, readinessRows, primaryNights, sleepIndexFor } from "./readiness.js";
 import { sleepSettings, tonightChoice } from "./energy-profile.js";
@@ -49,6 +49,42 @@ export function readinessParts(readiness) {
   return parts;
 }
 
+// The sleep index's three parts as the night's own values, each with how full
+// it is (0–1) for its bar: no points, since they do not always add up (a night
+// without stages is rescaled, a device's own score has no parts).
+function indexParts(night, need) {
+  const p = sleepIndexParts(night, need);
+  if (!p) return null;
+  const fill = part => round(part.points / part.max, 2);
+  return {
+    length: { minutes: p.length.minutes, need: p.length.need, fill: fill(p.length) },
+    quality: { efficiency: p.quality.efficiency, latency: p.quality.latency, waso: p.quality.waso, fill: fill(p.quality) },
+    stages: p.stages ? { share: p.stages.share, fill: fill(p.stages) } : null
+  };
+}
+
+// The middle half of a list (25th to 75th percentile, nearest rank): "usually".
+function middleHalf(values) {
+  const v = [...values].sort((a, b) => a - b), at = q => v[Math.round(q * (v.length - 1))];
+  return { low: at(0.25), high: at(0.75) };
+}
+
+// The user's usual share of deep and REM sleep: the nights with stages from
+// the same source as last night (devices stage sleep differently) in the 30
+// days before it, from 7 of them.
+export const USUAL_NIGHTS = 7;
+function usualStages(nights, night, date) {
+  if (!night?.stages) return null;
+  const share = (n, key) => num(n.stages?.[key]) != null && num(n.durationMin) > 0 ? num(n.stages[key]) / num(n.durationMin) * 100 : null;
+  const same = [...nights.entries()]
+    .filter(([d, n]) => d < date && d >= shift(date, -30) && (n.source || null) === (night.source || null))
+    .map(([, n]) => ({ deep: share(n, "DEEP"), rem: share(n, "REM") }))
+    .filter(n => n.deep != null && n.rem != null && n.deep + n.rem > 0);
+  if (same.length < USUAL_NIGHTS) return null;
+  const range = key => { const r = middleHalf(same.map(n => n[key])); return { low: Math.round(r.low), high: Math.round(r.high) }; };
+  return { deep: range("deep"), rem: range("rem"), nights: same.length };
+}
+
 export function buildHealth({ date, hour = null, health = {}, fitness = {}, sleep = {}, weight = {}, profile = {}, checkin = null, muscle = [] }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const intervals = (Array.isArray(fitness.wellness) ? fitness.wellness : []).filter(r => r.id <= date);
@@ -85,6 +121,13 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   // The week's debt as Today counts it (naps too), up to last night.
   const debt = weekSleepDebt(sessions, date, { age, goal: sleepSet.goal });
   const week = Array.from({ length: 7 }, (_, i) => shift(date, i - 6)).map(d => ({ date: d, value: round(num(nights.get(d)?.durationMin)) })).filter(p => p.value != null);
+  // The sleep index of the last 14 nights with its average and the user's
+  // usual range (the middle half of them, from 7 nights). No database reads:
+  // the 30 days of nights are loaded already.
+  const indexNights = Array.from({ length: 14 }, (_, i) => shift(date, i - 13))
+    .map(d => ({ date: d, value: nights.get(d) ? sleepIndexFor(nights.get(d), d === date ? needToday.need : needOn(d).need) : null }))
+    .filter(p => p.value != null);
+  const indexUsual = indexNights.length >= USUAL_NIGHTS ? middleHalf(indexNights.map(p => p.value)) : null;
 
   // Regularity: bedtimes of the last 14 nights (minutes after 18:00 so that
   // 23:30 and 00:30 are an hour apart, not 23).
@@ -165,9 +208,15 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
         end: clockOf(night.endTime),
         latencyMinutes: round(num(night.latencyMin ?? night.minutesToFallAsleep)),
         efficiency: num(night.timeInBedMin) > 0 && num(night.durationMin) ? Math.round(num(night.durationMin) / num(night.timeInBedMin) * 100) : null,
-        stages: stageMin("DEEP") != null || stageMin("REM") != null ? { deep: stageMin("DEEP") ?? 0, light: stageMin("LIGHT") ?? 0, rem: stageMin("REM") ?? 0, awake: stageMin("AWAKE") ?? 0 } : null
+        stages: stageMin("DEEP") != null || stageMin("REM") != null ? { deep: stageMin("DEEP") ?? 0, light: stageMin("LIGHT") ?? 0, rem: stageMin("REM") ?? 0, awake: stageMin("AWAKE") ?? 0 } : null,
+        // What makes up the index (sleep detail); null when the index is the device's own score.
+        parts: indexParts(night, needToday.need),
+        // "usually 15–20 %" under deep and REM sleep, from 7 nights of the same source.
+        usual: usualStages(nights, night, date)
       } : null,
       week,
+      // Last 14 nights: the index of each, its average and the usual range.
+      index: indexNights.length >= 2 ? { nights: indexNights, average: Math.round(mean(indexNights.map(p => p.value))), low: indexUsual?.low ?? null, high: indexUsual?.high ?? null } : null,
       need: needToday.need,
       tonight: { need: tonight.need, base: sleepNeedMinutes({ age, goal: sleepSet.goal }), strain: tonight.base - sleepNeedMinutes({ age, goal: sleepSet.goal }), goalSet: sleepSet.goal != null, wakeSet: plan?.wakeSource === "setting", hrv: tonight.hrv, debt: tonight.debt, naps: tonight.naps, bedtime: plan ? clock(plan.bed) : null, wake: plan ? clock(plan.wake) : null,
         // The planned night (Spánek): its evening, the sleep it plans (the need or
