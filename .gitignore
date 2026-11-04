@@ -22,3 +22,8 @@ __pycache__/
 scripts/muscles-v1.bin
 # The same model CI puts in the app's bundle (.github/scripts/fetch-muscle-model.sh).
 ios-native/Aurin/Resources/Models/
+
+# Own VO2max validation: personal exports and the --json output stay local (scripts/vo2max-validate.mjs)
+vo2max*.json
+export*.json
+export.zip
