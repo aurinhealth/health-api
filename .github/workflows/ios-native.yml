@@ -285,8 +285,8 @@ jobs:
 
       # The Apple Watch app on the sample day (AurinWatch/WatchDemo.swift, -demo) for
       # the App Store and the website: watch/ in English, watch-cs/ in Czech, each
-      # page by the crown, a detail, the gym and its rest, and the watch face with
-      # Aurin's complications (DemoFace). The watch is dark only. Not a release
+      # page by the crown, a detail, the gym and its rest, the watch face with
+      # Aurin's complications (DemoFace) and a race day (a duathlon, -race). The watch is dark only. Not a release
       # check: a missing watch simulator or shot never fails the run.
       - name: Screenshot the Apple Watch
         continue-on-error: true
@@ -328,6 +328,8 @@ jobs:
             shoot $dir 6-face "$@" -face
             shoot $dir 7-sleep "$@" -open sleep
             shoot $dir 8-strain "$@" -open strain
+            # Race day: a sprint duathlon as one card with Open in Workout (WatchDemo -race).
+            shoot $dir 9-race "$@" -page training -race
           done
           xcrun simctl shutdown "$watch" || true
 

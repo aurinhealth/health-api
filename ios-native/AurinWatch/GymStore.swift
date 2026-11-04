@@ -33,7 +33,7 @@ final class GymStore: ObservableObject {
     init() {
         // The sample day's gym for the screenshots (WatchDemo).
         if WatchDemo.on {
-            gym = WatchDemo.gym
+            gym = WatchDemo.race ? nil : WatchDemo.gym
             return
         }
         let defaults = UserDefaults.standard
