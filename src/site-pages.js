@@ -831,7 +831,7 @@ export function overviewPage(request) {
       ['muscles', '', 0, 'Know what’s recovered.', 'From the gym and from your rides, runs and swims, every muscle shows tired, recovering or rested.', 6000, 'phone']]],
     ['vyziva', '', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
       ['food-day', 'foodOne', 220, 'A target that moves.', 'Train harder and you get more to eat. See what makes up the target: your base, the workouts done and the ones still planned. The coach says what that means for your next meal.', 7500],
-      ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000],
+      ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Snap your plate and each food on it is listed to adjust, or scan a barcode or search. Set the portion your way, and log drinks with one tap.', 8000],
       ['food-day', 'drinks', 330, 'Drink to your goal.', 'Tap a drink, or the whale itself for your usual glass. At today’s goal it blows its spout. Keep Aurin’s goal, set your own, or build up to it day by day. Rather a bottle, a flower or an octopus? Pick one in Settings.', 9500],
       ['food-day', 'diet', 120, 'Eat your way.', 'Everything, vegetarian or vegan; balanced, high protein, lower carb or keto. Your protein, carbs and nutrients follow, or set your own.', 8000]]],
     ['kouc', '', 'A coach just for you.', 'It remembers what you tell it, in every new chat too, and you can see and edit what it remembers.', 'green', 'glow-today', [
