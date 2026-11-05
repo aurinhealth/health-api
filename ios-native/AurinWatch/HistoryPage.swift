@@ -68,7 +68,7 @@ struct HistoryPage: View {
             if spans.count > 1 { picker.padding(.top, 2) }
             chart
                 .padding(.top, 6)
-                .frame(height: Self.chartHeight - (spans.count > 1 ? 26 : 0))
+                .frame(height: Self.chartHeight - (spans.count > 1 ? 32 : 0))
             if shown == 90 {
                 Text(trend)
                     .font(.system(size: 11))
@@ -107,10 +107,13 @@ struct HistoryPage: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(value == shown ? Color.black : W.ink)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 22)
+                        // 28 pt to tap (watch audit G2; was 22).
+                        .frame(height: 28)
                         .background(value == shown ? metric.color : Color.clear, in: Capsule())
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .accessibilityAddTraits(value == shown ? .isSelected : [])
             }
         }
         .padding(2)

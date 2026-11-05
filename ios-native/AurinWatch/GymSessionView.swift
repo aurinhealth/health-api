@@ -429,7 +429,8 @@ struct GymSessionView: View {
             sidePill(lift.side, short: false)
             sidePill(lift.side, short: true)
         }
-        .contentShape(Capsule())
+        // 28 pt to tap around the 20 pt pill, without moving the row (watch audit G2).
+        .contentShape(Rectangle().inset(by: -4))
         .onTapGesture {
             guard let other else { return }
             WKInterfaceDevice.current().play(.click)
