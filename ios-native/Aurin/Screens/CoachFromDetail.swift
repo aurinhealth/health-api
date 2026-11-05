@@ -252,7 +252,8 @@ struct CoachSubjectCard: View {
 enum CoachSuggestions {
     static let fallback = ["Jak mám dnes trénovat?", "Necítím se dobře, uprav mi týden.", "Co sníst před večerním tréninkem?", "Proč mám nízkou připravenost?"]
 
-    static func forDay(today: TodaySnapshot?, sessions: [WeekSession], date: String) -> [String] {
+    /// `limit`: three on the empty chat; more as the pool under an answer (CoachView.followUps).
+    static func forDay(today: TodaySnapshot?, sessions: [WeekSession], date: String, limit: Int = 3) -> [String] {
         var out: [String] = []
         let tomorrow = AppModel.shift(date, by: 1) ?? ""
         if let done = sessions.last(where: { $0.date == date && $0.status == "done" && ["ride", "run", "strength"].contains($0.sport) }) {
@@ -275,7 +276,7 @@ enum CoachSuggestions {
         }
         for q in fallback.map(L10n.tr) where !out.contains(q) { out.append(q) }
         var seen = Set<String>()
-        return Array(out.filter { seen.insert($0).inserted }.prefix(3))
+        return Array(out.filter { seen.insert($0).inserted }.prefix(limit))
     }
 
     /// A long or intense session: the night before it matters.

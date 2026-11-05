@@ -223,6 +223,24 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// Under the last answer: copy, thumbs and the time; copied, up and down; and the panel after a thumb down.
+    func testCoachAnswerActions() throws {
+        let at = Date(timeIntervalSince1970: 1_793_213_880)
+        try render("coach-answer-actions", height: 520) {
+            VStack(alignment: .leading, spacing: 14) {
+                BubbleView(bubble: CoachView.Bubble(mine: false, text: "Ano. HRV je zpátky v obvyklém rozmezí a spal jsi 7:12, takže dnes sedí plánované **VO2max 5×4 min**.", at: at),
+                           last: true, rate: { _ in }, decide: { _, _ in })
+                AnswerActions(text: "x", rating: "up", at: at, rate: { _ in })
+                AnswerActions(text: "x", rating: "down", at: at, rate: { _ in })
+                AnswerActions(text: "x", rating: nil, at: nil, rate: nil)
+            }
+            .padding(24).environment(AppModel(demo: true))
+        }
+        try render("coach-answer-feedback", height: 420) {
+            AnswerFeedbackSheet(send: { _ in }, report: {})
+        }
+    }
+
     /// The coach's swim cards: 8×100 m at CSS in the pool, and open water with the safety line.
     func testCoachSwimCards() throws {
         func step(_ meters: Int, _ pct: Double, css: Double = 108, rest: Bool = false) -> String {

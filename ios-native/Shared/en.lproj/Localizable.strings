@@ -3825,6 +3825,17 @@
 "V %@ nic nového." = "Nothing new in %@.";
 "%@ z %@." = "%@ from %@.";
 "%@ a %@ z %@." = "%@ and %@ from %@.";
+"Zkopírováno" = "Copied";
+"Dobrá odpověď" = "Good answer";
+"Špatná odpověď" = "Bad answer";
+"Co v odpovědi nesedělo?" = "What was off?";
+"Uloží se jen důvod, ne text chatu." = "Only the reason is saved, not the text of the chat.";
+"Čísla nesedí" = "The numbers don't match";
+"Nepomohlo to" = "It didn't help";
+"Nahlásit tuto odpověď…" = "Report this answer…";
+"Nahlásit odpověď" = "Report answer";
+"Odpověď kouče, kterou hlásím:" = "The coach's answer I'm reporting:";
+"Co je na ní špatně: " = "What's wrong with it: ";
 "Ukáže, z čeho se index skládá." = "Shows what makes up the index.";
 "Z čeho se skládá index" = "What makes up the index";
 "Posledních %@ nocí · průměr %@" = "Last %1$@ nights · average %2$@";
@@ -3854,3 +3865,13 @@
 "Zatím tu nic není. Palec dáš cviku po tréninku v Ohodnotit, nebo když ho vyměníš a zvolíš I příště." = "Nothing here yet. Give an exercise a thumb in Rate after a workout, or swap it and choose Next time too.";
 "Plány je vynechají." = "Plans leave these out.";
 "Plány je dají o něco častěji." = "Plans pick these a little more often.";
+
+/* Food → amount: what is left of the day's target before adding (DayLeftLine) */
+"Po přidání" = "After adding";
+"Po přidání zbývá dnes" = "After adding, left today";
+"Po přidání zbývá %@" = "After adding, left %@";
+"%@ kcal nad dnešním cílem" = "%@ kcal over today's target";
+"%@ kcal nad cílem %@" = "%@ kcal over the target %@";
+"limit sacharidů: zbývá %@ g" = "carb limit: %@ g left";
+"%@ g nad limitem sacharidů" = "%@ g over the carb limit";
+"%@ z %@ kcal snědeno · tohle jídlo %@ kcal" = "%@ of %@ kcal eaten · this food %@ kcal";

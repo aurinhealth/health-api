@@ -88,6 +88,22 @@ struct CoachMarkdown: View, Equatable {
         return out
     }
 
+    /// The answer as plain text for "Kopírovat": no #, ** or | marks, a list
+    /// item per line with its bullet or number.
+    static func plainText(_ text: String) -> String {
+        let plain: (String) -> String = { String(inline($0).characters) }
+        return blocks(text).compactMap { block -> String? in
+            switch block {
+            case .heading(_, let t), .paragraph(let t): return plain(t)
+            case .bullets(let items): return items.map { "• " + plain($0) }.joined(separator: "\n")
+            case .numbered(let items): return items.enumerated().map { "\($0.offset + 1). " + plain($0.element) }.joined(separator: "\n")
+            case .table(let rows): return rows.map { $0.map(plain).joined(separator: "\t") }.joined(separator: "\n")
+            case .rule: return nil
+            }
+        }
+        .joined(separator: "\n\n")
+    }
+
     /// https on aurin.health, the hosts of the app's own links.
     static func allowedLink(_ url: URL) -> Bool {
         url.scheme?.lowercased() == "https" && AppRoute.linkHosts.contains(url.host()?.lowercased() ?? "")

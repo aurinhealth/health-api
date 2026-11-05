@@ -40,6 +40,7 @@ const P = {
   chdown: '<path d="m6 9 6 6 6-6"/>',
   cal: '<rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
   info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 8v.2"/>',
+  copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/>',
   thumb: '<path d="M7 11v9H4v-9ZM7 11l4-7c1.5 0 2.5 1 2.2 2.6L12.7 10H18a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 16.8 20H7"/>',
   rotate: '<path d="M4 12a8 8 0 0 1 14-5.3M20 4v4h-4M20 12a8 8 0 0 1-14 5.3M4 20v-4h4"/>',
   pencil: '<path d="M15.5 5.5l3 3M4 20l1-4L16 5a2.1 2.1 0 0 1 3 3L8 19Z"/>',
@@ -423,7 +424,8 @@ const foodTarget = `<div class="dm pad">
 </div>`;
 
 // AddFoodSheet.swift ("Co přidáme?": the meal, the search, six tiles, the foods list), then BarcodeScanSheet.swift:
-// the finder with "Vybrat fotku", the found card with NutritionCells, the PortionWheel turned to 1½ servings, and "Přidat do oběda".
+// the finder with "Vybrat fotku", the found card with NutritionCells, DayLeftLine (what is left of the sample day's 2,650 kcal
+// and 150 g protein after this food), the PortionWheel turned to 1½ servings, and "Přidat do oběda".
 const foodAdd = `<div class="dm pad fa">
 <div class="row sp"><span class="sent h">What are you adding?</span><span class="mut s">Close</span></div>
 <span class="meal">Lunch${ic('updown')}</span>
@@ -439,6 +441,8 @@ ${[['Plain Greek yogurt', 'Hollandia · 140 g', 205], ['Banana', '120 g', 105]].
 <div class="sent h3">Plain Greek yogurt</div>
 <div class="mut s">Hollandia · EAN 8594001234567</div>
 <div class="nc">${[['kcal', 205, 307], ['protein', 13, 19.5], ['carbs', 6, 9], ['fat', 14, 21]].map(([k, a, b]) => `<div><span class="num md"${n(a, b, 4500, 700, 'i')}>${Math.round(b)}</span><span class="mut s">${k === 'kcal' ? 'kcal' : k + ' g'}</span></div>`).join('')}</div>
+<div class="dl"><div class="row sp"><span>After adding, left today</span><span><b><span data-n="1065,963,4500,700,i">963</span> kcal</b> · <span data-n="53,47,4500,700,i">47</span> g of protein</span></div>
+<i class="dlb"><b class="g"${at('4500:on')}></b><b class="e"></b></i><div class="mut s">1,380 of 2,650 kcal eaten · this food <span data-n="205,307,4500,700,i">307</span> kcal</div></div>
 <div class="wf"><b data-tx="0|1;4500|1½">1½</b><i></i><span>serving (140 g)</span>${ic('chevd')}</div>
 <div class="wheel"><div class="col w"><ul>${['0', '1', '2'].map(x => `<li>${x}</li>`).join('')}</ul></div><div class="col p"><ul${at('4500:on')}>${['', '–', '¼', '⅓', '½', '⅔'].map(x => `<li>${x}</li>`).join('')}</ul></div><div class="col u"><ul>${['g', 'serving (140 g)', ''].map(x => `<li>${x}</li>`).join('')}</ul></div></div>
 <div class="mut s">1 serving = 140 g · 205 kcal</div>
@@ -472,6 +476,9 @@ const drinks = `<div class="dm pad dk">
 <div class="dk-chips">${drinkChip('drop', 'Water', 250)}${drinkChip('drop', 'Water', 500, '600:press 750-press 900:ok 2100-ok 2400:press 2550-press 2700:ok 3900-ok', '500 900-in 2300 2700-in')}${drinkChip('cup', 'Coffee', 200)}</div>
 </div>`;
 
+// Under the coach's last answer (AnswerActions in CoachAnswerFeedback.swift): copy, thumbs up and down, its time.
+const answerFoot = (time, when) => `<div class="afoot"${at(when)}>${ic('copy')}${ic('thumb')}${ic('thumb', 'down')}<span>${time}</span></div>`;
+
 // ---- Coach (CoachView.swift: bubbles, ActionCard with a workout preview, the confirmed line) ----
 const coachScreen = `<div class="app glow-today chat">${STATUS}
 <div class="nav c"><span class="cb">${ic('x')}</span><b>Coach</b><span class="cb">⋯</span></div>
@@ -489,6 +496,7 @@ ${[['Squat', '3×8 · 80 kg'], ['Bench press', '3×8 · 62.5 kg'], ['Rows', '3×
 <div class="ab"${at('6600:gone')}><span class="ok"${at('6200:press 6600-press')}>Confirm</span><span class="no">No</span><i class="br"></i>${['Shorter', 'Longer', 'Easier', 'Harder'].map(x => `<span class="q">${x}</span>`).join('')}<i class="br"></i><span class="q">Another day</span></div>
 <div class="conf"${at('6600')}>${ic('check')}Proposal confirmed.</div>
 </div>
+${answerFoot('5:31 PM', '7000')}
 </div>
 <div class="inp"><span class="cam">${ic('camera')}</span><span class="mut">Message the coach…</span><span class="snd">${ic('up')}</span></div>
 </div>`;
@@ -503,6 +511,7 @@ const memoryScreen = `<div class="app glow-today chat">${STATUS}
 <div class="dots"${at('500 1500-in')}><span>Coach is thinking…</span></div>
 <div class="c1"${at('1500')}><span data-type="1500,1100">Got it, no running until your knee is better. I’ll swap Saturday’s run for an easy ride and keep lunges out of your gym days.</span></div>
 <div class="mchip"${at('2900')}>${ic('check')}Remembered: left knee hurts when running<span class="mut">Back</span></div>
+${answerFoot('8:12 PM', '3200')}
 </div>
 <div class="inp"><span class="cam">${ic('camera')}</span><span class="mut">Message the coach…</span><span class="snd">${ic('up')}</span></div>
 </div>`;
@@ -877,7 +886,7 @@ html:not(.js) .stage1{display:none}
 .mb{display:block;height:3px;margin-top:4px;border-radius:3px;background:var(--track);overflow:hidden}.mb b{display:block;height:100%;width:var(--w)}
 .coach{margin-top:14px;padding:12px 14px;border-radius:16px;background:var(--bg)}.ch4{display:flex;align-items:center;gap:6px;color:var(--indigo);font-weight:500;font-size:13.5px}
 .coach .sent{margin-top:4px;font-size:17px;line-height:1.3;min-height:3.9em}
-.fa{position:relative;min-height:524px;overflow:hidden}
+.fa{position:relative;min-height:584px;overflow:hidden}
 .meal{display:inline-flex;align-items:center;gap:4px;margin-top:6px;padding:4px 10px;border-radius:99px;background:color-mix(in srgb,var(--text) 6%,transparent);font-size:13px;font-weight:600}.meal .di{font-size:10px}
 .srch{display:flex;align-items:center;gap:10px;height:44px;margin-top:12px;border-bottom:1px solid color-mix(in srgb,var(--text) 25%,transparent);font-size:17px}.srch .di{font-size:18px;color:var(--muted)}
 .tiles6{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
@@ -906,6 +915,10 @@ html:not(.js) .stage1{display:none}
 .wheel ul{margin:0;padding:0;list-style:none;transition:transform 1s cubic-bezier(.16,1,.3,1)}.wheel li{height:32px;font-size:17px;font-weight:600;line-height:32px;white-space:nowrap}
 .js .wheel ul[data-at]{opacity:1!important;transform:none!important}.wheel ul.on,.js .wheel ul.on{transform:translateY(-96px)!important}
 .fa .res .meal{margin-top:10px}.fa .res .btn{margin-top:10px}
+.dl{margin-top:10px;font-size:13px}.dl .row{gap:8px}.dlb{position:relative;display:block;height:4px;margin:6px 0 5px;border-radius:4px;background:var(--track);overflow:hidden}
+.dlb b{position:absolute;left:0;top:0;bottom:0;border-radius:4px}.dlb .e{width:${(1380 / 2650 * 100).toFixed(1)}%;background:var(--text)}
+.dlb .g{width:${(1585 / 2650 * 100).toFixed(1)}%;background:color-mix(in srgb,var(--muted) 55%,transparent);transition:width .7s cubic-bezier(.16,1,.3,1)}.dlb .g.on{width:${(1687 / 2650 * 100).toFixed(1)}%}
+.js .dlb .g[data-at]{opacity:1!important;transform:none!important}
 
 /* Screens built here, in the phone: drawn at the app's 390 pt and scaled to the screen. */
 .scr .app{position:absolute;left:0;top:0;width:390px;height:848px;zoom:calc(292 / 390);overflow:hidden;padding:0 20px;background:var(--bg);font:15px/1.35 -apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;color:var(--text);--num:"Instrument Serif","New York",Georgia,serif}
@@ -1079,6 +1092,7 @@ html:not(.js) .stage1{display:none}
 .cy-d.ov i{background:var(--amber-soft);color:var(--amber)}.cy-d.cast i{border:1.5px dashed var(--pink);color:var(--pink)}.cy-d.today i{box-shadow:inset 0 0 0 2px var(--text)}
 .cy-b{display:flex;align-items:center;justify-content:center;gap:6px;height:46px;margin-top:12px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--line);font-weight:600}
 /* The coach's memory: the green line under an answer and the list it keeps. */
+.afoot{align-self:stretch;display:flex;align-items:center;gap:18px;padding:0 4px;color:var(--muted)}.afoot .di{width:16px;height:16px;stroke-width:1.6}.afoot span{margin-left:auto;font-size:12px}
 .mchip{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:var(--green-soft);color:var(--green);font-size:13px;font-weight:500;transition:opacity .3s,transform .3s!important}
 .mchip .di{width:13px;height:13px;stroke-width:2.8}.mchip .mut{margin-left:4px}
 .js .mchip.wait:not(.in){opacity:0;transform:translateY(6px)}
