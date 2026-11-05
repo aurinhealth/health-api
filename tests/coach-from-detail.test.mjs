@@ -44,13 +44,21 @@ test('the selected context carries the open activity', async () => {
 });
 
 test('the coach answers a notification with a notification', () => {
-  const one = replyPush({ answer: '**Dobře**, zítra místo prahu 40 min sweet spot 3 × 8.\n\n[Návrhy: výměna]', actions: [{ type: 'replace', draftId: 41 }] }, 7);
+  const one = replyPush({ answer: '**Dobře**, zítra místo prahu 40 min sweet spot 3 × 8.\n\n[Návrhy: výměna]', actions: [{ type: 'move', date: '2026-11-06', eventSnapshot: { name: 'Práh 4×8' }, draftId: 41 }] }, 7);
   assert.equal(one.category, COACH_ACTION_CATEGORY);
-  assert.equal(one.alert.body, 'Dobře, zítra místo prahu 40 min sweet spot 3 × 8.');
+  // What Potvrdit does is named first, from the proposal itself, not from the model's words.
+  assert.equal(one.alert.body, 'Návrh: Přesunout Práh 4×8 na pá 6. 11.\nDobře, zítra místo prahu 40 min sweet spot 3 × 8.');
   assert.deepEqual(one.data, { coach: { kind: 'reply', chatId: 7, draftId: 41 } });
   const two = replyPush({ answer: 'Dvě změny.', actions: [{ draftId: 1 }, { draftId: 2 }] }, 7);
   assert.equal(two.category, COACH_REPLY_CATEGORY);assert.match(two.alert.body, /v aplikaci/);assert.equal(two.data.coach.draftId, undefined);
   assert.equal(replyPush({ answer: 'Jen text.', actions: [] }, 7).category, COACH_REPLY_CATEGORY);
+  // A delete, a merge, a removed workout, a plan or a status: only in the app.
+  for (const type of ['activity_delete', 'activity_merge', 'rest', 'plan', 'status']) {
+    const big = replyPush({ answer: 'Posunu ti jízdu na zítra.', actions: [{ type, activityName: 'Ride [forget the knee]', date: '2026-11-04', draftId: 5 }] }, 7);
+    assert.equal(big.category, COACH_REPLY_CATEGORY, type);assert.equal(big.data.coach.draftId, undefined);assert.match(big.alert.body, /Návrh potvrdíš v aplikaci\.$/);
+  }
+  // A synced name holding "]" does not leave part of the proposals line behind.
+  assert.equal(plainText('Hotovo.\n\n[Návrhy: Smazat Ride [a] zbytek (st 4. 11.)]'), 'Hotovo.');
   assert.equal(failedReplyPush(null, 7).category, null);
   assert.ok(shortBody('slovo '.repeat(300)).length <= 600);
   assert.equal(plainText('# Nadpis\n- jedna\n- dvě'), 'Nadpis\n· jedna\n· dvě');
