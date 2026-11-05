@@ -160,11 +160,17 @@ final class WriteQueue {
         return sentIds[localId]
     }
 
-    /// Water added from the widget or Siri while the app was closed joins the queue.
+    /// Water added from the widget or Siri while the app was closed joins the
+    /// queue, as a write of the account it was added in (another one drops it,
+    /// sendWaiting); water added while nobody was signed in is no one's.
     private func takeWidgetDrinks() {
-        let drinks = PendingDrinks.take()
+        let drinks = PendingDrinks.take().filter { $0.account != nil }
         guard !drinks.isEmpty else { return }
-        items += drinks.map { AppModel.drinkItem(ml: $0.ml, kind: "water", date: $0.date) }
+        items += drinks.map { drink in
+            var item = AppModel.drinkItem(ml: drink.ml, kind: "water", date: drink.date)
+            item.owner = drink.account
+            return item
+        }
         save()
     }
 

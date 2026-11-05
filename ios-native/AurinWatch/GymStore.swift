@@ -254,6 +254,7 @@ final class GymStore: ObservableObject {
     /// reach, or it did not answer) the watch saves the sheet itself. A plan
     /// from an older iPhone, without its sheet, waits in the iPhone's queue as before.
     private func write(_ message: [String: Any]) {
+        let message = WatchAPI.owned(message)
         guard gym?.sheet != nil else {
             guard let session = phone else { return }
             if session.isReachable {
@@ -519,7 +520,7 @@ final class GymStore: ObservableObject {
         guard !ticks.isEmpty || cardio != nil, let session = phone,
               let data = WatchGym.PartDone(date: gym.date, part: part.rawValue, ticks: ticks, seconds: cardio?.seconds,
                                            end: cardio?.end, cardio: part.isCardio ? part.cardioId : nil).encoded() else { return }
-        let message = [WatchGym.partDoneKey: data]
+        let message = WatchAPI.owned([WatchGym.partDoneKey: data])
         if session.isReachable {
             session.sendMessage(message, replyHandler: { _ in }, errorHandler: { _ in WCSession.default.transferUserInfo(message) })
         } else {

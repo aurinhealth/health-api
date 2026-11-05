@@ -17,6 +17,11 @@ struct WatchSession: Codable, Equatable, Sendable {
     var apiLevel: Int
     var language: String
     var imperial: Bool
+    /// The account signed in on the iPhone (its id). What the watch queues for
+    /// the iPhone carries it under accountKey, so another account signed in
+    /// meanwhile drops it (WatchBridge didReceiveUserInfo).
+    var account: Int? = nil
+    static let accountKey = "account"
 
     func encoded() -> Data? { try? JSONEncoder().encode(self) }
     static func decode(_ data: Data) -> WatchSession? { try? JSONDecoder().decode(WatchSession.self, from: data) }

@@ -78,6 +78,9 @@ struct PasskeysSettingsView: View {
             keys = try await model.api.removePasskey(id: key.id)
             if keys.isEmpty { PasskeyService.remember(false) }
             error = nil
+        } catch APIError.stepUpRequired(_, let info) {
+            // Removing a way to confirm it's you needs the same check as adding one (src/passkeys.js).
+            stepUp = StepUpRequest(info: info, reason: L10n.tr("Odebrání Face ID potřebuje krátké ověření."), destructive: true) { await remove(key) }
         } catch {
             self.error = APIClient.readable(error).localizedDescription
         }

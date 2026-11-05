@@ -3568,6 +3568,7 @@
 "Pozastavení zdravotních dat potřebuje krátké ověření." = "Pausing health data needs a quick check.";
 "Změna e-mailu potřebuje krátké ověření." = "Changing the email needs a quick check.";
 "Nový způsob přihlášení potřebuje krátké ověření." = "Adding a new way to sign in needs a quick check.";
+"Odebrání Face ID potřebuje krátké ověření." = "Removing Face ID needs a quick check.";
 "Nejdřív potvrď, že jsi to ty." = "Confirm it's you first.";
 "Žádná data za 7 dní" = "No data in 7 days";
 "Základ" = "Base";
@@ -3681,6 +3682,15 @@
 "Začít 7denní zkoušku zdarma" = "Start 7-day free trial";
 "VYZKOUŠEJ 7 DNÍ ZDARMA" = "TRY 7 DAYS FREE";
 "12MĚSÍČNÍ TARIF · VYZKOUŠEJ 7 DNÍ ZDARMA" = "12-MONTH PLAN · TRY 7 DAYS FREE";
+"V PRO JE" = "INCLUDED IN PRO";
+"Platíš měsíčně" = "Pay monthly";
+"12 plateb" = "12 payments";
+"%@ celkem" = "%@ total";
+"%@/měs." = "%@/mo";
+"v přepočtu" = "equivalent";
+"zrušíš kterýkoli měsíc" = "cancel any month";
+"UŠETŘÍŠ %d %%" = "SAVE %d%%";
+"Ušetříš %d %% proti měsíčnímu tarifu" = "Saves %d%% compared with the monthly plan";
 
 /* Settings → Aurin Pro in night violet and the coach message packs (ProSettings.swift) */
 "%lld navíc" = "%lld extra";

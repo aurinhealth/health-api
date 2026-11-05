@@ -76,7 +76,7 @@ test("a session cookie counts only with the user's current epoch, and the epoch 
   assert.ok(entry.indexOf("async function routeRequest(") > checked);
   // Unlinking Apple and signing out everywhere bump it with a fresh cookie for the caller.
   assert.match(entry, /unlinkAppleIdentity\(env\.RAW_DB, session\.user\.id\);[\s\S]{0,600}return signedOutElsewhere\(env\.RAW_DB, session\.user\.id, env, Response\.json\(\{status:"ok"\}/);
-  assert.match(entry, /if \(url\.pathname === "\/app\/api\/account\/sign-out-everywhere"\) return handleSignOutEverywhere\(request, env, url, session\);/);
+  assert.match(entry, /if \(url\.pathname === "\/app\/api\/account\/sign-out-everywhere"\) return handleSignOutEverywhere\(request, env, url, session, ctx\);/);
   assert.match(entry, /sign-out-everywhere\)\$/, "signing out everywhere keeps the cached coach inputs");
   // Apple Health uploads over the size limit are refused before the body is read.
   assert.match(entry, /if\(appleBodyTooLarge\(request\)\)return Response\.json\(\{message:L\([^)]*\)\},\{status:413\}\);\s*const body=await request\.json\(\)/);

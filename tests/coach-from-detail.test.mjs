@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assistantAppContext, selectedSubject, selectedAssistantContext } from '../src/assistant-app-context.js';
 import { COACH_MOMENT_KEYS } from '../src/coach-assistant.js';
-import { replyPush, failedReplyPush, pushOpening, plainText, shortBody, COACH_ACTION_CATEGORY, COACH_REPLY_CATEGORY } from '../src/coach-push-reply.js';
+import { replyPush, failedReplyPush, foreignPushReply, pushOpening, plainText, shortBody, COACH_ACTION_CATEGORY, COACH_REPLY_CATEGORY } from '../src/coach-push-reply.js';
 import { appendChatTurnIds, readChat, startChatWithCoach, chatContext } from '../src/assistant-chats.js';
 import { createD1 } from './helpers/d1.mjs';
 import { scopedDb } from '../src/tenancy.js';
@@ -44,10 +44,11 @@ test('the selected context carries the open activity', async () => {
 });
 
 test('the coach answers a notification with a notification', () => {
-  const one = replyPush({ answer: '**Dobře**, zítra místo prahu 40 min sweet spot 3 × 8.\n\n[Návrhy: výměna]', actions: [{ type: 'replace', draftId: 41 }] }, 7);
+  const one = replyPush({ answer: '**Dobře**, zítra místo prahu 40 min sweet spot 3 × 8.\n\n[Návrhy: výměna]', actions: [{ type: 'replace', draftId: 41 }] }, 7, 3);
   assert.equal(one.category, COACH_ACTION_CATEGORY);
   assert.equal(one.alert.body, 'Dobře, zítra místo prahu 40 min sweet spot 3 × 8.');
-  assert.deepEqual(one.data, { coach: { kind: 'reply', chatId: 7, draftId: 41 } });
+  assert.deepEqual(one.data, { coach: { kind: 'reply', chatId: 7, account: 3, draftId: 41 } });
+  assert.equal(failedReplyPush(null, 7, 3).data.coach.account, 3);
   const two = replyPush({ answer: 'Dvě změny.', actions: [{ draftId: 1 }, { draftId: 2 }] }, 7);
   assert.equal(two.category, COACH_REPLY_CATEGORY);assert.match(two.alert.body, /v aplikaci/);assert.equal(two.data.coach.draftId, undefined);
   assert.equal(replyPush({ answer: 'Jen text.', actions: [] }, 7).category, COACH_REPLY_CATEGORY);
@@ -55,6 +56,20 @@ test('the coach answers a notification with a notification', () => {
   assert.ok(shortBody('slovo '.repeat(300)).length <= 600);
   assert.equal(plainText('# Nadpis\n- jedna\n- dvě'), 'Nadpis\n· jedna\n· dvě');
   assert.equal(pushOpening('Tři krátké noci za sebou', 'Zítřejší práh vyměním?'), '**Tři krátké noci za sebou**\n\nZítřejší práh vyměním?');
+});
+
+// Security audit 2026-11-04, point 23: a notification another account got on
+// this phone (signed out since) cannot write into this account's chat.
+test('a reply to another account\'s notification is refused', () => {
+  assert.equal(foreignPushReply({ account: 3, chatId: 7 }, 3, true), false);
+  assert.equal(foreignPushReply({ account: 3, chatId: 7 }, 3, false), false, 'its own chat deleted meanwhile: a new chat');
+  assert.equal(foreignPushReply({ account: 3 }, 3, false), false);
+  assert.equal(foreignPushReply({ account: 4, chatId: 7 }, 3, true), true, 'another account, even with a chat id this account has too');
+  assert.equal(foreignPushReply({ account: 4 }, 3, false), true);
+  // An older app sends no account: a chat id that is not this account's is refused.
+  assert.equal(foreignPushReply({ chatId: 7 }, 3, false), true);
+  assert.equal(foreignPushReply({ chatId: 7 }, 3, true), false);
+  assert.equal(foreignPushReply({}, 3, false), false);
 });
 
 test('a chat answered from a push starts with the push and keeps message ids', async () => {

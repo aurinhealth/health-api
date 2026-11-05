@@ -643,10 +643,11 @@ final class APIClient: @unchecked Sendable {
 
     /// Step 2: the code moves the account to the new address; returns it. The
     /// account, its data and subscription stay; every other device is signed
-    /// out and this one gets a fresh cookie.
+    /// out (and gets no more notifications) and this one gets a fresh cookie.
     func verifyEmailChange(email: String, code: String) async throws -> String {
         struct Changed: Decodable { let email: String? }
-        let changed: Changed = try await send("/app/api/account/email/verify", method: "POST", body: ["email": JSONValue.string(email), "code": .string(code)])
+        let changed: Changed = try await send("/app/api/account/email/verify", method: "POST",
+                                              body: ["email": JSONValue.string(email), "code": .string(code), "pushToken": PushRegistration.sentToken])
         return changed.email?.nilIfBlank ?? email
     }
 

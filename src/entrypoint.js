@@ -22,7 +22,6 @@ import { cached, cachedOnly, bumpCacheVersion, FOOD_WRITE, UNCHANGED_HEADER, clo
 import { manualPairs } from './manual-pairs.js';
 import { activityDetail, rideIntervals } from './activity-detail.js';
 import { watchDetail, withWatch } from './watch-detail.js';
-import { useCookbookDatabase } from './cookbook.js';
 import {googleDashboard} from './google-dashboard.js';
 import {applyEnergyBudget} from './energy-budget.js';
 import {buildToday,todayUnavailable} from './app-today.js';
@@ -109,8 +108,12 @@ import { reviewRefusal, isReviewAccount } from "./app-review.js";
 import { updateFitnessEstimate } from "./own-vo2max-store.js";
 import { ensureReviewSample } from "./review-sample.js";
 import { handleNativeAppleLogin, forgetUsedAppleTokens } from "./apple-login.js";
+<<<<<<< HEAD
 import { chatContext, appendChatTurnIds, listChats, readChat, deleteChat, startChatWithCoach, ownedChat, saveAnswerFeedback } from "./assistant-chats.js";
 import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedReplyPush } from "./coach-push-reply.js";
+=======
+import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedReplyPush, foreignPushReply } from "./coach-push-reply.js";
+>>>>>>> origin/main
 import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
 import { coachEvalPrincipal, handleCoachEval } from "./coach-eval.js";
@@ -284,7 +287,6 @@ async function intervalsWebhookFor(env, ctx, message) {
 export async function runIntervalsWebhookInvocation(env, ctx, { athlete, parts = [], kinds = [], deleted = [] } = {}) {
   try {
     await ensureTenancy(env.DB, env);
-    useCookbookDatabase(env.DB);
     await forIntervalsAthlete(env, ctx, String(athlete || ""), parts, kinds, deleted);
     return { ok: true };
   } catch (error) {
@@ -412,7 +414,6 @@ export async function runUserJobs(env, ctx, { cron, scheduledTime }, user, names
 export async function runUserJobsInvocation(env, ctx, { user, names, cron, scheduledTime }) {
   try {
     await ensureTenancy(env.DB, env);
-    useCookbookDatabase(env.DB);
     await runUserJobs(env, ctx, { cron, scheduledTime }, user, names);
     return { ok: true };
   } catch (error) {
@@ -463,7 +464,6 @@ export async function fanOutUserJobs(env, ctx, controller, { concurrency = 10 } 
 const worker = {
   async scheduled(controller, env, ctx) {
     await ensureTenancy(env.DB, env);
-    useCookbookDatabase(env.DB);
     // Data of deleted accounts that the delete request had no time for.
     // The rest of paused health data, and the last pass after a pause (health-pause.js).
     if (controller.cron === "* * * * *") await finishHealthPauses(env.DB, env.USER_DATA_ROUTING === 'true' || env.FOOD_CATALOG_ROUTING === 'true' ? { databaseForUser: id => deletionDatabase(env, id) } : {}).catch(error => console.error("Health data deletion failed", error.message));
@@ -506,7 +506,6 @@ const worker = {
       if (error instanceof TenancyUpgradeInProgress) return Response.json({status:"error",message:error.message},{status:503,headers:{"Retry-After":"30","Cache-Control":"no-store"}});
       throw error;
     }
-    useCookbookDatabase(env.DB);
     const rawEnv = env;
     // Deny by default: only allowlisted routes are reachable without a session or API key.
     let principal = await resolvePrincipal(request, env);
@@ -892,7 +891,7 @@ async function coachPush(env, ctx) {
   const hide = hidesValues(state) ? (nudge.swap ? 'swap' : 'coach') : null;
   let sent = 0;
   for (const device of devices) {
-    const result = await sendPush(env, device, { title: nudge.title, body: nudge.body }, { category: nudge.swap ? COACH_SWAP_CATEGORY : COACH_REPLY_CATEGORY, data: { coach: { kind: nudge.kind, date } }, hide }).catch(error => ({ ok: false, error: error.message }));
+    const result = await sendPush(env, device, { title: nudge.title, body: nudge.body }, { category: nudge.swap ? COACH_SWAP_CATEGORY : COACH_REPLY_CATEGORY, data: { coach: { kind: nudge.kind, date, account: db.userId } }, hide }).catch(error => ({ ok: false, error: error.message }));
     if (result.ok) sent++;
     else if (result.gone) await deletePushToken(db, device.token);
     else console.error('Coach push not delivered', result.status || '', result.reason || result.error || '');
@@ -2343,7 +2342,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     let body;try{body=JSON.parse(raw)||{};}catch{body={};}
     const text=String(body.text||'').trim();
     if(!text||text.length>PUSH_REPLY_CHARS)return Response.json({message:L('Odpověď je prázdná nebo moc dlouhá.', 'The reply is empty or too long.')},{status:400});
-    let chatId=(await ownedChat(env.DB,body.chatId).catch(()=>null))?.id??null;
+    let chatId=body.chatId==null?null:(await ownedChat(env.DB,body.chatId).catch(()=>null))?.id??null;
+    if(foreignPushReply(body,env.USER_ID,chatId!=null))return Response.json({message:L('Tahle notifikace patří jinému účtu.', 'This notification belongs to another account.')},{status:409,headers:{'Cache-Control':'no-store'}});
     if(!chatId){
       const opening=pushOpening(body.title,body.body);
       chatId=opening?await startChatWithCoach(env.DB,body.title,opening):null;
@@ -2354,7 +2354,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const result=response?await response.json().catch(()=>null):null;
     const answered=response?.ok&&result?.answer;
     if(answered&&result.chatId)chatId=result.chatId;
-    const push=answered?replyPush(result,chatId):failedReplyPush(result?.message,chatId);
+    const push=answered?replyPush(result,chatId,env.USER_ID):failedReplyPush(result?.message,chatId,env.USER_ID);
     // Settings → Oznámení → Skrýt zdravotní údaje (push.js hidesValues), read while the coach answered.
     const hide=answered&&hidesValues(await stateRead)?'reply':null;
     let sent=0;

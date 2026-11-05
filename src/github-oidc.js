@@ -16,9 +16,12 @@ let cachedJwks = null;
 let cachedJwksAt = 0;
 let forcedJwksAt = 0;
 
-// `audience` and `workflows` default to the deploy smoke test's; the coach
-// evaluation (coach-eval.js) passes its own, so its token opens nothing else.
-export async function verifyGitHubActionsToken(request, fetchImpl = fetch, { audience = EXPECTED_AUDIENCE, workflows = EXPECTED_WORKFLOWS } = {}) {
+// `audience`, `workflows` and `environment` default to the deploy smoke test's;
+// the coach evaluation (coach-eval.js) passes its own, so its token opens
+// nothing else. The smoke test runs in the GitHub environment "production"
+// only, so a token from a staging deploy job never opens the live server
+// (security audit 2026-11-04, point 21).
+export async function verifyGitHubActionsToken(request, fetchImpl = fetch, { audience = EXPECTED_AUDIENCE, workflows = EXPECTED_WORKFLOWS, environment = "production" } = {}) {
   const authorization = request.headers.get("Authorization") || "";
   if (!authorization.startsWith("Bearer ")) throw new Error("Missing GitHub Actions bearer token");
   const token = authorization.slice(7).trim();
@@ -39,6 +42,7 @@ export async function verifyGitHubActionsToken(request, fetchImpl = fetch, { aud
   if (String(claims.repository_owner_id) !== EXPECTED_REPOSITORY_OWNER_ID) throw new Error("Invalid GitHub Actions repository owner");
   if (claims.ref !== "refs/heads/main") throw new Error("Invalid GitHub Actions ref");
   if (!workflows.has(claims.workflow_ref)) throw new Error("Invalid GitHub Actions workflow");
+  if (environment && claims.environment !== environment) throw new Error("Invalid GitHub Actions environment");
   // A push to main, or a deploy of the live server started by hand ("Vydat").
   if (claims.event_name !== "push" && claims.event_name !== "workflow_dispatch") throw new Error("Invalid GitHub Actions event");
   if (claims.actor !== "aurinhealth") throw new Error("Invalid GitHub Actions actor");

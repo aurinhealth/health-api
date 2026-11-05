@@ -17,7 +17,6 @@ Food values come from:
 - **Personal foods**: the user's own saved foods, a separate D1 table
   (`personal_foods`), searched by name or barcode in the app (`/app/api/food/search`).
   They are never shared with any provider.
-- **Cookbook**: recipes with their nutrition values (`cookbook.js`).
 - **World catalogue** (`world-foods.js`): about 3.4 million foods from the
   kCalori release (Open Food Facts ODbL, USDA FoodData Central, Fineli, Ciqual,
   CoFID), read only from the R2 bucket `aurin-food-catalog` (Eastern Europe), listed after saved and

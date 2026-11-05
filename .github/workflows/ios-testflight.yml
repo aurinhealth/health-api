@@ -225,7 +225,7 @@ jobs:
             base=""
             if [ "${{ github.event_name }}" != pull_request ]; then
               base=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ios-testflight.yml --branch main \
-                --status success --limit 1 --json headSha --jq '.[0].headSha // ""')
+                --status success --limit 20 --json headSha,event --jq 'map(select(.event != "pull_request"))[0].headSha // ""')
             fi
             # Unknown, gone, or this very commit again: just the last commit.
             if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null || [ "$(git rev-parse "$base")" = "$(git rev-parse HEAD)" ]; then
