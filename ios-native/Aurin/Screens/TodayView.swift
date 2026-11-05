@@ -595,7 +595,8 @@ struct ReadinessHero: View {
                 }
             } else if let days = readiness.learningDays {
                 ReadinessLearning(days: days, date: date)
-            } else if readiness.flags?.contains("no_night") == true && !isToday {
+            } else if readiness.flags?.contains("no_night") == true && (!isToday || Calendar.current.component(.hour, from: Date()) >= 12) {
+                // Today from noon on: the night is not coming any more.
                 Text("Bez zaznamenané noci")
                     .font(Typo.sentence(34, relativeTo: .largeTitle))
                     .foregroundStyle(Palette.ink)
