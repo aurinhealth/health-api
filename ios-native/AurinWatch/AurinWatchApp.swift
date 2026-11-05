@@ -31,6 +31,11 @@ struct AurinWatchApp: App {
             await WatchStore.shared.fromServer()
             await WatchStore.shared.scheduleMorning()
         }
+        // Today from the iPhone while the app is in the background: taken now,
+        // so the watch face moves on without opening the app (watch audit F2).
+        .backgroundTask(.watchConnectivity) {
+            await WatchStore.shared.receivePending()
+        }
         // The coach's pushes from the iPhone, in the watch's own look.
         WKNotificationScene(controller: CoachNotificationController.self, category: "COACH_SWAP")
         WKNotificationScene(controller: CoachNotificationController.self, category: "COACH_REPLY")

@@ -641,7 +641,7 @@ const wSteps = (frac, c, goal) => `<i class="aw-st">${Array.from({length: 10}, (
 const watchFace = `<div class="aw-s aw-face"><div class="aw-frow">${wArc(.35, WA.amber, '4:18', 'WORKOUT')}${wArc(.58, WA.blue, '1.5', 'WATER')}<div class="aw-date">THU<b>8</b></div></div>
 <div class="aw-clock">7:12</div>
 <div class="aw-day">${[['READY', '78', WA.green, .78], ['SLEEP', '7:12', WA.amber, .76, [7, 9]], ['STRAIN', '8.4', WA.amber, .53, [6, 9]]].map(([k, v, c, f, g]) => `<div><span style="color:${c}">${k}</span><b>${v}</b>${wSteps(f, c, g)}</div>`).join('')}</div>
-<div class="aw-frow aw-fbot">${wArc(.52, '#FFC274', '1380', 'KCAL')}${wArc(.56, '#83C7FF', '84', 'PROTEIN')}${wArc(.84, WA.indigo, '6:30', 'ALARM')}</div></div>`;
+<div class="aw-frow aw-fbot">${wArc(.52, '#FFC274', '1270', 'LEFT')}${wArc(.56, '#83C7FF', '84', 'PROTEIN')}${wArc(.84, WA.indigo, '6:30', 'ALARM')}</div></div>`;
 
 // Race day (TrainingPage.raceCard, RaceDay.swift): a training plan's duathlon as one card, its legs in race
 // order with their distance and time, and one start for the whole race.

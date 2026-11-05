@@ -73,6 +73,10 @@ struct DayEntry: TimelineEntry {
 /// alarm's day and night and Aurin through the day move on; countdowns run
 /// on their own (Text timerInterval). The watch app reloads them with each new Today.
 struct DayProvider: TimelineProvider {
+    /// When this complication goes on top of the Smart Stack (watch audit F4):
+    /// none for the small ones and food or drinks.
+    var moments: Set<Moment> = []
+
     func placeholder(in context: Context) -> DayEntry { DayEntry(date: Date(), snapshot: .sample) }
 
     func getSnapshot(in context: Context, completion: @escaping (DayEntry) -> Void) {
@@ -89,7 +93,7 @@ struct DayProvider: TimelineProvider {
         let start = Calendar.current.dateInterval(of: .minute, for: now)?.start ?? now
         let entries = (0..<24).map { i -> DayEntry in
             let date = start.addingTimeInterval(Double(i) * 900)
-            return DayEntry(date: date, snapshot: snapshot, plan: plan, relevance: Moment.relevance(snapshot, at: date))
+            return DayEntry(date: date, snapshot: snapshot, plan: plan, relevance: Moment.relevance(snapshot, at: date, for: moments))
         }
         completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(6 * 3600))))
     }
@@ -115,17 +119,19 @@ enum Moment {
     }
 
     /// High from waking for two hours, in the 90 minutes before a workout and
-    /// the 2 hours before bed; none otherwise.
-    static func relevance(_ s: WatchSnapshot?, at now: Date) -> TimelineEntryRelevance? {
-        guard let s, s.date == Days.key(now) else { return nil }
-        if let end = Days.at(s.sleep?.end, on: s.date), now >= end, now.timeIntervalSince(end) < 2 * 3600 {
+    /// the 2 hours before bed, each only for the complications that show it
+    /// (readiness in the morning, the workout before it, the night before bed);
+    /// none otherwise. It was the same for all, so Food or Night came up in the morning too.
+    static func relevance(_ s: WatchSnapshot?, at now: Date, for wanted: Set<Moment>) -> TimelineEntryRelevance? {
+        guard !wanted.isEmpty, let s, s.date == Days.key(now) else { return nil }
+        if wanted.contains(.readiness), let end = Days.at(s.sleep?.end, on: s.date), now >= end, now.timeIntervalSince(end) < 2 * 3600 {
             return TimelineEntryRelevance(score: 80, duration: 900)
         }
-        if let next = Small.nextToday(s, at: now), let start = Days.at(next.time, on: s.date),
+        if wanted.contains(.workout), let next = Small.nextToday(s, at: now), let start = Days.at(next.time, on: s.date),
            start > now, start.timeIntervalSince(now) <= 90 * 60 {
             return TimelineEntryRelevance(score: 90, duration: 900)
         }
-        if let alarm = s.alarm, let bed = Days.at(alarm.bedtime, on: alarm.evening ?? s.date),
+        if wanted.contains(.night), let alarm = s.alarm, let bed = Days.at(alarm.bedtime, on: alarm.evening ?? s.date),
            now < bed, bed.timeIntervalSince(now) <= 2 * 3600 {
             return TimelineEntryRelevance(score: 70, duration: 900)
         }
@@ -206,7 +212,7 @@ enum Small {
         case .aurin, .readiness: tr("PŘIPR.", "READY")
         case .sleep: tr("SPÁNEK", "SLEEP")
         case .strain: tr("NÁMAHA", "STRAIN")
-        case .calories: "KCAL"
+        case .calories: tr("ZBÝVÁ", "LEFT")
         case .protein: tr("BÍLK.", "PROTEIN")
         case .drinks: tr("VODA", "WATER")
         case .hrv: "HRV"
@@ -222,7 +228,7 @@ enum Small {
         case .sleep: "moon.fill"
         case .strain: "flame.fill"
         case .calories: "fork.knife"
-        case .protein: "fork.knife"
+        case .protein: "p.circle.fill"
         case .drinks: "drop.fill"
         case .hrv: "waveform.path.ecg"
         case .restingHR: "heart.fill"
@@ -282,8 +288,12 @@ enum Small {
             if target > 0 {
                 line = left >= 0 ? tr("Zbývá ", "") + Days.int(left) + tr(" kcal", " kcal left") : Days.int(-left) + tr(" kcal navíc", " kcal over")
             }
+            // Watch audit F1: the number is what is left ("LEFT"), past the
+            // goal what is over it ("OVER", amber); with no goal what was eaten ("KCAL").
             let text = target > 0 ? Days.int(abs(left)) : Days.int(kcal)
-            return SmallValue(fraction: target > 0 ? kcal / target : 0, color: reached ? C.green : C.carbs, word: word(m),
+            let over = target > 0 && left < 0
+            let said = target <= 0 ? "KCAL" : over ? tr("NAVÍC", "OVER") : word(m)
+            return SmallValue(fraction: target > 0 ? kcal / target : 0, color: over ? C.amber : reached ? C.green : C.carbs, word: said,
                               text: text, line: line, symbol: symbol(m))
         case .protein:
             guard let protein = today?.food?.protein, let eaten = protein.eaten else { return empty }
@@ -546,7 +556,7 @@ enum WideKind: String {
 @MainActor
 enum WideComplication {
     static func configuration(_ kind: WideKind) -> some WidgetConfiguration {
-        StaticConfiguration(kind: "aurin.wide." + kind.rawValue, provider: DayProvider()) { entry in
+        StaticConfiguration(kind: "aurin.wide." + kind.rawValue, provider: DayProvider(moments: moments(kind))) { entry in
             WideView(kind: kind, entry: entry)
                 // Hidden on a locked watch (and wrist down with "Hide Sensitive Complications").
                 .privacySensitive()
@@ -558,6 +568,18 @@ enum WideComplication {
                      ? tr("Co dnes dělat: připravenost a další trénink.", "What to do today: readiness and the next workout.")
                      : tr("Z dneška v aplikaci Aurin.", "From today in Aurin."))
         .supportedFamilies([.accessoryRectangular])
+    }
+
+    /// When each goes on top of the Smart Stack (Moment.relevance).
+    static func moments(_ kind: WideKind) -> Set<Moment> {
+        switch kind {
+        case .aurin: [.readiness, .workout, .night]
+        case .today: [.readiness, .workout]
+        case .day: [.readiness]
+        case .workout: [.workout]
+        case .night: [.night]
+        case .food, .drinks: []
+        }
     }
 
     static func name(_ kind: WideKind) -> String {
@@ -609,6 +631,7 @@ struct WideView: View {
             SegmentedArc(fraction: value.fraction, color: value.color, lineWidth: 5)
             Text(value.text).font(.system(size: 17, weight: .bold, design: .rounded)).minimumScaleFactor(0.6).padding(.bottom, 2)
             Text(value.word).font(.system(size: 7, weight: .bold)).foregroundStyle(value.color)
+                .widgetAccentable()
                 .lineLimit(1).minimumScaleFactor(0.6)
                 .frame(maxHeight: .infinity, alignment: .bottom).padding(.horizontal, 8)
         }
@@ -780,7 +803,7 @@ struct WideView: View {
                     Image(systemName: "checkmark")
                     Text(last.name + tr(" hotovo", " done")).lineLimit(1)
                 }
-                .font(.system(size: 12, weight: .semibold)).foregroundStyle(C.green)
+                .font(.system(size: 12, weight: .semibold)).foregroundStyle(C.green).widgetAccentable()
                 let added = today?.strain.training
                 Text(Days.join([last.minutes.map(Days.minutes), added.map(addedStrain)]))
                     .font(.system(size: 15, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
@@ -790,8 +813,8 @@ struct WideView: View {
                 }
             } else if let next {
                 HStack(spacing: 4) {
-                    Image(systemName: Days.sport(next.sport)).foregroundStyle(C.amber)
-                    Text(next.name).foregroundStyle(C.amber).lineLimit(1).minimumScaleFactor(0.75)
+                    Image(systemName: Days.sport(next.sport)).foregroundStyle(C.amber).widgetAccentable()
+                    Text(next.name).foregroundStyle(C.amber).widgetAccentable().lineLimit(1).minimumScaleFactor(0.75)
                     Spacer(minLength: 2)
                     if next.date == key, let start = Days.at(next.time, on: key), start > entry.date, start.timeIntervalSince(entry.date) <= 3 * 3600 {
                         (Text(tr("za ", "in ")) + Text(timerInterval: entry.date...start, countsDown: true, showsHours: true))
@@ -813,7 +836,7 @@ struct WideView: View {
                     .padding(.top, 3)
                 }
             } else {
-                Text(tr("Trénink", "Workout")).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.amber)
+                Text(tr("Trénink", "Workout")).font(.system(size: 12, weight: .semibold)).foregroundStyle(C.amber).widgetAccentable()
                 Text(tr("Tento týden už nic", "Nothing left this week")).font(.system(size: 14)).foregroundStyle(C.muted)
             }
         }
@@ -828,7 +851,7 @@ struct WideView: View {
         let rows: [(String, WatchSnapshot.Macro?, Color)] = [(tr("S", "C"), food?.carbs, C.carbs), (tr("B", "P"), food?.protein, C.protein), (tr("T", "F"), food?.fat, C.fat)]
         return VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Image(systemName: "fork.knife").foregroundStyle(C.carbs)
+                Image(systemName: "fork.knife").foregroundStyle(C.carbs).widgetAccentable()
                 Group {
                     if food?.kcal == nil {
                         Text(tr("Jídlo", "Food"))
@@ -838,7 +861,8 @@ struct WideView: View {
                         Text(Days.thousands(kcal) + " kcal")
                     }
                 }
-                .foregroundStyle(target > 0 && kcal >= target ? C.green : C.carbs)
+                .foregroundStyle(target > 0 && kcal > target ? C.amber : target > 0 && kcal >= target ? C.green : C.carbs)
+                .widgetAccentable()
                 .lineLimit(1).minimumScaleFactor(0.8)
                 Spacer(minLength: 2)
                 if target > 0 { Text(tr("z ", "of ") + Days.thousands(target)).font(.system(size: 10)).foregroundStyle(C.muted) }
@@ -865,8 +889,8 @@ struct WideView: View {
         let v = Small.value(.drinks, entry.snapshot, at: entry.date)
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
-                Image(systemName: "drop.fill").foregroundStyle(v.color)
-                Text(tr("Pití", "Drinks")).foregroundStyle(v.color)
+                Image(systemName: v.symbol == "checkmark" ? "checkmark" : "drop.fill").foregroundStyle(v.color).widgetAccentable()
+                Text(tr("Pití", "Drinks")).foregroundStyle(v.color).widgetAccentable()
                 Spacer()
                 Text(v.text).foregroundStyle(.white)
             }
@@ -901,7 +925,7 @@ struct WideView: View {
                     Text(tr("Noc", "Night"))
                 }
             }
-            .font(.system(size: 12, weight: .semibold)).foregroundStyle(C.indigo).lineLimit(1)
+            .font(.system(size: 12, weight: .semibold)).foregroundStyle(C.indigo).widgetAccentable().lineLimit(1)
             NightLine(now: entry.date, bed: bed, wake: wake)
                 .frame(height: 11)
                 .padding(.top, 2)
@@ -955,7 +979,9 @@ struct Line: View {
 }
 
 /// From the morning (7:00) to the bedtime and on to the wake time, with a
-/// white dot where now is: the day dim, the night from indigo to amber.
+/// white dot where now is: the day dim, the night from indigo to amber. The
+/// dot sits in a gap cut out of the line, so on a tinted or clear face (all
+/// one colour) it still shows.
 struct NightLine: View {
     let now: Date
     let bed: Date?
@@ -984,10 +1010,14 @@ struct NightLine: View {
                 Capsule().fill(LinearGradient(colors: [C.indigo, C.amber], startPoint: .leading, endPoint: .trailing))
                     .frame(width: max(0, w - bedX), height: 5)
                     .offset(x: bedX)
+                    .widgetAccentable()
+                Circle().frame(width: 13, height: 13)
+                    .offset(x: x(now) - 6.5)
+                    .blendMode(.destinationOut)
                 Circle().fill(.white).frame(width: 9, height: 9)
-                    .overlay { Circle().stroke(.black, lineWidth: 2) }
                     .offset(x: x(now) - 4.5)
             }
+            .compositingGroup()
             .frame(height: g.size.height)
         }
     }
