@@ -108,12 +108,8 @@ import { reviewRefusal, isReviewAccount } from "./app-review.js";
 import { updateFitnessEstimate } from "./own-vo2max-store.js";
 import { ensureReviewSample } from "./review-sample.js";
 import { handleNativeAppleLogin, forgetUsedAppleTokens } from "./apple-login.js";
-<<<<<<< HEAD
 import { chatContext, appendChatTurnIds, listChats, readChat, deleteChat, startChatWithCoach, ownedChat, saveAnswerFeedback } from "./assistant-chats.js";
-import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedReplyPush } from "./coach-push-reply.js";
-=======
 import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedReplyPush, foreignPushReply } from "./coach-push-reply.js";
->>>>>>> origin/main
 import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
 import { coachEvalPrincipal, handleCoachEval } from "./coach-eval.js";
