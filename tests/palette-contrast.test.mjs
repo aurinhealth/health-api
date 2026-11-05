@@ -24,3 +24,8 @@ test('muted is 4.5:1 on every surface and section glow, faint on every surface',
     }
   }
 });
+
+test("the website's --muted is the app's light muted (docs/website-follows-app.md)", () => {
+  const web = readFileSync(new URL('../src/design-system.js', import.meta.url), 'utf8');
+  assert.equal(parseInt(/--muted:#([0-9A-Fa-f]{6})/.exec(web)[1], 16), token('muted').light);
+});

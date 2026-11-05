@@ -266,6 +266,7 @@ final class SnapshotTests: XCTestCase {
             Units.setSystem("metric")
         }
         XCTAssertEqual(L10n.tr("Spánek"), "Sleep")
+        XCTAssertEqual(Fmt.monthTitleSpoken("2026-11-05"), "November 2026, week 45")
         XCTAssertEqual(L10n.tr("text bez překladu"), "text bez překladu")
         XCTAssertEqual(L10n.plural("dní", 5), "days")
         XCTAssertEqual(Units.weightText(100, digits: 0), "220 lb")

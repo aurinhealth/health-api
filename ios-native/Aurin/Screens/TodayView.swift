@@ -237,7 +237,9 @@ struct DataAgePill: View {
                     .padding(.horizontal, 10)
                     .frame(height: 26)
                     .background(Palette.amberSoft, in: Capsule())
-                    .tapTarget(width: 44, height: 26)
+                    // 44 pt to tap, grown only downwards: the week strip's days
+                    // sit right above it.
+                    .padding(.bottom, 18).contentShape(Rectangle()).padding(.bottom, -18)
                 }
                 .buttonStyle(.plain)
                 .disabled(model.loading || health.syncing)
@@ -473,7 +475,6 @@ struct HeaderIcon: View {
                 .padding(.horizontal, Self.padding)
                 .frame(height: 42)
                 .contentShape(Rectangle())
-                .tapTarget(width: 44, height: 42)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.tr(label))
