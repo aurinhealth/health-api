@@ -116,6 +116,8 @@
     // (src/ai-total.js): per account in the group (paying ones 0.5 USD, the free week
     // half, TestFlight 75 % up to 20, accounts without a purchase older than a week half,
     // up to 30) or fixed where accounts cost nothing to make (new accounts, the server).
+    // A full group stops only its accounts past perAccount today; the rest go on up to
+    // twice the brake. A fixed brake stops the whole group.
     // The owner hears once a day when a group passes half of its brake.
     "AI_GROUP_BRAKES": {
       "paid": { "perAccount": 0.5, "min": 10 },

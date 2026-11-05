@@ -1,5 +1,5 @@
 import {assertAIAccess} from './subscription.js';
-import { assertAiTotal } from './ai-total.js';
+import { assertAiTotal, addAiSpend } from './ai-total.js';
 import { weekCheckForCoach } from './week-check.js';
 import { buildCyclingCoachV2, CYCLING_COACH_V2_META, engineForAI } from "./cycling-coach-v2.js";
 import { cycleShared } from "./cycle-model.js";
@@ -413,19 +413,23 @@ export function aiFailureText(status){return 'AI '+status+': '+(status===429?L('
 // fall back to its own words waits briefly instead of the full 90 s.
 export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null, reasoningEffort = 'low',onText=null,feature=null,timeoutMs=null,slotWaitMs=undefined }) {
   await assertAIAccess(env);
-  // All users together under the day's emergency brake (ai-total.js).
-  await assertAiTotal(env);
   if (!env.OPENAI_API_KEY) throw new Error(L('AI teď není dostupná.', 'AI isn\'t available right now.'));
   // Refused at once when the limit is already spent, then checked again with
   // the slot held: the calls running beside this one count at their reservation.
   await assertAiAllowance(env,feature);
   const reserveUsd=estimateAiCostUsd(model||env.OPENAI_MODEL||'gpt-6-sol',{instructions,input,maxOutputTokens,tools});
-  const release=await claimAiSlot(env,{feature,reserveUsd,...(slotWaitMs!=null?{waitMs:slotWaitMs}:{})});
+  // All users together and the account's group (ai-total.js) hold the call
+  // while it runs; a call that ends without a cost gives the hold back.
+  const hold=await assertAiTotal(env,{reserveUsd});
   try{
-    await assertAiAllowance(env,feature,{exceptId:release.id});
-    return await openAIResponse(env,{instructions,input,maxOutputTokens,tools,format,model,reasoningEffort,onText,feature,timeoutMs,slotId:release.id});
+    const release=await claimAiSlot(env,{feature,reserveUsd,...(slotWaitMs!=null?{waitMs:slotWaitMs}:{})});
+    try{
+      await assertAiAllowance(env,feature,{exceptId:release.id});
+      return await openAIResponse(env,{instructions,input,maxOutputTokens,tools,format,model,reasoningEffort,onText,feature,timeoutMs,slotId:release.id,hold});
+    }
+    finally{await release();}
   }
-  finally{await release();}
+  finally{await addAiSpend(env,0,hold);}
 }
 
 // A busy or briefly failing OpenAI (429, 5xx, a dropped connection) is asked
@@ -457,10 +461,10 @@ const retryWait=(ms,signal)=>new Promise((resolve,reject)=>{
   signal.addEventListener('abort',()=>{clearTimeout(timer);reject(signal.reason);},{once:true});
 });
 
-async function openAIResponse(env, { instructions, input, maxOutputTokens, tools, format, model, reasoningEffort, onText, feature, timeoutMs, slotId }) {
+async function openAIResponse(env, { instructions, input, maxOutputTokens, tools, format, model, reasoningEffort, onText, feature, timeoutMs, slotId, hold }) {
   const chosenModel=model || env.OPENAI_MODEL || 'gpt-6-sol';
   // Sent but broken off with no usage: the call counts at its reservation.
-  const broken=async error=>{await keepAiReservation(env,slotId,{feature,model:chosenModel});throw error;};
+  const broken=async error=>{await keepAiReservation(env,slotId,{feature,model:chosenModel,hold});throw error;};
   const response = await fetchOpenAI(env, {
     signal:AbortSignal.timeout(timeoutMs||timeoutFor(maxOutputTokens)),
     body:JSON.stringify({
@@ -481,10 +485,10 @@ async function openAIResponse(env, { instructions, input, maxOutputTokens, tools
   // A stream that fails after generation started still cost tokens (A8a): the
   // usage the failure event carried is recorded before the error goes on.
   try{data=onText?await readOpenAIStream(response,onText):await response.json();}
-  catch(error){if(!error?.usage)return broken(error);await recordAiUsage(env,{feature,model:error.model||chosenModel,usage:error.usage,webSearches:0,slotId}).catch(()=>{});throw error;}
+  catch(error){if(!error?.usage)return broken(error);await recordAiUsage(env,{feature,model:error.model||chosenModel,usage:error.usage,webSearches:0,slotId,hold}).catch(()=>{});throw error;}
   // Web searches are billed per call; a failed one is not.
   const webSearches=(data.output||[]).filter(item=>item.type==='web_search_call'&&item.status!=='failed').length;
-  await recordAiUsage(env,{feature,model:data.model||chosenModel,usage:data.usage,webSearches,slotId});
+  await recordAiUsage(env,{feature,model:data.model||chosenModel,usage:data.usage,webSearches,slotId,hold});
   const incomplete=data.status==='incomplete';
   const text = data.output?.flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n') || data.output_text || data.streamedText;
   if (!text) throw new Error(incomplete?L('Odpověď AI byla moc dlouhá a nedokončila se. Zkus zadání zúžit.', 'The AI answer ran too long and was cut off. Try a narrower request.'):L('AI nevrátila odpověď.', 'The AI didn\'t return an answer.'));

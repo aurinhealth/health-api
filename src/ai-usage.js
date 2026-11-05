@@ -73,11 +73,12 @@ export const CARRIED_MONTH_FEATURE = "carried-over-month";
 // Today's spending under the daily guard: everything but the coach chat (and a
 // carried-over month).
 // A running call counts at its reservation (claimAiSlot); exceptId leaves one
-// row out, the call that is asking.
-export async function aiSpentToday(env, { exceptId = 0 } = {}) {
+// row out, the call that is asking. coachChat: the coach chat too (a group's
+// share of one account, ai-total.js).
+export async function aiSpentToday(env, { exceptId = 0, coachChat = false } = {}) {
   if (!tracked(env)) return 0;
   await ensureAiUsage(env.DB);
-  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day = ? AND COALESCE(feature, '') NOT IN (?, ?) AND id != ?").bind(env.USER_ID, await limitToday(env), COACH_CHAT_FEATURE, CARRIED_MONTH_FEATURE, Number(exceptId) || 0).first();
+  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day = ? AND COALESCE(feature, '') NOT IN (?, ?) AND id != ?").bind(env.USER_ID, await limitToday(env), coachChat ? CARRIED_MONTH_FEATURE : COACH_CHAT_FEATURE, CARRIED_MONTH_FEATURE, Number(exceptId) || 0).first();
   return Math.round(Number(row?.spent || 0) * 1e5) / 1e5;
 }
 
@@ -172,16 +173,19 @@ function limitError(message) {
 
 // A call that broke off after it was sent (a stream cut short, a timeout, a
 // lost connection) leaves no usage, yet the model may have worked on it:
-// its reservation stays as its cost. Best effort, as recordAiUsage.
-export async function keepAiReservation(env, slotId, { feature = null, model = null } = {}) {
+// its reservation stays as its cost, in the account and in the day's and the
+// group's totals (`hold`, ai-total.js). Best effort, as recordAiUsage.
+export async function keepAiReservation(env, slotId, { feature = null, model = null, hold = null } = {}) {
+  if (hold) hold.done = true;
   if (!tracked(env) || !slotId) return;
   await env.DB.prepare("UPDATE ai_usage SET feature = ?, model = ? WHERE id = ? AND user_id = ? AND model = 'pending'")
     .bind(feature, model || "unknown", slotId, env.USER_ID).run().catch(error => console.error("AI reservation not kept", error?.message || error));
 }
 
 // Best effort: a failed write never costs the user the answer. slotId: the
-// call's pending row (claimAiSlot), which becomes the record.
-export async function recordAiUsage(env, { feature = null, model = null, usage = null, webSearches = 0, slotId = null } = {}) {
+// call's pending row (claimAiSlot), which becomes the record; hold: what the
+// call held in the day's and the group's totals (assertAiTotal).
+export async function recordAiUsage(env, { feature = null, model = null, usage = null, webSearches = 0, slotId = null, hold = null } = {}) {
   if (!tracked(env) || !usage) return;
   try {
     await ensureAiUsage(env.DB);
@@ -189,7 +193,7 @@ export async function recordAiUsage(env, { feature = null, model = null, usage =
     const cost = usageCost(model, usage, webSearches) ?? usageCost("gpt-6-sol", usage, webSearches) ?? 0;
     const values = [feature, model, n(usage.input_tokens) || 0, n(usage.output_tokens) || 0, cost, cachedTokens(usage)];
     // All users' total of the day (ai-total.js), the owner's included.
-    await addAiSpend(env, cost);
+    await addAiSpend(env, cost, hold);
     if (slotId) {
       const settled = await env.DB.prepare("UPDATE ai_usage SET feature = ?, model = ?, input_tokens = ?, output_tokens = ?, cost_usd = ?, cached_tokens = ? WHERE id = ? AND user_id = ? AND model = 'pending'")
         .bind(...values, slotId, env.USER_ID).run();
