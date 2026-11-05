@@ -71,7 +71,7 @@ import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
 import { grantedExtras } from "./google-scopes.js";
 import { renderForEnvironment, MAX_MINUTES } from "./workout-model.js";
 import { plannedEventWorkout } from "./planned-detail.js";
-import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, freeMinutes, roleTime, usualFor, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, hrvSourceRows, weeklyRunCap, capRunVolume, committedRunMinutes } from "./week-planner.js";
+import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, freeMinutes, roleTime, usualFor, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, hrvTrend, hrvSourceRows, weeklyRunCap, capRunVolume, committedRunMinutes } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { saveCalendarFree, clearCalendarFree } from './calendar-free.js';
 import { getCheckin, readinessCheckin, saveCheckin } from './morning-checkin.js';
@@ -79,7 +79,7 @@ import { getChecks, upcomingTest } from './threshold-check.js';
 import { saveSportChoice, sportExclusion, suggestedSports } from './sport-choice.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories } from './athlete-state.js';
 import { recentNotes, earlierToday, chatSummary, coachNoteDays, queueDayNote, summarizeChatStart, forgetNote, usersWithNotesDue, runCoachNotes } from './coach-notes.js';
-import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planWorkoutId, planChanges, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
+import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planWorkoutId, planChanges, planRedMorning, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
 import { chatLibraryQuery, askedSession } from './chat-ask.js';
 import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
@@ -159,7 +159,7 @@ import { readDaysTogether } from "./day-reads.js";
 import { shiftDate, googleHealthFor, dashboardProfile, mondayOfDate, dayStartSql, mapLimit, userWeekStart } from "./dashboard-shared.js";
 import { recentCoachProposals, ensureCoachInboxTable } from "./coach-inbox.js";
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
-import { planningHistory, triathlonHistory, planForWeek, syncedPlans, planSportDates, planSportMinutes, todayPlace, trainingGymPlans, weightKg } from "./plan-context.js";
+import { planningHistory, triathlonHistory, planForWeek, planTrendCheck, syncedPlans, planSportDates, planSportMinutes, todayPlace, trainingGymPlans, weightKg } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor } from "./coach-ride-reviews.js";
 import { planComplianceRoute } from "./plan-compliance-route.js";
 import { activityCompareRoute } from "./activity-compare.js";
@@ -1064,6 +1064,12 @@ async function computeWeekTargets(env,ctx,start,prefs,{original=false}={}){
     if(plan.plan&&targets.status!=='ok')targets=estimatedTargets(roles,start,today,days);
     return capWeekTargets(capRunVolume(p.apply(targets),runCap,runCommitted),prefs,[],weather);
   };
+  // Monday: the plan follows the trend of the week before (planTrendCheck); changed, the week is built again.
+  if(plan.plan&&start===mondayOfDate(today)&&!(plan.plan.trendChecked>=start)&&!plan.plan.proposal){
+    const rows=hrvSourceRows(wellness,(await googleHealthFor(env,ctx,today).catch(()=>({})))?.wellness,start);
+    const changed=await planTrendCheck(env,plan.plan,start,{hrvDown,hrv:hrvDown?hrvTrend(rows,start,wellness):null}).catch(()=>null);
+    if(changed)return computeWeekTargets(env,ctx,start,prefs,{original});
+  }
   const targets=build(plan);
   return original&&plan.original?{...targets,original:build(plan.original).items}:targets;
 }
@@ -1160,6 +1166,16 @@ async function planResult(env,ctx,today){
   const completion=planCompletion(plan,{days:sportDays(prefs.days,plan),doneDates,today:shiftDate(end,1)});
   const next=planTemplates().filter(t=>t.sport===plan.sport&&t.id!==template.id&&!t.race).slice(0,2).map(t=>({id:t.id,name:t.name,goal:t.goal}));
   return {id:plan.id,templateId:template.id,name:template.name,sport:plan.sport,startDate:plan.firstDay||plan.startDate,endDate:plan.endDate,ftpStart:plan.sport==='swim'?null:plan.start?.ftp??null,ftpEnd:plan.sport==='swim'?null:Number(thresholds.ftp)||null,...(plan.sport==='swim'&&plan.start?.css&&Number(thresholds.swimCss)>0?{cssStart:plan.start.css,cssEnd:Math.round(Number(thresholds.swimCss))}:{}),ctlStart:plan.start?.ctl??null,ctlEnd:ctl,sessionsDone:doneDates.length,sessionsPlanned:plan.start?.sessions??null,minutesDone:Math.round(minutes),minutesPlanned:plan.start?.minutes??null,completion,weeks:templateSummary(template,template.choose?planSports(plan):null).weeks,next};
+}
+// A red morning: today's key session of the plan swaps with an easy day
+// ahead (training-plans.js planRedMorning). Checked once a day, after Today
+// has answered; the plan is read again after the week's targets (its review).
+async function planRedCheck(env,ctx,date,readiness){
+  const targets=await computeWeekTargets(env,ctx,mondayOfDate(date)).catch(()=>null),plan=(await syncedPlans(env,date).catch(()=>({}))).active;
+  if(!plan||plan.redChecked===date||plan.pauseFrom)return;
+  const done=await planSportDates(env,plan,date,shiftDate(date,1)).catch(()=>[]),hrv=readiness?.components?.hrv;
+  const moved=!done.length&&targets?planRedMorning(plan,targets,date,{hrv:hrv?.value,low:hrv?.low,high:hrv?.high,sleep:readiness?.night?.durationMin}):null;
+  await savePlanState(env.DB,{...(moved||plan),redChecked:date});
 }
 // What the active plan asks the athlete about now (training-plans.js): an
 // answer pending (back from a break, last week's key sessions missed) or a key
@@ -2066,6 +2082,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       else if(request.method!=='GET')return Response.json({message:'Method not allowed'},{status:405});
       const {active,gym}=await syncedPlans(env,today);
       let summary=active?planSummary(active,today):null,gymSummary=gym?planSummary(gym,today):null,finished=null,finishedGym=null;
+      // A change the plan made on its own (a lighter week sooner, a level up): its card on the plan's screen too.
+      if(summary&&active.proposal?.applied)summary.proposal=proposalView(active.proposal,active,today);
       if(summary?.started){
         const prefs=await getWeekPlan(env.DB).catch(()=>({}));
         summary.completion=planCompletion(active,{days:sportDays(prefs.days,active),doneDates:await planSportDates(env,active,active.startDate,mondayOfDate(today)).catch(()=>[]),today});
@@ -2160,7 +2178,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           w.steps=athleteSteps(structure,x.sport,w.environment,thresholds);
           workout={id:w.id,name:planName(w.name),sport:w.sport,environment:w.environment,duration_minutes:w.duration_minutes,target_load:w.target_load,intensity_factor:w.intensity_factor,description:w.description,steps:w.steps};
         }
-        sessions.push({date:x.date,sport:x.sport,label:planName(x.label),kind:x.plan.kind,minutes:x.minutes,workoutId:x.plan.workoutId,workout,done:done.has(x.date),editable:x.date>=today&&!done.has(x.date),edited:Boolean(plan.edits?.[x.plan.movedFrom||x.date]),...(x.plan.change?{change:x.plan.change}:{})});
+        sessions.push({date:x.date,sport:x.sport,label:planName(x.label),kind:x.plan.kind,minutes:x.minutes,workoutId:x.plan.workoutId,workout,done:done.has(x.date),editable:x.date>=today&&!done.has(x.date),edited:Boolean(plan.edits?.[x.plan.movedFrom||x.date])&&plan.edits[x.plan.movedFrom||x.date].auto!=='red',...(x.plan.change?{change:x.plan.change}:{})});
       }
       // This week's free time by weekday ("Time this week"), and whether it is its own.
       const weekPrefs=await getWeekPlan(env.DB,monday,{calendar:false}).catch(()=>null);
@@ -2660,10 +2678,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       ]);
       // The active training plan in one line (training-plans.js).
       const active=synced.active??synced.gym,summary=active?planSummary(active,date):null;
-      const trainingPlan=summary?.started?{name:summary.name,week:summary.week,weeksCount:summary.weeksCount,phaseLabel:summary.phaseLabel,raceDate:summary.raceDate,paused:summary.paused,canUndo:Boolean(active.undo),proposal:proposal?{type:proposal.type,title:proposal.title,text:proposal.text,options:proposal.options,days:proposal.days||null,button:proposal.button}:null}:null;
+      const trainingPlan=summary?.started?{name:summary.name,week:summary.week,weeksCount:summary.weeksCount,phaseLabel:summary.phaseLabel,raceDate:summary.raceDate,paused:summary.paused,canUndo:Boolean(active.undo),proposal:proposal?{type:proposal.type,title:proposal.title,text:proposal.text,options:proposal.options,days:proposal.days||null,button:proposal.button,...(proposal.headline?{headline:proposal.headline,keep:proposal.keep}:{}),...(proposal.chart?{chart:proposal.chart}:{})}:null}:null;
       // Connected services that need the user (access refused, Google permissions missing), shown at the top of Today.
       const problems=connectionProblems(status);
       if(date===localToday()&&profile)ctx.waitUntil(lockReadiness(env.DB,{date,health,fitness,sleep,profile}).catch(()=>false));
+      // A red morning moves today's key session of the plan (planRedCheck), once a day.
+      if(isToday&&synced.active&&synced.active.redChecked!==date&&!synced.active.pauseFrom){
+        const readiness=readinessFor({date,google:health?.wellness||[],intervals:fitness?.wellness||[],sessions:sleep?.sessions||[],profile:profile||{},checkin});
+        if(readiness?.zone==='red')ctx.waitUntil(planRedCheck(env,ctx,date,readiness).catch(()=>null));
+      }
       // The morning push's advice (push.js), so Today's coach card says the same.
       const morning=isToday?await Promise.all([getAthleteState(env.DB).catch(()=>null),morningContext(env,{date,health,fitness,sleep,profile,doses:training,tomorrowDaily:tomorrow})])
         .then(([state,m])=>({...m,athleteState:state?.status||null,context:m.context?{...m.context,memories:usedMemories(state)}:null})).catch(()=>null):null;

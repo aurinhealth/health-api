@@ -11,7 +11,7 @@ import { getWeekPlan, planWeekRoles, roleTime, planRoleOptions } from "./week-pl
 import { getAthleteState } from "./athlete-state.js";
 import { loadProfiles } from "./profile-suggestions.js";
 import { sportKinds } from "./athlete-focus.js";
-import { reviewPlan, planWeek, planQuality, planLoad, applyPlan, activePlan, planSports, planDoneSports, planOriginal } from "./training-plans.js";
+import { reviewPlan, planWeek, planQuality, planLoad, applyPlan, activePlan, planSports, planDoneSports, planOriginal, planTrend, savePlanState } from "./training-plans.js";
 import { weekWeather, dayHours } from "./adaptive-week.js";
 import { weatherKitConfigured, weatherKitDetail } from "./weatherkit.js";
 import { ensureGymPlans } from "./gym-plan-store.js";
@@ -84,6 +84,28 @@ export async function planSportMinutes(env,of,from,to){
   const sports=planDoneSports(of);
   const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(from,-1),shiftDate(to,1)).all()).results||[];
   return dedupeActivities(rows.map(activityFromRow)).filter(a=>a&&sports.includes(a.kind)&&a.date>=from&&a.date<to).reduce((sum,a)=>sum+(Number(a.minutes)||0),0);
+}
+// Monday's look at the trend (training-plans.js trendProposal), once a week:
+// with HRV down only the card's numbers; otherwise whether every key session
+// of the last three weeks was done (a read of the activities, three of the
+// week plans) and how hard they felt (one read of the ratings). Returns the
+// plan when it changed, else null.
+export async function planTrendCheck(env,plan,monday,{hrvDown=false,hrv=null}={}){
+  if(!plan||plan.trendChecked>=monday||plan.proposal||plan.pauseFrom||plan.sport==='gym')return null;
+  let keysDone=false,rpe=[];
+  if(!hrvDown){
+    const from=shiftDate(monday,-21),[done,keys,rows]=await Promise.all([
+      planSportDates(env,plan,from,monday).catch(()=>[]),
+      Promise.all([1,2,3].map(k=>planKeyDates(env,plan,shiftDate(monday,-7*k)).catch(()=>[]))),
+      env.DB.prepare("SELECT rpe FROM workout_feedback WHERE user_id=? AND survey<>'auto_completed' AND rpe IS NOT NULL AND scheduled_date>=? AND scheduled_date<?").bind(env.USER_ID,from,monday).all().then(r=>r.results||[]).catch(()=>[])
+    ]);
+    const all=keys.flat();
+    keysDone=keys.every(k=>k.length>0)&&all.every(d=>done.includes(d));
+    rpe=rows.map(r=>Number(r.rpe));
+  }
+  const next=planTrend(plan,monday,{hrvDown,hrv,keysDone,rpe});
+  await savePlanState(env.DB,next);
+  return next.proposal?next:null;
 }
 // The key days (quality, test, long) the plan put in a week.
 export async function planKeyDates(env,plan,monday){

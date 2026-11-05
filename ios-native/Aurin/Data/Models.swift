@@ -79,6 +79,18 @@ struct TodaySnapshot: Decodable, Equatable {
         /// For a missed session: the days left in the week.
         let days: [String]?
         let button: String
+        /// A change the plan made already (a lighter week sooner, a level up):
+        /// the headline, the button that puts the plan back and, for the
+        /// lighter week, the last 14 mornings of HRV with the normal band.
+        var headline: String? = nil
+        var keep: String? = nil
+        var chart: Chart? = nil
+
+        struct Chart: Decodable, Equatable {
+            let values: [Double?]
+            let low: Double
+            let high: Double
+        }
     }
 
     struct Readiness: Decodable, Equatable {

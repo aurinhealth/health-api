@@ -253,3 +253,59 @@ test("every changed session says why and what it was", async () => {
   assert.equal(c.plan.change.kind, "shorter");
   assert.match(c.plan.change.line, /30 min/);
 });
+
+test("the plan follows the trend: a lighter week sooner, a level up, a red morning", async () => {
+  const { planTrend, planChoice, planChanges, planOriginal, planRedMorning, proposalView, planEdit } = await import("../src/training-plans.js");
+  const plan = { templateId: "run-10k", startDate: monday, raceDate: "2026-12-20", raceKm: 10 };
+  const targets = (p, start) => { const pw = planWeek(p, start); return applyPlan(weekTargets({ roles: planWeekRoles(days, { quality: planQuality(pw), prefer: "run" }), ctl: 50, days: [], today: start, weekStart: start, plan: planLoad(pw) }), p, start, { thresholdPace: 280 }); };
+  const template = getTemplate("run-10k"), recovery = template.weeks.findIndex((w, i) => i > 0 && w.phase === "recovery");
+  const now = week(recovery - 1), build = planWeek(plan, now);
+  assert.ok(!["recovery", "taper", "race"].includes(build.spec.phase));
+  // HRV below normal: the recovery week a week ahead comes now, applied at once and said so.
+  const hrv = { below: 5, values: Array(14).fill(50), low: 52, high: 64, sleep: 370 };
+  const lighter = planTrend(plan, now, { hrvDown: true, hrv });
+  assert.equal(lighter.proposal.type, "lighter");
+  assert.equal(planWeek(lighter, now).spec.phase, "recovery");
+  assert.equal(planWeek(lighter, now).week, recovery);
+  assert.equal(planWeek(lighter, week(recovery)).spec.phase, build.spec.phase);
+  // The race day stays.
+  assert.equal(lighter.raceDate, plan.raceDate);
+  const view = proposalView(lighter.proposal, lighter, now);
+  assert.match(view.text, /5 dní z posledních 7/);
+  assert.match(view.text, /6 h 10 min/);
+  assert.equal(view.chart.low, 52);
+  // Its sessions say what they were.
+  const changed = planChanges(targets(lighter, now).items, targets(planOriginal(lighter), now).items, lighter, now).filter(x => x.plan?.change);
+  assert.ok(changed.length >= 1 && changed.every(x => x.plan.change.kind === "easier" && /^Bylo: /.test(x.plan.change.line)));
+  // "Keep the plan" puts it back, checked for this week so not asked again.
+  const kept = planChoice(lighter, lighter.proposal, "keep", { today: now });
+  assert.equal(kept.pulled ?? null, null);
+  assert.equal(kept.proposal, null);
+  assert.equal(kept.trendChecked, now);
+  assert.equal(planChoice(lighter, lighter.proposal, "ok", { today: now }).pulled.at, now);
+  // Nothing in a recovery week, without a recovery week ahead, or already asked.
+  assert.equal(planTrend(plan, week(recovery), { hrvDown: true, hrv }).proposal, undefined);
+  // Every key session done and easy, HRV steady: next week one level up.
+  const steady = planTrend(plan, week(1), { keysDone: true, rpe: [6, 5, 6.5] });
+  assert.equal(steady.proposal?.type, "harder");
+  assert.equal(steady.stepUp.from, week(2));
+  assert.equal(planTrend(plan, week(1), { keysDone: true, rpe: [8, 7, 7] }).proposal, undefined);
+  assert.equal(planTrend(plan, week(1), { keysDone: false, rpe: [5, 5, 5] }).proposal, undefined);
+  const up = planChanges(targets(steady, week(2)).items, targets(planOriginal(steady), week(2)).items, steady, week(2)).filter(x => x.plan?.change);
+  assert.ok(up.some(x => x.plan.change.kind === "harder"));
+  // A red morning: today's key session swaps with an easy day ahead; it stays there.
+  const runDays = [["run"], [], ["run"], ["run"], [], ["run"], ["run"]];
+  const t2 = (p, start) => { const pw = planWeek(p, start); return applyPlan(weekTargets({ roles: planWeekRoles(runDays, { quality: planQuality(pw), prefer: "run" }), ctl: 50, days: [], today: start, weekStart: start, plan: planLoad(pw) }), p, start, { thresholdPace: 280 }); };
+  const start = week(2), key = t2(plan, start).items.filter(x => x.sport === "run" && x.plan?.kind === "quality")[1];
+  const red = planRedMorning(plan, t2(plan, start), key.date, { hrv: 38, low: 52, high: 64, sleep: 320 });
+  assert.equal(red.edits[key.date].auto, "red");
+  const after = planChanges(t2(red, start).items, t2(planOriginal(red), start).items, red, start);
+  const today = after.find(x => x.sport === "run" && x.date === key.date), moved = after.find(x => x.sport === "run" && x.date === red.edits[key.date].to);
+  assert.equal(today.plan.change.kind, "easier");
+  assert.match(today.plan.change.text, /HRV 38 ms/);
+  assert.equal(moved.plan.change.kind, "moved");
+  assert.equal(moved.label, key.label);
+  assert.throws(() => planEdit(red, { date: key.date, op: "reset" }, key.date));
+  // Already moved that day: nothing more.
+  assert.equal(planRedMorning(red, t2(red, start), key.date), null);
+});

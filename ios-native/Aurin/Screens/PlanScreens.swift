@@ -662,13 +662,15 @@ struct ActivePlanContent: View {
     @State private var allWeeks = false
 
     var body: some View {
-        let phase = active.template.weeks.first { $0.week == active.week }?.phaseLabel ?? ""
+        // This week's phase as the plan has it now (a recovery week moved sooner says so).
+        let phase = active.phaseLabel ?? active.template.weeks.first { $0.week == active.week }?.phaseLabel ?? ""
         VStack(alignment: .leading, spacing: 0) {
         SectionLabel(text: active.paused == true ? L10n.tr("pozastaveno")
                      : active.started ? L10n.f("Týden %@ z %@", String(active.week), String(active.weeksCount)) + " · " + phase
                      : L10n.f("Začíná %@", Fmt.dayMonth(active.firstDay ?? active.startDate)))
             .padding(.top, 24)
         Text(active.name).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+        if let proposal = active.proposal { PlanProposalCard(proposal: proposal, changed: reload).padding(.top, 16) }
         Card {
             PlanWeeksChart(bars: PlanWeeksChart.bars(weeks: active.template.weeks, preview: preview, active: active), current: active.started ? active.week : 0)
         }
@@ -911,11 +913,15 @@ struct PlanWeekDetail: Decodable, Equatable {
         let line: String
         let text: String
         var original: Original? = nil
+        /// Red recovery decided it: shown in rust, not amber.
+        var alert: Bool? = nil
 
         struct Original: Decodable, Equatable {
             let label: String?
             let minutes: Double?
             var date: String? = nil
+            /// A key session moved after a red morning: its new day.
+            var now: String? = nil
         }
 
         var symbol: String {
@@ -928,7 +934,8 @@ struct PlanWeekDetail: Decodable, Equatable {
         }
 
         var color: Color {
-            switch kind {
+            if alert == true { return Palette.rust }
+            return switch kind {
             case "moved", "easier": Palette.amber
             case "harder": Palette.blue
             default: Palette.muted

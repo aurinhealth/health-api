@@ -93,6 +93,8 @@ struct TrainingPlans: Decodable, Equatable {
         /// A multisport plan: its sports and their sessions a week.
         var sports: [String]? = nil
         var perSport: [String: Int]? = nil
+        /// A change the plan made on its own (a lighter week sooner, a level up): OK or keep the plan.
+        var proposal: TodaySnapshot.PlanProposal? = nil
         let template: Template
 
         func done(_ week: Int) -> Int? { completion?[String(week)] }
@@ -964,6 +966,8 @@ struct PlanProposalCard: View {
     @Environment(AppModel.self) private var model
     let proposal: TodaySnapshot.PlanProposal
     var plain = false
+    /// After an answer: the screen showing it loads again (the plan's screen).
+    var changed: () async -> Void = {}
     @State private var choice: String?
     @State private var picking = false
     @State private var busy = false
@@ -988,20 +992,33 @@ struct PlanProposalCard: View {
                     .disabled(busy)
                 }
             } else {
-                WidgetHeader(title: proposal.title, color: Palette.amberBar)
-                Text(proposal.text).font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
-                VStack(spacing: 0) {
-                    ForEach(Array(proposal.options.enumerated()), id: \.element.id) { index, option in
-                        if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                        Button { choice = option.id } label: { row(option) }.buttonStyle(.plain)
+                WidgetHeader(title: proposal.title, color: proposal.type == "harder" ? Palette.blue : Palette.amberBar)
+                if let headline = proposal.headline {
+                    // A change the plan made already (approved mockup 1-trend-misto-jednoho-rana, 3 Nov 2026).
+                    Text(headline).font(Typo.sentence(24)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                    Text(proposal.text).font(.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+                    if let chart = proposal.chart { PlanHRVChart(chart: chart) }
+                } else {
+                    Text(proposal.text).font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                }
+                if proposal.options.count > 1 {
+                    VStack(spacing: 0) {
+                        ForEach(Array(proposal.options.enumerated()), id: \.element.id) { index, option in
+                            if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                            Button { choice = option.id } label: { row(option) }.buttonStyle(.plain)
+                        }
                     }
                 }
                 HStack(spacing: 10) {
                     PrimaryButton(title: selected?.id == "pick" ? L10n.tr("Vybrat den") : proposal.button, busy: busy) {
-                        if selected?.id == "pick" { picking = true } else { Task { await apply(selected) } }
+                        if selected?.id == "pick" { picking = true } else if proposal.keep != nil { Task { await send(["choice": .string("ok")], done: nil) } } else { Task { await apply(selected) } }
                     }
-                    SecondaryButton(title: "Nechat") { Task { await send(["choice": .string("keep")], done: nil) } }
-                        .frame(width: 120)
+                    if let keep = proposal.keep {
+                        SecondaryButton(title: keep) { Task { await send(["choice": .string("keep")], done: nil) } }
+                    } else {
+                        SecondaryButton(title: "Nechat") { Task { await send(["choice": .string("keep")], done: nil) } }
+                            .frame(width: 120)
+                    }
                 }
                 .disabled(busy || model.demo)
             }
@@ -1050,6 +1067,7 @@ struct PlanProposalCard: View {
             error = nil
             if let label { done = label } else { await model.refresh() }
             await model.refreshTraining()
+            await changed()
         } catch {
             self.error = error.localizedDescription
         }
@@ -1066,6 +1084,40 @@ struct PlanProposalCard: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+/// The last 14 mornings of HRV against the athlete's normal band: the line
+/// turns amber where it runs below the band.
+struct PlanHRVChart: View {
+    let chart: TodaySnapshot.PlanProposal.Chart
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            GeometryReader { geo in
+                let known = chart.values.compactMap { $0 }
+                let lo = min(chart.low, known.min() ?? chart.low) * 0.92, hi = max(chart.high, known.max() ?? chart.high) * 1.05
+                let y: (Double) -> CGFloat = { v in geo.size.height * CGFloat(1 - (v - lo) / max(1, hi - lo)) }
+                let x: (Int) -> CGFloat = { i in geo.size.width * CGFloat(i) / CGFloat(max(1, chart.values.count - 1)) }
+                ZStack(alignment: .topLeading) {
+                    Rectangle().fill(Palette.track).frame(height: max(2, y(chart.low) - y(chart.high))).offset(y: y(chart.high))
+                    ForEach(Array(chart.values.indices.dropLast()), id: \.self) { i in
+                        if let a = chart.values[i], let b = chart.values[i + 1] {
+                            Path { p in p.move(to: CGPoint(x: x(i), y: y(a))); p.addLine(to: CGPoint(x: x(i + 1), y: y(b))) }
+                                .stroke(b < chart.low ? Palette.amberBar : Palette.muted, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        }
+                    }
+                }
+            }
+            .frame(height: 64)
+            HStack {
+                Text(verbatim: "HRV · " + L10n.plural("%lld dní", chart.values.count)).font(Typo.caption).foregroundStyle(Palette.muted)
+                Spacer()
+                Text("pás = tvůj normál").font(Typo.caption).foregroundStyle(Palette.muted)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: L10n.tr("HRV za 14 dní proti tvému normálu")))
     }
 }
 
@@ -1213,6 +1265,7 @@ struct PlanChangeCard: View {
         var parts: [String] = []
         if let m = o.minutes { parts.append(planDuration(Int(m.rounded()))) }
         if let d = o.date { parts.append(Fmt.weekdayShort(d) + " " + Fmt.dayMonth(d)) }
+        if let now = o.now { parts.append(L10n.f("teď %@", Fmt.weekdayShort(now) + " " + Fmt.dayMonth(now))) }
         return parts.joined(separator: " · ")
     }
 }
