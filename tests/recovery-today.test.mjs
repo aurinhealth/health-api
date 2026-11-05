@@ -32,6 +32,9 @@ test("Doporučovat méně: the sauna instead of stretching, nothing when both ar
   assert.deepEqual(sauna.items.map(i => i.kind), ["sauna"]);
   assert.equal(sauna.items[0].detail, "3× 10 min večer, pak hodně pít");
   assert.equal(recoveryToday({ date: DATE, today: [gymDone], less: ["stretch", "sauna"] }), null);
+  // A warning sign, alcohol or an injury: no sauna, so nothing instead of stretching.
+  assert.equal(recoveryToday({ date: DATE, today: [gymDone], less: ["stretch"], noSauna: true }), null);
+  assert.deepEqual(recoveryToday({ date: DATE, today: [gymDone], noSauna: true }).items.map(i => i.kind), ["stretch"]);
   // The morning after has no sauna: nothing to offer instead.
   assert.equal(recoveryToday({ date: DATE, yesterday: [{ status: "done", sport: "ride", minutes: 180, tss: 160 }], less: ["stretch"] }), null);
 });

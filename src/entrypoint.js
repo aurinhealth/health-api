@@ -63,7 +63,7 @@ import { explainWorkout, athleteSteps } from "./workout-explanation.js";
 import { libraryBricks } from "./brick-workouts.js";
 import { aiWorkoutPick } from "./ai-workout-pick.js";
 import { composeWorkout, poorFit, fewMatches, composeKey, libraryKind, COMPOSE_VARIANTS } from "./ai-workout-compose.js";
-import { rankOptions, dayChoice, recentKinds, pickState, savePick, undoSkip, lessKinds, setLess, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "./coach-pick.js";
+import { rankOptions, saunaSigns, dayChoice, recentKinds, pickState, savePick, undoSkip, lessKinds, setLess, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "./coach-pick.js";
 import { activityKindOf } from "./activity-match.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
@@ -86,7 +86,7 @@ import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_O
 import { isHardSession, isHardKind } from './session-intensity.js';
 import { reviseWeek, rulesRevision, revisionSignature, readRevision, saveRevision, decideRevision, shownRevision, liveRevision } from './week-revision.js';
 import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
-import { illnessWarning, illnessSigns } from './illness-check.js';
+import { illnessWarning } from './illness-check.js';
 import { readinessFor } from './readiness.js';
 import { lockReadiness } from "./readiness-lock.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
@@ -175,6 +175,7 @@ import { handleTrainingEditsApi, handleThresholdApi } from "./routes-training.js
 import { handleFoodApi, queueFoodGoogleSafely } from "./routes-food.js";
 import { handleCycleApi } from "./routes-cycle.js";
 import { handleJournalApi, journalForCoach } from "./routes-journal.js";
+import { saunaRisks } from "./journal-store.js";
 import { muscleModelResponse } from "./muscle-model.js";
 import { morningMetrics } from "./journal-impact.js";
 import { cycleForCoach } from "./cycle-model.js";
@@ -1418,6 +1419,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         .then(async([prefs,plan])=>({prefs,plan,targets:prefs?await computeWeekTargets(env,ctx,mondayOfDate(date),prefs).catch(()=>null):null}));
       const around=Promise.all([loadProfiles(env.DB,env.USER_ID).catch(()=>({})),recentKinds(env.DB,env.USER_ID,date),pickState(env.DB,env.USER_ID,date),readGymPlan(env.DB,date).catch(()=>null),lessKinds(env.DB,env.USER_ID).catch(()=>[]),todayPlace(env,ctx,date)]);
       around.catch(()=>{});
+      const risking=saunaRisks(env.DB,date).catch(()=>({}));
       const [inputs,week,athlete]=await Promise.all([loadCoachInputs(env,ctx,internalAuth,date),weekLoading,getAthleteState(env.DB).catch(()=>null)]);
       const [[ride,run],[profiles,recent,state,gym,less,place]]=await Promise.all([Promise.all([defaultDayCoach(env,{...inputs,athleteState:athlete},date,'ride',week),defaultDayCoach(env,{...inputs,athleteState:athlete},date,'run',week)]),around]);
       // The swim coach only for a swimmer: swimming as the main sport or a swim
@@ -1426,9 +1428,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const swims=(['swimming','triathlon'].includes(eff.mainSport)||mains.includes('swim')||(recent.sports||[]).includes('swim'))&&(!allowed||allowed.includes('swim'));
       const swim=swims?await defaultDayCoach(env,{...inputs,athleteState:athlete},date,'swim',week).catch(()=>null):null;
       const planned=[...(swim?.constraints?.plannedToday&&activityKindOf(swim.constraints.plannedToday.type||swim.constraints.plannedToday.name)==='swim'?['swim']:[]),...(ride.constraints?.plannedToday&&activityKindOf(ride.constraints.plannedToday.type||ride.constraints.plannedToday.name)==='ride'?['ride']:[]),...(run.constraints?.plannedToday&&activityKindOf(run.constraints.plannedToday.type||run.constraints.plannedToday.name)==='run'?['run']:[]),...((gym?.values||[]).length>7?['gym']:[])];
-      // Nemoc, Zranění or Pauza leaves only rest; signs of an illness drop the sauna.
-      const illness=illnessSigns(readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile})).length>0;
-      const ranked=rankOptions({ride,run,swim,mainSport:eff.mainSport||'general',mains,allowed,sports:recent.sports,today:recent.today,declines:state.declines,less,planned,done:recent.done,athleteStatus:athlete?.status||'active',illness});
+      // Nemoc, Zranění or Pauza leaves only rest; a warning sign of the night,
+      // alcohol yesterday or an injury in the journal drops the sauna (coach-pick.js saunaSigns).
+      const risks=await risking;
+      const noSauna=saunaSigns(readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile}))||!!risks.alcohol||!!risks.injury;
+      const ranked=rankOptions({ride,run,swim,mainSport:eff.mainSport||'general',mains,allowed,sports:recent.sports,today:recent.today,declines:state.declines,less,planned,done:recent.done,athleteStatus:athlete?.status||'active',noSauna});
       // The ready workouts stay while the options do (pickSignature), so a sync
       // that changes nothing asks the AI nothing.
       const signature=pickSignature(ranked);
@@ -2636,7 +2640,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const proposing=syncing.then(p=>isToday&&p.active?planProposal(env,ctx).catch(()=>null):null);
       const checking=connectionStatus(env).catch(()=>null);
       // Today only: yesterday's sessions and tomorrow's plan for "Regenerace na dnes" (recovery-today.js).
-      const [daily,health,fitness,sleep,fluids,weight,coaches,profile,place,gym,yesterday,tomorrow,savedRecovery,checkin,synced,proposal,status,recoveryLess,training]=await Promise.all([
+      const [daily,health,fitness,sleep,fluids,weight,coaches,profile,place,gym,yesterday,tomorrow,savedRecovery,checkin,synced,proposal,status,recoveryLess,training,risks]=await Promise.all([
         read('/analysis/daily?date='+date),googleHealthFor(env,ctx,date).catch(()=>({})),
         cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
         read('/health/sleep?start='+from+'&end='+to).then(d=>intervalsSleep(env,ctx,d,from,to)).catch(()=>({})),
@@ -2646,7 +2650,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         listRecovery(env.DB,{from:date,to:date}).catch(()=>[]),readinessCheckin(env.DB,date).catch(()=>null),
         syncing,proposing,checking,
         isToday?lessKinds(env.DB,env.USER_ID).catch(()=>[]):[],
-        isToday?loadTrainingDoses(env.DB).catch(()=>null):null
+        isToday?loadTrainingDoses(env.DB).catch(()=>null):null,
+        isToday?saunaRisks(env.DB,date).catch(()=>({})):{}
       ]);
       // The active training plan in one line (training-plans.js).
       const active=synced.active??synced.gym,summary=active?planSummary(active,date):null;
@@ -2659,7 +2664,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         .then(([state,m])=>({...m,athleteState:state?.status||null,context:m.context?{...m.context,memories:usedMemories(state)}:null})).catch(()=>null):null;
       applyEnergyBudget(daily,profile,health);
       return Response.json(withRecoveryTime(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,location:place.location,forecast:place.forecast,gym:gym[date]||null,checkin,trainingPlan,
-        recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess},unavailable:todayUnavailable(failed),morning}),training),{headers:{'Cache-Control':'no-store'}});
+        recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess,risks},unavailable:todayUnavailable(failed),morning}),training),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 

@@ -34,7 +34,9 @@ const sentence = text => { const t = String(text || "").trim(); return t ? t[0].
 // allowed: the sports the athlete does (Settings → Sports to suggest: ride,
 // run, swim, strength), null when never chosen; the others are not offered.
 // mains: the main sports as those kinds (several allowed), else mainSport's.
-export function rankOptions({ ride, run, swim = null, mainSport = "general", mains = null, allowed = null, sports = [], today = [], declines = [], less = [], planned = [], done = [], athleteStatus = "active", illness = false }) {
+// noSauna: a reason the sauna is no option today (saunaSigns, or alcohol
+// yesterday or an injury in the journal, journal-store.js saunaRisks).
+export function rankOptions({ ride, run, swim = null, mainSport = "general", mains = null, allowed = null, sports = [], today = [], declines = [], less = [], planned = [], done = [], athleteStatus = "active", noSauna = false }) {
   if (athleteStatus && athleteStatus !== "active") return pausedOptions(athleteStatus);
   const status = ride?.readiness?.status || run?.readiness?.status || "yellow";
   const names = KIND_NAMES();
@@ -85,8 +87,8 @@ export function rankOptions({ ride, run, swim = null, mainSport = "general", mai
     if (less.includes(o.kind) && !planned.includes(o.kind)) score -= 15;
     o.score = score;
   }
-  // Signs of an oncoming illness (illness-check.js): no sauna, it only adds load.
-  if (illness) options.splice(options.findIndex(o => o.kind === "sauna"), 1);
+  // The sauna is load, not rest: none with a warning sign (noSauna).
+  if (noSauna) options.splice(options.findIndex(o => o.kind === "sauna"), 1);
   // A sport the athlete turned off is never offered, not even under Další možnosti.
   if (Array.isArray(allowed)) for (const kind of ["ride", "run", "swim", "gym"]) if (!allowed.map(asOption).includes(kind)) { const i = options.findIndex(o => o.kind === kind); if (i >= 0) options.splice(i, 1); }
   // A sport the athlete does (the main one or done in the last 60 days) wins a
@@ -98,15 +100,27 @@ export function rankOptions({ ride, run, swim = null, mainSport = "general", mai
   options.sort((a, b) => b.score - a.score || Number(known(b)) - Number(known(a)));
   const first = options.findIndex(known);
   if (first > 0) options.unshift(...options.splice(first, 1));
+  // A bad morning starts with the day off and a walk; the sauna comes second at most.
+  if (status === "red" && options[0].kind === "sauna") { const i = options.findIndex(o => o.kind === "rest"); if (i > 0) options.unshift(...options.splice(i, 1)); }
   const best = options[0];
-  // A day off on a bad morning comes with the sauna when it helps.
-  if (best.kind === "rest" && status === "red" && !trainedToday && !illness) { best.title = L("Volno a sauna", "Day off and sauna"); best.detail = L("Procházka · sauna 3 × 12 min", "A walk · sauna 3 × 12 min"); best.lines = [[L("Procházka", "Walk"), "30 min"], [L("Sauna", "Sauna"), L("3 × 12 min", "3 × 12 min")]]; }
   // After training the day off is stretching and an evening walk.
   const rest = options.find(o => o.kind === "rest");
   if (trainedToday && rest) { rest.title = L("Protažení", "Stretching"); rest.detail = L("15 min · večer procházka 30 min", "15 min · an evening walk of 30 min"); rest.lines = [[L("Protažení", "Stretching"), "15 min"], [L("Večer", "Evening"), L("procházka 30 min", "a 30 min walk")]]; }
   best.best = true;
   best.reason = reasonFor(best, { status, ride, lowerTired, planned, trainedToday, done });
+  // Why the sauna is missing where it would be offered, without naming a cause.
+  if (noSauna && best.kind === "rest" && (status === "red" || trainedToday)) best.reason += " " + L("Sauna je taky zátěž, dnes ne.", "Sauna adds load, so not today.");
   return { status, score: ride?.readiness?.score ?? null, lowerTired, options: options.map(({ score, hard, rest, ...o }) => ({ ...o, action: o.kind === "ride" || o.kind === "run" || o.kind === "swim" && swim ? "library" : o.kind === "gym" ? "gym" : "accept" })) };
+}
+
+// The night's signs that take the sauna off the list, any one of them: a
+// raised temperature or breathing rate in sleep, or a resting heart rate two
+// usual spreads above its normal (readiness components, recovery-model.js).
+// The resting heart rate alone is a cautious choice without direct evidence
+// (docs/methodology.md 2.9).
+export function saunaSigns(readiness) {
+  const c = readiness?.components || {};
+  return !!(c.wristTemp?.raised || c.skinTemp?.elevated || c.respiration?.elevated || (c.restingHR?.z != null && c.restingHR.z >= 2));
 }
 
 // Nemoc, Zranění or Pauza set by the athlete: no training on offer, only rest

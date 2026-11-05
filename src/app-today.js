@@ -15,6 +15,7 @@ import { activityKindOf } from "./activity-match.js";
 import { daySessions, deviceEnergyExtra, withHeartRateLoad } from "./app-training.js";
 export { withHeartRateLoad };
 import { recoveryToday } from "./recovery-today.js";
+import { saunaSigns } from "./coach-pick.js";
 import { cycleState, askPeriodToday, cycleTrainingCaution } from "./cycle-model.js";
 import { isHardSession } from "./session-intensity.js";
 import { heatAdvice, indoorText } from "./heat-advice.js";
@@ -256,7 +257,9 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     tomorrow: rec.tomorrow ? daySessions(shift(date, 1), date, rec.tomorrow, gymByDate[shift(date, 1)] || null).sessions : null,
     gym: gymByDate,
     saved: savedRecovery,
-    less: Array.isArray(rec.less) ? rec.less : []
+    less: Array.isArray(rec.less) ? rec.less : [],
+    // No sauna with a warning sign, alcohol yesterday or an injury in the journal (coach-pick.js saunaSigns).
+    noSauna: saunaSigns(readiness) || !!rec.risks?.alcohol || !!rec.risks?.injury || ["sick", "injured"].includes(morning?.athleteState)
   }) : null;
   const stretchName = recoveryCard?.items?.find(i => i.kind === "stretch")?.title;
   const recoveryItems = savedRecovery.map(r => ({

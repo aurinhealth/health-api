@@ -397,6 +397,25 @@ export async function autoDays(db, from, to) {
 // Days left out of every comparison because the athlete was ill: the journal's
 // "Nemoc", a "nemocný" morning check-in the day or the morning after, and the
 // current "Sick" status since it was set (there is no older status history).
+// What takes the sauna off the day's options (coach-pick.js): alcohol the day
+// before (✓ in the journal or a beer or wine in the drinks) and an injury
+// ticked in the journal in the last 72 h (that day and the three before, so a
+// late evening still counts). Two small reads on their keys.
+export async function saunaRisks(db, date) {
+  const rows = async (sql, ...args) => {
+    try { return (await db.prepare(sql).bind(db.userId, ...args).all()).results || []; } catch (error) { if (missingTable(error)) return []; throw error; }
+  };
+  const yesterday = shift(date, -1);
+  const [journal, drinks] = await Promise.all([
+    rows("SELECT date,item_key FROM journal_entries WHERE user_id=? AND item_key IN ('alcohol','injury') AND (answer=1 OR amount>0) AND date>=? AND date<=?", shift(date, -3), date),
+    rows("SELECT 1 FROM fluid_log WHERE user_id=? AND date>=? AND date<=? AND kind IN ('beer','wine') LIMIT 1", yesterday, date)
+  ]);
+  return {
+    alcohol: drinks.length > 0 || journal.some(r => r.item_key === "alcohol" && r.date >= yesterday),
+    injury: journal.some(r => r.item_key === "injury")
+  };
+}
+
 export async function sickDays(db, from, to, athleteState = null) {
   const out = new Set();
   const rows = async (sql, ...args) => {
