@@ -234,6 +234,6 @@ struct WhyDetail: View {
         guard let value = m?.value, let low = m?.low, let high = m?.high else { return nil }
         if value > high { return W.tr(czechHigh, "high") }
         if value < low { return W.tr(czechLow, "low") }
-        return W.tr("v rozmezí", "usual")
+        return W.tr("v rozmezí", "in range")
     }
 }

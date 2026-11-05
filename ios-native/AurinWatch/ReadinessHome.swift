@@ -92,13 +92,14 @@ struct ReadinessHome: View {
         VStack(alignment: .leading, spacing: 2) {
             heroNumber
             // The day's verdict under the number, the iPhone's line (src/day-verdict.js) in short.
-            if let verdict, !dimmed {
+            // Only this morning's: an older day's verdict would read as advice for today.
+            if let verdict, !dimmed, stale == nil {
                 Text(verdict.text)
                     .watchFont(14, .semibold)
                     .foregroundStyle(verdict.color)
-                    .lineLimit(1)
+                    .lineLimit(2)
                     .minimumScaleFactor(0.8)
-                    .opacity(stale == nil ? 1 : 0.45)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         // In from the screen's edge and clear of the alarm button above.
@@ -151,8 +152,8 @@ struct ReadinessHome: View {
 
     /// Beside the number: what the page waits for, else "Readiness".
     private var title: String {
-        if dimmed { return W.tr("Zvedni zápěstí", "Raise your wrist to see") }
-        switch stale {
+        if dimmed { return W.tr("Zvedni zápěstí", "Raise your wrist") }
+        return switch stale {
         case .loading: W.tr("Načítám dnešek…", "Getting today…")
         case .night: W.tr("Čekám na spánek z noci", "Waiting for last night's sleep")
         case .failed, nil: W.tr("Připravenost", "Readiness")
@@ -255,6 +256,8 @@ struct ReadinessHome: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
+        // Three narrow columns: they grow with the text size only so far.
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
         // An older day's numbers, greyed (point 6).
         .saturation(stale == nil ? 1 : 0)
         .opacity(stale == nil ? 1 : 0.55)
@@ -331,7 +334,7 @@ struct ReadinessHome: View {
         switch WatchRangeBar.side(value, low, high) {
         case 1: g.note = W.tr("nad", "above")
         case -1: g.note = W.tr("pod", "below"); g.color = W.amber
-        default: g.note = W.tr("v rozmezí", "usual")
+        default: g.note = W.tr("v rozmezí", "in range")
         }
         return g
     }

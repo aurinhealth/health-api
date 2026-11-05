@@ -353,14 +353,23 @@ extension View {
     }
 }
 
-/// Always On (wrist down): the morning's and health numbers of a detail page
-/// hide until the wrist is raised (Today audit 17); a workout's live numbers
+/// Always On (wrist down): a health detail page, its rings and bars too,
+/// hides until the wrist is raised (Today audit 17); a workout's live numbers
 /// stay (their own screens).
 struct HiddenInAlwaysOn: ViewModifier {
     @Environment(\.isLuminanceReduced) private var dimmed
 
     func body(content: Content) -> some View {
-        content.redacted(reason: dimmed ? .placeholder : [])
+        content
+            .opacity(dimmed ? 0 : 1)
+            .overlay {
+                if dimmed {
+                    Text(W.tr("Zvedni zápěstí", "Raise your wrist"))
+                        .watchFont(14, .semibold)
+                        .foregroundStyle(W.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
     }
 }
 
