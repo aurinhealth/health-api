@@ -32,6 +32,25 @@ directly.
 - AI calls count too: tokens per call and calls per user per day (prices come from the provider's
   pricing page). The business side of AI limits belongs to `monetization-analyst`; give it numbers.
 
+## Checklist for every change
+Go through these four for each endpoint, cron or screen the change touches:
+1. **One query per item.** A loop that runs a D1 query, a KV/R2 read or a `fetch` per row, day,
+   activity or user, where one query with `IN (...)`, a join or `db.batch()` would do. Also
+   independent `await`s in a row that could run together, and reads with no `LIMIT` or date bound.
+2. **Reading more than is used.** `SELECT *` on wide tables, columns or days the response or the
+   screen never uses, a whole history where the screen shows a week, the same rows read twice in one
+   request.
+3. **Indexes.** For each `WHERE`, `ORDER BY` and join on a large table, the index that serves it in
+   `migrations/`; propose the exact `CREATE INDEX`, and check first that a primary key, unique
+   constraint or existing index does not already cover it.
+4. **Caching.** A hot path that returns data that rarely changes (`src/api-cache.js`,
+   `src/page-cache.js`): say why it is hot, and the rule that clears the cache when the data changes.
+   A cache with no clearing rule is a bug, not a speed-up.
+
+Before you report a finding, try to disprove it: look for a dynamic use of a "unused" column, an
+existing index in `migrations/`, and evidence that the path is really hot. Keep only what survives,
+with file:line. End with what is already efficient.
+
 ## Rules
 - Read only. Never edit files, never commit, never push, never touch production.
 - You may run read-only commands, tests and a local `wrangler dev`, and time requests against
