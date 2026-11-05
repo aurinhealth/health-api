@@ -62,6 +62,9 @@ export function normalizeCycleSettings(raw) {
     pillReminder: s.pillReminder === true,
     pillReminderTime: time,
     pillReminderInPause: s.pillReminderInPause === true,
+    // "Did you take your pill?" an hour after the usual time when today's
+    // pill isn't logged (Reminders.swift); on unless turned off.
+    pillMissed: s.pillMissed !== false,
     // The AI coach sees today's cycle (cycleForCoach) only when the athlete
     // turns this on: cycle data is special-category health data (GDPR art. 9).
     shareWithCoach: s.shareWithCoach === true,
@@ -164,7 +167,24 @@ export function pillState(settings, date, today, byDate) {
   const pause = index >= active;
   const out = { pack: settings.pillPack, number: pause ? null : index + 1, of: active, pause, pauseDay: pause ? index - active + 1 : null, taken: today ? today.pill : null };
   if (byDate && !pause) out.packTaken = Array.from({ length: index + 1 }, (_, i) => !!byDate.get(shift(date, i - index))?.pill);
+  if (byDate) out.usual = usualPillTime(date, byDate);
   return out;
+}
+
+// The time the pill is usually logged: the median of the times logged on the
+// 14 days before `date`, from 3 of them on (null before). A time before 4:00
+// counts as late the evening before, so 23:50 and 00:10 average near midnight.
+export function usualPillTime(date, byDate) {
+  const times = [];
+  for (let i = 1; i <= 14; i++) {
+    const m = /^(\d\d):(\d\d)$/.exec(String(byDate.get(shift(date, -i))?.pill || ""));
+    if (m) times.push(((+m[1] * 60 + +m[2]) + 1440 - 240) % 1440 + 240);
+  }
+  if (times.length < 3) return null;
+  times.sort((a, b) => a - b);
+  const mid = times.length >> 1;
+  const median = (times.length % 2 ? times[mid] : Math.round((times[mid - 1] + times[mid]) / 2)) % 1440;
+  return String(Math.floor(median / 60)).padStart(2, "0") + ":" + String(median % 60).padStart(2, "0");
 }
 
 // Ask "Has your period started?" in the morning: a natural cycle, the forecast

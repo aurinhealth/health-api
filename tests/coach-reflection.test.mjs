@@ -109,6 +109,9 @@ test("the coach sees the next two days' plan and suggests recovery that fits", (
   const s = scenario(), nextDays = [{ date: "x1", planned: [], restDay: true }, { date: "x2", planned: [{ name: "Sweet Spot", type: "Ride", minutes: 90, tss: 95 }], restDay: false }, { date: "x3", planned: [], restDay: true }];
   const input = reflectionInput({ ...s, signals: reflectionSignals(s), food: [], previous: [], nextDays });
   assert.deepEqual(input.nextDays.map(d => d.restDay), [true, false]);
+  // No sauna today: a flag for the coach, without the reason.
+  assert.equal("saunaOff" in input, false);
+  assert.equal(reflectionInput({ ...s, signals: reflectionSignals(s), food: [], previous: [], nextDays, saunaOff: true }).saunaOff, true);
   assert.match(reflectionInstructions, /zítra restDay, napiš, že má zítra volný den/);
   assert.match(reflectionInstructions, /Nevymýšlej trénink, který v plánu není/);
   assert.match(reflectionInstructions, /protažení nebo mobilita .*3–4 cviky/);

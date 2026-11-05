@@ -34,8 +34,10 @@ const sentence = text => { const t = String(text || "").trim(); return t ? t[0].
 // allowed: the sports the athlete does (Settings → Sports to suggest: ride,
 // run, swim, strength), null when never chosen; the others are not offered.
 // mains: the main sports as those kinds (several allowed), else mainSport's.
-export function rankOptions({ ride, run, swim = null, mainSport = "general", mains = null, allowed = null, sports = [], today = [], declines = [], less = [], planned = [], done = [], athleteStatus = "active", illness = false }) {
-  if (athleteStatus && athleteStatus !== "active") return pausedOptions(athleteStatus);
+// noSauna: a reason the sauna is no option today (saunaSigns, or alcohol,
+// Nemoc or an injury in the journal, journal-store.js saunaRisks).
+export function rankOptions({ ride, run, swim = null, mainSport = "general", mains = null, allowed = null, sports = [], today = [], declines = [], less = [], planned = [], done = [], athleteStatus = "active", noSauna = false }) {
+  if (athleteStatus && athleteStatus !== "active") return pausedOptions(athleteStatus, noSauna);
   const status = ride?.readiness?.status || run?.readiness?.status || "yellow";
   const names = KIND_NAMES();
   const lowerTired = (ride?.load?.lowerBodyGymSignals48h || 0) > 0;
@@ -85,8 +87,8 @@ export function rankOptions({ ride, run, swim = null, mainSport = "general", mai
     if (less.includes(o.kind) && !planned.includes(o.kind)) score -= 15;
     o.score = score;
   }
-  // Night values outside the usual range (night-check.js): no sauna, it only adds load.
-  if (illness) options.splice(options.findIndex(o => o.kind === "sauna"), 1);
+  // The sauna is load, not rest: none with a warning sign (noSauna).
+  if (noSauna) options.splice(options.findIndex(o => o.kind === "sauna"), 1);
   // A sport the athlete turned off is never offered, not even under Další možnosti.
   if (Array.isArray(allowed)) for (const kind of ["ride", "run", "swim", "gym"]) if (!allowed.map(asOption).includes(kind)) { const i = options.findIndex(o => o.kind === kind); if (i >= 0) options.splice(i, 1); }
   // A sport the athlete does (the main one or done in the last 60 days) wins a
@@ -98,20 +100,32 @@ export function rankOptions({ ride, run, swim = null, mainSport = "general", mai
   options.sort((a, b) => b.score - a.score || Number(known(b)) - Number(known(a)));
   const first = options.findIndex(known);
   if (first > 0) options.unshift(...options.splice(first, 1));
+  // A bad morning starts with the day off and a walk; the sauna comes second at most.
+  if (status === "red" && options[0].kind === "sauna") { const i = options.findIndex(o => o.kind === "rest"); if (i > 0) options.unshift(...options.splice(i, 1)); }
   const best = options[0];
-  // A day off on a bad morning comes with the sauna when it helps.
-  if (best.kind === "rest" && status === "red" && !trainedToday && !illness) { best.title = L("Volno a sauna", "Day off and sauna"); best.detail = L("Procházka · sauna 3 × 12 min", "A walk · sauna 3 × 12 min"); best.lines = [[L("Procházka", "Walk"), "30 min"], [L("Sauna", "Sauna"), L("3 × 12 min", "3 × 12 min")]]; }
   // After training the day off is stretching and an evening walk.
   const rest = options.find(o => o.kind === "rest");
   if (trainedToday && rest) { rest.title = L("Protažení", "Stretching"); rest.detail = L("15 min · večer procházka 30 min", "15 min · an evening walk of 30 min"); rest.lines = [[L("Protažení", "Stretching"), "15 min"], [L("Večer", "Evening"), L("procházka 30 min", "a 30 min walk")]]; }
   best.best = true;
   best.reason = reasonFor(best, { status, ride, lowerTired, planned, trainedToday, done });
+  // Why the sauna is missing where it would be offered, without naming a cause.
+  if (noSauna && best.kind === "rest" && (status === "red" || trainedToday)) best.reason += " " + L("Sauna je taky zátěž, dnes ne.", "Sauna adds load, so not today.");
   return { status, score: ride?.readiness?.score ?? null, lowerTired, options: options.map(({ score, hard, rest, ...o }) => ({ ...o, action: o.kind === "ride" || o.kind === "run" || o.kind === "swim" && swim ? "library" : o.kind === "gym" ? "gym" : "accept" })) };
 }
 
+// The night's signs that take the sauna off the list, any one of them: a
+// raised temperature or breathing rate in sleep, or a resting heart rate two
+// usual spreads above its normal (readiness components, recovery-model.js).
+// The resting heart rate alone is a cautious choice without direct evidence
+// (docs/methodology.md 2.9).
+export function saunaSigns(readiness) {
+  const c = readiness?.components || {};
+  return !!(c.wristTemp?.raised || c.skinTemp?.elevated || c.respiration?.elevated || (c.restingHR?.z != null && c.restingHR.z >= 2));
+}
+
 // Nemoc, Zranění or Pauza set by the athlete: no training on offer, only rest
-// (the sauna too during a break, never while ill).
-function pausedOptions(athleteStatus) {
+// (the sauna too during a break, never while ill or with noSauna).
+function pausedOptions(athleteStatus, noSauna = false) {
   const rest = athleteStatus === "sick"
     ? { kind: "rest", title: L("Odpočinek", "Rest"), detail: L("Spánek, pití a klid", "Sleep, drinks and quiet"), lines: [[L("Pití", "Drink"), L("2–3 l během dne", "2–3 l through the day")], [L("Spánek", "Sleep"), L("o hodinu déle", "an hour longer")]] }
     : { kind: "rest", title: L("Volno", "Day off"), detail: L("Procházka 30 min a protažení", "A 30 min walk and stretching"), lines: [[L("Procházka", "Walk"), "30 min"], [L("Protažení", "Stretching"), "15 min"]] };
@@ -119,7 +133,7 @@ function pausedOptions(athleteStatus) {
     injured: L("Máš nastavené Zranění. Náhradní trénink navrhnu, až kouči popíšeš svá omezení.", "Your status is Injured. I'll suggest other training once you tell the coach your limitations."),
     on_break: L("Máš nastavenou Pauzu, dnes bez tréninku.", "Your status is Rest, no training today.") }[athleteStatus] || L("Dnes bez tréninku.", "No training today.");
   const options = [{ ...rest, best: true, reason }];
-  if (athleteStatus === "on_break") options.push({ kind: "sauna", title: L("Sauna", "Sauna"), detail: L("3 × 12 min", "3 × 12 min"), lines: [[L("3 kola", "3 rounds"), L("12 min v sauně", "12 min in the sauna")], [L("Mezi tím", "Between"), L("5 min venku nebo sprcha", "5 min outside or a shower")], [L("Pití", "Drink"), L("0,5 l vody", "0.5 l of water")]] });
+  if (athleteStatus === "on_break" && !noSauna) options.push({ kind: "sauna", title: L("Sauna", "Sauna"), detail: L("3 × 12 min", "3 × 12 min"), lines: [[L("3 kola", "3 rounds"), L("12 min v sauně", "12 min in the sauna")], [L("Mezi tím", "Between"), L("5 min venku nebo sprcha", "5 min outside or a shower")], [L("Pití", "Drink"), L("0,5 l vody", "0.5 l of water")]] });
   return { status: "red", score: null, lowerTired: false, paused: athleteStatus, options: options.map(o => ({ ...o, action: "accept" })) };
 }
 
@@ -239,11 +253,13 @@ export async function setLess(db, userId, kind, less = true) {
   return { status: "ok", less: await lessKinds(db, userId) };
 }
 
-// The ready workouts of the day's options, kept while the options stay the
-// same (the same kinds, titles and lengths): new data that changes nothing
-// reuses them, so the AI is asked again only when the day really changes.
+// The ready workouts of the day's options, kept while the options that have
+// one (ride, run, swim, gym) stay the same (kinds, titles, which is best): new
+// data that changes nothing reuses them, so the AI is asked again only when
+// the day really changes, not when only the sauna or the day off moves.
+const DETAILED = new Set(["ride", "run", "swim", "gym"]);
 export function pickSignature(ranked) {
-  return JSON.stringify([ranked.status, ranked.lowerTired ? 1 : 0, ...ranked.options.map(o => [o.kind, o.title, o.best ? 1 : 0])]);
+  return JSON.stringify([ranked.status, ranked.lowerTired ? 1 : 0, ...ranked.options.filter(o => DETAILED.has(o.kind)).map(o => [o.kind, o.title, o.best ? 1 : 0])]);
 }
 
 export async function storedDetails(db, userId, date, signature) {

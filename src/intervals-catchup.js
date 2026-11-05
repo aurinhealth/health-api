@@ -151,7 +151,7 @@ async function handled(env, keys) {
   return new Set(rows.filter(r => r.status === "sent" || r.status === "off" || Number(r.attempts) < 3).map(r => r.activity_key));
 }
 
-async function intervalsActivities(env, oldest, newest, fetchImpl) {
+export async function intervalsActivities(env, oldest, newest, fetchImpl) {
   const response = await fetchImpl(`https://intervals.icu/api/v1/athlete/0/activities?oldest=${oldest}&newest=${newest}`, {
     headers: { Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json" }, signal: AbortSignal.timeout(15000)
   });
@@ -163,7 +163,7 @@ async function intervalsActivities(env, oldest, newest, fetchImpl) {
 
 // Found at Intervals.icu under our external_id (a send whose answer was lost):
 // recorded as sent, so the import skips it (sentIntervalsIds) and it is not sent again.
-async function recordSent(env, item, remoteId) {
+export async function recordSent(env, item, remoteId) {
   await env.DB.prepare(`INSERT INTO sync_sends (user_id, activity_key, destination, status, remote_id, payload_json, updated_at) VALUES (?, ?, 'intervals', 'sent', ?, '{}', CURRENT_TIMESTAMP)
     ON CONFLICT(user_id, activity_key, destination) DO UPDATE SET status = 'sent', remote_id = excluded.remote_id, message = NULL, updated_at = CURRENT_TIMESTAMP`)
     .bind(env.USER_ID, item.key, String(remoteId)).run();

@@ -394,6 +394,29 @@ export async function autoDays(db, from, to) {
   return days;
 }
 
+// What takes the sauna off the day's options (coach-pick.js): alcohol the
+// evening before or today (✓ in the journal, a beer or wine in the drinks, a
+// drink with alcohol in the food diary; the athlete's ✕ for the day wins over
+// the logged drinks), Nemoc ticked yesterday or today, and an injury ticked in
+// the last 72 h (that day and the three before, so a late evening still
+// counts). Three small reads on their keys and dates.
+export async function saunaRisks(db, date) {
+  const rows = async (sql, ...args) => {
+    try { return (await db.prepare(sql).bind(db.userId, ...args).all()).results || []; } catch (error) { if (missingTable(error)) return []; throw error; }
+  };
+  const yesterday = shift(date, -1);
+  const [journal, drinks, food] = await Promise.all([
+    rows("SELECT date,item_key,answer,amount FROM journal_entries WHERE user_id=? AND item_key IN ('alcohol','injury','sick') AND date>=? AND date<=?", shift(date, -3), date),
+    rows("SELECT date FROM fluid_log WHERE user_id=? AND date>=? AND date<=? AND kind IN ('beer','wine')", yesterday, date),
+    rows("SELECT id,consumed_date,recipe_title,note,kcal FROM food_logs WHERE user_id=? AND consumed_date>=? AND consumed_date<=? AND (status IS NULL OR status='eaten')", yesterday, date)
+  ]);
+  const yes = r => Number(r.answer) === 1 || Number(r.amount) > 0;
+  const ticked = (key, from) => journal.some(r => r.item_key === key && r.date >= from && yes(r));
+  const crossed = new Set(journal.filter(r => r.item_key === "alcohol" && !yes(r) && r.answer != null).map(r => r.date));
+  const logged = [...drinks.map(d => d.date), ...food.filter(f => drinkFromFoodEntry(f)?.alcohol).map(f => f.consumed_date)].some(d => !crossed.has(d));
+  return { alcohol: ticked("alcohol", yesterday) || logged, sick: ticked("sick", yesterday), injury: ticked("injury", shift(date, -3)) };
+}
+
 // Days left out of every comparison because the athlete was ill: the journal's
 // "Nemoc", a "nemocný" morning check-in the day or the morning after, and the
 // current "Sick" status since it was set (there is no older status history).

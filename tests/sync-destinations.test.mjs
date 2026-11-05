@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import {
-  readSyncPrefs, saveSyncPrefs, normalizeSyncPrefs, allowedWellness, syncOverview, sendActivity, retrySend, activitySends,
+  readSyncPrefs, forwardSince, saveSyncPrefs, normalizeSyncPrefs, allowedWellness, syncOverview, sendActivity, retrySend, activitySends,
   normalizeActivity, googleExercise, googleMissingScopes, retrySyncSends, sentByAurin
 } from "../src/sync-destinations.js";
 import { EXTRA_SCOPES, HEALTH_SCOPES } from "../src/google-scopes.js";
@@ -25,7 +25,7 @@ function recorder(reply) {
 
 test("without a choice the plan and activities keep going; health data to Intervals.icu waits for a yes", async () => {
   const d = db({ migrate: false });
-  assert.deepEqual(await readSyncPrefs(d, 7, "intervals"), { pushPlanned: true, pushActivities: true, pullActivities: true, health: [], stored: false });
+  assert.deepEqual(await readSyncPrefs(d, 7, "intervals"), { pushPlanned: true, pushActivities: true, pullActivities: true, health: [], forward: [], stored: false });
   assert.deepEqual(await readSyncPrefs(d, 7, "apple"), { pushPlanned: false, pushActivities: false, pullActivities: false, health: [], stored: false });
   // Writing workouts to Google needs a permission nobody has yet: off until chosen.
   assert.equal((await readSyncPrefs(d, 7, "google")).pushActivities, false);
@@ -34,7 +34,7 @@ test("without a choice the plan and activities keep going; health data to Interv
 test("preferences are saved per user and destination, cleaned up", async () => {
   const d = db();
   const saved = await saveSyncPrefs(d, 7, "intervals", { pushPlanned: false, health: ["hrv", "sleep", "nonsense", "hrv"] });
-  assert.deepEqual(saved, { pushPlanned: false, pushActivities: true, pullActivities: true, health: ["hrv", "sleep"] });
+  assert.deepEqual(saved, { pushPlanned: false, pushActivities: true, pullActivities: true, health: ["hrv", "sleep"], forward: [] });
   assert.deepEqual(await readSyncPrefs(d, 7, "intervals"), { ...saved, stored: true });
   assert.deepEqual((await readSyncPrefs(d, 8, "intervals")).health, []);
   // A partial update keeps the rest; "all" again.
@@ -58,6 +58,37 @@ test("a health list chosen before Apple Health's workouts were a choice keeps se
   // Saved again, the list is the athlete's own from then on.
   await saveSyncPrefs(d, 7, "intervals", { health: ["hrv"] });
   assert.deepEqual((await readSyncPrefs(d, 7, "intervals")).health, ["hrv"]);
+});
+
+test("workouts from other apps: off at first, each turned on with its own start, kept beside the health data", async () => {
+  const d = db(), NOW = Date.parse("2026-11-04T20:00:00Z");
+  const on = await saveSyncPrefs(d, 7, "intervals", { forward: ["wahoo", "strava"], health: "all", backfill: true }, { now: NOW });
+  assert.deepEqual(on.forward, ["wahoo"]);
+  assert.deepEqual(on.started, ["wahoo"]);
+  assert.deepEqual(await forwardSince(d, 7), { wahoo: "2026-10-21T20:00:00.000Z" });
+  // The health data stays "all"; an older app that does not send the list keeps it.
+  const read = await readSyncPrefs(d, 7, "intervals");
+  assert.equal(read.health, "all");
+  assert.deepEqual(read.forward, ["wahoo"]);
+  await saveSyncPrefs(d, 7, "intervals", { health: ["hrv"] }, { now: NOW + 60000 });
+  assert.deepEqual((await readSyncPrefs(d, 7, "intervals")).forward, ["wahoo"]);
+  // Google turned on later starts then; Wahoo keeps its start.
+  const both = await saveSyncPrefs(d, 7, "intervals", { forward: ["google", "wahoo"] }, { now: NOW + 120000 });
+  assert.deepEqual(both.started, ["google"]);
+  assert.deepEqual(await forwardSince(d, 7), { wahoo: "2026-10-21T20:00:00.000Z", google: "2026-11-04T20:02:00.000Z" });
+  assert.deepEqual((await readSyncPrefs(d, 7, "intervals")).health, ["hrv"]);
+  await saveSyncPrefs(d, 7, "intervals", { forward: [] });
+  assert.deepEqual(await forwardSince(d, 7), {});
+  // Other destinations have no such list.
+  assert.equal((await saveSyncPrefs(d, 7, "google", { forward: ["wahoo"] })).forward, undefined);
+});
+
+test("the overview offers only connected apps' workouts for Intervals.icu", async () => {
+  const d = db();
+  const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "Bearer t", WAHOO_TOKEN: "w" };
+  const intervals = (await syncOverview(env)).destinations.find(x => x.id === "intervals");
+  assert.deepEqual(intervals.forwardSources, ["wahoo"]);
+  assert.deepEqual(intervals.prefs.forward, []);
 });
 
 test("the wellness push sends only the chosen health data", () => {
