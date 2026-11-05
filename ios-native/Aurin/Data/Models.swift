@@ -97,6 +97,9 @@ struct TodaySnapshot: Decodable, Equatable {
         /// What to do today, a key of src/day-verdict.js ("hard", "steady", "easy",
         /// "legs", "no_intensity", "rest"); nil on an earlier day or from an older server.
         var verdict: String? = nil
+        /// What shaped the number (src/readiness.js): "short_night" (under 3 h,
+        /// capped at yellow), "no_night" (no number without the night), etc.
+        var flags: [String]? = nil
     }
 
     struct Sleep: Decodable, Equatable {
