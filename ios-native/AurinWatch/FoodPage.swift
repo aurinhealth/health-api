@@ -3,8 +3,8 @@ import SwiftUI
 /// The third page by the crown (mockup 44): the day's energy in a ring with
 /// what is left, carbs, protein and fat in the iPhone's colours, and water
 /// with its bar and +250 ml (8 fl oz in imperial) that goes to the iPhone's day.
-/// Undo takes a drink back for a few seconds; the drop opens the favourite
-/// drinks from Food → Drinks on the iPhone (mockup 9).
+/// Undo in the water line takes a drink back for a few seconds; the bottle
+/// opens the favourite drinks from Food → Drinks on the iPhone (mockup 9).
 struct FoodPage: View {
     @EnvironmentObject private var store: WatchStore
     @State private var added = 0
@@ -94,57 +94,53 @@ struct FoodPage: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Watch audit E1: +250 ml stays where it is (a second quick tap adds a
+    /// second glass, it no longer hit Undo there); Undo is in the line, the
+    /// whole line its button; the bottle with the favourites is a round
+    /// button, gone when there are none.
     private func water(_ food: WatchSnapshot.Food) -> some View {
         let favorites = store.snapshot?.drinks ?? []
         return HStack(spacing: 6) {
-            Button {
-                drinks = true
-            } label: {
-                Image(systemName: "waterbottle.fill")
-                    .font(.system(size: 15))
-                    .foregroundStyle(W.blue)
-                    .frame(width: 22, height: 30)
-                    .contentShape(Rectangle())
+            if !favorites.isEmpty {
+                Button {
+                    drinks = true
+                } label: {
+                    Image(systemName: "waterbottle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(W.blue)
+                        .frame(width: 32, height: 32)
+                        .background(Color.white.opacity(0.14), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(W.tr("Nápoje", "Drinks"))
             }
-            .buttonStyle(.plain)
-            .disabled(favorites.isEmpty)
-            .accessibilityLabel(W.tr("Nápoje", "Drinks"))
-            VStack(alignment: .leading, spacing: 0) {
-                Text(store.drink.flatMap(\.name).map { $0 + " · " + W.water(food.water ?? 0) } ?? waterLine(food))
-                    .font(.system(size: 12, weight: .medium).monospacedDigit())
-                    .foregroundStyle(W.ink)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                Bar(fraction: fraction(food.water, food.waterTarget), color: W.blue).padding(.top, 3)
-            }
-            Spacer(minLength: 2)
-            if store.drink != nil {
+            if let drink = store.drink {
                 Button {
                     store.undoDrink()
                 } label: {
-                    Text(W.tr("Zpět", "Undo"))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(W.ink)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color.white.opacity(0.14), in: Capsule())
+                    waterInfo(food, undo: "+" + W.glass(drink.ml))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(W.tr("Vrátit ", "Undo ") + "+" + W.glass(drink.ml))
             } else {
-                Button {
-                    store.addWater(ml: W.glassMl)
-                    added += 1
-                } label: {
-                    Text(W.imperial ? "+8 oz" : "+250")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(W.blue, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(W.imperial ? W.tr("Přidat 8 fl oz vody", "Add 8 fl oz of water") : W.tr("Přidat 250 ml vody", "Add 250 ml of water"))
+                waterInfo(food, undo: nil)
             }
+            Spacer(minLength: 2)
+            Button {
+                store.addWater(ml: W.glassMl)
+                added += 1
+            } label: {
+                Text(W.glassText)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.black)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(W.blue, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(W.imperial ? W.tr("Přidat 8 fl oz vody", "Add 8 fl oz of water") : W.tr("Přidat 250 ml vody", "Add 250 ml of water"))
         }
         .sensoryFeedback(.success, trigger: added)
         .padding(.horizontal, 8)
@@ -157,6 +153,26 @@ struct FoodPage: View {
                 drinks = false
             }
         }
+    }
+
+    /// "0.5 / 1.0 l", while Undo can take the last drink back "+250 ml · Undo", and the bar.
+    private func waterInfo(_ food: WatchSnapshot.Food, undo: String?) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(store.drink.flatMap(\.name).map { $0 + " · " + W.water(food.water ?? 0) } ?? waterLine(food))
+                .font(.system(size: 12, weight: .medium).monospacedDigit())
+                .foregroundStyle(W.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            if let undo {
+                (Text(undo + " · ").foregroundColor(W.secondary) + Text(W.tr("Zpět", "Undo")).foregroundColor(W.ink))
+                    .font(.system(size: 10, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            Bar(fraction: fraction(food.water, food.waterTarget), color: W.blue).padding(.top, 3)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private func fraction(_ value: Double?, _ target: Double?) -> Double {
