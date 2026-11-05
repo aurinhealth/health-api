@@ -110,24 +110,20 @@ final class CalendarTime {
         return min(own, usable)
     }
 
-    /// Sends the free time when it changed since the last time (or `force`);
-    /// true when the server took a new one.
-    @discardableResult
-    func send(api: APIClient, force: Bool = false) async -> Bool {
-        guard reads, api.hasSession else { return false }
+    /// Sends the free time when it changed since the last time (or `force`).
+    func send(api: APIClient, force: Bool = false) async {
+        guard reads, api.hasSession else { return }
         let days = read()
         let body: JSONObject = ["days": .array(days.map { .object(["date": .string($0.date), "minutes": .number(Double($0.free))]) })]
         let account = defaults.string(forKey: AvatarStore.emailKey) ?? ""
         let key = account + "|" + days.map { "\($0.date)=\($0.free)" }.joined(separator: ",")
-        guard force || defaults.string(forKey: Self.sentKey) != key else { return false }
+        guard force || defaults.string(forKey: Self.sentKey) != key else { return }
         struct Response: Decodable { let status: String? }
         do {
             let _: Response = try await api.send("/app/api/calendar-free", method: "POST", body: body)
             defaults.set(key, forKey: Self.sentKey)
-            return true
         } catch {
             defaults.removeObject(forKey: Self.sentKey)
-            return false
         }
     }
 

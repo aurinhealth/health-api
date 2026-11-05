@@ -76,10 +76,10 @@ extension AppModel {
         if Self.accountUnconfirmed { await loadAccountInitial() }
         // The Apple Health sync, the waiting writes and the free time from the
         // iPhone calendar start together (Today audit point 39): the saved Today
-        // is on screen meanwhile. Today waits for the writes; the calendar only
-        // feeds Aktivita dne, which asks again once a new free time went out.
+        // is on screen meanwhile. Today waits for the writes and the free time
+        // (Aktivita dne is made from it), not for the sync to start after them.
         let calendarClient = api
-        let calendarSent = Task { await CalendarTime.shared.send(api: calendarClient) }
+        async let calendarSent: Void = CalendarTime.shared.send(api: calendarClient)
         let health = AppleHealth.shared
         // Until a late-morning sync, last night and the morning's HRV from the
         // watch go out before Today is computed, waiting at most 8 s. Later in
@@ -88,6 +88,7 @@ extension AppModel {
         let client = api
         var sync: Task<AppleHealth.SyncOutcome, Never>? = Task { await health.run(api: client) }
         let wrote = await sendOutbox()
+        await calendarSent
         // The planned workouts into the iPhone calendar, alongside Today.
         let mirror = api
         Task { await CalendarTime.shared.mirror(api: mirror) }
@@ -101,8 +102,6 @@ extension AppModel {
             // The day is on screen: the arrows and swipes work again.
             loading = false
             if let sync, await sync.value.changed { changed = true; try? await loadToday() }
-            // A new free time reached the server after Today: Aktivita dne asks again.
-            if await calendarSent.value, selectedDate == nil, stillSignedIn(account) { todayRevision += 1 }
             // New nights or workouts reach the Health snapshot too: the sleep
             // detail opened from Today shows it.
             if changed {
