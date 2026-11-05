@@ -48,6 +48,8 @@ struct TrainingModeView: View {
     @State private var swapping: String?
     /// "Vybrat jiný cvik" for this exercise: the whole catalog.
     @State private var replacing: String?
+    /// The day's swaps, for "Vyměněno dnes" in the summary (GymSwaps).
+    @State private var swaps: [GymSwap] = []
     /// The exercise whose Moje poznámka is being written.
     @State private var noteFor: String?
     /// The barbell set whose plates are being loaded.
@@ -791,6 +793,7 @@ struct TrainingModeView: View {
             ForEach(newRecords(day)) { record in recordCard(record) }
             if let zones = totals?.zones, zones.reduce(0, +) >= 1 { ZoneMinutesCard(minutes: zones) }
             changesCard(day)
+            swapsCard
             if totals?.saved == true { healthCard }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             if !finishedSession { addExerciseButton }
@@ -823,6 +826,8 @@ struct TrainingModeView: View {
             // The muscles with this workout counted (loaded again once it is saved).
             if finishedSession, let muscles = model.muscles { WorkoutFatigueCard(data: muscles).padding(.top, 6) }
         }
+        // Swaps from the Apple Watch come in while the workout is open.
+        .onAppear { swaps = GymSwaps.list(date) }
     }
 
     private func summaryGrid(_ day: GymDay) -> some View {
@@ -933,6 +938,72 @@ struct TrainingModeView: View {
         }
         .padding(.vertical, 12)
         .overlay(alignment: .top) { if !first { Rectangle().fill(Palette.hairline).frame(height: 1) } }
+    }
+
+    /// "Vyměněno dnes": each swap of the workout, kept only today or next time too.
+    @ViewBuilder
+    private var swapsCard: some View {
+        if !swaps.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel(text: "Vyměněno dnes").padding(.horizontal, 4).padding(.top, 4)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(swaps) { swap in swapRow(swap, first: swap.id == swaps.first?.id) }
+                }
+                .padding(.horizontal, 16)
+                .cardSurface(cornerRadius: 22)
+            }
+        }
+    }
+
+    private func swapRow(_ swap: GymSwap, first: Bool) -> some View {
+        let to = ExerciseCatalog.shownName(swap.to)
+        return VStack(alignment: .leading, spacing: 10) {
+            Text(verbatim: ExerciseCatalog.shownName(swap.from) + " → " + to)
+                .font(Typo.bodyStrong).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+            Picker(L10n.f("Výměna za %@", to), selection: Binding(get: { swap.nextTime }, set: { next in Task { await keepSwap(swap, next) } })) {
+                Text("Jen dnes").tag(false)
+                Text("I příště").tag(true)
+            }
+            .pickerStyle(.segmented)
+            if swap.nextTime {
+                Text(L10n.f("Další tréninky dají místo něj %@. Vrátit to jde v Nastavení → Posilovna → Cviky.", to))
+                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 14)
+        .overlay(alignment: .top) { if !first { Rectangle().fill(Palette.hairline).frame(height: 1) } }
+    }
+
+    /// "I příště": the old exercise thumbs down, the new one up, so the plans
+    /// give the new one (src/exercise-feedback.js). "Jen dnes" puts back the
+    /// thumbs they had before. One write, no AI.
+    private func keepSwap(_ swap: GymSwap, _ next: Bool) async {
+        guard let i = swaps.firstIndex(where: { $0.id == swap.id }), swaps[i].nextTime != next else { return }
+        let old = swaps
+        // The switch moves at once; the thumbs from before are read meanwhile.
+        swaps[i].nextTime = next
+        if next, !model.demo {
+            if catalog.isEmpty { catalog = (try? await model.api.gymExercises()) ?? [] }
+            if let j = swaps.firstIndex(where: { $0.id == swap.id }) {
+                swaps[j].fromBefore = catalog.first { $0.name == swap.from }?.liked
+                swaps[j].toBefore = catalog.first { $0.name == swap.to }?.liked
+            }
+        }
+        GymSwaps.save(swaps, date: date)
+        guard !model.demo else { return }
+        let before = swaps.first { $0.id == swap.id } ?? swap
+        let items: [(exercise: String, liked: Bool?)] = next
+            ? [(exercise: swap.from, liked: false), (exercise: swap.to, liked: true)]
+            : [(exercise: swap.from, liked: before.fromBefore), (exercise: swap.to, liked: before.toBefore)]
+        do {
+            try await model.api.rateExercises(items)
+            for item in items { if let j = catalog.firstIndex(where: { $0.name == item.exercise }) { catalog[j].liked = item.liked } }
+            error = nil
+        } catch {
+            swaps = old
+            GymSwaps.save(old, date: date)
+            self.error = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription)
+        }
     }
 
     private var healthCard: some View {
@@ -1272,6 +1343,8 @@ struct TrainingModeView: View {
         let onScreen = next.exercises[safe: index]?.name == name
         next.replace(exercise: name, with: alt.name, kg: alt.kg.flatMap { $0 > 0 ? GymCoach.kgText($0) : nil })
         day = next
+        GymSwaps.record(date, from: name, to: alt.name)
+        swaps = GymSwaps.list(date)
         // The exercise on screen stays on screen, now as the alternative.
         if onScreen, let at = next.exercises.firstIndex(where: { $0.sets.contains { rows.contains($0.row) } }) {
             index = at
@@ -1393,6 +1466,7 @@ struct TrainingModeView: View {
                 await training
             }
             if let workout { await live.delete(workout) }
+            GymSwaps.save([], date: date)
         }
         dismiss()
     }

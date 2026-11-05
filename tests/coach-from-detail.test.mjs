@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assistantAppContext, selectedSubject, selectedAssistantContext } from '../src/assistant-app-context.js';
 import { COACH_MOMENT_KEYS } from '../src/coach-assistant.js';
-import { replyPush, failedReplyPush, pushOpening, plainText, shortBody, COACH_ACTION_CATEGORY, COACH_REPLY_CATEGORY } from '../src/coach-push-reply.js';
-import { appendChatTurn, readChat, startChatWithCoach, lastAnswerId, chatContext } from '../src/assistant-chats.js';
+import { replyPush, failedReplyPush, foreignPushReply, pushOpening, plainText, shortBody, COACH_ACTION_CATEGORY, COACH_REPLY_CATEGORY } from '../src/coach-push-reply.js';
+import { appendChatTurnIds, readChat, startChatWithCoach, chatContext } from '../src/assistant-chats.js';
 import { createD1 } from './helpers/d1.mjs';
 import { scopedDb } from '../src/tenancy.js';
 
@@ -44,10 +44,11 @@ test('the selected context carries the open activity', async () => {
 });
 
 test('the coach answers a notification with a notification', () => {
-  const one = replyPush({ answer: '**Dobře**, zítra místo prahu 40 min sweet spot 3 × 8.\n\n[Návrhy: výměna]', actions: [{ type: 'replace', draftId: 41 }] }, 7);
+  const one = replyPush({ answer: '**Dobře**, zítra místo prahu 40 min sweet spot 3 × 8.\n\n[Návrhy: výměna]', actions: [{ type: 'replace', draftId: 41 }] }, 7, 3);
   assert.equal(one.category, COACH_ACTION_CATEGORY);
   assert.equal(one.alert.body, 'Dobře, zítra místo prahu 40 min sweet spot 3 × 8.');
-  assert.deepEqual(one.data, { coach: { kind: 'reply', chatId: 7, draftId: 41 } });
+  assert.deepEqual(one.data, { coach: { kind: 'reply', chatId: 7, account: 3, draftId: 41 } });
+  assert.equal(failedReplyPush(null, 7, 3).data.coach.account, 3);
   const two = replyPush({ answer: 'Dvě změny.', actions: [{ draftId: 1 }, { draftId: 2 }] }, 7);
   assert.equal(two.category, COACH_REPLY_CATEGORY);assert.match(two.alert.body, /v aplikaci/);assert.equal(two.data.coach.draftId, undefined);
   assert.equal(replyPush({ answer: 'Jen text.', actions: [] }, 7).category, COACH_REPLY_CATEGORY);
@@ -57,15 +58,31 @@ test('the coach answers a notification with a notification', () => {
   assert.equal(pushOpening('Tři krátké noci za sebou', 'Zítřejší práh vyměním?'), '**Tři krátké noci za sebou**\n\nZítřejší práh vyměním?');
 });
 
+// Security audit 2026-11-04, point 23: a notification another account got on
+// this phone (signed out since) cannot write into this account's chat.
+test('a reply to another account\'s notification is refused', () => {
+  assert.equal(foreignPushReply({ account: 3, chatId: 7 }, 3, true), false);
+  assert.equal(foreignPushReply({ account: 3, chatId: 7 }, 3, false), false, 'its own chat deleted meanwhile: a new chat');
+  assert.equal(foreignPushReply({ account: 3 }, 3, false), false);
+  assert.equal(foreignPushReply({ account: 4, chatId: 7 }, 3, true), true, 'another account, even with a chat id this account has too');
+  assert.equal(foreignPushReply({ account: 4 }, 3, false), true);
+  // An older app sends no account: a chat id that is not this account's is refused.
+  assert.equal(foreignPushReply({ chatId: 7 }, 3, false), true);
+  assert.equal(foreignPushReply({ chatId: 7 }, 3, true), false);
+  assert.equal(foreignPushReply({}, 3, false), false);
+});
+
 test('a chat answered from a push starts with the push and keeps message ids', async () => {
   const raw = createD1(), db = scopedDb(raw, 1), other = scopedDb(raw, 2);
   const id = await startChatWithCoach(db, 'Tři krátké noci za sebou', pushOpening('Tři krátké noci za sebou', 'Zítřejší práh vyměním?'));
-  assert.equal(await appendChatTurn(db, id, 'Mám jen 40 minut', 'Dám ti sweet spot.'), id);
+  const turn = await appendChatTurnIds(db, id, 'Mám jen 40 minut', 'Dám ti sweet spot.');
+  assert.equal(turn.chatId, id);
   const chat = await readChat(db, id);
   assert.equal(chat.title, 'Tři krátké noci za sebou');
   assert.deepEqual(chat.messages.map(m => m.role), ['assistant', 'user', 'assistant']);
   assert.ok(chat.messages.every(m => Number.isInteger(m.id)));
-  assert.equal(await lastAnswerId(db, id), chat.messages[2].id);
-  assert.equal(await lastAnswerId(other, id), null);
+  // The answer's id, which the proposals and the thumbs under it point to.
+  assert.equal(turn.messageId, chat.messages[2].id);
+  assert.equal(await readChat(other, id), null);
   assert.deepEqual((await chatContext(db, id)).map(t => t.role), ['assistant', 'user', 'assistant']);
 });

@@ -16,6 +16,39 @@ final class SnapshotTests: XCTestCase {
         try render("today", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
     }
 
+    /// The tabs at the iPhone Duo's widths (duo-*): closed (466), a third and half
+    /// of the open display in landscape (317, 475) and the whole of it (951, two
+    /// columns: WideLayout).
+    func testDuoWidths() throws {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        let widths: [(String, CGFloat)] = [("closed", 466), ("third", 317), ("half", 475), ("open", 951)]
+        for (name, width) in widths {
+            let wide = width >= WideLayout.minWidth
+            try render("duo-\(name)-today", glow: Palette.Glow.today, width: width, window: true) {
+                TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40)
+                    .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
+            }
+            // A NavigationStack does not measure its height, and a very tall window draws
+            // nothing: these two stop at a set height, their top as on the screen.
+            try render("duo-\(name)-health", glow: Palette.Glow.health, height: 1500, width: width, window: true) {
+                NavigationStack { ScrollView { HealthContent(health: DemoData.health) }.scrollIndicators(.hidden) }.padding(.top, 50).padding(.bottom, 40)
+                    .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
+            }
+            try render("duo-\(name)-food", glow: Palette.Glow.food, width: width, window: true) {
+                FoodContent(food: DemoData.food).padding(.top, 50).padding(.bottom, 40)
+                    .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
+            }
+            try render("duo-\(name)-training", glow: Palette.Glow.training, height: 1500, width: width, window: true) {
+                ScrollView { TrainingContent(training: DemoData.training).padding(.top, 50) }.scrollIndicators(.hidden)
+                    .environment(AppModel(demo: true)).environment(\.locale, L10n.locale).environment(\.wideLayout, wide)
+            }
+        }
+    }
+
     func testRecoveryTimeDays() {
         // Days only, never a clock time; after 22:00 it counts for the next morning.
         var parts = DateComponents(year: 2026, month: 10, day: 15, hour: 23, minute: 30)
@@ -190,6 +223,24 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// Under the last answer: copy, thumbs and the time; copied, up and down; and the panel after a thumb down.
+    func testCoachAnswerActions() throws {
+        let at = Date(timeIntervalSince1970: 1_793_213_880)
+        try render("coach-answer-actions", height: 520) {
+            VStack(alignment: .leading, spacing: 14) {
+                BubbleView(bubble: CoachView.Bubble(mine: false, text: "Ano. HRV je zpátky v obvyklém rozmezí a spal jsi 7:12, takže dnes sedí plánované **VO2max 5×4 min**.", at: at),
+                           last: true, rate: { _ in }, decide: { _, _ in })
+                AnswerActions(text: "x", rating: "up", at: at, rate: { _ in })
+                AnswerActions(text: "x", rating: "down", at: at, rate: { _ in })
+                AnswerActions(text: "x", rating: nil, at: nil, rate: nil)
+            }
+            .padding(24).environment(AppModel(demo: true))
+        }
+        try render("coach-answer-feedback", height: 420) {
+            AnswerFeedbackSheet(send: { _ in }, report: {})
+        }
+    }
+
     /// The coach's swim cards: 8×100 m at CSS in the pool, and open water with the safety line.
     func testCoachSwimCards() throws {
         func step(_ meters: Int, _ pct: Double, css: Double = 108, rest: Bool = false) -> String {
@@ -258,6 +309,7 @@ final class SnapshotTests: XCTestCase {
         try render("settings", height: 1700) { NavigationStack { SettingsMenu(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-profile", height: 900) { NavigationStack { ProfileSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-sources", height: 900) { NavigationStack { SourcesSettingsView(store: store) }.environment(AppModel(demo: true)) }
+        try render("settings-sports", height: 900) { NavigationStack { SportsSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-goals", height: 1300) { NavigationStack { GoalsSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-zones", height: 700) { NavigationStack { ZonesSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-gym", height: 700) { NavigationStack { GymSettingsView() }.environment(AppModel(demo: true)) }
@@ -391,15 +443,39 @@ final class SnapshotTests: XCTestCase {
             UserDefaults.standard.removeObject(forKey: "AppleLanguages")
         }
         var focus = SetupFocus(profile: ["mainSport": .string("triathlon"), "sportGoal": .string("závod"), "eventName": .string("Ironman 70.3"), "eventDate": .string("2027-06-13")])
-        XCTAssertEqual(focus.sport, "triathlon")
+        // A profile from before the list: its one main sport is ticked and main.
+        XCTAssertEqual(focus.sports.kinds, ["ride", "run", "swim"])
+        XCTAssertEqual(focus.sports.mainSport, "triathlon")
         XCTAssertEqual(focus.goal, "race")
         let saved = focus.applied(to: ["sex": .string("male")])
         XCTAssertEqual(saved["sex"], .string("male"))
         XCTAssertEqual(saved["mainSport"], .string("triathlon"))
+        XCTAssertEqual(saved["sports"], .array([.string("ride"), .string("run"), .string("swim")]))
         XCTAssertEqual(saved["eventDate"], .string("2027-06-13"))
+        // Ride and Run main without a duathlon, the gym too (Petr 2026-11-03).
+        var choice = SportsChoice()
+        choice.toggle("ride")
+        XCTAssertEqual(choice.mains, ["ride"], "the first sport ticked is the main one")
+        choice.toggleMain("run")
+        choice.toggle("strength")
+        XCTAssertEqual(choice.kinds, ["ride", "run", "strength"])
+        XCTAssertEqual(choice.mains, ["ride", "run"])
+        XCTAssertEqual(choice.mainSport, "cycling")
+        choice.toggle("ride")
+        XCTAssertEqual(choice.mains, ["run"], "a sport unticked stops being main")
+        choice.toggle("ride")
+        choice.toggleMain("ride")
+        XCTAssertEqual(SportsChoice(profile: choice.applied(to: [:])), choice)
+        focus.sports = choice
         focus.swims100 = true
         try render("setup-sport-en", height: 844) { SetupSportPage(focus: .constant(focus)).padding(24).padding(.top, 40).environment(\.locale, L10n.locale) }
+        try render("setup-sport-swim-en", height: 844) {
+            SetupSportPage(focus: .constant(SetupFocus(profile: ["sports": .array([.string("ride"), .string("swim"), .string("strength")]), "mainSports": .array([.string("ride")]), "swims100": .bool(true)])))
+                .padding(24).padding(.top, 40).environment(\.locale, L10n.locale)
+        }
         try render("setup-goal-en", height: 844) { SetupGoalPage(focus: .constant(focus)).padding(24).padding(.top, 40).environment(\.locale, L10n.locale) }
+        // The steps over the pages (point 6): the goal is page 4 of 6.
+        try render("setup-steps-en", height: 80) { SetupSteps(done: 4, total: 6).padding(24) }
         try render("setup-time-en", height: 844) {
             SetupTimePage(minutes: .constant([60, 0, 75, 0, 45, 270, 120]), loading: false, lifts: true) {}
                 .padding(24).padding(.top, 40).environment(\.locale, L10n.locale)
@@ -810,10 +886,52 @@ final class SnapshotTests: XCTestCase {
         try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore()) }
         try render("paywall-plans-trial", height: 844) { PaywallView(close: {}, frozenTime: 5.5, step: 1, store: ProStore(trialEligible: true)) }
         try render("paywall-free-week", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true)) }
-        try render("paywall-all-plans", height: 700) {
-            AllProPlans(offers: ProOffer.all(ProStore(trialEligible: true)), selected: .constant(.yearOnce), buying: false, start: {}, redeem: {}, restore: {})
+        // The end of the first setup (point 7): no way back, "Teď ne" under the button.
+        try render("paywall-setup-end", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true), notNow: true) }
+        // "View more plans" (variant 8c): where the year can be paid monthly (CZ) and where it can't (US).
+        let czech = ProOffer.plans(yearly: "1 490 Kč", monthly: "199 Kč", perMonth: "124 Kč",
+                                   commitment: ProStore.Commitment(monthly: "149 Kč", total: "1 788 Kč"), trial: true)
+        try render("paywall-all-plans", height: 900, window: true) {
+            AllProPlans(offers: czech, selected: .constant(.yearMonthly), buying: false, start: {}, redeem: {}, restore: {})
                 .background(Night.bottom)
         }
+        try render("paywall-all-plans-monthly", height: 900, window: true) {
+            AllProPlans(offers: czech, selected: .constant(.monthly), buying: false, start: {}, redeem: {}, restore: {})
+                .background(Night.bottom)
+        }
+        try render("paywall-all-plans-large-text", height: 1400, typeSize: .accessibility3, window: true) {
+            AllProPlans(offers: czech, selected: .constant(.yearMonthly), buying: false, start: {}, redeem: {}, restore: {})
+                .background(Night.bottom)
+        }
+        L10n.setLanguage("en")
+        defer { L10n.setLanguage("cs"); UserDefaults.standard.removeObject(forKey: "AppleLanguages") }
+        let american = ProOffer.plans(yearly: "$59.99", monthly: "$6.99", perMonth: "$5.00", commitment: nil, trial: true)
+        try render("paywall-all-plans-us-en", height: 900, window: true) {
+            AllProPlans(offers: american, selected: .constant(.yearOnce), buying: false, start: {}, redeem: {}, restore: {})
+                .background(Night.bottom).environment(\.locale, L10n.locale)
+        }
+    }
+
+    /// What each plan saves against paying monthly (variant 8c): only the yearly plans, in whole percent.
+    func testPlanSavings() throws {
+        let czech = ProOffer.plans(yearly: "1\u{202F}490,00\u{00A0}Kč", monthly: "199,00\u{00A0}Kč", perMonth: "124\u{00A0}Kč",
+                                   commitment: ProStore.Commitment(monthly: "149,00\u{00A0}Kč", total: "1\u{202F}788,00\u{00A0}Kč"), trial: true)
+        XCTAssertEqual(czech.map(\.kind), [.yearMonthly, .yearOnce, .monthly])
+        XCTAssertEqual(czech.map(\.save), [25, 37, nil], "149 vs 199, 1 490 vs 12 × 199 (37.6, rounded down), monthly none")
+        let american = ProOffer.plans(yearly: "$59.99", monthly: "$6.99", perMonth: "$5.00", commitment: nil, trial: true)
+        XCTAssertEqual(american.map(\.save), [28, nil])
+        // An English phone in Czechia or Germany: the same numbers, never "SAVE 100%".
+        let english = ProOffer.plans(yearly: "CZK 1,490", monthly: "CZK 199", perMonth: nil,
+                                     commitment: ProStore.Commitment(monthly: "CZK 149.00", total: "CZK 1,788.00"), trial: true)
+        XCTAssertEqual(english.map(\.save), [25, 37, nil])
+        XCTAssertEqual(ProStore.number("1.490,00 €"), 1490)
+        XCTAssertEqual(ProStore.number("1\u{202F}490\u{00A0}Kč"), 1490)
+        XCTAssertEqual(ProStore.number("$59.99"), Decimal(string: "59.99"))
+        XCTAssertEqual(ProStore.number("5,99 €"), Decimal(string: "5.99"))
+        XCTAssertNil(ProStore.number("Kč"))
+        XCTAssertNil(ProOffer.saving(Decimal(string: "1.49"), months: 12, against: Decimal(199)), "a price read wrong, no label")
+        XCTAssertNil(ProOffer.saving(Decimal(199), months: 1, against: Decimal(199)), "no saving, no label")
+        XCTAssertNil(ProOffer.saving(nil, months: 12, against: Decimal(199)), "a price without a number, no label")
     }
 
     /// Settings → Aurin Pro in night violet: active, the free week on day 3,
@@ -1013,16 +1131,57 @@ final class SnapshotTests: XCTestCase {
             NavigationStack { ActivePlanContent(active: run, preview: nil, week: nil, editGoal: {}).padding(.horizontal, 24) }.environment(model)
         }
         try render("plan-goal-time", height: 620) { GoalTimeSheet(km: 21.1, estimate: 6270, weeks: 10, initial: 6120) { _ in } }
-        // Multisport: a duathlon (its race's sports, run, ride, run on race day) and a plan without a race with picked sports.
-        let du = #"{"id":"du-standard","sport":"triathlon","name":"Standardní duatlon","goal":"Běh 10 km, kolo 40 km, běh 5 km","description":"","level":"intermediate","weeksCount":12,"days":[5,7],"race":{"km":55,"options":null,"kind":"du-standard","legList":[{"sport":"run","km":10},{"sport":"ride","km":40},{"sport":"run","km":5}]},"perSport":{"ride":3,"run":3},"sports":["ride","run"],"weeks":[\#(weeks)]}"#
-        let duPlan = #"{"templates":[\#(du)],"active":{"id":11,"templateId":"du-standard","name":"Standardní duatlon","startDate":"2026-10-19","raceDate":"2027-01-10","raceKm":55,"week":6,"weeksCount":12,"phaseLabel":"Budování","started":true,"paused":false,"shiftedWeeks":0,"returning":false,"sports":["ride","run"],"perSport":{"ride":3,"run":3},"race":{"km":55,"kind":"du-standard","minutes":131,"legList":[{"sport":"run","km":10,"minutes":44},{"sport":"ride","km":40,"minutes":66},{"sport":"run","km":5,"minutes":21}]},"template":\#(du)},"activeGym":null,"started":null}"#
+        // Multisport in English, as the post on X shows it (the server's English
+        // templates, src/training-plans.js): a sprint duathlon (its race's sports, run,
+        // ride, run on race day, the same race as the watch's -race) and a plan without
+        // a race with picked sports, each sheet with its overview instead of the spinner.
+        L10n.setLanguage("en")
+        typealias PlanWeek = (phase: String, label: String, load: Double, keys: [String], sessions: Int, minutes: Int, tss: Int)
+        func planWeekJSON(_ list: [PlanWeek]) -> String {
+            list.enumerated().map { i, w in
+                #"{"week":\#(i + 1),"phase":"\#(w.phase)","phaseLabel":"\#(w.label)","load":\#(w.load),"keys":[\#(w.keys.map { "\"\($0)\"" }.joined(separator: ","))],"longMinutes":null,"race":\#(w.phase == "race")}"#
+            }.joined(separator: ",")
+        }
+        func previewWeekJSON(_ list: [PlanWeek]) -> String {
+            list.enumerated().map { i, w in
+                #"{"week":\#(i + 1),"phase":"\#(w.phase)","phaseLabel":"\#(w.label)","keys":[\#(w.keys.map { "\"\($0)\"" }.joined(separator: ","))],"race":\#(w.phase == "race"),"sessions":\#(w.sessions),"minutes":\#(w.minutes),"tss":\#(w.tss)}"#
+            }.joined(separator: ",")
+        }
+        let duWeekList: [PlanWeek] = [
+            ("base", "Base", 1, ["Tempo 2×10", "Fartlek pyramid 1-2-3-2-1"], 5, 365, 315),
+            ("base", "Base", 1.03, ["Tempo 2×15", "Hills 6×90 s"], 5, 375, 324),
+            ("base", "Base", 1.06, ["Tempo 2×15", "Fartlek pyramid 1-2-3-4-3-2-1"], 5, 390, 337),
+            ("recovery", "Recovery", 0.7, [], 5, 260, 225),
+            ("build", "Build", 1.04, ["Sweet Spot 3×15", "Threshold intervals 3×10 min"], 5, 365, 315),
+            ("peak", "Peak", 1.08, ["Threshold 2×20", "Sub-threshold 4×8 min"], 5, 385, 333),
+            ("peak", "Peak", 1.08, ["Threshold 2×20", "Sub-threshold 4×8 min"], 5, 390, 337),
+            ("recovery", "Recovery", 0.7, [], 5, 255, 220),
+            ("taper", "Taper", 0.72, ["Threshold 3×10", "Threshold intervals 3×8 min"], 5, 250, 216),
+            ("race", "Race", 0.5, [], 5, 165, 143)]
+        let du = #"{"id":"du-sprint","sport":"triathlon","name":"Sprint duathlon","goal":"5 km run, 20 km ride, 2.5 km run","description":"","level":"beginner","weeksCount":10,"days":[4,6],"race":{"km":27.5,"options":null,"kind":"du-sprint","legList":[{"sport":"run","km":5},{"sport":"ride","km":20},{"sport":"run","km":2.5}]},"perSport":{"ride":2,"run":3},"sports":["ride","run"],"weeks":[\#(planWeekJSON(duWeekList))]}"#
+        let duPlan = #"{"templates":[\#(du)],"active":{"id":11,"templateId":"du-sprint","name":"Sprint duathlon","startDate":"2026-10-05","raceDate":"2026-12-13","raceKm":27.5,"week":5,"weeksCount":10,"phaseLabel":"Build","started":true,"paused":false,"shiftedWeeks":0,"returning":false,"sports":["ride","run"],"perSport":{"ride":2,"run":3},"completion":{"1":100,"2":94,"3":88,"4":100},"race":{"km":27.5,"kind":"du-sprint","minutes":80,"legList":[{"sport":"run","km":5,"minutes":22},{"sport":"ride","km":20,"minutes":36},{"sport":"run","km":2.5,"minutes":12}]},"template":\#(du)},"activeGym":null,"started":null}"#
         let duathlon = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(duPlan.utf8)).active)
         try render("plan-race-duathlon", glow: Palette.Glow.training, height: 700) {
-            NavigationStack { ActivePlanContent(active: duathlon, preview: nil, week: nil).padding(.horizontal, 24) }.environment(model)
+            NavigationStack { ActivePlanContent(active: duathlon, preview: nil, week: nil).padding(.horizontal, 24) }.environment(model).environment(\.locale, L10n.locale)
         }
-        try render("plan-start-duathlon", height: 900) { StartPlanSheet(template: duathlon.template).environment(model) }
-        let multi = try decoder.decode(TrainingPlans.Template.self, from: Data(#"{"id":"multi-base","sport":"triathlon","name":"Multisport","goal":"Kondice ve dvou nebo třech sportech","description":"","level":"intermediate","weeksCount":12,"days":[4,7],"race":null,"perSport":{"ride":2,"run":2,"swim":2},"sports":["ride","run","swim"],"choose":true,"weeks":[\#(weeks)]}"#.utf8))
-        try render("plan-start-multisport", height: 900) { StartPlanSheet(template: multi).environment(model) }
+        let duPreview = try decoder.decode(PlanPreview.self, from: Data(#"{"startDate":"2026-11-09","firstDay":null,"endDate":"2027-01-17","days":[1,2,4,5,6],"weeks":[\#(previewWeekJSON(duWeekList))],"totals":{"sessions":50,"minutes":3200,"tss":2765}}"#.utf8))
+        try render("plan-start-duathlon", height: 1500) { StartPlanSheet(template: duathlon.template, initial: duPreview).environment(model).environment(\.locale, L10n.locale) }
+        let multiWeekList: [PlanWeek] = [
+            ("base", "Base", 1, ["Tempo 2×10", "Fartlek pyramid 1-2-3-2-1"], 6, 365, 315),
+            ("base", "Base", 1.03, ["Tempo 2×10", "Hills 6×90 s"], 6, 375, 324),
+            ("base", "Base", 1.06, ["Tempo 2×15", "Fartlek pyramid 1-2-3-2-1"], 6, 390, 337),
+            ("recovery", "Recovery", 0.7, [], 6, 260, 225),
+            ("base", "Base", 1, ["Tempo 2×15", "Fartlek pyramid 1-2-3-4-3-2-1"], 6, 355, 307),
+            ("build", "Build", 1.06, ["Threshold 2×15", "Tempo run 25 min"], 6, 375, 324),
+            ("build", "Build", 1.08, ["Sweet Spot 3×15", "Threshold intervals 4×8 min"], 6, 385, 333),
+            ("recovery", "Recovery", 0.7, [], 6, 255, 220),
+            ("build", "Build", 1.04, ["Sweet Spot 3×15", "Threshold intervals 3×10 min"], 6, 360, 311),
+            ("peak", "Peak", 1.08, ["Threshold 2×20", "Sub-threshold 4×8 min"], 6, 375, 324),
+            ("peak", "Peak", 1.08, ["Threshold 2×20", "Sub-threshold 4×8 min"], 6, 380, 328),
+            ("recovery", "Recovery", 0.7, [], 6, 250, 216)]
+        let multi = try decoder.decode(TrainingPlans.Template.self, from: Data(#"{"id":"multi-base","sport":"triathlon","name":"Multisport","goal":"Fitness in two or three sports","description":"","level":"intermediate","weeksCount":12,"days":[4,7],"race":null,"perSport":{"ride":2,"run":2,"swim":2},"sports":["ride","run","swim"],"choose":true,"weeks":[\#(planWeekJSON(multiWeekList))]}"#.utf8))
+        let multiPreview = try decoder.decode(PlanPreview.self, from: Data(#"{"startDate":"2026-11-09","firstDay":null,"endDate":"2027-01-31","days":[1,2,4,5,6],"sports":["ride","run"],"weeks":[\#(previewWeekJSON(multiWeekList))],"totals":{"sessions":72,"minutes":4125,"tss":3564}}"#.utf8))
+        try render("plan-start-multisport", height: 1700) { StartPlanSheet(template: multi, initial: multiPreview).environment(model).environment(\.locale, L10n.locale) }
         try render("plan-sports", height: 420) { PlanSportsSheet(initial: ["ride", "swim"]).environment(model) }
         // A gym plan with its strength tests, and its result with the lifts before and after.
         let testKeys = "\"Dřep, bench, mrtvý tah: odhad maxima\",\"3× týdně\"", workKeys = "\"3× týdně\",\"5 × 5\",\"RPE 8\""

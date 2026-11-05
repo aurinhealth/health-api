@@ -10,6 +10,8 @@ test("each minute names the jobs due then: syncing always, the rest on their min
   assert.ok(dueUserJobs("* * * * *", at(10, 5)).includes("wahoo-exports"));
   assert.ok(dueUserJobs("* * * * *", at(10, 20)).includes("ultrahuman"));
   assert.ok(dueUserJobs("* * * * *", at(10, 25)).includes("whoop"));
+  assert.ok(dueUserJobs("* * * * *", at(10, 45)).includes("intervals-catchup"));
+  assert.ok(!dueUserJobs("* * * * *", at(10, 46)).includes("intervals-catchup"));
   assert.ok(dueUserJobs("* * * * *", at(9, 35)).includes("wahoo"));
   // Every hour at :35; off the three-hour mark it reads Wahoo only on a day with a ride planned (wahooRideExpected).
   assert.ok(dueUserJobs("* * * * *", at(10, 35)).includes("wahoo"));
@@ -48,6 +50,22 @@ test("the coach's push goes to everyone with a phone to notify, whatever they co
   // Off the push minutes, or without APNs, only the users with a service.
   assert.deepEqual((await fanOut(apns, at(17, 6))).map(m => m.user.id), [1]);
   assert.deepEqual((await fanOut({}, at(17, 5))).map(m => m.user.id), [1]);
+});
+
+test("Aurin's own VO2max runs once a day for every consenting user, whatever they connected", async () => {
+  assert.ok(dueUserJobs("* * * * *", at(4, 47)).includes("fitness-estimate"));
+  assert.ok(!dueUserJobs("* * * * *", at(4, 45)).includes("fitness-estimate"));
+  assert.ok(!dueUserJobs("* * * * *", at(5, 47)).includes("fitness-estimate"));
+  const db = database(1);
+  // 2: Apple Health only, no phone; 3: consent withdrawn; 4: blocked.
+  for (const [id, consent, disabled] of [[2, true, 0], [3, false, 0], [4, true, 1]]) {
+    db.sqlite.prepare("INSERT INTO users (id, email, name, role, disabled) VALUES (?, ?, ?, 'user', ?)").run(id, "u" + id + "@example.com", "U" + id, disabled);
+    db.sqlite.prepare("INSERT INTO user_consents VALUES (?, 'health', ?)").run(id, consent ? null : "2026-10-01");
+  }
+  const sent = [];
+  await fanOutUserJobs({ DB: db, OWNER_EMAIL: "owner@example.com", USER_JOBS: { run: async message => { sent.push(message); return { ok: true }; } } }, {}, { cron: "* * * * *", scheduledTime: at(4, 47).getTime() });
+  assert.deepEqual(sent.map(m => m.user.id), [1, 2]);
+  assert.ok(sent.every(m => m.names.includes("fitness-estimate")));
 });
 
 function database(count) {

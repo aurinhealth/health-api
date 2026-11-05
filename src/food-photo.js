@@ -19,7 +19,7 @@ export const FOOD_PHOTO_SCHEMA = {
   schema: {
     type: "object",
     additionalProperties: false,
-    required: ["kind", "name", "basis", "serving_size", "calories", "protein_g", "carbs_g", "fat_g", "sugar_g", "fiber_g", "salt_g", "confidence", "note"],
+    required: ["kind", "name", "basis", "serving_size", "calories", "protein_g", "carbs_g", "fat_g", "sugar_g", "fiber_g", "salt_g", "confidence", "note", "items"],
     properties: {
       kind: { type: "string", enum: ["label", "portion_summary", "meal_photo", "unreadable"] },
       name: { type: "string" },
@@ -27,7 +27,11 @@ export const FOOD_PHOTO_SCHEMA = {
       serving_size: { type: "string" },
       calories: nullableNumber, protein_g: nullableNumber, carbs_g: nullableNumber, fat_g: nullableNumber, sugar_g: nullableNumber, fiber_g: nullableNumber, salt_g: nullableNumber,
       confidence: { type: "string", enum: ["high", "medium", "low"] },
-      note: { type: "string" }
+      note: { type: "string" },
+      // A meal photo with 2+ foods on the plate, one by one (empty otherwise).
+      items: { type: "array", items: { type: "object", additionalProperties: false,
+        required: ["name", "grams", "calories_100g", "protein_100g", "carbs_100g", "fat_100g"],
+        properties: { name: { type: "string" }, grams: { type: "number" }, calories_100g: nullableNumber, protein_100g: nullableNumber, carbs_100g: nullableNumber, fat_100g: nullableNumber } } }
     }
   }
 };
@@ -64,14 +68,36 @@ export function photoResultFromAnswer(answer, mode = "label") {
     values.fiber_100g != null ? L("Vláknina ", "Fibre ") + decimal(values.fiber_100g) + " g" : "",
     values.salt_100g != null ? L("Sůl ", "Salt ") + decimal(values.salt_100g) + " g" : ""].filter(Boolean);
   const confidence = ["high", "medium", "low"].includes(r.confidence) ? r.confidence : "low";
+  const items = portion && r.kind === "meal_photo" ? mealItems(r.items) : [];
   return {
     kind: ["label", "portion_summary", "meal_photo"].includes(r.kind) ? r.kind : "label",
     name, basis, values, text: lines.join("\n"),
     servingSize: String(r.serving_size || "").trim().slice(0, 60),
     confidence: r.kind === "meal_photo" && confidence === "high" ? "medium" : confidence,
     note: String(r.note || "").trim().slice(0, 300),
-    warning: nutritionConsistency(values)
+    warning: nutritionConsistency(values),
+    ...(items.length >= 2 ? { items } : {})
   };
+}
+
+// The foods on a plate as the app lists them (point 3 of the competitor
+// comparison): at most 6, each with its grams and values per 100 g. An item
+// that is not a food (no name, no energy, impossible values) is dropped; with
+// fewer than 2 left the photo stays one food, as before.
+export function mealItems(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const item of list) {
+    const name = String(item?.name || "").trim().slice(0, 120);
+    const grams = num(item?.grams);
+    const values = {};
+    for (const key of ["calories_100g", "protein_100g", "carbs_100g", "fat_100g"]) { const v = num(item?.[key]); if (v != null && v >= 0) values[key] = v; }
+    if (!name || grams == null || grams < 1 || grams > 2000 || values.calories_100g == null) continue;
+    if (values.calories_100g > 950 || ["protein_100g", "carbs_100g", "fat_100g"].some(k => values[k] > 100)) continue;
+    out.push({ name, grams: Math.round(grams), ...values });
+    if (out.length === 6) break;
+  }
+  return out;
 }
 
 export function validFoodImage(image) {

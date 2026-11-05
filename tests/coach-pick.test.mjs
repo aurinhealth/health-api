@@ -155,3 +155,21 @@ test("a workout the athlete planned for today takes Aktivita dne like a choice",
   const route = src.slice(src.indexOf("if(url.pathname==='/app/api/coach/pick')"), src.indexOf("if(url.pathname==='/app/api/coach/check-in'"));
   assert.match(route, /chosen:dayChoice\(\{chosen:state\.chosen,planned\}\)/);
 });
+
+// Marie, 2026-11-02: runs and the gym, never a ride; three declined runs and a
+// declined gym day put the ride first on a tie (yellow and green mornings).
+test("declines never turn a sport the athlete doesn't do into the day's activity", () => {
+  const declines = [{ top: "run" }, { top: "gym" }, { top: "run" }, { top: "run" }];
+  for (const status of ["yellow", "green"]) {
+    const r = rankOptions({ ride: coach(status, "endurance", 60, 1), run: coach(status, "endurance"), mainSport: "general", sports: ["run", "strength", "walk"], declines });
+    assert.notEqual(r.options[0].kind, "ride", status);
+    assert.ok(r.options.some(o => o.kind === "ride"), "the ride stays among the other options");
+  }
+});
+
+test("a new general-fitness account gets the gym or a run, never a ride", () => {
+  const r = rankOptions({ ride: coach("yellow", "endurance"), run: coach("yellow", "endurance"), mainSport: "general", sports: [] });
+  assert.ok(["gym", "run"].includes(r.options[0].kind), r.options[0].kind);
+  const cyclist = rankOptions({ ride: coach("yellow", "endurance"), run: coach("yellow", "endurance"), mainSport: "cycling", sports: [] });
+  assert.equal(cyclist.options[0].kind, "ride");
+});

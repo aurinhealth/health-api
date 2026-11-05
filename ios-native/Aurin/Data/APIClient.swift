@@ -204,6 +204,14 @@ final class APIClient: @unchecked Sendable {
         return r.chat
     }
 
+    /// The thumb under a coach answer ("up", "down" or nil to take it back) and,
+    /// with down, a reason from AnswerFeedbackReason. Only these are stored.
+    func rateAnswer(messageId: Int, rating: String?, reason: String? = nil) async throws {
+        var body: JSONObject = ["messageId": .number(Double(messageId)), "rating": rating.map { .string($0) } ?? .null]
+        if let reason { body["reason"] = .string(reason) }
+        let _: JSONValue = try await send("/app/api/assistant/feedback", method: "POST", body: body)
+    }
+
     func deleteChat(id: Int) async throws {
         let _: JSONValue = try await send("/app/api/assistant/chats/\(id)", method: "DELETE", body: JSONObject())
     }
@@ -514,9 +522,10 @@ final class APIClient: @unchecked Sendable {
         return (name, r.brand?.trimmingCharacters(in: .whitespaces).nilIfBlank)
     }
 
-    func readFoodPhoto(_ jpeg: Data, mode: String) async throws -> (product: FoodProduct, note: String?) {
+    func readFoodPhoto(_ jpeg: Data, mode: String) async throws -> (product: FoodProduct, note: String?, items: [PhotoItem]) {
         struct Values: Decodable { let calories_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, sugars_100g, salt_100g: Double? }
-        struct Response: Decodable { let status: String?; let name: String?; let basis: String?; let values: Values?; let servingSize: String?; let note: String?; let warning: String?; let message: String? }
+        struct Item: Decodable { let name: String; let grams: Double; let calories_100g, protein_100g, carbs_100g, fat_100g: Double? }
+        struct Response: Decodable { let status: String?; let name: String?; let basis: String?; let values: Values?; let servingSize: String?; let note: String?; let warning: String?; let message: String?; let items: [Item]? }
         let body: JSONObject = ["image": .string("data:image/jpeg;base64," + jpeg.base64EncodedString()), "mode": .string(mode)]
         let r: Response = try await send("/app/api/food/photo", method: "POST", body: body, timeout: 180)
         guard r.status == "ok", let v = r.values else { throw APIError.message(r.message ?? L10n.tr("Na fotce se hodnoty nepodařilo přečíst.")) }
@@ -528,7 +537,12 @@ final class APIClient: @unchecked Sendable {
         product.fiber_100g = v.fiber_100g
         product.sugars_100g = v.sugars_100g
         product.salt_100g = v.salt_100g
-        return (product, [r.note, r.warning].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " ").nilIfBlank)
+        // A plate with several foods (src/food-photo.js mealItems): each one per 100 g, an AI estimate.
+        let items = (r.items ?? []).map { i in
+            PhotoItem(product: FoodProduct(name: i.name, calories_100g: i.calories_100g, protein_100g: i.protein_100g, carbs_100g: i.carbs_100g,
+                                           fat_100g: i.fat_100g, source: "ai-estimate"), amount: i.grams)
+        }
+        return (product, [r.note, r.warning].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " ").nilIfBlank, items)
     }
 
     func logFood(_ request: FoodLogRequest) async throws {
@@ -635,10 +649,11 @@ final class APIClient: @unchecked Sendable {
 
     /// Step 2: the code moves the account to the new address; returns it. The
     /// account, its data and subscription stay; every other device is signed
-    /// out and this one gets a fresh cookie.
+    /// out (and gets no more notifications) and this one gets a fresh cookie.
     func verifyEmailChange(email: String, code: String) async throws -> String {
         struct Changed: Decodable { let email: String? }
-        let changed: Changed = try await send("/app/api/account/email/verify", method: "POST", body: ["email": JSONValue.string(email), "code": .string(code)])
+        let changed: Changed = try await send("/app/api/account/email/verify", method: "POST",
+                                              body: ["email": JSONValue.string(email), "code": .string(code), "pushToken": PushRegistration.sentToken])
         return changed.email?.nilIfBlank ?? email
     }
 

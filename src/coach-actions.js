@@ -1,3 +1,4 @@
+import { sportAllowed } from './sport-choice.js';
 import { L } from './lang.js';
 import { validDay } from './training-availability.js';
 import { trainingStatus } from './training-status.js';
@@ -19,7 +20,7 @@ export const WORKOUT_KINDS=['recovery','endurance','long','tempo','sweet_spot','
 // The muscle groups a gym card can be built around (strength-generator.js
 // FOCUS_GROUPS, the same ids; a test keeps them equal).
 export const GYM_MUSCLES=['chest','upper_back','lats','front_delts','side_delts','rear_delts','biceps','triceps','abs','obliques','quads','hamstrings','hips','calves','forearms','traps','lower_back'];
-export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','visuals','actions','memory'],properties:{answer:{type:'string'},memory:{type:'object',additionalProperties:false,required:['forget','update'],properties:{forget:{type:'array',items:{type:'string'}},update:{type:'array',items:{type:'object',additionalProperties:false,required:['from','to'],properties:{from:{type:'string'},to:{type:'string'}}}}}},visuals:{type:'array',items:{type:'string',enum:COACH_VISUALS}},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','statusUntil','reason','fromExercise','toExercise','workoutId','kind','place','activityId','otherActivityId','time','kcal','gymFocus','gymMuscles','insisted','planId','days','raceKm'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap','week_sport','activity_kcal','activity_delete','activity_merge','activity_time','plan']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','swim','']},minutes:{type:'integer'},status:{type:'string',enum:['active','sick','injured','on_break','']},statusUntil:{type:'string'},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'},workoutId:{type:'string'},kind:{type:'string',enum:['',...WORKOUT_KINDS]},place:{type:'string',enum:['','pool','open_water']},gymFocus:{type:'string',enum:['','upper','lower']},gymMuscles:{type:'array',items:{type:'string',enum:GYM_MUSCLES}},insisted:{type:'boolean'},activityId:{type:'string'},otherActivityId:{type:'string'},time:{type:'string'},kcal:{type:'integer'},planId:{type:'string'},days:{type:'array',items:{type:'integer'}},raceKm:{type:'number'}}}}}}};
+export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','visuals','actions','memory'],properties:{answer:{type:'string'},memory:{type:'object',additionalProperties:false,required:['save','forget','update'],properties:{save:{type:'array',items:{type:'object',additionalProperties:false,required:['text','group'],properties:{text:{type:'string'},group:{type:'string',enum:['goals','training','health','life']}}}},forget:{type:'array',items:{type:'string'}},update:{type:'array',items:{type:'object',additionalProperties:false,required:['from','to'],properties:{from:{type:'string'},to:{type:'string'}}}}}},visuals:{type:'array',items:{type:'string',enum:COACH_VISUALS}},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','statusUntil','reason','fromExercise','toExercise','workoutId','kind','place','activityId','otherActivityId','time','kcal','gymFocus','gymMuscles','insisted','planId','days','raceKm'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap','week_sport','activity_kcal','activity_delete','activity_merge','activity_time','plan']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','swim','']},minutes:{type:'integer'},status:{type:'string',enum:['active','sick','injured','on_break','']},statusUntil:{type:'string'},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'},workoutId:{type:'string'},kind:{type:'string',enum:['',...WORKOUT_KINDS]},place:{type:'string',enum:['','pool','open_water']},gymFocus:{type:'string',enum:['','upper','lower']},gymMuscles:{type:'array',items:{type:'string',enum:GYM_MUSCLES}},insisted:{type:'boolean'},activityId:{type:'string'},otherActivityId:{type:'string'},time:{type:'string'},kcal:{type:'integer'},planId:{type:'string'},days:{type:'array',items:{type:'integer'}},raceKm:{type:'number'}}}}}}};
 export const ACTION_INSTRUCTIONS=actionInstructions();
 // Words the athlete must have used before the coach may propose Sick or Injured.
 export const SICK_WORDS=/nemoc|horeč|horec|sick|chřip|chrip|nachl|rým|covid|vir[oó]z|viros|teplot|\bill\b|illness|unwell|fever|\bflu\b|\bcold\b|virus|sore throat|temperature/i;
@@ -124,6 +125,8 @@ export function gymMusclesOf(a,message){
   return out;
 }
 export function validateCoachActions(actions,context,today,{userInitiated=false}={}){
+  // A sport off in Sports to suggest only when the athlete asks for it in this chat (sport-choice.js).
+  const allowed=sport=>sportAllowed(context.focus,sport,[context.userMessage,...(context.conversation||[]).filter(t=>t.role==='user').map(t=>t.content)]);
   const events=new Map((context.week||[]).flatMap(d=>(d.planned||[]).map(a=>[String(a.id),{date:d.date,...a}])));
   // A planned session on the proposed day itself is the one it replaces (a
   // workout on a planned day passes only when the athlete asked for it).
@@ -179,13 +182,14 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
     if(a.type==='plan'){
       const template=getTemplate(String(a.planId||''));
       if(!userInitiated||!template||template.choose||trainingStatus(context.athleteState).paused||taken().some(x=>x.type==='plan'))return [];
+      if(['ride','run','swim','gym'].includes(template.sport)&&!allowed(template.sport))return [];
       let when;try{when=planStart(template,{today,raceDate:template.race&&validDay(a.date)?a.date:null,startDate:!template.race&&validDay(a.date)&&a.date>today?a.date:null});}catch{return [];}
       const days=[...new Set((Array.isArray(a.days)?a.days:[]).map(Number).filter(n=>Number.isInteger(n)&&n>=0&&n<=6))].sort();
       const chosen=template.sport!=='gym'&&days.length>=template.days[0]&&days.length<=template.days[1]?days:null;
       const raceKm=template.race?.options?.includes(Number(a.raceKm))?Number(a.raceKm):template.race?.km??null;
       return [{type:'plan',planId:template.id,sport:template.sport,planName:template.name,weeksCount:template.weeks.length,date:when.raceDate&&template.race?when.raceDate:when.firstDay||when.startDate,startDate:when.startDate,...(when.firstDay?{firstDay:when.firstDay}:{}),...(template.race?{raceDate:when.raceDate,raceKm}:{}),...(!template.race&&validDay(a.date)&&a.date>today?{requestedStart:a.date}:{}),...(chosen?{days:chosen}:{}),reason}];
     }
-    if(a.type==='week_sport'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)){
+    if(a.type==='week_sport'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)&&allowed(a.sport)){
       return [{type:'week_sport',date:a.date,sport:a.sport,reason}];
     }
     if(a.type==='status'&&['active','sick','injured','on_break'].includes(a.status)){
@@ -213,6 +217,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
     if(a.type==='workout'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','swim','gym'].includes(a.sport)&&Number.isInteger(a.minutes)&&a.minutes>=(a.sport==='run'?20:a.sport==='swim'?15:30)&&a.minutes<=(a.sport==='swim'?90:MAX_MINUTES[a.sport]||360)){
       const openWater=a.sport==='swim'&&a.place==='open_water';
       if(openWater&&context.cannotSwim100m)return [];
+      if(!allowed(a.sport))return [];
       if(!userInitiated&&context.remainingPlanned?.some(x=>x.date===a.date))return [];
       const budget=context.availabilityByDate?.[a.date]?.minutes;if(!userInitiated&&budget!=null&&a.minutes>budget)return [];
       // Only a workout the coach was actually offered; the preview then shows exactly it.

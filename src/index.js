@@ -3,7 +3,6 @@ import { KEEP_TYPE_SQL, watchType, mark } from "./activity-type.js";
 import { healthPointJson } from './health-point-json.js';
 import {localExportIndex} from './local-workouts.js';
 import {hasRecentActivityData} from './onboarding.js';
-import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { reconcileCancelledGymPlans } from './planned-events.js';
 import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck,settleEnergyCheck} from './activity-energy-check.js';
 import {energyChoices,applyEnergyChoice} from './activity-energy-choices.js';
@@ -63,7 +62,7 @@ export default {
         return Response.json({
           status: "ok",
           service: "health-api",
-          version: "final-5-cookbook-v3.3.0-queued-google-sync"
+          version: "final-5-v3.3.0-queued-google-sync"
         });
       }
 
@@ -116,14 +115,6 @@ export default {
 
       if (url.pathname === "/analysis/energy") {
         return await analysisEnergy(env, url);
-      }
-
-      if (url.pathname === "/cookbook/page") {
-        return await cookbookPage(env, url);
-      }
-
-      if (url.pathname === "/cookbook/search") {
-        return await cookbookSearch(env, url);
       }
 
       if (url.pathname === "/food/log") {
@@ -1309,8 +1300,16 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays,del
 
   if (!Array.isArray(activities)) throw new Error('Invalid Intervals activity response');
   const statements = [];
-  const previous = activities.some(a => a?._note && !a.name && !a.type)
-    ? (await env.DB.prepare("SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='activity' AND start_time>=?").bind(env.USER_ID,oldest).all()).results || [] : [];
+  // What the window already has: a note-only answer keeps the stored name and
+  // type, and "Synchronizovat znovu" says how many are new (activities_new).
+  // By id (the unique index), 90 a query: a stored start may be UTC or local.
+  const notes = activities.some(a => a?._note && !a.name && !a.type);
+  const ids = [...new Set(activities.filter(a => a?.id != null && a.id !== '').map(a => 'activity:' + String(a.id)))];
+  const previous = [];
+  for (let i = 0; i < ids.length; i += 90) {
+    const part = ids.slice(i, i + 90);
+    previous.push(...((await env.DB.prepare(`SELECT external_id${notes ? ",payload_json" : ""} FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='activity' AND external_id IN (${part.map(() => "?").join(",")})`).bind(env.USER_ID, ...part).all()).results || []));
+  }
   const existingById = new Map(previous.map(row => [row.external_id, row]));
   // Activities the app logged and sent there (Synchronizace): the app keeps
   // its own copy, a second one from Intervals.icu would count them twice.
@@ -1318,11 +1317,12 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays,del
   // Settings → Synchronizace → Intervals.icu → Stahovat hotové aktivity off.
   if (!(await readSyncPrefs(env.DB, env.USER_ID, "intervals")).pullActivities) return { activities_found: activities.length, activities_saved: 0, skipped: "off" };
 
-  let saved = 0;
+  let saved = 0, added = 0;
 
   for (const sourceActivity of activities) {
     const id = String(sourceActivity.id);
     if (sentByAurin(sourceActivity) || sentHere.has(id)) continue;
+    if (!existingById.has("activity:" + id)) added++;
     let a = sourceActivity;
     if (sourceActivity?._note && !sourceActivity.name && !sourceActivity.type) {
       const existing = existingById.get("activity:"+id);
@@ -1380,6 +1380,9 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays,del
 
     activities_saved:
       saved,
+
+    activities_new:
+      added,
 
     ...(removed ? { activities_removed: removed } : {})
   };
@@ -1443,7 +1446,8 @@ async function syncIntervalsEvents(env) {
   ).bind(env.USER_ID, oldest, rangeEnd);
   const statements = [];
 
-  let saved = 0;
+  let saved = 0, added = 0;
+  const known = new Set(previous.map(row => row.external_id));
 
   const appEvents=await localExportIndex(env.DB,env.USER_ID);
   for (const e of events) {
@@ -1480,6 +1484,7 @@ async function syncIntervalsEvents(env) {
     ));
 
     saved++;
+    if (!known.has(`planned:${id}`)) added++;
   }
 
   // Replace atomically so a storage failure preserves the previous calendar.
@@ -1492,6 +1497,9 @@ async function syncIntervalsEvents(env) {
 
     events_saved:
       saved,
+
+    events_new:
+      added,
 
     reconciled_from:
       oldest
@@ -2450,95 +2458,8 @@ function calculateFueling(
 
 
 // ======================================================
-// COOKBOOK
-// ======================================================
-
-async function cookbookRecipeByPage(page) {
-  return getCookbookRecipeByPage(page);
-}
-
-async function cookbookSearchResults(url) {
-  const q = (url.searchParams.get("q") || "").trim().toLowerCase();
-  const category = (url.searchParams.get("category") || "").trim().toLowerCase();
-  const maxMinutes = Number(url.searchParams.get("max_minutes"));
-  const mealPrep = url.searchParams.get("meal_prep");
-  const limit = Math.max(1, Math.min(30, Number(url.searchParams.get("limit") || 10)));
-
-  const cookbookData = await getCookbook();
-  const cookbook = Array.isArray(cookbookData) ? cookbookData : (cookbookData?.recipes || []);
-
-  let results = cookbook.filter(recipe => {
-    if (category && recipe.category.toLowerCase() !== category) return false;
-    if (Number.isFinite(maxMinutes) && maxMinutes > 0) {
-      const match = String(recipe.time || "").match(/(\d+)/);
-      if (match && Number(match[1]) > maxMinutes) return false;
-    }
-    if (mealPrep === "1" && !recipe.meal_prep) return false;
-    return true;
-  });
-
-  if (q) {
-    results = results
-      .map(recipe => {
-        const haystack = `${recipe.title} ${recipe.ingredients || ""} ${(recipe.ingredients_clean || []).join(" ")}`.toLowerCase();
-        let score = haystack.includes(q) ? 100 : 0;
-        for (const word of q.split(/\s+/).filter(Boolean)) {
-          if (recipe.title.toLowerCase().includes(word)) score += 20;
-          else if (haystack.includes(word)) score += 5;
-        }
-        return { recipe, score };
-      })
-      .filter(x => x.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .map(x => x.recipe);
-  }
-
-  return results.slice(0, limit);
-}
-
-async function cookbookPage(env, url) {
-  const page = url.searchParams.get("page");
-  const recipe = await cookbookRecipeByPage(page);
-
-  if (!recipe) {
-    return Response.json({
-      status: "error",
-      message: "Cookbook page not found",
-      page
-    }, { status: 404 });
-  }
-
-  return Response.json({
-    status: "ok",
-    recipe
-  });
-}
-
-async function cookbookSearch(env, url) {
-  const recipes = await cookbookSearchResults(url);
-  return Response.json({
-    status: "ok",
-    count: recipes.length,
-    recipes
-  });
-}
-
-// ======================================================
 // FOOD LOG
 // ======================================================
-
-function scaleRecipe(recipe, servings) {
-  const factor = Number(servings);
-  const s = Number.isFinite(factor) && factor > 0 ? factor : 1;
-
-  return {
-    kcal: Math.round(recipe.kcal * s),
-    protein_g: Math.round(recipe.protein_g * s * 10) / 10,
-    carbs_g: Math.round(recipe.carbs_g * s * 10) / 10,
-    fat_g: Math.round(recipe.fat_g * s * 10) / 10,
-    fiber_g: Math.round(recipe.fiber_g * s * 10) / 10
-  };
-}
 
 async function foodLogForDate(env, date) {
   // Planned or cancelled food (ChatGPT can plan a meal) is not eaten.
@@ -2577,15 +2498,7 @@ async function foodLog(env, request, url) {
   const consumedAt = body.consumed_at || new Date().toISOString();
   const servings = Number(body.servings || 1);
 
-  let recipe = null;
-  if (body.page != null) recipe = await cookbookRecipeByPage(body.page);
-  if (body.recipe_page != null) recipe = await cookbookRecipeByPage(body.recipe_page);
-
-  if (body.page != null && !recipe) {
-    return Response.json({ status: "error", message: "Cookbook page not found", page: body.page }, { status: 404 });
-  }
-
-  const scaled = recipe ? scaleRecipe(recipe, servings) : {
+  const scaled = {
     kcal: Number(body.kcal || 0),
     protein_g: Number(body.protein_g || 0),
     carbs_g: Number(body.carbs_g || 0),
@@ -2593,8 +2506,8 @@ async function foodLog(env, request, url) {
     fiber_g: Number(body.fiber_g || 0)
   };
 
-  const name = body.name || (recipe && recipe.title) || "Manual entry";
-  const source = recipe ? "cookbook" : (body.source || "manual");
+  const name = body.name || "Manual entry";
+  const source = body.source || "manual";
 
   if (!name || !Number.isFinite(scaled.kcal)) {
     return Response.json({ status: "error", message: "name and kcal are required" }, { status: 400 });
@@ -2608,8 +2521,8 @@ async function foodLog(env, request, url) {
   `).bind(env.USER_ID, 
     date,
     consumedAt,
-    recipe ? recipe.page : null,
-    recipe ? recipe.title : name,
+    null,
+    name,
     servings,
     scaled.kcal,
     scaled.protein_g,
@@ -2626,7 +2539,6 @@ async function foodLog(env, request, url) {
     date,
     entry: {
       name,
-      page: recipe ? recipe.page : null,
       servings,
       source,
       ...scaled

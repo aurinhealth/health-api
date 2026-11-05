@@ -49,7 +49,8 @@ struct TrainingPage: View {
                     // on the padded view it pointed at the row's top.
                     .overlay(alignment: .top) { Color.clear.frame(height: 1).id("week").padding(.top, 8) }
                 content(day)
-                if day == today, noGymToday { noGym }
+                // Race day offers no gym (the race card is the day).
+                if day == today, noGymToday, !raceDay(day) { noGym }
                 // The last button a little above the screen's rounded bottom edge.
                 Color.clear.frame(height: 8)
             }
@@ -58,10 +59,15 @@ struct TrainingPage: View {
             .padding(.horizontal, 6)
         }
         .task {
-            // The sample day's screenshot (-week): the week and Continue both whole.
-            guard WatchDemo.flag("-week") else { return }
-            try? await Task.sleep(for: .milliseconds(400))
-            proxy.scrollTo("week", anchor: .top)
+            // The sample day's screenshots: -week the week and Continue both whole,
+            // -race the race card from its top with Open in Workout.
+            if WatchDemo.race {
+                try? await Task.sleep(for: .milliseconds(400))
+                proxy.scrollTo("race", anchor: .top)
+            } else if WatchDemo.flag("-week") {
+                try? await Task.sleep(for: .milliseconds(400))
+                proxy.scrollTo("week", anchor: .top)
+            }
         }
         }
         // Each turn of the crown to this page shows it again: the plan only
@@ -134,6 +140,11 @@ struct TrainingPage: View {
     static func exercises(_ count: Int) -> String {
         guard !W.english else { return count == 1 ? "1 exercise" : "\(count) exercises" }
         return "\(count) " + (count == 1 ? "cvik" : (2...4).contains(count) ? "cviky" : "cviků")
+    }
+
+    /// The day has a race (its legs as one card).
+    private func raceDay(_ day: String) -> Bool {
+        RaceDay(Self.joined(sessions.filter { $0.date == day && !$0.done })) != nil
     }
 
     // MARK: The day shown
@@ -441,6 +452,7 @@ struct TrainingPage: View {
         }
         .buttonStyle(.plain)
         .padding(.top, 8)
+        .id("race")
         // The first leg's plan also for the complication; the others only for the start.
         .onAppear { for (index, leg) in race.legs.enumerated() { plans.load(leg, shelf: index == 0) } }
     }

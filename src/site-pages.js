@@ -117,6 +117,9 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .xw li{font-size:var(--fs-17);font-weight:600;letter-spacing:-.01em;line-height:1.3;color:var(--text);white-space:nowrap}
 /* A dot after each name: where the row breaks on a narrow phone, a line ends with it and names never run together. */
 .xw li:not(:last-child)::after{content:"·";margin:0 .55em;font-weight:400;color:var(--muted)}
+/* A wordmark stands about as tall as the names' capitals, on their line. */
+.xw .wm{display:inline-flex;align-items:center;height:1.3em}.xw .wm picture{display:contents}
+.xw .wm img{display:block;width:auto;height:.74em}.xw .wm.ultrahuman img{height:.6em}
 @media (max-width:359px){.xw li{font-size:var(--fs-14)}}
 /* The phone and its three numbers are drawn at one size (the rig) and scaled down where the column is narrower,
    so the numbers never leave the column and the coach sits under the phone, not over its tab bar. */
@@ -271,6 +274,20 @@ main:focus{outline:none}
 .privacy .more{display:inline-flex;align-items:center;gap:8px;margin-top:24px;color:var(--primary-text);font-weight:600;text-decoration:none}
 .privacy .more:hover{text-decoration:underline}
 .privacy .more .icon{width:16px;height:16px}
+/* Price: what stays free and what Pro adds, as Settings → Aurin Pro lists them, side by side; one call under them. */
+.price{padding:150px 0 0}
+.price .plans{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin-top:40px}
+.plan{padding:32px 32px 28px;border-radius:var(--r-22);background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)}
+.plan.pro{background:color-mix(in srgb,var(--green) 8%,var(--panel));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--green) 35%,var(--line))}
+.plan .pk{font-size:var(--fs-12);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}.plan.pro .pk{color:var(--green)}
+.plan h3{margin:10px 0 0;font:400 var(--fs-44)/1.1 var(--serif);letter-spacing:-.015em}.plan h3 small{font:500 var(--fs-17) var(--sans);color:var(--sec)}
+.plan .pl{margin:8px 0 0;color:var(--sec)}
+.plan h3 .save{display:inline-block;vertical-align:middle;margin-left:6px;padding:3px 10px;border-radius:var(--r-pill);background:var(--green-soft);color:var(--green);font:700 var(--fs-12)/1.4 var(--sans);letter-spacing:.06em;text-transform:uppercase}
+.plan ul{list-style:none;margin:20px 0 0;padding:0;display:grid;gap:10px}
+.plan li{position:relative;padding-left:20px}.plan li::before{content:"";position:absolute;left:2px;top:.62em;width:7px;height:7px;border-radius:50%;background:var(--green)}
+.plan li ul{margin:8px 0 2px;gap:6px}.plan li li{color:var(--sec);font-size:var(--fs-14)}.plan li li::before{width:5px;height:5px;background:var(--muted)}
+.plan .pn{margin:22px 0 0;font-size:var(--fs-14);color:var(--muted)}
+.price .go-join{height:48px;margin-top:32px;padding:0 24px;font-size:var(--fs-17)}
 .card{background:var(--panel);border-radius:var(--r-22);padding:24px;box-shadow:var(--shadow-card)}
 /* The Google Health disclosure, when it is on the homepage (GOOGLE_DISCLOSURE_ON_HOME), folded under one line
    (Petr 2026-11-03): its text is in the page, word for word, and opens on a tap without JS. */
@@ -408,7 +425,8 @@ main:focus{outline:none}
   .ac{grid-template-columns:1fr;gap:32px;justify-items:center}.opener .head{justify-self:stretch}
   .opener{padding-top:110px}.chapter.opens{padding-top:64px}
   .sun{margin:-16px auto -8px}
-  .muscles,.privacy,#faq{padding-top:110px}
+  .muscles,.privacy,.price,#faq{padding-top:110px}
+  .price .plans{grid-template-columns:1fr}
   .faq .side{position:static}
 }
 @media (max-width:560px){
@@ -439,6 +457,7 @@ main:focus{outline:none}
   .part,.flip .part{margin-top:-310px}
   /* A one-thing card only touches the phone's lower edge: the screen above it stays whole. */
   .part:has(>.one),.flip .part:has(>.one){margin-top:-56px}
+  .plan{padding:24px 22px 22px}.plan h3{font-size:var(--fs-28)}
   .site-foot .top{grid-template-columns:1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
 }
 `;
@@ -700,7 +719,7 @@ function pageLang(request, czech = false) {
 // secured, and what happens on disconnecting and deleting; the support page is the help on managing and
 // deleting data. Keep both in step with the code: scopes in google-scopes.js, the wellness copy in
 // wellness-sync.js, the download and deletion in account-data.js.
-const UPDATED = {cs: '1. listopadu 2026', en: '1 November 2026'};
+const UPDATED = {cs: '4. listopadu 2026', en: '4 November 2026'};
 // The controller's address for questions and data requests (privacy policy and support page).
 const CONTACT_EMAIL = 'support@aurin.health';
 // Who runs Aurin: a sole trader, so the privacy policy, the terms and the health data policy give the
@@ -725,6 +744,30 @@ export const GOOGLE_DISCLOSURE_ON_HOME = false;
 // The watches and rings the "Works with" row under the form names: Apple Watch through Apple Health, Fitbit and
 // Pixel Watch through Google Health, the Ultrahuman Ring and WHOOP directly. Aurin does not support Garmin.
 export const WEARABLES = ['Apple Watch', 'Fitbit', 'Pixel Watch', 'WHOOP', 'Ultrahuman'];
+// Aurin Pro's US prices in App Store Connect (Petr, 2026-11-02); the App Store shows each country its own.
+export const PRO_PRICE = {month: '$6.99', year: '$59.99'};
+// What the year saves against 12 months paid monthly, in whole percent rounded down, as the app's plans show it
+// (ProOffer.saving, variant 8c of the paywall, Petr 2026-11-04): 28 for $59.99 against 12 × $6.99.
+export const PRO_SAVE = Math.floor((1 - parseFloat(PRO_PRICE.year.slice(1)) / (12 * parseFloat(PRO_PRICE.month.slice(1)))) * 100);
+// What Aurin has for everyone and what Pro adds, as Settings → Aurin Pro lists them (ProContents in
+// SubscriptionView.swift, in the app's English). A Pro group with items lists them under its title.
+export const PRO_CONTENTS = {
+  free: ['Readiness, sleep and strain', 'Cycle tracking', 'Calorie target and macros', 'Food log, barcode and label', 'Gym log and exercise technique', 'A starter plan for every sport'],
+  pro: [['Aurin Intelligence', ['A coach just for you', 'Plan changes in your own words', 'Workout, day and week reviews', 'Food from a photo, words or the web', 'Gym equipment from a photo or web']],
+    ['Adaptive training plans', ['Plans for races and goals', 'Shaped by your recovery and progress', 'Fits the time you have each day']],
+    ['Vitamins and minerals', []], ['Own macros and nutrient targets', []]]};
+// WHOOP and Ultrahuman show their own wordmark, unaltered, from their brand files (WHOOP's developer design guidelines,
+// Ultrahuman's site), black on the light page and white on the dark one; Petr's call on 2026-11-03 while both
+// consent requests are open. Apple and Google allow no device wordmark without a licence, so those stay names.
+// [file, width, height] of the wordmark's viewBox.
+export const WORDMARKS = {WHOOP: ['whoop', 200, 32], Ultrahuman: ['ultrahuman', 1280, 118]};
+const wearable = w => {
+  const mark = WORDMARKS[w];
+  if (!mark) return `<li>${w}</li>`;
+  const [file, wd, ht] = mark;
+  const img = `<img src="/site/logos/${file}-black.svg" alt="${w}" width="${wd}" height="${ht}">`;
+  return `<li class="wm ${file}">${DARK_SITE ? `<picture><source srcset="/site/logos/${file}-white.svg" media="(prefers-color-scheme:dark)">${img}</picture>` : img}</li>`;
+};
 export const googleDisclosure = () => `<details class="disclosure reveal" lang="en"><summary>Google Health data disclosure</summary><div class="card">
 <p>Aurin is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
 <p>With your authorization, the service may read fitness, health-metric, sleep, and nutrition data from Google Health. It may also add nutrition logs to Google Health when you ask the service to record food or drinks. This data is used only for the requested training and nutrition features.</p>
@@ -748,7 +791,7 @@ export function overviewPage(request) {
     'training-rest': 'Aurin’s rest timer counting down between sets, with the next exercise',
     'food-day': 'Aurin’s food day: a calorie target that moves with training, and the meals logged',
     'food-add': 'Adding food in Aurin: a photo of the plate, a barcode or a search',
-    sleep: 'A night in Aurin: deep, REM and light sleep, when you fell asleep and woke up',
+    sleep: 'A night in Aurin: 7:12 asleep, sleep index 82 and what makes it up: length, quality and stages',
     'sleep-need': 'Aurin’s sleep need for tonight and what made it grow',
     bedtime: 'Aurin’s bedtime dial: the moon for bedtime, the sun for the alarm',
     'bedtime-goal': 'Picking tonight’s sleep in Aurin: catch up, as usual or at least seven hours',
@@ -769,11 +812,11 @@ export function overviewPage(request) {
       ['journal-impact', 'journalOne', 330, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000],
       ['html:cycle', 'cycleOne', 300, 'Readiness that knows your cycle.', 'Turn on cycle tracking and, in the days before your period, your resting heart rate and temperature are weighed against your own days in that phase. A usual rise costs no points.', 7000]]],
     ['spanek', '', 'Every night, in detail.', 'From any watch or ring you wear.', 'indigo', 'glow-health', [
-      ['sleep', 'sleepOne', 330, 'See how you slept.', 'Deep, REM and light sleep, when you fell asleep and when you woke up.'],
+      ['sleep', 'sleepOne', 330, 'See how you slept.', 'Deep, REM and light sleep against your usual, what makes up the sleep index, and how last night sits among your last 14.'],
       ['sleep-need', 'needOne', 220, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
       ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
       ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
-    ['trenink', '', 'A plan that adapts.', 'Tell Aurin your goal and the time you have. A busy day in your calendar gets a shorter workout.', 'green', 'glow-today', [
+    ['trenink', '', 'A plan that adapts.', 'Pick the sports you do, one or more as main, your goal and your time. The coach suggests only those sports, and a busy day in your calendar gets a shorter workout.', 'green', 'glow-today', [
       ['html:ride', 'sendRide', 260, 'For your ride.', 'From a first gran fondo to rides of up to 8 hours, with the long ride on the day you pick. Send each ride to Wahoo, Intervals.icu or your Apple Watch, or export it for trainer apps.', 7000],
       ['html:run', 'sendRun', 260, 'For your run.', 'From a faster 5 km to a marathon, with the long run on the day you pick. Each run goes to your Apple Watch, Intervals.icu or Wahoo.', 7000],
       ['html:swim', 'sendSwim', 300, 'For your swim.', 'Swim 1,500 m without stopping, get faster with a CSS test, or add strength for swimmers. Pool swims go to your Apple Watch.', 7000],
@@ -783,17 +826,17 @@ export function overviewPage(request) {
       ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, set their length and move them into the order you like. Then start.', 7000],
       ['training-set', 'tickOne', 300, 'Tick off every set.', 'Every set comes filled in with its weight, reps and plates. One tap marks it done; miss your reps or hit failure and the next set comes lighter, breeze through and it comes heavier.', 6000],
       ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, longer after squats than after curls, and stays on your lock screen. The last seconds count down with a vibration.', 13500],
-      ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume, new records and the muscles you tired, saved to Apple Health. Then say how it went.', 6000],
+      ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume, new records and the muscles you tired, saved to Apple Health. Swapped an exercise? Keep it for next time. Then say how it went.', 6000],
       // On a phone the 3D figure gives way to this step (#svaly is hidden there); it has no piece, so it stays last.
       ['muscles', '', 0, 'Know what’s recovered.', 'From the gym and from your rides, runs and swims, every muscle shows tired, recovering or rested.', 6000, 'phone']]],
     ['vyziva', '', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
       ['food-day', 'foodOne', 220, 'A target that moves.', 'Train harder and you get more to eat. See what makes up the target: your base, the workouts done and the ones still planned. The coach says what that means for your next meal.', 7500],
-      ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000],
+      ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Snap your plate and each food on it is listed to adjust, or scan a barcode or search. Set the portion your way, and log drinks with one tap.', 8000],
       ['food-day', 'drinks', 330, 'Drink to your goal.', 'Tap a drink, or the whale itself for your usual glass. At today’s goal it blows its spout. Keep Aurin’s goal, set your own, or build up to it day by day. Rather a bottle, a flower or an octopus? Pick one in Settings.', 9500],
       ['food-day', 'diet', 120, 'Eat your way.', 'Everything, vegetarian or vegan; balanced, high protein, lower carb or keto. Your protein, carbs and nutrients follow, or set your own.', 8000]]],
-    ['kouc', '', 'A coach just for you.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
-      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today or what to eat before a workout, or send a photo of your trainer’s plan. When it proposes a workout or a plan for your race, confirm it and it lands in your plan.', 11500],
-      ['html:memory', 'coachMemory', 140, 'It remembers you.', 'Tell it about a sore knee, your schedule or a goal and it keeps that in mind. See everything it remembers, edit it or delete it.', 7000]]],
+    ['kouc', '', 'A coach just for you.', 'It remembers what you tell it, in every new chat too, and you can see and edit what it remembers.', 'green', 'glow-today', [
+      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today or what to eat before a workout, or send a photo of your trainer’s plan. When it proposes a workout or a plan for your race, confirm it and it lands in your plan. Copy any answer, give it a thumb up or down, and tap a suggested question to go on.', 11500],
+      ['html:memory', 'coachMemory', 140, 'It remembers you.', 'Tell it about a sore knee, your schedule or a goal and it keeps that in mind, in a new chat too. See what it remembers by goals, training, health and life, edit it or switch memory off.', 7000]]],
     ['hodinky', '', 'Aurin on your wrist.', 'Today’s readiness when you raise your wrist, your gym sets without your phone, water in one tap. It comes with the iPhone app.', 'green', 'glow-today',
       WATCH.map(([, title, text], i) => [`watch:${i}`, '', 0, title, text, 6000])]];
   // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides
@@ -846,10 +889,10 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
   const faq = [
     ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit or Pixel Watch. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
     ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
-    ['What does it cost?', 'Nothing during testing. After the release, Aurin Intelligence (the coach, food from a photo, words or the web, and the reviews), every training plan beyond the free starter plan in each sport, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: $6.99 a month or $59.99 a year with the first week free, shown in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.'],
+    ['What does it cost?', `Nothing during testing. After the release, Aurin Intelligence (the coach, food from a photo, words or the web, and the reviews), every training plan beyond the free starter plan in each sport, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: ${PRO_PRICE.year} a year with the first week free (${PRO_SAVE}% less than monthly) or ${PRO_PRICE.month} a month, shown in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.`],
     ['Does Aurin know my cycle?', 'If you turn on cycle tracking in Settings → Cycle, yes. Your readiness then weighs your resting heart rate and temperature in the days before your period against your own days in that phase, and, if you allow it, the coach knows it too.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from, and under Health data see for each type where Aurin reads it from and sends it to, with a switch for each.'],
-    ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
+    ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo, and each day the data of Today, Training and Food for the coach’s short summary there. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
     ['Where is my data and who sees it?', 'In Aurin’s database in Europe, encrypted. We never sell it or use it for ads. AI features get only what a question needs, and only once you allow them. <a href="/privacy">More in the privacy policy</a>.'],
     ['Can I delete my data?', 'Yes. In Settings → Privacy &amp; data you can download all your data, pause your health data (Aurin deletes it and keeps your account) or delete your account with everything in it. Before any of them, Aurin asks you to confirm it’s you with Face ID or a code sent to your email, so nobody else can do it with your phone or your sign-in.'],
     ['Is Aurin a medical device?', 'No. Aurin helps you plan training, food and rest. It does not diagnose or treat anything, so if you feel unwell, see a doctor.'],
@@ -885,7 +928,7 @@ ${sun(72)}
 <h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w${i >= SLANT ? ' it' : ''}" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
 <p class="lede">Aurin reads your sleep, HRV and workouts from the watch or ring you wear, and every morning turns them into one number, one plan and one coach.</p>
 <div class="cta">${store('top')}<p class="note">Free early access on iPhone through TestFlight.</p></div>
-<div class="xw"><span class="xe" id="xw-t">Works with what you already wear</span><ul aria-labelledby="xw-t">${WEARABLES.map(w => `<li>${w}</li>`).join('')}</ul></div>
+<div class="xw"><span class="xe" id="xw-t">Works with what you already wear</span><ul aria-labelledby="xw-t">${WEARABLES.map(wearable).join('')}</ul></div>
 </div>
 <div class="stage"><div class="rig">
 <div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">${day.hrv} ms</div><div class="d up">↑ ${day.hrv - day.hrvBaseline} ms above normal</div></div>
@@ -909,6 +952,18 @@ ${actNav}
 <div class="promise reveal">${LOCK}<h2 class="big">Your data works only for you.</h2><p class="sub">We never sell it or use it for ads. Aurin reads only what you allow, and you can delete all of it in Settings at any time.</p>
 <a class="more" href="/privacy">Read the privacy policy <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a></div>
 ${GOOGLE_DISCLOSURE_ON_HOME ? googleDisclosure() : ''}
+</div></section>
+
+<section id="cena" class="price"><div class="wrap">
+<div class="head reveal"><div class="eyebrow">Price</div><h2 class="big">Free while we test.</h2></div>
+<div class="plans">
+<div class="plan reveal"><div class="pk">Aurin</div><h3>Free</h3><p class="pl">Now and after the release.</p>
+<ul>${PRO_CONTENTS.free.map(x => `<li>${x}</li>`).join('')}</ul></div>
+<div class="plan pro reveal"><div class="pk">Aurin Pro</div><h3>${PRO_PRICE.year}<small> a year</small> <span class="save">Save ${PRO_SAVE}%</span></h3><p class="pl">with the first week free, or ${PRO_PRICE.month} a month, cancel any month. Once Aurin is in the App Store.</p>
+<ul>${PRO_CONTENTS.pro.map(([t, items]) => `<li>${t}${items.length ? `<ul>${items.map(x => `<li>${x}</li>`).join('')}</ul>` : ''}</li>`).join('')}</ul>
+<p class="pn">Prices vary by country. The App Store shows yours before you buy.</p></div>
+</div>
+<a class="nav-cta go-join" href="#join">Get early access</a>
 </div></section>
 
 <section id="faq"><div class="wrap faq">
@@ -984,7 +1039,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <p><strong>Wahoo</strong>, only if you connect your Wahoo account: your finished rides and runs (start, duration, distance, climbing, power, training load, heart rate, cadence and calories), to count them in your training load. Aurin deletes them when you disconnect Wahoo.</p>
 <p><strong>The calendar on your iPhone</strong>, only if you turn on Read calendar: the app reads your events on the phone and sends us only the number of minutes free for training on each day of the next two weeks, never the events, their names or times. We keep these numbers for up to a week after the day and delete them when you turn reading off. If you turn on Add workouts, the app writes your planned workouts into the calendar on your phone.</p>
 <p><strong>What you enter in Aurin:</strong> your profile (such as age, height, weight, sports, goals and the time you have for training) and the profile photo if you add one, food and drinks, workouts and how they went, notes, your journal answers (such as alcohol, caffeine, sauna or how you felt), and your conversations with the assistant. A photo you send the coach goes to OpenAI with that one message (see below) and is not stored; the conversation keeps only a note that a photo was there. We count the messages you send the coach each week, to keep the service fair for everyone.</p>
-<p><strong>What you send us from Settings → Help:</strong> a problem report with what you write, a screenshot if you add one and, if you leave it on, the app’s diagnostics (app and iOS version, the iPhone and Apple Watch model, the screens you last opened, your connections and their last errors, recent and failed requests and crashes, never your health data), or a feature idea with the app version. We keep them to answer you and fix the problem, and they are deleted with your account.</p>
+<p><strong>What you send us from Settings → Help:</strong> a problem report with what you write, a screenshot if you add one and, if you leave it on, the app’s diagnostics (app and iOS version, the iPhone and Apple Watch model, the screens you last opened, your connections and their last errors, recent and failed requests and crashes, never your health data), or a feature idea with the app version. “Report this answer…” under the coach’s answer starts the same report with that answer’s text in it, which you can change before you send it. We keep them to answer you and fix the problem, and they are deleted with your account.</p>
 <p><strong>Aurin Pro bought in the app:</strong> Apple handles the payment and we never see your payment details. With each purchase, renewal, refund or cancellation the App Store sends us a signed record of it: its identifiers, the plan, when it started and when it renews or ends, whether it renews and whether it was refunded, and the random identifier of your Aurin account that the app gives the purchase. We use it only to unlock Aurin Pro for your account, and it is deleted with your account.</p>
 <p><strong>The waitlist on our website:</strong> when you join it, we keep the email address you enter and when you joined. We use it only to let you test Aurin through Apple’s TestFlight; we send no newsletters to it.</p>
 <p><strong>On your device:</strong> a sign-in cookie valid for up to 30 days, a short-lived cookie that protects signing in, a cookie valid for 10 minutes after you confirm it’s you before changing your email, adding a passkey, downloading your data or deleting your account, a cookie kept for up to a year after you sign in with an email code, which holds no personal data and only lets this device keep signing in when someone else enters wrong codes for your email, cookies with your theme and language and, in the browser’s storage, a copy of the last loaded day and a few display settings so the app opens instantly, and, once you add or use a passkey, your email with the passkey’s identifier, so this device signs you in with it instead of sending a code. We use no advertising or tracking cookies.</p>
@@ -1016,7 +1071,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <ul>
 <li>On iPhone, Aurin reads from Apple Health only the types you allow, such as sleep, workouts, heart rate, HRV, steps, active energy, VO₂ max, weight, and food and water logged in other apps. It uses them only to show and evaluate your recovery, training load, workouts, food diary and calorie target.</li>
 <li>Journal, only if you allow it (Settings → Data sources → Apple Health → Journal): mindful minutes, time in daylight, noise levels while you sleep, symptoms (headache, runny nose, body ache and stomach trouble), sexual activity (only after you turn on Settings → Journal → Sexual activity and give its own explicit consent; otherwise it is not read and what we had is deleted) and yoga or stretching workouts, one value a day each, plus the days your iPhone changed time zone. They are used only to fill in your journal. The AI coach sees yesterday's answers of the journal items you keep and which habits go with your next-morning readiness (summary numbers). Your mood, anxiety, cannabis, CBD and medication reach it only after you turn on Settings → Journal → Sensitive items and give its separate explicit consent. Sexual activity never goes to AI.</li>
-<li>Cycle tracking, only if you turn it on (Settings → Cycle): the periods, their strength, symptoms, contraception, the life stage (perimenopause or menopause) and hormone therapy if you set them, the pill you mark as taken and the dates you enter, plus menstrual flow, ovulation tests, hot flashes, night sweats and sleep changes from Apple Health if you allow them. They are used to show your cycle, to judge your readiness against your own normal for each phase and to ease a hard training day. They go to the AI coach only if you turn on "Coach knows my cycle", and then only today's phase, cycle day, bleeding, symptoms, life stage and hormone therapy, never dates or history. They are not sent to any connected service, and turning the tracking off keeps them until you delete your account.</li>
+<li>Cycle tracking, only if you turn it on (Settings → Cycle): the periods, their strength, symptoms, contraception, the life stage (perimenopause or menopause) and hormone therapy if you set them, the pill you mark as taken and the dates you enter, plus menstrual flow, ovulation tests, hot flashes, night sweats and sleep changes from Apple Health if you allow them. They are used to show your cycle, to judge your readiness against your own normal for each phase and to ease a hard training day. They go to the AI coach only if you turn on "Coach knows my cycle", and then only today's phase, cycle day, bleeding and symptoms, whether you use hormonal contraception or are in the pill break, your usual cycle length and the days to your next period, life stage and hormone therapy, never dates or history. They are not sent to any connected service, and turning the tracking off keeps them until you delete your account.</li>
 <li>Writing to Apple Health, only if you turn it on (Settings → Data sources → Apple Health): workouts you log in Aurin and, for the types you choose, the weight you type in, the day’s food (energy, protein, carbohydrates and fat) and water. iOS asks your permission for each type, and you can turn writing off in the same place or in the iPhone Settings → Health → Data Access &amp; Devices → Aurin. What Aurin wrote stays in Apple Health when you delete your account.</li>
 <li>Apple Health data goes only to our server and, for features you use, to the services under “Who receives your data”. We do not sell it, do not use or share it for advertising, and do not give it to data brokers.</li>
 <li>You change or remove access in the iPhone Settings → Health → Data Access & Devices → Aurin. Data already synced is deleted with your account.</li>
@@ -1026,8 +1081,8 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <li><strong>Intervals.icu</strong>, if you connect it: the workouts you plan in Aurin, the workouts you finish in Aurin, nutrition notes and calorie targets in your calendar, and only if you turn on health data for it (when you connect it, or later in Settings → Sync) workouts from Apple Health that no other service has brought there (type, time, distance, heart rate and calories), your weight and several times a day a copy of your daily wellness from Google Health and Apple Health (sleep, average sleeping heart rate, steps, resting heart rate, HRV, oxygen saturation, respiration, VO2 max and body fat). Intervals.icu handles this data under its own privacy policy.</li>
 <li><strong>Wahoo</strong>, if you connect it: the rides and runs you plan in Aurin, with their steps and targets, so they appear on your ELEMNT and KICKR, and your FTP with your power zones, so your ELEMNT uses the same FTP and zones as Aurin. Wahoo handles this data under its own privacy policy.</li>
 <li><strong>Google Health</strong>: the food and drinks you log and, if you allow it, your weight and the workouts you finish in Aurin.</li>
-<li><strong>OpenAI</strong> (USA), when you use an AI feature (such as the assistant, recognizing food from a photo, label or description, plan reviews, workout reflections or exercise descriptions): the data that request needs, such as your message, the photo and related training, sleep, health and nutrition data, including data from a connected Ultrahuman Ring or WHOOP. OpenAI processes it on our behalf under its API data processing terms: it does not use data sent through its API to train its models and keeps it for up to 30 days to detect abuse, unless the law requires it to keep it longer.</li>
-<li><strong>Cloudflare</strong> runs Aurin, stores its database in Europe and keeps the technical logs.${email ? ' Its Email Service sends the sign-in and confirmation codes and the notices about new passkeys.' : ''} On the website, Cloudflare Turnstile checks that the waitlist form is sent by a person. For that it reads technical details of your browser and sets no tracking cookies. Cloudflare Web Analytics counts visits to the website (which pages, from which site and country, on which kind of device) without cookies and without following you to other websites.</li>
+<li><strong>OpenAI</strong> (USA), when you use an AI feature (such as the assistant, recognizing food from a photo, label or description, plan reviews, workout reflections or exercise descriptions), and every day for the coach’s short summary on Today, Training and Food, which the coach writes on its own from that screen’s data: the data that request needs, such as your message, the photo and related training, sleep, health and nutrition data, including data from a connected Ultrahuman Ring or WHOOP. OpenAI processes it on our behalf under its API data processing terms: it does not use data sent through its API to train its models and keeps it for up to 30 days to detect abuse, unless the law requires it to keep it longer.</li>
+<li><strong>Cloudflare</strong> runs Aurin, stores its database in Europe and keeps the technical logs.${email ? ' Its Email Service sends the sign-in and confirmation codes and the notices about new passkeys and about your other devices being signed out.' : ''} On the website, Cloudflare Turnstile checks that the waitlist form is sent by a person. For that it reads technical details of your browser and sets no tracking cookies. Cloudflare Web Analytics counts visits to the website (which pages, from which site and country, on which kind of device) without cookies and without following you to other websites.</li>
 <li><strong>Apple</strong>, if you allow notifications (Settings → Notifications): your iPhone’s notification token and the text of each notification, such as the morning readiness or a note from the coach, which Apple’s push service delivers to your iPhone. Turning notifications off or signing out removes the token.</li>
 <li><strong>Apple</strong>, when you buy Aurin Pro: the random identifier of your Aurin account that the app adds to the purchase, so the App Store’s records of it reach the right account. Apple handles the purchase under its own privacy policy.</li>
 <li><strong>Apple</strong>, when we add you to the testers from the waitlist: your email address, so that TestFlight emails you how to install Aurin. Apple handles it under its own privacy policy.</li>
@@ -1069,7 +1124,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <li>Data that Aurin copied to Intervals.icu or Google Health stays there; you can delete it in those services.</li>
 <li>You can also remove Aurin’s access at any time in your Google Account under <a href="${GOOGLE_CONNECTIONS}">Third-party apps and services</a>. Aurin then can no longer read or write your Google data.</li>
 ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID settings.</li>' : ''}
-<li>Technical logs are kept for a few days, and OpenAI keeps AI requests for up to 30 days under its API terms.</li>
+<li>Technical logs are kept for a few days, the coach’s summaries on Today, Training and Food for 7 days, and OpenAI keeps AI requests for up to 30 days under its API terms.</li>
 <li>An address on the waitlist stays there until testing ends, until you delete your Aurin account, or for 12 months at most, whichever comes first. You can also ask us to remove it sooner at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</li>
 </ul>
 <p>The <a href="/support">Support</a> page explains step by step how to manage and delete your data.</p>
@@ -1108,7 +1163,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <p><strong>Wahoo</strong>, jen když připojíš účet Wahoo: tvoje dokončené jízdy a běhy (začátek, délku, vzdálenost, převýšení, výkon, tréninkovou zátěž, tep, kadenci a kalorie), aby se započítaly do tréninkové zátěže. Aurin je po odpojení Wahoo smaže.</p>
 <p><strong>Kalendář v iPhonu</strong>, jen když zapneš Číst kalendář: aplikace přečte události v telefonu a pošle nám jen počet volných minut na trénink v každém dni příštích dvou týdnů, nikdy události, jejich názvy ani časy. Tato čísla uchováváme nejvýš týden po daném dni a smažeme je, když čtení vypneš. Když zapneš Zapisovat tréninky, aplikace zapíše naplánované tréninky do kalendáře v telefonu.</p>
 <p><strong>Co zadáš v Aurinu:</strong> profil (třeba věk, výška, váha, sporty, cíle a čas na trénink) a profilovou fotku, pokud ji přidáš, jídlo a pití, tréninky a jejich hodnocení, poznámky, odpovědi v deníku (třeba alkohol, kofein, sauna nebo jak ti bylo) a konverzace s asistentem. Fotka, kterou pošleš kouči, jde do OpenAI jen s tou jednou zprávou (viz níže) a neukládáme ji; v konverzaci zůstane jen poznámka, že tam fotka byla. Počítáme, kolik zpráv koučovi za týden pošleš, aby služba zůstala férová pro všechny.</p>
-<p><strong>Co nám pošleš z Nastavení → Pomoc:</strong> hlášení problému s tím, co napíšeš, snímkem obrazovky, když ho přidáš, a pokud ji necháš zapnutou, diagnostikou aplikace (verze aplikace a iOS, model iPhonu a Apple Watch, naposledy otevřené obrazovky, propojení a jejich poslední chyby, poslední a nepovedené požadavky a pády, nikdy tvoje zdravotní data), nebo návrh funkce s verzí aplikace. Uchováváme je, abychom ti odpověděli a problém opravili, a smažou se s tvým účtem.</p>
+<p><strong>Co nám pošleš z Nastavení → Pomoc:</strong> hlášení problému s tím, co napíšeš, snímkem obrazovky, když ho přidáš, a pokud ji necháš zapnutou, diagnostikou aplikace (verze aplikace a iOS, model iPhonu a Apple Watch, naposledy otevřené obrazovky, propojení a jejich poslední chyby, poslední a nepovedené požadavky a pády, nikdy tvoje zdravotní data), nebo návrh funkce s verzí aplikace. „Nahlásit tuto odpověď…“ u odpovědi kouče založí stejné hlášení s textem té odpovědi, který před odesláním můžeš upravit. Uchováváme je, abychom ti odpověděli a problém opravili, a smažou se s tvým účtem.</p>
 <p><strong>Aurin Pro koupené v aplikaci:</strong> platbu řeší Apple a tvoje platební údaje nikdy nevidíme. S každým nákupem, obnovením, vrácením peněz nebo zrušením nám App Store pošle podepsaný záznam o něm: jeho identifikátory, tarif, kdy začal a kdy se obnoví nebo skončí, jestli se obnovuje a jestli byly peníze vráceny, a náhodný identifikátor tvého účtu Aurin, který aplikace k nákupu přidá. Používáme ho jen k odemčení Aurin Pro pro tvůj účet a smaže se s tvým účtem.</p>
 <p><strong>Waitlist na našem webu:</strong> když se do něj zapíšeš, uložíme e-mail, který zadáš, a datum zápisu. Použijeme ho jen k testování Aurinu přes TestFlight od Applu; žádné newslettery na něj neposíláme.</p>
 <p><strong>Ve tvém zařízení:</strong> cookie přihlášení s platností nejvýš 30 dní, krátkodobá cookie, která chrání přihlašování, cookie platná 10 minut poté, co potvrdíš, že jsi to ty, před změnou e-mailu, přidáním přístupového klíče, stažením dat nebo smazáním účtu, cookie na nejvýš rok po přihlášení kódem z e-mailu, která neobsahuje žádné osobní údaje a jen dovolí tomuto zařízení přihlásit se, i když na tvůj e-mail někdo jiný zadává špatné kódy, cookies s vybraným vzhledem a jazykem a v úložišti prohlížeče kopie naposledy načteného dne a několik nastavení zobrazení, aby se aplikace otevřela hned, a když si přidáš nebo použiješ přístupový klíč, tvůj e-mail s označením klíče, aby tě zařízení přihlásilo jím a nemuselo posílat kód. Reklamní ani sledovací cookies nepoužíváme.</p>
@@ -1140,7 +1195,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <ul>
 <li>Na iPhonu Aurin čte z Apple Health jen údaje, které povolíš, třeba spánek, tréninky, tep, HRV, kroky, aktivní energii, VO₂max, váhu a jídlo a pití zapsané v jiných aplikacích. Používá je jen k tomu, aby ti ukázal a vyhodnotil regeneraci, tréninkovou zátěž, tréninky, jídelníček a kalorický cíl.</li>
 <li>Deník, jen když ho povolíš (Nastavení → Zdroje dat → Apple Health → Deník): minuty všímavosti, čas na denním světle, hluk ve spánku, příznaky (bolest hlavy, rýma, bolest těla a potíže se žaludkem), sexuální aktivita (jen když zapneš Nastavení → Deník → Sexuální aktivita a dáš k tomu samostatný výslovný souhlas; jinak ji nečteme a co už máme, smažeme) a tréninky jógy nebo protahování, u každého jedna hodnota za den, a k tomu dny, kdy iPhone změnil časové pásmo. Slouží jen k vyplnění deníku. AI kouč vidí včerejší odpovědi u položek, které máš v deníku, a které návyky souvisejí s tvou připraveností další ráno (souhrnná čísla). Náladu, úzkost, konopí, CBD a léky dostane až poté, co zapneš Nastavení → Deník → Citlivé položky a dáš k tomu samostatný výslovný souhlas. Sexuální aktivita do AI nejde nikdy.</li>
-<li>Sledování cyklu, jen když ho zapneš (Nastavení → Cyklus): menstruace, jejich síla, potíže, antikoncepce, fáze života (perimenopauza, menopauza) a hormonální terapie, pokud je nastavíš, prášky, které odklikneš, a data, která zadáš, a z Apple Health menstruace, ovulační testy, návaly horka, noční pocení a změny spánku, pokud je povolíš. Slouží k zobrazení cyklu, k hodnocení připravenosti proti tvému normálu v dané fázi a ke zlehčení náročného tréninku. AI kouč je dostane jen po zapnutí „Kouč ví o cyklu“, a to jen dnešní fázi, den cyklu, krvácení, potíže, fázi života a hormonální terapii, nikdy data ani historii. Žádné připojené službě je neposíláme a po vypnutí sledování zůstanou uložené, dokud nesmažeš účet.</li>
+<li>Sledování cyklu, jen když ho zapneš (Nastavení → Cyklus): menstruace, jejich síla, potíže, antikoncepce, fáze života (perimenopauza, menopauza) a hormonální terapie, pokud je nastavíš, prášky, které odklikneš, a data, která zadáš, a z Apple Health menstruace, ovulační testy, návaly horka, noční pocení a změny spánku, pokud je povolíš. Slouží k zobrazení cyklu, k hodnocení připravenosti proti tvému normálu v dané fázi a ke zlehčení náročného tréninku. AI kouč je dostane jen po zapnutí „Kouč ví o cyklu“, a to jen dnešní fázi, den cyklu, krvácení a potíže, jestli užíváš hormonální antikoncepci nebo máš pauzu v prášcích, obvyklou délku cyklu a počet dní do další menstruace, fázi života a hormonální terapii, nikdy data ani historii. Žádné připojené službě je neposíláme a po vypnutí sledování zůstanou uložené, dokud nesmažeš účet.</li>
 <li>Zápis do Apple Health, jen když ho zapneš (Nastavení → Zdroje dat → Apple Health): tréninky, které zapíšeš v Aurinu, a u typů, které vybereš, i váha, kterou zadáš, denní jídlo (energie, bílkoviny, sacharidy a tuky) a pití. iOS se tě na každý typ zeptá zvlášť a zápis vypneš na stejném místě nebo v Nastavení iPhonu → Zdraví → Přístup k datům a zařízení → Aurin. Co Aurin zapsal, zůstane v Apple Health i po smazání účtu.</li>
 <li>Data z Apple Health jdou jen na náš server a kvůli funkcím, které používáš, ke službám z části Kdo data dostává. Neprodáváme je, nepoužíváme ani nepředáváme k reklamě a nedáváme je obchodníkům s daty.</li>
 <li>Přístup změníš nebo zrušíš v Nastavení iPhonu → Zdraví → Přístup k datům a zařízení → Aurin. Už synchronizovaná data se smažou s účtem.</li>
@@ -1150,8 +1205,8 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <li><strong>Intervals.icu</strong>, když ho připojíš: tréninky, které naplánuješ v Aurinu, tréninky, které v Aurinu dokončíš, poznámky k výživě a cíle kalorií v kalendáři, a jen když mu zdravotní data zapneš (při připojení nebo později v Nastavení → Synchronizace) tréninky z Apple Zdraví, které tam nepřinesla jiná služba (typ, čas, vzdálenost, tep a kalorie), tvoji váhu a několikrát denně kopii denních wellness údajů z Google Health a Apple Zdraví (spánek, průměrný tep ve spánku, kroky, klidový tep, HRV, okysličení krve, dech, VO₂max a tělesný tuk). Intervals.icu s nimi zachází podle svých zásad ochrany soukromí.</li>
 <li><strong>Wahoo</strong>, když ho připojíš: jízdy a běhy, které naplánuješ v Aurinu, s jejich úseky a cíli, aby se objevily v ELEMNT a KICKR, a tvoje FTP s výkonovými zónami, aby ELEMNT počítal se stejným FTP a zónami jako Aurin. Wahoo s nimi nakládá podle svých zásad ochrany osobních údajů.</li>
 <li><strong>Google Health</strong>: jídlo a pití, které zapíšeš, a když to povolíš, i tvoje váha a tréninky, které v Aurinu dokončíš.</li>
-<li><strong>OpenAI</strong> (USA), když použiješ AI funkci (třeba asistenta, rozpoznání jídla z fotky, etikety nebo popisu, revizi plánu, zhodnocení tréninku nebo popis cviku): data, která daný požadavek potřebuje, třeba tvoji zprávu, fotku a související údaje o tréninku, spánku, zdraví a výživě, včetně dat z připojeného prstenu Ultrahuman nebo WHOOPu. OpenAI je zpracovává naším jménem podle svých podmínek zpracování dat přes API: data poslaná přes API nepoužívá k trénování modelů a uchovává je nejvýš 30 dní kvůli odhalování zneužití, pokud mu zákon neukládá uchovat je déle.</li>
-<li><strong>Cloudflare</strong> provozuje Aurin, ukládá jeho databázi v Evropě a uchovává technické záznamy.${email ? ' Jeho služba Email Service posílá kódy pro přihlášení a potvrzení a upozornění na nové přístupové klíče.' : ''} Na webu Cloudflare Turnstile ověřuje, že formulář čekací listiny posílá člověk. Čte k tomu technické údaje o prohlížeči a nenastavuje sledovací cookies. Cloudflare Web Analytics počítá návštěvy webu (které stránky, odkud a z jaké země, na jakém typu zařízení) bez cookies a bez sledování na jiných webech.</li>
+<li><strong>OpenAI</strong> (USA), když použiješ AI funkci (třeba asistenta, rozpoznání jídla z fotky, etikety nebo popisu, revizi plánu, zhodnocení tréninku nebo popis cviku), a každý den kvůli krátkému shrnutí kouče na Dnes, Tréninku a Jídle, které kouč píše sám z dat dané obrazovky: data, která daný požadavek potřebuje, třeba tvoji zprávu, fotku a související údaje o tréninku, spánku, zdraví a výživě, včetně dat z připojeného prstenu Ultrahuman nebo WHOOPu. OpenAI je zpracovává naším jménem podle svých podmínek zpracování dat přes API: data poslaná přes API nepoužívá k trénování modelů a uchovává je nejvýš 30 dní kvůli odhalování zneužití, pokud mu zákon neukládá uchovat je déle.</li>
+<li><strong>Cloudflare</strong> provozuje Aurin, ukládá jeho databázi v Evropě a uchovává technické záznamy.${email ? ' Jeho služba Email Service posílá kódy pro přihlášení a potvrzení a upozornění na nové přístupové klíče a na odhlášení ostatních zařízení.' : ''} Na webu Cloudflare Turnstile ověřuje, že formulář čekací listiny posílá člověk. Čte k tomu technické údaje o prohlížeči a nenastavuje sledovací cookies. Cloudflare Web Analytics počítá návštěvy webu (které stránky, odkud a z jaké země, na jakém typu zařízení) bez cookies a bez sledování na jiných webech.</li>
 <li><strong>Apple</strong>, když povolíš oznámení (Nastavení → Oznámení): token tvého iPhonu pro oznámení a text každého oznámení, třeba ranní připravenosti nebo zprávy od kouče, které Applova služba pro oznámení doručí do tvého iPhonu. Vypnutím oznámení nebo odhlášením se token smaže.</li>
 <li><strong>Apple</strong>, když koupíš Aurin Pro: náhodný identifikátor tvého účtu Aurin, který aplikace k nákupu přidá, aby záznamy App Storu o něm došly ke správnému účtu. Apple s nákupem nakládá podle svých zásad ochrany soukromí.</li>
 <li><strong>Apple</strong>, když tě z waitlistu přidáme k testerům: tvůj e-mail, aby ti TestFlight poslal, jak Aurin nainstalovat. Apple s ním nakládá podle svých zásad ochrany soukromí.</li>
@@ -1193,7 +1248,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <li>Co Aurin zkopíroval do Intervals.icu nebo Google Health, tam zůstane; smazat to můžeš v těchto službách.</li>
 <li>Přístup Aurinu můžeš kdykoli odebrat i ve svém účtu Google v části <a href="${GOOGLE_CONNECTIONS}">Aplikace a služby třetích stran</a>. Aurin pak už tvoje data z Googlu nepřečte ani nezapíše.</li>
 ${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení svého Apple ID.</li>' : ''}
-<li>Technické záznamy se uchovávají několik dní a OpenAI podle svých podmínek API uchovává požadavky AI nejvýš 30 dní.</li>
+<li>Technické záznamy se uchovávají několik dní, shrnutí kouče na Dnes, Tréninku a Jídle 7 dní a OpenAI podle svých podmínek API uchovává požadavky AI nejvýš 30 dní.</li>
 <li>E-mail ve waitlistu zůstane, dokud testování neskončí, dokud nesmažeš účet v Aurinu, nebo nejdéle 12 měsíců, podle toho, co nastane dřív. O dřívější smazání nás můžeš požádat na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</li>
 </ul>
 <p>Na stránce <a href="/support">Podpora</a> najdeš postup krok za krokem, jak data spravovat a smazat.</p>
@@ -1211,7 +1266,7 @@ ${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení sv
 }
 
 // Terms of Use. The English text is the reference version; the Czech one says the same.
-const TERMS_UPDATED = {cs: '30. října 2026', en: '30 October 2026'};
+const TERMS_UPDATED = {cs: '3. listopadu 2026', en: '3 November 2026'};
 const APPLE_EULA = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 
 export function termsPage(request) {
@@ -1249,11 +1304,13 @@ export function termsPage(request) {
 </ul>
 <h2>AI features</h2>
 <ul>
-<li>The coach, reading food photos and labels, looking up foods, planning the week, recognizing gym equipment and reviewing workouts use artificial intelligence. They have usage limits and work only with your consent, which you can withdraw in <strong>Settings → Privacy &amp; data → AI features</strong>. The rest of Aurin works without them.</li>
+<li>The coach, reading food photos and labels, looking up foods, planning the week, recognizing gym equipment and reviewing workouts use artificial intelligence. They work only with your consent, which you can withdraw in <strong>Settings → Privacy &amp; data → AI features</strong>. The rest of Aurin works without them.</li>
 <li>AI answers are generated automatically and can be incomplete or wrong, including nutrition values and ingredients. Check them before you rely on them, especially if you have an allergy or follow a medical diet.</li>
 </ul>
 <h2>Price</h2>
-<p>Aurin is currently free, AI features included. Aurin Pro, the coach, food from a photo and the AI reviews, is an auto-renewing subscription sold only through the App Store, where Apple handles payment, cancellation and refunds. The app shows its price, period and conditions before you buy; the yearly plan can start with a free week, once per Apple ID. A subscription renews until you cancel it in your Apple account’s subscriptions (in the app, Settings → Aurin Pro → Manage subscription) at least 24 hours before the period ends. While Aurin is in testing, purchases in TestFlight are Apple’s test purchases and cost nothing. Before Aurin Pro is needed for the AI features, we will tell you in advance. We never charge you without your purchase.</p>
+<p>Aurin is currently free, AI features included. After the release, Aurin Pro adds Aurin Intelligence (the coach, plan changes in your own words, workout, day and week reviews, food from a photo, words or the web, and gym equipment from a photo or the web), adaptive training plans for races and goals, vitamins and minerals, and your own macros and nutrient targets. Readiness, sleep and strain, cycle tracking, the calorie target and macros, the food and gym log and a starter plan for every sport stay free.</p>
+<p>Aurin Pro is an auto-renewing subscription sold only through the App Store, where Apple handles payment, cancellation and refunds. It runs monthly or for 12 months, paid at once or, where Apple offers it, monthly over the 12 months. The app shows the price, period and conditions before you buy; a 12-month plan can start with a free week, once per Apple ID. A subscription renews until you cancel it in your Apple account’s subscriptions (in the app, Settings → Aurin Pro → Manage subscription) at least 24 hours before the period ends. On the 12-month plan paid monthly, cancelling stops the next renewal and the remaining payments for the current 12 months are still due.</p>
+<p>Some extras can also be bought in the app. AI features can have usage limits, which may differ by plan and which we may change. While Aurin is in testing, purchases in TestFlight are Apple’s test purchases and cost nothing. Before Aurin Pro is needed for the features it includes, we will tell you in advance. We never charge you without your purchase.</p>
 <h2>Fair use</h2>
 <p>Do not try to get around Aurin’s security, access someone else’s account or data, overload the service, download it automatically, copy or resell it, or use it for anything unlawful. Reverse engineering is allowed only where the law permits it.</p>
 <h2>Availability and changes</h2>
@@ -1317,11 +1374,13 @@ export function termsPage(request) {
 </ul>
 <h2>AI funkce</h2>
 <ul>
-<li>Kouč, čtení fotek jídla a etiket, dohledání potravin, plánování týdne, rozpoznání vybavení posilovny a hodnocení tréninků používají umělou inteligenci. Mají limity použití a fungují jen s tvým souhlasem, který odvoláš v <strong>Nastavení → Soukromí a data → AI funkce</strong>. Zbytek Aurinu funguje i bez nich.</li>
+<li>Kouč, čtení fotek jídla a etiket, dohledání potravin, plánování týdne, rozpoznání vybavení posilovny a hodnocení tréninků používají umělou inteligenci. Fungují jen s tvým souhlasem, který odvoláš v <strong>Nastavení → Soukromí a data → AI funkce</strong>. Zbytek Aurinu funguje i bez nich.</li>
 <li>Odpovědi AI vznikají automaticky a můžou být neúplné nebo chybné, včetně nutričních hodnot a složení. Než se na ně spolehneš, zkontroluj je, hlavně když máš alergii nebo držíš léčebnou dietu.</li>
 </ul>
 <h2>Cena</h2>
-<p>Aurin je zatím zdarma, včetně AI funkcí. Aurin Pro, tedy kouč, jídlo z fotky a hodnocení od AI, je automaticky obnovované předplatné, které prodáváme jen přes App Store, kde platbu, zrušení i vrácení peněz řeší Apple. Cenu, období a podmínky ti aplikace ukáže před nákupem; roční tarif může začít týdnem zdarma, jednou na Apple ID. Předplatné se obnovuje, dokud ho nezrušíš v předplatných svého účtu Apple (v aplikaci Nastavení → Aurin Pro → Spravovat předplatné) aspoň 24 hodin před koncem období. Dokud je Aurin v testování, nákupy v TestFlightu jsou testovací nákupy Applu a nic nestojí. Než bude Aurin Pro pro AI funkce potřeba, dáme ti vědět předem. Bez tvého nákupu ti nikdy nic neúčtujeme.</p>
+<p>Aurin je zatím zdarma, včetně AI funkcí. Po vydání přidá Aurin Pro funkce Aurin Intelligence (kouče, změny plánu vlastními slovy, hodnocení tréninku, dne a týdne, jídlo z fotky, slov nebo webu a vybavení posilovny z fotky nebo webu), adaptivní tréninkové plány na závody a cíle, vitamíny a minerály a vlastní makra a cíle živin. Připravenost, spánek a zátěž, sledování cyklu, kalorický cíl a makra, zápis jídla a posilovny a úvodní plán pro každý sport zůstávají zdarma.</p>
+<p>Aurin Pro je automaticky obnovované předplatné, které prodáváme jen přes App Store, kde platbu, zrušení i vrácení peněz řeší Apple. Platí se měsíčně, nebo na 12 měsíců, a to najednou, nebo tam, kde to Apple nabízí, měsíčně po dobu 12 měsíců. Cenu, období a podmínky ti aplikace ukáže před nákupem; 12měsíční tarif může začít týdnem zdarma, jednou na Apple ID. Předplatné se obnovuje, dokud ho nezrušíš v předplatných svého účtu Apple (v aplikaci Nastavení → Aurin Pro → Spravovat předplatné) aspoň 24 hodin před koncem období. U 12měsíčního tarifu placeného měsíčně zrušení zastaví další obnovení a zbývající platby za běžících 12 měsíců se platí dál.</p>
+<p>Některé doplňky jde v aplikaci i dokoupit. AI funkce můžou mít limity použití, které se můžou lišit podle tarifu a které můžeme měnit. Dokud je Aurin v testování, nákupy v TestFlightu jsou testovací nákupy Applu a nic nestojí. Než bude Aurin Pro pro funkce, které obsahuje, potřeba, dáme ti vědět předem. Bez tvého nákupu ti nikdy nic neúčtujeme.</p>
 <h2>Férové používání</h2>
 <p>Nesnaž se obejít zabezpečení Aurinu, dostat se k cizímu účtu nebo datům, přetěžovat službu, automaticky ji stahovat, kopírovat ji nebo přeprodávat, ani ji používat k ničemu protiprávnímu. Zpětná analýza je dovolená jen tam, kde to povoluje zákon.</p>
 <h2>Dostupnost a změny</h2>
@@ -1409,7 +1468,7 @@ export function supportPage(request, {apple = false, email = false, open = false
 // The Consumer Health Data Privacy Policy that Washington's My Health My Data Act (RCW 19.373) and
 // Nevada's SB 370 ask for, apart from the privacy policy and linked from the homepage (footer). It
 // says the same as the privacy policy, in the categories those laws use; change both together.
-const HEALTH_DATA_UPDATED = '31 October 2026';
+const HEALTH_DATA_UPDATED = '4 November 2026';
 export function healthDataPage(request) {
   return doc(request, '/health-data', {en: 'Consumer Health Data Privacy Policy'}, {
     en: `<p class="muted">Last updated: ${HEALTH_DATA_UPDATED}</p>
@@ -1434,7 +1493,7 @@ export function healthDataPage(request) {
 <p><strong>To collect it.</strong> We collect and process consumer health data only after you consent in the app, before any of it is synced. Sexual activity and cycle tracking each take a consent of their own when you turn them on (Settings → Journal → Sexual activity, Settings → Cycle).</p>
 <p><strong>To share it.</strong> Sharing consumer health data takes a separate consent from the one to collect it, for each recipient, and none is given in advance:</p>
 <ul>
-<li><strong>OpenAI</strong>, for the AI features: a checkbox of its own (“Allow AI”). Your mood, anxiety, cannabis, CBD and medication go to the coach only after a further consent (Settings → Journal → Sensitive items), and your cycle only after “Coach knows my cycle”. Sexual activity never goes to AI.</li>
+<li><strong>OpenAI</strong>, for the AI features, including the coach’s daily summary on Today, Training and Food: a checkbox of its own (“Allow AI”). Your mood, anxiety, cannabis, CBD and medication go to the coach only after a further consent (Settings → Journal → Sensitive items), and your cycle only after “Coach knows my cycle”. Sexual activity never goes to AI.</li>
 <li><strong>Intervals.icu</strong>: when you connect it, Aurin first shows what it writes there: the workouts you plan and finish in Aurin and your calorie target, with notes on your nutrition. Connecting it is your consent to that. Your health data (sleep, heart rate, HRV, blood oxygen, breathing, VO2 max, body fat, steps and weight) and your Apple Watch workouts go there only after you also turn on “Also send health data” on that screen, or later in Settings → Sync.</li>
 <li><strong>Wahoo</strong>: when you connect it, Aurin first shows that it sends there only the rides and runs you plan in Aurin, for your ELEMNT and KICKR. Connecting it is your consent to that.</li>
 <li><strong>Google Health</strong>: before you connect it, Aurin shows what it writes there (the food log and, with the permissions you tick on Google’s consent screen, your weight and workouts) and asks for your consent.</li>

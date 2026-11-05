@@ -92,3 +92,14 @@ test("the consent gate fails closed: any env with a database needs consent, whet
   assert.equal((await subscriptionStatus({ ...unmarked, USER_IS_OWNER: true })).aiAccess, true);
   assert.equal((await subscriptionStatus({ OPENAI_API_KEY: "sk" })).aiAccess, true);
 });
+
+test("an AI consent stores the AI text's own version; it does not ask for health again", async () => {
+  const { AI_CONSENT_VERSION } = await import("../src/consent.js");
+  const { env } = setup();
+  await saveConsent(env, { health: true, ai: true });
+  const c = await consentStatus(env);
+  assert.equal(c.ai.version, AI_CONSENT_VERSION);
+  assert.equal(c.health.version, CONSENT_VERSION);
+  assert.equal(c.needed, false);
+  assert.equal(c.aiAllowed, true);
+});

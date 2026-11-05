@@ -222,7 +222,7 @@ final class WatchStore: NSObject, ObservableObject {
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
         guard session.activationState == .activated else { return }
-        let message: [String: Any] = [WatchSnapshot.waterKey: drink.ml, WatchSnapshot.drinkKindKey: drink.kind]
+        let message = WatchAPI.owned([WatchSnapshot.waterKey: drink.ml, WatchSnapshot.drinkKindKey: drink.kind])
         if session.isReachable {
             session.sendMessage(message, replyHandler: { _ in }, errorHandler: { _ in
                 WCSession.default.transferUserInfo(message)

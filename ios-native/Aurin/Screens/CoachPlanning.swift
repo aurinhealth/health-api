@@ -108,7 +108,7 @@ struct CoachCheckInCard: View {
 
     private func settle(_ memory: String, keep: Bool) async {
         withAnimation { things.advice = nil }
-        if keep { _ = try? await model.api.keepMemory(memory) } else { _ = try? await model.api.forgetMemory(memory) }
+        if keep { _ = try? await model.api.keepMemory(memory) } else { _ = try? await model.api.forgetMemory(memory, toPast: true) }
     }
 
     private func dismiss(_ advice: CoachCheckIn.Advice) async {

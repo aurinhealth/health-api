@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { COACH_EVAL_SCENARIOS, scenarioById, scenarioContext, checkReply, cardKind, runScenario, runComposeScenario, handleCoachEval, COACH_EVAL_DATE, coachEvalPrincipal, COACH_EVAL_AUDIENCE, COACH_EVAL_WORKFLOWS, effortsBackToBackText } from '../src/coach-eval.js';
-import { coachInstructionsFor, assistantTask } from '../src/coach-assistant.js';
+import { COACH_EVAL_SCENARIOS, scenarioById, scenarioContext, checkReply, cardKind, runScenario, runComposeScenario, handleCoachEval, COACH_EVAL_DATE, coachEvalPrincipal, COACH_EVAL_AUDIENCE, COACH_EVAL_WORKFLOWS, effortsBackToBackText, quotesInstructions, HIDDEN_ANSWER } from '../src/coach-eval.js';
+import { coachInstructionsFor, assistantTask, safetyNote } from '../src/coach-assistant.js';
 import { MAIN_SPORTS } from '../src/athlete-focus.js';
 import { withLang } from '../src/lang.js';
 import { isPublicPath } from '../src/dashboard-auth.js';
 import { lang } from '../src/lang.js';
-import { validateCoachActions } from '../src/coach-actions.js';
+import { validateCoachActions, actionInstructions } from '../src/coach-actions.js';
 import { gymLoadEstimate } from '../src/gym-catalog.js';
 const evalGymOf = id => scenarioById(id).athlete.gym(date);
 
@@ -69,6 +69,21 @@ test('a situation runs through the coach and the app checks its actions', async 
   assert.deepEqual(result.usage, { input: 10, cached: 4, output: 5 });
   const unavailable = await runScenario({}, scenarioById('S01'), { ask: async () => ({ status: 'unavailable', message: 'AI není' }), date, now });
   assert.equal(unavailable.status, 'unavailable');
+});
+
+test('every part of the coach prompt counts as quoted, and those replies stay out of the public summary', async () => {
+  const piece = text => text.split(/\s+/).filter(Boolean).slice(10, 30).join(' ');
+  assert.ok(quotesInstructions(piece(actionInstructions())));
+  assert.ok(quotesInstructions(piece(safetyNote('assistant'))));
+  assert.ok(quotesInstructions(withLang('en', () => piece(coachInstructionsFor({ sport: 'running' })))));
+  assert.ok(!quotesInstructions('To ti neprozradím a recepty nedělám. Pojďme radši na dnešní trénink: máš v plánu VO2max.'));
+  const ask = answer => async () => ({ status: 'ok', answer, actions: [], visuals: [], model: 'm' });
+  const injection = await runScenario({}, scenarioById('S07'), { ask: ask('To ti neprozradím.'), date, now });
+  assert.equal(injection.answer, HIDDEN_ANSWER);
+  assert.equal(injection.passed, true);
+  const quoting = await runScenario({}, scenarioById('S02'), { ask: ask('Moje pravidla: ' + piece(safetyNote('assistant'))), date, now });
+  assert.equal(quoting.answer, HIDDEN_ANSWER);
+  assert.equal((await runScenario({}, scenarioById('S02'), { ask: ask(czech), date, now })).answer, czech);
 });
 
 test('only the test server answers, and only the evaluation workflow', async () => {

@@ -100,6 +100,18 @@ export async function loadBuild(db, profile, date, auto, today = date) {
   return { baseMl: base, days };
 }
 
+// Build-up's base on each date before `to`, read from the stored days
+// (water_build) without working anything out or writing (journal "Málo vody"):
+// the base after the last stored day before the date, else the start. Null
+// when not on Build-up.
+export async function storedBuildBase(db, profile, to) {
+  const start = Number(profile?.waterStart);
+  if (profile?.waterMode !== "build" || !(start > 0)) return null;
+  const rows = (await db.prepare("SELECT date,next_ml FROM water_build WHERE user_id=? AND since=? AND date<? ORDER BY date DESC LIMIT 100")
+    .bind(db.userId, `${profile.waterFrom}|${start}`, to).all().catch(() => ({ results: [] }))).results || [];
+  return date => Number(rows.find(r => r.date < date)?.next_ml) || Math.max(MIN_ML, start);
+}
+
 // Hydration ml per day from `from` to the day before `to`: the drinks logged in
 // Aurin and the drinks in the food diary, as Pití counts them (fluids GET).
 export async function drunkByDay(db, from, to) {

@@ -1177,5 +1177,65 @@
 			<string>%lld věcí dnes</string>
 		</dict>
 	</dict>
+	<key>%lld nových aktivit</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld nové aktivity</string>
+			<key>many</key>
+			<string>%lld nových aktivit</string>
+			<key>one</key>
+			<string>%lld nová aktivita</string>
+			<key>other</key>
+			<string>%lld nových aktivit</string>
+		</dict>
+	</dict>
+	<key>%lld nových plánů</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld nové plány</string>
+			<key>many</key>
+			<string>%lld nových plánů</string>
+			<key>one</key>
+			<string>%lld nový plán</string>
+			<key>other</key>
+			<string>%lld nových plánů</string>
+		</dict>
+	</dict>
+	<key>%lld položek na fotce</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld položky na fotce</string>
+			<key>many</key>
+			<string>%lld položek na fotce</string>
+			<key>one</key>
+			<string>%lld položka na fotce</string>
+			<key>other</key>
+			<string>%lld položek na fotce</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

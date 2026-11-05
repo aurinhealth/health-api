@@ -61,6 +61,9 @@ final class ProStore {
     private(set) var purchasing = false
     /// Plans the day-5 reminder when a free week starts (the tests plan nothing).
     @ObservationIgnored var trialReminder: @MainActor (Date, String) async -> Void = { await ProStore.remindTrialEnd(purchased: $0, price: $1) }
+    /// Finishes a pack's transaction. The pack test records it: StoreKit's test
+    /// session on iOS 27 can keep listing a finished pack in Transaction.unfinished.
+    @ObservationIgnored var finishTransaction: @MainActor (Transaction) async -> Void = { await $0.finish() }
 
     @ObservationIgnored private var api: APIClient?
     @ObservationIgnored private var updates: Task<Void, Never>?
@@ -222,12 +225,12 @@ final class ProStore {
             throw APIError.message(L10n.tr("App Store nákup nepotvrdil. Zkus to znovu."))
         }
         // Xcode's StoreKit testing: the server never accepts its signature.
-        if transaction.environment == .xcode { await transaction.finish(); return Self.packs[id] }
+        if transaction.environment == .xcode { await finishTransaction(transaction); return Self.packs[id] }
         guard let left = await sendPack(result) else {
             // Kept unfinished: it goes to the server on the next start.
             throw APIError.message(L10n.tr("Nákup proběhl, zprávy se přidají, jakmile bude spojení se serverem."))
         }
-        await transaction.finish()
+        await finishTransaction(transaction)
         return left
     }
 
@@ -284,6 +287,7 @@ final class ProStore {
     /// "1 490 Kč" from the App Store, or the fixed one.
     func price(_ id: String) -> String? { products[id]?.displayPrice }
 
+
     /// The yearly price a month, in the store's currency: "124 Kč", "5,00 €".
     func perMonth(_ id: String) -> String? {
         guard let product = products[id] else { return nil }
@@ -329,6 +333,24 @@ final class ProStore {
             number += fraction.padding(toLength: fractionDigits, withPad: "0", startingAt: 0)
         }
         return String(characters[..<first]) + number + String(characters[(last + 1)...])
+    }
+
+    /// The number in a shown price whatever the phone's locale, by the rule reprice
+    /// uses: the last separator is the decimal one when one or two digits follow it,
+    /// any other groups thousands. 1490 from "CZK 1,490", "1 490 Kč" and "1.490,00 €";
+    /// 59.99 from "$59.99"; 149 from "149,00 Kč".
+    nonisolated static func number(_ shown: String) -> Decimal? {
+        let characters = Array(shown)
+        guard let first = characters.firstIndex(where: \.isNumber),
+              let last = characters.lastIndex(where: \.isNumber) else { return nil }
+        let span = Array(characters[first...last])
+        let decimal = span.indices.last(where: { !span[$0].isNumber }).flatMap { span.count - $0 - 1 <= 2 ? $0 : nil }
+        var number = ""
+        for (index, character) in span.enumerated() {
+            if let digit = character.wholeNumberValue, character.isNumber { number += String(digit) }
+            else if index == decimal { number += "." }
+        }
+        return number.isEmpty ? nil : Decimal(string: number, locale: Locale(identifier: "en_US_POSIX"))
     }
 
     /// The number in a shown price: 1490 from "1 490,00 Kč", 59.99 from "$59.99", 1490 from "1.490,00 €" (de).

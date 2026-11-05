@@ -32,10 +32,14 @@ struct AddFoodSheet: View {
     @State private var scanning = false
     @State private var photoMode: String?
     @State private var readingPhoto = false
+    /// Choosing a food for a meal photo's list (PhotoItemsView "Přidat
+    /// položku"): only the search and the lists; the food comes back here.
+    var pick: ((FoodProduct, Double) -> Void)? = nil
 
-    init(meal: String, start: FoodStart? = nil) {
+    init(meal: String, start: FoodStart? = nil, pick: ((FoodProduct, Double) -> Void)? = nil) {
         _meal = State(initialValue: meal)
         self.start = start
+        self.pick = pick
     }
 
     var body: some View {
@@ -47,7 +51,7 @@ struct AddFoodSheet: View {
                         Spacer()
                         Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
                     }
-                    MealMenu(selection: $meal).padding(.top, 6)
+                    if pick == nil { MealMenu(selection: $meal).padding(.top, 6) }
 
                     HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
@@ -61,7 +65,7 @@ struct AddFoodSheet: View {
                     .overlay(alignment: .bottom) { Rectangle().fill(Palette.ink.opacity(0.25)).frame(height: 1) }
                     .padding(.top, 18)
 
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+                    if pick == nil { LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
                         tile("Skenovat", "barcode.viewfinder") { scanning = true }
                         tile("Vyfotit", "camera") { photoMode = "portion" }
                         tile("Z galerie", "photo.on.rectangle") { galleryOpen = true }
@@ -70,7 +74,7 @@ struct AddFoodSheet: View {
                         tile("Dohledat AI", "sparkles") { Task { await lookUp() } }
                             .disabled(query.trimmingCharacters(in: .whitespaces).count < 2 || lookingUp || model.demo)
                     }
-                    .padding(.top, 18)
+                    .padding(.top, 18) }
                     if readingPhoto {
                         CoachThinking(text: L10n.tr("AI čte fotku…")).padding(.top, 12)
                     } else if lookingUp {
@@ -123,8 +127,9 @@ struct AddFoodSheet: View {
             .navBarVisibility(.hidden)
             .navigationDestination(for: FoodRoute.self) { route in
                 switch route {
-                case .amount(let product): FoodAmountView(product: product, meal: meal, done: { dismiss() })
+                case .amount(let product): FoodAmountView(product: product, meal: meal, pick: pick, done: { dismiss() })
                 case .photo(let product, let note): FoodAmountView(product: product, meal: meal, note: note, editing: true, done: { dismiss() })
+                case .items(let photoMeal): PhotoItemsView(meal: photoMeal, mealType: meal, done: { dismiss() })
                 case .manual: ManualFoodView(meal: meal, name: query, done: { dismiss() })
                 case .recipe: RecipeEditorView(saved: { Task { await loadRecent() }; path.removeLast() })
                 }
@@ -349,11 +354,28 @@ struct AddFoodSheet: View {
         guard let jpeg = await image.jpegForUpload() else { return }
         do {
             let r = try await model.api.readFoodPhoto(jpeg, mode: mode)
-            path.append(.photo(r.product, r.note))
+            if r.items.count >= 2 {
+                path.append(.items(PhotoMeal(photo: image, items: r.items.map(ownFood))))
+            } else {
+                path.append(.photo(r.product, r.note))
+            }
             message = nil
         } catch {
             message = error.localizedDescription
         }
+    }
+
+    /// A food from the photo that is one of the user's own (every word of the
+    /// AI's name starts a word of it) takes the own food's values: nothing is
+    /// looked up on the web.
+    private func ownFood(_ item: PhotoItem) -> PhotoItem {
+        let wanted = Self.fold(item.product.name).split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+        guard !wanted.isEmpty, let own = saved.first(where: { product in
+            guard !product.perPortion, product.calories_100g != nil else { return false }
+            let words = Self.fold(product.name).split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            return wanted.allSatisfy { q in words.contains { $0.hasPrefix(q) } }
+        }) else { return item }
+        return PhotoItem(product: own, amount: item.amount, mine: true)
     }
 
     private func lookUp() async {
@@ -375,6 +397,7 @@ struct AddFoodSheet: View {
 enum FoodRoute: Hashable {
     case amount(FoodProduct)
     case photo(FoodProduct, String?)
+    case items(PhotoMeal)
     case manual
     case recipe
 }
@@ -430,6 +453,11 @@ struct FoodAmountView: View {
     var editing = false
     /// Opened from the push that the owner fixed it ("Opraveno").
     var fixed = false
+    /// The amount to start at (a food of a meal photo).
+    var start: Double? = nil
+    /// Choosing for a meal photo's list: "Hotovo" hands the food and the
+    /// amount back instead of logging it.
+    var pick: ((FoodProduct, Double) -> Void)? = nil
     var done: () -> Void = {}
     /// Another meal than the one the food was opened for.
     @State private var chosenMeal: String?
@@ -468,6 +496,11 @@ struct FoodAmountView: View {
                 }
                 // The same card as after a scan (BarcodeScanSheet): the values, then the wheel.
                 NutritionCells(product: current, amount: value ?? 0)
+                if pick == nil {
+                    DayLeftLine(day: model.writeDay, kcal: current.kcal(for: value ?? 0) ?? 0,
+                                protein: current.grams(current.protein_100g, for: value ?? 0) ?? 0,
+                                carbs: current.grams(current.carbs_100g, for: value ?? 0) ?? 0)
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     PortionWheel(product: current, amount: Binding(get: { value ?? 0 }, set: { amount = String(($0 * 10).rounded() / 10) }))
                         .id(current.unit + (current.usableServing.map(Self.text) ?? "") + (current.serving_name ?? ""))
@@ -517,12 +550,12 @@ struct FoodAmountView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-                if product.canSuggestNew && !model.demo {
+                if product.canSuggestNew && !model.demo && pick == nil {
                     SettingsGroup { SettingsToggle(title: "Navrhnout pro všechny", isOn: $suggestNew) }
                 }
-                MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 }))
+                if pick == nil { MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 })) }
                 Button { Task { await save() } } label: {
-                    Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(target)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    Text(saving ? L10n.tr("Ukládám…") : pick != nil ? L10n.tr("Hotovo") : MealSlot.addText(target)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                 }
                 .disabled(saving || value == nil || current.name.isEmpty || current.calories_100g == nil)
@@ -558,7 +591,7 @@ struct FoodAmountView: View {
         filled = true
         // Missing energy: the values open right away to fill it in.
         edit = editing || product.calories_100g == nil
-        if amount.isEmpty { amount = Self.text(product.defaultAmount) }
+        if amount.isEmpty { amount = Self.text(start ?? product.defaultAmount) }
         name = product.name
         brand = product.brand ?? ""
         kcal = product.calories_100g.map(Self.text) ?? ""
@@ -599,6 +632,7 @@ struct FoodAmountView: View {
 
     private func save() async {
         guard let value else { return }
+        if let pick { pick(current, value); return }
         saving = true
         defer { saving = false }
         var corrected = current

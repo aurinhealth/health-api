@@ -22,7 +22,6 @@ import { cached, cachedOnly, bumpCacheVersion, FOOD_WRITE, UNCHANGED_HEADER, clo
 import { manualPairs } from './manual-pairs.js';
 import { activityDetail, rideIntervals } from './activity-detail.js';
 import { watchDetail, withWatch } from './watch-detail.js';
-import { useCookbookDatabase } from './cookbook.js';
 import {googleDashboard} from './google-dashboard.js';
 import {applyEnergyBudget} from './energy-budget.js';
 import {buildToday,todayUnavailable} from './app-today.js';
@@ -37,14 +36,14 @@ import {buildFood} from './app-food.js';
 import {buildFoodWeek} from './app-food-week.js';
 import {normalizeProfile,effectiveProfile} from './energy-profile.js';
 import {withoutProDiet} from './diet.js';
-import {athleteFocus} from './athlete-focus.js';
+import {athleteFocus,mainKindsOf,SPORT_KINDS} from './athlete-focus.js';
 import { splitFacts, triathlonSplit } from './triathlon-split.js';
 import { getTrainingProfile } from './training-profile.js';
 import { loadProfiles, refreshSuggestions } from './profile-suggestions.js';
 import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
 import {forwardWatchWorkouts} from './watch-forward.js';
-import {askCoach,coachContext,lightModel,assistantTask,engineSport} from './coach-assistant.js';
+import {askCoach,coachContext,lightModel,assistantTask,engineSport,compactWellness} from './coach-assistant.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
 import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates } from './coach-actions.js';
 import { QUICK_CHIPS, quickSnapshot, quickOptions, quickChange, previewFollows, scaleGymRows, quickMemory, quickEntry } from './coach-quick-change.js';
@@ -77,7 +76,9 @@ import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './
 import { saveCalendarFree, clearCalendarFree } from './calendar-free.js';
 import { getCheckin, readinessCheckin, saveCheckin } from './morning-checkin.js';
 import { getChecks, upcomingTest } from './threshold-check.js';
-import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, memoryCheck, memoryChanges } from './athlete-state.js';
+import { saveSportChoice, sportExclusion, suggestedSports } from './sport-choice.js';
+import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories } from './athlete-state.js';
+import { recentNotes, earlierToday, chatSummary, coachNoteDays, queueDayNote, summarizeChatStart, forgetNote, usersWithNotesDue, runCoachNotes } from './coach-notes.js';
 import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planWorkoutId, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
 import { chatLibraryQuery, askedSession } from './chat-ask.js';
@@ -104,13 +105,16 @@ import legacyHealthApi, { googleToken, matchActivities } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
 import { reviewRefusal, isReviewAccount } from "./app-review.js";
+import { updateFitnessEstimate } from "./own-vo2max-store.js";
+import { ensureReviewSample } from "./review-sample.js";
 import { handleNativeAppleLogin, forgetUsedAppleTokens } from "./apple-login.js";
-import { chatContext, appendChatTurn, listChats, readChat, deleteChat, startChatWithCoach, lastAnswerId, ownedChat } from "./assistant-chats.js";
-import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedReplyPush } from "./coach-push-reply.js";
+import { chatContext, appendChatTurnIds, listChats, readChat, deleteChat, startChatWithCoach, ownedChat, saveAnswerFeedback } from "./assistant-chats.js";
+import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedReplyPush, foreignPushReply } from "./coach-push-reply.js";
 import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
 import { coachEvalPrincipal, handleCoachEval } from "./coach-eval.js";
-import { limitBody, publicBodyLimit } from "./body-limit.js";
+import { limitBody, publicBodyLimit, SIGNED_IN_BODY_LIMIT } from "./body-limit.js";
+import { accountRateLimit } from "./account-rate-limit.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleSignOut, endConnectSession, sessionSecret, foreignOriginChange, sessionMatchesUser, slidingSession } from "./dashboard-auth.js";
 import { appleAppSiteAssociation } from "./apple-app-site-association.js";
 import { handleWorkoutTemplatesApi, publicSharePage } from "./workout-templates.js";
@@ -120,6 +124,7 @@ import { deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts }
 import { forgetExpiredAiLimits } from "./ai-limit-memory.js";
 import { withPlainErrors } from "./error-text.js";
 import { handleIntervalsOAuth, disconnectIntervalsApp } from "./intervals-oauth.js";
+import { scheduleIntervalsCatchUp, runIntervalsCatchUp } from "./intervals-catchup.js";
 import { handleIntervalsWebhook } from "./intervals-webhook.js";
 import { handleAppStoreNotification } from "./app-store.js";
 import { intervalsChanged, intervalsReads } from "./intervals-reads.js";
@@ -128,11 +133,11 @@ import { handleWhoopOAuth, disconnectWhoop, syncWhoop } from "./whoop.js";
 import { wahooDetail } from "./wahoo-detail.js";
 import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, wahooRideExpected, readWahooTokens } from "./wahoo.js";
 import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed } from "./sync-destinations.js";
-import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, smokeUser, usersWithProviders, usersWithAccount, usersWithPushTokens, openSignup } from "./tenancy.js";
+import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, smokeUser, usersWithProviders, usersWithAccount, usersWithPushTokens, usersWithHealthConsent, openSignup } from "./tenancy.js";
 import { userDataEnvironment, prefetchUserData, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
 import { handlePasskeyLogin } from "./passkeys.js";
-import { handleEmailLogin } from "./email-login.js";
+import { handleEmailLogin, reviewCode } from "./email-login.js";
 import { handleWaitlistSignup, forgetOldWaitlist } from "./testflight-waitlist.js";
 import { forgetStaleRequestLimits } from "./ip-rate-limit.js";
 import { emailConfigured } from "./email-sender.js";
@@ -144,6 +149,7 @@ import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, p
 import { coachNudge, swapOffer, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
 import { waterNudge } from "./water-goal.js";
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
+import { cachedPage } from './page-cache.js';
 import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, L } from "./lang.js";
 import { appUpdateRequired } from "./app-version.js";
 import { compactOldData } from "./heart-rate-compaction.js";
@@ -277,7 +283,6 @@ async function intervalsWebhookFor(env, ctx, message) {
 export async function runIntervalsWebhookInvocation(env, ctx, { athlete, parts = [], kinds = [], deleted = [] } = {}) {
   try {
     await ensureTenancy(env.DB, env);
-    useCookbookDatabase(env.DB);
     await forIntervalsAthlete(env, ctx, String(athlete || ""), parts, kinds, deleted);
     return { ok: true };
   } catch (error) {
@@ -303,6 +308,10 @@ async function forIntervalsAthlete(env, ctx, athlete, parts, kinds, deleted = []
 const minute = (cron, now, test) => cron === "* * * * *" && test(now.getUTCMinutes(), now.getUTCHours());
 const every5 = (cron, now) => minute(cron, now, m => m % 5 === 0);
 const USER_JOBS = [
+  // Aurin's own VO2max and ages from the stored data, once a day at 4:47 UTC (a
+  // minute no five-minute job shares), for everyone who consented, whatever they
+  // connected; nothing is fetched from a service (own-vo2max-store.js).
+  { name: "fitness-estimate", providers: [], everyone: true, due: (cron, now) => minute(cron, now, (m, h) => h === 4 && m === 47), run: scoped => updateFitnessEstimate(scoped) },
   // After the user's midnight (0:00–6:00 in their zone), old Google data gets
   // thinner a step a minute: a workout's heart-rate samples older than a week become 5-minute
   // rows, those older than a month hourly rows, zone minutes hourly rows
@@ -325,6 +334,9 @@ const USER_JOBS = [
   { name: "coach-push", providers: [], push: true, due: every5, run: (scoped, ctx) => coachPush(scoped, ctx) },
   // Water Build-up: one push at 14:00 and one at 18:00 when the day is behind (water-goal.js).
   { name: "water-push", providers: [], push: true, due: every5, run: (scoped, ctx) => waterPush(scoped, ctx) },
+  // The coach's note of each day with chats and the tidy-up of its memory, after
+  // the user's midnight (coach-notes.js): hourly, for the users with a day due.
+  { name: "coach-notes", providers: [], notes: true, due: (cron, now) => minute(cron, now, m => m === 12), run: (scoped, ctx, controller) => runCoachNotes(scoped, { now: controller?.scheduledTime || Date.now() }) },
   { name: "google-food", providers: ["google"], due: every5, run: async scoped => { await backfillFoodGoogle(scoped.DB); await processFoodGoogle(scoped, { token: googleToken }); } },
   { name: "intervals-exports", providers: ["intervals"], due: every5, run: scoped => retryWorkoutExports(scoped) },
   // Done activities whose send to Google Health or Intervals.icu did not go through (sync-destinations.js).
@@ -351,6 +363,14 @@ const USER_JOBS = [
     await legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent", { method: "POST" }), scoped, ctx);
     await forwardWatchWorkouts(scoped).catch(error => console.error("Watch workout forward failed", error.message));
   } },
+  // Done workouts and plans that missed Intervals.icu while it was disconnected
+  // or refusing (intervals-catchup.js): every five minutes while one is pending
+  // (a reconnect schedules it), hourly at :45 it also looks for sends refused
+  // for good. Idle, one sync_status read.
+  { name: "intervals-catchup", providers: ["intervals"], due: every5, run: (scoped, ctx, controller) => {
+    const now = controller?.scheduledTime || Date.now();
+    return runIntervalsCatchUp(scoped, { now, pendingOnly: new Date(now).getUTCMinutes() !== 45 });
+  } },
   // Hourly at :50 until it is done: one more year of older Intervals.icu activities
   // (index.js syncIntervalsHistory), one request a run; then a single read of sync_status.
   { name: "intervals-history", providers: ["intervals"], due: (cron, now) => minute(cron, now, m => m === 50), run: async (scoped, ctx) => {
@@ -373,7 +393,7 @@ export function dueUserJobs(cron, now) { return USER_JOBS.filter(job => job.due(
 export async function runUserJobs(env, ctx, { cron, scheduledTime }, user, names) {
   const scoped = await withoutBrokenConnections(await connectionEnvironment(await userDataEnvironment(env, user)), new Date(scheduledTime || Date.now()));
   const connected = scoped.CONNECTED_PROVIDERS || [];
-  const jobs = USER_JOBS.filter(job => names.includes(job.name) && (job.push || job.providers.some(p => connected.includes(p))));
+  const jobs = USER_JOBS.filter(job => names.includes(job.name) && (job.push || job.notes || job.everyone || job.providers.some(p => connected.includes(p))));
   if (!jobs.length) return;
   const [language, zone] = await Promise.all([storedLanguage(env.DB, user.id, { fresh: true }), storedTimeZone(env.DB, user.id, { fresh: true })]), unitsChoice = await storedUnits(env.DB, user.id);
   const controller = { cron, scheduledTime };
@@ -390,7 +410,6 @@ export async function runUserJobs(env, ctx, { cron, scheduledTime }, user, names
 export async function runUserJobsInvocation(env, ctx, { user, names, cron, scheduledTime }) {
   try {
     await ensureTenancy(env.DB, env);
-    useCookbookDatabase(env.DB);
     await runUserJobs(env, ctx, { cron, scheduledTime }, user, names);
     return { ok: true };
   } catch (error) {
@@ -408,7 +427,11 @@ export async function fanOutUserJobs(env, ctx, controller, { concurrency = 10 } 
   const due = USER_JOBS.filter(job => names.includes(job.name)), providers = [...new Set(due.flatMap(job => job.providers))];
   // A push job also goes to users with a phone to notify and no service its other jobs need.
   const notified = due.some(job => job.push) && pushConfigured(env) ? await usersWithPushTokens(env.DB, env) : [];
-  const byId = new Map([...(await usersWithProviders(env.DB, env, providers)), ...notified].map(user => [user.id, user]));
+  // The coach's night note goes to the users who chatted, whatever they connected.
+  const chatted = due.some(job => job.notes) ? await usersWithNotesDue(env.DB, env, scheduledTime) : [];
+  // A job for everyone (once a day) goes to every consenting user.
+  const everyone = due.some(job => job.everyone) ? await usersWithHealthConsent(env.DB, env) : [];
+  const byId = new Map([...(await usersWithProviders(env.DB, env, providers)), ...notified, ...chatted, ...everyone].map(user => [user.id, user]));
   // The App Review demo account syncs with no third-party service (app-review.js).
   const users = [...byId.values()].filter(user => !isReviewAccount(env, user));
   const binding = env.USER_JOBS && typeof env.USER_JOBS.run === "function" ? env.USER_JOBS : null;
@@ -437,7 +460,6 @@ export async function fanOutUserJobs(env, ctx, controller, { concurrency = 10 } 
 const worker = {
   async scheduled(controller, env, ctx) {
     await ensureTenancy(env.DB, env);
-    useCookbookDatabase(env.DB);
     // Data of deleted accounts that the delete request had no time for.
     // The rest of paused health data, and the last pass after a pause (health-pause.js).
     if (controller.cron === "* * * * *") await finishHealthPauses(env.DB, env.USER_DATA_ROUTING === 'true' || env.FOOD_CATALOG_ROUTING === 'true' ? { databaseForUser: id => deletionDatabase(env, id) } : {}).catch(error => console.error("Health data deletion failed", error.message));
@@ -472,7 +494,7 @@ const worker = {
     // Static pages stay independent of storage availability.
     // Crawlers and link checkers ask with HEAD too; a 401 there keeps the site out of search.
     if (STATIC_PATHS.has(url.pathname) && (request.method === 'GET' || request.method === 'HEAD')) {
-      const page = await staticRoute(url, request, env);
+      const page = await cachedPage(url, env, ctx, () => staticRoute(url, request, env));
       return request.method === 'HEAD' ? new Response(null, page) : page;
     }
     try { await ensureTenancy(env.DB, env, { request }); }
@@ -480,7 +502,6 @@ const worker = {
       if (error instanceof TenancyUpgradeInProgress) return Response.json({status:"error",message:error.message},{status:503,headers:{"Retry-After":"30","Cache-Control":"no-store"}});
       throw error;
     }
-    useCookbookDatabase(env.DB);
     const rawEnv = env;
     // Deny by default: only allowlisted routes are reachable without a session or API key.
     let principal = await resolvePrincipal(request, env);
@@ -488,10 +509,12 @@ const worker = {
     if (!principal && url.pathname === "/automation/coach-eval") principal = await coachEvalPrincipal(request, env);
     const isPublic = isPublicPath(url.pathname);
     // Nobody signed in: the body is read only up to a limit (body-limit.js, SEC-013).
+    let publicLimited = false;
     if (isPublic && !principal) {
       const limited = await limitBody(request, publicBodyLimit(url.pathname));
       if (limited.response) return limited.response;
       request = limited.request;
+      publicLimited = true;
     }
     if (!isPublic && !principal) {
       // A browser opening an address that isn't a page (a mistyped or old link) gets the site's 404 page.
@@ -499,7 +522,7 @@ const worker = {
         const page = notFoundPage(request);
         return request.method === 'HEAD' ? new Response(null, page) : page;
       }
-      return unauthorizedResponse();
+      return unauthorizedResponse(request);
     }
     let user = null, prefetched = null;
     if (principal?.kind === "user") {
@@ -508,7 +531,14 @@ const worker = {
       user = await findUser(env.DB, principal.userId, env);
       // A cookie from before the user signed out everywhere (or changed the e-mail, removed a passkey or the Apple ID) is no cookie.
       if (user && !sessionMatchesUser(principal, user)) { user = null; principal = null; }
-      if (!user && !isPublic) return unauthorizedResponse();
+      if (!user && !isPublic) return unauthorizedResponse(request);
+      // A stale or orphaned cookie on a public route is nobody signed in: the same body limit (SEC-013).
+      if (!user && !publicLimited) {
+        const limited = await limitBody(request, publicBodyLimit(url.pathname));
+        if (limited.response) return limited.response;
+        request = limited.request;
+        publicLimited = true;
+      }
     } else if (principal?.kind === "system") {
       // The deploy smoke test acts as its own empty account, never as the owner (tenancy.js smokeUser).
       user = await smokeUser(env.DB, env);
@@ -549,6 +579,14 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // Every change made with the session cookie, whatever the route.
     if (foreignOriginChange(request, principal)) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     const signedIn = principal?.kind === "user" && Boolean(user);
+    if (signedIn) {
+      // Requests per account (account-rate-limit.js) and the size of what it sends (body-limit.js).
+      const limited = await accountRateLimit(request, rawEnv, user.id);
+      if (limited) return limited;
+      const sized = await limitBody(request, SIGNED_IN_BODY_LIMIT);
+      if (sized.response) return sized.response;
+      request = sized.request;
+    }
     // Routes only the old web dashboard used: the owner's (owner-only-routes.js).
     const ownerOnly = ownerOnlyRefusal(url.pathname, { signedIn, user });
     if (ownerOnly) return ownerOnly;
@@ -588,7 +626,7 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (googleOAuth) {if(url.pathname==="/oauth/google/callback"&&googleOAuth.status===302){await clearConnectionHealth(env,'google');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_google'").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return endConnectSession(googleOAuth);}
     const intervalsOAuth = await handleIntervalsOAuth(request, env, url.pathname);
     // A new Intervals.icu connection imports its history, the same as a pasted key.
-    if (intervalsOAuth) {if(url.pathname==="/oauth/intervals/callback"&&intervalsOAuth.status===302){await clearConnectionHealth(env,'intervals');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name IN ('initial_intervals','intervals_history')").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return endConnectSession(intervalsOAuth);}
+    if (intervalsOAuth) {if(url.pathname==="/oauth/intervals/callback"&&intervalsOAuth.status===302){await clearConnectionHealth(env,'intervals');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name IN ('initial_intervals','intervals_history')").bind(env.USER_ID).run();await scheduleIntervalsCatchUp(env).catch(error=>console.error('Intervals.icu catch-up schedule failed',error.message));await initialImport(await connectionEnvironment(env),ctx);}return endConnectSession(intervalsOAuth);}
     // A new Ultrahuman connection imports the ring's last two months (readiness's baseline).
     const ultrahumanOAuth = await handleUltrahumanOAuth(request, env, url.pathname);
     if (ultrahumanOAuth) {if(url.pathname==="/oauth/ultrahuman/callback")firstImport(env,ctx,"ultrahuman");return endConnectSession(ultrahumanOAuth);}
@@ -614,6 +652,10 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (emailLogin) return emailLogin;
     if (url.pathname.startsWith("/app/api/")) {
       if (!user) return unauthorizedResponse();
+      // The App Review account shows a sample athlete's Apple Health (review-sample.js);
+      // only while its fixed code works; two rows read an hour, no query at all for anyone
+      // else. Paused health data stays paused.
+      if (isReviewAccount(rawEnv, user) && reviewCode(rawEnv, String(user.email || "").trim().toLowerCase()) && !user.healthPaused) await ensureReviewSample(env, { later: job => ctx.waitUntil(job) }).catch(error => console.error("Review sample failed", error.message));
       if (foodCatalogRequestPaused(request, env, url.pathname)) return Response.json({status:'catalog_upgrade',message:new FoodCatalogUnavailable().message},{status:503,headers:{'Retry-After':'30','Cache-Control':'no-store'}});
       // A write the app replays after a lost signal is stored once (idempotency.js).
       const response = await withIdempotency(request, env, url, r => handleDashboardApi(r, env, ctx, url, { user, signedIn }));
@@ -781,7 +823,7 @@ async function morningPush(env, ctx, options = {}) {
   // Settings → Oznámení → Ranní připravenost off; the phone keeps its token for the coach.
   const state = await getAthleteState(env.DB).catch(() => null);
   if (state?.notify?.morning === false) { await morningPushNote(env, { reason: 'off' }); return { sent: 0, reason: 'off' }; }
-  const withState = r => r ? { ...r, athleteState: state?.status || null, ...(r.context ? { context: { ...r.context, memories: state?.memories || [] } } : {}) } : r;
+  const withState = r => r ? { ...r, athleteState: state?.status || null, ...(r.context ? { context: { ...r.context, memories: usedMemories(state) } } : {}) } : r;
   // The night, the baselines and today's plan only once the push goes out.
   // Each check in the window leaves why no push went out (sync_status
   // morning_push): "started" left alone means the run was cut off.
@@ -845,7 +887,7 @@ async function coachPush(env, ctx) {
   const hide = hidesValues(state) ? (nudge.swap ? 'swap' : 'coach') : null;
   let sent = 0;
   for (const device of devices) {
-    const result = await sendPush(env, device, { title: nudge.title, body: nudge.body }, { category: nudge.swap ? COACH_SWAP_CATEGORY : COACH_REPLY_CATEGORY, data: { coach: { kind: nudge.kind, date } }, hide }).catch(error => ({ ok: false, error: error.message }));
+    const result = await sendPush(env, device, { title: nudge.title, body: nudge.body }, { category: nudge.swap ? COACH_SWAP_CATEGORY : COACH_REPLY_CATEGORY, data: { coach: { kind: nudge.kind, date, account: db.userId } }, hide }).catch(error => ({ ok: false, error: error.message }));
     if (result.ok) sent++;
     else if (result.gone) await deletePushToken(db, device.token);
     else console.error('Coach push not delivered', result.status || '', result.reason || result.error || '');
@@ -1153,8 +1195,10 @@ async function coachTextExtras(env,ctx,internalAuth,screen){
   // Today has its own readiness on screen; the coach adds why (parts) and the athlete's status.
   // Sick, injured or on a break holds the text back on Trénink too (screen-texts.js holdBack).
   const state=await getAthleteState(env.DB).catch(()=>null);
-  if(screen==='today')return {...(coachTrends?{coachTrends}:{}),...(readiness?{readinessDetail:readiness}:{}),athleteState:state?.status||null};
-  return {...(coachTrends?{coachTrends}:{}),...(readiness?{readiness}:{}),athleteState:state?.status||null};
+  // The cycle only as the coach may know it: null unless "Kouč ví o cyklu" is on (cycle-model.js cycleForCoach).
+  const coachCycle=profile?.cycle?cycleForCoach({...profile.cycle,date}):null;
+  if(screen==='today')return {...(coachTrends?{coachTrends}:{}),...(readiness?{readinessDetail:readiness}:{}),athleteState:state?.status||null,coachCycle};
+  return {...(coachTrends?{coachTrends}:{}),...(readiness?{readiness}:{}),athleteState:state?.status||null,coachCycle};
 }
 // performance: the runs' and rides' trends, curves and laps (Intervals.icu
 // sport settings, power and pace curves, up to six activities' laps). Only the
@@ -1311,20 +1355,28 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if(url.pathname==='/app/api/athlete-state'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     try{
-      if(request.method==='GET'){const state=await getAthleteState(env.DB);return Response.json({status:'ok',state,memories:memoryList(state)},{headers:{'Cache-Control':'no-store'}});}
+      // The memory screen: the lasting memories with their groups, what no longer
+      // holds (Past), the notes of the last days (Recent chats) and "Use memory".
+      const memoryScreen=async state=>({memories:memoryList(state),pastMemories:pastMemoryList(state),recentChats:await recentNotes(env.DB,{days:coachNoteDays(env)}).catch(()=>[]),memoryOff:Boolean(state.memoryOff)});
+      if(request.method==='GET'){const state=await getAthleteState(env.DB);return Response.json({status:'ok',state,...await memoryScreen(state)},{headers:{'Cache-Control':'no-store'}});}
       if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
       if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
       const body=await request.json();
       // memory adds one by hand, edit {from,to} rewrites one, keep says a passing one still holds.
-      const edit=body.edit&&typeof body.edit==='object'?{from:String(body.edit.from??''),to:String(body.edit.to??'')}:null;
-      const state=await updateAthleteState(env.DB,{status:body.status,note:body.note,statusUntil:body.statusUntil,forget:body.forget,dismiss:body.dismiss,memory:typeof body.memory==='string'?body.memory:null,edit,keep:typeof body.keep==='string'?body.keep:null,notify:body.notify&&typeof body.notify==='object'?body.notify:null});
+      // group puts a new or edited one into Goals, Training, Health or Life; regroup moves one;
+      // toPast keeps a forgotten pain under Past, forgetPast and forgetNote erase; memoryOff is "Use memory".
+      const text=v=>typeof v==='string'?v:null;
+      const edit=body.edit&&typeof body.edit==='object'?{from:String(body.edit.from??''),to:String(body.edit.to??''),group:text(body.edit.group)}:null;
+      const regroup=body.regroup&&typeof body.regroup==='object'?{text:text(body.regroup.text),group:text(body.regroup.group)}:null;
+      if(typeof body.forgetNote==='string')await forgetNote(env.DB,body.forgetNote);
+      const state=await updateAthleteState(env.DB,{status:body.status,note:body.note,statusUntil:body.statusUntil,forget:body.forget,toPast:body.toPast===true,forgetPast:text(body.forgetPast),dismiss:body.dismiss,memory:text(body.memory),group:text(body.group),edit,regroup,memoryOff:typeof body.memoryOff==='boolean'?body.memoryOff:undefined,keep:text(body.keep),notify:body.notify&&typeof body.notify==='object'?body.notify:null});
       if(body.status!=null)await syncedPlans(env).catch(()=>null);
       // Sick, injured or on a break: the sessions the athlete chose to cancel go too.
       // They are kept in the athlete's state, so the coach knows what to put back.
       let cancelled=0;const gone=[];
       if(state.status!=='active'&&Array.isArray(body.cancel))for(const eventId of body.cancel.slice(0,14))await deletePlannedEvent(env,{eventId}).then(r=>{cancelled++;if(r?.cancelled)gone.push(r.cancelled);}).catch(error=>console.error('Cancel failed',error.message));
       if(gone.length)await updateAthleteState(env.DB,{cancelled:gone}).catch(error=>console.error('Cancelled sessions not kept',error.message));
-      return Response.json({status:'ok',state,memories:memoryList(state),cancelled},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',state,...await memoryScreen(state),cancelled},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
   // The morning check-in on Today (morning-checkin.js): one answer a day.
@@ -1370,12 +1422,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const [[ride,run],[profiles,recent,state,gym,less,place]]=await Promise.all([Promise.all([defaultDayCoach(env,{...inputs,athleteState:athlete},date,'ride',week),defaultDayCoach(env,{...inputs,athleteState:athlete},date,'run',week)]),around]);
       // The swim coach only for a swimmer: swimming as the main sport or a swim
       // in the last 60 days (one small capabilities read more, nobody else pays it).
-      const swims=['swimming','triathlon'].includes(profiles?.effective?.mainSport)||(recent.sports||[]).includes('swim');
+      const eff=profiles?.effective||{},allowed=Array.isArray(eff.sports)?eff.sports:null,mains=mainKindsOf(eff);
+      const swims=(['swimming','triathlon'].includes(eff.mainSport)||mains.includes('swim')||(recent.sports||[]).includes('swim'))&&(!allowed||allowed.includes('swim'));
       const swim=swims?await defaultDayCoach(env,{...inputs,athleteState:athlete},date,'swim',week).catch(()=>null):null;
       const planned=[...(swim?.constraints?.plannedToday&&activityKindOf(swim.constraints.plannedToday.type||swim.constraints.plannedToday.name)==='swim'?['swim']:[]),...(ride.constraints?.plannedToday&&activityKindOf(ride.constraints.plannedToday.type||ride.constraints.plannedToday.name)==='ride'?['ride']:[]),...(run.constraints?.plannedToday&&activityKindOf(run.constraints.plannedToday.type||run.constraints.plannedToday.name)==='run'?['run']:[]),...((gym?.values||[]).length>7?['gym']:[])];
       // Nemoc, Zranění or Pauza leaves only rest; signs of an illness drop the sauna.
       const illness=illnessSigns(readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile})).length>0;
-      const ranked=rankOptions({ride,run,swim,mainSport:profiles?.effective?.mainSport||'general',sports:recent.sports,today:recent.today,declines:state.declines,planned,done:recent.done,athleteStatus:athlete?.status||'active',illness});
+      const ranked=rankOptions({ride,run,swim,mainSport:eff.mainSport||'general',mains,allowed,sports:recent.sports,today:recent.today,declines:state.declines,less,planned,done:recent.done,athleteStatus:athlete?.status||'active',illness});
       // The ready workouts stay while the options do (pickSignature), so a sync
       // that changes nothing asks the AI nothing.
       const signature=pickSignature(ranked);
@@ -1476,7 +1529,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         ...(strain?.level?{recentState:{level:strain.level,signs:strain.chips}}:{}),
         weather:Object.fromEntries(Object.entries(weather||{}).map(([d,w])=>[d,{max:w.max,rain:w.rain,wind:w.wind}])),
         trainingPlan:plan.pw?{name:plan.pw.template?.name||null,week:plan.pw.week,weeks:plan.pw.weeks,phase:plan.pw.spec?.phase||null}:null,coach,
-        preferenceMemory:state.memories?.length?state.memories:undefined};
+        preferenceMemory:usedMemories(state).length?usedMemories(state):undefined};
       try{
         // Hard sessions the AI doesn't plan: in the calendar or done from the day before the week on.
         const fixedHard=inputs.week.days.filter(d=>d.date>=shiftDate(start,-1)&&d.date<=shiftDate(start,7)).flatMap(d=>[...(d.daily?.training?.planned||[]),...(d.daily?.training?.completed||[])].filter(a=>['ride','run'].includes(sportOf(a))&&isHardSession(a,sportOf(a))).map(()=>d.date));
@@ -1507,7 +1560,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const weekDays=Array.from({length:7},(_,i)=>shiftDate(start,i)).filter(d=>d>=today);
         const others=(Array.isArray(body.others)?body.others:[]).slice(0,20).filter(o=>validTrainingDay(o?.date)).map(o=>({date:o.date,sport:String(o.sport||''),kind:KINDS.includes(o.kind)?o.kind:kindOfSystem(o.system),minutes:Math.max(0,Math.min(600,Math.round(Number(o.minutes)||0)))||null}));
         const readiness=await todayReadiness(env,ctx,today).catch(()=>null);
-        try{changed=await adjustByText(env,{session:current,request:text,weekDays,availabilityByDate:Object.fromEntries(weekDays.map(d=>[d,availabilityOn(prefs,d).minutes??null])),otherSessions:others,readiness:{score:readiness?.score??null,zone:readiness?.zone||null},prefs,today,preferenceMemory:(await getAthleteState(env.DB).catch(()=>({}))).memories||[]});}
+        try{changed=await adjustByText(env,{session:current,request:text,weekDays,availabilityByDate:Object.fromEntries(weekDays.map(d=>[d,availabilityOn(prefs,d).minutes??null])),otherSessions:others,readiness:{score:readiness?.score??null,zone:readiness?.zone||null},prefs,today,preferenceMemory:usedMemories(await getAthleteState(env.DB).catch(()=>({})))});}
         catch(error){return Response.json({status:'unavailable',message:error?.ai?error.message:L('AI teď není dostupná. Použij rychlé volby.', 'AI isn\'t available right now. Use the quick options.')},{status:503});}
       }
       return Response.json({status:'ok',session:{...changed,focus:FOCUS_OF[changed.kind]||null}},{headers:{'Cache-Control':'no-store'}});
@@ -1567,7 +1620,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const reviews=await rideReviewsForCoach(env,ctx,days.find(x=>x.date===date)?.daily?.training,date,inputs.fitness?.wellness).catch(()=>[]);
       const plans=new Map();const availabilityByDate={};
       for(const u of upcoming){const w=mondayOfDate(u.date);if(!plans.has(w))plans.set(w,await getWeekPlan(env.DB,w).catch(()=>null));const p=plans.get(w);availabilityByDate[u.date]=p?availabilityOn(p,u.date).minutes??null:null;}
-      const facts={date,today,done:doneFacts,feedback:feedback.map(f=>({name:f.name,rpe:f.rpe,notes:f.notes,completedPercent:f.completedPercent})),planFit,reviews:reviews.map(r=>({name:r.name,plan:r.plan,verdict:r.verdict,findings:r.findings})),readiness:{score:readiness?.score??null,zone:readiness?.zone||null},upcoming,availabilityByDate,...(athlete?.memories?.length?{preferenceMemory:athlete.memories}:{})};
+      const facts={date,today,done:doneFacts,feedback:feedback.map(f=>({name:f.name,rpe:f.rpe,notes:f.notes,completedPercent:f.completedPercent})),planFit,reviews:reviews.map(r=>({name:r.name,plan:r.plan,verdict:r.verdict,findings:r.findings})),readiness:{score:readiness?.score??null,zone:readiness?.zone||null},upcoming,availabilityByDate,...(usedMemories(athlete).length?{preferenceMemory:usedMemories(athlete)}:{})};
       const r=upcoming.length?await reviseWeek(env,facts,{focus:inputs.focus}):{...rulesRevision({...facts,upcoming:[]}),source:'rules'};
       // Each change gets its workout now, so the card shows what replaces what.
       const changes=[];
@@ -1729,6 +1782,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   {const r=await handleGymToolsApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
   {const r=await handleWorkoutTemplatesApi(request,env,url,session);if(r!==undefined)return r;}
   if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
+  // "Don't suggest rides" and Settings → Sports to suggest: one sport off or on (sport-choice.js).
+  if(url.pathname==='/app/api/sports'&&request.method==='POST'){const body=await request.json().catch(()=>({}));if(!SPORT_KINDS.includes(body.sport)||typeof body.suggest!=='boolean')return Response.json({message:L('Neznámý sport.', 'Unknown sport.')},{status:400});return Response.json({status:'ok',...await saveSportChoice(env.DB,env.USER_ID,body.sport,body.suggest)},{headers:{'Cache-Control':'no-store'}});}
   if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){let profile=normalizeProfile(await request.json().catch(()=>({})));
     // Custom macros, own protein and own nutrient targets are Aurin Pro (diet.js); checked only when one is set.
     if(profile.dietStyle==='custom'||profile.proteinPerKg!=null||Object.keys(profile.nutrientTargets).length){const pro=await subscriptionStatus(env).then(s=>s.plan==='ai').catch(()=>null);if(pro===false)profile=withoutProDiet(profile);else if(pro===null){const saved=await dashboardProfile(env).catch(()=>null);if(saved)profile={...profile,dietStyle:profile.dietStyle==='custom'&&saved.dietStyle!=='custom'?'balanced':profile.dietStyle,proteinPerKg:saved.proteinPerKg??null,nutrientTargets:saved.nutrientTargets||{}};}}if(profile.waterMode==='build'&&!profile.waterFrom)profile.waterFrom=localToday();await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();const suggestions=await refreshSuggestions(env,{googleToken}).catch(error=>{console.error('Profile suggestions failed',error.message);return null;});const profile=r?JSON.parse(r.profile_json):null;
@@ -1749,7 +1804,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const readinessDate=date<localToday()?date:localToday();
       const readiness=dayReadiness({date:readinessDate,fitness:inputs.fitness,health:inputs.health,profile:inputs.profile,checkin:readinessDate===date?inputs.checkin:await readinessCheckin(env.DB,readinessDate).catch(()=>null)});
       const input=buildReviewInput({date,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,gymRows,roles:prefs?planWeekRoles(prefs.days,{...weekPlan.roles,...roleTime(prefs)}):[],feedback,coachNotes:notes.map(r=>({date:r.date,text:r.text})),readiness});
-      const state=await getAthleteState(env.DB);Object.assign(input,{athleteState:state.status,statusNote:state.note,preferenceMemory:state.memories,availability:availabilityOn(prefs,date),...(inputs.cycle?{cycle:inputs.cycle}:{}),...(inputs.upcomingTest?{upcomingTest:inputs.upcomingTest}:{})});
+      const state=await getAthleteState(env.DB);Object.assign(input,{athleteState:state.status,statusNote:state.note,preferenceMemory:usedMemories(state),availability:availabilityOn(prefs,date),...(inputs.cycle?{cycle:inputs.cycle}:{}),...(inputs.upcomingTest?{upcomingTest:inputs.upcomingTest}:{})});
       const reviews=[await reviewDay(env,input,null,inputs.focus).catch(error=>({model:lightModel(env),error:error.message}))];
       return Response.json({status:'ok',date,reviews},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:500})}
@@ -1860,7 +1915,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const monday=start?mondayOfDate(start):mondayOfDate(localToday());
       const targets=await computeWeekTargets(env,ctx,monday,prefs).catch(error=>({status:'error',message:error.message,items:[]}));
       const historyEstimate=activityHistoryEstimate(await planningHistory(env,localToday(),21),localToday());
-      return Response.json({status:'ok',prefs,roles:planWeekRoles(prefs.days,{...(await planForWeek(env,ctx,monday)).roles,...roleTime(prefs)}),start:monday,targets,historyEstimate},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',prefs,roles:planWeekRoles(prefs.days,{...(await planForWeek(env,ctx,monday)).roles,...roleTime(prefs)}),start:monday,targets,historyEstimate,sports:await suggestedSports(env.DB,env.USER_ID)},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
   // Free time from the iPhone calendar (calendar-free.js): POST {days:[{date,minutes}]}
@@ -2126,14 +2181,20 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     // The chat keeps only a mark where the photo was.
     const saved=image?L('[Fotka] ', '[Photo] ')+message:message;
     // A lasting preference is saved only once the request has been answered.
-    const memory=explicitPreference(message),athleteState=await getAthleteState(env.DB);
+    // "Nenavrhuj mi kolo" turns the sport off (sport-choice.js) before the answer,
+    // so the answer keeps to it; it is a setting with Undo, not a memory.
+    // With AI the coach itself saves what to remember (memory.save); the
+    // sentence rule is left for the answer without AI.
+    const noSport=sportExclusion(message),athleteState=await getAthleteState(env.DB);
+    const memory=noSport||env.OPENAI_API_KEY||athleteState.memoryOff?null:explicitPreference(message);
     const saveMemory=()=>memory?updateAthleteState(env.DB,{memory}).catch(error=>{console.error('Preference save failed',error.message);}):null;
     // Each answer belongs to a chat; without a known chat id a new chat starts.
-    const remember=async answer=>appendChatTurn(env.DB,body.chatId,saved,answer).catch(error=>{console.error('Chat save failed',error.message);return null;});
-    if(!env.OPENAI_API_KEY){if(!memory)return Response.json({status:'unavailable',message:L('AI teď není dostupná. Zkus to později.', 'AI isn\'t available right now. Try again later.')},{status:503});await saveMemory();return Response.json({status:'ok',answer:L('Zapamatoval jsem si: ','I\'ll remember: ')+memory,memorySaved:memory,chatId:await remember('Zapamatoval jsem si: '+memory)});}
+    // The answer's id comes back as messageId: copy and the thumbs under it point to it.
+    const remember=async answer=>appendChatTurnIds(env.DB,body.chatId,saved,answer).catch(error=>{console.error('Chat save failed',error.message);return {chatId:null,messageId:null};});
+    if(!env.OPENAI_API_KEY){if(!memory)return Response.json({status:'unavailable',message:L('AI teď není dostupná. Zkus to později.', 'AI isn\'t available right now. Try again later.')},{status:503});await saveMemory();return Response.json({status:'ok',answer:L('Zapamatoval jsem si: ','I\'ll remember: ')+memory,memorySaved:memory,...await remember('Zapamatoval jsem si: '+memory)});}
     // "Měl jsem snickers": a draft of food entries to confirm, not a coach answer.
     if(body.mode!=='coach'&&!image&&isFoodLogMessage(message)){
-      try{const draft=await buildFoodDraft(env,message,localToday());if(draft.items.length){const answer=foodDraftSummary(draft);return Response.json({status:'ok',kind:'food_draft',draft,answer,chatId:await remember(answer)},{headers:{'Cache-Control':'no-store'}});}}
+      try{const draft=await buildFoodDraft(env,message,localToday());if(draft.items.length){const answer=foodDraftSummary(draft);return Response.json({status:'ok',kind:'food_draft',draft,answer,...await remember(answer)},{headers:{'Cache-Control':'no-store'}});}}
       catch(error){console.error('Food sentence failed',error.message);}
     }
     // A message to the coach counts against the week's allowance (coach-allowance.js).
@@ -2141,7 +2202,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try{claim=await claimCoachMessage(env,body.chatId);}
     catch(error){if(error.coachAllowance)return Response.json({status:'coach_allowance_used',message:error.message,coachAllowance:error.coachAllowance},{status:429,headers:{'Cache-Control':'no-store'}});console.error('Coach allowance read failed',error.message);claim={kind:'message'};}
     // The chat so far decides the depth too: a follow-up keeps the topic's context.
-    const date=localToday(),appContext=assistantAppContext(body.appContext,date),conversation=await chatContext(env.DB,body.chatId).catch(()=>[]);
+    const date=localToday(),appContext=assistantAppContext(body.appContext,date),chat=await chatContext(env.DB,body.chatId,{withIds:true}).catch(()=>({turns:[],firstId:null,more:false})),conversation=chat.turns;
+    // What the coach knows beyond this chat's last 60 messages (coach-notes.js):
+    // the older part of a long chat, the notes of the last days, the end of
+    // another chat today and what no longer holds. Nothing of it with memory off.
+    const remembers=!athleteState.memoryOff;
+    const [olderPart,recentChats,otherToday]=await Promise.all([
+      chat.more?chatSummary(env.DB,body.chatId).catch(()=>null):null,
+      remembers?recentNotes(env.DB,{today:date,days:coachNoteDays(env)}).catch(()=>[]):[],
+      remembers?earlierToday(env.DB,body.chatId,{today:date}).catch(()=>[]):[]
+    ]);
+    const memoryCtx={...(olderPart?{chatSoFar:olderPart.text}:{}),...(recentChats.length?{recentChats}:{}),...(otherToday.length?{earlierToday:otherToday}:{}),...(remembers&&athleteState.pastMemories?.length?{pastMemory:athleteState.pastMemories.map(p=>p.text)}:{})};
     // A photo needs the full context: a plan on it becomes workout cards.
     const asked=assistantTask(message,body.appContext?appContext:null,conversation),task=image&&['simple','quick','adjustment'].includes(asked)?'planning':asked,started=Date.now();
     const availabilityMinutes=Number.isFinite(Number(body.availabilityMinutes))?Number(body.availabilityMinutes):null;
@@ -2185,9 +2256,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const reviewDay=selected.appContext.date<=date&&selected.selectedDay?selected.appContext.date:date;
         const reviews=await rideReviewsForCoach(env,ctx,reviewDay===date?inputs.daily?.training:selected.selectedDay,reviewDay,inputs.fitness?.wellness,thresholds).catch(()=>[]);
         if(reviews.length)coachCtx.completedRideReviews=reviews;
-        if(blockHistory)Object.assign(coachCtx,{blockHistory,blockFitness:inputs.fitness.wellness||[],historyPeriod:{from:shiftDate(date,-84),to:date,source:'cached activities; missing records remain unknown'}});
+        if(blockHistory)Object.assign(coachCtx,{blockHistory,blockFitness:compactWellness(inputs.fitness.wellness,{date,days:90})||[],historyPeriod:{from:shiftDate(date,-84),to:date,source:'cached activities; missing records remain unknown'}});
       }else focus=await dashboardProfile(env).then(profile=>athleteFocus(profile,date)).catch(()=>null);
-      Object.assign(coachCtx,{userInitiated:true,...(focus?.cannotSwim100m?{cannotSwim100m:true}:{}),athleteState:athleteState.status,statusNote:athleteState.note,statusUntil:athleteState.statusUntil,...(athleteState.cancelled?.length?{cancelledSessions:athleteState.cancelled}:{}),preferenceMemory:memory?[...new Set([...(athleteState.memories||[]),memory])]:athleteState.memories,conversation});
+      Object.assign(coachCtx,{userInitiated:true,...(focus?.cannotSwim100m?{cannotSwim100m:true}:{}),athleteState:athleteState.status,statusNote:athleteState.note,statusUntil:athleteState.statusUntil,...(athleteState.cancelled?.length?{cancelledSessions:athleteState.cancelled}:{}),preferenceMemory:memory?[...new Set([...usedMemories(athleteState),memory])]:usedMemories(athleteState),...memoryCtx,...(sportChanges?{sportsToSuggestChange:{turnedOff:noSport}}:{}),...(coachCtx.focus?{}:{focus}),conversation});
       const sport=engineSport(focus,selected?.appContext||appContext,message);
       // The library offer is for the day, length and kind the message asks
       // for (chat-ask.js; Revize doporučování tréninků 2026-10-16, nález 9).
@@ -2219,29 +2290,37 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const dropped=(Array.isArray(answer.actions)?answer.actions.length:0)-actions.length;
       if(dropped>0)answer.answer=String(answer.answer||'').trimEnd()+L('\n\n'+(dropped===1?'Jeden návrh':'Některé návrhy')+' neprošl'+(dropped===1?'':'y')+' kontrolou aplikace (den, délka, sport nebo stav), proto tu chybí. Napiš, co upravit, a připravím nový.','\n\n'+(dropped===1?'One proposal':'Some proposals')+' didn\'t pass the app\'s checks (day, length, sport or status), so '+(dropped===1?'it is':'they are')+' missing here. Tell me what to change and I\'ll prepare a new one.');
       await saveMemory();
-      // What the answer says no longer holds is only proposed: the athlete confirms
-      // it under the answer (Forget / Update), so text from the data the coach
-      // reads (an activity name from a connected service) cannot change the memory.
-      const changes=memoryChanges(answer.memory,athleteState.memories);
+      // What the coach saved from the athlete's words is kept at once and shown
+      // under the answer with Undo. What the answer says no longer holds is only
+      // proposed: the athlete confirms it under the answer (Forget / Update), so
+      // text from the data the coach reads cannot quietly change the memory.
+      const saves=remembers&&!noSport?memorySaves(answer.memory,athleteState.memories):[];
+      if(saves.length)await updateAthleteState(env.DB,{saves}).catch(error=>{console.error('Coach memory save failed',error.message);saves.length=0;});
+      const changes=remembers?memoryChanges(answer.memory,athleteState.memories):{forgotten:[],updated:[]};
       // The chat keeps a one-line summary of the proposals, so later turns can refer to them.
-      const note=actionsNote(actions),chatId=await remember(answer.answer+(note?'\n\n'+note:''));
+      const note=actionsNote(actions),{chatId,messageId}=await remember(answer.answer+(note?'\n\n'+note:''));
+      // The day gets its note after midnight; a long chat's older part its summary, after the answer.
+      if(remembers)await queueDayNote(env.DB,date).catch(error=>console.error('Day note not queued',error.message));
+      if(chat.more&&chatId&&chat.firstId)ctx.waitUntil(summarizeChatStart(env,chatId,chat.firstId).catch(error=>console.error('Chat summary failed',error.message)));
       const coachAllowance=await recordCoachMessage(env,chatId,claim).catch(error=>{console.error('Coach message not counted',error.message);return null;});
       // Proposals from earlier days no longer show up as open.
       await env.DB.prepare("UPDATE coach_inbox SET status='expired' WHERE user_id=? AND status='draft' AND created_at<? AND draft_json LIKE '%\"coach_action\"%'").bind(env.USER_ID,dayStartSql(date)).run().catch(error=>console.error('Draft expiry failed',error.message));
       // A workout card keeps the context its quick changes check (coach-quick-change.js).
       const quick=actions.some(a=>a.type==='workout')?quickSnapshot(coachCtx,date):null;
-      // Each proposal points to the answer it came with, so a reopened chat shows it there.
-      const messageId=actions.length?await lastAnswerId(env.DB,chatId).catch(()=>null):null;
+      // Each proposal points to the answer it came with (messageId), so a reopened chat shows it there.
       for(const action of actions){const own=action.type==='workout'?quick:null,draft={kind:'coach_action',action,chatId,...(messageId?{messageId}:{}),...(own?{quick:own}:{})};const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling',message,JSON.stringify(draft)).run();const options=own?quickOptions(action,own):null;proposals.push({...action,draftId:ins.meta?.last_row_id,...(options?{quick:options}:{})});}
       delete answer.memory;
-      return {...answer,chatId,actions:proposals,coachAllowance,memorySaved:memory,memoryChanges:{saved:memory||null,forgotten:[],updated:[]},memoryProposals:changes,costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
+      return {...answer,chatId,messageId,actions:proposals,coachAllowance,memorySaved:memory||saves[0]?.text||null,memoryChanges:{saved:memory||saves[0]?.text||null,saves:memory?[{text:memory,group:null}]:saves,forgotten:[],updated:[]},memoryProposals:changes,...(sportChanges?{sportChanges}:{}),costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
     };
     // A message whose answer failed goes back to the allowance, unless part of
     // the answer already reached the chat.
-    const reply=(onAnswer,onProgress)=>{
+    // The sport turned off by the message goes back on when no answer came.
+    let sportChanges=null;
+    const reply=async (onAnswer,onProgress)=>{
       let shown=false;
       const show=onAnswer&&(text=>{if(text)shown=true;onAnswer(text);});
-      return answerMessage(show,onProgress).catch(async error=>{if(!shown)await releaseCoachMessage(env,claim).catch(e=>console.error('Coach message not released',e.message));throw error;});
+      if(noSport)sportChanges=await saveSportChoice(env.DB,env.USER_ID,noSport,false).then(async r=>{if(!r.changed)return null;await bumpCacheVersion(env.DB);return {removed:[noSport]};}).catch(error=>{console.error('Sport choice failed',error.message);return null;});
+      return answerMessage(show,onProgress).catch(async error=>{if(!shown)await releaseCoachMessage(env,claim).catch(e=>console.error('Coach message not released',e.message));if(sportChanges&&!shown)await saveSportChoice(env.DB,env.USER_ID,noSport,true).then(()=>bumpCacheVersion(env.DB)).catch(e=>console.error('Sport choice not undone',e.message));throw error;});
     };
     if(body.stream)return assistantStreamResponse(reply,{waitUntil:promise=>ctx.waitUntil(promise)});
     try{return Response.json(await reply(null),{headers:{'Cache-Control':'no-store'}});}
@@ -2259,7 +2338,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     let body;try{body=JSON.parse(raw)||{};}catch{body={};}
     const text=String(body.text||'').trim();
     if(!text||text.length>PUSH_REPLY_CHARS)return Response.json({message:L('Odpověď je prázdná nebo moc dlouhá.', 'The reply is empty or too long.')},{status:400});
-    let chatId=(await ownedChat(env.DB,body.chatId).catch(()=>null))?.id??null;
+    let chatId=body.chatId==null?null:(await ownedChat(env.DB,body.chatId).catch(()=>null))?.id??null;
+    if(foreignPushReply(body,env.USER_ID,chatId!=null))return Response.json({message:L('Tahle notifikace patří jinému účtu.', 'This notification belongs to another account.')},{status:409,headers:{'Cache-Control':'no-store'}});
     if(!chatId){
       const opening=pushOpening(body.title,body.body);
       chatId=opening?await startChatWithCoach(env.DB,body.title,opening):null;
@@ -2270,7 +2350,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const result=response?await response.json().catch(()=>null):null;
     const answered=response?.ok&&result?.answer;
     if(answered&&result.chatId)chatId=result.chatId;
-    const push=answered?replyPush(result,chatId):failedReplyPush(result?.message,chatId);
+    const push=answered?replyPush(result,chatId,env.USER_ID):failedReplyPush(result?.message,chatId,env.USER_ID);
     // Settings → Oznámení → Skrýt zdravotní údaje (push.js hidesValues), read while the coach answered.
     const hide=answered&&hidesValues(await stateRead)?'reply':null;
     let sent=0;
@@ -2301,6 +2381,18 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       chat.actions=rows.map(r=>{try{const d=JSON.parse(r.draft_json);return d.kind==='coach_action'&&d.chatId===chat.id&&d.messageId?{...d.action,draftId:r.id,draftStatus:r.status,messageId:d.messageId}:null;}catch{return null;}}).filter(Boolean);
     }
     return chat?Response.json({status:'ok',chat},{headers:{'Cache-Control':'no-store'}}):Response.json({message:'Chat neexistuje.'},{status:404});
+  }
+  // The thumbs under a coach answer: the answer's id, up or down and a reason
+  // from a short list; no AI, no message counted (assistant-chats.js).
+  if(url.pathname==='/app/api/assistant/feedback'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    // Refused by its declared length before anything is read (body-limit.js).
+    const limited=await limitBody(request,1024);
+    if(limited.response)return limited.response;
+    let body;try{body=JSON.parse(await limited.request.text())||{};}catch{body={};}
+    try{return Response.json(await saveAnswerFeedback(env.DB,body),{headers:{'Cache-Control':'no-store'}});}
+    catch(error){return Response.json({message:error.message},{status:error.status||400});}
   }
   // "Vrátit" under a confirmed delete, merge or time change of a done activity.
   if(url.pathname==='/app/api/activity/undo'&&request.method==='POST'){
@@ -2468,6 +2560,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     await deleteConnectionSecret(env,'intervals_athlete');
     await clearConnectionHealth(env,'intervals');
     await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name IN ('initial_intervals','intervals_history')").bind(env.USER_ID).run();
+    // What was done while it was not connected goes there too (intervals-catchup.js).
+    await scheduleIntervalsCatchUp(env).catch(error=>console.error('Intervals.icu catch-up schedule failed',error.message));
     await initialImport(await connectionEnvironment(env),ctx);
     return Response.json({status:'ok',athleteId:athlete.id||null,message:'Intervals.icu je připojené'+(athlete.name?' ('+athlete.name+')':'')+'.'},{headers:{'Cache-Control':'no-store'}});
   }
@@ -2562,7 +2656,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(date===localToday()&&profile)ctx.waitUntil(lockReadiness(env.DB,{date,health,fitness,sleep,profile}).catch(()=>false));
       // The morning push's advice (push.js), so Today's coach card says the same.
       const morning=isToday?await Promise.all([getAthleteState(env.DB).catch(()=>null),morningContext(env,{date,health,fitness,sleep,profile,doses:training,tomorrowDaily:tomorrow})])
-        .then(([state,m])=>({...m,athleteState:state?.status||null,context:m.context?{...m.context,memories:state?.memories||[]}:null})).catch(()=>null):null;
+        .then(([state,m])=>({...m,athleteState:state?.status||null,context:m.context?{...m.context,memories:usedMemories(state)}:null})).catch(()=>null):null;
       applyEnergyBudget(daily,profile,health);
       return Response.json(withRecoveryTime(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,location:place.location,forecast:place.forecast,gym:gym[date]||null,checkin,trainingPlan,
         recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess},unavailable:todayUnavailable(failed),morning}),training),{headers:{'Cache-Control':'no-store'}});
@@ -3115,7 +3209,7 @@ async function adjustCoachDraft(env,ctx,row,draft,body){
     const rows=await env.DB.prepare("SELECT id,draft_json FROM coach_inbox WHERE user_id=? AND id<>? AND created_at>=datetime('now','-30 days') AND draft_json LIKE '%\"quickChanges\"%'").bind(env.USER_ID,row.id).all().catch(()=>({results:[]}));
     const earlier=(rows.results||[]).flatMap(r=>{try{return JSON.parse(r.draft_json).quickChanges||[];}catch{return [];}});
     const state=await getAthleteState(env.DB).catch(()=>({memories:[]}));
-    memory=quickMemory(chip,next.date,[...earlier,...history],state.memories||[]);
+    memory=state.memoryOff?null:quickMemory(chip,next.date,[...earlier,...history],state.memories||[]);
     if(memory)await updateAthleteState(env.DB,{memory}).catch(error=>{console.error('Quick change memory failed',error.message);memory=null;});
   }
   const options=quickOptions(next,draft.quick);

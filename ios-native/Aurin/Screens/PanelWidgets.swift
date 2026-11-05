@@ -26,6 +26,16 @@ enum WidgetSize: String, CaseIterable, Identifiable, Codable {
 enum WidgetPanel: String {
     case today, health, training, food
 
+    /// The tab the panel is the page of.
+    var tab: AppTab {
+        switch self {
+        case .today: return .today
+        case .health: return .health
+        case .training: return .training
+        case .food: return .food
+        }
+    }
+
     var title: String {
         switch self {
         case .today: return "Dnes"
@@ -410,10 +420,20 @@ struct SizedWidgetBody<Value: View, Chart: View>: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         case .medium:
-            HStack(alignment: .bottom, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) { value }
-                    .frame(width: 120, alignment: .leading)
-                chart(mediumChart)
+            // Side by side; in a window narrower than any iPhone (iPhone Duo, Aurin on
+            // a third of the open display) the chart goes under the number instead of
+            // pushing the card past the screen's edge.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .bottom, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) { value }
+                        .frame(width: 120, alignment: .leading)
+                    chart(mediumChart)
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) { value }
+                    chart(mediumChart)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         case .large:
             VStack(alignment: .leading, spacing: 16) {
@@ -533,7 +553,7 @@ struct PanelWidget: View {
         case .food:
             if let t = data.today { FoodWidget(nutrition: t.nutrition, size: item.size, waterFailed: t.unavailable?.contains("fluids") == true) }
         case .drinks:
-            if let f = data.food { DrinksCard(water: f.water, size: item.size) }
+            if let f = data.food { DrinksCard(water: f.water, size: item.size, panel: data.panel, live: linked) }
         case .macros:
             if let f = data.food {
                 Card {

@@ -245,6 +245,29 @@ const WORDS_EN={
 };
 
 
+// Why a period day is easy (Today eases it, cycle-model.js cycleTrainingCaution).
+// The app shows these; the AI gets them only when the athlete shares the
+// cycle with the coach, otherwise the neutral words (engineForAI).
+const CYCLE_TEXTS=()=>({
+  cap:L("menstruace","period"),
+  adaptation:L("menstruace se silným krvácením, křečemi nebo únavou: dnes lehce a krátce","period with heavy flow, cramps or fatigue: easy and short today")
+});
+const NEUTRAL_TEXTS=()=>({cap:L("lehčí den","an easier day"),adaptation:L("dnes lehce a krátce","easy and short today")});
+// The engine's result as the AI may see it. Without the cycle shared
+// ("Kouč ví o cyklu", cycle-model.js cycleShared), a period day keeps its
+// easy session but says no reason, and the readiness parts lose their luteal
+// mark. With it shared nothing changes.
+export function engineForAI(engine,{cycleShared=false}={}){
+  if(cycleShared||!engine||typeof engine!=="object")return engine;
+  const cycle=CYCLE_TEXTS(),neutral=NEUTRAL_TEXTS();
+  const plain=t=>typeof t!=="string"?t:t===cycle.adaptation?neutral.adaptation:t.split(": "+cycle.cap+".").join(": "+neutral.cap+".");
+  const out={...engine};
+  if(engine.readiness&&Array.isArray(engine.readiness.todayParts))out.readiness={...engine.readiness,todayParts:engine.readiness.todayParts.map(p=>{if(!p||typeof p!=="object"||!("cycle" in p))return p;const {cycle:_,...rest}=p;return rest;})};
+  if(Array.isArray(engine.rationale))out.rationale=engine.rationale.map(plain);
+  if(engine.recommendation&&Array.isArray(engine.recommendation.adaptations))out.recommendation={...engine.recommendation,adaptations:engine.recommendation.adaptations.map(plain)};
+  return out;
+}
+
 export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null,focus=null,profile=null,checkin=null,upcomingTest=null,recoveryTime=null,today=null}={}){
   const policy=trainingStatus(athleteState);
   sport=sport==="run"||sport==="swim"?sport:"ride";
@@ -506,8 +529,8 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
       capAt(short?40:60,L("dech nebo teplota ve spánku nad normálem","breathing or temperature in sleep above normal"));
       adaptations.push(L("dech nebo teplota ve spánku jsou nad normálem: bez intenzity a krátce","breathing or temperature in sleep are above normal: no intensity and short"));
     } else if(cycleEase&&!insisted&&(quality()||kind==="long_endurance")){
-      kind="endurance";capAt(short?30:45,L("menstruace","period"));
-      adaptations.push(L("menstruace se silným krvácením, křečemi nebo únavou: dnes lehce a krátce","period with heavy flow, cramps or fatigue: easy and short today"));
+      kind="endurance";capAt(short?30:45,CYCLE_TEXTS().cap);
+      adaptations.push(CYCLE_TEXTS().adaptation);
     } else if(readiness==="yellow"&&quality()){
       if(chatAsked)adaptations.push(L("střední připravenost: tvrdá část zkrácená","moderate readiness: hard part kept short"));
       else{kind="endurance";adaptations.push(L("střední připravenost: bez intenzity","moderate readiness: no intensity"));}

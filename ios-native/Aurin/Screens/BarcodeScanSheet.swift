@@ -248,6 +248,9 @@ struct BarcodeScanSheet: View {
                         Text([product.brand, code.map { "EAN " + $0 }].compactMap { $0 }.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                     NutritionCells(product: product, amount: amount)
+                    DayLeftLine(day: model.writeDay, kcal: product.kcal(for: amount) ?? 0,
+                                protein: product.grams(product.protein_100g, for: amount) ?? 0,
+                                carbs: product.grams(product.carbs_100g, for: amount) ?? 0)
                     VStack(alignment: .leading, spacing: 4) {
                         PortionWheel(product: product, amount: $amount, kind: Binding(get: { portionKind ?? .base }, set: { portionKind = $0 })).id(product.id + (product.serving_size?.string ?? "") + (product.serving_name ?? ""))
                         servingLine(product)

@@ -100,11 +100,13 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
     if (emailChange) return emailChange;
   }
   // Settings → Účet: every other device is signed out; this one gets a fresh cookie.
-  if (url.pathname === "/app/api/account/sign-out-everywhere") return handleSignOutEverywhere(request, env, url, session);
-  // Settings → Účet: unlinks the Apple ID.
+  if (url.pathname === "/app/api/account/sign-out-everywhere") return handleSignOutEverywhere(request, env, url, session, ctx);
+  // Settings → Účet: unlinks the Apple ID, once the user confirmed it's them (step-up.js): a stolen
+  // session must not take away a way to sign in (security review 2026-11-04, point 41).
   if (url.pathname === "/app/api/me/apple" && request.method === "DELETE") {
     if (!session.signedIn) return Response.json({message:"Přihlas se do dashboardu."},{status:401});
     if (request.headers.get("Origin") !== url.origin) return Response.json({message:"Neplatný původ požadavku."},{status:403});
+    const unconfirmed=await stepUp();if(unconfirmed)return unconfirmed;
     await unlinkAppleIdentity(env.RAW_DB, session.user.id);
     // The app's Apple sign-in is given back too, when the app made one.
     const keys = await connectionEnvironment(env);

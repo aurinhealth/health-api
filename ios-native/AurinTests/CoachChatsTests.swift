@@ -25,4 +25,34 @@ import XCTest
         XCTAssertEqual(ChatsPanel.title(days[0].day), "Dnes")
         XCTAssertEqual(ChatsPanel.title(AppModel.shift(AppModel.localDate(now), by: -1)!), "Včera")
     }
+
+    /// The stored answer's id comes with the answer, and a reopened chat brings each answer's thumb.
+    func testAnswerIdAndThumbDecode() throws {
+        let result = try JSONDecoder().decode(AssistantResult.self, from: Data(#"{"status":"ok","answer":"Ano.","chatId":4,"messageId":91,"actions":[]}"#.utf8))
+        XCTAssertEqual(result.messageId, 91)
+        let chat = try JSONDecoder().decode(ChatDetail.self, from: Data(#"{"id":4,"title":"t","messages":[{"id":90,"role":"user","content":"Můžu?","createdAt":"2026-11-04 18:58:00"},{"id":91,"role":"assistant","content":"Ano.","createdAt":"2026-11-04 18:58:09","rating":"down"}]}"#.utf8))
+        XCTAssertNil(chat.messages[0].rating)
+        XCTAssertEqual(chat.messages[1].rating, "down")
+        XCTAssertEqual(chat.messages[1].serverId, 91)
+    }
+
+    /// Copy gives the answer without the Markdown marks.
+    func testCopiedAnswerIsPlainText() {
+        let text = "## Dnes\n\nAno, **VO2max 5×4 min** sedí.\n\n- Drž 112–118 % FTP\n- Stop pod 105 %\n\n1. Rozjetí\n2. Intervaly\n\n---"
+        XCTAssertEqual(CoachMarkdown.plainText(text), "Dnes\n\nAno, VO2max 5×4 min sedí.\n\n• Drž 112–118 % FTP\n• Stop pod 105 %\n\n1. Rozjetí\n2. Intervaly")
+    }
+
+    /// Under an answer the pool is larger than the three of the empty chat.
+    func testDaySuggestionsTakeALimit() {
+        let date = AppModel.localDate(Date())
+        XCTAssertEqual(CoachSuggestions.forDay(today: nil, sessions: [], date: date).count, 3)
+        XCTAssertEqual(CoachSuggestions.forDay(today: nil, sessions: [], date: date, limit: 8).count, CoachSuggestions.fallback.count)
+    }
+
+    /// "Report this answer…" fills the description within the server's 4000 characters.
+    func testReportedAnswerFitsTheReport() {
+        let start = CoachAnswerReport.startText(String(repeating: "Dlouhá odpověď. ", count: 400))
+        XCTAssertLessThan(start.count, 4000)
+        XCTAssertTrue(start.hasPrefix("Odpověď kouče, kterou hlásím:"))
+    }
 }

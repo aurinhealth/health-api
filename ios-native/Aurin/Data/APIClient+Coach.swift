@@ -213,6 +213,8 @@ struct WeekPlanResponse: Decodable {
     /// Kept whole: the editor changes a few keys and sends the object back.
     let prefs: JSONValue?
     let targets: Targets?
+    /// Nastavení → Sporty k navrhování; nil when the athlete never chose.
+    let sports: [String]?
 
     struct Targets: Decodable {
         let status: String?
@@ -385,9 +387,22 @@ extension APIClient {
         return r.memories ?? []
     }
 
+    /// The whole memory screen: memories by group, Past, Recent chats and "Use memory".
+    func coachMemoryScreen() async throws -> CoachMemoryScreen {
+        try await get("/app/api/athlete-state")
+    }
+
+    /// Any change on the memory screen; answers the screen as the server keeps it.
     @discardableResult
-    func addMemory(_ text: String) async throws -> [CoachMemory] {
-        try await changeMemories(["memory": .string(text)])
+    func changeMemoryScreen(_ body: [String: JSONValue]) async throws -> CoachMemoryScreen {
+        try await send("/app/api/athlete-state", method: "POST", body: body)
+    }
+
+    @discardableResult
+    func addMemory(_ text: String, group: String? = nil) async throws -> [CoachMemory] {
+        var body: [String: JSONValue] = ["memory": .string(text)]
+        if let group { body["group"] = .string(group) }
+        return try await changeMemories(body)
     }
 
     @discardableResult
@@ -395,9 +410,10 @@ extension APIClient {
         try await changeMemories(["edit": .object(["from": .string(from), "to": .string(to)])])
     }
 
+    /// toPast: "no longer true" about a pain keeps it under Past; without it the memory is erased.
     @discardableResult
-    func forgetMemory(_ text: String) async throws -> [CoachMemory] {
-        try await changeMemories(["forget": .string(text)])
+    func forgetMemory(_ text: String, toPast: Bool = false) async throws -> [CoachMemory] {
+        try await changeMemories(["forget": .string(text), "toPast": .bool(toPast)])
     }
 
     /// A passing memory still holds: the coach asks again in two weeks.

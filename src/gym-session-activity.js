@@ -24,7 +24,7 @@ import { mark } from './activity-type.js';
 
 export const GYM_ACTIVITY_PREFIX = 'aurin-gym:';
 // Sets typed in afterwards come within seconds of each other: no session.
-const MIN_MINUTES = 10;
+export const MIN_MINUTES = 10;
 // Watch pieces this far around the logged sets are the same session (warm-up).
 const AROUND_MS = 20 * 60000;
 

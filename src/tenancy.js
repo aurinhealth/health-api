@@ -53,6 +53,14 @@ export const PERSONAL_TABLES = {
   athlete_state: {},
   assistant_chats: {},
   assistant_messages: {},
+  // Thumbs up/down under the coach's answers: the answer's id and a reason, no text (assistant-chats.js).
+  assistant_feedback: {},
+  // The coach's memory between chats (coach-notes.js): a note per day with
+  // chats, the summary of a long chat's older part, and the days waiting for
+  // their note (central, coach_note_queue).
+  coach_notes: { pk: ["user_id", "day"] },
+  assistant_chat_summaries: { pk: ["user_id", "chat_id"] },
+  coach_note_queue: { pk: ["user_id", "day"] },
   exercise_videos: {},
   api_cache_versions: {},
   ai_usage: {},
@@ -64,6 +72,8 @@ export const PERSONAL_TABLES = {
   coach_pack_purchases: {},
   coach_pack_balance: {},
   user_setup: {}, subscriptions: {}, local_workouts: {}, workout_exports: {},
+  // Which account holds each App Store subscription, and its newest record (app-store.js).
+  store_originals: {},
   personal_recipes: {}, recipe_contributions: {}, food_contributions: {}, food_reports: {},
   user_language: {}, user_time_zone: {}, recovery_sessions: {}, user_consents: {},
   // The coach's daily sentence per screen (screen-texts.js).
@@ -128,6 +138,8 @@ export const PERSONAL_TABLES = {
   app_settings: {},
   // The profile photo (profile-photo.js).
   profile_photos: {},
+  // Aurin's own VO2max and ages, one row a day (own-vo2max-store.js).
+  fitness_estimates: { pk: ["user_id", "date"] },
   // One row a week of training per sport (training-history.js trainingWeeks).
   training_weeks: { pk: ["user_id", "week"] }
 };
@@ -138,6 +150,12 @@ let tenancyReady = false;
 export function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
+
+// An address of plain ASCII characters. toLowerCase turns some other letters into ASCII ones
+// (U+212A KELVIN SIGN into "k"), so such an address could name someone else's account: a new
+// account or a new address of an account takes only plain ones. Existing accounts keep theirs
+// (security review 2026-11-04, point 32).
+export const plainEmail = value => /^[\x21-\x7e]+$/.test(String(value || "").trim());
 
 export function ownerEmail(env) {
   return normalizeEmail(env.OWNER_EMAIL);
@@ -237,6 +255,39 @@ function memoStatement(statement, sql, memo, values = []) {
   };
 }
 
+// The second line of the guard below (security check 2026-11-04, N7): a
+// statement on personal tables should also be bound to this user's id. For
+// now it only logs, once per statement text in an isolate, so the owner can
+// see in the Worker logs whether any query would be refused before it is
+// switched on. Checking costs no database read.
+const ID_GUARD_LOGGED = new Set();
+const ID_GUARD_LOG_LIMIT = 200;
+const boundToUser = (values, id) => values.some(v => (typeof v === "number" || typeof v === "bigint" || (typeof v === "string" && /^\d+$/.test(v))) && Number(v) === id);
+export function unboundUserQuery(sql, values, id) {
+  if (/^\s*(CREATE|ALTER|DROP|PRAGMA)\b/i.test(sql) || !PERSONAL_TABLE_PATTERN.test(sql)) return false;
+  return !boundToUser(values || [], id);
+}
+function noteUnboundUser(sql, values, id) {
+  if (!unboundUserQuery(sql, values, id)) return;
+  const text = sql.replace(/\s+/g, " ").slice(0, 160);
+  if (ID_GUARD_LOGGED.has(text) || ID_GUARD_LOGGED.size >= ID_GUARD_LOG_LIMIT) return;
+  ID_GUARD_LOGGED.add(text);
+  console.warn("Personal-data query not bound to the user's id (log only):", text);
+}
+const GUARDED = Symbol("guarded");
+function idGuardStatement(statement, sql, id, values = []) {
+  const checked = kind => (...args) => { noteUnboundUser(sql, values, id); return statement[kind](...args); };
+  return {
+    [REAL]: statement?.[REAL] || statement,
+    [GUARDED]: { sql, values },
+    bind: (...next) => idGuardStatement(statement.bind(...next), sql, id, next),
+    run: checked("run"),
+    first: checked("first"),
+    all: checked("all"),
+    raw: checked("raw")
+  };
+}
+
 // A D1 facade that refuses statements touching personal tables unless they
 // mention user_id, so a missed WHERE clause fails instead of leaking data.
 export function scopedDb(db, userId, { memo = false } = {}) {
@@ -259,9 +310,10 @@ export function scopedDb(db, userId, { memo = false } = {}) {
       check(query);
       const statement = db.prepare(query);
       const retried = retriedStatement(IDEMPOTENT_SCHEMA.test(query) ? schemaStatement(statement, String(query), schemaDone) : statement, query);
-      return reads ? memoStatement(retried, String(query), reads) : retried;
+      return idGuardStatement(reads ? memoStatement(retried, String(query), reads) : retried, String(query), id);
     },
     async batch(statements) {
+      for (const s of statements) if (s?.[GUARDED]) noteUnboundUser(s[GUARDED].sql, s[GUARDED].values, id);
       reads?.clear();
       try { return await withD1Retry(() => db.batch(statements.map(s => s?.[REAL] || s)), { read: false }); } finally { reads?.clear(); }
     },
@@ -488,6 +540,7 @@ export async function signInGoogleUser(db, env, { sub, email, name, request = nu
   if (!sub || !address) return null;
   let row = await db.prepare("SELECT id, email, name, role, disabled, google_sub FROM users WHERE google_sub=?").bind(String(sub)).first();
   if (!row) {
+    if (!plainEmail(email)) return null;
     row = await db.prepare("SELECT id, email, name, role, disabled, google_sub FROM users WHERE email=?").bind(address).first();
     if (row && row.google_sub && row.google_sub !== String(sub)) return null;
   }
@@ -513,15 +566,18 @@ export async function mayGetEmailCode(db, env, email) {
 }
 
 // Why an address may get a sign-in code: "known" (an active user, an invited address or
-// the owner), "open" (only because of OPEN_SIGNUP, so any address typed in), or null.
-export async function emailCodeAccess(db, env, email) {
+// the owner), "open" (only because of OPEN_SIGNUP, so any address typed in), or null. With
+// OPEN_SIGNUP an account opened today (UTC) is "open" too: anyone can open some, so they must not
+// spend the codes kept for the people who were here before (security review 2026-11-04, point 4).
+export async function emailCodeAccess(db, env, email, now = Date.now()) {
   const address = normalizeEmail(email);
   if (!address) return null;
   const [user, invite] = await Promise.all([
-    db.prepare("SELECT disabled FROM users WHERE email=?").bind(address).first(),
+    db.prepare("SELECT disabled, created_at FROM users WHERE email=?").bind(address).first(),
     db.prepare("SELECT email FROM user_invites WHERE email=?").bind(address).first()
   ]);
-  if (user) return user.disabled ? null : "known";
+  if (user?.disabled) return null;
+  if (user) return openSignup(env) && address !== ownerEmail(env) && String(user.created_at || "").slice(0, 10) === new Date(now).toISOString().slice(0, 10) ? "open" : "known";
   if (invite || address === ownerEmail(env)) return "known";
   return openSignup(env) ? "open" : null;
 }
@@ -547,8 +603,10 @@ export class SignupLimited extends Error {
 // Whether a sign-in with this verified address may create a new account.
 // request: the sign-in's request, whose network the new account counts against;
 // throws SignupLimited when that network made too many today.
+// The address is the normalized one here, so a letter toLowerCase already turned into ASCII passes:
+// the sign-ins check the address as it came (plainEmail) before they find an account by it.
 export async function mayCreateAccount(db, env, address, { request = null } = {}) {
-  if (!address) return false;
+  if (!address || !plainEmail(address)) return false;
   if (address === ownerEmail(env)) return true;
   const invited = Boolean(await db.prepare("SELECT email FROM user_invites WHERE email=?").bind(address).first());
   if (!openSignup(env) && !invited) return false;
@@ -694,7 +752,7 @@ export async function signInEmailUser(db, env, email, { request = null } = {}) {
 // Returns { email, previous } or { error: "invalid" | "missing" | "same" | "owner" | "taken" }.
 export async function changeUserEmail(db, env, id, email) {
   const address = normalizeEmail(email);
-  if (!address || address.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) return { error: "invalid" };
+  if (!address || address.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) || !plainEmail(email)) return { error: "invalid" };
   const row = await db.prepare("SELECT id, email FROM users WHERE id=?").bind(Number(id)).first();
   if (!row) return { error: "missing" };
   if (normalizeEmail(row.email) === address) return { error: "same" };
@@ -759,6 +817,17 @@ export async function usersWithAccount(db, env, provider, externalId) {
 export async function usersWithPushTokens(db, env) {
   const rows = await db.prepare("SELECT u.id, u.email, u.name, u.role, u.disabled, EXISTS (SELECT 1 FROM user_consents k WHERE k.user_id = u.id AND k.kind = 'health' AND k.withdrawn_at IS NULL) AS consented FROM users u WHERE u.disabled = 0 AND EXISTS (SELECT 1 FROM push_tokens t WHERE t.user_id = u.id) ORDER BY u.id").all().catch(() => ({ results: [] }));
   return (rows.results || []).map(row => ({ row, user: publicUser(row, env) })).filter(({ row, user }) => user.isOwner || row.consented).map(({ user }) => user);
+}
+
+// Every user whose health data the background jobs may touch (enabled and
+// consenting, or the owner), whatever they connected: Apple Health only, a ring,
+// nothing yet. For the once-a-day jobs that work on stored data only.
+export async function usersWithHealthConsent(db, env) {
+  const rows = await db.prepare("SELECT u.id, u.email, u.name, u.role, u.disabled FROM users u WHERE u.disabled = 0 AND EXISTS (SELECT 1 FROM user_consents k WHERE k.user_id = u.id AND k.kind = 'health' AND k.withdrawn_at IS NULL) ORDER BY u.id").all().catch(() => ({ results: [] }));
+  const list = (rows.results || []).map(row => publicUser(row, env));
+  const owner = await ownerUser(db, env);
+  if (owner && !list.some(u => u.id === owner.id)) list.unshift(owner);
+  return list;
 }
 
 export function _resetTenancyForTest() { tenancyReady = false; }

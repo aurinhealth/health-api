@@ -74,29 +74,39 @@ class Packs {
   close() { if (this.fd != null) closeSync(this.fd); }
 }
 
-export function build(source, out, { log = console.log, version = new Date().toISOString().slice(0, 10).replace(/-/g, "") } = {}) {
-  const dir = join(out, version);
-  rmSync(dir, { recursive: true, force: true });
-  mkdirSync(join(dir, "names"), { recursive: true });
-  const work = join(out, `work-${version}.sqlite`);
-  if (existsSync(work)) rmSync(work);
+// From a kCalori foods.sqlite release.
+export function build(source, out, opts = {}) {
   const src = new DatabaseSync(source, { readOnly: true });
-  const db = new DatabaseSync(work);
-  db.exec(`PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA temp_store=FILE; PRAGMA cache_size=-200000;
-    CREATE TABLE rec(id INTEGER PRIMARY KEY, bkey TEXT, rank INTEGER NOT NULL, json TEXT NOT NULL);
-    CREATE TABLE post(word TEXT NOT NULL, rank INTEGER NOT NULL, id INTEGER NOT NULL);`);
   const name = lang => `(SELECT name FROM food_names WHERE food_id=f.id AND lower(lang)='${lang}' ORDER BY is_primary DESC, id LIMIT 1)`;
   const rows = src.prepare(`SELECT f.*, ${name("cs")} AS cs, ${name("en")} AS en,
       EXISTS(SELECT 1 FROM food_markets m WHERE m.food_id=f.id AND m.country_tag='en:czech-republic') AS cz
     FROM foods f WHERE f.search_enabled=1 AND f.kcal IS NOT NULL AND f.protein IS NOT NULL AND f.carbs IS NOT NULL AND f.fat IS NOT NULL
     ORDER BY f.id`);
+  const sources = src.prepare("SELECT id, title, url, license, license_url, version FROM sources WHERE release_allowed=1").all();
+  try { return buildRows(rows.iterate(), sources, out, opts); } finally { src.close(); }
+}
+
+// From rows in the shape of the kCalori query above (id, catalog_key,
+// default_name, cs, en, brand, barcode, basis_unit, kcal ... source_id, cz);
+// a row may bring its rank (a record carried over from an earlier version).
+// sources: the attributions, kept for the sources that have foods.
+export function buildRows(rows, sourceList, out, { log = console.log, version = new Date().toISOString().slice(0, 10).replace(/-/g, "") } = {}) {
+  const dir = join(out, version);
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(join(dir, "names"), { recursive: true });
+  const work = join(out, `work-${version}.sqlite`);
+  if (existsSync(work)) rmSync(work);
+  const db = new DatabaseSync(work);
+  db.exec(`PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA temp_store=FILE; PRAGMA cache_size=-200000;
+    CREATE TABLE rec(id INTEGER PRIMARY KEY, bkey TEXT, rank INTEGER NOT NULL, json TEXT NOT NULL);
+    CREATE TABLE post(word TEXT NOT NULL, rank INTEGER NOT NULL, id INTEGER NOT NULL);`);
   const addRec = db.prepare("INSERT INTO rec(id,bkey,rank,json) VALUES(?,?,?,?)");
   const addPost = db.prepare("INSERT INTO post(word,rank,id) VALUES(?,?,?)");
   const counts = { foods: 0, czech_market: 0, barcodes: 0, words: 0, by_source: {} };
   db.exec("BEGIN");
-  for (const row of rows.iterate()) {
+  for (const row of rows) {
     if (EXCLUDED.has(row.source_id)) continue;
-    const rec = toRecord(row), rank = rankOf(row), key = barcodeKey(row.barcode);
+    const rec = toRecord(row), rank = row.rank ?? rankOf(row), key = barcodeKey(row.barcode);
     const ws = indexWords(row);
     rec.t = ws.join(" "); rec.r = rank;
     addRec.run(row.id, key, rank, JSON.stringify(rec));
@@ -156,12 +166,11 @@ export function build(source, out, { log = console.log, version = new Date().toI
   for (const [shard, nodesOf] of manifests) writeFileSync(join(dir, "names", `${shard}.json`), JSON.stringify(nodesOf));
   log(`${nodes} name nodes, ${(bytes / 1048576).toFixed(0)} MB in ${packs.files.length} pack(s)`);
 
-  const sources = src.prepare("SELECT id, title, url, license, license_url, version FROM sources WHERE release_allowed=1").all()
-    .filter(s => !EXCLUDED.has(s.id) && counts.by_source[s.id]);
+  const sources = sourceList.filter(s => !EXCLUDED.has(s.id) && counts.by_source[s.id]);
   const meta = { format: WORLD_FOODS_FORMAT, version, created_utc: new Date().toISOString(), node_limit: NODE_LIMIT,
     license: "ODbL-1.0 (database); individual source attributions below", counts, sources, files: [...bpacks.files, ...packs.files] };
   writeFileSync(join(dir, "meta.json"), JSON.stringify(meta, null, 1));
-  src.close(); db.close(); rmSync(work);
+  db.close(); rmSync(work);
   return { dir, meta };
 }
 

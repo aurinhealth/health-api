@@ -162,6 +162,12 @@ export function todayUnavailable(failed) {
   return [...new Set([...failed].map(path => TODAY_PARTS[path]).filter(Boolean))];
 }
 
+// The source of the latest night up to `date`, null without one or without a source.
+export function latestNightSource(nights, date) {
+  const last = [...nights.keys()].filter(d => d <= date).sort().at(-1);
+  return (last && nights.get(last).source) || null;
+}
+
 export function buildToday({ date, hour = null, morning = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null, unavailable = [] }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
@@ -351,7 +357,8 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") }
       : num(rows.find(r => r.id === date)?.hrv) > 0 ? { value: round(num(rows.find(r => r.id === date).hrv)), baseline: null, low: null, high: null, trend: null, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") } : null,
     restingHR: restingHR ? { value: round(restingHR.value), baseline: round(restingHR.baseline, 1), low: round(restingHR.low, 1), high: round(restingHR.high, 1), series: last(14, "restingHR") } : null,
-    summary: summary ? { headline: summary.headline || null, text: summary.text || null, recommendation: summary.recommendation || null } : null,
+    // remember: the injury sentence inside the recommendation (push.js), which the coach's AI text leaves out (screen-texts.js).
+    summary: summary ? { headline: summary.headline || null, text: summary.text || null, recommendation: summary.recommendation || null, ...(summary.remember && String(summary.recommendation || "").includes(summary.remember) ? { remember: summary.remember } : {}) } : null,
     nutrition: {
       kcal: round(num(totals.kcal)),
       target: num(nutrition.calorieTarget),
@@ -383,7 +390,10 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     recovery: recoveryCard,
     // Regenerace (recovery-time.js): /app/api/today fills it in for today.
     recoveryTime: null,
-    tonight: plan ? { bedtime: clock(plan.bed), wake: clock(plan.wake), need: tonightNeed, wakeSet: plan.wakeSource === "setting" } : null,
+    // source: the device of the latest night up to today (source_family, e.g.
+    // apple-health): the bedtime reminder asks for a charged watch only when
+    // Apple Watch measures sleep (Reminders.swift).
+    tonight: plan ? { bedtime: clock(plan.bed), wake: clock(plan.wake), need: tonightNeed, wakeSet: plan.wakeSource === "setting", source: latestNightSource(nights, date) } : null,
     steps: { today: num(todayRow.steps), goal: STEP_GOAL, week: last(7, "steps"), month: last(30, "steps"), hourly: byHour[date] ? byHour[date].map(v => Math.round(v)) : null, usual, hour, activeKcal: activeKcal(num(todayRow.activeCalories), watchExtra), activeKcalExcluded: watchExtra || null, activeMinutes: activeMinutes(google, date) },
     weight: weights.length ? { latest: weights.at(-1).value, goal: num(profile.targetWeight), series: weights } : null,
     weather: todayWeather(location, forecast, date)

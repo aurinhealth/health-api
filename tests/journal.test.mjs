@@ -410,6 +410,31 @@ test("journal: too little water is measured against the day's drinks target", as
   assert.deepEqual([auto[d].little_water, auto[e].little_water], [{ yes: false }, { yes: true }]);
 });
 
+test("journal: too little water follows the goal set in Cíle, and today waits for the end of the day", async () => {
+  const { raw, db, fluid, userId } = dataDb();
+  const d = "2026-10-14", e = "2026-10-15", now = localToday();
+  raw.sqlite.exec("CREATE TABLE dashboard_profile (user_id INTEGER NOT NULL, id INTEGER NOT NULL, profile_json TEXT, PRIMARY KEY (user_id, id))");
+  raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,sample_time,value_numeric) VALUES(?,?,?,?,?)").run(userId, "apple", "weight", d + "T07:00:00", 80);
+  const profile = p => raw.sqlite.prepare("INSERT OR REPLACE INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?)").run(userId, JSON.stringify(p));
+  // 2.1 l: too little for Auto at 80 kg (2.4 l), enough for a Custom goal of 2 l.
+  fluid.run(userId, d, d + "T10:00", 2100, "water");
+  profile({ waterMode: "custom", waterGoal: 2000 });
+  assert.deepEqual((await autoDays(db, d, d))[d].little_water, { yes: false });
+  // Build-up: the base after the last stored day (1.8 l), not Auto.
+  raw.sqlite.exec("CREATE TABLE water_build (user_id INTEGER NOT NULL, since TEXT NOT NULL, date TEXT NOT NULL, goal_ml INTEGER NOT NULL, extra_ml INTEGER NOT NULL, drunk_ml INTEGER NOT NULL, logged INTEGER NOT NULL, next_ml INTEGER NOT NULL, PRIMARY KEY (user_id, since, date))");
+  raw.sqlite.prepare("INSERT INTO water_build VALUES(?,?,?,?,?,?,?,?)").run(userId, "2026-10-01|1500", "2026-10-13", 1700, 0, 1700, 1, 1800);
+  profile({ waterMode: "build", waterStart: 1500, waterFrom: "2026-10-01" });
+  fluid.run(userId, e, e + "T10:00", 1900, "water");
+  const built = await autoDays(db, d, e);
+  assert.deepEqual([built[d].little_water, built[e].little_water], [{ yes: false }, { yes: false }]);
+  // Today: no ✓ in the morning with a coffee drunk, ✕ once the goal is met.
+  profile({});
+  fluid.run(userId, now, now + "T07:30", 250, "coffee");
+  assert.equal((await autoDays(db, now, now))[now].little_water, undefined);
+  fluid.run(userId, now, now + "T12:00", 2500, "water");
+  assert.deepEqual((await autoDays(db, now, now))[now].little_water, { yes: false });
+});
+
 test("journal: Apple Health fills in mindfulness, daylight, noise in sleep, symptoms, sex, yoga, stretching and a time-zone change", async () => {
   const { raw, db, userId } = dataDb();
   const d = "2026-10-14", e = "2026-10-15", now = Date.parse("2026-10-16T12:00:00Z");

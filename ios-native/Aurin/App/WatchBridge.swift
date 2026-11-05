@@ -212,7 +212,8 @@ final class WatchBridge: NSObject {
         let server = api.baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         return WatchSession(server: server, name: cookie.name, value: cookie.value,
                             expires: api.baseURL.host().flatMap(SessionKeychain.expires) ?? cookie.expiresDate,
-                            apiLevel: APIClient.apiLevel, language: L10n.language, imperial: Units.imperial)
+                            apiLevel: APIClient.apiLevel, language: L10n.language, imperial: Units.imperial,
+                            account: Outbox.account)
     }
 
     /// Settings → Apple Watch, kept on the iPhone and sent with every Today.
@@ -515,6 +516,9 @@ extension WatchBridge: WCSessionDelegate {
 
     /// A set, a drink or the alarm's place sent while the iPhone was out of reach.
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        // Queued on the watch for another account than the one signed in now:
+        // it is that account's, so it goes nowhere (unknown on either side counts as the same).
+        if let owner = userInfo[WatchSession.accountKey] as? Int, let current = Outbox.account, owner != current { return }
         let done = (userInfo[WatchGym.doneKey] as? Data).flatMap(WatchGym.Done.decode)
         let rated = (userInfo[WatchGym.ratedKey] as? Data).flatMap(WatchGym.Rated.decode)
         let water = userInfo[WatchSnapshot.waterKey] as? Int

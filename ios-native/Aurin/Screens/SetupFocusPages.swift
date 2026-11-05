@@ -1,14 +1,14 @@
 import SwiftUI
 
-// The first-run setup's training pages after "O tobě" (SetupFlowView): the main
-// sport, the goal and the time on each weekday. They ask what "Zaměření"
+// The first-run setup's training pages after "O tobě" (SetupFlowView): the
+// sports (several may be main), the goal and the time on each weekday. They ask what "Zaměření"
 // (FocusSheet) asks and save it the same way (the profile and the usual week),
 // so the first Aktivita dne and the first proposals already know them. Each
 // page can be skipped; the card on Training stays for whoever does.
 
 /// What the three pages chose, against what the server had, so only a change is saved.
 struct SetupFocus: Equatable {
-    var sport = ""
+    var sports = SportsChoice()
     var goal = ""
     var swims100: Bool?
     var eventName = ""
@@ -16,8 +16,7 @@ struct SetupFocus: Equatable {
 
     /// From the saved profile (an earlier start on the web, or Zaměření).
     init(profile: JSONObject = [:]) {
-        let main = profile["mainSport"]?.string ?? ""
-        sport = FocusChoice.sports.contains { $0.0 == main } ? main : ""
+        sports = SportsChoice(profile: profile)
         let text = profile["sportGoal"]?.string ?? ""
         goal = FocusChoice.goalTexts.first { $0.value == text }?.key ?? ""
         if case .bool(let can)? = profile["swims100"] { swims100 = can }
@@ -27,7 +26,7 @@ struct SetupFocus: Equatable {
 
     /// The profile with these answers (FocusChoice.applying, plus the race for "Závod").
     func applied(to profile: JSONObject) -> JSONObject {
-        var next = FocusChoice.applying(profile, sport: sport, goal: goal, swims100: swims100)
+        var next = FocusChoice.applying(profile, sports: sports, goal: goal, swims100: swims100)
         if goal == "race" {
             next["eventName"] = .string(eventName.trimmingCharacters(in: .whitespaces))
             if let eventDate { next["eventDate"] = .string(Self.day(eventDate)) }
@@ -49,41 +48,41 @@ struct SetupFocus: Equatable {
     }
 }
 
-/// "Jaký je tvůj hlavní sport?": FocusSheet's sports, one row each, in the
-/// order Ride, Run, Swim, Triathlon, Gym, General fitness.
+/// "Jaké sporty děláš?": the sports in one step, ticked, with "Hlavní" on
+/// one or more (SportsPicker); swimming asks whether 100 m go without a stop.
 struct SetupSportPage: View {
     @Binding var focus: SetupFocus
 
-    private static let symbols = ["cycling": "bicycle", "running": "figure.run", "swimming": "figure.pool.swim",
-                                  "triathlon": "figure.open.water.swim", "strength": "dumbbell.fill", "general": "heart"]
-
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SetupPageTitle(title: "Jaký je tvůj hlavní sport?",
-                           subtitle: "Aurin podle něj plánuje. Ostatní sporty z hodinek se počítají dál.")
-            ForEach(FocusChoice.sports, id: \.0) { item in
-                ChoiceCard(title: item.1, systemImage: Self.symbols[item.0], selected: focus.sport == item.0) {
-                    withAnimation(.snappy) { focus.sport = item.0 }
-                }
-            }
-            if FocusChoice.swims(focus.sport) {
-                SettingsGroup(footer: focus.swims100 == false ? "Začneme krátkými délkami a technikou v bazénu. Pár lekcí s trenérem plavání ti pomůže nejvíc." : "Když ne, začneme krátkými délkami a technikou.") {
-                    HStack(spacing: 12) {
-                        Text("Uplaveš 100 m bez zastavení?").font(.body).foregroundStyle(Palette.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 8)
-                        Picker("Uplaveš 100 m bez zastavení?", selection: $focus.swims100) {
-                            Text("Ano").tag(Bool?.some(true))
-                            Text("Ne").tag(Bool?.some(false))
-                        }
-                        .pickerStyle(.segmented).fixedSize()
-                    }
-                    .padding(.horizontal, 16).padding(.vertical, 10)
-                }
-                .padding(.top, 6)
+            SetupPageTitle(title: "Jaké sporty děláš?",
+                           subtitle: "Zaškrtni všechny, které děláš, a u těch, na které trénuješ nejvíc, klepni na Hlavní. Kouč navrhuje jen tyhle.")
+            SportsPicker(choice: $focus.sports)
+            if focus.sports.swims {
+                SwimLevelGroup(swims100: $focus.swims100).padding(.top, 6)
             }
         }
-        .sensoryFeedback(.selection, trigger: focus.sport)
+    }
+}
+
+/// "Uplaveš 100 m bez zastavení?" under the sports, when swimming is one of them.
+struct SwimLevelGroup: View {
+    @Binding var swims100: Bool?
+
+    var body: some View {
+        SettingsGroup(footer: swims100 == false ? "Začneme krátkými délkami a technikou v bazénu. Pár lekcí s trenérem plavání ti pomůže nejvíc." : "Když ne, začneme krátkými délkami a technikou.") {
+            HStack(spacing: 12) {
+                Text("Uplaveš 100 m bez zastavení?").font(.body).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Picker("Uplaveš 100 m bez zastavení?", selection: $swims100) {
+                    Text("Ano").tag(Bool?.some(true))
+                    Text("Ne").tag(Bool?.some(false))
+                }
+                .pickerStyle(.segmented).fixedSize()
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10)
+        }
     }
 }
 

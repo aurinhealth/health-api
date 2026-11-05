@@ -1,5 +1,9 @@
 import { L } from './lang.js';
-import { swimSafetyLine } from './private/athlete-focus.js';
+import * as prompts from './private/athlete-focus.js';
+const { swimSafetyLine } = prompts;
+// The lines for the chosen sports come with aurin-prompts; an older checkout leaves them out.
+const sportsLine = names => prompts.sportsLine?.(names) ?? null;
+const mainSportsLine = names => prompts.mainSportsLine?.(names) ?? null;
 // "Hlavní sport a cíl" from the settings: what the athlete trains for. The
 // coach prompts take their role and direction from it; without it they use
 // general fitness. Sport history selects the sport only when the user chose
@@ -45,13 +49,43 @@ export function supportSports(mainSport, regular = []) {
   return (regular || []).filter(k => !OWN_KINDS[mainSport].includes(k));
 }
 
+const KIND_LABEL = { ride: ["kolo", "ride"], run: ["běh", "run"], swim: ["plavání", "swim"], strength: ["posilovna", "gym"] };
+const kindLabel = k => L(...(KIND_LABEL[k] || [k, k]));
+
 const text = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+
+// The sports the athlete does (Settings → Sports to suggest, the first-run
+// setup) and the main ones among them, in the order Ride, Run, Swim, Gym.
+// Without `sports` the athlete never chose: every sport may be suggested.
+export const SPORT_KINDS = ["ride", "run", "swim", "strength"];
+const MAIN_KINDS = { cycling: ["ride"], running: ["run"], swimming: ["swim"], strength: ["strength"], triathlon: ["ride", "run", "swim"] };
+export const sportKinds = v => SPORT_KINDS.filter(k => Array.isArray(v) && v.includes(k));
+// The single main sport the older parts read (diet, gym, prompts' role line):
+// none = general fitness, Ride + Run + Swim = triathlon, else the first one.
+export function mainSportOfKinds(mains = []) {
+  if (!mains.length) return "general";
+  if (["ride", "run", "swim"].every(k => mains.includes(k))) return "triathlon";
+  return { ride: "cycling", run: "running", swim: "swimming", strength: "strength" }[mains[0]];
+}
+// The main sports as kinds: the chosen list, else the one main sport's.
+export const mainKindsOf = p => Array.isArray(p?.mainSports) ? sportKinds(p.mainSports) : [...(MAIN_KINDS[p?.mainSport] || [])];
 
 // The settings fields as stored in the profile.
 export function normalizeFocus(p = {}) {
   const hours = Number(p.weeklyHours);
+  const asked = Object.hasOwn(SPORTS, p.mainSport) || p.mainSport === "auto" ? p.mainSport : null;
+  let sports = Array.isArray(p.sports) ? sportKinds(p.sports) : null;
+  let mainSports = Array.isArray(p.mainSports) ? sportKinds(p.mainSports).filter(k => !sports || sports.includes(k)) : null;
+  // An older app changes only the one main sport and sends the list it read
+  // back unchanged: the main sport it chose wins, and is a sport the athlete does.
+  if (mainSports && asked && asked !== mainSportOfKinds(mainSports)) {
+    mainSports = asked === "auto" ? null : [...(MAIN_KINDS[asked] || [])];
+    if (sports && mainSports) sports = sportKinds([...sports, ...mainSports]);
+  }
   return {
-    mainSport: Object.hasOwn(SPORTS, p.mainSport) || p.mainSport === "auto" ? p.mainSport : "general",
+    mainSport: mainSports ? mainSportOfKinds(mainSports) : asked || "general",
+    ...(sports ? { sports } : {}),
+    ...(mainSports ? { mainSports } : {}),
     sportGoal: text(p.sportGoal, 300),
     eventName: text(p.eventName, 120),
     eventDate: /^\d{4}-\d{2}-\d{2}$/.test(String(p.eventDate || "")) && Number.isFinite(Date.parse(p.eventDate + "T12:00:00Z")) ? p.eventDate : "",
@@ -67,9 +101,18 @@ export function athleteFocus(profile, today) {
   const f = normalizeFocus(profile || {});
   if (f.mainSport === "auto") f.mainSport = "general";
   const daysLeft = f.eventDate && today ? Math.round((Date.parse(f.eventDate + "T12:00:00Z") - Date.parse(today + "T12:00:00Z")) / 86400000) : null;
+  const mains = mainKindsOf(f);
+  // Two or three main sports that are not a triathlon: each named.
+  const several = mains.length > 1 && f.mainSport !== "triathlon";
   return {
-    sport: f.mainSport || null, sportLabel: SPORTS[f.mainSport] ? L(SPORTS[f.mainSport].label, SPORT_LABEL_EN[f.mainSport]) : null,
+    sport: f.mainSport || null,
+    sportLabel: several ? mains.map(k => kindLabel(k)).join(L(" a ", " and ")) : SPORTS[f.mainSport] ? L(SPORTS[f.mainSport].label, SPORT_LABEL_EN[f.mainSport]) : null,
+    mains,
+    // The sports the coach may suggest; none when the athlete never chose.
+    ...(f.sports ? { sports: f.sports } : {}),
     goal: f.sportGoal || null,
+    // Sports done regularly in the last year (effectiveProfile), none when unknown.
+    ...(Array.isArray(profile?.regularSports) && profile.regularSports.length ? { regular: profile.regularSports.filter(k => typeof k === "string").slice(0, 4) } : {}),
     ...(f.swims100 === false && ["swimming", "triathlon"].includes(f.mainSport) ? { cannotSwim100m: true } : {}),
     event: (f.eventName || f.eventDate) && (daysLeft == null || daysLeft >= 0) ? { name: f.eventName || null, date: f.eventDate || null, daysLeft } : null
   };
@@ -85,7 +128,10 @@ export function withFocus(instructions, focus) {
   const scope = /^(?:Jsi|You are) [^.]*Aurin[^.]*\./.test(instructions) ? L(" Radíš i s ostatními sporty v aplikaci Aurin (kolo, běh, plavání, posilovna), se sportovní výživou, spánkem a regenerací.", " You also advise on the other sports in the Aurin app (ride, run, swim, gym), sports nutrition, sleep and recovery.") : "";
   let out = focus.sport ? instructions.replace(/^(?:Jsi|You are) [^.]*\./, L(`Jsi profesionální trenér ${SPORTS[focus.sport].role}.`, `You are a professional coach for ${SPORT_ROLE_EN[focus.sport]}.`) + scope) : instructions;
   const lines = [], weeks = focus.event?.daysLeft != null ? Math.floor(focus.event.daysLeft / 7) : null;
-  if (focus.sportLabel) lines.push(L(`Hlavní sport: ${focus.sportLabel}; ostatní sporty ber jako doplněk k němu.`, `Main sport: ${focus.sportLabel}; treat the other sports as a complement to it.`));
+  const several = focus.sportLabel && focus.mains?.length > 1 && focus.sport !== "triathlon" ? mainSportsLine(focus.sportLabel) : null;
+  if (several) lines.push(several);
+  else if (focus.sportLabel) lines.push(L(`Hlavní sport: ${focus.sportLabel}; ostatní sporty ber jako doplněk k němu.`, `Main sport: ${focus.sportLabel}; treat the other sports as a complement to it.`));
+  if (Array.isArray(focus.sports)) lines.push(...[sportsLine(focus.sports.length ? focus.sports.map(kindLabel).join(", ") : L("žádný (jen odpočinek a regenerace)", "none (only rest and recovery)"))].filter(Boolean));
   if (focus.goal) lines.push(L(`Cíl sportovce (jeho slova): „${focus.goal}“.`, `The athlete's goal (their own words): “${focus.goal}”.`));
   if (focus.cannotSwim100m) lines.push(swimSafetyLine());
   if (focus.event) lines.push(L(`Hlavní závod: ${focus.event.name ? `„${focus.event.name}“` : "bez názvu"}${focus.event.date ? ` ${focus.event.date}` : ""}${focus.event.daysLeft != null ? ` (za ${focus.event.daysLeft} dní, ${weeks} týdnů)` : ""}. Přizpůsob tomu fázi přípravy.`,

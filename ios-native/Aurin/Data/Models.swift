@@ -245,6 +245,9 @@ struct TodaySnapshot: Decodable, Equatable {
         let need: Int?
         /// The wake time comes from the user's alarm setting (not the usual nights).
         var wakeSet: Bool? = nil
+        /// The device of the latest night ("apple-health", "whoop" …); nil
+        /// without a night yet or from an older server.
+        var source: String? = nil
     }
 
     struct Steps: Decodable, Equatable {

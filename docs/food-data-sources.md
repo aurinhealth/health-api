@@ -17,13 +17,15 @@ Food values come from:
 - **Personal foods**: the user's own saved foods, a separate D1 table
   (`personal_foods`), searched by name or barcode in the app (`/app/api/food/search`).
   They are never shared with any provider.
-- **Cookbook**: recipes with their nutrition values (`cookbook.js`).
 - **World catalogue** (`world-foods.js`): about 3.4 million foods from the
   kCalori release (Open Food Facts ODbL, USDA FoodData Central, Fineli, Ciqual,
   CoFID), read only from the R2 bucket `aurin-food-catalog` (Eastern Europe), listed after saved and
   shared foods. Built with `scripts/build-world-foods.mjs <foods.sqlite> <out>`
   and uploaded with `scripts/upload-world-foods.mjs <out>/<version>`; the
   upload writes `current.json` last, so a new version switches over at once.
+  Every 14 days `.github/workflows/food-catalog-refresh.yml` replaces the Open
+  Food Facts products with the current OFF export and carries the other sources
+  over ([food-catalog-refresh.md](food-catalog-refresh.md)).
   Sources without a licence to pass data on (the uploaded kCalori list,
   NutriDatabaze) are left out. Attributions are on the privacy page.
 

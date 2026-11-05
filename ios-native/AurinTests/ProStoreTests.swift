@@ -155,22 +155,23 @@ final class ProStoreTests: XCTestCase {
         await step("load") { await store.load() }
         XCTAssertEqual(ProStore.packIDs, ["health.aurin.app.coach.messages40", "health.aurin.app.coach.messages100"])
         XCTAssertTrue(try XCTUnwrap(store.price("health.aurin.app.coach.messages40")).contains("99"))
+        // buyPack finishes the transaction it bought. That is read from the finish
+        // call itself: on CI (3 Nov, iOS 27) Transaction.unfinished still listed the
+        // pack bought and finished in this step (same ID), so the list is only logged.
+        var finished: [(id: UInt64, product: String)] = []
+        store.finishTransaction = { transaction in
+            finished.append((id: transaction.id, product: transaction.productID))
+            await transaction.finish()
+        }
         // Xcode's test purchase never reaches the server: the pack's own messages come back.
-        let buying = Date().addingTimeInterval(-1)
         let left = try await step("buy pack") { try await store.buyPack("health.aurin.app.coach.messages100") }
         XCTAssertEqual(left, 100)
         XCTAssertFalse(store.entitled, "a pack is not Aurin Pro")
-        // The pack bought here is finished. On CI (3 Nov, iOS 27) Transaction.unfinished
-        // still listed a messages100 transaction 3 s after buyPack had finished its
-        // own, so only a transaction bought during this step counts. Every open one
-        // is named in the log with its ID and date.
-        var unfinished = 0
+        XCTAssertEqual(finished.map { $0.product }, ["health.aurin.app.coach.messages100"], "the bought pack is finished")
         for await result in Transaction.unfinished {
             let transaction = result.unsafePayloadValue
-            print("ProStoreTests open transaction: \(transaction.productID) \(transaction.id), bought \(transaction.purchaseDate), buying from \(buying)")
-            if transaction.productID == "health.aurin.app.coach.messages100", transaction.purchaseDate >= buying { unfinished += 1 }
+            print("ProStoreTests open transaction: \(transaction.productID) \(transaction.id), bought \(transaction.purchaseDate); finished here: \(finished.map { $0.id })")
         }
-        XCTAssertEqual(unfinished, 0, "the bought pack is finished")
         _ = session
     }
 

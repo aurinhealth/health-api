@@ -81,8 +81,11 @@ jobs:
         run: |
           set -euo pipefail
           # Builds come from ios-testflight.yml runs on main; the build number is the run number.
+          # A pull request whose branch is called main is no main build (security audit 2026-11-04,
+          # point 25): pull_request runs are left out, runs started by hand from main stay.
           runs="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ios-testflight.yml --branch main \
-            --status success --limit 100 --json number,headSha,databaseId)"
+            --status success --limit 100 --json number,headSha,databaseId,event \
+            | jq -c 'map(select(.event != "pull_request"))')"
           if [ -n "$BUILD" ]; then
             run="$(jq -c --argjson n "$BUILD" 'map(select(.number == $n))[0] // empty' <<< "$runs")"
           else
@@ -110,7 +113,8 @@ jobs:
           # The smoke test (ios-native.yml) must have passed on the app the build holds:
           # the newest iOS run on main whose commit has the build's app, without later app changes.
           checks="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ios-native.yml --branch main \
-            --status completed --limit 50 --json headSha,conclusion,databaseId)"
+            --status completed --limit 50 --json headSha,conclusion,databaseId,event \
+            | jq -c 'map(select(.event != "pull_request"))')"
           check=""
           while read -r row; do
             csha="$(jq -r .headSha <<< "$row")"

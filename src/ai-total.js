@@ -13,6 +13,17 @@
 // small part of it (5 USD a month is about 0.17 a day), so only a spike or a bug
 // reaches it. The accounts are counted once a day, when the group's day starts;
 // a count that fails is not kept, so the next call counts again.
+// A group at its brake stops only its accounts that spent their share today
+// (the brake's perAccount in the UTC day, across all AI, the coach chat and
+// its other running calls included), so a few
+// accounts using their whole allowance never stop the AI of the rest; at
+// GROUP_HARD_STOP times the brake the whole group waits. A fixed brake has no
+// share (accounts made in bulk, the server): there it stops the whole group.
+// The App Review account is never stopped by its group (its own budget is small).
+// Each call holds what it can cost at most (estimateAiCostUsd) in the day and
+// in its group before it runs, so calls running at once see each other; its
+// real cost replaces the hold after, a call refused without a cost gives it
+// back, and one that broke off keeps it (keepAiReservation).
 // The account's own limits (ai-usage.js) stay the real cap on what AI costs.
 // The owner hears once a day of a group that passes AI_GROUP_ALERT_SHARE of its
 // brake (half by default). Unset or not a number is off.
@@ -21,6 +32,8 @@ import { emailConfigured, sendEmail } from "./email-sender.js";
 import { isStaging, ownerUnlimited } from "./staging.js";
 import { aiGroup, groupOfSubscription, newAccountSince, AI_GROUPS } from "./ai-limit-share.js";
 import { ensureStoreColumns } from "./app-store.js";
+import { isReviewAccount } from "./app-review.js";
+import { aiSpentUtcDay } from "./ai-usage.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const utcDay = (now = new Date()) => now.toISOString().slice(0, 10);
@@ -128,33 +141,73 @@ function overloaded() {
   return error;
 }
 
-// Before a model call: refused once the day's total reached its brake (test
-// server), or the account's group reached its own.
-export async function assertAiTotal(env, now = new Date()) {
-  const db = central(env);
-  if (!db) return;
-  const limit = n(env?.AI_TOTAL_DAILY_LIMIT_USD), failed = what => error => { console.error(what, error?.message || error); return null; };
-  if (limit != null && limit >= 0 && !(env.USER_IS_OWNER === true && !isStaging(env))) {
-    const spent = await aiSpentTodayAll(db, now).catch(failed("AI total read failed"));
-    if (spent != null && spent >= limit) throw overloaded();
-  }
-  if (ownerUnlimited(env) || !Object.keys(groupBrakes(env)).length) return;
-  await ensureAiSpendDays(db);
-  const group = await groupDay(db, env, await aiGroup(env), now).catch(failed("AI group read failed"));
-  if (group?.brake != null && group.spent >= group.brake) throw overloaded();
+const GROUP_HARD_STOP = 2;
+
+// A brake's share of one account: its perAccount, or none (a fixed brake).
+const fairShare = brake => (brake && typeof brake === "object" ? n(brake.perAccount) : null);
+
+// Before a model call: holds reserveUsd in the day's total and in the
+// account's group, refused once the day's total reached its brake (test
+// server) or the group its own (see the top). Returns the hold, which
+// addAiSpend settles with the real cost (0 gives it back). A failed read or
+// write does not cost the user the answer: nothing is held then.
+// slotId: the call's own row in ai_usage (claimAiSlot), left out of its share.
+export async function assertAiTotal(env, { reserveUsd = 0, slotId = 0, now = new Date() } = {}) {
+  const db = central(env), usd = rounded(Math.max(0, n(reserveUsd) || 0));
+  const hold = { day: utcDay(now), group: null, dayUsd: 0, groupUsd: 0, done: true };
+  if (!db) return hold;
+  const failed = what => error => { console.error(what, error?.message || error); return null; };
+  try { await ensureAiSpendDays(db); } catch (error) { failed("AI totals not ready")(error); return hold; }
+  hold.group = await aiGroup(env); hold.done = false;
+  // One statement adds the hold while the row is under `cap` (none: always),
+  // so calls at the same time take turns: "held", "full" or "failed".
+  const add = (table, cap) => {
+    const [cols, keys] = table === "days" ? ["day", [hold.day]] : ["day, grp", [hold.day, hold.group]];
+    return db.prepare(`INSERT INTO ai_spend_${table} (${cols}, cost_usd) VALUES (${keys.map(() => "?").join(", ")}, ?) ON CONFLICT(${cols}) DO UPDATE SET cost_usd = round(cost_usd + excluded.cost_usd, 5)${cap != null ? " WHERE cost_usd < ?" : ""} RETURNING cost_usd`)
+      .bind(...keys, usd, ...(cap != null ? [cap] : [])).first().then(row => (row ? "held" : "full"), error => { failed(`AI ${table} hold failed`)(error); return "failed"; });
+  };
+  const brake = ownerUnlimited(env) || isReviewAccount(env) || !Object.keys(groupBrakes(env)).length ? null
+    : (await groupDay(db, env, hold.group, now).catch(failed("AI group read failed")))?.brake ?? null;
+  let group = await add("groups", brake);
+  if (group === "full") group = await add("groups", await pastBrake(env, hold, brake, slotId));
+  if (group === "full") throw overloaded();
+  if (group === "held") hold.groupUsd = usd;
+  const limit = n(env?.AI_TOTAL_DAILY_LIMIT_USD), dayCap = limit != null && limit >= 0 && !(env.USER_IS_OWNER === true && !isStaging(env)) ? limit : null;
+  const day = dayCap === 0 ? "full" : await add("days", dayCap);
+  if (day === "full") { await addAiSpend(env, 0, hold); throw overloaded(); }
+  if (day === "held") hold.dayUsd = usd;
+  return hold;
 }
 
-// After a model call: adds its cost to the day and to the account's group, and
-// the first time the day passes the alert (or the group passes its share of the
-// brake) the owner hears of it. Best effort, like recordAiUsage.
-export async function addAiSpend(env, cost, now = new Date()) {
-  const db = central(env), usd = n(cost);
-  if (!db || !(usd > 0)) return;
+// The group is at its brake: the account goes on while its own spending in
+// the group's day is under the brake's share, up to GROUP_HARD_STOP times the
+// brake. Its calls running beside this one count at their reservation (their
+// slots are taken first, in one statement each), so they pass one by one.
+async function pastBrake(env, hold, brake, slotId) {
+  const share = fairShare(groupBrakes(env)[hold.group]);
+  if (share == null) throw overloaded();
+  const spent = await aiSpentUtcDay(env, hold.day, { exceptId: slotId }).catch(error => { console.error("AI usage read failed", error?.message || error); return 0; });
+  if (spent >= share) throw overloaded();
+  return brake * GROUP_HARD_STOP;
+}
+
+// After a model call: its cost replaces what the call held (assertAiTotal) in
+// the day and in the account's group (0 gives the hold back; without a hold
+// the whole cost is added), and the first time the day passes the alert (or
+// the group passes its share of the brake) the owner hears of it. Once per
+// hold. Best effort, like recordAiUsage.
+export async function addAiSpend(env, cost, hold = null, now = new Date()) {
+  const db = central(env), usd = Math.max(0, n(cost) || 0);
+  if (!db || hold?.done) return;
+  if (hold) hold.done = true;
+  const dayDelta = rounded(usd - (hold?.dayUsd || 0)), groupDelta = rounded(usd - (hold?.groupUsd || 0));
+  if (!dayDelta && !groupDelta) return;
   try {
     await ensureAiSpendDays(db);
-    const day = utcDay(now), group = await aiGroup(env);
-    await db.prepare("INSERT INTO ai_spend_days(day, cost_usd) VALUES(?, ?) ON CONFLICT(day) DO UPDATE SET cost_usd = cost_usd + excluded.cost_usd").bind(day, usd).run();
-    const row = await db.prepare("INSERT INTO ai_spend_groups(day, grp, cost_usd) VALUES(?, ?, ?) ON CONFLICT(day, grp) DO UPDATE SET cost_usd = cost_usd + excluded.cost_usd RETURNING cost_usd, brake_usd, alerted").bind(day, group, usd).first();
+    const day = hold?.day || utcDay(now), group = hold?.group || await aiGroup(env);
+    await db.prepare("INSERT INTO ai_spend_days(day, cost_usd) VALUES(?, ?) ON CONFLICT(day) DO UPDATE SET cost_usd = round(cost_usd + excluded.cost_usd, 5)").bind(day, dayDelta).run();
+    const row = await db.prepare("INSERT INTO ai_spend_groups(day, grp, cost_usd) VALUES(?, ?, ?) ON CONFLICT(day, grp) DO UPDATE SET cost_usd = round(cost_usd + excluded.cost_usd, 5) RETURNING cost_usd, brake_usd, alerted").bind(day, group, groupDelta).first();
+    if (!(usd > 0)) return;
     await alertGroup(env, db, day, group, row);
     const alert = n(env.AI_TOTAL_DAILY_ALERT_USD);
     if (alert == null || alert < 0) return;

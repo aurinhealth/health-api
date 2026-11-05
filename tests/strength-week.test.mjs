@@ -119,6 +119,20 @@ test("four gym days a week alternate upper and lower body, five and more push, p
   assert.ok(workExercises(next).every(x => !["back", "biceps", "rear_delts"].includes(EXERCISES[x].muscle)));
 });
 
+// Petr 2026-11-05: Lower Body Thursday, Friday and Sunday. Thursday's leg day
+// was all variants of the main exercises (Single-Leg Press for the leg press…),
+// which the split did not count as legs, so Friday was legs again.
+test("a leg day of exercise variants still counts as legs: the next day is upper body, no exercise repeated", () => {
+  const thursday = { date: "2026-11-05", exercises: ["Single-Leg Press", "Bulgarian Split Squat", "Cable Single Leg Laying Leg Curl", "Smith Machine Calf Raise", "Decline Sit-Up"] };
+  assert.ok(thursday.exercises.slice(0, 4).every(x => EXERCISES[x].variantOf), "variants");
+  // Upper body done on Tuesday.
+  const done = ["Low row", "Lat pulldown", "DB bench press", "DB shoulder press"].map(exercise => ({ workout_date: "2026-11-03", exercise, type: "WORK", completed: 1, actual_kg: 20, actual_reps: 8, rpe: 8, set_no: 1 }));
+  const friday = generateStrengthPlan(context("2026-11-06", [thursday], done), { durationMinutes: 70, blockDates: ["2026-11-07", "2026-11-08"], weeklyGymDays: 4 });
+  assert.equal(friday.planName, "Upper Body");
+  const block = generateStrengthPlan(context("2026-11-06", [thursday], done), { durationMinutes: 70, blockDates: ["2026-11-07"] });
+  assert.deepEqual(workExercises(block).filter(x => thursday.exercises.includes(x)), []);
+});
+
 test("the week's gym days count the week plan and the sessions that week", () => {
   const plan = [["gym"], [], ["gym"], [], ["gym"], ["gym"], []];
   assert.equal(weeklyGymDays("2026-10-21", plan), 4);

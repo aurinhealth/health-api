@@ -1,7 +1,8 @@
 import {assertAIAccess} from './subscription.js';
-import { assertAiTotal } from './ai-total.js';
+import { assertAiTotal, addAiSpend } from './ai-total.js';
 import { weekCheckForCoach } from './week-check.js';
-import { buildCyclingCoachV2, CYCLING_COACH_V2_META } from "./cycling-coach-v2.js";
+import { buildCyclingCoachV2, CYCLING_COACH_V2_META, engineForAI } from "./cycling-coach-v2.js";
+import { cycleShared } from "./cycle-model.js";
 import { withFocus } from "./athlete-focus.js";
 import { COACH_ACTION_FORMAT, actionInstructions, COACH_VISUALS } from './coach-actions.js';
 import { EXERCISES } from './strength-generator.js';
@@ -281,7 +282,9 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
   // One place for every caller (chat, week planning, coach evaluation): a
   // strength athlete's day is a gym day unless a ride, run or swim is asked or planned.
   const gymFirst = gymDay(focus, { appContext, message, daily });
-  const cyclingCoachV2 = gymFirst ? strengthDay(engine, { availabilityMinutes, dayMinutes, week, date }) : engine;
+  // The AI sees why a period day is easy only when the athlete shares the
+  // cycle (`cycle` is cycle-model.js cycleForCoach, null otherwise).
+  const cyclingCoachV2 = engineForAI(gymFirst ? strengthDay(engine, { availabilityMinutes, dayMinutes, week, date }) : engine, { cycleShared: Boolean(cycle) || cycleShared(profile?.cycle) });
   return {
     date,...(now?{now}:{}),weekday:weekdayOf(date),...(gymFirst?{gymDay:true}:{}),
     athleteState:cyclingCoachV2.athleteState.status,statusNote:cyclingCoachV2.athleteState.note,
@@ -310,7 +313,7 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     ...(performance?{performance}:{}),
     gym:strengthSets.map(r=>compactObject({date:r.workout_date,exercise:r.exercise,set:num(r.set_no),...strengthSet(r),toFailure:r.toFailure||null,intensity:r.intensity||null,drop:String(r.type).toUpperCase()==='DROP'||null})),
     strengthProgress:strengthProgress(gym?.history,date),
-    todayGym:todayGymContext(gym,date,athleteState?.memories),
+    todayGym:todayGymContext(gym,date,athleteState?.memoryOff?[]:athleteState?.memories),
     strengthCoverage:strengthCoverage({date,strength:{recentCompletedSets:strengthSets}},EXERCISES),
     capabilities,
     // The athlete's own words after workouts and the coach's notes on them.
@@ -410,19 +413,21 @@ export function aiFailureText(status){return 'AI '+status+': '+(status===429?L('
 // fall back to its own words waits briefly instead of the full 90 s.
 export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null, reasoningEffort = 'low',onText=null,feature=null,timeoutMs=null,slotWaitMs=undefined }) {
   await assertAIAccess(env);
-  // All users together under the day's emergency brake (ai-total.js).
-  await assertAiTotal(env);
   if (!env.OPENAI_API_KEY) throw new Error(L('AI teď není dostupná.', 'AI isn\'t available right now.'));
   // Refused at once when the limit is already spent, then checked again with
   // the slot held: the calls running beside this one count at their reservation.
   await assertAiAllowance(env,feature);
   const reserveUsd=estimateAiCostUsd(model||env.OPENAI_MODEL||'gpt-6-sol',{instructions,input,maxOutputTokens,tools});
   const release=await claimAiSlot(env,{feature,reserveUsd,...(slotWaitMs!=null?{waitMs:slotWaitMs}:{})});
+  let hold=null;
   try{
     await assertAiAllowance(env,feature,{exceptId:release.id});
-    return await openAIResponse(env,{instructions,input,maxOutputTokens,tools,format,model,reasoningEffort,onText,feature,timeoutMs,slotId:release.id});
+    // All users together and the account's group (ai-total.js) hold the call
+    // while it runs; a call that ends without a cost gives the hold back.
+    hold=await assertAiTotal(env,{reserveUsd,slotId:release.id});
+    return await openAIResponse(env,{instructions,input,maxOutputTokens,tools,format,model,reasoningEffort,onText,feature,timeoutMs,slotId:release.id,hold});
   }
-  finally{await release();}
+  finally{if(hold)await addAiSpend(env,0,hold);await release();}
 }
 
 // A busy or briefly failing OpenAI (429, 5xx, a dropped connection) is asked
@@ -454,10 +459,10 @@ const retryWait=(ms,signal)=>new Promise((resolve,reject)=>{
   signal.addEventListener('abort',()=>{clearTimeout(timer);reject(signal.reason);},{once:true});
 });
 
-async function openAIResponse(env, { instructions, input, maxOutputTokens, tools, format, model, reasoningEffort, onText, feature, timeoutMs, slotId }) {
+async function openAIResponse(env, { instructions, input, maxOutputTokens, tools, format, model, reasoningEffort, onText, feature, timeoutMs, slotId, hold }) {
   const chosenModel=model || env.OPENAI_MODEL || 'gpt-6-sol';
   // Sent but broken off with no usage: the call counts at its reservation.
-  const broken=async error=>{await keepAiReservation(env,slotId,{feature,model:chosenModel});throw error;};
+  const broken=async error=>{await keepAiReservation(env,slotId,{feature,model:chosenModel,hold});throw error;};
   const response = await fetchOpenAI(env, {
     signal:AbortSignal.timeout(timeoutMs||timeoutFor(maxOutputTokens)),
     body:JSON.stringify({
@@ -478,10 +483,10 @@ async function openAIResponse(env, { instructions, input, maxOutputTokens, tools
   // A stream that fails after generation started still cost tokens (A8a): the
   // usage the failure event carried is recorded before the error goes on.
   try{data=onText?await readOpenAIStream(response,onText):await response.json();}
-  catch(error){if(!error?.usage)return broken(error);await recordAiUsage(env,{feature,model:error.model||chosenModel,usage:error.usage,webSearches:0,slotId}).catch(()=>{});throw error;}
+  catch(error){if(!error?.usage)return broken(error);await recordAiUsage(env,{feature,model:error.model||chosenModel,usage:error.usage,webSearches:0,slotId,hold}).catch(()=>{});throw error;}
   // Web searches are billed per call; a failed one is not.
   const webSearches=(data.output||[]).filter(item=>item.type==='web_search_call'&&item.status!=='failed').length;
-  await recordAiUsage(env,{feature,model:data.model||chosenModel,usage:data.usage,webSearches,slotId});
+  await recordAiUsage(env,{feature,model:data.model||chosenModel,usage:data.usage,webSearches,slotId,hold});
   const incomplete=data.status==='incomplete';
   const text = data.output?.flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n') || data.output_text || data.streamedText;
   if (!text) throw new Error(incomplete?L('Odpověď AI byla moc dlouhá a nedokončila se. Zkus zadání zúžit.', 'The AI answer ran too long and was cut off. Try a narrower request.'):L('AI nevrátila odpověď.', 'The AI didn\'t return an answer.'));
@@ -501,7 +506,7 @@ export function coachAnswerText(text,{actions=false,incomplete=false}={}){
   if(incomplete)answer=(answer?answer+'\n\n':'')+L(TRUNCATED_NOTE,'The answer was cut short. Write “continue” or narrow the question.');
   else if(!answer)answer=L('Odpověď se nepodařilo zpracovat. Zkus to prosím znovu.', 'The answer couldn\'t be processed. Please try again.');
   const visuals=Array.isArray(parsed?.visuals)?[...new Set(parsed.visuals.filter(v=>COACH_VISUALS.includes(v)))].slice(0,2):[];
-  const memory={forget:Array.isArray(parsed?.memory?.forget)?parsed.memory.forget:[],update:Array.isArray(parsed?.memory?.update)?parsed.memory.update:[]};
+  const memory={save:Array.isArray(parsed?.memory?.save)?parsed.memory.save:[],forget:Array.isArray(parsed?.memory?.forget)?parsed.memory.forget:[],update:Array.isArray(parsed?.memory?.update)?parsed.memory.update:[]};
   return {answer,visuals,actions:Array.isArray(parsed?.actions)?parsed.actions:[],memory};
 }
 
@@ -511,7 +516,7 @@ export async function askCoach(env, message, context, {model = null, focus = nul
   if (!env.OPENAI_API_KEY) return {status: 'unavailable', message: L('AI teď není dostupná. Zkus to později.', 'AI isn\'t available right now. Try again later.')};
   const started = Date.now();
   const light = task === 'simple' || task === 'quick', chosen = model || (light ? lightModel(env) : complexModel(env));
-  const data = task === 'simple' ? {date:context.date,now:context.now,athleteState:context.athleteState,statusNote:context.statusNote,preferenceMemory:context.preferenceMemory} : {...context};
+  const data = task === 'simple' ? {date:context.date,now:context.now,athleteState:context.athleteState,statusNote:context.statusNote,preferenceMemory:context.preferenceMemory,...(context.sportsToSuggestChange?{sportsToSuggestChange:context.sportsToSuggestChange}:{}),...['chatSoFar','recentChats','earlierToday','pastMemory'].reduce((o,k)=>context[k]?{...o,[k]:context[k]}:o,{})} : {...context};
   delete data.conversation;
   // Earlier turns go as real messages: the data first, the question last.
   const turns=(context?.conversation||[]).filter(t=>['user','assistant'].includes(t?.role)&&String(t.content||'').trim()).map(t=>({role:t.role,content:String(t.content).slice(0,8000)}));

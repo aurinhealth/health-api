@@ -217,9 +217,13 @@ export function readinessMessage({ score, zone, flags = [], missing = [], checki
     : L(`Dnešní plán: ${names}. Dnes v klidnějším tempu.`, `Today's plan: ${names}. Take it easier than usual.`);
   else if (level === "red") body = names ? L(`${names} dnes vynech. Nanejvýš procházka nebo lehké protažení.`, `Skip today's ${names}. A walk or easy mobility at most.`) : L("Nanejvýš procházka nebo lehké protažení.", "A walk or easy mobility at most.");
   if (body && !saveFor && signals.length) body = reasonsSentence(signals) + " " + body;
-  if (body && injury) body += " " + L(`Pamatuj: ${injury}.`, `Keep in mind: ${injury}.`).replace(/\.\.$/, ".");
+  // The words of an injury the coach was told about are never on the lock
+  // screen, not even in the hidden part (an APNs payload travels readable):
+  // only Today's card shows them, after the app is opened. The card's
+  // `remember` lets the AI's copy of that card leave them out (screen-texts.js).
+  const remember = body && injury ? L(`Pamatuj: ${injury}.`, `Keep in mind: ${injury}.`).replace(/\.\.$/, ".") : null;
   // What the days before, the journal, an injury or tomorrow changed: Today's coach card says the same (app-today.js).
-  const changed = weighed && (signals.length || saveFor || injury) ? { headline: advice, recommendation: body } : null;
+  const changed = weighed && (signals.length || saveFor || injury) ? { headline: advice, recommendation: remember ? body + " " + remember : body, ...(remember ? { remember } : {}) } : null;
   return { alert: { title, ...(subtitle ? { subtitle } : {}), ...(body ? { body } : {}) }, zone: shown || null, ...(changed ? { changed } : {}) };
 }
 
