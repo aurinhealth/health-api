@@ -177,6 +177,13 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
   - Hall KD et al. Lancet 2011;378:826–837: statické pravidlo 7700 kcal/kg přeceňuje dlouhodobý úbytek. Proto bereme polovinu a strop.
 - **Proti konkurenci:** Garmin a Whoop berou výdej z hodinek. Ten má chybu přes 20 % a navíc nemá jednotný směr (O'Driscoll R et al. Br J Sports Med 2020;54:332–340). Naše smyčka podle váhy tuto systematickou chybu postupně opraví, podobně jako aplikace s adaptivním výdejem.
 
+### 2.10 Klidový tep nad obvyklým rozmezím (karta „Dnes se hodí lehčí den“)
+
+- **Práh zátěže:** klidový tep aspoň 2 obvyklé odchylky nad obvyklou hodnotou 2 noci po sobě, nebo 1 noc a zároveň HRV pod svým obvyklým rozmezím (`restingHRAbove` v `src/night-check.js`). Jen proti vlastnímu obvyklému rozmezí zdroje (14 nocí z těch samých hodinek): s rozmezím převzatým z jiných hodinek (nové hodinky, `restingHRMixed` nebo provizorní) se signál nespouští, protože by posun nového zařízení četl jako vzestup.
+- **Text:** „Resting heart rate is above your usual range. Alcohol, heat, a late meal, stress or hard training can do this.“ Karta nabízí lehčí den (stejná výměna jako u ostatních nočních hodnot). Nikdy nepíše „abnormal“, nemoc ani infekci.
+- **Proč dvě noci:** klidový tep je u jednotlivce stabilní, ale pětina lidí má aspoň jeden týden s výkyvem ≥ 10 tepů/min (Quer G et al., PLoS One 2020;15:e0227709), takže jedna noc dává falešné poplachy. Změny tepu a HRV dávají smysl jen spolu s dalšími znaky přetížení (Bosquet L et al., Br J Sports Med 2008). Alkohol zvyšuje tep v noci v závislosti na dávce (Pietilä J et al., JMIR Ment Health 2018). Horko zvyšuje tep při stejné zátěži (Racinais S et al., Scand J Med Sci Sports 2015, konsenzus k tréninku v horku).
+- **Limity:** je to práh zátěže pro úpravu tréninku, ne hodnocení zdraví.
+
 ## Co zbývá
 
 - **Výsledky ověření (bod 2.8):** nástroj je hotový, ale tvrzení „index předpovídá průběh tréninku“ lze použít až po spuštění na reálných datech (aspoň desítky tréninkových dní u více uživatelů).

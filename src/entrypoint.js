@@ -876,9 +876,10 @@ async function coachPush(env, ctx) {
     // The coach's inputs when a card has just made them, else only what the push reads.
     const inputs = await cachedOnly(env, 'coach-inputs:' + date) || await loadPushInputs(env, ctx, internalHeaders(), date);
     const upcoming = await upcomingSessions(env, (inputs.week?.days || []).filter(d => d.date >= date && d.date <= shiftDate(date, 1)));
-    const readiness = morningDue ? readinessFor({ date, google: inputs.health?.wellness || [], intervals: inputs.fitness?.wellness || [], sessions: inputs.health?.sleep || [], profile: inputs.profile }) : null;
+    const readinessOn = day => readinessFor({ date: day, google: inputs.health?.wellness || [], intervals: inputs.fitness?.wellness || [], sessions: inputs.health?.sleep || [], profile: inputs.profile });
+    const readiness = morningDue ? readinessOn(date) : null;
     nudge = coachNudge({ date, hour, morning: morningDue, evening: eveningDue, upcoming, sleep: inputs.health?.sleep || [],
-      easier: morningDue ? easierDayCard({ date, readiness, state }) : null,
+      easier: morningDue ? easierDayCard({ date, readiness, yesterday: readinessOn(shiftDate(date, -1)), state }) : null,
       recovery: morningDue ? proactiveAdvice({ ...inputs, state, readiness }) : null });
   }
   if (!nudge) return { sent: 0, reason: 'nothing-to-say' };
@@ -1460,8 +1461,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const date=localToday(),state=await getAthleteState(env.DB),inputs=await loadCoachInputs(env,ctx,internalAuth,date);
       // Night values outside the usual range come first (an easier day, with
       // today's hard ride or run swapped for an easy one), then the general break advice.
-      const readiness=readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile});
-      let easier=easierDayCard({date,readiness,state});
+      const readinessOn=day=>readinessFor({date:day,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile});
+      const readiness=readinessOn(date),yesterday=readinessOn(shiftDate(date,-1));
+      let easier=easierDayCard({date,readiness,yesterday,state});
       if(easier){
         // The swap waits in the athlete's state, so Ulehčit dnešek answers it as the push's Vyměnit does
         // (/app/api/coach/nudge); a swap already offered for today stays. Today's sessions only, read only now.
@@ -1470,7 +1472,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           if(hard){state.nudge={...easierSwap(hard),title:easier.headline,day:date,status:'pending'};await updateAthleteState(env.DB,{nudge:state.nudge});}
         }
         const offer=state.nudge?.date===date?swapOffer(state,date):null;
-        easier=offer?easierDayCard({date,readiness,state,offer}):easier;
+        easier=offer?easierDayCard({date,readiness,yesterday,state,offer}):easier;
       }
       // The push's swap of tomorrow's session stays first until it is answered.
       const swap=swapOffer(state,date);
