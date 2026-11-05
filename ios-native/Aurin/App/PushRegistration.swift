@@ -148,7 +148,14 @@ enum PushRegistration {
     /// Settings → Oznámení → Ranní připravenost; on until turned off.
     static let morningKey = "remind.morning"
     /// The token last sent to the server for the signed-in account.
-    private static let sentKey = "push.sentToken"
+    nonisolated private static let sentKey = "push.sentToken"
+
+    /// This phone's token as the server has it, or null: sent when this phone signs
+    /// the other devices out, so the server keeps only this phone's notifications
+    /// (src/dashboard-auth.js signedOutElsewhere).
+    nonisolated static var sentToken: JSONValue {
+        UserDefaults.standard.string(forKey: sentKey).map { JSONValue.string($0) } ?? .null
+    }
 
     /// Settings → Oznámení → Kouč; on until turned off.
     static let coachKey = "remind.coach"
@@ -229,9 +236,11 @@ enum PushRegistration {
     /// Signing out without signal: the server could not be told, so the phone
     /// leaves Apple's push service and the old account's pushes no longer reach
     /// the lock screen (Apple then answers the server that the token is gone).
-    /// The next sign-in registers again.
+    /// The next sign-in registers again: the server may have dropped the token
+    /// meanwhile (another device signed this one out), so it is sent again.
     static func leavePushService() {
         UIApplication.shared.unregisterForRemoteNotifications()
+        UserDefaults.standard.removeObject(forKey: sentKey)
     }
 
     /// The server sends only the pushes whose switch is on; told when a switch
@@ -345,13 +354,17 @@ enum CoachPush {
         let content = response.notification.request.content
         let coach = content.userInfo["coach"] as? [String: Any]
         let chatId = (coach?["chatId"] as? NSNumber)?.intValue
+        // A notification of another account (signed out on this phone since):
+        // its buttons do nothing in this one.
+        let account = (coach?["account"] as? NSNumber)?.intValue
+        if let account, let current = Outbox.account, account != current { return }
         switch response.actionIdentifier {
         case replyAction:
             guard let text = (response as? UNTextInputNotificationResponse)?.userText.trimmingCharacters(in: .whitespacesAndNewlines),
                   !text.isEmpty else { return }
             // The coach takes a while: the upload goes on in the background.
             let shown = NotificationText(content)
-            CoachReplyUpload.shared.send(text: text, title: shown.title, body: shown.body, chatId: chatId, api: api)
+            CoachReplyUpload.shared.send(text: text, title: shown.title, body: shown.body, chatId: chatId, account: account, api: api)
         case confirmAction, rejectAction:
             guard let draft = (coach?["draftId"] as? NSNumber)?.intValue else { return }
             let confirm = response.actionIdentifier == confirmAction
@@ -428,9 +441,11 @@ final class CoachReplyUpload: NSObject, URLSessionTaskDelegate, @unchecked Senda
         return URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }()
 
-    func send(text: String, title: String, body: String, chatId: Int?, api: APIClient) {
+    /// account: the one the push was for; the server refuses the reply in another.
+    func send(text: String, title: String, body: String, chatId: Int?, account: Int?, api: APIClient) {
         var payload: JSONObject = ["text": .string(text), "title": .string(title), "body": .string(body)]
         if let chatId { payload["chatId"] = .number(Double(chatId)) }
+        if let account { payload["account"] = .number(Double(account)) }
         guard let request = try? api.pushReplyRequest(), let data = try? JSONEncoder().encode(payload) else { return }
         // A background upload goes from a file.
         let file = FileManager.default.temporaryDirectory.appendingPathComponent(Self.filePrefix + UUID().uuidString + ".json")

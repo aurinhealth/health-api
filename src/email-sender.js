@@ -120,6 +120,25 @@ const PASSKEY_TEXT = {
   }
 };
 
+const SIGNED_OUT_TEXT = {
+  cs: {
+    subject: "Ostatní zařízení se odhlásila z tvého účtu Aurin",
+    body: when => [`Všechna zařízení kromě jednoho se ${when} odhlásila z tvého účtu Aurin (Odhlásit ostatní zařízení).`, "Pokud o tom nevíš, přihlas se znovu, v Nastavení → Účet zmáčkni Odhlásit ostatní zařízení a dej vědět správci aplikace."]
+  },
+  en: {
+    subject: "Your other devices were signed out of Aurin",
+    body: when => [`Every device but one was signed out of your Aurin account on ${when} (Sign out other devices).`, "If this was not you, sign in again, tap Sign out other devices under Settings → Account and tell the app's administrator."]
+  }
+};
+
+// "Odhlásit ostatní zařízení" asks for no confirmation (it is for a lost phone), so the account's
+// address hears of it.
+export function signedOutEverywhereEmail(lang, date = new Date(), zone = timeZone()) {
+  const en = lang === "en";
+  const t = SIGNED_OUT_TEXT[en ? "en" : "cs"], paragraphs = t.body(noticeTime(en, date, zone));
+  return { subject: t.subject, text: paragraphs.join("\n\n") + "\n", html: htmlEmail(en ? "en" : "cs", paragraphs) };
+}
+
 export function passkeyAddedEmail(lang, name, date = new Date(), zone = timeZone()) {
   const en = lang === "en";
   const when = noticeTime(en, date, zone);

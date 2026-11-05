@@ -172,24 +172,37 @@ export function bedtimePlan(input) {
 // deep ≥ 13 %, REM ≥ 20 %; Ohayon 2004).
 // Stages get the least weight: wrist devices stage sleep far less reliably
 // than they measure its length. Without stages the rest is rescaled.
-export function sleepIndexScore(night, need) {
+// sleepIndexParts gives the three parts as the night's own values (the sleep
+// detail's "What makes up the index") with how full each part is (0–1);
+// sleepIndexScore adds them up.
+export function sleepIndexParts(night, need) {
   if (!night || !(Number(night.durationMin) > 0)) return null;
   const duration = Number(night.durationMin), bed = Number(night.timeInBedMin), want = need || 480;
   if (!(bed >= duration)) return null;
-  const durationPoints = 50 * Math.max(0, Math.min(1, (duration / want - 0.5) / 0.5));
-  const efficiency = Math.max(0, Math.min(1, (duration / bed - 0.65) / 0.2));
+  const clamp = x => Math.max(0, Math.min(1, x));
+  const efficiency = clamp((duration / bed - 0.65) / 0.2);
   const latency = Number(night.latencyMin), waso = Number(night.wasoMin);
   const hasLatency = night.latencyMin != null && Number.isFinite(latency), hasWaso = night.wasoMin != null && Number.isFinite(waso);
   // With the device's sleep summary, 35 points split into efficiency (20),
   // falling asleep within 30 min (7.5, none from 60) and wake after sleep
   // onset up to 20 min (7.5, none from 50): the NSF good-quality ranges.
-  const efficiencyPoints = hasLatency && hasWaso
-    ? 20 * efficiency + 7.5 * Math.max(0, Math.min(1, (60 - latency) / 30)) + 7.5 * Math.max(0, Math.min(1, (50 - waso) / 30))
+  const qualityPoints = hasLatency && hasWaso
+    ? 20 * efficiency + 7.5 * clamp((60 - latency) / 30) + 7.5 * clamp((50 - waso) / 30)
     : 35 * efficiency;
   const deep = Number(night.stages && night.stages.DEEP), rem = Number(night.stages && night.stages.REM);
-  if (!Number.isFinite(deep) || !Number.isFinite(rem)) return Math.round((durationPoints + efficiencyPoints) / 85 * 100);
-  const stagePoints = 7.5 * Math.min(1, deep / duration / 0.13) + 7.5 * Math.min(1, rem / duration / 0.2);
-  return Math.round(durationPoints + efficiencyPoints + stagePoints);
+  const staged = Number.isFinite(deep) && Number.isFinite(rem);
+  const stagePoints = staged ? 7.5 * Math.min(1, deep / duration / 0.13) + 7.5 * Math.min(1, rem / duration / 0.2) : null;
+  return {
+    length: { minutes: Math.round(duration), need: Math.round(want), points: 50 * clamp((duration / want - 0.5) / 0.5), max: 50 },
+    quality: { efficiency: Math.round(duration / bed * 100), latency: hasLatency ? Math.round(latency) : null, waso: hasWaso ? Math.round(waso) : null, points: qualityPoints, max: 35 },
+    stages: staged ? { share: Math.round((deep + rem) / duration * 100), points: stagePoints, max: 15 } : null
+  };
+}
+export function sleepIndexScore(night, need) {
+  const parts = sleepIndexParts(night, need);
+  if (!parts) return null;
+  const points = parts.length.points + parts.quality.points;
+  return parts.stages ? Math.round(points + parts.stages.points) : Math.round(points / 85 * 100);
 }
 
 // Apple Watch's sleeping wrist temperature (°C, one value a night, on the
@@ -456,4 +469,4 @@ export function hrvMetric(row) {
 }
 
 // The self-contained model functions (tests/helpers/recovery-model.mjs runs them on their own).
-export const RECOVERY_MODEL_FUNCTIONS = [personalBaseline, sourceBaseline, sleepNeedMinutes, sleepDebtMinutes, hrvStatusLow, sleepNeedFor, bedtimePlan, sleepIndexScore, recoveryComponentScore, lutealOffset, recoveryReadiness, heartRateLoad, strainScore];
+export const RECOVERY_MODEL_FUNCTIONS = [personalBaseline, sourceBaseline, sleepNeedMinutes, sleepDebtMinutes, hrvStatusLow, sleepNeedFor, bedtimePlan, sleepIndexParts, sleepIndexScore, recoveryComponentScore, lutealOffset, recoveryReadiness, heartRateLoad, strainScore];
