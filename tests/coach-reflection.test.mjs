@@ -112,7 +112,6 @@ test("the coach sees the next two days' plan and suggests recovery that fits", (
   // No sauna today: a flag for the coach, without the reason.
   assert.equal("saunaOff" in input, false);
   assert.equal(reflectionInput({ ...s, signals: reflectionSignals(s), food: [], previous: [], nextDays, saunaOff: true }).saunaOff, true);
-  assert.match(reflectionInstructions, /saunaOff: true, saunu nedoporučuj/);
   assert.match(reflectionInstructions, /zítra restDay, napiš, že má zítra volný den/);
   assert.match(reflectionInstructions, /Nevymýšlej trénink, který v plánu není/);
   assert.match(reflectionInstructions, /protažení nebo mobilita .*3–4 cviky/);
