@@ -88,7 +88,8 @@ export function callPrices(calls = []) {
   const by = new Map();
   for (const c of calls) {
     const key = c.group + " · " + (FEATURE_NAMES[c.feature] || c.feature || "jiné");
-    by.set(key, [...(by.get(key) || []), Number(c.cost) || 0]);
+    if (!by.has(key)) by.set(key, []);
+    by.get(key).push(Number(c.cost) || 0);
   }
   return [...by.entries()].map(([name, costs]) => {
     const sorted = costs.sort((a, b) => a - b), total = sorted.reduce((a, b) => a + b, 0);
