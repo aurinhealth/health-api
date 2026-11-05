@@ -6,6 +6,7 @@ import { subscriptionStatus } from "./subscription.js";
 import { appAccountToken, saveAppInstall, saveAppTransaction, storePurchase } from "./app-store.js";
 import { packMessagesLeft, packPurchases } from './coach-packs.js';
 import { coachAllowance } from "./coach-allowance.js";
+import { inFreeWeek } from "./ai-limit-share.js";
 import { consentStatus, saveConsent } from "./consent.js";
 import { missingProviders, connectionEnvironment, deleteConnectionSecret } from "./connection-secrets.js";
 import { bumpCacheVersion } from "./api-cache.js";
@@ -138,7 +139,10 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
   // The purchase as the App Store last told it, and the account's appAccountToken for the next one (app-store.js).
   if(url.pathname==='/app/api/subscription'&&request.method==='GET'){
     const store=session.signedIn?await Promise.all([appAccountToken(env),storePurchase(env)]).catch(error=>{console.error('App Store row failed',error.message);return [null,null];}):[null,null];
-    return Response.json({...await subscriptionStatus(env),coachAllowance:await coachAllowance(env).catch(()=>null),appAccountToken:store[0],purchase:store[1]},{headers:{'Cache-Control':'no-store'}});
+    const status=await subscriptionStatus(env);
+    // Coach message packs only where they can be used right away: not in the free week.
+    const packsOnSale=status.checkoutAvailable&&!await inFreeWeek(env).catch(()=>false);
+    return Response.json({...status,packsOnSale,coachAllowance:await coachAllowance(env).catch(()=>null),appAccountToken:store[0],purchase:store[1]},{headers:{'Cache-Control':'no-store'}});
   }
   // Extra coach messages: how many are left and the purchases, for "Your purchases" (coach-packs.js).
   if(url.pathname==='/app/api/coach-packs'&&request.method==='GET'){

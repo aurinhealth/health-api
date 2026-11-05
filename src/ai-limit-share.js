@@ -49,6 +49,13 @@ async function subscriptionRow(env) {
   }
 }
 
+// In the free week (Apple's introductory offer): bought coach messages are not
+// offered then, since the coach chat locks when the week ends unpaid.
+export async function inFreeWeek(env) {
+  if (!env?.DB || !(Number(env.USER_ID) > 0) || env.USER_IS_OWNER === true) return false;
+  return groupOfSubscription(await subscriptionRow(env)) === "trial";
+}
+
 // The request's group, once per request. A failed read counts as "new" (the
 // fixed brake and half limits).
 export function aiGroup(env) {

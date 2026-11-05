@@ -190,7 +190,7 @@ struct NotificationsSettingsView: View {
                 SettingsGroup {
                     NavigationLink { PillReminderView() } label: {
                         SettingsRow(icon: SettingsIcon(systemImage: "pills.fill", color: Palette.indigo), title: "Antikoncepce",
-                                    value: settings.pillReminder ? ClockText.format(settings.pillReminderTime) : L10n.tr("vypnuto"))
+                                    value: settings.pillReminder ? ClockText.format(settings.pillReminderTime) : (settings.pillMissed ?? true) ? L10n.tr("jen vynechaný") : L10n.tr("vypnuto"))
                     }
                     .buttonStyle(.plain)
                 }

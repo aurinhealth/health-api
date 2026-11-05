@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cached, cachedOnly, closedDay } from "../src/api-cache.js";
+import { cached, cachedOnly, forgetCached, closedDay } from "../src/api-cache.js";
 
 function setup() {
   const map = new Map();
@@ -180,4 +180,16 @@ test("cachedOnly gives a kept entry under the current version and computes nothi
   // No cache or no user: nothing.
   assert.equal(await cachedOnly({ DB: {} }, "coach-inputs:2026-11-01", { store }), null);
   assert.equal(await cachedOnly(env, "coach-inputs:2026-11-01", { store: null }), null);
+});
+
+test("forgetCached drops one entry under the current version and keeps the rest", async () => {
+  const { env, store, map } = setup();
+  store.delete = async key => map.delete(key);
+  let calls = 0;
+  const day = async () => ({ steps: ++calls });
+  await cached(env, null, "google-dashboard:2026-11-05", day, { store });
+  await cached(env, null, "coach-inputs", async () => ({ heavy: true }), { store });
+  await forgetCached(env, "google-dashboard:2026-11-05", { store });
+  assert.deepEqual(await cached(env, null, "google-dashboard:2026-11-05", day, { store }), { steps: 2 });
+  assert.deepEqual(await cached(env, null, "coach-inputs", async () => ({ heavy: false }), { store }), { heavy: true });
 });

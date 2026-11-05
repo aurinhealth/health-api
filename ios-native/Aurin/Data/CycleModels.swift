@@ -30,6 +30,9 @@ struct CycleSettings: Codable, Equatable {
     /// "HH:MM"
     var pillReminderTime: String
     var pillReminderInPause: Bool
+    /// "Už máš dnešní prášek?" when today's pill isn't logged an hour after the
+    /// usual time; nil from an older server (on).
+    var pillMissed: Bool?
     /// The AI coach sees today's cycle (src/cycle-model.js cycleForCoach).
     var shareWithCoach: Bool?
     /// Fáze života: "regular", "perimenopause" or "menopause"; nil from an older server.
@@ -122,6 +125,9 @@ struct PillDay: Decodable, Equatable {
     /// For pills 1 to today's, whether that day's pill was logged (nil from an
     /// older server).
     var packTaken: [Bool]? = nil
+    /// "HH:MM": the time the pill is usually logged (the last 14 days, from 3
+    /// logged times; nil before or from an older server).
+    var usual: String? = nil
 
     /// Pill `number` of the pack logged as taken: only a logged pill counts,
     /// a day left unlogged stays not taken.
