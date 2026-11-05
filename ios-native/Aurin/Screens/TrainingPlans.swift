@@ -1152,6 +1152,7 @@ struct PlanSessionView: View {
                     if let f = session.workout?.intensity_factor { meta("IF", Fmt.decimal(f, digits: 2)) }
                 }
                 .padding(.top, 16)
+                if let change = session.change { PlanChangeCard(change: change).padding(.top, 16) }
                 if let blocks = session.workout?.steps, !WorkoutProfile.segments(blocks).isEmpty {
                     Card { WorkoutProfile(blocks: blocks, sport: sport) }.padding(.top, 16)
                     SectionLabel(text: "Průběh").padding(.top, 26)
@@ -1175,6 +1176,44 @@ struct PlanSessionView: View {
             Text(LocalizedStringKey(title)).font(Typo.caption).foregroundStyle(Palette.muted)
             Text(value).font(Typo.number(22)).foregroundStyle(Palette.ink)
         }
+    }
+}
+
+/// Why the session changed and the session it was (approved mockup
+/// 3-proc-se-trenink-zmenil, 3 Nov 2026).
+struct PlanChangeCard: View {
+    let change: PlanWeekDetail.Change
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: change.symbol).scaledFont(17, weight: .semibold).foregroundStyle(change.color)
+                Text(change.text).font(.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+            .background(change.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            if let original = change.original, let label = original.label {
+                SectionLabel(text: "Původně").padding(.top, 20)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(verbatim: label).strikethrough(change.kind != "shorter").font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                    Text(verbatim: originalLine(original)).font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .cardSurface(cornerRadius: 22)
+                .padding(.top, 10)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// "55 min · út 10. 3.": the original length and its day.
+    private func originalLine(_ o: PlanWeekDetail.Change.Original) -> String {
+        var parts: [String] = []
+        if let m = o.minutes { parts.append(planDuration(Int(m.rounded()))) }
+        if let d = o.date { parts.append(Fmt.weekdayShort(d) + " " + Fmt.dayMonth(d)) }
+        return parts.joined(separator: " · ")
     }
 }
 

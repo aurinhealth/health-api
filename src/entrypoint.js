@@ -79,7 +79,7 @@ import { getChecks, upcomingTest } from './threshold-check.js';
 import { saveSportChoice, sportExclusion, suggestedSports } from './sport-choice.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories } from './athlete-state.js';
 import { recentNotes, earlierToday, chatSummary, coachNoteDays, queueDayNote, summarizeChatStart, forgetNote, usersWithNotesDue, runCoachNotes } from './coach-notes.js';
-import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planWorkoutId, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
+import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planWorkoutId, planChanges, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
 import { chatLibraryQuery, askedSession } from './chat-ask.js';
 import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
@@ -1031,7 +1031,8 @@ function intervalsSleep(env,ctx,data,start,end){
   },{ttl:300}));
 }
 
-async function computeWeekTargets(env,ctx,start,prefs){
+// original: also the same week of the plan as it was made (targets.original, its items), for planChanges.
+async function computeWeekTargets(env,ctx,start,prefs,{original=false}={}){
   // Without prefs (the plan's week, the plan proposal) the saved week plan decides.
   prefs=prefs||await getWeekPlan(env.DB,start);
   const end=shiftDate(start,7),today=localToday();
@@ -1054,11 +1055,17 @@ async function computeWeekTargets(env,ctx,start,prefs){
   // The forecast decides outdoor or indoor (and so the length) unless the athlete chose.
   const weather=await weekWeather(prefs.location,start,env).catch(()=>({}));
   const runCap=weeklyRunCap(await planningHistory(env,start,28).catch(()=>[]),start);
-  const plan=await planForWeek(env,ctx,start),roles=planWeekRoles(prefs.days,{...plan.roles,...roleTime(prefs)});
-  let targets=weekTargets({roles,ctl,lastWeekLoad,weekLoads:weekLoadsBefore(wellness,start),hrvDown:hrvWeekTrendDown(hrvSourceRows(wellness,(await googleHealthFor(env,ctx,today).catch(()=>({})))?.wellness,start),start),rampRate:[...wellness].reverse().find(r=>Number.isFinite(Number(r.rampRate)))?.rampRate??null,days,today,weekStart:start,plan:plan.load,eventDate:plan.plan?null:athleteFocus(await dashboardProfile(env).catch(()=>null),today).event?.date||null});
-  // A plan needs its sessions even before there is a fitness history.
-  if(plan.plan&&targets.status!=='ok')targets=estimatedTargets(roles,start,today,days);
-  return capWeekTargets(capRunVolume(plan.apply(targets),runCap,runCommitted),prefs,[],weather);
+  const plan=await planForWeek(env,ctx,start);
+  const hrvDown=hrvWeekTrendDown(hrvSourceRows(wellness,(await googleHealthFor(env,ctx,today).catch(()=>({})))?.wellness,start),start),eventDate=plan.plan?null:athleteFocus(await dashboardProfile(env).catch(()=>null),today).event?.date||null;
+  const build=p=>{
+    const roles=planWeekRoles(prefs.days,{...p.roles,...roleTime(prefs)});
+    let targets=weekTargets({roles,ctl,lastWeekLoad,weekLoads:weekLoadsBefore(wellness,start),hrvDown,rampRate:[...wellness].reverse().find(r=>Number.isFinite(Number(r.rampRate)))?.rampRate??null,days,today,weekStart:start,plan:p.load,eventDate});
+    // A plan needs its sessions even before there is a fitness history.
+    if(plan.plan&&targets.status!=='ok')targets=estimatedTargets(roles,start,today,days);
+    return capWeekTargets(capRunVolume(p.apply(targets),runCap,runCommitted),prefs,[],weather);
+  };
+  const targets=build(plan);
+  return original&&plan.original?{...targets,original:build(plan.original).items}:targets;
 }
 // Fitness now (CTL), for the plan's estimate and its result.
 async function currentCtl(env,ctx){
@@ -2137,12 +2144,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const monday=shiftDate(plan.startDate,(Math.max(1,Math.round(n)||1)-1)*7),pw=planWeek(plan,monday);
       if(!pw)throw new Error(L('Tento týden v plánu není.', 'This week is not in the plan.'));
       const [targets,thresholds,doneDates]=await Promise.all([
-        computeWeekTargets(env,ctx,monday).catch(()=>({items:[]})),
+        computeWeekTargets(env,ctx,monday,null,{original:true}).catch(()=>({items:[]})),
         cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),
         planSportDates(env,plan,monday,shiftDate(monday,7)).catch(()=>[])
       ]);
       const done=new Set(doneDates),sessions=[],sports=planSports(plan);
-      for(const x of (targets.items||[]).filter(x=>sports.includes(x.sport)&&(plan.sport==='triathlon'||(x.slot||0)===0)&&x.plan?.workoutId)){
+      // Each session the plan or the athlete changed says why and what it was (planChanges).
+      for(const x of planChanges(targets.items||[],targets.original||[],plan,monday).filter(x=>sports.includes(x.sport)&&(plan.sport==='triathlon'||(x.slot||0)===0)&&x.plan?.workoutId)){
+        // Shorter for the day's free time: the plan's workout at that length.
+        if(x.planMinutes&&x.plan.family&&x.sport!=='swim')x.plan.workoutId=planWorkoutId(x.sport,x.plan,x.minutes,x.plan.shiftBy||0)||x.plan.workoutId;
         const library=await getWorkout(env.DB,x.plan.workoutId).catch(()=>null);
         let workout=null;
         if(library){
@@ -2150,7 +2160,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           w.steps=athleteSteps(structure,x.sport,w.environment,thresholds);
           workout={id:w.id,name:planName(w.name),sport:w.sport,environment:w.environment,duration_minutes:w.duration_minutes,target_load:w.target_load,intensity_factor:w.intensity_factor,description:w.description,steps:w.steps};
         }
-        sessions.push({date:x.date,sport:x.sport,label:planName(x.label),kind:x.plan.kind,minutes:x.minutes,workoutId:x.plan.workoutId,workout,done:done.has(x.date),editable:x.date>=today&&!done.has(x.date),edited:Boolean(plan.edits?.[x.plan.movedFrom||x.date])});
+        sessions.push({date:x.date,sport:x.sport,label:planName(x.label),kind:x.plan.kind,minutes:x.minutes,workoutId:x.plan.workoutId,workout,done:done.has(x.date),editable:x.date>=today&&!done.has(x.date),edited:Boolean(plan.edits?.[x.plan.movedFrom||x.date]),...(x.plan.change?{change:x.plan.change}:{})});
       }
       // This week's free time by weekday ("Time this week"), and whether it is its own.
       const weekPrefs=await getWeekPlan(env.DB,monday,{calendar:false}).catch(()=>null);
