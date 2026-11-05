@@ -145,6 +145,8 @@ enum W {
     /// 432 minutes as "7h 12m" ("7 h 12 min" in Czech).
     static func duration(minutes: Double) -> String {
         let m = Int(minutes.rounded())
+        // "9h of sleep", not "9h 0m".
+        if m % 60 == 0 { return english ? "\(m / 60)h" : "\(m / 60) h" }
         return english ? "\(m / 60)h \(m % 60)m" : "\(m / 60) h \(m % 60) min"
     }
 
