@@ -225,7 +225,7 @@ export async function saveSupportReport(env, body, client = null) {
     .bind(env.DB.userId, report.message, report.screenshot, report.diagnostics, env.DB.userId, DAILY_REPORTS, env.DB.userId, `-${MIN_GAP_SECONDS} seconds`).run();
   if (!Number(result?.meta?.changes)) {
     await assertAllowed(env.DB, report.idea);
-    throw fail(L("Před chvílí odešlo hlášení. Další pošli za pár sekund.", "A report was sent a moment ago. Send another in a few seconds."), 429);
+    throw fail(report.idea ? L("Před chvílí odešel návrh. Další pošli za pár sekund.", "An idea was sent a moment ago. Send another in a few seconds.") : L("Před chvílí odešlo hlášení. Další pošli za pár sekund.", "A report was sent a moment ago. Send another in a few seconds."), 429);
   }
   const id = Number(result?.meta?.last_row_id) || null;
   let emailed = false;

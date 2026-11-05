@@ -27,7 +27,7 @@ test("a local address written as a number, in octal or hex is still local", asyn
 });
 
 test("Aurin's own hosts, Workers addresses and a trailing-dot local name are refused", () => {
-  for (const link of ["https://aurin.health/app/api/me", "https://staging.aurin.health/", "https://AURIN.HEALTH./", "https://x.aurin-staging.com/", "https://health-api.petr.workers.dev/", "https://petrfitnessdata.eu/", "http://foo.localhost./"])
+  for (const link of ["https://aurin.health/app/api/me", "https://staging.aurin.health/", "https://AURIN.HEALTH./", "https://x.aurin-staging.com/", "https://health-api.petr.workers.dev/", "https://petrfitnessdata.eu/", "http://foo.localhost./", "https://aurin.health../x"])
     assert.equal(publicUrl(link), null, link);
   assert.equal(publicUrl("https://notaurin.health/"), "https://notaurin.health/");
 });
@@ -40,6 +40,8 @@ test("a body is read only up to its limit; the rest is never downloaded", async 
   assert.equal(bytes.byteLength, 1_500_000);
   assert.equal(whole, false);
   assert.ok(pulled <= 4 * 1024 * 1024, `pulled ${pulled}`);
+  const exact = await readUpTo(new Response(new Uint8Array(10)), 10);
+  assert.deepEqual([exact.bytes.byteLength, exact.whole], [10, true]);
   const small = await readUpTo(new Response("fit"), 10);
   assert.deepEqual([new TextDecoder().decode(small.bytes), small.whole], ["fit", true]);
 });

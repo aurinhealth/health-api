@@ -113,6 +113,8 @@ async function plannedCopy(db, userId, row, structure) {
 }
 export async function ensureShareTable(db) {
   await db.prepare("CREATE TABLE IF NOT EXISTS workout_shares (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, sport TEXT NOT NULL, name TEXT NOT NULL, from_name TEXT, plan_date TEXT, template_json TEXT NOT NULL, image_png TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
+  // The day's limit counts one account's shares without reading everyone's (or their images).
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_workout_shares_user ON workout_shares(user_id, created_at)").run();
 }
 
 // The workout's own part for the app: the exercises and their muscles for the

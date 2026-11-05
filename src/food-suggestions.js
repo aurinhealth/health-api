@@ -32,6 +32,8 @@ async function ensure(db) {
     decided_at TEXT
   )`).run();
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_food_suggestions_status ON food_suggestions(status, created_at DESC)").run();
+  // The day's limit counts one account's rows (UNDER_DAILY_LIMIT).
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_food_suggestions_user ON food_suggestions(user_id, created_at)").run();
   if (!withReports.has(db)) {
     for (const column of ["kind TEXT NOT NULL DEFAULT 'correction'", "reason TEXT", "note TEXT", "ref TEXT"])
       await db.prepare("ALTER TABLE food_suggestions ADD COLUMN " + column).run().catch(() => { /* already there */ });

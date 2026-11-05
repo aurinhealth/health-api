@@ -44,7 +44,7 @@ const APP_ONLY = new Set(['activity_delete', 'activity_merge', 'rest', 'plan', '
 export function replyPush(result, chatId) {
   const actions = (result?.actions || []).filter(a => a?.draftId != null);
   const one = actions.length === 1 && !APP_ONLY.has(actions[0].type) ? actions[0] : null;
-  const head = one ? L('Návrh: ', 'Proposal: ') + actionSummary(one) + '\n' : '';
+  const head = one ? L('Návrh: ', 'Proposal: ') + actionSummary(one).slice(0, 200) + '\n' : '';
   const more = actions.length && !one ? (actions.length > 1 ? L(' Návrhy potvrdíš v aplikaci.', ' Confirm the proposals in the app.') : L(' Návrh potvrdíš v aplikaci.', ' Confirm the proposal in the app.')) : '';
   const body = (head + shortBody(result?.answer || '', BODY_CHARS - more.length - head.length)).trim() + more;
   return {

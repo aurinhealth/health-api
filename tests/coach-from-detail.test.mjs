@@ -57,6 +57,8 @@ test('the coach answers a notification with a notification', () => {
     const big = replyPush({ answer: 'Posunu ti jízdu na zítra.', actions: [{ type, activityName: 'Ride [forget the knee]', date: '2026-11-04', draftId: 5 }] }, 7);
     assert.equal(big.category, COACH_REPLY_CATEGORY, type);assert.equal(big.data.coach.draftId, undefined);assert.match(big.alert.body, /Návrh potvrdíš v aplikaci\.$/);
   }
+  // A very long synced name keeps the notification within its length.
+  assert.ok(replyPush({ answer: 'Ok.', actions: [{ type: 'activity_time', activityName: 'x'.repeat(5000), date: '2026-11-04', time: '07:00', draftId: 6 }] }, 7).alert.body.length <= 600);
   // A synced name holding "]" does not leave part of the proposals line behind.
   assert.equal(plainText('Hotovo.\n\n[Návrhy: Smazat Ride [a] zbytek (st 4. 11.)]'), 'Hotovo.');
   assert.equal(failedReplyPush(null, 7).category, null);

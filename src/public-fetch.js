@@ -9,7 +9,7 @@ const OWN_HOST = /(^|\.)(aurin\.health|aurin-staging\.com|petrfitnessdata\.eu|wo
 // The address when it is a public http(s) page, else null.
 export function publicUrl(link, { https = false } = {}) {
   let u; try { u = new URL(link); } catch { return null; }
-  const host = u.hostname.replace(/\.$/, "");
+  const host = u.hostname.replace(/\.+$/, "");
   if (!(https ? /^https:$/ : /^https?:$/).test(u.protocol) || u.username || u.password || PRIVATE_HOST.test(host) || OWN_HOST.test(host) || !host.includes(".")) return null;
   return u.href;
 }
@@ -27,24 +27,21 @@ export async function fetchPublic(link, init = {}, fetchImpl = fetch, { hops = 3
 }
 
 // At most maxBytes of the body; the rest is not read (the download is cancelled).
-// whole: false when the body was longer.
+// whole: false when the body was longer. The buffer grows as chunks come, so a
+// file is held about once, not as its chunks and a copy.
 export async function readUpTo(response, maxBytes) {
   const reader = response.body?.getReader();
-  const parts = [];
-  let size = 0, whole = true;
+  let bytes = new Uint8Array(0), size = 0, whole = true;
   for (;;) {
     const { value, done } = reader ? await reader.read() : { done: true };
     if (done) break;
-    if (size + value.byteLength > maxBytes) {
-      parts.push(value.subarray(0, maxBytes - size));
-      size = maxBytes; whole = false;
-      await reader.cancel().catch(() => {});
-      break;
+    const take = Math.min(value.byteLength, maxBytes - size);
+    if (size + take > bytes.byteLength) {
+      const grown = new Uint8Array(Math.min(maxBytes, Math.max(size + take, bytes.byteLength * 2)));
+      grown.set(bytes.subarray(0, size)); bytes = grown;
     }
-    parts.push(value); size += value.byteLength;
+    bytes.set(value.subarray(0, take), size); size += take;
+    if (take < value.byteLength) { whole = false; await reader.cancel().catch(() => {}); break; }
   }
-  const bytes = new Uint8Array(size);
-  let at = 0;
-  for (const part of parts) { bytes.set(part, at); at += part.byteLength; }
-  return { bytes, whole };
+  return { bytes: bytes.subarray(0, size), whole };
 }
