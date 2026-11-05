@@ -787,7 +787,7 @@ export function overviewPage(request) {
     'training-rest': 'Aurin’s rest timer counting down between sets, with the next exercise',
     'food-day': 'Aurin’s food day: a calorie target that moves with training, and the meals logged',
     'food-add': 'Adding food in Aurin: a photo of the plate, a barcode or a search',
-    sleep: 'A night in Aurin: deep, REM and light sleep, when you fell asleep and woke up',
+    sleep: 'A night in Aurin: 7:12 asleep, sleep index 82 and what makes it up: length, quality and stages',
     'sleep-need': 'Aurin’s sleep need for tonight and what made it grow',
     bedtime: 'Aurin’s bedtime dial: the moon for bedtime, the sun for the alarm',
     'bedtime-goal': 'Picking tonight’s sleep in Aurin: catch up, as usual or at least seven hours',
