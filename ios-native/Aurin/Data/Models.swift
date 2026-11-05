@@ -96,6 +96,9 @@ struct TodaySnapshot: Decodable, Equatable {
         var learningDays: Int? = nil
         /// Nights measured in the 30 days before today (the watch's history); nil from an older server.
         var pastNights: Int? = nil
+        /// What shaped the number (src/readiness.js): "short_night" (under 3 h,
+        /// capped at yellow), "no_night" (no number without the night), etc.
+        var flags: [String]? = nil
     }
 
     struct Sleep: Decodable, Equatable {

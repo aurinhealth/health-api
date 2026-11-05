@@ -64,6 +64,7 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
   - Teplota kůže ve spánku o ≥ 0,5 °C a zároveň 2 noční SD nad 30denní baseline Google Health ubere 10 bodů (Google Health typ `daily-sleep-temperature-derivations`).
   - Potřebuje 14 předchozích měření.
   - HRV a klidový tep se porovnávají jen se dny stejného zdroje (Apple SDNN, Google RMSSD, Intervals.icu). Nový zdroj s méně než 14 dny převezme baseline jiného zdroje, pokud se oba aspoň 5 dní překrývají: posun je průměrný rozdíl ve dnech překryvu (ln HRV, tepy/min). Dokud nový zdroj nemá 14 vlastních dní, je číslo orientační (`provisional`, `sourceBaseline`). Bez překryvu platí původní pravidlo.
+  - Noc: hlavní noc dne je nejdelší spánek (3 h a víc). Když domovský zdroj zachytil jen úlomek pod 3 h a jiné zařízení celou noc, platí ta delší (jen spánek; HRV a klidový tep zůstávají u domovského zařízení, `src/source-priority.js`). Noc pod 3 h se započítá a připravenost má nejvýš horní hranici žluté (66) se štítkem „krátká noc“. Když noc chybí a hodinky jinak noci zaznamenávají (aspoň jedna za 14 dní), připravenost nemá číslo: probdělá noc a hodinky na stole vypadají stejně. HRV a klidový tep se ukážou dál. Bez jakýchkoli nocí (spánek se neměří) zůstává číslo z HRV a tepu (`src/readiness.js`, `shortNight`, `withoutNight`). Zdroj: Craven J et al. Sports Med 2022;52:2669–2690, [PMC9584849](https://pmc.ncbi.nlm.nih.gov/articles/PMC9584849/): akutní ztráta spánku sníží výkon o 7,6 %.
   - Dnes, Zdraví, kouč kola a běhu, kouč posilovny i revize dne berou číslo z jedné funkce se stejnými vstupy: 90 dní wellness, spánek za 30 dní, cíl spánku z profilu, zátěž předchozího dne a ranní pocit (`src/readiness.js`, `readinessFor`).
 - **Zdroje:**
   - Plews DJ et al. Eur J Appl Physiol 2012;112:3729–3741, [PMID 22367011](https://pubmed.ncbi.nlm.nih.gov/22367011/): 7denní průměr lnRMSSD zachytil přetrénování, jednotlivé dny ne.
@@ -175,6 +176,13 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
   - Racette SB et al. Am J Physiol Endocrinol Metab 2012;302:E441–E448: příjem = výdej + změna zásob; regrese denních vážení je nejspolehlivější odhad změny zásob.
   - Hall KD et al. Lancet 2011;378:826–837: statické pravidlo 7700 kcal/kg přeceňuje dlouhodobý úbytek. Proto bereme polovinu a strop.
 - **Proti konkurenci:** Garmin a Whoop berou výdej z hodinek. Ten má chybu přes 20 % a navíc nemá jednotný směr (O'Driscoll R et al. Br J Sports Med 2020;54:332–340). Naše smyčka podle váhy tuto systematickou chybu postupně opraví, podobně jako aplikace s adaptivním výdejem.
+
+### 2.10 Klidový tep nad obvyklým rozmezím (karta „Dnes se hodí lehčí den“)
+
+- **Práh zátěže:** klidový tep aspoň 2 obvyklé odchylky nad obvyklou hodnotou 2 noci po sobě, nebo 1 noc a zároveň HRV pod svým obvyklým rozmezím (`restingHRAbove` v `src/night-check.js`). Jen proti vlastnímu obvyklému rozmezí zdroje (14 nocí z těch samých hodinek): s rozmezím převzatým z jiných hodinek (nové hodinky, `restingHRMixed` nebo provizorní) se signál nespouští, protože by posun nového zařízení četl jako vzestup.
+- **Text:** „Resting heart rate is above your usual range. Alcohol, heat, a late meal, stress or hard training can do this.“ Karta nabízí lehčí den (stejná výměna jako u ostatních nočních hodnot). Nikdy nepíše „abnormal“, nemoc ani infekci.
+- **Proč dvě noci:** klidový tep je u jednotlivce stabilní, ale pětina lidí má aspoň jeden týden s výkyvem ≥ 10 tepů/min (Quer G et al., PLoS One 2020;15:e0227709), takže jedna noc dává falešné poplachy. Změny tepu a HRV dávají smysl jen spolu s dalšími znaky přetížení (Bosquet L et al., Br J Sports Med 2008). Alkohol zvyšuje tep v noci v závislosti na dávce (Pietilä J et al., JMIR Ment Health 2018). Horko zvyšuje tep při stejné zátěži (Racinais S et al., Scand J Med Sci Sports 2015, konsenzus k tréninku v horku).
+- **Limity:** je to práh zátěže pro úpravu tréninku, ne hodnocení zdraví.
 
 ## Co zbývá
 
