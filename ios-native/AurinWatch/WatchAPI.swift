@@ -23,6 +23,9 @@ enum WatchAPI {
     // MARK: - The sign-in
 
     static func store(_ data: Data?) {
+        // The account stays after the iPhone signs out: what the watch still
+        // queues belongs to it.
+        if let account = data.flatMap(WatchSession.decode)?.account { UserDefaults.standard.set(account, forKey: accountKey) }
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service]
         SecItemDelete(query as CFDictionary)
         guard let data else { return }
@@ -43,6 +46,16 @@ enum WatchAPI {
     }
 
     static var signedIn: Bool { session != nil }
+
+    private static let accountKey = "watchAccount"
+
+    /// A message for the iPhone with the account it was written in.
+    static func owned(_ message: [String: Any]) -> [String: Any] {
+        guard let account = UserDefaults.standard.object(forKey: accountKey) as? Int else { return message }
+        var message = message
+        message[WatchSession.accountKey] = account
+        return message
+    }
 
     // MARK: - Requests
 

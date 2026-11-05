@@ -5,14 +5,24 @@ import WidgetKit
 /// Water added from the home-screen widget. The widget has no session of its
 /// own, so the drink waits in the App Group; the app moves it into its outbox
 /// of writes on the next refresh (WriteQueue.send), which sends it when
-/// there is signal. The widget shows it at once.
+/// there is signal. The widget shows it at once. Each drink keeps the account
+/// signed in when it was added, so another account never sends it.
 enum PendingDrinks {
     struct Drink: Codable, Equatable {
         let date: String
         let ml: Int
+        var account: Int? = nil
     }
 
     private static let key = "pendingDrinks"
+    private static let accountKey = "pendingDrinksAccount"
+
+    /// The account signed in in the app (its id), for the widget and Siri;
+    /// nil after "Odhlásit se".
+    static var account: Int? {
+        get { UserDefaults(suiteName: WidgetSnapshot.group)?.object(forKey: accountKey) as? Int }
+        set { UserDefaults(suiteName: WidgetSnapshot.group)?.set(newValue, forKey: accountKey) }
+    }
     /// Posted after a drink is added; the app, when it runs (Siri), sends it at once.
     static let added = Notification.Name("PendingDrinks.added")
 
@@ -27,10 +37,10 @@ enum PendingDrinks {
         return imperial ? Units.roundedMl(fluidOunces: 8) : 250
     }
 
-    static func add(_ ml: Int, on date: String) {
+    static func add(_ ml: Int, on date: String, account: Int? = PendingDrinks.account) {
         let defaults = UserDefaults(suiteName: WidgetSnapshot.group)
         var list = load(defaults)
-        list.append(Drink(date: date, ml: ml))
+        list.append(Drink(date: date, ml: ml, account: account))
         defaults?.set(try? JSONEncoder().encode(list), forKey: key)
     }
 
@@ -43,7 +53,7 @@ enum PendingDrinks {
     }
 
     static func putBack(_ drinks: [Drink]) {
-        for d in drinks { add(d.ml, on: d.date) }
+        for d in drinks { add(d.ml, on: d.date, account: d.account) }
     }
 
     private static func load(_ defaults: UserDefaults?) -> [Drink] {
