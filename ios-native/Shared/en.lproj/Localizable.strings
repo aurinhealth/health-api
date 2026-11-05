@@ -1121,7 +1121,6 @@
 "zprávy" = "messages";
 "zpět v tréninku" = "back to training";
 "zranění" = "injured";
-"zrychlený" = "elevated";
 "zvýšená" = "elevated";
 "± %lld min" = "± %lld min";
 "Únava" = "Fatigue";
@@ -1703,7 +1702,6 @@
 "data z %@" = "data from %@";
 "data ze včera %@" = "data from yesterday %@";
 " · obnovit" = " · refresh";
-"%@ proti normálu" = "%@ vs. your normal";
 "Poměr zátěže %@" = "Load ratio %@";
 "jednotvárný týden" = "monotonous week";
 "90 dní" = "90 days";
@@ -1782,6 +1780,17 @@
 "menstruace se čeká" = "period expected";
 "prášek z %@" = "pill of %@";
 "Čas na prášek" = "Time for your pill";
+"Už máš dnešní prášek?" = "Did you take your pill?";
+"Ještě není zapsaný." = "Not logged yet.";
+"Ještě není zapsaný. Obvykle ho bereš kolem %@." = "Not logged yet. You usually take it at %@.";
+"Prášek ještě není zapsaný" = "Pill not logged yet";
+"obvykle ho bereš kolem %@" = "you usually take it at %@";
+"Vynechaný prášek" = "Missed pill";
+"Zeptat se, když chybí záznam" = "Ask if not logged";
+"Obvyklý čas" = "Usual time";
+"po 3 záznamech" = "after 3 logs";
+"jen vynechaný" = "missed only";
+"Hodinu po čase, kdy prášek obvykle zapisuješ (nebo po připomínce, je-li později), jen když dnešní ještě chybí." = "An hour after the time you usually log it (or after the reminder, if later), only when today's pill isn't logged.";
 "Žádná" = "None";
 "vrátit" = "undo";
 "nastavit" = "set";
@@ -2725,6 +2734,9 @@
 "Auto · %@" = "Auto · %@";
 "Auto vychází z tréninků za poslední dva roky. Pauza kvůli nemoci nebo zranění úroveň nesníží." = "Auto is based on your training over the last two years. A break for illness or injury won't lower the level.";
 "Spánek se teď nepodařilo načíst" = "Sleep couldn’t load right now";
+"Krátká noc: méně než 3 hodiny spánku." = "Short night: under 3 hours of sleep.";
+"Bez zaznamenané noci" = "No night recorded";
+"Bez spánku z té noci se připravenost nepočítá. HRV a klidový tep najdeš níže." = "Readiness needs that night’s sleep. HRV and resting heart rate are below.";
 "Pití se teď nepodařilo načíst" = "Drinks couldn’t load right now";
 
 /* Gym equipment picker (GymPlaces.swift) */
@@ -3892,6 +3904,27 @@
 "%@ g bílkovin · %@ g sacharidů · %@ g tuků" = "%@ g protein · %@ g carbs · %@ g fat";
 "Množství jsou odhad z fotky. Omáčky a olej jsou nejméně přesné." = "Amounts are estimated from the photo. Sauces and oil are the least precise.";
 
+/* Today audit 1, 12, D2 (MDR): breathing, temperature and blood oxygen against the usual range, the easier-day card. */
+"odhad zařízení" = "device estimate";
+"obvyklé rozmezí" = "usual range";
+"obvyklé rozmezí %@" = "usual range %@";
+"obvyklé rozmezí %@–%@ /min" = "usual range %@–%@ /min";
+"obvyklé rozmezí %@–%@ %% · 14 nocí" = "usual range %@–%@%% · 14 nights";
+"Odchylka od obvyklé teploty v noci" = "Night temperature against your usual";
+"Obvykle" = "Usual";
+"v obvyklém rozmezí" = "within your usual range";
+"nad obvyklým rozmezím" = "above your usual range";
+"pod obvyklým rozmezím" = "below your usual range";
+"nad obvyklým" = "above usual";
+"pod obvyklým" = "below usual";
+"obvyklé" = "usual";
+"Dnes:" = "Today:";
+"Ulehčit dnešek" = "Make today easier";
+"obvyklé rozmezí %@–%@ ms" = "usual range %@–%@ ms";
+"obvyklé rozmezí %@–%@ bpm" = "usual range %@–%@ bpm";
+"Aurin není zdravotnický prostředek. Před zdravotním rozhodnutím se poraď s lékařem." = "Aurin isn't a medical device. Check with a doctor before making medical decisions.";
+"%@ proti obvyklému" = "%@ vs usual";
+
 /* Intervals.icu: workouts from other apps (SyncForwardGroup) */
 "Zapsané v Aurinu" = "Logged in Aurin";
 "Tréninky z jiných aplikací" = "Workouts from other apps";
@@ -3906,3 +3939,4 @@
 "Poslat i posledních 14 dní" = "Also send the last 14 days";
 "Od %@" = "Since %@";
 "Poslat do Intervals.icu" = "Send to Intervals.icu";
+"%@, týden %lld" = "%@, week %lld";

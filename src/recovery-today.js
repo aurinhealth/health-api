@@ -77,7 +77,7 @@ function loadText(s, when, worked) {
 function tomorrowText(sessions) {
   if (sessions == null) return ".";
   const next = sessions.find(s => s && s.status !== "done");
-  if (!next) return L(" a zítra máš volno.", " and tomorrow is a rest day.");
+  if (!next) return L(" a zítra máš volno.", " and tomorrow is free.");
   const sport = sportOf(next), hard = isHardSession(String(next.title || ""), sport);
   if (sport === "ride") return hard ? L(" a zítra jedeš intervaly.", " and tomorrow you ride intervals.") : L(" a zítra jedeš na kolo.", " and tomorrow you ride.");
   if (sport === "run") return hard ? L(" a zítra běžíš intervaly.", " and tomorrow you run intervals.") : L(" a zítra běžíš.", " and tomorrow you run.");
@@ -94,8 +94,9 @@ const stretchTitle = sport => sport === "gym" ? L("Protažení po posilovně", "
 // lists them (tomorrow null when not known); gym: {date: gym plan} for the
 // exercises of a strength session; saved: the day's recovery sessions
 // (listRecovery), to mark what is done already; less: the kinds marked
-// "Doporučovat méně" (coach-pick.js).
-export function recoveryToday({ today = [], yesterday = [], tomorrow = null, gym = {}, date = null, saved = [], less = [] } = {}) {
+// "Doporučovat méně" (coach-pick.js); noSauna: a reason for no sauna today
+// (coach-pick.js saunaSigns), then stretching is the tip.
+export function recoveryToday({ today = [], yesterday = [], tomorrow = null, gym = {}, date = null, saved = [], less = [], noSauna = false } = {}) {
   const doneToday = (today || []).filter(s => loaded(s));
   const doneYesterday = (yesterday || []).filter(s => loaded(s, true));
   const when = doneToday.length ? "today" : doneYesterday.length ? "yesterday" : null;
@@ -126,7 +127,7 @@ export function recoveryToday({ today = [], yesterday = [], tomorrow = null, gym
     routine: { title: stretchTitle(sport), minutes: described.minutes, items: described.items }
   }];
   // A sauna on the evening of the training day, not the morning after.
-  if (when === "today") options.push({ kind: "sauna", title: "Sauna", detail: L("3× 10 min večer, pak hodně pít", "3× 10 min in the evening, then drink plenty"), done: done("sauna"), savedId: savedId("sauna") });
+  if (when === "today" && !noSauna) options.push({ kind: "sauna", title: "Sauna", detail: L("3× 10 min večer, pak hodně pít", "3× 10 min in the evening, then drink plenty"), done: done("sauna"), savedId: savedId("sauna") });
   // One tip in the coach's card (Petr, 2026-10-14): the first the athlete
   // didn't mark "Doporučovat méně". Bedtime is Plán dne's.
   const items = options.filter(o => !(less || []).includes(o.kind)).slice(0, 1);

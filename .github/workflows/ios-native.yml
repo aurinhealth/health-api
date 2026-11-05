@@ -97,9 +97,9 @@ jobs:
           udid=$(xcrun simctl list devices available -j | python3 -c '
           import itertools, json, sys
           devices = json.load(sys.stdin)["devices"]
-          # Only the numbers right after "iOS-": the xcode-27 image of 2026-11-04 also has
-          # runtimes like "iOS-27-1-iPhone19" (a build for one device); the plain one goes first.
-          version = lambda runtime: ([int(n) for n in itertools.takewhile(str.isdigit, runtime.split("iOS-")[-1].split("-"))], runtime.split("iOS-")[-1].replace("-", "").isdigit())
+          # Only the version numbers: the 2026-11-04 image adds a runtime for
+          # one device, its key ending in "-iPhone19" after the version.
+          version = lambda runtime: [int(n) for n in itertools.takewhile(str.isdigit, runtime.split("iOS-")[-1].split("-"))]
           # The newest iOS on the image first. (On the Xcode 26 image the oldest went
           # first: StoreKit testing loaded no products on the iOS 26.4/26.5 simulators.
           # On iOS 27.0 the first test purchase after boot asks to sign in to an
@@ -405,9 +405,9 @@ jobs:
           udid=$(xcrun simctl list devices available -j | python3 -c '
           import itertools, json, sys
           devices = json.load(sys.stdin)["devices"]
-          # Only the numbers right after "iOS-": the xcode-27 image of 2026-11-04 also has
-          # runtimes like "iOS-27-1-iPhone19" (a build for one device); the plain one goes first.
-          version = lambda runtime: ([int(n) for n in itertools.takewhile(str.isdigit, runtime.split("iOS-")[-1].split("-"))], runtime.split("iOS-")[-1].replace("-", "").isdigit())
+          # Only the version numbers: the 2026-11-04 image adds a runtime for
+          # one device, its key ending in "-iPhone19" after the version.
+          version = lambda runtime: [int(n) for n in itertools.takewhile(str.isdigit, runtime.split("iOS-")[-1].split("-"))]
           runtimes = sorted((r for r in devices if "iOS" in r), key=version, reverse=True)
           duo = [d for r in runtimes for d in devices[r] if "Duo" in d["name"]]
           print(duo[0]["udid"] if duo else "")')

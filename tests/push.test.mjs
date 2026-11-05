@@ -408,3 +408,13 @@ test("an approved food fix sends nothing without the APNs secrets", async () => 
   assert.equal((await sendFoodApproved(env, raw, { users: [{ userId, kind: "report" }], product: { name: "x" } })).reason, "not-configured");
   assert.match(withLang("cs", () => foodApprovedMessage("correction", { name: "Kofola" })).body, /Tvoje oprava/);
 });
+
+test("a night under 3 hours waits for the other device's upload like a missing night", async () => {
+  _resetPushForTest();
+  const { env } = setup();
+  await savePushToken(env.DB, TOKEN_A);
+  const { fetchImpl } = fakeApns();
+  const readiness = () => ({ score: 66, zone: "yellow", missing: [], flags: ["short_night"] });
+  assert.equal((await sendMorningReadiness(env, { readiness, now: MORNING, fetchImpl })).reason, "waiting-for-sleep");
+  assert.equal((await sendMorningReadiness(env, { readiness, now: new Date("2026-10-12T08:30:00Z"), fetchImpl })).sent, 1);
+});

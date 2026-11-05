@@ -275,9 +275,11 @@ export async function sendMorningReadiness(env, { readiness, details = null, now
       if (localHour(now) < MORNING_TO_HOUR - 1 || typeof readiness !== "function" || !scored(await Promise.resolve().then(() => readiness(shiftDay(date, -1))).catch(() => null))) return { sent: 0, reason: "no-score", score: value?.score ?? null, missing: value?.missing || [] };
       text = L("Data z noci zatím nedorazila. Otevři Aurin a synchronizuje se.", "Last night's data hasn't arrived yet. Open Aurin to sync.");
     }
-    // Without last night the score is HRV and resting HR only: wait for the
-    // night's upload until the last hour of the window.
-    if (!text && (value.missing || []).includes("sleep") && localHour(now) < MORNING_TO_HOUR - 1) return { sent: 0, reason: "waiting-for-sleep", score: value.score, missing: value.missing };
+    // Without last night the score is HRV and resting HR only, and a night
+    // under 3 hours may be a watch that died while another device still has to
+    // sync the full night (readiness.js short_night): wait for the night's
+    // upload until the last hour of the window.
+    if (!text && ((value.missing || []).includes("sleep") || (value.flags || []).includes("short_night")) && localHour(now) < MORNING_TO_HOUR - 1) return { sent: 0, reason: "waiting-for-sleep", score: value.score, missing: value.missing };
     // The day is claimed before sending, so an upload and the cron at the same moment send one push.
     const claim = await db.prepare("INSERT INTO push_log(user_id,kind,local_date) VALUES(?,?,?) ON CONFLICT(user_id,kind,local_date) DO NOTHING").bind(db.userId, MORNING_READINESS, date).run();
     if (!Number(claim?.meta?.changes)) return { sent: 0, reason: "already-sent" };

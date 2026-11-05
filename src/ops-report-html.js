@@ -99,7 +99,9 @@ export function opsReportHtml({ date, rows = [], room = null, stuck = null, acco
     const top = Math.min(100, Math.max(0, ...ai.named.map(m => m.share || 0)));
     const bar = ai.limit && ai.named.length ? `<div style="height:8px;background:#e4e4e7;border-radius:4px;margin:6px 0 0"><div style="width:${top}%;height:8px;background:${top >= 80 ? "#ef4444" : top >= 50 ? "#f59e0b" : "#22c55e"};border-radius:4px"></div></div>` : "";
     parts.push(heading(`AI včera: ${money(ai.total)} · ${ai.calls} dotazů${ai.cachedShare != null ? ` · ${ai.cachedShare} % vstupu z cache` : ""}`, near.length ? "orange" : "green")
-      + table(null, body) + `<p style="margin:10px 0 0;font-size:14px">Za měsíc${ai.limit ? ` (strop ${escape(usd(ai.limit))} na účet)` : ""}: ${escape(monthLine)}</p>` + bar);
+      + table(null, body) + `<p style="margin:10px 0 0;font-size:14px">Za měsíc${ai.limit ? ` (strop ${escape(usd(ai.limit))} na účet)` : ""}: ${escape(monthLine)}</p>` + bar
+      + ((ai.prices || []).length ? `<p style="margin:14px 0 4px;font-size:14px">Cena jednoho dotazu podle skupiny (průměr · p95)</p>`
+        + table(null, ai.prices.map(p => rowHtml([cell(escape(p.name)), cell(escape(`${money(p.average)} · ${money(p.p95)}`), { align: "right", nowrap: true, pad: "7px 0 7px 12px" }), cell(escape(`${p.calls}×`), { align: "right", muted: true, pad: "7px 0 7px 12px" })]))) : ""));
   } else if (aiLines) parts.push(heading("AI", null) + aiLines.split("\n").filter(Boolean).map(line => paragraph(line.replace(/^- /, "• "))).join(""));
 
   if (accounts) {

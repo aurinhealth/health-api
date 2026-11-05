@@ -18,6 +18,9 @@ struct SubscriptionStatus: Decodable, Equatable {
     let checkoutAvailable: Bool?
     let features: [Feature]?
     let terms: String?
+    /// Coach message packs can be bought now (not in the free week); nil from
+    /// an older server, which only had checkoutAvailable.
+    var packsOnSale: Bool? = nil
     /// This week's messages to the coach; nil for the owner.
     var coachAllowance: CoachAllowance? = nil
     /// The account's UUID that every purchase carries, so the server knows whose it is.
@@ -42,6 +45,7 @@ struct SubscriptionStatus: Decodable, Equatable {
     }
 
     var pilot: Bool { mode != "paid" }
+    var packsBuyable: Bool { (packsOnSale ?? checkoutAvailable) == true }
     var hasAI: Bool { plan == "ai" }
     /// Aurin Pro bought (or its free week); in the pilot everyone has AI without it.
     var purchased: Bool { purchase?.active == true || (!pilot && hasAI) }

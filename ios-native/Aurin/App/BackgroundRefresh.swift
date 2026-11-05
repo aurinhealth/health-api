@@ -68,12 +68,14 @@ enum BackgroundRefresh {
     /// The server's Today for the widgets and the reminders (water after the
     /// day's target, a workout the watch already brought), then Aktivita dne
     /// for the new data, kept for Today's card (CoachPick.stored), so it opens
-    /// ready without loading.
-    private static func followToday(api: APIClient) async -> Bool {
+    /// ready without loading. A HealthKit wake that brought only today's steps
+    /// or heart rate skips Aktivita dne: it would not change, and computing it
+    /// again is the heaviest call the app makes.
+    private static func followToday(api: APIClient, pick: Bool = true) async -> Bool {
         guard let today = try? await api.today() else { return false }
         WidgetBridge.update(today)
         await Reminders.reschedule(from: today)
-        if !Task.isCancelled { _ = try? await api.coachPick() }
+        if pick, !Task.isCancelled { _ = try? await api.coachPick() }
         return true
     }
 
@@ -85,6 +87,7 @@ enum BackgroundRefresh {
     static func healthWake(api: APIClient) async {
         let outcome = await AppleHealth.shared.run(api: api)
         wakeChanged = wakeChanged || outcome.changed
+        wakeMeaningful = wakeMeaningful || outcome.meaningful
         follow?.cancel()
         let background = FinishInBackground("Health wake")
         follow = Task { @MainActor in
@@ -92,15 +95,17 @@ enum BackgroundRefresh {
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled, api.hasSession else { return }
             follow = nil
-            let changed = wakeChanged
+            let changed = wakeChanged, meaningful = wakeMeaningful
             wakeChanged = false
+            wakeMeaningful = false
             await CalendarTime.shared.send(api: api)
             await CalendarTime.shared.mirror(api: api)
-            if changed { _ = await followToday(api: api) }
+            if changed { _ = await followToday(api: api, pick: meaningful) }
         }
     }
     private static var follow: Task<Void, Never>?
     private static var wakeChanged = false
+    private static var wakeMeaningful = false
 }
 
 /// Leaving the app mid-sync: iOS froze the app within seconds, the requests on
