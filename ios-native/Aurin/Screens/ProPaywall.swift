@@ -692,7 +692,9 @@ struct ScreenBelt: View {
             }
         }
         .offset(x: -shift)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // minWidth 0: the frame takes the screen's width, not the whole belt's (twelve phones),
+        // which otherwise widened the free week past the screen.
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         .clipped()
         .drawingGroup()
         .accessibilityElement(children: .ignore)
