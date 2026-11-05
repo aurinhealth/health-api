@@ -18,7 +18,7 @@ import { connectionStatus } from "./connections.js";
 import { saveSourcePriority } from "./source-priority.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, backfillConnectionAccounts } from "./connection-secrets.js";
 import { withIntervalsSleep, intervalsWellness } from './intervals-sleep.js';
-import { cached, cachedOnly, bumpCacheVersion, FOOD_WRITE, UNCHANGED_HEADER, closedDay, CLOSED_DAY_TTL_SECONDS } from './api-cache.js';
+import { cached, cachedOnly, forgetCached, bumpCacheVersion, FOOD_WRITE, UNCHANGED_HEADER, closedDay, CLOSED_DAY_TTL_SECONDS } from './api-cache.js';
 import { manualPairs } from './manual-pairs.js';
 import { activityDetail, rideIntervals } from './activity-detail.js';
 import { watchDetail, withWatch } from './watch-detail.js';
@@ -2968,17 +2968,25 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if(!body||typeof body!=='object')return Response.json({message:L('Neplatná data.', 'Invalid data.')},{status:400});
         const result=await saveAppleHealth(env.DB,env.USER_ID,body);
         if(result.code)return Response.json({message:result.message},{status:result.code});
-        // The phone sends the last days again on every sync: only new data makes
-        // the cached screens and the coach's texts outdated (CACHE_NEUTRAL skips it above).
-        if(result.changed){await bumpCacheVersion(env.DB);await markScreenTextsStale(env).catch(()=>{});}
+        // The phone sends the last days again on every sync. A workout, a night,
+        // the morning's first values or an earlier day make the cached screens and
+        // the coach's texts outdated at once; today's running totals (steps, energy,
+        // zone minutes) reach them within the cache's 10 minutes, as Google's do
+        // (apple-health.js meaningfulChange). Food from other apps only what shows food,
+        // and the Food sentence is written again at once, as after the user's own meal.
+        if(result.meaningful){await bumpCacheVersion(env.DB);await markScreenTextsStale(env).catch(()=>{});}
+        else if(result.foodChanged){await bumpCacheVersion(env.DB,{food:true});await markScreenTextsStale(env).catch(()=>{});}
+        // Today's steps and heart rate on Today and the widgets: the day's sums now, not in 2 minutes.
+        if(result.changed&&!result.meaningful)await forgetCached(env,'google-dashboard:'+localToday());
         // Apple Watch workouts pair with Intervals.icu activities like Google's do.
         const from=Date.parse(body.windows?.exercise?.from||'');
-        if(result.changed&&Number.isFinite(from))ctx.waitUntil(matchActivities(env,{days:Math.min(400,Math.ceil((Date.now()-from)/86400000)+1)}).catch(error=>console.error('Activity matching failed',error.message)));
+        if(result.workouts&&Number.isFinite(from))ctx.waitUntil(matchActivities(env,{days:Math.min(400,Math.ceil((Date.now()-from)/86400000)+1)}).catch(error=>console.error('Activity matching failed',error.message)));
         // New resting and maximum heart rate reach the profile's automatic values now, not the next day.
-        if(result.changed)ctx.waitUntil(refreshSuggestions(env,{force:true}).catch(error=>console.error('Profile suggestions not refreshed',error.message)));
+        if(result.meaningful)ctx.waitUntil(refreshSuggestions(env,{force:true}).catch(error=>console.error('Profile suggestions not refreshed',error.message)));
         // Last night arrived: the morning readiness push, once a day (push.js).
         if(result.saved&&hasLastNight(body.records))ctx.waitUntil(morningPush(env,ctx,{fresh:true}).catch(error=>console.error('Morning push failed',error.message)));
-        return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+        // Only running totals: the screen kept for the coach's text stays (fetch below).
+        return Response.json(result,{headers:{'Cache-Control':'no-store',...(result.meaningful||result.foodChanged?{}:{[UNCHANGED_HEADER]:'1'})}});
       }
       if(request.method==='DELETE'){const result=await disconnectAppleHealth(env.DB,env.USER_ID);await bumpCacheVersion(env.DB);return Response.json(result,{headers:{'Cache-Control':'no-store'}});}
       return Response.json({message:'Method not allowed'},{status:405});
