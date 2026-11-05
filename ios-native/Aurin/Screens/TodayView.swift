@@ -242,6 +242,9 @@ struct DataAgePill: View {
                     .padding(.horizontal, 10)
                     .frame(height: 26)
                     .background(Palette.amberSoft, in: Capsule())
+                    // 44 pt to tap, grown only downwards: the week strip's days
+                    // sit right above it.
+                    .padding(.bottom, 18).contentShape(Rectangle()).padding(.bottom, -18)
                 }
                 .buttonStyle(.plain)
                 .disabled(model.loading || health.syncing)
@@ -376,6 +379,7 @@ struct TabHeader<Extra: View>: View {
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .alignmentGuide(VerticalAlignment.center) { $0[.firstTextBaseline] - capHeight / 2 }
+                    .accessibilityLabel(Fmt.monthTitleSpoken(date))
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 4)
                 if let back = backToToday {
@@ -385,6 +389,7 @@ struct TabHeader<Extra: View>: View {
                             .lineLimit(1).fixedSize()
                             .padding(.horizontal, 12).frame(height: 36)
                             .contentShape(Capsule())
+                            .tapTarget(width: 44, height: 36)
                     }
                     .buttonStyle(.plain)
                     .chromeGlass(in: Capsule())
@@ -956,6 +961,7 @@ struct ConnectionProblemCard: View {
                                 .font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
                                 .padding(.horizontal, 14).frame(height: 34)
                                 .background(Palette.button, in: Capsule())
+                                .tapTarget(width: 44, height: 34)
                             }
                             .buttonStyle(.plain)
                         }
