@@ -79,9 +79,9 @@ struct WatchRoot: View {
                         // Drawn again at noon, when the night stops being awaited.
                         TimelineView(.explicit([WatchStore.noon()])) { _ in
                             if let night = store.nightPending {
-                                ReadinessHome(s: night, stale: .night, today: snapshot)
+                                ReadinessHome(s: night, stale: .night, today: snapshot, openTraining: openTraining)
                             } else {
-                                ReadinessHome(s: snapshot)
+                                ReadinessHome(s: snapshot, openTraining: openTraining)
                             }
                         }
                     } else if let snapshot = store.snapshot {
@@ -138,6 +138,12 @@ struct WatchRoot: View {
             AlarmRinging().onAppear { WatchReport.visit("alarmRinging") }
         }
         .task { openDemo() }
+    }
+
+    /// The Training page, from today's gym row on the first page (watch audit B1).
+    private var openTraining: (() -> Void)? {
+        guard store.settings.pages.contains("training") else { return nil }
+        return { withAnimation { page = "training" } }
     }
 
     /// The sample day's screenshots (WatchDemo): a detail as its complication
