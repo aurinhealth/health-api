@@ -187,22 +187,53 @@ struct WatchRoot: View {
     }
 }
 
-/// Nothing from the iPhone yet (the first launch).
+/// Nothing from the iPhone yet, the first launch (watch audit G4): getting it, not signed in
+/// (the iPhone signs the watch in), or no connection with Try again; before,
+/// it always said to open Aurin on the iPhone, while it was loading too.
 struct WaitingView: View {
+    @EnvironmentObject private var store: WatchStore
+
+    private enum Phase { case loading, signedOut, failed }
+
+    private var state: Phase {
+        if !WatchAPI.signedIn, !WatchDemo.on { return .signedOut }
+        return store.todayFailed ? .failed : .loading
+    }
+
     var body: some View {
+        let state = state
         VStack(spacing: 8) {
             Ring(fraction: 0, color: W.green, size: 64) {
-                Image(systemName: "iphone")
-                    .font(.system(size: 20))
-                    .foregroundStyle(W.green)
+                if state == .loading {
+                    ProgressView()
+                } else {
+                    Image(systemName: "iphone")
+                        .font(.system(size: 20))
+                        .foregroundStyle(W.green)
+                }
             }
-            Text(W.tr("Otevři Aurin v iPhonu", "Open Aurin on your iPhone"))
-                .font(W.serif(19))
-                .multilineTextAlignment(.center)
-            Text(W.tr("Hodinky dostanou dnešek z iPhonu.", "Your watch gets today from your iPhone."))
-                .font(W.news(13))
-                .foregroundStyle(W.secondary)
-                .multilineTextAlignment(.center)
+            switch state {
+            case .loading:
+                Text(W.tr("Načítám dnešek…", "Getting today…"))
+                    .font(W.serif(19))
+            case .signedOut:
+                Text(W.tr("Otevři Aurin v iPhonu", "Open Aurin on your iPhone"))
+                    .font(W.serif(19))
+                    .multilineTextAlignment(.center)
+                Text(W.tr("Jednou ho otevři a hodinky se přihlásí.", "Open Aurin on your iPhone once to sign in."))
+                    .font(W.news(13))
+                    .foregroundStyle(W.secondary)
+                    .multilineTextAlignment(.center)
+            case .failed:
+                Text(W.tr("Bez spojení.", "No connection."))
+                    .font(W.serif(19))
+                Text(W.tr("Otevři Aurin v iPhonu.", "Open Aurin on your iPhone."))
+                    .font(W.news(13))
+                    .foregroundStyle(W.secondary)
+                    .multilineTextAlignment(.center)
+                Button(W.tr("Zkusit znovu", "Try again")) { store.ask() }
+                    .buttonStyle(.bordered)
+            }
         }
         .padding(.horizontal, 6)
         .containerBackground(W.glow(W.Glow.readiness), for: .navigation)

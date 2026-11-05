@@ -108,7 +108,14 @@ private struct TurnView: View {
                         .font(.system(size: 11))
                         .foregroundStyle(W.secondary)
                 }
-                if !turn.failed {
+                if turn.failed {
+                    // Watch audit G3: the question again, without dictating it anew.
+                    Button { CoachStore.shared.retry(turn.id) } label: {
+                        Label(W.tr("Zkusit znovu", "Try again"), systemImage: "arrow.clockwise")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .buttonStyle(.bordered)
+                } else {
                     Button { speaker.read(answer) } label: {
                         Label(W.tr("Přečíst", "Read aloud"), systemImage: "speaker.wave.2.fill")
                             .font(.system(size: 13, weight: .medium))
