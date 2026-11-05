@@ -9,19 +9,23 @@ struct DetailPage<RingContent: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ring
-            Text(title)
-                .font(W.serif(21))
-                .foregroundStyle(W.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .padding(.top, 4)
-            Text(note)
-                .font(.system(size: 12))
-                .foregroundStyle(W.secondary)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
+            // VoiceOver reads the ring, the title and the sentence as one (watch audit G1).
+            VStack(spacing: 0) {
+                ring
+                Text(title)
+                    .font(W.serif(21))
+                    .foregroundStyle(W.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(.top, 4)
+                Text(note)
+                    .font(.system(size: 12))
+                    .foregroundStyle(W.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+            }
+            .accessibilityElement(children: .combine)
             Spacer(minLength: 8)
             if !tiles.isEmpty { Tiles(items: tiles) }
         }
@@ -109,7 +113,8 @@ struct SleepDetail: View {
         TabView {
             DetailPage(title: title, note: note, tiles: tiles) {
                 Ring(fraction: fraction, color: W.indigo, goal: goal) {
-                    RingValue(value: s.sleep?.minutes.map { W.clock(minutes: $0) } ?? "–", label: W.tr("Spánek", "Sleep"), color: W.indigo, size: 28)
+                    RingValue(value: s.sleep?.minutes.map { W.clock(minutes: $0) } ?? "–", label: W.tr("Spánek", "Sleep"), color: W.indigo, size: 28,
+                              said: s.sleep?.minutes.map { W.spoken(seconds: $0 * 60) })
                 }
             }
             .containerBackground(W.glow(W.Glow.sleep), for: .tabView)

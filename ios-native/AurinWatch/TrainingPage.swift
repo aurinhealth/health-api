@@ -566,8 +566,23 @@ struct WeekRow: View {
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.plain)
+                // "Thursday, today, planned", not "T" (watch audit G1).
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(spoken(day))
+                .accessibilityAddTraits(day == shown ? [.isButton, .isSelected] : .isButton)
             }
         }
+    }
+
+    private func spoken(_ day: String) -> String {
+        var parts = [W.dayName(day).capitalized(with: W.locale)]
+        if day == today { parts.append(W.tr("dnes", "today")) }
+        if sessions.contains(where: { $0.date == day && $0.done }) {
+            parts.append(W.tr("odcvičeno", "done"))
+        } else if sessions.contains(where: { $0.date == day && !$0.done }) {
+            parts.append(W.tr("naplánováno", "planned"))
+        }
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder private func dot(_ day: String) -> some View {

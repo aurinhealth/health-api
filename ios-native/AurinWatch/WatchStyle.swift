@@ -76,6 +76,17 @@ enum W {
 
     static var locale: Locale { Locale(identifier: english ? "en_US" : "cs_CZ") }
 
+    /// "4 hours 45 minutes" for VoiceOver, where "4:45" reads as a time of day.
+    static func spoken(seconds: Double) -> String {
+        let formatter = DateComponentsFormatter()
+        formatter.unitsStyle = .full
+        formatter.allowedUnits = seconds >= 3600 ? [.hour, .minute] : seconds >= 60 ? [.minute, .second] : [.second]
+        var calendar = Calendar.current
+        calendar.locale = locale
+        formatter.calendar = calendar
+        return formatter.string(from: max(0, seconds)) ?? ""
+    }
+
     // MARK: Numbers
 
     /// Made once per language and format: a formatter costs more than the text.
@@ -290,6 +301,8 @@ struct RingValue: View {
     let label: String
     let color: Color
     var size: CGFloat = 32
+    /// What VoiceOver says for the value ("7 hours 12 minutes" for "7:12").
+    var said: String? = nil
 
     var body: some View {
         VStack(spacing: 1) {
@@ -303,6 +316,7 @@ struct RingValue: View {
             .foregroundStyle(W.ink)
             .lineLimit(1)
             .minimumScaleFactor(0.6)
+            .accessibilityLabel(said ?? value)
         Text(label.uppercased())
             .font(W.label(8.5))
             .tracking(0.5)
@@ -349,6 +363,8 @@ struct Tiles: View {
                         .frame(height: 2)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(item.label + ", " + item.value)
             }
         }
     }
