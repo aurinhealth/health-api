@@ -21,7 +21,8 @@ const SCREENS = {
   muscles: 'site/muscles',
   // The walk through the app (test4WebsiteScenes), by the step's name without its number.
   sleep: 'spanek',
-  'sleep-need': 'spanek-2',
+  // The sleep need: the third shot, under what makes up the index and the last 14 nights.
+  'sleep-need': 'spanek-3',
   bedtime: 'planovac',
   'bedtime-goal': 'planovac-2',
   'readiness-parts': 'pripravenost',

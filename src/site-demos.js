@@ -101,7 +101,7 @@ const NIGHT = [['l', 0, 12], ['d', 12, 40], ['l', 40, 62], ['r', 62, 74], ['a', 
   ['l', 290, 330], ['d', 330, 337], ['l', 337, 370], ['r', 370, 400], ['a', 400, 405], ['l', 405, 436], ['r', 436, 446], ['a', 446, 449]];
 const sleepNight = `<div class="dm pad">
 <div class="sl">Sleep · Wednesday night</div>
-<div class="row base"><span class="num big"${n(400, 432, 150, 1300, 'hmc')}>7:12</span><span class="pill ind"${at('1300')}>Score 82</span></div>
+<div class="row base"><span class="num big"${n(400, 432, 150, 1300, 'hmc')}>7:12</span><span class="pill ind"${at('1300')}>index 82</span></div>
 <div class="hg" aria-hidden="true"><div class="hgl"><span>Awake</span><span>REM</span><span>Light</span><span>Deep</span></div><div class="hgt">${NIGHT.map(([t, s, e], i) => `<i class="${t}" style="left:${(s / 449 * 100).toFixed(2)}%;width:${Math.max(0.5, (e - s) / 449 * 100).toFixed(2)}%"${at(String(300 + i * 60))}></i>`).join('')}</div></div>
 <div class="hgx" aria-hidden="true"><span>11:33 PM</span><span>7:02 AM</span></div>
 <div class="stg">${[['Deep', '1:23', 83, '19%', 'd'], ['REM', '1:34', 94, '22%', 'r'], ['Light', '4:15', 255, '59%', 'l'], ['Awake', '0:17', 17, '3×', 'a']].map(([k, v, m, p, c], i) => `<div class="sr"><span>${k}</span><i class="bar"><b class="${c}" style="--w:${(m / 255 * 100).toFixed(1)}%"${at(String(900 + i * 220))}></b></i><span class="num">${v}</span><span class="mut">${p}</span></div>`).join('')}</div>
@@ -343,10 +343,10 @@ const tickOne = `<div class="dm pad one tm">
 <div class="one-pt rst"${at('1900')}>${ic('flame')}Failure, so next set 80 kg</div>
 </div>`;
 const sleepOne = `<div class="dm pad one">
-<div class="row sp base"><b>Last night</b><span class="pill ind"${at('1300')}>Score 82</span></div>
+<div class="row sp base"><b>Last night</b><span class="pill ind"${at('1300')}>index 82</span></div>
 <div class="row base one-v"><span class="num big"${n(400, 432, 150, 1300, 'hmc')}>7:12</span><span class="mut">asleep</span></div>
 <div class="mut">11:33 PM to 7:02 AM</div>
-<div class="one-pt ind"${at('1500')}>1:23 deep sleep</div>
+<div class="one-pt ind"${at('1500')}>19% deep sleep, usually 15–20%</div>
 </div>`;
 const needOne = `<div class="dm pad one">
 <div class="row sp base"><b>Need for tonight</b><span class="mut">baseline 8:00</span></div>

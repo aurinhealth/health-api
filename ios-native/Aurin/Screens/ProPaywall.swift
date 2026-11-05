@@ -136,6 +136,9 @@ struct PaywallView: View {
     /// A fixed moment instead of the clock (the snapshot tests).
     var frozenTime: Double? = nil
     let store: ProStore
+    /// Opened on the free week at the end of the setup (SetupProOffer): no way
+    /// back to the plans, and "Teď ne" across the whole width under the button.
+    let notNow: Bool
     @State private var demo = AppModel(demo: true)
     /// 0 the opening, 1 the offer, 2 the free week.
     @State private var step: Int
@@ -147,10 +150,11 @@ struct PaywallView: View {
     @State private var started = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(close: @escaping () -> Void, frozenTime: Double? = nil, step: Int = 0, store: ProStore = .shared) {
+    init(close: @escaping () -> Void, frozenTime: Double? = nil, step: Int = 0, store: ProStore = .shared, notNow: Bool = false) {
         self.close = close
         self.frozenTime = frozenTime
         self.store = store
+        self.notNow = notNow
         _step = State(initialValue: step)
     }
 
@@ -240,7 +244,7 @@ struct PaywallView: View {
 
     private var freeWeek: some View {
         VStack(spacing: 0) {
-            topBar(back: true)
+            topBar(back: !notNow)
             Text("Tvůj týden zdarma").font(Typo.sentence(36, relativeTo: .largeTitle)).foregroundStyle(Night.ink)
                 .multilineTextAlignment(.center)
             Text(verbatim: L10n.f("Celé Aurin Pro zdarma do %@.", Self.weekday(Self.firstPayment(from: today))))
@@ -296,6 +300,16 @@ struct PaywallView: View {
             }
             .buttonStyle(.plain)
             .disabled(store.purchasing)
+            if notNow && !more {
+                Button(action: close) {
+                    Text("Teď ne").font(Typo.bodyStrong).foregroundStyle(Night.ink)
+                        .frame(maxWidth: .infinity).frame(height: 54)
+                        .overlay { Capsule().stroke(Night.ink.opacity(0.25), lineWidth: 1) }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(store.purchasing)
+            }
             if more {
                 if withTrial {
                     Text(verbatim: L10n.f("Zdarma do %@, pak %@", Self.dayMonth(Self.firstPayment(from: today)), chosen.afterTrial))

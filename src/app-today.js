@@ -162,6 +162,12 @@ export function todayUnavailable(failed) {
   return [...new Set([...failed].map(path => TODAY_PARTS[path]).filter(Boolean))];
 }
 
+// The source of the latest night up to `date`, null without one or without a source.
+export function latestNightSource(nights, date) {
+  const last = [...nights.keys()].filter(d => d <= date).sort().at(-1);
+  return (last && nights.get(last).source) || null;
+}
+
 export function buildToday({ date, hour = null, morning = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null, unavailable = [] }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
@@ -384,7 +390,10 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     recovery: recoveryCard,
     // Regenerace (recovery-time.js): /app/api/today fills it in for today.
     recoveryTime: null,
-    tonight: plan ? { bedtime: clock(plan.bed), wake: clock(plan.wake), need: tonightNeed, wakeSet: plan.wakeSource === "setting" } : null,
+    // source: the device of the latest night up to today (source_family, e.g.
+    // apple-health): the bedtime reminder asks for a charged watch only when
+    // Apple Watch measures sleep (Reminders.swift).
+    tonight: plan ? { bedtime: clock(plan.bed), wake: clock(plan.wake), need: tonightNeed, wakeSet: plan.wakeSource === "setting", source: latestNightSource(nights, date) } : null,
     steps: { today: num(todayRow.steps), goal: STEP_GOAL, week: last(7, "steps"), month: last(30, "steps"), hourly: byHour[date] ? byHour[date].map(v => Math.round(v)) : null, usual, hour, activeKcal: activeKcal(num(todayRow.activeCalories), watchExtra), activeKcalExcluded: watchExtra || null, activeMinutes: activeMinutes(google, date) },
     weight: weights.length ? { latest: weights.at(-1).value, goal: num(profile.targetWeight), series: weights } : null,
     weather: todayWeather(location, forecast, date)

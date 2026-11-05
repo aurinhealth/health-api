@@ -791,7 +791,7 @@ export function overviewPage(request) {
     'training-rest': 'Aurin’s rest timer counting down between sets, with the next exercise',
     'food-day': 'Aurin’s food day: a calorie target that moves with training, and the meals logged',
     'food-add': 'Adding food in Aurin: a photo of the plate, a barcode or a search',
-    sleep: 'A night in Aurin: deep, REM and light sleep, when you fell asleep and woke up',
+    sleep: 'A night in Aurin: 7:12 asleep, sleep index 82 and what makes it up: length, quality and stages',
     'sleep-need': 'Aurin’s sleep need for tonight and what made it grow',
     bedtime: 'Aurin’s bedtime dial: the moon for bedtime, the sun for the alarm',
     'bedtime-goal': 'Picking tonight’s sleep in Aurin: catch up, as usual or at least seven hours',
@@ -812,7 +812,7 @@ export function overviewPage(request) {
       ['journal-impact', 'journalOne', 330, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000],
       ['html:cycle', 'cycleOne', 300, 'Readiness that knows your cycle.', 'Turn on cycle tracking and, in the days before your period, your resting heart rate and temperature are weighed against your own days in that phase. A usual rise costs no points.', 7000]]],
     ['spanek', '', 'Every night, in detail.', 'From any watch or ring you wear.', 'indigo', 'glow-health', [
-      ['sleep', 'sleepOne', 330, 'See how you slept.', 'Deep, REM and light sleep, when you fell asleep and when you woke up.'],
+      ['sleep', 'sleepOne', 330, 'See how you slept.', 'Deep, REM and light sleep against your usual, what makes up the sleep index, and how last night sits among your last 14.'],
       ['sleep-need', 'needOne', 220, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
       ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
       ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
