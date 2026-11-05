@@ -418,18 +418,16 @@ export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5
   // the slot held: the calls running beside this one count at their reservation.
   await assertAiAllowance(env,feature);
   const reserveUsd=estimateAiCostUsd(model||env.OPENAI_MODEL||'gpt-6-sol',{instructions,input,maxOutputTokens,tools});
-  // All users together and the account's group (ai-total.js) hold the call
-  // while it runs; a call that ends without a cost gives the hold back.
-  const hold=await assertAiTotal(env,{reserveUsd});
+  const release=await claimAiSlot(env,{feature,reserveUsd,...(slotWaitMs!=null?{waitMs:slotWaitMs}:{})});
+  let hold=null;
   try{
-    const release=await claimAiSlot(env,{feature,reserveUsd,...(slotWaitMs!=null?{waitMs:slotWaitMs}:{})});
-    try{
-      await assertAiAllowance(env,feature,{exceptId:release.id});
-      return await openAIResponse(env,{instructions,input,maxOutputTokens,tools,format,model,reasoningEffort,onText,feature,timeoutMs,slotId:release.id,hold});
-    }
-    finally{await release();}
+    await assertAiAllowance(env,feature,{exceptId:release.id});
+    // All users together and the account's group (ai-total.js) hold the call
+    // while it runs; a call that ends without a cost gives the hold back.
+    hold=await assertAiTotal(env,{reserveUsd,slotId:release.id});
+    return await openAIResponse(env,{instructions,input,maxOutputTokens,tools,format,model,reasoningEffort,onText,feature,timeoutMs,slotId:release.id,hold});
   }
-  finally{await addAiSpend(env,0,hold);}
+  finally{if(hold)await addAiSpend(env,0,hold);await release();}
 }
 
 // A busy or briefly failing OpenAI (429, 5xx, a dropped connection) is asked

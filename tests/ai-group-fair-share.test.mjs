@@ -108,3 +108,20 @@ test("a call the AI service refused gives its hold back; one that broke off keep
   assert.equal(groupSpent(db, "free"), reserved, "the model may have worked on it");
   assert.equal(await aiSpentTodayAll(db), reserved);
 });
+
+test("past the brake an account's calls at the same time pass one by one, on the group's UTC day", async () => {
+  const db = pilot(ids);
+  db.sqlite.exec("CREATE TABLE IF NOT EXISTS ai_spend_groups (day TEXT NOT NULL, grp TEXT NOT NULL, cost_usd REAL NOT NULL DEFAULT 0, brake_usd REAL, alerted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, grp))");
+  db.sqlite.prepare("INSERT INTO ai_spend_groups (day, grp, cost_usd, brake_usd) VALUES (?, 'free', 5, 5)").run(today());
+  await withOpenAI(async calls => {
+    const runs = [0, 1, 2].map(() => callOpenAI(envFor(db, 100, FREE), { feature: "assistant", instructions: "x", input: "y", maxOutputTokens: 25000 }));
+    const results = await Promise.allSettled(runs);
+    assert.equal(results.filter(r => r.status === "fulfilled").length, 1, "the first one held counts against the others");
+    assert.equal(calls(), 1);
+  }, { delayMs: 25 });
+  // A zone far east puts the rows on the account's next day: still today in UTC.
+  db.sqlite.exec("UPDATE ai_usage SET day = date('now', '+1 day')");
+  await withOpenAI(async () => {
+    await assert.rejects(ask(envFor(db, 100, FREE)), error => error.status === 429);
+  });
+});

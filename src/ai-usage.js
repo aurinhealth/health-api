@@ -73,12 +73,25 @@ export const CARRIED_MONTH_FEATURE = "carried-over-month";
 // Today's spending under the daily guard: everything but the coach chat (and a
 // carried-over month).
 // A running call counts at its reservation (claimAiSlot); exceptId leaves one
-// row out, the call that is asking. coachChat: the coach chat too (a group's
-// share of one account, ai-total.js).
-export async function aiSpentToday(env, { exceptId = 0, coachChat = false } = {}) {
+// row out, the call that is asking.
+export async function aiSpentToday(env, { exceptId = 0 } = {}) {
   if (!tracked(env)) return 0;
   await ensureAiUsage(env.DB);
-  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day = ? AND COALESCE(feature, '') NOT IN (?, ?) AND id != ?").bind(env.USER_ID, await limitToday(env), coachChat ? CARRIED_MONTH_FEATURE : COACH_CHAT_FEATURE, CARRIED_MONTH_FEATURE, Number(exceptId) || 0).first();
+  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day = ? AND COALESCE(feature, '') NOT IN (?, ?) AND id != ?").bind(env.USER_ID, await limitToday(env), COACH_CHAT_FEATURE, CARRIED_MONTH_FEATURE, Number(exceptId) || 0).first();
+  return Math.round(Number(row?.spent || 0) * 1e5) / 1e5;
+}
+
+// Everything the account's AI cost in a UTC day (YYYY-MM-DD, by the rows'
+// created_at, the days of the group brakes), the coach chat included and
+// running calls at their reservation, but nothing carried over from a deleted
+// account: its share of its group (ai-total.js). exceptId as above.
+export async function aiSpentUtcDay(env, day, { exceptId = 0 } = {}) {
+  if (!tracked(env)) return 0;
+  await ensureAiUsage(env.DB);
+  const shift = days => new Date(Date.parse(`${day}T00:00:00Z`) + days * 864e5).toISOString().slice(0, 10);
+  // The account's own days lie within a day of UTC; they keep the index in use.
+  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day >= ? AND day <= ? AND created_at >= ? AND created_at < ? AND COALESCE(model, '') != ? AND COALESCE(feature, '') != ? AND id != ?")
+    .bind(env.USER_ID, shift(-1), shift(1), day, shift(1), CARRIED_MODEL, CARRIED_MONTH_FEATURE, Number(exceptId) || 0).first();
   return Math.round(Number(row?.spent || 0) * 1e5) / 1e5;
 }
 

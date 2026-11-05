@@ -14,7 +14,8 @@
 // reaches it. The accounts are counted once a day, when the group's day starts;
 // a count that fails is not kept, so the next call counts again.
 // A group at its brake stops only its accounts that spent their share today
-// (the brake's perAccount, across all AI, the coach chat included), so a few
+// (the brake's perAccount in the UTC day, across all AI, the coach chat and
+// its other running calls included), so a few
 // accounts using their whole allowance never stop the AI of the rest; at
 // GROUP_HARD_STOP times the brake the whole group waits. A fixed brake has no
 // share (accounts made in bulk, the server): there it stops the whole group.
@@ -32,7 +33,7 @@ import { isStaging, ownerUnlimited } from "./staging.js";
 import { aiGroup, groupOfSubscription, newAccountSince, AI_GROUPS } from "./ai-limit-share.js";
 import { ensureStoreColumns } from "./app-store.js";
 import { isReviewAccount } from "./app-review.js";
-import { aiSpentToday } from "./ai-usage.js";
+import { aiSpentUtcDay } from "./ai-usage.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const utcDay = (now = new Date()) => now.toISOString().slice(0, 10);
@@ -150,7 +151,8 @@ const fairShare = brake => (brake && typeof brake === "object" ? n(brake.perAcco
 // server) or the group its own (see the top). Returns the hold, which
 // addAiSpend settles with the real cost (0 gives it back). A failed read or
 // write does not cost the user the answer: nothing is held then.
-export async function assertAiTotal(env, { reserveUsd = 0, now = new Date() } = {}) {
+// slotId: the call's own row in ai_usage (claimAiSlot), left out of its share.
+export async function assertAiTotal(env, { reserveUsd = 0, slotId = 0, now = new Date() } = {}) {
   const db = central(env), usd = rounded(Math.max(0, n(reserveUsd) || 0));
   const hold = { day: utcDay(now), group: null, dayUsd: 0, groupUsd: 0, done: true };
   if (!db) return hold;
@@ -167,7 +169,7 @@ export async function assertAiTotal(env, { reserveUsd = 0, now = new Date() } = 
   const brake = ownerUnlimited(env) || isReviewAccount(env) || !Object.keys(groupBrakes(env)).length ? null
     : (await groupDay(db, env, hold.group, now).catch(failed("AI group read failed")))?.brake ?? null;
   let group = await add("groups", brake);
-  if (group === "full") group = await add("groups", await pastBrake(env, hold.group, brake));
+  if (group === "full") group = await add("groups", await pastBrake(env, hold, brake, slotId));
   if (group === "full") throw overloaded();
   if (group === "held") hold.groupUsd = usd;
   const limit = n(env?.AI_TOTAL_DAILY_LIMIT_USD), dayCap = limit != null && limit >= 0 && !(env.USER_IS_OWNER === true && !isStaging(env)) ? limit : null;
@@ -177,12 +179,14 @@ export async function assertAiTotal(env, { reserveUsd = 0, now = new Date() } = 
   return hold;
 }
 
-// The group is at its brake: the account goes on while its own spending today
-// is under the brake's share, up to GROUP_HARD_STOP times the brake.
-async function pastBrake(env, group, brake) {
-  const share = fairShare(groupBrakes(env)[group]);
+// The group is at its brake: the account goes on while its own spending in
+// the group's day is under the brake's share, up to GROUP_HARD_STOP times the
+// brake. Its calls running beside this one count at their reservation (their
+// slots are taken first, in one statement each), so they pass one by one.
+async function pastBrake(env, hold, brake, slotId) {
+  const share = fairShare(groupBrakes(env)[hold.group]);
   if (share == null) throw overloaded();
-  const spent = await aiSpentToday(env, { coachChat: true }).catch(error => { console.error("AI usage read failed", error?.message || error); return 0; });
+  const spent = await aiSpentUtcDay(env, hold.day, { exceptId: slotId }).catch(error => { console.error("AI usage read failed", error?.message || error); return 0; });
   if (spent >= share) throw overloaded();
   return brake * GROUP_HARD_STOP;
 }
