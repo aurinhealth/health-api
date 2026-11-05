@@ -109,7 +109,7 @@ import { updateFitnessEstimate } from "./own-vo2max-store.js";
 import { ensureReviewSample } from "./review-sample.js";
 import { handleNativeAppleLogin, forgetUsedAppleTokens } from "./apple-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat, startChatWithCoach, lastAnswerId, ownedChat } from "./assistant-chats.js";
-import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedReplyPush } from "./coach-push-reply.js";
+import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedReplyPush, foreignPushReply } from "./coach-push-reply.js";
 import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
 import { coachEvalPrincipal, handleCoachEval } from "./coach-eval.js";
@@ -887,7 +887,7 @@ async function coachPush(env, ctx) {
   const hide = hidesValues(state) ? (nudge.swap ? 'swap' : 'coach') : null;
   let sent = 0;
   for (const device of devices) {
-    const result = await sendPush(env, device, { title: nudge.title, body: nudge.body }, { category: nudge.swap ? COACH_SWAP_CATEGORY : COACH_REPLY_CATEGORY, data: { coach: { kind: nudge.kind, date } }, hide }).catch(error => ({ ok: false, error: error.message }));
+    const result = await sendPush(env, device, { title: nudge.title, body: nudge.body }, { category: nudge.swap ? COACH_SWAP_CATEGORY : COACH_REPLY_CATEGORY, data: { coach: { kind: nudge.kind, date, account: db.userId } }, hide }).catch(error => ({ ok: false, error: error.message }));
     if (result.ok) sent++;
     else if (result.gone) await deletePushToken(db, device.token);
     else console.error('Coach push not delivered', result.status || '', result.reason || result.error || '');
@@ -2338,7 +2338,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     let body;try{body=JSON.parse(raw)||{};}catch{body={};}
     const text=String(body.text||'').trim();
     if(!text||text.length>PUSH_REPLY_CHARS)return Response.json({message:L('Odpověď je prázdná nebo moc dlouhá.', 'The reply is empty or too long.')},{status:400});
-    let chatId=(await ownedChat(env.DB,body.chatId).catch(()=>null))?.id??null;
+    let chatId=body.chatId==null?null:(await ownedChat(env.DB,body.chatId).catch(()=>null))?.id??null;
+    if(foreignPushReply(body,env.USER_ID,chatId!=null))return Response.json({message:L('Tahle notifikace patří jinému účtu.', 'This notification belongs to another account.')},{status:409,headers:{'Cache-Control':'no-store'}});
     if(!chatId){
       const opening=pushOpening(body.title,body.body);
       chatId=opening?await startChatWithCoach(env.DB,body.title,opening):null;
@@ -2349,7 +2350,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const result=response?await response.json().catch(()=>null):null;
     const answered=response?.ok&&result?.answer;
     if(answered&&result.chatId)chatId=result.chatId;
-    const push=answered?replyPush(result,chatId):failedReplyPush(result?.message,chatId);
+    const push=answered?replyPush(result,chatId,env.USER_ID):failedReplyPush(result?.message,chatId,env.USER_ID);
     // Settings → Oznámení → Skrýt zdravotní údaje (push.js hidesValues), read while the coach answered.
     const hide=answered&&hidesValues(await stateRead)?'reply':null;
     let sent=0;
