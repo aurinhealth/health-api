@@ -3917,3 +3917,4 @@
 "Poslat i posledních 14 dní" = "Also send the last 14 days";
 "Od %@" = "Since %@";
 "Poslat do Intervals.icu" = "Send to Intervals.icu";
+"%@, týden %lld" = "%@, week %lld";

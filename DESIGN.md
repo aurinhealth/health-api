@@ -38,7 +38,7 @@ palette changes, change `design-system.js` and this file together.
 | `--panel2` | #EAE5DC | Recessed areas |
 | `--text` | #1B1A17 | Headlines and body |
 | `--sec` | #3B3832 | Secondary body text in long passages |
-| `--muted` | #6D6A63 | Sub-lines, captions, nav links (about 4.7:1 on paper) |
+| `--muted` | #69665F | Sub-lines, captions, nav links (5.0:1 on paper, same as the app) |
 | `--line` | rgba(27,26,23,.09) | Borders and dividers |
 | `--track` | rgba(27,26,23,.08) | Hover fills, empty bars, close buttons |
 | `--button` | #15140F | Primary button (the ink pill) |
