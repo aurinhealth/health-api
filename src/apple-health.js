@@ -21,6 +21,7 @@ import { resolveSources, MANAGED_TYPES } from "./source-priority.js";
 import { rebuildHourSummary, SUMMARY_TYPES } from "./hour-summary.js";
 import { fromGoogleApp } from "./activity-origin.js";
 import { overlapShare, sessionGap } from "./activity-match.js";
+import { localDate, localToday } from "./user-time.js";
 
 export const SOURCE = "apple-health";
 export const WEARABLE_FAMILIES = "('google-wearables','apple-health')";
@@ -350,6 +351,29 @@ async function appleSexConsent(db, userId) {
   }
 }
 
+// What must reach the cached screens and the coach at once (the route bumps
+// the cache version for it): a workout, a night, the morning's first value
+// of resting heart rate, HRV, breathing, SpO2 or wrist temperature, a body
+// measurement, Deník's symptoms, noise and travel, and any change to an
+// earlier day. The iPhone sends the day's running totals again on every sync
+// (steps, energy, zone minutes, wear hours, walking heart rate, a daily
+// average that moves): today's reach the screens within the cache's
+// 10 minutes, as Google's do (index.js), instead of recomputing the coach's
+// three weeks 50 times a day on the user's single-threaded database.
+const MORNING = new Set(["daily-resting-heart-rate", "daily-heart-rate-variability", "daily-respiratory-rate", "daily-oxygen-saturation", "daily-wrist-temperature"]);
+const ALWAYS = new Set(["exercise", "sleep", ...Object.keys(SAMPLE), "daily-night-noise", "daily-time-zone-change", SEXUAL_ACTIVITY]);
+// The user's day of a stored row: a daily value carries its date, a time is
+// converted to the user's zone (a day's zone minutes start at local midnight).
+export const appleRowDay = row => /^\d{4}-\d{2}-\d{2}$/.test(String(row.sample_time || "")) ? row.sample_time : localDate(row.sample_time || row.start_time || row.end_time);
+export function meaningfulChange(written, today) {
+  return written.some(row => {
+    const date = appleRowDay(row);
+    if (!date || date < today) return true;
+    if (ALWAYS.has(row.data_type) || row.data_type.startsWith("daily-symptom-")) return true;
+    return MORNING.has(row.data_type) && row.inserted === true;
+  });
+}
+
 // Deletes the sexual activity stored from Apple Health (consent withdrawn).
 export const deleteSexualActivity = (db, userId) =>
   db.prepare(`DELETE FROM health_datapoints WHERE user_id = ? AND source_family = '${SOURCE}' AND data_type = ?`).bind(userId, SEXUAL_ACTIVITY);
@@ -365,8 +389,12 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
   const statements = rows.map(row => upsert(db, userId, row));
   if (!keepSex) statements.push(deleteSexualActivity(db, userId));
   // Rows really written: the upsert leaves a row that did not change alone.
-  let changed = 0;
+  let changed = 0, unlisted = 0;
   const written = [];
+  // The morning values of today already stored (a few rows by their key):
+  // only a first one is news for the readiness, a moving average is not.
+  const today = localToday(), mornings = rows.filter(r => MORNING.has(r.data_type) && r.sample_time === today).map(r => r.external_id);
+  const stored = new Set(mornings.length ? ((await db.prepare(`SELECT external_id FROM health_datapoints WHERE user_id = ? AND source_family = '${SOURCE}' AND external_id IN (SELECT value FROM json_each(?))`).bind(userId, JSON.stringify(mornings)).all()).results || []).map(r => r.external_id) : []);
   // 200 statements a round trip: a first sync of 1500 records is 8 batches, not 30.
   for (let i = 0; i < statements.length; i += 200) {
     const results = await db.batch(statements.slice(i, i + 200)) || [];
@@ -374,7 +402,8 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
       const n = Number(result?.meta?.changes || 0);
       changed += n;
       // The last statement may be the sexual-activity delete, which has no row.
-      if (n && rows[i + j]) written.push(rows[i + j]);
+      if (n && rows[i + j]) written.push({ ...rows[i + j], inserted: !stored.has(rows[i + j].external_id) });
+      else if (n) unlisted += n;
     });
   }
 
@@ -443,7 +472,11 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
   // screens and the coach's texts stay valid (entrypoint.js).
   changed += removed + replaced + Number(food.changed || 0);
   await writeStatus(db, userId, "ok", { saved, skipped: input.length - rows.length, removed, replaced, categories });
-  return { status: "ok", saved, changed, skipped: input.length - rows.length, removed, replaced, ...(body.food ? { food: food.saved } : {}) };
+  const meaningful = Boolean(deleted.length || unlisted) || meaningfulChange(written, today);
+  return {
+    status: "ok", saved, changed, skipped: input.length - rows.length, removed, replaced, ...(body.food ? { food: food.saved } : {}),
+    meaningful, foodChanged: Number(food.changed || 0) > 0, workouts: [...written, ...deleted].some(r => r.data_type === "exercise")
+  };
 }
 
 // Disconnecting: like the other services, the data Aurin already has stays
