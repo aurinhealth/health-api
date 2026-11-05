@@ -11,7 +11,7 @@ roles are sub agents defined in `.claude/agents/`:
 | iOS & watchOS Designer | `ios-designer` | no |
 | Data & Integrations Engineer | `data-engineer` | read-only commands |
 | Security (red team) | `security-red-team` | yes, staging.aurin.health or local only |
-| Privacy & Compliance | `privacy-compliance` | no |
+| Privacy, Compliance & Legal | `privacy-compliance` | no |
 | Tester (QA) | `qa-tester` | yes, tests, local and staging only |
 | Performance & Cost Engineer | `performance-cost` | yes, tests, local and timing on staging |
 | Monetization & Unit Economics Analyst | `monetization-analyst` | read-only commands |
@@ -42,6 +42,8 @@ roles are sub agents defined in `.claude/agents/`:
 - Every pull request that changes the server or how data loads: `performance-cost` writes the
   "Rychlost a náklady" paragraph (speed, D1 rows, Cloudflare limits) for its description.
 - Security, payments, user data and accounts: `security-red-team` and `privacy-compliance` review it.
+- Legal texts (privacy, terms, support, health data), App Store texts and Review Notes, subscriptions,
+  AI disclosures and other companies' names and logos: `privacy-compliance`.
 - AI features, AI limits, the paywall and prices: `monetization-analyst` checks they never block a
   normal user and that every user earns more than they cost.
 - Every request or point to discuss: `research-analyst` first researches competitors, medical and
@@ -89,3 +91,8 @@ The "promises against the code" check (`privacy-compliance`), the four-point che
 [phuryn/product-engineering](https://github.com/phuryn/product-engineering) (MIT, Pawel Huryn), read
 on 2026-11-04. The skills themselves are not installed here: they target another stack and would
 clash with this process.
+
+The legal checklists of `privacy-compliance` (GDPR art. 13 and 14, DPIA, transfers, consumer terms,
+the AI Act, the Cyber Resilience Act and the Data Act) adapt, in our own words, expert skills read on
+[Lawwe AI](https://lawve.ai) on 2026-11-05; the role file lists them with their licences. Nothing is
+installed and no text is copied.
