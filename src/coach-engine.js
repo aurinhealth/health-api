@@ -77,7 +77,8 @@ function morningAdvice({plan,low,heavy,sleepLow,done}){
     if(plan.gym)parts.push(L('V posilovně nech 2 opakování v rezervě.','In the gym keep 2 reps in reserve.'));
     return L('Po včerejší velké zátěži začni zvolna. ','After yesterday\'s big load, start easy. ')+parts.join(' ');
   }
-  if(plan.empty)return L('Dnes nemáš nic v plánu: prostor pro regeneraci. Další aktivitu přizpůsob chuti a času, který máš.','Nothing is planned today: room to recover. Fit any activity to your mood and the time you have.');
+  // Nothing planned on a good day is no rest day (Today audit D3): the strain target stops at the usual day.
+  if(plan.empty)return L('Dnes nemáš nic v plánu. Aktivitu přizpůsob chuti a času, který máš, nejvýš v obvyklém objemu.','Nothing is planned today. Fit any activity to your mood and the time you have, up to your usual volume.');
   return L('Dnešní plán (','You can stick to today\'s plan (')+plan.names.join(', ')+L(') můžeš dodržet; při rozcvičení ověř, že se cítíš dobře.','); check during the warm-up that you feel good.');
 }
 // caution: the workload line (workload-ratio.js workloadCaution) when the

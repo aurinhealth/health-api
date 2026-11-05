@@ -32,6 +32,9 @@ test("Doporučovat méně: the sauna instead of stretching, nothing when both ar
   assert.deepEqual(sauna.items.map(i => i.kind), ["sauna"]);
   assert.equal(sauna.items[0].detail, "3× 10 min večer, pak hodně pít");
   assert.equal(recoveryToday({ date: DATE, today: [gymDone], less: ["stretch", "sauna"] }), null);
+  // A warning sign, alcohol or an injury: no sauna, so nothing instead of stretching.
+  assert.equal(recoveryToday({ date: DATE, today: [gymDone], less: ["stretch"], noSauna: true }), null);
+  assert.deepEqual(recoveryToday({ date: DATE, today: [gymDone], noSauna: true }).items.map(i => i.kind), ["stretch"]);
   // The morning after has no sauna: nothing to offer instead.
   assert.equal(recoveryToday({ date: DATE, yesterday: [{ status: "done", sport: "ride", minutes: 180, tss: 160 }], less: ["stretch"] }), null);
 });
@@ -86,6 +89,11 @@ test("sauna and a finished routine are saved as done and join Today's plan", asy
   assert.deepEqual(rows.map(i => i.title), ["Protažení po posilovně", "Sauna"]);
   assert.ok(rows.every(i => i.done && /hotovo$/.test(i.detail)));
   assert.match(rows[0].detail, /^\d+ min · 6 cviků · hotovo$/);
+  // With stretching "less", the sauna is the tip; alcohol or a Sick status takes it off.
+  const base = { date: DATE, hour: 20, daily: { training: { planned: [], matched: [], completed: [] } }, gym: { name: "Horní tělo A", exercises: ["Bench press"], logged: 4 } };
+  assert.equal(buildToday({ ...base, recovery: { less: ["stretch"] } }).recovery.items[0].kind, "sauna");
+  assert.equal(buildToday({ ...base, recovery: { less: ["stretch"], risks: { alcohol: true } } }).recovery, null);
+  assert.equal(buildToday({ ...base, recovery: { less: ["stretch"] }, morning: { athleteState: "sick" } }).recovery, null);
   // A past day shows the saved recovery in its plan but no suggestions.
   const past = buildToday({ date: DATE, hour: null, recovery: { saved } });
   assert.equal(past.recovery, null);

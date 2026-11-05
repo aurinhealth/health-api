@@ -561,7 +561,7 @@ const TEMPLATES = () => [
 ];
 export const planTemplates = () => [...TEMPLATES(), ...TRI_TEMPLATES()];
 // The starter plan of every sport is free; every other plan is an Aurin Pro
-// "adaptive training plan" once AI_PAYWALL_ENABLED is on (Petr, 3 Nov 2026).
+// "adaptive training plan" once the paywall is on (paywallOn in subscription.js; Petr, 3 Nov 2026).
 // A plan already running goes on to its end.
 export const FREE_PLANS = new Set(["ride-base", "run-5k-start", "swim-400", "gym-muscle", "tri-sprint"]);
 export const getTemplate = id => planTemplates().find(t => t.id === id) || null;

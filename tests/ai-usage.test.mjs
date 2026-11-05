@@ -5,7 +5,8 @@ import { createD1 } from "./helpers/d1.mjs";
 import { grantAiConsent } from "./helpers/consent.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { callOpenAI } from "../src/coach-assistant.js";
-import { aiAllowance, aiDailyLimitUsd, aiMonthlyLimitUsd, usageCost } from "../src/ai-usage.js";
+import { aiAllowance, aiDailyLimitUsd, aiMonthlyLimitUsd, usageCost, ensureAiUsage, PACK_NET_USD_PER_MESSAGE } from "../src/ai-usage.js";
+import { savePackTransaction } from "../src/coach-packs.js";
 import { localToday } from "../src/user-time.js";
 import { serverSource } from "./helpers/server-source.mjs";
 
@@ -57,6 +58,19 @@ test("cached input is billed at the cached price and kept in the log", async () 
   assert.deepEqual({ ...db.sqlite.prepare("SELECT cached_tokens, cost_usd FROM ai_usage").get() }, { cached_tokens: 15000, cost_usd: 0.023 });
 });
 
+test("input written into the prompt cache costs 1.25× the input price and is kept in the log", async () => {
+  // 20k input: 5k cached, 12k written to the cache, 3k plain; 1k output of gpt-6-sol:
+  // 3k × 2 + 12k × 2.5 + 5k × 0.2 + 1k × 10 per 1M = 0.047 USD (0.041 when writes counted as plain input).
+  const usage = { input_tokens: 20000, input_tokens_details: { cached_tokens: 5000, cache_write_tokens: 12000 }, output_tokens: 1000 };
+  assert.equal(usageCost("gpt-6-sol", usage), 0.047);
+  // Writes beyond the uncached input never count twice.
+  assert.equal(usageCost("gpt-6-sol", { input_tokens: 1000, input_tokens_details: { cached_tokens: 1000, cache_write_tokens: 1000 } }), 0.0002);
+  const db = grantAiConsent(createD1(), 7, 8), realFetch = globalThis.fetch;
+  globalThis.fetch = async () => answer(usage);
+  try { await callOpenAI(envFor(db), { feature: "assistant", instructions: "x", input: "y" }); } finally { globalThis.fetch = realFetch; }
+  assert.deepEqual({ ...db.sqlite.prepare("SELECT cached_tokens, cache_write_tokens, cost_usd FROM ai_usage").get() }, { cached_tokens: 5000, cache_write_tokens: 12000, cost_usd: 0.047 });
+});
+
 test("a table from before the cached column gets it", async () => {
   const db = grantAiConsent(createD1(), 7, 8);
   db.sqlite.exec("CREATE TABLE ai_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, day TEXT NOT NULL, feature TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, cost_usd REAL)");
@@ -71,8 +85,33 @@ test("the limit messages name no amount", async () => {
     await callOpenAI(env, { instructions: "x", input: "y" });
     await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => /Pro dnešek toho bylo s AI hodně/.test(error.message) && !/\$|USD|\d/.test(error.message));
     db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (8, ?, 10)").run(localToday());
-    await assert.rejects(callOpenAI({ ...env, DB: scopedDb(db, 8), USER_ID: 8, AI_DAILY_LIMIT_USD: "" }, { instructions: "x", input: "y" }), error => /pozastavená/.test(error.message) && !/\$|USD|\d/.test(error.message));
+    await assert.rejects(callOpenAI({ ...env, DB: scopedDb(db, 8), USER_ID: 8, AI_DAILY_LIMIT_USD: "" }, { instructions: "x", input: "y" }), error => /Kouč a AI funkce budou zase k dispozici od 1\. \d{1,2}\./.test(error.message) && !/\$|USD|podpor/.test(error.message));
   });
+});
+
+test("bought coach messages raise the monthly cap by what they bring in, so a pack is never stopped by it", async () => {
+  const db = grantAiConsent(createD1(), 7, 8);
+  await withOpenAI(async calls => {
+    const env = envFor(db, { AI_DAILY_LIMIT_USD: "100" });
+    await ensureAiUsage(env.DB);
+    db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, 5)").run(localToday());
+    await assert.rejects(callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" }), error => error.limit === true);
+    // A 100 pack: 100 × 0.05 USD more room.
+    await savePackTransaction(env, { productId: "b.coach.messages100", bundleId: "b", transactionId: "t1", environment: "Production", purchaseDate: Date.now() });
+    await callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" });
+    assert.equal(calls(), 1);
+    // Messages used this month keep their room: the cap does not shrink as they go.
+    db.sqlite.exec("CREATE TABLE IF NOT EXISTS coach_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, week TEXT NOT NULL, chat_id INTEGER, kind TEXT NOT NULL, counted INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)");
+    db.sqlite.exec("UPDATE coach_pack_balance SET used = 60 WHERE user_id = 7");
+    for (let i = 0; i < 60; i++) db.sqlite.prepare("INSERT INTO coach_messages (user_id, week, kind, counted) VALUES (7, '2026-01-01', 'pack', 0)").run();
+    db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, 4)").run(localToday());
+    await callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" });
+    assert.equal(calls(), 2);
+    // Past what the pack brings in, the cap holds again.
+    db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, 1)").run(localToday());
+    await assert.rejects(callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" }), error => error.limit === true);
+  });
+  assert.equal(PACK_NET_USD_PER_MESSAGE, 0.05);
 });
 
 test("a daily limit, when set, stops the next call once it is spent; the owner has none on the test server", async () => {
@@ -119,7 +158,7 @@ test("the monthly limit stops AI for the rest of the month and counts only this 
     // Earlier this month and last month: only this month counts.
     db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, 4.5), (7, '2000-01-15', 50)").run(month + "-01");
     assert.deepEqual(await aiAllowance(env), { spentUsd: localToday().endsWith("-01") ? 5.2 : 0.7, limitUsd: 100, monthSpentUsd: 5.2, monthLimitUsd: 5 });
-    await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => error.limit === true && /pozastavená/.test(error.message));
+    await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => error.limit === true && /zase k dispozici od/.test(error.message));
     assert.equal(calls(), 1);
   });
   assert.equal(aiMonthlyLimitUsd({ AI_MONTHLY_LIMIT_USD: "12" }), 12);
