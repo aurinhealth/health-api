@@ -6,7 +6,8 @@ import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { withLang } from "../src/lang.js";
-import { screenText, screenFacts, MAX_PER_DAY, SLOT_WAIT_MS, markScreenTextsStale } from "../src/screen-texts.js";
+import { screenText, screenFacts, MAX_PER_DAY, SLOT_WAIT_MS, BACKGROUND_SLOT_WAIT_MS, markScreenTextsStale } from "../src/screen-texts.js";
+import { bumpCacheVersion } from "../src/api-cache.js";
 
 const today = (extra = {}) => ({
   date: "2026-10-11",
@@ -51,13 +52,14 @@ test("the AI is asked once per day state; the same state answers from the cache"
   assert.match(first.time, /^\d{2}:\d{2}$/);
   assert.equal(seen.feature, "screen-text");
   assert.match(seen.input, /"sleepMinutes":400/);
-  // Every opening loads the data to compare; the same state is not asked again.
+  // Nothing of the user's changed within 10 minutes: not even the data is loaded.
   const again = await screenText(env, { screen: "today", load, ask });
   assert.equal(asked, 1);
-  assert.equal(loaded, 2);
+  assert.equal(loaded, 1);
+  // Later the data is compared again; the same state is not asked again.
   await screenText(env, { screen: "today", load, ask, now: Date.now() + 2 * 3600000 });
   assert.equal(asked, 1);
-  assert.equal(loaded, 3);
+  assert.equal(loaded, 2);
   assert.equal(again.text, first.text);
   assert.deepEqual(again.basis, first.basis);
   // Another screen has its own text.
@@ -171,4 +173,71 @@ test("Trénink knows a paused athlete: the status is in the facts and a new stat
   assert.equal(active.facts.athleteState, null);
   assert.equal(sick.facts.athleteState, "sick");
   assert.notEqual(active.fingerprint, sick.fingerprint);
+});
+
+test("a change of the user's data loads the screen again at once; the same version waits 10 minutes", async () => {
+  const env = owner();
+  await env.DB.prepare("CREATE TABLE api_cache_versions (user_id INTEGER PRIMARY KEY, version INTEGER NOT NULL DEFAULT 0, food INTEGER NOT NULL DEFAULT 0)").run();
+  let loaded = 0;
+  const load = async () => { loaded++; return today(); };
+  const start = Date.now();
+  await screenText(env, { screen: "today", load, ask: reply("Spal jsi 6 h 40.", ""), now: start });
+  await screenText(env, { screen: "today", load, ask: reply("x", ""), now: start + 9 * 60000 });
+  assert.equal(loaded, 1);
+  await bumpCacheVersion(env.DB);
+  await screenText(env, { screen: "today", load, ask: reply("x", ""), now: start + 9 * 60000 + 1 });
+  assert.equal(loaded, 2, "a new version compares at once");
+  // That comparison counts as a check: the next opening skips the loading again.
+  await screenText(env, { screen: "today", load, ask: reply("x", ""), now: start + 10 * 60000 });
+  assert.equal(loaded, 2);
+});
+
+test("background data: the last text at once and the new one written after the answer, once", async () => {
+  const env = owner();
+  let asked = 0, sleep = 400, seen = null;
+  const ask = async (_env, req) => { asked++; seen = req; return { text: JSON.stringify({ text: "Text " + asked, advice: "" }) }; };
+  const load = async () => today({ sleep: { minutes: sleep, need: 450, index: 74 } });
+  const work = [];
+  const later = p => work.push(p);
+  const start = Date.now();
+  assert.equal((await screenText(env, { screen: "today", load, ask, later, now: start })).text, "Text 1", "the day's first text is waited for");
+  assert.equal(work.length, 0);
+  sleep = 470;
+  const shown = await screenText(env, { screen: "today", load, ask, later, now: start + 11 * 60000 });
+  assert.equal(shown.text, "Text 1", "the last text shows at once");
+  // Opened again before the background write ends: it is not asked twice.
+  await screenText(env, { screen: "today", load, ask, later, now: start + 22 * 60000 });
+  assert.equal(work.length, 1);
+  await Promise.all(work);
+  assert.equal(asked, 2);
+  assert.equal(seen.slotWaitMs, BACKGROUND_SLOT_WAIT_MS);
+  assert.ok(BACKGROUND_SLOT_WAIT_MS < 20000, "within the 30 s after the answer");
+  assert.equal((await screenText(env, { screen: "today", load, ask, later, now: start + 23 * 60000 })).text, "Text 2");
+});
+
+test("busy slots in the background let the claim go; the user's own change and a red day wait for the new text", async () => {
+  const env = owner();
+  let asked = 0, busy = false, sleep = 400, plan = today().plan, zone = "yellow";
+  const ask = async () => { asked++; if (busy) throw Object.assign(new Error("busy"), { busy: true }); return { text: JSON.stringify({ text: "Text " + asked, advice: "" }) }; };
+  const load = async () => today({ sleep: { minutes: sleep, need: 450, index: 74 }, plan, readiness: { score: 71, zone } });
+  const work = [];
+  const later = p => work.push(p);
+  const start = Date.now();
+  await screenText(env, { screen: "today", load, ask, later, now: start });
+  busy = true; sleep = 470;
+  await screenText(env, { screen: "today", load, ask, later, now: start + 11 * 60000 });
+  await Promise.all(work.splice(0));
+  busy = false;
+  await screenText(env, { screen: "today", load, ask, later, now: start + 12 * 60000 });
+  assert.equal(work.length, 1, "the next opening claims it again");
+  await Promise.all(work.splice(0));
+  assert.equal(asked, 3);
+  // The user's own change: waited for.
+  plan = [];
+  await markScreenTextsStale(env);
+  assert.equal((await screenText(env, { screen: "today", load, ask, later, now: start + 13 * 60000 })).text, "Text 4");
+  // A red morning: waited for, so a text written for yesterday's plan never shows.
+  zone = "red";
+  assert.equal((await screenText(env, { screen: "today", load, ask, later, now: start + 30 * 60000 })).text, "Text 5");
+  assert.equal(work.length, 0);
 });
