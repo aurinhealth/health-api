@@ -19,6 +19,7 @@ import { isReviewAccount, REVIEW_AI_MONTHLY_LIMIT_USD } from "./app-review.js";
 import { aiLimitShare } from "./ai-limit-share.js";
 import { addAiSpend } from "./ai-total.js";
 import { ownerUnlimited } from "./staging.js";
+import { packMessagesForMonth } from "./coach-packs.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
@@ -120,8 +121,28 @@ export async function assertAiAllowance(env, feature = null, { exceptId = 0 } = 
   // A failed read of the log does not cost the user the answer.
   const failed = error => { console.error("AI usage read failed", error?.message || error); return 0; };
   const [monthSpent, daySpent] = await Promise.all([monthLimit == null ? 0 : aiSpentThisMonth(env, { exceptId }).catch(failed), dayLimit == null ? 0 : aiSpentToday(env, { exceptId }).catch(failed)]);
-  if (monthLimit != null && monthSpent >= monthLimit) throw limitError(L("AI je teď pro tvůj účet pozastavená. Ozvi se nám na podporu.", "AI is paused for your account for now. Please contact support."));
+  if (monthLimit != null && monthSpent >= monthLimit && monthSpent >= monthLimit + await packRaise(env)) throw limitError(await monthLimitMessage(env));
   if (dayLimit != null && daySpent >= dayLimit) throw limitError(L("Pro dnešek toho bylo s AI hodně. Pokračovat můžeš zítra.", "That's a lot of AI for today. You can carry on tomorrow."));
+}
+
+// Bought coach messages (coach-packs.js) never stop at the monthly cap: it
+// rises by what they bring in after Apple and VAT, the 100 pack's
+// PACK_NET_USD_PER_MESSAGE being the lower of the two (199 Kč → 6.42 USD).
+// This month's packs count whole, earlier ones for the messages left. Read
+// only once the plain cap is reached; a failed read raises nothing.
+export const PACK_NET_USD_PER_MESSAGE = 0.064;
+async function packRaise(env) {
+  const month = (await limitToday(env)).slice(0, 7);
+  const { bought, left } = await packMessagesForMonth(env, month + "-01").catch(error => { console.error("Coach packs read failed", error?.message || error); return { bought: 0, left: 0 }; });
+  return Math.max(bought, left) * PACK_NET_USD_PER_MESSAGE;
+}
+
+// "Back on 1 December": the cap ends with the account's month. No amount.
+async function monthLimitMessage(env) {
+  const [y, m] = (await limitToday(env)).slice(0, 7).split("-").map(Number);
+  const next = new Date(Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1));
+  const en = next.toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
+  return L(`Kouč a AI funkce budou zase k dispozici od 1. ${next.getUTCMonth() + 1}.`, `The coach and AI features are back on ${en}.`);
 }
 
 // A call's cost is known only after it, so parallel requests would all pass

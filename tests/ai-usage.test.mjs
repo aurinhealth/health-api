@@ -5,7 +5,8 @@ import { createD1 } from "./helpers/d1.mjs";
 import { grantAiConsent } from "./helpers/consent.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { callOpenAI } from "../src/coach-assistant.js";
-import { aiAllowance, aiDailyLimitUsd, aiMonthlyLimitUsd, usageCost } from "../src/ai-usage.js";
+import { aiAllowance, aiDailyLimitUsd, aiMonthlyLimitUsd, usageCost, ensureAiUsage, PACK_NET_USD_PER_MESSAGE } from "../src/ai-usage.js";
+import { savePackTransaction } from "../src/coach-packs.js";
 import { localToday } from "../src/user-time.js";
 import { serverSource } from "./helpers/server-source.mjs";
 
@@ -71,8 +72,26 @@ test("the limit messages name no amount", async () => {
     await callOpenAI(env, { instructions: "x", input: "y" });
     await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => /Pro dnešek toho bylo s AI hodně/.test(error.message) && !/\$|USD|\d/.test(error.message));
     db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (8, ?, 10)").run(localToday());
-    await assert.rejects(callOpenAI({ ...env, DB: scopedDb(db, 8), USER_ID: 8, AI_DAILY_LIMIT_USD: "" }, { instructions: "x", input: "y" }), error => /pozastavená/.test(error.message) && !/\$|USD|\d/.test(error.message));
+    await assert.rejects(callOpenAI({ ...env, DB: scopedDb(db, 8), USER_ID: 8, AI_DAILY_LIMIT_USD: "" }, { instructions: "x", input: "y" }), error => /Kouč a AI funkce budou zase k dispozici od 1\. \d{1,2}\./.test(error.message) && !/\$|USD|podpor/.test(error.message));
   });
+});
+
+test("bought coach messages raise the monthly cap by what they bring in, so a pack is never stopped by it", async () => {
+  const db = grantAiConsent(createD1(), 7, 8);
+  await withOpenAI(async calls => {
+    const env = envFor(db, { AI_DAILY_LIMIT_USD: "100" });
+    await ensureAiUsage(env.DB);
+    db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, 5)").run(localToday());
+    await assert.rejects(callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" }), error => error.limit === true);
+    // A 100 pack bought this month: 100 × 0.064 USD more room.
+    await savePackTransaction(env, { productId: "b.coach.messages100", bundleId: "b", transactionId: "t1", environment: "Production", purchaseDate: Date.now() });
+    await callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" });
+    assert.equal(calls(), 1);
+    // Past what it brings in, the cap holds again.
+    db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, 6.4)").run(localToday());
+    await assert.rejects(callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" }), error => error.limit === true);
+  });
+  assert.equal(PACK_NET_USD_PER_MESSAGE, 0.064);
 });
 
 test("a daily limit, when set, stops the next call once it is spent; the owner has none on the test server", async () => {
@@ -119,7 +138,7 @@ test("the monthly limit stops AI for the rest of the month and counts only this 
     // Earlier this month and last month: only this month counts.
     db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, 4.5), (7, '2000-01-15', 50)").run(month + "-01");
     assert.deepEqual(await aiAllowance(env), { spentUsd: localToday().endsWith("-01") ? 5.2 : 0.7, limitUsd: 100, monthSpentUsd: 5.2, monthLimitUsd: 5 });
-    await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => error.limit === true && /pozastavená/.test(error.message));
+    await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => error.limit === true && /zase k dispozici od/.test(error.message));
     assert.equal(calls(), 1);
   });
   assert.equal(aiMonthlyLimitUsd({ AI_MONTHLY_LIMIT_USD: "12" }), 12);
