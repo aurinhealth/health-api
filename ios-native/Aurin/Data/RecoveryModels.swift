@@ -105,7 +105,9 @@ struct RecoveryTime: Decodable, Equatable {
     }()
 
     /// The day it counts for: after 22:00 the next morning's. Regenerace
-    /// shows days only, never a clock time (Petr, 2026-10-15).
+    /// shows half a day at most, never a clock time or hours (Petr,
+    /// 2026-10-15; Today audit 15: no model of it is validated, Stanley 2013
+    /// gives days).
     private static func day(_ date: Date) -> Date {
         Calendar.current.component(.hour, from: date) >= 22 ? date.addingTimeInterval(6 * 3600) : date
     }
@@ -114,24 +116,32 @@ struct RecoveryTime: Decodable, Equatable {
         DateFormatters.make(pattern, locale: L10n.locale, timeZone: .current).string(from: date)
     }
 
-    /// "dnes", "pátek" / "today", "Friday".
-    static func when(_ date: Date, today: String) -> String {
-        let d = day(date)
-        return AppModel.localDate(d) == today ? L10n.tr("dnes") : format(d, "EEEE")
+    /// 0 morning (till noon), 1 afternoon (till 17:00), 2 evening.
+    private static func slot(_ date: Date) -> Int {
+        let hour = Calendar.current.component(.hour, from: date)
+        return hour < 12 ? 0 : hour < 17 ? 1 : 2
     }
 
-    /// In a sentence: "dnes", "v pátek", "ve čtvrtek" / "today", "on Friday".
-    static func phrase(_ date: Date, today: String) -> String {
-        let d = day(date)
-        if AppModel.localDate(d) == today { return L10n.tr("dnes") }
-        if L10n.isEnglish { return "on " + format(d, "EEEE") }
-        let weekday = Calendar.current.component(.weekday, from: d)
-        return ["v neděli", "v pondělí", "v úterý", "ve středu", "ve čtvrtek", "v pátek", "v sobotu"][weekday - 1]
+    private static func days(from today: String, to date: Date) -> Int {
+        let utc = TimeZone(identifier: "UTC")!
+        let f = DateFormatters.iso(timeZone: utc)
+        guard let a = f.date(from: today), let b = f.date(from: AppModel.localDate(date)) else { return 0 }
+        return Int((b.timeIntervalSince(a) / 86400).rounded())
     }
 
-    /// "pá" / "Fri" for the bar's ends and the sessions.
+    /// "dnes odpoledne", "zítra dopoledne", "za 2 dny" / "this afternoon",
+    /// "tomorrow morning", "in 2 days".
+    static func part(_ date: Date, today: String) -> String {
+        let d = day(date), ahead = days(from: today, to: d)
+        if ahead >= 2 { return L10n.f("za %@", L10n.plural("%lld dní", ahead)) }
+        let parts = ahead == 1 ? ["zítra dopoledne", "zítra odpoledne", "zítra večer"] : ["dnes dopoledne", "dnes odpoledne", "dnes večer"]
+        return L10n.tr(parts[slot(d)])
+    }
+
+    /// "Po odpoledne" / "Mon afternoon" for the bar's ends.
     static func short(_ date: Date, ready: Bool = true) -> String {
-        format(ready ? day(date) : date, L10n.isEnglish ? "EEE" : "EEEEEE").capitalized(with: L10n.locale)
+        let d = ready ? day(date) : date
+        return format(d, L10n.isEnglish ? "EEE" : "EEEEEE").capitalized(with: L10n.locale) + " " + L10n.tr(["dopoledne", "odpoledne", "večer"][slot(d)])
     }
 
     /// A session's day: "dnes", "včera", "neděle" / "Sunday".

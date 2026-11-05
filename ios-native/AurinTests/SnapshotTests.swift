@@ -50,19 +50,25 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testRecoveryTimeDays() {
-        // Days only, never a clock time; after 22:00 it counts for the next morning.
+        // Half a day at most, never a clock time or hours (Today audit 15);
+        // after 22:00 it counts for the next morning.
         var parts = DateComponents(year: 2026, month: 10, day: 15, hour: 23, minute: 30)
         let lateThursday = Calendar.current.date(from: parts) ?? Date()
-        XCTAssertEqual(RecoveryTime.when(lateThursday, today: "2026-10-15"), "pátek")
-        XCTAssertEqual(RecoveryTime.phrase(lateThursday, today: "2026-10-15"), "v pátek")
+        XCTAssertEqual(RecoveryTime.part(lateThursday, today: "2026-10-15"), "zítra dopoledne")
         parts.hour = 17
         let thursday = Calendar.current.date(from: parts) ?? Date()
-        XCTAssertEqual(RecoveryTime.when(thursday, today: "2026-10-15"), "dnes")
-        XCTAssertEqual(RecoveryTime.phrase(thursday, today: "2026-10-14"), "ve čtvrtek")
+        XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-15"), "dnes večer")
+        XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-14"), "zítra večer")
+        XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-13"), "za 2 dny")
+        parts.hour = 14
+        XCTAssertEqual(RecoveryTime.short(Calendar.current.date(from: parts) ?? Date()), "Čt odpoledne")
         XCTAssertEqual(RecoveryTime.dayName("2026-10-11", today: "2026-10-15"), "neděle")
         XCTAssertEqual(RecoveryTime.dayName("2026-10-14", today: "2026-10-15"), "včera")
         let gym = RecoveryTime.Cause(kind: "gym", title: "Posilovna, celé tělo", detail: nil, date: "2026-10-11", hours: 96, readyAt: "2026-10-15T15:49:00Z")
-        XCTAssertEqual(RecoveryTimeContent.detail(gym, today: "2026-10-15"), "neděle · svaly 96 h")
+        XCTAssertEqual(RecoveryTimeContent.detail(gym, today: "2026-10-15"), "neděle · svaly")
+        // A yellow or red morning: hard training waits for a greener one.
+        let time = DemoData.today.recoveryTime
+        XCTAssertEqual(time.flatMap { RecoveryTime.hardLine($0, today: "2026-10-08", zone: "red") }, "tvrdý trénink ne dřív než po zelenějším ránu")
     }
 
     /// Dnes → Den: the night, readiness, done workout and its strain, steps,
@@ -101,6 +107,9 @@ final class SnapshotTests: XCTestCase {
         let time = try XCTUnwrap(today.recoveryTime)
         try render("today-recovery", glow: Palette.Glow.today) {
             RecoveryTimeContent(time: time, today: today.date, now: RecoveryTime.date("2026-10-08T08:00:00Z") ?? Date()).padding(24).padding(.top, 30)
+        }
+        try render("today-recovery-yellow", glow: Palette.Glow.today) {
+            RecoveryTimeContent(time: time, today: today.date, zone: "yellow", now: RecoveryTime.date("2026-10-08T08:00:00Z") ?? Date()).padding(24).padding(.top, 30)
         }
     }
 
@@ -266,6 +275,7 @@ final class SnapshotTests: XCTestCase {
             Units.setSystem("metric")
         }
         XCTAssertEqual(L10n.tr("Spánek"), "Sleep")
+        XCTAssertEqual(RecoveryTime.part(Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 16, hour: 14)) ?? Date(), today: "2026-10-15"), "tomorrow afternoon")
         XCTAssertEqual(L10n.tr("text bez překladu"), "text bez překladu")
         XCTAssertEqual(L10n.plural("dní", 5), "days")
         XCTAssertEqual(Units.weightText(100, digits: 0), "220 lb")

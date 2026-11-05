@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { sessionRecoveryHours, recoveryTime, morningSigns, activityRecoveryHours, MAX_HOURS } from "../src/recovery-time.js";
-import { recoveryForCoach } from "../src/coach-assistant.js";
+import { recoveryForCoach, halfDay } from "../src/coach-assistant.js";
 import { buildToday } from "../src/app-today.js";
 
 const now = Date.parse("2026-10-15T08:00:00Z"), ago = h => now - h * 3600000;
@@ -59,8 +59,18 @@ test("the activity detail and the coach read the same model", () => {
   assert.equal(activityRecoveryHours({ type: "Ride", icu_training_load: 84, icu_intensity: 88, moving_time: 4320 }), 36);
   assert.equal(activityRecoveryHours({ type: "WeightTraining", moving_time: 3600 }), null);
   const c = recoveryForCoach(recoveryTime({ activities: [ride(14, 84, 88)], now }));
-  assert.match(c.hardFrom, /^2026-10-16 \d\d:\d\d$/);
+  // Half a day at most, no clock time or hours (Today audit 15).
+  assert.match(c.hardFrom, /^2026-10-1[67] (morning|afternoon|evening)$/);
+  assert.equal(c.hoursLeft, undefined);
+  assert.doesNotMatch(c.causes.join(" "), /\d+ h\b/);
   assert.match(c.causes[0], /Kolo · tempo/);
+});
+
+test("the coach gets half a day, after 22:00 the next morning (Prague time)", () => {
+  assert.equal(halfDay("2026-11-05T09:00:00Z"), "2026-11-05 morning");
+  assert.equal(halfDay("2026-11-05T13:00:00Z"), "2026-11-05 afternoon");
+  assert.equal(halfDay("2026-11-05T17:00:00Z"), "2026-11-05 evening");
+  assert.equal(halfDay("2026-11-05T21:30:00Z"), "2026-11-06 morning");
 });
 
 test("Today carries the resting heart rate range Regenerace reads", () => {
