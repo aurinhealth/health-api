@@ -381,7 +381,8 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     event: eventPlan(athleteFocus(profile, date).event || planRace, date),
     form: lastPmc ? { fitness: round(lastPmc.fitness), fatigue: round(lastPmc.fatigue), form: tsb, zone: zone.key, label: zone.label, text: zone.text, series: pmc } : null,
     load: { weeks, intensity },
-    acwr: workload.historyDays > 0 ? workload.acwr : null,
+    // The last 7 days against the usual 28, in words only (Today audit D4).
+    acwr: workload.historyDays > 0 && workload.acwr.level ? { level: workload.acwr.level } : null,
     monotony: workload.historyDays > 0 ? workload.monotony : null,
     zones: zoneTotal > 0 || zoneWeeksTotal > 0 ? { ...Object.fromEntries(Object.entries(zones).map(([k, v]) => [k, Math.round(v)])), minutes: Math.round(zoneTotal), weeks: zoneWeeks } : null,
     vo2max: vo2Latest ? { value: vo2Latest.value, change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,

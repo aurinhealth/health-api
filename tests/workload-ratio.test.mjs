@@ -3,7 +3,7 @@
 // in the deterministic coach's morning summary.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { acwr, acwrZone, dailyLoadSeries, monotony, rowLoad, workloadCaution, workloadMetrics, acwrZoneLabel } from "../src/workload-ratio.js";
+import { acwr, loadLevel, dailyLoadSeries, monotony, rowLoad, workloadCaution, workloadMetrics, loadLevelLabel } from "../src/workload-ratio.js";
 import { trendFacts } from "../src/trend-facts.js";
 import { buildTraining } from "../src/app-training.js";
 import { buildCoachCouncil } from "../src/coach-engine.js";
@@ -41,10 +41,10 @@ test("the series is 42 days to the date, rest days and missing days 0, history f
 test("ACWR is the 7-day mean over the 28-day mean", () => {
   // Three weeks at 50 a day, then a week at 100: acute 100, chronic 62.5.
   const r = acwr([...repeat(21, 50), ...repeat(7, 100)], 28);
-  assert.deepEqual(r, { value: 1.6, zone: "high", acute: 100, chronic: 62.5 });
+  assert.deepEqual(r, { value: 1.6, level: "wellAbove", acute: 100, chronic: 62.5 });
   // A steady load is 1.
   assert.equal(acwr(repeat(42, 40), 42).value, 1);
-  assert.equal(acwr(repeat(42, 40), 42).zone, "sweetSpot");
+  assert.equal(acwr(repeat(42, 40), 42).level, "usual");
   // Rest days count as 0: every other day trained.
   const alternate = Array.from({ length: 28 }, (_, i) => (i % 2 ? 60 : 0));
   assert.equal(acwr(alternate, 28).value, round2((60 * 4 / 7) / 30));
@@ -54,14 +54,14 @@ const round2 = v => Math.round(v * 100) / 100;
 test("ACWR is null with under 21 days of history or no chronic load", () => {
   const loads = [...repeat(8, 0), ...repeat(20, 50)];
   assert.equal(acwr(loads, 20).value, null);
-  assert.equal(acwr(loads, 20).zone, null);
+  assert.equal(acwr(loads, 20).level, null);
   // The means are still there to show.
   assert.equal(acwr(loads, 20).acute, 50);
   // The chronic mean over the 21 days since the first load, not 28 with a week of zeros.
   assert.equal(acwr(loads, 21).value, round2(50 / (1000 / 21)));
   assert.equal(acwr([...repeat(7, 0), ...repeat(21, 40)], 21).value, 1);
   // All zero.
-  assert.deepEqual(acwr(repeat(28, 0), 40), { value: null, zone: null, acute: 0, chronic: 0 });
+  assert.deepEqual(acwr(repeat(28, 0), 40), { value: null, level: null, acute: 0, chronic: 0 });
   // Fewer than 28 days of series.
   assert.equal(acwr(repeat(10, 50), 30).value, null);
   // From rows: history counts from the first load, not the length of the series.
@@ -70,17 +70,18 @@ test("ACWR is null with under 21 days of history or no chronic load", () => {
   assert.equal(workloadMetrics(rows([...repeat(21, 0), ...repeat(21, 50)]), DATE).acwr.value, 1);
 });
 
-test("ACWR zones: < 0.8 low, 0.8–1.3 sweet spot, 1.3–1.5 elevated, > 1.5 high", () => {
-  assert.equal(acwrZone(0.79), "low");
-  assert.equal(acwrZone(0.8), "sweetSpot");
-  assert.equal(acwrZone(1.3), "sweetSpot");
-  assert.equal(acwrZone(1.31), "elevated");
-  assert.equal(acwrZone(1.5), "elevated");
-  assert.equal(acwrZone(1.51), "high");
-  assert.equal(acwrZone(null), null);
-  assert.equal(withLang("cs", () => acwrZoneLabel("sweetSpot")), "optimální pásmo");
-  assert.equal(withLang("en", () => acwrZoneLabel("high")), "high load, overload risk");
-  assert.equal(acwrZoneLabel("nope"), null);
+test("the last 7 days against the usual 28 in words, no bands or risk (Today audit D4)", () => {
+  assert.equal(loadLevel(0.69), "wellBelow");
+  assert.equal(loadLevel(0.7), "below");
+  assert.equal(loadLevel(0.9), "usual");
+  assert.equal(loadLevel(1.15), "usual");
+  assert.equal(loadLevel(1.42), "above");
+  assert.equal(loadLevel(1.5), "above");
+  assert.equal(loadLevel(1.51), "wellAbove");
+  assert.equal(loadLevel(null), null);
+  assert.equal(withLang("cs", () => loadLevelLabel("above")), "nad obvyklým");
+  assert.equal(withLang("en", () => loadLevelLabel("wellAbove")), "well above");
+  assert.equal(loadLevelLabel("sweetSpot"), null);
 });
 
 test("monotony is the 7-day mean over its SD, strain the week's load × monotony", () => {
@@ -105,7 +106,8 @@ test("the Training screen carries acwr and monotony from the fitness rows", () =
   // Every other day 60 (Intervals.icu's day load), today trained.
   const wellness = Array.from({ length: 100 }, (_, i) => ({ id: shift(DATE, i - 99), ctl: 40, atl: 45, ctlLoad: i % 2 ? 60 : 0 }));
   const t = buildTraining({ date: DATE, fitness: { wellness } });
-  assert.deepEqual(t.acwr, { value: round2((240 / 7) / 30), zone: "sweetSpot", acute: 34.3, chronic: 30 });
+  // In words only: no ratio or loads for the app.
+  assert.deepEqual(t.acwr, { level: "usual" });
   assert.equal(t.monotony.high, false);
   assert.equal(t.monotony.value, 1.15);
   assert.equal(t.monotony.strain, 277);
@@ -115,22 +117,20 @@ test("the Training screen carries acwr and monotony from the fitness rows", () =
   assert.equal(none.monotony, null);
   // The training screen's "Proč?" lists both.
   const facts = withLang("en", () => screenFacts("training", { ...t, form: null }));
-  assert.ok(facts.basis.some(b => b.label === "Acute:chronic load" && b.value === "1.14 (sweet spot)"));
+  assert.ok(facts.basis.some(b => b.label === "Last 7 days vs your usual 28" && b.value === "usual"));
   assert.ok(facts.basis.some(b => b.label === "Monotony" && /^1\.15, strain 277$/.test(b.value)));
 });
 
 test("the coach's trend facts carry acwr and monotony with Czech and English labels", () => {
   const intervals = rows([...repeat(35, 50), ...repeat(7, 100)], "ctlLoad");
   const cs = withLang("cs", () => trendFacts({ date: DATE, intervals }));
-  assert.equal(cs.acwr.value, 1.6);
-  assert.equal(cs.acwr.zone, "high");
-  assert.equal(cs.acwr.label, "Poměr akutní a chronické zátěže");
-  assert.equal(cs.acwr.zoneLabel, "vysoká zátěž, riziko přetížení");
+  // The level only, never the ratio, the mean loads or a risk.
+  assert.deepEqual(cs.acwr, { label: "Posledních 7 dní vs. obvyklých 28", level: "wellAbove", levelLabel: "výrazně nad obvyklým" });
   // A week at a constant 100 has no variation: no monotony fact.
   assert.equal(cs.monotony, undefined);
   const varied = rows([...repeat(35, 50), 90, 100, 95, 100, 90, 100, 95], "ctlLoad");
   const en = withLang("en", () => trendFacts({ date: DATE, intervals: varied }));
-  assert.equal(en.acwr.label, "Acute:chronic workload ratio");
+  assert.equal(en.acwr.label, "Last 7 days vs your usual 28");
   assert.equal(en.monotony.label, "Training monotony (7 days)");
   assert.equal(en.monotony.strainLabel, "Weekly training strain");
   assert.equal(en.monotony.high, true);
@@ -138,24 +138,25 @@ test("the coach's trend facts carry acwr and monotony with Czech and English lab
   assert.equal(trendFacts({ date: DATE, intervals: rows(repeat(14, 50), "ctlLoad") }), null);
 });
 
-test("the deterministic coach warns when ACWR is above 1.5 or monotony above 2.0", () => {
-  const high = { acwr: { value: 1.62, zone: "high" }, monotony: { value: 1.2, high: false } };
-  assert.match(withLang("cs", () => workloadCaution(high)), /^Poměr akutní a chronické zátěže je 1,62: .*lehčích dní/);
-  assert.match(withLang("en", () => workloadCaution(high)), /^Your acute:chronic workload ratio is 1\.62: .*easier days/);
-  const flat = { acwr: { value: 1.1 }, monotony: { value: 2.34, high: true } };
+test("the deterministic coach warns when the last 7 days are well above the usual 28 or monotony above 2.0", () => {
+  const high = { acwr: { level: "wellAbove" }, monotony: { value: 1.2, high: false } };
+  assert.equal(withLang("cs", () => workloadCaution(high)), "Posledních 7 dní bylo výrazně nad tvými obvyklými 28. Tento týden střídej těžší a lehčí dny.");
+  assert.equal(withLang("en", () => workloadCaution(high)), "The last 7 days were well above your usual 28. Alternate harder and easier days this week.");
+  assert.doesNotMatch(withLang("en", () => workloadCaution(high)), /risk|ratio|\d\.\d/);
+  const flat = { acwr: { level: "usual" }, monotony: { value: 2.34, high: true } };
   assert.match(withLang("cs", () => workloadCaution(flat)), /^Monotónnost tréninku je 2,34: .*den volna\.$/);
   assert.match(withLang("en", () => workloadCaution(flat)), /^Training monotony is 2\.34: .*rest day\.$/);
   // Both: two lines; at the limits or without data: nothing.
-  assert.match(withLang("en", () => workloadCaution({ acwr: { value: 1.7 }, monotony: { value: 2.1 } })), /ratio is 1\.7: .* monotony is 2\.1: /);
-  assert.equal(workloadCaution({ acwr: { value: 1.5 }, monotony: { value: 2 } }), null);
-  assert.equal(workloadCaution({ acwr: { value: null }, monotony: { value: null } }), null);
+  assert.match(withLang("en", () => workloadCaution({ acwr: { level: "wellAbove" }, monotony: { value: 2.1 } })), /usual 28\. .* monotony is 2\.1: /);
+  assert.equal(workloadCaution({ acwr: { level: "above" }, monotony: { value: 2 } }), null);
+  assert.equal(workloadCaution({ acwr: { level: null }, monotony: { value: null } }), null);
   assert.equal(workloadCaution(null), null);
 
   // In the morning summary, in the app language.
   const en = withLang("en", () => buildCoachCouncil({ date: DATE, fitness: { tsb: -5 }, workload: high }).morningSummary);
-  assert.match(en.text, /Current form -5\. Your acute:chronic workload ratio is 1\.62/);
+  assert.match(en.text, /Current form -5\. The last 7 days were well above your usual 28/);
   const cs = withLang("cs", () => buildCoachCouncil({ date: DATE, workload: flat }).morningSummary);
   assert.match(cs.text, /Monotónnost tréninku je 2,34/);
   // Without the warning and without other facts there is no summary.
-  assert.equal(buildCoachCouncil({ date: DATE, workload: { acwr: { value: 1.1 }, monotony: { value: 1.5 } } }).morningSummary, null);
+  assert.equal(buildCoachCouncil({ date: DATE, workload: { acwr: { level: "usual" }, monotony: { value: 1.5 } } }).morningSummary, null);
 });
