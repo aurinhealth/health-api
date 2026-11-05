@@ -66,12 +66,22 @@ struct WatchRoot: View {
     @ObservedObject private var gym = GymStore.shared
     @State private var page = WatchDemo.value("-page") ?? "readiness"
     @State private var path = NavigationPath()
+    @Environment(\.legibilityWeight) private var legibility
+    /// Bold Text, for W.serif and W.news: drawn again when it changes.
+    @State private var bold = false
 
     var body: some View {
-        if WatchDemo.flag("-face"), let s = store.snapshot {
-            DemoFace(s: s)
-        } else {
-            pages
+        Group {
+            if WatchDemo.flag("-face"), let s = store.snapshot {
+                DemoFace(s: s)
+            } else {
+                pages
+            }
+        }
+        .id(bold)
+        .onChange(of: legibility, initial: true) { _, now in
+            W.boldText = now == .bold
+            bold = W.boldText
         }
     }
 

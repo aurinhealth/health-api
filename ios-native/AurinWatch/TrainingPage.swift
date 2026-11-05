@@ -29,21 +29,17 @@ struct TrainingPage: View {
         ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Text(W.tr("Trénink", "Training"))
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(W.amber)
-                    Spacer()
-                    if day != today {
-                        Text(day == tomorrow ? W.tr("ZÍTRA", "TOMORROW") : W.dayName(day).uppercased())
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.black)
-                            .padding(.horizontal, 7).padding(.vertical, 2)
-                            .background(W.amber, in: Capsule())
-                    }
+                // The page's name is the system title (watch audit D3); the
+                // day shown, when not today, on a row of its own.
+                if day != today {
+                    Text(day == tomorrow ? W.tr("ZÍTRA", "TOMORROW") : W.dayName(day).uppercased())
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(W.amber, in: Capsule())
+                        .padding(.bottom, 6)
                 }
                 WeekRow(days: weekDays, today: today, shown: day, sessions: sessions) { picked = $0 }
-                    .padding(.top, 6)
                     // Where the sample day's screenshot scrolls to (-week): 8 pt into
                     // the week, so it stays whole under the clock and Continue whole
                     // above the screen's edge. The id sits on the 1 pt line itself:
@@ -71,6 +67,7 @@ struct TrainingPage: View {
             }
         }
         }
+        .navigationTitle(W.tr("Trénink", "Training"))
         // Each turn of the crown to this page shows it again: the plan only
         // when there is none for today or it is older than 10 minutes (the
         // iPhone sends every change it saves on its own).
@@ -124,17 +121,20 @@ struct TrainingPage: View {
         .padding(.top, 12)
     }
 
-    private func startButton(_ kind: WatchGym.Start.Kind, _ title: String, prominent: Bool) -> some View {
-        Button {
+    /// The main one white, the others the system's grey (watch audit D2).
+    @ViewBuilder private func startButton(_ kind: WatchGym.Start.Kind, _ title: String, prominent: Bool) -> some View {
+        let button = Button {
             Task { if await store.start(kind) { running = true } }
         } label: {
             Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(prominent ? .black : W.ink)
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.borderedProminent)
-        .tint(prominent ? W.ink : W.tile)
-        .padding(.top, 3)
+        if prominent {
+            button.mainButton().padding(.top, 3)
+        } else {
+            button.buttonStyle(.bordered).padding(.top, 3)
+        }
     }
 
     /// "5 cviků", "5 exercises".
@@ -258,8 +258,7 @@ struct TrainingPage: View {
                             .font(.system(size: 16, weight: .semibold)).foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(W.green)
+                    .mainButton()
                     // The button's own width, centred in the page.
                     .frame(maxWidth: .infinity)
                     .padding(.top, 8)
@@ -627,8 +626,7 @@ struct OpenInWorkoutButton: View {
                     .font(.system(size: 14, weight: .semibold)).foregroundStyle(.black)
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(W.green)
+            .mainButton()
             .disabled(opening)
             if failed {
                 Text(W.tr("Aplikace Cvičení se neotevřela. Zkus to znovu.", "Couldn't open the Workout app. Try again."))

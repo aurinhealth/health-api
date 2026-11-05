@@ -55,6 +55,7 @@ struct MetricDetail: View {
             }
         }
         .tabViewStyle(.verticalPage)
+        .navigationTitle(metric.name)
     }
 
     private var normal: ClosedRange<Double>? {
@@ -125,6 +126,7 @@ struct SleepDetail: View {
             }
         }
         .tabViewStyle(.verticalPage)
+        .navigationTitle(W.tr("Spánek", "Sleep"))
     }
 
     /// The night against its need (half an hour either side marked), the
@@ -191,6 +193,7 @@ struct StrainDetail: View {
             }
         }
         .containerBackground(W.glow(W.Glow.strain), for: .navigation)
+        .navigationTitle(W.tr("Námaha", "Strain"))
     }
 
     /// The target's top at 85 % of the ring, so short of it, in it and over it all show.
@@ -257,6 +260,7 @@ struct WhyDetail: View {
             }
         }
         .containerBackground(W.glow(W.Glow.readiness), for: .navigation)
+        .navigationTitle(W.tr("Připravenost", "Readiness"))
     }
 
     private var note: String {

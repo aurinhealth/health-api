@@ -613,7 +613,7 @@ const wRange = (pos, c) => `<i class="aw-rb"><b style="left:${pos}%;background:$
 const wRing = (size, r, width, frac, c, inner) => `<span class="aw-ring" style="width:${size}px;height:${size}px"><svg viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" pathLength="100" stroke="${c}" stroke-opacity=".22" stroke-width="${width}" stroke-dasharray="8 2"/><circle cx="${size / 2}" cy="${size / 2}" r="${r}" pathLength="100" stroke="${c}" stroke-width="${width}" stroke-dasharray="${frac === 1 ? '8 2' : `${'8 2 '.repeat(Math.round(frac * 10)).trim()} 0 100`}" transform="rotate(-90 ${size / 2} ${size / 2})"/></svg>${inner}</span>`;
 const wTop = (left, time, right) => `<div class="aw-top"><span>${left}</span><span class="aw-time">${time}</span><span>${right}</span></div>`;
 const wBtn = (icon, c) => `<span class="aw-ib" style="color:${c}">${ic(icon)}</span>`;
-const watchHome = `<div class="aw-s aw-home" style="--gw:#163A2E">${wTop(wBtn('alarm', WA.indigo), '7:12', wBtn('chat', WA.amber))}
+const watchHome = `<div class="aw-s aw-home" style="--gw:#163A2E">${wTop(wBtn('alarm', WA.ink), '7:12', wBtn('chat', WA.ink))}
 <div class="aw-hero"><span class="aw-n">78</span><span class="aw-side"><span class="aw-k">Readiness</span><span class="aw-pill" style="color:${WA.green}">high</span></span></div>
 <div class="aw-g">${[['Sleep', WA.indigo, '7:12', '', 28, WA.amber, '89%'], ['Strain', WA.amber, '8.4', '', 14, WA.neutral, 'of 11–14'], ['HRV', WA.green, '64', 'ms', 76, WA.green, 'high']].map(([k, kc, v, u, pos, c, note]) => `<div><span class="aw-k" style="color:${kc}">${k}</span><span class="aw-n aw-v">${v}${u ? `<small>${u}</small>` : ''}</span>${wRange(pos, c)}<b style="color:${c}">${note}</b></div>`).join('')}</div>
 <div class="aw-next"><span style="color:${WA.amber}">${ic('gym')}</span>Strength, full body · 45′ at 5:30 PM${ic('chev', 'aw-cv')}</div></div>`;
@@ -624,9 +624,9 @@ const watchGym = `<div class="aw-s" style="--gw:#3A2A17">${wTop(wBtn('pause', WA
 <div class="aw-two"><div class="aw-box on"><span class="aw-n">80</span><span class="aw-k">kg</span></div><div class="aw-box"><span class="aw-n">8</span><span class="aw-k">reps</span></div></div>
 <div class="aw-done">Set done</div>
 <div class="aw-two aw-tiles"><div><span class="aw-k">Time</span><b>12:40</b></div><div><span class="aw-k">Heart</span><b style="color:${WA.red}">128 <small>bpm</small></b></div></div>
-<div class="aw-two aw-tiles"><div><span class="aw-k">Volume</span><b style="color:${WA.indigo}">1.9 <small>t</small></b></div><div><span class="aw-k">Calories</span><b style="color:${WA.amber}">86 <small>kcal</small></b></div></div></div>`;
-const watchFood = `<div class="aw-s" style="--gw:#163047">${wTop('', '12:20', '')}
-<div class="aw-food">${wRing(70, 29, 7, .52, WA.amber, `<span class="aw-in"><span class="aw-n">1,380</span><small>OF 2,650</small></span>`)}<div><b style="color:${WA.amber}">Food</b><span class="aw-news">1,270 kcal left</span><span class="aw-k">lunch logged 12:30</span></div></div>
+<div class="aw-two aw-tiles"><div><span class="aw-k">Volume</span><b style="color:${WA.amber}">1.9 <small>t</small></b></div><div><span class="aw-k">Calories</span><b style="color:${WA.amber}">86 <small>kcal</small></b></div></div></div>`;
+const watchFood = `<div class="aw-s" style="--gw:#163047">${wTop('<b class="aw-tt">Food</b>', '', '<b class="aw-time">12:20</b>')}
+<div class="aw-food">${wRing(70, 29, 7, .52, WA.amber, `<span class="aw-in"><span class="aw-n">1,380</span><small>OF 2,650</small></span>`)}<div><span class="aw-news">1,270 kcal left</span><span class="aw-k">lunch logged 12:30</span></div></div>
 <div class="aw-mac">${[['Carbs', 177, 330, '#FFC274'], ['Protein', 84, 150, '#83C7FF'], ['Fat', 36, 80, '#B3A1FF']].map(([k, v, t, c]) => `<div><b style="color:${c}">${k}</b>${v}/${t} g<i><b style="width:${Math.round(v / t * 100)}%;background:${c}"></b></i></div>`).join('')}</div>
 <div class="aw-water"><span class="aw-btl" style="color:${WA.blue}">${ic('drop')}</span><div><b>1.5</b> <span class="aw-k">/ 2.6 L</span><i><b style="width:58%"></b></i></div><span class="aw-plus">+250 ml</span></div></div>`;
 // The app's ring on the face (SegmentedArc): ten arcs over three quarters of a circle, open at the bottom
@@ -646,7 +646,7 @@ const watchFace = `<div class="aw-s aw-face"><div class="aw-frow">${wArc(.35, WA
 
 // Race day (TrainingPage.raceCard, RaceDay.swift): a training plan's duathlon as one card, its legs in race
 // order with their distance and time, and one start for the whole race.
-const watchRace = `<div class="aw-s" style="--gw:#3A2A17">${wTop('', '8:31', '')}
+const watchRace = `<div class="aw-s" style="--gw:#3A2A17">${wTop('<b class="aw-tt">Training</b>', '', '<b class="aw-time">8:31</b>')}
 <div class="aw-race"><div class="aw-rh"><b>Today · 9:00</b><span>1 h 20</span></div><b class="aw-rn"><span style="color:${WA.amber}">${ic('flag')}</span>Duathlon</b>
 ${[['run', '5 km', '24 min', WA.red], ['bike', '20 km', '33 min', WA.amber], ['run', '2.5 km', '13 min', WA.red]].map(([icon, d, t, c]) => `<div class="aw-leg"><span style="color:${c}">${ic(icon)}</span>${d}<i>${t}</i></div>`).join('')}
 <div class="aw-go">${ic('play')}Open in Workout</div></div></div>`;
@@ -1117,7 +1117,7 @@ html:not(.js) .stage1{display:none}
 .aw-s{position:relative;height:100%;border-radius:50px;overflow:hidden;padding:14px 15px 12px;background:radial-gradient(120% 60% at 50% -5%,var(--gw,#000) 0,#000 70%);color:#ECEAE6;font:12px/1.3 -apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;text-align:left}
 .aw-s .di{width:14px;height:14px}
 .aw-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;height:26px}.aw-top>span:last-child{justify-self:end}
-.aw-time{font-weight:600;font-size:14px}
+.aw-time{font-weight:600;font-size:14px}.aw-tt{font-size:14px;font-weight:600}
 .aw-ib{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.12)}.aw-ib .di{stroke-width:2.4}
 .aw-ib.aw-sm{width:22px;height:22px}.aw-ib.aw-sm .di{width:11px;height:11px;stroke-width:3}
 .aw-n{font-family:"Instrument Serif","New York",Georgia,serif;font-weight:400;line-height:1}
@@ -1126,7 +1126,7 @@ html:not(.js) .stage1{display:none}
 .aw-side{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin-bottom:7px}.aw-side .aw-k{color:#D9D6D0;font-size:12px}
 .aw-pill{padding:2px 8px;border-radius:99px;background:rgba(143,230,196,.16);font-size:11px;font-weight:600}
 .aw-g{display:flex;margin-top:6px;border-radius:14px;background:rgba(255,255,255,.08)}.aw-g>div{flex:1;display:flex;flex-direction:column;padding:6px 6px 6px 7px}.aw-g>div+div{border-left:1px solid rgba(255,255,255,.1)}
-.aw-v{font-size:19px;line-height:1.1}.aw-v small{font:10px -apple-system,Inter,sans-serif;color:#9AA39F;margin-left:2px}.aw-g b{font-size:10px}
+.aw-v{font-family:ui-rounded,"SF Pro Rounded",-apple-system,Inter,sans-serif;font-weight:600;font-variant-numeric:tabular-nums;font-size:17px;line-height:1.1}.aw-v small{font:10px -apple-system,Inter,sans-serif;color:#9AA39F;margin-left:2px}.aw-g b{font-size:10px;white-space:nowrap}
 .aw-rb{position:relative;display:block;height:4px;margin:4px 0 3px;border-radius:2px;background:#2A2C2E}.aw-rb:before{content:"";position:absolute;left:33%;width:34%;top:0;bottom:0;background:rgba(255,255,255,.18)}
 .aw-rb b{position:absolute;top:-2px;width:8px;height:8px;margin-left:-4px;border-radius:50%;border:1.5px solid #000}
 .aw-next{display:flex;align-items:center;gap:5px;margin-top:7px;font-size:10.5px;font-weight:600;white-space:nowrap}.aw-next .aw-cv{margin-left:auto;flex:none;color:#9AA39F}
@@ -1141,7 +1141,7 @@ html:not(.js) .stage1{display:none}
 .aw-race{margin-top:4px;padding:8px 10px;border-radius:14px;background:rgba(255,255,255,.07)}.aw-rh{display:flex;justify-content:space-between;font-size:10.5px}.aw-rh b{color:#F2B46B}.aw-rh span{color:#9AA39F}
 .aw-rn{display:flex;align-items:center;gap:5px;margin:2px 0 2px;font-size:16px}.aw-rn .di{width:14px;height:14px}
 .aw-leg{display:flex;align-items:center;gap:6px;padding:3.5px 0;font-size:12px;font-weight:500}.aw-leg+.aw-leg{border-top:1px solid rgba(255,255,255,.08)}.aw-leg .di{width:13px;height:13px}.aw-leg i{margin-left:auto;font-style:normal;color:#9AA39F;font-weight:400}
-.aw-go{display:flex;align-items:center;justify-content:center;gap:5px;height:30px;margin-top:6px;border-radius:15px;background:#8FE6C4;color:#000;font-size:13px;font-weight:700}.aw-go .di{width:11px;height:11px}
+.aw-go{display:flex;align-items:center;justify-content:center;gap:5px;height:30px;margin-top:6px;border-radius:15px;background:#F4F2EE;color:#000;font-size:13px;font-weight:700}.aw-go .di{width:11px;height:11px}
 
 .aw-ring{position:relative;display:grid;place-items:center;flex:none}.aw-ring>svg{position:absolute;inset:0;fill:none}
 .aw-in{display:flex;flex-direction:column;align-items:center;line-height:1}.aw-in small{font-size:7.5px;color:#9AA39F;margin-top:2px}
@@ -1160,7 +1160,7 @@ html:not(.js) .stage1{display:none}
 .aw-day{display:flex}.aw-day>div{flex:1;display:flex;flex-direction:column;padding:0 5px}.aw-day>div+div{border-left:1px solid rgba(255,255,255,.14)}
 .aw-day span{font-size:8.5px;font-weight:700;letter-spacing:.4px}.aw-day>div>b{font:700 18px/1.15 -apple-system,Inter,sans-serif}
 .aw-st{position:relative;display:flex;gap:1.5px;margin-top:2px;padding-bottom:3.5px}.aw-st b{flex:1;height:5px;border-radius:1px}.aw-st em{position:absolute;bottom:0;height:1.5px;border-radius:1px;background:rgba(255,255,255,.6)}
-.aw-home .aw-hero .aw-n{font-size:70px}.aw-home .aw-hero{margin-top:4px}.aw-home .aw-g{margin-top:10px}.aw-home .aw-g>div{padding:8px 6px 8px 8px}.aw-home .aw-v{font-size:23px}.aw-home .aw-next{align-items:flex-start;margin-top:12px;font-size:12.5px;line-height:1.3;white-space:normal}.aw-home .aw-next .di{margin-top:2px}
+.aw-home .aw-hero .aw-n{font-size:70px}.aw-home .aw-hero{margin-top:4px}.aw-home .aw-g{margin-top:10px}.aw-home .aw-g>div{padding:8px 6px 8px 8px}.aw-home .aw-v{font-size:20px}.aw-home .aw-next{align-items:flex-start;margin-top:12px;font-size:12.5px;line-height:1.3;white-space:normal}.aw-home .aw-next .di{margin-top:2px}
 .aw-face{display:flex;flex-direction:column;justify-content:space-between}.aw-fbot{padding:0 2px 4px}
 @media (prefers-reduced-motion:reduce){.dw-eye circle,.dw-spout,.js .dw.goal,.js .dw-burst.in path,.js .dw-drop.in,.js .dw-ring.in{animation:none}.dw-drop,.dw-ring{display:none}}
 .wc .th .di{font-size:12px}.wc .chips3 .ch3{border-radius:16px;transition:background .35s,border-color .35s}.wc .ch3 b{font-weight:600;font-size:15px}

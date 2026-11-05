@@ -22,6 +22,7 @@ struct AlarmView: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .automatic))
+        .navigationTitle(W.tr("Budík", "Alarm"))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { settings = true } label: { Image(systemName: "gearshape.fill") }
@@ -185,7 +186,8 @@ private struct AlarmDay: View {
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 7)
-                .background(primary ? W.indigo : W.tile, in: Capsule())
+                // The main choice white, as every main button (watch audit D2).
+                .background(primary ? W.ink : W.tile, in: Capsule())
         }
         .buttonStyle(.plain)
     }
@@ -349,11 +351,12 @@ struct AlarmRinging: View {
             HStack(spacing: 6) {
                 // Double Tap snoozes, never stops: a half-awake tap can't end the alarm.
                 Button(W.tr("Odložit", "Snooze")) { alarm.snoozeNow() }
-                    .tint(W.tile)
+                    .buttonStyle(.bordered)
                     .doubleTap()
-                Button(W.tr("Vypnout", "Stop")) { alarm.stop() }
-                    .tint(W.amber)
-                    .foregroundStyle(.black)
+                Button { alarm.stop() } label: {
+                    Text(W.tr("Vypnout", "Stop")).foregroundStyle(.black)
+                }
+                .mainButton()
             }
             .font(.system(size: 14, weight: .semibold))
         }

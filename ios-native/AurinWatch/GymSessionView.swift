@@ -289,7 +289,7 @@ struct GymSessionView: View {
                     // Not in the sample day's screenshot, where their tops would show cut off.
                     if !WatchDemo.on {
                         LazyVGrid(columns: [GridItem(.flexible(), spacing: 5), GridItem(.flexible(), spacing: 5)], spacing: 5) {
-                            cell(W.tr("Objem", "Volume"), GymText.volume(gym.volume), nil, W.indigo, small: false)
+                            cell(W.tr("Objem", "Volume"), GymText.volume(gym.volume), nil, W.amber, small: false)
                             cell(W.tr("Kalorie", "Calories"), W.number(workout.calories), "kcal", W.amber, small: false)
                         }
                     }
@@ -688,17 +688,16 @@ struct GymSessionView: View {
                         .font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(W.green)
+                .mainButton()
                 .padding(.top, 6)
                 Button(role: .destructive) {
                     summary = true
                 } label: {
                     Text(W.tr("Ukončit trénink", "End workout")).font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(W.red)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
-                .tint(W.red)
+                .endButton()
             }
             .frame(maxWidth: .infinity)
         }
@@ -721,7 +720,7 @@ struct GymSessionView: View {
                             .stroke(W.amber, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                             .rotationEffect(.degrees(-90))
                             .animation(.linear(duration: 1), value: left)
-                        Text(GymText.elapsed(left.rounded(.up))).font(W.serif(20)).foregroundStyle(W.ink)
+                        Text(GymText.elapsed(left.rounded(.up))).font(W.digits(18)).foregroundStyle(W.ink)
                             .lineLimit(1).minimumScaleFactor(0.7)
                     }
                     .frame(width: 56, height: 56)
@@ -890,8 +889,7 @@ struct GymSessionView: View {
                         .font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(W.green)
+                .mainButton()
                 .disabled(store.changing)
                 .padding(.top, 6)
             }
@@ -913,11 +911,10 @@ struct GymSessionView: View {
                 Button(role: .destructive) {
                     discard()
                 } label: {
-                    Text(W.tr("Zahodit", "Discard")).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                    Text(W.tr("Zahodit", "Discard")).font(.system(size: 15, weight: .semibold)).foregroundStyle(W.red)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color(hex: 0xE5484D))
+                .endButton()
                 .padding(.top, 8)
                 Button {
                     discarding = false
@@ -961,11 +958,10 @@ struct GymSessionView: View {
                     workout.dismissAsk()
                     summary = true
                 } label: {
-                    Text(W.tr("Ukončit trénink", "End workout")).font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
+                    Text(W.tr("Ukončit trénink", "End workout")).font(.system(size: 15, weight: .semibold)).foregroundStyle(W.red)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(W.ink)
+                .endButton()
                 .padding(.top, 8)
                 Button {
                     workout.worked()
@@ -1002,8 +998,7 @@ struct GymSessionView: View {
                     Text(W.tr("Hotovo", "Done")).font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(W.ink)
+                .mainButton()
                 .padding(.top, 6)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1013,7 +1008,7 @@ struct GymSessionView: View {
     private func savedTile(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(label).font(.system(size: 11)).foregroundStyle(W.muted)
-            Text(value).font(W.serif(22)).foregroundStyle(W.ink)
+            Text(value).font(W.digits(20)).foregroundStyle(W.ink)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 9).padding(.vertical, 4)
@@ -1417,8 +1412,7 @@ struct GymSummary: View {
                     Text(W.tr("Dokončit", "Finish")).font(.system(size: 16, weight: .semibold)).foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(W.green)
+                .mainButton()
                 .padding(.top, 4)
                 if let keepTraining, setsLeft > 0 {
                     Button(action: keepTraining) {

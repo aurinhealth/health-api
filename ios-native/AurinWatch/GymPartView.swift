@@ -235,7 +235,8 @@ struct GymPartView: View {
         let index = min(run.hold, max(0, holds.count - 1))
         let hold = holds[index]
         let moveIndex = (routine.items.firstIndex { $0.id == hold.item.id } ?? 0) + 1
-        let color = part == .warmup ? W.green : W.indigo
+        // Stretching green as the warm-up, not the coach's and sleep's indigo (watch audit D4).
+        let color = W.green
         let left = run.holdEnd.map { $0.timeIntervalSince(now) } ?? Double(hold.item.seconds)
         var title = hold.item.name
         if let side = hold.side { title += " · " + (side == "L" ? W.tr("levá", "left") : W.tr("pravá", "right")) }
@@ -301,7 +302,7 @@ struct GymPartView: View {
                 .rotationEffect(.degrees(-90))
                 .animation(.linear(duration: 1), value: left)
             VStack(spacing: 0) {
-                Text(text).font(W.serif(22)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.6)
+                Text(text).font(W.digits(20)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.6)
                 Text(caption).font(.system(size: 9)).foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
             }
             .padding(.horizontal, 6)

@@ -24,6 +24,8 @@ struct FoodPage: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // The page's name as the system title, as on every page but the first (watch audit D3).
+        .navigationTitle(W.tr("Jídlo", "Food"))
         .containerBackground(W.glow(W.Glow.food), for: .navigation)
         .containerBackground(W.glow(W.Glow.food), for: .tabView)
     }
@@ -37,7 +39,6 @@ struct FoodPage: View {
                               color: W.muted, size: 20)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(W.tr("Jídlo", "Food")).font(.system(size: 12, weight: .semibold)).foregroundStyle(W.amber)
                     Text(left(food))
                         .font(W.news(16))
                         .foregroundStyle(W.ink)

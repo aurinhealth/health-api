@@ -33,7 +33,8 @@ enum W {
         static let restingHR = Color(hex: 0x3D1D2A)
         static let strain = Color(hex: 0x3A2A17)
         static let food = Color(hex: 0x163047)
-        static let coach = Color(hex: 0x3D2614)
+        /// Indigo, the coach's colour as on the iPhone (watch audit D4).
+        static let coach = Color(hex: 0x25233F)
     }
 
     /// A shape style, for containerBackground: the colour fades into black.
@@ -59,8 +60,21 @@ enum W {
         }
     }
 
-    static func serif(_ size: CGFloat) -> Font { .custom("InstrumentSerif-Regular", size: size) }
-    static func news(_ size: CGFloat) -> Font { .custom("Newsreader-Regular", size: size) }
+    /// Bold Text (Settings → Accessibility): the serifs don't thicken by
+    /// themselves, so with it on they become the system serif, heavier
+    /// (watch audit D1). Set by WatchRoot from its environment.
+    nonisolated(unsafe) static var boldText = false
+
+    static func serif(_ size: CGFloat) -> Font {
+        boldText ? .system(size: size, weight: .semibold, design: .serif) : .custom("InstrumentSerif-Regular", size: size)
+    }
+    static func news(_ size: CGFloat) -> Font {
+        boldText ? .system(size: size, weight: .medium, design: .serif) : .custom("Newsreader-Regular", size: size)
+    }
+    /// Numbers in tiles, cards and small rings: the serif only for a page's
+    /// main number (24 pt and up), as its thin "1" read "111" as "lll" (watch
+    /// audit D1); the complications' rounded face.
+    static func digits(_ size: CGFloat) -> Font { .system(size: size, weight: .semibold, design: .rounded).monospacedDigit() }
     static func label(_ size: CGFloat = 9) -> Font { .system(size: size, weight: .semibold) }
 
     // MARK: Language
@@ -341,9 +355,9 @@ struct Tiles: View {
             ForEach(Array(items.prefix(3).enumerated()), id: \.offset) { _, item in
                 VStack(spacing: 2) {
                     Text(item.value)
-                        // Numbers in the serif, words ("short", "high") in the system font.
+                        // Numbers rounded (watch audit D1), words ("short", "high") in the system font.
                         .font(item.value.contains(where: \.isLetter) ? .system(size: 13, weight: .semibold)
-                              : W.serif(item.value.count < 4 ? 19 : 15))
+                              : W.digits(item.value.count < 4 ? 17 : 14))
                         .foregroundStyle(W.ink)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
@@ -367,5 +381,20 @@ struct Tiles: View {
                 .accessibilityLabel(item.label + ", " + item.value)
             }
         }
+    }
+}
+
+/// The three button roles, as on the iPhone (watch audit D2): the main one
+/// white with black text, a secondary one the system's grey, one that ends
+/// something grey with red text. System styles only, so watchOS 26 gives
+/// them its Liquid Glass; green is left for a state (done, on target).
+@MainActor
+extension View {
+    func mainButton() -> some View {
+        buttonStyle(.borderedProminent).tint(W.ink)
+    }
+
+    func endButton() -> some View {
+        buttonStyle(.bordered).foregroundStyle(W.red)
     }
 }

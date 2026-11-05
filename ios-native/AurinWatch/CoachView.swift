@@ -73,7 +73,7 @@ struct CoachView: View {
                     .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(.black)
                     .frame(width: 58, height: 58)
-                    .background(W.amber, in: Circle())
+                    .background(W.indigo, in: Circle())
                 Text(coach.turns.isEmpty ? W.tr("Zeptej se kouče", "Ask the coach") : W.tr("Další otázka", "Ask again"))
                     .font(.system(size: 12))
                     .foregroundStyle(W.muted)
@@ -113,7 +113,7 @@ private struct TurnView: View {
                         Label(W.tr("Přečíst", "Read aloud"), systemImage: "speaker.wave.2.fill")
                             .font(.system(size: 13, weight: .medium))
                     }
-                    .tint(W.amber)
+                    .tint(W.indigo)
                 }
             }
         }

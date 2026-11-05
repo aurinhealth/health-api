@@ -85,13 +85,14 @@ struct ReadinessHome: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 NavigationLink(value: Page.alarm) {
-                    Image(systemName: "alarm.fill").foregroundStyle(W.indigo)
+                    // In ink, as the iPhone's header icons (watch audit D4).
+                    Image(systemName: "alarm.fill").foregroundStyle(W.ink)
                 }
                 .accessibilityLabel(W.tr("Budík", "Alarm"))
             }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink(value: Page.coach) {
-                    Image(systemName: "bubble.left.and.text.bubble.right").foregroundStyle(W.amber)
+                    Image(systemName: "bubble.left.and.text.bubble.right").foregroundStyle(W.ink)
                 }
                 .accessibilityLabel(W.tr("Kouč", "Coach"))
             }
@@ -248,7 +249,7 @@ struct ReadinessHome: View {
             // The name in its kind's colour, the state in the dot and the word under it (watch audit C1b).
             Text(g.title).font(.system(size: 11, weight: .medium)).foregroundStyle(Self.kind(g.page)).lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(g.value).font(W.serif(19)).foregroundStyle(W.ink)
+                Text(g.value).font(W.digits(17)).foregroundStyle(W.ink)
                 if let unit = g.unit, g.value != "–" { Text(unit).font(.system(size: 10)).foregroundStyle(W.muted) }
             }
             .lineLimit(1)
