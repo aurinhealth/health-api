@@ -285,6 +285,7 @@ final class SnapshotTests: XCTestCase {
         }
         XCTAssertEqual(L10n.tr("Spánek"), "Sleep")
         XCTAssertEqual(RecoveryTime.part(Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 16, hour: 14)) ?? Date(), today: "2026-10-15"), "tomorrow afternoon")
+        XCTAssertEqual(Fmt.monthTitleSpoken("2026-11-05"), "November 2026, week 45")
         XCTAssertEqual(L10n.tr("text bez překladu"), "text bez překladu")
         XCTAssertEqual(L10n.plural("dní", 5), "days")
         XCTAssertEqual(Units.weightText(100, digits: 0), "220 lb")
@@ -376,6 +377,8 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(t.event?.phases.map(\.state), ["done", "now", "next"])
         XCTAssertEqual(Fmt.weekdayShort("2026-10-08"), "Čt")
         XCTAssertEqual(Fmt.dayMonth("2026-11-01"), "1. listopadu")
+        // VoiceOver reads the tab header's month with its year and week (Today audit 25).
+        XCTAssertEqual(Fmt.monthTitleSpoken("2026-11-05"), "listopad 2026, týden 45")
         XCTAssertEqual(Fmt.relativeDay("2026-10-10", today: "2026-10-08"), "v sobotu")
         XCTAssertEqual(Fmt.duration(75), "1 h 15 min")
         XCTAssertEqual(L10n.plural("dní", 24), "dní")
