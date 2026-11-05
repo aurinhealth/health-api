@@ -16,11 +16,15 @@ How Aurin Pro is bought and how the server learns about it. The code is in
    intermediate and the leaf, each signature, the bundle ID and the product, then sets
    `subscriptions.plan='ai'` and `valid_until` = `expiresDate` (or `'free'` after a refund
    or revocation). A transaction carrying another account's token, or one another account
-   sent first, is refused with 409.
+   sent first, is refused with 409. `store_originals` holds one row per original transaction
+   (the account and the newest `signedDate`), claimed in one statement, so two accounts
+   sending it at once cannot both get it.
 3. Apple sends App Store Server Notifications V2 to `POST /webhooks/app-store`
    (renewals, failed renewals with the grace period, expiry, refunds, revocation). The row is
    found by the token, or by the original transaction id for a code redeemed outside the app.
-   An older record never overwrites a newer one (`store_signed_at`).
+   An older record never overwrites a newer one (`store_signed_at`, and per subscription
+   `store_originals.signed_at`, so a refunded subscription cannot come back by sending another
+   purchase and then its record from before the refund).
 4. While `AI_PAYWALL_ENABLED` is off (the pilot) everyone keeps AI; the purchase only shows
    in Settings → Aurin Pro. Turn the paywall on separately.
 
