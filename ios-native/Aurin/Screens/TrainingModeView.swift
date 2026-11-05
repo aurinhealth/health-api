@@ -1621,6 +1621,8 @@ struct TrainingModeView: View {
         let rows = Set(next.exercises.filter { $0.name == name }.flatMap(\.sets).filter { !$0.done }.map(\.row))
         let onScreen = next.exercises[safe: index]?.name == name
         next.replace(exercise: name, with: alt.name, kg: alt.kg.flatMap { $0 > 0 ? GymCoach.kgText($0) : nil })
+        // Swapped before a set was done: its time so far goes with it (the watch keeps it by the row).
+        if !next.exercises.contains(where: { $0.name == name }) { live.rename(name, to: alt.name) }
         day = next
         GymSwaps.record(date, from: name, to: alt.name)
         swaps = GymSwaps.list(date)

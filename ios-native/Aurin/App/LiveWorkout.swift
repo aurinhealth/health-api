@@ -472,6 +472,11 @@ final class LiveWorkout: NSObject {
     /// The part or exercise in front now and since when.
     var focused: Segment? { segments.last }
 
+    /// A swapped exercise takes the time spent on it so far.
+    func rename(_ key: String, to newKey: String) {
+        segments = segments.map { $0.key == key ? Segment(key: newKey, start: $0.start, kcal: $0.kcal) : $0 }
+    }
+
     /// Seconds spent on `key` so far, every time it was in front added up.
     func seconds(of key: String, at now: Date = Date()) -> Int {
         var sum = 0.0
