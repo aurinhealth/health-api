@@ -25,8 +25,10 @@ How Aurin Pro is bought and how the server learns about it. The code is in
    An older record never overwrites a newer one (`store_signed_at`, and per subscription
    `store_originals.signed_at`, so a refunded subscription cannot come back by sending another
    purchase and then its record from before the refund).
-4. While `AI_PAYWALL_ENABLED` is off (the pilot) everyone keeps AI; the purchase only shows
-   in Settings → Aurin Pro. Turn the paywall on separately.
+4. While `AI_PAYWALL_ENABLED` is off (the pilot) everyone keeps AI and nothing is on sale
+   (`checkoutAvailable` stays false). `owner` turns the paid split on for the owner's account
+   only, to try the offer, the locked plans and a TestFlight purchase; `true` turns it on for
+   everyone.
 
 ## Extra coach messages (packs)
 
@@ -48,7 +50,8 @@ the simulator) are signed by Xcode, never verify, and stay on the phone.
 
 | Name | Kind | What |
 | --- | --- | --- |
-| `APP_STORE_APP_ID` | secret or var | The app's Apple ID (App Store Connect → App Information → Apple ID, a number). Once set, `/app/api/subscription` reports `checkoutAvailable: true` and production notifications must name this app. |
+| `APP_STORE_APP_ID` | secret or var | The app's Apple ID (App Store Connect → App Information → Apple ID, a number). Once set, `/app/api/subscription` reports `checkoutAvailable: true` to every account the paywall is on for and production notifications must name this app. |
+| `AI_PAYWALL_ENABLED` | var | Empty: the pilot (everyone has AI and every plan, nothing on sale). `owner`: the paid split for the owner's account only. `true`: for everyone. |
 | `APP_STORE_BUNDLE_ID` | var, optional | `health.aurin.app` unless set. The products are `<bundle>.pro.monthly` and `<bundle>.pro.yearly`. |
 
 No private key is needed: verification uses Apple's public certificate chain only.

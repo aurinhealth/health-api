@@ -97,6 +97,8 @@ Cena ani limity nejsou vymyšlené. Platební brána není implementovaná.
 se kontroluje centrálně na serveru. Pro budoucí zapnutí je nutné nejprve doplnit
 platby, webhooky a provozní limity. Po výslovném nastavení na `true` je pro AI
 potřeba serverový záznam `subscriptions(plan='ai', valid_until=<budoucí datum>)`.
+Hodnota `owner` zapne placený režim jen pro účet vlastníka (zkouška nabídky,
+zamčených plánů a nákupu v TestFlightu); ostatní účty zůstávají v pilotu.
 Aplikace nemá klientské API pro změnu vlastního tarifu. Vypršené předplatné
 nemá AI přístup. Připojený API klíč je samostatný předpoklad dostupnosti AI.
 

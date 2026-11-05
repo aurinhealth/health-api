@@ -98,7 +98,15 @@ test("the app's transaction unlocks Pro for the account until it expires", async
   assert.equal(pilot.mode, "pilot");
   assert.equal(pilot.aiAccess, true);
   assert.equal(pilot.checkoutAvailable, false);
-  assert.equal((await subscriptionStatus({ ...user(2), APP_STORE_APP_ID: "6740000000" })).checkoutAvailable, true);
+  // Nothing is on sale in the pilot, even once the store is set up.
+  assert.equal((await subscriptionStatus({ ...user(2), APP_STORE_APP_ID: "6740000000" })).checkoutAvailable, false);
+  assert.equal((await subscriptionStatus({ ...user(2), APP_STORE_APP_ID: "6740000000", AI_PAYWALL_ENABLED: "true" })).checkoutAvailable, true);
+  // AI_PAYWALL_ENABLED=owner: the paid split for the owner's account only, the testers stay in the pilot.
+  const owner = await subscriptionStatus({ ...user(2), APP_STORE_APP_ID: "6740000000", AI_PAYWALL_ENABLED: "owner", USER_IS_OWNER: true });
+  assert.deepEqual([owner.mode, owner.plan, owner.aiAccess, owner.checkoutAvailable], ["paid", "free", false, true]);
+  assert.equal((await subscriptionStatus({ ...env, APP_STORE_APP_ID: "6740000000", AI_PAYWALL_ENABLED: "owner", USER_IS_OWNER: true, CONSENT_REQUIRED: false })).aiAccess, true, "the owner's bought plan gives AI");
+  const tester = await subscriptionStatus({ ...user(2), APP_STORE_APP_ID: "6740000000", AI_PAYWALL_ENABLED: "owner" });
+  assert.deepEqual([tester.mode, tester.plan, tester.aiAccess, tester.checkoutAvailable], ["pilot", "ai", true, false]);
 });
 
 test("a purchase of another account, app or plan is refused", async () => {
