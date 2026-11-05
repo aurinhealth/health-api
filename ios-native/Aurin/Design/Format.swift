@@ -104,6 +104,16 @@ enum Fmt {
         return text.prefix(1).uppercased(with: locale) + text.dropFirst()
     }
 
+    /// What VoiceOver reads for the tab header's month (Today audit 25): "listopad
+    /// 2026, týden 45", "November 2026, week 45" (ISO week).
+    static func monthTitleSpoken(_ isoDate: String) -> String {
+        guard let date = parse(isoDate) else { return monthTitle(isoDate) }
+        var calendar = Calendar(identifier: .iso8601)
+        calendar.timeZone = utc
+        let month = DateFormatters.make("LLLL yyyy", locale: locale, timeZone: utc).string(from: date)
+        return L10n.f("%@, týden %lld", month, calendar.component(.weekOfYear, from: date))
+    }
+
     /// "14": the day of the month.
     static func dayNumber(_ isoDate: String) -> String {
         guard let day = Int(isoDate.suffix(2)) else { return "" }

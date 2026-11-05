@@ -45,6 +45,7 @@ struct TodayTrainingRow: View {
                         .font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
                         .padding(.horizontal, 14).frame(height: 36)
                         .background(Palette.green, in: Capsule())
+                        .tapTarget(width: 44, height: 36)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("today-training.start")

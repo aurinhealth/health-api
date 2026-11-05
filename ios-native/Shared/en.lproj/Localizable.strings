@@ -2731,6 +2731,9 @@
 "Auto · %@" = "Auto · %@";
 "Auto vychází z tréninků za poslední dva roky. Pauza kvůli nemoci nebo zranění úroveň nesníží." = "Auto is based on your training over the last two years. A break for illness or injury won't lower the level.";
 "Spánek se teď nepodařilo načíst" = "Sleep couldn’t load right now";
+"Krátká noc: méně než 3 hodiny spánku." = "Short night: under 3 hours of sleep.";
+"Bez zaznamenané noci" = "No night recorded";
+"Bez spánku z té noci se připravenost nepočítá. HRV a klidový tep najdeš níže." = "Readiness needs that night’s sleep. HRV and resting heart rate are below.";
 "Pití se teď nepodařilo načíst" = "Drinks couldn’t load right now";
 
 /* Gym equipment picker (GymPlaces.swift) */
@@ -3933,3 +3936,4 @@
 "Poslat i posledních 14 dní" = "Also send the last 14 days";
 "Od %@" = "Since %@";
 "Poslat do Intervals.icu" = "Send to Intervals.icu";
+"%@, týden %lld" = "%@, week %lld";

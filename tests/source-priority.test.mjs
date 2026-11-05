@@ -15,9 +15,9 @@ function setup() {
 }
 const NOW = Date.parse("2026-10-12T12:00:00Z");
 const day = n => new Date(Date.parse("2026-10-12T12:00:00Z") - n * 86400000).toISOString().slice(0, 10);
-const insert = (raw, family, type, id, { sample = null, start = null, end = null, value = null } = {}) =>
-  raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,sample_time,start_time,end_time,value_numeric,payload_json) VALUES(1,?,?,?,?,?,?,?,'{}')")
-    .run(family, type, id, sample, start, end, value);
+const insert = (raw, family, type, id, { sample = null, start = null, end = null, value = null, payload = {} } = {}) =>
+  raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,sample_time,start_time,end_time,value_numeric,payload_json) VALUES(1,?,?,?,?,?,?,?,?)")
+    .run(family, type, id, sample, start, end, value, JSON.stringify(payload));
 const role = (raw, family, id) => raw.sqlite.prepare("SELECT record_role FROM health_datapoints WHERE source_family=? AND external_id=?").get(family, id).record_role;
 // The Fitbit worn every night and all day; the watch only on some days.
 function fitbitEveryDay(raw, days = 10) {
@@ -121,4 +121,33 @@ test("the history behind the home source is read only when two sources meet, and
   assert.equal(reads, 2);
   await resolveSources(counted, 1, { types: ["time-in-heart-rate-zone"], since: day(2), now: NOW + 2 * 3600000 });
   assert.equal(reads, 3, "other callers read it fresh");
+});
+
+test("a fragment from the home device gives way to another device's full night; its HRV stays home", async () => {
+  const { raw, db } = setup();
+  // The Fitbit holds the nights; this morning it caught only 50 minutes.
+  for (let i = 1; i < 10; i++) insert(raw, "google-wearables", "sleep", "gs" + day(i), { start: day(i + 1) + "T22:00:00Z", end: day(i) + "T06:00:00Z" });
+  insert(raw, "google-wearables", "sleep", "gs" + day(0), { start: day(0) + "T05:10:00Z", end: day(0) + "T06:00:00Z" });
+  insert(raw, "google-wearables", "daily-resting-heart-rate", "grhr" + day(0), { sample: day(0), value: 50 });
+  // The watch recorded the whole night.
+  insert(raw, "apple-health", "sleep", "as" + day(0), { start: day(1) + "T22:30:00Z", end: day(0) + "T06:05:00Z" });
+  insert(raw, "apple-health", "daily-resting-heart-rate", "arhr" + day(0), { sample: day(0), value: 56 });
+  await resolveSources(db, 1, { since: day(30), now: NOW });
+  assert.equal(role(raw, "apple-health", "as" + day(0)), "primary", "the longest night counts");
+  assert.equal(role(raw, "google-wearables", "gs" + day(0)), "duplicate");
+  assert.equal(role(raw, "google-wearables", "grhr" + day(0)), "primary", "the night's resting HR stays with the home device");
+  // A chosen source still wins with its fragment.
+  await saveSourcePriority(db, 1, { night: "google" });
+  await resolveSources(db, 1, { since: day(30), now: NOW });
+  assert.equal(role(raw, "google-wearables", "gs" + day(0)), "primary");
+});
+
+test("a night counts by its minutes asleep: 3:10 in bed with 40 minutes awake is short", async () => {
+  const { raw, db } = setup();
+  for (let i = 1; i < 10; i++) insert(raw, "google-wearables", "sleep", "gs" + day(i), { start: day(i + 1) + "T22:00:00Z", end: day(i) + "T06:00:00Z" });
+  insert(raw, "google-wearables", "sleep", "gs" + day(0), { start: day(0) + "T02:50:00Z", end: day(0) + "T06:00:00Z", payload: { sleep: { summary: { minutesAwake: 40 } } } });
+  insert(raw, "apple-health", "sleep", "as" + day(0), { start: day(1) + "T22:30:00Z", end: day(0) + "T06:05:00Z" });
+  await resolveSources(db, 1, { since: day(30), now: NOW });
+  assert.equal(role(raw, "apple-health", "as" + day(0)), "primary");
+  assert.equal(role(raw, "google-wearables", "gs" + day(0)), "duplicate");
 });
