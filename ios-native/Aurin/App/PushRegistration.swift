@@ -345,13 +345,17 @@ enum CoachPush {
         let content = response.notification.request.content
         let coach = content.userInfo["coach"] as? [String: Any]
         let chatId = (coach?["chatId"] as? NSNumber)?.intValue
+        // A notification of another account (signed out on this phone since):
+        // its buttons do nothing in this one.
+        let account = (coach?["account"] as? NSNumber)?.intValue
+        if let account, let current = Outbox.account, account != current { return }
         switch response.actionIdentifier {
         case replyAction:
             guard let text = (response as? UNTextInputNotificationResponse)?.userText.trimmingCharacters(in: .whitespacesAndNewlines),
                   !text.isEmpty else { return }
             // The coach takes a while: the upload goes on in the background.
             let shown = NotificationText(content)
-            CoachReplyUpload.shared.send(text: text, title: shown.title, body: shown.body, chatId: chatId, api: api)
+            CoachReplyUpload.shared.send(text: text, title: shown.title, body: shown.body, chatId: chatId, account: account, api: api)
         case confirmAction, rejectAction:
             guard let draft = (coach?["draftId"] as? NSNumber)?.intValue else { return }
             let confirm = response.actionIdentifier == confirmAction
@@ -428,9 +432,11 @@ final class CoachReplyUpload: NSObject, URLSessionTaskDelegate, @unchecked Senda
         return URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }()
 
-    func send(text: String, title: String, body: String, chatId: Int?, api: APIClient) {
+    /// account: the one the push was for; the server refuses the reply in another.
+    func send(text: String, title: String, body: String, chatId: Int?, account: Int?, api: APIClient) {
         var payload: JSONObject = ["text": .string(text), "title": .string(title), "body": .string(body)]
         if let chatId { payload["chatId"] = .number(Double(chatId)) }
+        if let account { payload["account"] = .number(Double(account)) }
         guard let request = try? api.pushReplyRequest(), let data = try? JSONEncoder().encode(payload) else { return }
         // A background upload goes from a file.
         let file = FileManager.default.temporaryDirectory.appendingPathComponent(Self.filePrefix + UUID().uuidString + ".json")

@@ -1,5 +1,6 @@
 import AuthenticationServices
 import Foundation
+import UserNotifications
 
 // Signing in and out: the profile setup, the account this phone keeps things
 // for, and what a sign-out drops (AccountScope, AccountCaches, WriteQueue).
@@ -286,6 +287,9 @@ extension AppModel {
             // The photo stays for this account's next sign-in (AvatarStore.keep).
         }
         notice = nil
+        // The account's notifications already on the lock screen go too: their
+        // texts and their Odpovědět / Potvrdit belong to it, not the next account.
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
         // The next sign-in sends the push token again for its own account.
         PushRegistration.forget()
         UserDefaults.standard.removeObject(forKey: Self.setupDoneKey)
