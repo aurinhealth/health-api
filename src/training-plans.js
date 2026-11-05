@@ -1243,7 +1243,7 @@ const fromRow = r => r ? { id: r.id, templateId: r.template_id, sport: r.sport, 
 // start: FTP, fitness and the estimate when the plan started (its result);
 // seen: the finished plan's result was closed; target: a running race's goal
 // time in seconds; perWeek: a gym plan's sessions a week the athlete chose.
-const STATE_KEYS = ["pauseFrom", "pauseUntil", "shiftedWeeks", "returnFrom", "returnWeeks", "reviewed", "moves", "lightWeeks", "proposal", "undo", "firstDay", "edits", "weekDays", "start", "seen", "target", "perWeek", "sports", "pulled", "stepUp", "trendChecked", "redChecked"];
+const STATE_KEYS = ["pauseFrom", "pauseUntil", "shiftedWeeks", "returnFrom", "returnWeeks", "reviewed", "moves", "lightWeeks", "proposal", "undo", "firstDay", "edits", "weekDays", "start", "seen", "target", "perWeek", "sports", "pulled", "stepUp", "trendChecked", "redChecked", "estimates", "threshold", "goalKept"];
 async function savePlan(db, plan) {
   const state = Object.fromEntries(STATE_KEYS.filter(k => plan[k] != null).map(k => [k, plan[k]]));
   await db.prepare("UPDATE training_plans SET start_date=?,state_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(plan.startDate, JSON.stringify(state), db.userId, plan.id).run();
@@ -1321,8 +1321,13 @@ export function trendProposal(plan, monday, { hrvDown = false, hrv = null, keysD
 }
 // The Monday's check on the plan (trendProposal): the plan with the change
 // applied and the proposal saying so, or the plan only marked as checked.
-export function planTrend(plan, monday, data) {
-  const checked = { ...plan, trendChecked: monday }, proposal = trendProposal(checked, monday, data);
+// `estimate` (a running race's estimate now, seconds) and `thresholdPace` are
+// kept for the race goal card (race-estimate.js goalCheck): the week's estimate
+// and the threshold pace before and now.
+export function planTrend(plan, monday, data = {}) {
+  const record = data.estimate > 0 ? { estimates: { ...(plan.estimates || {}), [monday]: Math.round(data.estimate) } } : {};
+  if (Number(data.thresholdPace) > 0) record.threshold = { before: plan.threshold?.now ?? null, now: Math.round(Number(data.thresholdPace)), at: monday };
+  const checked = { ...plan, trendChecked: monday, ...record }, proposal = trendProposal(checked, monday, data);
   return proposal ? { ...planChoice(checked, { ...proposal, applied: false }, "ok", { today: monday }), proposal } : checked;
 }
 

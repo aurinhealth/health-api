@@ -1149,6 +1149,19 @@ final class SnapshotTests: XCTestCase {
         try render("plan-race-run", glow: Palette.Glow.training, height: 700) {
             NavigationStack { ActivePlanContent(active: run, preview: nil, week: nil, editGoal: {}).padding(.horizontal, 24) }.environment(model)
         }
+        // Checked every Monday: on track with the paces, and behind with a realistic goal.
+        let checkedOn = #""race":{"km":21.1,"estimate":6400,"estimateStart":6550,"target":6300,"goalPace":299,"verdict":"real","history":[{"week":1,"seconds":6550},{"week":3,"seconds":6500},{"week":5,"seconds":6430}],"projected":6250,"status":"on_track","badge":"Podle plánu","note":"Zbývá stáhnout 1:40 za 6 týdnů, tempem, jakým se zlepšuješ. Z tvého prahového tempa, kontrola každé pondělí.","weeksLeft":6,"checked":"2026-11-23","paces":{"race":299,"threshold":289,"thresholdBefore":292,"easy":[355,375]}}"#
+        let onTrack = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(runPlan.replacingOccurrences(of: #""race":{"km":21.1,"estimate":6190,"estimateStart":6270,"target":6120,"goalPace":290,"verdict":"bold"}"#, with: checkedOn).utf8)).active)
+        XCTAssertEqual(onTrack.race?.status, "on_track")
+        try render("plan-race-goal-on-track", glow: Palette.Glow.training, height: 1000) {
+            NavigationStack { ActivePlanContent(active: onTrack, preview: nil, week: nil, editGoal: {}).padding(.horizontal, 24) }.environment(model)
+        }
+        let checkedOff = #""race":{"km":21.1,"estimate":6430,"estimateStart":6500,"target":6000,"goalPace":284,"verdict":"hard","history":[{"week":1,"seconds":6500},{"week":4,"seconds":6460}],"projected":6390,"status":"behind","behind":390,"realistic":6420,"badge":"o 7 min pomaleji než cíl","note":"Zbývají 4 týdny. Držet 4:44 /km by znamenalo běhat každý trénink moc tvrdě. Cíl 1:47:00 sedí na tvou formu a pořád tě potáhne.","weeksLeft":4,"paces":{"race":284,"threshold":290}}"#
+        let behind = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(runPlan.replacingOccurrences(of: #""race":{"km":21.1,"estimate":6190,"estimateStart":6270,"target":6120,"goalPace":290,"verdict":"bold"}"#, with: checkedOff).utf8)).active)
+        XCTAssertEqual(behind.race?.realistic, 6420)
+        try render("plan-race-goal-behind", glow: Palette.Glow.training, height: 1000) {
+            NavigationStack { ActivePlanContent(active: behind, preview: nil, week: nil, editGoal: {}).padding(.horizontal, 24) }.environment(model)
+        }
         try render("plan-goal-time", height: 620) { GoalTimeSheet(km: 21.1, estimate: 6270, weeks: 10, initial: 6120) { _ in } }
         // Multisport in English, as the post on X shows it (the server's English
         // templates, src/training-plans.js): a sprint duathlon (its race's sports, run,

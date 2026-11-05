@@ -222,6 +222,32 @@ struct PlanRace: Decodable, Equatable {
     var legs: Legs? = nil
     /// A multisport race: every leg in its order (a duathlon's two runs too).
     var legList: [Leg]? = nil
+    /// A running race plan, checked every Monday (src/race-estimate.js goalCheck):
+    /// the estimate each week so far, where it ends on race day, on_track or
+    /// behind with its badge and sentence, a realistic goal when the goal is
+    /// out of reach, and the paces.
+    var history: [Point]? = nil
+    var projected: Int? = nil
+    var status: String? = nil
+    var badge: String? = nil
+    var note: String? = nil
+    var realistic: Int? = nil
+    var weeksLeft: Int? = nil
+    /// The Monday the paces were checked.
+    var checked: String? = nil
+    var paces: Paces? = nil
+
+    struct Point: Decodable, Equatable {
+        let week: Int
+        let seconds: Int
+    }
+
+    struct Paces: Decodable, Equatable {
+        let race: Int
+        var threshold: Int? = nil
+        var thresholdBefore: Int? = nil
+        var easy: [Int]? = nil
+    }
 
     struct Legs: Decodable, Equatable {
         let swim: Leg
