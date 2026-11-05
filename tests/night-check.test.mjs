@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nightOffValues, easierDayCard } from '../src/night-check.js';
+import { nightOffValues, easierDayCard, restingHRAbove } from '../src/night-check.js';
 import { coachNudge, easierSwap, hardSession, swapOffer } from '../src/coach-push.js';
 import { withLang } from '../src/lang.js';
 
@@ -63,4 +63,28 @@ test('the coach push says an easier day fits, never to switch to Sick', () => {
   assert.match(m.body, /Keep today's training easy\.$/);
   const upcoming = [{ eventId: 'planned:7', date, sport: 'ride', kind: 'vo2max', name: 'VO2max 5×4', minutes: 75 }];
   assert.match(withLang('en', () => coachNudge({ date, hour: 8, morning: true, easier, upcoming })).body, /On Today you can make today easier\.$/);
+});
+
+test('the resting heart rate alone: two nights above, or one with HRV under its range, after 14 nights', () => {
+  const rhr = (z, days = 30) => ({ value: 60, baseline: 51, z, days });
+  const high = { components: { restingHR: rhr(2.3) } }, before = { components: { restingHR: rhr(2.1) } };
+  assert.equal(restingHRAbove(high, null), false, 'one night is not enough');
+  assert.equal(restingHRAbove(high, before), true);
+  assert.equal(restingHRAbove(high, { components: { restingHR: rhr(1.5) } }), false);
+  assert.equal(restingHRAbove({ components: { restingHR: rhr(2.3), hrv: { value: 38, baseline: 50, z: -1.4 } } }, null), true);
+  assert.equal(restingHRAbove({ components: { restingHR: rhr(2.3, 10) } }, before), false, 'no usual range yet');
+  assert.equal(restingHRAbove({ components: { restingHR: rhr(1.9) } }, before), false);
+  for (const lang of ['cs', 'en']) {
+    const card = withLang(lang, () => easierDayCard({ date, readiness: high, yesterday: before }));
+    assert.equal(card.signal, 'restingHR');
+    assert.deepEqual(card.rows.map(r => r.id), ['restingHR']);
+    assert.doesNotMatch(card.headline + ' ' + card.message, ILLNESS, lang);
+    const push = withLang(lang, () => coachNudge({ date, hour: 8, morning: true, easier: card }));
+    assert.doesNotMatch(push.body, ILLNESS, lang);
+  }
+  const en = withLang('en', () => easierDayCard({ date, readiness: high, yesterday: before }));
+  assert.equal(en.message, 'Resting heart rate is above your usual range. Alcohol, heat, a late meal, stress or hard training can do this.');
+  assert.match(withLang('en', () => coachNudge({ date, hour: 8, morning: true, easier: en })).body, /^Resting heart rate is above your usual range\. /);
+  // With the warmer night the night card wins.
+  assert.equal(easierDayCard({ date, readiness: off, yesterday: before }).signal, 'night');
 });
