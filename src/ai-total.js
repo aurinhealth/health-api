@@ -169,6 +169,10 @@ export async function assertAiTotal(env, { reserveUsd = 0, slotId = 0, now = new
   const brake = ownerUnlimited(env) || isReviewAccount(env) || !Object.keys(groupBrakes(env)).length ? null
     : (await groupDay(db, env, hold.group, now).catch(failed("AI group read failed")))?.brake ?? null;
   let group = await add("groups", brake);
+  // Full: the accounts are counted again once (a campaign's new free weeks of
+  // today), and the grown brake is tried before the account's own share.
+  const grown = group === "full" ? await recountBrake(db, env, hold, brake, now).catch(failed("AI group recount failed")) : null;
+  if (grown != null) group = await add("groups", grown);
   if (group === "full") group = await add("groups", await pastBrake(env, hold, brake, slotId));
   if (group === "full") throw overloaded();
   if (group === "held") hold.groupUsd = usd;
@@ -177,6 +181,22 @@ export async function assertAiTotal(env, { reserveUsd = 0, slotId = 0, now = new
   if (day === "full") { await addAiSpend(env, 0, hold); throw overloaded(); }
   if (day === "held") hold.dayUsd = usd;
   return hold;
+}
+
+// A group whose brake grows with its accounts reached it: its accounts are
+// counted again (at most every RECOUNT_MINUTES per group in this isolate), and
+// a brake grown since the day's first call replaces the day's one. Returns
+// the grown brake, or null when it did not grow.
+const RECOUNT_MINUTES = 10, recounted = new Map();
+async function recountBrake(db, env, hold, brake, now) {
+  if (brake == null || !growing(groupBrakes(env)[hold.group])) return null;
+  const key = hold.day + ":" + hold.group, last = recounted.get(key) || 0;
+  if (now.getTime() - last < RECOUNT_MINUTES * 60000) return null;
+  recounted.set(key, now.getTime());
+  const { usd, counted } = await groupBrakeUsd(db, env, hold.group, now.getTime());
+  if (!counted || usd == null || usd <= brake) return null;
+  await db.prepare("UPDATE ai_spend_groups SET brake_usd = ? WHERE day = ? AND grp = ? AND brake_usd < ?").bind(usd, hold.day, hold.group, usd).run();
+  return usd;
 }
 
 // The group is at its brake: the account goes on while its own spending in
