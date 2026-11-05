@@ -382,3 +382,34 @@ test('the terms say what Aurin Pro adds, its plans and that extras can be bought
   for(const t of [en,cs])assert.doesNotMatch(t,/Aurin Pro, (the coach|tedy kouč)/,'the old short list is gone');
   for(const t of [en,cs])assert.doesNotMatch(t,/coach messages|zprávy koučovi|one-time purchase|jednorázov/i,'no message packs or limits in the terms');
 });
+
+// Launch terms (legal review 5 Nov 2026, points 1-3): the launch version drops only the
+// "free / in testing" sentences; both versions say how Aurin Pro may change (Directive
+// 2019/770 art. 19), name the Czech Trade Inspection Authority for every consumer, and the
+// Czech text does not defer to the English one.
+test('the launch terms drop only the testing sentences and keep the change rules',async()=>{
+  const page=(path,pro)=>termsPage(new Request('https://aurin.health'+path),{pro}).text();
+  const [en,cs,enPro,csPro]=await Promise.all([page('/terms',false),page('/cs/terms',false),page('/terms',true),page('/cs/terms',true)]);
+  const testing={en:[/currently free/,/currently in testing/,/test purchases/],cs:[/zatím zdarma/,/zatím v testování/,/testovací nákupy/]};
+  for(const re of testing.en){assert.match(en,re);assert.doesNotMatch(enPro,re);}
+  for(const re of testing.cs){assert.match(cs,re);assert.doesNotMatch(csPro,re);}
+  assert.match(enPro,/<p>Aurin Pro adds Aurin Intelligence/);
+  assert.match(csPro,/<p>Aurin Pro přidává funkce Aurin Intelligence/);
+  assert.match(enPro,/Last updated: 15 December 2026/);
+  assert.match(csPro,/Poslední změna: 15. prosince 2026/);
+  for(const t of [en,enPro]){
+    assert.match(t,/only for a good reason/);
+    assert.match(t,/at least 30 days ahead in the app or by e-mail\. You can then end the subscription without any fee/);
+    assert.match(t,/If you are a consumer, you can also turn to the Czech Trade Inspection Authority/);
+  }
+  for(const t of [cs,csPro]){
+    assert.match(t,/jen z dobrého důvodu/);
+    assert.match(t,/Předplatné pak můžeš bez jakéhokoli poplatku ukončit/);
+    assert.match(t,/Jako spotřebitel se můžeš obrátit také na Českou obchodní inspekci/);
+    assert.doesNotMatch(t,/Závazné je anglické znění/);
+  }
+  for(const t of [en,cs,enPro,csPro]){
+    assert.match(t,/reportaproblem\.apple\.com/);
+    assert.doesNotMatch(t,/unlimited|neomezen|Kč|USD|\$\d/i,'no prices or unlimited in the terms');
+  }
+});

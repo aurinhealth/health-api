@@ -1265,13 +1265,20 @@ ${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení sv
   });
 }
 
-// Terms of Use. The English text is the reference version; the Czech one says the same.
-const TERMS_UPDATED = {cs: '3. listopadu 2026', en: '3 November 2026'};
+// Terms of Use, in English and Czech; both versions say the same and neither one prevails.
+// `pro` is the launch version, shown once Aurin Pro is needed for what it includes
+// (AI_PAYWALL_ENABLED=true, subscription.js paywallOn): it drops the "free / in testing"
+// sentences and takes effect on TERMS_LAUNCH. Testers get 30 days' notice of it (the terms
+// promise that), so the paywall is never turned on for everyone before TERMS_LAUNCH.
+const TERMS_UPDATED = {cs: '6. listopadu 2026', en: '6 November 2026'};
+const TERMS_LAUNCH = {cs: '15. prosince 2026', en: '15 December 2026'};
 const APPLE_EULA = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+const APPLE_REFUND = 'https://reportaproblem.apple.com';
 
-export function termsPage(request) {
+export function termsPage(request, {pro = false} = {}) {
+  const updated = pro ? TERMS_LAUNCH : TERMS_UPDATED;
   return doc(request, '/terms', {cs: 'Podmínky použití', en: 'Terms of Use'}, {
-    en: `<p class="muted">Last updated: ${TERMS_UPDATED.en}</p>
+    en: `<p class="muted">Last updated: ${updated.en}</p>
 <p>These terms are the agreement between you and the operator of Aurin when you use the Aurin iPhone app and aurin.health. Aurin is run by ${OPERATOR.en} (“we” below), reachable at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. By creating an account or using Aurin you agree to them. How we handle your personal data is described in the <a href="/privacy">Privacy Policy</a>.</p>
 <h2>What Aurin does</h2>
 <ul>
@@ -1308,14 +1315,14 @@ export function termsPage(request) {
 <li>AI answers are generated automatically and can be incomplete or wrong, including nutrition values and ingredients. Check them before you rely on them, especially if you have an allergy or follow a medical diet.</li>
 </ul>
 <h2>Price</h2>
-<p>Aurin is currently free, AI features included. After the release, Aurin Pro adds Aurin Intelligence (the coach, plan changes in your own words, workout, day and week reviews, food from a photo, words or the web, and gym equipment from a photo or the web), adaptive training plans for races and goals, vitamins and minerals, and your own macros and nutrient targets. Readiness, sleep and strain, cycle tracking, the calorie target and macros, the food and gym log and a starter plan for every sport stay free.</p>
+<p>${pro ? '' : 'Aurin is currently free, AI features included. After the release, '}Aurin Pro adds Aurin Intelligence (the coach, plan changes in your own words, workout, day and week reviews, food from a photo, words or the web, and gym equipment from a photo or the web), adaptive training plans for races and goals, vitamins and minerals, and your own macros and nutrient targets. Readiness, sleep and strain, cycle tracking, the calorie target and macros, the food and gym log and a starter plan for every sport stay free.</p>
 <p>Aurin Pro is an auto-renewing subscription sold only through the App Store, where Apple handles payment, cancellation and refunds. It runs monthly or for 12 months, paid at once or, where Apple offers it, monthly over the 12 months. The app shows the price, period and conditions before you buy; a 12-month plan can start with a free week, once per Apple ID. A subscription renews until you cancel it in your Apple account’s subscriptions (in the app, Settings → Aurin Pro → Manage subscription) at least 24 hours before the period ends. On the 12-month plan paid monthly, cancelling stops the next renewal and the remaining payments for the current 12 months are still due.</p>
-<p>Some extras can also be bought in the app. AI features can have usage limits, which may differ by plan and which we may change. While Aurin is in testing, purchases in TestFlight are Apple’s test purchases and cost nothing. Before Aurin Pro is needed for the features it includes, we will tell you in advance. We never charge you without your purchase.</p>
+<p>Some extras can also be bought in the app. AI features can have usage limits, which may differ by plan and which we may change. We change what Aurin Pro includes or its usage limits only for a good reason, such as a new or improved feature, a change at a connected service or an AI provider, security, running costs or a change in the law, and the price you pay does not go up because of it. If a change makes Aurin Pro noticeably worse for you, we tell you at least 30 days ahead in the app or by e-mail. You can then end the subscription without any fee before the change takes effect and ask Apple for a refund of the time you paid for and will not use, at <a href="${APPLE_REFUND}">reportaproblem.apple.com</a>.${pro ? '' : ' While Aurin is in testing, purchases in TestFlight are Apple’s test purchases and cost nothing. Before Aurin Pro is needed for the features it includes, we will tell you at least 30 days in advance.'} We never charge you without your purchase.</p>
 <h2>Fair use</h2>
 <p>Do not try to get around Aurin’s security, access someone else’s account or data, overload the service, download it automatically, copy or resell it, or use it for anything unlawful. Reverse engineering is allowed only where the law permits it.</p>
 <h2>Availability and changes</h2>
-<ul>
-<li>Aurin is currently in testing through Apple’s TestFlight: test builds expire, and the app changes more often than a released one.</li>
+<ul>${pro ? '' : `
+<li>Aurin is currently in testing through Apple’s TestFlight: test builds expire, and the app changes more often than a released one.</li>`}
 <li>We develop Aurin continuously, so features can change, move or be removed. We do our best to keep it running, but we cannot promise it will always be available or free of errors. We provide the updates needed to keep Aurin working as described, through the App Store or TestFlight; install them when they come.</li>
 <li>If we ever shut Aurin down, we will tell you at least 30 days ahead in the app or by e-mail, so you can download your data.</li>
 </ul>
@@ -1338,10 +1345,10 @@ export function termsPage(request) {
 <h2>Changes to these terms</h2>
 <p>We publish every change on this page with its date. Before a significant change takes effect, we tell you at least 30 days ahead in the app or by e-mail. If you do not agree, you can delete your account before then.</p>
 <h2>Law and disputes</h2>
-<p>These terms are governed by Czech law. If you are a consumer living in another country, you keep the protection that the mandatory law of that country gives you. If something goes wrong, write to us first and we will try to put it right. If you are a consumer in the Czech Republic, you can also turn to the Czech Trade Inspection Authority (<a href="https://www.coi.cz">coi.cz</a>) for out-of-court resolution of a dispute.</p>
+<p>These terms are governed by Czech law. If you are a consumer living in another country, you keep the protection that the mandatory law of that country gives you. If something goes wrong, write to us first and we will try to put it right. If you are a consumer, you can also turn to the Czech Trade Inspection Authority (<a href="https://www.coi.cz">coi.cz</a>), which handles out-of-court resolution of consumer disputes with traders in the Czech Republic.</p>
 <h2>Contact</h2>
 <p><a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></p>`,
-    cs: `<p class="muted">Poslední změna: ${TERMS_UPDATED.cs}</p>
+    cs: `<p class="muted">Poslední změna: ${updated.cs}</p>
 <p>Tyto podmínky jsou dohodou mezi tebou a provozovatelem Aurinu, když používáš aplikaci Aurin pro iPhone a web aurin.health. Aurin provozuje ${OPERATOR.cs} (dál „my“), na adrese <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. Založením účtu nebo používáním Aurinu s nimi souhlasíš. Jak zacházíme s tvými osobními údaji, popisují <a href="/privacy">Zásady ochrany soukromí</a>.</p>
 <h2>Co Aurin dělá</h2>
 <ul>
@@ -1378,14 +1385,14 @@ export function termsPage(request) {
 <li>Odpovědi AI vznikají automaticky a můžou být neúplné nebo chybné, včetně nutričních hodnot a složení. Než se na ně spolehneš, zkontroluj je, hlavně když máš alergii nebo držíš léčebnou dietu.</li>
 </ul>
 <h2>Cena</h2>
-<p>Aurin je zatím zdarma, včetně AI funkcí. Po vydání přidá Aurin Pro funkce Aurin Intelligence (kouče, změny plánu vlastními slovy, hodnocení tréninku, dne a týdne, jídlo z fotky, slov nebo webu a vybavení posilovny z fotky nebo webu), adaptivní tréninkové plány na závody a cíle, vitamíny a minerály a vlastní makra a cíle živin. Připravenost, spánek a zátěž, sledování cyklu, kalorický cíl a makra, zápis jídla a posilovny a úvodní plán pro každý sport zůstávají zdarma.</p>
+<p>${pro ? 'Aurin Pro přidává' : 'Aurin je zatím zdarma, včetně AI funkcí. Po vydání přidá Aurin Pro'} funkce Aurin Intelligence (kouče, změny plánu vlastními slovy, hodnocení tréninku, dne a týdne, jídlo z fotky, slov nebo webu a vybavení posilovny z fotky nebo webu), adaptivní tréninkové plány na závody a cíle, vitamíny a minerály a vlastní makra a cíle živin. Připravenost, spánek a zátěž, sledování cyklu, kalorický cíl a makra, zápis jídla a posilovny a úvodní plán pro každý sport zůstávají zdarma.</p>
 <p>Aurin Pro je automaticky obnovované předplatné, které prodáváme jen přes App Store, kde platbu, zrušení i vrácení peněz řeší Apple. Platí se měsíčně, nebo na 12 měsíců, a to najednou, nebo tam, kde to Apple nabízí, měsíčně po dobu 12 měsíců. Cenu, období a podmínky ti aplikace ukáže před nákupem; 12měsíční tarif může začít týdnem zdarma, jednou na Apple ID. Předplatné se obnovuje, dokud ho nezrušíš v předplatných svého účtu Apple (v aplikaci Nastavení → Aurin Pro → Spravovat předplatné) aspoň 24 hodin před koncem období. U 12měsíčního tarifu placeného měsíčně zrušení zastaví další obnovení a zbývající platby za běžících 12 měsíců se platí dál.</p>
-<p>Některé doplňky jde v aplikaci i dokoupit. AI funkce můžou mít limity použití, které se můžou lišit podle tarifu a které můžeme měnit. Dokud je Aurin v testování, nákupy v TestFlightu jsou testovací nákupy Applu a nic nestojí. Než bude Aurin Pro pro funkce, které obsahuje, potřeba, dáme ti vědět předem. Bez tvého nákupu ti nikdy nic neúčtujeme.</p>
+<p>Některé doplňky jde v aplikaci i dokoupit. AI funkce můžou mít limity použití, které se můžou lišit podle tarifu a které můžeme měnit. Obsah Aurin Pro nebo jeho limity měníme jen z dobrého důvodu, například kvůli nové nebo vylepšené funkci, změně u propojené služby nebo poskytovatele AI, bezpečnosti, nákladům na provoz nebo změně zákona, a cena, kterou platíš, kvůli tomu nestoupne. Když tě změna znatelně znevýhodní, dáme ti to vědět aspoň 30 dní předem v aplikaci nebo e-mailem. Předplatné pak můžeš bez jakéhokoli poplatku ukončit, než změna začne platit, a o vrácení peněz za zaplacenou dobu, kterou nevyužiješ, požádat Apple na <a href="${APPLE_REFUND}">reportaproblem.apple.com</a>.${pro ? '' : ' Dokud je Aurin v testování, nákupy v TestFlightu jsou testovací nákupy Applu a nic nestojí. Než bude Aurin Pro pro funkce, které obsahuje, potřeba, dáme ti to vědět aspoň 30 dní předem.'} Bez tvého nákupu ti nikdy nic neúčtujeme.</p>
 <h2>Férové používání</h2>
 <p>Nesnaž se obejít zabezpečení Aurinu, dostat se k cizímu účtu nebo datům, přetěžovat službu, automaticky ji stahovat, kopírovat ji nebo přeprodávat, ani ji používat k ničemu protiprávnímu. Zpětná analýza je dovolená jen tam, kde to povoluje zákon.</p>
 <h2>Dostupnost a změny</h2>
-<ul>
-<li>Aurin je zatím v testování přes TestFlight od Applu: testovací sestavení mají omezenou platnost a aplikace se mění častěji než vydaná.</li>
+<ul>${pro ? '' : `
+<li>Aurin je zatím v testování přes TestFlight od Applu: testovací sestavení mají omezenou platnost a aplikace se mění častěji než vydaná.</li>`}
 <li>Aurin průběžně vyvíjíme, takže se funkce můžou měnit, přesouvat nebo zmizet. Snažíme se, aby fungoval, ale nemůžeme slíbit, že bude vždy dostupný a bez chyb. Aktualizace potřebné k tomu, aby Aurin fungoval, jak popisujeme, dodáváme přes App Store nebo TestFlight; nainstaluj si je, když přijdou.</li>
 <li>Kdybychom Aurin někdy ukončili, dáme ti to vědět aspoň 30 dní předem v aplikaci nebo e-mailem, ať máš čas si stáhnout data.</li>
 </ul>
@@ -1408,10 +1415,9 @@ export function termsPage(request) {
 <h2>Změny podmínek</h2>
 <p>Každou změnu zveřejníme na této stránce s datem. Než začne platit podstatná změna, dáme ti to vědět aspoň 30 dní předem v aplikaci nebo e-mailem. Když nesouhlasíš, můžeš do té doby účet smazat.</p>
 <h2>Právo a spory</h2>
-<p>Tyto podmínky se řídí českým právem. Pokud jsi spotřebitel s bydlištěm v jiné zemi, zůstává ti ochrana, kterou ti dávají kogentní předpisy té země. Když se něco pokazí, napiš nám nejdřív a pokusíme se to napravit. Spotřebitel v České republice se může s mimosoudním řešením sporu obrátit také na Českou obchodní inspekci (<a href="https://www.coi.cz">coi.cz</a>).</p>
+<p>Tyto podmínky se řídí českým právem. Pokud jsi spotřebitel s bydlištěm v jiné zemi, zůstává ti ochrana, kterou ti dávají kogentní předpisy té země. Když se něco pokazí, napiš nám nejdřív a pokusíme se to napravit. Jako spotřebitel se můžeš obrátit také na Českou obchodní inspekci (<a href="https://www.coi.cz">coi.cz</a>), která mimosoudně řeší spory spotřebitelů s obchodníky z České republiky.</p>
 <h2>Kontakt</h2>
-<p><a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></p>
-<p class="muted">Závazné je anglické znění: <a href="/terms">Terms of Use</a>.</p>`
+<p><a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></p>`
   });
 }
 
