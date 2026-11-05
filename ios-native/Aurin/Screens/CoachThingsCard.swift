@@ -12,16 +12,9 @@ import SwiftUI
 @MainActor @Observable
 final class CoachThings {
     var advice: CoachCheckIn.Advice?
-    /// After "Přepnout na Nemoc": until when, and how many sessions went.
-    var switched: Switched?
     var revision: WeekRevision?
     var check: WeekCheck?
     var threshold: ThresholdCheck?
-
-    struct Switched: Equatable {
-        let until: String?
-        let cancelled: Int
-    }
 
     /// How long an answered thing shows its confirmation ("Upraveno i v
     /// kalendáři") before it goes and the next one moves up.
@@ -113,10 +106,8 @@ struct CoachThingsCard: View {
     /// the week's calendar, the threshold and the plan.
     private var items: [Item] {
         var out: [Item] = []
-        if things.switched != nil || things.advice != nil {
-            let summary = things.switched != nil
-                ? L10n.tr("Stav Nemoc")
-                : things.advice?.headline ?? things.advice?.message ?? things.advice?.reasons?.first ?? ""
+        if things.advice != nil {
+            let summary = things.advice?.headline ?? things.advice?.message ?? things.advice?.reasons?.first ?? ""
             out.append(Item(id: "check-in", label: L10n.tr("Kouč se ptá"), summary: summary,
                             content: AnyView(CoachCheckInCard(things: things, openCoach: openCoach))))
         }

@@ -86,7 +86,7 @@ import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_O
 import { isHardSession, isHardKind } from './session-intensity.js';
 import { reviseWeek, rulesRevision, revisionSignature, readRevision, saveRevision, decideRevision, shownRevision, liveRevision } from './week-revision.js';
 import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
-import { illnessWarning } from './illness-check.js';
+import { easierDayCard } from './night-check.js';
 import { readinessFor } from './readiness.js';
 import { lockReadiness } from "./readiness-lock.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
@@ -146,7 +146,7 @@ import { clearConnectionHealth, connectionProblems, withoutBrokenConnections } f
 import { handleSupportReport } from "./support-report.js";
 import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
 import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, pushConfigured, listPushTokens, sendPush, deletePushToken, MORNING_READINESS, hidesValues } from "./push.js";
-import { coachNudge, swapOffer, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
+import { coachNudge, swapOffer, hardSession, easierSwap, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
 import { waterNudge } from "./water-goal.js";
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
 import { cachedPage } from './page-cache.js';
@@ -878,10 +878,12 @@ async function coachPush(env, ctx) {
     const upcoming = await upcomingSessions(env, (inputs.week?.days || []).filter(d => d.date >= date && d.date <= shiftDate(date, 1)));
     const readiness = morningDue ? readinessFor({ date, google: inputs.health?.wellness || [], intervals: inputs.fitness?.wellness || [], sessions: inputs.health?.sleep || [], profile: inputs.profile }) : null;
     nudge = coachNudge({ date, hour, morning: morningDue, evening: eveningDue, upcoming, sleep: inputs.health?.sleep || [],
-      illness: morningDue ? illnessWarning({ date, readiness, state, week: inputs.week }) : null,
+      easier: morningDue ? easierDayCard({ date, readiness, state }) : null,
       recovery: morningDue ? proactiveAdvice({ ...inputs, state, readiness }) : null });
   }
   if (!nudge) return { sent: 0, reason: 'nothing-to-say' };
+  // A swap Today already offers (the easier day, /app/api/coach/check-in) is not replaced by another.
+  if (nudge.swap && state.nudge?.day === date && state.nudge.status === 'pending') return { sent: 0, reason: 'swap-offered' };
   if (!(await claim(COACH_PUSH, date))) return { sent: 0, reason: 'already-sent' };
   // "Vyměnit" answers this one (/app/api/coach/nudge).
   // Today shows the same offer until it is answered (/app/api/coach/check-in).
@@ -1461,9 +1463,23 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     try{
       const date=localToday(),state=await getAthleteState(env.DB),inputs=await loadCoachInputs(env,ctx,internalAuth,date);
-      // The signs of an oncoming illness come first, then the general break advice.
+      // Night values outside the usual range come first (an easier day, with
+      // today's hard ride or run swapped for an easy one), then the general break advice.
       const readiness=readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile});
-      const advice=swapOffer(state,date)||illnessWarning({date,readiness,state,week:inputs.week})||proactiveAdvice({...inputs,state,readiness})||memoryCheck(state,date);
+      let easier=easierDayCard({date,readiness,state});
+      if(easier){
+        // The swap waits in the athlete's state, so Ulehčit dnešek answers it as the push's Vyměnit does
+        // (/app/api/coach/nudge); a swap already offered for today stays. Today's sessions only, read only now.
+        if(!(state.nudge?.day===date&&state.nudge.status==='pending')){
+          const hard=hardSession(await upcomingSessions(env,(inputs.week?.days||[]).filter(d=>d.date===date)),[date]);
+          if(hard){state.nudge={...easierSwap(hard),title:easier.headline,day:date,status:'pending'};await updateAthleteState(env.DB,{nudge:state.nudge});}
+        }
+        const offer=state.nudge?.date===date?swapOffer(state,date):null;
+        easier=offer?easierDayCard({date,readiness,state,offer}):easier;
+      }
+      // The push's swap of tomorrow's session stays first until it is answered.
+      const swap=swapOffer(state,date);
+      const advice=(swap&&state.nudge.date!==date?swap:null)||easier||swap||proactiveAdvice({...inputs,state,readiness})||memoryCheck(state,date);
       return Response.json({status:'ok',state,advice},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }

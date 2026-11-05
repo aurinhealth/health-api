@@ -6,35 +6,30 @@ import SwiftUI
 // MARK: - Check-in
 
 /// The coach speaks first when several signs say the body needs a break, when
-/// the night shows signs of an oncoming illness, or when a pain it remembers
-/// may have passed. A thing in the coach's card on Today (CoachThingsCard).
+/// several night values are outside the usual range (an easier day fits), or
+/// when a pain it remembers may have passed. A thing in the coach's card on
+/// Today (CoachThingsCard).
 struct CoachCheckInCard: View {
     @Environment(AppModel.self) private var model
     let things: CoachThings
     var openCoach: () -> Void = {}
-    @State private var showIllness = false
-    @State private var illnessSessions: [CoachCheckIn.Advice.Session] = []
     @State private var swapError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let switched = things.switched {
-                Text(switched.until.map { L10n.f("Stav Nemoc do %@", Fmt.weekdayShort(ISODay.shift($0, -1)) + " " + Fmt.dayMonth(ISODay.shift($0, -1))) } ?? L10n.tr("Stav Nemoc"))
-                    .font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
-                Text(switched.cancelled > 0
-                     ? L10n.f("Zrušené tréninky: %@. Až se ti uleví, napiš kouči a plán vrátíme.", String(switched.cancelled))
-                     : L10n.tr("Až se ti uleví, napiš kouči a plán vrátíme."))
-                    .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-                SecondaryButton(title: "Zpět na Trénink", systemImage: "arrow.uturn.backward") { Task { await backToTraining() } }
-            } else if let advice = things.advice {
+            if let advice = things.advice {
                 if let headline = advice.headline {
                     Text(headline).font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                 }
+                if advice.kind == "easier_day", let message = advice.message {
+                    Text(message).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                // Each value against the usual, in ink: a description, never a warning (MDR).
                 ForEach(advice.rows ?? []) { row in
                     HStack {
                         Text(row.label).font(Typo.small).foregroundStyle(Palette.secondary)
                         Spacer()
-                        Text(row.value).font(Typo.small.weight(.medium)).foregroundStyle(Palette.rust)
+                        Text(row.value).font(Typo.small.weight(.medium)).foregroundStyle(Palette.ink)
                     }
                     .padding(.vertical, 6)
                     .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }
@@ -45,21 +40,23 @@ struct CoachCheckInCard: View {
                         Text(reason).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                if let message = advice.message {
+                if advice.kind != "easier_day", let message = advice.message {
                     Text(message).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 }
-                if advice.kind == "swap", let from = advice.from, let to = advice.to {
+                if advice.kind == "swap" || advice.kind == "easier_day", let from = advice.from, let to = advice.to {
+                    let easier = advice.kind == "easier_day"
                     // "VO2max 5×4 · 75 min → Lehká jízda · 45 min", as the push offered it.
                     HStack(spacing: 8) {
-                        Text(verbatim: from).strikethrough().foregroundStyle(Palette.muted)
+                        if easier { Text("Dnes:").foregroundStyle(Palette.muted) }
+                        Text(verbatim: from).strikethrough(!easier).foregroundStyle(Palette.muted)
                         Image(systemName: "arrow.right").font(.caption.weight(.semibold)).foregroundStyle(Palette.faint)
                         Text(verbatim: to).fontWeight(.semibold).foregroundStyle(Palette.ink)
                     }
                     .font(Typo.small)
                     .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 10) {
-                        PrimaryButton(title: L10n.tr("Vyměnit")) { Task { await answerSwap(advice, swap: true) } }
-                        SecondaryButton(title: "Nechat") { Task { await answerSwap(advice, swap: false) } }
+                        PrimaryButton(title: L10n.tr(easier ? "Ulehčit dnešek" : "Vyměnit")) { Task { await answerSwap(advice, swap: true) } }
+                        SecondaryButton(title: easier ? "Nechat plán" : "Nechat") { Task { await answerSwap(advice, swap: false) } }
                     }
                     if let swapError {
                         Text(swapError).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
@@ -70,11 +67,6 @@ struct CoachCheckInCard: View {
                         PrimaryButton(title: L10n.tr("Už neplatí")) { Task { await settle(memory, keep: false) } }
                         SecondaryButton(title: "Pořád platí") { Task { await settle(memory, keep: true) } }
                     }
-                } else if advice.kind == "illness" {
-                    HStack(spacing: 10) {
-                        PrimaryButton(title: L10n.tr("Přepnout na Nemoc")) { illnessSessions = advice.sessions ?? []; showIllness = true }
-                        SecondaryButton(title: "Teď ne") { Task { await dismiss(advice) } }
-                    }
                 } else {
                     HStack(spacing: 10) {
                         PrimaryButton(title: L10n.tr("Probrat"), systemImage: "bubble.left.and.text.bubble.right", action: openCoach)
@@ -84,13 +76,6 @@ struct CoachCheckInCard: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        // On the stack, so the sheet stays while the card turns into the done card.
-        .sheet(isPresented: $showIllness) {
-            IllnessSheet(sessions: illnessSessions) { until, cancel in
-                try await model.setAthleteStatus("sick", until: until, note: nil, cancel: cancel)
-                withAnimation { things.switched = .init(until: until, cancelled: cancel.count); things.advice = nil }
-            }
-        }
     }
 
     /// Vyměnit puts the easier session in the plan, Nechat keeps the plan.
@@ -114,79 +99,6 @@ struct CoachCheckInCard: View {
     private func dismiss(_ advice: CoachCheckIn.Advice) async {
         withAnimation { things.advice = nil }
         if let id = advice.id { try? await model.api.dismissAdvice(id: id) }
-    }
-
-    private func backToTraining() async {
-        try? await model.setAthleteStatus("active", until: nil, note: nil)
-        withAnimation { things.switched = nil }
-    }
-}
-
-/// "Přepnout na Nemoc": for how long, and the sessions until then that go.
-struct IllnessSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let sessions: [CoachCheckIn.Advice.Session]
-    /// The first day the status no longer applies (nil: until changed) and the event ids to cancel.
-    var apply: (String?, [String]) async throws -> Void
-    @State private var days: Int? = 3
-    @State private var saving = false
-    @State private var error: String?
-
-    private static let lengths: [(days: Int?, label: String)] = [(1, "Zítra"), (3, "3 dny"), (7, "Týden"), (nil, "Neurčito")]
-
-    private var until: String? { days.map { ISODay.shift(AppModel.localDate(Date()), $0) } }
-    /// The sessions before the status ends; with no end, all the card knows of.
-    private var cancelled: [CoachCheckIn.Advice.Session] { sessions.filter { s in until.map { s.date < $0 } ?? true } }
-
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 12) {
-                SectionLabel(text: "Do kdy")
-                HStack(spacing: 8) {
-                    ForEach(Self.lengths.indices, id: \.self) { i in
-                        let l = Self.lengths[i]
-                        Button { days = l.days } label: {
-                            Text(L10n.tr(l.label)).font(.subheadline.weight(.medium))
-                                .foregroundStyle(days == l.days ? Palette.onButton : Palette.ink)
-                                .padding(.horizontal, 14).frame(height: 36)
-                                .background(days == l.days ? Palette.button : Palette.card, in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                if !cancelled.isEmpty {
-                    SectionLabel(text: "Tréninky, které zruším").padding(.top, 10)
-                    VStack(spacing: 0) {
-                        ForEach(cancelled) { s in
-                            HStack {
-                                Text(Fmt.capitalized(Fmt.weekdayShort(s.date)) + " · " + s.name).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
-                                Spacer()
-                            }
-                            .padding(.horizontal, 16).frame(minHeight: 48)
-                        }
-                    }
-                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-                if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-                Spacer()
-                PrimaryButton(title: L10n.tr(saving ? "Ukládám…" : "Přepnout"), busy: saving) {
-                    Task {
-                        saving = true
-                        defer { saving = false }
-                        do { try await apply(until, cancelled.map(\.eventId)); dismiss() } catch { self.error = error.localizedDescription }
-                    }
-                }
-                .disabled(saving)
-            }
-            .padding(20)
-            .background { Palette.background.ignoresSafeArea() }
-            .navigationTitle(L10n.tr("Nemoc"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Zrušit") { dismiss() } }
-            }
-        }
-        .presentationDetents([.medium, .large])
     }
 }
 
