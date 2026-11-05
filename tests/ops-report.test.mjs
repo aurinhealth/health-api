@@ -175,3 +175,17 @@ test("every morning: accounts and AI against what Pro brings in, with a proposal
   assert.match(accountsReport({ ...quiet, totalYesterdayUsd: 22 }, limits), /Včera padlo 73 % denní brzdy pro všechny\. Než AI vypne všem, zvedni AI_TOTAL_DAILY_LIMIT_USD na 45\.00 \$ a AI_TOTAL_DAILY_ALERT_USD na 15\.00 \$/);
   assert.match(accountsReport({ ...quiet, accounts: 18 }, limits), /Účtů je 18 z 20 testerů/);
 });
+
+test("the morning e-mail says where yesterday's barcode scans were found and what went to Open Food Facts", () => {
+  const rows = [
+    { kind: "barcode", service: "saved", count: 2 }, { kind: "barcode", service: "world", count: 5 },
+    { kind: "barcode", service: "off-live", count: 1 }, { kind: "barcode", service: "missing", count: 2 },
+    { kind: "off-share", service: "sent", count: 1 }, { kind: "off-share", service: "exists", count: 1 }
+  ];
+  const { text, html } = opsReport(rows, null, "2026-11-05");
+  assert.match(text, /Čárové kódy včera\n- 10 skenů: uložené u nás 2, světový katalog 5, živě z Open Food Facts 1, nenalezeno 2 \(20 %\)/);
+  assert.match(text, /Schválené potraviny do Open Food Facts: přidáno 1, už tam hodnoty měly 1/);
+  assert.match(html, /Čárové kódy včera/);
+  assert.match(html, /• 10 skenů/);
+  assert.equal(opsReport([], null, "2026-11-05"), null, "no scans, no e-mail");
+});
