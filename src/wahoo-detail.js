@@ -13,7 +13,7 @@ import { rideFtpFor } from './intervals-athlete.js';
 import { parseFit, fitStreams } from './fit-file.js';
 import { thin, zoneBounds, zoneSeconds, storedHeartRate } from './watch-detail.js';
 import { wahooFileUrl } from './wahoo.js';
-import { fetchPublic } from './public-fetch.js';
+import { fetchPublic, readUpTo } from './public-fetch.js';
 
 const STREAMS = 'activity-streams';
 const MAX_FILE = 20 * 1024 * 1024;
@@ -25,8 +25,8 @@ async function download(url, fetchImpl) {
   if (!url) return null;
   const response = await fetchPublic(url, { signal: AbortSignal.timeout(12000) }, fetchImpl, { https: true }).catch(() => null);
   if (!response?.ok || Number(response.headers.get('content-length') || 0) > MAX_FILE) return null;
-  const bytes = new Uint8Array(await response.arrayBuffer().catch(() => new ArrayBuffer(0)));
-  return bytes.length && bytes.length <= MAX_FILE ? bytes : null;
+  const { bytes, whole } = await readUpTo(response, MAX_FILE).catch(() => ({ bytes: new Uint8Array(0) }));
+  return bytes.length && whole ? bytes : null;
 }
 
 // The workout's curves: kept from an earlier read, else from the FIT file (the
