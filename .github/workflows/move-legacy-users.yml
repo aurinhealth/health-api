@@ -40,6 +40,7 @@ jobs:
           repository: aurinhealth/aurin-prompts
           token: ${{ secrets.PROMPTS_REPO_TOKEN }}
           path: src/private
+          persist-credentials: false
 
       - name: Set up Node
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0

@@ -86,6 +86,7 @@ jobs:
           repository: aurinhealth/aurin-prompts
           token: ${{ secrets.PROMPTS_REPO_TOKEN }}
           path: src/private
+          persist-credentials: false
 
       - name: Set up Node
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
@@ -140,11 +141,21 @@ jobs:
           set -euo pipefail
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install --quiet "duckdb==$DUCKDB_VERSION"
+          # One fixed version of the export, checked against the SHA-256 Hugging Face
+          # lists for it (security audit 2026-11-04, point 37): the newest commit of
+          # the dataset is looked up once, and the file is downloaded from that commit.
+          api=https://huggingface.co/api/datasets/openfoodfacts/product-database
+          rev="$(curl -fsS --retry 6 --retry-all-errors --retry-delay 30 "$api/revision/main" | jq -r .sha)"
+          [[ "$rev" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Open Food Facts: no dataset version ($rev)"; exit 1; }
+          sum="$(curl -fsS --retry 6 --retry-all-errors --retry-delay 30 -X POST "$api/paths-info/$rev" -d paths=food.parquet | jq -r '.[0].lfs.oid')"
+          [[ "$sum" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::Open Food Facts: no checksum for food.parquet ($sum)"; exit 1; }
+          echo "Open Food Facts version $rev, SHA-256 $sum"
           # One download of the whole file: Hugging Face answers DuckDB's many
           # ranged requests from shared runner addresses with HTTP 429.
           curl -fL --retry 6 --retry-all-errors --retry-delay 30 -C - -A "aurin-food-catalog-refresh" \
-            -o "$RUNNER_TEMP/food.parquet" "https://huggingface.co/datasets/openfoodfacts/product-database/resolve/main/food.parquet"
+            -o "$RUNNER_TEMP/food.parquet" "https://huggingface.co/datasets/openfoodfacts/product-database/resolve/$rev/food.parquet"
           ls -l "$RUNNER_TEMP/food.parquet"
+          echo "$sum  $RUNNER_TEMP/food.parquet" | sha256sum -c --quiet - || { echo "::error::Open Food Facts: food.parquet does not match its checksum"; exit 1; }
           "$RUNNER_TEMP/venv/bin/python" -I scripts/export-off.py "$RUNNER_TEMP/off.ndjson.gz" "$RUNNER_TEMP/food.parquet"
           rm -f "$RUNNER_TEMP/food.parquet"
           ls -l "$RUNNER_TEMP/off.ndjson.gz"
