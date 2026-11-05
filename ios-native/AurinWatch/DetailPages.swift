@@ -5,7 +5,6 @@ struct DetailPage<RingContent: View>: View {
     let title: String
     let note: String
     let tiles: [Tiles.Item]
-    let color: Color
     @ViewBuilder var ring: RingContent
 
     var body: some View {
@@ -24,7 +23,7 @@ struct DetailPage<RingContent: View>: View {
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
             Spacer(minLength: 8)
-            if !tiles.isEmpty { Tiles(items: tiles, color: color) }
+            if !tiles.isEmpty { Tiles(items: tiles) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -39,8 +38,8 @@ struct MetricDetail: View {
 
     var body: some View {
         TabView {
-            DetailPage(title: title, note: note, tiles: tiles, color: metric.color) {
-                Ring(fraction: fraction, color: metric.color) {
+            DetailPage(title: title, note: note, tiles: tiles) {
+                Ring(fraction: fraction, color: metric.color, goal: normal == nil ? nil : 1.0 / 3...2.0 / 3) {
                     RingValue(value: m?.value.map { W.number($0) } ?? "–", label: metric.unit, color: metric.color)
                 }
             }
@@ -54,10 +53,21 @@ struct MetricDetail: View {
         .tabViewStyle(.verticalPage)
     }
 
-    /// Where today sits between the lowest and the highest of the last 90 days,
-    /// full when it is the best of them.
+    private var normal: ClosedRange<Double>? {
+        guard let low = m?.low, let high = m?.high, high > low else { return nil }
+        return low...high
+    }
+
+    /// Today against the normal, which takes the ring's middle third (as the
+    /// first page's range bar), so a normal HRV fills the ring to the middle
+    /// of its marked part (watch audit C3). Without a normal yet: where today
+    /// sits between the lowest and the highest of the last 90 days.
     private var fraction: Double {
         guard let m, let value = m.value else { return 0 }
+        if let normal {
+            let span = normal.upperBound - normal.lowerBound
+            return Swift.min(Swift.max((value - normal.lowerBound + span) / (3 * span), 0.03), 0.97)
+        }
         let values = m.series.map(\.value) + [value]
         guard let lo = values.min(), let hi = values.max(), hi > lo else { return 0.5 }
         let f = (value - lo) / (hi - lo)
@@ -71,13 +81,15 @@ struct MetricDetail: View {
         return W.tr("Normální", "Normal")
     }
 
+    /// "Your normal 63–99", or by how much today is outside it (watch audit C2).
     private var note: String {
         guard let low = m?.low, let high = m?.high else { return W.tr("Normál se ještě počítá.", "Your normal is still being worked out.") }
-        let normal = W.tr("tvůj normál", "your normal") + " " + W.number(low) + "–" + W.number(high)
-        if metric == .hrv, let value = m?.value {
-            return W.change((value - (low + high) / 2).rounded()) + " ms · " + normal
+        if let value = m?.value?.rounded(), value > high || value < low {
+            let amount = W.number(value > high ? value - high : low - value) + " " + metric.unit
+            return value > high ? W.tr("O \(amount) nad tvým normálem", "\(amount) above your normal")
+                                : W.tr("O \(amount) pod tvým normálem", "\(amount) below your normal")
         }
-        return normal.prefix(1).uppercased() + normal.dropFirst()
+        return W.tr("Tvůj normál ", "Your normal ") + W.number(low) + "–" + W.number(high)
     }
 
     private var tiles: [Tiles.Item] {
@@ -95,8 +107,8 @@ struct SleepDetail: View {
 
     var body: some View {
         TabView {
-            DetailPage(title: title, note: note, tiles: tiles, color: W.indigo) {
-                Ring(fraction: fraction, color: W.indigo) {
+            DetailPage(title: title, note: note, tiles: tiles) {
+                Ring(fraction: fraction, color: W.indigo, goal: goal) {
                     RingValue(value: s.sleep?.minutes.map { W.clock(minutes: $0) } ?? "–", label: W.tr("Spánek", "Sleep"), color: W.indigo, size: 28)
                 }
             }
@@ -110,9 +122,21 @@ struct SleepDetail: View {
         .tabViewStyle(.verticalPage)
     }
 
+    /// The night against its need (half an hour either side marked), the
+    /// need's top at 85 % so a longer night shows too (watch audit C3).
+    private var top: Double? {
+        guard let need = s.sleep?.need, need > 0 else { return nil }
+        return Swift.max((need + 30) / 0.85, s.sleep?.minutes ?? 0)
+    }
+
     private var fraction: Double {
-        guard let minutes = s.sleep?.minutes, let need = s.sleep?.need, need > 0 else { return 0 }
-        return Swift.min(minutes / need, 1)
+        guard let minutes = s.sleep?.minutes, let top else { return 0 }
+        return minutes / top
+    }
+
+    private var goal: ClosedRange<Double>? {
+        guard let need = s.sleep?.need, let top else { return nil }
+        return (need - 30) / top...(need + 30) / top
     }
 
     private var title: String {
@@ -155,22 +179,29 @@ struct StrainDetail: View {
     private var strain: WatchSnapshot.Strain { s.strain }
 
     var body: some View {
-        DetailPage(title: title, note: note, tiles: tiles, color: W.amber) {
-            Ring(fraction: fraction, color: W.amber) {
-                RingValue(value: strain.score.map { W.number($0, digits: 1) } ?? "–", label: range, color: W.amber)
+        DetailPage(title: title, note: note, tiles: tiles) {
+            Ring(fraction: fraction, color: W.amber, goal: goal) {
+                // The target is the marked part of the ring and the line under (watch audit C5).
+                RingValue(value: strain.score.map { W.number($0, digits: 1) } ?? "–", label: W.tr("Námaha", "Strain"), color: W.amber)
             }
         }
         .containerBackground(W.glow(W.Glow.strain), for: .navigation)
     }
 
-    private var range: String {
-        guard let low = strain.low, let high = strain.high else { return W.tr("Námaha", "Strain") }
-        return W.tr("z", "of") + " " + W.number(low) + "–" + W.number(high)
+    /// The target's top at 85 % of the ring, so short of it, in it and over it all show.
+    private var top: Double? {
+        guard let high = strain.high, high > 0 else { return nil }
+        return Swift.max(high / 0.85, strain.score ?? 0)
     }
 
     private var fraction: Double {
-        guard let score = strain.score, let high = strain.high, high > 0 else { return 0 }
-        return Swift.min(score / high, 1)
+        guard let score = strain.score, let top else { return 0 }
+        return score / top
+    }
+
+    private var goal: ClosedRange<Double>? {
+        guard let low = strain.low, let high = strain.high, high >= low, let top else { return nil }
+        return low / top...high / top
     }
 
     private var title: String {
@@ -189,13 +220,21 @@ struct StrainDetail: View {
         return W.tr("Dnešní cíl", "Today's target") + " " + W.number(low) + "–" + W.number(high)
     }
 
+    /// "+1.5", or "0" for none: "–" means missing data (watch audit C5).
+    private func added(_ value: Double?) -> String {
+        guard let value else { return "–" }
+        let text = W.number(value, digits: 1)
+        return text == W.number(0, digits: 1) ? "0" : "+" + text
+    }
+
     private var tiles: [Tiles.Item] {
         var items = [Tiles.Item(label: W.tr("Kroky", "Steps"), value: s.steps.map { W.number($0) } ?? "–"),
-                     Tiles.Item(label: W.tr("Pohyb", "Movement"), value: strain.movement.map { "+" + W.number($0, digits: 1) } ?? "–")]
+                     Tiles.Item(label: W.tr("Pohyb", "Movement"), value: added(strain.movement))]
         if let planned = strain.planned, planned > 0, strain.nextTitle != nil {
-            items.append(Tiles.Item(label: W.tr("Plán", "Planned"), value: "+" + W.number(planned, digits: 1)))
+            items.append(Tiles.Item(label: W.tr("Plán", "Planned"), value: added(planned)))
         } else {
-            items.append(Tiles.Item(label: W.tr("Trénink", "Training"), value: strain.training.map { "+" + W.number($0, digits: 1) } ?? "–"))
+            // No workout yet today: none added, not missing.
+            items.append(Tiles.Item(label: W.tr("Trénink", "Training"), value: added(strain.training ?? (strain.score == nil ? nil : 0))))
         }
         return items
     }
@@ -207,7 +246,7 @@ struct WhyDetail: View {
 
     var body: some View {
         let color = W.zoneColor(s.zone)
-        DetailPage(title: W.tr("Proč ", "Why ") + (s.readiness.map { String($0) } ?? "–"), note: note, tiles: tiles, color: W.indigo) {
+        DetailPage(title: W.tr("Proč ", "Why ") + (s.readiness.map { String($0) } ?? "–"), note: note, tiles: tiles) {
             Ring(fraction: Double(s.readiness ?? 0) / 100, color: color) {
                 RingValue(value: s.readiness.map { String($0) } ?? "–", label: W.tr("Připravenost", "Ready"), color: color)
             }

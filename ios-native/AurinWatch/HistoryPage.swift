@@ -49,7 +49,8 @@ struct HistoryPage: View {
                 Text(days.average.map(format) ?? "–")
                     .font(W.serif(24))
                     .foregroundStyle(W.ink)
-                Text(metric.unit + " " + W.tr("průměr", "avg"))
+                // "5:26 avg", not "5:26 h avg" (watch audit C4).
+                Text((sleep ? "" : metric.unit + " ") + W.tr("průměr", "avg"))
                     .font(.system(size: 11))
                     .foregroundStyle(W.secondary)
                 if let need {
@@ -59,16 +60,20 @@ struct HistoryPage: View {
                     Text(W.tr("potřeba", "need") + " " + W.clock(minutes: need))
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(W.amber)
-                } else if let change {
-                    Text(change.0)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(change.1)
                 }
+            }
+            // Against what (watch audit C2): "↑ 21 ms vs first week".
+            if !sleep, let change {
+                Text(change.0)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(change.1)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             if spans.count > 1 { picker.padding(.top, 2) }
             chart
                 .padding(.top, 6)
-                .frame(height: Self.chartHeight - (spans.count > 1 ? 26 : 0))
+                .frame(height: Self.chartHeight - (spans.count > 1 ? 26 : 0) - (!sleep && change != nil ? 14 : 0))
             if shown == 90 {
                 Text(trend)
                     .font(.system(size: 11))
@@ -78,7 +83,7 @@ struct HistoryPage: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 4)
             } else {
-                Tiles(items: tiles, color: sleep ? W.amber : metric.color)
+                Tiles(items: tiles)
                     .padding(.top, 4)
             }
         }
@@ -131,12 +136,14 @@ struct HistoryPage: View {
         return after - before
     }
 
+    /// The span's last week against its first week, said so (HRV, resting HR).
     private var change: (String, Color)? {
-        guard let diff else { return nil }
-        let value = sleep ? diff : diff.rounded()
-        if abs(value) < (sleep ? 5 : 1) { return (W.change(0), W.muted) }
+        guard !sleep, let diff else { return nil }
+        let value = diff.rounded()
+        let against = W.tr(" proti 1. týdnu", " vs first week")
+        if abs(value) < 1 { return (W.tr("= jako 1. týden", "= same as first week"), W.muted) }
         let good = metric.higherIsBetter ? value > 0 : value < 0
-        return (sleep ? W.minutesChange(value) : W.change(value), good ? W.green : W.amber)
+        return ((value > 0 ? "↑ " : "↓ ") + W.number(abs(value)) + " " + metric.unit + against, good ? W.green : W.amber)
     }
 
     private var trend: String {
@@ -229,15 +236,10 @@ struct HistoryPage: View {
             Chart {
                 if sleep, let need {
                     // The night's need as one dashed line over the bars.
+                    // Named in the header ("— need 9:00"), not on the line, where it was cut off.
                     RuleMark(y: .value("Potřeba", need / 60))
                         .foregroundStyle(W.amber)
                         .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
-                        // Says what the line is, above it on the left, clear of the scale.
-                        .annotation(position: .top, alignment: .leading, spacing: 1) {
-                            Text(W.tr("potřeba", "need"))
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(W.amber)
-                        }
                 } else if let band {
                     RectangleMark(xStart: .value("Od", first), xEnd: .value("Do", last),
                                   yStart: .value("Nízko", band.lowerBound), yEnd: .value("Vysoko", band.upperBound))
