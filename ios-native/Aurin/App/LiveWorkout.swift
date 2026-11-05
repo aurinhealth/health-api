@@ -464,6 +464,9 @@ final class LiveWorkout: NSObject {
     /// no set in it, so no question while one runs, and 10 min from its end.
     @ObservationIgnored private var openParts: Set<String> = []
 
+    /// One of those screens is open over Režim tréninku.
+    var partsOpen: Bool { !openParts.isEmpty }
+
     func partOpen(_ name: String, _ open: Bool) {
         if open { openParts.insert(name) } else { openParts.remove(name) }
         worked()

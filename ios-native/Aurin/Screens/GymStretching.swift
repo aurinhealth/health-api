@@ -91,6 +91,9 @@ struct StretchingCard: View {
     let date: String
     var kind: GymRoutineKind = .stretching
     var compact = false
+    /// Spustit tapped, before its screen opens: in Režim tréninku the workout
+    /// (clock, heart rate) starts with it.
+    var onStart: () -> Void = {}
     @AppStorage(StretchingCard.doneKey) private var stored = ""
     @State private var info: GymStretching.Item?
     @State private var timer = false
@@ -114,7 +117,7 @@ struct StretchingCard: View {
                     }
                 }
                 Spacer()
-                Button { timer = true } label: {
+                Button { onStart(); timer = true } label: {
                     Label("Spustit", systemImage: "play.fill").font(.subheadline.weight(.semibold))
                         .foregroundStyle(Palette.onButton)
                         .padding(.horizontal, 14).frame(height: 36)

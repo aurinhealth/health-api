@@ -121,7 +121,7 @@ struct TrainingModeView: View {
                                 if restEnd == nil, !day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
                                     ForEach(parts.before(day)) { part in
                                         if let routine = parts.routine(part, day: day), !routineDone(routine, kind: part.kind) {
-                                            StretchingCard(stretching: routine, date: date, kind: part.kind, compact: true).padding(.top, 14)
+                                            StretchingCard(stretching: routine, date: date, kind: part.kind, compact: true, onStart: startFromPart).padding(.top, 14)
                                         }
                                     }
                                 }
@@ -175,6 +175,9 @@ struct TrainingModeView: View {
             if !model.demo { HeartRateSensor.shared.connectSaved() }
         }
         .onDisappear {
+            // The warm-up's, stretching's or cardio's own screen over this one:
+            // the workout, its heart rate and the sensor go on underneath.
+            guard !live.partsOpen else { return }
             ScreenAwake.release("training"); model.immersive = false
             // Left another way than the arrow (the edge swipe, a link) while the
             // workout runs: it goes on hidden, as with the arrow.
@@ -1391,6 +1394,12 @@ struct TrainingModeView: View {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         if !model.demo && !live.running { await live.begin(since: nil, weightKg: model.today?.weight?.latest) }
         syncActivity()
+    }
+
+    /// Spustit on the warm-up, stretching or cardio before the exercises: the
+    /// workout starts with it, as with Začít trénink, so its clock and heart rate run.
+    private func startFromPart() {
+        if !started { Task { await start() } }
     }
 
     /// The arrow: the screen closes, the clock, heart rate, rest alarm and
