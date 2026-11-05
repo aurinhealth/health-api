@@ -48,7 +48,11 @@ extension AppModel {
         let defaults = UserDefaults.standard
         defaults.set(account.name, forKey: AvatarStore.nameKey)
         defaults.set(account.email, forKey: AvatarStore.emailKey)
-        if let id = account.id { defaults.set(id, forKey: AvatarStore.idKey) }
+        if let id = account.id {
+            defaults.set(id, forKey: AvatarStore.idKey)
+            // Water from the widget and Siri is written for this account.
+            PendingDrinks.account = id
+        }
         let shown = defaults.string(forKey: Self.displayNameKey)?.nilIfBlank ?? account.name ?? account.email
         if let first = shown?.trimmingCharacters(in: .whitespaces).first {
             defaults.set(String(first).uppercased(), forKey: Self.accountInitialKey)
@@ -283,6 +287,7 @@ extension AppModel {
             // The next account looks for its own kept settings.
             SettingsBackup.forget()
             for key in [AvatarStore.nameKey, AvatarStore.emailKey, AvatarStore.idKey, Self.displayNameKey, Self.accountUncheckedKey] { UserDefaults.standard.removeObject(forKey: key) }
+            PendingDrinks.account = nil
             // The photo stays for this account's next sign-in (AvatarStore.keep).
         }
         notice = nil
