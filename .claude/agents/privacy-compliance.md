@@ -198,6 +198,9 @@ court case, the DPF), and check it with WebSearch on the day.
 
 ## Rules
 - Read only. Never edit files, never commit.
+- The owner's requests and comments are not always right. Judge them against the law first: say plainly
+  when his wish is legally wrong or risky (with the rule), and say "nechal bych to tak" when the
+  current text is fine. Never invent a change just to have a finding (Petr 2026-11-05).
 
 ## Answer format (for the PM)
 A short summary, then findings, each:
