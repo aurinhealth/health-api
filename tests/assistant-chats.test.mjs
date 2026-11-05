@@ -40,3 +40,42 @@ test('old chats stay until the athlete deletes them and titles stay short',async
   assert.equal(chatTitle('  '),'Nový chat');
 });
 
+
+test('thumbs under an answer keep only its id and a reason, and go with the chat',async()=>{
+  const {appendChatTurnIds,saveAnswerFeedback}=await import('../src/assistant-chats.js');
+  const raw=createD1(),db=scopedDb(raw,1),other=scopedDb(raw,2);
+  const {chatId,messageId}=await appendChatTurnIds(db,null,'Můžu dnes intervaly?','Ano, HRV je v normálu.');
+  assert.ok(chatId>0&&messageId>0);
+  const read=await readChat(db,chatId);
+  assert.equal(read.messages.find(m=>m.role==='assistant').id,messageId);
+  assert.equal(read.messages[1].rating,undefined);
+  // The question is not an answer, and another user's answer is not there.
+  const question=read.messages.find(m=>m.role==='user').id;
+  await assert.rejects(saveAnswerFeedback(db,{messageId:question,rating:'up'}),e=>e.status===404);
+  await assert.rejects(saveAnswerFeedback(other,{messageId,rating:'up'}),e=>e.status===404);
+  await assert.rejects(saveAnswerFeedback(db,{messageId,rating:'meh'}),e=>e.status===400);
+  await assert.rejects(saveAnswerFeedback(db,{messageId,rating:'up',reason:'numbers'}),e=>e.status===400);
+  await assert.rejects(saveAnswerFeedback(db,{messageId,rating:'down',reason:'Free text from the chat'}),e=>e.status===400);
+  await saveAnswerFeedback(db,{messageId,rating:'down'});
+  await saveAnswerFeedback(db,{messageId,rating:'down',reason:'numbers'});
+  const rows=raw.sqlite.prepare('SELECT * FROM assistant_feedback').all();
+  assert.equal(rows.length,1);
+  assert.deepEqual(Object.keys(rows[0]).sort(),['chat_id','message_id','rating','reason','updated_at','user_id']);
+  assert.equal(rows[0].reason,'numbers');
+  assert.equal((await readChat(db,chatId)).messages[1].rating,'down');
+  // Taken back, then up again.
+  await saveAnswerFeedback(db,{messageId,rating:null});
+  assert.equal((await readChat(db,chatId)).messages[1].rating,undefined);
+  await saveAnswerFeedback(db,{messageId,rating:'up'});
+  assert.equal((await readChat(db,chatId)).messages[1].rating,'up');
+  await deleteChat(db,chatId);
+  assert.equal(raw.sqlite.prepare('SELECT COUNT(*) AS n FROM assistant_feedback').get().n,0);
+});
+
+test('a chat without any thumbs reads as before',async()=>{
+  const raw=createD1(),db=scopedDb(raw,1);
+  const id=await appendChatTurn(db,null,'Ahoj','Ahoj.');
+  const chat=await readChat(db,id);
+  assert.equal(chat.messages.length,2);
+  assert.ok(chat.messages.every(m=>!('rating' in m)));
+});

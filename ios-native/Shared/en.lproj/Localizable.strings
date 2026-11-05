@@ -245,7 +245,7 @@
 "Kdy jít spát?" = "When to go to bed?";
 "Kdy mám čas" = "When I have time";
 "Kdykoli" = "Anytime";
-"Když použiješ AI funkci (asistent, rozpoznání jídla z fotky, hodnocení tréninku a týdne), pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI v USA." = "When you use an AI feature (the assistant, food recognition from photos, workout and week reviews), Aurin sends the data it needs, including health data and the photos you send, to OpenAI in the USA.";
+"Když použiješ AI funkci (kouč, rozpoznání jídla z fotky, hodnocení tréninku a týdne), a každý den kvůli krátkému shrnutí kouče na Dnes, Tréninku a Jídle, pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI v USA. Cyklus jen po zapnutí „Kouč ví o cyklu“." = "When you use an AI feature (the coach, food recognition from photos, workout and week reviews), and every day for the coach's short summary on Today, Training and Food, Aurin sends the data it needs, including health data and the photos you send, to OpenAI in the USA. Your cycle only if you turn on “Coach knows my cycle”.";
 "Klidový tep" = "Resting heart rate";
 "Klidový tep po dnech" = "Resting heart rate by day";
 "Knihovna" = "Library";
@@ -267,7 +267,7 @@
 "Kouč přemýšlí…" = "Coach is thinking…";
 "Kouč teď neodpověděl." = "The coach didn't answer.";
 "Kouč čte tvůj den…" = "Coach is reading your day…";
-"Kouč včetně fotek v chatu, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál." = "The coach including photos in the chat, food photo reading and food lookup send the data they need to AI. Without consent, the rest of the app keeps working.";
+"Kouč včetně fotek v chatu, jeho denní shrnutí na Dnes, Tréninku a Jídle, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál." = "The coach, including photos in chat, its daily summary on Today, Training and Food, reading food photos and looking up foods send the data they need to AI. Without consent, the rest of the app keeps working.";
 "Kuřecí rizoto" = "Chicken risotto";
 "Květina" = "Flower";
 "Kyslík v krvi" = "Blood oxygen";
@@ -481,6 +481,7 @@
 "Přední stehna" = "Quads";
 "Předvolba" = "Preset";
 "Přeskočit" = "Skip";
+"Krok %lld z %lld" = "Step %lld of %lld";
 "Přeskočit pauzu" = "Skip rest";
 "Přesunout %@ na %@" = "Move %@ to %@";
 "Přesunout na jiný den" = "Move to another day";
@@ -788,7 +789,7 @@
 "Večeře" = "Dinner";
 "Vlastní" = "Custom";
 "Vlastní váha" = "Bodyweight";
-"Vlnky ve vodě a efekt po splnění cíle" = "Ripples in the water and an effect at your goal";
+"Občas se pohne, vlnky a efekt v cíli" = "Moves now and then, ripples and a goal effect";
 "Vláknina" = "Fiber";
 "Voda" = "Water";
 "Volno" = "Day off";
@@ -953,7 +954,7 @@
 "hubnout %@ týdně" = "lose %@ per week";
 "nabrat %@ týdně" = "gain %@ per week";
 "imperiální" = "imperial";
-"index %@" = "Score %@";
+"index %@" = "index %@";
 "jen tento týden" = "this week only";
 "jen vlastní váha" = "bodyweight only";
 "jen čára jako dřív" = "just a line, as before";
@@ -1495,8 +1496,6 @@
 "Pozastavit" = "Pause";
 "Ukončit časovač" = "Stop the timer";
 "Proč?" = "Why?";
-"Kouč vychází jen z těchto čísel. Text se píše jednou denně." = "The coach uses only these numbers. The text is written once a day.";
-"Text podle pravidel aplikace, AI je vypnutá nebo nedostupná." = "Text from the app's rules; AI is off or unavailable.";
 
 /* Gym: logged workout, live logging, calories to check */
 "tlaky" = "pushes";
@@ -1799,6 +1798,7 @@
 "podle tvého běžného týdne" = "from your usual week";
 "Vyber sport a klepni na den." = "Pick a sport and tap a day.";
 "Klepni na den, kam dát: %@" = "Tap the day to put it on: %@";
+"Vypnuté v Nastavení → Sporty: %@." = "Off in Settings → Sports: %@.";
 "Bez tréninku" = "No workout";
 "Přidat sem" = "Add here";
 "Vytvořit tréninky" = "Create workouts";
@@ -3272,7 +3272,7 @@
 "Přidat se na čekací listinu" = "Join the waitlist";
 "Zaškrtni první políčko, ať můžeš pokračovat." = "Tick the first box to continue.";
 "Později" = "Later";
-"Nepovinné. Potřebuje je kouč a rozpoznání jídla. Jde to vypnout v Nastavení." = "Optional. The coach and food recognition need it. You can turn it off in Settings.";
+"Nepovinné. Potřebuje je kouč, jeho denní shrnutí a rozpoznání jídla. Jde to vypnout v Nastavení." = "Optional. The coach, its daily summary and food recognition need it. You can turn it off in Settings.";
 "Čte spánek, tep, HRV, tréninky, váhu a jídlo. Bez zeptání nic nezapisuje." = "Reads sleep, heart rate, HRV, workouts, weight and food. Writes nothing without asking.";
 "Aurin potřebuje věk, výšku a váhu, aby spočítal kalorie, námahu a zotavení. Pohlaví mění výpočet kalorií a tepových zón." = "Aurin needs your age, height and weight to work out calories, strain and recovery. Sex changes how calories and heart rate zones are worked out.";
 "Zadej výšku mezi %@ a %@." = "Enter a height between %@ and %@.";
@@ -3570,6 +3570,7 @@
 "Pozastavení zdravotních dat potřebuje krátké ověření." = "Pausing health data needs a quick check.";
 "Změna e-mailu potřebuje krátké ověření." = "Changing the email needs a quick check.";
 "Nový způsob přihlášení potřebuje krátké ověření." = "Adding a new way to sign in needs a quick check.";
+"Odebrání Face ID potřebuje krátké ověření." = "Removing Face ID needs a quick check.";
 "Nejdřív potvrď, že jsi to ty." = "Confirm it's you first.";
 "Žádná data za 7 dní" = "No data in 7 days";
 "Základ" = "Base";
@@ -3683,6 +3684,15 @@
 "Začít 7denní zkoušku zdarma" = "Start 7-day free trial";
 "VYZKOUŠEJ 7 DNÍ ZDARMA" = "TRY 7 DAYS FREE";
 "12MĚSÍČNÍ TARIF · VYZKOUŠEJ 7 DNÍ ZDARMA" = "12-MONTH PLAN · TRY 7 DAYS FREE";
+"V PRO JE" = "INCLUDED IN PRO";
+"Platíš měsíčně" = "Pay monthly";
+"12 plateb" = "12 payments";
+"%@ celkem" = "%@ total";
+"%@/měs." = "%@/mo";
+"v přepočtu" = "equivalent";
+"zrušíš kterýkoli měsíc" = "cancel any month";
+"UŠETŘÍŠ %d %%" = "SAVE %d%%";
+"Ušetříš %d %% proti měsíčnímu tarifu" = "Saves %d%% compared with the monthly plan";
 
 /* Settings → Aurin Pro in night violet and the coach message packs (ProSettings.swift) */
 "%lld navíc" = "%lld extra";
@@ -3816,6 +3826,62 @@
 "V %@ nic nového." = "Nothing new in %@.";
 "%@ z %@." = "%@ from %@.";
 "%@ a %@ z %@." = "%@ and %@ from %@.";
+"Zkopírováno" = "Copied";
+"Dobrá odpověď" = "Good answer";
+"Špatná odpověď" = "Bad answer";
+"Co v odpovědi nesedělo?" = "What was off?";
+"Uloží se jen důvod, ne text chatu." = "Only the reason is saved, not the text of the chat.";
+"Čísla nesedí" = "The numbers don't match";
+"Nepomohlo to" = "It didn't help";
+"Nahlásit tuto odpověď…" = "Report this answer…";
+"Nahlásit odpověď" = "Report answer";
+"Odpověď kouče, kterou hlásím:" = "The coach's answer I'm reporting:";
+"Co je na ní špatně: " = "What's wrong with it: ";
+"Ukáže, z čeho se index skládá." = "Shows what makes up the index.";
+"Z čeho se skládá index" = "What makes up the index";
+"Posledních %@ nocí · průměr %@" = "Last %1$@ nights · average %2$@";
+"obvykle %@–%@" = "usually %1$@–%2$@";
+"Kvalita" = "Quality";
+"Fáze" = "Stages";
+"spánek proti potřebě na minulou noc" = "asleep against the need for last night";
+"efektivita %@" = "efficiency %@";
+"%@ spánku" = "%@ of sleep";
+"hluboký a REM spánek dohromady" = "deep and REM sleep together";
+"Index 0–100: délka proti tvé potřebě a kvalita. Tahle noc nemá fáze, tak se počítá jen z nich." = "Index 0–100: length against your need, and quality. This night has no stages, so it counts only these two.";
+"Index 0–100: délka proti tvé potřebě, kvalita a podíl hlubokého a REM spánku. Fáze váží nejméně, hodinky je měří nejméně přesně." = "Index 0–100: length against your need, quality, and the share of deep and REM sleep. Stages weigh least, watches measure them least precisely.";
+"Index téhle noci spočítalo tvoje zařízení, Aurin k němu nemá části." = "Your device calculated this night’s index, so Aurin has no parts for it.";
+"usnutí za %@ min" = "fell asleep in %@ min";
+"probuzení %@×" = "woke %@×";
+"%@ min vzhůru" = "%@ min awake";
+"čas v posteli, kdy spíš" = "the share of time in bed spent asleep";
+"Pás je tvoje obvyklé rozmezí, %@ až %@." = "The band is your usual range, %1$@ to %2$@.";
+"Index spánku za posledních %@ nocí, průměr %@." = "Sleep index over the last %1$@ nights, average %2$@.";
+"Měj na ruce nabité hodinky, ať se noc změří." = "Keep your charged watch on so the night gets measured.";
+"Vyměněno dnes" = "Swapped today";
+"Jen dnes" = "Only today";
+"I příště" = "Next time too";
+"Výměna za %@" = "Swap for %@";
+"Další tréninky dají místo něj %@. Vrátit to jde v Nastavení → Posilovna → Cviky." = "Next workouts use %@ instead. Undo in Settings → Gym → Exercises.";
+"Které tě baví a které ne" = "The ones you like and don't";
+"Zatím tu nic není. Palec dáš cviku po tréninku v Ohodnotit, nebo když ho vyměníš a zvolíš I příště." = "Nothing here yet. Give an exercise a thumb in Rate after a workout, or swap it and choose Next time too.";
+"Plány je vynechají." = "Plans leave these out.";
+"Plány je dají o něco častěji." = "Plans pick these a little more often.";
+
+/* Food → amount: what is left of the day's target before adding (DayLeftLine) */
+"Po přidání" = "After adding";
+"Po přidání zbývá dnes" = "After adding, left today";
+"Po přidání zbývá %@" = "After adding, left %@";
+"%@ kcal nad dnešním cílem" = "%@ kcal over today's target";
+"%@ kcal nad cílem %@" = "%@ kcal over the target %@";
+"limit sacharidů: zbývá %@ g" = "carb limit: %@ g left";
+"%@ g nad limitem sacharidů" = "%@ g over the carb limit";
+"%@ z %@ kcal snědeno · tohle jídlo %@ kcal" = "%@ of %@ kcal eaten · this food %@ kcal";
+
+/* Food → photo with several foods on the plate (PhotoItemsView) */
+"Z fotky" = "From your photo";
+"Přidat položku" = "Add an item";
+"%@ g bílkovin · %@ g sacharidů · %@ g tuků" = "%@ g protein · %@ g carbs · %@ g fat";
+"Množství jsou odhad z fotky. Omáčky a olej jsou nejméně přesné." = "Amounts are estimated from the photo. Sauces and oil are the least precise.";
 
 /* Intervals.icu: workouts from other apps (SyncForwardGroup) */
 "Zapsané v Aurinu" = "Logged in Aurin";

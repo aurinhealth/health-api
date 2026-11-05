@@ -50,6 +50,22 @@ final class SiriShortcutsTests: XCTestCase {
         XCTAssertEqual(PendingDrinks.glassMl(saved: nil, imperial: true), Units.roundedMl(fluidOunces: 8))
     }
 
+    /// Security audit 2026-11-04, point 36: water from the widget or Siri
+    /// keeps the account it was added in, so another account never sends it.
+    func testWidgetWaterKeepsItsAccount() {
+        let saved = PendingDrinks.account
+        _ = PendingDrinks.take()
+        defer { PendingDrinks.account = saved; _ = PendingDrinks.take() }
+        PendingDrinks.account = 7
+        PendingDrinks.add(250, on: "2026-11-05")
+        PendingDrinks.account = nil
+        PendingDrinks.add(300, on: "2026-11-05")
+        let drinks = PendingDrinks.take()
+        XCTAssertEqual(drinks.map(\.account), [7, nil])
+        PendingDrinks.putBack(drinks)
+        XCTAssertEqual(PendingDrinks.take().map(\.account), [7, nil])
+    }
+
     func testWorkoutSaysWhatIsLeftThenWhatIsDoneThenTheCoachsPick() {
         let ride = TodaySnapshot.PlanItem(kind: "workout", time: "17:30", title: "Tempo 3 × 8 min", detail: nil, done: false)
         let gym = TodaySnapshot.PlanItem(kind: "workout", time: nil, title: "Posilovna", detail: nil, done: true)

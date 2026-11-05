@@ -7,6 +7,8 @@ struct AssistantResult: Decodable, Equatable {
     let answer: String?
     let incomplete: Bool?
     let chatId: Int?
+    /// The stored answer: copy and the thumbs under it point to it.
+    var messageId: Int? = nil
     let actions: [CoachAction]?
     let memorySaved: String?
     /// Pictures to draw under the answer from the app's own data:
@@ -316,9 +318,11 @@ struct ChatMessage: Decodable, Equatable, Identifiable {
     let createdAt: String?
     /// The server's id, which a proposal points to (CoachAction.messageId).
     var serverId: Int? = nil
+    /// "up" or "down": the athlete's thumb under this answer.
+    var rating: String? = nil
     var id: String { role + "|" + (createdAt ?? "") + "|" + String(content.prefix(40)) }
 
-    enum CodingKeys: String, CodingKey { case role, content, createdAt, serverId = "id" }
+    enum CodingKeys: String, CodingKey { case role, content, createdAt, rating, serverId = "id" }
 }
 
 struct ChatDetail: Decodable, Equatable {

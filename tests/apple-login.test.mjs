@@ -52,9 +52,11 @@ function nativeFetch(claims, seen = {}) {
   return async (url, init) => {
     if (String(url).endsWith("/auth/keys")) return Response.json({ keys: [jwk] });
     seen.calls = [...(seen.calls || []), { url: String(url), body: new URLSearchParams(String(init.body)) }];
-    return Response.json({ refresh_token: "apple-refresh-1", ...claims });
+    return Response.json({ refresh_token: "apple-refresh-1", id_token: tokenOf("apple-friend"), ...claims });
   };
 }
+// The id_token of Apple's /auth/token answer, for the Apple ID `sub`.
+const tokenOf = sub => [{ alg: "RS256" }, { iss: "https://appleid.apple.com", sub }].map(part => Buffer.from(JSON.stringify(part)).toString("base64url")).join(".") + ".sig";
 async function nativeRequest(env, body, { fetchImpl, saveRefreshToken, headers = { "Content-Type": "application/json" } } = {}) {
   const request = new Request("https://aurin.health/auth/app/apple", { method: "POST", headers, body: JSON.stringify(body) });
   return handleNativeAppleLogin(request, env, "/auth/app/apple", { fetchImpl, saveRefreshToken });
@@ -82,6 +84,19 @@ test("the app signs in with Apple natively and keeps the token that deleting the
   assert.equal(revoked.calls[0].url, "https://appleid.apple.com/auth/revoke");
   assert.equal(revoked.calls[0].body.get("token"), "apple-refresh-1");
   assert.equal(await revokeApple({ ...apple }), "none");
+});
+
+test("a code of another Apple ID gives no token to keep (point 31)", async () => {
+  const env = await withUsers();
+  await env.DB.prepare("INSERT INTO user_invites(email) VALUES ('friend@example.com')").run();
+  const token = await idToken({ aud: "health.aurin.app", nonce: await hex(APP_NONCE) });
+  const saved = [], original = console.warn;
+  console.warn = () => {};
+  let ok;
+  try { ok = await nativeRequest(env, { identityToken: token, authorizationCode: "code-of-someone-else", nonce: APP_NONCE }, { fetchImpl: nativeFetch({ id_token: tokenOf("apple-stranger") }), saveRefreshToken: async (user, value) => saved.push(value) }); }
+  finally { console.warn = original; }
+  assert.equal(ok.status, 200, "the sign-in itself still works");
+  assert.deepEqual(saved, []);
 });
 
 test("a token is revoked with the app's and the Loadwise app's client, even when the first answers 200", async () => {

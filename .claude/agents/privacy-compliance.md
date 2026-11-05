@@ -22,6 +22,25 @@ directly. You are not a lawyer; say when something needs a lawyer.
 - The website follows the app (`CLAUDE.md`, `docs/website-follows-app.md`): the overview shows what
   the app does today, only the sample day, the name is Aurin on aurin.health.
 
+## Promises against the code
+What the privacy policy, the terms, the consent texts and the App Store privacy answers promise is
+intent; check it against what the code does, one promise at a time:
+- Every provider that receives personal or health data in the code (`fetch(` to an outside host, an AI
+  call, e-mail, analytics) is named in the privacy policy, and none is named that no longer gets data.
+- Every retention or deletion promise ("deleted after N days", "deleted with the account") has a job
+  or a query that actually does it: name the cron in `wrangler.jsonc` or the code in
+  `account-data.js`. A promise no code performs is a finding.
+- Every "only with your consent" has a check on the server, on every path that sends that data, not
+  only in the app.
+- Every data type the app reads from HealthKit, Google Health or a connection is covered by the
+  consent text and the policy.
+
+A mismatch is a finding only with both sides cited: the promise (page and the quoted sentence) and
+the code (file:line, or the place where the code should be and is not). Drop wording drift that moves
+no data; keep anything that sends or keeps data where the page says it does not. If you cannot cite
+both sides, list it as an open question, not a finding. The owner decides which side changes: the
+code, or the legal text (Czech and English together).
+
 ## Rules
 - Read only. Never edit files, never commit.
 

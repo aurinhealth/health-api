@@ -66,6 +66,14 @@
   "send_email": [
     { "name": "EMAIL" }
   ],
+  // Requests per signed-in account (src/account-rate-limit.js): all of /app/api/*,
+  // syncs from the providers started by hand, and Apple Health uploads in a
+  // bucket of their own. Counted by Cloudflare, no D1.
+  "ratelimits": [
+    { "name": "API_RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 300, "period": 60 } },
+    { "name": "SYNC_RATE_LIMITER", "namespace_id": "1002", "simple": { "limit": 20, "period": 60 } },
+    { "name": "APPLE_RATE_LIMITER", "namespace_id": "1003", "simple": { "limit": 300, "period": 60 } }
+  ],
   // The cron runs each user's background jobs in an invocation of their own
   // (src/user-jobs-entrypoint.js), so one run's query limit is not shared by all.
   "services": [
@@ -107,14 +115,16 @@
     // Each group of accounts has its own daily brake, so one never stops another's AI
     // (src/ai-total.js): per account in the group (paying ones 0.5 USD, the free week
     // half, TestFlight 75 % up to 20, accounts without a purchase older than a week half,
-    // up to 30) or fixed where accounts cost nothing to make (new accounts, the server).
+    // up to 15) or fixed where accounts cost nothing to make (new accounts, the server).
+    // A full group stops only its accounts past perAccount today; the rest go on up to
+    // twice the brake. A fixed brake stops the whole group.
     // The owner hears once a day when a group passes half of its brake.
     "AI_GROUP_BRAKES": {
       "paid": { "perAccount": 0.5, "min": 10 },
       "gift": { "perAccount": 0.5, "min": 10 },
       "trial": { "perAccount": 0.25, "min": 5 },
       "testflight": { "perAccount": 0.375, "min": 5, "max": 20 },
-      "free": { "perAccount": 0.25, "min": 5, "max": 30 },
+      "free": { "perAccount": 0.25, "min": 5, "max": 15 },
       "new": { "usd": 5 },
       "system": { "usd": 5 }
     },
@@ -176,6 +186,12 @@
       // Google sign-in work.
       "services": [
         { "binding": "USER_JOBS", "service": "health-api-staging", "entrypoint": "UserJobs" }
+      ],
+      // The same limits as the live server (bindings are not inherited by an env).
+      "ratelimits": [
+        { "name": "API_RATE_LIMITER", "namespace_id": "1101", "simple": { "limit": 300, "period": 60 } },
+        { "name": "SYNC_RATE_LIMITER", "namespace_id": "1102", "simple": { "limit": 20, "period": 60 } },
+        { "name": "APPLE_RATE_LIMITER", "namespace_id": "1103", "simple": { "limit": 300, "period": 60 } }
       ],
       "vars": {
         "ENVIRONMENT": "staging",

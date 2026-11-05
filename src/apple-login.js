@@ -1,5 +1,5 @@
 import { sessionSecret, signedInResponse } from "./dashboard-auth.js";
-import { ensureTenancy, normalizeEmail, publicUser, mayCreateAccount, createAccount, SignupLimited } from "./tenancy.js";
+import { ensureTenancy, normalizeEmail, plainEmail, publicUser, mayCreateAccount, createAccount, SignupLimited } from "./tenancy.js";
 import { inheritAiLimits } from "./ai-limit-memory.js";
 import { L } from "./lang.js";
 
@@ -52,15 +52,18 @@ export async function handleNativeAppleLogin(request, env, pathname, { fetchImpl
   const code = String(body?.authorizationCode || "");
   if (saveRefreshToken && canRevoke(env) && code && code.length < 2000) {
     try {
-      const refresh = await exchangeAppCode(env, code, fetchImpl, String(claims.aud));
+      const refresh = await exchangeAppCode(env, code, fetchImpl, String(claims.aud), String(claims.sub));
       if (refresh) await saveRefreshToken(user, refresh);
     } catch (error) { console.error("Apple refresh token not stored", error.message); }
   }
   return signedInResponse(user.id, env, { status: "ok" });
 }
 
-// client: the app that signed in (its bundle ID, the token's audience).
-async function exchangeAppCode(env, code, fetchImpl, client = appBundleId(env)) {
+// client: the app that signed in (its bundle ID, the token's audience). sub: the Apple ID that
+// signed in; a code of another Apple ID gives no token, so deleting this account never gives
+// back someone else's Apple sign-in (security review 2026-11-04, point 31). Apple's answer comes
+// straight from Apple over TLS, so its id_token is read without checking the signature again.
+async function exchangeAppCode(env, code, fetchImpl, client = appBundleId(env), sub = null) {
   const response = await fetchImpl(APPLE + "/auth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -68,6 +71,9 @@ async function exchangeAppCode(env, code, fetchImpl, client = appBundleId(env)) 
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error("Apple token HTTP " + response.status + " " + (data.error || ""));
+  let owner = null;
+  try { owner = decodeJson(String(data.id_token || "").split(".")[1] || ""); } catch { owner = null; }
+  if (!owner?.sub || String(owner.sub) !== String(sub)) { console.warn("Apple refresh token of another Apple ID not stored"); return null; }
   return data.refresh_token || null;
 }
 
@@ -202,7 +208,8 @@ export async function signInAppleUser(db, env, { sub, email, name = null, reques
   await ensureIdentities(db);
   const address = normalizeEmail(email);
   let row = await db.prepare("SELECT u.id, u.email, u.name, u.role, u.disabled FROM user_identities i JOIN users u ON u.id = i.user_id WHERE i.provider = 'apple' AND i.subject = ?").bind(String(sub)).first();
-  if (!row && address) {
+  // Only a plain address finds or opens an account by e-mail (tenancy.js plainEmail).
+  if (!row && address && plainEmail(email)) {
     row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(address).first();
     // An account that already has another Apple ID does not take a second one by e-mail.
     if (row && await db.prepare("SELECT 1 AS linked FROM user_identities WHERE provider = 'apple' AND user_id = ?").bind(row.id).first()) return null;

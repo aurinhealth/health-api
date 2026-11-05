@@ -46,7 +46,6 @@ test("an account with the admin role in the database but not OWNER_EMAIL gets no
   assert.equal(user.isAdmin, false);
   assert.equal(user.isOwner, false);
   for (const path of ["/app/api/admin/waitlist", "/app/api/admin/ai-spending"]) assert.equal((await call(env, user, path)).status, 403, path);
-  assert.equal((await call(env, user, "/app/api/admin/cookbook", "POST", { recipes: [] })).status, 403);
 });
 
 test("after OWNER_EMAIL changes, the earlier owner is no longer the admin and the new one is", async () => {
@@ -64,7 +63,7 @@ test("after OWNER_EMAIL changes, the earlier owner is no longer the admin and th
 
 test("the owner's own admin routes still answer, and writes still need the app's origin", async () => {
   const { env, owner } = await setup();
-  const url = new URL(ORIGIN + "/app/api/admin/cookbook");
+  const url = new URL(ORIGIN + "/app/api/admin/waitlist");
   const foreign = await handleAdminApi(new Request(url, { method: "POST", headers: { Origin: "https://evil.example" }, body: "{}" }), env, url, { signedIn: true, user: owner });
   assert.equal(foreign.status, 403);
   assert.equal((await call(env, owner, "/app/api/admin/nothing-here")).status, 404);

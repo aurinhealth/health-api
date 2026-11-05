@@ -213,6 +213,8 @@ struct WeekPlanResponse: Decodable {
     /// Kept whole: the editor changes a few keys and sends the object back.
     let prefs: JSONValue?
     let targets: Targets?
+    /// Nastavení → Sporty k navrhování; nil when the athlete never chose.
+    let sports: [String]?
 
     struct Targets: Decodable {
         let status: String?

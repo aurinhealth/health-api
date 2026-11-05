@@ -40,6 +40,7 @@ const P = {
   chdown: '<path d="m6 9 6 6 6-6"/>',
   cal: '<rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
   info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 8v.2"/>',
+  copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/>',
   thumb: '<path d="M7 11v9H4v-9ZM7 11l4-7c1.5 0 2.5 1 2.2 2.6L12.7 10H18a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 16.8 20H7"/>',
   rotate: '<path d="M4 12a8 8 0 0 1 14-5.3M20 4v4h-4M20 12a8 8 0 0 1-14 5.3M4 20v-4h4"/>',
   pencil: '<path d="M15.5 5.5l3 3M4 20l1-4L16 5a2.1 2.1 0 0 1 3 3L8 19Z"/>',
@@ -100,7 +101,7 @@ const NIGHT = [['l', 0, 12], ['d', 12, 40], ['l', 40, 62], ['r', 62, 74], ['a', 
   ['l', 290, 330], ['d', 330, 337], ['l', 337, 370], ['r', 370, 400], ['a', 400, 405], ['l', 405, 436], ['r', 436, 446], ['a', 446, 449]];
 const sleepNight = `<div class="dm pad">
 <div class="sl">Sleep · Wednesday night</div>
-<div class="row base"><span class="num big"${n(400, 432, 150, 1300, 'hmc')}>7:12</span><span class="pill ind"${at('1300')}>Score 82</span></div>
+<div class="row base"><span class="num big"${n(400, 432, 150, 1300, 'hmc')}>7:12</span><span class="pill ind"${at('1300')}>index 82</span></div>
 <div class="hg" aria-hidden="true"><div class="hgl"><span>Awake</span><span>REM</span><span>Light</span><span>Deep</span></div><div class="hgt">${NIGHT.map(([t, s, e], i) => `<i class="${t}" style="left:${(s / 449 * 100).toFixed(2)}%;width:${Math.max(0.5, (e - s) / 449 * 100).toFixed(2)}%"${at(String(300 + i * 60))}></i>`).join('')}</div></div>
 <div class="hgx" aria-hidden="true"><span>11:33 PM</span><span>7:02 AM</span></div>
 <div class="stg">${[['Deep', '1:23', 83, '19%', 'd'], ['REM', '1:34', 94, '22%', 'r'], ['Light', '4:15', 255, '59%', 'l'], ['Awake', '0:17', 17, '3×', 'a']].map(([k, v, m, p, c], i) => `<div class="sr"><span>${k}</span><i class="bar"><b class="${c}" style="--w:${(m / 255 * 100).toFixed(1)}%"${at(String(900 + i * 220))}></b></i><span class="num">${v}</span><span class="mut">${p}</span></div>`).join('')}</div>
@@ -342,10 +343,10 @@ const tickOne = `<div class="dm pad one tm">
 <div class="one-pt rst"${at('1900')}>${ic('flame')}Failure, so next set 80 kg</div>
 </div>`;
 const sleepOne = `<div class="dm pad one">
-<div class="row sp base"><b>Last night</b><span class="pill ind"${at('1300')}>Score 82</span></div>
+<div class="row sp base"><b>Last night</b><span class="pill ind"${at('1300')}>index 82</span></div>
 <div class="row base one-v"><span class="num big"${n(400, 432, 150, 1300, 'hmc')}>7:12</span><span class="mut">asleep</span></div>
 <div class="mut">11:33 PM to 7:02 AM</div>
-<div class="one-pt ind"${at('1500')}>1:23 deep sleep</div>
+<div class="one-pt ind"${at('1500')}>19% deep sleep, usually 15–20%</div>
 </div>`;
 const needOne = `<div class="dm pad one">
 <div class="row sp base"><b>Need for tonight</b><span class="mut">baseline 8:00</span></div>
@@ -390,7 +391,7 @@ const tmRest = `<div class="dm pad tm rest">
 <div class="nowc"><span class="mut s">Now</span><div class="row sp"><b>Squat · set 3</b><span class="num md">80 kg × 8</span></div><span class="mut s">Last time 77.5 × 8</span></div>
 </div>`;
 
-// The finish screen (TrainingModeView.swift summary): what you did, a record, the changes, the muscles it tired, saved to Health.
+// The finish screen (TrainingModeView.swift summary): what you did, a record, the changes, a swap kept for next time, saved to Health (the muscles have their own chapter next).
 const doneScreen = `<div class="app glow-training">${STATUS}
 <div class="nav"><span class="cb">${ic('x')}</span><div class="nt"><b>Full body</b><span class="mut s">3 exercises · 9/9 sets</span></div></div>
 <div class="center col"><div class="sl">Workout done</div><div class="sent title2">Full body</div></div>
@@ -398,7 +399,8 @@ const doneScreen = `<div class="app glow-training">${STATUS}
     .map(([k, v, f, t, u, d], i) => `<div><span class="mut s">${k}</span><span class="num tv"><span${n(f, t, 300 + i * 120, 1100, u === 't' ? '1' : 'i')}>${String(t)}</span>${u ? ' ' + u : ''}</span>${d ? `<span class="grn s"${at('1600')}>${d}</span>` : ''}</div>`).join('')}</div>
 <div class="card rec"${at('1900')}><span class="sc amb">${ic('spark')}</span><div><b>New record</b><span class="mut s">Squat 82.5 × 6</span></div></div>
 <div class="card chg"${at('2500')}>${[['Squat', '4 × 80 kg', '+2.5 kg', 'grn'], ['Bench press', '3 × 62.5 kg', '+2.5 kg', 'grn'], ['Rows', '3 × 50 kg', '+2.5 kg', 'grn']].map(([a, b, c, k]) => `<div class="li"><div><b>${a}</b><span class="mut s">${b}</span></div><span class="${k} s b">${c}</span></div>`).join('')}</div>
-<div class="card mf"${at('2800')}><img src="/site/muscles/f00.webp" alt="" width="34" height="53" loading="lazy"><div><b>Muscle fatigue</b><span class="mut s">Quads and glutes rested in 2 days</span></div><span class="mut">${ic('chev')}</span></div>
+<div class="sl swl"${at('2650')}>Swapped today</div>
+<div class="card swp"${at('2650')}><b>Leg press → Squat</b>${seg(['Only today', 'Next time too'], 0, 1, 3600)}</div>
 <div class="card hk"${at('3400')}><span class="rust">${ic('heart')}</span><b>Saved to Apple Health</b><span class="grn">${ic('check')}</span></div>
 <div class="btn dark big2">${ic('thumb')}Rate</div>
 </div>`;
@@ -422,7 +424,8 @@ const foodTarget = `<div class="dm pad">
 </div>`;
 
 // AddFoodSheet.swift ("Co přidáme?": the meal, the search, six tiles, the foods list), then BarcodeScanSheet.swift:
-// the finder with "Vybrat fotku", the found card with NutritionCells, the PortionWheel turned to 1½ servings, and "Přidat do oběda".
+// the finder with "Vybrat fotku", the found card with NutritionCells, DayLeftLine (what is left of the sample day's 2,650 kcal
+// and 150 g protein after this food), the PortionWheel turned to 1½ servings, and "Přidat do oběda".
 const foodAdd = `<div class="dm pad fa">
 <div class="row sp"><span class="sent h">What are you adding?</span><span class="mut s">Close</span></div>
 <span class="meal">Lunch${ic('updown')}</span>
@@ -438,6 +441,8 @@ ${[['Plain Greek yogurt', 'Hollandia · 140 g', 205], ['Banana', '120 g', 105]].
 <div class="sent h3">Plain Greek yogurt</div>
 <div class="mut s">Hollandia · EAN 8594001234567</div>
 <div class="nc">${[['kcal', 205, 307], ['protein', 13, 19.5], ['carbs', 6, 9], ['fat', 14, 21]].map(([k, a, b]) => `<div><span class="num md"${n(a, b, 4500, 700, 'i')}>${Math.round(b)}</span><span class="mut s">${k === 'kcal' ? 'kcal' : k + ' g'}</span></div>`).join('')}</div>
+<div class="dl"><div class="row sp"><span>After adding, left today</span><span><b><span data-n="1065,963,4500,700,i">963</span> kcal</b> · <span data-n="53,47,4500,700,i">47</span> g of protein</span></div>
+<i class="dlb"><b class="g"${at('4500:on')}></b><b class="e"></b></i><div class="mut s">1,380 of 2,650 kcal eaten · this food <span data-n="205,307,4500,700,i">307</span> kcal</div></div>
 <div class="wf"><b data-tx="0|1;4500|1½">1½</b><i></i><span>serving (140 g)</span>${ic('chevd')}</div>
 <div class="wheel"><div class="col w"><ul>${['0', '1', '2'].map(x => `<li>${x}</li>`).join('')}</ul></div><div class="col p"><ul${at('4500:on')}>${['', '–', '¼', '⅓', '½', '⅔'].map(x => `<li>${x}</li>`).join('')}</ul></div><div class="col u"><ul>${['g', 'serving (140 g)', ''].map(x => `<li>${x}</li>`).join('')}</ul></div></div>
 <div class="mut s">1 serving = 140 g · 205 kcal</div>
@@ -471,6 +476,9 @@ const drinks = `<div class="dm pad dk">
 <div class="dk-chips">${drinkChip('drop', 'Water', 250)}${drinkChip('drop', 'Water', 500, '600:press 750-press 900:ok 2100-ok 2400:press 2550-press 2700:ok 3900-ok', '500 900-in 2300 2700-in')}${drinkChip('cup', 'Coffee', 200)}</div>
 </div>`;
 
+// Under the coach's last answer (AnswerActions in CoachAnswerFeedback.swift): copy, thumbs up and down, its time.
+const answerFoot = (time, when) => `<div class="afoot"${at(when)}>${ic('copy')}${ic('thumb')}${ic('thumb', 'down')}<span>${time}</span></div>`;
+
 // ---- Coach (CoachView.swift: bubbles, ActionCard with a workout preview, the confirmed line) ----
 const coachScreen = `<div class="app glow-today chat">${STATUS}
 <div class="nav c"><span class="cb">${ic('x')}</span><b>Coach</b><span class="cb">⋯</span></div>
@@ -488,6 +496,7 @@ ${[['Squat', '3×8 · 80 kg'], ['Bench press', '3×8 · 62.5 kg'], ['Rows', '3×
 <div class="ab"${at('6600:gone')}><span class="ok"${at('6200:press 6600-press')}>Confirm</span><span class="no">No</span><i class="br"></i>${['Shorter', 'Longer', 'Easier', 'Harder'].map(x => `<span class="q">${x}</span>`).join('')}<i class="br"></i><span class="q">Another day</span></div>
 <div class="conf"${at('6600')}>${ic('check')}Proposal confirmed.</div>
 </div>
+${answerFoot('5:31 PM', '7000')}
 </div>
 <div class="inp"><span class="cam">${ic('camera')}</span><span class="mut">Message the coach…</span><span class="snd">${ic('up')}</span></div>
 </div>`;
@@ -502,6 +511,7 @@ const memoryScreen = `<div class="app glow-today chat">${STATUS}
 <div class="dots"${at('500 1500-in')}><span>Coach is thinking…</span></div>
 <div class="c1"${at('1500')}><span data-type="1500,1100">Got it, no running until your knee is better. I’ll swap Saturday’s run for an easy ride and keep lunges out of your gym days.</span></div>
 <div class="mchip"${at('2900')}>${ic('check')}Remembered: left knee hurts when running<span class="mut">Back</span></div>
+${answerFoot('8:12 PM', '3200')}
 </div>
 <div class="inp"><span class="cam">${ic('camera')}</span><span class="mut">Message the coach…</span><span class="snd">${ic('up')}</span></div>
 </div>`;
@@ -876,7 +886,7 @@ html:not(.js) .stage1{display:none}
 .mb{display:block;height:3px;margin-top:4px;border-radius:3px;background:var(--track);overflow:hidden}.mb b{display:block;height:100%;width:var(--w)}
 .coach{margin-top:14px;padding:12px 14px;border-radius:16px;background:var(--bg)}.ch4{display:flex;align-items:center;gap:6px;color:var(--indigo);font-weight:500;font-size:13.5px}
 .coach .sent{margin-top:4px;font-size:17px;line-height:1.3;min-height:3.9em}
-.fa{position:relative;min-height:524px;overflow:hidden}
+.fa{position:relative;min-height:584px;overflow:hidden}
 .meal{display:inline-flex;align-items:center;gap:4px;margin-top:6px;padding:4px 10px;border-radius:99px;background:color-mix(in srgb,var(--text) 6%,transparent);font-size:13px;font-weight:600}.meal .di{font-size:10px}
 .srch{display:flex;align-items:center;gap:10px;height:44px;margin-top:12px;border-bottom:1px solid color-mix(in srgb,var(--text) 25%,transparent);font-size:17px}.srch .di{font-size:18px;color:var(--muted)}
 .tiles6{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
@@ -905,6 +915,10 @@ html:not(.js) .stage1{display:none}
 .wheel ul{margin:0;padding:0;list-style:none;transition:transform 1s cubic-bezier(.16,1,.3,1)}.wheel li{height:32px;font-size:17px;font-weight:600;line-height:32px;white-space:nowrap}
 .js .wheel ul[data-at]{opacity:1!important;transform:none!important}.wheel ul.on,.js .wheel ul.on{transform:translateY(-96px)!important}
 .fa .res .meal{margin-top:10px}.fa .res .btn{margin-top:10px}
+.dl{margin-top:10px;font-size:13px}.dl .row{gap:8px}.dlb{position:relative;display:block;height:4px;margin:6px 0 5px;border-radius:4px;background:var(--track);overflow:hidden}
+.dlb b{position:absolute;left:0;top:0;bottom:0;border-radius:4px}.dlb .e{width:${(1380 / 2650 * 100).toFixed(1)}%;background:var(--text)}
+.dlb .g{width:${(1585 / 2650 * 100).toFixed(1)}%;background:color-mix(in srgb,var(--muted) 55%,transparent);transition:width .7s cubic-bezier(.16,1,.3,1)}.dlb .g.on{width:${(1687 / 2650 * 100).toFixed(1)}%}
+.js .dlb .g[data-at]{opacity:1!important;transform:none!important}
 
 /* Screens built here, in the phone: drawn at the app's 390 pt and scaled to the screen. */
 .scr .app{position:absolute;left:0;top:0;width:390px;height:848px;zoom:calc(292 / 390);overflow:hidden;padding:0 20px;background:var(--bg);font:15px/1.35 -apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;color:var(--text);--num:"Instrument Serif","New York",Georgia,serif}
@@ -934,7 +948,7 @@ html:not(.js) .stage1{display:none}
 .rec{display:flex;align-items:center;gap:12px;padding:14px 16px!important}.sc{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--amber-soft);font-size:16px}.rec b{display:block}
 .chg{padding:2px 16px!important}.chg .li{min-height:52px}.chg b{display:block;font-size:14.5px}
 .hk{display:flex;align-items:center;gap:10px;padding:14px 16px!important}.hk b{flex:1}
-.mf{display:flex;align-items:center;gap:12px;padding:10px 16px!important}.mf img{flex:none;width:34px;height:auto}.mf div{flex:1}.mf b{display:block}
+.swl{margin:10px 4px -2px}.swp{display:grid;gap:8px;padding:11px 14px!important}.swp b{font-size:14.5px}.swp .seg span{padding:5px 0}
 .big2{height:50px;margin-top:14px}
 .chat{display:flex;flex-direction:column}.chat .nav b{font-size:17px}
 .msgs{flex:1;display:flex;flex-direction:column;gap:12px;padding:10px 0;justify-content:flex-start}
@@ -1026,8 +1040,12 @@ html:not(.js) .stage1{display:none}
 /* The goal reached: the whale blows its spout (DrinkFigure.swift), bobbing a little. */
 .w-spout{transform-origin:48px 32px;transition:transform .5s cubic-bezier(.34,1.6,.5,1),opacity .3s!important;animation:w-blow 1.6s ease-in-out infinite}.js .w-spout.wait:not(.in){opacity:0;transform:scale(.2)}
 @keyframes w-blow{50%{translate:0 -1.5px}}@media (prefers-reduced-motion:reduce){.w-spout{animation:none}}.js .w-whale .w-water.wait:not(.in){opacity:1}
-.w-wv{animation:w-wave 3s linear infinite}.w-wv2{animation-duration:4.4s}@keyframes w-wave{to{transform:translateX(-55px)}}.w-wv2{animation-name:w-wave2}@keyframes w-wave2{from{transform:translate(0,6px)}to{transform:translate(-36.67px,6px)}}
-@media (prefers-reduced-motion:reduce){.w-wv{animation:none}}
+/* As in DrinkFigure.swift: the water stands still and sloshes only for a few seconds after each drink. */
+.w-wv{transition:transform 2.6s cubic-bezier(.3,.6,.4,1)!important}.w-wv2{transform:translate(0,6px)}
+.w-whale .w-water.in .w-wv,.dw-w.a .w-wv{transform:translateX(-27.5px)}.w-whale .w-water.in .w-wv2,.dw-w.a .w-wv2{transform:translate(-18.34px,6px)}
+.w-whale .w-water.full .w-wv,.dw-w.b .w-wv{transform:translateX(-55px)}.w-whale .w-water.full .w-wv2,.dw-w.b .w-wv2{transform:translate(-36.67px,6px)}
+.dw-w.c .w-wv{transform:translateX(-82.5px)}.dw-w.c .w-wv2{transform:translate(-55px,6px)}
+@media (prefers-reduced-motion:reduce){.w-wv{transition:none!important}}
 .w-drink .row.base{flex-wrap:wrap;column-gap:6px}.w-drink .row.base .mut{white-space:nowrap}
 /* Drinks: the card in Výživa with the whale (DrinkFigure.swift), its colours in light and dark. */
 .dk{--wt:#4FA3D9;--wd:rgba(46,134,193,.35);--we:#EAF3F9;--wi:#1B4F72;--wf:#1B1A17;--wb:#F28AA0}
@@ -1051,6 +1069,8 @@ html:not(.js) .stage1{display:none}
 .js .dw-w.wait:not(.in){opacity:1}
 .dw-ink{fill:none;stroke:var(--wi);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}.dw-thin{stroke-width:2}.dw-face{fill:var(--wf)}
 .dw-lid{fill:none;stroke:var(--wf);stroke-width:2.4;stroke-linecap:round}.dw-blush{fill:var(--wb);opacity:.45}
+/* Now and then the whale blinks (the app's idle move). */
+.dw-eye circle{transform-origin:30px 56px;animation:dw-blink 6.5s ease-in-out 2.2s infinite}@keyframes dw-blink{0%,95%,100%{transform:scaleY(1)}97.5%{transform:scaleY(.15)}}
 .dw-happy,.dw.goal .dw-eye{opacity:0}.dw.goal .dw-happy{opacity:1}.dw-eye,.dw-happy{transition:opacity .2s!important}
 .dw-drop{fill:var(--wt);opacity:0}.js .dw-drop.in{animation:dw-fall .45s ease-in forwards}@keyframes dw-fall{from{opacity:1;transform:translate(48px,-14px) scale(1.5)}90%{opacity:1}to{opacity:0;transform:translate(48px,32px) scale(1.5)}}
 .dw-ring{fill:none;stroke:#fff;stroke-width:1.6;opacity:0;transform-origin:48px 31px}.js .dw-ring.in{animation:dw-ring .7s ease-out forwards}@keyframes dw-ring{from{opacity:.9;transform:scale(.6)}to{opacity:0;transform:scale(3.2,2.4)}}
@@ -1072,6 +1092,7 @@ html:not(.js) .stage1{display:none}
 .cy-d.ov i{background:var(--amber-soft);color:var(--amber)}.cy-d.cast i{border:1.5px dashed var(--pink);color:var(--pink)}.cy-d.today i{box-shadow:inset 0 0 0 2px var(--text)}
 .cy-b{display:flex;align-items:center;justify-content:center;gap:6px;height:46px;margin-top:12px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--line);font-weight:600}
 /* The coach's memory: the green line under an answer and the list it keeps. */
+.afoot{align-self:stretch;display:flex;align-items:center;gap:18px;padding:0 4px;color:var(--muted)}.afoot .di{width:16px;height:16px;stroke-width:1.6}.afoot span{margin-left:auto;font-size:12px}
 .mchip{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:var(--green-soft);color:var(--green);font-size:13px;font-weight:500;transition:opacity .3s,transform .3s!important}
 .mchip .di{width:13px;height:13px;stroke-width:2.8}.mchip .mut{margin-left:4px}
 .js .mchip.wait:not(.in){opacity:0;transform:translateY(6px)}
@@ -1139,7 +1160,7 @@ html:not(.js) .stage1{display:none}
 .aw-st{display:flex;gap:1.5px;margin-top:2px}.aw-st b{flex:1;height:5px;border-radius:1px}
 .aw-home .aw-hero .aw-n{font-size:70px}.aw-home .aw-hero{margin-top:4px}.aw-home .aw-g{margin-top:10px}.aw-home .aw-g>div{padding:8px 6px 8px 8px}.aw-home .aw-v{font-size:23px}.aw-home .aw-next{align-items:flex-start;margin-top:12px;font-size:12.5px;line-height:1.3;white-space:normal}.aw-home .aw-next .di{margin-top:2px}
 .aw-face{display:flex;flex-direction:column;justify-content:space-between}.aw-fbot{padding:0 2px 4px}
-@media (prefers-reduced-motion:reduce){.dw-spout,.js .dw.goal,.js .dw-burst.in path,.js .dw-drop.in,.js .dw-ring.in{animation:none}.dw-drop,.dw-ring{display:none}}
+@media (prefers-reduced-motion:reduce){.dw-eye circle,.dw-spout,.js .dw.goal,.js .dw-burst.in path,.js .dw-drop.in,.js .dw-ring.in{animation:none}.dw-drop,.dw-ring{display:none}}
 .wc .th .di{font-size:12px}.wc .chips3 .ch3{border-radius:16px;transition:background .35s,border-color .35s}.wc .ch3 b{font-weight:600;font-size:15px}
 .wc .hg{margin-bottom:0}.hgt.w-draw{transition:clip-path 1.6s ease-in-out!important;clip-path:inset(0 0 0 0)}.js .hgt.w-draw.wait:not(.in){opacity:1;transform:none;clip-path:inset(0 100% 0 0)}
 .coach2{gap:12px}.coach2 .w-q{justify-self:end;padding:10px 14px;border-radius:18px;background:var(--button);color:var(--on-button);font-size:16px}

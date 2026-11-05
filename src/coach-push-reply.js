@@ -34,9 +34,20 @@ export function pushOpening(title, body) {
   return t && b ? `**${t}**\n\n${b}` : t || b;
 }
 
+// A reply from a notification another account got on this phone (it signed
+// out, another signed in) is refused: that account's texts never reach this
+// one's chat (security audit 2026-11-04, point 23). The app sends the account
+// the push was for (data.coach.account); an older app only the chat, which
+// then has to be one of this account's.
+export function foreignPushReply(body, userId, chatOwned) {
+  if (body?.account != null) return Number(body.account) !== Number(userId);
+  return body?.chatId != null && !chatOwned;
+}
+
 // The push with the coach's answer: {alert, category, data}. One proposal is
-// confirmed from the notification; several only in the app.
-export function replyPush(result, chatId) {
+// confirmed from the notification; several only in the app. account: whose
+// push it is, so the phone answers it only in that account.
+export function replyPush(result, chatId, account = null) {
   const actions = (result?.actions || []).filter(a => a?.draftId != null);
   const one = actions.length === 1 ? actions[0] : null;
   const more = actions.length > 1 ? L(' Návrhy potvrdíš v aplikaci.', ' Confirm the proposals in the app.') : '';
@@ -44,15 +55,15 @@ export function replyPush(result, chatId) {
   return {
     alert: { title: L('Kouč', 'Coach'), body: body || L('Odpověď je v aplikaci.', 'The answer is in the app.') },
     category: one ? COACH_ACTION_CATEGORY : COACH_REPLY_CATEGORY,
-    data: { coach: { kind: 'reply', chatId: chatId ?? null, ...(one ? { draftId: one.draftId } : {}) } }
+    data: { coach: { kind: 'reply', chatId: chatId ?? null, account, ...(one ? { draftId: one.draftId } : {}) } }
   };
 }
 
 // The coach could not answer: the reason, and the chat to try again in.
-export function failedReplyPush(message, chatId) {
+export function failedReplyPush(message, chatId, account = null) {
   return {
     alert: { title: L('Kouč', 'Coach'), body: shortBody(message || L('Kouč teď neodpověděl. Zkus to v aplikaci.', "The coach didn't answer. Try again in the app.")) },
     category: null,
-    data: { coach: { kind: 'reply', chatId: chatId ?? null } }
+    data: { coach: { kind: 'reply', chatId: chatId ?? null, account } }
   };
 }

@@ -31,8 +31,19 @@ request to `aurin-prompts`, never in this public repository. A change that needs
 `aurin-prompts` first; an `aurin-prompts`-only change goes live by running "Deploy Cloudflare Worker" on
 `main` (workflow_dispatch).
 
+## Writing code
+
+Adapted from [andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills) (MIT).
+
+- Simplest code that does the job: no features, options or abstractions nobody asked for. If 200 lines
+  could be 50, rewrite it.
+- Touch only what the task needs. Match the existing style, leave working code alone, mention unrelated
+  dead code instead of deleting it, and remove only what your own change left unused.
+- Before writing, say how the change will be checked (a test, a CI check, a staging call), then make it pass.
+
 ## AI team
 
 Claude Code works here as a product team: the main conversation is the Product Manager, the roles
 are read-only sub agents in `.claude/agents/`. Tests and attacks only on staging.aurin.health or local,
-never production; nothing changes before the owner approves. See [docs/ai-team.md](docs/ai-team.md).
+never production; nothing changes before the owner approves. Every request starts with a sourced brief
+from `research-analyst`, then the team goes through the points one by one. See [docs/ai-team.md](docs/ai-team.md).

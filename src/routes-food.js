@@ -1,5 +1,5 @@
 // Food routes of the dashboard API: personal foods, the food log, search, labels,
-// photos, the cookbook and drinks.
+// photos and drinks.
 import { searchRecipes } from "./personal-recipes.js";
 import { savePersonalFood, listPersonalFoods, searchFoodCatalog as searchPersonalFoods } from "./personal-foods.js";
 import { searchWorldFoods, barcodeKey, microsFor } from "./world-foods.js";
@@ -7,7 +7,6 @@ import { searchWorldFoods, barcodeKey, microsFor } from "./world-foods.js";
 import { readBarcodeWithAI, readFoodPhotoWithAI, readPackageFrontWithAI } from "./food-photo.js";
 import { foodIntake } from "./food-portions.js";
 import { productFromLabel } from "./food-sources.js";
-import { getCookbookRecipeByPage } from "./cookbook.js";
 import { queueFoodGoogle, processFoodGoogle } from "./food-google-sync.js";
 import { lookupFoodWithAI, estimateFoodWithAI } from "./food-ai.js";
 import { sendFoodApproved } from "./push.js";
@@ -143,11 +142,6 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
       if(request.method==='DELETE'){await deleteFluid(env.DB,url.searchParams.get('id'));return Response.json({status:'ok'},{headers:{'Cache-Control':'no-store'}});}
       return Response.json({message:'Method not allowed'},{status:405});
     }catch(error){return Response.json({status:'error',message:error.message},{status:error instanceof FluidInputError?400:500});}
-  }
-  // A page of the owner's cookbook; other users never reach it (owner-only-routes.js).
-  if(url.pathname==='/app/api/food/recipe'&&request.method==='GET'){
-    const recipe=await getCookbookRecipeByPage(url.searchParams.get('page'));
-    return Response.json(recipe?{recipe}:{message:L('Na této stránce není známý recept.', 'There\'s no known recipe on this page.')},{status:recipe?200:404,headers:{'Cache-Control':'no-store'}});
   }
   if(url.pathname==='/app/api/food/log'&&request.method==='POST'){
     try {const body=await request.json(),p=body.product||{};

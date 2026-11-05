@@ -33,6 +33,8 @@ struct SetupFlowView: View {
     @State private var agreeAI = false
     /// iOS has not asked about notifications yet: the page about them comes last.
     @State private var askNotifications = false
+    /// The free week shown at the end (SetupProOffer).
+    @State private var proOffer = false
     // Data sources
     @State private var appleWorking = false
     @State private var appleRead = false
@@ -73,22 +75,36 @@ struct SetupFlowView: View {
         ZStack {
             ScreenBackground(glow: Palette.Glow.today)
             VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    // No way back to a consent already given, or from the notifications
-                    // to a profile already saved.
-                    if index > 0 && pages[index - 1] != .consent && page != .notifications {
-                        CircleButton(systemImage: "chevron.left", label: "Zpět") { withAnimation { index -= 1 } }
+                HStack(spacing: 0) {
+                    // Both sides keep their width (the hidden button and label), so the
+                    // steps between them stay put from page to page.
+                    ZStack {
+                        CircleButton(systemImage: "chevron.left", label: "Zpět").hidden()
+                        // No way back to a consent already given, or from the notifications
+                        // to a profile already saved.
+                        if index > 0 && pages[index - 1] != .consent && page != .notifications {
+                            CircleButton(systemImage: "chevron.left", label: "Zpět") { withAnimation { index -= 1 } }
+                        }
                     }
-                    Spacer()
-                    // Without the consent the app cannot be used: the way out is signing out,
-                    // or back to the paused screen when health data was paused (HealthPausedView).
-                    if page == .consent && model.resumingHealth {
-                        Button("Zrušit") { model.resumingHealth = false; model.needsSetup = false }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
-                    } else if page == .consent {
-                        Button("Odhlásit") { Task { await model.logout() } }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
-                    } else if skippable {
-                        Button("Přeskočit") { Task { await skip() } }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
-                            .disabled(saving)
+                    // How far along: shown once the page count is known (whether iOS asked
+                    // about notifications already), so it never jumps; not for the consent alone.
+                    if ready && pages.count > 1 {
+                        SetupSteps(done: index + 1, total: pages.count)
+                    } else {
+                        Spacer()
+                    }
+                    ZStack(alignment: .trailing) {
+                        ForEach(["Přeskočit", "Odhlásit", "Zrušit"], id: \.self) { Text(L10n.tr($0)).font(Typo.bodyStrong).hidden() }
+                        // Without the consent the app cannot be used: the way out is signing out,
+                        // or back to the paused screen when health data was paused (HealthPausedView).
+                        if page == .consent && model.resumingHealth {
+                            Button("Zrušit") { model.resumingHealth = false; model.needsSetup = false }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                        } else if page == .consent {
+                            Button("Odhlásit") { Task { await model.logout() } }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                        } else if skippable {
+                            Button("Přeskočit") { Task { await skip() } }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                                .disabled(saving)
+                        }
                     }
                 }
                 .frame(height: 40)
@@ -108,8 +124,8 @@ struct SetupFlowView: View {
                         .font(Typo.small.weight(.medium)).foregroundStyle(Palette.amber)
                         .padding(.bottom, 10)
                 }
-                PrimaryButton(title: buttonTitle, busy: saving || appleWorking) { Task { await next() } }
-                    .disabled(saving || appleWorking || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree)
+                PrimaryButton(title: buttonTitle, busy: saving || appleWorking || proOffer) { Task { await next() } }
+                    .disabled(saving || appleWorking || proOffer || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree)
                               || (page == .sport && focus.sports.kinds.isEmpty) || (page == .goal && focus.goal.isEmpty))
                 if page == .sources {
                     // "Teď ne" skips connecting, not "O tobě": without age, height and
@@ -123,7 +139,7 @@ struct SetupFlowView: View {
                     Button("Později") { Task { await done(notifications: false) } }
                         .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                         .frame(maxWidth: .infinity).frame(height: 44)
-                        .disabled(saving)
+                        .disabled(saving || proOffer)
                 }
             }
             .padding(.horizontal, 24)
@@ -136,6 +152,10 @@ struct SetupFlowView: View {
             if skippable { await loadFocus() }
         }
         .sheet(item: $connecting) { target in ServiceConnectSheet(target: target) { await loadProviders(); syncRun += 1 } }
+        // The free week, once, after the last page (SetupProOffer); Today when it closes.
+        .fullScreenCover(isPresented: $proOffer, onDismiss: { Task { await model.finishSetup() } }) {
+            PaywallView(close: { proOffer = false }, step: 2, notNow: true)
+        }
         .interactiveDismissDisabled()
     }
 
@@ -169,7 +189,7 @@ struct SetupFlowView: View {
         ("Co", "Tep, variabilita tepu (HRV), spánek, váha a tělesný tuk, jídlo a pití, tréninky a jak ti šly."),
         ("Odkud", "Ze služeb, které připojíš (Apple Health, Google Health, Intervals.icu), a z toho, co zadáš sám."),
         ("K čemu", "Jen k přehledům, výpočtům a plánům v Aurinu. Data neprodáváme a nepoužíváme k reklamě."),
-        ("AI", "Když použiješ AI funkci (asistent, rozpoznání jídla z fotky, hodnocení tréninku a týdne), pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI v USA."),
+        ("AI", "Když použiješ AI funkci (kouč, rozpoznání jídla z fotky, hodnocení tréninku a týdne), a každý den kvůli krátkému shrnutí kouče na Dnes, Tréninku a Jídle, pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI v USA. Cyklus jen po zapnutí „Kouč ví o cyklu“."),
         ("Odvolání", "Pozastavením zdravotních dat, nebo smazáním účtu v Nastavení → Soukromí a data, kde si předtím můžeš stáhnout všechna svoje data.")
     ]
 
@@ -187,7 +207,7 @@ struct SetupFlowView: View {
         checkbox("Souhlasím, aby Aurin zpracovával moje údaje o zdraví, jak je popsáno výše.", note: nil, isOn: $agree)
             .padding(.top, 4)
         checkbox("Posílat data do AI funkcí",
-                 note: "Nepovinné. Potřebuje je kouč a rozpoznání jídla. Jde to vypnout v Nastavení.",
+                 note: "Nepovinné. Potřebuje je kouč, jeho denní shrnutí a rozpoznání jídla. Jde to vypnout v Nastavení.",
                  isOn: $agreeAI)
         Link("Zásady ochrany soukromí", destination: Self.privacyURL).font(Typo.small)
     }
@@ -763,14 +783,15 @@ struct SetupFlowView: View {
     /// allowed, and it asks only once: so only after "Zapnout" on the page that
     /// shows what they bring ("Později" leaves the question for Nastavení →
     /// Oznámení). The push token follows the answer. Today then starts with
-    /// the "První dny" card (FirstDaysCard).
+    /// the "První dny" card (FirstDaysCard), after the free week once when
+    /// the account can still have it (SetupProOffer).
     private func done(notifications: Bool) async {
         saving = true
         defer { saving = false }
         if notifications { _ = await Reminders.requestPermission() }
         await PushRegistration.refresh(api: model.api)
         FirstDays.start()
-        await model.finishSetup()
+        if await SetupProOffer.due(model) { proOffer = true } else { await model.finishSetup() }
     }
 
     // MARK: - Oznámení
@@ -792,6 +813,64 @@ struct SetupFlowView: View {
         }
         .padding(.top, 14)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// How far the setup is: a thin bar of one piece a page, the ones done and
+/// the one open in ink (point 6 of the competitor comparison, 4 Nov 2026).
+struct SetupSteps: View {
+    let done: Int
+    let total: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<total, id: \.self) { i in
+                Capsule().fill(i < done ? Palette.ink : Palette.track).frame(height: 4)
+            }
+        }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: done)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 12)
+        .accessibilityElement()
+        .accessibilityLabel(L10n.f("Krok %lld z %lld", done, total))
+    }
+}
+
+/// Point 7 of the competitor comparison (Petr, 4 Nov 2026): at the end of the
+/// first setup the free week of Aurin Pro (PaywallView's own page) shows once,
+/// only when Pro is on sale (not in the pilot, where everyone has it), the
+/// account allowed the AI features (the coach needs them), has no Pro and this
+/// Apple ID can still have the free week. "Teď ne" or the cross go to Today.
+@MainActor
+enum SetupProOffer {
+    static let shownKey = "aurin.setupProOfferShown"
+
+    /// When it was shown on this phone, for the Today coach card's Pro line
+    /// (point 40, still to come) to keep away that day: never two offers at once.
+    static var shownAt: Date? { UserDefaults.standard.object(forKey: shownKey) as? Date }
+
+    /// One GET /app/api/subscription after the last page, waited for at most
+    /// 3 s so a weak signal never holds the way to Today; true marks it shown.
+    static func due(_ model: AppModel) async -> Bool {
+        guard !model.demo, shownAt == nil else { return false }
+        let api = model.api
+        let due = await withTaskGroup(of: Bool.self) { group in
+            group.addTask { await check(api) }
+            group.addTask { try? await Task.sleep(for: .seconds(3)); return false }
+            let first = await group.next() ?? false
+            group.cancelAll()
+            return first
+        }
+        if due { UserDefaults.standard.set(Date(), forKey: shownKey) }
+        return due
+    }
+
+    private static func check(_ api: APIClient) async -> Bool {
+        guard let status = try? await api.subscription(), !status.pilot, status.aiConsent == true, !status.purchased else { return false }
+        let store = ProStore.shared
+        await store.load()
+        return store.trialEligible && !store.entitled
     }
 }
 

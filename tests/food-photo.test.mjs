@@ -69,3 +69,21 @@ test("the front of a package gives the name and the brand, or nothing", async ()
   assert.equal(packageFrontFromAnswer({ found: true, name: "  ", brand: "Relax" }), null);
   assert.equal(packageFrontFromAnswer("not json"), null);
 });
+
+test('a meal photo with several foods lists them, checked and at most 6', async () => {
+  const { mealItems } = await import('../src/food-photo.js');
+  const rice = { name: 'Rýže basmati vařená', grams: 180.4, calories_100g: 130, protein_100g: 2.7, carbs_100g: 28, fat_100g: 0.3 };
+  const chicken = { name: 'Kuřecí prsa grilovaná', grams: 150, calories_100g: 165, protein_100g: 31, carbs_100g: 0, fat_100g: 3.6 };
+  const meal = photoResultFromAnswer(answer({ kind: 'meal_photo', basis: 'portion', calories: 482, protein_g: 51, carbs_g: 50, fat_g: 6, items: [chicken, rice] }), 'portion');
+  assert.equal(meal.items.length, 2);
+  assert.deepEqual(meal.items[1], { name: 'Rýže basmati vařená', grams: 180, calories_100g: 130, protein_100g: 2.7, carbs_100g: 28, fat_100g: 0.3 });
+  // One food left after the checks, a label or the label mode: no list, the photo stays one food.
+  assert.equal(photoResultFromAnswer(answer({ kind: 'meal_photo', basis: 'portion', calories: 482, items: [chicken, { ...rice, grams: 0 }] }), 'portion').items, undefined);
+  assert.equal(photoResultFromAnswer(answer({ items: [chicken, rice] }), 'label').items, undefined);
+  assert.equal(photoResultFromAnswer(answer({ kind: 'meal_photo', basis: 'portion', calories: 482 }), 'portion').items, undefined);
+  // Impossible values, empty names and no energy are dropped; never more than 6.
+  assert.deepEqual(mealItems([{ ...rice, calories_100g: 2000 }, { ...rice, protein_100g: 140 }, { ...rice, name: ' ' }, { ...rice, calories_100g: null }, { ...rice, grams: 5000 }]), []);
+  assert.equal(mealItems(Array(9).fill(rice)).length, 6);
+  assert.deepEqual(mealItems('nothing'), []);
+  assert.ok(FOOD_PHOTO_SCHEMA.schema.required.includes('items'));
+});

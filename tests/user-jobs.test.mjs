@@ -52,6 +52,22 @@ test("the coach's push goes to everyone with a phone to notify, whatever they co
   assert.deepEqual((await fanOut({}, at(17, 5))).map(m => m.user.id), [1]);
 });
 
+test("Aurin's own VO2max runs once a day for every consenting user, whatever they connected", async () => {
+  assert.ok(dueUserJobs("* * * * *", at(4, 47)).includes("fitness-estimate"));
+  assert.ok(!dueUserJobs("* * * * *", at(4, 45)).includes("fitness-estimate"));
+  assert.ok(!dueUserJobs("* * * * *", at(5, 47)).includes("fitness-estimate"));
+  const db = database(1);
+  // 2: Apple Health only, no phone; 3: consent withdrawn; 4: blocked.
+  for (const [id, consent, disabled] of [[2, true, 0], [3, false, 0], [4, true, 1]]) {
+    db.sqlite.prepare("INSERT INTO users (id, email, name, role, disabled) VALUES (?, ?, ?, 'user', ?)").run(id, "u" + id + "@example.com", "U" + id, disabled);
+    db.sqlite.prepare("INSERT INTO user_consents VALUES (?, 'health', ?)").run(id, consent ? null : "2026-10-01");
+  }
+  const sent = [];
+  await fanOutUserJobs({ DB: db, OWNER_EMAIL: "owner@example.com", USER_JOBS: { run: async message => { sent.push(message); return { ok: true }; } } }, {}, { cron: "* * * * *", scheduledTime: at(4, 47).getTime() });
+  assert.deepEqual(sent.map(m => m.user.id), [1, 2]);
+  assert.ok(sent.every(m => m.names.includes("fitness-estimate")));
+});
+
 function database(count) {
   const db = createD1();
   db.sqlite.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, name TEXT, role TEXT, disabled INTEGER DEFAULT 0); CREATE TABLE connection_credentials (user_id INTEGER, provider TEXT); CREATE TABLE user_consents (user_id INTEGER, kind TEXT, withdrawn_at TEXT);");

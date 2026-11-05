@@ -11,11 +11,16 @@ import { localToday, localDateTime } from "./user-time.js";
 import { consentStatus } from "./consent.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { acwrZoneLabel } from "./workload-ratio.js";
+import { partsForAI } from "./cycle-model.js";
 import { READINESS_RULE, TRENDS_RULE, FOOD_RULE, instructions } from './private/screen-texts.js';
 
 export const SCREENS = ["today", "training", "food"];
 export const MAX_PER_DAY = 12;
 const GAP_MINUTES = 5;
+// A day's texts are kept this many days, then deleted when the user's next
+// text is written (and all of them with the account): a text only serves its day.
+export const KEEP_DAYS = 7;
+const daysBefore = (day, days) => new Date(Date.parse(day + "T12:00:00Z") - days * 86400000).toISOString().slice(0, 10);
 // A failed AI call is not repeated on every opening of the screen.
 const RETRY_MINUTES = 60;
 // The coach's sentence is not worth a wait: with the user's AI slots taken by
@@ -44,17 +49,24 @@ export function screenFacts(screen, data) {
 
 function todayFacts(d) {
   const sleep = d.sleep || null, hrv = d.hrv || null, rhr = d.restingHR || null, n = d.nutrition || {};
-  const plan = (Array.isArray(d.plan) ? d.plan : []).filter(i => i && i.kind !== "bedtime");
+  const shown = (Array.isArray(d.plan) ? d.plan : []).filter(i => i && i.kind !== "bedtime");
+  // The hormonal pill ("Pill 6 of 21") is cycle data the sentence does not
+  // need: never for the AI, shared or not (it stays under "Proč?").
+  const plan = shown.filter(i => i.kind !== "pill");
   const facts = {
     readiness: d.readiness?.score ?? null,
     readinessZone: d.readiness?.zone ?? null,
     // Why: the readiness parts and flags (breathing or temperature up, the
     // check-in), the athlete's status and the cycle, as training gets them.
-    readinessParts: Array.isArray(d.readinessDetail?.parts) ? d.readinessDetail.parts : [],
+    // A luteal mark on a part tells the phase: only with the cycle shared.
+    readinessParts: partsForAI(d.readinessDetail?.parts, Boolean(d.coachCycle)),
     readinessFlags: Array.isArray(d.readiness?.flags) ? d.readiness.flags.filter(f => f !== "provisional") : [],
     checkin: d.checkin || null,
     athleteState: d.athleteState && d.athleteState !== "active" ? d.athleteState : null,
-    cycle: d.cycle ? { phase: d.cycle.phase || null, cycleDay: num(d.cycle.cycleDay), eased: Boolean(d.cycle.eased), symptoms: Array.isArray(d.cycle.symptoms) ? d.cycle.symptoms : [] } : null,
+    // The cycle only as cycle-model.js cycleForCoach gives it, so only with
+    // "Kouč ví o cyklu" on (the route adds it as coachCycle). Today's own
+    // cycle card (d.cycle) is shown with tracking on, shared or not.
+    ...(cycleFact(d) ? { cycle: cycleFact(d) } : {}),
     sleepMinutes: num(sleep?.minutes), sleepNeedMinutes: num(sleep?.need), sleepIndex: num(sleep?.index),
     hrv: num(hrv?.value), hrvBaseline: num(hrv?.baseline), hrvUsualRange: hrv ? [num(hrv.low), num(hrv.high)] : null, hrvTrend: hrv?.trend ?? null,
     restingHR: num(rhr?.value), restingHRBaseline: num(rhr?.baseline),
@@ -62,7 +74,9 @@ function todayFacts(d) {
     plan: plan.map(i => ({ title: i.title, detail: i.detail || null, done: Boolean(i.done) })).slice(0, 6),
     kcalEaten: num(n.kcal), kcalTarget: num(n.target),
     bedtimeTonight: d.tonight?.bedtime ?? null,
-    ruleBasedSummary: [d.summary?.text, d.summary?.recommendation].filter(Boolean).join(" ") || null,
+    ruleBasedSummary: adviceForAI(d.summary).text,
+    // An injury or pain the coach was told about: only yes, never its words.
+    ...(adviceForAI(d.summary).restriction ? { injuryNoted: true } : {}),
     ...trendsOf(d)
   };
   const hrvDiff = facts.hrv != null && facts.hrvBaseline != null ? facts.hrv - facts.hrvBaseline : null;
@@ -72,7 +86,7 @@ function todayFacts(d) {
     facts.hrv != null && { label: "HRV", value: Math.round(facts.hrv) + " ms" + (facts.hrvBaseline != null ? L(", obvykle ", ", usually ") + Math.round(facts.hrvBaseline) : "") },
     facts.restingHR != null && { label: L("Klidový tep", "Resting HR"), value: Math.round(facts.restingHR) + (facts.restingHRBaseline != null ? L(", obvykle ", ", usually ") + Math.round(facts.restingHRBaseline) : "") },
     facts.strainPlanned != null && { label: L("Plánovaná námaha", "Planned strain"), value: decimal(facts.strainPlanned) },
-    plan.length > 0 && { label: L("Plán dne", "Day plan"), value: plan.map(i => i.title + (i.done ? " ✓" : "")).join(", ") }
+    shown.length > 0 && { label: L("Plán dne", "Day plan"), value: shown.map(i => i.title + (i.done ? " ✓" : "")).join(", ") }
   ].filter(Boolean);
   const chips = [
     facts.sleepMinutes != null && L("Spánek ", "Sleep ") + hm(facts.sleepMinutes),
@@ -89,7 +103,11 @@ function todayFacts(d) {
     // The numbers it quotes too, in steps that matter (readiness by 5, sleep
     // by 15 minutes, HRV and resting HR by 3), so "Proč?" never shows a
     // number the new ring has left behind.
-    fingerprint: [sleep ? 1 : 0, facts.readinessZone || "", step(facts.readiness, 5), step(facts.sleepMinutes, 15), step(facts.hrv, 3), step(facts.restingHR, 3), facts.readinessFlags.join(","), facts.checkin || "", facts.athleteState || "", plan.map(i => i.title + (i.done ? "✓" : "")).sort().join("|"), facts.ruleBasedSummary || ""].join(":").slice(0, 800)
+    fingerprint: [sleep ? 1 : 0, facts.readinessZone || "", step(facts.readiness, 5), step(facts.sleepMinutes, 15), step(facts.hrv, 3), step(facts.restingHR, 3), facts.readinessFlags.join(","), facts.checkin || "", facts.athleteState || "", plan.map(i => i.title + (i.done ? "✓" : "")).sort().join("|"), facts.ruleBasedSummary || "",
+      // Sharing the cycle turned on or off, or an injury noted, writes a new
+      // text, so a withdrawn cycle leaves today's text too. Added only when
+      // there, so other users' fingerprints stay as they were.
+      ...(facts.cycle ? ["cycle" + (facts.cycle.eased ? "-eased" : "")] : []), ...(facts.injuryNoted ? ["injury"] : [])].join(":").slice(0, 800)
   };
 }
 
@@ -108,7 +126,7 @@ function trainingFacts(d) {
     vo2max: d.vo2max ? { value: num(d.vo2max.value), change28d: num(d.vo2max.change) } : null,
     // The recovery model's readiness of today, as the day review gets it
     // (coach-review.js dayReadiness), added to the screen data by the route.
-    readiness: d.readiness?.zone || d.readiness?.score != null ? { score: num(d.readiness.score), zone: d.readiness.zone || null, parts: Array.isArray(d.readiness.parts) ? d.readiness.parts : [], flags: Array.isArray(d.readiness.flags) ? d.readiness.flags : [], checkin: d.readiness.checkin || null } : null,
+    readiness: d.readiness?.zone || d.readiness?.score != null ? { score: num(d.readiness.score), zone: d.readiness.zone || null, parts: partsForAI(d.readiness.parts, Boolean(d.coachCycle)), flags: Array.isArray(d.readiness.flags) ? d.readiness.flags : [], checkin: d.readiness.checkin || null } : null,
     ...trendsOf(d)
   };
   const basis = [
@@ -169,6 +187,24 @@ function foodFacts(d) {
     // left has to fit one meal (MAX_PER_DAY caps it).
     fingerprint: String(logged) + (facts.hour >= 18 ? ":evening" : "")
   };
+}
+
+// The shared cycle (coachCycle) with whether Today eased a session for it.
+function cycleFact(d) {
+  const c = d.coachCycle && typeof d.coachCycle === "object" ? d.coachCycle : null;
+  if (!c) return null;
+  return { phase: c.phase || null, cycleDay: num(c.cycleDay), eased: Boolean(d.cycle?.eased || c.easeToday), symptoms: Array.isArray(c.symptoms) ? c.symptoms : [] };
+}
+
+// The free text of an injury the coach was told about (push.js
+// readinessMessage `remember`) stays out of the AI's copy of the rule-based
+// advice: Today shows it, the AI gets only that there is one.
+function adviceForAI(summary) {
+  if (!summary) return { text: null, restriction: false };
+  const remember = typeof summary.remember === "string" && summary.remember ? summary.remember : null;
+  let advice = summary.recommendation || "";
+  if (remember) advice = advice.split(remember).join("").replace(/\s{2,}/g, " ").trim();
+  return { text: [summary.text, advice].filter(Boolean).join(" ") || null, restriction: Boolean(remember) };
 }
 
 // The long-term facts (trend-facts.js) the route adds to the screen data.
@@ -266,6 +302,10 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
     await env.DB.prepare(`INSERT INTO ai_screen_texts (user_id, day, screen, lang, fingerprint, text, advice, basis_json, generations, failed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?)
       ON CONFLICT(user_id, day, screen, lang) DO UPDATE SET fingerprint=excluded.fingerprint, text=excluded.text, advice=excluded.advice, basis_json=excluded.basis_json, generations=ai_screen_texts.generations+1, failed_at=NULL, created_at=excluded.created_at`)
       .bind(userId, day, screen, language, info.fingerprint, text, advice || null, JSON.stringify({ chips: info.chips, basis: info.basis }), createdAt).run();
+    // The day's first text of a screen also deletes all the user's texts
+    // older than KEEP_DAYS, of every screen and language, also one no longer
+    // used (primary key user_id, day: a few rows; a later call finds none).
+    if (!row?.text) await env.DB.prepare("DELETE FROM ai_screen_texts WHERE user_id=? AND day<?").bind(userId, daysBefore(day, KEEP_DAYS)).run().catch(() => {});
     return answer("ai", { text, advice: advice || null, chips: info.chips, basis: info.basis, createdAt });
   } catch (error) {
     if (error?.busy) return cached || fallback();
