@@ -3823,3 +3823,13 @@
 "V %@ nic nového." = "Nothing new in %@.";
 "%@ z %@." = "%@ from %@.";
 "%@ a %@ z %@." = "%@ and %@ from %@.";
+
+/* Food → amount: what is left of the day's target before adding (DayLeftLine) */
+"Po přidání" = "After adding";
+"Po přidání zbývá dnes" = "After adding, left today";
+"Po přidání zbývá %@" = "After adding, left %@";
+"%@ kcal nad dnešním cílem" = "%@ kcal over today's target";
+"%@ kcal nad cílem %@" = "%@ kcal over the target %@";
+"limit sacharidů: zbývá %@ g" = "carb limit: %@ g left";
+"%@ g nad limitem sacharidů" = "%@ g over the carb limit";
+"%@ z %@ kcal snědeno · tohle jídlo %@ kcal" = "%@ of %@ kcal eaten · this food %@ kcal";
