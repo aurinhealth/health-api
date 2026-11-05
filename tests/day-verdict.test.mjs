@@ -8,7 +8,7 @@ import { withTimeZone } from "../src/user-time.js";
 import { dayVerdict, verdictText, VERDICT_KEYS } from "../src/day-verdict.js";
 import { readinessMessage } from "../src/push.js";
 import { buildToday, readinessSummary, strainTarget, todayWorkouts } from "../src/app-today.js";
-import { screenFacts } from "../src/screen-texts.js";
+import { screenFacts, pushesForTest } from "../src/screen-texts.js";
 
 const date = "2026-10-27";
 const gym = d => ({ date: d, kind: "strength", minutes: 55 });
@@ -107,4 +107,20 @@ test("an earlier day has no verdict: nothing is left to decide", () => {
   const t = withTimeZone("Europe/Prague", () => buildToday({ date: DAY, hour: null, daily, health: { wellness }, sleep: { sessions: nights("05:02") }, profile: { age: 38 } }));
   assert.ok(t.readiness.score != null);
   assert.equal(t.readiness.verdict, null);
+});
+
+test("a sick check-in sets the strain target to rest also on a morning without a score", () => {
+  const t = withTimeZone("Europe/Prague", () => buildToday({ date: DAY, hour: 8, daily, health: { wellness: [] }, sleep: { sessions: [] }, profile: { age: 38 }, checkin: "sick" }));
+  assert.equal(t.readiness.score, null);
+  assert.ok(t.strain.target.high <= 4.5, JSON.stringify(t.strain.target));
+});
+
+test("an earlier yellow day keeps the coach's own card", () => {
+  const coach = { headline: "How it went", text: "t", recommendation: "r" };
+  assert.deepEqual(readinessSummary(coach, { zone: "yellow", flags: [] }, null, true, false, null, null), coach);
+});
+
+test("the AI may not say to keep the plan when the verdict is anything but a hard day", () => {
+  assert.equal(pushesForTest({ readinessZone: "green", dayVerdict: verdictText("steady") }, "Stick to the plan today."), true);
+  assert.equal(pushesForTest({ readinessZone: "green", dayVerdict: verdictText("hard") }, "Stick to the plan today."), false);
 });

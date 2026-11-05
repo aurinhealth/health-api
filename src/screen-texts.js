@@ -326,7 +326,10 @@ const holdBack = f => (f?.readinessZone || f?.readiness?.zone) === "red" || f?.c
   || (f?.readinessFlags || f?.readiness?.flags || []).some(x => /^(respiration|skin_temp|wrist_temp)_elevated$|^checkin_sick$/.test(x));
 const PUSHES = /drž(?:et)? se plánu|podle plánu|dodrž|interval|vo2|práh|sweet spot|stick to (?:the|your) plan|as planned|threshold/i;
 const KEEPS_PLAN = /drž(?:et)? se plánu|podle plánu|dodrž|stick to (?:the|your) plan|as planned/i;
-const pushes = (f, s) => holdBack(f) ? PUSHES.test(s) : (f?.readinessZone || f?.readiness?.zone) === "yellow" && KEEPS_PLAN.test(s);
+// Not on a yellow day, nor when the day's verdict is anything but a hard day (two reasons turn green into yellow).
+export const pushesForTest = (f, s) => pushes(f, s);
+const pushes = (f, s) => holdBack(f) ? PUSHES.test(s)
+  : ((f?.readinessZone || f?.readiness?.zone) === "yellow" || (f?.dayVerdict && f.dayVerdict !== verdictText("hard"))) && KEEPS_PLAN.test(s);
 
 function parseBasis(json) {
   try { const v = JSON.parse(json || "{}"); return { chips: Array.isArray(v.chips) ? v.chips : [], basis: Array.isArray(v.basis) ? v.basis : [] }; }

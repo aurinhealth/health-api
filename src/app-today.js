@@ -142,7 +142,8 @@ export function readinessSummary(summary, readiness = {}, checkin = null, hasPla
   const flags = readiness?.flags || [];
   const sick = checkin === "sick" || flags.includes("checkin_sick");
   const signs = flags.some(f => /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f));
-  const yellow = readiness?.zone === "yellow";
+  // Yellow only for today (an earlier day keeps the coach's own card).
+  const yellow = readiness?.zone === "yellow" && verdict != null;
   // A paused athlete: the coach's own pause guidance (training-status.js) under the verdict's words.
   if (verdict === "rest" && !sick) return { ...(summary || { text: null }), headline: verdictText(verdict) };
   if (!(readiness?.zone === "red" || sick || signs || (yellow && !trained))) return morning && !trained ? { ...(summary || { text: null }), ...morning } : summary;
@@ -336,6 +337,9 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
   const message = hour != null && readiness.score != null ? readinessMessage({ score: readiness.score, zone: readiness.zone, flags: readiness.flags || [], missing: readiness.missing || [], checkin, athleteState: morning?.athleteState || null,
     sleep: night ? { minutes: num(night.durationMin) } : null, planned: todayWorkouts(planItems), tomorrow: morning?.tomorrow || [], context: morning?.context || null, date }) : null;
   const verdict = message?.verdict || null;
+  // A sick check-in, signs of illness or a paused athlete: rest, also on a morning without a score.
+  const recover = (checkin === "sick" || (readiness.flags || []).some(f => f === "checkin_sick" || /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f)))
+    || Boolean(morning?.athleteState && morning.athleteState !== "active");
   const summary = readinessSummary(coaches.morningSummary || null, readiness, checkin, planned.length > 0, done.length > 0 && !open.length, morning ? message?.changed || null : null, verdict);
   // Done first in the order of the day, then what is still open, then bedtime
   // with the planned wake time (Den draws the night ahead dashed to it).
@@ -374,7 +378,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     } : null,
     // The day's naps for Dnes → Den: each sleep that began today after the night.
     naps: napsOn(sessions, date, night),
-    strain: { score: strainNow, training: strainParts.training, movement: strainParts.movement, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: !daySession.length, recover: verdict === "rest" || verdict === "no_intensity" }), rest: !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || null } },
+    strain: { score: strainNow, training: strainParts.training, movement: strainParts.movement, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: !daySession.length, recover }), rest: !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || null } },
     // metric: "rmssd" or "sdnn" when the source said how it measures (Apple Health), else null.
     // Today's HRV shows even before its source has the 14 days a baseline needs.
     hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") }
