@@ -2970,9 +2970,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         // the morning's first values or an earlier day make the cached screens and
         // the coach's texts outdated at once; today's running totals (steps, energy,
         // zone minutes) reach them within the cache's 10 minutes, as Google's do
-        // (apple-health.js meaningfulChange). Food from other apps only what shows food.
+        // (apple-health.js meaningfulChange). Food from other apps only what shows food,
+        // and the Food sentence is written again at once, as after the user's own meal.
         if(result.meaningful){await bumpCacheVersion(env.DB);await markScreenTextsStale(env).catch(()=>{});}
-        else if(result.foodChanged)await bumpCacheVersion(env.DB,{food:true});
+        else if(result.foodChanged){await bumpCacheVersion(env.DB,{food:true});await markScreenTextsStale(env).catch(()=>{});}
         // Apple Watch workouts pair with Intervals.icu activities like Google's do.
         const from=Date.parse(body.windows?.exercise?.from||'');
         if(result.workouts&&Number.isFinite(from))ctx.waitUntil(matchActivities(env,{days:Math.min(400,Math.ceil((Date.now()-from)/86400000)+1)}).catch(error=>console.error('Activity matching failed',error.message)));
@@ -2981,7 +2982,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         // Last night arrived: the morning readiness push, once a day (push.js).
         if(result.saved&&hasLastNight(body.records))ctx.waitUntil(morningPush(env,ctx,{fresh:true}).catch(error=>console.error('Morning push failed',error.message)));
         // Only running totals: the screen kept for the coach's text stays (fetch below).
-        return Response.json(result,{headers:{'Cache-Control':'no-store',...(result.meaningful?{}:{[UNCHANGED_HEADER]:'1'})}});
+        return Response.json(result,{headers:{'Cache-Control':'no-store',...(result.meaningful||result.foodChanged?{}:{[UNCHANGED_HEADER]:'1'})}});
       }
       if(request.method==='DELETE'){const result=await disconnectAppleHealth(env.DB,env.USER_ID);await bumpCacheVersion(env.DB);return Response.json(result,{headers:{'Cache-Control':'no-store'}});}
       return Response.json({message:'Method not allowed'},{status:405});

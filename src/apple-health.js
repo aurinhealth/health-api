@@ -360,8 +360,9 @@ async function appleSexConsent(db, userId) {
 // average that moves): today's reach the screens within the cache's
 // 10 minutes, as Google's do (index.js), instead of recomputing the coach's
 // three weeks 50 times a day on the user's single-threaded database.
-const MORNING = new Set(["daily-resting-heart-rate", "daily-heart-rate-variability", "daily-respiratory-rate", "daily-oxygen-saturation", "daily-wrist-temperature"]);
-const ALWAYS = new Set(["exercise", "sleep", ...Object.keys(SAMPLE), "daily-night-noise", "daily-time-zone-change", SEXUAL_ACTIVITY]);
+const MORNING = new Set(["daily-resting-heart-rate", "daily-heart-rate-variability", "daily-oxygen-saturation"]);
+// Breathing and wrist temperature feed the readiness flags that hold the coach back: every change counts.
+const ALWAYS = new Set(["exercise", "sleep", ...Object.keys(SAMPLE), "daily-night-noise", "daily-time-zone-change", "daily-respiratory-rate", "daily-wrist-temperature", SEXUAL_ACTIVITY]);
 // The user's day of a stored row: a daily value carries its date, a time is
 // converted to the user's zone (a day's zone minutes start at local midnight).
 export const appleRowDay = row => /^\d{4}-\d{2}-\d{2}$/.test(String(row.sample_time || "")) ? row.sample_time : localDate(row.sample_time || row.start_time || row.end_time);

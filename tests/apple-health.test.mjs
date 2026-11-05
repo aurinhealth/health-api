@@ -348,6 +348,9 @@ test("only a workout, a night, the morning's first values or an earlier day make
   assert.equal((await save([{ type: "daily-resting-heart-rate", id: "rhr:" + today, date: today, value: 52 }])).meaningful, true);
   // The day's average moving later is a running total.
   assert.equal((await save([{ type: "daily-resting-heart-rate", id: "rhr:" + today, date: today, value: 53 }])).meaningful, false);
+  // Breathing and wrist temperature feed the flags that hold the coach back: a later value too.
+  assert.equal((await save([{ type: "daily-respiratory-rate", id: "resp:" + today, date: today, value: 14 }])).meaningful, true);
+  assert.equal((await save([{ type: "daily-respiratory-rate", id: "resp:" + today, date: today, value: 16 }])).meaningful, true);
   // Today's steps, zone minutes and wear hours: the 10-minute cache catches up.
   const live = await save([
     { type: "steps", id: "steps:now", start: hour(9), end: hour(10), value: 900 },
