@@ -193,6 +193,8 @@ extension WatchBridge {
         guard var day = await gymDay(change.date) else { return nil }
         guard change.kind == .parts || day.exercises.indices.contains(change.exercise) || (change.kind == .addExercise && day.exercises.isEmpty)
         else { return watchGym(day, date: change.date) }
+        // For "Vyměněno dnes" in the workout's summary on the phone.
+        if change.kind == .swap, let option = change.option { GymSwaps.record(change.date, from: day.exercises[change.exercise].name, to: option.name) }
         day.apply(change)
         await save(day, date: change.date)
         return watchGym(day, date: change.date)

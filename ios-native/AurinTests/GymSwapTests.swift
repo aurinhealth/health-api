@@ -38,4 +38,17 @@ final class GymSwapTests: XCTestCase {
         XCTAssertEqual(d.exercises.map(\.name), ["Cable fly", "Machine chest press"])
         XCTAssertEqual(d.exercises[1].sets.map(\.plannedKg), ["40", "32"])
     }
+
+    // "Vyměněno dnes" (competitor comparison point 10): one row per swap of the day.
+    func testSwapsOfTheDayFollowTheChain() {
+        var list = GymSwaps.adding([], from: "Barbell bench press", to: "Dumbbell bench press")
+        list = GymSwaps.adding(list, from: "Dumbbell bench press", to: "Machine chest press")
+        XCTAssertEqual(list.map { $0.from + ">" + $0.to }, ["Barbell bench press>Machine chest press"])
+        list = GymSwaps.adding(list, from: "Lat pulldown", to: "Pull-up")
+        XCTAssertEqual(list.count, 2)
+        // Swapped back: nothing changed for that exercise.
+        list = GymSwaps.adding(list, from: "Machine chest press", to: "Barbell bench press")
+        XCTAssertEqual(list.map(\.from), ["Lat pulldown"])
+        XCTAssertEqual(GymSwaps.adding(list, from: "Squat", to: "Squat"), list)
+    }
 }

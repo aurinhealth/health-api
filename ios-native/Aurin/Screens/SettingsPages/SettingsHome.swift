@@ -367,6 +367,12 @@ struct GymSettingsView: View {
     var body: some View {
         SettingsPage(title: "Posilovna") {
             GymPreferencesGroup()
+            SettingsGroup {
+                NavigationLink { GymExerciseTasteView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "hand.thumbsup", color: Palette.green), title: "Cviky", subtitle: "Které tě baví a které ne")
+                }
+            }
+            .buttonStyle(.plain)
             GymRestGroup()
             GymSignalsGroup()
             SettingsGroup {
