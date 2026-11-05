@@ -628,7 +628,7 @@ const watchGym = `<div class="aw-s" style="--gw:#3A2A17">${wTop(wBtn('pause', WA
 const watchFood = `<div class="aw-s" style="--gw:#163047">${wTop('', '12:20', '')}
 <div class="aw-food">${wRing(70, 29, 7, .52, WA.amber, `<span class="aw-in"><span class="aw-n">1,380</span><small>OF 2,650</small></span>`)}<div><b style="color:${WA.amber}">Food</b><span class="aw-news">1,270 kcal left</span><span class="aw-k">lunch logged 12:30</span></div></div>
 <div class="aw-mac">${[['Carbs', 177, 330, '#FFC274'], ['Protein', 84, 150, '#83C7FF'], ['Fat', 36, 80, '#B3A1FF']].map(([k, v, t, c]) => `<div><b style="color:${c}">${k}</b>${v}/${t} g<i><b style="width:${Math.round(v / t * 100)}%;background:${c}"></b></i></div>`).join('')}</div>
-<div class="aw-water"><span style="color:${WA.blue}">${ic('drop')}</span><div><b>1.5</b> <span class="aw-k">/ 2.6 L</span><i><b style="width:58%"></b></i></div><span class="aw-plus">+250</span></div></div>`;
+<div class="aw-water"><span class="aw-btl" style="color:${WA.blue}">${ic('drop')}</span><div><b>1.5</b> <span class="aw-k">/ 2.6 L</span><i><b style="width:58%"></b></i></div><span class="aw-plus">+250 ml</span></div></div>`;
 // The app's ring on the face (SegmentedArc): ten arcs over three quarters of a circle, open at the bottom
 // for the word, the value inside; the rest in a dim shade of the same colour.
 const wArc = (frac, c, value, word) => {
@@ -655,7 +655,7 @@ export const WATCH = [
   ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness, sleep, strain and HRV, as on Today, and what’s next today in one line.', watchHome],
   ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown, and the rest counts down and taps you when it’s time. Leave the iPhone in your locker: the watch keeps your sets, even without signal, and hands them over later. Nothing planned? Build a workout for your rested muscles right on the watch.', watchGym],
   ['glow-training', 'Race day, one tap.', 'A duathlon, aquabike, aquathlon or triathlon from your plan shows as one card, its legs in race order, and starts as one multisport workout: the watch times each leg and each change. Tap it for each leg’s target.', watchRace],
-  ['glow-health', 'Water in one tap.', 'What’s left to eat today, the macros, and +250 for a glass of water. Your iPhone gets it at once.', watchFood],
+  ['glow-health', 'Water in one tap.', 'What’s left to eat today, the macros, and +250 ml for a glass of water. Your iPhone gets it at once.', watchFood],
   ['glow-health', 'On your watch face.', 'Readiness, sleep and strain against today’s goal, a countdown to your workout, water, food, protein and your alarm sit around the time, so you don’t even open the app.', watchFace]];
 
 // Apple Watch's part opens with the watch face and its three complications.
@@ -1149,8 +1149,8 @@ html:not(.js) .stage1{display:none}
 .aw-news{font-family:Newsreader,Georgia,serif;font-size:16px;line-height:1.15;white-space:nowrap}
 .aw-mac{display:flex;gap:7px;margin-top:4px;font-size:10.5px}.aw-mac>div{flex:1}.aw-mac b{display:block}
 .aw-mac i,.aw-water i{display:block;height:3px;margin-top:2px;border-radius:2px;background:#2A2C2E}.aw-mac i b,.aw-water i b{display:block;height:100%;border-radius:2px;background:#7CC3F0}
-.aw-water{display:flex;align-items:center;gap:7px;margin-top:8px;padding:6px 6px 6px 10px;border-radius:14px;background:#141618}.aw-water>div{flex:1;font-size:13px}
-.aw-plus{padding:6px 10px;border-radius:99px;background:#7CC3F0;color:#000;font-size:13px;font-weight:700}
+.aw-water{display:flex;align-items:center;gap:5px;margin-top:8px;padding:6px;border-radius:14px;background:#141618}.aw-water>div{flex:1;min-width:0;white-space:nowrap;font-size:12px}.aw-water .aw-k{font-size:11px}
+.aw-btl{display:grid;place-items:center;width:24px;height:24px;flex:none;border-radius:50%;background:rgba(255,255,255,.14)}.aw-btl svg{width:14px;height:14px}.aw-plus{white-space:nowrap;padding:6px 8px;border-radius:99px;background:#7CC3F0;color:#000;font-size:12px;font-weight:700}
 .aw-face{background:#000;padding:16px 16px 12px}.aw-frow{display:flex;align-items:center;justify-content:space-between}
 .aw-date{display:flex;flex-direction:column;align-items:center;justify-content:center;width:46px;height:46px;border-radius:50%;background:#1c1d1f;color:#FF6B5B;font-size:9px;font-weight:600}.aw-date b{color:#fff;font-size:17px}
 .aw-arc{position:relative;display:grid;place-items:center;flex:none;width:50px;height:50px}.aw-arc svg{position:absolute;inset:0;fill:none;stroke-width:5}
