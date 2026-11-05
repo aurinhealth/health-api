@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { appleRow, saveAppleHealth, disconnectAppleHealth, appleHealthStatus, afterGoogleSync, flushGoogleSync, appleBodyTooLarge, MAX_BODY_BYTES } from "../src/apple-health.js";
+import { localToday, zonedIso, zonedTime } from "../src/user-time.js";
+import { appleRow, appleRowDay, meaningfulChange, saveAppleHealth, disconnectAppleHealth, appleHealthStatus, afterGoogleSync, flushGoogleSync, appleBodyTooLarge, MAX_BODY_BYTES } from "../src/apple-health.js";
 import { googleDashboard } from "../src/google-dashboard.js";
 import { sleepSessionFromRow } from "../src/sleep-sessions.js";
 import { averageRestingHeartRate } from "../src/profile-suggestions.js";
@@ -90,7 +91,7 @@ test("saving is idempotent and the Health summary reads Apple rows", async () =>
     { type: "time-in-heart-rate-zone", id: "zone:2026-10-10:MODERATE", zone: "MODERATE", minutes: 42, start: "2026-10-09T22:00:00Z" },
     { type: "bogus", id: "x" }
   ] };
-  assert.deepEqual(await saveAppleHealth(db, 1, body), { status: "ok", saved: 4, changed: 4, skipped: 1, removed: 0, replaced: 0 });
+  assert.deepEqual(await saveAppleHealth(db, 1, body), { status: "ok", saved: 4, changed: 4, skipped: 1, removed: 0, replaced: 0, meaningful: true, foodChanged: false, workouts: false });
   const before = rows(raw).map(r => r.updated_at + r.payload_json);
   raw.sqlite.exec("UPDATE health_datapoints SET updated_at='2000-01-01'");
   // The same hours again: nothing changed, so the cached screens stay valid.
@@ -337,4 +338,43 @@ test("sexual activity is kept only with the consent the server holds; what the a
   raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,sample_time,value_numeric,payload_json) VALUES(1,'apple-health','daily-sexual-activity','old','2026-10-01',1,'{}')").run();
   await saveAppleHealth(db, 1, { records: [] }, { now });
   assert.equal(stored(), 0);
+});
+
+test("only a workout, a night, the morning's first values or an earlier day make the coach's caches outdated", async () => {
+  const { db } = setup();
+  const now = Date.now(), today = localToday(), hour = h => new Date(Date.parse(today + "T00:00:00Z") + h * 3600000).toISOString().replace(".000Z", "Z");
+  const save = records => saveAppleHealth(db, 1, { records });
+  // A new day's first resting heart rate and HRV: the readiness needs them.
+  assert.equal((await save([{ type: "daily-resting-heart-rate", id: "rhr:" + today, date: today, value: 52 }])).meaningful, true);
+  // The day's average moving later is a running total.
+  assert.equal((await save([{ type: "daily-resting-heart-rate", id: "rhr:" + today, date: today, value: 53 }])).meaningful, false);
+  // Breathing and wrist temperature feed the flags that hold the coach back: a later value too.
+  assert.equal((await save([{ type: "daily-respiratory-rate", id: "resp:" + today, date: today, value: 14 }])).meaningful, true);
+  assert.equal((await save([{ type: "daily-respiratory-rate", id: "resp:" + today, date: today, value: 16 }])).meaningful, true);
+  // Today's steps, zone minutes and wear hours: the 10-minute cache catches up.
+  const live = await save([
+    { type: "steps", id: "steps:now", start: hour(9), end: hour(10), value: 900 },
+    { type: "daily-wear-hours", id: "wear:" + today, date: today, value: 9 },
+    { type: "daily-walking-heart-rate", id: "walk:" + today, date: today, value: 95 }
+  ]);
+  assert.equal(live.changed > 0, true);
+  assert.equal(live.meaningful, false);
+  assert.equal((await save([{ type: "steps", id: "steps:now", start: hour(9), end: hour(10), value: 1400 }])).meaningful, false);
+  // Yesterday's late steps change a closed total: outdated at once.
+  const yesterday = new Date(Date.parse(today + "T12:00:00Z") - 86400000).toISOString().slice(0, 10);
+  assert.equal((await save([{ type: "daily-wear-hours", id: "wear:" + yesterday, date: yesterday, value: 15 }])).meaningful, true);
+  // A workout and a night always.
+  const ride = await save([{ type: "exercise", id: "W9", activity: "cycling", start: hour(7), end: hour(8), kcal: 600 }]);
+  assert.deepEqual([ride.meaningful, ride.workouts], [true, true]);
+  assert.equal((await save([{ type: "weight", id: "w:" + today, time: hour(6), value: 74.2 }])).meaningful, true);
+  // Nothing new: nothing at all.
+  assert.deepEqual(await save([{ type: "steps", id: "steps:now", start: hour(9), end: hour(10), value: 1400 }]).then(r => [r.changed, r.meaningful]), [0, false]);
+  assert.ok(now);
+});
+
+test("a day's zone minutes start at the user's midnight, which is the day before in UTC", () => {
+  const today = localToday();
+  const zones = appleRow({ type: "time-in-heart-rate-zone", id: "zone:x", zone: "LIGHT", minutes: 30, start: zonedIso(new Date(zonedTime(today + "T00:00:00"))).at });
+  assert.equal(appleRowDay(zones), today);
+  assert.equal(meaningfulChange([{ ...zones, inserted: false }], today), false);
 });

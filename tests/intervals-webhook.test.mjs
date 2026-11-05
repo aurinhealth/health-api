@@ -63,7 +63,9 @@ test("disconnecting an OAuth connection gives the access back to Intervals.icu; 
 test("an OAuth connection is not imported every 5 minutes; the webhook route is wired", () => {
   const entry = serverSource();
   assert.match(entry, /url\.pathname === "\/webhooks\/intervals"/);
-  assert.match(entry, /name: "intervals-recent".*\n    if \(intervalsOAuthQuiet\(scoped, 40, .*\)\) return;\n    await legacyHealthApi\.fetch/);
+  assert.match(entry, /name: "intervals-recent".*\n    const at = .*, quiet = intervalsOAuthQuiet\(scoped, 40, at\);\n    if \(!quiet\) await legacyHealthApi\.fetch/);
+  // Other apps' workouts: every half hour with OAuth, and Intervals.icu is asked only when one is due.
+  assert.match(entry, /if \(!quiet \|\| at\.getUTCMinutes\(\) % 30 === 10\) await forwardWatchWorkouts/);
   assert.match(entry, /if \(intervalsOAuthQuiet\(scoped, 30, .*\)\) return;\n    await syncWeights/);
   assert.match(entry, /disconnectIntervalsApp\(env\);await deleteConnectionSecret\(env,'intervals_athlete'\)/);
 });

@@ -171,7 +171,7 @@ export async function aiReflection(env, input, focus = null) {
 
 // The data the coach sees, kept compact.
 // readiness: the day's verdict (coach-review.js dayReadiness); gym: the sets logged that day.
-export function reflectionInput({ date, feedback, workout, signals, activities, wellness, sleep, food, recentFeedback, previous,athleteState=null,nextDays=[],readiness=null,gym=[] }) {
+export function reflectionInput({ date, feedback, workout, signals, activities, wellness, sleep, food, recentFeedback, previous,athleteState=null,nextDays=[],readiness=null,gym=[],saunaOff=false }) {
   const since = d => String(d) >= shift(date, -14) && String(d) <= date;
   return {
     date, feedback, workout,athleteState:trainingStatus(athleteState), signals: signals.map(({ id, weight, text }) => ({ id, weight, text })),
@@ -184,7 +184,9 @@ export function reflectionInput({ date, feedback, workout, signals, activities, 
     previousCoachNotes: (previous || []).slice(0, 3).map(r => ({ date: r.date, text: r.text })),
     nextDays: (nextDays || []).slice(0, 2),
     ...(readiness ? { readiness: { score: n(readiness.score), zone: readiness.zone || null, parts: readiness.parts || [], flags: readiness.flags || [] } } : {}),
-    ...(gym?.length ? { gymSets: gym.slice(0, 40) } : {})
+    ...(gym?.length ? { gymSets: gym.slice(0, 40) } : {}),
+    // No sauna today (coach-pick.js saunaSigns, journal-store.js saunaRisks), without the reason.
+    ...(saunaOff ? { saunaOff: true } : {})
   };
 }
 
@@ -225,7 +227,7 @@ export async function createReflection(env, { date, workoutId = null, rpe = null
   let text = null, source = "rules", model = null;
   if (env.OPENAI_API_KEY) {
     try {
-      const r = await aiReflection(env, reflectionInput({ date, feedback, workout, signals, activities: data.activities, wellness: data.wellness, sleep: data.sleep, food: data.food, recentFeedback: data.recentFeedback, previous,athleteState:data.athleteState,nextDays:data.nextDays,readiness:data.readiness||null,gym:data.gym||[] }), data.focus || null);
+      const r = await aiReflection(env, reflectionInput({ date, feedback, workout, signals, activities: data.activities, wellness: data.wellness, sleep: data.sleep, food: data.food, recentFeedback: data.recentFeedback, previous,athleteState:data.athleteState,nextDays:data.nextDays,readiness:data.readiness||null,gym:data.gym||[],saunaOff:!!data.saunaOff }), data.focus || null);
       text = r.text; model = r.model; source = "ai";
     } catch (error) { console.error("Coach reflection AI failed", error.message); }
   }

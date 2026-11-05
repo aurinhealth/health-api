@@ -5,7 +5,7 @@ import { scopedDb, PERSONAL_TABLES } from "../src/tenancy.js";
 import { withLang } from "../src/lang.js";
 import { CATALOG, DEFAULT_PINNED, CATEGORIES, normalizeCustomItem, itemView, catalogItem, usualPart, moodText } from "../src/journal-catalog.js";
 import { percentEffect, impactOf, thresholdOf, rankImpacts, newDiscovery, dayState, itemDetail, morningMetrics, timeLevel, levelTime, shiftDay } from "../src/journal-impact.js";
-import { saveJournalEntry, listJournalEntries, getJournalSettings, saveCustomItem, autoDays, sickDays, caffeineMg, alcoholDrinks, setJournalOptions, setFixed } from "../src/journal-store.js";
+import { saveJournalEntry, listJournalEntries, getJournalSettings, saveCustomItem, autoDays, sickDays, saunaRisks, caffeineMg, alcoholDrinks, setJournalOptions, setFixed } from "../src/journal-store.js";
 import { journalDay, journalCard, journalCatalog, thresholdText, waitingText, valueText, handleJournalApi, journalForCoach } from "../src/routes-journal.js";
 import { exportPages } from "../src/account-data.js";
 import { localToday } from "../src/user-time.js";
@@ -310,6 +310,36 @@ test("illness takes days out: the journal's Nemoc, a sick check-in and the Sick 
   raw.sqlite.prepare("INSERT INTO morning_checkins(user_id,date,feeling) VALUES(4,'2026-10-06','sick')").run();
   const out = await sickDays(db, "2026-10-01", "2026-10-15", { status: "sick", changedAt: "2026-10-13T08:00:00Z" });
   assert.deepEqual([...out].sort(), ["2026-10-02", "2026-10-05", "2026-10-06", "2026-10-13", "2026-10-14", "2026-10-15"]);
+});
+
+test("the sauna's risks: alcohol, Nemoc, an injury in the last 72 h, drinks and the food diary", async () => {
+  const raw = createD1(), db = scopedDb(raw, 5);
+  const none = { alcohol: false, sick: false, injury: false };
+  assert.deepEqual(await saunaRisks(db, "2026-10-10"), none);
+  const settings = await getJournalSettings(db);
+  await saveJournalEntry(db, settings, { date: "2026-10-09", key: "alcohol", answer: 1 });
+  await saveJournalEntry(db, settings, { date: "2026-10-07", key: "injury", answer: 1 });
+  await saveJournalEntry(db, settings, { date: "2026-10-09", key: "sick", answer: 1 });
+  assert.deepEqual(await saunaRisks(db, "2026-10-10"), { alcohol: true, sick: true, injury: true });
+  // The injury counts on its day and the three after it, not the fourth.
+  assert.equal((await saunaRisks(db, "2026-10-11")).injury, false);
+  // Two days later alcohol and Nemoc are behind, a ✕ never counts.
+  assert.deepEqual(await saunaRisks(db, "2026-10-11"), none);
+  await saveJournalEntry(db, settings, { date: "2026-10-11", key: "injury", answer: 0 });
+  assert.equal((await saunaRisks(db, "2026-10-11")).injury, false);
+  // Alcohol ticked today counts too.
+  await saveJournalEntry(db, settings, { date: "2026-10-11", key: "alcohol", answer: 1 });
+  assert.equal((await saunaRisks(db, "2026-10-11")).alcohol, true);
+  // A beer in the drinks the evening before; the athlete's ✕ for that day wins.
+  await (await import("../src/fluids.js")).ensure(db);
+  raw.sqlite.prepare("INSERT INTO fluid_log(user_id,date,consumed_at,ml,kind) VALUES(5,'2026-10-13','2026-10-13T20:00',500,'beer')").run();
+  assert.equal((await saunaRisks(db, "2026-10-14")).alcohol, true);
+  await saveJournalEntry(db, settings, { date: "2026-10-13", key: "alcohol", answer: 0 });
+  assert.equal((await saunaRisks(db, "2026-10-14")).alcohol, false);
+  // A wine logged in the food diary.
+  raw.sqlite.exec("CREATE TABLE IF NOT EXISTS food_logs (user_id INTEGER NOT NULL, id INTEGER PRIMARY KEY AUTOINCREMENT, consumed_date TEXT NOT NULL, consumed_at TEXT, recipe_title TEXT, note TEXT, kcal REAL, status TEXT)");
+  raw.sqlite.prepare("INSERT INTO food_logs(user_id,consumed_date,consumed_at,recipe_title,note,kcal) VALUES(5,'2026-10-15','2026-10-15T21:00','Červené víno',?,120)").run(JSON.stringify({ amount: 200, unit: "ml" }));
+  assert.equal((await saunaRisks(db, "2026-10-16")).alcohol, true);
 });
 
 test("the routes: a day, an answer, the impact with the mornings and an item's detail", async () => {

@@ -9,7 +9,7 @@ extension AppModel {
         let account = scope
         guard let response = try? await api.cycle(month: month), stillSignedIn(account) else { return }
         cycle = response
-        Reminders.storePill(response.enabled ? response.settings : nil)
+        Reminders.storePill(response.enabled ? response.settings : nil, usual: response.state?.pill?.usual)
         if response.enabled && !cycleHealthSynced {
             cycleHealthSynced = true
             await CycleHealth.sync(api: api)
@@ -20,7 +20,7 @@ extension AppModel {
         guard !demo else { return }
         let response = try await api.saveCycleSettings(changes)
         cycle = response
-        Reminders.storePill(response.enabled ? response.settings : nil)
+        Reminders.storePill(response.enabled ? response.settings : nil, usual: response.state?.pill?.usual)
         if response.enabled && !cycleHealthSynced {
             cycleHealthSynced = true
             await CycleHealth.sync(api: api)
@@ -40,7 +40,9 @@ extension AppModel {
 
     /// The pill taken now (Today, Health, the calendar).
     func takePill(on date: String? = nil) async throws {
-        try await logCycleDay(date ?? Self.localDate(Date()), ["pill": .string(Self.clockNow())])
+        let day = date ?? Self.localDate(Date())
+        try await logCycleDay(day, ["pill": .string(Self.clockNow())])
+        await Reminders.pillLogged(date: day)
     }
 
     private func afterCycleChange() async {

@@ -143,10 +143,13 @@ final class AppleHealth {
     @ObservationIgnored private var generation = 0
 
     /// What a sync did: ok is false on an error; changed when the server stored
-    /// something new (the same hours sent again change nothing).
+    /// something new (the same hours sent again change nothing); meaningful
+    /// when that changes the coach's picture too (a workout, a night, the
+    /// morning's values, an earlier day), not only today's steps or heart rate.
     struct SyncOutcome {
         var ok: Bool
         var changed: Bool
+        var meaningful = false
     }
 
     /// A sync after 10:00 today already brought last night: Today no longer
@@ -499,22 +502,24 @@ final class AppleHealth {
                 message = nil
                 return SyncOutcome(ok: true, changed: false)
             }
-            var changed = false
+            var changed = false, meaningful = false
             for upload in uploads {
                 // Signed out or another account meanwhile: this iPhone's data is not theirs to get.
                 guard round == generation, enabled, !AppModel.accountUnconfirmed else { return SyncOutcome(ok: false, changed: false) }
                 let answer: UploadAnswer = try await api.send("/app/api/health/apple", method: "POST", body: upload)
                 // An older server does not say: count it as new.
-                changed = changed || (answer.changed ?? 1) > 0
+                let new = (answer.changed ?? 1) > 0
+                changed = changed || new
+                meaningful = meaningful || (answer.meaningful ?? new)
             }
-            guard round == generation else { return SyncOutcome(ok: false, changed: changed) }
+            guard round == generation else { return SyncOutcome(ok: false, changed: changed, meaningful: meaningful) }
             lastSync = started
             UserDefaults.standard.set(started, forKey: Self.lastSyncKey)
             UserDefaults.standard.set(uploadPrint, forKey: Self.sentPrintKey)
             UserDefaults.standard.set(started, forKey: Self.sentAtKey)
             if sexHistory { JournalSwitch.sexHistory(false) }
             message = nil
-            return SyncOutcome(ok: true, changed: changed)
+            return SyncOutcome(ok: true, changed: changed, meaningful: meaningful)
         } catch {
             // Abandoned (AppleHealth.abandon): no error to show, the next sync goes on.
             if AppModel.isCancellation(error) || round != generation { return SyncOutcome(ok: false, changed: false) }
@@ -524,9 +529,11 @@ final class AppleHealth {
     }
 }
 
-/// POST /app/api/health/apple: how many rows the upload really changed.
+/// POST /app/api/health/apple: how many rows the upload really changed, and
+/// whether that changes the coach's picture (an older server does not say).
 private struct UploadAnswer: Decodable {
     let changed: Int?
+    let meaningful: Bool?
 }
 
 /// GET /app/api/health/apple: whether the account reads Apple Health.

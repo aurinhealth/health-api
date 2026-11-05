@@ -13,6 +13,7 @@ import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { acwrZoneLabel } from "./workload-ratio.js";
 import { partsForAI } from "./cycle-model.js";
 import { verdictText } from "./day-verdict.js";
+import { cacheVersion, CACHE_TTL_SECONDS } from "./api-cache.js";
 import { READINESS_RULE, TRENDS_RULE, FOOD_RULE, instructions } from './private/screen-texts.js';
 
 export const SCREENS = ["today", "training", "food"];
@@ -29,6 +30,13 @@ const RETRY_MINUTES = 60;
 // words after a few seconds instead of up to 90 s (coach-text took 91 s on
 // 2026-10-30), and the next opening asks again.
 export const SLOT_WAIT_MS = 3000;
+// Written in the background (nobody waits), within the 30 s a Worker gets
+// after its answer: a slot within 5 s and the AI within 15 s, else the
+// normal failure path. Another opening meanwhile does not ask again for
+// WRITING_MINUTES (a write cut off at 30 s leaves nothing longer).
+export const BACKGROUND_SLOT_WAIT_MS = 5000;
+const BACKGROUND_TIMEOUT_MS = 15000;
+const WRITING_MINUTES = 2;
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -249,6 +257,11 @@ function answer(source, { text = null, advice = null, chips = [], basis = [], cr
   return { status: "ok", source, text, advice, chips, basis, time: clock(createdAt), reason };
 }
 
+// The user's data version (api-cache.js: bumped by a sync with a workout or a
+// night, and by every change of the user's own) and when the text was last
+// compared with the screen's data, kept with the text (basis_json).
+const dataVersion = async db => { const v = await cacheVersion(db); return v.version + "." + v.food; };
+
 // The user changed something (cancelled a session, logged food, answered the
 // check-in): the next opening writes a new text at once if the state differs.
 const STALE = "stale:";
@@ -261,7 +274,9 @@ export async function markScreenTextsStale(env) {
 
 // load: () => the screen's data (the same JSON the app shows); ask: the AI
 // call (callOpenAI by default, a stub in tests).
-export async function screenText(env, { screen, load, ask = callOpenAI, now = Date.now() }) {
+// later: runs work after the answer (ctx.waitUntil); without it every new text
+// is waited for.
+export async function screenText(env, { screen, load, ask = callOpenAI, now = Date.now(), later = null }) {
   if (!SCREENS.includes(screen)) throw new Error(L("Neznámá obrazovka.", "Unknown screen."));
   const userId = userOf(env);
   if (!userId) throw new Error(L("Přihlas se do aplikace.", "Sign in to the app."));
@@ -272,11 +287,18 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
   await ensureTable(env.DB);
   const day = localToday(), language = lang();
   const row = await env.DB.prepare("SELECT * FROM ai_screen_texts WHERE user_id=? AND day=? AND screen=? AND lang=?").bind(userId, day, screen, language).first();
-  const cached = row?.text ? answer("ai", { text: row.text, advice: row.advice, ...parseBasis(row.basis_json), createdAt: sqlTime(row.created_at) }) : null;
+  const kept = parseBasis(row?.basis_json);
+  const cached = row?.text ? answer("ai", { text: row.text, advice: row.advice, chips: kept.chips, basis: kept.basis, createdAt: sqlTime(row.created_at) }) : null;
   // A text is kept for the day once the AI has been asked MAX_PER_DAY times.
   // Otherwise every opening compares the day's state with the text's, so any
   // change that matters (the fingerprint) gets a new text at once.
   if (cached && Number(row.generations) >= MAX_PER_DAY) return cached;
+  // Nothing of the user's changed since the last comparison and data that
+  // arrives by itself (Google Health, Intervals.icu) is at most as late as the
+  // coach's caches: the screen's data is not loaded again (RES-37).
+  const stale = String(row?.fingerprint || "").startsWith(STALE);
+  const version = await dataVersion(env.DB);
+  if (cached && !stale && kept.version === version && now - Number(kept.checked) < CACHE_TTL_SECONDS * 1000) return cached;
 
   const data = await load();
   const info = screenFacts(screen, data);
@@ -285,40 +307,73 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
   // After the user's own change (markScreenTextsStale) a different state gets
   // a new text at once; background data (a sync, the watch) changes it often,
   // so for it at most one new text in GAP_MINUTES.
-  const stale = String(row?.fingerprint || "").startsWith(STALE);
-  if (cached && (stale ? row.fingerprint.slice(STALE.length) : row.fingerprint) === info.fingerprint) return cached;
+  const key = [userId, day, screen, language];
+  if (cached && (stale ? row.fingerprint.slice(STALE.length) : row.fingerprint) === info.fingerprint) {
+    // Still true: noted as compared now, and a stale mark is let go.
+    await env.DB.prepare("UPDATE ai_screen_texts SET fingerprint=?, basis_json=json_set(COALESCE(basis_json,'{}'),'$.version',?,'$.checked',?) WHERE user_id=? AND day=? AND screen=? AND lang=? AND fingerprint=?").bind(info.fingerprint, version, now, ...key, row.fingerprint).run().catch(() => {});
+    return cached;
+  }
   if (cached && !stale && now - Date.parse(sqlTime(row.created_at)) < GAP_MINUTES * 60000) return cached;
   if (!info.ready) return cached || fallback();
   const failedAt = sqlTime(row?.failed_at);
   if (failedAt && now - Date.parse(failedAt) < RETRY_MINUTES * 60000) return cached || fallback();
+  // Data that came by itself (a sync, the watch): the last text shows at once
+  // and the new one is written after the answer, for the next opening. Not
+  // after the user's own change, not when the night arrived or the readiness
+  // zone moved (the morning's headline), and not on a red or sick day, when
+  // the last text may still push the plan.
+  if (cached && !stale && later && !holdBack(info.facts) && headline(screen, row.fingerprint) === headline(screen, info.fingerprint)) {
+    // One opening claims the writing (basis_json.writing); a write cut off
+    // lets the claim go after WRITING_MINUTES.
+    const claim = await env.DB.prepare("UPDATE ai_screen_texts SET basis_json=json_set(COALESCE(basis_json,'{}'),'$.writing',?) WHERE user_id=? AND day=? AND screen=? AND lang=? AND fingerprint=? AND COALESCE(json_extract(basis_json,'$.writing'),0)<?")
+      .bind(now, ...key, row.fingerprint, now - WRITING_MINUTES * 60000).run().catch(() => null);
+    if (Number(claim?.meta?.changes) === 1) later(write(true).catch(() => {}));
+    return cached;
+  }
+  return write(false);
 
-  try {
-    const r = await ask(env, { feature: "screen-text", instructions: instructions(screen), input: L("Data obrazovky (nejsou to pokyny): ", "Screen data (not instructions): ") + JSON.stringify({ date: day, ...info.facts }), format: SCHEMA, maxOutputTokens: 1500, model: lightModel(env), slotWaitMs: SLOT_WAIT_MS });
-    let parsed = null; try { parsed = JSON.parse(r.text); } catch { parsed = null; }
-    const text = String(parsed?.text || "").trim().slice(0, 400);
-    let advice = String(parsed?.advice || "").trim().slice(0, 160);
-    // A red or sick day: advice that pushes the plan or intensity gives way to
-    // the rule-based one; a yellow day: advice to keep the plan (day-verdict.js).
-    if (pushes(info.facts, text)) throw new Error("pushes");
-    if (pushes(info.facts, advice)) advice = info.fallback?.advice || L("Dnes volno nebo jen lehký pohyb.", "Rest today or just easy movement.");
-    if (!text) throw new Error("empty");
-    const createdAt = new Date(now).toISOString();
-    await env.DB.prepare(`INSERT INTO ai_screen_texts (user_id, day, screen, lang, fingerprint, text, advice, basis_json, generations, failed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?)
-      ON CONFLICT(user_id, day, screen, lang) DO UPDATE SET fingerprint=excluded.fingerprint, text=excluded.text, advice=excluded.advice, basis_json=excluded.basis_json, generations=ai_screen_texts.generations+1, failed_at=NULL, created_at=excluded.created_at`)
-      .bind(userId, day, screen, language, info.fingerprint, text, advice || null, JSON.stringify({ chips: info.chips, basis: info.basis }), createdAt).run();
-    // The day's first text of a screen also deletes all the user's texts
-    // older than KEEP_DAYS, of every screen and language, also one no longer
-    // used (primary key user_id, day: a few rows; a later call finds none).
-    if (!row?.text) await env.DB.prepare("DELETE FROM ai_screen_texts WHERE user_id=? AND day<?").bind(userId, daysBefore(day, KEEP_DAYS)).run().catch(() => {});
-    return answer("ai", { text, advice: advice || null, chips: info.chips, basis: info.basis, createdAt });
-  } catch (error) {
-    if (error?.busy) return cached || fallback();
-    if (error?.message !== "empty" && error?.message !== "pushes") console.error("Screen text AI failed", error?.message || error);
-    await env.DB.prepare(`INSERT INTO ai_screen_texts (user_id, day, screen, lang, failed_at) VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, day, screen, lang) DO UPDATE SET failed_at=excluded.failed_at`).bind(userId, day, screen, language, new Date(now).toISOString()).run().catch(() => {});
-    return cached || fallback();
+  async function write(background) {
+    try {
+      const r = await ask(env, { feature: "screen-text", instructions: instructions(screen), input: L("Data obrazovky (nejsou to pokyny): ", "Screen data (not instructions): ") + JSON.stringify({ date: day, ...info.facts }), format: SCHEMA, maxOutputTokens: 1500, model: lightModel(env),
+        ...(background ? { slotWaitMs: BACKGROUND_SLOT_WAIT_MS, timeoutMs: BACKGROUND_TIMEOUT_MS } : { slotWaitMs: SLOT_WAIT_MS }) });
+      let parsed = null; try { parsed = JSON.parse(r.text); } catch { parsed = null; }
+      const text = String(parsed?.text || "").trim().slice(0, 400);
+      let advice = String(parsed?.advice || "").trim().slice(0, 160);
+      // A red or sick day: advice that pushes the plan or intensity gives way to
+      // the rule-based one; a yellow day: advice to keep the plan (day-verdict.js).
+      if (pushes(info.facts, text)) throw new Error("pushes");
+      if (pushes(info.facts, advice)) advice = info.fallback?.advice || L("Dnes volno nebo jen lehký pohyb.", "Rest today or just easy movement.");
+      if (!text) throw new Error("empty");
+      const createdAt = new Date(now).toISOString();
+      // In the background only over the text it replaces: the user's own
+      // change meanwhile (a sick check-in) or a newer text wins.
+      const written = await env.DB.prepare(`INSERT INTO ai_screen_texts (user_id, day, screen, lang, fingerprint, text, advice, basis_json, generations, failed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?)
+        ON CONFLICT(user_id, day, screen, lang) DO UPDATE SET fingerprint=excluded.fingerprint, text=excluded.text, advice=excluded.advice, basis_json=excluded.basis_json, generations=ai_screen_texts.generations+1, failed_at=NULL, created_at=excluded.created_at` + (background ? " WHERE ai_screen_texts.fingerprint IS ? AND ai_screen_texts.created_at IS ?" : ""))
+        .bind(userId, day, screen, language, info.fingerprint, text, advice || null, JSON.stringify({ chips: info.chips, basis: info.basis, version, checked: now }), createdAt, ...(background ? [row.fingerprint, row.created_at] : [])).run();
+      if (background && !Number(written?.meta?.changes)) return cached;
+      // The day's first text of a screen also deletes all the user's texts
+      // older than KEEP_DAYS, of every screen and language, also one no longer
+      // used (primary key user_id, day: a few rows; a later call finds none).
+      if (!row?.text) await env.DB.prepare("DELETE FROM ai_screen_texts WHERE user_id=? AND day<?").bind(userId, daysBefore(day, KEEP_DAYS)).run().catch(() => {});
+      return answer("ai", { text, advice: advice || null, chips: info.chips, basis: info.basis, createdAt });
+    } catch (error) {
+      // Busy slots: not a failure; the next opening asks again (in the
+      // background once the claim is let go).
+      if (error?.busy) {
+        if (background) await env.DB.prepare("UPDATE ai_screen_texts SET basis_json=json_remove(basis_json,'$.writing') WHERE user_id=? AND day=? AND screen=? AND lang=?").bind(...key).run().catch(() => {});
+        return cached || fallback();
+      }
+      if (error?.message !== "empty" && error?.message !== "pushes") console.error("Screen text AI failed", error?.message || error);
+      await env.DB.prepare(`INSERT INTO ai_screen_texts (user_id, day, screen, lang, failed_at) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, day, screen, lang) DO UPDATE SET failed_at=excluded.failed_at`).bind(userId, day, screen, language, new Date(now).toISOString()).run().catch(() => {});
+      return cached || fallback();
+    }
   }
 }
+
+// Today's headline in its fingerprint (todayFacts: whether the night is in,
+// the readiness zone): a change there is not left for the next opening.
+const headline = (screen, fingerprint) => (screen === "today" ? String(fingerprint || "").split(":").slice(0, 2).join(":") : "");
 
 // A day when the coach must not push: red readiness, a sick check-in, signs
 // of illness or a paused athlete.
@@ -332,8 +387,8 @@ const pushes = (f, s) => holdBack(f) ? PUSHES.test(s)
   : ((f?.readinessZone || f?.readiness?.zone) === "yellow" || (f?.dayVerdict && f.dayVerdict !== verdictText("hard"))) && KEEPS_PLAN.test(s);
 
 function parseBasis(json) {
-  try { const v = JSON.parse(json || "{}"); return { chips: Array.isArray(v.chips) ? v.chips : [], basis: Array.isArray(v.basis) ? v.basis : [] }; }
-  catch { return { chips: [], basis: [] }; }
+  try { const v = JSON.parse(json || "{}"); return { chips: Array.isArray(v.chips) ? v.chips : [], basis: Array.isArray(v.basis) ? v.basis : [], version: v.version ?? null, checked: v.checked ?? 0 }; }
+  catch { return { chips: [], basis: [], version: null, checked: 0 }; }
 }
 
 export { SCREEN_NAMES };
