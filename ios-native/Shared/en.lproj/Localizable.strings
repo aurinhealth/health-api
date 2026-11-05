@@ -3882,3 +3882,18 @@
 "Přidat položku" = "Add an item";
 "%@ g bílkovin · %@ g sacharidů · %@ g tuků" = "%@ g protein · %@ g carbs · %@ g fat";
 "Množství jsou odhad z fotky. Omáčky a olej jsou nejméně přesné." = "Amounts are estimated from the photo. Sauces and oil are the least precise.";
+
+/* Intervals.icu: workouts from other apps (SyncForwardGroup) */
+"Zapsané v Aurinu" = "Logged in Aurin";
+"Tréninky z jiných aplikací" = "Workouts from other apps";
+"Posílá se dvě hodiny po konci tréninku a jen když ho Intervals.icu ještě nemá. Aplikaci, která do Intervals.icu posílá sama, nech vypnutou." = "Sent two hours after a workout ends, only if Intervals.icu doesn’t have it yet. Leave an app off if it already sends to Intervals.icu itself.";
+"Apple Watch a další aplikace" = "Apple Watch and other apps";
+"Jízdy s výkonem, tepem a trasou" = "Rides with power, heart rate, route";
+"Fitbit a Pixel Watch" = "Fitbit and Pixel Watch";
+"Posílat tréninky z %@ do Intervals.icu?" = "Send %@ workouts to Intervals.icu?";
+"Aurin zkopíruje každý dokončený trénink z Wahoo do tvého účtu Intervals.icu jako jeho soubor: čas, délku, vzdálenost, trasu, výkon, tep, kadenci a kalorie." = "Aurin copies each finished Wahoo workout to your Intervals.icu account as its file: time, duration, distance, route, power, heart rate, cadence and calories.";
+"Aurin zkopíruje každý dokončený trénink z Google Health do tvého účtu Intervals.icu: typ, název, čas, délku, vzdálenost, tep a kalorie." = "Aurin copies each finished Google Health workout to your Intervals.icu account: type, name, time, duration, distance, heart rate and calories.";
+"Vypnout to můžeš kdykoli. Co už v Intervals.icu je, tam zůstane." = "You can turn this off any time. Copies already in Intervals.icu stay there.";
+"Poslat i posledních 14 dní" = "Also send the last 14 days";
+"Od %@" = "Since %@";
+"Poslat do Intervals.icu" = "Send to Intervals.icu";
