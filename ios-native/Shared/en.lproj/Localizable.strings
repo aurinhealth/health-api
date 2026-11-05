@@ -3279,7 +3279,7 @@
 "Zadej váhu mezi %@ a %@." = "Enter a weight between %@ and %@.";
 "Ozveme se, když na tom záleží" = "A message when it matters";
 "Každé ráno tvoje připravenost a kouč, když je potřeba změnit plán." = "Your readiness every morning, and the coach when your plan should change.";
-"Připravenost 78 · vysoká" = "Readiness 78 · high";
+"Připravenost 78 · Dobrý den na tvrdý trénink" = "Readiness 78 · Good day for a hard workout";
 "Dobrá noc, třetí den v řadě. Dnes naplno do posilovny." = "Good night, third day in a row. Go all in on strength today.";
 "HRV je dva dny dole. Dnešní intervaly jsem posunul na čtvrtek." = "HRV is down two days running. I moved today’s intervals to Thursday.";
 "Za 30 minut do postele" = "Bedtime in 30 minutes";
@@ -3882,3 +3882,13 @@
 "Přidat položku" = "Add an item";
 "%@ g bílkovin · %@ g sacharidů · %@ g tuků" = "%@ g protein · %@ g carbs · %@ g fat";
 "Množství jsou odhad z fotky. Omáčky a olej jsou nejméně přesné." = "Amounts are estimated from the photo. Sauces and oil are the least precise.";
+
+/* Today audit 7, 26, D1: the label by the readiness number and the day's verdict (src/day-verdict.js). */
+"v obvyklém rozmezí" = "within your usual range";
+"pod obvyklým rozmezím" = "below your usual range";
+"Dobrý den na tvrdý trénink" = "Good day for a hard workout";
+"Dnes s mírou" = "Keep it steady today";
+"Dnes v klidu" = "Take it easy today";
+"Dej nohám pauzu" = "Give your legs a break";
+"Dnes bez intenzity" = "No intensity today";
+"Dnes odpočinek" = "Rest today";

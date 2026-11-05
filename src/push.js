@@ -1,6 +1,6 @@
 // Push notifications to the iPhone app through Apple's push service (APNs):
 // the morning readiness, once a day after the night's data has arrived
-// ("Připravenost 72 · Dnes klidně naplno", the night's numbers, today's plan). The app registers its device
+// ("Připravenost 72 · Dobrý den na tvrdý trénink", the night's numbers, today's plan). The app registers its device
 // token (POST /app/api/push/token) when notifications are allowed and the
 // "Ranní připravenost" switch in Settings → Oznámení is on, and removes it
 // (DELETE) when the switch goes off or the user signs out.
@@ -11,7 +11,8 @@
 // service. Without the secrets every call here quietly does nothing.
 import { L, storedLanguage, withLang } from "./lang.js";
 import { localDate, localHour, localToday, storedTimeZone, withTimeZone } from "./user-time.js";
-import { adviceSignals, injuryNote, isHardSession, reasonsSentence } from "./morning-advice.js";
+import { reasonsSentence } from "./morning-advice.js";
+import { dayVerdict, verdictText } from "./day-verdict.js";
 
 const shiftDay = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 
@@ -166,41 +167,24 @@ export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Da
   return { ok: false, status: response.status, reason, gone: response.status === 410 || DEAD_TOKEN.has(reason) };
 }
 
-// The morning push (Petr, 2026-10-25): the readiness with one piece of advice
-// from its zone as the title ("Readiness 66 · Go easier today"), the night's
+// The morning push (Petr, 2026-10-25): the readiness with the day's verdict
+// (day-verdict.js) as the title ("Readiness 66 · Keep it steady today"), the night's
 // numbers against the athlete's normal as the subtitle ("Sleep 6:40 · HRV
 // −14% · Resting HR +2") and what to do with today's planned sessions as the
 // body. Signs of illness (breathing or temperature up), a sick check-in or a
-// paused athlete never get "go hard". `zone` is the colour of the ring the
+// paused athlete never get a hard day. `zone` is the colour of the ring the
 // app's notification extension draws (ios-native ReadinessNotification).
 // With `date` and `context` (morning-advice.js) the advice also weighs the
 // short night, the days before, the journal, an injury and tomorrow: two
 // reasons to hold back turn green into yellow, three turn yellow into red,
 // and the body starts with them ("3 gym days in a row and a short night.").
-export function readinessMessage({ score, zone, flags = [], missing = [], checkin = null, athleteState = null, sleep = null, hrv = null, restingHR = null, planned = [], tomorrow = [], context = null, date = null }) {
-  const sick = checkin === "sick" || (flags || []).includes("checkin_sick"), signs = (flags || []).some(f => /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f));
-  const rest = sick || (athleteState && athleteState !== "active");
-  const noSleep = (missing || []).includes("sleep");
-  const sessions = (planned || []).filter(s => s && s.title).slice(0, 2);
-  const names = sessions.map(s => s.title).join(", ");
-  const sport = sessions.length === 1 ? sessions[0].sport : null;
-  const weighed = !rest && !signs && !noSleep && date && context;
-  const signals = weighed ? adviceSignals({ date, sleepMinutes: sleep?.minutes, context }) : [];
-  const injury = weighed ? injuryNote(context.memories) : null;
-  const level = zone === "green" && signals.length >= 2 ? "yellow" : zone === "yellow" && signals.length >= 3 ? "red" : zone;
-  const legs = level === "yellow" && signals.some(s => s.legs);
-  const saveFor = weighed && level === "green" && !signals.length && !sessions.some(isHardSession) ? (tomorrow || []).filter(s => s && s.title).find(isHardSession) : null;
-  const shown = rest ? "red" : signs && level === "green" ? "yellow" : level;
-  const advice = rest ? L("Dnes odpočinek", "Rest today") : signs ? L("Dnes bez intenzity", "No intensity today")
-    : legs ? L("Dej nohám pauzu", "Give your legs a break")
-    : saveFor ? L("Dnes v klidu", "Keep today easy")
-    : level === "green" && signals.length === 1 ? L("Můžeš trénovat", "Good to train")
-    : level === "green" && injury ? L("Trénuj opatrně", "Train with care")
-    : {
-      green: L("Dnes klidně naplno", "Go hard today"),
-      yellow: L("Dnes spíš lehčeji", "Go easier today"),
-      red: L("Dnes odpočinek", "Rest today")
-    }[level];
+export function readinessMessage(input) {
+  const { score, sleep = null, hrv = null, restingHR = null } = input;
+  const v = dayVerdict(input) || { key: null, level: input.zone, shown: input.zone, sessions: [], signals: [] };
+  const { level, rest, signs, noSleep, signals, injury, legs, saveFor, weighed } = v;
+  const names = v.sessions.map(s => s.title).join(", ");
+  const sport = v.sessions.length === 1 ? v.sessions[0].sport : null;
+  const advice = verdictText(v.key);
   const title = L("Připravenost", "Readiness") + " " + Math.round(Number(score)) + (advice ? " · " + advice : "");
   const subtitle = nightNumbers({ sleep, hrv, restingHR, noSleep }) || undefined;
   let body;
@@ -208,7 +192,7 @@ export function readinessMessage({ score, zone, flags = [], missing = [], checki
   else if (rest) body = names ? L(`${names} dnes vynech a dej tělu klid.`, `Skip today's ${names} and let your body recover.`) : L("Dej tělu klid.", "Let your body recover today.");
   else if (signs) body = L("Dech nebo teplota ve spánku jsou nad tvým normálem. Dnes odpočívej a napiš kouči, jak se cítíš.", "Your breathing or temperature in sleep is above your normal. Rest today and tell the coach how you feel.");
   else if (saveFor) body = L(`Zítra: ${saveFor.title}. Dnes lehce v Z2, ať na něj máš síly.`, `Tomorrow: ${saveFor.title}. Easy Z2 today so you're fresh for it.`);
-  else if (level === "green" && signals.length === 1) body = names ? L(`Dnešní plán: ${names}. Odtrénuj ho podle plánu, nic navíc.`, `Today's plan: ${names}. Train as planned, nothing extra.`) : L("Nic naplánováno. Klidně trénuj, jen bez maxim.", "Nothing planned. Train if you like, just no all-out efforts.");
+  else if (level === "green" && (signals.length === 1 || injury)) body = names ? L(`Dnešní plán: ${names}. Odtrénuj ho podle plánu, nic navíc.`, `Today's plan: ${names}. Train as planned, nothing extra.`) : L("Nic naplánováno. Klidně trénuj, jen bez maxim.", "Nothing planned. Train if you like, just no all-out efforts.");
   else if (level === "green") body = names ? L(`Dnešní plán: ${names}. Tělo je připravené, do toho.`, `Today's plan: ${names}. Your body is ready, go for it.`) : L("Nic naplánováno. Dobrý den na těžší trénink.", "Nothing planned. A good day for a harder session.");
   else if (level === "yellow") body = legs && !names ? L("Horní polovina těla nebo lehká jízda v Z2, nohy dnes ne.", "Upper body or an easy Z2 ride, no legs today.")
     : !names ? L("Nic naplánováno. Když budeš trénovat, tak lehce: Z2 nebo lehká posilovna.", "Nothing planned. If you train, keep it easy: Z2 or a light gym session.")
@@ -224,7 +208,7 @@ export function readinessMessage({ score, zone, flags = [], missing = [], checki
   const remember = body && injury ? L(`Pamatuj: ${injury}.`, `Keep in mind: ${injury}.`).replace(/\.\.$/, ".") : null;
   // What the days before, the journal, an injury or tomorrow changed: Today's coach card says the same (app-today.js).
   const changed = weighed && (signals.length || saveFor || injury) ? { headline: advice, recommendation: remember ? body + " " + remember : body, ...(remember ? { remember } : {}) } : null;
-  return { alert: { title, ...(subtitle ? { subtitle } : {}), ...(body ? { body } : {}) }, zone: shown || null, ...(changed ? { changed } : {}) };
+  return { alert: { title, ...(subtitle ? { subtitle } : {}), ...(body ? { body } : {}) }, zone: v.shown || null, verdict: v.key, ...(changed ? { changed } : {}) };
 }
 
 // "Sleep 6:40 · HRV −14% · Resting HR +2": the night, and HRV and resting

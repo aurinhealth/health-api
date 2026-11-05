@@ -256,11 +256,28 @@ enum ReadinessText {
         L10n.plural("%@ bodů připravenosti", Fmt.signed(Double(points)), abs(points))
     }
 
+    /// The label by the readiness number only describes the body (Today audit
+    /// D1, FDA 2026: "usual range", never "normal"); its colour stays the zone's.
+    /// What to do today is the verdict's line (`verdict`).
     static func pill(_ zone: String?) -> (String, Color, Color)? {
         switch zone {
-        case "green": return ("vysoká", Palette.green, Palette.greenSoft)
-        case "yellow": return ("střední", Palette.amber, Palette.amberSoft)
-        case "red": return ("nízká", Palette.rust, Palette.rust.opacity(0.14))
+        case "green": return (L10n.tr("v obvyklém rozmezí"), Palette.green, Palette.greenSoft)
+        case "yellow": return (L10n.tr("pod obvyklým rozmezím"), Palette.amber, Palette.amberSoft)
+        case "red": return (L10n.tr("pod obvyklým rozmezím"), Palette.rust, Palette.rust.opacity(0.14))
+        default: return nil
+        }
+    }
+
+    /// The day's verdict under the number on Today, one key from the server's
+    /// list (src/day-verdict.js VERDICT_KEYS, the morning push says the same).
+    static func verdict(_ key: String?) -> String? {
+        switch key {
+        case "hard": return L10n.tr("Dobrý den na tvrdý trénink")
+        case "steady": return L10n.tr("Dnes s mírou")
+        case "easy": return L10n.tr("Dnes v klidu")
+        case "legs": return L10n.tr("Dej nohám pauzu")
+        case "no_intensity": return L10n.tr("Dnes bez intenzity")
+        case "rest": return L10n.tr("Dnes odpočinek")
         default: return nil
         }
     }

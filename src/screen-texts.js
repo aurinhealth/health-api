@@ -12,6 +12,7 @@ import { consentStatus } from "./consent.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { acwrZoneLabel } from "./workload-ratio.js";
 import { partsForAI } from "./cycle-model.js";
+import { verdictText } from "./day-verdict.js";
 import { READINESS_RULE, TRENDS_RULE, FOOD_RULE, instructions } from './private/screen-texts.js';
 
 export const SCREENS = ["today", "training", "food"];
@@ -62,6 +63,8 @@ function todayFacts(d) {
     readinessParts: partsForAI(d.readinessDetail?.parts, Boolean(d.coachCycle)),
     readinessFlags: Array.isArray(d.readiness?.flags) ? d.readiness.flags.filter(f => f !== "provisional") : [],
     checkin: d.checkin || null,
+    // The day's verdict in words (day-verdict.js): the AI may soften it, never raise it.
+    dayVerdict: verdictText(d.readiness?.verdict),
     athleteState: d.athleteState && d.athleteState !== "active" ? d.athleteState : null,
     // The cycle only as cycle-model.js cycleForCoach gives it, so only with
     // "Kouč ví o cyklu" on (the route adds it as coachCycle). Today's own
@@ -294,9 +297,10 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
     let parsed = null; try { parsed = JSON.parse(r.text); } catch { parsed = null; }
     const text = String(parsed?.text || "").trim().slice(0, 400);
     let advice = String(parsed?.advice || "").trim().slice(0, 160);
-    // A red or sick day: advice that pushes the plan or intensity gives way to the rule-based one.
-    if (holdBack(info.facts) && PUSHES.test(text)) throw new Error("pushes");
-    if (holdBack(info.facts) && PUSHES.test(advice)) advice = info.fallback?.advice || L("Dnes volno nebo jen lehký pohyb.", "Rest today or just easy movement.");
+    // A red or sick day: advice that pushes the plan or intensity gives way to
+    // the rule-based one; a yellow day: advice to keep the plan (day-verdict.js).
+    if (pushes(info.facts, text)) throw new Error("pushes");
+    if (pushes(info.facts, advice)) advice = info.fallback?.advice || L("Dnes volno nebo jen lehký pohyb.", "Rest today or just easy movement.");
     if (!text) throw new Error("empty");
     const createdAt = new Date(now).toISOString();
     await env.DB.prepare(`INSERT INTO ai_screen_texts (user_id, day, screen, lang, fingerprint, text, advice, basis_json, generations, failed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?)
@@ -321,6 +325,8 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
 const holdBack = f => (f?.readinessZone || f?.readiness?.zone) === "red" || f?.checkin === "sick" || Boolean(f?.athleteState)
   || (f?.readinessFlags || f?.readiness?.flags || []).some(x => /^(respiration|skin_temp|wrist_temp)_elevated$|^checkin_sick$/.test(x));
 const PUSHES = /drž(?:et)? se plánu|podle plánu|dodrž|interval|vo2|práh|sweet spot|stick to (?:the|your) plan|as planned|threshold/i;
+const KEEPS_PLAN = /drž(?:et)? se plánu|podle plánu|dodrž|stick to (?:the|your) plan|as planned/i;
+const pushes = (f, s) => holdBack(f) ? PUSHES.test(s) : (f?.readinessZone || f?.readiness?.zone) === "yellow" && KEEPS_PLAN.test(s);
 
 function parseBasis(json) {
   try { const v = JSON.parse(json || "{}"); return { chips: Array.isArray(v.chips) ? v.chips : [], basis: Array.isArray(v.basis) ? v.basis : [] }; }
