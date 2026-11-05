@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { rankOptions, dayChoice, doneSentence, setLess, lessKinds, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "../src/coach-pick.js";
+import { rankOptions, saunaSigns, dayChoice, doneSentence, setLess, lessKinds, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "../src/coach-pick.js";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 
@@ -15,10 +15,15 @@ test("a rested cyclist gets the ride the coach chose, the rest under Jiné možn
   assert.deepEqual(r.options.map(o => o.kind).sort(), ["gym", "rest", "ride", "run", "sauna", "swim"]);
 });
 
-test("a bad night recommends a day off with the sauna and says why", () => {
+test("a bad night recommends a day off with a walk, the sauna second at most, and says why", () => {
   const r = rankOptions({ ride: coach("red", "recovery", 30, 0, ["spánek 5,8 h z potřebných 7,5 h"]), run: coach("red", "recovery"), mainSport: "cycling", sports: ["ride"] });
   assert.equal(r.options[0].kind, "rest");
-  assert.equal(r.options[0].title, "Volno a sauna");
+  assert.equal(r.options[0].title, "Volno");
+  assert.match(r.options[0].detail, /Procházka/);
+  assert.equal(r.options[1].kind, "sauna");
+  // Declined days off still never put the sauna first on a red day.
+  const declined = rankOptions({ ride: coach("red", "recovery"), run: coach("red", "recovery"), mainSport: "cycling", sports: ["ride"], declines: [{ top: "rest" }, { top: "rest" }, { top: "rest" }] });
+  assert.equal(declined.options[0].kind, "rest");
   assert.match(r.options[0].reason, /^Spánek 5,8 h/);
   assert.equal(r.options[0].action, "accept");
 });
@@ -142,9 +147,32 @@ test("Nemoc, Zranění or Pauza leave only rest; signs of an illness drop the sa
   assert.match(sick.options[0].reason, /^Máš nastavenou Nemoc/);
   assert.deepEqual(rankOptions({ ride: coach("green"), run: coach("green"), athleteStatus: "injured" }).options.map(o => o.kind), ["rest"]);
   assert.deepEqual(rankOptions({ ride: coach("green"), run: coach("green"), athleteStatus: "on_break" }).options.map(o => o.kind), ["rest", "sauna"]);
-  const signs = rankOptions({ ride: coach("red", "recovery"), run: coach("red", "recovery"), mainSport: "cycling", sports: ["ride"], illness: true });
+  assert.deepEqual(rankOptions({ ride: coach("green"), run: coach("green"), athleteStatus: "on_break", noSauna: true }).options.map(o => o.kind), ["rest"]);
+  const signs = rankOptions({ ride: coach("red", "recovery"), run: coach("red", "recovery"), mainSport: "cycling", sports: ["ride"], noSauna: true });
   assert.ok(!signs.options.some(o => o.kind === "sauna"));
   assert.equal(signs.options[0].title, "Volno");
+  // The reason says why there is no sauna without naming a cause.
+  assert.match(signs.options[0].reason, /Sauna je taky zátěž, dnes ne\.$/);
+  assert.doesNotMatch(signs.options[0].reason, /nemoc|alkohol|zranění/i);
+  // After training the sauna is gone too.
+  const trained = rankOptions({ ride: coach("green"), run: coach("green"), mainSport: "cycling", sports: ["ride"], today: ["ride"], noSauna: true });
+  assert.ok(!trained.options.some(o => o.kind === "sauna"));
+  assert.equal(trained.options[0].kind, "rest");
+});
+
+test("the sauna dropping keeps the day's ready workouts", () => {
+  const args = { ride: coach("green"), run: coach("green"), mainSport: "cycling", sports: ["ride"] };
+  assert.equal(pickSignature(rankOptions({ ...args, noSauna: true })), pickSignature(rankOptions(args)));
+  assert.notEqual(pickSignature(rankOptions({ ...args, ride: coach("red", "recovery") })), pickSignature(rankOptions(args)));
+});
+
+test("any one warning sign of the night takes the sauna off", () => {
+  assert.equal(saunaSigns(null), false);
+  assert.equal(saunaSigns({ components: { hrv: { z: -1.5 }, restingHR: { z: 1.5 } } }), false);
+  assert.equal(saunaSigns({ components: { wristTemp: { raised: true } } }), true);
+  assert.equal(saunaSigns({ components: { skinTemp: { elevated: true } } }), true);
+  assert.equal(saunaSigns({ components: { respiration: { elevated: true } } }), true);
+  assert.equal(saunaSigns({ components: { restingHR: { z: 2 } } }), true);
 });
 
 test("a workout the athlete planned for today takes Aktivita dne like a choice", async () => {

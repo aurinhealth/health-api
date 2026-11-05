@@ -158,6 +158,13 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
 - **Statistika:** u jednoho sportovce Pearsonovo r s 95% intervalem spolehlivosti (Fisherova transformace); verdikt „podporuje“ jen když interval nepřekročí nulu, pod 10 dní „málo dat“. Přes více sportovců korelace opakovaných měření (rmcorr; Bakdash JZ, Marusich LR. Front Psychol 2017;8:456), která používá jen variabilitu uvnitř člověka: `node scripts/recovery-validation-rmcorr.mjs a.json b.json …`.
 - **Proč takhle:** výrobci své indexy nezávisle nevalidují. Whoop zveřejnil analýzu 389 profesionálních golfistů, kde složený Recovery sledoval výkon lépe než jednotlivé metriky. Tohle je náš ekvivalent na vlastních uživatelích. Doporučený další krok je smíšený model (výsledek ~ skóre centrované na osobu + zátěž + náhodný sklon pro uživatele) a srovnání s prostým z-skóre HRV, aby složený index prokázal přidanou hodnotu.
 
+### 2.9 Sauna v Aktivitě dne a v Regeneraci
+
+- **Pravidlo:** sauna je zátěž srdce a oběhu, ne odpočinek. Z nabídky zmizí při statusu Nemoc nebo Zranění, při jediném signálu z noci (zvýšená teplota zápěstí nebo kůže, zvýšený dech ve spánku), při alkoholu včera nebo dnes (zaškrtnutý v deníku, pivo či víno v pití nebo nápoj s alkoholem v jídelníčku; sportovcovo ✕ v deníku má přednost), při Nemoci zaškrtnuté v deníku včera nebo dnes a do 72 h po zranění zapsaném v deníku (`saunaSigns` v `src/coach-pick.js`, `saunaRisks` v `src/journal-store.js`). V červený den je první volba Volno s procházkou a sauna smí být nanejvýš druhá. Text důvodu nejmenuje příčinu („Sauna adds load, so not today“). Zpětná vazba kouče po tréninku dostane jen příznak `saunaOff` a saunu pak nezmíní.
+- **Klidový tep sám o sobě** (aspoň 2 obvyklé odchylky nad obvyklou hodnotou) saunu taky vyřadí. Je to opatrná volba bez přímého důkazu: sauna je zátěž oběhu a vyšší klidový tep často provází alkohol, horko nebo náročný trénink.
+- **Zdroje:** Hannuksela ML, Ellahham S. Am J Med 2001;110:118–126 (alkohol a sauna: hypotenze, arytmie). Kenttämies A, Karkola K. J Forensic Sci 2008;53:724–729 (úmrtí v sauně, asi polovina pod vlivem alkoholu). Sports Medicine Australia, „No HARM“ 48–72 h po poranění měkkých tkání (bez tepla). AOK: zátěž srdce v sauně je srovnatelná s mírným tréninkem.
+- **Limity:** jde o konzervativní pravidla, ne o hodnocení zdraví. Aurin není zdravotnický prostředek.
+
 ### 2.6 Kalorický cíl a vývoj váhy
 
 - **Výpočet:**
