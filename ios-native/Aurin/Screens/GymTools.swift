@@ -230,6 +230,8 @@ struct GymBuilderView: View {
     @State private var focusPreset = false
     @State private var muscles: Set<String> = []
     @State private var proposal: GymProposal?
+    /// The exercises "Jiný návrh" has shown since the setup last changed: the next proposal picks others.
+    @State private var shown: [String] = []
     @State private var wish = ""
     @State private var answer: String?
     @State private var busy: String?
@@ -578,7 +580,7 @@ struct GymBuilderView: View {
                 .padding(.top, 22)
                 if template == nil {
                     HStack(spacing: 10) {
-                        SecondaryButton(title: "Jiný návrh", systemImage: "arrow.clockwise") { Task { await preview() } }
+                        SecondaryButton(title: "Jiný návrh", systemImage: "arrow.clockwise") { Task { await preview(another: true) } }
                         SecondaryButton(title: "Změnit zadání", systemImage: "slider.horizontal.3") { showForm = true; proposal = nil; answer = nil }
                     }
                     .disabled(busy != nil)
@@ -722,16 +724,21 @@ struct GymBuilderView: View {
     /// The rested muscles the Odpočaté focus asks for (MuscleFatigue.restedFocus).
     private var restedIds: [String] { model.muscles?.restedFocus ?? [] }
 
-    private func preview() async {
+    /// another: "Jiný návrh", the same setup with other exercises than shown so far.
+    private func preview(another: Bool = false) async {
         await run("preview") {
             let auto = quick && !showForm && !lengthPicked
+            let current: [String] = another ? (proposal?.exercises ?? []).map { $0.name } : []
+            let avoid: [String] = another ? shown + current.filter { !shown.contains($0) } : []
             var next = try await model.api.previewGym(date: isoDay, minutes: minutes,
                                                       focus: focus == "upper" || focus == "lower" ? focus : nil,
                                                       muscles: focus == "muscles" ? BodyFigure.muscles.map { $0.id }.filter(muscles.contains)
                                                           : focus == "rested" ? restedIds : [],
-                                                      autoLength: auto, usualMinutes: auto ? GymLength.usual : nil)
+                                                      autoLength: auto, usualMinutes: auto ? GymLength.usual : nil,
+                                                      avoidExercises: avoid)
             next.groupSupersets()
             if auto, let settled = next.minutes { minutes = settled }
+            shown = avoid
             proposal = next
             answer = nil
             wish = ""
