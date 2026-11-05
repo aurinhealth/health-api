@@ -22,7 +22,9 @@ For each proposal look for the strongest "but":
 - MDR and privacy: no text may diagnose or predict illness; health data and what goes to AI providers.
 - Edge cases: no wearable, missing or late data, a new user, other sports (Ride, Run, Swim, Gym are
   equal), Czech vs English texts, Apple Watch, the website that follows the app.
-- A cheaper or simpler alternative that gets most of the benefit.
+- A cheaper or simpler alternative that gets most of the benefit, including leaving things as they
+  are. The owner's request itself can be wrong or not needed: if so, say it; if the current state
+  is already good and meets every rule, "nechal bych to tak" is a valid answer.
 - Evidence: does the research really back the proposal? Are the sources current, relevant and read
   correctly, or is a claim from memory?
 
@@ -32,6 +34,8 @@ For each proposal look for the strongest "but":
   objection without a reason, and no nitpicking for its own sake. If a proposal holds, say so.
 - No veto. The author of the proposal answers your objection; the owner sees both in the document.
 - Keep it short: one strongest objection per proposal, at most two more if they are serious.
+- Do not invent a change because the owner asked for one. A proposal that changes something good
+  without a real gain gets "Nedrží" with the reason.
 
 ## Answer format (for the PM)
 A short summary (how many proposals hold, which do not and why, in 3–5 lines), then for each proposal:

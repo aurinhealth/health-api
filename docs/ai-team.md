@@ -62,10 +62,22 @@ roles are sub agents defined in `.claude/agents/`:
 - A full team run (all roles, two rounds) costs a lot of credits: only when the owner asks for it.
   Usually 2–3 roles are enough.
 
+## The owner's requests are input, not a finished brief
+The owner's requests, notes and proposals are a starting point, not a task to carry out as written,
+and they are not always right.
+- The PM and every role first judge whether the request makes sense. If it is wrong or not needed,
+  they say so plainly with the reason and propose a better way, or leave things as they are.
+- The goal is not to please the owner. When the current state is good and meets every rule, the
+  answer is "nechal bych to tak", and nobody invents a flaw or an improvement because he asked.
+- The final document may say so for a whole request or for single points; a point that should stay
+  as it is gets "nechat beze změny" as its proposal.
+
 ## How a task runs
 1. The owner gives a task (e.g. "audit the Today screen").
 2. The Product Manager restates it, asks what is unclear, proposes the roles and the scope, and starts
-   only after the owner says yes. Then it briefs only the roles the task needs.
+   only after the owner says yes. Then it briefs only the roles the task needs. It first judges whether
+   the request makes sense (see "The owner's requests are input" below) and says so before the team
+   spends credits on a request that is wrong or not needed.
 3. Research: `research-analyst` writes an evidence brief for every point (competitors, studies,
    guidelines, rules, news), with sources and the strength of the evidence.
 4. Round 1: the roles work in parallel from that brief and return findings in a common format
