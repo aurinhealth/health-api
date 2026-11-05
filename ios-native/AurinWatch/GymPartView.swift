@@ -309,6 +309,7 @@ struct GymPartView: View {
         .frame(width: 66, height: 66)
     }
 
+    /// Start or Stop the cardio, Next in the warm-up: one per screen, so Double Tap too.
     private func primary(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
@@ -318,6 +319,7 @@ struct GymPartView: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .doubleTap()
     }
 
     private func secondary(_ title: String, action: @escaping () -> Void) -> some View {

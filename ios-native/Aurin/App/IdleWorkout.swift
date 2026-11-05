@@ -21,8 +21,9 @@ enum IdleWorkout {
 
     static var category: UNNotificationCategory {
         UNNotificationCategory(identifier: categoryID, actions: [
-            UNNotificationAction(identifier: endAction, title: L10n.tr("Ukončit trénink"), options: [.foreground]),
-            UNNotificationAction(identifier: keepAction, title: L10n.tr("Ještě cvičím"), options: [])
+            // Keep going first: Double Tap on Apple Watch runs the first action, and must not end a workout.
+            UNNotificationAction(identifier: keepAction, title: L10n.tr("Ještě cvičím"), options: []),
+            UNNotificationAction(identifier: endAction, title: L10n.tr("Ukončit trénink"), options: [.foreground])
         ], intentIdentifiers: [], options: [])
     }
 
