@@ -75,15 +75,28 @@ export function readinessWeek({ date, readiness, sessions = [], profile = null }
   });
 }
 
-export function strainTarget({ readiness = null, zone = null, planned = null, debt = 0, rest = false } = {}) {
+// Without a plan (Today audit D3) the readiness sets it, never above the
+// usual day: the high end at most the 80th percentile of the last 28 days'
+// strain (usualStrain), or 12 until 14 of those days have a strain. Only with
+// a plan is a day with nothing planned or done a rest day.
+export function strainTarget({ readiness = null, zone = null, planned = null, debt = 0, rest = false, noPlan = false, usual = null } = {}) {
   let mid = readiness != null ? 4 + 0.12 * readiness : 10;
   if (planned > 0) mid = (mid + planned) / 2;
   // A day with nothing planned or done is a rest day: walking, light movement.
   else if (rest) mid = Math.min(mid, 6.5);
+  else if (noPlan) mid = Math.min(mid, (usual ?? 12) - 1.5);
   mid -= Math.min(2, (Number(debt) || 0) / 30 * 0.5);
   if (zone === "red") mid = Math.min(mid, 6); else if (zone === "yellow") mid = Math.min(mid, 12);
   const r1 = v => Math.round(v * 10) / 10;
   return { low: r1(Math.max(1, mid - 1.5)), high: r1(Math.min(20, mid + 1.5)) };
+}
+
+// The usual day's strain: the 80th percentile of the last 28 days with a
+// strain from heart-rate zones (dayStrain), null with fewer than 14 such days.
+export function usualStrain(rows, date) {
+  const days = Array.from({ length: 28 }, (_, i) => dayStrain(rows, shift(date, -(i + 1)))).filter(v => v != null).sort((a, b) => a - b);
+  if (days.length < 14) return null;
+  return Math.round(days[Math.floor(0.8 * (days.length - 1))] * 10) / 10;
 }
 
 // Planned training on the same 0–21 scale, from TSS (as the web dashboard).
@@ -210,6 +223,10 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
   const debtNow = weekSleepDebt(sessions, date, { age, goal: sleepSet.goal });
 
   const planned = Array.isArray(training.planned) ? training.planned : [];
+  // A plan exists (Today audit D3): an Aurin training plan, today's gym plan or
+  // sessions planned today, yesterday or tomorrow; then an empty today is a rest day.
+  const hasPlan = !!trainingPlan || !!gym || planned.length > 0 || [recovery?.yesterday, recovery?.tomorrow].some(d => Array.isArray(d?.planned) && d.planned.length > 0);
+  const usualDay = usualStrain(google, date);
   const plannedTss = planned.reduce((s, w) => s + (num(w.tss) || 0), 0);
 
   // Food and drink.
@@ -351,7 +368,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     } : null,
     // The day's naps for Dnes → Den: each sleep that began today after the night.
     naps: napsOn(sessions, date, night),
-    strain: { score: strainNow, training: strainParts.training, movement: strainParts.movement, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: !daySession.length }), rest: !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || null } },
+    strain: { score: strainNow, training: strainParts.training, movement: strainParts.movement, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: hasPlan && !daySession.length, noPlan: !hasPlan && !daySession.length, usual: usualDay }), rest: hasPlan && !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || (hasPlan || daySession.length ? null : usualDay != null ? L("bez plánu · ne nad obvyklý objem", "no plan · not above your usual volume") : L("bez plánu", "no plan")) } },
     // metric: "rmssd" or "sdnn" when the source said how it measures (Apple Health), else null.
     // Today's HRV shows even before its source has the 14 days a baseline needs.
     hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") }

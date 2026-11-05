@@ -296,6 +296,33 @@ test("the day's strain target follows readiness, the plan, sleep debt and the zo
   assert.equal(t.strain.target.plan, "Silový trénink");
 });
 
+test("without a plan the strain target follows readiness under the usual day, never a rest day (D3)", async () => {
+  const { strainTarget, usualStrain } = await import("../src/app-today.js");
+  // Without a plan and nothing today: no rest-day cap, the usual day caps the high end.
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", noPlan: true, usual: 13 }), { low: 10, high: 13 });
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", noPlan: true, usual: 16 }), { low: 11.1, high: 14.1 });
+  // A new athlete without 14 days: at most 12.
+  assert.deepEqual(strainTarget({ readiness: 90, zone: "green", noPlan: true }), { low: 9, high: 12 });
+  assert.ok(strainTarget({ readiness: 25, zone: "red", noPlan: true, usual: 15 }).high <= 7.5);
+  // The usual day: the 80th percentile of the last 28 days with a strain, null under 14.
+  const zones = minutes => ({ light: minutes, moderate: minutes / 4 });
+  const day = (i, minutes) => ({ id: new Date(Date.parse("2026-10-14T12:00:00Z") - i * 86400000).toISOString().slice(0, 10), hrZoneMinutes: zones(minutes) });
+  assert.equal(usualStrain(Array.from({ length: 10 }, (_, i) => day(i + 1, 60)), "2026-10-14"), null);
+  const rows = Array.from({ length: 28 }, (_, i) => day(i + 1, 20 + i * 5));
+  const usual = usualStrain(rows, "2026-10-14");
+  assert.ok(usual > 0 && usual < 21);
+  // Today's own row never counts.
+  assert.equal(usualStrain([...rows, day(0, 600)], "2026-10-14"), usual);
+
+  // On Today: no plan anywhere is no rest day, and the plan row says why the target stops.
+  const free = buildToday({ ...input, gym: null, trainingPlan: null, recovery: null, daily: { ...input.daily, training: { planned: [], matched: [], completed: [] } } });
+  assert.equal(free.strain.target.rest, false);
+  assert.match(free.strain.target.plan, /^bez plánu/);
+  const planned = buildToday({ ...input, gym: null, trainingPlan: null, recovery: { tomorrow: { planned: [{ name: "Intervaly" }] } }, daily: { ...input.daily, training: { planned: [], matched: [], completed: [] } } });
+  assert.equal(planned.strain.target.rest, true);
+  assert.equal(planned.strain.target.plan, null);
+});
+
 test("the week strip: Monday to Sunday of the day's week, the day's own zone, no zone after it", async () => {
   const { readinessWeek } = await import("../src/app-today.js");
   const week = readinessWeek({ date: "2026-10-14", readiness: { score: 72, zone: "green", rows: [] } });
