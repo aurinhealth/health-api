@@ -223,7 +223,7 @@ struct PaywallView: View {
                 AurinProTitle(size: 34)
             }
             .padding(.top, 2)
-            clock { time in ScreenCarousel(time: time) }
+            carouselClock { time in ScreenCarousel(time: time) }
                 .frame(maxHeight: .infinity)
             if withTrial {
                 Text(verbatim: L10n.tr(chosen.kind == .monthly ? "VYZKOUŠEJ 7 DNÍ ZDARMA" : "12MĚSÍČNÍ TARIF · VYZKOUŠEJ 7 DNÍ ZDARMA"))
@@ -383,6 +383,17 @@ struct PaywallView: View {
             content(PaywallIntro.length)
         } else {
             TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in content(context.date.timeIntervalSince(started)) }
+        }
+    }
+
+    /// The carousel's clock: like `clock`, but with Reduce Motion it still ticks
+    /// twice a second, so the phones move on as a fade without any sliding.
+    @ViewBuilder
+    private func carouselClock<V: View>(@ViewBuilder _ content: @escaping (Double) -> V) -> some View {
+        if reduceMotion, frozenTime == nil {
+            TimelineView(.periodic(from: .now, by: 0.5)) { context in content(context.date.timeIntervalSince(started)) }
+        } else {
+            clock(content)
         }
     }
 
@@ -606,16 +617,18 @@ struct ProPlanSample: View {
 }
 
 /// The offer's phones: the middle one large, its neighbours dimmed beside
-/// it; they move on by themselves every 2.5 s and can be swiped.
+/// it; they move on by themselves every 2.5 s and can be swiped. A swipe
+/// shows the next phone and the carousel moves on from there.
 struct ScreenCarousel: View {
     let time: Double
     static let screens: [ProScreen] = ProScreen.allCases
-    @State private var chosen: Int?
+    static let interval = 2.5
+    /// The phone shown at `shownAt`; the carousel counts on from it.
+    @State private var start = 0
     @State private var shownAt: Double = 0
 
     var body: some View {
-        let automatic = Int(time / 2.5) % Self.screens.count
-        let index = chosen ?? automatic
+        let index = (start + Int(max(0, time - shownAt) / Self.interval)) % Self.screens.count
         let screen = Self.screens[index]
         VStack(spacing: 10) {
             GeometryReader { geo in
@@ -635,9 +648,12 @@ struct ScreenCarousel: View {
                 .animation(.easeInOut(duration: 0.5), value: index)
             }
             .padding(.top, 10)
+            // The phones themselves take no touches (PhoneMockup), so the swipe needs its own area.
+            .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 20).onEnded { value in
                 let step = value.translation.width < 0 ? 1 : -1
-                chosen = (index + step + Self.screens.count) % Self.screens.count
+                start = (index + step + Self.screens.count) % Self.screens.count
+                shownAt = time
             })
             VStack(spacing: 3) {
                 Text(verbatim: screen.title).font(Typo.sentence(19)).foregroundStyle(Night.ink)
