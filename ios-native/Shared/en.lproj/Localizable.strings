@@ -1773,6 +1773,17 @@
 "menstruace se čeká" = "period expected";
 "prášek z %@" = "pill of %@";
 "Čas na prášek" = "Time for your pill";
+"Už máš dnešní prášek?" = "Did you take your pill?";
+"Ještě není zapsaný." = "Not logged yet.";
+"Ještě není zapsaný. Obvykle ho bereš kolem %@." = "Not logged yet. You usually take it at %@.";
+"Prášek ještě není zapsaný" = "Pill not logged yet";
+"obvykle ho bereš kolem %@" = "you usually take it at %@";
+"Vynechaný prášek" = "Missed pill";
+"Zeptat se, když chybí záznam" = "Ask if not logged";
+"Obvyklý čas" = "Usual time";
+"po 3 záznamech" = "after 3 logs";
+"jen vynechaný" = "missed only";
+"Hodinu po čase, kdy prášek obvykle zapisuješ (nebo po připomínce, je-li později), jen když dnešní ještě chybí." = "An hour after the time you usually log it (or after the reminder, if later), only when today's pill isn't logged.";
 "Žádná" = "None";
 "vrátit" = "undo";
 "nastavit" = "set";

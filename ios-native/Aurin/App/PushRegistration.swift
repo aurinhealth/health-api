@@ -122,7 +122,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         guard Reminders.isPill(content.categoryIdentifier) else { return }
         let date = content.userInfo["date"] as? String ?? AppModel.localDate(Date())
         if Reminders.isPillTaken(response.actionIdentifier) {
-            _ = try? await api.saveCycleDay(["date": .string(date), "pill": .string(AppModel.clockNow())])
+            if (try? await api.saveCycleDay(["date": .string(date), "pill": .string(AppModel.clockNow())])) != nil {
+                await Reminders.pillLogged(date: date)
+            }
         } else if Reminders.isPillSnooze(response.actionIdentifier) {
             await Reminders.snoozePill(date: date, title: content.title, body: content.body)
         }
