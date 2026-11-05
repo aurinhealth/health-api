@@ -26,6 +26,20 @@ final class GymSwapTests: XCTestCase {
         XCTAssertEqual(sets.filter(\.drop).map(\.plannedKg), ["38", "30.5"])
     }
 
+    func testWarmUpsRampUpToTheNewWeight() {
+        // Petr 2026-11-05: after a swap the three warm-ups showed 8, 5, 3 reps but no kg.
+        var d = day([row("WARMUP", "Chest flat press Prime", "1", "15"), row("WARMUP", "Chest flat press Prime", "2", "22,5"),
+                     row("WARMUP", "Chest flat press Prime", "3", "27,5"), row("WORK", "Chest flat press Prime", "1", "35")])
+        d.replace(exercise: "Chest flat press Prime", with: "Barbell bench press", kg: "62.5")
+        let sets = d.exercises[0].sets
+        XCTAssertEqual(sets.filter(\.warmup).map(\.plannedKg), ["25", "40", "50"])
+        XCTAssertEqual(sets.filter(\.work).map(\.plannedKg), ["62.5"])
+        // A later exercise's single warm-up: 65 %.
+        var e = day([row("WARMUP", "Lat pulldown", "1", "30"), row("WORK", "Lat pulldown", "1", "45")])
+        e.replace(exercise: "Lat pulldown", with: "Barbell row", kg: "50")
+        XCTAssertEqual(e.exercises[0].sets.filter(\.warmup).map(\.plannedKg), ["32,5"])
+    }
+
     func testWithoutAnEstimateTheWeightsAreEmpty() {
         var d = day([row("WORK", "Cable fly", "1", "20"), row("DROP", "Cable fly", "1", "16")])
         d.replace(exercise: "Cable fly", with: "Machine chest press")
