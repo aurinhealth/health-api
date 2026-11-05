@@ -187,7 +187,7 @@ struct SubscriptionView: View {
         return ProPageState(hasPro: hasPro, unlocked: hasPro || status?.aiAccess == true, pilot: status?.pilot == true,
                             renewal: renewal(status), freeWeek: store.freeWeek, firstPayment: firstPayment,
                             payments: store.payments, allowance: status?.coachAllowance,
-                            packsOnSale: status?.checkoutAvailable == true,
+                            packsOnSale: status?.packsBuyable == true,
                             loaded: status != nil, trial: store.trialEligible)
     }
 

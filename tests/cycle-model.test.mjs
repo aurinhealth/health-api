@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cycleState, cycleLength, periodStarts, askPeriodToday, cycleTrainingCaution, cycleMonth, markCyclePhases, normalizeCycleSettings, pillState } from "../src/cycle-model.js";
+import { cycleState, cycleLength, periodStarts, askPeriodToday, cycleTrainingCaution, cycleMonth, markCyclePhases, normalizeCycleSettings, pillState, usualPillTime } from "../src/cycle-model.js";
 import { recoveryReadiness, lutealOffset } from "../src/recovery-model.js";
 
 const bleed = (start, n = 4, flow = 2) => Array.from({ length: n }, (_, i) => ({ date: new Date(Date.parse(start + "T12:00:00Z") + i * 86400000).toISOString().slice(0, 10), flow }));
@@ -52,10 +52,24 @@ test("hormonal contraception has no phases, ovulation or forecast", () => {
   assert.equal(st.phase, undefined);
   assert.equal(st.next, undefined);
   assert.equal(st.daysSinceBleeding, 8);
-  assert.deepEqual(st.pill, { pack: "21+7", number: 7, of: 21, pause: false, pauseDay: null, taken: null, packTaken: [false, false, false, false, false, false, false] });
+  assert.deepEqual(st.pill, { pack: "21+7", number: 7, of: 21, pause: false, pauseDay: null, taken: null, packTaken: [false, false, false, false, false, false, false], usual: null });
   assert.equal(askPeriodToday(st), false);
   // A copper IUD leaves the natural cycle.
   assert.equal(cycleState({ settings: on({ contraception: "copper_iud" }), days: bleed("2026-10-03"), date: "2026-10-12" }).phase, "follicular");
+});
+
+test("the usual pill time is the median of the last 14 days, from 3 logged times", () => {
+  const days = (...pairs) => new Map(pairs.map(([date, pill]) => [date, { date, pill }]));
+  // Two times are not enough; "taken" (a day filled in later) has no time.
+  assert.equal(usualPillTime("2026-11-05", days(["2026-11-04", "20:00"], ["2026-11-03", "20:10"], ["2026-11-02", "taken"])), null);
+  assert.equal(usualPillTime("2026-11-05", days(["2026-11-04", "20:00"], ["2026-11-03", "20:10"], ["2026-11-02", "19:40"], ["2026-11-01", "21:00"])), "20:05");
+  // Around midnight: 23:50, 00:10 and 00:20 are late evenings, not mornings.
+  assert.equal(usualPillTime("2026-11-05", days(["2026-11-04", "23:50"], ["2026-11-03", "00:10"], ["2026-11-02", "00:20"])), "00:10");
+  // Today's own time and days over 14 days back don't count.
+  assert.equal(usualPillTime("2026-11-05", days(["2026-11-05", "08:00"], ["2026-10-20", "08:00"], ["2026-11-04", "20:00"], ["2026-11-03", "20:00"])), null);
+  // The missed-pill question is on unless turned off.
+  assert.equal(normalizeCycleSettings({}).pillMissed, true);
+  assert.equal(normalizeCycleSettings({ pillMissed: false }).pillMissed, false);
 });
 
 test("the pill pack counts pills and pause days", () => {

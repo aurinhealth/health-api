@@ -228,6 +228,68 @@ struct PillCard: View {
     }
 }
 
+/// Today, an hour after the usual time with today's pill not logged (the same
+/// question as the notification, Reminders.asksMissedPill): Vzato logs it,
+/// Za 30 minut hides the card and asks again by a notification in 30 minutes.
+struct MissedPillCard: View {
+    @Environment(AppModel.self) private var model
+    let pill: PillDay?
+    let date: String
+    @State private var saving = false
+    @AppStorage("cycle.pill.snoozedUntil") private var snoozedUntil: Double = 0
+
+    var body: some View {
+        // Checked again every minute while Today stays open.
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            if let pill, let number = pill.number, let usual = pill.usual,
+               context.date.timeIntervalSince1970 >= snoozedUntil, Reminders.asksMissedPill(pill, now: context.date) {
+                Card {
+                    WidgetHeader(title: "Cyklus", color: Palette.pink)
+                    Text("Prášek ještě není zapsaný").font(Typo.sentence(20)).foregroundStyle(Palette.ink)
+                    Text(verbatim: L10n.f("%@. prášek z %@", String(number), String(pill.of)) + " · " + L10n.f("obvykle ho bereš kolem %@", ClockText.format(usual)))
+                        .font(Typo.caption).foregroundStyle(Palette.muted)
+                    HStack(spacing: 10) {
+                        Button { take() } label: {
+                            Text("Vzato").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                                .frame(maxWidth: .infinity).frame(height: 42).background(Palette.button, in: Capsule())
+                        }
+                        .disabled(saving)
+                        Button { snooze() } label: {
+                            Text("Za 30 minut").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                                .frame(maxWidth: .infinity).frame(height: 42)
+                                .overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
+                }
+                .padding(.top, 12)
+            }
+        }
+    }
+
+    private func take() {
+        saving = true
+        Task {
+            do {
+                try await model.takePill(on: date)
+            } catch {
+                model.notice = error.localizedDescription
+            }
+            saving = false
+        }
+    }
+
+    private func snooze() {
+        snoozedUntil = Date().addingTimeInterval(30 * 60).timeIntervalSince1970
+        guard let pill, let number = pill.number else { return }
+        Task {
+            await Reminders.snoozePill(date: date, title: L10n.tr("Už máš dnešní prášek?"),
+                                       body: PushRegistration.hideValuesOn ? L10n.tr("Ještě není zapsaný.") : L10n.f("%@. prášek z %@", String(number), String(pill.of)))
+        }
+    }
+}
+
 /// "Vzato" until the pill is taken, then "Vzato 21:04" in green.
 struct PillButton: View {
     let taken: String?
@@ -911,7 +973,8 @@ struct LengthChoiceSheet: View {
 
 // MARK: - Settings → Oznámení → Antikoncepce
 
-/// The pill reminder: the time, the pack and the pause.
+/// The pill reminder: the time, the pack and the pause, and the question when
+/// today's pill isn't logged.
 struct PillReminderView: View {
     @Environment(AppModel.self) private var model
     @State private var time = Date()
@@ -961,6 +1024,18 @@ struct PillReminderView: View {
                 .buttonStyle(.plain)
                 SettingsDivider()
                 SettingsToggle(title: "Připomínat i v pauze", isOn: Binding(get: { settings?.pillReminderInPause == true }, set: { save(["pillReminderInPause": .bool($0)]) }))
+            }
+
+            // An hour after the usual time, only when today's pill isn't logged.
+            SettingsGroup(title: "Vynechaný prášek", footer: "Hodinu po čase, kdy prášek obvykle zapisuješ (nebo po připomínce, je-li později), jen když dnešní ještě chybí.") {
+                SettingsToggle(title: "Zeptat se, když chybí záznam", isOn: Binding(get: { settings?.pillMissed ?? true }, set: { on in
+                    Task {
+                        if on { _ = await Reminders.requestPermission() }
+                        save(["pillMissed": .bool(on)])
+                    }
+                }))
+                SettingsDivider()
+                SettingsRow(title: "Obvyklý čas", value: model.cycle?.state?.pill?.usual.map { ClockText.format($0) } ?? L10n.tr("po 3 záznamech"), chevron: false)
             }
         }
         .sheet(isPresented: $choosingPack) {

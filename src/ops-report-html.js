@@ -28,7 +28,10 @@ const ROUTE_NAMES = {
   "GET /app/api/food-today": "Jídlo dnes", "GET /app/api/gym": "Posilovna", "POST /app/api/gym": "Uložení série", "GET /app/api/health": "Zdraví",
   "GET /app/api/week": "Týden", "POST /app/api/food/log": "Zápis jídla", "POST /app/api/food/search": "Hledání jídla",
   "POST /app/api/onboarding": "Úvodní nastavení", "POST /app/api/planned/delete": "Smazání plánu", "POST /app/api/workouts/schedule": "Naplánování tréninku",
-  "POST /app/api/calendar-free": "Volný čas v kalendáři", "POST /app/api/coach": "Chat s koučem"
+  "POST /app/api/calendar-free": "Volný čas v kalendáři", "POST /app/api/coach": "Chat s koučem",
+  "POST /app/api/food/ai-lookup": "Dohledání jídla na webu", "GET /app/api/cycle": "Cyklus", "POST /app/api/coach/week": "Plán týdne od kouče",
+  "POST /app/api/workouts/generate": "Vygenerování tréninku", "GET /app/api/daily": "Den", "GET /app/api/onboarding": "Úvodní nastavení",
+  "POST /app/api/athlete-state": "Stav sportovce"
 };
 export const routeLabel = service => ROUTE_NAMES[service] || (String(service).startsWith("cron ") ? `Úloha na pozadí: ${String(service).slice(5)}` : String(service));
 
@@ -96,7 +99,9 @@ export function opsReportHtml({ date, rows = [], room = null, stuck = null, acco
     const top = Math.min(100, Math.max(0, ...ai.named.map(m => m.share || 0)));
     const bar = ai.limit && ai.named.length ? `<div style="height:8px;background:#e4e4e7;border-radius:4px;margin:6px 0 0"><div style="width:${top}%;height:8px;background:${top >= 80 ? "#ef4444" : top >= 50 ? "#f59e0b" : "#22c55e"};border-radius:4px"></div></div>` : "";
     parts.push(heading(`AI včera: ${money(ai.total)} · ${ai.calls} dotazů${ai.cachedShare != null ? ` · ${ai.cachedShare} % vstupu z cache` : ""}`, near.length ? "orange" : "green")
-      + table(null, body) + `<p style="margin:10px 0 0;font-size:14px">Za měsíc${ai.limit ? ` (strop ${escape(usd(ai.limit))} na účet)` : ""}: ${escape(monthLine)}</p>` + bar);
+      + table(null, body) + `<p style="margin:10px 0 0;font-size:14px">Za měsíc${ai.limit ? ` (strop ${escape(usd(ai.limit))} na účet)` : ""}: ${escape(monthLine)}</p>` + bar
+      + ((ai.prices || []).length ? `<p style="margin:14px 0 4px;font-size:14px">Cena jednoho dotazu podle skupiny (průměr · p95)</p>`
+        + table(null, ai.prices.map(p => rowHtml([cell(escape(p.name)), cell(escape(`${money(p.average)} · ${money(p.p95)}`), { align: "right", nowrap: true, pad: "7px 0 7px 12px" }), cell(escape(`${p.calls}×`), { align: "right", muted: true, pad: "7px 0 7px 12px" })]))) : ""));
   } else if (aiLines) parts.push(heading("AI", null) + aiLines.split("\n").filter(Boolean).map(line => paragraph(line.replace(/^- /, "• "))).join(""));
 
   if (accounts) {

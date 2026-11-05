@@ -3,7 +3,7 @@
 export const themeTokens = `
 :root{color-scheme:light;
   /* Surfaces and text. */
-  --bg:#F3EFE8;--panel:#FBFAF7;--panel2:#EAE5DC;--text:#1B1A17;--sec:#3B3832;--muted:#6D6A63;
+  --bg:#F3EFE8;--panel:#FBFAF7;--panel2:#EAE5DC;--text:#1B1A17;--sec:#3B3832;--muted:#69665F;
   --line:rgba(27,26,23,.09);--track:rgba(27,26,23,.08);
   /* App hues: readiness green, strain amber, coach indigo, macros. */
   --green:#1F6B52;--green-soft:#D3EADF;--amber:#A35A12;--amber-bar:#C4782A;--amber-soft:#F3E1C6;--sand:#E6D3B5;--brown:#8A6D3B;
