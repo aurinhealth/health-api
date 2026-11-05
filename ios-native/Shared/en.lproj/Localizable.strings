@@ -1379,6 +1379,8 @@
 "jízdy a trénink na trenažeru" = "rides and indoor training";
 "přes Intervals" = "via Intervals";
 "propojeno" = "connected";
+"propojeno, data starší než 12 h" = "connected, data over 12 hours old";
+"poslední noc dorazila" = "last night arrived";
 "spánek, tréninky, srdce, pohyb" = "sleep, workouts, heart, movement";
 "tréninky, plán, zóny" = "workouts, plan, zones";
 "spánek, tep, kroky" = "sleep, heart rate, steps";

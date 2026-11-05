@@ -180,6 +180,11 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
         var nextTime: String?
     }
 
+    /// Today without last night yet (no sleep, no readiness, not a new
+    /// athlete's first days): the HRV and resting HR it has are not this
+    /// morning's, so they show "–" (Today audit 20).
+    var awaitingNight: Bool { readiness == nil && learningDays == nil && (sleep?.minutes ?? 0) <= 0 }
+
     func encoded() -> Data? {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .secondsSince1970

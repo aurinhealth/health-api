@@ -8,16 +8,17 @@ import SwiftUI
 ///
 /// Before today's numbers come (review 2026-11-02, point 6) it shows the last
 /// day it has, greyed: "Getting today…" while the watch fetches them, "No
-/// connection" only when that failed, and "Waiting for last night's sleep"
-/// when today came without the night.
+/// connection" only when that failed. Today without the night says "Waiting
+/// for last night" with "–" for readiness, sleep and HRV (Today audit 20).
 struct ReadinessHome: View {
     let s: WatchSnapshot
     /// Always On (wrist down): the morning's numbers hide (Today audit 17).
     @Environment(\.isLuminanceReduced) private var dimmed
-    /// Why `s` is not today's numbers; nil when it is.
+    /// Why `s` is not this morning's numbers; nil when it is.
     var stale: Stale? = nil
-    /// Today's snapshot while the night is awaited (its next workout).
-    var today: WatchSnapshot? = nil
+
+    /// `s` is an older day's (greyed, its details closed).
+    private var older: Bool { stale == .loading || stale == .failed }
 
     enum Page: Hashable {
         case why, sleep, restingHR, hrv, strain, alarm, coach
@@ -28,7 +29,7 @@ struct ReadinessHome: View {
         case loading
         /// Neither the iPhone nor the server gave today.
         case failed
-        /// Today came without last night's sleep (the wearable has not synced yet).
+        /// Today came without last night (the wearable has not synced it yet).
         case night
     }
 
@@ -46,14 +47,14 @@ struct ReadinessHome: View {
                     .minimumScaleFactor(0.8)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 2)
-            } else if stale != nil {
+            } else if older {
                 Text(dayLabel)
                     .watchFont(12, .medium)
                     .foregroundStyle(W.secondary)
                     .padding(.top, 2)
             }
-            gauges.padding(.top, stale == nil ? 6 : 3)
-                .disabled(stale != nil)
+            gauges.padding(.top, older ? 3 : 6)
+                .disabled(older)
             if let race = todayRace {
                 // Race day: the race opens its legs (RaceDetail).
                 NavigationLink(value: race) {
@@ -125,7 +126,7 @@ struct ReadinessHome: View {
             } else {
                 Text(dimmed ? "––" : s.readiness.map { String($0) } ?? "–")
                     .font(W.serif(52))
-                    .foregroundStyle(stale == nil ? W.ink : W.muted)
+                    .foregroundStyle(older ? W.muted : W.ink)
                     .lineLimit(1)
             }
             VStack(alignment: .leading, spacing: 4) {
@@ -142,7 +143,7 @@ struct ReadinessHome: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
                         .background(pill.color.opacity(0.16), in: Capsule())
-                        .opacity(stale == nil ? 1 : 0.45)
+                        .opacity(older ? 0.45 : 1)
                 }
             }
         }
@@ -155,7 +156,7 @@ struct ReadinessHome: View {
         if dimmed { return W.tr("Zvedni zápěstí", "Raise your wrist") }
         return switch stale {
         case .loading: W.tr("Načítám dnešek…", "Getting today…")
-        case .night: W.tr("Čekám na spánek z noci", "Waiting for last night's sleep")
+        case .night: W.tr("Čekám na poslední noc", "Waiting for last night")
         case .failed, nil: W.tr("Připravenost", "Readiness")
         }
     }
@@ -201,8 +202,8 @@ struct ReadinessHome: View {
     /// Today's race not yet done, in place of the next workout ("Duatlon · 9:00").
     private var todayRace: RaceDay? {
         // As todayLine: an older day's plan is not today's.
-        guard let day = stale == nil ? s : today else { return nil }
-        return RaceDay((day.week ?? []).filter { $0.date == day.date && !$0.done })
+        guard !older else { return nil }
+        return RaceDay((s.week ?? []).filter { $0.date == s.date && !$0.done })
     }
 
     private func todayRow(text: String, symbol: String) -> some View {
@@ -221,8 +222,7 @@ struct ReadinessHome: View {
     /// length once though the plan's title may already end with it.
     private var todayLine: (text: String, symbol: String, session: WatchSnapshot.Session)? {
         // An older day's plan is not today's: only today's snapshot tells it.
-        guard let day = stale == nil ? s : today,
-              let next = (day.week ?? []).first(where: { $0.date == day.date && !$0.done }) else { return nil }
+        guard !older, let next = (s.week ?? []).first(where: { $0.date == s.date && !$0.done }) else { return nil }
         var text = next.name
         if let minutes = next.minutes { text += " · \(minutes)′" }
         if let time = next.time { text += W.tr(" v ", " at ") + time }
@@ -259,8 +259,8 @@ struct ReadinessHome: View {
         // Three narrow columns: they grow with the text size only so far.
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
         // An older day's numbers, greyed (point 6).
-        .saturation(stale == nil ? 1 : 0)
-        .opacity(stale == nil ? 1 : 0.55)
+        .saturation(older ? 0 : 1)
+        .opacity(older ? 0.55 : 1)
         .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
     }
 
@@ -327,9 +327,11 @@ struct ReadinessHome: View {
         return g
     }
 
+    /// Only this morning's: before the night comes the HRV is the night before's.
     private var hrv: Gauge {
-        var g = Gauge(page: .hrv, title: "HRV", value: s.hrv?.value.map { W.number($0) } ?? "–", unit: "ms", color: W.green)
-        guard let value = s.hrv?.value, let low = s.hrv?.low, let high = s.hrv?.high, high > low else { return g }
+        let value = s.awaitingNight ? nil : s.hrv?.value
+        var g = Gauge(page: .hrv, title: "HRV", value: value.map { W.number($0) } ?? "–", unit: "ms", color: W.green)
+        guard let value, let low = s.hrv?.low, let high = s.hrv?.high, high > low else { return g }
         g.bar = (value, low, high)
         switch WatchRangeBar.side(value, low, high) {
         case 1: g.note = W.tr("nad", "above")
