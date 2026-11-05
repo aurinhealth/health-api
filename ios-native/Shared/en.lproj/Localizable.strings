@@ -481,6 +481,7 @@
 "Přední stehna" = "Quads";
 "Předvolba" = "Preset";
 "Přeskočit" = "Skip";
+"Krok %lld z %lld" = "Step %lld of %lld";
 "Přeskočit pauzu" = "Skip rest";
 "Přesunout %@ na %@" = "Move %@ to %@";
 "Přesunout na jiný den" = "Move to another day";
