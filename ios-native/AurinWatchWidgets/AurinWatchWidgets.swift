@@ -434,6 +434,13 @@ struct SmallView: View {
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
+        // One sentence for VoiceOver ("Readiness 72"), not the ring's pieces (watch audit G1).
+        content
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(value.line)
+    }
+
+    @ViewBuilder private var content: some View {
         switch family {
         case .accessoryInline:
             Label(inlineLine, systemImage: value.symbol)
@@ -761,6 +768,8 @@ struct WideView: View {
                 .overlay(alignment: .leading) {
                     if index > 0 { Rectangle().fill(Color.white.opacity(0.14)).frame(width: 1) }
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(v.line)
             }
         }
     }

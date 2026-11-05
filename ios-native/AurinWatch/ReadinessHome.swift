@@ -34,6 +34,10 @@ struct ReadinessHome: View {
         VStack(alignment: .leading, spacing: 0) {
             NavigationLink(value: Page.why) { hero }
                 .buttonStyle(.plain)
+                // One element, not "66", "Readiness", "moderate" (watch audit G1).
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(title + " " + (s.readiness.map { String($0) } ?? "–") + (pill.map { ", " + $0.text } ?? ""))
+                .accessibilityAddTraits(.isButton)
                 // An older day's details would read as today's.
                 .disabled(stale != nil)
             if stale == .failed {
@@ -209,6 +213,8 @@ struct ReadinessHome: View {
         var bar: (value: Double, low: Double, high: Double)? = nil
         var note: String? = nil
         var color: Color
+        /// What VoiceOver says after the title, when the screen's words don't say it.
+        var said: String? = nil
     }
 
     private var gauges: some View {
@@ -248,6 +254,9 @@ struct ReadinessHome: View {
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(g.title)
+        .accessibilityValue(g.said ?? ([g.value + (g.unit.map { " " + $0 } ?? "")] + [g.note].compactMap { $0 }).joined(separator: ", "))
     }
 
     /// The night against its need: the band is half an hour either side (TodayView).
@@ -257,6 +266,8 @@ struct ReadinessHome: View {
         let low = need - 30, high = need + 30
         g.bar = (minutes, low, high)
         g.note = W.tr("\(W.number(minutes / need * 100)) %", "\(W.number(minutes / need * 100))%")
+        // "4 hours 45 minutes, 53% of need": "4:45" reads as a time, "53%" says not of what.
+        g.said = W.spoken(seconds: minutes * 60) + ", " + (g.note ?? "") + W.tr(" potřeby", " of need")
         // As on the watch face: red under three quarters of the need.
         g.color = minutes >= low ? W.green : minutes >= need * 0.75 ? W.amber : W.red
         return g

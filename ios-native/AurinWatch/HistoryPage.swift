@@ -67,6 +67,9 @@ struct HistoryPage: View {
             }
             if spans.count > 1 { picker.padding(.top, 2) }
             chart
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(header.capitalized(with: W.locale))
+                .accessibilityValue(chartSummary)
                 .padding(.top, 6)
                 .frame(height: Self.chartHeight - (spans.count > 1 ? 26 : 0))
             if shown == 90 {
@@ -115,6 +118,21 @@ struct HistoryPage: View {
         }
         .padding(2)
         .background(W.tile, in: Capsule())
+    }
+
+    /// The chart for VoiceOver in one sentence (watch audit G1): "Average 81 ms,
+    /// lowest 49, highest 111, today 94." instead of each day as "Den, Hodnota".
+    private var chartSummary: String {
+        let values = days.map(\.value)
+        let say = { (v: Double) in sleep ? W.spoken(seconds: v * 60) : W.number(v) + " " + metric.unit }
+        var parts: [String] = []
+        if let average = days.average { parts.append(W.tr("Průměr ", "Average ") + say(average)) }
+        if let low = values.min(), let high = values.max() {
+            parts.append(W.tr("nejméně ", "lowest ") + say(low))
+            parts.append(W.tr("nejvíc ", "highest ") + say(high))
+        }
+        if let last = days.last, last.date == today { parts.append(W.tr("dnes ", "today ") + say(last.value)) }
+        return parts.joined(separator: ", ")
     }
 
     /// A value in the metric's unit: "50", or "7:04" for sleep.

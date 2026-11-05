@@ -700,6 +700,9 @@ struct GymSessionView: View {
                             .lineLimit(1).minimumScaleFactor(0.7)
                     }
                     .frame(width: 56, height: 56)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(W.tr("Pauza", "Rest"))
+                    .accessibilityValue(W.tr("zbývá ", "") + W.spoken(seconds: left.rounded(.up)) + W.tr("", " left"))
                     if let gym, let lift, let e = gym.exercises.first(where: { $0.lifts.contains { $0.row == lift.row } }) {
                         VStack(alignment: .leading, spacing: 0) {
                             Text(W.tr("Další · ", "Next · ") + e.title).font(.system(size: 10)).foregroundStyle(W.secondary)
