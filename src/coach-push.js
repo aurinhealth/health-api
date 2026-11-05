@@ -78,7 +78,9 @@ export function coachNudge({ date, hour, zone = null, easier = null, recovery = 
     // Load and recovery only, never an illness (Today audit 1, 12, D2): Today's card offers the easier day.
     // Today's button only when there is a hard ride or run today to swap.
     const hard = hardSession(upcoming, [date]);
-    return { kind: 'easier_day', title: easier.headline, body: L('Několik nočních hodnot bylo mimo tvé obvyklé rozmezí. ', 'Several night values were outside your usual range. ')
+    const what = easier.signal === 'restingHR' ? L('Klidový tep je nad tvým obvyklým rozmezím. ', 'Resting heart rate is above your usual range. ')
+      : L('Několik nočních hodnot bylo mimo tvé obvyklé rozmezí. ', 'Several night values were outside your usual range. ');
+    return { kind: 'easier_day', title: easier.headline, body: what
       + (hard ? L('Na Dnes můžeš dnešek ulehčit.', 'On Today you can make today easier.') : L('Dnes trénuj lehce.', 'Keep today\'s training easy.')) };
   }
   if (morning && hour < MORNING_TO_HOUR && recovery) {
