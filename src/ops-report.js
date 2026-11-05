@@ -82,7 +82,21 @@ const usd = value => `${(Number(value) || 0).toFixed(2)} $`;
 // month: one per user since the 1st ({who, cost, owner}). who is "Ty" for
 // the owner and "Účet #id · group" for everyone else: the report is an
 // e-mail, and an account number is all it needs (no e-mail addresses).
-export function aiSummary(rows, month, limit) {
+// calls: each call of the day ({group, feature, cost}): the average and p95
+// price of a call by group and feature, the five that cost the most in all.
+export function callPrices(calls = []) {
+  const by = new Map();
+  for (const c of calls) {
+    const key = c.group + " · " + (FEATURE_NAMES[c.feature] || c.feature || "jiné");
+    by.set(key, [...(by.get(key) || []), Number(c.cost) || 0]);
+  }
+  return [...by.entries()].map(([name, costs]) => {
+    const sorted = costs.sort((a, b) => a - b), total = sorted.reduce((a, b) => a + b, 0);
+    return { name, calls: sorted.length, total, average: total / sorted.length, p95: sorted[Math.ceil(sorted.length * 0.95) - 1] };
+  }).sort((a, b) => b.total - a.total).slice(0, 5);
+}
+
+export function aiSummary(rows, month, limit, calls = []) {
   if (!rows.length) return null;
   const users = new Map();
   for (const row of rows) {
@@ -102,7 +116,8 @@ export function aiSummary(rows, month, limit) {
   return {
     total: list.reduce((acc, u) => acc + u.cost, 0), calls: list.reduce((acc, u) => acc + u.calls, 0),
     cachedShare: input > 0 ? Math.round(sum("cached") / input * 100) : null,
-    users: list, limit: limit || null, named, others: { count: others.length, cost: others.reduce((acc, m) => acc + m.cost, 0) }
+    users: list, limit: limit || null, named, others: { count: others.length, cost: others.reduce((acc, m) => acc + m.cost, 0) },
+    prices: callPrices(calls)
   };
 }
 
@@ -115,7 +130,9 @@ export function aiText(ai) {
   const named = ai.named.map(m => `${m.who} ${money(m.cost)}${m.share != null ? ` (${m.share} %)` : ""}`);
   const others = ai.others.count ? `${ai.named.length ? "ostatní " : ""}${ai.others.count} ${accountsWord(ai.others.count)} dohromady ${money(ai.others.cost)}` : "";
   const monthLine = [...named, others].filter(Boolean).join(" · ");
-  return `Útrata AI včera: ${money(ai.total)}, ${ai.calls} dotazů${cache}\n${lines.join("\n")}\n\nZa měsíc${ai.limit ? ` (strop ${usd(ai.limit)} na účet)` : ""}: ${monthLine}`;
+  const prices = (ai.prices || []).map(p => `- ${p.name}: průměr ${money(p.average)}, p95 ${money(p.p95)} (${p.calls}×)`);
+  return `Útrata AI včera: ${money(ai.total)}, ${ai.calls} dotazů${cache}\n${lines.join("\n")}\n\nZa měsíc${ai.limit ? ` (strop ${usd(ai.limit)} na účet)` : ""}: ${monthLine}`
+    + (prices.length ? `\n\nCena jednoho dotazu podle skupiny\n${prices.join("\n")}` : "");
 }
 
 // Account deletions the cron has failed at least this many times in a row
@@ -251,7 +268,7 @@ export async function sendDailyOpsReport(env, now = new Date()) {
   // The test server keeps two databases and no reserve on purpose.
   const reserve = room && env.ENVIRONMENT !== "staging" ? await reserveCapacity(env.DB) : null;
   const capacity = room ? { ...room, ...(reserve ? { reserve } : {}) } : null;
-  const ai = await aiData(env, yesterday, now.getTime()).then(({ rows: used, month }) => aiSummary(used, month, aiMonthlyLimitUsd(env))).catch(error => { console.warn("AI usage report failed", error?.message || error); return null; });
+  const ai = await aiData(env, yesterday, now.getTime()).then(({ rows: used, month, calls }) => aiSummary(used, month, aiMonthlyLimitUsd(env), calls)).catch(error => { console.warn("AI usage report failed", error?.message || error); return null; });
   const stuck = await stuckAccountDeletions(env.DB).catch(error => { console.warn("Stuck account deletions read failed", error?.message || error); return []; });
   const setting = value => value == null || value === "" || !Number.isFinite(Number(value)) ? null : Number(value);
   const accounts = await accountStats(env, yesterday).then(stats => accountsReport(stats, { monthly: aiMonthlyLimitUsd(env), unpaidShare: unpaidLimitShare(env), totalAlert: setting(env.AI_TOTAL_DAILY_ALERT_USD), totalLimit: setting(env.AI_TOTAL_DAILY_LIMIT_USD) }))
@@ -275,6 +292,9 @@ export async function aiData(env, date, now = Date.now()) {
     FROM ai_usage a WHERE a.day = ? AND a.model NOT IN ('pending', 'carried-over') GROUP BY a.user_id, a.feature`).bind(date).all()).results || [];
   const month = (await env.DB.prepare(`SELECT a.user_id, SUM(a.cost_usd) AS cost
     FROM ai_usage a WHERE a.day >= ? AND a.day <= ? AND a.model NOT IN ('pending', 'carried-over') GROUP BY a.user_id`).bind(date.slice(0, 8) + "01", date).all()).results || [];
+  // Each call of the day on its own, for the average and p95 price of a call by group and feature.
+  const each = (await env.DB.prepare(`SELECT a.user_id, a.feature, a.cost_usd AS cost
+    FROM ai_usage a WHERE a.day = ? AND a.model NOT IN ('pending', 'carried-over') LIMIT 20000`).bind(date).all()).results || [];
   const ids = [...new Set([...rows, ...month].map(r => Number(r.user_id)).filter(id => id > 0))];
   const owner = String(env.OWNER_EMAIL || "").trim().toLowerCase();
   const users = new Map(), subs = new Map();
@@ -284,16 +304,18 @@ export async function aiData(env, date, now = Date.now()) {
     for (const s of (await env.DB.prepare("SELECT user_id, plan, valid_until, store_environment, free_trial, offer_type, testflight FROM subscriptions WHERE user_id IN (SELECT value FROM json_each(?))").bind(list).all()).results || []) subs.set(Number(s.user_id), s);
   }
   const isOwner = id => Boolean(owner) && String(users.get(id)?.email || "").trim().toLowerCase() === owner;
-  const who = id => {
+  const groupOf = id => {
     if (isOwner(id)) return "Ty";
     const user = users.get(id), sub = subs.get(id);
-    if (!user) return `Účet #${id} · smazaný`;
+    if (!user) return "smazaný";
     const group = sub ? groupOfSubscription(sub, now) : String(user.created_at || "").replace("T", " ").slice(0, 19) >= newAccountSince(now) ? "new" : "free";
-    return `Účet #${id} · ${ACCOUNT_GROUPS[group] || group}`;
+    return ACCOUNT_GROUPS[group] || group;
   };
+  const who = id => isOwner(id) ? "Ty" : `Účet #${id} · ${groupOf(id)}`;
   return {
     rows: rows.map(r => ({ who: who(Number(r.user_id)), feature: r.feature, calls: r.calls, cost: r.cost, input: r.input, cached: r.cached })),
-    month: month.map(m => ({ who: who(Number(m.user_id)), cost: m.cost, owner: isOwner(Number(m.user_id)) }))
+    month: month.map(m => ({ who: who(Number(m.user_id)), cost: m.cost, owner: isOwner(Number(m.user_id)) })),
+    calls: each.map(c => ({ group: groupOf(Number(c.user_id)), feature: c.feature, cost: c.cost }))
   };
 }
 const ACCOUNT_GROUPS = { paid: "Pro", gift: "pilot nebo dárek", trial: "týden zdarma", testflight: "TestFlight", free: "bez nákupu", new: "nový účet", system: "server" };

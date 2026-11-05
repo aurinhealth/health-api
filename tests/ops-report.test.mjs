@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
-import { recordOpsEvent, withOpsScope, sendDailyOpsReport, opsReport, aiReport, aiSummary, aiData, routeName, stuckAccountDeletions, accountStats, accountsReport } from "../src/ops-report.js";
+import { recordOpsEvent, withOpsScope, sendDailyOpsReport, opsReport, aiReport, aiSummary, aiText, callPrices, aiData, routeName, stuckAccountDeletions, accountStats, accountsReport } from "../src/ops-report.js";
 import { parseSlow } from "../src/ops-report-html.js";
 import { ensureAiUsage } from "../src/ai-usage.js";
 import { ensureStoreColumns } from "../src/app-store.js";
@@ -58,6 +58,27 @@ test("the AI section lists yesterday's cost per account with the most used featu
   assert.doesNotMatch(text, /@/);
   assert.equal(aiReport([], [], 4), null);
   assert.match(opsReport([], null, "2026-10-15", text).text, /Útrata AI včera/);
+});
+
+test("the AI section gives the average and p95 price of a call by group and feature", async () => {
+  const calls = [...Array.from({ length: 19 }, () => ({ group: "Pro", feature: "assistant", cost: 0.02 })), { group: "Pro", feature: "assistant", cost: 0.12 },
+    { group: "týden zdarma", feature: "screen-text", cost: 0.001 }];
+  assert.deepEqual(callPrices(calls).map(p => [p.name, p.calls, Math.round(p.average * 1000) / 1000, p.p95]), [["Pro · chat s koučem", 20, 0.025, 0.02], ["týden zdarma · věty kouče na obrazovkách", 1, 0.001, 0.001]]);
+  calls.push({ group: "Pro", feature: "assistant", cost: 0.2 });
+  assert.equal(callPrices(calls)[0].p95, 0.12);
+  const ai = aiSummary([{ who: "Účet #9 · Pro", feature: "assistant", calls: 21, cost: 0.7 }], [], 5, calls);
+  assert.match(aiText(ai), /Cena jednoho dotazu podle skupiny\n- Pro · chat s koučem: průměr 0\.03 \$, p95 0\.12 \$ \(21×\)/);
+  assert.match(opsReport([], null, "2026-11-02", ai).html, /Cena jednoho dotazu podle skupiny/);
+  // From the log: the group of each call, never an e-mail.
+  const db = createD1();
+  db.sqlite.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
+  db.sqlite.exec("INSERT INTO users (id, email, created_at) VALUES (1, 'owner@example.com', '2026-10-01 08:00:00'), (14, 'free@x.cz', '2026-10-01 08:00:00')");
+  await ensureAiUsage(db);
+  await ensureStoreColumns(db);
+  const add = db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, feature, model, cost_usd) VALUES (?, '2026-11-02', ?, 'gpt', ?)");
+  add.run(1, "assistant", 0.07); add.run(14, "screen-text", 0.001); add.run(14, "screen-text", 0.003);
+  const { calls: logged } = await aiData({ DB: db, OWNER_EMAIL: "owner@example.com" }, "2026-11-02", Date.parse("2026-11-03T06:00:00Z"));
+  assert.deepEqual(logged.map(c => c.group).sort(), ["Ty", "bez nákupu", "bez nákupu"]);
 });
 
 test("the AI report names accounts by number and group, never by e-mail", async () => {
