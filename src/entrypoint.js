@@ -708,14 +708,15 @@ export default {
   }
 };
 
-// Server-Timing on every answer; the app's API requests also go to the logs,
-// and a slow one into the owner's morning report (request-timing.js).
+// The app's API requests: Server-Timing on the answer, a line in the logs, and
+// a slow one into the owner's morning report (request-timing.js). Sign-in,
+// webhooks and the site get no Server-Timing: their database work says nothing
+// to a caller without an account (security review 2026-11-04).
 function withTiming(response, work, route, env, ctx) {
-  if (route.includes(" /app/api/")) {
-    console.log(JSON.stringify({ timing: route, status: response.status, ms: elapsed(work), queries: work.queries, rows_read: work.rowsRead, db_ms: work.dbMs, waits: work.waits }));
-    const slow = slowness(work);
-    if (slow) ctx?.waitUntil?.(recordOpsEvent(env.DB, "slow", route, slow));
-  }
+  if (!route.includes(" /app/api/")) return response;
+  console.log(JSON.stringify({ timing: route, status: response.status, ms: elapsed(work), queries: work.queries, rows_read: work.rowsRead, db_ms: work.dbMs, waits: work.waits }));
+  const slow = slowness(work);
+  if (slow) ctx?.waitUntil?.(recordOpsEvent(env.DB, "slow", route, slow));
   try { response.headers.set("Server-Timing", serverTiming(work)); return response; }
   catch { const copy = new Response(response.body, response); copy.headers.set("Server-Timing", serverTiming(work)); return copy; }
 }
