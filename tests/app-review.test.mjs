@@ -101,14 +101,15 @@ test("the review account is the APP_REVIEW_EMAIL user, never the owner", () => {
 test("the review account cannot start a connection or send data out; the rest of the app works", async () => {
   const reviewer = { id: 9, email: "review@example.com" }, friend = { id: 3, email: "friend@example.com" };
   const blocked = [["GET", "/oauth/intervals"], ["GET", "/oauth/intervals/callback"], ["GET", "/oauth/google"],
-    ["POST", "/app/api/connect/start"], ["POST", "/auth/app/connect"], ["POST", "/app/api/connections"], ["POST", "/app/api/sync/activity"], ["POST", "/app/api/sync/retry"], ["POST", "/app/api/workouts/export"]];
+    ["POST", "/app/api/connect/start"], ["POST", "/auth/app/connect"], ["POST", "/app/api/connections"], ["POST", "/app/api/sync/activity"], ["POST", "/app/api/sync/retry"], ["POST", "/app/api/workouts/export"],
+    ["GET", "/oauth/whoop"], ["GET", "/oauth/wahoo/callback"], ["GET", "/oauth/ultrahuman"], ["GET", "/auth/app/connect"], ["POST", "/app/api/planned/send"]];
   for (const [method, path] of blocked) {
     const refused = reviewRefusal(REVIEW, reviewer, method, path);
     assert.equal(refused?.status, 403, path);
     assert.equal((await refused.json()).status, "demo_account");
     assert.equal(reviewRefusal(REVIEW, friend, method, path), null, "others: " + path);
   }
-  for (const [method, path] of [["POST", "/app/api/health/apple"], ["GET", "/app/api/connections"], ["DELETE", "/app/api/connections"], ["GET", "/app/api/today"], ["POST", "/app/api/assistant"], ["GET", "/oauth/googlex"]]) {
+  for (const [method, path] of [["POST", "/app/api/health/apple"], ["GET", "/app/api/connections"], ["DELETE", "/app/api/connections"], ["GET", "/app/api/today"], ["POST", "/app/api/assistant"], ["GET", "/oauthx"], ["GET", "/app/api/planned/destinations"]]) {
     assert.equal(reviewRefusal(REVIEW, reviewer, method, path), null, path);
   }
   assert.equal(reviewRefusal(REVIEW, null, "GET", "/oauth/intervals"), null, "signed out: the route's own 401");
