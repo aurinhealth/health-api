@@ -85,7 +85,7 @@ export function rankOptions({ ride, run, swim = null, mainSport = "general", mai
     if (less.includes(o.kind) && !planned.includes(o.kind)) score -= 15;
     o.score = score;
   }
-  // Signs of an oncoming illness (illness-check.js): no sauna, it only adds load.
+  // Night values outside the usual range (night-check.js): no sauna, it only adds load.
   if (illness) options.splice(options.findIndex(o => o.kind === "sauna"), 1);
   // A sport the athlete turned off is never offered, not even under Další možnosti.
   if (Array.isArray(allowed)) for (const kind of ["ride", "run", "swim", "gym"]) if (!allowed.map(asOption).includes(kind)) { const i = options.findIndex(o => o.kind === kind); if (i >= 0) options.splice(i, 1); }

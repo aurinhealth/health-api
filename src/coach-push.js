@@ -1,8 +1,8 @@
 // "Kouč se ozve sám": the coach's own push, at most one a local day, on until
 // Settings → Oznámení → Kouč is turned off (Petr, 2026-10-14). It speaks up when
 //   - the athlete flew to another time zone (3 hours or more),
-//   - in the morning, the night shows signs of an oncoming illness, or several
-//     signs say recovery lags before a hard session today or tomorrow; then the
+//   - in the morning, several night values are outside the usual range (an
+//     easier day fits), or several signs say recovery lags before a hard session today or tomorrow; then the
 //     push offers "Vyměnit" (an easy session in its place) and "Nechat",
 //   - in the evening before a long or hard session.
 // The phone answers the buttons through /app/api/coach/nudge (entrypoint.js).
@@ -47,12 +47,24 @@ export function zoneShiftHours(fromOffsetMs, toOffsetMs) {
   return Math.round((toOffsetMs - fromOffsetMs) / 36e5);
 }
 
+// The first hard ride or run of `days` among the upcoming sessions.
+export function hardSession(upcoming = [], days = []) {
+  return (upcoming || []).find(u => days.includes(u.date) && HARD_KINDS.has(u.kind) && MIN_MINUTES[u.sport]) || null;
+}
+
+// An easy session of the same sport in place of the hard one (/app/api/coach/nudge "swap").
+export function easierSwap(hard) {
+  const minutes = Math.max(MIN_MINUTES[hard.sport], round5(Math.min(EASY_MINUTES, hard.minutes || EASY_MINUTES)));
+  const what = KIND_NAME()[hard.kind] || hard.name || L('trénink', 'session');
+  return { eventId: hard.eventId, date: hard.date, sport: hard.sport, environment: hard.environment || 'outdoor', minutes, kind: 'endurance', name: hard.name || null, what, fromMinutes: hard.minutes || null };
+}
+
 // The message for this moment, or null:
 // {kind, title, body, swap?: {eventId, date, sport, environment, minutes, kind, name}}.
-// zone: {shift, changed} from the time-zone check; illness: illnessWarning;
+// zone: {shift, changed} from the time-zone check; easier: night-check.js easierDayCard;
 // recovery: proactiveAdvice; upcoming: ride and run sessions [{eventId, date,
 // sport, name, minutes, kind, environment}]; sleep: the nights.
-export function coachNudge({ date, hour, zone = null, illness = null, recovery = null, upcoming = [], sleep = [], morning = false, evening = false }) {
+export function coachNudge({ date, hour, zone = null, easier = null, recovery = null, upcoming = [], sleep = [], morning = false, evening = false }) {
   if (hour < COACH_FROM_HOUR || hour >= COACH_TO_HOUR) return null;
   if (zone && Math.abs(zone.shift) >= ZONE_HOURS && zone.changed >= shift(date, -1)) {
     const h = Math.abs(zone.shift);
@@ -62,21 +74,22 @@ export function coachNudge({ date, hour, zone = null, illness = null, recovery =
       body: L('První dva dny ber tréninky lehce a spánek posouvej o hodinu denně.', 'Take the first two days easy and shift your sleep by an hour a day.')
     };
   }
-  if (morning && hour < MORNING_TO_HOUR && illness) {
-    return { kind: 'illness', title: illness.headline, body: L('Dnes raději lehce. Když se necítíš dobře, na Dnes můžeš přepnout na Nemoc a zrušit tréninky.', 'Keep today easy. If you feel unwell, on Today you can switch to Sick and cancel the sessions.') };
+  if (morning && hour < MORNING_TO_HOUR && easier) {
+    // Load and recovery only, never an illness (Today audit 1, 12, D2): Today's card offers the easier day.
+    return { kind: 'easier_day', title: easier.headline, body: L('Několik nočních hodnot bylo mimo tvé obvyklé rozmezí. Na Dnes můžeš dnešek ulehčit.', 'Several night values were outside your usual range. On Today you can make today easier.') };
   }
   if (morning && hour < MORNING_TO_HOUR && recovery) {
-    const hard = upcoming.find(u => (u.date === date || u.date === shift(date, 1)) && HARD_KINDS.has(u.kind) && MIN_MINUTES[u.sport]);
+    const hard = hardSession(upcoming, [date, shift(date, 1)]);
     if (hard) {
-      const nights = shortNights(sleep, date), minutes = Math.max(MIN_MINUTES[hard.sport], round5(Math.min(EASY_MINUTES, hard.minutes || EASY_MINUTES)));
+      const nights = shortNights(sleep, date), swap = easierSwap(hard);
       const word = ['', '', L('Dvě', 'Two'), L('Tři', 'Three'), L('Čtyři', 'Four')][Math.min(nights, 4)] || '';
-      const today = hard.date === date, what = KIND_NAME()[hard.kind] || hard.name || L('trénink', 'session');
-      const easy = hard.sport === 'run' ? L(`lehký běh ${minutes} min`, `an easy ${minutes} min run`) : L(`lehkou jízdu ${minutes} min`, `an easy ${minutes} min ride`);
+      const today = hard.date === date;
+      const easy = hard.sport === 'run' ? L(`lehký běh ${swap.minutes} min`, `an easy ${swap.minutes} min run`) : L(`lehkou jízdu ${swap.minutes} min`, `an easy ${swap.minutes} min ride`);
       return {
         kind: 'recovery',
         title: nights >= 2 ? L(`${word} krátké noci za sebou`, `${word} short nights in a row`) : L('Tělo se ještě nezotavilo', "Your body hasn't recovered yet"),
-        body: L(`${today ? 'Dnešní' : 'Zítřejší'} ${what} vyměním za ${easy}?`, `Swap ${today ? "today's" : "tomorrow's"} ${what} for ${easy}?`),
-        swap: { eventId: hard.eventId, date: hard.date, sport: hard.sport, environment: hard.environment || 'outdoor', minutes, kind: 'endurance', name: hard.name || null, what, fromMinutes: hard.minutes || null }
+        body: L(`${today ? 'Dnešní' : 'Zítřejší'} ${swap.what} vyměním za ${easy}?`, `Swap ${today ? "today's" : "tomorrow's"} ${swap.what} for ${easy}?`),
+        swap
       };
     }
   }
