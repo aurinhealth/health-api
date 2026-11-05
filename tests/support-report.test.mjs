@@ -183,3 +183,12 @@ test("the user's answer where it happened leads, and a watch problem names the w
   assert.deepEqual(reportWhere({ happenedOn: "iphone" }, { api: "7" }), ["Happened on (the user's answer): iPhone", "Sent from: iPhone app without diagnostics"]);
   assert.equal(reportScreen({ happenedOn: "watch" }), "Apple Watch");
 });
+
+test("reports sent together store one and send one e-mail", async () => {
+  const { raw, env, sent } = setup();
+  const results = await Promise.allSettled(Array.from({ length: DAILY_REPORTS + 5 }, (_, i) => saveSupportReport(env, { message: "hlášení " + i })));
+  assert.equal(results.filter(r => r.status === "fulfilled").length, 1);
+  assert.ok(results.filter(r => r.status === "rejected").every(r => r.reason.status === 429));
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM support_reports").get().n, 1);
+  assert.equal(sent.length, 1);
+});

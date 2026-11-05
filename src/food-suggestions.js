@@ -63,6 +63,19 @@ export function suggestionChanges(before, after) {
   return SUGGESTION_FIELDS.filter(k => String(before?.[k] ?? "") !== String(after?.[k] ?? ""));
 }
 
+// Replaces the user's pending entry for the food (`same`: the WHERE that finds
+// it) and saves the new one in one transaction, both only while the day's limit
+// is not reached, so requests sent together cannot pass it. Throws 429 otherwise.
+const UNDER_DAILY_LIMIT = "(SELECT COUNT(*) FROM food_suggestions WHERE user_id=? AND created_at>=datetime('now','-1 day')) < ?";
+async function replacePending(db, same, sameArgs, insert, limitMessage) {
+  const [, saved] = await db.batch([
+    db.prepare(`DELETE FROM food_suggestions WHERE user_id=? AND status='pending' AND ${same} AND ${UNDER_DAILY_LIMIT}`).bind(db.userId, ...sameArgs, db.userId, DAILY_SUGGESTIONS),
+    insert(UNDER_DAILY_LIMIT, [db.userId, DAILY_SUGGESTIONS])
+  ]);
+  if (!Number(saved?.meta?.changes)) throw fail(limitMessage, 429);
+  return { status: "ok", id: Number(saved?.meta?.last_row_id) || null };
+}
+
 // Stores one pending suggestion per user and food; a newer one replaces it.
 export async function saveFoodSuggestion(db, body) {
   const before = label(body?.before), after = label(body?.after);
@@ -72,13 +85,10 @@ export async function saveFoodSuggestion(db, body) {
   if (!suggestionChanges(before, after).length) return { status: "unchanged" };
   await ensure(db);
   const barcode = after.barcode || before.barcode || null;
-  const recent = await db.prepare("SELECT COUNT(*) AS n FROM food_suggestions WHERE user_id=? AND created_at>=datetime('now','-1 day')").bind(db.userId).first();
-  if (Number(recent?.n || 0) >= DAILY_SUGGESTIONS) throw fail(L("Dnešní limit návrhů je vyčerpaný. Zkus to zítra.", "You've reached today's limit of suggestions. Try again tomorrow."), 429);
-  const key = barcode || before.name;
-  await db.prepare("DELETE FROM food_suggestions WHERE user_id=? AND status='pending' AND kind='correction' AND COALESCE(barcode,name)=?").bind(db.userId, key).run();
-  const result = await db.prepare("INSERT INTO food_suggestions(user_id,barcode,name,before_json,after_json,ref) VALUES(?,?,?,?,?,?)")
-    .bind(db.userId, barcode, before.name || after.name, JSON.stringify(before), JSON.stringify(after), foodRef(before)).run();
-  return { status: "ok", id: Number(result?.meta?.last_row_id) || null };
+  return replacePending(db, "kind='correction' AND COALESCE(barcode,name)=?", [barcode || before.name],
+    (limit, args) => db.prepare(`INSERT INTO food_suggestions(user_id,barcode,name,before_json,after_json,ref) SELECT ?,?,?,?,?,? WHERE ${limit}`)
+      .bind(db.userId, barcode, before.name || after.name, JSON.stringify(before), JSON.stringify(after), foodRef(before), ...args),
+    L("Dnešní limit návrhů je vyčerpaný. Zkus to zítra.", "You've reached today's limit of suggestions. Try again tomorrow."));
 }
 
 // "Suggest for everyone": the label values of a food the user saved, one
@@ -90,12 +100,10 @@ export async function saveNewFoodSuggestion(db, body) {
   if (["calories_100g", "protein_100g", "carbs_100g", "fat_100g"].some(k => product[k] == null || product[k] < 0 || product[k] > (k === "calories_100g" ? 1000 : 100))) throw fail(L("Doplň platné nutriční hodnoty.", "Fill in valid nutrition values."));
   const ref = foodRef(product);
   await ensure(db);
-  const recent = await db.prepare("SELECT COUNT(*) AS n FROM food_suggestions WHERE user_id=? AND created_at>=datetime('now','-1 day')").bind(db.userId).first();
-  if (Number(recent?.n || 0) >= DAILY_SUGGESTIONS) throw fail(L("Dnešní limit návrhů je vyčerpaný. Zkus to zítra.", "You've reached today's limit of suggestions. Try again tomorrow."), 429);
-  await db.prepare("DELETE FROM food_suggestions WHERE user_id=? AND status='pending' AND kind='new_food' AND ref=?").bind(db.userId, ref).run();
-  const result = await db.prepare("INSERT INTO food_suggestions(user_id,barcode,name,before_json,after_json,kind,ref) VALUES(?,?,?,'{}',?,'new_food',?)")
-    .bind(db.userId, product.barcode || null, product.name, JSON.stringify(product), ref).run();
-  return { status: "ok", id: Number(result?.meta?.last_row_id) || null };
+  return replacePending(db, "kind='new_food' AND ref=?", [ref],
+    (limit, args) => db.prepare(`INSERT INTO food_suggestions(user_id,barcode,name,before_json,after_json,kind,ref) SELECT ?,?,?,'{}',?,'new_food',? WHERE ${limit}`)
+      .bind(db.userId, product.barcode || null, product.name, JSON.stringify(product), ref, ...args),
+    L("Dnešní limit návrhů je vyčerpaný. Zkus to zítra.", "You've reached today's limit of suggestions. Try again tomorrow."));
 }
 
 // "Hodnoty nesedí": what is wrong (REPORT_REASONS) and an optional note; one
@@ -105,13 +113,11 @@ export async function saveFoodReport(db, body) {
   if (!product || !product.name || !REPORT_REASONS.includes(reason)) throw fail(L("Hlášení není platné.", "The report isn't valid."));
   const ref = foodRef(product), note = String(body?.note || "").trim().slice(0, 300) || null;
   await ensure(db);
-  const recent = await db.prepare("SELECT COUNT(*) AS n FROM food_suggestions WHERE user_id=? AND created_at>=datetime('now','-1 day')").bind(db.userId).first();
-  if (Number(recent?.n || 0) >= DAILY_SUGGESTIONS) throw fail(L("Dnešní limit hlášení je vyčerpaný. Zkus to zítra.", "You've reached today's limit of reports. Try again tomorrow."), 429);
-  await db.prepare("DELETE FROM food_suggestions WHERE user_id=? AND status='pending' AND kind='report' AND ref=?").bind(db.userId, ref).run();
   const json = JSON.stringify(product);
-  const result = await db.prepare("INSERT INTO food_suggestions(user_id,barcode,name,before_json,after_json,kind,reason,note,ref) VALUES(?,?,?,?,?,'report',?,?,?)")
-    .bind(db.userId, product.barcode || null, product.name, json, json, reason, note, ref).run();
-  return { status: "ok", id: Number(result?.meta?.last_row_id) || null };
+  return replacePending(db, "kind='report' AND ref=?", [ref],
+    (limit, args) => db.prepare(`INSERT INTO food_suggestions(user_id,barcode,name,before_json,after_json,kind,reason,note,ref) SELECT ?,?,?,?,?,'report',?,?,? WHERE ${limit}`)
+      .bind(db.userId, product.barcode || null, product.name, json, json, reason, note, ref, ...args),
+    L("Dnešní limit hlášení je vyčerpaný. Zkus to zítra.", "You've reached today's limit of reports. Try again tomorrow."));
 }
 
 // The foods among products with a pending report, for the "Nahlášeno" label:

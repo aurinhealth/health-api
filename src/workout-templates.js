@@ -32,9 +32,12 @@ import { describeInstructions } from './private/workout-templates.js';
 export const SPORTS = ["gym", ...ENDURANCE_SPORTS];
 const MAX_EXERCISES = 30;
 const MAX_SAVED = 300;
-const MAX_SHARES_PER_DAY = 100;
+// With full-size previews one account stores at most about 14 MB a day.
+export const MAX_SHARES_PER_DAY = 20;
 // The preview image is a PNG drawn by the app (about 1200 × 630); base64.
+// Anything else is dropped, so the link never serves other content as an image.
 const MAX_IMAGE_CHARS = 700_000;
+const PNG_BASE64 = /^iVBORw0KGg[A-Za-z0-9+/]*={0,2}$/;
 const ID = /^[A-Za-z0-9]{10}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -293,13 +296,14 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
     // A link to the workout; the app sends the preview image it drew.
     if (path === "/app/api/shares" && request.method === "POST") {
       const template = cleanTemplate(body);
-      const image = typeof body.image === "string" && body.image.length <= MAX_IMAGE_CHARS && /^[A-Za-z0-9+/=]+$/.test(body.image) ? body.image : null;
+      const image = typeof body.image === "string" && body.image.length <= MAX_IMAGE_CHARS && PNG_BASE64.test(body.image) ? body.image : null;
       const db = env.RAW_DB || env.DB;
       await ensureShareTable(db);
-      const today = (await db.prepare("SELECT COUNT(*) AS n FROM workout_shares WHERE user_id=? AND created_at>=datetime('now','-1 day')").bind(env.USER_ID).first())?.n || 0;
-      if (today >= MAX_SHARES_PER_DAY) return json({ message: L("Dnešní limit sdílení tréninků je vyčerpaný. Zkus to zítra.", "You've reached today's limit for sharing workouts. Try again tomorrow.") }, 429);
       const id = newId(), from = await senderName(env, session.user), date = DATE.test(String(body.date || "")) && body.date >= localToday() ? body.date : null;
-      await db.prepare("INSERT INTO workout_shares(id,user_id,sport,name,from_name,plan_date,template_json,image_png) VALUES(?,?,?,?,?,?,?,?)").bind(id, env.USER_ID, template.sport, template.name, from, date, JSON.stringify(template), image).run();
+      // The day's limit is checked in the same statement that saves, so requests sent together cannot pass it.
+      const saved = await db.prepare("INSERT INTO workout_shares(id,user_id,sport,name,from_name,plan_date,template_json,image_png) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM workout_shares WHERE user_id=? AND created_at>=datetime('now','-1 day')) < ?")
+        .bind(id, env.USER_ID, template.sport, template.name, from, date, JSON.stringify(template), image, env.USER_ID, MAX_SHARES_PER_DAY).run();
+      if (!Number(saved?.meta?.changes)) return json({ message: L("Dnešní limit sdílení tréninků je vyčerpaný. Zkus to zítra.", "You've reached today's limit for sharing workouts. Try again tomorrow.") }, 429);
       return json({ status: "ok", id, url: shareUrl(env, id) });
     }
     const shared = /^\/app\/api\/shares\/([A-Za-z0-9]{10})$/.exec(path);

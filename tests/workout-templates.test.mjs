@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { handleWorkoutTemplatesApi, publicSharePage, cleanTemplate, templateFromRows } from "../src/workout-templates.js";
+import { handleWorkoutTemplatesApi, publicSharePage, cleanTemplate, templateFromRows, MAX_SHARES_PER_DAY } from "../src/workout-templates.js";
 import { scriptPolicy } from "../src/web-security.js";
 import { templateStrengthPlan, EXERCISES } from "../src/strength-generator.js";
 import { readRoutines, withRoutines } from "../src/stretching.js";
@@ -13,6 +13,7 @@ import { getWorkout, catalog } from "../src/workout-library.js";
 const ORIGIN = "https://aurin.health";
 const env = (raw, id) => ({ DB: scopedDb(raw, id), RAW_DB: raw, USER_ID: id });
 const session = name => ({ signedIn: true, user: { name } });
+const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("PNGDATA")]);
 async function call(raw, id, method, path, body, name = "Petr Bouma") {
   const url = new URL(ORIGIN + path);
   const request = new Request(url, { method, headers: { Origin: ORIGIN, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
@@ -57,7 +58,7 @@ test("own workouts are listed, edited and deleted", async () => {
 
 test("a shared link lands once in the friend's Od přátel, with the sender's first name only", async () => {
   const raw = createD1();
-  const image = Buffer.from("\x89PNG fake").toString("base64");
+  const image = PNG.toString("base64");
   const shared = await call(raw, 1, "POST", "/app/api/shares", { ...legs, image, date: "2099-01-05" });
   assert.equal(shared.status, 200);
   // The link is on aurin.health even when the app still talks to the old host.
@@ -88,7 +89,7 @@ test("a shared link lands once in the friend's Od přátel, with the sender's fi
 
 test("the link's page shows the workout and its preview image to anyone", async () => {
   const raw = createD1();
-  const shared = await call(raw, 1, "POST", "/app/api/shares", { ...legs, image: Buffer.from("PNGDATA").toString("base64") });
+  const shared = await call(raw, 1, "POST", "/app/api/shares", { ...legs, image: PNG.toString("base64") });
   const url = new URL(ORIGIN + "/t/" + shared.body.id);
   const pageResponse = await publicSharePage(new Request(url), raw, url);
   const html = await pageResponse.text();
@@ -109,7 +110,7 @@ test("the link's page shows the workout and its preview image to anyone", async 
   const imageUrl = new URL(url + "/og.png");
   const image = await publicSharePage(new Request(imageUrl), raw, imageUrl);
   assert.equal(image.headers.get("content-type"), "image/png");
-  assert.equal(Buffer.from(await image.arrayBuffer()).toString(), "PNGDATA");
+  assert.deepEqual(Buffer.from(await image.arrayBuffer()), PNG);
   const missing = new URL(ORIGIN + "/t/AAAAAAAAAA");
   assert.equal((await publicSharePage(new Request(missing), raw, missing)).status, 404);
   assert.equal(await publicSharePage(new Request(new URL(ORIGIN + "/privacy")), raw, new URL(ORIGIN + "/privacy")), null);
@@ -299,4 +300,14 @@ test("Popiš slovy a swim: CSS and pool go along, lengths end at the wall, rests
   assert.equal(t.blocks[0].steps[0].meters, 300, "rounded to the 50 m pool");
   assert.deepEqual(t.blocks[1].steps[1], { label: "Pauza", rest: true, seconds: 20 });
   assert.equal(t.blocks[1].repeats, 8);
+});
+
+test("a share link's preview must be a PNG, and shares sent together cannot pass the daily limit", async () => {
+  const raw = createD1();
+  const html = await call(raw, 1, "POST", "/app/api/shares", { ...legs, image: Buffer.from("<html><script>x</script>").toString("base64") });
+  assert.equal(raw.sqlite.prepare("SELECT image_png FROM workout_shares WHERE id = ?").get(html.body.id).image_png, null);
+  const results = await Promise.all(Array.from({ length: MAX_SHARES_PER_DAY + 10 }, () => call(raw, 1, "POST", "/app/api/shares", { ...legs, image: PNG.toString("base64") })));
+  assert.equal(results.filter(r => r.status === 200).length, MAX_SHARES_PER_DAY - 1);
+  assert.ok(results.filter(r => r.status !== 200).every(r => r.status === 429));
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM workout_shares WHERE user_id = 1").get().n, MAX_SHARES_PER_DAY);
 });

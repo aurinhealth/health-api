@@ -157,3 +157,11 @@ test("unchecked foods earlier versions shared stay in the database but no longer
   await savePersonalFood(a, { name: "Kefír bílý", brand: "Bohušovická", nutrition_basis: "ml", calories_100g: 50, protein_100g: 3, carbs_100g: 4, fat_100g: 2 });
   assert.equal(raw.sqlite.prepare("SELECT COUNT(*) n FROM shared_foods").get().n, 1);
 });
+
+test("suggestions sent together cannot pass the daily limit", async () => {
+  const raw = createD1(), a = scopedDb(raw, 3);
+  const results = await Promise.allSettled(Array.from({ length: DAILY_SUGGESTIONS + 10 }, (_, i) => saveFoodSuggestion(a, { before: { ...before, barcode: String(8590000000000 + i) }, after: { ...after, barcode: String(8590000000000 + i) } })));
+  assert.equal(results.filter(r => r.status === "fulfilled").length, DAILY_SUGGESTIONS);
+  assert.ok(results.filter(r => r.status === "rejected").every(r => r.reason.status === 429));
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM food_suggestions WHERE user_id = 3").get().n, DAILY_SUGGESTIONS);
+});
