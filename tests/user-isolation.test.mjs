@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
+import { PERSONAL_TABLES } from "../src/tenancy.js";
 
 // Every query on a personal table filters by the signed-in user. The scoped
 // database (tenancy.js) only checks that user_id is mentioned; this test
 // checks that SELECT, UPDATE and DELETE actually filter on it.
-const tenancy = readFileSync(new URL("../src/tenancy.js", import.meta.url), "utf8");
-const personal = Object.keys(Object.fromEntries([...tenancy.match(/PERSONAL_TABLES = \{([\s\S]*?)\n\};/)[1].matchAll(/^\s{2}([a-z_]+):/gm)].map(m => [m[1], 1])));
+// Every table scopedDb guards, from the code itself (several are declared on one line).
+const personal = Object.keys(PERSONAL_TABLES);
 const table = new RegExp(`\\b(${personal.join("|")})\\b`, "i");
 
 // Intentionally cross-user: listing users with connections for cron jobs,
@@ -41,7 +42,21 @@ const allowed = [/FROM workout_shares WHERE id=\?"$/, /^"DELETE FROM push_tokens
   // Apple's refund notification names the pack's transaction, not the user (coach-packs.js).
   /^'UPDATE coach_pack_purchases SET refunded_at = \? WHERE transaction_id = \? AND refunded_at IS NULL'$/,
   // The night's job finds the users with a coach day note due (coach-notes.js).
-  /FROM users u WHERE u\.disabled = 0 AND u\.id IN \(SELECT q\.user_id FROM coach_note_queue q WHERE q\.due_at <= \?\)/];
+  /FROM users u WHERE u\.disabled = 0 AND u\.id IN \(SELECT q\.user_id FROM coach_note_queue q WHERE q\.due_at <= \?\)/,
+  // The AI group brakes count every account's subscription and the free accounts (ai-total.js).
+  /^`SELECT s\.plan, s\.valid_until, s\.store_environment, s\.free_trial, s\.offer_type, s\.testflight FROM subscriptions s WHERE \$\{GROUPED\}/,
+  /^`SELECT COUNT\(\*\) AS n FROM users u WHERE u\.disabled = 0 AND u\.created_at <= \?\$\{notOwner\("u\.id"\)\} AND NOT EXISTS \(SELECT 1 FROM subscriptions s WHERE s\.user_id = u\.id AND/,
+  // Apple's transaction names the subscription, not the user: who holds it (app-store.js).
+  /^'SELECT user_id FROM subscriptions WHERE (original_transaction_id|app_account_token)=\?'$/,
+  // The owner's morning report reads the subscriptions of the accounts it lists (ops-report.js).
+  /^"SELECT user_id, plan, valid_until, store_environment, free_trial, offer_type, testflight FROM subscriptions WHERE user_id IN \(SELECT value FROM json_each\(\?\)\)"$/,
+  // The common catalogue: a food or recipe goes when no one's contribution holds it,
+  // and the count of reports on it is shown to everyone (shared-foods.js, personal-recipes.js).
+  /FROM (food|recipe)_contributions WHERE user_id IS NOT NULL AND catalog_id=\?\)/, /\(SELECT COUNT\(\*\) FROM food_reports WHERE user_id IS NOT NULL AND catalog_id=/,
+  // Signing in reads the account with its own health-pause consent; the daily jobs find consenting users (tenancy.js).
+  /FROM user_consents k WHERE k\.user_id = (users|u)\.id AND k\.kind = 'health'/,
+  // Not SQL: the terms page's text names subscriptions.
+  /^`<p class="muted">Last updated: \$\{TERMS_UPDATED\.en\}/];
 
 test("personal tables are known", () => {
   for (const name of ["health_datapoints", "food_logs", "dashboard_profile", "connection_credentials"]) assert.ok(personal.includes(name), name);

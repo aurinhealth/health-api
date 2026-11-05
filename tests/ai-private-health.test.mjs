@@ -12,6 +12,7 @@ import { screenText, screenFacts, KEEP_DAYS } from "../src/screen-texts.js";
 import { cycleForCoach, cycleShared, partsForAI } from "../src/cycle-model.js";
 import { buildCyclingCoachV2, engineForAI } from "../src/cycling-coach-v2.js";
 import { unauthorizedResponse } from "../src/dashboard-auth.js";
+import { coachContext } from "../src/coach-assistant.js";
 
 const date = "2026-11-04";
 // Tracking on, day 2 of a heavy period with cramps.
@@ -94,6 +95,13 @@ test("a real engine run on a heavy period day: eased, and no cycle words for the
   const engine = buildCyclingCoachV2({ date, daily: { training: { planned: [{ name: "VO2max 5×4", type: "Ride", durationHours: 1, tss: 80 }] } }, week: { days: [] }, fitness: { wellness: [] }, health: {}, gym: {}, availabilityMinutes: 90, profile: { sex: "female", cycle: cycleOf(false) }, sport: "ride" });
   assert.match(JSON.stringify(engine), /period/);
   assert.doesNotMatch(JSON.stringify(engineForAI(engine, { cycleShared: false })), /menstru|period/i);
+}));
+
+test("the chat's input in Czech: eased for the app, no cycle words for the AI unless shared", () => withLang("cs", () => {
+  const input = share => JSON.stringify(coachContext({ date, daily: { training: { planned: [{ name: "VO2max 5×4", type: "Ride", durationHours: 1, tss: 80 }] } }, week: { days: [] }, fitness: { wellness: [] }, health: {}, gym: { history: [] }, availabilityMinutes: 90, profile: { sex: "female", cycle: cycleOf(share) }, sport: "ride", cycle: share ? cycleForCoach(cycleOf(share)) : null }));
+  const CZECH = /menstruac|krvácen|křeč|cyklu|luteál|prášek|"cycle":true/i;
+  assert.match(input(true), /menstruac/, "with sharing the coach knows why the day is easy");
+  assert.doesNotMatch(input(false), CZECH);
 }));
 
 test("the sentence's records of earlier days go after KEEP_DAYS", async () => {

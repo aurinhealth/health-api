@@ -708,14 +708,15 @@ export default {
   }
 };
 
-// Server-Timing on every answer; the app's API requests also go to the logs,
-// and a slow one into the owner's morning report (request-timing.js).
+// The app's API requests: Server-Timing on the answer, a line in the logs, and
+// a slow one into the owner's morning report (request-timing.js). Sign-in,
+// webhooks and the site get no Server-Timing: their database work says nothing
+// to a caller without an account (security review 2026-11-04).
 function withTiming(response, work, route, env, ctx) {
-  if (route.includes(" /app/api/")) {
-    console.log(JSON.stringify({ timing: route, status: response.status, ms: elapsed(work), queries: work.queries, rows_read: work.rowsRead, db_ms: work.dbMs, waits: work.waits }));
-    const slow = slowness(work);
-    if (slow) ctx?.waitUntil?.(recordOpsEvent(env.DB, "slow", route, slow));
-  }
+  if (!route.includes(" /app/api/")) return response;
+  console.log(JSON.stringify({ timing: route, status: response.status, ms: elapsed(work), queries: work.queries, rows_read: work.rowsRead, db_ms: work.dbMs, waits: work.waits }));
+  const slow = slowness(work);
+  if (slow) ctx?.waitUntil?.(recordOpsEvent(env.DB, "slow", route, slow));
   try { response.headers.set("Server-Timing", serverTiming(work)); return response; }
   catch { const copy = new Response(response.body, response); copy.headers.set("Server-Timing", serverTiming(work)); return copy; }
 }
@@ -1574,6 +1575,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   // "Revize po tréninku" (week-revision.js): after a finished ride or run the
   // coach proposes changes to the next sessions; GET builds it once per new
   // session or rating, POST applies it ("Upravit") or keeps the plan ("Nechat").
+  // "Upravit" applies the proposal the athlete saw: the app sends its signature
+  // (older apps send none), and a card made again since is not applied unseen.
+  const changedSince=(body,stored)=>typeof body.signature==='string'&&body.signature!==stored.signature;
   if(url.pathname==='/app/api/coach/revision'&&['GET','POST'].includes(request.method)){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if(request.method==='POST'&&request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
@@ -1584,6 +1588,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if(!date||!['apply','keep'].includes(body.decision))throw new Error(L('Tahle revize už neplatí.', 'This review has expired.'));
         const stored=await readRevision(env.DB,date);
         if(!stored||stored.status!=='pending')return Response.json({status:'ok',revision:stored},{headers:{'Cache-Control':'no-store'}});
+        if(body.decision==='apply'&&changedSince(body,stored))return Response.json({message:L('Návrh se mezitím změnil. Podívej se na nový.', 'The proposal has changed since. Have a look at the new one.')},{status:409});
         if(body.decision==='keep'){await decideRevision(env.DB,date,'kept');return Response.json({status:'ok',revision:{...stored,status:'kept'}},{headers:{'Cache-Control':'no-store'}});}
         assertTrainingAllowed(await getAthleteState(env.DB));
         const changes=[];
@@ -1655,6 +1660,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if(body.date!==today||!['apply','keep'].includes(body.decision))throw new Error(L('Tahle kontrola už neplatí.', 'This check has expired.'));
         const stored=await readWeekCheck(env.DB,today);
         if(!stored||stored.status!=='pending')return Response.json({status:'ok',check:stored},noStore);
+        if(body.decision==='apply'&&changedSince(body,stored))return Response.json({message:L('Návrh se mezitím změnil. Podívej se na nový.', 'The proposal has changed since. Have a look at the new one.')},{status:409});
         if(body.decision==='keep'){await decideWeekCheck(env.DB,today,'kept');return Response.json({status:'ok',check:{...stored,status:'kept'}},noStore);}
         assertTrainingAllowed(await getAthleteState(env.DB));
         const changes=[];
@@ -2406,6 +2412,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // without the AI and without counting as a message.
       if(body.decision==='adjust')return Response.json(await adjustCoachDraft(env,ctx,row,draft,body),{headers:{'Cache-Control':'no-store'}});
       if(!['confirm','reject'].includes(body.decision))throw new Error(L('Potvrď nebo odmítni návrh.', 'Confirm or reject the proposal.'));
+      // A proposal holds for the day it was made, as in the chat, also from an old notification.
+      if(body.decision==='confirm'&&row.created_at<dayStartSql(localToday())){
+        await env.DB.prepare("UPDATE coach_inbox SET status='expired' WHERE user_id=? AND id=? AND status='draft'").bind(env.USER_ID,row.id).run();
+        return Response.json({message:L('Návrh je z jiného dne a už neplatí. Zeptej se kouče znovu.', 'This proposal is from another day and no longer applies. Ask the coach again.')},{status:409});
+      }
       // Taken before anything is done, so a double tap or a confirm from the push
       // and the app at once acts only once; a claim older than two minutes is a
       // request that died midway. A change that fails puts the proposal back.

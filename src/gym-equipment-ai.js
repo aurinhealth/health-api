@@ -6,7 +6,7 @@ import { L } from "./lang.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { METAGYM_KUTNA_HORA, OTHER_STATIONS, OTHER_STATION_IDS, stationPicker } from "./gym-equipment.js";
 import { validFoodImage } from "./food-photo.js";
-import { fetchPublic, publicUrl } from "./public-fetch.js";
+import { fetchPublic, publicUrl, readUpTo } from "./public-fetch.js";
 import { instructions } from './private/gym-equipment-ai.js';
 
 // Generic names and groups, in the order the app lists them.
@@ -118,7 +118,7 @@ async function fetchPage(link, fetchImpl) {
   try {
     const r = await fetchPublic(link, { headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (compatible; AurinBot/1.0; +https://aurin.health)" }, signal: AbortSignal.timeout(8000) }, fetchImpl);
     if (!r?.ok || !/html/i.test(r.headers.get("content-type") || "")) return "";
-    return (await r.text()).slice(0, 1_500_000);
+    return new TextDecoder().decode((await readUpTo(r, 1_500_000)).bytes);
   } catch { return ""; }
 }
 

@@ -242,7 +242,7 @@ test("the data download lists the passkeys and deleting the account removes them
   const [exported] = (await exportAccount(own, user)).tables.user_passkeys;
   assert.equal(exported.id, passkey.id);
   assert.equal(exported.user_id, undefined);
-  env.DB.sqlite.exec(readFileSync(new URL("../migrations/0011_account_deletions.sql", import.meta.url), "utf8"));
+  for (const file of ["0011_account_deletions.sql", "0026_account_deletion_retries.sql"]) env.DB.sqlite.exec(readFileSync(new URL("../migrations/" + file, import.meta.url), "utf8"));
   await deleteAccount(own, await findUser(env.DB, user.id, env));
   assert.equal(env.DB.sqlite.prepare("SELECT COUNT(*) AS n FROM user_passkeys").get().n, 0);
   assert.equal((await signIn(env, passkey)).status, 401);

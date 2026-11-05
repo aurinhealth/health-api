@@ -164,9 +164,9 @@ export async function deleteAccount(env, user, { fetchImpl = fetch, budgetMs = R
     console.error("Account data deletion continues in the cron", error.message);
     return { status: "ok", google, apple, whoop, ultrahuman, wahoo, intervals, deleted: {}, pending: true };
   }
-  if (purge.done) {
-    await completeDeletion(env.DB, env.USER_ID, env.USER_DATA_ROUTING === 'true');
-  }
+  // A sync or upload that began before the deletion may still write a little;
+  // the cron's last pass LAST_PASS_MINUTES later removes it, then the marker goes.
+  if (purge.done) await env.DB.prepare("UPDATE account_deletions SET retry_after = ? WHERE user_id = ?").bind(sqlTime(lastPassAt(new Date())), env.USER_ID).run();
   return { status: "ok", google, apple, whoop, ultrahuman, wahoo, intervals, deleted: purge.deleted, pending: !purge.done };
 }
 
@@ -189,6 +189,11 @@ async function completeDeletion(db, userId, routed) {
 // chunk budget (an account costs a query per table besides its chunks).
 // Returns what happened to each account, or null when none was due.
 const MAX_ACCOUNTS_PER_RUN = 3;
+// As with pausing health data (health-pause.js): a sync, webhook or upload that
+// was running when the account went may still write; the last pass removes it.
+const LAST_PASS_MINUTES = 15;
+const lastPassAt = from => new Date(from.getTime() + LAST_PASS_MINUTES * 60000);
+const parseSqlTime = text => new Date(String(text).replace(" ", "T") + "Z");
 const DELETION_RETRY_MINUTES = attempts => Math.min(5 * 2 ** Math.max(0, attempts - 1), 6 * 60);
 const sqlTime = date => date.toISOString().slice(0, 19).replace("T", " ");
 const errorText = error => String(error?.message ?? error ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
@@ -200,7 +205,7 @@ export async function finishAccountDeletions(db, { budgetMs = CRON_BUDGET_MS, ch
   while (results.length < maxAccounts && chunksLeft > 0 && (!results.length || Date.now() < deadline)) {
     let next;
     try {
-      next = await db.prepare("SELECT user_id, attempts FROM account_deletions WHERE retry_after IS NULL OR retry_after <= ? ORDER BY requested_at, user_id LIMIT 1").bind(sqlTime(now())).first();
+      next = await db.prepare("SELECT user_id, attempts, requested_at FROM account_deletions WHERE retry_after IS NULL OR retry_after <= ? ORDER BY requested_at, user_id LIMIT 1").bind(sqlTime(now())).first();
     } catch (error) {
       if (missingTable(error)) return null;
       throw error;
@@ -209,7 +214,7 @@ export async function finishAccountDeletions(db, { budgetMs = CRON_BUDGET_MS, ch
     const userId = Number(next.user_id);
     let result;
     try {
-      result = await finishOne(db, userId, { deadline, chunkRows, maxChunks: chunksLeft, databaseForUser });
+      result = await finishOne(db, userId, { deadline, chunkRows, maxChunks: chunksLeft, databaseForUser, requestedAt: next.requested_at, now });
     } catch (error) {
       const attempts = Number(next.attempts || 0) + 1;
       const retryAfter = new Date(now().getTime() + DELETION_RETRY_MINUTES(attempts) * 60000);
@@ -227,16 +232,19 @@ export async function finishAccountDeletions(db, { budgetMs = CRON_BUDGET_MS, ch
   return results.length ? results : null;
 }
 
-async function finishOne(db, userId, { deadline, chunkRows, maxChunks, databaseForUser }) {
+// The marker and the data route stay until a pass that started at least
+// LAST_PASS_MINUTES after the deletion has found nothing left to delete.
+async function finishOne(db, userId, { deadline, chunkRows, maxChunks, databaseForUser, requestedAt, now }) {
   if (await db.prepare("SELECT 1 AS present FROM users WHERE id = ?").bind(userId).first()) {
     await db.prepare("DELETE FROM account_deletions WHERE user_id = ?").bind(userId).run();
     return { userId, done: false, skipped: "account exists" };
   }
+  const started = now();
+  const lastPass = lastPassAt(parseSqlTime(requestedAt));
   const data = databaseForUser ? await databaseForUser(userId) : db;
   const { done, deleted, chunks } = await purgeUserData(data, userId, { deadline, chunkRows, maxChunks });
-  if (done) {
-    await completeDeletion(db, userId, Boolean(databaseForUser));
-  }
+  if (done && started >= lastPass) await completeDeletion(db, userId, Boolean(databaseForUser));
+  else if (done) await db.prepare("UPDATE account_deletions SET retry_after = ? WHERE user_id = ?").bind(sqlTime(lastPass), userId).run();
   return { userId, done, deleted: Object.values(deleted).reduce((sum, n) => sum + n, 0), chunks };
 }
 

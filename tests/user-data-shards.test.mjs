@@ -139,6 +139,8 @@ test('account export and resumable deletion find both central and shard records'
   await deleteAccount(a, user(3), { budgetMs: 0, chunkRows: 1 });
   assert.equal(core.sqlite.prepare('SELECT COUNT(*) n FROM users WHERE id=3').get().n, 0);
   for (let i = 0; i < 5 && rows(core, 'account_deletions', 3).length; i++) await finishAccountDeletions(core, { databaseForUser: id => deletionDatabase(env,id), chunkRows: 1 });
+  assert.equal(rows(core, 'user_data_routes', 3).length, 1, 'the route waits for the last pass');
+  await finishAccountDeletions(core, { databaseForUser: id => deletionDatabase(env,id), now: () => new Date(Date.now() + 16 * 60000) });
   assert.equal(rows(shards[0], 'health_datapoints', 3).length, 0);
   assert.equal(rows(core, 'user_data_routes', 3).length, 0);
   assert.equal(rows(core, 'account_deletions', 3).length, 0);

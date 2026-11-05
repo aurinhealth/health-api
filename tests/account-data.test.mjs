@@ -188,6 +188,24 @@ test("a large account is deleted in chunks, never with one DELETE over all its r
   assert.ok(deletes.length > 0 && deletes.every(sql => /WHERE rowid IN \(SELECT rowid FROM \w+ WHERE user_id = \? LIMIT \?\)/.test(sql)));
   assert.equal(count(db, "health_datapoints", 3), 0);
   assert.equal(count(db, "health_datapoints", 4), 8);
+  // The marker waits for the last pass (account deletion's own test below).
+  assert.ok(db.sqlite.prepare("SELECT retry_after FROM account_deletions WHERE user_id = 3").get().retry_after > new Date().toISOString().slice(0, 19).replace("T", " "));
+});
+
+test("a sync that writes after the deletion is removed by the last pass 15 minutes later", async () => {
+  const db = database();
+  addSamples(db, 3, 2);
+  const env = { DB: scopedDb(db, 3), USER_ID: 3 };
+  const inFlight = scopedDb(db, 3); // a sync job that began before the deletion
+  const result = await deleteAccount(env, user, { fetchImpl: async () => new Response("") });
+  assert.equal(result.pending, false);
+  await inFlight.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,value_numeric,payload_json) VALUES(?, 'google', 'heart_rate', 'late', 60, '{}')").bind(3).run();
+  const minutes = n => () => new Date(Date.now() + n * 60000);
+  assert.equal(await finishAccountDeletions(db, { now: minutes(5) }), null, "not due before the last pass");
+  assert.equal(count(db, "health_datapoints", 3), 1);
+  const [run] = await finishAccountDeletions(db, { now: minutes(16) });
+  assert.deepEqual([run.userId, run.done, run.deleted], [3, true, 1]);
+  assert.equal(count(db, "health_datapoints", 3), 0);
   assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM account_deletions").get().n, 0);
 });
 
@@ -212,6 +230,8 @@ test("what the request has no time for, the cron finishes; the account is gone a
   assert.equal(count(db, "dashboard_profile", 3), 0);
   assert.equal(count(db, "health_datapoints", 4), 4);
   assert.equal(count(db, "users", 4), 1);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM account_deletions").get().n, 1, "the marker waits for the last pass");
+  await finishAccountDeletions(db, { now: () => new Date(Date.now() + 16 * 60000) });
   assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM account_deletions").get().n, 0);
 });
 

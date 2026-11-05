@@ -140,7 +140,7 @@ export const TESTER_CAP = 20;
 const pct = (a, b) => b > 0 ? Math.round(a / b * 100) : 0;
 
 // stats: { accounts, newWeek, aiUsersWeek, paidMonthly, paidYearly, gift, trial, sandbox,
-// weekUsd, monthUsd, monthDay, monthDays, totalYesterdayUsd, nearCap: [{ email, cost, limit }] }
+// weekUsd, monthUsd, monthDay, monthDays, totalYesterdayUsd, nearCap: [{ id, cost, limit }] }
 // (accountStats). Every morning: the numbers, what to watch and a proposal
 // for each, so a limit is raised before people hit it. limits: the Worker
 // settings ({ monthly, unpaidShare, totalAlert, totalLimit }).
@@ -158,7 +158,7 @@ export function accountsReport(stats, limits = {}) {
 - AI za 7 dní ${usd(stats.weekUsd)} (${usd(perUser)} na uživatele s AI), za měsíc zatím ${usd(stats.monthUsd)}, do konce měsíce asi ${usd(projected)}
 - Pro vydělá asi ${usd(revenue)} za měsíc${monthly != null ? ` · strop na účet ${usd(monthly)}, bez placení ${usd(monthly * unpaidShare)}` : ""}`];
   const proposals = [];
-  for (const row of stats.nearCap) proposals.push(`${row.email} má za měsíc ${usd(row.cost)} z ${usd(row.limit)} (${pct(row.cost, row.limit)} %). Jestli je to běžné používání, zvedni AI_MONTHLY_LIMIT_USD z ${usd(monthly)} na ${usd((monthly || 0) + 2)}; jestli ne, nech to, brzda ho zastaví.`);
+  for (const row of stats.nearCap) proposals.push(`Účet #${row.id} má za měsíc ${usd(row.cost)} z ${usd(row.limit)} (${pct(row.cost, row.limit)} %). Jestli je to běžné používání, zvedni AI_MONTHLY_LIMIT_USD z ${usd(monthly)} na ${usd((monthly || 0) + 2)}; jestli ne, nech to, brzda ho zastaví.`);
   if (stats.aiUsersWeek >= 3 && stats.nearCap.length / stats.aiUsersWeek >= 0.2) proposals.push(`U stropu je ${stats.nearCap.length} z ${stats.aiUsersWeek} lidí s AI. Strop je nejspíš moc nízko: zvedni AI_MONTHLY_LIMIT_USD o 2 USD.`);
   if (paid > 0 && projected > revenue) proposals.push(`AI tento měsíc vyjde asi na ${usd(projected)}, víc, než Pro vydělá (${usd(revenue)} za ${paid} platících). Sniž COACH_WEEKLY_MESSAGES z 30 na 25, nebo strop na účet.`);
   if (totalLimit != null && stats.totalYesterdayUsd >= totalLimit * 0.7) proposals.push(`Včera padlo ${pct(stats.totalYesterdayUsd, totalLimit)} % denní brzdy pro všechny. Než AI vypne všem, zvedni AI_TOTAL_DAILY_LIMIT_USD na ${usd(Math.ceil(totalLimit * 1.5))}${totalAlert != null ? ` a AI_TOTAL_DAILY_ALERT_USD na ${usd(Math.ceil(totalAlert * 1.5))}` : ""}.`);
@@ -194,7 +194,7 @@ export async function accountStats(env, date, { now = Date.now() } = {}) {
   }
   const spend = (await db.prepare("SELECT user_id, SUM(cost_usd) AS week FROM ai_usage WHERE day >= ? AND day <= ? AND model NOT IN ('pending', 'carried-over') GROUP BY user_id").bind(weekFrom, date).all()).results || [];
   // counted: what the account's limit sees (with what a deleted account of the same person carried over).
-  const monthRows = (await db.prepare("SELECT a.user_id, u.email, SUM(CASE WHEN a.model = 'carried-over' THEN 0 ELSE a.cost_usd END) AS cost, SUM(a.cost_usd) AS counted FROM ai_usage a JOIN users u ON u.id = a.user_id WHERE a.day >= ? AND a.day <= ? AND a.model != 'pending' GROUP BY a.user_id").bind(monthFrom, date).all()).results || [];
+  const monthRows = (await db.prepare("SELECT a.user_id, SUM(CASE WHEN a.model = 'carried-over' THEN 0 ELSE a.cost_usd END) AS cost, SUM(a.cost_usd) AS counted FROM ai_usage a JOIN users u ON u.id = a.user_id WHERE a.day >= ? AND a.day <= ? AND a.model != 'pending' GROUP BY a.user_id").bind(monthFrom, date).all()).results || [];
   for (const row of spend) {
     if (!ids.has(Number(row.user_id))) continue;
     if (Number(row.week) > 0) { stats.aiUsersWeek++; stats.weekUsd += Number(row.week); }
@@ -205,7 +205,7 @@ export async function accountStats(env, date, { now = Date.now() } = {}) {
     const counted = Number(row.counted) || 0;
     stats.monthUsd += Number(row.cost) || 0;
     const limit = full == null ? null : whole.has(Number(row.user_id)) ? full : full * share;
-    if (limit && counted >= limit * 0.8) stats.nearCap.push({ email: row.email, cost: counted, limit });
+    if (limit && counted >= limit * 0.8) stats.nearCap.push({ id: Number(row.user_id), cost: counted, limit });
   }
   return stats;
 }

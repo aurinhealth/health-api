@@ -220,7 +220,13 @@ export async function saveSupportReport(env, body, client = null) {
   // The server's side goes with the app's, so the stored report is whole.
   const server = report.idea ? null : await serverSnapshot(env.DB).catch(() => null);
   if (server) report.diagnostics = JSON.stringify({ ...(report.diagnostics ? JSON.parse(report.diagnostics) : {}), server, ...(client ? { client } : {}) });
-  const result = await env.DB.prepare("INSERT INTO support_reports(user_id,message,screenshot_base64,diagnostics_json) VALUES(?,?,?,?)").bind(env.DB.userId, report.message, report.screenshot, report.diagnostics).run();
+  // The limits again in the statement that saves, so reports sent together cannot pass them.
+  const result = await env.DB.prepare("INSERT INTO support_reports(user_id,message,screenshot_base64,diagnostics_json) SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM support_reports WHERE user_id=? AND created_at>=datetime('now','-1 day')) < ? AND NOT EXISTS (SELECT 1 FROM support_reports WHERE user_id=? AND created_at>=datetime('now',?))")
+    .bind(env.DB.userId, report.message, report.screenshot, report.diagnostics, env.DB.userId, DAILY_REPORTS, env.DB.userId, `-${MIN_GAP_SECONDS} seconds`).run();
+  if (!Number(result?.meta?.changes)) {
+    await assertAllowed(env.DB, report.idea);
+    throw fail(report.idea ? L("Před chvílí odešel návrh. Další pošli za pár sekund.", "An idea was sent a moment ago. Send another in a few seconds.") : L("Před chvílí odešlo hlášení. Další pošli za pár sekund.", "A report was sent a moment ago. Send another in a few seconds."), 429);
+  }
   const id = Number(result?.meta?.last_row_id) || null;
   let emailed = false;
   const to = supportAddress(env);

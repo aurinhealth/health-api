@@ -99,6 +99,7 @@ test('account export and resumable deletion cover food metadata without deleting
   for(let i=0;i<5&&count(f.core,'account_deletions');i++)await finishAccountDeletions(f.core,{databaseForUser:id=>deletionDatabase(f.env,id),chunkRows:1});
   assert.equal(count(f.foods,'food_reports'),0);assert.equal(count(f.foods,'recipe_contributions'),0);
   assert.equal(count(f.foods,'food_contributions'),1);assert.equal(count(f.shards[0],'personal_foods'),0);assert.equal(count(f.shards[1],'personal_foods'),1);
+  await finishAccountDeletions(f.core,{databaseForUser:id=>deletionDatabase(f.env,id),now:()=>new Date(Date.now()+16*60000)}); // the last pass
   assert.equal(count(f.core,'account_deletions'),0);
 });
 

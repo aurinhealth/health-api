@@ -148,6 +148,8 @@ struct WeekRevision: Decodable, Equatable {
     let date: String
     /// "pending", "applied" (or "kept", which the server does not show again).
     let status: String?
+    /// The version shown; "Upravit" applies only this one.
+    let signature: String?
     let summary: String?
     let changes: [Change]?
 
@@ -484,9 +486,10 @@ extension APIClient {
     }
 
     /// "Upravit" (apply) or "Nechat" (keep).
-    func decideRevision(date: String, apply: Bool) async throws -> WeekRevision? {
-        let r: WeekRevisionResponse = try await send("/app/api/coach/revision", method: "POST",
-                                                     body: ["date": JSONValue.string(date), "decision": .string(apply ? "apply" : "keep")])
+    func decideRevision(date: String, signature: String?, apply: Bool) async throws -> WeekRevision? {
+        var body: JSONObject = ["date": .string(date), "decision": .string(apply ? "apply" : "keep")]
+        if let signature { body["signature"] = .string(signature) }
+        let r: WeekRevisionResponse = try await send("/app/api/coach/revision", method: "POST", body: body)
         return r.revision
     }
 

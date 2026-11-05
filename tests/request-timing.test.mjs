@@ -48,11 +48,12 @@ test("a cron job that reads a million rows lands in the morning report", async (
   assert.match(opsReport(rows, null, "2026-10-29").text, /Pomalé požadavky a úlohy[^\n]*\n- cron sync: 1× \(naposledy: \d+ ms, 1 dotazů, 1000005 řádků\)/);
 });
 
-test("every answer of the Worker carries Server-Timing", () => {
+test("every answer of the app's API carries Server-Timing, sign-in and the site none", () => {
   const source = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   const exported = source.slice(source.lastIndexOf("export default {"));
   assert.match(exported, /return timed\(async work => \{/);
   assert.match(exported, /withTiming\(await withPlainErrors\(request, answered\), work, route, env, ctx\)/);
+  assert.match(source, /function withTiming\(response, work, route, env, ctx\) \{\n  if \(!route\.includes\(" \/app\/api\/"\)\) return response;/);
 });
 
 test("the slow report says what the request waited for: D1, Intervals, AI, another request", async () => {

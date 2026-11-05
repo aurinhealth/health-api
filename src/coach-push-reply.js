@@ -3,6 +3,7 @@
 // again; one proposal in the answer gets "Potvrdit" and "Ne" right there
 // (PushRegistration.swift CoachPush).
 import { L } from './lang.js';
+import { actionSummary, withoutActionsNote } from './coach-actions.js';
 
 // The phone's notification categories (PushRegistration.swift).
 export const COACH_REPLY_CATEGORY = 'COACH_REPLY';
@@ -14,8 +15,7 @@ const BODY_CHARS = 600;
 
 // Markdown out: a notification shows plain text.
 export function plainText(text) {
-  return String(text || '')
-    .replace(/\[(?:Návrhy|Proposals): [^\]]*\]/g, '')
+  return withoutActionsNote(text)
     .replace(/\*\*|__|`/g, '')
     .replace(/^\s{0,3}#{1,6}\s+/gm, '')
     .replace(/^\s*[-*•]\s+/gm, '· ')
@@ -34,13 +34,19 @@ export function pushOpening(title, body) {
   return t && b ? `**${t}**\n\n${b}` : t || b;
 }
 
-// The push with the coach's answer: {alert, category, data}. One proposal is
-// confirmed from the notification; several only in the app.
+// Deleting or merging an activity, removing a planned workout, a new plan and
+// a status change are confirmed only in the app, where the card shows them.
+const APP_ONLY = new Set(['activity_delete', 'activity_merge', 'rest', 'plan', 'status']);
+
+// The push with the coach's answer: {alert, category, data}. One small proposal
+// is confirmed from the notification, which names it first (the body is hidden
+// on the lock screen when health values are); others only in the app.
 export function replyPush(result, chatId) {
   const actions = (result?.actions || []).filter(a => a?.draftId != null);
-  const one = actions.length === 1 ? actions[0] : null;
-  const more = actions.length > 1 ? L(' Návrhy potvrdíš v aplikaci.', ' Confirm the proposals in the app.') : '';
-  const body = shortBody(result?.answer || '', BODY_CHARS - more.length) + more;
+  const one = actions.length === 1 && !APP_ONLY.has(actions[0].type) ? actions[0] : null;
+  const head = one ? L('Návrh: ', 'Proposal: ') + actionSummary(one).slice(0, 200) + '\n' : '';
+  const more = actions.length && !one ? (actions.length > 1 ? L(' Návrhy potvrdíš v aplikaci.', ' Confirm the proposals in the app.') : L(' Návrh potvrdíš v aplikaci.', ' Confirm the proposal in the app.')) : '';
+  const body = (head + shortBody(result?.answer || '', BODY_CHARS - more.length - head.length)).trim() + more;
   return {
     alert: { title: L('Kouč', 'Coach'), body: body || L('Odpověď je v aplikaci.', 'The answer is in the app.') },
     category: one ? COACH_ACTION_CATEGORY : COACH_REPLY_CATEGORY,

@@ -59,6 +59,9 @@ export function actionSafetyContext(days,today,planFor){
   };
 }
 export const actionsNote=actions=>actions?.length?L('[Návrhy: ','[Proposals: ')+actions.map(actionSummary).join('; ')+']':'';
+// The answer without that line. It always comes last and the names in it come
+// from synced data, so everything from its start is cut (a name may hold "]").
+export const withoutActionsNote=text=>String(text||'').replace(/\s*\[(?:Návrhy|Proposals): [\s\S]*$/,'');
 // Hard work the app never prepares for today on a red readiness day or with
 // signs of illness (safetyNote): the answer may say so, the card cannot.
 const ILLNESS_FLAG=/^(?:respiration|skin_temp|wrist_temp)_elevated$|^checkin_sick$/;
