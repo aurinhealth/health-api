@@ -158,6 +158,11 @@ export async function ensureStoreColumns(db) {
   for (const column of COLUMNS) await db.prepare('ALTER TABLE subscriptions ADD COLUMN ' + column).run().catch(() => { /* already there */ });
   await db.prepare('CREATE INDEX IF NOT EXISTS subscriptions_app_account_token ON subscriptions(app_account_token)').run();
   await db.prepare('CREATE INDEX IF NOT EXISTS subscriptions_original_transaction ON subscriptions(original_transaction_id)').run();
+  // claimOriginal's table, filled from the rows already there in the same step.
+  await db.batch([
+    db.prepare('CREATE TABLE IF NOT EXISTS store_originals (original_transaction_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, signed_at INTEGER NOT NULL)'),
+    db.prepare('INSERT OR IGNORE INTO store_originals(original_transaction_id,user_id,signed_at) SELECT original_transaction_id,user_id,COALESCE(store_signed_at,0) FROM subscriptions WHERE original_transaction_id IS NOT NULL')
+  ]);
 }
 async function withColumns(db, work) {
   try { return await work(); } catch (error) {
@@ -212,13 +217,38 @@ function planOf(tx, renewal, type) {
   return until ? { plan: 'ai', validUntil: new Date(until).toISOString() } : { plan: 'free', validUntil: null };
 }
 
-// Writes the transaction to the row of userId, unless a newer one is there already.
+const signedAtOf = tx => Number(tx.signedDate) || Date.now();
+
+// One row per original transaction (one subscription of one Apple ID): the
+// account it belongs to and the newest record Apple signed for it. Claimed in
+// one statement, so two accounts sending the same purchase at once cannot both
+// get it, and an older record never undoes a newer one, even when the account's
+// row held another subscription in between (refunded, another purchase, then
+// the old record again). Apple's own notifications (fromApple) move the mark
+// whichever account holds it.
+// 'ok': the newest record so far, write it; 'stale': an older one; 'taken': another account's.
+async function claimOriginal(db, userId, tx, fromApple = false) {
+  const original = String(tx.originalTransactionId);
+  const result = await withColumns(db, () => db.prepare('INSERT INTO store_originals(original_transaction_id,user_id,signed_at) VALUES(?,?,?) ON CONFLICT(original_transaction_id) DO UPDATE SET signed_at=excluded.signed_at WHERE (? OR store_originals.user_id=excluded.user_id) AND store_originals.signed_at<=excluded.signed_at')
+    .bind(original, userId, signedAtOf(tx), fromApple ? 1 : 0).run());
+  if (result.meta.changes) return 'ok';
+  if (fromApple) return 'stale';
+  const holder = await db.prepare('SELECT user_id FROM store_originals WHERE original_transaction_id=?').bind(original).first();
+  return Number(holder?.user_id) === Number(userId) ? 'stale' : 'taken';
+}
+
+// Writes the transaction to the row of userId, unless a newer one of the same
+// subscription is there already (claimOriginal keeps the order of each
+// subscription). Another subscription takes the row's place only while it gives Pro,
+// or while the row's own gives none (an expired TestFlight purchase does not
+// push out the App Store one).
 async function write(db, userId, tx, renewal, type) {
   const { plan, validUntil } = planOf(tx, renewal, type);
-  const signedAt = Number(tx.signedDate) || Date.now();
+  const signedAt = signedAtOf(tx);
+  const now = new Date().toISOString();
   const autoRenew = renewal && renewal.autoRenewStatus != null ? (Number(renewal.autoRenewStatus) === 1 ? 1 : 0) : null;
-  await withColumns(db, () => db.prepare("INSERT INTO subscriptions(user_id,plan,valid_until,original_transaction_id,product_id,store_environment,store_signed_at,auto_renew,updated_at,free_trial,offer_type) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,valid_until=excluded.valid_until,original_transaction_id=excluded.original_transaction_id,product_id=excluded.product_id,store_environment=excluded.store_environment,store_signed_at=excluded.store_signed_at,auto_renew=COALESCE(excluded.auto_renew,subscriptions.auto_renew),updated_at=excluded.updated_at,free_trial=excluded.free_trial,offer_type=excluded.offer_type WHERE subscriptions.store_signed_at IS NULL OR subscriptions.store_signed_at<=excluded.store_signed_at OR subscriptions.original_transaction_id IS NOT excluded.original_transaction_id")
-    .bind(userId, plan, validUntil, String(tx.originalTransactionId), tx.productId, tx.environment, signedAt, autoRenew, new Date().toISOString(), Number(tx.offerType) === 1 || tx.offerDiscountType === 'FREE_TRIAL' ? 1 : 0, Number(tx.offerType) > 0 ? Number(tx.offerType) : null).run());
+  await withColumns(db, () => db.prepare("INSERT INTO subscriptions(user_id,plan,valid_until,original_transaction_id,product_id,store_environment,store_signed_at,auto_renew,updated_at,free_trial,offer_type) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,valid_until=excluded.valid_until,original_transaction_id=excluded.original_transaction_id,product_id=excluded.product_id,store_environment=excluded.store_environment,store_signed_at=excluded.store_signed_at,auto_renew=COALESCE(excluded.auto_renew,subscriptions.auto_renew),updated_at=excluded.updated_at,free_trial=excluded.free_trial,offer_type=excluded.offer_type WHERE subscriptions.store_signed_at IS NULL OR (subscriptions.original_transaction_id IS excluded.original_transaction_id AND subscriptions.store_signed_at<=excluded.store_signed_at) OR (subscriptions.original_transaction_id IS NOT excluded.original_transaction_id AND ((excluded.plan='ai' AND excluded.valid_until>?) OR subscriptions.plan<>'ai' OR subscriptions.valid_until IS NULL OR subscriptions.valid_until<=?))")
+    .bind(userId, plan, validUntil, String(tx.originalTransactionId), tx.productId, tx.environment, signedAt, autoRenew, now, Number(tx.offerType) === 1 || tx.offerDiscountType === 'FREE_TRIAL' ? 1 : 0, Number(tx.offerType) > 0 ? Number(tx.offerType) : null, now, now).run());
   return { plan, validUntil };
 }
 
@@ -231,9 +261,9 @@ export async function saveAppTransaction(env, body, options = {}) {
   if (tx.appAccountToken && String(tx.appAccountToken).toLowerCase() !== mine.toLowerCase()) throw refuse(L('Tento nákup patří jinému účtu Aurin.', 'This purchase belongs to another Aurin account.'), 409);
   if (isPack(env, tx)) return savePackTransaction(env, tx);
   // An offer code redeemed outside the app has no token: the first account to send it keeps it.
-  const raw = env.RAW_DB || env.DB;
-  const holder = await raw.prepare('SELECT user_id FROM subscriptions WHERE original_transaction_id=?').bind(String(tx.originalTransactionId)).first();
-  if (holder && Number(holder.user_id) !== Number(env.USER_ID)) throw refuse(L('Tento nákup patří jinému účtu Aurin.', 'This purchase belongs to another Aurin account.'), 409);
+  const claim = await claimOriginal(env.RAW_DB || env.DB, env.USER_ID, tx);
+  if (claim === 'taken') throw refuse(L('Tento nákup patří jinému účtu Aurin.', 'This purchase belongs to another Aurin account.'), 409);
+  if (claim === 'stale') return { status: 'ok', stale: true, productId: tx.productId, environment: tx.environment };
   const saved = await write(env.DB, env.USER_ID, tx, null, null);
   return { status: 'ok', plan: saved.plan, validUntil: saved.validUntil, productId: tx.productId, environment: tx.environment };
 }
@@ -270,11 +300,19 @@ export async function handleAppStoreNotification(request, env, options = {}) {
     checkTransaction(env, tx);
     // A refunded pack stops counting; nothing else about a pack needs the server.
     if (isPack(env, tx)) return Response.json({ status: 'ok', refunded: tx.revocationDate || note.notificationType === 'REFUND' ? await refundPackTransaction(env.DB, tx) : false });
-    const row = await withColumns(env.DB, async () => (tx.appAccountToken ? await env.DB.prepare('SELECT user_id FROM subscriptions WHERE app_account_token=?').bind(String(tx.appAccountToken).toLowerCase()).first() : null)
-      || await env.DB.prepare('SELECT user_id FROM subscriptions WHERE original_transaction_id=?').bind(String(tx.originalTransactionId)).first());
-    if (!row) return Response.json({ status: 'ok', unknown: true });
-    const saved = await write(env.DB, row.user_id, tx, renewal, note.notificationType);
-    return Response.json({ status: 'ok', plan: saved.plan });
+    const original = String(tx.originalTransactionId);
+    const byToken = tx.appAccountToken ? await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM subscriptions WHERE app_account_token=?').bind(String(tx.appAccountToken).toLowerCase()).first()) : null;
+    const rows = byToken ? [byToken] : (await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM subscriptions WHERE original_transaction_id=?').bind(original).all())).results || [];
+    // The holder, also when its row holds another subscription by now.
+    const held = byToken || await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM store_originals WHERE original_transaction_id=?').bind(original).first()) || rows[0];
+    if (!held) return Response.json({ status: 'ok', unknown: true });
+    const holder = Number(held.user_id);
+    if (await claimOriginal(env.DB, holder, tx, true) === 'stale') return Response.json({ status: 'ok', stale: true });
+    // Pro goes to the holder only; its end also reaches a copy made before claimOriginal.
+    const { plan } = planOf(tx, renewal, note.notificationType);
+    const targets = new Set([holder, ...(plan === 'free' ? rows.map(row => Number(row.user_id)) : [])]);
+    for (const userId of targets) await write(env.DB, userId, tx, renewal, note.notificationType);
+    return Response.json({ status: 'ok', plan });
   } catch (error) {
     if (error.status) return Response.json({ status: 'error', message: error.message }, { status: error.status });
     throw error;

@@ -124,6 +124,31 @@ test("an older transaction does not undo a newer one", async () => {
   assert.equal(Date.parse(row(raw, 1).valid_until), now + 365 * DAY);
 });
 
+// D1 answers over the network: each statement takes a few milliseconds.
+const pause = () => new Promise(done => setTimeout(done, 1 + Math.random() * 4));
+const late = s => ({ ...s, bind: (...values) => late(s.bind(...values)), first: async () => { await pause(); return s.first(); }, all: async () => { await pause(); return s.all(); }, run: async () => { await pause(); return s.run(); } });
+
+test("a purchase without a token sent by several accounts at once goes to one of them", async () => {
+  for (let round = 0; round < 10; round++) {
+    const { raw, user } = setup();
+    for (const id of [1, 2, 3, 4, 5]) await appAccountToken(user(id));
+    const slow = { ...raw, prepare: sql => late(raw.prepare(sql)) };
+    const answers = await Promise.allSettled([1, 2, 3, 4, 5].map(id => saveAppTransaction({ DB: scopedDb(slow, id), RAW_DB: slow, USER_ID: id }, { signedTransaction: jws(transaction()) }, { roots })));
+    assert.equal(answers.filter(a => a.status === "fulfilled").length, 1);
+    assert.ok(answers.filter(a => a.status === "rejected").every(a => a.reason.status === 409));
+    assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM subscriptions WHERE original_transaction_id='2000000000'").get().n, 1);
+  }
+});
+
+test("a subscription held before store_originals stays with its account", async () => {
+  const { raw, user } = setup();
+  // The row as an older server left it, before the first statement on store_originals.
+  for (const column of ["app_account_token TEXT", "original_transaction_id TEXT", "product_id TEXT", "store_environment TEXT", "store_signed_at INTEGER", "auto_renew INTEGER", "updated_at TEXT", "free_trial INTEGER", "offer_type INTEGER", "testflight INTEGER"]) raw.sqlite.exec("ALTER TABLE subscriptions ADD COLUMN " + column);
+  raw.sqlite.exec("INSERT INTO subscriptions(user_id,plan,app_account_token,original_transaction_id,store_signed_at) VALUES(1,'ai','a','2000000000'," + (now + 5000) + "),(2,'free','b',NULL,NULL)");
+  await assert.rejects(saveAppTransaction(user(2), { signedTransaction: jws(transaction()) }, { roots }), { status: 409 });
+  assert.equal((await saveAppTransaction(user(1), { signedTransaction: jws(transaction({ signedDate: now })) }, { roots })).stale, true, "older than the row");
+});
+
 const notify = (payload, env, options = { roots }) => handleAppStoreNotification(new Request("https://aurin.health/webhooks/app-store", { method: "POST", body: JSON.stringify({ signedPayload: jws(payload) }) }), env, options);
 const notification = (type, tx, extra = {}) => ({
   notificationType: type, notificationUUID: crypto.randomUUID(), version: "2.0", signedDate: now + 1000,
@@ -231,4 +256,64 @@ test("a TestFlight build (Apple's AppTransaction says Sandbox) puts the account 
   assert.equal((await post({})).status, 403);
   assert.equal((await post({ Origin: "https://aurin.health" })).status, 400);
   assert.equal((await post({ Origin: "https://aurin.health" }, { signedIn: false })).status, 401);
+});
+
+test("a refunded subscription does not come back through another purchase and its old record", async () => {
+  const { raw, user } = setup();
+  const env = user(1);
+  const token = await appAccountToken(env);
+  const old = jws(transaction({ appAccountToken: token, environment: "Production", expiresDate: now + 365 * DAY, signedDate: now }));
+  await saveAppTransaction(env, { signedTransaction: old }, { roots });
+  await notify(notification("REFUND", transaction({ appAccountToken: token, environment: "Production", expiresDate: now + 365 * DAY, revocationDate: now + 500, signedDate: now + 1000 })), { DB: raw });
+  assert.equal(row(raw, 1).plan, "free");
+  // Another subscription (a TestFlight one), then the record from before the refund.
+  await saveAppTransaction(env, { signedTransaction: jws(transaction({ appAccountToken: token, originalTransactionId: "3000000000", expiresDate: now - DAY, signedDate: now + 2000 })) }, { roots });
+  assert.equal((await saveAppTransaction(env, { signedTransaction: old }, { roots })).stale, true);
+  assert.equal(row(raw, 1).original_transaction_id, "3000000000");
+  assert.equal((await storePurchase(env)).active, false);
+  // A late notification of the refunded one does not bring it back either.
+  await notify(notification("DID_RENEW", transaction({ appAccountToken: token, environment: "Production", expiresDate: now + 365 * DAY, signedDate: now + 100 })), { DB: raw });
+  assert.equal(row(raw, 1).original_transaction_id, "3000000000");
+  // A newer record of it (bought again) still counts.
+  await saveAppTransaction(env, { signedTransaction: jws(transaction({ appAccountToken: token, environment: "Production", expiresDate: now + 30 * DAY, signedDate: now + 3000 })) }, { roots });
+  assert.equal(row(raw, 1).plan, "ai");
+});
+
+test("a refund reaches every account that held a copy of the subscription", async () => {
+  const { raw, user } = setup();
+  await saveAppTransaction(user(1), { signedTransaction: jws(transaction()) }, { roots });
+  // A copy made before claimOriginal (the race it closes).
+  await appAccountToken(user(2));
+  raw.sqlite.exec("UPDATE subscriptions SET plan='ai', original_transaction_id='2000000000', store_signed_at=" + now + " WHERE user_id=2");
+  await notify(notification("REFUND", transaction({ revocationDate: now + 500, signedDate: now + 1000 })), { DB: raw });
+  assert.deepEqual([row(raw, 1).plan, row(raw, 2).plan], ["free", "free"]);
+  // Bought again: Pro goes back to the holder only.
+  await notify(notification("SUBSCRIBED", transaction({ expiresDate: now + 30 * DAY, signedDate: now + 2000 })), { DB: raw });
+  assert.deepEqual([row(raw, 1).plan, row(raw, 2).plan], ["ai", "free"]);
+});
+
+test("a refund finds a subscription without a token after the account's row moved on", async () => {
+  const { raw, user } = setup();
+  const env = user(1);
+  const token = await appAccountToken(env);
+  const old = jws(transaction({ environment: "Production", expiresDate: now + 365 * DAY, signedDate: now }));
+  await saveAppTransaction(env, { signedTransaction: old }, { roots });
+  // Pro ran out, then another subscription took the row.
+  await notify(notification("EXPIRED", transaction({ environment: "Production", expiresDate: now - DAY, signedDate: now + 500 })), { DB: raw });
+  await saveAppTransaction(env, { signedTransaction: jws(transaction({ appAccountToken: token, originalTransactionId: "3000000000", expiresDate: now + DAY, signedDate: now + 1000 })) }, { roots });
+  assert.equal(row(raw, 1).original_transaction_id, "3000000000");
+  await notify(notification("REFUND", transaction({ environment: "Production", expiresDate: now + 365 * DAY, revocationDate: now + 1500, signedDate: now + 2000 })), { DB: raw });
+  assert.equal((await saveAppTransaction(env, { signedTransaction: old }, { roots })).stale, true);
+  assert.equal(row(raw, 1).original_transaction_id, "3000000000");
+});
+
+test("an ended TestFlight purchase does not push out the App Store one", async () => {
+  const { raw, user } = setup();
+  const env = user(1);
+  const token = await appAccountToken(env);
+  await saveAppTransaction(env, { signedTransaction: jws(transaction({ appAccountToken: token, originalTransactionId: "3000000000", expiresDate: now + DAY, signedDate: now })) }, { roots });
+  await saveAppTransaction(env, { signedTransaction: jws(transaction({ appAccountToken: token, environment: "Production", expiresDate: now + 365 * DAY, signedDate: now + 1000 })) }, { roots });
+  await notify(notification("EXPIRED", transaction({ appAccountToken: token, originalTransactionId: "3000000000", expiresDate: now - DAY, signedDate: now + 2000 })), { DB: raw });
+  assert.equal(row(raw, 1).original_transaction_id, "2000000000");
+  assert.equal((await storePurchase(env)).active, true);
 });

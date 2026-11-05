@@ -6,7 +6,7 @@ export const FOOD_CATALOG_TABLES = new Set([
 ]);
 export const CENTRAL_PERSONAL_TABLES = new Set([
   'connection_credentials', 'connection_accounts', 'user_consents', 'user_identities', 'user_passkeys',
-  'user_language', 'user_time_zone', 'subscriptions', 'ai_usage', 'coach_carryover',
+  'user_language', 'user_time_zone', 'subscriptions', 'store_originals', 'ai_usage', 'coach_carryover',
   // Apple's refund notification finds a bought pack without the user (coach-packs.js).
   'coach_pack_purchases', 'coach_pack_balance',
   'food_contributions', 'recipe_contributions', 'food_reports', 'support_reports', 'food_suggestions',

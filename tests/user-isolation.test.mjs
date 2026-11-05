@@ -40,6 +40,8 @@ const allowed = [/FROM workout_shares WHERE id=\?"$/, /^"DELETE FROM push_tokens
   /^"UPDATE food_suggestions SET status='approved', decided_at=CURRENT_TIMESTAMP WHERE kind='report' AND status='pending' AND ref=\?"$/,
   // Apple's refund notification names the pack's transaction, not the user (coach-packs.js).
   /^'UPDATE coach_pack_purchases SET refunded_at = \? WHERE transaction_id = \? AND refunded_at IS NULL'$/,
+  // An App Store subscription belongs to one account: who holds it, when another account sends it (app-store.js).
+  /^'SELECT user_id FROM store_originals WHERE original_transaction_id=\?'$/,
   // The night's job finds the users with a coach day note due (coach-notes.js).
   /FROM users u WHERE u\.disabled = 0 AND u\.id IN \(SELECT q\.user_id FROM coach_note_queue q WHERE q\.due_at <= \?\)/];
 
