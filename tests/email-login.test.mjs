@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
-import { handleEmailLogin, sendCode, codesPerDay, openCodesPerDay } from "../src/email-login.js";
+import { handleEmailLogin, sendCode, codesPerDay, openCodesPerDay, networkCodesPerDay } from "../src/email-login.js";
 import { emailConfigured, emailSender, signInCodeEmail, passkeyAddedEmail, emailChangedEmail } from "../src/email-sender.js";
 import { withTimeZone } from "../src/user-time.js";
 import { ensureTenancy, inviteUser, signInEmailUser, setUserDisabled, _resetTenancyForTest } from "../src/tenancy.js";
@@ -228,7 +228,8 @@ test("all codes together stay under the day's budget (EMAIL_CODES_PER_DAY, 500 b
 });
 
 test("one caller starts at most fifty sign-ins a day, and an IPv6 caller is its whole /64", async () => {
-  const { env, sent } = await setup({ OPEN_SIGNUP: "true" });
+  // A budget big enough that one caller's share of it (a twentieth) is no limit here.
+  const { env, sent } = await setup({ OPEN_SIGNUP: "true", EMAIL_CODES_PER_DAY: "2000" });
   const t0 = Date.parse("2026-10-07T00:00:00Z"), answers = [];
   // 24 an hour, under the minute and hour limits.
   for (let i = 0; i < 51; i++) answers.push((await at(t0 + i * 150_000, () => start(env, "p" + i + "@example.com", { ip: "203.0.113.5" }))).status);
@@ -256,6 +257,65 @@ test("addresses that get a code only through OPEN_SIGNUP use at most four fifths
   assert.equal(sent.length, 5);
   // The page answers the same either way.
   assert.deepEqual(await (await quietly(() => start(env, "junk5@example.com"))).json(), { status: "ok" });
+});
+
+test("one caller takes at most a twentieth of the day's sign-in codes (point 4)", async () => {
+  assert.equal(networkCodesPerDay({}), 25);
+  assert.equal(networkCodesPerDay({ EMAIL_CODES_PER_DAY: "40" }), 10, "never fewer than ten");
+  const { env, sent } = await setup({ OPEN_SIGNUP: "true", EMAIL_CODES_PER_DAY: "200" });
+  const t0 = Date.parse("2026-10-07T00:00:00Z");
+  for (let i = 0; i < 11; i++) await at(t0 + i * 150_000, () => quietly(() => start(env, "p" + i + "@example.com", { ip: "203.0.113.5" })));
+  assert.equal(sent.length, 10, "the caller's ten of the day");
+  await at(t0, () => start(env, "other@example.com", { ip: "203.0.113.6" }));
+  assert.equal(sent.length, 11, "another caller still gets one");
+  // An IPv6 caller is its whole /48 here: the /64s of one site share its ten.
+  for (let i = 0; i < 11; i++) await at(t0 + i * 150_000, () => quietly(() => start(env, "v" + i + "@example.com", { ip: "2001:db8:7:" + i.toString(16) + "::1" })));
+  assert.equal(sent.length, 21);
+  await at(t0, () => start(env, "w@example.com", { ip: "2001:db8:8::1" }));
+  assert.equal(sent.length, 22, "the next /48");
+});
+
+test("someone who spends the day's codes locks out neither known devices nor App Review (point 4)", async () => {
+  const { env, sent } = await setup({ OPEN_SIGNUP: "true", EMAIL_CODES_PER_DAY: "5", APP_REVIEW_EMAIL: "review@example.com", APP_REVIEW_CODE: "246810", APP_REVIEW_UNTIL: "2999-12-31" });
+  const t0 = Date.parse("2026-10-07T08:00:00Z");
+  // A member who signed in on this phone yesterday, and the review account.
+  await inviteUser(env.DB, "member@example.com", 1);
+  await inviteUser(env.DB, "review@example.com", 1);
+  await at(t0 - 86_400_000, () => start(env, "member@example.com"));
+  const signedIn = await at(t0 - 86_400_000, () => verify(env, "member@example.com", codeIn(sent[0])));
+  const cookie = signedIn.headers.getSetCookie().map(value => sentTo(value, "/auth/email/start")).filter(value => value.startsWith("aurin_known=")).join("; ");
+  assert.ok(cookie, "the phone is a known device");
+  // Someone uses up the whole day's budget.
+  for (let i = 0; i < 4; i++) await sendCode(env, "junk" + i + "@example.com", "cs", { now: t0 });
+  assert.equal(await sendCode(env, "owner@example.com", "cs", { now: t0 }), true);
+  assert.equal(await quietly(() => sendCode(env, "member@example.com", "cs", { now: t0 + 120_000 })), false, "the day's codes are gone");
+  const before = sent.length;
+  await at(t0 + 120_000, () => start(env, "member@example.com", { cookie }));
+  assert.equal(sent.length, before + 1, "the member's own phone still gets a code");
+  await at(t0 + 120_000, () => start(env, "review@example.com"));
+  assert.equal(codeIn(sent.at(-1)), "246810", "and App Review its fixed code");
+});
+
+test("a known device whose own budget is used up still gets a code from the shared one", async () => {
+  const { env, sent } = await setup({ EMAIL_CODES_PER_DAY: "2" });
+  const t0 = Date.parse("2026-10-07T08:00:00Z");
+  await at(t0 - 86_400_000, () => start(env, "owner@example.com"));
+  const signedIn = await at(t0 - 86_400_000, () => verify(env, "owner@example.com", codeIn(sent[0])));
+  const cookie = signedIn.headers.getSetCookie().map(value => sentTo(value, "/auth/email/start")).filter(value => value.startsWith("aurin_known=")).join("; ");
+  for (let i = 0; i < 2; i++) await at(t0 + i * 61_000, () => start(env, "owner@example.com", { cookie }));
+  assert.equal(sent.length, 3, "the known devices' two of the day");
+  await at(t0 + 2 * 61_000, () => start(env, "owner@example.com", { cookie }));
+  assert.equal(sent.length, 4, "then one of the shared budget");
+});
+
+test("with OPEN_SIGNUP, accounts opened today draw on the open share (point 4)", async () => {
+  const { env, sent } = await setup({ OPEN_SIGNUP: "true", EMAIL_CODES_PER_DAY: "5" });
+  const now = Date.now();
+  await signInEmailUser(env.DB, env, "fresh@example.com");
+  for (let i = 0; i < 4; i++) assert.equal(await sendCode(env, "junk" + i + "@example.com", "cs", { now }), true);
+  assert.equal(await quietly(() => sendCode(env, "fresh@example.com", "cs", { now })), false, "an account from today is no older member");
+  assert.equal(await sendCode(env, "owner@example.com", "cs", { now }), true, "the reserved code is still there");
+  assert.equal(sent.length, 5);
 });
 
 test("a send that is refused leaves the address's pending code as it was", async () => {

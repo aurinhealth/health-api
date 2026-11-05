@@ -1,7 +1,9 @@
-import { L, withLang } from './lang.js';
+import { L, lang, withLang } from './lang.js';
 import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { bumpSessionEpoch } from "./tenancy.js";
 import { APP_RETURN_PATH, APP_CONNECTED_PATH } from "./app-origin.js";
+import { emailConfigured, sendEmail, signedOutEverywhereEmail } from "./email-sender.js";
+import { allowRequest } from "./ip-rate-limit.js";
 
 const SESSION_COOKIE = "pfd_session";
 export const SESSION_SECONDS = 30 * 24 * 60 * 60;
@@ -142,6 +144,8 @@ export async function handleSignOut(request, env, user) {
   try {
     const known = await heldKnownDevice(request, env, env.DB, user.id);
     const moved = await env.DB.prepare("UPDATE users SET session_epoch = session_epoch + 1 WHERE id=? AND session_epoch=?").bind(Number(user.id), Number(user.sessionEpoch) || 0).run();
+    // No device of the account is signed in any more, so none gets its notifications (point 11).
+    if (Number(moved?.meta?.changes) > 0) await keepOnlyPushToken(env.DB, user.id, null);
     const device = known && Number(moved?.meta?.changes) > 0 ? await knownDeviceCookie(env.DB, env, user.id) : null;
     if (device) response.headers.append("Set-Cookie", device);
   } catch (error) { console.error("Sign-out: sessions not ended", error?.message); }
@@ -194,9 +198,11 @@ export async function sessionCookie(uid, exp, secret, epoch = 0, iat = Math.floo
   return SESSION_COOKIE+"="+payload+"."+signature+"; Path=/; Max-Age="+SESSION_SECONDS+"; HttpOnly; Secure; SameSite=Lax";
 }
 
-// The connect sheet's cookie (CONNECT_SESSION_SECONDS, see above), of the user's current epoch.
-export async function connectSessionCookie(db, uid, secret, now = Math.floor(Date.now() / 1000)) {
-  const payload = base64url(new TextEncoder().encode(JSON.stringify({uid:Number(uid),exp:now+CONNECT_SESSION_SECONDS,se:await sessionEpochOf(db, uid),iat:now,at:now,sc:CONNECT_SCOPE})));
+// The connect sheet's cookie (CONNECT_SESSION_SECONDS, see above), of the given epoch (the
+// ticket's), else the user's current one.
+export async function connectSessionCookie(db, uid, secret, now = Math.floor(Date.now() / 1000), epoch = null) {
+  const se = epoch === null ? await sessionEpochOf(db, uid) : Number(epoch) || 0;
+  const payload = base64url(new TextEncoder().encode(JSON.stringify({uid:Number(uid),exp:now+CONNECT_SESSION_SECONDS,se,iat:now,at:now,sc:CONNECT_SCOPE})));
   return SESSION_COOKIE+"="+payload+"."+await dashboardHmac(payload, secret)+"; Path=/; Max-Age="+CONNECT_SESSION_SECONDS+"; HttpOnly; Secure; SameSite=Lax";
 }
 
@@ -218,9 +224,13 @@ export async function sessionEpochOf(db, uid) {
 }
 
 // A month-long session cookie for the user as they are now (every sign-in, and
-// the caller's own device after the epoch moved on).
+// the caller's own device after the epoch moved on). Its year (SESSION_MAX_SECONDS) starts
+// again, so it counts as a sign-in: an account in use is never taken for one left for 24
+// months (account-data.js inactiveAccounts; security review 2026-11-04, point 30).
 export async function userSessionCookie(db, uid, secret) {
-  return sessionCookie(uid, Math.floor(Date.now() / 1000) + SESSION_SECONDS, secret, await sessionEpochOf(db, uid));
+  const row = await db.prepare("UPDATE users SET last_login_at=CURRENT_TIMESTAMP WHERE id=? RETURNING session_epoch").bind(Number(uid)).first()
+    .catch(error => { console.error("Sign-in time not saved", error?.message); return null; });
+  return sessionCookie(uid, Math.floor(Date.now() / 1000) + SESSION_SECONDS, secret, row ? Number(row.session_epoch) || 0 : await sessionEpochOf(db, uid));
 }
 
 // A JSON answer that also signs the user in (passkey, e-mail code and Apple sign-in). The sign-in
@@ -257,10 +267,15 @@ export async function hasStepUp(request, secret, uid, epoch, now = Math.floor(Da
 }
 
 // Moves the user's epoch on (every other device is signed out) and keeps the
-// caller signed in: the answer carries a fresh cookie.
+// caller signed in: the answer carries a fresh cookie. The devices signed out get no more of the
+// account's notifications (security review 2026-11-04, point 11): the app sends its own push
+// token ({ pushToken }, null when it has none) and every other token of the account goes. An app
+// from before sends none, and the tokens stay, so its own phone keeps its notifications.
 export async function signedOutElsewhere(db, userId, env, response, request = null) {
   const known = request ? await heldKnownDevice(request, env, db, userId) : false;
+  const body = request ? await request.clone().json().catch(() => null) : null;
   await bumpSessionEpoch(db, userId);
+  if (body && typeof body === "object" && "pushToken" in body) await keepOnlyPushToken(db, userId, body.pushToken);
   response.headers.append("Set-Cookie", await userSessionCookie(db, userId, sessionSecret(env)));
   // A known device for e-mail codes stays one; the others lose it with the epoch.
   if (known) {
@@ -328,13 +343,29 @@ export async function heldKnownDevice(request, env, db, userId) {
   return Boolean(owner?.email) && Boolean(await matchingKnown(env, owner, cookies));
 }
 
-// Settings → Účet: POST /app/api/account/sign-out-everywhere.
-export async function handleSignOutEverywhere(request, env, url, session) {
+// The account's push tokens but `keep` (the caller's own phone) go: the devices whose session
+// ended get none of its notifications any more. No table yet means no tokens.
+export async function keepOnlyPushToken(db, userId, keep) {
+  const token = typeof keep === "string" ? keep.trim().toLowerCase() : "";
+  await db.prepare("DELETE FROM push_tokens WHERE user_id=? AND token<>?").bind(Number(userId), token).run()
+    .catch(error => { if (!/no such table/i.test(String(error?.message))) console.error("Push tokens of signed-out devices not removed", error?.message); });
+}
+
+// Settings → Účet: POST /app/api/account/sign-out-everywhere. No "confirm it's you" here: it is the
+// button for a lost phone. The account's e-mail is told instead, so someone with a stolen session
+// who signs the owner out does not go unnoticed (security review 2026-11-04, point 41).
+export async function handleSignOutEverywhere(request, env, url, session, ctx = null) {
   if (url.pathname !== "/app/api/account/sign-out-everywhere") return null;
   if (request.method !== "POST") return Response.json({ message: L("Použij POST.", "Use POST.") }, { status: 405 });
   if (!session.signedIn || !session.user) return unauthorizedResponse();
   if (request.headers.get("Origin") !== url.origin) return Response.json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, { status: 403 });
-  return signedOutElsewhere(env.RAW_DB || env.DB, session.user.id, env, Response.json({ status: "ok" }, { headers: { "Cache-Control": "no-store" } }), request);
+  const response = await signedOutElsewhere(env.RAW_DB || env.DB, session.user.id, env, Response.json({ status: "ok" }, { headers: { "Cache-Control": "no-store" } }), request);
+  // At most two notices an hour and five a day, so the button cannot be used to spend the day's e-mails.
+  if (emailConfigured(env) && session.user.email && await allowRequest(env.RAW_DB || env.DB, "signout-notice:" + Number(session.user.id), { hour: 2, day: 5 })) {
+    const notice = sendEmail(env, { to: session.user.email, ...signedOutEverywhereEmail(lang()) }).catch(error => console.error("Sign-out notice e-mail failed", error?.code || error?.message));
+    if (ctx?.waitUntil) ctx.waitUntil(notice); else await notice;
+  }
+  return response;
 }
 
 // Whether the session is old enough for a fresh cookie (SESSION_REFRESH_SECONDS since it was issued).

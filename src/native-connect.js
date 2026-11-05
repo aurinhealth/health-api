@@ -11,9 +11,11 @@
 //    sign the reader in as that user and put their health data in the sender's
 //    account (pentest 2026-10-25, L4), so such a link only expires. A browser
 //    already signed in as the ticket's user also continues. Each ticket works once,
+//    and only while the session that asked for it is one: it carries that session's
+//    epoch, so "Odhlásit všude" ends a ticket not used yet too (security review 2026-11-04, point 6),
 // 3. the provider's callback ends at https://<server>/auth/app/connected?event=…,
 //    which closes the sheet (connect-return.js) and clears that cookie.
-import { signText, connectSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
+import { signText, connectSessionCookie, sessionSecret, sessionEpochOf, timingSafeEqualString } from "./dashboard-auth.js";
 import { L, lang } from "./lang.js";
 import { connectReturnUrl } from "./connect-return.js";
 import { APP_CONNECTED_PATH } from "./app-origin.js";
@@ -26,9 +28,9 @@ const PROVIDERS = new Set(["google", "google-extra", "intervals", "ultrahuman", 
 const b64 = bytes => { let s = ""; for (const b of bytes) s += String.fromCharCode(b); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
 const unb64 = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), c => c.charCodeAt(0));
 
-export async function connectTicket(uid, provider, secret, now = Date.now()) {
+export async function connectTicket(uid, provider, secret, now = Date.now(), epoch = 0) {
   const id = b64(crypto.getRandomValues(new Uint8Array(12)));
-  const payload = b64(new TextEncoder().encode(JSON.stringify({ uid, p: provider, exp: Math.floor(now / 1000) + TICKET_SECONDS, id })));
+  const payload = b64(new TextEncoder().encode(JSON.stringify({ uid, p: provider, exp: Math.floor(now / 1000) + TICKET_SECONDS, id, se: Number(epoch) || 0 })));
   return payload + "." + await signText("app-connect." + payload, secret);
 }
 
@@ -40,7 +42,10 @@ export async function readConnectTicket(ticket, secret, now = Date.now()) {
   try { data = JSON.parse(new TextDecoder().decode(unb64(payload))); } catch { return null; }
   const uid = Number(data?.uid);
   if (!Number.isInteger(uid) || uid <= 0 || !PROVIDERS.has(data?.p) || !(Number(data?.exp) > Math.floor(now / 1000))) return null;
-  return { uid, provider: data.p, id: typeof data.id === "string" ? data.id : null, exp: Number(data.exp) };
+  // A ticket from before the epoch was in it (at most two minutes old at the release) counts as 0.
+  const epoch = data.se === undefined ? 0 : Number(data.se);
+  if (!Number.isInteger(epoch) || epoch < 0) return null;
+  return { uid, provider: data.p, id: typeof data.id === "string" ? data.id : null, exp: Number(data.exp), epoch };
 }
 
 // Marks the ticket used (auth_challenges, purpose app-connect); false when it was used before.
@@ -63,6 +68,7 @@ const pageLang = (url, request) => ["en", "cs"].includes(url.searchParams.get("h
   : /^en\b/i.test(request.headers.get("Accept-Language") || "") ? "en" : "cs";
 
 async function continueToProvider(env, ticket, hl) {
+  if ((await sessionEpochOf(env.DB, ticket.uid)) !== ticket.epoch) return expired(env);
   if (!(await useTicket(env.DB, ticket))) return expired(env);
   // Google's data policy: the app showed its own disclosure right before this (consent=1).
   const next = { google: "/oauth/google?consent=1", "google-extra": "/oauth/google?consent=1&extra=1", ultrahuman: "/oauth/ultrahuman", whoop: "/oauth/whoop", wahoo: "/oauth/wahoo" }[ticket.provider] || "/oauth/intervals";
@@ -70,7 +76,7 @@ async function continueToProvider(env, ticket, hl) {
   const location = ticket.provider.startsWith("google") ? next + "&hl=" + hl : next;
   const headers = new Headers({ Location: location, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
   // A connect-only cookie (dashboard-auth.js), not a session: the sheet shares Safari's cookies.
-  headers.append("Set-Cookie", await connectSessionCookie(env.DB, ticket.uid, sessionSecret(env)));
+  headers.append("Set-Cookie", await connectSessionCookie(env.DB, ticket.uid, sessionSecret(env), undefined, ticket.epoch));
   return new Response(null, { status: 303, headers });
 }
 
@@ -80,7 +86,7 @@ export async function handleNativeConnect(request, env, url, { user, signedIn })
     if (request.headers.get("Origin") !== url.origin) return Response.json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, { status: 403 });
     const { provider } = await request.json().catch(() => ({}));
     if (!PROVIDERS.has(provider)) return Response.json({ message: L("Neznámá služba.", "Unknown service.") }, { status: 400 });
-    const ticket = await connectTicket(user.id, provider, sessionSecret(env));
+    const ticket = await connectTicket(user.id, provider, sessionSecret(env), Date.now(), user.sessionEpoch);
     return Response.json({ status: "ok", url: url.origin + "/auth/app/connect?ticket=" + encodeURIComponent(ticket) + "&hl=" + lang() }, { headers: { "Cache-Control": "no-store" } });
   }
   if (url.pathname === "/auth/app/connect" && request.method === "GET") {
