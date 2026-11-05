@@ -34,7 +34,7 @@ import { healthPointJson } from './health-point-json.js';
 import { localDateTime, localToday, zonedTime, withTimeZone, validTimeZone } from './user-time.js';
 import { parseIntervalsWorkoutText } from './planned-workout.js';
 import { outdoorWidth, n } from './workout-model.js';
-import { readSyncPrefs } from './sync-destinations.js';
+import { readSyncPrefs, stopForwarding } from './sync-destinations.js';
 import { timingSafeEqualString } from './dashboard-auth.js';
 import { athleteThresholds } from './intervals-athlete.js';
 import { L } from './lang.js';
@@ -554,6 +554,9 @@ export async function disconnectWahoo(env, { fetchImpl = fetch } = {}) {
     env.DB.prepare("UPDATE health_datapoints SET record_role='primary',matched_activity_id=NULL,match_confidence=NULL WHERE user_id=? AND matched_activity_id LIKE 'wahoo:%' AND record_role='duplicate'").bind(userId)
   ]);
   await env.DB.prepare("DELETE FROM workout_exports WHERE user_id=? AND provider='wahoo'").bind(userId).run().catch(() => null);
+  // Rides passed on to Intervals.icu (watch-forward.js): Aurin's record of
+  // them goes too, and sending Wahoo's workouts there ends with the connection.
+  await stopForwarding(env.DB, userId, 'wahoo').catch(error => console.error('Wahoo forward stop failed', error.message));
   await deleteConnectionSecret(env, SOURCE);
   await clearConnectionHealth(env, SOURCE);
   delete env.WAHOO_TOKEN;

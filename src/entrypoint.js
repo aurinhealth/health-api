@@ -132,7 +132,7 @@ import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman } from "./u
 import { handleWhoopOAuth, disconnectWhoop, syncWhoop } from "./whoop.js";
 import { wahooDetail } from "./wahoo-detail.js";
 import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, wahooRideExpected, readWahooTokens } from "./wahoo.js";
-import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed } from "./sync-destinations.js";
+import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed, stopForwarding } from "./sync-destinations.js";
 import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, smokeUser, usersWithProviders, usersWithAccount, usersWithPushTokens, usersWithHealthConsent, openSignup } from "./tenancy.js";
 import { userDataEnvironment, prefetchUserData, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
@@ -357,11 +357,13 @@ const USER_JOBS = [
   // Every 5 minutes for a personal API key; an OAuth connection gets
   // webhooks (/webhooks/intervals), so only a look every 6 hours in case
   // one was lost (an OAuth app has 100 requests per athlete a day).
-  // After it, Apple Health workouts no other source brought go to Intervals.icu (watch-forward.js).
+  // After it, other apps' workouts no other source brought go to Intervals.icu
+  // (watch-forward.js): with OAuth every half hour too, so a ride goes about
+  // two hours after it ended; it asks Intervals.icu only when one is due.
   { name: "intervals-recent", providers: ["intervals"], due: every5, run: async (scoped, ctx, controller) => {
-    if (intervalsOAuthQuiet(scoped, 40, new Date(controller.scheduledTime || Date.now()))) return;
-    await legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent", { method: "POST" }), scoped, ctx);
-    await forwardWatchWorkouts(scoped).catch(error => console.error("Watch workout forward failed", error.message));
+    const at = new Date(controller.scheduledTime || Date.now()), quiet = intervalsOAuthQuiet(scoped, 40, at);
+    if (!quiet) await legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent", { method: "POST" }), scoped, ctx);
+    if (!quiet || at.getUTCMinutes() % 30 === 10) await forwardWatchWorkouts(scoped).catch(error => console.error("Watch workout forward failed", error.message));
   } },
   // Done workouts and plans that missed Intervals.icu while it was disconnected
   // or refusing (intervals-catchup.js): every five minutes while one is pending
@@ -2547,7 +2549,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(body.provider==='google'&&!env.USER_IS_OWNER) await revokeGoogle(env);
       if(body.provider==='intervals'){await disconnectIntervalsApp(env);await deleteConnectionSecret(env,'intervals_athlete');}
       await deleteConnectionSecret(env,body.provider);
-      if(body.provider==='google') await deleteConnectionSecret(env,'google_scopes');
+      if(body.provider==='google'){await deleteConnectionSecret(env,'google_scopes');await stopForwarding(env.DB,env.USER_ID,'google').catch(()=>null);}
       await clearConnectionHealth(env,body.provider);
       return Response.json({status:'ok',message:L('Připojení je odebrané.', 'The connection has been removed.')},{headers:{'Cache-Control':'no-store'}});
     }
