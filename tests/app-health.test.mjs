@@ -217,3 +217,42 @@ test("Health: the HRV chart ends on the number above it, the morning's locked on
   const t = buildToday({ ...input, health: { wellness: later }, profile: { ...input.profile, readinessLocks: { [DATE]: lock } } });
   assert.equal(t.hrv.value, h.hrv.value);
 });
+
+test("Health: what makes up the sleep index, as values without points", () => {
+  const h = buildHealth(input);
+  const p = h.sleep.night.parts;
+  assert.equal(p.length.minutes, 412);
+  assert.equal(p.length.need, h.sleep.need);
+  assert.deepEqual({ efficiency: p.quality.efficiency, latency: p.quality.latency, waso: p.quality.waso }, { efficiency: 95, latency: 9, waso: 13 });
+  assert.equal(p.stages.share, Math.round(170 / 412 * 100));
+  for (const part of [p.length, p.quality, p.stages]) assert.ok(part.fill >= 0 && part.fill <= 1);
+  assert.ok(!JSON.stringify(p).includes("points"), "no points go to the app");
+  // A night without stages has no stages part; a device's own score has no parts.
+  const bare = buildHealth({ ...input, sleep: { sessions: sessions.map(s => ({ ...s, stages: {} })) } });
+  assert.equal(bare.sleep.night.parts.stages, null);
+  const device = buildHealth({ ...input, sleep: { sessions: sessions.map(s => ({ ...s, timeInBedMin: null, score: 77 })) } });
+  assert.equal(device.sleep.night.index, 77);
+  assert.equal(device.sleep.night.parts, null);
+});
+
+test("Health: the last 14 nights of the index and the usual deep and REM share", () => {
+  const h = buildHealth(input);
+  assert.equal(h.sleep.index.nights.length, 14);
+  assert.equal(h.sleep.index.nights.at(-1).value, h.sleep.night.index);
+  assert.ok(h.sleep.index.low <= h.sleep.index.average && h.sleep.index.average <= h.sleep.index.high);
+  // Every night 80 deep and 90 REM of 412 minutes: usually 19 % and 22 %.
+  assert.deepEqual(h.sleep.night.usual, { deep: { low: 19, high: 19 }, rem: { low: 22, high: 22 }, nights: 19 });
+  // Only nights of the same source count, and 7 of them are needed.
+  const mixed = sessions.map((s, i) => ({ ...s, source: i === 19 || i < 6 ? "apple-health" : "whoop" }));
+  assert.equal(buildHealth({ ...input, sleep: { sessions: mixed } }).sleep.night.usual, null);
+  const few = buildHealth({ ...input, sleep: { sessions: sessions.slice(-3) } });
+  assert.equal(few.sleep.night.usual, null);
+  assert.equal(few.sleep.index.nights.length, 3);
+  assert.equal(few.sleep.index.low, null);
+});
+
+test("Today: the device of the latest night for the bedtime reminder", () => {
+  const withSource = sessions.map(s => ({ ...s, source: "apple-health" }));
+  assert.equal(buildToday({ ...input, sleep: { sessions: withSource } }).tonight.source, "apple-health");
+  assert.equal(buildToday({ ...input, sleep: { sessions: [] } }).tonight?.source ?? null, null);
+});
