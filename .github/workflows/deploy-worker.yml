@@ -5,7 +5,7 @@ name: Deploy Cloudflare Worker
 #   main lands here first; internal testers switch the app to it.
 # - production (health-api, https://aurin.health): only the "Vydat" workflow
 #   (vydat.yml) deploys it, with the newest main. Run this by hand with target
-#   production for a server-only fix. Production only takes commits on main.
+#   production for a server-only fix. Both servers only take commits on main.
 # The Cloudflare token is a secret of the job's GitHub environment, production
 # or staging (docs/test-server-and-releases.md, "Who can deploy").
 on:
@@ -61,18 +61,35 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+    # The exact commits tested here are the ones the deploy job checks out and
+    # deploys: a branch name or the prompts' main could move in between
+    # (security audit 2026-11-04, points 20 and 27).
+    outputs:
+      sha: ${{ steps.pin.outputs.sha }}
+      prompts: ${{ steps.pin.outputs.prompts }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ env.REF }}
+          persist-credentials: false
 
+      # The prompts token is not kept in the checkout, so later steps never see it (point 26).
       - name: Check out the private AI prompts
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: aurinhealth/aurin-prompts
           token: ${{ secrets.PROMPTS_REPO_TOKEN }}
           path: src/private
+          persist-credentials: false
+
+      - name: Pin the commits
+        id: pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "prompts=$(git -C src/private rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       # The tenancy tests use node:sqlite, available from Node 22.
       - name: Set up Node
@@ -93,7 +110,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Production waits for the owner's approval; both take runs from main only.
+    # Production waits for the owner's approval; both take commits on main only.
     environment: ${{ inputs.target == 'production' && 'production' || 'staging' }}
     # One deploy per server at a time; staging never waits for production.
     concurrency:
@@ -106,17 +123,38 @@ jobs:
       ENV_ARGS: ${{ inputs.target == 'production' && ' ' || '--env staging' }}
       STAGING_FLAG: ${{ inputs.target == 'production' && ' ' || '--staging' }}
     steps:
+      # Only main reaches either server: a branch commit would be overwritten by
+      # the next merge or release, and Vydat relies on production being part of
+      # main. It runs first, before any code of the commit or any secret, and
+      # checks the exact commit the test job tested (points 20 and 21).
+      - name: Check the commit is on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.test.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Neznámý commit ($SHA)."; exit 1; }
+          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$SHA" --jq .status)"
+          case "$status" in
+            identical|behind) ;;
+            *) echo "::error::Commit ${SHA::7} není v main ($status), na server jde jen main."; exit 1 ;;
+          esac
+
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ env.REF }}
+          ref: ${{ needs.test.outputs.sha }}
+          persist-credentials: false
 
       - name: Check out the private AI prompts
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: aurinhealth/aurin-prompts
+          ref: ${{ needs.test.outputs.prompts }}
           token: ${{ secrets.PROMPTS_REPO_TOKEN }}
           path: src/private
+          persist-credentials: false
 
       - name: Set up Node
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
@@ -135,21 +173,6 @@ jobs:
             echo "::error::Chybí secret OWNER_EMAIL v GitHub prostředí '${{ inputs.target == 'production' && 'production' || 'staging' }}' (Settings → Environments)."
             exit 1
           fi
-
-      # Only main reaches the live server: a branch commit would be overwritten
-      # by the next release, and Vydat relies on production being part of main.
-      - name: Check the commit is on main
-        if: env.TARGET == 'production'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$REF" --jq .status)"
-          case "$status" in
-            identical|behind) ;;
-            *) echo "::error::Commit ${REF::7} není v main ($status), na ostrý server jde jen main."; exit 1 ;;
-          esac
 
       # Sign-ins are signed with SESSION_SECRET only (src/dashboard-auth.js) and
       # the connections are encrypted with CONNECTION_KEY only (connection-secrets.js).
@@ -223,10 +246,12 @@ jobs:
           wranglerVersion: "4.147.0"
 
       # The website's waitlist approves people into TestFlight (src/testflight-waitlist.js)
-      # with the App Store Connect key: secrets ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 of this
-      # GitHub environment, the same values as in "testflight". Without them only Schválit
-      # stops working, so the deploy goes on.
+      # with the App Store Connect key: secrets ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 of the
+      # production environment, the same values as in "testflight". Without them only
+      # Schválit stops working, so the deploy goes on. The test server never gets the key
+      # (security audit 2026-11-04, point 19).
       - name: Hand the App Store Connect key to the server
+        if: env.TARGET == 'production'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -454,6 +479,8 @@ jobs:
       # gets the checks that need no account.
       - name: Smoke test the test server
         if: env.TARGET == 'staging'
+        env:
+          SHA: ${{ needs.test.outputs.sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -462,4 +489,4 @@ jobs:
           home="$(curl -fsS -D "$RUNNER_TEMP/home-headers" "https://$HOST/")"
           grep -q "TEST · staging" <<< "$home" || { echo "The test server's badge is missing"; exit 1; }
           grep -qiE '^x-robots-tag: noindex' "$RUNNER_TEMP/home-headers" || { echo "The test server must stay out of search engines"; exit 1; }
-          echo "Test server: https://$HOST (${REF::7})" >> "$GITHUB_STEP_SUMMARY"
+          echo "Test server: https://$HOST (${SHA::7})" >> "$GITHUB_STEP_SUMMARY"

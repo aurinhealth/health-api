@@ -43,24 +43,55 @@ struct ProOffer: Identifiable, Equatable {
     let trial: Bool
     /// The 12 payments together (yearly paid monthly).
     var total: String? = nil
+    /// What this plan saves against paying monthly, in whole percent; nil for monthly.
+    var save: Int? = nil
+    /// The yearly price a month ("124 Kč"), for the yearly plan's card.
+    var perMonth: String? = nil
     var id: String { kind.rawValue }
     var product: String { kind == .monthly ? ProStore.monthlyID : ProStore.yearlyID }
 
     /// Yearly paid monthly (where the App Store offers it), yearly paid once, monthly.
     @MainActor
     static func all(_ store: ProStore) -> [ProOffer] {
-        let yearly = store.price(ProStore.yearlyID) ?? L10n.tr("1 490 Kč")
-        let monthly = store.price(ProStore.monthlyID) ?? L10n.tr("199 Kč")
+        plans(yearly: store.price(ProStore.yearlyID) ?? L10n.tr("1 490 Kč"),
+              monthly: store.price(ProStore.monthlyID) ?? L10n.tr("199 Kč"),
+              perMonth: store.perMonth(ProStore.yearlyID), commitment: store.commitment,
+              trial: store.trialEligible)
+    }
+
+    /// The plans from the shown prices; what each saves against paying monthly
+    /// comes from the numbers in them (ProStore.number, whatever the phone's locale).
+    static func plans(yearly: String, monthly: String, perMonth: String?, commitment: ProStore.Commitment?,
+                      trial: Bool) -> [ProOffer] {
+        let amount = ProStore.number
+        let month = amount(monthly)
         var plans: [ProOffer] = []
-        if let c = store.commitment {
+        if let c = commitment {
             plans.append(ProOffer(kind: .yearMonthly, title: L10n.tr("Ročně, placeno měsíčně"), price: c.monthly, unit: L10n.tr("/měs."),
-                                  note: L10n.f("12 plateb · %@", c.total), trial: store.trialEligible, total: c.total))
+                                  note: L10n.f("12 plateb · %@", c.total), trial: trial, total: c.total,
+                                  save: saving(amount(c.monthly), months: 1, against: month)))
         }
         plans.append(ProOffer(kind: .yearOnce, title: L10n.tr("Ročně, placeno najednou"), price: yearly, unit: L10n.tr("/rok"),
-                              note: store.perMonth(ProStore.yearlyID).map { L10n.f("%@ měsíčně", $0) } ?? "", trial: store.trialEligible))
+                              note: perMonth.map { L10n.f("%@ měsíčně", $0) } ?? "", trial: trial,
+                              save: saving(amount(yearly), months: 12, against: month), perMonth: perMonth))
         plans.append(ProOffer(kind: .monthly, title: L10n.tr("Měsíčně"), price: monthly, unit: L10n.tr("/měs."),
                               note: L10n.tr("Zrušíš kterýkoli měsíc"), trial: false))
         return plans
+    }
+
+    /// What `price` for `months` saves against paying `monthly` for as many months,
+    /// in whole percent rounded down, so the label never promises more than the
+    /// prices give (monetization review, 4 Nov 2026): 149 against 199 is 25,
+    /// 1 490 against 12 × 199 is 37 (37.6), $59.99 against 12 × $6.99 is 28.
+    /// Nil when it saves nothing, a price has no number or the saving is beyond
+    /// belief (over 90 %: a price read wrong, never a label).
+    static func saving(_ price: Decimal?, months: Int, against monthly: Decimal?) -> Int? {
+        guard let price, let monthly, monthly > 0, price > 0 else { return nil }
+        let full = monthly * Decimal(months)
+        var share = (full - price) / full * 100, whole = Decimal()
+        NSDecimalRound(&whole, &share, 0, .down)
+        let percent = NSDecimalNumber(decimal: whole).intValue
+        return (1...90).contains(percent) ? percent : nil
     }
 
     /// The two plans on the offer: the 12-month ones, or yearly and monthly where Apple has no monthly payments.
@@ -105,6 +136,9 @@ struct PaywallView: View {
     /// A fixed moment instead of the clock (the snapshot tests).
     var frozenTime: Double? = nil
     let store: ProStore
+    /// Opened on the free week at the end of the setup (SetupProOffer): no way
+    /// back to the plans, and "Teď ne" across the whole width under the button.
+    let notNow: Bool
     @State private var demo = AppModel(demo: true)
     /// 0 the opening, 1 the offer, 2 the free week.
     @State private var step: Int
@@ -116,10 +150,11 @@ struct PaywallView: View {
     @State private var started = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(close: @escaping () -> Void, frozenTime: Double? = nil, step: Int = 0, store: ProStore = .shared) {
+    init(close: @escaping () -> Void, frozenTime: Double? = nil, step: Int = 0, store: ProStore = .shared, notNow: Bool = false) {
         self.close = close
         self.frozenTime = frozenTime
         self.store = store
+        self.notNow = notNow
         _step = State(initialValue: step)
     }
 
@@ -151,7 +186,7 @@ struct PaywallView: View {
         .sheet(isPresented: $allPlans) {
             AllProPlans(offers: offers, selected: $plan, buying: store.purchasing, start: { allPlans = false; next() },
                         redeem: { allPlans = false; redeemCode = true }, restore: restore)
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
                 .presentationBackground(Night.bottom)
         }
         // Apple's own sheet for an offer code; what it redeems comes through Transaction.updates (ProStore).
@@ -209,7 +244,7 @@ struct PaywallView: View {
 
     private var freeWeek: some View {
         VStack(spacing: 0) {
-            topBar(back: true)
+            topBar(back: !notNow)
             Text("Tvůj týden zdarma").font(Typo.sentence(36, relativeTo: .largeTitle)).foregroundStyle(Night.ink)
                 .multilineTextAlignment(.center)
             Text(verbatim: L10n.f("Celé Aurin Pro zdarma do %@.", Self.weekday(Self.firstPayment(from: today))))
@@ -265,6 +300,16 @@ struct PaywallView: View {
             }
             .buttonStyle(.plain)
             .disabled(store.purchasing)
+            if notNow && !more {
+                Button(action: close) {
+                    Text("Teď ne").font(Typo.bodyStrong).foregroundStyle(Night.ink)
+                        .frame(maxWidth: .infinity).frame(height: 54)
+                        .overlay { Capsule().stroke(Night.ink.opacity(0.25), lineWidth: 1) }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(store.purchasing)
+            }
             if more {
                 if withTrial {
                     Text(verbatim: L10n.f("Zdarma do %@, pak %@", Self.dayMonth(Self.firstPayment(from: today)), chosen.afterTrial))
@@ -680,7 +725,12 @@ struct OfferCard: View {
     }
 }
 
-/// "View more plans": all three plans, redeeming a code and restoring.
+/// "View more plans", like Bevel's (variant 8c, Petr 4 Nov 2026): what Pro
+/// includes on top (App Store 3.1.2(c): say what the price buys), then two plans
+/// side by side over the button with what each saves against paying monthly
+/// (never "Most popular", which we could not back), and where the App Store has
+/// the year paid monthly, the month without commitment as a small row under them.
+/// In the US and Singapore (no year paid monthly) the two cards are yearly and monthly.
 struct AllProPlans: View {
     let offers: [ProOffer]
     @Binding var selected: ProOffer.Kind
@@ -688,59 +738,189 @@ struct AllProPlans: View {
     let start: () -> Void
     let redeem: () -> Void
     let restore: () -> Void
+    @Environment(\.dismiss) private var dismiss
 
-    private var chosen: ProOffer? { offers.first { $0.kind == selected } }
+    /// What Pro includes: the offer's first four screens, in the same words.
+    static let included: [ProScreen] = [.coach, .plan, .training, .food]
+
+    /// The chosen plan; the yearly one while the year paid monthly is chosen where it isn't sold (the US, before the offer resets it).
+    private var chosen: ProOffer? { offers.first { $0.kind == selected } ?? offers.first { $0.kind == .yearOnce } }
+    /// The two cards: the 12-month plans where the year can be paid monthly, else yearly and monthly.
+    private var cards: [ProOffer] { offers.count > 2 ? offers.filter { $0.kind != .monthly } : offers }
+    /// The month without commitment under the cards, when it is not one of them.
+    private var extra: ProOffer? { offers.count > 2 ? offers.first { $0.kind == .monthly } : nil }
 
     var body: some View {
-        VStack(spacing: 12) {
-            Text("Všechny tarify").font(Typo.sentence(30, relativeTo: .largeTitle)).foregroundStyle(Night.ink)
-                .padding(.top, 24).padding(.bottom, 4)
-            ForEach(offers) { o in
-                Button { selected = o.kind } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: selected == o.kind ? "checkmark.circle.fill" : "circle")
-                            .scaledFont(22, cap: .denseCap).foregroundStyle(selected == o.kind ? Night.violet : Night.faint)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(verbatim: o.title).font(.subheadline.weight(.medium))
-                            Text(verbatim: o.note).font(.caption).opacity(0.7)
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 2) {
-                            (Text(verbatim: o.price).font(Typo.number(24)) + Text(verbatim: o.unit).font(.caption2))
-                            if o.trial {
-                                Text("7 DNÍ ZDARMA").scaledFont(9, weight: .bold, cap: .denseCap).foregroundStyle(selected == o.kind ? Night.violet : Night.mint)
-                            }
-                        }
+        ScrollView {
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark").scaledFont(14, weight: .semibold, cap: .denseCap).foregroundStyle(Night.ink)
+                            .frame(width: 36, height: 36).background(Night.card, in: Circle())
+                            .frame(width: 44, height: 44).contentShape(Circle())
                     }
-                    .foregroundStyle(selected == o.kind ? Night.violet : Night.ink)
-                    .padding(14)
-                    .background(selected == o.kind ? Night.lavender : Night.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(selected == o.kind ? .clear : Night.line))
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.tr("Zavřít"))
+                }
+                .padding(.top, 16)
+                Text("Všechny tarify").font(Typo.sentence(30, relativeTo: .largeTitle)).foregroundStyle(Night.ink)
+                    .multilineTextAlignment(.center)
+                includedList.padding(.top, 18)
+                HStack(alignment: .top, spacing: 10) {
+                    ForEach(cards) { o in
+                        PlanCard(offer: o, selected: chosen?.kind == o.kind) { selected = o.kind }
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 30)
+                if let extra {
+                    monthlyRow(extra).padding(.top, 12)
+                }
+                Button(action: start) {
+                    Text(verbatim: L10n.tr(chosen?.trial == true ? "Začít 7denní zkoušku zdarma" : "Předplatit"))
+                        .font(Typo.bodyStrong).foregroundStyle(Night.violet)
+                        .frame(maxWidth: .infinity).frame(minHeight: 54).background(Night.lavender, in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .accessibilityAddTraits(selected == o.kind ? .isSelected : [])
+                .disabled(buying)
+                .padding(.top, 18)
+                HStack(spacing: 22) {
+                    Button(action: redeem) { Text("Uplatnit promo kód") }
+                    Button(action: restore) { Text("Obnovit nákup") }
+                }
+                .font(Typo.bodyStrong).foregroundStyle(Night.lavender).buttonStyle(.plain)
+                .padding(.top, 14)
+                if let chosen {
+                    Text(verbatim: chosen.terms(trialDays: chosen.trial)).font(.caption2).foregroundStyle(Night.faint)
+                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 12)
+                }
+                HStack(spacing: 6) {
+                    Link(destination: URL(string: "https://aurin.health/terms")!) { Text("Podmínky").underline() }
+                    Text(verbatim: "·")
+                    Link(destination: URL(string: "https://aurin.health/privacy")!) { Text("Soukromí").underline() }
+                }
+                .font(.caption2).foregroundStyle(Night.faint).padding(.top, 3).padding(.bottom, 16)
             }
-            Button(action: start) {
-                Text(verbatim: L10n.tr(chosen?.trial == true ? "Začít 7denní zkoušku zdarma" : "Předplatit"))
-                    .font(Typo.bodyStrong).foregroundStyle(Night.violet)
-                    .frame(maxWidth: .infinity).frame(height: 54).background(Night.lavender, in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .disabled(buying)
-            .padding(.top, 4)
-            HStack(spacing: 22) {
-                Button(action: redeem) { Text("Uplatnit promo kód") }
-                Button(action: restore) { Text("Obnovit nákup") }
-            }
-            .font(Typo.bodyStrong).foregroundStyle(Night.lavender).buttonStyle(.plain)
-            if let chosen {
-                Text(verbatim: chosen.terms(trialDays: chosen.trial)).font(.caption2).foregroundStyle(Night.faint)
-                    .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
+            .padding(.horizontal, 20)
         }
-        .padding(.horizontal, 20)
+        .scrollBounceBehavior(.basedOnSize)
+        // Half-width cards: the price stays whole up to the size the app's screens stop at.
+        .dynamicTypeSize(...DynamicTypeSize.screenCap)
         .environment(\.colorScheme, .dark)
+    }
+
+    /// "V PRO JE" and four rows with a sparkle: title and one line each.
+    private var includedList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("V PRO JE").scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Night.faint)
+                .padding(.bottom, 8)
+            ForEach(Self.included, id: \.self) { screen in
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Image(systemName: "sparkle").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Night.lilac)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verbatim: screen.title).font(.subheadline.weight(.medium)).foregroundStyle(Night.ink)
+                        Text(verbatim: screen.subtitle).font(.caption).foregroundStyle(Night.muted)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 9)
+                .overlay(alignment: .top) { Rectangle().fill(Night.line).frame(height: 1) }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// "Měsíčně · zrušíš kterýkoli měsíc  199 Kč/měs.": a small row, selectable like a card.
+    private func monthlyRow(_ o: ProOffer) -> some View {
+        let on = selected == o.kind
+        return Button { selected = o.kind } label: {
+            HStack(spacing: 8) {
+                (Text(verbatim: o.title).font(.subheadline.weight(.medium))
+                 + Text(verbatim: " · " + L10n.tr("zrušíš kterýkoli měsíc")).font(.subheadline).foregroundStyle(on ? Night.violet.opacity(0.75) : Night.muted))
+                Spacer(minLength: 4)
+                (Text(verbatim: o.price).font(Typo.number(18)) + Text(verbatim: o.unit).font(.caption2))
+                    .lineLimit(1).fixedSize()
+            }
+            .foregroundStyle(on ? Night.violet : Night.ink)
+            .padding(.horizontal, 14).padding(.vertical, 11)
+            .background(on ? Night.lavender : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(on ? .clear : Night.line))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+/// A plan in "View more plans": "UŠETŘÍŠ 25 %" on its top edge, the name and the
+/// selection mark, the price large and two short lines (12 payments and the
+/// total; the yearly price a month).
+struct PlanCard: View {
+    let offer: ProOffer
+    let selected: Bool
+    let choose: () -> Void
+
+    /// The two lines under the price.
+    var lines: [String] {
+        switch offer.kind {
+        case .yearMonthly: return [L10n.tr("12 plateb"), offer.total.map { L10n.f("%@ celkem", $0) }].compactMap { $0 }
+        case .yearOnce: return offer.perMonth.map { [L10n.f("%@/měs.", $0), L10n.tr("v přepočtu")] } ?? []
+        case .monthly: return [offer.note]
+        }
+    }
+
+    /// The name on the card: "Platíš měsíčně" (the year paid monthly), "Ročně", "Měsíčně".
+    var name: String {
+        switch offer.kind {
+        case .yearMonthly: return L10n.tr("Platíš měsíčně")
+        case .yearOnce: return L10n.tr("Ročně")
+        case .monthly: return L10n.tr("Měsíčně")
+        }
+    }
+
+    var body: some View {
+        Button(action: choose) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(verbatim: name).font(.subheadline.weight(.medium)).lineLimit(2).minimumScaleFactor(0.8)
+                    Spacer(minLength: 4)
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .scaledFont(18, cap: .denseCap)
+                        .foregroundStyle(selected ? Night.violet : Night.faint)
+                }
+                (Text(verbatim: offer.price).font(Typo.number(24)) + Text(verbatim: offer.unit).font(.caption))
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .padding(.top, 8)
+                VStack(alignment: .leading, spacing: 1) {
+                    // Wrap, never cut: the 12 months' total must show whole (App Store 3.1.2).
+                    ForEach(lines, id: \.self) { Text(verbatim: $0).fixedSize(horizontal: false, vertical: true) }
+                }
+                .font(.caption).opacity(0.85).padding(.top, 4)
+            }
+            .foregroundStyle(selected ? Night.violet : Night.ink)
+            // Room under the SAVE pill on the card's top edge, also with large text.
+            .padding(.horizontal, 12).padding(.top, 22).padding(.bottom, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(selected ? Night.lavender : Night.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(selected ? .clear : Night.line))
+            .overlay(alignment: .topLeading) {
+                if let save = offer.save {
+                    Text(verbatim: L10n.f("UŠETŘÍŠ %d %%", save)).scaledFont(10, weight: .bold, cap: .denseCap).foregroundStyle(Night.bottom)
+                        .lineLimit(1).fixedSize()
+                        .padding(.horizontal, 9).padding(.vertical, 3)
+                        .background(Night.mint, in: Capsule())
+                        .offset(x: 12, y: -9)
+                        .accessibilityLabel(L10n.f("Ušetříš %d %% proti měsíčnímu tarifu", save))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

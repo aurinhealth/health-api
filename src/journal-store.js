@@ -13,7 +13,8 @@ import { CATALOG, DEFAULT_PINNED, MOOD_LABEL_MASK, catalogItem, normalizeCustomI
 import { drinkFromFoodEntry, hydrationMl, hydrationTarget } from "./fluids.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
-import { localDateTime } from "./user-time.js";
+import { localDateTime, localToday } from "./user-time.js";
+import { waterGoal, storedBuildBase } from "./water-goal.js";
 import { JOURNAL, deleteSexualActivity } from "./apple-health.js";
 import { L } from "./lang.js";
 
@@ -350,13 +351,19 @@ export async function autoDays(db, from, to) {
       set(n.date, "drink_before_bed", (drinkTimes[n.date] || []).some(t => { const m = minutesOf(t) + (t < "12:00" ? 1440 : 0); return m <= bed && m >= bed - 60; }));
     }
   }
+  const today = localToday(), buildBase = await storedBuildBase(db, profile, shift(to, 1)).catch(() => null);
   for (const date of logged) {
     if (date < from || date > to) continue;
     const day = days[date] ||= {};
-    // Too little: under the day's drinks target (body weight and training), as in Pití.
+    // Too little: under the day's goal as Pití shows it (Auto, Custom or
+    // Build-up, with the training extra). Today is not over: ✕ once the goal
+    // is met, never ✓ before the day ends.
     if (day.__water != null) {
       const weight = weights.filter(w => String(w.at).slice(0, 10) <= date).at(-1)?.value_numeric;
-      set(date, "little_water", day.__water < hydrationTarget({ weightKg: weight, sex: profile?.sex, ...hours[date] }).ml);
+      const auto = hydrationTarget({ weightKg: weight, sex: profile?.sex, ...hours[date] });
+      const goal = waterGoal(auto, profile || {}, buildBase ? { baseMl: buildBase(date), days: [] } : null).ml;
+      if (day.__water >= goal) set(date, "little_water", false);
+      else if (date < today) set(date, "little_water", true);
     }
     if (!day.energy_drink) set(date, "energy_drink", false);
     set(date, "heavy_dinner", (dinner[date] || 0) >= 900);

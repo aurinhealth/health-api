@@ -1080,6 +1080,9 @@ function choosePlan(context, options = {}) {
   candidatesByPattern.horizontalPush.push('Push-up');candidatesByPattern.quad.push('Bodyweight squat');candidatesByPattern.hinge.push('Glute bridge');candidatesByPattern.core.push('Dead bug');
   const groupOf = {}, lastGroupDate = new Map();
   for (const [group, list] of Object.entries(candidatesByPattern)) for (const ex of list) groupOf[ex] ??= group;
+  // A variant (variantOf) belongs to its main exercise's group: a leg day of
+  // variants is still a leg day for the split and the days around it.
+  for (const [ex, def] of Object.entries(EXERCISES)) if (def.variantOf && groupOf[def.variantOf]) groupOf[ex] ??= groupOf[def.variantOf];
   // The nearest day, before or after: planned sessions later in the week count too.
   for (const [ex, d] of lastExerciseDate) { const group = groupOf[ex]; if (group && (!lastGroupDate.has(group) || daysBetween(d, context.date) < daysBetween(lastGroupDate.get(group), context.date))) lastGroupDate.set(group, d); }
 
@@ -1092,7 +1095,8 @@ function choosePlan(context, options = {}) {
   for (const session of context?.strength?.plannedSessions || []) { note(session.date); for (const ex of session.exercises || []) note(session.date, ex); }
   for (const d of options.blockDates || []) note(d);
   const adjacentExercises = new Set(), adjacentGroups = new Set();
-  for (const [d, list] of gymDates) if (daysBetween(d, context.date) <= 1) for (const ex of list) { adjacentExercises.add(ex); if (groupOf[ex]) adjacentGroups.add(groupOf[ex]); }
+  // A variant counts as its main exercise too, as the main one becomes the variant again.
+  for (const [d, list] of gymDates) if (daysBetween(d, context.date) <= 1) for (const ex of list) { adjacentExercises.add(ex); if (EXERCISES[ex]?.variantOf) adjacentExercises.add(EXERCISES[ex].variantOf); if (groupOf[ex]) adjacentGroups.add(groupOf[ex]); }
   const shift = k => new Date(Date.parse(dateKey(context.date) + "T12:00:00Z") + k * 86400000).toISOString().slice(0, 10);
   const inBlock = [...gymDates.keys()].some(d => daysBetween(d, context.date) === 1);
   const thirdInRow = gymDates.has(shift(-1)) && gymDates.has(shift(-2));

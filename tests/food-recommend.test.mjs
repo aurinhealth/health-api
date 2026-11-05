@@ -21,7 +21,10 @@ test("meal suggestions use the personal calorie target", async () => {
   const r = await recommend(env({ sex: "male", age: 30, height: 180, activity: "active", goal: "lose_0.5" }, 80));
   assert.equal(r.status, "ok");
   assert.equal(r.calorieTarget, Math.round(1780 * 1.45) - 550);
-  assert.ok(Array.isArray(r.mealRecommendations));
+  assert.ok(Array.isArray(r.storeAlternatives));
+  // The owner's cookbook is gone (audit point 42): no recipes are suggested.
+  assert.equal(r.recommendations, undefined);
+  assert.equal(r.mealRecommendations, undefined);
 });
 
 test("without weight there are no meal suggestions, only what is missing", async () => {

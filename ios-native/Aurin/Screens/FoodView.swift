@@ -330,6 +330,11 @@ struct DrinksCard: View {
     @Environment(AppModel.self) private var model
     let water: FoodSnapshot.Water
     var size: WidgetSize = .medium
+    /// The panel the card is on: on Jídlo the figure moves now and then, elsewhere once.
+    var panel: WidgetPanel = .food
+    /// On a panel (not while editing or in the gallery): the figure may move on its own.
+    var live = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var other = false
     @State private var choosing = false
     @State private var pop = false
@@ -341,6 +346,18 @@ struct DrinksCard: View {
     @AppStorage(DrinkFigureKind.animateKey) private var animate = true
 
     private var figure: DrinkFigureKind { DrinkFigureKind.from(figureRaw) }
+
+    private var idle: DrinkFigureIdle {
+        if !live || !animate { return .off }
+        return panel == .food ? .fidget : .once
+    }
+
+    /// The card's tab is open with nothing pushed over it (hidden tabs stay built).
+    private var shown: Bool {
+        let tab = panel.tab
+        if model.tab != tab { return false }
+        return model.paths[tab]?.isEmpty ?? true
+    }
     private var target: Double { max(water.target ?? 2500, 1) }
     private var fraction: Double { (water.ml ?? 0) / target }
     private var reached: Bool { fraction >= 1 }
@@ -417,7 +434,7 @@ struct DrinksCard: View {
                 ProgressLine(fraction: fraction, color: Palette.blue, height: 5)
             } else {
                 HStack(spacing: 16) {
-                    DrinkFigure(kind: figure, fraction: fraction, size: 96, animate: animate)
+                    DrinkFigure(kind: figure, fraction: fraction, size: 96, animate: animate, idle: idle, shown: shown)
                         .scaleEffect(pop ? 1.12 : 1)
                         .contentShape(Rectangle())
                         .onTapGesture { Task { await quickAdd() } }
@@ -460,9 +477,9 @@ struct DrinksCard: View {
             DrinkPresetRow(add: { ml, kind in await model.addDrink(ml: ml, kind: kind) })
         }
         .sensoryFeedback(.impact(weight: .light), trigger: adds)
-        .animation(.easeInOut(duration: 0.6), value: water.ml)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.6), value: water.ml)
         .onChange(of: reached) { _, now in
-            guard now, animate else { return }
+            guard now, animate, !reduceMotion else { return }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.45)) { pop = true }
             withAnimation(.spring(response: 0.4, dampingFraction: 0.6).delay(0.35)) { pop = false }
         }

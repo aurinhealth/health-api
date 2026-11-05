@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { athleteFocus, normalizeFocus, withFocus, mainSportOfKinds } from "../src/athlete-focus.js";
 import { effectiveProfile } from "../src/energy-profile.js";
-import { withSportChoice, sportExclusion, saveSportChoice, sportAllowed } from "../src/sport-choice.js";
+import { withSportChoice, sportExclusion, saveSportChoice, sportAllowed, suggestedSports } from "../src/sport-choice.js";
 import { rankOptions } from "../src/coach-pick.js";
 import { validateCoachActions } from "../src/coach-actions.js";
 import { fallbackSports, allowedSport } from "../src/adaptive-week.js";
@@ -92,6 +92,16 @@ test("the choice is saved to the profile and saving the same again changes nothi
   assert.deepEqual([saved.sex, saved.sports], ["female", ["run", "swim", "strength"]]);
   assert.equal((await saveSportChoice(db, 4, "ride", false)).changed, false);
   assert.deepEqual((await saveSportChoice(db, 4, "ride", true)).sports, ["ride", "run", "swim", "strength"]);
+});
+
+test("Week plan offers the ticked sports, all of them when the athlete never chose", async () => {
+  const db = scopedDb(createD1(), 5);
+  assert.equal(await suggestedSports(db, 5), null);
+  await db.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();
+  await db.prepare("INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?)").bind(5, JSON.stringify({ mainSport: "cycling" })).run();
+  assert.equal(await suggestedSports(db, 5), null);
+  await saveSportChoice(db, 5, "swim", false);
+  assert.deepEqual(await suggestedSports(db, 5), ["ride", "run", "strength"]);
 });
 
 const coach = (status = "green", kind = "endurance", minutes = 60) => ({ readiness: { status, score: 70, reasons: [] }, recommendation: { session: { kind, durationMinutes: minutes } }, load: { lowerBodyGymSignals48h: 0 } });

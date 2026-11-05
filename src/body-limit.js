@@ -9,6 +9,13 @@ export const PUBLIC_BODY_LIMIT = 64 * 1024;
 // can send several activities in one webhook.
 export const WEBHOOK_BODY_LIMIT = 1024 * 1024;
 
+// A signed-in account's request (security check 2026-11-04, N3): enough for the
+// largest the app sends (eight gym photos for equipment detection, each a
+// 1600 px JPEG, so a few MB), far below the 100 MB that would take the
+// Worker's 128 MB of memory. Apple Health uploads keep their own 4 MB
+// (apple-health.js MAX_BODY_BYTES).
+export const SIGNED_IN_BODY_LIMIT = 16 * 1024 * 1024;
+
 export function publicBodyLimit(pathname) {
   return String(pathname || "").startsWith("/webhooks/") ? WEBHOOK_BODY_LIMIT : PUBLIC_BODY_LIMIT;
 }

@@ -17,7 +17,7 @@ import { CONSENT_VERSION } from './consent.js';
 // their body (own foods and recipes, own workouts, liked exercises).
 export const KEPT_TABLES = new Set([
   'user_consents', 'user_identities', 'user_passkeys', 'user_language', 'user_time_zone',
-  'connection_credentials', 'connection_accounts', 'subscriptions', 'push_tokens', 'profile_photos',
+  'connection_credentials', 'connection_accounts', 'subscriptions', 'store_originals', 'push_tokens', 'profile_photos',
   'app_settings', 'user_setup', 'ai_usage', 'coach_messages', 'coach_carryover',
   'recipe_contributions', 'food_contributions', 'food_reports', 'food_suggestions', 'support_reports',
   'api_cache_versions', 'sync_preferences', 'week_plan_preferences', 'journal_settings',

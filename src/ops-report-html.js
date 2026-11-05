@@ -28,7 +28,10 @@ const ROUTE_NAMES = {
   "GET /app/api/food-today": "Jídlo dnes", "GET /app/api/gym": "Posilovna", "POST /app/api/gym": "Uložení série", "GET /app/api/health": "Zdraví",
   "GET /app/api/week": "Týden", "POST /app/api/food/log": "Zápis jídla", "POST /app/api/food/search": "Hledání jídla",
   "POST /app/api/onboarding": "Úvodní nastavení", "POST /app/api/planned/delete": "Smazání plánu", "POST /app/api/workouts/schedule": "Naplánování tréninku",
-  "POST /app/api/calendar-free": "Volný čas v kalendáři", "POST /app/api/coach": "Chat s koučem"
+  "POST /app/api/calendar-free": "Volný čas v kalendáři", "POST /app/api/coach": "Chat s koučem",
+  "POST /app/api/food/ai-lookup": "Dohledání jídla na webu", "GET /app/api/cycle": "Cyklus", "POST /app/api/coach/week": "Plán týdne od kouče",
+  "POST /app/api/workouts/generate": "Vygenerování tréninku", "GET /app/api/daily": "Den", "GET /app/api/onboarding": "Úvodní nastavení",
+  "POST /app/api/athlete-state": "Stav sportovce"
 };
 export const routeLabel = service => ROUTE_NAMES[service] || (String(service).startsWith("cron ") ? `Úloha na pozadí: ${String(service).slice(5)}` : String(service));
 

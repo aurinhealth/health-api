@@ -31,11 +31,12 @@ keeps its own session cookie and its own Apple Health last sync; passkeys work o
 Merges reach the internal TestFlight group (every build, with its pull request's notes) and the test
 server. `vydat.yml`, run by hand:
 
-1. picks the newest build uploaded from main, or the number typed in;
+1. picks the newest build uploaded from main (a pull request's build never counts), or the number typed in;
 2. deploys the newest main to the live server (migrations, shards, smoke tests) once the owner
-   approves the deploy (the `production` environment, see "Who can deploy"). Production only
-   ever takes commits on main (deploy-worker.yml refuses others), so a release never puts back an
-   older server than a hand-started deploy left there. Without a typed build number it stops when
+   approves the deploy (the `production` environment, see "Who can deploy"). Both servers only
+   ever take commits on main (deploy-worker.yml refuses others before anything runs), so a release never
+   puts back an older server than a hand-started deploy left there. The deploy job deploys exactly the
+   commits its test job tested, of health-api and of aurin-prompts. Without a typed build number it stops when
    main has app changes the newest build lacks;
 3. writes "What to Test" from the TestFlight sections of every pull request since the previous
    release (the main commit of the newest Vydat run whose production deploy went through). Only
@@ -98,6 +99,8 @@ cannot reach the live Worker or databases. The `staging` environment therefore h
 `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (an environment secret wins over the repository secret of
 the same name); `production` and `backup` keep the live account's. `scripts/provision-user-shards.mjs`
 stops a staging deploy whose token still sees `health-data`, its user databases or `petrfitness-foods`.
+The App Store Connect key goes to the live Worker only, never to `health-api-staging`, and the live server
+takes the deploy smoke test's GitHub token only from a job in the `production` environment.
 
 The zone aurin.health stays in the live account. staging.aurin.health reaches the test account's Worker
 through Cloudflare for SaaS: the test account has a small zone of its own, aurin-staging.com, whose custom hostname is
@@ -120,8 +123,9 @@ rules, and for Enterprise for required reviewers; check before making the reposi
 
 "Coach evaluation" (`coach-eval.yml`, started by hand from main) sends 14 fixed situations to the real
 AI coach on the test server and shows each reply with its checks in the job summary; the replies are also
-kept as the `coach-eval` artifact. Each situation brings its own made-up athlete (`src/coach-eval.js`):
-green and red mornings, raised breathing in sleep, chest pain during intervals, a crash diet, beta
+kept as the `coach-eval` artifact. Both are public, so the prompt injection's reply, and any reply that
+quotes the coach's prompt (eight words in a row from any part of it), show only their checks. Each
+situation brings its own made-up athlete (`src/coach-eval.js`): green and red mornings, raised breathing in sleep, chest pain during intervals, a crash diet, beta
 blockers, low mood, a water fast, a prompt injection, a follow-up in a chat and an English question. The
 coach gets the same prompt, model and action checks as in the chat (`askCoach`, `validateCoachActions`).
 

@@ -34,6 +34,7 @@ jobs:
           repository: aurinhealth/aurin-prompts
           token: ${{ secrets.PROMPTS_REPO_TOKEN }}
           path: src/private
+          persist-credentials: false
 
       # The tenancy tests use node:sqlite, available from Node 22.
       - name: Set up Node

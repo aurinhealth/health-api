@@ -48,6 +48,14 @@ struct CoachView: View {
     /// Packs of extra messages can be bought (the App Store is set up on the server).
     @State private var packsOnSale = false
     @State private var morePacks = false
+    /// The answer whose thumb went down: the short panel with the reasons.
+    @State private var dislikedAnswer: Bubble?
+    /// The thumb down waiting in that panel: saved with the reason on Send, or
+    /// without one when the panel is closed (one request, so no reason is lost).
+    @State private var pendingDown: (bubble: UUID, before: String?)?
+    /// "Report this answer…" in that panel: Nahlásit problém with the answer, once the panel is closed.
+    @State private var reportAfterPanel: String?
+    @State private var reporting: ReportedAnswer?
     @FocusState private var focused: Bool
 
     struct Bubble: Identifiable, Equatable {
@@ -75,7 +83,16 @@ struct CoachView: View {
         var photoMark = false
         /// The seconds the answer took, for one given while the chat was open.
         var answeredIn: Int? = nil
+        /// The stored answer on the server, which its thumb points to.
+        var serverId: Int? = nil
+        /// When the answer came: the time under the last one.
+        var at: Date? = nil
+        /// "up" or "down".
+        var rating: String? = nil
     }
+
+    /// The answer sent to Nahlásit problém.
+    struct ReportedAnswer: Hashable { let text: String }
 
     var body: some View {
         NavigationStack {
@@ -88,6 +105,8 @@ struct CoachView: View {
                             else if let subject = current { CoachSubjectCard(subject: subject) }
                             ForEach(messages) { bubble in
                                 BubbleView(bubble: bubble,
+                                           last: bubble.id == lastAnswer?.id && !sending,
+                                           rate: canRate(bubble) ? { rating in rateTapped(bubble.id, rating) } : nil,
                                            decide: { action, confirm in Task { await decide(action, confirm: confirm, in: bubble.id) } },
                                            undoMemory: { chip in Task { await undo(chip, in: bubble.id) } },
                                            decideMemory: { chip, yes in Task { await decide(chip, yes, in: bubble.id) } },
@@ -98,6 +117,8 @@ struct CoachView: View {
                                            more: (bubble.note && packsOnSale) ? { morePacks = true } : nil)
                                     .id(bubble.id)
                             }
+                            // Questions the app already has, under the last answer; gone once typing starts.
+                            if !followUps.isEmpty { followUpList }
                             // Until the first words arrive: the coach's bubble with dots and what he is doing;
                             // then the same row under the words while the answer is finished (proposals, preview).
                             if let progress, sending {
@@ -155,6 +176,26 @@ struct CoachView: View {
             }
             .navigationDestination(isPresented: $showMemory) { CoachMemoryView() }
             .navigationDestination(isPresented: $morePacks) { CoachPacksView() }
+            .navigationDestination(item: $reporting) { CoachAnswerReport(answer: $0.text) }
+            .sheet(item: $dislikedAnswer, onDismiss: {
+                if let down = pendingDown {
+                    pendingDown = nil
+                    Task { await rate(down.bubble, "down", before: down.before) }
+                }
+                if let text = reportAfterPanel { reportAfterPanel = nil; reporting = ReportedAnswer(text: text) }
+            }) { bubble in
+                AnswerFeedbackSheet(send: { reason in
+                    let before = pendingDown?.before
+                    pendingDown = nil
+                    dislikedAnswer = nil
+                    Task { await rate(bubble.id, "down", reason: reason, before: before) }
+                }, report: {
+                    reportAfterPanel = bubble.text
+                    dislikedAnswer = nil
+                })
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
         }
         .overlay {
             if showChats {
@@ -200,6 +241,36 @@ struct CoachView: View {
                 .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+
+    /// Up to three questions the app already has for this topic or day, not yet
+    /// asked in this chat; no AI is asked for them. A tap sends one as the
+    /// athlete's message (it counts like a typed one).
+    private var followUps: [String] {
+        guard !sending, !usedUp, !needsConsent, !needsSubscription, photo == nil,
+              input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let last = lastAnswer, last.food == nil else { return [] }
+        let asked = Set(messages.filter(\.mine).map { $0.text.lowercased() })
+        let pool = (current?.questions.map(L10n.tr) ?? [])
+            + CoachSuggestions.forDay(today: model.today, sessions: model.training?.sessions ?? [], date: AppModel.localDate(Date()), limit: 8)
+        var seen = Set<String>()
+        return Array(pool.filter { !asked.contains($0.lowercased()) && seen.insert($0.lowercased()).inserted }.prefix(3))
+    }
+
+    private var followUpList: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(followUps, id: \.self) { q in
+                Button { input = q; Task { await send() } } label: {
+                    Text(q).font(.subheadline).foregroundStyle(Palette.ink).multilineTextAlignment(.leading)
+                        .padding(.horizontal, 14).padding(.vertical, 9)
+                        .background(Palette.card, in: Capsule())
+                        .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 0.5))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.trailing, 40)
+        .transition(.opacity)
     }
 
     private var dayWelcome: some View {
@@ -415,6 +486,8 @@ struct CoachView: View {
                     edit(id) {
                         if let a = result.answer ?? last { $0.text = a }
                         $0.answeredIn = max(1, Int(Date().timeIntervalSince(asked).rounded()))
+                        $0.serverId = result.messageId
+                        $0.at = Date()
                         $0.actions = result.actions ?? []
                         $0.visuals = result.visuals ?? []
                         $0.memory = (result.sportChanges?.chips ?? []) + (result.memoryChanges?.chips ?? []) + (result.memoryProposals?.proposals ?? [])
@@ -456,6 +529,45 @@ struct CoachView: View {
             usedUp = true
         } catch {
             messages.removeAll { $0.id == id && $0.text.isEmpty }
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// The coach's answer at the end of the chat (the line about the week's
+    /// messages may follow it); nil while the athlete's question waits for one.
+    private var lastAnswer: Bubble? {
+        guard let last = messages.last(where: { !$0.note }), !last.mine, !last.text.isEmpty else { return nil }
+        return last
+    }
+
+    /// Thumbs need the stored answer; the demo's sample answers keep them on the phone.
+    private func canRate(_ bubble: Bubble) -> Bool {
+        !bubble.mine && !bubble.note && !bubble.text.isEmpty && (bubble.serverId != nil || model.demo)
+    }
+
+    /// Up toggles; down fills at once and opens the panel with the reasons,
+    /// which saves it (CoachView.pendingDown); a second tap on either takes it back.
+    private func rateTapped(_ bubble: UUID, _ rating: String?) {
+        if rating == "down", let b = messages.first(where: { $0.id == bubble }) {
+            pendingDown = (bubble, b.rating)
+            edit(bubble) { $0.rating = "down" }
+            dislikedAnswer = b
+            return
+        }
+        Task { await rate(bubble, rating) }
+    }
+
+    /// Only the answer's id, the thumb and the reason go to the server, never
+    /// the text. `before`: the thumb to go back to when saving fails.
+    private func rate(_ bubble: UUID, _ rating: String?, reason: String? = nil, before: String?? = nil) async {
+        guard let b = messages.first(where: { $0.id == bubble }) else { return }
+        let before = before ?? b.rating
+        edit(bubble) { $0.rating = rating }
+        guard !model.demo, let serverId = b.serverId else { return }
+        do {
+            try await model.api.rateAnswer(messageId: serverId, rating: rating, reason: reason)
+        } catch {
+            edit(bubble) { $0.rating = before }
             self.error = error.localizedDescription
         }
     }
@@ -641,7 +753,8 @@ struct CoachView: View {
             let actions = chat.actions ?? []
             messages = chat.messages.map { m in
                 guard m.role == "user" else {
-                    var bubble = Bubble(mine: false, text: Self.withoutProposalNote(m.content))
+                    var bubble = Bubble(mine: false, text: Self.withoutProposalNote(m.content), serverId: m.serverId,
+                                        at: ChatsPanel.date(m.createdAt), rating: m.rating)
                     if let id = m.serverId {
                         bubble.actions = actions.filter { $0.messageId == id }
                         for a in bubble.actions {
@@ -662,6 +775,10 @@ struct CoachView: View {
 
 struct BubbleView: View {
     let bubble: CoachView.Bubble
+    /// The last answer: copy, the thumbs and its time under it. Older answers have them on a long press.
+    var last = false
+    /// "up", "down" or nil (taken back); nil when the answer can't be rated.
+    var rate: ((String?) -> Void)? = nil
     var decide: (CoachAction, Bool) -> Void
     var undoMemory: (CoachMemoryChip) -> Void = { _ in }
     var decideMemory: (CoachMemoryChip, Bool) -> Void = { _, _ in }
@@ -708,7 +825,8 @@ struct BubbleView: View {
                         .equatable()
                         .padding(.horizontal, 16).padding(.vertical, 14)
                         .cardSurface(cornerRadius: 18)
-                        .textSelection(.enabled)
+                        .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .contextMenu { AnswerActions.menu(text: bubble.text, rating: bubble.rating, rate: rate) }
                 }
             }
             ForEach(bubble.visuals, id: \.self) { kind in
@@ -731,6 +849,10 @@ struct BubbleView: View {
             }
             if let food = bubble.food {
                 FoodDraftCard(draft: food, logged: bubble.logged, ok: bubble.loggedOK, log: logFood)
+            }
+            // Under everything the answer brought (cards, memory lines), as at Bevel.
+            if last, !bubble.mine, !bubble.note, !bubble.text.isEmpty {
+                AnswerActions(text: bubble.text, rating: bubble.rating, at: bubble.at, rate: rate)
             }
         }
         .frame(maxWidth: .infinity, alignment: bubble.mine ? .trailing : .leading)

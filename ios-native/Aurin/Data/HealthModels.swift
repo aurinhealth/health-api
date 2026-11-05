@@ -66,6 +66,58 @@ struct HealthSnapshot: Decodable, Equatable {
         let latencyMinutes: Double?
         let efficiency: Int?
         let stages: Stages?
+        /// What makes up the index (src/app-health.js indexParts); nil from an
+        /// older server or when the index is the device's own score.
+        var parts: IndexParts? = nil
+        /// The usual share of deep and REM sleep, from 7 nights of the same source.
+        var usual: UsualStages? = nil
+    }
+
+    /// The index's three parts as the night's own values, each with how full
+    /// it is (0–1) for its bar. No points: they don't always add up.
+    struct IndexParts: Decodable, Equatable {
+        let length: Length
+        let quality: Quality
+        let stages: StageShare?
+
+        struct Length: Decodable, Equatable {
+            let minutes: Double
+            let need: Double
+            let fill: Double
+        }
+
+        struct Quality: Decodable, Equatable {
+            let efficiency: Int
+            let latency: Double?
+            let waso: Double?
+            let fill: Double
+        }
+
+        /// Deep and REM sleep together, % of the sleep.
+        struct StageShare: Decodable, Equatable {
+            let share: Int
+            let fill: Double
+        }
+    }
+
+    struct UsualStages: Decodable, Equatable {
+        let deep: Range
+        let rem: Range
+        let nights: Int
+
+        struct Range: Decodable, Equatable {
+            let low: Int
+            let high: Int
+        }
+    }
+
+    /// The sleep index of the last 14 nights, its average and the usual range
+    /// (the middle half of them, nil under 7 nights).
+    struct IndexNights: Decodable, Equatable {
+        let nights: [Point]
+        let average: Int
+        let low: Double?
+        let high: Double?
     }
 
     struct Tonight: Decodable, Equatable {
@@ -111,6 +163,8 @@ struct HealthSnapshot: Decodable, Equatable {
         let tonight: Tonight
         let debt: Debt?
         let regularity: Regularity?
+        /// Last 14 nights of the index (sleep detail); nil from an older server.
+        var index: IndexNights? = nil
     }
 
     struct HRV: Decodable, Equatable {

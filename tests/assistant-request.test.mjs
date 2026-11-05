@@ -25,7 +25,7 @@ test("a message carries at most one checked photo, which reaches the AI but neve
   // Only the photo may push the request past 64,000 characters.
   assert.match(route, /if\(raw\.length-\(image\?\.length\|\|0\)>ASSISTANT_REQUEST_CHARS\)return/);
   assert.match(route, /if\(image!=null&&!validCoachImage\(image\)\)return Response\.json\(/);
-  assert.match(route, /appendChatTurn\(env\.DB,body\.chatId,saved,answer\)/);
+  assert.match(route, /appendChatTurnIds\(env\.DB,body\.chatId,saved,answer\)/);
   assert.match(route, /const saved=image\?L\('\[Fotka\] ', '\[Photo\] '\)\+message:message;/);
   assert.match(route, /askCoach\(env,message,coachCtx,\{focus,actions:true,task,onAnswer,image\}\)/);
   // A photo is never a food sentence and always gets the full context.

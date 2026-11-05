@@ -63,10 +63,11 @@ extension APIClient {
         return list.passkeys
     }
 
-    /// Removes one passkey; whoever signed in with it elsewhere is signed out.
+    /// Removes one passkey; whoever signed in with it elsewhere is signed out
+    /// and gets no more notifications of the account (this phone keeps its own).
     func removePasskey(id: String) async throws -> [PasskeyInfo] {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed.subtracting(CharacterSet(charactersIn: "&+=")))
-        let list: PasskeyList = try await send("/app/api/passkeys?id=" + (encoded ?? id), method: "DELETE", body: JSONObject())
+        let list: PasskeyList = try await send("/app/api/passkeys?id=" + (encoded ?? id), method: "DELETE", body: ["pushToken": PushRegistration.sentToken])
         PasskeyService.prune(list)
         return list.passkeys
     }
@@ -78,9 +79,10 @@ extension APIClient {
         return (rpId, handle)
     }
 
-    /// Signs out every other device; this one gets a fresh cookie and stays.
+    /// Signs out every other device; this one gets a fresh cookie and stays, and
+    /// only this phone keeps the account's notifications.
     func signOutOtherDevices() async throws {
-        let _: JSONValue = try await send("/app/api/account/sign-out-everywhere", method: "POST", body: JSONObject())
+        let _: JSONValue = try await send("/app/api/account/sign-out-everywhere", method: "POST", body: ["pushToken": PushRegistration.sentToken])
     }
 }
 

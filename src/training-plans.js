@@ -3,6 +3,7 @@ import { buildWorkout, step, MAX_MINUTES } from "./workout-model.js";
 import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
 import { SWIMMING_WORKOUTS, SWIMMING_WORKOUTS_EN } from "./swimming-workouts.js";
+import { workoutNameEn } from "./workout-i18n.js";
 import { testFor } from "./threshold-check.js";
 import { RACE_PACE, rideRace, RIDE_RACES, durationShare } from "./race-estimate.js";
 // Multi-week training plans: the plan sets the week, the data sets the day.
@@ -560,7 +561,7 @@ const TEMPLATES = () => [
 ];
 export const planTemplates = () => [...TEMPLATES(), ...TRI_TEMPLATES()];
 // The starter plan of every sport is free; every other plan is an Aurin Pro
-// "adaptive training plan" once AI_PAYWALL_ENABLED is on (Petr, 3 Nov 2026).
+// "adaptive training plan" once the paywall is on (paywallOn in subscription.js; Petr, 3 Nov 2026).
 // A plan already running goes on to its end.
 export const FREE_PLANS = new Set(["ride-base", "run-5k-start", "swim-400", "gym-muscle", "tri-sprint"]);
 export const getTemplate = id => planTemplates().find(t => t.id === id) || null;
@@ -607,7 +608,15 @@ export { systemOf };
 // The cycling catalogue names its sessions in English; in Czech the plan says Práh, Nad/pod prahem.
 export const planName = name => name == null ? name : L(String(name).replace(/ \(\d+\/\d+\)/, "").replace("Threshold Over-Under", "Nad/pod prahem").replace("Over-Under", "Nad/pod prahem").replace("Sub-threshold", "Pod prahem").replace("Threshold", "Práh").replace("Sweet Spot", "Sweet spot"), String(name));
 // A swim is named in both languages in its catalogue (swimming-workouts.js).
-const baseName = id => { let w = Object.values(CATALOGUE).flat().find(x => x.id === String(id).replace(/~\d+$/, "")); if (w?.sport === "swim") w = L(w, SWIMMING_WORKOUTS_EN.find(x => x.id === w.id) || w); return w ? w.name.replace(/ · \d+ min$/, "") : null; };
+// The catalog is in Czech: in English a swim takes its English twin, a run or ride its English name
+// ("Fartlek pyramida 1-2-3-2-1" was left in English plans' week keys and session labels).
+const baseName = id => {
+  let w = Object.values(CATALOGUE).flat().find(x => x.id === String(id).replace(/~\d+$/, ""));
+  if (!w) return null;
+  if (w.sport === "swim") w = L(w, SWIMMING_WORKOUTS_EN.find(x => x.id === w.id) || w);
+  const name = w.sport === "swim" ? w.name : L(w.name, workoutNameEn(w.name));
+  return name.replace(/ · \d+ min$/, "");
+};
 
 // A plan's test session by sport.
 const testLabel = sport => sport === "run" ? L("Běžecký test", "Run test") : sport === "swim" ? L("Test CSS", "CSS test") : L("Test FTP", "FTP test");
