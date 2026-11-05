@@ -14,6 +14,8 @@ export function emailConfigured(env) {
 }
 
 export async function sendEmail(env, { to, subject, text, html }) {
+  // A subject is one line: a line break from user data would start another header.
+  subject = String(subject).replace(/[\u0000-\u001f\u007f]+/g, " ");
   const result = await env.EMAIL.send({ from: { email: emailSender(env), name: "Aurin" }, to, subject, text, html });
   return result?.messageId || null;
 }

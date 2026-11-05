@@ -192,3 +192,10 @@ test("reports sent together store one and send one e-mail", async () => {
   assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM support_reports").get().n, 1);
   assert.equal(sent.length, 1);
 });
+
+test("the e-mail subject stays one line whatever the diagnostics say", async () => {
+  const { env, sent } = setup();
+  await saveSupportReport(env, { message: "Nejde to", diagnostics: { screens: ["today\r\nBcc: someone@example.com"] } });
+  assert.match(sent[0].subject, /today Bcc: someone@example\.com/);
+  assert.doesNotMatch(sent[0].subject, /[\r\n]/);
+});
