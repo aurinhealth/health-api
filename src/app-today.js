@@ -258,8 +258,8 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     gym: gymByDate,
     saved: savedRecovery,
     less: Array.isArray(rec.less) ? rec.less : [],
-    // No sauna with a warning sign, alcohol yesterday or an injury in the journal (coach-pick.js saunaSigns).
-    noSauna: saunaSigns(readiness) || !!rec.risks?.alcohol || !!rec.risks?.injury || ["sick", "injured"].includes(morning?.athleteState)
+    // No sauna with a warning sign, alcohol, Nemoc or an injury in the journal (coach-pick.js saunaSigns).
+    noSauna: saunaSigns(readiness) || !!rec.risks?.alcohol || !!rec.risks?.injury || !!rec.risks?.sick || ["sick", "injured"].includes(morning?.athleteState)
   }) : null;
   const stretchName = recoveryCard?.items?.find(i => i.kind === "stretch")?.title;
   const recoveryItems = savedRecovery.map(r => ({

@@ -147,6 +147,7 @@ test("Nemoc, Zranění or Pauza leave only rest; signs of an illness drop the sa
   assert.match(sick.options[0].reason, /^Máš nastavenou Nemoc/);
   assert.deepEqual(rankOptions({ ride: coach("green"), run: coach("green"), athleteStatus: "injured" }).options.map(o => o.kind), ["rest"]);
   assert.deepEqual(rankOptions({ ride: coach("green"), run: coach("green"), athleteStatus: "on_break" }).options.map(o => o.kind), ["rest", "sauna"]);
+  assert.deepEqual(rankOptions({ ride: coach("green"), run: coach("green"), athleteStatus: "on_break", noSauna: true }).options.map(o => o.kind), ["rest"]);
   const signs = rankOptions({ ride: coach("red", "recovery"), run: coach("red", "recovery"), mainSport: "cycling", sports: ["ride"], noSauna: true });
   assert.ok(!signs.options.some(o => o.kind === "sauna"));
   assert.equal(signs.options[0].title, "Volno");
@@ -157,6 +158,12 @@ test("Nemoc, Zranění or Pauza leave only rest; signs of an illness drop the sa
   const trained = rankOptions({ ride: coach("green"), run: coach("green"), mainSport: "cycling", sports: ["ride"], today: ["ride"], noSauna: true });
   assert.ok(!trained.options.some(o => o.kind === "sauna"));
   assert.equal(trained.options[0].kind, "rest");
+});
+
+test("the sauna dropping keeps the day's ready workouts", () => {
+  const args = { ride: coach("green"), run: coach("green"), mainSport: "cycling", sports: ["ride"] };
+  assert.equal(pickSignature(rankOptions({ ...args, noSauna: true })), pickSignature(rankOptions(args)));
+  assert.notEqual(pickSignature(rankOptions({ ...args, ride: coach("red", "recovery") })), pickSignature(rankOptions(args)));
 });
 
 test("any one warning sign of the night takes the sauna off", () => {

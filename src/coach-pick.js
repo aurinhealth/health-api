@@ -34,10 +34,10 @@ const sentence = text => { const t = String(text || "").trim(); return t ? t[0].
 // allowed: the sports the athlete does (Settings → Sports to suggest: ride,
 // run, swim, strength), null when never chosen; the others are not offered.
 // mains: the main sports as those kinds (several allowed), else mainSport's.
-// noSauna: a reason the sauna is no option today (saunaSigns, or alcohol
-// yesterday or an injury in the journal, journal-store.js saunaRisks).
+// noSauna: a reason the sauna is no option today (saunaSigns, or alcohol,
+// Nemoc or an injury in the journal, journal-store.js saunaRisks).
 export function rankOptions({ ride, run, swim = null, mainSport = "general", mains = null, allowed = null, sports = [], today = [], declines = [], less = [], planned = [], done = [], athleteStatus = "active", noSauna = false }) {
-  if (athleteStatus && athleteStatus !== "active") return pausedOptions(athleteStatus);
+  if (athleteStatus && athleteStatus !== "active") return pausedOptions(athleteStatus, noSauna);
   const status = ride?.readiness?.status || run?.readiness?.status || "yellow";
   const names = KIND_NAMES();
   const lowerTired = (ride?.load?.lowerBodyGymSignals48h || 0) > 0;
@@ -124,8 +124,8 @@ export function saunaSigns(readiness) {
 }
 
 // Nemoc, Zranění or Pauza set by the athlete: no training on offer, only rest
-// (the sauna too during a break, never while ill).
-function pausedOptions(athleteStatus) {
+// (the sauna too during a break, never while ill or with noSauna).
+function pausedOptions(athleteStatus, noSauna = false) {
   const rest = athleteStatus === "sick"
     ? { kind: "rest", title: L("Odpočinek", "Rest"), detail: L("Spánek, pití a klid", "Sleep, drinks and quiet"), lines: [[L("Pití", "Drink"), L("2–3 l během dne", "2–3 l through the day")], [L("Spánek", "Sleep"), L("o hodinu déle", "an hour longer")]] }
     : { kind: "rest", title: L("Volno", "Day off"), detail: L("Procházka 30 min a protažení", "A 30 min walk and stretching"), lines: [[L("Procházka", "Walk"), "30 min"], [L("Protažení", "Stretching"), "15 min"]] };
@@ -133,7 +133,7 @@ function pausedOptions(athleteStatus) {
     injured: L("Máš nastavené Zranění. Náhradní trénink navrhnu, až kouči popíšeš svá omezení.", "Your status is Injured. I'll suggest other training once you tell the coach your limitations."),
     on_break: L("Máš nastavenou Pauzu, dnes bez tréninku.", "Your status is Rest, no training today.") }[athleteStatus] || L("Dnes bez tréninku.", "No training today.");
   const options = [{ ...rest, best: true, reason }];
-  if (athleteStatus === "on_break") options.push({ kind: "sauna", title: L("Sauna", "Sauna"), detail: L("3 × 12 min", "3 × 12 min"), lines: [[L("3 kola", "3 rounds"), L("12 min v sauně", "12 min in the sauna")], [L("Mezi tím", "Between"), L("5 min venku nebo sprcha", "5 min outside or a shower")], [L("Pití", "Drink"), L("0,5 l vody", "0.5 l of water")]] });
+  if (athleteStatus === "on_break" && !noSauna) options.push({ kind: "sauna", title: L("Sauna", "Sauna"), detail: L("3 × 12 min", "3 × 12 min"), lines: [[L("3 kola", "3 rounds"), L("12 min v sauně", "12 min in the sauna")], [L("Mezi tím", "Between"), L("5 min venku nebo sprcha", "5 min outside or a shower")], [L("Pití", "Drink"), L("0,5 l vody", "0.5 l of water")]] });
   return { status: "red", score: null, lowerTired: false, paused: athleteStatus, options: options.map(o => ({ ...o, action: "accept" })) };
 }
 
@@ -253,11 +253,13 @@ export async function setLess(db, userId, kind, less = true) {
   return { status: "ok", less: await lessKinds(db, userId) };
 }
 
-// The ready workouts of the day's options, kept while the options stay the
-// same (the same kinds, titles and lengths): new data that changes nothing
-// reuses them, so the AI is asked again only when the day really changes.
+// The ready workouts of the day's options, kept while the options that have
+// one (ride, run, swim, gym) stay the same (kinds, titles, which is best): new
+// data that changes nothing reuses them, so the AI is asked again only when
+// the day really changes, not when only the sauna or the day off moves.
+const DETAILED = new Set(["ride", "run", "swim", "gym"]);
 export function pickSignature(ranked) {
-  return JSON.stringify([ranked.status, ranked.lowerTired ? 1 : 0, ...ranked.options.map(o => [o.kind, o.title, o.best ? 1 : 0])]);
+  return JSON.stringify([ranked.status, ranked.lowerTired ? 1 : 0, ...ranked.options.filter(o => DETAILED.has(o.kind)).map(o => [o.kind, o.title, o.best ? 1 : 0])]);
 }
 
 export async function storedDetails(db, userId, date, signature) {

@@ -89,6 +89,11 @@ test("sauna and a finished routine are saved as done and join Today's plan", asy
   assert.deepEqual(rows.map(i => i.title), ["Protažení po posilovně", "Sauna"]);
   assert.ok(rows.every(i => i.done && /hotovo$/.test(i.detail)));
   assert.match(rows[0].detail, /^\d+ min · 6 cviků · hotovo$/);
+  // With stretching "less", the sauna is the tip; alcohol or a Sick status takes it off.
+  const base = { date: DATE, hour: 20, daily: { training: { planned: [], matched: [], completed: [] } }, gym: { name: "Horní tělo A", exercises: ["Bench press"], logged: 4 } };
+  assert.equal(buildToday({ ...base, recovery: { less: ["stretch"] } }).recovery.items[0].kind, "sauna");
+  assert.equal(buildToday({ ...base, recovery: { less: ["stretch"], risks: { alcohol: true } } }).recovery, null);
+  assert.equal(buildToday({ ...base, recovery: { less: ["stretch"] }, morning: { athleteState: "sick" } }).recovery, null);
   // A past day shows the saved recovery in its plan but no suggestions.
   const past = buildToday({ date: DATE, hour: null, recovery: { saved } });
   assert.equal(past.recovery, null);

@@ -1318,7 +1318,7 @@ async function reflectionData(env,ctx,internalAuth,date,workoutId=null){
     WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<?
       AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time`).bind(env.USER_ID,from,to).all().catch(()=>({results:[]}))).results||[];
   const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));
-  const [fitness,sleep,food,recentFeedback,workout,profile,watch,checkin,gymSets]=await Promise.all([
+  const [fitness,sleep,food,recentFeedback,workout,profile,watch,checkin,gymSets,risks]=await Promise.all([
     internal('/app/api/fitness?days=42').then(r=>r.json()).catch(()=>({})),
     app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-21)+'&end='+to,{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>intervalsSleep(env,ctx,d,shiftDate(date,-21),to)),
     env.DB.prepare("SELECT consumed_at,recipe_title,kcal,carbs_g FROM food_logs WHERE user_id=? AND consumed_date=? AND (status IS NULL OR status='eaten') ORDER BY consumed_at").bind(env.USER_ID,date).all().then(r=>r.results||[]).catch(()=>[]),
@@ -1328,10 +1328,13 @@ async function reflectionData(env,ctx,internalAuth,date,workoutId=null){
     // HRV and resting HR from the watch, the check-in and the day's gym sets.
     googleHealthFor(env,ctx,date).catch(()=>({})),
     readinessCheckin(env.DB,date).catch(()=>null),
-    env.DB.prepare("SELECT exercise,set_no,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND workout_date=? AND type='WORK' AND completed=1 ORDER BY id").bind(env.USER_ID,date).all().then(r=>r.results||[]).catch(()=>[])
+    env.DB.prepare("SELECT exercise,set_no,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND workout_date=? AND type='WORK' AND completed=1 ORDER BY id").bind(env.USER_ID,date).all().then(r=>r.results||[]).catch(()=>[]),
+    saunaRisks(env.DB,date).catch(()=>({}))
   ]);
   const wellness=fillWellness(fitness.wellness||[],watch?.wellness||[]);
   const readiness=dayReadiness({date,fitness,health:{...watch,sleep:sleep.sessions||[]},profile,checkin});
+  // The coach's recovery tips leave out the sauna when Aktivita dne does (coach-pick.js saunaSigns).
+  const saunaOff=saunaSigns(readinessFor({date,google:watch?.wellness,intervals:fitness?.wellness,sessions:sleep.sessions||[],profile,checkin}))||!!risks.alcohol||!!risks.injury||!!risks.sick;
   // The next two days' plan, so the coach knows whether tomorrow is a rest day or a hard session.
   const nextDays=await Promise.all([1,2].map(async k=>{const d=shiftDate(date,k);
     const [daily,gym]=await Promise.all([app.fetch(new Request('https://internal/analysis/daily?date='+d,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({})),readGymPlan(env.DB,d).catch(()=>null)]);
@@ -1345,7 +1348,7 @@ async function reflectionData(env,ctx,internalAuth,date,workoutId=null){
     workout:workout?{id:workout.id,name:workout.name,system:workout.primary_system,sport:workout.sport,durationMinutes:workout.duration_minutes}:null,
     activities:dedupeActivities(activityRows.map(activityFromRow)),
     wellness,sleep:[...nights.values()],food,recentFeedback,nextDays,focus:athleteFocus(profile,date),athleteState:await getAthleteState(env.DB),
-    readiness,gym:gymSets.map(r=>({exercise:r.exercise,set:Number(r.set_no)||null,kg:r.actual_kg,reps:r.actual_reps,rpe:r.rpe}))
+    readiness,saunaOff,gym:gymSets.map(r=>({exercise:r.exercise,set:Number(r.set_no)||null,kg:r.actual_kg,reps:r.actual_reps,rpe:r.rpe}))
   };
 }
 
@@ -1429,9 +1432,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const swim=swims?await defaultDayCoach(env,{...inputs,athleteState:athlete},date,'swim',week).catch(()=>null):null;
       const planned=[...(swim?.constraints?.plannedToday&&activityKindOf(swim.constraints.plannedToday.type||swim.constraints.plannedToday.name)==='swim'?['swim']:[]),...(ride.constraints?.plannedToday&&activityKindOf(ride.constraints.plannedToday.type||ride.constraints.plannedToday.name)==='ride'?['ride']:[]),...(run.constraints?.plannedToday&&activityKindOf(run.constraints.plannedToday.type||run.constraints.plannedToday.name)==='run'?['run']:[]),...((gym?.values||[]).length>7?['gym']:[])];
       // Nemoc, Zranění or Pauza leaves only rest; a warning sign of the night,
-      // alcohol yesterday or an injury in the journal drops the sauna (coach-pick.js saunaSigns).
+      // alcohol, Nemoc or an injury in the journal drops the sauna (coach-pick.js saunaSigns).
       const risks=await risking;
-      const noSauna=saunaSigns(readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile}))||!!risks.alcohol||!!risks.injury;
+      const noSauna=saunaSigns(readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile}))||!!risks.alcohol||!!risks.injury||!!risks.sick;
       const ranked=rankOptions({ride,run,swim,mainSport:eff.mainSport||'general',mains,allowed,sports:recent.sports,today:recent.today,declines:state.declines,less,planned,done:recent.done,athleteStatus:athlete?.status||'active',noSauna});
       // The ready workouts stay while the options do (pickSignature), so a sync
       // that changes nothing asks the AI nothing.
@@ -2660,7 +2663,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const problems=connectionProblems(status);
       if(date===localToday()&&profile)ctx.waitUntil(lockReadiness(env.DB,{date,health,fitness,sleep,profile}).catch(()=>false));
       // The morning push's advice (push.js), so Today's coach card says the same.
-      const morning=isToday?await Promise.all([getAthleteState(env.DB).catch(()=>null),morningContext(env,{date,health,fitness,sleep,profile,doses:training,tomorrowDaily:tomorrow})])
+      // A failed context still keeps the athlete's status, so a paused athlete never sees a hard day.
+      const morning=isToday?await Promise.all([getAthleteState(env.DB).catch(()=>null),morningContext(env,{date,health,fitness,sleep,profile,doses:training,tomorrowDaily:tomorrow}).catch(()=>({tomorrow:[],context:null}))])
         .then(([state,m])=>({...m,athleteState:state?.status||null,context:m.context?{...m.context,memories:usedMemories(state)}:null})).catch(()=>null):null;
       applyEnergyBudget(daily,profile,health);
       return Response.json(withRecoveryTime(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,location:place.location,forecast:place.forecast,gym:gym[date]||null,checkin,trainingPlan,
