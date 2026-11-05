@@ -58,10 +58,14 @@ test("the store keeps the app's log over Apple Health's and merges partial write
   assert.deepEqual([s.enabled, s.cycleLength, s.contraception], [true, 31, "none"]);
   assert.equal((await saveCycleSettings(db, { lastPeriod: "2026-10-03" })).cycleLength, 31);
   assert.equal((await getCycleSettings(db)).lastPeriod, "2026-10-03");
-  await importAppleCycle(db, [{ date: "2026-10-03", flow: 3 }, { date: "2026-10-04", flow: 1 }, { date: "2026-10-16", ovulationTest: true }]);
+  const sent = [{ date: "2026-10-03", flow: 3 }, { date: "2026-10-04", flow: 1 }, { date: "2026-10-16", ovulationTest: true }];
+  assert.deepEqual(await importAppleCycle(db, sent), { saved: 3, changed: 3 });
+  // The same days on the next app launch: nothing written, nothing outdated.
+  assert.deepEqual(await importAppleCycle(db, sent), { saved: 3, changed: 0 });
+  assert.deepEqual(await importAppleCycle(db, []), { saved: 0, changed: 0 });
   await saveCycleDay(db, { date: "2026-10-04", flow: 2 });
   await saveCycleDay(db, { date: "2026-10-04", symptoms: ["cramps", "nope"] });
-  await importAppleCycle(db, [{ date: "2026-10-04", flow: 3 }]);
+  assert.deepEqual(await importAppleCycle(db, [{ date: "2026-10-04", flow: 3 }]), { saved: 1, changed: 1 });
   const days = await listCycleDays(db, "2026-10-01", "2026-10-31");
   assert.deepEqual(days.map(d => [d.date, d.flow, d.symptoms, d.ovulationTest]), [["2026-10-03", 3, [], false], ["2026-10-04", 2, ["cramps"], false], ["2026-10-16", 0, [], true]]);
   const kept = await saveCycleDay(db, { date: "2026-10-12", pill: "21:04", keepPlan: true });
@@ -119,4 +123,19 @@ test("a pill marked as taken stays taken when the day is read back, and clearing
   assert.equal((await saveCycleDay(db, { date: "2026-10-12", pill: null })).pill, null);
   assert.equal(normalizeCycleDay({ pill: "taken" }).pill, "taken");
   assert.equal(normalizeCycleDay({ pill: "bogus" }).pill, null);
+});
+
+test("the same Apple Health cycle days again answer unchanged, so nothing cached is dropped", async () => {
+  const { createD1 } = await import("./helpers/d1.mjs");
+  const { handleCycleApi } = await import("../src/routes-cycle.js");
+  const { UNCHANGED_HEADER } = await import("../src/api-cache.js");
+  const db = createD1(); db.userId = 7;
+  const url = new URL("https://aurin.health/app/api/cycle/apple");
+  const send = () => handleCycleApi(new Request(url, { method: "POST", headers: { Origin: url.origin }, body: JSON.stringify({ days: [{ date: "2026-10-03", flow: 2 }] }) }), { DB: db }, null, url, { signedIn: true });
+  const first = await send();
+  assert.equal(first.headers.get(UNCHANGED_HEADER), null);
+  assert.deepEqual(await first.json(), { status: "ok", saved: 1, changed: 1 });
+  const again = await send();
+  assert.equal(again.headers.get(UNCHANGED_HEADER), "1");
+  assert.equal((await again.json()).changed, 0);
 });
