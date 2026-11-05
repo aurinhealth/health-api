@@ -66,7 +66,9 @@ export function readinessFor({ date, rows = null, google = [], intervals = [], s
   // The rest of a night locked at a wake-up brings its own night signals
   // too (HRV, resting HR, breathing, temperature), and so does the main
   // device's night arriving after another watch's: the lock is set anew.
-  const lock = locked && ((locked.night && continues(live, locked.night)) || otherDevice(locked, own.find(r => r.id === date))) ? null : locked;
+  // A lock from the Intervals.icu copy (a night without times) gives way to
+  // the night from the main source (Google, Apple) once it arrives.
+  const lock = locked && ((locked.night && (continues(live, locked.night) || fromCopy(locked.night, live))) || otherDevice(locked, own.find(r => r.id === date))) ? null : locked;
   const plain = withLock(own, date, lock);
   const merged = profile?.cycle ? markCyclePhases(plain, profile.cycle) : plain;
   const sleepSet = sleepSettings(profile || {});
@@ -102,6 +104,12 @@ export function readinessLockOf(readiness, date) {
 function continues(live, locked) {
   const t = v => Date.parse(v || "");
   return Boolean(live) && t(live.startTime) <= t(locked.endTime) && t(live.endTime) > t(locked.endTime) && num(live.durationMin) > num(locked.durationMin);
+}
+
+// The locked night is the Intervals.icu wellness copy (intervals-sleep.js: no
+// time in bed) and the main source's night with its times is there now.
+function fromCopy(locked, live) {
+  return !locked.startTime && Boolean(live?.startTime);
 }
 
 // The day's HRV or resting heart rate now comes from another device than the

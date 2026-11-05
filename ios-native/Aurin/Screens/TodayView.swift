@@ -158,7 +158,12 @@ struct TodayContent: View {
             // suggests something else; without a plan the activity of the day
             // in full (CoachPick.swift, Petr 2026-11-02).
             let planned = TodayTrainingCard.planned(today)
-            if planned.isEmpty {
+            if planned.isEmpty && today.unavailable?.contains("training") == true {
+                // The day's plan could not be read: not "nothing planned".
+                PartUnavailableNote(text: "Trénink se teď nepodařilo načíst")
+                    .cardSurface(cornerRadius: 22)
+                    .padding(.top, 12)
+            } else if planned.isEmpty {
                 CoachPickCard(top: 12)
             } else {
                 TodayTrainingCard(items: planned, red: today.readiness.zone == "red").padding(.top, 12)
@@ -782,7 +787,10 @@ struct KeyNumbers: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             .onGeometryChange(for: Bool.self) { $0.size.width < 300 } action: { compact = $0 }
-            if sleepFailed {
+            if healthFailed {
+                Divider().overlay(Palette.hairline)
+                PartUnavailableNote(text: "Data ze zdraví se teď nepodařilo načíst")
+            } else if sleepFailed {
                 Divider().overlay(Palette.hairline)
                 PartUnavailableNote(text: "Spánek se teď nepodařilo načíst")
             }
@@ -793,6 +801,8 @@ struct KeyNumbers: View {
 
     /// The server could not read the nights this time (not: no night yet).
     private var sleepFailed: Bool { today.unavailable?.contains("sleep") == true && today.sleep?.minutes == nil }
+    /// The watch's day or the fitness rows (HRV, resting HR, strain) could not be read this time.
+    private var healthFailed: Bool { today.unavailable?.contains("health") == true }
 
     /// A cell's bar (when it has a range), its band's values and the line under it.
     struct Gauge {

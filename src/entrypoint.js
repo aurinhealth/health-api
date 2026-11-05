@@ -2628,7 +2628,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const failed=new Set();
       const missing=(path,why)=>{const part=path.split('?')[0];failed.add(part);console.warn(JSON.stringify({today_part_failed:part,why:String(why).slice(0,200)}));return {};};
       const answer=(path,r)=>r.ok?r.json():missing(path,'HTTP '+r.status);
-      const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>answer(path,r)).catch(error=>missing(path,error?.message||error));
+      // part: the name a failure is reported under when it is not the path's own.
+      const read=(path,part=path)=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>answer(part,r)).catch(error=>missing(part,error?.message||error));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>answer(path,r)).catch(error=>missing(path,error?.message||error));
       const from=shiftDate(date,-30),to=shiftDate(date,1),isToday=date===localToday();
       // The active training plan, today's plan proposal and the connection check start with the rest.
@@ -2637,13 +2638,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const checking=connectionStatus(env).catch(()=>null);
       // Today only: yesterday's sessions and tomorrow's plan for "Regenerace na dnes" (recovery-today.js).
       const [daily,health,fitness,sleep,fluids,weight,coaches,profile,place,gym,yesterday,tomorrow,savedRecovery,checkin,synced,proposal,status,recoveryLess,training]=await Promise.all([
-        read('/analysis/daily?date='+date),googleHealthFor(env,ctx,date).catch(()=>({})),
-        cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
-        read('/health/sleep?start='+from+'&end='+to).then(d=>intervalsSleep(env,ctx,d,from,to)).catch(()=>({})),
+        read('/analysis/daily?date='+date),googleHealthFor(env,ctx,date).catch(error=>missing('google-health',error?.message||error)),
+        // {} is a failed read (a fitness read shared with another request reports nothing here).
+        cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).then(f=>Object.keys(f||{}).length?f:missing('/app/api/fitness','empty')).catch(error=>missing('/app/api/fitness',error?.message||error)),
+        read('/health/sleep?start='+from+'&end='+to).then(d=>Object.keys(d).length?intervalsSleep(env,ctx,d,from,to):d).catch(error=>missing('/health/sleep',error?.message||error)),
         api('/app/api/fluids?date='+date),read('/health/weight'),api('/app/api/coaches?date='+date),dashboardProfile(env).catch(()=>null),
-        todayPlace(env,ctx,date),trainingGymPlans(env,isToday?shiftDate(date,-1):date,isToday?shiftDate(date,1):date).catch(()=>({})),
-        isToday?read('/analysis/daily?date='+shiftDate(date,-1)):null,isToday?read('/analysis/daily?date='+shiftDate(date,1)):null,
-        listRecovery(env.DB,{from:date,to:date}).catch(()=>[]),readinessCheckin(env.DB,date).catch(()=>null),
+        todayPlace(env,ctx,date),trainingGymPlans(env,isToday?shiftDate(date,-1):date,isToday?shiftDate(date,1):date).catch(error=>missing('gym-plans',error?.message||error)),
+        isToday?read('/analysis/daily?date='+shiftDate(date,-1),'recovery'):null,isToday?read('/analysis/daily?date='+shiftDate(date,1),'recovery'):null,
+        listRecovery(env.DB,{from:date,to:date}).catch(error=>{missing('recovery',error?.message||error);return [];}),readinessCheckin(env.DB,date).catch(()=>null),
         syncing,proposing,checking,
         isToday?lessKinds(env.DB,env.USER_ID).catch(()=>[]):[],
         isToday?loadTrainingDoses(env.DB).catch(()=>null):null

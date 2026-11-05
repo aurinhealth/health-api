@@ -156,10 +156,16 @@ export function napsOn(sessions, date, night) {
 }
 
 // The parts of Today that failed (their paths), by the card they feed: the
-// nights (Spánek) and the drinks (Voda in Jídlo a pití).
-const TODAY_PARTS = { "/health/sleep": "sleep", "/app/api/fluids": "fluids" };
+// nights (Spánek), the drinks (Voda in Jídlo a pití), the watch's day and the
+// fitness rows (health: readiness, HRV, resting HR, strain), the day's
+// analysis (training and food), the gym plans (training), the weight, the
+// coaches' morning summary (coach) and "Regenerace na dnes" (recovery).
+const TODAY_PARTS = {
+  "/health/sleep": ["sleep"], "/app/api/fluids": ["fluids"], "google-health": ["health"], "/app/api/fitness": ["health"],
+  "/analysis/daily": ["training", "food"], "gym-plans": ["training"], "/health/weight": ["weight"], "/app/api/coaches": ["coach"], recovery: ["recovery"]
+};
 export function todayUnavailable(failed) {
-  return [...new Set([...failed].map(path => TODAY_PARTS[path]).filter(Boolean))];
+  return [...new Set([...failed].flatMap(path => TODAY_PARTS[path] || []))];
 }
 
 // The source of the latest night up to `date`, null without one or without a source.

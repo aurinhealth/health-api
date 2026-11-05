@@ -2717,6 +2717,9 @@
 "Auto vychází z tréninků za poslední dva roky. Pauza kvůli nemoci nebo zranění úroveň nesníží." = "Auto is based on your training over the last two years. A break for illness or injury won't lower the level.";
 "Spánek se teď nepodařilo načíst" = "Sleep couldn’t load right now";
 "Pití se teď nepodařilo načíst" = "Drinks couldn’t load right now";
+"Data ze zdraví se teď nepodařilo načíst" = "Health data couldn’t load right now";
+"Trénink se teď nepodařilo načíst" = "Training couldn’t load right now";
+"Jídlo se teď nepodařilo načíst" = "Food couldn’t load right now";
 
 /* Gym equipment picker (GymPlaces.swift) */
 "Přidat posilovnu" = "Add a gym";
