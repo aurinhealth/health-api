@@ -93,6 +93,10 @@ test("signing out the other devices is told to the account's e-mail (point 41)",
   await call(env, user, "/app/api/account/sign-out-everywhere", { body: {} });
   assert.equal(sent.at(-1).to, "friend@example.com");
   assert.equal(sent.at(-1).subject, "Ostatní zařízení se odhlásila z tvého účtu Aurin");
+  // At most two notices an hour: the button cannot spend the day's e-mails.
+  const before = sent.length;
+  for (let i = 0; i < 3; i++) await call(env, await findUser(env.DB, user.id, env), "/app/api/account/sign-out-everywhere", { body: {} });
+  assert.equal(sent.length, before + 1);
   const en = withTimeZone("Europe/London", () => signedOutEverywhereEmail("en", new Date("2026-11-04T10:00:00Z")));
   assert.match(en.text, /^Every device but one was signed out of your Aurin account on 4 November 2026 at 10:00 GMT/);
   assert.match(en.text, /Settings → Account/);

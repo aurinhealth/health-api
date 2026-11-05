@@ -268,6 +268,11 @@ test("one caller takes at most a twentieth of the day's sign-in codes (point 4)"
   assert.equal(sent.length, 10, "the caller's ten of the day");
   await at(t0, () => start(env, "other@example.com", { ip: "203.0.113.6" }));
   assert.equal(sent.length, 11, "another caller still gets one");
+  // An IPv6 caller is its whole /48 here: the /64s of one site share its ten.
+  for (let i = 0; i < 11; i++) await at(t0 + i * 150_000, () => quietly(() => start(env, "v" + i + "@example.com", { ip: "2001:db8:7:" + i.toString(16) + "::1" })));
+  assert.equal(sent.length, 21);
+  await at(t0, () => start(env, "w@example.com", { ip: "2001:db8:8::1" }));
+  assert.equal(sent.length, 22, "the next /48");
 });
 
 test("someone who spends the day's codes locks out neither known devices nor App Review (point 4)", async () => {
@@ -289,6 +294,18 @@ test("someone who spends the day's codes locks out neither known devices nor App
   assert.equal(sent.length, before + 1, "the member's own phone still gets a code");
   await at(t0 + 120_000, () => start(env, "review@example.com"));
   assert.equal(codeIn(sent.at(-1)), "246810", "and App Review its fixed code");
+});
+
+test("a known device whose own budget is used up still gets a code from the shared one", async () => {
+  const { env, sent } = await setup({ EMAIL_CODES_PER_DAY: "2" });
+  const t0 = Date.parse("2026-10-07T08:00:00Z");
+  await at(t0 - 86_400_000, () => start(env, "owner@example.com"));
+  const signedIn = await at(t0 - 86_400_000, () => verify(env, "owner@example.com", codeIn(sent[0])));
+  const cookie = signedIn.headers.getSetCookie().map(value => sentTo(value, "/auth/email/start")).filter(value => value.startsWith("aurin_known=")).join("; ");
+  for (let i = 0; i < 2; i++) await at(t0 + i * 61_000, () => start(env, "owner@example.com", { cookie }));
+  assert.equal(sent.length, 3, "the known devices' two of the day");
+  await at(t0 + 2 * 61_000, () => start(env, "owner@example.com", { cookie }));
+  assert.equal(sent.length, 4, "then one of the shared budget");
 });
 
 test("with OPEN_SIGNUP, accounts opened today draw on the open share (point 4)", async () => {

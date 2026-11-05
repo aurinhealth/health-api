@@ -599,6 +599,8 @@ export class SignupLimited extends Error {
 // Whether a sign-in with this verified address may create a new account.
 // request: the sign-in's request, whose network the new account counts against;
 // throws SignupLimited when that network made too many today.
+// The address is the normalized one here, so a letter toLowerCase already turned into ASCII passes:
+// the sign-ins check the address as it came (plainEmail) before they find an account by it.
 export async function mayCreateAccount(db, env, address, { request = null } = {}) {
   if (!address || !plainEmail(address)) return false;
   if (address === ownerEmail(env)) return true;

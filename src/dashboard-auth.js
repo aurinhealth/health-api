@@ -3,6 +3,7 @@ import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { bumpSessionEpoch } from "./tenancy.js";
 import { APP_RETURN_PATH, APP_CONNECTED_PATH } from "./app-origin.js";
 import { emailConfigured, sendEmail, signedOutEverywhereEmail } from "./email-sender.js";
+import { allowRequest } from "./ip-rate-limit.js";
 
 const SESSION_COOKIE = "pfd_session";
 export const SESSION_SECONDS = 30 * 24 * 60 * 60;
@@ -359,7 +360,8 @@ export async function handleSignOutEverywhere(request, env, url, session, ctx = 
   if (!session.signedIn || !session.user) return unauthorizedResponse();
   if (request.headers.get("Origin") !== url.origin) return Response.json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, { status: 403 });
   const response = await signedOutElsewhere(env.RAW_DB || env.DB, session.user.id, env, Response.json({ status: "ok" }, { headers: { "Cache-Control": "no-store" } }), request);
-  if (emailConfigured(env) && session.user.email) {
+  // At most two notices an hour and five a day, so the button cannot be used to spend the day's e-mails.
+  if (emailConfigured(env) && session.user.email && await allowRequest(env.RAW_DB || env.DB, "signout-notice:" + Number(session.user.id), { hour: 2, day: 5 })) {
     const notice = sendEmail(env, { to: session.user.email, ...signedOutEverywhereEmail(lang()) }).catch(error => console.error("Sign-out notice e-mail failed", error?.code || error?.message));
     if (ctx?.waitUntil) ctx.waitUntil(notice); else await notice;
   }

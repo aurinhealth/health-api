@@ -20,7 +20,7 @@
 // (EMAIL_CHANGE_CODES_PER_DAY, 100), so they never take from the codes for signing in, and one
 // account asks for at most 2 a minute, 5 an hour and 10 a day, one caller for 5, 20 and 30.
 import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie, knownDevice, knownDeviceCookie, heldKnownDevice, keepOnlyPushToken } from "./dashboard-auth.js";
-import { allowClient, allowRequest, clientKey } from "./ip-rate-limit.js";
+import { allowClient, allowRequest, callerNetwork } from "./ip-rate-limit.js";
 import { normalizeEmail, plainEmail, emailCodeAccess, signInEmailUser, changeUserEmail, SignupLimited } from "./tenancy.js";
 import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail, stepUpCodeEmail } from "./email-sender.js";
 import { siteLang } from "./site-pages.js";
@@ -78,13 +78,21 @@ export async function handleEmailLogin(request, env, pathname, ctx) {
     // tell anyone on such a network which addresses have an account.
     const known = await knownDevice(request, env, email);
     // Whether a code goes out (and how long that takes) stays out of the answer.
-    const network = await clientKey(request, sessionSecret(env));
+    const network = await networkKey(request, sessionSecret(env));
     const work = sendCode(env, email, requestLanguage(request), { known, network }).catch(error => console.error("Sign-in code e-mail failed", error?.code || error?.message));
     if (ctx?.waitUntil) ctx.waitUntil(work); else await work;
     return json({ status: "ok" });
   }
   if (!(await allowClient(env.DB, request, sessionSecret(env), "email-verify", Date.now(), VERIFY_LIMITS))) return json({ message: TOO_MANY() }, 429);
   return verifyCode(env, email, body?.code, await knownDevice(request, env, email), request);
+}
+
+// The caller for its share of the day's codes: an IPv4 address, or a whole IPv6 /48, as one site
+// (a tunnel broker hands out a /48 for free, which would be 65,536 /64 callers). Keyed hash, so no address is stored.
+async function networkKey(request, secret) {
+  const network = callerNetwork(request.headers.get("CF-Connecting-IP"));
+  const site = network.endsWith("::/64") ? network.split(":").slice(0, 3).join(":") + "::/48" : network;
+  return (await signText("email-share:" + site, String(secret || ""))).slice(0, 32);
 }
 
 function randomCode() {
@@ -135,8 +143,8 @@ export async function sendCode(env, email, lang = "cs", { now = Date.now(), code
 // their wrong tries never touch the address's sign-in codes.
 // `known`: the nonce of a device that signed in with the address (knownDevice); it has its own
 // day's codes instead of the address's, the address's lock does not hold it, and its codes come
-// from a day's budget of their own. `network`: the caller (clientKey), at most NETWORK_SHARE of
-// the day's sign-in codes. `review`: the fixed App Review code, outside every budget of the day.
+// from a day's budget of their own (then from the shared one). `network`: the caller (networkKey),
+// at most NETWORK_SHARE of the day's sign-in codes, and as much of the known devices' ones. `review`: the fixed App Review code, outside every budget of the day.
 // Returns "sent", or why not: "resend" (one went out less than a minute ago), "daily" (the day's
 // codes are used up), "locked" (too many wrong codes today) or "budget" (all codes of the day).
 async function claimAndSend(db, env, email, code, purpose, message, now, { open = false, change = false, stepUp = false, known = null, network = null, review = false, to = email } = {}) {
@@ -153,9 +161,13 @@ async function claimAndSend(db, env, email, code, purpose, message, now, { open 
     if (!(await allowRequest(db, "email-codes:step-up:day", { day: stepUpCodesPerDay(env) }, now))) { console.warn("Step-up code budget of the day is used up"); return "budget"; }
   } else if (change) {
     if (!(await allowRequest(db, "email-codes:change:day", { day: changeCodesPerDay(env) }, now))) { console.warn("E-mail change code budget of the day is used up"); return "budget"; }
-  } else if (known) {
-    if (!(await allowRequest(db, "email-codes:known-device:day", { day: codesPerDay(env) }, now))) { console.warn("Known-device code budget of the day is used up"); return "budget"; }
-  } else if (!review) {
+  } else if (review) {
+    // The fixed App Review code: outside every budget of the day.
+  } else if (known && (!network || await allowRequest(db, "email-codes:network-known:" + network, { day: networkCodesPerDay(env) }, now))
+    && await allowRequest(db, "email-codes:known-device:day", { day: codesPerDay(env) }, now)) {
+    // A known device's own budget; once it (or the caller's share of it) is used up, the code
+    // still comes from the shared budget below.
+  } else {
     if (network && !(await allowRequest(db, "email-codes:network:" + network, { day: networkCodesPerDay(env) }, now))) { console.warn("Sign-in codes of the day for one caller are used up"); return "budget"; }
     if (open && !(await allowRequest(db, "email-codes:open:day", { day: openCodesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day for new addresses is used up"); return "budget"; }
     if (!(await allowRequest(db, "email-codes:day", { day: codesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day is used up"); return "budget"; }
