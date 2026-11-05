@@ -180,6 +180,8 @@ struct GymTechnique: Decodable, Equatable {
     let photoCredit: String?
     let video: Video?
     let searchUrl: String?
+    /// The athlete's thumb for the exercise: true, false or nil (none yet).
+    var liked: Bool? = nil
 
     struct Video: Decodable, Equatable {
         let id: String?

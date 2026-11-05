@@ -391,7 +391,7 @@ const tmRest = `<div class="dm pad tm rest">
 <div class="nowc"><span class="mut s">Now</span><div class="row sp"><b>Squat · set 3</b><span class="num md">80 kg × 8</span></div><span class="mut s">Last time 77.5 × 8</span></div>
 </div>`;
 
-// The finish screen (TrainingModeView.swift summary): what you did, a record, the changes, a swap kept for next time, saved to Health (the muscles have their own chapter next).
+// The finish screen (TrainingModeView.swift summary): what you did, a record, the changes, a swap kept for next time, sent to Apple Health and Intervals.icu, then Close (the muscles have their own chapter next).
 const doneScreen = `<div class="app glow-training">${STATUS}
 <div class="nav"><span class="cb">${ic('x')}</span><div class="nt"><b>Full body</b><span class="mut s">3 exercises · 9/9 sets</span></div></div>
 <div class="center col"><div class="sl">Workout done</div><div class="sent title2">Full body</div></div>
@@ -401,16 +401,16 @@ const doneScreen = `<div class="app glow-training">${STATUS}
 <div class="card chg"${at('2500')}>${[['Squat', '4 × 80 kg', '+2.5 kg', 'grn'], ['Bench press', '3 × 62.5 kg', '+2.5 kg', 'grn'], ['Rows', '3 × 50 kg', '+2.5 kg', 'grn']].map(([a, b, c, k]) => `<div class="li"><div><b>${a}</b><span class="mut s">${b}</span></div><span class="${k} s b">${c}</span></div>`).join('')}</div>
 <div class="sl swl"${at('2650')}>Swapped today</div>
 <div class="card swp"${at('2650')}><b>Leg press → Squat</b>${seg(['Only today', 'Next time too'], 0, 1, 3600)}</div>
-<div class="card hk"${at('3400')}><span class="rust">${ic('heart')}</span><b>Saved to Apple Health</b><span class="grn">${ic('check')}</span></div>
-<div class="btn dark big2">${ic('thumb')}Rate</div>
+<div class="card hk"${at('3400')}><span class="rust">${ic('heart')}</span><b>Apple Health</b><span class="grn s b">${ic('check')} Saved</span></div>
+<div class="card hk"${at('3700')}><span class="mut">${ic('check')}</span><b>Intervals.icu</b><span class="grn s b">${ic('check')} Sent</span></div>
+<div class="btn dark big2">Close</div>
 </div>`;
 
 const tmDone = `<div class="dm pad">
 <div class="sent h2">How was the workout?</div>
-<div class="sl">Exercises</div>
-${[['Squat', 1], ['Bench press', 1], ['Rows', 0]].map(([k, up], i) => `<div class="li"><span>${k}</span><span class="thumbs"><i class="tu${up ? '' : ''}"${up ? at(String(900 + i * 500) + ':on') : ''}>${ic('thumb')}</i><i class="td">${ic('thumb', 'down')}</i></span></div>`).join('')}
-<div class="sl">Did the workout’s plan suit you?</div>
-<div class="suit"><span${at('2600:on')}>👍<b>Suited me</b></span><span>😐<b>It’s OK</b></span><span>👎<b>Didn’t suit me</b></span></div>
+<div class="suit"><span${at('900:on')}>👍<b>Suited me</b></span><span>😐<b>It’s OK</b></span><span>👎<b>Didn’t suit me</b></span></div>
+<div class="sl">Rate exercises</div>
+${[['Squat', 1], ['Bench press', 1], ['Rows', 0]].map(([k, up], i) => `<div class="li"><span>${k}</span><span class="thumbs"><i class="tu${up ? '' : ''}"${up ? at(String(1800 + i * 500) + ':on') : ''}>${ic('thumb')}</i><i class="td">${ic('thumb', 'down')}</i></span></div>`).join('')}
 </div>`;
 
 // ---- Food (Widgets.swift FoodWidget, FoodView.swift, BarcodeScanSheet.swift, PortionWheel chips) ----

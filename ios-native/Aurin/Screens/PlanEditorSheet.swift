@@ -110,7 +110,9 @@ struct PlanEditorSheet: View {
                 if let date { GymRoutineSheet(part: part, day: day, date: date) }
             }
             .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
-                TechniqueSheet(exercise: item.name)
+                // Nahradit as Vyměnit cvik in the menu: a dated plan, sets still to do.
+                let left = day.exercises.first(where: { $0.name == item.name })?.sets.contains(where: { !$0.done }) == true
+                TechniqueSheet(exercise: item.name, replace: date != nil && left ? { Task { try? await Task.sleep(for: .milliseconds(450)); swapping = item.name } } : nil)
             }
             .sheet(item: Binding(get: { pairing.map { Named(name: $0) } }, set: { pairing = $0?.name })) { item in
                 if let offset = day.exercises.firstIndex(where: { $0.id == item.name }) {
