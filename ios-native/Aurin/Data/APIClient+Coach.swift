@@ -12,13 +12,12 @@ struct CoachCheckIn: Decodable {
         let reasons: [String]?
         let message: String?
         /// "memory_check": a passing memory ("bolí mě koleno") to confirm or forget;
-        /// "illness": signs of an oncoming illness (src/illness-check.js).
+        /// "easier_day": several night values outside the usual range (src/night-check.js).
         var kind: String? = nil
         var memory: String? = nil
-        /// illness: each sign against the normal, and the sessions it may cancel.
+        /// easier_day: each value against the usual.
         var rows: [Row]? = nil
-        var sessions: [Session]? = nil
-        /// swap: the morning push's offer, the session now and the easier one.
+        /// swap, easier_day: the offer for today, the session now and the easier one.
         var date: String? = nil
         var from: String? = nil
         var to: String? = nil
@@ -27,13 +26,6 @@ struct CoachCheckIn: Decodable {
             let id: String
             let label: String
             let value: String
-        }
-
-        struct Session: Decodable, Equatable, Identifiable {
-            let eventId: String
-            let date: String
-            let name: String
-            var id: String { eventId }
         }
     }
 }

@@ -80,17 +80,20 @@ export async function saveCycleDay(db, body) {
 
 // Apple Health's menstrual flow, ovulation tests and symptoms for the days it
 // sent (at most 400): only the apple_* columns change, what was logged in the
-// app stays.
+// app stays. The app sends the same days on every launch: a day that already
+// holds the same values is not written, and changed counts the days that were.
 export async function importAppleCycle(db, days) {
   await ensure(db);
   const list = (Array.isArray(days) ? days : []).filter(d => d && isDate(d.date)).slice(0, 400);
-  for (const d of list) {
+  if (!list.length) return { saved: 0, changed: 0 };
+  const results = await db.batch(list.map(d => {
     const flow = d.flow == null ? null : Math.max(0, Math.min(3, Math.round(Number(d.flow)) || 0));
     const symptoms = Array.isArray(d.symptoms) && d.symptoms.length ? JSON.stringify([...new Set(d.symptoms.filter(x => SYMPTOMS.includes(x)))]) : null;
-    await db.prepare("INSERT INTO cycle_days(user_id,date,apple_flow,apple_ovulation,apple_symptoms) VALUES(?,?,?,?,?) ON CONFLICT(user_id,date) DO UPDATE SET apple_flow=excluded.apple_flow,apple_ovulation=excluded.apple_ovulation,apple_symptoms=excluded.apple_symptoms,updated_at=CURRENT_TIMESTAMP")
-      .bind(db.userId, d.date, flow, d.ovulationTest ? 1 : 0, symptoms).run();
-  }
-  return list.length;
+    return db.prepare(`INSERT INTO cycle_days(user_id,date,apple_flow,apple_ovulation,apple_symptoms) VALUES(?,?,?,?,?) ON CONFLICT(user_id,date) DO UPDATE SET apple_flow=excluded.apple_flow,apple_ovulation=excluded.apple_ovulation,apple_symptoms=excluded.apple_symptoms,updated_at=CURRENT_TIMESTAMP
+      WHERE cycle_days.apple_flow IS NOT excluded.apple_flow OR cycle_days.apple_ovulation IS NOT excluded.apple_ovulation OR cycle_days.apple_symptoms IS NOT excluded.apple_symptoms`)
+      .bind(db.userId, d.date, flow, d.ovulationTest ? 1 : 0, symptoms);
+  }));
+  return { saved: list.length, changed: results.reduce((sum, r) => sum + (Number(r?.meta?.changes) || 0), 0) };
 }
 
 // What the readiness and Today need: the settings and the last 200 days, or

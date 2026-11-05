@@ -84,6 +84,7 @@ struct Pill: View {
     var body: some View {
         Text(text)
             .font(.footnote.weight(.semibold))
+            .lineLimit(1).minimumScaleFactor(0.8)
             .foregroundStyle(foreground)
             .padding(.horizontal, 10)
             .frame(height: 26)
@@ -176,6 +177,15 @@ struct RangeBar: View {
         }
     }
 
+    /// "↑ nad obvyklým", "↓ pod obvyklým", "obvyklé": where the value is, no judgement.
+    static func usualWord(_ value: Double, _ low: Double, _ high: Double) -> String {
+        switch side(value, low, high) {
+        case 1: return "↑ " + L10n.tr("nad obvyklým")
+        case -1: return "↓ " + L10n.tr("pod obvyklým")
+        default: return L10n.tr("obvyklé")
+        }
+    }
+
     /// Green within the range or on its good side, amber on its bad side.
     static func color(_ value: Double, _ low: Double, _ high: Double, worseAbove: Bool) -> Color {
         let side = side(value, low, high)
@@ -193,6 +203,9 @@ struct TileRange: View {
     var text: String? = nil
     /// The band's values under its ends.
     var edges: (low: String, high: String)? = nil
+    /// The metric's own colour and the usual-range words instead of better or
+    /// worse (breathing, temperature and blood oxygen: MDR).
+    var tint: Color? = nil
 
     /// Half a degree either side of the usual night, in the phone's unit.
     static var temperatureEdges: (low: String, high: String) {
@@ -200,10 +213,10 @@ struct TileRange: View {
     }
 
     var body: some View {
-        let color = text == nil ? RangeBar.color(value, low, high, worseAbove: worseAbove) : Palette.blue
+        let color = tint ?? (text == nil ? RangeBar.color(value, low, high, worseAbove: worseAbove) : Palette.blue)
         VStack(alignment: .leading, spacing: 8) {
             RangeBar(value: value, low: low, high: high, color: color, edges: edges)
-            Text(verbatim: text ?? RangeBar.word(value, low, high))
+            Text(verbatim: text ?? (tint != nil ? RangeBar.usualWord(value, low, high) : RangeBar.word(value, low, high)))
                 .font(Typo.caption.weight(.medium)).foregroundStyle(color)
                 .lineLimit(1).minimumScaleFactor(0.8)
         }
@@ -218,10 +231,13 @@ struct DetailRange: View {
     let high: Double
     let label: String
     var worseAbove = false
+    /// The dot in the metric's own colour instead of better or worse (breathing,
+    /// temperature and blood oxygen describe, never judge: MDR).
+    var tint: Color? = nil
 
     var body: some View {
         VStack(spacing: 8) {
-            RangeBar(value: value, low: low, high: high, color: RangeBar.color(value, low, high, worseAbove: worseAbove), height: 8)
+            RangeBar(value: value, low: low, high: high, color: tint ?? RangeBar.color(value, low, high, worseAbove: worseAbove), height: 8)
             HStack {
                 Text("níž")
                 Spacer()
