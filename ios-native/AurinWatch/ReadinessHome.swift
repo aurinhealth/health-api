@@ -228,7 +228,8 @@ struct ReadinessHome: View {
 
     private func cell(_ g: Gauge) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(g.title).font(.system(size: 11, weight: .medium)).foregroundStyle(W.muted).lineLimit(1)
+            // The name in its kind's colour, the state in the dot and the word under it (watch audit C1b).
+            Text(g.title).font(.system(size: 11, weight: .medium)).foregroundStyle(Self.kind(g.page)).lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text(g.value).font(W.serif(19)).foregroundStyle(W.ink)
                 if let unit = g.unit, g.value != "–" { Text(unit).font(.system(size: 10)).foregroundStyle(W.muted) }
@@ -248,6 +249,16 @@ struct ReadinessHome: View {
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+    }
+
+    /// Sleep indigo, strain amber, HRV green: what the number is, never how it stands.
+    static func kind(_ page: Page) -> Color {
+        switch page {
+        case .sleep: W.indigo
+        case .strain: W.amber
+        case .hrv: W.green
+        default: W.muted
+        }
     }
 
     /// The night against its need: the band is half an hour either side (TodayView).

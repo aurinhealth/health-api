@@ -41,7 +41,9 @@ struct CoachNotificationView: View {
             if let readiness = today?.readiness {
                 Ring(fraction: Double(readiness) / 100, color: W.zoneColor(today?.zone), size: 78) {
                     Text("\(readiness)").font(W.serif(30)).foregroundStyle(W.ink)
-                    Text(W.tr("připravenost", "readiness")).font(.system(size: 8)).foregroundStyle(W.muted)
+                    // The zone in a word, not only the ring's colour (watch audit C1b).
+                    Text(W.zoneWord(today?.zone) ?? W.tr("připravenost", "readiness"))
+                        .font(.system(size: 9, weight: .semibold)).foregroundStyle(W.zoneColor(today?.zone))
                 }
             } else {
                 Image(systemName: "bubble.left.and.text.bubble.right")

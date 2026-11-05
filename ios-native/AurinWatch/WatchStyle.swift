@@ -49,6 +49,16 @@ enum W {
         }
     }
 
+    /// The zone in a word, as the first page's pill: the colour never alone.
+    static func zoneWord(_ zone: String?) -> String? {
+        switch zone {
+        case "green": tr("vysoká", "high")
+        case "yellow": tr("střední", "moderate")
+        case "red": tr("nízká", "low")
+        default: nil
+        }
+    }
+
     static func serif(_ size: CGFloat) -> Font { .custom("InstrumentSerif-Regular", size: size) }
     static func news(_ size: CGFloat) -> Font { .custom("Newsreader-Regular", size: size) }
     static func label(_ size: CGFloat = 9) -> Font { .system(size: size, weight: .semibold) }
@@ -128,13 +138,6 @@ enum W {
     /// A glass: 250 ml or 8 fl oz.
     static var glassMl: Int { imperial ? Int((8 * mlPerFluidOunce).rounded()) : 250 }
     static var glassText: String { imperial ? "+8 fl oz" : "+250 ml" }
-
-    /// A signed change: "+4", "−2", "0".
-    static func change(_ value: Double, digits: Int = 0) -> String {
-        let text = number(abs(value), digits: digits)
-        if text == number(0, digits: digits) { return text }
-        return (value > 0 ? "+" : "−") + text
-    }
 
     /// 432 minutes as "7:12".
     static func clock(minutes: Double) -> String {
@@ -228,9 +231,13 @@ struct Ring<Content: View>: View {
     let fraction: Double
     let color: Color
     var size: CGFloat = 94
+    /// The normal or the target as a share of the ring: a thin line outside
+    /// its segments, as under the Day complication's steps (watch audit C3).
+    var goal: ClosedRange<Double>? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
+        let marked = (0..<10).filter { goal?.contains((Double($0) + 0.5) / 10) == true }
         ZStack {
             Circle().fill(W.disc)
             ForEach(0..<10, id: \.self) { i in
@@ -238,6 +245,11 @@ struct Ring<Content: View>: View {
                     .stroke(i < Int((fraction * 10).rounded()) ? color : W.track,
                             style: StrokeStyle(lineWidth: size * 0.08, lineCap: .butt))
                     .frame(width: size * 0.8, height: size * 0.8)
+            }
+            if let first = marked.first, let last = marked.last {
+                Arc(start: 135 + Double(first) * 27 + 2, end: 135 + Double(last) * 27 + 25)
+                    .stroke(Color.white.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    .frame(width: size * 0.97, height: size * 0.97)
             }
             VStack(spacing: 1) { content }
         }
@@ -285,8 +297,8 @@ struct RingValue: View {
     }
 }
 
-/// The three tiles at the bottom of a page, all the same height; the first
-/// one is the highlighted one, with its colour along the top.
+/// The three tiles at the bottom of a page, all alike (watch audit C6: the
+/// first one was highlighted for no reason).
 struct Tiles: View {
     struct Item {
         let label: String
@@ -294,11 +306,10 @@ struct Tiles: View {
     }
 
     let items: [Item]
-    let color: Color
 
     var body: some View {
         HStack(spacing: 5) {
-            ForEach(Array(items.prefix(3).enumerated()), id: \.offset) { index, item in
+            ForEach(Array(items.prefix(3).enumerated()), id: \.offset) { _, item in
                 VStack(spacing: 2) {
                     Text(item.value)
                         // Numbers in the serif, words ("short", "high") in the system font.
@@ -310,7 +321,7 @@ struct Tiles: View {
                         .frame(height: 20)
                     Text(item.label)
                         .font(W.label(8))
-                        .foregroundStyle(index == 0 ? color : W.secondary)
+                        .foregroundStyle(W.secondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
@@ -319,7 +330,7 @@ struct Tiles: View {
                 .background(W.tile, in: RoundedRectangle(cornerRadius: 12))
                 .overlay(alignment: .top) {
                     Rectangle()
-                        .fill(index == 0 ? color : W.dim)
+                        .fill(W.dim)
                         .frame(height: 2)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 12))
