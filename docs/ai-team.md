@@ -17,6 +17,13 @@ roles are sub agents defined in `.claude/agents/`:
 | Monetization & Unit Economics Analyst | `monetization-analyst` | read-only commands |
 | Critic | `critic` | no |
 | Marketing | `marketing` | read-only commands, public web |
+| Cycling Coach | `cycling-coach` | no |
+| Running Coach | `running-coach` | no |
+| Swimming Coach | `swimming-coach` | no |
+| Triathlon & Duathlon Coach | `triathlon-coach` | no |
+| Strength Coach | `strength-coach` | no |
+| Sports Nutritionist | `sports-nutritionist` | no |
+| Physiotherapist | `physiotherapist` | no |
 
 ## Rules
 - Every role is read-only: no role edits files, commits or pushes. Changes are made only after the
@@ -40,6 +47,13 @@ roles are sub agents defined in `.claude/agents/`:
 - Every request or point to discuss: `research-analyst` first researches competitors, medical and
   sport-science literature, guidelines, news and studies, each claim with a source. The other roles
   build their proposals on that brief.
+- Training, plans, workouts and the coach's training advice: the coach of each sport the change touches
+  (`cycling-coach`, `running-coach`, `swimming-coach`, `strength-coach`) checks that a professional coach
+  would prescribe it this way, fitted to the user's real time and goal. A week plan across several sports
+  adds `triathlon-coach`. Fuelling goes to `sports-nutritionist`, pain, injury, warm-ups, mobility and
+  return to training to `physiotherapist`. The coaches judge the practice; `health-scientist` still owns
+  method, sources and MDR, and `ai-coach-engineer` the prompts and code.
+- Food features and food advice: `sports-nutritionist`.
 - Every team run: `critic` reviews the proposals before the owner's document.
 - Social posts and replies on X: `marketing` drafts and reviews them. The Product Manager schedules
   posts in Typefully; replies under other people's posts the owner posts himself.
