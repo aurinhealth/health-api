@@ -394,7 +394,7 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
   // The morning values of today already stored (a few rows by their key):
   // only a first one is news for the readiness, a moving average is not.
   const today = localToday(), mornings = rows.filter(r => MORNING.has(r.data_type) && r.sample_time === today).map(r => r.external_id);
-  const stored = new Set(mornings.length ? ((await db.prepare(`SELECT external_id FROM health_datapoints WHERE user_id = ? AND source_family = '${SOURCE}' AND external_id IN (SELECT value FROM json_each(?))`).bind(userId, JSON.stringify(mornings)).all()).results || []).map(r => r.external_id) : []);
+  const stored = new Set(mornings.length ? ((await db.prepare(`SELECT external_id FROM health_datapoints WHERE user_id = ? AND source_family = '${SOURCE}' AND data_type IN (SELECT value FROM json_each(?)) AND external_id IN (SELECT value FROM json_each(?))`).bind(userId, JSON.stringify([...MORNING]), JSON.stringify(mornings)).all()).results || []).map(r => r.external_id) : []);
   // 200 statements a round trip: a first sync of 1500 records is 8 batches, not 30.
   for (let i = 0; i < statements.length; i += 200) {
     const results = await db.batch(statements.slice(i, i + 200)) || [];
