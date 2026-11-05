@@ -56,6 +56,13 @@ export async function saveSportChoice(db, userId, kind, suggest) {
   return { changed, sports: profile.sports, mainSports: mainKindsOf(profile), mainSport: profile.mainSport };
 }
 
+// Week plan's sport picker: the sports ticked in Settings → Sports to suggest,
+// or null when the athlete never chose (all of them are offered). One row read.
+export async function suggestedSports(db, userId) {
+  const row = await db.prepare("SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1").bind(userId).first().catch(() => null);
+  try { const p = JSON.parse(row?.profile_json || "null"); return Array.isArray(p?.sports) ? sportKinds(p.sports) : null; } catch { return null; }
+}
+
 // A card in a sport the athlete turned off only when they ask for that sport
 // in this chat ("dnes bych si dal kolo"); the message that turned it off does not count.
 export function sportAllowed(focus, sport, askedTexts = []) {

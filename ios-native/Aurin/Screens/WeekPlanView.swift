@@ -138,6 +138,7 @@ enum WeekPlanDraftMemory {
 struct WeekPlanView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var weekStart = WeekPlanView.monday()
     @AppStorage("weekPlan.mode") private var mode = "manual"
     @State private var plan: WeekPlanResponse?
@@ -146,6 +147,8 @@ struct WeekPlanView: View {
     /// The weekdays whose run goes right after the ride (chip "Brick").
     @State private var bricks: Set<Int> = []
     @State private var picked: String?
+    /// Nastavení → Sporty k navrhování (ride, run, swim, strength); nil: never chosen, all are offered.
+    @State private var sports: [String]?
     @State private var note = ""
     /// "Opravit návrh": what the AI should fix in its proposal.
     @State private var correction = ""
@@ -319,30 +322,33 @@ struct WeekPlanView: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(picked.map { L10n.f("Klepni na den, kam dát: %@", sportLabel($0)) } ?? L10n.tr("Vyber sport a klepni na den."))
                 .font(Typo.small).foregroundStyle(Palette.secondary).padding(.top, 18)
-            // Four sports don't fit one line on a small phone: they scroll.
-            ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(Self.pickable, id: \.self) { sport in
-                    Button {
-                        picked = picked == sport ? nil : sport
-                    } label: {
-                        let on = picked == sport
-                        Label {
-                            Text(sportLabel(sport)).foregroundStyle(on ? Palette.onAccent : Palette.ink)
-                        } icon: {
-                            Image(systemName: sportSymbol(sport)).foregroundStyle(on ? Palette.onAccent : sportColor(sport))
-                        }
-                            .font(Typo.small.weight(.semibold))
-                            .padding(.horizontal, 12).frame(height: 36)
-                            .background(on ? sportColor(sport) : Palette.card, in: Capsule())
-                            .overlay { Capsule().stroke(Palette.hairline, lineWidth: on ? 0 : 1) }
+            // The sports fit one line as tiles; at the largest text sizes they scroll.
+            Group {
+                if typeSize.isAccessibilitySize {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) { ForEach(pickable, id: \.self) { sportCapsule($0) } }
                     }
-                    .buttonStyle(.plain)
+                    .scrollClipDisabled()
+                } else {
+                    HStack(spacing: 8) { ForEach(pickable, id: \.self) { sportTile($0) } }
                 }
             }
-            }
-            .scrollClipDisabled()
             .padding(.top, 10)
+            if !hiddenSports.isEmpty {
+                NavigationLink {
+                    WeekPlanSportsSettings { kinds in
+                        sports = kinds
+                        if let p = picked, !pickable.contains(p) { picked = nil }
+                    }
+                } label: {
+                    (Text(L10n.f("Vypnuté v Nastavení → Sporty: %@.", hiddenSports.map(sportLabel).joined(separator: ", "))) + Text(verbatim: " ")
+                        + Text("Změnit").foregroundColor(Palette.green))
+                        .font(Typo.caption).foregroundStyle(Palette.muted)
+                        .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
+            }
             if picked == "brick" {
                 Text("Brick: běh hned po kole, do hodinek jako jeden trénink.")
                     .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 8).fixedSize(horizontal: false, vertical: true)
@@ -403,8 +409,57 @@ struct WeekPlanView: View {
         .disabled(past || working)
     }
 
-    /// The chips to pick: the sports, and Brick after Swim (Ride, Run, Swim, Brick, Gym).
-    private static let pickable = ["ride", "run", "swim", "brick", "gym"]
+    /// Ride, Run, Swim, Gym: the sport order everywhere in the app.
+    private static let allSports = ["ride", "run", "swim", "gym"]
+
+    /// The sports to pick: the ones ticked in Nastavení → Sporty k navrhování
+    /// (all when never chosen), and Brick last, a ride and a run together.
+    private var pickable: [String] {
+        let shown = Self.allSports.filter { !hiddenSports.contains($0) }
+        return shown + (shown.contains("ride") && shown.contains("run") ? ["brick"] : [])
+    }
+
+    /// The sports turned off in Nastavení → Sporty k navrhování; none when nothing is ticked.
+    private var hiddenSports: [String] {
+        guard let sports, !sports.isEmpty else { return [] }
+        return Self.allSports.filter { !sports.contains($0 == "gym" ? "strength" : $0) }
+    }
+
+    private func sportTile(_ sport: String) -> some View {
+        let on = picked == sport
+        return Button { picked = on ? nil : sport } label: {
+            VStack(spacing: 5) {
+                Image(systemName: sportSymbol(sport)).scaledFont(17, weight: .semibold)
+                    .foregroundStyle(on ? Palette.onAccent : sportColor(sport))
+                Text(sportLabel(sport)).font(Typo.caption.weight(.semibold))
+                    .foregroundStyle(on ? Palette.onAccent : Palette.ink)
+                    .lineLimit(1).minimumScaleFactor(0.75)
+            }
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity, minHeight: 58)
+            .background(on ? sportColor(sport) : Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Palette.hairline, lineWidth: on ? 0 : 1) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func sportCapsule(_ sport: String) -> some View {
+        let on = picked == sport
+        return Button { picked = on ? nil : sport } label: {
+            Label {
+                Text(sportLabel(sport)).foregroundStyle(on ? Palette.onAccent : Palette.ink)
+            } icon: {
+                Image(systemName: sportSymbol(sport)).foregroundStyle(on ? Palette.onAccent : sportColor(sport))
+            }
+                .font(Typo.small.weight(.semibold))
+                .padding(.horizontal, 12).frame(minHeight: 36)
+                .background(on ? sportColor(sport) : Palette.card, in: Capsule())
+                .overlay { Capsule().stroke(Palette.hairline, lineWidth: on ? 0 : 1) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
 
     /// The brick days that still hold a ride and a run.
     private var liveBricks: Set<Int> {
@@ -1015,6 +1070,7 @@ struct WeekPlanView: View {
             let p = try await model.api.weekPlan(start: start)
             guard start == weekStart else { return }
             plan = p
+            sports = p.sports
             if sessions.isEmpty {
                 days = WeekPlanPrefs.days(p.prefs)
                 bricks = WeekPlanPrefs.bricks(p.prefs)
@@ -1274,6 +1330,34 @@ private struct AdjustSessionSheet: View {
             dismiss()
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+}
+
+/// Nastavení → Sporty k navrhování opened from the week plan: the profile
+/// loads first; on the way back the plan shows the sports as saved.
+private struct WeekPlanSportsSettings: View {
+    @Environment(AppModel.self) private var model
+    let done: ([String]) -> Void
+    @State private var store: SettingsStore?
+
+    var body: some View {
+        Group {
+            if let store {
+                SportsSettingsView(store: store)
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task {
+            guard store == nil else { return }
+            let s = SettingsStore(api: model.api, demo: model.demo)
+            await s.load()
+            store = s
+        }
+        .onDisappear {
+            // Only a saved list: a profile that never chose keeps every sport.
+            if case .array(let items)? = store?.profile["sports"] { done(items.compactMap { $0.string }) }
         }
     }
 }
