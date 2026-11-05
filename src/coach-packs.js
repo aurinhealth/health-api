@@ -56,16 +56,6 @@ export async function packMessagesLeft(env) {
   return Math.max(0, Number(row?.left) || 0);
 }
 
-// What the monthly AI cap gives way to (ai-usage.js): the messages of packs
-// bought since `since` (YYYY-MM-DD, the month's first day) and those left.
-export async function packMessagesForMonth(env, since) {
-  if (!tracked(env)) return { bought: 0, left: 0 };
-  const db = central(env);
-  const row = await withTables(db, () => db.prepare(`SELECT (SELECT COALESCE(SUM(messages), 0) FROM coach_pack_purchases WHERE user_id = ? AND counted = 1 AND refunded_at IS NULL AND purchased_at >= ?) AS bought,
-    (${BOUGHT}) - COALESCE((SELECT used FROM coach_pack_balance WHERE user_id = ?), 0) AS left`).bind(env.USER_ID, since, env.USER_ID, env.USER_ID).first());
-  return { bought: Math.max(0, Number(row?.bought) || 0), left: Math.max(0, Number(row?.left) || 0) };
-}
-
 // The account's purchases, newest first, for "Your purchases".
 export async function packPurchases(env) {
   if (!env?.DB || !(Number(env.USER_ID) > 0)) return [];

@@ -19,7 +19,7 @@ import { isReviewAccount, REVIEW_AI_MONTHLY_LIMIT_USD } from "./app-review.js";
 import { aiLimitShare } from "./ai-limit-share.js";
 import { addAiSpend } from "./ai-total.js";
 import { ownerUnlimited } from "./staging.js";
-import { packMessagesForMonth } from "./coach-packs.js";
+import { packMessagesLeft } from "./coach-packs.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
@@ -126,15 +126,21 @@ export async function assertAiAllowance(env, feature = null, { exceptId = 0 } = 
 }
 
 // Bought coach messages (coach-packs.js) never stop at the monthly cap: it
-// rises by what they bring in after Apple and VAT, the 100 pack's
-// PACK_NET_USD_PER_MESSAGE being the lower of the two (199 Kč → 6.42 USD).
-// This month's packs count whole, earlier ones for the messages left. Read
-// only once the plain cap is reached; a failed read raises nothing.
-export const PACK_NET_USD_PER_MESSAGE = 0.064;
+// rises by PACK_NET_USD_PER_MESSAGE for every bought message still left and
+// every one used this month (coach_messages kind 'pack'), so it does not
+// shrink as they are used. 0.05 USD keeps a margin under what the 100 pack
+// nets (0.064 USD after Apple's 15 % and 21 % VAT) for a higher VAT, Apple's
+// 30 % or a weaker koruna. Read only once the plain cap is reached; a failed
+// read raises nothing.
+export const PACK_NET_USD_PER_MESSAGE = 0.05;
 async function packRaise(env) {
-  const month = (await limitToday(env)).slice(0, 7);
-  const { bought, left } = await packMessagesForMonth(env, month + "-01").catch(error => { console.error("Coach packs read failed", error?.message || error); return { bought: 0, left: 0 }; });
-  return Math.max(bought, left) * PACK_NET_USD_PER_MESSAGE;
+  const month = (await limitToday(env)).slice(0, 7) + "-01";
+  const failed = error => { console.error("Coach packs read failed", error?.message || error); return 0; };
+  const [left, used] = await Promise.all([
+    packMessagesLeft(env).catch(failed),
+    env.DB.prepare("SELECT COUNT(*) AS n FROM coach_messages WHERE user_id = ? AND kind = 'pack' AND created_at >= ?").bind(env.USER_ID, month).first().then(r => Number(r?.n) || 0).catch(failed)
+  ]);
+  return (left + used) * PACK_NET_USD_PER_MESSAGE;
 }
 
 // "Back on 1 December": the cap ends with the account's month. No amount.

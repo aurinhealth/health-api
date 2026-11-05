@@ -83,15 +83,22 @@ test("bought coach messages raise the monthly cap by what they bring in, so a pa
     await ensureAiUsage(env.DB);
     db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, 5)").run(localToday());
     await assert.rejects(callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" }), error => error.limit === true);
-    // A 100 pack bought this month: 100 × 0.064 USD more room.
+    // A 100 pack: 100 × 0.05 USD more room.
     await savePackTransaction(env, { productId: "b.coach.messages100", bundleId: "b", transactionId: "t1", environment: "Production", purchaseDate: Date.now() });
     await callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" });
     assert.equal(calls(), 1);
-    // Past what it brings in, the cap holds again.
-    db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, 6.4)").run(localToday());
+    // Messages used this month keep their room: the cap does not shrink as they go.
+    db.sqlite.exec("CREATE TABLE IF NOT EXISTS coach_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, week TEXT NOT NULL, chat_id INTEGER, kind TEXT NOT NULL, counted INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)");
+    db.sqlite.exec("UPDATE coach_pack_balance SET used = 60 WHERE user_id = 7");
+    for (let i = 0; i < 60; i++) db.sqlite.prepare("INSERT INTO coach_messages (user_id, week, kind, counted) VALUES (7, '2026-01-01', 'pack', 0)").run();
+    db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, 4)").run(localToday());
+    await callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" });
+    assert.equal(calls(), 2);
+    // Past what the pack brings in, the cap holds again.
+    db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, 1)").run(localToday());
     await assert.rejects(callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" }), error => error.limit === true);
   });
-  assert.equal(PACK_NET_USD_PER_MESSAGE, 0.064);
+  assert.equal(PACK_NET_USD_PER_MESSAGE, 0.05);
 });
 
 test("a daily limit, when set, stops the next call once it is spent; the owner has none on the test server", async () => {
