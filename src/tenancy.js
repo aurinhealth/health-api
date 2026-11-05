@@ -147,6 +147,12 @@ export function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+// An address of plain ASCII characters. toLowerCase turns some other letters into ASCII ones
+// (U+212A KELVIN SIGN into "k"), so such an address could name someone else's account: a new
+// account or a new address of an account takes only plain ones. Existing accounts keep theirs
+// (security review 2026-11-04, point 32).
+export const plainEmail = value => /^[\x21-\x7e]+$/.test(String(value || "").trim());
+
 export function ownerEmail(env) {
   return normalizeEmail(env.OWNER_EMAIL);
 }
@@ -530,6 +536,7 @@ export async function signInGoogleUser(db, env, { sub, email, name, request = nu
   if (!sub || !address) return null;
   let row = await db.prepare("SELECT id, email, name, role, disabled, google_sub FROM users WHERE google_sub=?").bind(String(sub)).first();
   if (!row) {
+    if (!plainEmail(email)) return null;
     row = await db.prepare("SELECT id, email, name, role, disabled, google_sub FROM users WHERE email=?").bind(address).first();
     if (row && row.google_sub && row.google_sub !== String(sub)) return null;
   }
@@ -555,15 +562,18 @@ export async function mayGetEmailCode(db, env, email) {
 }
 
 // Why an address may get a sign-in code: "known" (an active user, an invited address or
-// the owner), "open" (only because of OPEN_SIGNUP, so any address typed in), or null.
-export async function emailCodeAccess(db, env, email) {
+// the owner), "open" (only because of OPEN_SIGNUP, so any address typed in), or null. With
+// OPEN_SIGNUP an account opened today (UTC) is "open" too: anyone can open some, so they must not
+// spend the codes kept for the people who were here before (security review 2026-11-04, point 4).
+export async function emailCodeAccess(db, env, email, now = Date.now()) {
   const address = normalizeEmail(email);
   if (!address) return null;
   const [user, invite] = await Promise.all([
-    db.prepare("SELECT disabled FROM users WHERE email=?").bind(address).first(),
+    db.prepare("SELECT disabled, created_at FROM users WHERE email=?").bind(address).first(),
     db.prepare("SELECT email FROM user_invites WHERE email=?").bind(address).first()
   ]);
-  if (user) return user.disabled ? null : "known";
+  if (user?.disabled) return null;
+  if (user) return openSignup(env) && address !== ownerEmail(env) && String(user.created_at || "").slice(0, 10) === new Date(now).toISOString().slice(0, 10) ? "open" : "known";
   if (invite || address === ownerEmail(env)) return "known";
   return openSignup(env) ? "open" : null;
 }
@@ -590,7 +600,7 @@ export class SignupLimited extends Error {
 // request: the sign-in's request, whose network the new account counts against;
 // throws SignupLimited when that network made too many today.
 export async function mayCreateAccount(db, env, address, { request = null } = {}) {
-  if (!address) return false;
+  if (!address || !plainEmail(address)) return false;
   if (address === ownerEmail(env)) return true;
   const invited = Boolean(await db.prepare("SELECT email FROM user_invites WHERE email=?").bind(address).first());
   if (!openSignup(env) && !invited) return false;
@@ -736,7 +746,7 @@ export async function signInEmailUser(db, env, email, { request = null } = {}) {
 // Returns { email, previous } or { error: "invalid" | "missing" | "same" | "owner" | "taken" }.
 export async function changeUserEmail(db, env, id, email) {
   const address = normalizeEmail(email);
-  if (!address || address.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) return { error: "invalid" };
+  if (!address || address.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) || !plainEmail(email)) return { error: "invalid" };
   const row = await db.prepare("SELECT id, email FROM users WHERE id=?").bind(Number(id)).first();
   if (!row) return { error: "missing" };
   if (normalizeEmail(row.email) === address) return { error: "same" };

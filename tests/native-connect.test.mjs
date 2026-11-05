@@ -98,6 +98,33 @@ test("the app's own sheet, which repeats the ticket in a header, skips the confi
   assert.match(direct.headers.get("Set-Cookie"), /HttpOnly; Secure/);
 });
 
+test("a ticket asked for before \"Odhlásit všude\" only expires afterwards (point 6)", async () => {
+  const cenv = connectEnv();
+  cenv.DB.sqlite.exec("UPDATE users SET session_epoch = 4 WHERE id = 3");
+  const ticket = await connectTicket(3, "intervals", env.SESSION_SECRET, Date.now(), 4);
+  // Sign out everywhere: the epoch moves on before the ticket is used.
+  cenv.DB.sqlite.exec("UPDATE users SET session_epoch = 5 WHERE id = 3");
+  const url = new URL(origin + "/auth/app/connect?ticket=" + encodeURIComponent(ticket));
+  const late = await handleNativeConnect(new Request(url, { headers: { "X-Aurin-Connect": ticket } }), cenv, url, { user: null, signedIn: false });
+  assert.equal(late.headers.get("Location"), "https://aurin.health/auth/app/connected?event=expired");
+  assert.equal(late.headers.get("Set-Cookie"), null, "no connect cookie");
+  // A ticket of the current epoch works, and its cookie carries that epoch.
+  const fresh = await connectTicket(3, "intervals", env.SESSION_SECRET, Date.now(), 5);
+  const freshUrl = new URL(origin + "/auth/app/connect?ticket=" + encodeURIComponent(fresh));
+  const ok = await handleNativeConnect(new Request(freshUrl, { headers: { "X-Aurin-Connect": fresh } }), cenv, freshUrl, { user: null, signedIn: false });
+  assert.equal(ok.status, 303);
+  const cookie = ok.headers.getSetCookie().find(value => value.startsWith("pfd_session="));
+  assert.equal(JSON.parse(Buffer.from(cookie.split(";")[0].slice("pfd_session=".length).split(".")[0], "base64url")).se, 5);
+});
+
+test("the app's ticket carries the epoch of the session that asked for it", async () => {
+  const response = await handleNativeConnect(
+    new Request(origin + "/app/api/connect/start", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ provider: "wahoo" }) }),
+    env, new URL(origin + "/app/api/connect/start"), { user: { id: 3, sessionEpoch: 2 }, signedIn: true });
+  const read = await readConnectTicket(new URL((await response.json()).url).searchParams.get("ticket"), env.SESSION_SECRET);
+  assert.equal(read.epoch, 2);
+});
+
 // The app's browser sheet closes on https://<server>/auth/app/connected, which only the Aurin app
 // can catch; the old custom scheme is gone.
 test("a connection always returns to the app over https", async () => {

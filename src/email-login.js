@@ -11,14 +11,17 @@
 // that never signed in with it. Such a device has its own 10 codes and 20 tries a day. One caller (an IPv4 address or an IPv6 /64, ip-rate-limit.js)
 // starts at most 5 sign-ins a minute, 30 an hour and 50 a day, and checks at most 10 codes a
 // minute, 30 an hour and 100 a day. All codes together stay under EMAIL_CODES_PER_DAY (500) a
-// day, of which addresses that get a code only through OPEN_SIGNUP use at most four fifths,
-// so made-up addresses cannot use up the codes of people with an account or an invitation.
+// day, of which addresses that get a code only through OPEN_SIGNUP (and accounts opened today)
+// use at most four fifths, so made-up addresses cannot use up the codes of people with an account
+// or an invitation, and one caller gets at most a twentieth of the day's codes. Known devices
+// have a day's budget of their own, and the fixed App Review code takes from no budget, so
+// someone who spends the day's codes still locks out neither (security review 2026-11-04, point 4).
 // Codes for moving an account to another address have their own day's budget
 // (EMAIL_CHANGE_CODES_PER_DAY, 100), so they never take from the codes for signing in, and one
 // account asks for at most 2 a minute, 5 an hour and 10 a day, one caller for 5, 20 and 30.
-import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie, knownDevice, knownDeviceCookie, heldKnownDevice } from "./dashboard-auth.js";
-import { allowClient, allowRequest } from "./ip-rate-limit.js";
-import { normalizeEmail, emailCodeAccess, signInEmailUser, changeUserEmail, SignupLimited } from "./tenancy.js";
+import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie, knownDevice, knownDeviceCookie, heldKnownDevice, keepOnlyPushToken } from "./dashboard-auth.js";
+import { allowClient, allowRequest, clientKey } from "./ip-rate-limit.js";
+import { normalizeEmail, plainEmail, emailCodeAccess, signInEmailUser, changeUserEmail, SignupLimited } from "./tenancy.js";
 import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail, stepUpCodeEmail } from "./email-sender.js";
 import { siteLang } from "./site-pages.js";
 import { reviewCodeActive } from "./app-review.js";
@@ -32,6 +35,9 @@ const MAX_FAILED_PER_DAY = 20;
 const MAX_REVIEW_FAILURES = 20;
 const DEFAULT_CODES_PER_DAY = 500;
 const RESERVED_SHARE = 0.2;
+// One caller's share of the day's codes; a mobile operator's shared address (many people behind
+// one IPv4) still gets 25 a day, and a returning user's own phone (a known device) is not counted.
+const NETWORK_SHARE = 0.05;
 const DEFAULT_CHANGE_CODES_PER_DAY = 100;
 const DEFAULT_STEP_UP_CODES_PER_DAY = 500;
 // Per caller: asking for a code, and checking one.
@@ -72,7 +78,8 @@ export async function handleEmailLogin(request, env, pathname, ctx) {
     // tell anyone on such a network which addresses have an account.
     const known = await knownDevice(request, env, email);
     // Whether a code goes out (and how long that takes) stays out of the answer.
-    const work = sendCode(env, email, requestLanguage(request), { known }).catch(error => console.error("Sign-in code e-mail failed", error?.code || error?.message));
+    const network = await clientKey(request, sessionSecret(env));
+    const work = sendCode(env, email, requestLanguage(request), { known, network }).catch(error => console.error("Sign-in code e-mail failed", error?.code || error?.message));
     if (ctx?.waitUntil) ctx.waitUntil(work); else await work;
     return json({ status: "ok" });
   }
@@ -112,12 +119,13 @@ async function fixedReviewCode(db, env, email, now) {
   return user?.role === "admin" ? null : code;
 }
 
-// Returns true when a code went out.
-export async function sendCode(env, email, lang = "cs", { now = Date.now(), code, known = null } = {}) {
-  const access = await emailCodeAccess(env.DB, env, email);
+// Returns true when a code went out. network: the caller's key (clientKey), whose share of the day it takes.
+export async function sendCode(env, email, lang = "cs", { now = Date.now(), code, known = null, network = null } = {}) {
+  const access = await emailCodeAccess(env.DB, env, email, now);
   if (!access) return false;
-  const sent = code || await fixedReviewCode(env.DB, env, email, now) || randomCode();
-  return (await claimAndSend(env.DB, env, email, sent, "email-code", signInCodeEmail(lang, sent), now, { open: access === "open", known })) === "sent";
+  const review = code ? null : await fixedReviewCode(env.DB, env, email, now);
+  const sent = code || review || randomCode();
+  return (await claimAndSend(env.DB, env, email, sent, "email-code", signInCodeEmail(lang, sent), now, { open: access === "open", known, network, review: Boolean(review) })) === "sent";
 }
 
 // `open`: the address gets a code only because anyone may sign up, so it draws on the open share.
@@ -126,10 +134,12 @@ export async function sendCode(env, email, lang = "cs", { now = Date.now(), code
 // account's own row ("step-up:<id>") and `to` its address, so these codes, their day's limit and
 // their wrong tries never touch the address's sign-in codes.
 // `known`: the nonce of a device that signed in with the address (knownDevice); it has its own
-// day's codes instead of the address's, and the address's lock does not hold it.
+// day's codes instead of the address's, the address's lock does not hold it, and its codes come
+// from a day's budget of their own. `network`: the caller (clientKey), at most NETWORK_SHARE of
+// the day's sign-in codes. `review`: the fixed App Review code, outside every budget of the day.
 // Returns "sent", or why not: "resend" (one went out less than a minute ago), "daily" (the day's
 // codes are used up), "locked" (too many wrong codes today) or "budget" (all codes of the day).
-async function claimAndSend(db, env, email, code, purpose, message, now, { open = false, change = false, stepUp = false, known = null, to = email } = {}) {
+async function claimAndSend(db, env, email, code, purpose, message, now, { open = false, change = false, stepUp = false, known = null, network = null, review = false, to = email } = {}) {
   const seconds = Math.floor(now / 1000), day = today(now);
   // The address's own limits are checked first, so a code it would not get spends no budget.
   const current = await db.prepare("SELECT sent_at, day, day_count, fail_day, fail_count FROM email_login_codes WHERE email=?").bind(email).first();
@@ -143,7 +153,10 @@ async function claimAndSend(db, env, email, code, purpose, message, now, { open 
     if (!(await allowRequest(db, "email-codes:step-up:day", { day: stepUpCodesPerDay(env) }, now))) { console.warn("Step-up code budget of the day is used up"); return "budget"; }
   } else if (change) {
     if (!(await allowRequest(db, "email-codes:change:day", { day: changeCodesPerDay(env) }, now))) { console.warn("E-mail change code budget of the day is used up"); return "budget"; }
-  } else {
+  } else if (known) {
+    if (!(await allowRequest(db, "email-codes:known-device:day", { day: codesPerDay(env) }, now))) { console.warn("Known-device code budget of the day is used up"); return "budget"; }
+  } else if (!review) {
+    if (network && !(await allowRequest(db, "email-codes:network:" + network, { day: networkCodesPerDay(env) }, now))) { console.warn("Sign-in codes of the day for one caller are used up"); return "budget"; }
     if (open && !(await allowRequest(db, "email-codes:open:day", { day: openCodesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day for new addresses is used up"); return "budget"; }
     if (!(await allowRequest(db, "email-codes:day", { day: codesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day is used up"); return "budget"; }
   }
@@ -184,6 +197,7 @@ export function codeRefusal(reason) {
 export const codesPerDay = env => { const n = Number(env?.EMAIL_CODES_PER_DAY); return Number.isInteger(n) && n > 0 ? n : DEFAULT_CODES_PER_DAY; };
 // What addresses that get a code only through OPEN_SIGNUP may use of it; the rest is kept for the others.
 export const openCodesPerDay = env => { const all = codesPerDay(env); return all - Math.ceil(all * RESERVED_SHARE); };
+export const networkCodesPerDay = env => Math.max(10, Math.ceil(codesPerDay(env) * NETWORK_SHARE));
 export const changeCodesPerDay = env => { const n = Number(env?.EMAIL_CHANGE_CODES_PER_DAY); return Number.isInteger(n) && n > 0 ? n : DEFAULT_CHANGE_CODES_PER_DAY; };
 // Codes confirming it's you go only to the account's own address, never to one typed in; their own
 // budget keeps deleting and downloading the data working when the e-mail change codes run out.
@@ -278,7 +292,7 @@ export async function handleEmailChange(request, env, url, session, ctx, stepUp 
   if (request.headers.get("Origin") !== new URL(request.url).origin) return json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, 403);
   const db = env.RAW_DB || env.DB, user = session.user, body = await request.json().catch(() => ({}));
   const email = normalizeEmail(body?.email), purpose = "email-change:" + user.id;
-  if (email.length > 254 || !EMAIL_PATTERN.test(email)) return emailChangeRefusal("invalid");
+  if (email.length > 254 || !EMAIL_PATTERN.test(email) || !plainEmail(body?.email)) return emailChangeRefusal("invalid");
   if (url.pathname === "/app/api/account/email/start") {
     if (email === normalizeEmail(user.email)) return emailChangeRefusal("same");
     if (user.isOwner || email === normalizeEmail(env.OWNER_EMAIL)) return emailChangeRefusal("owner");
@@ -301,6 +315,8 @@ export async function handleEmailChange(request, env, url, session, ctx, stepUp 
   const known = await heldKnownDevice(request, env, db, user.id);
   const changed = await changeUserEmail(db, env, user.id, email);
   if (changed.error) return emailChangeRefusal(changed.error);
+  // As with signing out the other devices (dashboard-auth.js signedOutElsewhere): only this phone keeps the notifications.
+  if (body && typeof body === "object" && "pushToken" in body) await keepOnlyPushToken(db, user.id, body.pushToken);
   await notifyOldAddress(env, changed, requestLanguage(request), ctx);
   // The change signs every other device out (session_epoch); this one gets a fresh cookie, and
   // a known device stays one for the new address.
