@@ -204,6 +204,14 @@ final class APIClient: @unchecked Sendable {
         return r.chat
     }
 
+    /// The thumb under a coach answer ("up", "down" or nil to take it back) and,
+    /// with down, a reason from AnswerFeedbackReason. Only these are stored.
+    func rateAnswer(messageId: Int, rating: String?, reason: String? = nil) async throws {
+        var body: JSONObject = ["messageId": .number(Double(messageId)), "rating": rating.map { .string($0) } ?? .null]
+        if let reason { body["reason"] = .string(reason) }
+        let _: JSONValue = try await send("/app/api/assistant/feedback", method: "POST", body: body)
+    }
+
     func deleteChat(id: Int) async throws {
         let _: JSONValue = try await send("/app/api/assistant/chats/\(id)", method: "DELETE", body: JSONObject())
     }

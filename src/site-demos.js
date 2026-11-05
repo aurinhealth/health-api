@@ -40,6 +40,7 @@ const P = {
   chdown: '<path d="m6 9 6 6 6-6"/>',
   cal: '<rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
   info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 8v.2"/>',
+  copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/>',
   thumb: '<path d="M7 11v9H4v-9ZM7 11l4-7c1.5 0 2.5 1 2.2 2.6L12.7 10H18a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 16.8 20H7"/>',
   rotate: '<path d="M4 12a8 8 0 0 1 14-5.3M20 4v4h-4M20 12a8 8 0 0 1-14 5.3M4 20v-4h4"/>',
   pencil: '<path d="M15.5 5.5l3 3M4 20l1-4L16 5a2.1 2.1 0 0 1 3 3L8 19Z"/>',
@@ -471,6 +472,9 @@ const drinks = `<div class="dm pad dk">
 <div class="dk-chips">${drinkChip('drop', 'Water', 250)}${drinkChip('drop', 'Water', 500, '600:press 750-press 900:ok 2100-ok 2400:press 2550-press 2700:ok 3900-ok', '500 900-in 2300 2700-in')}${drinkChip('cup', 'Coffee', 200)}</div>
 </div>`;
 
+// Under the coach's last answer (AnswerActions in CoachAnswerFeedback.swift): copy, thumbs up and down, its time.
+const answerFoot = (time, when) => `<div class="afoot"${at(when)}>${ic('copy')}${ic('thumb')}${ic('thumb', 'down')}<span>${time}</span></div>`;
+
 // ---- Coach (CoachView.swift: bubbles, ActionCard with a workout preview, the confirmed line) ----
 const coachScreen = `<div class="app glow-today chat">${STATUS}
 <div class="nav c"><span class="cb">${ic('x')}</span><b>Coach</b><span class="cb">⋯</span></div>
@@ -488,6 +492,7 @@ ${[['Squat', '3×8 · 80 kg'], ['Bench press', '3×8 · 62.5 kg'], ['Rows', '3×
 <div class="ab"${at('6600:gone')}><span class="ok"${at('6200:press 6600-press')}>Confirm</span><span class="no">No</span><i class="br"></i>${['Shorter', 'Longer', 'Easier', 'Harder'].map(x => `<span class="q">${x}</span>`).join('')}<i class="br"></i><span class="q">Another day</span></div>
 <div class="conf"${at('6600')}>${ic('check')}Proposal confirmed.</div>
 </div>
+${answerFoot('5:31 PM', '7000')}
 </div>
 <div class="inp"><span class="cam">${ic('camera')}</span><span class="mut">Message the coach…</span><span class="snd">${ic('up')}</span></div>
 </div>`;
@@ -502,6 +507,7 @@ const memoryScreen = `<div class="app glow-today chat">${STATUS}
 <div class="dots"${at('500 1500-in')}><span>Coach is thinking…</span></div>
 <div class="c1"${at('1500')}><span data-type="1500,1100">Got it, no running until your knee is better. I’ll swap Saturday’s run for an easy ride and keep lunges out of your gym days.</span></div>
 <div class="mchip"${at('2900')}>${ic('check')}Remembered: left knee hurts when running<span class="mut">Back</span></div>
+${answerFoot('8:12 PM', '3200')}
 </div>
 <div class="inp"><span class="cam">${ic('camera')}</span><span class="mut">Message the coach…</span><span class="snd">${ic('up')}</span></div>
 </div>`;
@@ -1078,6 +1084,7 @@ html:not(.js) .stage1{display:none}
 .cy-d.ov i{background:var(--amber-soft);color:var(--amber)}.cy-d.cast i{border:1.5px dashed var(--pink);color:var(--pink)}.cy-d.today i{box-shadow:inset 0 0 0 2px var(--text)}
 .cy-b{display:flex;align-items:center;justify-content:center;gap:6px;height:46px;margin-top:12px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--line);font-weight:600}
 /* The coach's memory: the green line under an answer and the list it keeps. */
+.afoot{align-self:stretch;display:flex;align-items:center;gap:18px;padding:0 4px;color:var(--muted)}.afoot .di{width:16px;height:16px;stroke-width:1.6}.afoot span{margin-left:auto;font-size:12px}
 .mchip{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:var(--green-soft);color:var(--green);font-size:13px;font-weight:500;transition:opacity .3s,transform .3s!important}
 .mchip .di{width:13px;height:13px;stroke-width:2.8}.mchip .mut{margin-left:4px}
 .js .mchip.wait:not(.in){opacity:0;transform:translateY(6px)}
