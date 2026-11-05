@@ -19,7 +19,7 @@ test('a raised temperature with another value shows the easier-day card with eac
   assert.equal(card.kind, 'easier_day');
   assert.equal(card.id, date + ':easier');
   assert.deepEqual(card.rows.map(r => r.id), ['temperature', 'respiration', 'hrv', 'restingHR']);
-  assert.deepEqual(card.rows.map(r => r.value), ['+0,8 °C proti obvyklému', '+2,0 /min proti obvyklému', '−24 % proti obvyklému', '+7 proti obvyklému']);
+  assert.deepEqual(card.rows.map(r => r.value), ['+0,8 °C proti obvyklému', '+2,0 /min proti obvyklému', '−24 % proti obvyklému', '+7 tepů/min proti obvyklému']);
   assert.equal(withLang('en', () => easierDayCard({ date, readiness: off })).rows[0].value, '+0.8 °C vs usual');
   for (const lang of ['cs', 'en']) {
     const c = withLang(lang, () => easierDayCard({ date, readiness: off }));
@@ -65,15 +65,18 @@ test('the coach push says an easier day fits, never to switch to Sick', () => {
   assert.match(withLang('en', () => coachNudge({ date, hour: 8, morning: true, easier, upcoming })).body, /On Today you can make today easier\.$/);
 });
 
-test('the resting heart rate alone: two nights above, or one with HRV under its range, after 14 nights', () => {
-  const rhr = (z, days = 30) => ({ value: 60, baseline: 51, z, days });
+test('the resting heart rate alone: two nights above, or one with HRV under its range, against its own range', () => {
+  const rhr = z => ({ value: 60, baseline: 51, z, days: 30 });
   const high = { components: { restingHR: rhr(2.3) } }, before = { components: { restingHR: rhr(2.1) } };
   assert.equal(restingHRAbove(high, null), false, 'one night is not enough');
   assert.equal(restingHRAbove(high, before), true);
   assert.equal(restingHRAbove(high, { components: { restingHR: rhr(1.5) } }), false);
   assert.equal(restingHRAbove({ components: { restingHR: rhr(2.3), hrv: { value: 38, baseline: 50, z: -1.4 } } }, null), true);
-  assert.equal(restingHRAbove({ components: { restingHR: rhr(2.3, 10) } }, before), false, 'no usual range yet');
   assert.equal(restingHRAbove({ components: { restingHR: rhr(1.9) } }, before), false);
+  // A range borrowed from another watch: no signal.
+  assert.equal(restingHRAbove({ ...high, flags: ['restingHRMixed'] }, before), false);
+  assert.equal(restingHRAbove({ ...high, provisional: true }, before), false);
+  assert.equal(restingHRAbove(high, { ...before, flags: ['restingHRMixed'] }), false);
   for (const lang of ['cs', 'en']) {
     const card = withLang(lang, () => easierDayCard({ date, readiness: high, yesterday: before }));
     assert.equal(card.signal, 'restingHR');
@@ -83,8 +86,28 @@ test('the resting heart rate alone: two nights above, or one with HRV under its 
     assert.doesNotMatch(push.body, ILLNESS, lang);
   }
   const en = withLang('en', () => easierDayCard({ date, readiness: high, yesterday: before }));
+  assert.equal(en.rows[0].value, '+9 bpm vs usual');
   assert.equal(en.message, 'Resting heart rate is above your usual range. Alcohol, heat, a late meal, stress or hard training can do this.');
   assert.match(withLang('en', () => coachNudge({ date, hour: 8, morning: true, easier: en })).body, /^Resting heart rate is above your usual range\. /);
+  // Dismissed or with today's swap like the night card.
+  assert.equal(easierDayCard({ date, readiness: high, yesterday: before, state: { dismissed: [date + ':easier'] } }), null);
+  const hard = hardSession([{ eventId: 'planned:7', date, sport: 'run', kind: 'threshold', name: 'Tempo', minutes: 50 }], [date]);
+  const state = { nudge: { ...easierSwap(hard), title: 'x', day: date, status: 'pending' } };
+  assert.equal(easierDayCard({ date, readiness: high, yesterday: before, state, offer: swapOffer(state, date) }).date, date);
   // With the warmer night the night card wins.
   assert.equal(easierDayCard({ date, readiness: off, yesterday: before }).signal, 'night');
+});
+
+test('through the real readiness: a steady rise for two nights fires, a new watch with a higher offset does not', async () => {
+  const { readinessFor } = await import('../src/readiness.js');
+  const day = o => new Date(Date.parse(date + 'T12:00:00Z') + o * 86400000).toISOString().slice(0, 10);
+  const nights = Array.from({ length: 40 }, (_, i) => ({ date: day(i - 39), startTime: day(i - 40) + 'T22:00:00Z', endTime: day(i - 39) + 'T06:00:00Z', durationMin: 450, timeInBedMin: 470 }));
+  const rows = rise => Array.from({ length: 40 }, (_, i) => { const o = i - 39; return { id: day(o), hrv: 55 + (i % 3), hrvSource: 'google-wearables', restingHR: (o >= -1 ? 50 + rise : 49 + (i % 3)), restingHRSource: 'google-wearables' }; });
+  const on = (google, d) => readinessFor({ date: d, google, intervals: [], sessions: nights, profile: { age: 38 } });
+  const up = rows(8);
+  assert.equal(restingHRAbove(on(up, date), on(up, day(-1))), true);
+  assert.equal(restingHRAbove(on(rows(1), date), on(rows(1), day(-1))), false);
+  // 38 nights on one watch, then two on a new one reading 6 higher: the range is borrowed.
+  const moved = up.map((r, i) => i >= 38 ? { ...r, restingHR: 56, restingHRSource: 'apple-health', hrvSource: 'apple-health' } : r);
+  assert.equal(restingHRAbove(on(moved, date), on(moved, day(-1))), false);
 });
