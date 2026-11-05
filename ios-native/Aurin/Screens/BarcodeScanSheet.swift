@@ -39,6 +39,14 @@ struct BarcodeScanSheet: View {
     /// The label had no name: the front of the package, read for the name
     /// and the brand of this food.
     @State private var frontOf: FoodProduct?
+    /// The AI found nothing by the code: the field for what the food is shows.
+    @State private var askName = false
+    /// "Přidat a skenovat další": the last food added while the scanner stays
+    /// open, shown over the camera.
+    @State private var added: String?
+    /// A food was added with the scanner kept open: closing it closes the
+    /// food sheet under it too, as after a single add.
+    @State private var loggedAny = false
     /// "Navrhnout pro všechny" for a food read from its label (FoodProduct.canSuggestNew).
     @State private var suggestNew = true
 
@@ -53,7 +61,10 @@ struct BarcodeScanSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                circle("xmark", label: "Zavřít") { dismiss() }
+                circle("xmark", label: "Zavřít") {
+                    dismiss()
+                    if loggedAny { onLogged() }
+                }
                 Spacer()
                 Text("ČÁROVÝ KÓD").font(.caption.weight(.medium)).tracking(1.9).foregroundStyle(Palette.muted)
                 Spacer()
@@ -69,6 +80,14 @@ struct BarcodeScanSheet: View {
 
             ScrollView {
                 VStack(spacing: 20) {
+                    if let added, state == .scanning || state == .searching {
+                        Label(added, systemImage: "checkmark")
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.green).lineLimit(1)
+                            .padding(.horizontal, 16).frame(height: 36)
+                            .background(Palette.green.opacity(0.15), in: Capsule())
+                            .padding(.horizontal, 12)
+                            .transition(.opacity)
+                    }
                     if state == .scanning || state == .searching { finder }
                     if state != .scanning { resultCard }
                 }
@@ -79,6 +98,15 @@ struct BarcodeScanSheet: View {
         }
         .background { Palette.background.ignoresSafeArea() }
         .task { await askCamera() }
+        // A tap when a code is read, then whether its food was found.
+        .sensoryFeedback(trigger: state) { old, new in
+            switch new {
+            case .searching where old == .scanning: .impact(weight: .medium)
+            case .found where old == .searching: .success
+            case .notFound where old == .searching: .warning
+            default: nil
+            }
+        }
         .onChange(of: torch) { Self.setTorch(torch) }
         .onChange(of: state) { if state != .scanning && state != .searching { torch = false } }
         .onDisappear { if torch { Self.setTorch(false) } }
@@ -130,6 +158,7 @@ struct BarcodeScanSheet: View {
                         guard state == .scanning else { return }
                         code = scanned
                         error = nil
+                        added = nil
                         state = .searching
                         Task { await find(scanned) }
                     }
@@ -236,31 +265,51 @@ struct BarcodeScanSheet: View {
                             .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                     }
                     .disabled(saving || amount <= 0)
+                    Button { Task { await save(product, next: true) } } label: {
+                        Label("Přidat a skenovat další", systemImage: "barcode.viewfinder")
+                            .font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                            .frame(maxWidth: .infinity).frame(height: 46)
+                            .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(saving || amount <= 0)
                 }
             case .notFound:
                 Text("Kód \(code ?? "") neznám.").font(Typo.sentence(22)).foregroundStyle(Palette.ink)
-                // With a name AI can estimate the food when the code is nowhere on the web.
-                TextField("Co to je? Třeba „tyčinka Margot“", text: $guess)
-                    .font(.subheadline).textInputAutocapitalization(.never)
-                    .padding(.horizontal, 16).frame(height: 46)
-                    .background(Palette.background, in: Capsule())
-                HStack(spacing: 10) {
-                    Button("Skenovat znovu") { reset() }
-                        .font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
-                        .padding(.horizontal, 16).frame(height: 46)
-                        .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
-                    Button { Task { await lookUp() } } label: {
-                        Label(L10n.tr(guess.trimmingCharacters(in: .whitespaces).count >= 2 ? "Odhadnout AI" : "Dohledat AI"), systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                            .frame(maxWidth: .infinity).frame(height: 46).background(Palette.button, in: Capsule())
-                    }
-                }
+                // The label first: its values are exact and saved with the
+                // code for everyone; AI only estimates.
                 Button { labelOpen = true } label: {
-                    Label("Vyfotit etiketu", systemImage: "camera").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
-                        .frame(maxWidth: .infinity).frame(height: 46)
-                        .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+                    Label("Vyfotit etiketu", systemImage: "camera").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                        .frame(maxWidth: .infinity).frame(height: 46).background(Palette.button, in: Capsule())
                 }
                 .buttonStyle(.plain)
                 .disabled(model.demo)
+                if askName {
+                    Rectangle().fill(Palette.ink.opacity(0.08)).frame(height: 1)
+                    // With a name AI can estimate the food when the code is nowhere on the web.
+                    TextField("Co to je? Třeba „tyčinka Margot“", text: $guess)
+                        .font(.subheadline).textInputAutocapitalization(.never)
+                        .padding(.horizontal, 16).frame(height: 46)
+                        .background(Palette.background, in: Capsule())
+                }
+                HStack(spacing: 10) {
+                    Button { reset() } label: {
+                        Text("Skenovat znovu").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                            .padding(.horizontal, 16).frame(maxWidth: askName ? nil : .infinity).frame(height: 46)
+                            .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    Button { Task { await lookUp() } } label: {
+                        Label(L10n.tr(guess.trimmingCharacters(in: .whitespaces).count >= 2 ? "Odhadnout AI" : "Dohledat AI"), systemImage: "sparkles")
+                            .font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity).frame(height: 46)
+                            .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
             case .scanning:
                 EmptyView()
             }
@@ -320,6 +369,7 @@ struct BarcodeScanSheet: View {
     private func reset() {
         code = nil
         guess = ""
+        askName = false
         product = nil
         error = nil
         state = .scanning
@@ -358,7 +408,7 @@ struct BarcodeScanSheet: View {
     nonisolated private static func barcode(in data: Data) async -> String? {
         await Task.detached(priority: .userInitiated) {
             let request = VNDetectBarcodesRequest()
-            request.symbologies = [.ean13, .ean8, .upce, .code128]
+            request.symbologies = BarcodeScanner.visionSymbologies
             try? VNImageRequestHandler(data: data).perform([request])
             return request.results?.compactMap(\.payloadStringValue).first { !$0.isEmpty }
         }.value
@@ -370,7 +420,7 @@ struct BarcodeScanSheet: View {
         do {
             let name = guess.trimmingCharacters(in: .whitespaces)
             if let p = try await model.api.lookupFood(name: name, barcode: code) { show(p) }
-            else { state = .notFound; error = name.isEmpty ? "AI ten kód nezná. Napiš, co to je, a odhadne to." : "AI ji nedokázala dohledat ani odhadnout. Zadej ji ručně." }
+            else { state = .notFound; askName = true; error = name.isEmpty ? "AI ten kód nezná. Napiš, co to je, a odhadne to." : "AI ji nedokázala dohledat ani odhadnout. Zadej ji ručně." }
         } catch {
             self.error = error.localizedDescription
             state = .notFound
@@ -415,7 +465,9 @@ struct BarcodeScanSheet: View {
         }
     }
 
-    private func save(_ product: FoodProduct) async {
+    /// `next`: the scanner stays open for the next code ("Přidat a skenovat
+    /// další"), with the food just added shown over the camera.
+    private func save(_ product: FoodProduct, next: Bool = false) async {
         let value = amount
         guard value > 0 else { return }
         saving = true
@@ -426,8 +478,16 @@ struct BarcodeScanSheet: View {
             error = message
         } else {
             if suggestNew { model.suggestNewFood(p) }
-            dismiss()
-            onLogged()
+            if next {
+                loggedAny = true
+                added = L10n.f("Přidáno " + MealSlot.toMeal(target) + ": %@", p.name)
+                suggestNew = true
+                portionKind = nil
+                reset()
+            } else {
+                dismiss()
+                onLogged()
+            }
         }
     }
 }
@@ -457,13 +517,20 @@ struct BarcodeScanner: UIViewRepresentable {
     var paused: Bool
     let onCode: (String) -> Void
 
+    /// The codes on food packages (UPC-A arrives as EAN-13 with a leading 0).
+    /// No Code 128: shelf and shipping labels use it, foods do not.
+    nonisolated static let symbologies: [AVMetadataObject.ObjectType] = [.ean13, .ean8, .upce]
+    nonisolated static let visionSymbologies: [VNBarcodeSymbology] = [.ean13, .ean8, .upce]
+
     /// The lens the scanner films with, and the light belongs to.
     nonisolated(unsafe) static let device: AVCaptureDevice? = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
 
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
         view.previewLayer.videoGravity = .resizeAspectFill
-        context.coordinator.camera.start(on: view.previewLayer)
+        let camera = context.coordinator.camera
+        view.onLayout = { [weak view] in if let view { camera.readOnlyInside(view.previewLayer) } }
+        camera.start(on: view.previewLayer) { [weak view] in if let view { camera.readOnlyInside(view.previewLayer) } }
         return view
     }
 
@@ -482,13 +549,24 @@ struct BarcodeScanner: UIViewRepresentable {
     final class PreviewView: UIView {
         override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
         var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+        var onLayout: (() -> Void)?
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            onLayout?()
+        }
     }
 
     @MainActor
     final class Coordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate {
         var onCode: (String) -> Void
-        var paused = false
+        var paused = false {
+            didSet { if paused != oldValue { candidate = nil } }
+        }
         let camera = BarcodeCamera()
+        /// The code read last: a code counts once two reads in a row give
+        /// the same digits, so one misread frame adds nothing.
+        private var candidate: String?
 
         init(onCode: @escaping (String) -> Void) {
             self.onCode = onCode
@@ -503,6 +581,7 @@ struct BarcodeScanner: UIViewRepresentable {
             // code on every frame: one is enough until the sheet scans again.
             MainActor.assumeIsolated {
                 guard !paused else { return }
+                guard candidate == code else { candidate = code; return }
                 paused = true
                 onCode(code)
             }
@@ -522,12 +601,27 @@ final class BarcodeCamera: @unchecked Sendable {
         output.setMetadataObjectsDelegate(delegate, queue: .main)
     }
 
-    func start(on layer: AVCaptureVideoPreviewLayer) {
+    /// `running` comes on the main thread once the camera films, when the
+    /// preview can say where its window lies in the camera's picture.
+    func start(on layer: AVCaptureVideoPreviewLayer, running: @escaping @MainActor () -> Void) {
         layer.session = session
         queue.async { [self] in
             if !configured { configured = configure() }
             if configured && !session.isRunning { session.startRunning() }
+            if session.isRunning { DispatchQueue.main.async { MainActor.assumeIsolated { running() } } }
         }
+    }
+
+    /// Codes only inside the window: the preview fills it and crops the
+    /// picture, and a code outside it (the next product on the shelf) was
+    /// read too (Apple's AVCamBarcode does the same). Before the camera runs
+    /// the layer has no picture to measure, so the whole picture stays.
+    @MainActor
+    func readOnlyInside(_ layer: AVCaptureVideoPreviewLayer) {
+        guard !layer.bounds.isEmpty, session.isRunning else { return }
+        let rect = layer.metadataOutputRectConverted(fromLayerRect: layer.bounds).intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+        guard !rect.isNull, rect.width > 0.05, rect.height > 0.05 else { return }
+        queue.async { [self] in output.rectOfInterest = rect }
     }
 
     func stop() {
@@ -542,14 +636,16 @@ final class BarcodeCamera: @unchecked Sendable {
         guard session.canAddInput(input), session.canAddOutput(output) else { return false }
         session.addInput(input)
         session.addOutput(output)
-        output.metadataObjectTypes = ([.ean13, .ean8, .upce, .code128] as [AVMetadataObject.ObjectType]).filter(output.availableMetadataObjectTypes.contains)
+        output.metadataObjectTypes = BarcodeScanner.symbologies.filter(output.availableMetadataObjectTypes.contains)
         Self.zoomForCodes(device)
         return true
     }
 
     /// The main lens of newer iPhones focuses only from 15–20 cm, where a code
-    /// is small; zoom in so a 35 mm wide code fills most of the window there
-    /// (Apple's recipe from AVCamBarcode), at most 2.5× so it stays sharp.
+    /// is small; zoom in so a 35 mm wide code fills most of the window a bit
+    /// beyond that (Apple's recipe from AVCamBarcode). The earlier cap of 2.5×
+    /// filled the window only closer than the lens can focus, so the code was
+    /// blurred just as it looked big enough (Petr, 2026-11-03).
     private static func zoomForCodes(_ device: AVCaptureDevice) {
         guard (try? device.lockForConfiguration()) != nil else { return }
         defer { device.unlockForConfiguration() }
@@ -561,10 +657,12 @@ final class BarcodeCamera: @unchecked Sendable {
         let dims = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
         let wide = Double(device.activeFormat.videoFieldOfView) * .pi / 180
         let short = 2 * atan(tan(wide / 2) * Double(min(dims.width, dims.height)) / Double(max(dims.width, dims.height)))
-        let filled = 35 / 0.7
+        let filled = 35 / 0.6
         let distance = filled / 2 / tan(short / 2)
-        guard distance < closest else { return }
-        device.videoZoomFactor = CGFloat(min(closest / distance, 2.5, Double(device.activeFormat.videoMaxZoomFactor)))
+        // A fifth beyond the closest focus, where the picture is sharp.
+        let sharp = closest * 1.2
+        guard distance < sharp else { return }
+        device.videoZoomFactor = CGFloat(min(sharp / distance, 4, Double(device.activeFormat.videoMaxZoomFactor)))
     }
 }
 

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { withLang } from "../src/lang.js";
 import { readFileSync } from "node:fs";
 import { buildToday, activeMinutes, withHeartRateLoad } from "../src/app-today.js";
 import { googleHealthSummary } from "../src/google-dashboard.js";
@@ -294,6 +295,49 @@ test("the day's strain target follows readiness, the plan, sleep debt and the zo
   assert.ok(t.strain.target.low < t.strain.target.high);
   assert.equal(t.strain.target.readiness, t.readiness.score);
   assert.equal(t.strain.target.plan, "Silový trénink");
+});
+
+test("without a plan the strain target follows readiness under the usual day, never a rest day (D3)", async () => {
+  const { strainTarget, usualStrain } = await import("../src/app-today.js");
+  // Without a plan and nothing today: no rest-day cap, the usual day caps the high end.
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", noPlan: true, usual: 13 }), { low: 10, high: 13 });
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", noPlan: true, usual: 16 }), { low: 11.1, high: 14.1 });
+  // A new athlete without 14 days: at most 12.
+  assert.deepEqual(strainTarget({ readiness: 90, zone: "green", noPlan: true }), { low: 9, high: 12 });
+  assert.ok(strainTarget({ readiness: 25, zone: "red", noPlan: true, usual: 15 }).high <= 7.5);
+  // A very quiet usual day never caps below a rest day, and the range never turns over.
+  assert.deepEqual(strainTarget({ readiness: 80, zone: "green", noPlan: true, usual: 1.8 }), { low: 5, high: 8 });
+  for (const debt of [60, 120, 600]) {
+    const t = strainTarget({ readiness: 80, zone: "red", noPlan: true, usual: 1.8, debt });
+    assert.ok(t.high >= t.low && t.low >= 1, JSON.stringify(t));
+  }
+  // The usual day: the 80th percentile of the last 28 days, null under 14.
+  const day = (i, light, extra = {}) => ({ id: new Date(Date.parse("2026-10-14T12:00:00Z") - i * 86400000).toISOString().slice(0, 10), hrZoneMinutes: { light, moderate: 0 }, ...extra });
+  assert.equal(usualStrain(Array.from({ length: 10 }, (_, i) => day(i + 1, 60)), "2026-10-14"), null);
+  // 28 days of 10..280 light minutes: the 80th percentile is the 22nd lowest, 220 min = load 440.
+  const rows = Array.from({ length: 28 }, (_, i) => day(i + 1, 10 * (i + 1)));
+  assert.equal(usualStrain(rows, "2026-10-14"), 18);
+  // Today's own row never counts.
+  assert.equal(usualStrain([...rows, day(0, 600)], "2026-10-14"), 18);
+  // Counted as Today counts a day: the day's TSS and the steps, not only the zones.
+  const quiet = Array.from({ length: 28 }, (_, i) => day(i + 1, 20, { steps: 11000 }));
+  const intervals = quiet.map(r => ({ id: r.id, ctlLoad: 60 }));
+  assert.ok(usualStrain(quiet, "2026-10-14", intervals) > usualStrain(quiet, "2026-10-14") + 4);
+  // On Today: no plan anywhere is no rest day, and the plan row says why the target stops.
+  const empty = { ...input.daily, training: { planned: [], matched: [], completed: [] } };
+  const today = extra => buildToday({ ...input, gym: null, trainingPlan: null, daily: empty, ...extra });
+  const free = today({ recovery: { yesterday: {}, tomorrow: {}, gym: {} } });
+  assert.equal(free.strain.target.rest, false);
+  assert.match(free.strain.target.plan, /^bez plánu/);
+  assert.equal(withLang("en", () => today({ recovery: null })).strain.target.plan.replace(" · not above your usual volume", ""), "no plan");
+  // A plan around today: planned or done yesterday or tomorrow, a gym plan, a running Aurin plan.
+  for (const recovery of [{ tomorrow: { planned: [{ name: "Intervaly" }] } }, { yesterday: { matched: [{ name: "Tempo" }] } }, { gym: { "2026-10-15": { exercises: ["Dřep"] } } }]) {
+    const t = today({ recovery });
+    assert.equal(t.strain.target.rest, true, JSON.stringify(recovery));
+    assert.equal(t.strain.target.plan, null);
+  }
+  assert.equal(today({ trainingPlan: { name: "Maraton" } }).strain.target.rest, true);
+  assert.equal(today({ trainingPlan: { name: "Maraton", paused: true } }).strain.target.rest, false);
 });
 
 test("the week strip: Monday to Sunday of the day's week, the day's own zone, no zone after it", async () => {
