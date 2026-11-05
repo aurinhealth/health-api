@@ -25,8 +25,39 @@ async function download(url, fetchImpl) {
   if (!url) return null;
   const response = await fetchPublic(url, { signal: AbortSignal.timeout(12000) }, fetchImpl, { https: true }).catch(() => null);
   if (!response?.ok || Number(response.headers.get('content-length') || 0) > MAX_FILE) return null;
-  const bytes = new Uint8Array(await response.arrayBuffer().catch(() => new ArrayBuffer(0)));
-  return bytes.length && bytes.length <= MAX_FILE ? bytes : null;
+  // Read in pieces, so a file without a length that runs past the limit is dropped early.
+  if (!response.body?.getReader) {
+    const bytes = new Uint8Array(await response.arrayBuffer().catch(() => new ArrayBuffer(0)));
+    return bytes.length && bytes.length <= MAX_FILE ? bytes : null;
+  }
+  const reader = response.body.getReader(), parts = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > MAX_FILE) { await reader.cancel().catch(() => {}); return null; }
+      parts.push(value);
+    }
+  } catch { return null; }
+  if (!size) return null;
+  const bytes = new Uint8Array(size);
+  let at = 0;
+  for (const part of parts) { bytes.set(part, at); at += part.length; }
+  return bytes;
+}
+
+// The workout's FIT file as Wahoo keeps it (the link kept with the activity,
+// else asked of Wahoo again), or null: what goes on to Intervals.icu
+// (watch-forward.js, sync-destinations.js pushIntervals).
+export async function wahooFitFile(env, workoutId, { fetchImpl = fetch } = {}) {
+  if (!/^\d{1,15}$/.test(String(workoutId || ''))) return null;
+  const row = await env.DB.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family='wahoo' AND data_type='activity' AND external_id=?")
+    .bind(env.USER_ID, 'wahoo:' + workoutId).first().catch(() => null);
+  if (!row) return null;
+  return await download(parse(row.payload_json).wahoo?.file, fetchImpl)
+    || await download(await wahooFileUrl(env, workoutId, { fetchImpl }).catch(() => null), fetchImpl);
 }
 
 // The workout's curves: kept from an earlier read, else from the FIT file (the

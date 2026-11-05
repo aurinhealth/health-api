@@ -47,6 +47,11 @@ struct SyncPrefs: Codable, Equatable {
     var pushActivities: Bool
     var pullActivities: Bool
     var health: SyncHealth
+    /// Intervals.icu: the apps whose workouts go there too ("wahoo", "google";
+    /// Apple Health's is the health type "workouts"). nil from other destinations.
+    var forward: [String]? = nil
+    /// Sent once, with an app just turned on: its last 14 days go too.
+    var backfill: Bool? = nil
 
     static let off = SyncPrefs(pushPlanned: false, pushActivities: false, pullActivities: false, health: .some([]))
 }
@@ -68,6 +73,8 @@ struct SyncDestination: Decodable, Equatable, Identifiable {
     let healthTypes: [String]
     /// Google permissions the chosen settings still need (activityWrite, weightWrite, nutritionWrite).
     var missingScopes: [String]? = nil
+    /// Intervals.icu: the connected apps whose workouts can go there too.
+    var forwardSources: [String]? = nil
 }
 
 struct SyncOverview: Decodable {
