@@ -265,22 +265,44 @@ enum WatchAPI {
     /// An exercise's technique steps (GET /app/api/gym/technique, the iPhone's
     /// technique sheet): none for an exercise outside the catalog, nil offline.
     static func gymTechnique(_ exercise: String) async -> [String]? {
+        guard let (status, technique) = await fetchTechnique(exercise) else { return nil }
+        switch status {
+        case 200: return (technique?.steps ?? []).filter { !$0.isEmpty }
+        // Not in the catalog: nothing to show, and nothing to ask again.
+        case 404: return []
+        default: return nil
+        }
+    }
+
+    /// The athlete's thumb for the exercise (true, false, nil), read fresh
+    /// with the technique: the steps are kept on the watch, the thumb is not.
+    static func exerciseLiked(_ exercise: String) async -> Bool? {
+        guard let (status, technique) = await fetchTechnique(exercise), status == 200 else { return nil }
+        return technique?.liked
+    }
+
+    private struct Technique: Decodable {
+        let steps: [String]?
+        let liked: Bool?
+    }
+
+    private static func fetchTechnique(_ exercise: String) async -> (Int, Technique?)? {
         var query = URLComponents()
         query.queryItems = [URLQueryItem(name: "exercise", value: exercise)]
         guard let session, let q = query.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B"),
               let request = request("/app/api/gym/technique?" + q, session: session),
               let (data, response) = try? await urlSession.data(for: request) else { return nil }
-        struct Response: Decodable {
-            struct Technique: Decodable { let steps: [String]? }
-            let technique: Technique?
-        }
-        switch (response as? HTTPURLResponse)?.statusCode ?? 0 {
-        case 200: return ((try? JSONDecoder().decode(Response.self, from: data))?.technique?.steps ?? []).filter { !$0.isEmpty }
-        // Not in the catalog: nothing to show, and nothing to ask again.
-        case 404: return []
-        case 401: store(nil); return nil
-        default: return nil
-        }
+        struct Response: Decodable { let technique: Technique? }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if status == 401 { store(nil) }
+        return (status, status == 200 ? (try? JSONDecoder().decode(Response.self, from: data))?.technique : nil)
+    }
+
+    /// A thumb up (true), down (false) or none (nil) for an exercise, as on
+    /// the iPhone (POST /app/api/feedback/exercise): the next plans leave out
+    /// the disliked ones.
+    static func rateExercise(_ exercise: String, liked: Bool?) async -> Bool {
+        await post("/app/api/feedback/exercise", ["exercise": .string(exercise), "liked": liked.map { JSONValue.bool($0) } ?? .null])
     }
 
     /// Exercises whose names hold `query`, the ones the gym allows first (GET /app/api/gym/exercises?q=).

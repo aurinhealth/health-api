@@ -54,6 +54,7 @@ struct GymSessionView: View {
 
     struct Info: Identifiable {
         let exercise: WatchGym.Exercise
+        let index: Int
         var id: String { exercise.name }
     }
 
@@ -168,7 +169,13 @@ struct GymSessionView: View {
                 NavigationStack { CoachView(view: "gym") }
             }
             .sheet(item: $info) { info in
-                GymExerciseInfo(exercise: info.exercise)
+                NavigationStack {
+                    // Swap from the info, as in ≡ (mockup "hodinky detail cviku").
+                    GymExerciseInfo(exercise: info.exercise) { option in
+                        store.change(.swap, exercise: info.index, option: option)
+                        self.info = nil
+                    }
+                }
             }
             .alert(W.tr("iPhone je mimo dosah", "iPhone out of reach"), isPresented: $store.failedChange) {
                 Button("OK", role: .cancel) {}
@@ -331,7 +338,7 @@ struct GymSessionView: View {
             }
             // A tap on the name: its technique, the record and my note (mockup "u cviku" 5).
             Button {
-                info = Info(exercise: ex)
+                info = Info(exercise: ex, index: e)
             } label: {
                 Text(ex.title).font(.system(size: fit.small ? 14 : 16, weight: .semibold)).foregroundStyle(W.ink)
                     .lineLimit(1).minimumScaleFactor(0.7)
@@ -1282,6 +1289,8 @@ struct GymSummary: View {
     let finish: () -> Void
     /// How the plan suited, sent with Finish (the iPhone's rating after a workout).
     @State private var rating: String?
+    /// Rate exercises: a thumb for each exercise done, as on the iPhone's summary.
+    @State private var rateOpen = false
 
     /// The iPhone's scale (PlanFitPicker): Sedělo, Ujde, Nesedělo.
     private struct Fit: Identifiable {
@@ -1361,6 +1370,20 @@ struct GymSummary: View {
                         Text(W.tr(fit.cs, fit.en)).font(.system(size: 11, weight: .semibold)).foregroundStyle(W.amber)
                             .frame(maxWidth: .infinity)
                     }
+                    Button { rateOpen = true } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "hand.thumbsup").foregroundStyle(W.muted)
+                            Text(W.tr("Ohodnotit cviky", "Rate exercises")).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.8)
+                            Spacer(minLength: 2)
+                            Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(W.muted)
+                        }
+                        .font(.system(size: 13, weight: .medium))
+                        .padding(.horizontal, 10)
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .background(W.tile, in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2)
                 }
                 Button {
                     if let rating, let date = store.gym?.date { store.rateWorkout(rating, date: date) }
@@ -1374,6 +1397,9 @@ struct GymSummary: View {
                 .padding(.top, 4)
             }
         }
+        .navigationDestination(isPresented: $rateOpen) {
+            GymRateExercises(exercises: (store.gym?.exercises ?? []).filter { $0.lifts.contains { $0.done && $0.work } })
+        }
     }
 
     private func stat(_ title: String, _ value: String) -> some View {
@@ -1384,13 +1410,76 @@ struct GymSummary: View {
     }
 }
 
+/// Rate exercises from the summary: a thumb up or down for each exercise
+/// done, saved at once (POST /app/api/feedback/exercise); the next plans
+/// leave out the disliked ones.
+struct GymRateExercises: View {
+    let exercises: [WatchGym.Exercise]
+    @State private var liked: [String: Bool] = [:]
+    @State private var failed = false
+
+    var body: some View {
+        List {
+            ForEach(exercises, id: \.name) { e in
+                HStack(spacing: 4) {
+                    Text(e.title).font(.system(size: 13, weight: .medium)).foregroundStyle(W.ink).lineLimit(2)
+                    Spacer(minLength: 2)
+                    thumb(e.name, up: true)
+                    thumb(e.name, up: false)
+                }
+            }
+            Text(failed ? W.tr("Bez připojení se neuložilo.", "Not saved: no connection.")
+                        : W.tr("Uloží se hned. Cviky s palcem dolů v dalších plánech nebudou.", "Saved right away. Disliked exercises stay out of your next plans."))
+                .font(.system(size: 11)).foregroundStyle(W.muted)
+                .listRowBackground(Color.clear)
+        }
+        .navigationTitle(W.tr("Cviky", "Exercises"))
+    }
+
+    private func thumb(_ name: String, up: Bool) -> some View {
+        let on = liked[name] == up
+        let tint: Color = up ? W.green : W.red
+        return Button {
+            let before = liked[name]
+            let value: Bool? = on ? nil : up
+            liked[name] = value
+            failed = false
+            WKInterfaceDevice.current().play(.click)
+            Task {
+                guard await WatchAPI.rateExercise(name, liked: value) else {
+                    liked[name] = before
+                    failed = true
+                    return
+                }
+            }
+        } label: {
+            Image(systemName: up ? (on ? "hand.thumbsup.fill" : "hand.thumbsup") : (on ? "hand.thumbsdown.fill" : "hand.thumbsdown"))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(on ? tint : W.muted)
+                .frame(width: 32, height: 30)
+                .background(on ? tint.opacity(0.22) : W.tile, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel((up ? W.tr("Baví mě", "I like it") : W.tr("Nebaví mě", "I don't like it")) + ", " + name)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
 /// Mockup "u cviku" 5, a tap on the exercise's name: the best set before
 /// today, the technique's steps (GET /app/api/gym/technique, kept on the
 /// watch) and my note on the exercise (Moje poznámka on the iPhone).
 struct GymExerciseInfo: View {
     let exercise: WatchGym.Exercise
+    /// Swap for another exercise (GymOptionsView), while it has sets to do.
+    var swap: ((WatchGym.Option) -> Void)? = nil
     @State private var steps: [String]?
     @State private var loading = true
+    /// The thumb, saved at once; a failed save puts it back.
+    @State private var liked: Bool?
+    @State private var failed = false
+    @State private var swapping = false
+
+    private var canSwap: Bool { swap != nil && exercise.lifts.contains { !$0.done } }
 
     var body: some View {
         ScrollView {
@@ -1401,6 +1490,7 @@ struct GymExerciseInfo: View {
                     Text(W.tr("Rekord ", "Record ") + GymText.lift(record))
                         .font(.system(size: 11, weight: .semibold)).foregroundStyle(W.amber)
                 }
+                taste
                 // An exercise outside the catalog has no steps: no heading either.
                 if loading || steps != [] {
                     heading(W.tr("TECHNIKA", "TECHNIQUE"))
@@ -1429,9 +1519,70 @@ struct GymExerciseInfo: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .task {
+            async let thumb = WatchAPI.exerciseLiked(exercise.name)
             steps = await GymStore.shared.technique(exercise.name)
             loading = false
+            liked = await thumb
         }
+        .navigationDestination(isPresented: $swapping) {
+            GymOptionsView(title: W.tr("Vyměnit cvik", "Swap exercise"), exercise: exercise.name) { option in swap?(option) }
+        }
+    }
+
+    /// 👍, 👎 and Swap under the name; after 👎, Swap stands out.
+    private var taste: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 5) {
+                thumb(up: true)
+                thumb(up: false)
+                if canSwap {
+                    Button { swapping = true } label: {
+                        Label(W.tr("Vyměnit", "Swap"), systemImage: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 12, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
+                            .foregroundStyle(liked == false ? Color.black : W.ink)
+                            .frame(maxWidth: .infinity, minHeight: 34)
+                            .background(liked == false ? W.ink : W.tile, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            if failed {
+                Text(W.tr("Bez připojení se neuložilo.", "Not saved: no connection."))
+                    .font(.system(size: 11)).foregroundStyle(W.muted)
+            } else if liked == false {
+                Text(W.tr("V dalších plánech už nebude.", "Won't be in your next plans."))
+                    .font(.system(size: 11)).foregroundStyle(W.muted)
+            }
+        }
+        .padding(.top, 5)
+    }
+
+    private func thumb(up: Bool) -> some View {
+        let on = liked == up
+        let tint: Color = up ? W.green : W.red
+        return Button {
+            let before = liked
+            let value: Bool? = on ? nil : up
+            liked = value
+            failed = false
+            WKInterfaceDevice.current().play(.click)
+            Task {
+                guard await WatchAPI.rateExercise(exercise.name, liked: value) else {
+                    liked = before
+                    failed = true
+                    return
+                }
+            }
+        } label: {
+            Image(systemName: up ? (on ? "hand.thumbsup.fill" : "hand.thumbsup") : (on ? "hand.thumbsdown.fill" : "hand.thumbsdown"))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(on ? tint : W.ink)
+                .frame(width: 44, height: 34)
+                .background(on ? tint.opacity(0.22) : W.tile, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(up ? W.tr("Baví mě", "I like it") : W.tr("Nebaví mě", "I don't like it"))
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     private func heading(_ text: String) -> some View {
