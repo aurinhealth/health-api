@@ -25,15 +25,21 @@ const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Nu
 // Prices in USD per 1M tokens (input, cached input, output). Input the model
 // has seen in the last few minutes with the same beginning is cached by OpenAI
 // and billed at the cached price (usage.input_tokens_details.cached_tokens).
+// Writing input into that cache costs more than plain input on the gpt-6
+// models (usage.input_tokens_details.cache_write_tokens, not part of
+// cached_tokens): CACHE_WRITE_FACTOR times the input price for the default
+// 30-minute cache (no prompt_cache_options is set).
 export const MODEL_PRICES = { "gpt-6-luna": [0.10, 0.01, 0.50], "gpt-6-sol": [2, 0.20, 10], "gpt-6.1-sol": [2, 0.10, 10], "gpt-6-astra": [10, 1, 50] };
+export const CACHE_WRITE_FACTOR = 1.25;
 // Each web search the model runs is billed on top of the tokens (10 USD per 1,000 calls).
 export const WEB_SEARCH_USD = 0.01;
 export const cachedTokens = usage => Math.min(n(usage?.input_tokens_details?.cached_tokens) || 0, n(usage?.input_tokens) || 0);
+export const cacheWriteTokens = usage => Math.max(0, Math.min(n(usage?.input_tokens_details?.cache_write_tokens) || 0, (n(usage?.input_tokens) || 0) - cachedTokens(usage)));
 export function usageCost(model, usage, webSearches = 0) {
   const key = Object.keys(MODEL_PRICES).sort((a, b) => b.length - a.length).find(k => String(model || "").startsWith(k));
   if (!key || !usage) return null;
-  const [i, c, o] = MODEL_PRICES[key], cached = cachedTokens(usage);
-  return Math.round((((n(usage.input_tokens) || 0) - cached) * i + cached * c + (n(usage.output_tokens) || 0) * o + (n(webSearches) || 0) * WEB_SEARCH_USD * 1e6) / 1e6 * 1e5) / 1e5;
+  const [i, c, o] = MODEL_PRICES[key], cached = cachedTokens(usage), written = cacheWriteTokens(usage);
+  return Math.round((((n(usage.input_tokens) || 0) - cached - written) * i + written * i * CACHE_WRITE_FACTOR + cached * c + (n(usage.output_tokens) || 0) * o + (n(webSearches) || 0) * WEB_SEARCH_USD * 1e6) / 1e6 * 1e5) / 1e5;
 }
 
 export { ownerUnlimited };
@@ -57,9 +63,13 @@ const tracked = env => Boolean(env?.DB && Number(env.USER_ID) > 0);
 
 const withCachedColumn = new WeakSet();
 export async function ensureAiUsage(db) {
-  await db.prepare("CREATE TABLE IF NOT EXISTS ai_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, day TEXT NOT NULL, feature TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, cost_usd REAL, cached_tokens INTEGER)").run();
+  await db.prepare("CREATE TABLE IF NOT EXISTS ai_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, day TEXT NOT NULL, feature TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, cost_usd REAL, cached_tokens INTEGER, cache_write_tokens INTEGER)").run();
   await db.prepare("CREATE INDEX IF NOT EXISTS ai_usage_user_day ON ai_usage(user_id, day)").run();
-  if (!withCachedColumn.has(db)) { await db.prepare("ALTER TABLE ai_usage ADD COLUMN cached_tokens INTEGER").run().catch(() => { /* already there */ }); withCachedColumn.add(db); }
+  if (!withCachedColumn.has(db)) {
+    await db.prepare("ALTER TABLE ai_usage ADD COLUMN cached_tokens INTEGER").run().catch(() => { /* already there */ });
+    await db.prepare("ALTER TABLE ai_usage ADD COLUMN cache_write_tokens INTEGER").run().catch(() => { /* already there */ });
+    withCachedColumn.add(db);
+  }
 }
 
 // The coach chat, which the daily guard does not cover.
@@ -204,15 +214,15 @@ export async function recordAiUsage(env, { feature = null, model = null, usage =
     await ensureAiUsage(env.DB);
     // An unknown model counts at the default model's price, so it cannot slip past the limit.
     const cost = usageCost(model, usage, webSearches) ?? usageCost("gpt-6-sol", usage, webSearches) ?? 0;
-    const values = [feature, model, n(usage.input_tokens) || 0, n(usage.output_tokens) || 0, cost, cachedTokens(usage)];
+    const values = [feature, model, n(usage.input_tokens) || 0, n(usage.output_tokens) || 0, cost, cachedTokens(usage), cacheWriteTokens(usage)];
     // All users' total of the day (ai-total.js), the owner's included.
     await addAiSpend(env, cost, hold);
     if (slotId) {
-      const settled = await env.DB.prepare("UPDATE ai_usage SET feature = ?, model = ?, input_tokens = ?, output_tokens = ?, cost_usd = ?, cached_tokens = ? WHERE id = ? AND user_id = ? AND model = 'pending'")
+      const settled = await env.DB.prepare("UPDATE ai_usage SET feature = ?, model = ?, input_tokens = ?, output_tokens = ?, cost_usd = ?, cached_tokens = ?, cache_write_tokens = ? WHERE id = ? AND user_id = ? AND model = 'pending'")
         .bind(...values, slotId, env.USER_ID).run();
       if (Number(settled?.meta?.changes) > 0) return;
     }
-    await env.DB.prepare("INSERT INTO ai_usage (user_id, day, feature, model, input_tokens, output_tokens, cost_usd, cached_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    await env.DB.prepare("INSERT INTO ai_usage (user_id, day, feature, model, input_tokens, output_tokens, cost_usd, cached_tokens, cache_write_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
       .bind(env.USER_ID, await limitToday(env), ...values).run();
   } catch (error) {
     console.error("AI usage not recorded", error?.message || error);

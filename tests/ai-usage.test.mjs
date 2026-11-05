@@ -57,6 +57,19 @@ test("cached input is billed at the cached price and kept in the log", async () 
   assert.deepEqual({ ...db.sqlite.prepare("SELECT cached_tokens, cost_usd FROM ai_usage").get() }, { cached_tokens: 15000, cost_usd: 0.023 });
 });
 
+test("input written into the prompt cache costs 1.25× the input price and is kept in the log", async () => {
+  // 20k input: 5k cached, 12k written to the cache, 3k plain; 1k output of gpt-6-sol:
+  // 3k × 2 + 12k × 2.5 + 5k × 0.2 + 1k × 10 per 1M = 0.047 USD (0.041 when writes counted as plain input).
+  const usage = { input_tokens: 20000, input_tokens_details: { cached_tokens: 5000, cache_write_tokens: 12000 }, output_tokens: 1000 };
+  assert.equal(usageCost("gpt-6-sol", usage), 0.047);
+  // Writes beyond the uncached input never count twice.
+  assert.equal(usageCost("gpt-6-sol", { input_tokens: 1000, input_tokens_details: { cached_tokens: 1000, cache_write_tokens: 1000 } }), 0.0002);
+  const db = grantAiConsent(createD1(), 7, 8), realFetch = globalThis.fetch;
+  globalThis.fetch = async () => answer(usage);
+  try { await callOpenAI(envFor(db), { feature: "assistant", instructions: "x", input: "y" }); } finally { globalThis.fetch = realFetch; }
+  assert.deepEqual({ ...db.sqlite.prepare("SELECT cached_tokens, cache_write_tokens, cost_usd FROM ai_usage").get() }, { cached_tokens: 5000, cache_write_tokens: 12000, cost_usd: 0.047 });
+});
+
 test("a table from before the cached column gets it", async () => {
   const db = grantAiConsent(createD1(), 7, 8);
   db.sqlite.exec("CREATE TABLE ai_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, day TEXT NOT NULL, feature TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, cost_usd REAL)");
