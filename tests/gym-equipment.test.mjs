@@ -138,7 +138,8 @@ test("dumbbell exercises ask for a dumbbell the athlete has", async () => {
 test("a prescribed failure set (stored as RPE 10) doesn't take a step back", () => {
   const rows = [{ actual_kg: 40, actual_reps: 12, rpe: 10, note: "[Do selhání]", workout_date: "2026-10-01" }, { actual_kg: 40, actual_reps: 12, rpe: 8, workout_date: "2026-10-01" }];
   assert.equal(progressionDecision(rows, "Leg extension", "10–12").decision, "increase");
-  assert.equal(progressionDecision(rows.map(r => ({ ...r, note: "" })), "Leg extension", "10–12").decision, "decrease");
+  // Rated failure with the reps in range is effort, not a load too heavy: it holds.
+  assert.equal(progressionDecision(rows.map(r => ({ ...r, note: "" })), "Leg extension", "10–12").decision, "hold");
 });
 
 test("dumbbells are picked before the note: a step up reaches the next dumbbell, one with none left holds", async () => {
