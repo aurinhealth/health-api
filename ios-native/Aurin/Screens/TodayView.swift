@@ -153,6 +153,11 @@ struct TodayContent: View {
         KeyNumbers(today: today)
             .padding(.top, wide ? 0 : 28)
 
+        if selectedDate == nil && !model.demo {
+            // Today's pill not logged an hour after the usual time.
+            MissedPillCard(pill: today.cycle?.pill, date: today.date)
+        }
+
         if selectedDate == nil {
             // Today's workout with Start, and the activity of the day when it
             // suggests something else; without a plan the activity of the day
