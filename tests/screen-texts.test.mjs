@@ -206,12 +206,12 @@ test("background data: the last text at once and the new one written after the a
   const shown = await screenText(env, { screen: "today", load, ask, later, now: start + 11 * 60000 });
   assert.equal(shown.text, "Text 1", "the last text shows at once");
   // Opened again before the background write ends: it is not asked twice.
-  await screenText(env, { screen: "today", load, ask, later, now: start + 22 * 60000 });
+  await screenText(env, { screen: "today", load, ask, later, now: start + 12 * 60000 });
   assert.equal(work.length, 1);
   await Promise.all(work);
   assert.equal(asked, 2);
   assert.equal(seen.slotWaitMs, BACKGROUND_SLOT_WAIT_MS);
-  assert.ok(BACKGROUND_SLOT_WAIT_MS < 20000, "within the 30 s after the answer");
+  assert.ok(BACKGROUND_SLOT_WAIT_MS + seen.timeoutMs <= 25000, "within the 30 s after the answer");
   assert.equal((await screenText(env, { screen: "today", load, ask, later, now: start + 23 * 60000 })).text, "Text 2");
 });
 
@@ -239,5 +239,48 @@ test("busy slots in the background let the claim go; the user's own change and a
   // A red morning: waited for, so a text written for yesterday's plan never shows.
   zone = "red";
   assert.equal((await screenText(env, { screen: "today", load, ask, later, now: start + 30 * 60000 })).text, "Text 5");
+  assert.equal(work.length, 0);
+});
+
+test("a background text never lands over the user's own change, and a stale mark of the same state is let go", async () => {
+  const env = owner();
+  let asked = 0, sleep = 400, open = () => {};
+  const gate = new Promise(resolve => { open = resolve; });
+  const ask = async () => { const n = ++asked; if (n === 2) await gate; return { text: JSON.stringify({ text: "Text " + n, advice: "" }) }; };
+  const load = async () => today({ sleep: { minutes: sleep, need: 450, index: 74 } });
+  const work = [];
+  const later = p => work.push(p);
+  const start = Date.now();
+  await screenText(env, { screen: "today", load, ask, later, now: start });
+  sleep = 470;
+  await screenText(env, { screen: "today", load, ask, later, now: start + 11 * 60000 });
+  assert.equal(work.length, 1);
+  // Meanwhile the user's own change marks the text stale; the background write then keeps out.
+  await markScreenTextsStale(env);
+  open();
+  await Promise.all(work.splice(0));
+  assert.equal(asked, 2);
+  const after = await screenText(env, { screen: "today", load, ask, later, now: start + 12 * 60000 });
+  assert.equal(after.text, "Text 3", "the user's change is written at once");
+  // The same state after a stale mark: no AI call, the mark is let go and the next opening skips loading.
+  await markScreenTextsStale(env);
+  let loaded = 0;
+  const counted = async () => { loaded++; return load(); };
+  assert.equal((await screenText(env, { screen: "today", load: counted, ask, later, now: start + 13 * 60000 })).text, "Text 3");
+  await screenText(env, { screen: "today", load: counted, ask, later, now: start + 14 * 60000 });
+  assert.equal(loaded, 1);
+  assert.equal(asked, 3);
+});
+
+test("the night arriving or a new readiness zone is waited for, not left for the next opening", async () => {
+  const env = owner();
+  let asked = 0, zone = "green";
+  const ask = async () => { asked++; return { text: JSON.stringify({ text: "Text " + asked, advice: "" }) }; };
+  const load = async () => today({ readiness: { score: 80, zone } });
+  const work = [];
+  const start = Date.now();
+  await screenText(env, { screen: "today", load, ask, later: p => work.push(p), now: start });
+  zone = "yellow";
+  assert.equal((await screenText(env, { screen: "today", load, ask, later: p => work.push(p), now: start + 11 * 60000 })).text, "Text 2");
   assert.equal(work.length, 0);
 });

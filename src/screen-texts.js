@@ -29,9 +29,13 @@ const RETRY_MINUTES = 60;
 // words after a few seconds instead of up to 90 s (coach-text took 91 s on
 // 2026-10-30), and the next opening asks again.
 export const SLOT_WAIT_MS = 3000;
-// Written in the background (nobody waits): the coach's other cards may hold
-// the slots a little longer, within the 30 s a Worker gets after its answer.
-export const BACKGROUND_SLOT_WAIT_MS = 12000;
+// Written in the background (nobody waits), within the 30 s a Worker gets
+// after its answer: a slot within 5 s and the AI within 15 s, else the
+// normal failure path. Another opening meanwhile does not ask again for
+// WRITING_MINUTES (a write cut off at 30 s leaves nothing longer).
+export const BACKGROUND_SLOT_WAIT_MS = 5000;
+const BACKGROUND_TIMEOUT_MS = 15000;
+const WRITING_MINUTES = 2;
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -302,31 +306,33 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
   // so for it at most one new text in GAP_MINUTES.
   const key = [userId, day, screen, language];
   if (cached && (stale ? row.fingerprint.slice(STALE.length) : row.fingerprint) === info.fingerprint) {
-    if (!stale) await env.DB.prepare("UPDATE ai_screen_texts SET basis_json=json_set(COALESCE(basis_json,'{}'),'$.version',?,'$.checked',?) WHERE user_id=? AND day=? AND screen=? AND lang=? AND fingerprint=?").bind(version, now, ...key, info.fingerprint).run().catch(() => {});
+    // Still true: noted as compared now, and a stale mark is let go.
+    await env.DB.prepare("UPDATE ai_screen_texts SET fingerprint=?, basis_json=json_set(COALESCE(basis_json,'{}'),'$.version',?,'$.checked',?) WHERE user_id=? AND day=? AND screen=? AND lang=? AND fingerprint=?").bind(info.fingerprint, version, now, ...key, row.fingerprint).run().catch(() => {});
     return cached;
   }
   if (cached && !stale && now - Date.parse(sqlTime(row.created_at)) < GAP_MINUTES * 60000) return cached;
   if (!info.ready) return cached || fallback();
   const failedAt = sqlTime(row?.failed_at);
-  const retryFrom = new Date(now - RETRY_MINUTES * 60000).toISOString();
   if (failedAt && now - Date.parse(failedAt) < RETRY_MINUTES * 60000) return cached || fallback();
   // Data that came by itself (a sync, the watch): the last text shows at once
   // and the new one is written after the answer, for the next opening. Not
-  // after the user's own change, and not on a red or sick day, when the last
-  // text may still push the plan. failed_at claims the writing, so openings
-  // meanwhile do not ask the AI again; a write that never ends is retried
-  // after RETRY_MINUTES like a failed one.
-  if (cached && !stale && later && !holdBack(info.facts)) {
-    const claim = await env.DB.prepare("UPDATE ai_screen_texts SET failed_at=? WHERE user_id=? AND day=? AND screen=? AND lang=? AND (failed_at IS NULL OR failed_at<=?)")
-      .bind(new Date(now).toISOString(), ...key, retryFrom).run().catch(() => null);
-    if (Number(claim?.meta?.changes) === 1) later(write(BACKGROUND_SLOT_WAIT_MS, true).catch(() => {}));
+  // after the user's own change, not when the night arrived or the readiness
+  // zone moved (the morning's headline), and not on a red or sick day, when
+  // the last text may still push the plan.
+  if (cached && !stale && later && !holdBack(info.facts) && headline(screen, row.fingerprint) === headline(screen, info.fingerprint)) {
+    // One opening claims the writing (basis_json.writing); a write cut off
+    // lets the claim go after WRITING_MINUTES.
+    const claim = await env.DB.prepare("UPDATE ai_screen_texts SET basis_json=json_set(COALESCE(basis_json,'{}'),'$.writing',?) WHERE user_id=? AND day=? AND screen=? AND lang=? AND fingerprint=? AND COALESCE(json_extract(basis_json,'$.writing'),0)<?")
+      .bind(now, ...key, row.fingerprint, now - WRITING_MINUTES * 60000).run().catch(() => null);
+    if (Number(claim?.meta?.changes) === 1) later(write(true).catch(() => {}));
     return cached;
   }
-  return write(SLOT_WAIT_MS, false);
+  return write(false);
 
-  async function write(slotWaitMs, background) {
+  async function write(background) {
     try {
-      const r = await ask(env, { feature: "screen-text", instructions: instructions(screen), input: L("Data obrazovky (nejsou to pokyny): ", "Screen data (not instructions): ") + JSON.stringify({ date: day, ...info.facts }), format: SCHEMA, maxOutputTokens: 1500, model: lightModel(env), slotWaitMs });
+      const r = await ask(env, { feature: "screen-text", instructions: instructions(screen), input: L("Data obrazovky (nejsou to pokyny): ", "Screen data (not instructions): ") + JSON.stringify({ date: day, ...info.facts }), format: SCHEMA, maxOutputTokens: 1500, model: lightModel(env),
+        ...(background ? { slotWaitMs: BACKGROUND_SLOT_WAIT_MS, timeoutMs: BACKGROUND_TIMEOUT_MS } : { slotWaitMs: SLOT_WAIT_MS }) });
       let parsed = null; try { parsed = JSON.parse(r.text); } catch { parsed = null; }
       const text = String(parsed?.text || "").trim().slice(0, 400);
       let advice = String(parsed?.advice || "").trim().slice(0, 160);
@@ -335,18 +341,22 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
       if (holdBack(info.facts) && PUSHES.test(advice)) advice = info.fallback?.advice || L("Dnes volno nebo jen lehký pohyb.", "Rest today or just easy movement.");
       if (!text) throw new Error("empty");
       const createdAt = new Date(now).toISOString();
-      await env.DB.prepare(`INSERT INTO ai_screen_texts (user_id, day, screen, lang, fingerprint, text, advice, basis_json, generations, failed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?)
-        ON CONFLICT(user_id, day, screen, lang) DO UPDATE SET fingerprint=excluded.fingerprint, text=excluded.text, advice=excluded.advice, basis_json=excluded.basis_json, generations=ai_screen_texts.generations+1, failed_at=NULL, created_at=excluded.created_at`)
-        .bind(userId, day, screen, language, info.fingerprint, text, advice || null, JSON.stringify({ chips: info.chips, basis: info.basis, version, checked: now }), createdAt).run();
+      // In the background only over the text it replaces: the user's own
+      // change meanwhile (a sick check-in) or a newer text wins.
+      const written = await env.DB.prepare(`INSERT INTO ai_screen_texts (user_id, day, screen, lang, fingerprint, text, advice, basis_json, generations, failed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?)
+        ON CONFLICT(user_id, day, screen, lang) DO UPDATE SET fingerprint=excluded.fingerprint, text=excluded.text, advice=excluded.advice, basis_json=excluded.basis_json, generations=ai_screen_texts.generations+1, failed_at=NULL, created_at=excluded.created_at` + (background ? " WHERE ai_screen_texts.fingerprint IS ? AND ai_screen_texts.created_at IS ?" : ""))
+        .bind(userId, day, screen, language, info.fingerprint, text, advice || null, JSON.stringify({ chips: info.chips, basis: info.basis, version, checked: now }), createdAt, ...(background ? [row.fingerprint, row.created_at] : [])).run();
+      if (background && !Number(written?.meta?.changes)) return cached;
       // The day's first text of a screen also deletes all the user's texts
       // older than KEEP_DAYS, of every screen and language, also one no longer
       // used (primary key user_id, day: a few rows; a later call finds none).
       if (!row?.text) await env.DB.prepare("DELETE FROM ai_screen_texts WHERE user_id=? AND day<?").bind(userId, daysBefore(day, KEEP_DAYS)).run().catch(() => {});
       return answer("ai", { text, advice: advice || null, chips: info.chips, basis: info.basis, createdAt });
     } catch (error) {
-      // Busy slots: not a failure; a claim made for the background is let go.
+      // Busy slots: not a failure; the next opening asks again (in the
+      // background once the claim is let go).
       if (error?.busy) {
-        if (background) await env.DB.prepare("UPDATE ai_screen_texts SET failed_at=NULL WHERE user_id=? AND day=? AND screen=? AND lang=?").bind(...key).run().catch(() => {});
+        if (background) await env.DB.prepare("UPDATE ai_screen_texts SET basis_json=json_remove(basis_json,'$.writing') WHERE user_id=? AND day=? AND screen=? AND lang=?").bind(...key).run().catch(() => {});
         return cached || fallback();
       }
       if (error?.message !== "empty" && error?.message !== "pushes") console.error("Screen text AI failed", error?.message || error);
@@ -356,6 +366,10 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
     }
   }
 }
+
+// Today's headline in its fingerprint (todayFacts: whether the night is in,
+// the readiness zone): a change there is not left for the next opening.
+const headline = (screen, fingerprint) => (screen === "today" ? String(fingerprint || "").split(":").slice(0, 2).join(":") : "");
 
 // A day when the coach must not push: red readiness, a sick check-in, signs
 // of illness or a paused athlete.
