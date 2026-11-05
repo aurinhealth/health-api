@@ -94,7 +94,7 @@ struct SetupFlowView: View {
                         Spacer()
                     }
                     ZStack(alignment: .trailing) {
-                        Text("Přeskočit").font(Typo.bodyStrong).hidden()
+                        ForEach(["Přeskočit", "Odhlásit", "Zrušit"], id: \.self) { Text(L10n.tr($0)).font(Typo.bodyStrong).hidden() }
                         // Without the consent the app cannot be used: the way out is signing out,
                         // or back to the paused screen when health data was paused (HealthPausedView).
                         if page == .consent && model.resumingHealth {
@@ -124,8 +124,8 @@ struct SetupFlowView: View {
                         .font(Typo.small.weight(.medium)).foregroundStyle(Palette.amber)
                         .padding(.bottom, 10)
                 }
-                PrimaryButton(title: buttonTitle, busy: saving || appleWorking) { Task { await next() } }
-                    .disabled(saving || appleWorking || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree)
+                PrimaryButton(title: buttonTitle, busy: saving || appleWorking || proOffer) { Task { await next() } }
+                    .disabled(saving || appleWorking || proOffer || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree)
                               || (page == .sport && focus.sports.kinds.isEmpty) || (page == .goal && focus.goal.isEmpty))
                 if page == .sources {
                     // "Teď ne" skips connecting, not "O tobě": without age, height and
@@ -139,7 +139,7 @@ struct SetupFlowView: View {
                     Button("Později") { Task { await done(notifications: false) } }
                         .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                         .frame(maxWidth: .infinity).frame(height: 44)
-                        .disabled(saving)
+                        .disabled(saving || proOffer)
                 }
             }
             .padding(.horizontal, 24)
@@ -850,15 +850,27 @@ enum SetupProOffer {
     /// (point 40, still to come) to keep away that day: never two offers at once.
     static var shownAt: Date? { UserDefaults.standard.object(forKey: shownKey) as? Date }
 
-    /// One GET /app/api/subscription after the last page; true marks it shown.
+    /// One GET /app/api/subscription after the last page, waited for at most
+    /// 3 s so a weak signal never holds the way to Today; true marks it shown.
     static func due(_ model: AppModel) async -> Bool {
-        guard !model.demo, shownAt == nil, let status = try? await model.api.subscription() else { return false }
-        guard !status.pilot, status.aiConsent == true, !status.purchased else { return false }
+        guard !model.demo, shownAt == nil else { return false }
+        let api = model.api
+        let due = await withTaskGroup(of: Bool.self) { group in
+            group.addTask { await check(api) }
+            group.addTask { try? await Task.sleep(for: .seconds(3)); return false }
+            let first = await group.next() ?? false
+            group.cancelAll()
+            return first
+        }
+        if due { UserDefaults.standard.set(Date(), forKey: shownKey) }
+        return due
+    }
+
+    private static func check(_ api: APIClient) async -> Bool {
+        guard let status = try? await api.subscription(), !status.pilot, status.aiConsent == true, !status.purchased else { return false }
         let store = ProStore.shared
         await store.load()
-        guard store.trialEligible, !store.entitled else { return false }
-        UserDefaults.standard.set(Date(), forKey: shownKey)
-        return true
+        return store.trialEligible && !store.entitled
     }
 }
 
