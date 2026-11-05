@@ -3856,3 +3856,13 @@
 "Pás je tvoje obvyklé rozmezí, %@ až %@." = "The band is your usual range, %1$@ to %2$@.";
 "Index spánku za posledních %@ nocí, průměr %@." = "Sleep index over the last %1$@ nights, average %2$@.";
 "Měj na ruce nabité hodinky, ať se noc změří." = "Keep your charged watch on so the night gets measured.";
+
+/* Food → amount: what is left of the day's target before adding (DayLeftLine) */
+"Po přidání" = "After adding";
+"Po přidání zbývá dnes" = "After adding, left today";
+"Po přidání zbývá %@" = "After adding, left %@";
+"%@ kcal nad dnešním cílem" = "%@ kcal over today's target";
+"%@ kcal nad cílem %@" = "%@ kcal over the target %@";
+"limit sacharidů: zbývá %@ g" = "carb limit: %@ g left";
+"%@ g nad limitem sacharidů" = "%@ g over the carb limit";
+"%@ z %@ kcal snědeno · tohle jídlo %@ kcal" = "%@ of %@ kcal eaten · this food %@ kcal";

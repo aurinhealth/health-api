@@ -423,7 +423,8 @@ const foodTarget = `<div class="dm pad">
 </div>`;
 
 // AddFoodSheet.swift ("Co přidáme?": the meal, the search, six tiles, the foods list), then BarcodeScanSheet.swift:
-// the finder with "Vybrat fotku", the found card with NutritionCells, the PortionWheel turned to 1½ servings, and "Přidat do oběda".
+// the finder with "Vybrat fotku", the found card with NutritionCells, DayLeftLine (what is left of the sample day's 2,650 kcal
+// and 150 g protein after this food), the PortionWheel turned to 1½ servings, and "Přidat do oběda".
 const foodAdd = `<div class="dm pad fa">
 <div class="row sp"><span class="sent h">What are you adding?</span><span class="mut s">Close</span></div>
 <span class="meal">Lunch${ic('updown')}</span>
@@ -439,6 +440,8 @@ ${[['Plain Greek yogurt', 'Hollandia · 140 g', 205], ['Banana', '120 g', 105]].
 <div class="sent h3">Plain Greek yogurt</div>
 <div class="mut s">Hollandia · EAN 8594001234567</div>
 <div class="nc">${[['kcal', 205, 307], ['protein', 13, 19.5], ['carbs', 6, 9], ['fat', 14, 21]].map(([k, a, b]) => `<div><span class="num md"${n(a, b, 4500, 700, 'i')}>${Math.round(b)}</span><span class="mut s">${k === 'kcal' ? 'kcal' : k + ' g'}</span></div>`).join('')}</div>
+<div class="dl"><div class="row sp"><span>After adding, left today</span><span><b><span data-n="1065,963,4500,700,i">963</span> kcal</b> · <span data-n="53,47,4500,700,i">47</span> g of protein</span></div>
+<i class="dlb"><b class="g"${at('4500:on')}></b><b class="e"></b></i><div class="mut s">1,380 of 2,650 kcal eaten · this food <span data-n="205,307,4500,700,i">307</span> kcal</div></div>
 <div class="wf"><b data-tx="0|1;4500|1½">1½</b><i></i><span>serving (140 g)</span>${ic('chevd')}</div>
 <div class="wheel"><div class="col w"><ul>${['0', '1', '2'].map(x => `<li>${x}</li>`).join('')}</ul></div><div class="col p"><ul${at('4500:on')}>${['', '–', '¼', '⅓', '½', '⅔'].map(x => `<li>${x}</li>`).join('')}</ul></div><div class="col u"><ul>${['g', 'serving (140 g)', ''].map(x => `<li>${x}</li>`).join('')}</ul></div></div>
 <div class="mut s">1 serving = 140 g · 205 kcal</div>
@@ -882,7 +885,7 @@ html:not(.js) .stage1{display:none}
 .mb{display:block;height:3px;margin-top:4px;border-radius:3px;background:var(--track);overflow:hidden}.mb b{display:block;height:100%;width:var(--w)}
 .coach{margin-top:14px;padding:12px 14px;border-radius:16px;background:var(--bg)}.ch4{display:flex;align-items:center;gap:6px;color:var(--indigo);font-weight:500;font-size:13.5px}
 .coach .sent{margin-top:4px;font-size:17px;line-height:1.3;min-height:3.9em}
-.fa{position:relative;min-height:524px;overflow:hidden}
+.fa{position:relative;min-height:584px;overflow:hidden}
 .meal{display:inline-flex;align-items:center;gap:4px;margin-top:6px;padding:4px 10px;border-radius:99px;background:color-mix(in srgb,var(--text) 6%,transparent);font-size:13px;font-weight:600}.meal .di{font-size:10px}
 .srch{display:flex;align-items:center;gap:10px;height:44px;margin-top:12px;border-bottom:1px solid color-mix(in srgb,var(--text) 25%,transparent);font-size:17px}.srch .di{font-size:18px;color:var(--muted)}
 .tiles6{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
@@ -911,6 +914,10 @@ html:not(.js) .stage1{display:none}
 .wheel ul{margin:0;padding:0;list-style:none;transition:transform 1s cubic-bezier(.16,1,.3,1)}.wheel li{height:32px;font-size:17px;font-weight:600;line-height:32px;white-space:nowrap}
 .js .wheel ul[data-at]{opacity:1!important;transform:none!important}.wheel ul.on,.js .wheel ul.on{transform:translateY(-96px)!important}
 .fa .res .meal{margin-top:10px}.fa .res .btn{margin-top:10px}
+.dl{margin-top:10px;font-size:13px}.dl .row{gap:8px}.dlb{position:relative;display:block;height:4px;margin:6px 0 5px;border-radius:4px;background:var(--track);overflow:hidden}
+.dlb b{position:absolute;left:0;top:0;bottom:0;border-radius:4px}.dlb .e{width:${(1380 / 2650 * 100).toFixed(1)}%;background:var(--text)}
+.dlb .g{width:${(1585 / 2650 * 100).toFixed(1)}%;background:color-mix(in srgb,var(--muted) 55%,transparent);transition:width .7s cubic-bezier(.16,1,.3,1)}.dlb .g.on{width:${(1687 / 2650 * 100).toFixed(1)}%}
+.js .dlb .g[data-at]{opacity:1!important;transform:none!important}
 
 /* Screens built here, in the phone: drawn at the app's 390 pt and scaled to the screen. */
 .scr .app{position:absolute;left:0;top:0;width:390px;height:848px;zoom:calc(292 / 390);overflow:hidden;padding:0 20px;background:var(--bg);font:15px/1.35 -apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;color:var(--text);--num:"Instrument Serif","New York",Georgia,serif}

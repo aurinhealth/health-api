@@ -468,6 +468,9 @@ struct FoodAmountView: View {
                 }
                 // The same card as after a scan (BarcodeScanSheet): the values, then the wheel.
                 NutritionCells(product: current, amount: value ?? 0)
+                DayLeftLine(day: model.writeDay, kcal: current.kcal(for: value ?? 0) ?? 0,
+                            protein: current.grams(current.protein_100g, for: value ?? 0) ?? 0,
+                            carbs: current.grams(current.carbs_100g, for: value ?? 0) ?? 0)
                 VStack(alignment: .leading, spacing: 4) {
                     PortionWheel(product: current, amount: Binding(get: { value ?? 0 }, set: { amount = String(($0 * 10).rounded() / 10) }))
                         .id(current.unit + (current.usableServing.map(Self.text) ?? "") + (current.serving_name ?? ""))

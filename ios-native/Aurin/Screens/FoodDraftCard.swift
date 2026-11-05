@@ -39,6 +39,8 @@ struct FoodDraftCard: View {
                     macro("T", total(\.fat_100g), Palette.fat)
                 }
                 .padding(.top, 6)
+                DayLeftLine(day: draft.date, kcal: total(\.calories_100g), protein: total(\.protein_100g), carbs: total(\.carbs_100g))
+                    .padding(.top, 12)
                 HStack(spacing: 8) {
                     Button { confirm() } label: {
                         Text("Zapsat").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
