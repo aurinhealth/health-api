@@ -10,8 +10,6 @@ const OWNER_ONLY_API_PATHS = new Set([
   "/app/api/activities",
   "/app/api/daily",
   "/app/api/fitness",
-  // A page of the owner's printed cookbook (cookbook.js).
-  "/app/api/food/recipe",
   "/app/api/me/apple",
   "/app/api/nutrition",
   "/app/api/nutrition/log",
@@ -21,8 +19,8 @@ const OWNER_ONLY_API_PATHS = new Set([
 ]);
 
 // The original API (index.js, strength-gateway.js): Google Health and
-// Intervals.icu syncs, analysis, the cookbook and the old food diary.
-const OWNER_ONLY_PREFIXES = ["/analysis/", "/cookbook/", "/food/", "/health/", "/strength/", "/sync/"];
+// Intervals.icu syncs, analysis and the old food diary.
+const OWNER_ONLY_PREFIXES = ["/analysis/", "/food/", "/health/", "/strength/", "/sync/"];
 
 export function ownerOnlyPath(pathname) {
   const path = String(pathname || "");

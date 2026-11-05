@@ -9,7 +9,6 @@ The food database holds `shared_foods`, `shared_recipes`, `food_contributions`,
 user_id guard and are included in account export/deletion. Only public label or
 recipe fields appear in search results. Personal foods/recipes, amounts eaten,
 dates, preferences and diary notes stay in the assigned personal database.
-The private cookbook remains on the central database.
 
 Search shows only foods the owner approved (`label_verified`): corrections,
 fixed reports and new foods users suggested for everyone (`src/food-suggestions.js`).

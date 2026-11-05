@@ -3,7 +3,6 @@ import { KEEP_TYPE_SQL, watchType, mark } from "./activity-type.js";
 import { healthPointJson } from './health-point-json.js';
 import {localExportIndex} from './local-workouts.js';
 import {hasRecentActivityData} from './onboarding.js';
-import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { reconcileCancelledGymPlans } from './planned-events.js';
 import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck,settleEnergyCheck} from './activity-energy-check.js';
 import {energyChoices,applyEnergyChoice} from './activity-energy-choices.js';
@@ -63,7 +62,7 @@ export default {
         return Response.json({
           status: "ok",
           service: "health-api",
-          version: "final-5-cookbook-v3.3.0-queued-google-sync"
+          version: "final-5-v3.3.0-queued-google-sync"
         });
       }
 
@@ -116,14 +115,6 @@ export default {
 
       if (url.pathname === "/analysis/energy") {
         return await analysisEnergy(env, url);
-      }
-
-      if (url.pathname === "/cookbook/page") {
-        return await cookbookPage(env, url);
-      }
-
-      if (url.pathname === "/cookbook/search") {
-        return await cookbookSearch(env, url);
       }
 
       if (url.pathname === "/food/log") {
@@ -2467,95 +2458,8 @@ function calculateFueling(
 
 
 // ======================================================
-// COOKBOOK
-// ======================================================
-
-async function cookbookRecipeByPage(page) {
-  return getCookbookRecipeByPage(page);
-}
-
-async function cookbookSearchResults(url) {
-  const q = (url.searchParams.get("q") || "").trim().toLowerCase();
-  const category = (url.searchParams.get("category") || "").trim().toLowerCase();
-  const maxMinutes = Number(url.searchParams.get("max_minutes"));
-  const mealPrep = url.searchParams.get("meal_prep");
-  const limit = Math.max(1, Math.min(30, Number(url.searchParams.get("limit") || 10)));
-
-  const cookbookData = await getCookbook();
-  const cookbook = Array.isArray(cookbookData) ? cookbookData : (cookbookData?.recipes || []);
-
-  let results = cookbook.filter(recipe => {
-    if (category && recipe.category.toLowerCase() !== category) return false;
-    if (Number.isFinite(maxMinutes) && maxMinutes > 0) {
-      const match = String(recipe.time || "").match(/(\d+)/);
-      if (match && Number(match[1]) > maxMinutes) return false;
-    }
-    if (mealPrep === "1" && !recipe.meal_prep) return false;
-    return true;
-  });
-
-  if (q) {
-    results = results
-      .map(recipe => {
-        const haystack = `${recipe.title} ${recipe.ingredients || ""} ${(recipe.ingredients_clean || []).join(" ")}`.toLowerCase();
-        let score = haystack.includes(q) ? 100 : 0;
-        for (const word of q.split(/\s+/).filter(Boolean)) {
-          if (recipe.title.toLowerCase().includes(word)) score += 20;
-          else if (haystack.includes(word)) score += 5;
-        }
-        return { recipe, score };
-      })
-      .filter(x => x.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .map(x => x.recipe);
-  }
-
-  return results.slice(0, limit);
-}
-
-async function cookbookPage(env, url) {
-  const page = url.searchParams.get("page");
-  const recipe = await cookbookRecipeByPage(page);
-
-  if (!recipe) {
-    return Response.json({
-      status: "error",
-      message: "Cookbook page not found",
-      page
-    }, { status: 404 });
-  }
-
-  return Response.json({
-    status: "ok",
-    recipe
-  });
-}
-
-async function cookbookSearch(env, url) {
-  const recipes = await cookbookSearchResults(url);
-  return Response.json({
-    status: "ok",
-    count: recipes.length,
-    recipes
-  });
-}
-
-// ======================================================
 // FOOD LOG
 // ======================================================
-
-function scaleRecipe(recipe, servings) {
-  const factor = Number(servings);
-  const s = Number.isFinite(factor) && factor > 0 ? factor : 1;
-
-  return {
-    kcal: Math.round(recipe.kcal * s),
-    protein_g: Math.round(recipe.protein_g * s * 10) / 10,
-    carbs_g: Math.round(recipe.carbs_g * s * 10) / 10,
-    fat_g: Math.round(recipe.fat_g * s * 10) / 10,
-    fiber_g: Math.round(recipe.fiber_g * s * 10) / 10
-  };
-}
 
 async function foodLogForDate(env, date) {
   // Planned or cancelled food (ChatGPT can plan a meal) is not eaten.
@@ -2594,15 +2498,7 @@ async function foodLog(env, request, url) {
   const consumedAt = body.consumed_at || new Date().toISOString();
   const servings = Number(body.servings || 1);
 
-  let recipe = null;
-  if (body.page != null) recipe = await cookbookRecipeByPage(body.page);
-  if (body.recipe_page != null) recipe = await cookbookRecipeByPage(body.recipe_page);
-
-  if (body.page != null && !recipe) {
-    return Response.json({ status: "error", message: "Cookbook page not found", page: body.page }, { status: 404 });
-  }
-
-  const scaled = recipe ? scaleRecipe(recipe, servings) : {
+  const scaled = {
     kcal: Number(body.kcal || 0),
     protein_g: Number(body.protein_g || 0),
     carbs_g: Number(body.carbs_g || 0),
@@ -2610,8 +2506,8 @@ async function foodLog(env, request, url) {
     fiber_g: Number(body.fiber_g || 0)
   };
 
-  const name = body.name || (recipe && recipe.title) || "Manual entry";
-  const source = recipe ? "cookbook" : (body.source || "manual");
+  const name = body.name || "Manual entry";
+  const source = body.source || "manual";
 
   if (!name || !Number.isFinite(scaled.kcal)) {
     return Response.json({ status: "error", message: "name and kcal are required" }, { status: 400 });
@@ -2625,8 +2521,8 @@ async function foodLog(env, request, url) {
   `).bind(env.USER_ID, 
     date,
     consumedAt,
-    recipe ? recipe.page : null,
-    recipe ? recipe.title : name,
+    null,
+    name,
     servings,
     scaled.kcal,
     scaled.protein_g,
@@ -2643,7 +2539,6 @@ async function foodLog(env, request, url) {
     date,
     entry: {
       name,
-      page: recipe ? recipe.page : null,
       servings,
       source,
       ...scaled
