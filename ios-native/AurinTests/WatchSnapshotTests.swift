@@ -31,6 +31,10 @@ final class WatchSnapshotTests: XCTestCase {
         waiting.readiness = nil
         waiting.sleep?.minutes = nil
         XCTAssertTrue(waiting.awaitingNight)
+        // No HRV or resting HR history (no wearable at night): nothing to wait for.
+        waiting.hrv = nil
+        waiting.restingHR = nil
+        XCTAssertFalse(waiting.awaitingNight)
 
         // Through WatchConnectivity and back.
         let data = try XCTUnwrap(s.encoded())

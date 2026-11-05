@@ -253,6 +253,8 @@ struct ReadinessHome: View {
                 if index > 0 { Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1) }
                 NavigationLink(value: gauge.page) { cell(gauge) }
                     .buttonStyle(.plain)
+                    // Before the night comes its detail would show the night before's HRV.
+                    .disabled(gauge.page == .hrv && s.awaitingNight)
             }
         }
         .fixedSize(horizontal: false, vertical: true)

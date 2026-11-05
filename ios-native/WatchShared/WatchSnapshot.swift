@@ -181,9 +181,13 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
     }
 
     /// Today without last night yet (no sleep, no readiness, not a new
-    /// athlete's first days): the HRV and resting HR it has are not this
-    /// morning's, so they show "–" (Today audit 20).
-    var awaitingNight: Bool { readiness == nil && learningDays == nil && (sleep?.minutes ?? 0) <= 0 }
+    /// athlete's first days) for an athlete whose nights bring HRV or resting
+    /// HR: the ones it has are not this morning's, so they show "–" (Today
+    /// audit 20). Without any such history there is no night to wait for.
+    var awaitingNight: Bool {
+        guard readiness == nil, learningDays == nil, (sleep?.minutes ?? 0) <= 0 else { return false }
+        return !(hrv?.series.isEmpty ?? true) || !(restingHR?.series.isEmpty ?? true)
+    }
 
     func encoded() -> Data? {
         let encoder = JSONEncoder()
