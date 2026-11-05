@@ -3032,6 +3032,8 @@
 "Poznámka · %@" = "Note · %@";
 "Poznámku se nepodařilo uložit: %@" = "The note couldn't be saved: %@";
 "Moje poznámka" = "My note";
+"Hlavní svaly" = "Primary muscles";
+"Pomocné svaly" = "Secondary muscles";
 
 /* Training plans: cycling races, gym plans, race estimates */
 "Se závodem" = "With a race";

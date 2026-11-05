@@ -167,6 +167,10 @@ extension GymDay {
 struct GymTechnique: Decodable, Equatable {
     let exercise: String?
     let muscles: [String]?
+    /// Body-map ids (BodyFigure.muscles): the muscles carrying at least half
+    /// of the load, then the helpers, each by weight.
+    let primaryMuscles: [String]?
+    let secondaryMuscles: [String]?
     let note: String?
     let setup: [String]?
     let steps: [String]?
