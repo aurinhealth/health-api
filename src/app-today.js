@@ -77,24 +77,32 @@ export function readinessWeek({ date, readiness, sessions = [], profile = null }
 
 // Without a plan (Today audit D3) the readiness sets it, never above the
 // usual day: the high end at most the 80th percentile of the last 28 days'
-// strain (usualStrain), or 12 until 14 of those days have a strain. Only with
-// a plan is a day with nothing planned or done a rest day.
+// strain (usualStrain, never below a rest day's 8), or 12 until 14 of those
+// days have a strain. Only with a plan is a day with nothing planned or done
+// a rest day. The high end never falls under the low one.
 export function strainTarget({ readiness = null, zone = null, planned = null, debt = 0, rest = false, noPlan = false, usual = null } = {}) {
   let mid = readiness != null ? 4 + 0.12 * readiness : 10;
   if (planned > 0) mid = (mid + planned) / 2;
   // A day with nothing planned or done is a rest day: walking, light movement.
   else if (rest) mid = Math.min(mid, 6.5);
-  else if (noPlan) mid = Math.min(mid, (usual ?? 12) - 1.5);
+  else if (noPlan) mid = Math.min(mid, Math.max(usual ?? 12, 8) - 1.5);
   mid -= Math.min(2, (Number(debt) || 0) / 30 * 0.5);
   if (zone === "red") mid = Math.min(mid, 6); else if (zone === "yellow") mid = Math.min(mid, 12);
   const r1 = v => Math.round(v * 10) / 10;
-  return { low: r1(Math.max(1, mid - 1.5)), high: r1(Math.min(20, mid + 1.5)) };
+  const low = r1(Math.max(1, mid - 1.5));
+  return { low, high: Math.max(low, r1(Math.min(20, mid + 1.5))) };
 }
 
-// The usual day's strain: the 80th percentile of the last 28 days with a
-// strain from heart-rate zones (dayStrain), null with fewer than 14 such days.
-export function usualStrain(rows, date) {
-  const days = Array.from({ length: 28 }, (_, i) => dayStrain(rows, shift(date, -(i + 1)))).filter(v => v != null).sort((a, b) => a - b);
+// The usual day's strain: the 80th percentile of the last 28 days, each day
+// counted as Today counts it (dayStrainParts: the heart-rate zones, or the
+// day's TSS from Intervals.icu plus the steps), null with fewer than 14 days.
+export function usualStrain(rows, date, intervals = []) {
+  const load = new Map((intervals || []).map(r => [r?.id, num(r?.ctlLoad ?? r?.atlLoad ?? r?.load)]));
+  const strainOn = d => {
+    const row = rows.find(r => r.id === d), tss = load.get(d);
+    return dayStrainParts({ zoneMinutes: row?.hrZoneMinutes, steps: num(row?.steps), sessions: tss > 0 ? [{ tss }] : [] }).score;
+  };
+  const days = Array.from({ length: 28 }, (_, i) => strainOn(shift(date, -(i + 1)))).filter(v => v != null).sort((a, b) => a - b);
   if (days.length < 14) return null;
   return Math.round(days[Math.floor(0.8 * (days.length - 1))] * 10) / 10;
 }
@@ -223,10 +231,14 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
   const debtNow = weekSleepDebt(sessions, date, { age, goal: sleepSet.goal });
 
   const planned = Array.isArray(training.planned) ? training.planned : [];
-  // A plan exists (Today audit D3): an Aurin training plan, today's gym plan or
-  // sessions planned today, yesterday or tomorrow; then an empty today is a rest day.
-  const hasPlan = !!trainingPlan || !!gym || planned.length > 0 || [recovery?.yesterday, recovery?.tomorrow].some(d => Array.isArray(d?.planned) && d.planned.length > 0);
-  const usualDay = usualStrain(google, date);
+  // A plan exists (Today audit D3): a running Aurin training plan, a gym plan
+  // from yesterday to tomorrow, or sessions planned (done or not) yesterday,
+  // today or tomorrow; then an empty today is a rest day. A past day has no
+  // days around it on /app/api/today, so there only its own plan counts.
+  const gymAround = Object.values({ ...(recovery?.gym || {}), ...(gym ? { [date]: gym } : {}) }).some(g => Array.isArray(g?.exercises) && g.exercises.length > 0);
+  const hasPlan = !!(trainingPlan && !trainingPlan.paused) || gymAround || planned.length > 0
+    || [recovery?.yesterday, recovery?.tomorrow].some(d => (Array.isArray(d?.planned) && d.planned.length > 0) || (Array.isArray(d?.matched) && d.matched.length > 0));
+  const usualDay = usualStrain(google, date, fitness.wellness);
   const plannedTss = planned.reduce((s, w) => s + (num(w.tss) || 0), 0);
 
   // Food and drink.

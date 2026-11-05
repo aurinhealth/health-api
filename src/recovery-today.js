@@ -77,7 +77,7 @@ function loadText(s, when, worked) {
 function tomorrowText(sessions) {
   if (sessions == null) return ".";
   const next = sessions.find(s => s && s.status !== "done");
-  if (!next) return L(" a zítra máš volno.", " and tomorrow is a rest day.");
+  if (!next) return L(" a zítra máš volno.", " and tomorrow is free.");
   const sport = sportOf(next), hard = isHardSession(String(next.title || ""), sport);
   if (sport === "ride") return hard ? L(" a zítra jedeš intervaly.", " and tomorrow you ride intervals.") : L(" a zítra jedeš na kolo.", " and tomorrow you ride.");
   if (sport === "run") return hard ? L(" a zítra běžíš intervaly.", " and tomorrow you run intervals.") : L(" a zítra běžíš.", " and tomorrow you run.");
