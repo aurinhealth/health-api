@@ -237,6 +237,7 @@ struct DataAgePill: View {
                     .padding(.horizontal, 10)
                     .frame(height: 26)
                     .background(Palette.amberSoft, in: Capsule())
+                    .tapTarget(width: 44, height: 26)
                 }
                 .buttonStyle(.plain)
                 .disabled(model.loading || health.syncing)
@@ -371,6 +372,7 @@ struct TabHeader<Extra: View>: View {
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .alignmentGuide(VerticalAlignment.center) { $0[.firstTextBaseline] - capHeight / 2 }
+                    .accessibilityLabel(Fmt.monthTitleSpoken(date))
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 4)
                 if let back = backToToday {
@@ -380,6 +382,7 @@ struct TabHeader<Extra: View>: View {
                             .lineLimit(1).fixedSize()
                             .padding(.horizontal, 12).frame(height: 36)
                             .contentShape(Capsule())
+                            .tapTarget(width: 44, height: 36)
                     }
                     .buttonStyle(.plain)
                     .chromeGlass(in: Capsule())
@@ -470,6 +473,7 @@ struct HeaderIcon: View {
                 .padding(.horizontal, Self.padding)
                 .frame(height: 42)
                 .contentShape(Rectangle())
+                .tapTarget(width: 44, height: 42)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.tr(label))
@@ -941,6 +945,7 @@ struct ConnectionProblemCard: View {
                                 .font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
                                 .padding(.horizontal, 14).frame(height: 34)
                                 .background(Palette.button, in: Capsule())
+                                .tapTarget(width: 44, height: 34)
                             }
                             .buttonStyle(.plain)
                         }

@@ -195,6 +195,7 @@ struct DayTimeline: View {
                     .font(.footnote.weight(.semibold)).foregroundStyle(Palette.pink)
                     .padding(.horizontal, 12).frame(height: 30)
                     .background(Palette.pinkSoft, in: Capsule())
+                    .tapTarget(width: 44, height: 30)
             }
             .buttonStyle(.plain)
             .disabled(busy)
