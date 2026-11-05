@@ -12,6 +12,8 @@ import SwiftUI
 /// when today came without the night.
 struct ReadinessHome: View {
     let s: WatchSnapshot
+    /// Always On (wrist down): the morning's numbers hide (Today audit 17).
+    @Environment(\.isLuminanceReduced) private var dimmed
     /// Why `s` is not today's numbers; nil when it is.
     var stale: Stale? = nil
     /// Today's snapshot while the night is awaited (its next workout).
@@ -38,7 +40,7 @@ struct ReadinessHome: View {
                 .disabled(stale != nil)
             if stale == .failed {
                 Text(W.tr("Bez spojení. Otevři Aurin v iPhonu a aktualizuj.", "No connection. Open Aurin on your iPhone to update."))
-                    .font(.system(size: 12, weight: .semibold))
+                    .watchFont(12, .semibold)
                     .foregroundStyle(W.amber)
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
@@ -46,7 +48,7 @@ struct ReadinessHome: View {
                     .padding(.top, 2)
             } else if stale != nil {
                 Text(dayLabel)
-                    .font(.system(size: 12, weight: .medium))
+                    .watchFont(12, .medium)
                     .foregroundStyle(W.secondary)
                     .padding(.top, 2)
             }
@@ -87,6 +89,26 @@ struct ReadinessHome: View {
     // MARK: Readiness
 
     private var hero: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            heroNumber
+            // The day's verdict under the number, the iPhone's line (src/day-verdict.js) in short.
+            if let verdict, !dimmed {
+                Text(verdict.text)
+                    .watchFont(14, .semibold)
+                    .foregroundStyle(verdict.color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .opacity(stale == nil ? 1 : 0.45)
+            }
+        }
+        // In from the screen's edge and clear of the alarm button above.
+        .padding(.top, 6)
+        .padding(.leading, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    private var heroNumber: some View {
         // The name beside the number, above the pill: over the number it
         // slid under the alarm button, which hangs over the page.
         HStack(alignment: .lastTextBaseline, spacing: 8) {
@@ -100,21 +122,21 @@ struct ReadinessHome: View {
                 .font(W.serif(46))
                 .lineLimit(1)
             } else {
-                Text(s.readiness.map { String($0) } ?? "–")
+                Text(dimmed ? "––" : s.readiness.map { String($0) } ?? "–")
                     .font(W.serif(52))
                     .foregroundStyle(stale == nil ? W.ink : W.muted)
                     .lineLimit(1)
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 12, weight: .medium))
+                    .watchFont(12, .medium)
                     .foregroundStyle(W.secondary)
-                    .lineLimit(stale == .night ? 2 : 1)
+                    .lineLimit(stale == .night || dimmed ? 2 : 1)
                     .minimumScaleFactor(0.8)
                     .fixedSize(horizontal: false, vertical: true)
-                if let pill {
+                if let pill, verdict == nil, !dimmed {
                     Text(pill.text)
-                        .font(.system(size: 11, weight: .semibold))
+                        .watchFont(12, .semibold)
                         .foregroundStyle(pill.color)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
@@ -123,17 +145,13 @@ struct ReadinessHome: View {
                 }
             }
         }
-        // In from the screen's edge and clear of the alarm button above.
-        .padding(.top, 6)
-        .padding(.leading, 4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
     }
 
     private var learning: Int? { s.learningDays.map { min(14, max(1, $0)) } }
 
     /// Beside the number: what the page waits for, else "Readiness".
     private var title: String {
+        if dimmed { return W.tr("Zvedni zápěstí", "Raise your wrist to see") }
         switch stale {
         case .loading: W.tr("Načítám dnešek…", "Getting today…")
         case .night: W.tr("Čekám na spánek z noci", "Waiting for last night's sleep")
@@ -147,7 +165,24 @@ struct ReadinessHome: View {
         return s.date == yesterday ? W.tr("Včera", "Yesterday") : W.dayName(s.date).capitalized
     }
 
-    /// The iPhone's words for the zone (TodayView's pill); while readiness
+    /// The day's verdict in at most 24 characters (Today audit 17), coloured
+    /// as the iPhone's: rest red, no intensity never green.
+    private var verdict: (text: String, color: Color)? {
+        guard s.readiness != nil, let key = s.verdict else { return nil }
+        let text: String? = switch key {
+        case "hard": W.tr("Den na tvrdý trénink", "Ready for a hard day")
+        case "steady": W.tr("Dnes s mírou", "Keep it steady")
+        case "easy": W.tr("Dnes v klidu", "Take it easy")
+        case "legs": W.tr("Dej nohám pauzu", "Give your legs a break")
+        case "no_intensity": W.tr("Dnes bez intenzity", "No intensity today")
+        case "rest": W.tr("Dnes odpočinek", "Rest today")
+        default: nil
+        }
+        let color = key == "rest" ? W.red : key == "no_intensity" && s.zone == "green" ? W.amber : W.zoneColor(s.zone)
+        return text.map { ($0, color) }
+    }
+
+    /// From an older iPhone without the verdict: the zone's words (TodayView's pill); while readiness
     /// learns a new athlete's normal, "učím se".
     private var pill: (text: String, color: Color)? {
         if s.readiness == nil, learning != nil { return (W.tr("učím se", "learning"), W.amber) }
@@ -171,8 +206,8 @@ struct ReadinessHome: View {
 
     private func todayRow(text: String, symbol: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
-            Image(systemName: symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(W.amber)
-            Text(text).font(.system(size: 13, weight: .semibold)).foregroundStyle(W.ink)
+            Image(systemName: symbol).watchFont(12, .semibold).foregroundStyle(W.amber)
+            Text(text).watchFont(13, .semibold).foregroundStyle(W.ink)
                 .lineLimit(2).minimumScaleFactor(0.8)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -213,7 +248,7 @@ struct ReadinessHome: View {
 
     private var gauges: some View {
         HStack(spacing: 0) {
-            ForEach(Array([sleep, strain, hrv].enumerated()), id: \.offset) { index, gauge in
+            ForEach(Array([sleep, strain, hrv].map(shown).enumerated()), id: \.offset) { index, gauge in
                 if index > 0 { Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1) }
                 NavigationLink(value: gauge.page) { cell(gauge) }
                     .buttonStyle(.plain)
@@ -228,10 +263,10 @@ struct ReadinessHome: View {
 
     private func cell(_ g: Gauge) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(g.title).font(.system(size: 11, weight: .medium)).foregroundStyle(W.muted).lineLimit(1)
+            Text(g.title).watchFont(12, .medium).foregroundStyle(W.muted).lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text(g.value).font(W.serif(19)).foregroundStyle(W.ink)
-                if let unit = g.unit, g.value != "–" { Text(unit).font(.system(size: 10)).foregroundStyle(W.muted) }
+                if let unit = g.unit, g.value != "–" { Text(unit).watchFont(12).foregroundStyle(W.muted) }
             }
             .lineLimit(1)
             .minimumScaleFactor(0.7)
@@ -239,7 +274,7 @@ struct ReadinessHome: View {
                 WatchRangeBar(value: bar.value, low: bar.low, high: bar.high, color: g.color).padding(.vertical, 2)
             }
             Text(g.note ?? " ")
-                .font(.system(size: 10, weight: .semibold))
+                .watchFont(12, .semibold)
                 .foregroundStyle(g.color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -248,6 +283,18 @@ struct ReadinessHome: View {
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+    }
+
+    /// Always On: the name stays, the number, bar and note hide.
+    private func shown(_ g: Gauge) -> Gauge {
+        guard dimmed else { return g }
+        var g = g
+        g.value = "––"
+        g.unit = nil
+        g.bar = nil
+        g.note = nil
+        g.color = W.muted
+        return g
     }
 
     /// The night against its need: the band is half an hour either side (TodayView).
@@ -282,9 +329,9 @@ struct ReadinessHome: View {
         guard let value = s.hrv?.value, let low = s.hrv?.low, let high = s.hrv?.high, high > low else { return g }
         g.bar = (value, low, high)
         switch WatchRangeBar.side(value, low, high) {
-        case 1: g.note = W.tr("nad", "high")
-        case -1: g.note = W.tr("pod", "low"); g.color = W.amber
-        default: g.note = W.tr("v normálu", "normal")
+        case 1: g.note = W.tr("nad", "above")
+        case -1: g.note = W.tr("pod", "below"); g.color = W.amber
+        default: g.note = W.tr("v rozmezí", "usual")
         }
         return g
     }

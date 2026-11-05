@@ -16,6 +16,9 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
     /// A new athlete's days of baseline so far (1–14) while readiness has no
     /// number yet (TodaySnapshot.Readiness.learningDays).
     var learningDays: Int? = nil
+    /// What to do today, a key of src/day-verdict.js ("hard", "steady",
+    /// "easy", "legs", "no_intensity", "rest"); nil from an older iPhone.
+    var verdict: String? = nil
     /// Today's summary from the server (src/app-today.js), in the app's language.
     var headline: String?
     var summary: String?

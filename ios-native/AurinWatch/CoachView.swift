@@ -40,7 +40,7 @@ struct CoachView: View {
                             ForEach(ideas, id: \.self) { idea in
                                 Button { coach.ask(idea, view: view) } label: {
                                     Text(idea)
-                                        .font(.system(size: 13))
+                                        .watchFont(13)
                                         .foregroundStyle(W.ink)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                         .padding(.horizontal, 10)
@@ -70,12 +70,12 @@ struct CoachView: View {
         TextFieldLink(prompt: Text(W.tr("Zeptej se kouče", "Ask the coach"))) {
             VStack(spacing: 4) {
                 Image(systemName: "mic.fill")
-                    .font(.system(size: 24, weight: .semibold))
+                    .watchFont(24, .semibold)
                     .foregroundStyle(.black)
                     .frame(width: 58, height: 58)
                     .background(W.amber, in: Circle())
                 Text(coach.turns.isEmpty ? W.tr("Zeptej se kouče", "Ask the coach") : W.tr("Další otázka", "Ask again"))
-                    .font(.system(size: 12))
+                    .watchFont(12)
                     .foregroundStyle(W.muted)
             }
             .frame(maxWidth: .infinity)
@@ -96,7 +96,7 @@ private struct TurnView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(turn.question)
-                .font(.system(size: 12))
+                .watchFont(12)
                 .foregroundStyle(W.muted)
             if let answer = turn.answer {
                 Text(answer)
@@ -105,13 +105,13 @@ private struct TurnView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if turn.proposal {
                     Label(W.tr("Návrh potvrdíš v iPhonu u kouče.", "Confirm the proposal on your iPhone."), systemImage: "iphone")
-                        .font(.system(size: 11))
+                        .watchFont(12)
                         .foregroundStyle(W.secondary)
                 }
                 if !turn.failed {
                     Button { speaker.read(answer) } label: {
                         Label(W.tr("Přečíst", "Read aloud"), systemImage: "speaker.wave.2.fill")
-                            .font(.system(size: 13, weight: .medium))
+                            .watchFont(13, .medium)
                     }
                     .tint(W.amber)
                 }

@@ -150,7 +150,7 @@ struct GymPartView: View {
                             Text(timerInterval: started...Date.distantFuture, countsDown: false)
                                 .font(W.serif(46)).foregroundStyle(W.ink).monospacedDigit()
                                 .lineLimit(1).minimumScaleFactor(0.6)
-                            Text(W.tr("běží", "running")).font(.system(size: 11)).foregroundStyle(W.secondary)
+                            Text(W.tr("běží", "running")).watchFont(12).foregroundStyle(W.secondary)
                         }
                         .frame(maxWidth: .infinity)
                         primary(W.tr("Stop", "Stop")) { stopCardio(at: Date()) }
@@ -162,7 +162,7 @@ struct GymPartView: View {
                         Text(run.minutes > 0 ? "\(run.minutes) min" : W.tr("Bez limitu", "No limit"))
                             .font(W.serif(32)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.6)
                         Text(W.tr("otoč korunkou pro čas", "turn the crown to set a time"))
-                            .font(.system(size: 10)).foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
+                            .watchFont(12).foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
                     }
                     .frame(maxWidth: .infinity)
                     .focusable(true)
@@ -180,7 +180,7 @@ struct GymPartView: View {
                         WKInterfaceDevice.current().play(.start)
                     }
                     Button(W.tr("Přeskočit", "Skip")) { finish(done: false) }
-                        .font(.system(size: 13, weight: .semibold))
+                        .watchFont(13, .semibold)
                         .buttonStyle(.bordered)
                 }
             }
@@ -204,7 +204,7 @@ struct GymPartView: View {
                         run.minutes = minutes
                     } label: {
                         Text(minutes == 0 ? W.tr("Bez limitu", "No limit") : (minutes == list.last ? "\(minutes) min" : "\(minutes)"))
-                            .font(.system(size: 12, weight: .semibold))
+                            .watchFont(12, .semibold)
                             .foregroundStyle(on ? .black : W.ink)
                             .padding(.horizontal, 9)
                             .frame(height: 26)
@@ -287,8 +287,8 @@ struct GymPartView: View {
 
     private func header(_ label: String, _ title: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(label).font(.system(size: 11, weight: .semibold)).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.7)
-            Text(verbatim: title).font(.system(size: 16, weight: .semibold)).foregroundStyle(W.ink)
+            Text(label).watchFont(12, .semibold).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.7)
+            Text(verbatim: title).watchFont(16, .semibold).foregroundStyle(W.ink)
                 .lineLimit(1).minimumScaleFactor(0.7)
         }
     }
@@ -302,7 +302,7 @@ struct GymPartView: View {
                 .animation(.linear(duration: 1), value: left)
             VStack(spacing: 0) {
                 Text(text).font(W.serif(22)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.6)
-                Text(caption).font(.system(size: 9)).foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
+                Text(caption).watchFont(12).foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
             }
             .padding(.horizontal, 6)
         }
@@ -311,7 +311,7 @@ struct GymPartView: View {
 
     private func primary(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
+            Text(title).watchFont(15, .semibold).foregroundStyle(.black)
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity).frame(height: 32)
                 .background(W.ink, in: Capsule())
@@ -322,7 +322,7 @@ struct GymPartView: View {
 
     private func secondary(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(W.ink)
+            Text(title).watchFont(14, .semibold).foregroundStyle(W.ink)
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity).frame(height: 32)
                 .background(W.tile, in: Capsule())
@@ -335,7 +335,7 @@ struct GymPartView: View {
     private var liveCells: some View {
         HStack(spacing: 5) {
             VStack(alignment: .leading, spacing: 0) {
-                Text(W.tr("Čas", "Time")).font(.system(size: 10)).foregroundStyle(W.secondary)
+                Text(W.tr("Čas", "Time")).watchFont(12).foregroundStyle(W.secondary)
                 Group {
                     if let start = workout.clockStart {
                         Text(timerInterval: start...Date.distantFuture, countsDown: false)
@@ -343,17 +343,17 @@ struct GymPartView: View {
                         Text("0:00")
                     }
                 }
-                .font(.system(size: 15, weight: .semibold).monospacedDigit()).foregroundStyle(W.ink)
+                .watchFont(15, .semibold).monospacedDigit().foregroundStyle(W.ink)
                 .lineLimit(1).minimumScaleFactor(0.7)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 7).padding(.vertical, 3)
             .background(W.tile, in: RoundedRectangle(cornerRadius: 10))
             VStack(alignment: .leading, spacing: 0) {
-                Text(W.tr("Tep", "Heart")).font(.system(size: 10)).foregroundStyle(W.secondary)
+                Text(W.tr("Tep", "Heart")).watchFont(12).foregroundStyle(W.secondary)
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text(workout.heartRate.map { W.number($0) } ?? "–").font(.system(size: 15, weight: .semibold)).foregroundStyle(W.pink)
-                    if workout.heartRate != nil { Text("bpm").font(.system(size: 9)).foregroundStyle(W.secondary) }
+                    Text(workout.heartRate.map { W.number($0) } ?? "–").watchFont(15, .semibold).foregroundStyle(W.pink)
+                    if workout.heartRate != nil { Text("bpm").watchFont(12).foregroundStyle(W.secondary) }
                 }
                 .lineLimit(1).minimumScaleFactor(0.7)
             }

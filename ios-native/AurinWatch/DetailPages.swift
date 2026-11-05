@@ -18,7 +18,7 @@ struct DetailPage<RingContent: View>: View {
                 .minimumScaleFactor(0.7)
                 .padding(.top, 4)
             Text(note)
-                .font(.system(size: 12))
+                .watchFont(12)
                 .foregroundStyle(W.secondary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -66,14 +66,14 @@ struct MetricDetail: View {
 
     private var title: String {
         guard let value = m?.value, let low = m?.low, let high = m?.high else { return metric.name }
-        if value > high { return metric == .restingHR ? W.tr("Vyšší než obvykle", "Higher than usual") : W.tr("Nad normálem", "Above normal") }
-        if value < low { return metric == .restingHR ? W.tr("Nižší než obvykle", "Lower than usual") : W.tr("Pod normálem", "Below normal") }
-        return W.tr("Normální", "Normal")
+        if value > high { return metric == .restingHR ? W.tr("Vyšší než obvykle", "Higher than usual") : W.tr("Nad obvyklým rozmezím", "Above your usual range") }
+        if value < low { return metric == .restingHR ? W.tr("Nižší než obvykle", "Lower than usual") : W.tr("Pod obvyklým rozmezím", "Below your usual range") }
+        return W.tr("V obvyklém rozmezí", "In your usual range")
     }
 
     private var note: String {
-        guard let low = m?.low, let high = m?.high else { return W.tr("Normál se ještě počítá.", "Your normal is still being worked out.") }
-        let normal = W.tr("tvůj normál", "your normal") + " " + W.number(low) + "–" + W.number(high)
+        guard let low = m?.low, let high = m?.high else { return W.tr("Obvyklé rozmezí se ještě počítá.", "Your usual range is still being worked out.") }
+        let normal = W.tr("obvyklé rozmezí", "usual range") + " " + W.number(low) + "–" + W.number(high)
         if metric == .hrv, let value = m?.value {
             return W.change((value - (low + high) / 2).rounded()) + " ms · " + normal
         }
@@ -234,6 +234,6 @@ struct WhyDetail: View {
         guard let value = m?.value, let low = m?.low, let high = m?.high else { return nil }
         if value > high { return W.tr(czechHigh, "high") }
         if value < low { return W.tr(czechLow, "low") }
-        return W.tr("normál", "normal")
+        return W.tr("v rozmezí", "usual")
     }
 }

@@ -41,11 +41,11 @@ struct CoachNotificationView: View {
             if let readiness = today?.readiness {
                 Ring(fraction: Double(readiness) / 100, color: W.zoneColor(today?.zone), size: 78) {
                     Text("\(readiness)").font(W.serif(30)).foregroundStyle(W.ink)
-                    Text(W.tr("připravenost", "readiness")).font(.system(size: 8)).foregroundStyle(W.muted)
+                    Text(W.tr("připravenost", "readiness")).watchFont(12).foregroundStyle(W.muted)
                 }
             } else {
                 Image(systemName: "bubble.left.and.text.bubble.right")
-                    .font(.system(size: 24))
+                    .watchFont(24)
                     .foregroundStyle(W.amber)
                     .frame(height: 40)
             }

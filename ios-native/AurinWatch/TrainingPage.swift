@@ -30,12 +30,12 @@ struct TrainingPage: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     Text(W.tr("Trénink", "Training"))
-                        .font(.system(size: 12, weight: .semibold))
+                        .watchFont(12, .semibold)
                         .foregroundStyle(W.amber)
                     Spacer()
                     if day != today {
                         Text(day == tomorrow ? W.tr("ZÍTRA", "TOMORROW") : W.dayName(day).uppercased())
-                            .font(.system(size: 10, weight: .bold))
+                            .watchFont(12, .bold)
                             .foregroundStyle(.black)
                             .padding(.horizontal, 7).padding(.vertical, 2)
                             .background(W.amber, in: Capsule())
@@ -105,10 +105,10 @@ struct TrainingPage: View {
         let settings = watch.settings
         return VStack(alignment: .leading, spacing: 5) {
             Text(W.tr("Posilovna není v plánu", "No gym planned"))
-                .font(.system(size: 15, weight: .semibold)).foregroundStyle(W.ink)
+                .watchFont(15, .semibold).foregroundStyle(W.ink)
             if let last = settings.lastGym {
                 Text(W.tr("Minule: ", "Last: ") + W.dayName(last) + (settings.lastGymExercises.map { " · " + Self.exercises($0) } ?? ""))
-                    .font(.system(size: 12)).foregroundStyle(W.secondary)
+                    .watchFont(12).foregroundStyle(W.secondary)
             }
             if store.starting {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 6)
@@ -127,7 +127,7 @@ struct TrainingPage: View {
         Button {
             Task { if await store.start(kind) { running = true } }
         } label: {
-            Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(prominent ? .black : W.ink)
+            Text(title).watchFont(15, .semibold).foregroundStyle(prominent ? .black : W.ink)
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
         }
@@ -223,20 +223,20 @@ struct TrainingPage: View {
             }
             ForEach(Array(done.dropFirst().enumerated()), id: \.offset) { _, other in
                 Text(Self.name(other) + (other.minutes.map { " · \($0) min" } ?? ""))
-                    .font(.system(size: 12)).foregroundStyle(W.secondary).padding(.top, 2)
+                    .watchFont(12).foregroundStyle(W.secondary).padding(.top, 2)
             }
         } else if day == today, let s = watch.snapshot, s.date != today {
             // Yesterday's Today: no word on today's plan yet, so not "Rest day".
             Text(W.tr("Čekám na dnešek", "Waiting for today"))
-                .font(.system(size: 17, weight: .semibold)).foregroundStyle(W.ink).padding(.top, 4)
+                .watchFont(17, .semibold).foregroundStyle(W.ink).padding(.top, 4)
             Text(W.tr("Dnešní plán přijde z iPhonu nebo serveru.", "Today's plan comes from your iPhone or the server."))
-                .font(.system(size: 12)).foregroundStyle(W.secondary)
+                .watchFont(12).foregroundStyle(W.secondary)
         } else {
             Text(day == today ? W.tr("Dnes volno", "Rest day") : W.tr("Nic naplánováno", "Nothing planned"))
-                .font(.system(size: 17, weight: .semibold)).foregroundStyle(W.ink).padding(.top, 4)
+                .watchFont(17, .semibold).foregroundStyle(W.ink).padding(.top, 4)
             if sessions.isEmpty, watch.snapshot == nil || store.failed {
                 Text(W.tr("Trénink hodinky dostanou z iPhonu.", "Your watch gets training from your iPhone."))
-                    .font(.system(size: 12)).foregroundStyle(W.secondary)
+                    .watchFont(12).foregroundStyle(W.secondary)
             }
         }
     }
@@ -245,18 +245,18 @@ struct TrainingPage: View {
     /// or where a ride or run without steps starts.
     @ViewBuilder private func single(_ main: WatchSnapshot.Session, day: String, gym: WatchGym?) -> some View {
         header(main)
-        Text(subtitle(main, day: day)).font(.system(size: 12)).foregroundStyle(W.secondary).padding(.top, 1)
+        Text(subtitle(main, day: day)).watchFont(12).foregroundStyle(W.secondary).padding(.top, 1)
         if main.sport == "strength", let gym, !gym.exercises.isEmpty {
             exercises(gym)
             if day == today {
                 if gym.allDone {
                     Label(W.tr("Hotovo", "Done"), systemImage: "checkmark")
-                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(W.green)
+                        .watchFont(15, .semibold).foregroundStyle(W.green)
                         .frame(maxWidth: .infinity).padding(.top, 8)
                 } else {
                     Button { running = true } label: {
                         Text(gym.started ? W.tr("Pokračovat", "Continue") : W.tr("Začít", "Start"))
-                            .font(.system(size: 16, weight: .semibold)).foregroundStyle(.black)
+                            .watchFont(16, .semibold).foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
@@ -270,7 +270,7 @@ struct TrainingPage: View {
             ProgressView().frame(maxWidth: .infinity).padding(.top, 8)
         } else if main.sport != "strength", day == today {
             Text(W.tr("Spustíš v aplikaci Cvičení.", "Start it in the Workout app."))
-                .font(.system(size: 12)).foregroundStyle(W.muted).padding(.top, 6)
+                .watchFont(12).foregroundStyle(W.muted).padding(.top, 6)
         }
     }
 
@@ -302,15 +302,15 @@ struct TrainingPage: View {
     /// Another of the day's workouts, folded to one line: tap to pick it.
     private func foldedCard(_ s: WatchSnapshot.Session) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: W.sportSymbol(s.sport)).font(.system(size: 13)).foregroundStyle(W.amber)
+            Image(systemName: W.sportSymbol(s.sport)).watchFont(13).foregroundStyle(W.amber)
             VStack(alignment: .leading, spacing: 0) {
-                Text(Self.name(s)).font(.system(size: 13, weight: .semibold)).foregroundStyle(W.ink).lineLimit(1)
+                Text(Self.name(s)).watchFont(13, .semibold).foregroundStyle(W.ink).lineLimit(1)
                 if let after = afterText(s) {
-                    Text(after).font(.system(size: 10, weight: .semibold)).foregroundStyle(W.amber).lineLimit(1)
+                    Text(after).watchFont(12, .semibold).foregroundStyle(W.amber).lineLimit(1)
                 }
             }
             Spacer(minLength: 4)
-            if let minutes = s.minutes { Text("\(minutes) min").font(.system(size: 11)).foregroundStyle(W.muted) }
+            if let minutes = s.minutes { Text("\(minutes) min").watchFont(12).foregroundStyle(W.muted) }
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -320,13 +320,13 @@ struct TrainingPage: View {
 
     private func header(_ s: WatchSnapshot.Session) -> some View {
         HStack(spacing: 5) {
-            Image(systemName: W.sportSymbol(s.sport)).font(.system(size: 13)).foregroundStyle(W.amber)
+            Image(systemName: W.sportSymbol(s.sport)).watchFont(13).foregroundStyle(W.amber)
             // One line when the name fits, if need be a little smaller
             // ("Silový trénink, celé tělo"), else two lines.
             ViewThatFits(in: .horizontal) {
-                Text(Self.name(s)).font(.system(size: 16, weight: .semibold)).lineLimit(1)
-                Text(Self.name(s)).font(.system(size: 14, weight: .semibold)).lineLimit(1)
-                Text(Self.name(s)).font(.system(size: 16, weight: .semibold))
+                Text(Self.name(s)).watchFont(16, .semibold).lineLimit(1)
+                Text(Self.name(s)).watchFont(14, .semibold).lineLimit(1)
+                Text(Self.name(s)).watchFont(16, .semibold)
                     .lineLimit(2).minimumScaleFactor(0.7)
             }
             .foregroundStyle(W.ink)
@@ -340,24 +340,24 @@ struct TrainingPage: View {
         let plan = s.eventId.flatMap { plans.plans[$0] }
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(subtitle(s, day: s.date, length: false)).font(.system(size: 11, weight: .semibold)).foregroundStyle(W.amber)
+                Text(subtitle(s, day: s.date, length: false)).watchFont(12, .semibold).foregroundStyle(W.amber)
                 Spacer(minLength: 4)
-                if let minutes = s.minutes { Text("\(minutes) min").font(.system(size: 11)).foregroundStyle(W.muted) }
+                if let minutes = s.minutes { Text("\(minutes) min").watchFont(12).foregroundStyle(W.muted) }
             }
             HStack(spacing: 6) {
-                Image(systemName: W.sportSymbol(s.sport)).font(.system(size: 15)).foregroundStyle(W.amber)
-                Text(Self.name(s)).font(.system(size: 17, weight: .semibold)).foregroundStyle(W.ink)
+                Image(systemName: W.sportSymbol(s.sport)).watchFont(15).foregroundStyle(W.amber)
+                Text(Self.name(s)).watchFont(17, .semibold).foregroundStyle(W.ink)
                     .lineLimit(2).minimumScaleFactor(0.75)
             }
             .padding(.top, 3)
             if let leg = nextLeg(s) {
                 HStack(spacing: 4) {
                     Image(systemName: W.sportSymbol(s.sport))
-                    Image(systemName: "arrow.right").font(.system(size: 9, weight: .bold)).foregroundStyle(W.muted)
+                    Image(systemName: "arrow.right").watchFont(12, .bold).foregroundStyle(W.muted)
                     Image(systemName: W.sportSymbol(leg.sport))
-                    Text(W.tr("hned po sobě", "back to back")).font(.system(size: 10, weight: .semibold)).foregroundStyle(W.muted)
+                    Text(W.tr("hned po sobě", "back to back")).watchFont(12, .semibold).foregroundStyle(W.muted)
                 }
-                .font(.system(size: 11))
+                .watchFont(12)
                 .foregroundStyle(W.amber)
                 .padding(.top, 3)
             }
@@ -375,7 +375,7 @@ struct TrainingPage: View {
                     Task { await start(s, plan: plan) }
                 } label: {
                     Label(W.tr("Otevřít ve Cvičení", "Open in Workout"), systemImage: "play.fill")
-                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(.black)
+                        .watchFont(14, .semibold).foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -400,14 +400,14 @@ struct TrainingPage: View {
         NavigationLink(value: race) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Text(subtitle(race.first, day: race.first.date, length: false)).font(.system(size: 11, weight: .semibold)).foregroundStyle(W.amber)
+                    Text(subtitle(race.first, day: race.first.date, length: false)).watchFont(12, .semibold).foregroundStyle(W.amber)
                     Spacer(minLength: 4)
-                    if let minutes = race.minutes { Text(RaceDay.length(minutes)).font(.system(size: 11)).foregroundStyle(W.muted) }
+                    if let minutes = race.minutes { Text(RaceDay.length(minutes)).watchFont(12).foregroundStyle(W.muted) }
                 }
                 HStack(spacing: 6) {
                     Image(systemName: race.legs.count == 1 ? W.sportSymbol(race.first.sport) : "flag.fill")
-                        .font(.system(size: 14)).foregroundStyle(W.amber)
-                    Text(race.name).font(.system(size: 17, weight: .semibold)).foregroundStyle(W.ink)
+                        .watchFont(14).foregroundStyle(W.amber)
+                    Text(race.name).watchFont(17, .semibold).foregroundStyle(W.ink)
                         .lineLimit(2).minimumScaleFactor(0.75)
                 }
                 .padding(.top, 3)
@@ -415,12 +415,12 @@ struct TrainingPage: View {
                     ForEach(Array(race.legs.enumerated()), id: \.offset) { index, leg in
                         if index > 0 { Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1) }
                         HStack(spacing: 7) {
-                            Image(systemName: W.sportSymbol(leg.sport)).font(.system(size: 12))
+                            Image(systemName: W.sportSymbol(leg.sport)).watchFont(12)
                                 .foregroundStyle(RaceDay.color(leg.sport)).frame(width: 16)
                             Text(RaceDay.distance(leg) ?? RaceDay.sportName(leg.sport))
-                                .font(.system(size: 13, weight: .medium)).foregroundStyle(W.ink).lineLimit(1)
+                                .watchFont(13, .medium).foregroundStyle(W.ink).lineLimit(1)
                             Spacer(minLength: 4)
-                            if let minutes = leg.minutes { Text(RaceDay.length(minutes)).font(.system(size: 12)).foregroundStyle(W.muted) }
+                            if let minutes = leg.minutes { Text(RaceDay.length(minutes)).watchFont(12).foregroundStyle(W.muted) }
                         }
                         .padding(.vertical, 5)
                     }
@@ -430,7 +430,7 @@ struct TrainingPage: View {
                 if race.legs.count == 1, let target = RaceDay.target(race.first.eventId.flatMap { plans.plans[$0] }, sport: race.first.sport) {
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(target.value).font(W.news(22)).foregroundStyle(W.ink)
-                        Text(target.unit).font(.system(size: 11)).foregroundStyle(W.muted)
+                        Text(target.unit).watchFont(12).foregroundStyle(W.muted)
                     }
                 }
                 if canStart(race) {
@@ -438,7 +438,7 @@ struct TrainingPage: View {
                         Task { await start(race) }
                     } label: {
                         Label(W.tr("Otevřít ve Cvičení", "Open in Workout"), systemImage: "play.fill")
-                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(.black)
+                            .watchFont(14, .semibold).foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
@@ -553,7 +553,7 @@ struct TrainingPage: View {
                     .foregroundStyle(W.muted)
             }
         }
-        .font(.system(size: 12))
+        .watchFont(12)
         .foregroundStyle(W.secondary)
         .padding(.top, 4)
     }
@@ -578,7 +578,7 @@ struct WeekRow: View {
                             .frame(width: 18, height: 18)
                             .padding(2)
                             .overlay { Circle().stroke(day == shown ? W.ink : .clear, lineWidth: 1.5) }
-                        Text(W.dayLetter(day)).font(.system(size: 11, weight: .semibold))
+                        Text(W.dayLetter(day)).watchFont(12, .semibold)
                             .foregroundStyle(day == today ? W.ink : W.muted)
                     }
                     .frame(maxWidth: .infinity)
@@ -738,7 +738,7 @@ enum GymText {
     /// The set's planned letter in a dashed box, as the iPhone's table shows a plan's letter.
     static func intensityPill(_ letter: String) -> some View {
         let color = intensityColor(letter)
-        return Text(letter).font(.system(size: 10, weight: .bold)).foregroundStyle(color)
+        return Text(letter).watchFont(12, .bold).foregroundStyle(color)
             .lineLimit(1).fixedSize()
             .padding(.horizontal, 4)
             .frame(minWidth: 18, minHeight: 18)
