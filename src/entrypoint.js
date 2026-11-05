@@ -18,7 +18,7 @@ import { connectionStatus } from "./connections.js";
 import { saveSourcePriority } from "./source-priority.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, backfillConnectionAccounts } from "./connection-secrets.js";
 import { withIntervalsSleep, intervalsWellness } from './intervals-sleep.js';
-import { cached, cachedOnly, bumpCacheVersion, FOOD_WRITE, UNCHANGED_HEADER, closedDay, CLOSED_DAY_TTL_SECONDS } from './api-cache.js';
+import { cached, cachedOnly, forgetCached, bumpCacheVersion, FOOD_WRITE, UNCHANGED_HEADER, closedDay, CLOSED_DAY_TTL_SECONDS } from './api-cache.js';
 import { manualPairs } from './manual-pairs.js';
 import { activityDetail, rideIntervals } from './activity-detail.js';
 import { watchDetail, withWatch } from './watch-detail.js';
@@ -2974,6 +2974,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         // and the Food sentence is written again at once, as after the user's own meal.
         if(result.meaningful){await bumpCacheVersion(env.DB);await markScreenTextsStale(env).catch(()=>{});}
         else if(result.foodChanged){await bumpCacheVersion(env.DB,{food:true});await markScreenTextsStale(env).catch(()=>{});}
+        // Today's steps and heart rate on Today and the widgets: the day's sums now, not in 2 minutes.
+        if(result.changed&&!result.meaningful)await forgetCached(env,'google-dashboard:'+localToday());
         // Apple Watch workouts pair with Intervals.icu activities like Google's do.
         const from=Date.parse(body.windows?.exercise?.from||'');
         if(result.workouts&&Number.isFinite(from))ctx.waitUntil(matchActivities(env,{days:Math.min(400,Math.ceil((Date.now()-from)/86400000)+1)}).catch(error=>console.error('Activity matching failed',error.message)));
