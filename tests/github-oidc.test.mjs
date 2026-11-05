@@ -9,7 +9,7 @@ const jwkOf = async (pair, kid) => ({ ...(await crypto.subtle.exportKey("jwk", p
 async function token(pair, kid, overrides = {}) {
   const claims = {
     iss: "https://token.actions.githubusercontent.com", aud: "health-strength", repository: "aurinhealth/health-api", repository_id: "1371310425", repository_owner_id: "329509326",
-    ref: "refs/heads/main", workflow_ref: "aurinhealth/health-api/.github/workflows/deploy-worker.yml@refs/heads/main", event_name: "push", actor: "aurinhealth",
+    ref: "refs/heads/main", workflow_ref: "aurinhealth/health-api/.github/workflows/deploy-worker.yml@refs/heads/main", event_name: "workflow_dispatch", actor: "aurinhealth", environment: "production",
     exp: Math.floor(Date.now() / 1000) + 300, ...overrides
   };
   const data = b64({ alg: "RS256", kid }) + "." + b64(claims);
@@ -43,6 +43,9 @@ test("the claims of another repository, workflow or actor are refused", async ()
   // The nightly gym workflow is gone: neither it nor a scheduled run gets in.
   await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { workflow_ref: "aurinhealth/health-api/.github/workflows/health-strength.yml@refs/heads/main", event_name: "schedule" })), fetchImpl), /workflow/);
   await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { event_name: "schedule" })), fetchImpl), /event/);
+  // A staging deploy job runs the same workflow from main, but in its own environment.
+  await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { environment: "staging" })), fetchImpl), /environment/);
+  await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { environment: undefined })), fetchImpl), /environment/);
   await assert.rejects(verifyGitHubActionsToken(request(await token(second, "gh-1")), fetchImpl), /signature/);
 });
 

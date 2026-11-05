@@ -16,7 +16,7 @@ const jwk = { ...(await crypto.subtle.exportKey("jwk", keys.publicKey)), kid: "g
 async function deployToken() {
   const claims = {
     iss: "https://token.actions.githubusercontent.com", aud: "health-strength", repository: "aurinhealth/health-api", repository_id: "1371310425", repository_owner_id: "329509326",
-    ref: "refs/heads/main", workflow_ref: "aurinhealth/health-api/.github/workflows/deploy-worker.yml@refs/heads/main", event_name: "push", actor: "aurinhealth",
+    ref: "refs/heads/main", workflow_ref: "aurinhealth/health-api/.github/workflows/deploy-worker.yml@refs/heads/main", event_name: "workflow_dispatch", actor: "aurinhealth", environment: "production",
     exp: Math.floor(Date.now() / 1000) + 300
   };
   const data = b64({ alg: "RS256", kid: "gh-test" }) + "." + b64(claims);
