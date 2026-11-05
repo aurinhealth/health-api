@@ -456,6 +456,8 @@ final class SnapshotTests: XCTestCase {
                 .padding(24).padding(.top, 40).environment(\.locale, L10n.locale)
         }
         try render("setup-goal-en", height: 844) { SetupGoalPage(focus: .constant(focus)).padding(24).padding(.top, 40).environment(\.locale, L10n.locale) }
+        // The steps over the pages (point 6): the goal is page 4 of 6.
+        try render("setup-steps-en", height: 80) { SetupSteps(done: 4, total: 6).padding(24) }
         try render("setup-time-en", height: 844) {
             SetupTimePage(minutes: .constant([60, 0, 75, 0, 45, 270, 120]), loading: false, lifts: true) {}
                 .padding(24).padding(.top, 40).environment(\.locale, L10n.locale)
@@ -866,6 +868,8 @@ final class SnapshotTests: XCTestCase {
         try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore()) }
         try render("paywall-plans-trial", height: 844) { PaywallView(close: {}, frozenTime: 5.5, step: 1, store: ProStore(trialEligible: true)) }
         try render("paywall-free-week", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true)) }
+        // The end of the first setup (point 7): no way back, "Teď ne" under the button.
+        try render("paywall-setup-end", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true), notNow: true) }
         // "View more plans" (variant 8c): where the year can be paid monthly (CZ) and where it can't (US).
         let czech = ProOffer.plans(yearly: "1 490 Kč", monthly: "199 Kč", perMonth: "124 Kč",
                                    commitment: ProStore.Commitment(monthly: "149 Kč", total: "1 788 Kč"), trial: true)
