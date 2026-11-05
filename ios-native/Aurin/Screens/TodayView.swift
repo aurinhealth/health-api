@@ -585,12 +585,23 @@ struct ReadinessHero: View {
                         Pill(text: pill.text, foreground: pill.fg, background: pill.bg)
                     }
                 }
+                if readiness.flags?.contains("short_night") == true {
+                    Text("Krátká noc: méně než 3 hodiny spánku.")
+                        .font(Typo.small).foregroundStyle(Palette.muted)
+                }
                 if readiness.provisional == true {
                     Text(provisionalLine)
                         .font(Typo.small).foregroundStyle(Palette.muted)
                 }
             } else if let days = readiness.learningDays {
                 ReadinessLearning(days: days, date: date)
+            } else if readiness.flags?.contains("no_night") == true && !isToday {
+                Text("Bez zaznamenané noci")
+                    .font(Typo.sentence(34, relativeTo: .largeTitle))
+                    .foregroundStyle(Palette.ink)
+                    .padding(.top, 8)
+                Text("Bez spánku z té noci se připravenost nepočítá. HRV a klidový tep najdeš níže.")
+                    .font(Typo.small).foregroundStyle(Palette.muted)
             } else {
                 Text(nightMissing && isToday ? "Čeká na dnešní noc" : "Zatím bez čísla")
                     .font(Typo.sentence(34, relativeTo: .largeTitle))

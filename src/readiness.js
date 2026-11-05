@@ -18,6 +18,7 @@
 import { mergeWellnessRows, recoveryReadiness, applyCheckin, sleepNeedFor, sleepIndexScore, heartRateLoad, strainScore } from "./recovery-model.js";
 import { sleepSettings } from "./energy-profile.js";
 import { markCyclePhases } from "./cycle-model.js";
+import { localDateTime } from "./user-time.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const shift = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
@@ -36,6 +37,22 @@ export function primaryNights(sessions) {
     if (d && (!best || num(s.durationMin) > num(best.durationMin))) byDay.set(d, s);
   }
   return byDay;
+}
+
+// A night under 3 hours (primaryNights leaves it out): the day's longest sleep
+// of 30 minutes or more that is not a nap and ended before 13:00 local time
+// (or has no times, an Intervals.icu copy). It counts, so a sleepless night
+// never raises the score by leaving the sleep out (Today audit point 5).
+export const SHORT_NIGHT_MIN = 30, FULL_NIGHT_MIN = 180;
+export function shortNight(sessions, date) {
+  let best = null;
+  for (const s of sessions || []) {
+    const minutes = num(s?.durationMin);
+    if (!s || s.nap || !(minutes >= SHORT_NIGHT_MIN && minutes < FULL_NIGHT_MIN) || nightDate(s) !== date) continue;
+    if (s.endTime && localDateTime(s.endTime).slice(11, 16) >= "13:00") continue;
+    if (!best || minutes > num(best.durationMin)) best = s;
+  }
+  return best;
 }
 
 // The wellness rows the readiness reads: Google and Apple days first,
@@ -60,7 +77,8 @@ export function strainOn(rows, date) {
 // sleep need (`need`: need, base, hrv, debt, naps), the night and the rows.
 export function readinessFor({ date, rows = null, google = [], intervals = [], sessions = [], profile = null, checkin = null } = {}) {
   const list = Array.isArray(sessions) ? sessions : [];
-  const live = primaryNights(list).get(date) || null;
+  const nights = primaryNights(list);
+  const live = nights.get(date) || shortNight(list, date);
   const locked = profile?.readinessLocks?.[date] || null;
   const own = Array.isArray(rows) ? rows.filter(r => r && r.id && r.id <= date) : readinessRows(google, intervals, date);
   // The rest of a night locked at a wake-up brings its own night signals
@@ -72,8 +90,26 @@ export function readinessFor({ date, rows = null, google = [], intervals = [], s
   const sleepSet = sleepSettings(profile || {});
   const need = sleepNeedFor({ date, age: num(profile?.age), goal: sleepSet.goal, strain: strainOn(merged, shift(date, -1)), rows: merged, sessions: list });
   const night = lock?.night || live;
-  const body = recoveryReadiness({ rows: merged, date, night, sleepNeed: need.need });
+  const body = withoutNight(recoveryReadiness({ rows: merged, date, night, sleepNeed: need.need }), night, tracksSleep(nights, date));
   return { ...applyCheckin(body, checkin), body, need, night, rows: merged };
+}
+
+// Nights are usually recorded: one in the 14 days before the day.
+const tracksSleep = (nights, date) => [...nights.keys()].some(d => d < date && d >= shift(date, -14));
+
+// The night decides how far the number goes (Today audit point 5, Craven 2022:
+// acute sleep loss costs ~7.5 % performance):
+// - a short night (under 3 h) caps it at the top of yellow, flagged "short_night";
+// - no night while the athlete's nights are usually recorded gives no number,
+//   flagged "no_night": a sleepless night and a watch left on the table look
+//   the same, so HRV and resting heart rate show without a score.
+// Without any recorded nights (no sleep tracking) the score stays as it is.
+const YELLOW_TOP = 66;
+function withoutNight(body, night, tracks) {
+  if (body.score == null) return body;
+  if (!night) return tracks ? { ...body, score: null, zone: null, flags: [...body.flags, "no_night"] } : body;
+  if (!(num(night.durationMin) < FULL_NIGHT_MIN)) return body;
+  return { ...body, score: Math.min(body.score, YELLOW_TOP), zone: body.zone === "green" ? "yellow" : body.zone, flags: [...body.flags, "short_night"] };
 }
 
 // The morning readiness stays all day (Petr, 2026-10-14): Fitbit, Google and

@@ -45,6 +45,8 @@ const DAY_OF = "substr(COALESCE(sample_time,end_time,start_time),1,10)";
 const SLEEP_KEY = `${DAY_OF} || CASE WHEN json_valid(payload_json) THEN CASE WHEN json_extract(payload_json, '$.sleep.metadata.nap') THEN '|nap' ELSE '' END ELSE '' END`;
 const HOUR_OF = 'substr(start_time,1,13)';
 const WINDOW_DAYS = 30;
+// A full night: 3 hours of sleep or more (readiness.js primaryNights).
+const FULL_NIGHT_MIN = 180;
 const addDays = (date, n) => new Date(Date.parse(date + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 const VALID = { night: ['auto', 'ultrahuman', 'whoop', 'apple', 'google'], day: ['auto', 'apple', 'google'] };
 
@@ -158,7 +160,8 @@ export async function resolveSources(db, userId, { part, types, since, now = Dat
   const apply = async (group, keyExpr, partName, homeOf) => {
     const names = group.map(t => `'${t}'`).join(',');
     // Every key with the families that have a row for it, the ones set aside by these rules included.
-    const keys = (await db.prepare(`SELECT ${keyExpr} k, source_family f, MAX(record_role = 'primary') kept, MAX(record_role = 'duplicate') aside FROM health_datapoints WHERE user_id = ? AND data_type IN (${names}) AND source_family IN ${FAMILY_SQL}
+    const keys = (await db.prepare(`SELECT ${keyExpr} k, source_family f, MAX(record_role = 'primary') kept, MAX(record_role = 'duplicate') aside,
+      MAX(COALESCE((julianday(end_time) - julianday(start_time)) * 1440, 0)) mins FROM health_datapoints WHERE user_id = ? AND data_type IN (${names}) AND source_family IN ${FAMILY_SQL}
       AND COALESCE(sample_time,end_time,start_time) >= ? AND (record_role = 'primary' OR (record_role = 'duplicate' AND matched_activity_id IN ${OURS})) GROUP BY 1, 2`).bind(userId, from).all()).results || [];
     const byKey = new Map();
     for (const r of keys) { if (!r.k) continue; if (!byKey.has(r.k)) byKey.set(r.k, new Map()); byKey.get(r.k).set(r.f, r); }
@@ -167,7 +170,15 @@ export async function resolveSources(db, userId, { part, types, since, now = Dat
     for (const [key, families] of byKey) {
       const mine = chosen[partName];
       const needsHome = families.size > 1 && !(mine && families.has(mine) && !off.has(mine));
-      const win = winner(families, mine, needsHome ? homeOf(await loadHistory(), key.slice(0, 10)) : null, off);
+      let win = winner(families, mine, needsHome ? homeOf(await loadHistory(), key.slice(0, 10)) : null, off);
+      // A night the automatic home source cut short (under 3 h, a fragment)
+      // gives way to another device's full night: the longest night counts
+      // (Today audit point 5). Sleep only; the night's HRV and resting heart
+      // rate stay with the home device, so their trend is not mixed.
+      if (needsHome && group[0] === 'sleep' && !key.endsWith('|nap') && Number(families.get(win)?.mins) < FULL_NIGHT_MIN) {
+        const longest = [...families].filter(([f]) => !off.has(f)).sort((a, b) => Number(b[1].mins) - Number(a[1].mins))[0];
+        if (longest && Number(longest[1].mins) >= FULL_NIGHT_MIN) win = longest[0];
+      }
       for (const [f, r] of families) {
         if (f === win) { if (Number(r.aside)) keep.get(f).push(key); }
         else if (Number(r.kept)) drop.get(f).push(key);
