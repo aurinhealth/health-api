@@ -589,6 +589,8 @@ struct MinimizedGym {
     let next: String?
     let startTapped: Bool
     var pending: [GymActivityAction] = []
+    /// The warm-up, cardio or stretching that was on the screen.
+    var part: GymDayPart? = nil
 }
 
 /// The bar over the tab bar while the workout is hidden: its time, the rest

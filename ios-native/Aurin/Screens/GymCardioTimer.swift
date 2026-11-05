@@ -144,6 +144,8 @@ struct CardioTimerView: View {
     let item: GymStretching.Item
     let date: String
     var onDone: () -> Void
+    /// Inside Režim tréninku (not a screen of its own).
+    var inline: Inline? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @AppStorage(GymCardioLog.storageKey) private var logs = ""
@@ -156,20 +158,33 @@ struct CardioTimerView: View {
     /// The countdown's end tones planned on the sound's clock (GymSignals.planRest).
     @State private var planned = false
 
+    struct Inline {
+        /// When it started (back from the bar over the tab bar), else now.
+        var since: Date?
+        /// Runs at once: tapped, not come on after the last set.
+        var autoStart: Bool
+        /// What follows: "Hotovo · další: Dřep" on its stop.
+        var next: String?
+        /// Stopped or skipped: the workout goes on with what follows.
+        var close: () -> Void
+    }
+
     private var isStart: Bool { item.id == "cardio-start" }
     private var total: Int { (minutes + added) * 60 }
     private var end: Date? { started.map { $0.addingTimeInterval(TimeInterval(total)) } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 10) {
-                Spacer()
-                if stopped == nil { GymSignalsMenu() }
-                Button { close() } label: {
-                    Image(systemName: "xmark").scaledFont(16, weight: .semibold, cap: .denseCap).frame(width: 36, height: 36)
+            if inline == nil {
+                HStack(spacing: 10) {
+                    Spacer()
+                    if stopped == nil { GymSignalsMenu() }
+                    Button { close() } label: {
+                        Image(systemName: "xmark").scaledFont(16, weight: .semibold, cap: .denseCap).frame(width: 36, height: 36)
+                    }
+                    .foregroundStyle(Palette.ink)
+                    .accessibilityLabel(L10n.tr("Zavřít"))
                 }
-                .foregroundStyle(Palette.ink)
-                .accessibilityLabel(L10n.tr("Zavřít"))
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text(verbatim: L10n.tr("Kardio") + " · " + L10n.tr(isStart ? "Začátek" : "Konec"))
@@ -200,7 +215,7 @@ struct CardioTimerView: View {
                 if minutes > 0 {
                     SecondaryButton(title: "+5 min") { extend() }
                 }
-                PrimaryButton(title: L10n.tr("Zastavit"), systemImage: "stop.fill") { stop(at: Date()) }
+                PrimaryButton(title: stopTitle, systemImage: "stop.fill") { stop(at: Date()) }
                     .accessibilityHint(Text("Uloží délku a konec kardia"))
             } else {
                 Spacer()
@@ -211,11 +226,11 @@ struct CardioTimerView: View {
                     .frame(maxWidth: .infinity)
                 Spacer()
                 PrimaryButton(title: L10n.tr("Spustit kardio"), systemImage: "play.fill") { start() }
-                SecondaryButton(title: "Přeskočit") { onDone(); dismiss() }
+                SecondaryButton(title: "Přeskočit") { onDone(); leave() }
             }
         }
-        .padding(20)
-        .background { Palette.background.ignoresSafeArea() }
+        .padding(inline == nil ? 20 : 16)
+        .background { if inline == nil { Palette.background.ignoresSafeArea() } }
         .task { await load() }
         .task(id: started) { await watch() }
         .onAppear {
@@ -229,6 +244,12 @@ struct CardioTimerView: View {
             // Ticked only now: in Režim tréninku a done part's card goes away, and this screen with it.
             if stopped != nil { onDone() }
         }
+    }
+
+    /// Zastavit, or in Režim tréninku "Hotovo · další: Dřep".
+    private var stopTitle: String {
+        guard let inline else { return L10n.tr("Zastavit") }
+        return inline.next.map { L10n.f("Hotovo · další: %@", $0) } ?? L10n.tr("Hotovo")
     }
 
     /// "běží · 124 bpm" while the time runs.
@@ -255,6 +276,15 @@ struct CardioTimerView: View {
     /// the day's own choice (Dnešní trénink → Kardio) when it has one.
     private func load() async {
         minutes = max(0, item.seconds / 60)
+        // In Režim tréninku a tap starts the time at once.
+        if let inline, inline.autoStart, started == nil {
+            if let since = inline.since {
+                started = since
+                planEnd()
+            } else {
+                start()
+            }
+        }
         guard !model.demo, let prefs = try? await model.api.gymPreferences() else { return }
         if let saved = prefs.cardioFavourites { favourites = saved }
     }
@@ -304,11 +334,17 @@ struct CardioTimerView: View {
         let entry = GymCardioLog.Entry(seconds: max(0, Int(time.timeIntervalSince(started).rounded())), end: time)
         logs = GymCardioLog.saving(entry, date: date, id: item.id, into: logs)
         stopped = entry
+        // In Režim tréninku: ticked, and on to what follows.
+        if let inline { onDone(); inline.close() }
     }
 
     /// Closed while the time runs: what ran so far is kept, as with Stop.
     private func close() {
         if started != nil, stopped == nil { stop(at: Date()) }
-        dismiss()
+        leave()
+    }
+
+    private func leave() {
+        if let inline { inline.close() } else { dismiss() }
     }
 }

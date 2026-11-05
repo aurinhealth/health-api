@@ -3937,3 +3937,7 @@
 "Od %@" = "Since %@";
 "Poslat do Intervals.icu" = "Send to Intervals.icu";
 "%@, týden %lld" = "%@, week %lld";
+"Části" = "Parts";
+"Ťukni na část a přepneš na ni." = "Tap a part to switch to it.";
+"Hotovo · další: %@" = "Done · next: %@";
+"Čas cviku" = "Exercise time";
