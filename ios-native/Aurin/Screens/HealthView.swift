@@ -483,7 +483,7 @@ struct RespirationWidget: View {
                 if let base = respiration.baseline {
                     TileRange(value: respiration.value, low: base - 0.5, high: base + 0.5, edges: (Fmt.decimal(base - 0.5), Fmt.decimal(base + 0.5)), tint: Palette.green)
                 } else {
-                    Text(respiration.elevated ? "zrychlený" : "stabilní").font(Typo.caption).foregroundStyle(respiration.elevated ? Palette.rust : Palette.green)
+                    Text(respiration.elevated ? "nad obvyklým rozmezím" : "v obvyklém rozmezí").font(Typo.caption).foregroundStyle(Palette.muted)
                 }
             } chart: { height in
                 VStack(spacing: 6) {
@@ -504,14 +504,14 @@ struct SkinTempWidget: View {
 
     var body: some View {
         Card {
-            WidgetHeader(title: "Teplota zápěstí", color: Palette.rust)
+            WidgetHeader(title: "Teplota zápěstí", color: Palette.amber)
             SizedWidgetBody(size: size, smallChart: 30, mediumChart: 44, smallShowsChart: false) {
                 NumberText(value: Fmt.signed(Units.temperatureChange(skin.deviation), digits: 1), unit: Units.temperatureUnit)
                 // The usual night is within half a degree of the athlete's own average.
                 TileRange(value: skin.deviation, low: -0.5, high: 0.5, edges: TileRange.temperatureEdges, tint: Palette.amber)
             } chart: { height in
                 VStack(spacing: 6) {
-                    BarChart(values: skin.series.map { $0.value + 1 }, styles: skin.series.map { BarStyle(fill: $0.value > 0 ? Palette.rust.opacity(0.6) : Palette.blue.opacity(0.5)) },
+                    BarChart(values: skin.series.map { $0.value + 1 }, styles: skin.series.map { BarStyle(fill: $0.value > 0 ? Palette.amber.opacity(0.6) : Palette.blue.opacity(0.5)) },
                              lo: 0, hi: 2, target: 1, height: height)
                     ChartSpan(dates: skin.series.map(\.date))
                 }
@@ -521,7 +521,7 @@ struct SkinTempWidget: View {
 }
 
 /// Apple Watch's wrist temperature: last night against the athlete's own
-/// nights and a bar for each of the last 14, last night's in rust.
+/// nights and a bar for each of the last 14, last night's in full amber.
 struct WristTempWidget: View {
     let wrist: HealthSnapshot.WristTemp
     var size: WidgetSize = .small
@@ -530,12 +530,12 @@ struct WristTempWidget: View {
 
     var body: some View {
         Card {
-            WidgetHeader(title: "Teplota zápěstí", color: Palette.rust, trailing: nights)
+            WidgetHeader(title: "Teplota zápěstí", color: Palette.amber, trailing: nights)
             VStack(alignment: .leading, spacing: 14) {
                 if let deviation = wrist.deviation {
                     VStack(alignment: .leading, spacing: 4) {
                         NumberText(value: Fmt.signed(Units.temperatureChange(deviation), digits: 1),
-                                   unit: size == .small ? Units.temperatureUnit : L10n.f("%@ proti normálu", Units.temperatureUnit))
+                                   unit: size == .small ? Units.temperatureUnit : L10n.f("%@ proti obvyklému", Units.temperatureUnit))
                         // The usual night is within half a degree of the athlete's own average.
                         TileRange(value: deviation, low: -0.5, high: 0.5, edges: TileRange.temperatureEdges, tint: Palette.amber)
                     }
@@ -544,7 +544,7 @@ struct WristTempWidget: View {
                 }
                 if bars.count > 1 && (size != .small || wrist.deviation == nil) {
                     BarChart(values: bars.map { max($0.value, 0) },
-                             styles: bars.indices.map { BarStyle(fill: $0 == bars.count - 1 ? Palette.rust : Palette.rust.opacity(0.28)) },
+                             styles: bars.indices.map { BarStyle(fill: $0 == bars.count - 1 ? Palette.amber : Palette.amber.opacity(0.28)) },
                              lo: 0, hi: max(bars.map(\.value).max() ?? 0, 0.5),
                              spacing: size == .small ? 2 : 4,
                              height: size == .large ? 80 : size == .medium ? 48 : 34)

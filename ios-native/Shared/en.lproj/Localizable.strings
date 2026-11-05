@@ -1112,7 +1112,6 @@
 "zprávy" = "messages";
 "zpět v tréninku" = "back to training";
 "zranění" = "injured";
-"zrychlený" = "elevated";
 "zvýšená" = "elevated";
 "± %lld min" = "± %lld min";
 "Únava" = "Fatigue";
@@ -1694,7 +1693,6 @@
 "data z %@" = "data from %@";
 "data ze včera %@" = "data from yesterday %@";
 " · obnovit" = " · refresh";
-"%@ proti normálu" = "%@ vs. your normal";
 "Poměr zátěže %@" = "Load ratio %@";
 "jednotvárný týden" = "monotonous week";
 "90 dní" = "90 days";
@@ -3902,3 +3900,4 @@
 "obvyklé rozmezí %@–%@ ms" = "usual range %@–%@ ms";
 "obvyklé rozmezí %@–%@ bpm" = "usual range %@–%@ bpm";
 "Aurin není zdravotnický prostředek. Před zdravotním rozhodnutím se poraď s lékařem." = "Aurin isn't a medical device. Check with a doctor before making medical decisions.";
+"%@ proti obvyklému" = "%@ vs usual";

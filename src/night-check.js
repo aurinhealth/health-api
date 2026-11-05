@@ -34,7 +34,7 @@ export function easierDayCard({ date, readiness, state = {}, offer = null }) {
   if ((state.status || 'active') !== 'active') return null;
   const id = date + ':easier';
   if ((state.dismissed || []).includes(id)) return null;
-  if (state.nudge?.day === date && state.nudge.status && state.nudge.status !== 'pending') return null;
+  if (state.nudge?.day === date && state.nudge.date === date && state.nudge.status && state.nudge.status !== 'pending') return null;
   const rows = nightOffValues(readiness);
   if (!rows.length) return null;
   return {

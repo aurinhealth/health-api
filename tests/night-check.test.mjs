@@ -40,6 +40,9 @@ test('the card carries today\'s swap when one is offered', () => {
   // Swapped or kept: the card has done its job today.
   assert.equal(easierDayCard({ date, readiness: off, state: { nudge: { ...nudge, status: 'kept' } } }), null);
   assert.equal(easierDayCard({ date, readiness: off, state: { nudge: { ...nudge, status: 'swapped' } } }), null);
+  // Tomorrow's session kept or swapped from the push leaves today's card.
+  const tomorrow = { ...nudge, date: '2026-10-15', status: 'kept' };
+  assert.ok(easierDayCard({ date, readiness: off, state: { nudge: tomorrow } }));
 });
 
 test('no card without a temperature or breathing value, for one value, when not training or dismissed', () => {
@@ -56,4 +59,8 @@ test('the coach push says an easier day fits, never to switch to Sick', () => {
   assert.equal(m.kind, 'easier_day');
   assert.equal(m.title, 'An easier day fits today');
   assert.doesNotMatch(m.body, ILLNESS);
+  // Today's button is promised only with a hard ride or run today to swap.
+  assert.match(m.body, /Keep today's training easy\.$/);
+  const upcoming = [{ eventId: 'planned:7', date, sport: 'ride', kind: 'vo2max', name: 'VO2max 5×4', minutes: 75 }];
+  assert.match(withLang('en', () => coachNudge({ date, hour: 8, morning: true, easier, upcoming })).body, /On Today you can make today easier\.$/);
 });

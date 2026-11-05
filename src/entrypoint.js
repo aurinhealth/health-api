@@ -879,6 +879,8 @@ async function coachPush(env, ctx) {
       recovery: morningDue ? proactiveAdvice({ ...inputs, state, readiness }) : null });
   }
   if (!nudge) return { sent: 0, reason: 'nothing-to-say' };
+  // A swap Today already offers (the easier day, /app/api/coach/check-in) is not replaced by another.
+  if (nudge.swap && state.nudge?.day === date && state.nudge.status === 'pending') return { sent: 0, reason: 'swap-offered' };
   if (!(await claim(COACH_PUSH, date))) return { sent: 0, reason: 'already-sent' };
   // "Vyměnit" answers this one (/app/api/coach/nudge).
   // Today shows the same offer until it is answered (/app/api/coach/check-in).
@@ -1466,7 +1468,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const offer=state.nudge?.date===date?swapOffer(state,date):null;
         easier=offer?easierDayCard({date,readiness,state,offer}):easier;
       }
-      const advice=easier||swapOffer(state,date)||proactiveAdvice({...inputs,state,readiness})||memoryCheck(state,date);
+      // The push's swap of tomorrow's session stays first until it is answered.
+      const swap=swapOffer(state,date);
+      const advice=(swap&&state.nudge.date!==date?swap:null)||easier||swap||proactiveAdvice({...inputs,state,readiness})||memoryCheck(state,date);
       return Response.json({status:'ok',state,advice},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
