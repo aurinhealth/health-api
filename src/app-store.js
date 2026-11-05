@@ -237,13 +237,18 @@ async function claimOriginal(db, userId, tx, fromApple = false) {
   return Number(holder?.user_id) === Number(userId) ? 'stale' : 'taken';
 }
 
-// Writes the transaction to the row of userId, unless a newer one is there already.
+// Writes the transaction to the row of userId, unless a newer one of the same
+// subscription is there already (claimOriginal keeps the order of each
+// subscription). Another subscription takes the row's place only while it gives Pro,
+// or while the row's own gives none (an expired TestFlight purchase does not
+// push out the App Store one).
 async function write(db, userId, tx, renewal, type) {
   const { plan, validUntil } = planOf(tx, renewal, type);
   const signedAt = signedAtOf(tx);
+  const now = new Date().toISOString();
   const autoRenew = renewal && renewal.autoRenewStatus != null ? (Number(renewal.autoRenewStatus) === 1 ? 1 : 0) : null;
-  await withColumns(db, () => db.prepare("INSERT INTO subscriptions(user_id,plan,valid_until,original_transaction_id,product_id,store_environment,store_signed_at,auto_renew,updated_at,free_trial,offer_type) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,valid_until=excluded.valid_until,original_transaction_id=excluded.original_transaction_id,product_id=excluded.product_id,store_environment=excluded.store_environment,store_signed_at=excluded.store_signed_at,auto_renew=COALESCE(excluded.auto_renew,subscriptions.auto_renew),updated_at=excluded.updated_at,free_trial=excluded.free_trial,offer_type=excluded.offer_type WHERE subscriptions.store_signed_at IS NULL OR subscriptions.store_signed_at<=excluded.store_signed_at OR subscriptions.original_transaction_id IS NOT excluded.original_transaction_id")
-    .bind(userId, plan, validUntil, String(tx.originalTransactionId), tx.productId, tx.environment, signedAt, autoRenew, new Date().toISOString(), Number(tx.offerType) === 1 || tx.offerDiscountType === 'FREE_TRIAL' ? 1 : 0, Number(tx.offerType) > 0 ? Number(tx.offerType) : null).run());
+  await withColumns(db, () => db.prepare("INSERT INTO subscriptions(user_id,plan,valid_until,original_transaction_id,product_id,store_environment,store_signed_at,auto_renew,updated_at,free_trial,offer_type) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,valid_until=excluded.valid_until,original_transaction_id=excluded.original_transaction_id,product_id=excluded.product_id,store_environment=excluded.store_environment,store_signed_at=excluded.store_signed_at,auto_renew=COALESCE(excluded.auto_renew,subscriptions.auto_renew),updated_at=excluded.updated_at,free_trial=excluded.free_trial,offer_type=excluded.offer_type WHERE subscriptions.store_signed_at IS NULL OR (subscriptions.original_transaction_id IS excluded.original_transaction_id AND subscriptions.store_signed_at<=excluded.store_signed_at) OR (subscriptions.original_transaction_id IS NOT excluded.original_transaction_id AND ((excluded.plan='ai' AND excluded.valid_until>?) OR subscriptions.plan<>'ai' OR subscriptions.valid_until IS NULL OR subscriptions.valid_until<=?))")
+    .bind(userId, plan, validUntil, String(tx.originalTransactionId), tx.productId, tx.environment, signedAt, autoRenew, now, Number(tx.offerType) === 1 || tx.offerDiscountType === 'FREE_TRIAL' ? 1 : 0, Number(tx.offerType) > 0 ? Number(tx.offerType) : null, now, now).run());
   return { plan, validUntil };
 }
 
@@ -295,14 +300,19 @@ export async function handleAppStoreNotification(request, env, options = {}) {
     checkTransaction(env, tx);
     // A refunded pack stops counting; nothing else about a pack needs the server.
     if (isPack(env, tx)) return Response.json({ status: 'ok', refunded: tx.revocationDate || note.notificationType === 'REFUND' ? await refundPackTransaction(env.DB, tx) : false });
-    // Every row with the subscription, so a refund also reaches a copy made before claimOriginal.
+    const original = String(tx.originalTransactionId);
     const byToken = tx.appAccountToken ? await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM subscriptions WHERE app_account_token=?').bind(String(tx.appAccountToken).toLowerCase()).first()) : null;
-    const rows = byToken ? [byToken] : (await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM subscriptions WHERE original_transaction_id=?').bind(String(tx.originalTransactionId)).all())).results || [];
-    if (!rows.length) return Response.json({ status: 'ok', unknown: true });
-    if (await claimOriginal(env.DB, rows[0].user_id, tx, true) === 'stale') return Response.json({ status: 'ok', stale: true });
-    let saved;
-    for (const row of rows) saved = await write(env.DB, row.user_id, tx, renewal, note.notificationType);
-    return Response.json({ status: 'ok', plan: saved.plan });
+    const rows = byToken ? [byToken] : (await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM subscriptions WHERE original_transaction_id=?').bind(original).all())).results || [];
+    // The holder, also when its row holds another subscription by now.
+    const held = byToken || await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM store_originals WHERE original_transaction_id=?').bind(original).first()) || rows[0];
+    if (!held) return Response.json({ status: 'ok', unknown: true });
+    const holder = Number(held.user_id);
+    if (await claimOriginal(env.DB, holder, tx, true) === 'stale') return Response.json({ status: 'ok', stale: true });
+    // Pro goes to the holder only; its end also reaches a copy made before claimOriginal.
+    const { plan } = planOf(tx, renewal, note.notificationType);
+    const targets = new Set([holder, ...(plan === 'free' ? rows.map(row => Number(row.user_id)) : [])]);
+    for (const userId of targets) await write(env.DB, userId, tx, renewal, note.notificationType);
+    return Response.json({ status: 'ok', plan });
   } catch (error) {
     if (error.status) return Response.json({ status: 'error', message: error.message }, { status: error.status });
     throw error;

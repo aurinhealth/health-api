@@ -287,4 +287,33 @@ test("a refund reaches every account that held a copy of the subscription", asyn
   raw.sqlite.exec("UPDATE subscriptions SET plan='ai', original_transaction_id='2000000000', store_signed_at=" + now + " WHERE user_id=2");
   await notify(notification("REFUND", transaction({ revocationDate: now + 500, signedDate: now + 1000 })), { DB: raw });
   assert.deepEqual([row(raw, 1).plan, row(raw, 2).plan], ["free", "free"]);
+  // Bought again: Pro goes back to the holder only.
+  await notify(notification("SUBSCRIBED", transaction({ expiresDate: now + 30 * DAY, signedDate: now + 2000 })), { DB: raw });
+  assert.deepEqual([row(raw, 1).plan, row(raw, 2).plan], ["ai", "free"]);
+});
+
+test("a refund finds a subscription without a token after the account's row moved on", async () => {
+  const { raw, user } = setup();
+  const env = user(1);
+  const token = await appAccountToken(env);
+  const old = jws(transaction({ environment: "Production", expiresDate: now + 365 * DAY, signedDate: now }));
+  await saveAppTransaction(env, { signedTransaction: old }, { roots });
+  // Pro ran out, then another subscription took the row.
+  await notify(notification("EXPIRED", transaction({ environment: "Production", expiresDate: now - DAY, signedDate: now + 500 })), { DB: raw });
+  await saveAppTransaction(env, { signedTransaction: jws(transaction({ appAccountToken: token, originalTransactionId: "3000000000", expiresDate: now + DAY, signedDate: now + 1000 })) }, { roots });
+  assert.equal(row(raw, 1).original_transaction_id, "3000000000");
+  await notify(notification("REFUND", transaction({ environment: "Production", expiresDate: now + 365 * DAY, revocationDate: now + 1500, signedDate: now + 2000 })), { DB: raw });
+  assert.equal((await saveAppTransaction(env, { signedTransaction: old }, { roots })).stale, true);
+  assert.equal(row(raw, 1).original_transaction_id, "3000000000");
+});
+
+test("an ended TestFlight purchase does not push out the App Store one", async () => {
+  const { raw, user } = setup();
+  const env = user(1);
+  const token = await appAccountToken(env);
+  await saveAppTransaction(env, { signedTransaction: jws(transaction({ appAccountToken: token, originalTransactionId: "3000000000", expiresDate: now + DAY, signedDate: now })) }, { roots });
+  await saveAppTransaction(env, { signedTransaction: jws(transaction({ appAccountToken: token, environment: "Production", expiresDate: now + 365 * DAY, signedDate: now + 1000 })) }, { roots });
+  await notify(notification("EXPIRED", transaction({ appAccountToken: token, originalTransactionId: "3000000000", expiresDate: now - DAY, signedDate: now + 2000 })), { DB: raw });
+  assert.equal(row(raw, 1).original_transaction_id, "2000000000");
+  assert.equal((await storePurchase(env)).active, true);
 });
