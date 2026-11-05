@@ -16,6 +16,8 @@ struct ReadinessHome: View {
     var stale: Stale? = nil
     /// Today's snapshot while the night is awaited (its next workout).
     var today: WatchSnapshot? = nil
+    /// Turns to the Training page (the gym's Start); nil when that page is off.
+    var openTraining: (() -> Void)? = nil
 
     enum Page: Hashable {
         case why, sleep, restingHR, hrv, strain, alarm, coach
@@ -55,13 +57,23 @@ struct ReadinessHome: View {
             if let race = todayRace {
                 // Race day: the race opens its legs (RaceDetail).
                 NavigationLink(value: race) {
-                    todayRow(text: race.name + (race.first.time.map { " · " + W.clockText($0) } ?? ""), symbol: "flag.fill")
+                    todayRow(text: race.name + (race.first.time.map { " · " + W.clockText($0) } ?? ""), symbol: "flag.fill", opens: true)
                 }
                 .buttonStyle(.plain)
             } else if let today = todayLine {
-                NavigationLink(value: today.session) { todayRow(text: today.text, symbol: today.symbol) }
-                    .buttonStyle(.plain)
-                    .disabled(today.session.sport != "ride" && today.session.sport != "run")
+                // Watch audit B1: the row leads to the start, the gym to the
+                // Training page (its Start), a ride, run or swim to its steps
+                // with Open in Workout.
+                let session = today.session
+                if ["ride", "run", "swim"].contains(session.sport), session.eventId != nil {
+                    NavigationLink(value: session) { todayRow(text: today.text, symbol: today.symbol, opens: true) }
+                        .buttonStyle(.plain)
+                } else if session.sport == "strength", let openTraining {
+                    Button(action: openTraining) { todayRow(text: today.text, symbol: today.symbol, opens: true) }
+                        .buttonStyle(.plain)
+                } else {
+                    todayRow(text: today.text, symbol: today.symbol, opens: false)
+                }
             }
             Spacer(minLength: 0)
         }
@@ -169,12 +181,17 @@ struct ReadinessHome: View {
         return RaceDay((day.week ?? []).filter { $0.date == day.date && !$0.done })
     }
 
-    private func todayRow(text: String, symbol: String) -> some View {
+    /// With `opens`, a › at the end: a tap leads to the start.
+    private func todayRow(text: String, symbol: String, opens: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
             Image(systemName: symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(W.amber)
             Text(text).font(.system(size: 13, weight: .semibold)).foregroundStyle(W.ink)
                 .lineLimit(2).minimumScaleFactor(0.8)
                 .fixedSize(horizontal: false, vertical: true)
+            if opens {
+                Spacer(minLength: 2)
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(W.muted)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 7)
@@ -190,13 +207,7 @@ struct ReadinessHome: View {
         var text = next.name
         if let minutes = next.minutes { text += " · \(minutes)′" }
         if let time = next.time { text += W.tr(" v ", " at ") + time }
-        let symbol = switch next.sport {
-        case "ride": "figure.outdoor.cycle"
-        case "run": "figure.run"
-        case "strength": "dumbbell.fill"
-        default: "figure.mixed.cardio"
-        }
-        return (text, symbol, next)
+        return (text, W.sportSymbol(next.sport), next)
     }
 
     // MARK: Sleep, strain, HRV

@@ -213,6 +213,7 @@ enum W {
         case "strength", "gym": "dumbbell.fill"
         case "swim": "figure.pool.swim"
         case "walk": "figure.walk"
+        case "stretch": "figure.flexibility"
         default: "figure.mixed.cardio"
         }
     }
