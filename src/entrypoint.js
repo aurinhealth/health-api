@@ -761,7 +761,7 @@ async function todayReadiness(env, ctx, date, { fresh = false, plan = false } = 
   const [health, fitness, sleep, profile, checkin, daily, gym] = await Promise.all([
     (fresh ? googleDashboard(env.DB, date) : googleHealthFor(env, ctx, date)).catch(() => ({})),
     (fresh ? internal('/app/api/fitness?days=90') : cached(env, ctx, 'fitness:90', () => internal('/app/api/fitness?days=90'))).catch(() => ({})),
-    read('/health/sleep?start=' + from + '&end=' + to).then(d => intervalsSleep(env,ctx,d,from, to)).catch(() => ({})),
+    read('/health/sleep?start=' + from + '&end=' + to).then(d => Object.keys(d).length ? intervalsSleep(env,ctx,d,from, to) : d).catch(() => ({})),
     dashboardProfile(env).catch(() => null),
     readinessCheckin(env.DB, date).catch(() => null),
     plan ? read('/analysis/daily?date=' + date) : null,
@@ -2640,7 +2640,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const [daily,health,fitness,sleep,fluids,weight,coaches,profile,place,gym,yesterday,tomorrow,savedRecovery,checkin,synced,proposal,status,recoveryLess,training]=await Promise.all([
         read('/analysis/daily?date='+date),googleHealthFor(env,ctx,date).catch(error=>missing('google-health',error?.message||error)),
         // {} is a failed read (a fitness read shared with another request reports nothing here).
-        cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).then(f=>Object.keys(f||{}).length?f:missing('/app/api/fitness','empty')).catch(error=>missing('/app/api/fitness',error?.message||error)),
+        cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).then(f=>Object.keys(f||{}).length||failed.has('/app/api/fitness')?f:missing('/app/api/fitness','empty')).catch(error=>missing('/app/api/fitness',error?.message||error)),
         read('/health/sleep?start='+from+'&end='+to).then(d=>Object.keys(d).length?intervalsSleep(env,ctx,d,from,to):d).catch(error=>missing('/health/sleep',error?.message||error)),
         api('/app/api/fluids?date='+date),read('/health/weight'),api('/app/api/coaches?date='+date),dashboardProfile(env).catch(()=>null),
         todayPlace(env,ctx,date),trainingGymPlans(env,isToday?shiftDate(date,-1):date,isToday?shiftDate(date,1):date).catch(error=>missing('gym-plans',error?.message||error)),
@@ -2747,7 +2747,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const [health,fitness,sleep,weight,profile,checkin,muscle]=await Promise.all([
         googleHealthFor(env,ctx,date).catch(()=>({})),
         cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
-        read('/health/sleep?start='+from+'&end='+to).then(d=>intervalsSleep(env,ctx,d,from,to)).catch(()=>({})),
+        read('/health/sleep?start='+from+'&end='+to).then(d=>Object.keys(d).length?intervalsSleep(env,ctx,d,from,to):d).catch(()=>({})),
         read('/health/weight'),dashboardProfile(env).catch(()=>null),readinessCheckin(env.DB,date).catch(()=>null),
         // Muscle mass from a scale through Apple Health (lean body mass).
         env.DB.prepare("SELECT sample_time,value_numeric FROM health_datapoints WHERE user_id=? AND data_type='lean-body-mass' AND record_role='primary' AND sample_time>=? ORDER BY sample_time LIMIT 400").bind(env.USER_ID,shiftDate(date,-60)).all().then(r=>r.results||[]).catch(()=>[])
@@ -2943,6 +2943,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const target = "https://intervals.icu/api/v1/athlete/0/wellness?oldest="+encodeURIComponent(from)+"&newest="+encodeURIComponent(to);
       const response = await intervalsReads(env,ctx)(target,{headers:{Authorization:auth,Accept:"application/json"}});
       const data = await response.json().catch(()=>[]);
+      // A revoked or expired key (Connections asks to reconnect it): the load from the
+      // watch and the gym as without Intervals.icu, not an error on every Today.
+      if (response.status===401||response.status===403) return Response.json({status:"ok",source:"aurin",connected:false,needsReconnect:true,days,wellness:await ownFitness(env,from,to)},{headers:{"Cache-Control":"no-store"}});
       if (!response.ok) return Response.json({status:"error",message:"Intervals wellness HTTP "+response.status,data},{status:response.status});
       const intervalsRows = (Array.isArray(data)?data:[]).map(x=>({...x,tsb:Number.isFinite(Number(x.ctl))&&Number.isFinite(Number(x.atl))?Number(x.ctl)-Number(x.atl):null})).filter(x=>x.id).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
       // Workouts only the watch recorded (not in Intervals.icu) count into CTL too.
