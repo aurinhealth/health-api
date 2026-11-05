@@ -251,6 +251,26 @@ test('a proposal is confirmed once: the claim comes before the change, a failure
   assert.deepEqual(tries.map(t=>t.meta.changes).sort(),[0,1]);
 });
 
+test('a proposal from an earlier day cannot be confirmed, also from an old notification',()=>{
+  const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
+  const route=entry.slice(entry.indexOf("url.pathname==='/app/api/assistant/action'"));
+  const age=route.indexOf("if(body.decision==='confirm'&&row.created_at<dayStartSql(localToday()))"),claim=route.indexOf("SET status='applying'");
+  assert.ok(age>0&&age<claim,'the age is checked before the claim');
+});
+
+test('"Upravit" on a week revision or check applies only the version the app showed',()=>{
+  const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
+  for(const path of ["'/app/api/coach/revision'","'/app/api/coach/week-check'"]){
+    const route=entry.slice(entry.indexOf('url.pathname==='+path));
+    const check=route.indexOf("if(body.decision==='apply'&&changedSince(body,stored))return Response.json("),apply=route.indexOf('assertTrainingAllowed(');
+    assert.ok(check>0&&check<apply,path);
+  }
+  const changedSince=new Function('return '+entry.match(/const changedSince=([^;]+);/)[1])();
+  assert.equal(changedSince({signature:'a'},{signature:'b'}),true);
+  assert.equal(changedSince({signature:'a'},{signature:'a'}),false);
+  assert.equal(changedSince({},{signature:'a'}),false,'an older app sends none');
+});
+
 test('the coach picks at most two known pictures for an answer',()=>{
   const r=coachAnswerText(JSON.stringify({answer:'Forma roste.',visuals:['form','bogus','sleep','zones'],actions:[]}),{actions:true});
   assert.deepEqual(r.visuals,['form','sleep']);

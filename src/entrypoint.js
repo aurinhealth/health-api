@@ -1574,6 +1574,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   // "Revize po tréninku" (week-revision.js): after a finished ride or run the
   // coach proposes changes to the next sessions; GET builds it once per new
   // session or rating, POST applies it ("Upravit") or keeps the plan ("Nechat").
+  // "Upravit" applies the proposal the athlete saw: the app sends its signature
+  // (older apps send none), and a card made again since is not applied unseen.
+  const changedSince=(body,stored)=>typeof body.signature==='string'&&body.signature!==stored.signature;
   if(url.pathname==='/app/api/coach/revision'&&['GET','POST'].includes(request.method)){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if(request.method==='POST'&&request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
@@ -1584,6 +1587,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if(!date||!['apply','keep'].includes(body.decision))throw new Error(L('Tahle revize už neplatí.', 'This review has expired.'));
         const stored=await readRevision(env.DB,date);
         if(!stored||stored.status!=='pending')return Response.json({status:'ok',revision:stored},{headers:{'Cache-Control':'no-store'}});
+        if(body.decision==='apply'&&changedSince(body,stored))return Response.json({message:L('Návrh se mezitím změnil. Podívej se na nový.', 'The proposal has changed since. Have a look at the new one.')},{status:409});
         if(body.decision==='keep'){await decideRevision(env.DB,date,'kept');return Response.json({status:'ok',revision:{...stored,status:'kept'}},{headers:{'Cache-Control':'no-store'}});}
         assertTrainingAllowed(await getAthleteState(env.DB));
         const changes=[];
@@ -1655,6 +1659,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if(body.date!==today||!['apply','keep'].includes(body.decision))throw new Error(L('Tahle kontrola už neplatí.', 'This check has expired.'));
         const stored=await readWeekCheck(env.DB,today);
         if(!stored||stored.status!=='pending')return Response.json({status:'ok',check:stored},noStore);
+        if(body.decision==='apply'&&changedSince(body,stored))return Response.json({message:L('Návrh se mezitím změnil. Podívej se na nový.', 'The proposal has changed since. Have a look at the new one.')},{status:409});
         if(body.decision==='keep'){await decideWeekCheck(env.DB,today,'kept');return Response.json({status:'ok',check:{...stored,status:'kept'}},noStore);}
         assertTrainingAllowed(await getAthleteState(env.DB));
         const changes=[];
@@ -2406,6 +2411,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // without the AI and without counting as a message.
       if(body.decision==='adjust')return Response.json(await adjustCoachDraft(env,ctx,row,draft,body),{headers:{'Cache-Control':'no-store'}});
       if(!['confirm','reject'].includes(body.decision))throw new Error(L('Potvrď nebo odmítni návrh.', 'Confirm or reject the proposal.'));
+      // A proposal holds for the day it was made, as in the chat, also from an old notification.
+      if(body.decision==='confirm'&&row.created_at<dayStartSql(localToday())){
+        await env.DB.prepare("UPDATE coach_inbox SET status='expired' WHERE user_id=? AND id=? AND status='draft'").bind(env.USER_ID,row.id).run();
+        return Response.json({message:L('Návrh je z jiného dne a už neplatí. Zeptej se kouče znovu.', 'This proposal is from another day and no longer applies. Ask the coach again.')},{status:409});
+      }
       // Taken before anything is done, so a double tap or a confirm from the push
       // and the app at once acts only once; a claim older than two minutes is a
       // request that died midway. A change that fails puts the proposal back.

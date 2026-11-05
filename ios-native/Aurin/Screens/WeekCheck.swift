@@ -14,6 +14,8 @@ struct WeekCheck: Decodable, Equatable {
     let date: String?
     /// "pending" or "applied" on Today; nil for a check of the week being built.
     let status: String?
+    /// The version shown; "Upravit" applies only this one.
+    let signature: String?
     let summary: String?
     /// The state behind it: "Připravenost 52", "Forma v neděli −27".
     let chips: [String]?
@@ -73,8 +75,9 @@ extension APIClient {
     }
 
     /// "Upravit" (apply) or "Nechat" (keep) on Today.
-    func decideWeekCheck(date: String, apply: Bool) async throws -> WeekCheck? {
-        let body: JSONObject = ["date": .string(date), "decision": .string(apply ? "apply" : "keep")]
+    func decideWeekCheck(date: String, signature: String?, apply: Bool) async throws -> WeekCheck? {
+        var body: JSONObject = ["date": .string(date), "decision": .string(apply ? "apply" : "keep")]
+        if let signature { body["signature"] = .string(signature) }
         let r: WeekCheckResponse = try await send("/app/api/coach/week-check", method: "POST", body: body)
         return r.check
     }
@@ -268,7 +271,7 @@ struct WeekCheckCard: View {
         defer { busy = false }
         error = nil
         do {
-            let next = try await model.api.decideWeekCheck(date: date, apply: apply)
+            let next = try await model.api.decideWeekCheck(date: date, signature: c.signature, apply: apply)
             withAnimation { things.check = apply ? next : nil }
             if apply {
                 await model.refreshTraining()
@@ -280,6 +283,8 @@ struct WeekCheckCard: View {
             }
         } catch {
             self.error = error.localizedDescription
+            // The check changed since it was shown: the new one replaces it.
+            if apply, let fresh = try? await model.api.weekCheck(), fresh.signature != c.signature { withAnimation { things.check = fresh } }
         }
     }
 }

@@ -263,7 +263,7 @@ struct WeekRevisionCard: View {
         defer { busy = false }
         error = nil
         do {
-            let next = try await model.api.decideRevision(date: r.date, apply: apply)
+            let next = try await model.api.decideRevision(date: r.date, signature: r.signature, apply: apply)
             withAnimation { things.revision = apply ? next : nil }
             if apply {
                 await model.refreshTraining()
@@ -277,6 +277,8 @@ struct WeekRevisionCard: View {
             }
         } catch {
             self.error = error.localizedDescription
+            // The revision changed since it was shown: the new one replaces it.
+            if apply, let fresh = try? await model.api.weekRevision(), fresh.signature != r.signature { withAnimation { things.revision = fresh } }
         }
     }
 }
