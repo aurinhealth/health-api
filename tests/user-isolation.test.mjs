@@ -26,6 +26,8 @@ const allowed = [/FROM workout_shares WHERE id=\?"$/, /^"DELETE FROM push_tokens
   /FROM users u WHERE u\.disabled = 0 AND EXISTS \(SELECT 1 FROM push_tokens t WHERE t\.user_id = u\.id\) ORDER BY u\.id"$/,
   // The owner's morning report sums AI cost over all accounts (ops-report.js).
   /^"SELECT 1 FROM sqlite_master WHERE type='table' AND name='ai_usage'"$/, /FROM ai_usage a WHERE a\.day (=|>=) \? AND (a\.day <= \? AND )?a\.model NOT IN \('pending', 'carried-over'\) GROUP BY a\.user_id/,
+  // ... with each call of the day for the average and p95 price of a call.
+  /SELECT a\.user_id, a\.feature, a\.cost_usd AS cost\s+FROM ai_usage a WHERE a\.day = \? AND a\.model NOT IN \('pending', 'carried-over'\) LIMIT 20000/,
   // ... and counts accounts, subscriptions and AI against what Pro brings in (accountStats).
   /FROM ai_usage WHERE day >= \? AND day <= \? AND model NOT IN \('pending', 'carried-over'\) GROUP BY user_id/, /FROM ai_usage a JOIN users u ON u\.id = a\.user_id WHERE a\.day >= \?/,
   /FROM subscriptions WHERE plan = 'ai'/,

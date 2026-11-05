@@ -80,6 +80,14 @@ export async function cachedOnly(env, key, { store = globalThis.caches?.default 
   return hit ? hit.json().catch(() => null) : null;
 }
 
+// Drops the kept entry of `key` under the current version (this data center's
+// copy): a sync that changed only today's running totals keeps the version
+// and refreshes just the day's Google Health and Apple sums.
+export async function forgetCached(env, key, { store = globalThis.caches?.default } = {}) {
+  if (!store || env.DB?.userId == null) return;
+  await store.delete(await entryUrl(env, key)).catch(() => {});
+}
+
 export async function cached(env, ctx, key, compute, { ttl = CACHE_TTL_SECONDS, store = globalThis.caches?.default } = {}) {
   if (!store || env.DB?.userId == null) return compute();
   const url = await entryUrl(env, key);

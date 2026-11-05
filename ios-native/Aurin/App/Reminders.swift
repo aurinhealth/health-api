@@ -108,8 +108,16 @@ enum Reminders {
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
         guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
-        let all = await center.pendingNotificationRequests().map(\.identifier)
-        let pending = all.filter(ours)
+        let requests = await center.pendingNotificationRequests()
+        let all = requests.map(\.identifier)
+        // Last night's missed-pill question (a pill usually logged near
+        // midnight asks after it) stays: today's planning no longer covers it.
+        let todayDate = AppModel.localDate(Date())
+        let keepsMissed = storedPill()?.missed ?? true
+        let lastNight = Set(requests.filter {
+            keepsMissed && $0.identifier.hasPrefix(missedPrefix) && ($0.content.userInfo["date"] as? String ?? todayDate) < todayDate
+        }.map(\.identifier))
+        let pending = all.filter { ours($0) && !lastNight.contains($0) }
         center.removePendingNotificationRequests(withIdentifiers: pending)
         var planned: [UNNotificationRequest] = []
         defer { addSoonest(planned, room: limit - (all.count - pending.count), to: center) }
@@ -207,6 +215,28 @@ enum Reminders {
                 if number == 0 && !pill.inPause { continue }
                 addOnce(&planned, "pill.\(offset)", day: day, at: pill.minute, title: L10n.tr("Čas na prášek"),
                         body: hidesValues ? "" : number == 0 ? L10n.tr("Pauza mezi baleními") : L10n.f("%@. prášek z %@", String(number), String(pill.active)),
+                        category: pillCategory, info: ["date": date])
+            }
+        }
+        // The missed pill (same screen, Vynechaný prášek): an hour after the
+        // time the pill is usually logged (or after the reminder, if later) on
+        // the coming 8 pill days, today left out once taken. Only once the
+        // server knows the usual time (3 logged pills in the last 14 days).
+        if let pill = storedPill(), pill.missed ?? true, let usual = today.cycle?.pill?.usual.flatMap(minutes) ?? pill.usual {
+            let at = missedPillMinute(usual: usual, reminder: pill.on ? pill.minute : nil)
+            let calendar = Calendar.current
+            let start = calendar.startOfDay(for: Date())
+            let takenToday = today.cycle?.pill?.taken != nil
+            for offset in 0..<8 {
+                if offset == 0 && takenToday { continue }
+                guard let day = calendar.date(byAdding: .day, value: offset, to: start) else { continue }
+                let date = AppModel.localDate(day)
+                guard let number = pillNumber(on: date, packStart: pill.packStart, active: pill.active), number > 0 else { continue }
+                // Past midnight (a pill usually logged at 23:30): the next day's early hours.
+                guard let fireDay = calendar.date(byAdding: .day, value: at / 1440, to: day) else { continue }
+                addOnce(&planned, "pillMissed." + date, day: fireDay, at: at % 1440, title: L10n.tr("Už máš dnešní prášek?"),
+                        body: hidesValues ? L10n.tr("Ještě není zapsaný.")
+                            : L10n.f("Ještě není zapsaný. Obvykle ho bereš kolem %@.", clock(usual)) + " · " + L10n.f("%@. prášek z %@", String(number), String(pill.active)),
                         category: pillCategory, info: ["date": date])
             }
         }
@@ -348,18 +378,24 @@ enum Reminders {
         var inPause: Bool
         var packStart: String
         var active: Int
+        /// The missed-pill question (nil from an older version: on).
+        var missed: Bool? = nil
+        /// The usual time the pill is logged, in minutes (nil: not known yet).
+        var usual: Int? = nil
     }
 
     /// The cycle settings the reminder needs, kept on the phone so the
     /// reminders are planned without the server (nil: no pill reminder).
-    static func storePill(_ settings: CycleSettings?) {
+    /// `usual`: the time the pill is usually logged ("HH:MM", GET /app/api/cycle).
+    static func storePill(_ settings: CycleSettings?, usual: String? = nil) {
         guard let settings, settings.contraception == "pill", let packStart = settings.packStart else {
             UserDefaults.standard.removeObject(forKey: pillKey)
             return
         }
         let active = ["21+7": 21, "24+4": 24, "28": 28][settings.pillPack] ?? 21
         let stored = StoredPill(on: settings.pillReminder, minute: minutes(settings.pillReminderTime) ?? 21 * 60,
-                                inPause: settings.pillReminderInPause, packStart: packStart, active: active)
+                                inPause: settings.pillReminderInPause, packStart: packStart, active: active,
+                                missed: settings.pillMissed ?? true, usual: usual.flatMap(minutes))
         if let data = try? JSONEncoder().encode(stored) { UserDefaults.standard.set(data, forKey: pillKey) }
     }
 
@@ -395,12 +431,48 @@ enum Reminders {
 
     private static let pillSnoozeId = "aurin-pill-snooze"
 
+    /// When "Už máš dnešní prášek?" asks, in minutes after the pill day's
+    /// midnight: an hour after the usual time, or after the reminder when that
+    /// is later. Before 4:00 counts as the night after the day (24:30 = 00:30
+    /// the next day), so a pill usually logged at 00:10 asks at 01:10.
+    static func missedPillMinute(usual: Int, reminder: Int?) -> Int {
+        let night = { (minute: Int) in (minute + 1440 - 240) % 1440 + 240 }
+        return max(night(usual), reminder.map(night) ?? 0) + 60
+    }
+
+    /// Whether Today asks about the pill now (MissedPillCard): the question is
+    /// on, today's pill is due and not logged, and its time has come.
+    static func asksMissedPill(_ pill: PillDay?, now: Date = Date()) -> Bool {
+        guard let pill, !pill.pause, pill.taken == nil, let stored = storedPill(), stored.missed ?? true,
+              let usual = pill.usual.flatMap(minutes) else { return false }
+        let at = missedPillMinute(usual: usual, reminder: stored.on ? stored.minute : nil)
+        let c = Calendar.current.dateComponents([.hour, .minute], from: now)
+        let minute = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+        // After midnight Today is already the next day: only the evening's own time counts.
+        return minute >= at && at < 1440
+    }
+
+    /// The pill of `date` logged: its snooze and missed-pill question go.
+    static func pillLogged(date: String) async {
+        let center = UNUserNotificationCenter.current()
+        let ids = await center.pendingNotificationRequests()
+            .filter { isPill($0.content.categoryIdentifier) && $0.content.userInfo["date"] as? String == date }
+            .map(\.identifier)
+        center.removePendingNotificationRequests(withIdentifiers: ids)
+    }
+
     /// Signing out or another account: no pill of the last one, and none of its reminders.
     static func forgetPill() {
         UserDefaults.standard.removeObject(forKey: pillKey)
         let ids = (0..<8).flatMap { [prefix + "pill.\($0)", legacyPrefix + "pill.\($0)"] } + [pillSnoozeId, "loadwise-pill-snooze"]
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
+        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: requests.map(\.identifier).filter { $0.hasPrefix(missedPrefix) })
+        }
     }
+
+    /// The missed-pill questions, one per pill day ("aurin.pillMissed.2026-11-05").
+    private static let missedPrefix = prefix + "pillMissed."
 
     /// "22:40" → 1360.
     static func minutes(_ clock: String) -> Int? {

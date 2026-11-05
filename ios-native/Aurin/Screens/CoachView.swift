@@ -205,7 +205,7 @@ struct CoachView: View {
             home = try? await model.api.coaches(date: AppModel.localDate(Date()))
             let status = try? await model.api.subscription()
             allowance = status?.coachAllowance
-            packsOnSale = status?.checkoutAvailable == true
+            packsOnSale = status?.packsBuyable == true
             if allowance?.usedUp == true { usedUp = true }
         }
     }

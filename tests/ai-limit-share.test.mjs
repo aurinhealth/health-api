@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { aiLimitShare, aiGroup } from "../src/ai-limit-share.js";
+import { aiLimitShare, aiGroup, inFreeWeek } from "../src/ai-limit-share.js";
 import { aiAllowance, assertAiAllowance, ensureAiUsage } from "../src/ai-usage.js";
 import { coachAllowance } from "../src/coach-allowance.js";
 import { ensureStoreColumns } from "../src/app-store.js";
@@ -55,4 +55,11 @@ test("the halved month stops AI at 3 USD", async () => {
   env.DB.prepare("INSERT INTO ai_usage (user_id, day, feature, model, cost_usd) VALUES (7, ?, 'assistant', 'gpt-6-sol', 3)").bind(localToday()).run();
   await assert.rejects(assertAiAllowance(env, "assistant"), error => error.status === 429);
   await assert.doesNotReject(assertAiAllowance(await account({ plan: "ai" }), "assistant"));
+});
+
+test("coach message packs are not offered in the free week: the chat locks when it ends unpaid", async () => {
+  assert.equal(await inFreeWeek(await account({ plan: "ai", trial: 1 })), true);
+  assert.equal(await inFreeWeek(await account({ plan: "ai" })), false);
+  assert.equal(await inFreeWeek(await account()), false);
+  assert.equal(await inFreeWeek(await account({ plan: "ai", trial: 1, USER_IS_OWNER: true })), false);
 });

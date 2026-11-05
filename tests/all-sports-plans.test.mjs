@@ -102,6 +102,10 @@ test("one free starter plan in every sport; the rest need Pro once payments are 
   assert.equal(await plansUnlocked({ AI_PAYWALL_ENABLED: "true", DB: db({ plan: "ai", valid_until: future }) }), true);
   assert.equal(await plansUnlocked({ AI_PAYWALL_ENABLED: "true", DB: db({ plan: "ai", valid_until: past }) }), false);
   assert.equal(await plansUnlocked({ AI_PAYWALL_ENABLED: "true", DB: db(null) }), false);
+  // AI_PAYWALL_ENABLED=owner locks the plans for the owner's account only.
+  assert.equal(await plansUnlocked({ AI_PAYWALL_ENABLED: "owner", USER_IS_OWNER: true, DB: db(null) }), false);
+  assert.equal(await plansUnlocked({ AI_PAYWALL_ENABLED: "owner", USER_IS_OWNER: true, DB: db({ plan: "ai", valid_until: future }) }), true);
+  assert.equal(await plansUnlocked({ AI_PAYWALL_ENABLED: "owner", DB: db(null) }), true, "testers keep every plan");
   const paywall = { AI_PAYWALL_ENABLED: "true", DB: db(null) };
   await assertPlanAccess(paywall, getTemplate("ride-base"));
   await assert.rejects(assertPlanAccess(paywall, getTemplate("ride-ftp")), e => e.status === 402);

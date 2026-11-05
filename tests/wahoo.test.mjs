@@ -6,7 +6,7 @@ import { scopedDb } from "../src/tenancy.js";
 import legacy from "../src/index.js";
 import { handleWahooOAuth, handleWahooWebhook, wahooActivityRow, wahooPlan, wahooPowerZones, writeWahooZones, syncWahoo, syncWahooWorkout, retryWahooExports, disconnectWahoo, wahooRideExpected } from "../src/wahoo.js";
 import { storeLocalEvent, syncLocalWorkout, editLocalWorkout } from "../src/local-workouts.js";
-import { saveSyncPrefs, syncOverview } from "../src/sync-destinations.js";
+import { saveSyncPrefs, syncOverview, readSyncPrefs } from "../src/sync-destinations.js";
 import { connectionStatus } from "../src/connections.js";
 import { readConnectionHealth } from "../src/connection-health.js";
 import { withTimeZone } from "../src/user-time.js";
@@ -257,8 +257,14 @@ test("the same ride from Wahoo and Intervals.icu counts once; Wahoo's ride stand
   await legacy.fetch(new Request("https://internal/sync/match", { method: "POST" }), e, { waitUntil() {} });
   const role = id => raw.sqlite.prepare("SELECT record_role FROM health_datapoints WHERE external_id=?").get(id).record_role;
   assert.deepEqual(["activity:i1", "wahoo:1", "g1", "wahoo:2", "g2"].map(role), ["primary", "duplicate", "duplicate", "primary", "duplicate"]);
+  // A ride passed on to Intervals.icu, with the switch on.
+  await saveSyncPrefs(db, 1, "intervals", { forward: ["wahoo"] });
+  raw.sqlite.prepare("INSERT INTO sync_sends (user_id, activity_key, destination, status, remote_id, payload_json) VALUES (1, 'wahoo:1', 'intervals', 'sent', 'i77', '{\"name\":\"Evening ride\"}')").run();
   // Disconnecting deletes the Wahoo rides; the watch's ride counts again.
   await disconnectWahoo(env(db), { fetchImpl: api().fetchImpl });
+  // Aurin's record of the sent ride goes (Wahoo counts its ids as personal data); the switch is off.
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM sync_sends WHERE activity_key = 'wahoo:1'").get().n, 0);
+  assert.deepEqual((await readSyncPrefs(db, 1, "intervals")).forward, []);
   assert.equal(rows(raw, "source_family='wahoo'").length, 0);
   assert.equal(role("g2"), "primary");
 });
