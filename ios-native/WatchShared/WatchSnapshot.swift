@@ -175,6 +175,19 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
         var planned: Double?
         var nextTitle: String?
         var nextTime: String?
+
+        /// Today's strain against its target, one rule for the watch app and
+        /// its complications: under it before 18:00 is neutral (the morning is
+        /// always under it), within it is on target, over it or still under it
+        /// from 18:00 is off. Nil without a target.
+        enum Standing: Equatable { case neutral, onTarget, off }
+
+        static func standing(_ score: Double, low: Double?, high: Double?, at now: Date, calendar: Calendar = .current) -> Standing? {
+            guard let low, let high else { return nil }
+            if score > high { return .off }
+            if score >= low { return .onTarget }
+            return calendar.component(.hour, from: now) >= 18 ? .off : .neutral
+        }
     }
 
     func encoded() -> Data? {

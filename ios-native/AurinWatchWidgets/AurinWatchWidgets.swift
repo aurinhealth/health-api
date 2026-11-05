@@ -921,19 +921,28 @@ struct StepBar: View {
 
     var body: some View {
         let filled = Int((min(1, max(0, fraction)) * 10).rounded())
-        HStack(spacing: 1.5) {
-            ForEach(0..<10, id: \.self) { i in
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(i < filled ? color : color.opacity(0.28))
-                    .widgetAccentable(i < filled)
-                    .overlay {
-                        if goal?.contains((Double(i) + 0.5) / 10) == true {
-                            RoundedRectangle(cornerRadius: 1).strokeBorder(Color.white.opacity(0.75), lineWidth: 1)
-                        }
-                    }
+        // The goal's steps get a thin line under them, not an edge: a line
+        // reads on a tinted face too, where the colours fade.
+        let marked = (0..<10).filter { goal?.contains((Double($0) + 0.5) / 10) == true }
+        VStack(alignment: .leading, spacing: 1.5) {
+            HStack(spacing: 1.5) {
+                ForEach(0..<10, id: \.self) { i in
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(i < filled ? color : color.opacity(0.28))
+                        .widgetAccentable(i < filled)
+                }
             }
+            .frame(height: 4)
+            GeometryReader { g in
+                if let first = marked.first, let last = marked.last {
+                    let step = (g.size.width - 9 * 1.5) / 10
+                    Capsule().fill(Color.white.opacity(0.6))
+                        .frame(width: CGFloat(last - first + 1) * step + CGFloat(last - first) * 1.5)
+                        .offset(x: CGFloat(first) * (step + 1.5))
+                }
+            }
+            .frame(height: 1.5)
         }
-        .frame(height: 4)
     }
 }
 
@@ -1099,6 +1108,8 @@ enum C {
     static let muted = Color(red: 0x9A / 255, green: 0xA3 / 255, blue: 0x9F / 255)
     /// Not today's data: yesterday's number in grey.
     static let stale = Color(red: 0x6E / 255, green: 0x74 / 255, blue: 0x71 / 255)
+    /// Strain under its target before the evening: fine for now.
+    static let neutral = Color(red: 0xD9 / 255, green: 0xD6 / 255, blue: 0xD0 / 255)
     static let green = Color(red: 0x8F / 255, green: 0xE6 / 255, blue: 0xC4 / 255)
     static let amber = Color(red: 0xF2 / 255, green: 0xB4 / 255, blue: 0x6B / 255)
     static let indigo = Color(red: 0xA5 / 255, green: 0xA1 / 255, blue: 0xFF / 255)
@@ -1124,13 +1135,15 @@ enum C {
         return minutes >= need * 0.75 ? amber : red
     }
 
-    /// Strain against the day's target: neutral before 18:00 (the morning is
-    /// always under it), green within it, amber over it or still under it in the evening.
+    /// Strain against the day's target (WatchSnapshot.Strain.standing, as in
+    /// the watch app): near-white under it before 18:00, not grey (that is old
+    /// data) nor indigo (sleep); green within it; amber over it or still under it in the evening.
     static func strain(_ score: Double, low: Double?, high: Double?, at now: Date) -> Color {
-        guard let low, let high else { return amber }
-        if score > high { return amber }
-        if score >= low { return green }
-        return Calendar.current.component(.hour, from: now) >= 18 ? amber : indigo
+        switch WatchSnapshot.Strain.standing(score, low: low, high: high, at: now) {
+        case .neutral: neutral
+        case .onTarget: green
+        case .off, nil: amber
+        }
     }
 
     /// HRV or resting HR against the athlete's normal: green within it or

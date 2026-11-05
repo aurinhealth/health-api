@@ -272,7 +272,12 @@ struct ReadinessHome: View {
         g.color = W.green
         if let score = s.strain.score {
             g.bar = (score, low, high)
-            g.color = WatchRangeBar.side(score, low, high) == 0 ? W.green : W.amber
+            // As on the watch face: under the target is fine until 18:00.
+            switch WatchSnapshot.Strain.standing(score, low: low, high: high, at: WatchDemo.now) {
+            case .neutral: g.color = W.secondary
+            case .onTarget: g.color = W.green
+            case .off, nil: g.color = W.amber
+            }
         }
         return g
     }

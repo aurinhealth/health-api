@@ -607,7 +607,7 @@ const actCoach = `<div class="dm wc coach2">
 </div>`;
 // ---- Apple Watch (AurinWatch/: ReadinessHome.swift, GymSessionView.swift, FoodPage.swift, the watch face's
 // complications in AurinWatchWidgets) on the sample day. The watch is dark only (WatchStyle.swift: W). ----
-const WA = {ink: '#ECEAE6', muted: '#9AA39F', green: '#8FE6C4', amber: '#F2B46B', indigo: '#A5A1FF', blue: '#7CC3F0', red: '#F0907A'};
+const WA = {ink: '#ECEAE6', neutral: '#D9D6D0', muted: '#9AA39F', green: '#8FE6C4', amber: '#F2B46B', indigo: '#A5A1FF', blue: '#7CC3F0', red: '#F0907A'};
 const wRange = (pos, c) => `<i class="aw-rb"><b style="left:${pos}%;background:${c}"></b></i>`;
 // A ring of ten segments (the complications, the food ring): the share filled in its colour over a faint track.
 const wRing = (size, r, width, frac, c, inner) => `<span class="aw-ring" style="width:${size}px;height:${size}px"><svg viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" pathLength="100" stroke="${c}" stroke-opacity=".22" stroke-width="${width}" stroke-dasharray="8 2"/><circle cx="${size / 2}" cy="${size / 2}" r="${r}" pathLength="100" stroke="${c}" stroke-width="${width}" stroke-dasharray="${frac === 1 ? '8 2' : `${'8 2 '.repeat(Math.round(frac * 10)).trim()} 0 100`}" transform="rotate(-90 ${size / 2} ${size / 2})"/></svg>${inner}</span>`;
@@ -615,7 +615,7 @@ const wTop = (left, time, right) => `<div class="aw-top"><span>${left}</span><sp
 const wBtn = (icon, c) => `<span class="aw-ib" style="color:${c}">${ic(icon)}</span>`;
 const watchHome = `<div class="aw-s aw-home" style="--gw:#163A2E">${wTop(wBtn('alarm', WA.indigo), '7:12', wBtn('chat', WA.amber))}
 <div class="aw-hero"><span class="aw-n">78</span><span class="aw-side"><span class="aw-k">Readiness</span><span class="aw-pill" style="color:${WA.green}">high</span></span></div>
-<div class="aw-g">${[['Sleep', '7:12', '', 28, WA.amber, '89%'], ['Strain', '8.4', '', 14, WA.amber, 'of 11–14'], ['HRV', '64', 'ms', 76, WA.green, 'high']].map(([k, v, u, pos, c, note]) => `<div><span class="aw-k">${k}</span><span class="aw-n aw-v">${v}${u ? `<small>${u}</small>` : ''}</span>${wRange(pos, c)}<b style="color:${c}">${note}</b></div>`).join('')}</div>
+<div class="aw-g">${[['Sleep', '7:12', '', 28, WA.amber, '89%'], ['Strain', '8.4', '', 14, WA.neutral, 'of 11–14'], ['HRV', '64', 'ms', 76, WA.green, 'high']].map(([k, v, u, pos, c, note]) => `<div><span class="aw-k">${k}</span><span class="aw-n aw-v">${v}${u ? `<small>${u}</small>` : ''}</span>${wRange(pos, c)}<b style="color:${c}">${note}</b></div>`).join('')}</div>
 <div class="aw-next"><span style="color:${WA.amber}">${ic('gym')}</span>Strength training, full body · 45′ at 5:30 PM</div></div>`;
 const watchGym = `<div class="aw-s" style="--gw:#3A2A17">${wTop(wBtn('pause', WA.ink), '5:41', `<span class="aw-ib">${ic('menu')}</span>`)}
 <div class="aw-ex"><b>Squat</b><span><i class="aw-ib aw-sm">${ic('minus')}</i>set 2/4<i class="aw-pl" style="color:${WA.amber}">H</i><i class="aw-ib aw-sm">${ic('plus')}</i></span></div>
@@ -636,11 +636,11 @@ const wArc = (frac, c, value, word) => {
     return `<path d="M${pt(a)}A${R} ${R} 0 0 1 ${pt(b)}" stroke="${c}"${i < Math.round(frac * 10) ? '' : ' stroke-opacity=".28"'}/>`; }).join('');
   return `<span class="aw-arc"><svg viewBox="0 0 50 50" aria-hidden="true">${arcs}</svg><b${value.length > 3 ? ' class="aw-sm2"' : ''}>${value}</b><i style="color:${c}">${word}</i></span>`;
 };
-// The Day complication (WideView.day): readiness, sleep and strain with ten steps, the goal's steps edged.
-const wSteps = (frac, c, goal) => `<i class="aw-st">${Array.from({length: 10}, (_, i) => `<b style="background:${c}${i < Math.round(frac * 10) ? '' : ';opacity:.28'}${goal && i >= goal[0] && i < goal[1] ? ';box-shadow:inset 0 0 0 1px #fff' : ''}"></b>`).join('')}</i>`;
+// The Day complication (WideView.day): readiness, sleep and strain with ten steps, a thin line under the goal's steps.
+const wSteps = (frac, c, goal) => `<i class="aw-st">${Array.from({length: 10}, (_, i) => `<b style="background:${c}${i < Math.round(frac * 10) ? '' : ';opacity:.28'}"></b>`).join('')}${goal ? `<em style="left:${goal[0] * 10}%;width:${(goal[1] - goal[0]) * 10}%"></em>` : ''}</i>`;
 const watchFace = `<div class="aw-s aw-face"><div class="aw-frow">${wArc(.35, WA.amber, '4:18', 'WORKOUT')}${wArc(.58, WA.blue, '1.5', 'WATER')}<div class="aw-date">THU<b>8</b></div></div>
 <div class="aw-clock">7:12</div>
-<div class="aw-day">${[['READY', '78', WA.green, .78], ['SLEEP', '7:12', WA.amber, .76, [7, 9]], ['STRAIN', '8.4', WA.amber, .53, [6, 9]]].map(([k, v, c, f, g]) => `<div><span style="color:${c}">${k}</span><b>${v}</b>${wSteps(f, c, g)}</div>`).join('')}</div>
+<div class="aw-day">${[['READY', '78', WA.green, .78], ['SLEEP', '7:12', WA.amber, .76, [7, 9]], ['STRAIN', '8.4', WA.neutral, .53, [6, 9]]].map(([k, v, c, f, g]) => `<div><span style="color:${c}">${k}</span><b>${v}</b>${wSteps(f, c, g)}</div>`).join('')}</div>
 <div class="aw-frow aw-fbot">${wArc(.52, '#FFC274', '1380', 'KCAL')}${wArc(.56, '#83C7FF', '84', 'PROTEIN')}${wArc(.84, WA.indigo, '6:30', 'ALARM')}</div></div>`;
 
 // Race day (TrainingPage.raceCard, RaceDay.swift): a training plan's duathlon as one card, its legs in race
@@ -1158,7 +1158,7 @@ html:not(.js) .stage1{display:none}
 .aw-clock{margin:2px 0 4px;text-align:center;font-size:50px;font-weight:600;line-height:1;letter-spacing:-1px;font-variant-numeric:tabular-nums}
 .aw-day{display:flex}.aw-day>div{flex:1;display:flex;flex-direction:column;padding:0 5px}.aw-day>div+div{border-left:1px solid rgba(255,255,255,.14)}
 .aw-day span{font-size:8.5px;font-weight:700;letter-spacing:.4px}.aw-day>div>b{font:700 18px/1.15 -apple-system,Inter,sans-serif}
-.aw-st{display:flex;gap:1.5px;margin-top:2px}.aw-st b{flex:1;height:5px;border-radius:1px}
+.aw-st{position:relative;display:flex;gap:1.5px;margin-top:2px;padding-bottom:3.5px}.aw-st b{flex:1;height:5px;border-radius:1px}.aw-st em{position:absolute;bottom:0;height:1.5px;border-radius:1px;background:rgba(255,255,255,.6)}
 .aw-home .aw-hero .aw-n{font-size:70px}.aw-home .aw-hero{margin-top:4px}.aw-home .aw-g{margin-top:10px}.aw-home .aw-g>div{padding:8px 6px 8px 8px}.aw-home .aw-v{font-size:23px}.aw-home .aw-next{align-items:flex-start;margin-top:12px;font-size:12.5px;line-height:1.3;white-space:normal}.aw-home .aw-next .di{margin-top:2px}
 .aw-face{display:flex;flex-direction:column;justify-content:space-between}.aw-fbot{padding:0 2px 4px}
 @media (prefers-reduced-motion:reduce){.dw-eye circle,.dw-spout,.js .dw.goal,.js .dw-burst.in path,.js .dw-drop.in,.js .dw-ring.in{animation:none}.dw-drop,.dw-ring{display:none}}

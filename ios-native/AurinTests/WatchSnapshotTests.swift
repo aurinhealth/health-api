@@ -35,4 +35,19 @@ final class WatchSnapshotTests: XCTestCase {
         XCTAssertEqual(s.sleep?.nights, [])
         XCTAssertNil(s.sleep?.deep)
     }
+
+    /// Strain against the target, one rule for the watch app and its
+    /// complications: under it is neutral until 18:00, then off.
+    func testStrainStanding() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Prague"))
+        let morning = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 11, day: 5, hour: 10)))
+        let evening = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 11, day: 5, hour: 18)))
+        typealias S = WatchSnapshot.Strain
+        XCTAssertEqual(S.standing(1.5, low: 3, high: 6, at: morning, calendar: calendar), .neutral)
+        XCTAssertEqual(S.standing(1.5, low: 3, high: 6, at: evening, calendar: calendar), .off)
+        XCTAssertEqual(S.standing(4.5, low: 3, high: 6, at: morning, calendar: calendar), .onTarget)
+        XCTAssertEqual(S.standing(7.2, low: 3, high: 6, at: morning, calendar: calendar), .off)
+        XCTAssertNil(S.standing(4.5, low: nil, high: 6, at: morning, calendar: calendar))
+    }
 }
