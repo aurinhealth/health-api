@@ -229,6 +229,8 @@ struct GymSessionView: View {
                 restEnd = nil
             }
         }
+        // Each part's and exercise's own time (GymWorkout.segments).
+        .onChange(of: focusKey ?? "", initial: true) { _, key in if !key.isEmpty { workout.focus(key) } }
         .onReceive(tick) { date in
             // Only the rest counts down; the set screen stays still between taps.
             guard restEnd != nil else { return }
@@ -253,6 +255,15 @@ struct GymSessionView: View {
         let started = gym.exercises.contains { $0.lifts.contains(where: \.done) }
         if !started, !skipBefore, let part = parts.before(day).first(where: { !store.partFinished($0) }) { return part }
         return gym.allDone ? nextAfter : nil
+    }
+
+    /// What is on the screen, for each part's and exercise's own time.
+    private var focusKey: String? {
+        guard workout.start != nil, !summary else { return nil }
+        if let part = shownPart { return part.rawValue }
+        guard let gym = store.gym, let lift = currentLift(in: gym),
+              let e = gym.exercises.first(where: { $0.lifts.contains { $0.row == lift.row } }) else { return nil }
+        return GymWorkout.exerciseKey(e)
     }
 
     /// The next part after the exercises not done or skipped yet.
@@ -333,10 +344,20 @@ struct GymSessionView: View {
             Button {
                 info = Info(exercise: ex)
             } label: {
-                Text(ex.title).font(.system(size: fit.small ? 14 : 16, weight: .semibold)).foregroundStyle(W.ink)
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
+                HStack(spacing: 4) {
+                    Text(ex.title).font(.system(size: fit.small ? 14 : 16, weight: .semibold)).foregroundStyle(W.ink)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    // Its own time, running on by itself (the screen stays still between taps).
+                    if let time = workout.earlier(GymWorkout.exerciseKey(ex)) {
+                        Text(timerInterval: time.since.addingTimeInterval(-Double(time.seconds))...Date.distantFuture, countsDown: false)
+                            .font(.system(size: 11, weight: .semibold).monospacedDigit()).foregroundStyle(W.amber)
+                            .lineLimit(1).fixedSize()
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .background(W.amber.opacity(0.18), in: Capsule())
+                    }
+                }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityHint(W.tr("Technika a poznámka", "Technique and note"))
@@ -1093,6 +1114,8 @@ struct GymExerciseList: View {
                 Spacer(minLength: 4)
                 let work = e.lifts.filter(\.work)
                 Text("\(work.filter(\.done).count)/\(work.count)").foregroundStyle(W.secondary)
+                let seconds = GymWorkout.shared.seconds(of: GymWorkout.exerciseKey(e))
+                if seconds > 0 { Text(GymText.elapsed(Double(seconds))).foregroundStyle(W.ink).monospacedDigit() }
             }
             .font(.system(size: 14))
         }
@@ -1132,16 +1155,22 @@ struct GymExerciseList: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                Toggle("", isOn: Binding(get: { on }, set: { value in
-                    var next = parts
-                    next.off.removeAll { $0 == part }
-                    if !value { next.off.append(part) }
-                    store.setParts(next)
-                }))
-                .labelsHidden()
-                .tint(W.green)
-                .fixedSize()
-                .accessibilityLabel(GymPartView.name(part))
+                // Its time once it ran; the switch only before that.
+                let seconds = GymWorkout.shared.seconds(of: part.rawValue)
+                if seconds > 0 {
+                    Text(GymText.elapsed(Double(seconds))).font(.system(size: 13).monospacedDigit()).foregroundStyle(W.ink)
+                } else {
+                    Toggle("", isOn: Binding(get: { on }, set: { value in
+                        var next = parts
+                        next.off.removeAll { $0 == part }
+                        if !value { next.off.append(part) }
+                        store.setParts(next)
+                    }))
+                    .labelsHidden()
+                    .tint(W.green)
+                    .fixedSize()
+                    .accessibilityLabel(GymPartView.name(part))
+                }
             }
         }
     }
@@ -1280,6 +1309,42 @@ struct GymSummary: View {
     @ObservedObject private var store = GymStore.shared
     @ObservedObject private var workout = GymWorkout.shared
     let finish: () -> Void
+
+    /// Each part and exercise with its time, calories and heart rate, in the day's order.
+    @ViewBuilder private var partRows: some View {
+        let stats = workout.partStats()
+        let rows = lines.filter { (stats[$0.key]?.seconds ?? 0) > 0 }
+        if !rows.isEmpty {
+            Divider()
+            ForEach(rows, id: \.key) { row in
+                let part = stats[row.key] ?? GymWorkout.PartStats()
+                HStack(spacing: 4) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(row.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(W.ink).lineLimit(1)
+                        Text(W.number(part.kcal) + " kcal" + (part.heartRate.map { " · " + W.number($0) + " bpm" } ?? ""))
+                            .font(.system(size: 10)).foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                    Spacer(minLength: 4)
+                    Text(GymText.elapsed(Double(part.seconds))).font(.system(size: 13, weight: .semibold).monospacedDigit()).foregroundStyle(W.ink)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
+    private struct Line {
+        let key: String
+        let name: String
+    }
+
+    /// The parts before the exercises, the exercises, the parts after them.
+    private var lines: [Line] {
+        let exercises = (store.gym?.exercises ?? []).map { Line(key: GymWorkout.exerciseKey($0), name: $0.title) }
+        guard let day = store.sheetDay, let parts = store.dayParts else { return exercises }
+        return parts.visible(day).flatMap { part -> [Line] in
+            part == .exercises ? exercises : [Line(key: part.rawValue, name: GymPartView.name(part))]
+        }
+    }
     /// How the plan suited, sent with Finish (the iPhone's rating after a workout).
     @State private var rating: String?
 
@@ -1326,6 +1391,7 @@ struct GymSummary: View {
                     stat(W.tr("Série", "Sets"), "\(store.gym?.setsDone ?? 0)")
                     stat(W.tr("Objem", "Volume"), GymText.volume(store.gym?.volume ?? 0))
                 }
+                partRows
                 if let gym = store.gym {
                     Divider()
                     ForEach(gym.exercises.filter { $0.lifts.contains { $0.done && $0.work } }, id: \.name) { e in
