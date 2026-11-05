@@ -47,6 +47,9 @@ intent; check it against what the code does, one promise at a time:
 - Every data type the app reads from HealthKit, Google Health or a connection is covered by the
   consent text and the policy.
 
+In the iPhone app, `Text("…")` with a String variable is still translated (`Text` extension in
+`ios-native/Shared/L10n.swift`), so Czech literals in Swift are not proof that English users see Czech.
+
 A mismatch is a finding only with both sides cited: the promise (page and the quoted sentence) and
 the code (file:line, or the place where the code should be and is not). Drop wording drift that moves
 no data; keep anything that sends or keeps data where the page says it does not. If you cannot cite
