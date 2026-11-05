@@ -1087,16 +1087,57 @@ final class SnapshotTests: XCTestCase {
             NavigationStack { ActivePlanContent(active: run, preview: nil, week: nil, editGoal: {}).padding(.horizontal, 24) }.environment(model)
         }
         try render("plan-goal-time", height: 620) { GoalTimeSheet(km: 21.1, estimate: 6270, weeks: 10, initial: 6120) { _ in } }
-        // Multisport: a duathlon (its race's sports, run, ride, run on race day) and a plan without a race with picked sports.
-        let du = #"{"id":"du-standard","sport":"triathlon","name":"Standardní duatlon","goal":"Běh 10 km, kolo 40 km, běh 5 km","description":"","level":"intermediate","weeksCount":12,"days":[5,7],"race":{"km":55,"options":null,"kind":"du-standard","legList":[{"sport":"run","km":10},{"sport":"ride","km":40},{"sport":"run","km":5}]},"perSport":{"ride":3,"run":3},"sports":["ride","run"],"weeks":[\#(weeks)]}"#
-        let duPlan = #"{"templates":[\#(du)],"active":{"id":11,"templateId":"du-standard","name":"Standardní duatlon","startDate":"2026-10-19","raceDate":"2027-01-10","raceKm":55,"week":6,"weeksCount":12,"phaseLabel":"Budování","started":true,"paused":false,"shiftedWeeks":0,"returning":false,"sports":["ride","run"],"perSport":{"ride":3,"run":3},"race":{"km":55,"kind":"du-standard","minutes":131,"legList":[{"sport":"run","km":10,"minutes":44},{"sport":"ride","km":40,"minutes":66},{"sport":"run","km":5,"minutes":21}]},"template":\#(du)},"activeGym":null,"started":null}"#
+        // Multisport in English, as the post on X shows it (the server's English
+        // templates, src/training-plans.js): a sprint duathlon (its race's sports, run,
+        // ride, run on race day, the same race as the watch's -race) and a plan without
+        // a race with picked sports, each sheet with its overview instead of the spinner.
+        L10n.setLanguage("en")
+        typealias PlanWeek = (phase: String, label: String, load: Double, keys: [String], sessions: Int, minutes: Int, tss: Int)
+        func planWeekJSON(_ list: [PlanWeek]) -> String {
+            list.enumerated().map { i, w in
+                #"{"week":\#(i + 1),"phase":"\#(w.phase)","phaseLabel":"\#(w.label)","load":\#(w.load),"keys":[\#(w.keys.map { "\"\($0)\"" }.joined(separator: ","))],"longMinutes":null,"race":\#(w.phase == "race")}"#
+            }.joined(separator: ",")
+        }
+        func previewWeekJSON(_ list: [PlanWeek]) -> String {
+            list.enumerated().map { i, w in
+                #"{"week":\#(i + 1),"phase":"\#(w.phase)","phaseLabel":"\#(w.label)","keys":[\#(w.keys.map { "\"\($0)\"" }.joined(separator: ","))],"race":\#(w.phase == "race"),"sessions":\#(w.sessions),"minutes":\#(w.minutes),"tss":\#(w.tss)}"#
+            }.joined(separator: ",")
+        }
+        let duWeekList: [PlanWeek] = [
+            ("base", "Base", 1, ["Tempo 2×10", "Fartlek pyramid 1-2-3-2-1"], 5, 365, 315),
+            ("base", "Base", 1.03, ["Tempo 2×15", "Hills 6×90 s"], 5, 375, 324),
+            ("base", "Base", 1.06, ["Tempo 2×15", "Fartlek pyramid 1-2-3-4-3-2-1"], 5, 390, 337),
+            ("recovery", "Recovery", 0.7, [], 5, 260, 225),
+            ("build", "Build", 1.04, ["Sweet Spot 3×15", "Threshold intervals 3×10 min"], 5, 365, 315),
+            ("peak", "Peak", 1.08, ["Threshold 2×20", "Sub-threshold 4×8 min"], 5, 385, 333),
+            ("peak", "Peak", 1.08, ["Threshold 2×20", "Sub-threshold 4×8 min"], 5, 390, 337),
+            ("recovery", "Recovery", 0.7, [], 5, 255, 220),
+            ("taper", "Taper", 0.72, ["Threshold 3×10", "Threshold intervals 3×8 min"], 5, 250, 216),
+            ("race", "Race", 0.5, [], 5, 165, 143)]
+        let du = #"{"id":"du-sprint","sport":"triathlon","name":"Sprint duathlon","goal":"5 km run, 20 km ride, 2.5 km run","description":"","level":"beginner","weeksCount":10,"days":[4,6],"race":{"km":27.5,"options":null,"kind":"du-sprint","legList":[{"sport":"run","km":5},{"sport":"ride","km":20},{"sport":"run","km":2.5}]},"perSport":{"ride":2,"run":3},"sports":["ride","run"],"weeks":[\#(planWeekJSON(duWeekList))]}"#
+        let duPlan = #"{"templates":[\#(du)],"active":{"id":11,"templateId":"du-sprint","name":"Sprint duathlon","startDate":"2026-10-05","raceDate":"2026-12-13","raceKm":27.5,"week":5,"weeksCount":10,"phaseLabel":"Build","started":true,"paused":false,"shiftedWeeks":0,"returning":false,"sports":["ride","run"],"perSport":{"ride":2,"run":3},"completion":{"1":100,"2":94,"3":88,"4":100},"race":{"km":27.5,"kind":"du-sprint","minutes":80,"legList":[{"sport":"run","km":5,"minutes":22},{"sport":"ride","km":20,"minutes":36},{"sport":"run","km":2.5,"minutes":12}]},"template":\#(du)},"activeGym":null,"started":null}"#
         let duathlon = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(duPlan.utf8)).active)
         try render("plan-race-duathlon", glow: Palette.Glow.training, height: 700) {
-            NavigationStack { ActivePlanContent(active: duathlon, preview: nil, week: nil).padding(.horizontal, 24) }.environment(model)
+            NavigationStack { ActivePlanContent(active: duathlon, preview: nil, week: nil).padding(.horizontal, 24) }.environment(model).environment(\.locale, L10n.locale)
         }
-        try render("plan-start-duathlon", height: 900) { StartPlanSheet(template: duathlon.template).environment(model) }
-        let multi = try decoder.decode(TrainingPlans.Template.self, from: Data(#"{"id":"multi-base","sport":"triathlon","name":"Multisport","goal":"Kondice ve dvou nebo třech sportech","description":"","level":"intermediate","weeksCount":12,"days":[4,7],"race":null,"perSport":{"ride":2,"run":2,"swim":2},"sports":["ride","run","swim"],"choose":true,"weeks":[\#(weeks)]}"#.utf8))
-        try render("plan-start-multisport", height: 900) { StartPlanSheet(template: multi).environment(model) }
+        let duPreview = try decoder.decode(PlanPreview.self, from: Data(#"{"startDate":"2026-11-09","firstDay":null,"endDate":"2027-01-17","days":[1,2,4,5,6],"weeks":[\#(previewWeekJSON(duWeekList))],"totals":{"sessions":50,"minutes":3200,"tss":2765}}"#.utf8))
+        try render("plan-start-duathlon", height: 1500) { StartPlanSheet(template: duathlon.template, initial: duPreview).environment(model).environment(\.locale, L10n.locale) }
+        let multiWeekList: [PlanWeek] = [
+            ("base", "Base", 1, ["Tempo 2×10", "Fartlek pyramid 1-2-3-2-1"], 6, 365, 315),
+            ("base", "Base", 1.03, ["Tempo 2×10", "Hills 6×90 s"], 6, 375, 324),
+            ("base", "Base", 1.06, ["Tempo 2×15", "Fartlek pyramid 1-2-3-2-1"], 6, 390, 337),
+            ("recovery", "Recovery", 0.7, [], 6, 260, 225),
+            ("base", "Base", 1, ["Tempo 2×15", "Fartlek pyramid 1-2-3-4-3-2-1"], 6, 355, 307),
+            ("build", "Build", 1.06, ["Threshold 2×15", "Tempo run 25 min"], 6, 375, 324),
+            ("build", "Build", 1.08, ["Sweet Spot 3×15", "Threshold intervals 4×8 min"], 6, 385, 333),
+            ("recovery", "Recovery", 0.7, [], 6, 255, 220),
+            ("build", "Build", 1.04, ["Sweet Spot 3×15", "Threshold intervals 3×10 min"], 6, 360, 311),
+            ("peak", "Peak", 1.08, ["Threshold 2×20", "Sub-threshold 4×8 min"], 6, 375, 324),
+            ("peak", "Peak", 1.08, ["Threshold 2×20", "Sub-threshold 4×8 min"], 6, 380, 328),
+            ("recovery", "Recovery", 0.7, [], 6, 250, 216)]
+        let multi = try decoder.decode(TrainingPlans.Template.self, from: Data(#"{"id":"multi-base","sport":"triathlon","name":"Multisport","goal":"Fitness in two or three sports","description":"","level":"intermediate","weeksCount":12,"days":[4,7],"race":null,"perSport":{"ride":2,"run":2,"swim":2},"sports":["ride","run","swim"],"choose":true,"weeks":[\#(planWeekJSON(multiWeekList))]}"#.utf8))
+        let multiPreview = try decoder.decode(PlanPreview.self, from: Data(#"{"startDate":"2026-11-09","firstDay":null,"endDate":"2027-01-31","days":[1,2,4,5,6],"sports":["ride","run"],"weeks":[\#(previewWeekJSON(multiWeekList))],"totals":{"sessions":72,"minutes":4125,"tss":3564}}"#.utf8))
+        try render("plan-start-multisport", height: 1700) { StartPlanSheet(template: multi, initial: multiPreview).environment(model).environment(\.locale, L10n.locale) }
         try render("plan-sports", height: 420) { PlanSportsSheet(initial: ["ride", "swim"]).environment(model) }
         // A gym plan with its strength tests, and its result with the lifts before and after.
         let testKeys = "\"Dřep, bench, mrtvý tah: odhad maxima\",\"3× týdně\"", workKeys = "\"3× týdně\",\"5 × 5\",\"RPE 8\""

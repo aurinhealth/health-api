@@ -44,7 +44,7 @@ import { loadProfiles, refreshSuggestions } from './profile-suggestions.js';
 import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
 import {forwardWatchWorkouts} from './watch-forward.js';
-import {askCoach,coachContext,lightModel,assistantTask,engineSport} from './coach-assistant.js';
+import {askCoach,coachContext,lightModel,assistantTask,engineSport,compactWellness} from './coach-assistant.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
 import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates } from './coach-actions.js';
 import { QUICK_CHIPS, quickSnapshot, quickOptions, quickChange, previewFollows, scaleGymRows, quickMemory, quickEntry } from './coach-quick-change.js';
@@ -106,13 +106,16 @@ import legacyHealthApi, { googleToken, matchActivities } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
 import { reviewRefusal, isReviewAccount } from "./app-review.js";
+import { updateFitnessEstimate } from "./own-vo2max-store.js";
+import { ensureReviewSample } from "./review-sample.js";
 import { handleNativeAppleLogin, forgetUsedAppleTokens } from "./apple-login.js";
 import { chatContext, appendChatTurnIds, listChats, readChat, deleteChat, startChatWithCoach, ownedChat, saveAnswerFeedback } from "./assistant-chats.js";
 import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedReplyPush } from "./coach-push-reply.js";
 import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
 import { coachEvalPrincipal, handleCoachEval } from "./coach-eval.js";
-import { limitBody, publicBodyLimit } from "./body-limit.js";
+import { limitBody, publicBodyLimit, SIGNED_IN_BODY_LIMIT } from "./body-limit.js";
+import { accountRateLimit } from "./account-rate-limit.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleSignOut, endConnectSession, sessionSecret, foreignOriginChange, sessionMatchesUser, slidingSession } from "./dashboard-auth.js";
 import { appleAppSiteAssociation } from "./apple-app-site-association.js";
 import { handleWorkoutTemplatesApi, publicSharePage } from "./workout-templates.js";
@@ -131,11 +134,11 @@ import { handleWhoopOAuth, disconnectWhoop, syncWhoop } from "./whoop.js";
 import { wahooDetail } from "./wahoo-detail.js";
 import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, wahooRideExpected, readWahooTokens } from "./wahoo.js";
 import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed } from "./sync-destinations.js";
-import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, smokeUser, usersWithProviders, usersWithAccount, usersWithPushTokens, openSignup } from "./tenancy.js";
+import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, smokeUser, usersWithProviders, usersWithAccount, usersWithPushTokens, usersWithHealthConsent, openSignup } from "./tenancy.js";
 import { userDataEnvironment, prefetchUserData, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
 import { handlePasskeyLogin } from "./passkeys.js";
-import { handleEmailLogin } from "./email-login.js";
+import { handleEmailLogin, reviewCode } from "./email-login.js";
 import { handleWaitlistSignup, forgetOldWaitlist } from "./testflight-waitlist.js";
 import { forgetStaleRequestLimits } from "./ip-rate-limit.js";
 import { emailConfigured } from "./email-sender.js";
@@ -307,6 +310,10 @@ async function forIntervalsAthlete(env, ctx, athlete, parts, kinds, deleted = []
 const minute = (cron, now, test) => cron === "* * * * *" && test(now.getUTCMinutes(), now.getUTCHours());
 const every5 = (cron, now) => minute(cron, now, m => m % 5 === 0);
 const USER_JOBS = [
+  // Aurin's own VO2max and ages from the stored data, once a day at 4:47 UTC (a
+  // minute no five-minute job shares), for everyone who consented, whatever they
+  // connected; nothing is fetched from a service (own-vo2max-store.js).
+  { name: "fitness-estimate", providers: [], everyone: true, due: (cron, now) => minute(cron, now, (m, h) => h === 4 && m === 47), run: scoped => updateFitnessEstimate(scoped) },
   // After the user's midnight (0:00–6:00 in their zone), old Google data gets
   // thinner a step a minute: a workout's heart-rate samples older than a week become 5-minute
   // rows, those older than a month hourly rows, zone minutes hourly rows
@@ -388,7 +395,7 @@ export function dueUserJobs(cron, now) { return USER_JOBS.filter(job => job.due(
 export async function runUserJobs(env, ctx, { cron, scheduledTime }, user, names) {
   const scoped = await withoutBrokenConnections(await connectionEnvironment(await userDataEnvironment(env, user)), new Date(scheduledTime || Date.now()));
   const connected = scoped.CONNECTED_PROVIDERS || [];
-  const jobs = USER_JOBS.filter(job => names.includes(job.name) && (job.push || job.notes || job.providers.some(p => connected.includes(p))));
+  const jobs = USER_JOBS.filter(job => names.includes(job.name) && (job.push || job.notes || job.everyone || job.providers.some(p => connected.includes(p))));
   if (!jobs.length) return;
   const [language, zone] = await Promise.all([storedLanguage(env.DB, user.id, { fresh: true }), storedTimeZone(env.DB, user.id, { fresh: true })]), unitsChoice = await storedUnits(env.DB, user.id);
   const controller = { cron, scheduledTime };
@@ -425,7 +432,9 @@ export async function fanOutUserJobs(env, ctx, controller, { concurrency = 10 } 
   const notified = due.some(job => job.push) && pushConfigured(env) ? await usersWithPushTokens(env.DB, env) : [];
   // The coach's night note goes to the users who chatted, whatever they connected.
   const chatted = due.some(job => job.notes) ? await usersWithNotesDue(env.DB, env, scheduledTime) : [];
-  const byId = new Map([...(await usersWithProviders(env.DB, env, providers)), ...notified, ...chatted].map(user => [user.id, user]));
+  // A job for everyone (once a day) goes to every consenting user.
+  const everyone = due.some(job => job.everyone) ? await usersWithHealthConsent(env.DB, env) : [];
+  const byId = new Map([...(await usersWithProviders(env.DB, env, providers)), ...notified, ...chatted, ...everyone].map(user => [user.id, user]));
   // The App Review demo account syncs with no third-party service (app-review.js).
   const users = [...byId.values()].filter(user => !isReviewAccount(env, user));
   const binding = env.USER_JOBS && typeof env.USER_JOBS.run === "function" ? env.USER_JOBS : null;
@@ -505,10 +514,12 @@ const worker = {
     if (!principal && url.pathname === "/automation/coach-eval") principal = await coachEvalPrincipal(request, env);
     const isPublic = isPublicPath(url.pathname);
     // Nobody signed in: the body is read only up to a limit (body-limit.js, SEC-013).
+    let publicLimited = false;
     if (isPublic && !principal) {
       const limited = await limitBody(request, publicBodyLimit(url.pathname));
       if (limited.response) return limited.response;
       request = limited.request;
+      publicLimited = true;
     }
     if (!isPublic && !principal) {
       // A browser opening an address that isn't a page (a mistyped or old link) gets the site's 404 page.
@@ -516,7 +527,7 @@ const worker = {
         const page = notFoundPage(request);
         return request.method === 'HEAD' ? new Response(null, page) : page;
       }
-      return unauthorizedResponse();
+      return unauthorizedResponse(request);
     }
     let user = null, prefetched = null;
     if (principal?.kind === "user") {
@@ -525,7 +536,14 @@ const worker = {
       user = await findUser(env.DB, principal.userId, env);
       // A cookie from before the user signed out everywhere (or changed the e-mail, removed a passkey or the Apple ID) is no cookie.
       if (user && !sessionMatchesUser(principal, user)) { user = null; principal = null; }
-      if (!user && !isPublic) return unauthorizedResponse();
+      if (!user && !isPublic) return unauthorizedResponse(request);
+      // A stale or orphaned cookie on a public route is nobody signed in: the same body limit (SEC-013).
+      if (!user && !publicLimited) {
+        const limited = await limitBody(request, publicBodyLimit(url.pathname));
+        if (limited.response) return limited.response;
+        request = limited.request;
+        publicLimited = true;
+      }
     } else if (principal?.kind === "system") {
       // The deploy smoke test acts as its own empty account, never as the owner (tenancy.js smokeUser).
       user = await smokeUser(env.DB, env);
@@ -566,6 +584,14 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // Every change made with the session cookie, whatever the route.
     if (foreignOriginChange(request, principal)) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     const signedIn = principal?.kind === "user" && Boolean(user);
+    if (signedIn) {
+      // Requests per account (account-rate-limit.js) and the size of what it sends (body-limit.js).
+      const limited = await accountRateLimit(request, rawEnv, user.id);
+      if (limited) return limited;
+      const sized = await limitBody(request, SIGNED_IN_BODY_LIMIT);
+      if (sized.response) return sized.response;
+      request = sized.request;
+    }
     // Routes only the old web dashboard used: the owner's (owner-only-routes.js).
     const ownerOnly = ownerOnlyRefusal(url.pathname, { signedIn, user });
     if (ownerOnly) return ownerOnly;
@@ -631,6 +657,10 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (emailLogin) return emailLogin;
     if (url.pathname.startsWith("/app/api/")) {
       if (!user) return unauthorizedResponse();
+      // The App Review account shows a sample athlete's Apple Health (review-sample.js);
+      // only while its fixed code works; two rows read an hour, no query at all for anyone
+      // else. Paused health data stays paused.
+      if (isReviewAccount(rawEnv, user) && reviewCode(rawEnv, String(user.email || "").trim().toLowerCase()) && !user.healthPaused) await ensureReviewSample(env, { later: job => ctx.waitUntil(job) }).catch(error => console.error("Review sample failed", error.message));
       if (foodCatalogRequestPaused(request, env, url.pathname)) return Response.json({status:'catalog_upgrade',message:new FoodCatalogUnavailable().message},{status:503,headers:{'Retry-After':'30','Cache-Control':'no-store'}});
       // A write the app replays after a lost signal is stored once (idempotency.js).
       const response = await withIdempotency(request, env, url, r => handleDashboardApi(r, env, ctx, url, { user, signedIn }));
@@ -1170,8 +1200,10 @@ async function coachTextExtras(env,ctx,internalAuth,screen){
   // Today has its own readiness on screen; the coach adds why (parts) and the athlete's status.
   // Sick, injured or on a break holds the text back on Trénink too (screen-texts.js holdBack).
   const state=await getAthleteState(env.DB).catch(()=>null);
-  if(screen==='today')return {...(coachTrends?{coachTrends}:{}),...(readiness?{readinessDetail:readiness}:{}),athleteState:state?.status||null};
-  return {...(coachTrends?{coachTrends}:{}),...(readiness?{readiness}:{}),athleteState:state?.status||null};
+  // The cycle only as the coach may know it: null unless "Kouč ví o cyklu" is on (cycle-model.js cycleForCoach).
+  const coachCycle=profile?.cycle?cycleForCoach({...profile.cycle,date}):null;
+  if(screen==='today')return {...(coachTrends?{coachTrends}:{}),...(readiness?{readinessDetail:readiness}:{}),athleteState:state?.status||null,coachCycle};
+  return {...(coachTrends?{coachTrends}:{}),...(readiness?{readiness}:{}),athleteState:state?.status||null,coachCycle};
 }
 // performance: the runs' and rides' trends, curves and laps (Intervals.icu
 // sport settings, power and pace curves, up to six activities' laps). Only the
@@ -2229,7 +2261,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const reviewDay=selected.appContext.date<=date&&selected.selectedDay?selected.appContext.date:date;
         const reviews=await rideReviewsForCoach(env,ctx,reviewDay===date?inputs.daily?.training:selected.selectedDay,reviewDay,inputs.fitness?.wellness,thresholds).catch(()=>[]);
         if(reviews.length)coachCtx.completedRideReviews=reviews;
-        if(blockHistory)Object.assign(coachCtx,{blockHistory,blockFitness:inputs.fitness.wellness||[],historyPeriod:{from:shiftDate(date,-84),to:date,source:'cached activities; missing records remain unknown'}});
+        if(blockHistory)Object.assign(coachCtx,{blockHistory,blockFitness:compactWellness(inputs.fitness.wellness,{date,days:90})||[],historyPeriod:{from:shiftDate(date,-84),to:date,source:'cached activities; missing records remain unknown'}});
       }else focus=await dashboardProfile(env).then(profile=>athleteFocus(profile,date)).catch(()=>null);
       Object.assign(coachCtx,{userInitiated:true,...(focus?.cannotSwim100m?{cannotSwim100m:true}:{}),athleteState:athleteState.status,statusNote:athleteState.note,statusUntil:athleteState.statusUntil,...(athleteState.cancelled?.length?{cancelledSessions:athleteState.cancelled}:{}),preferenceMemory:memory?[...new Set([...usedMemories(athleteState),memory])]:usedMemories(athleteState),...memoryCtx,...(sportChanges?{sportsToSuggestChange:{turnedOff:noSport}}:{}),...(coachCtx.focus?{}:{focus}),conversation});
       const sport=engineSport(focus,selected?.appContext||appContext,message);

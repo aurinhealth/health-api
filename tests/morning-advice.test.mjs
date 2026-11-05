@@ -58,7 +58,11 @@ test("an injury the coach knows about is remembered", () => {
   assert.equal(injuryNote(["Had a cold last week"]), null);
   const m = en({ score: 84, zone: "green", ...night, sleep: { minutes: 470 }, date, context: { activities: [], memories: ["Knee pain since Sunday"] } });
   assert.equal(m.alert.title, "Readiness 84 · Train with care");
-  assert.equal(m.alert.body, "Nothing planned. A good day for a harder session. Keep in mind: Knee pain since Sunday.");
+  // The words stay off the lock screen, also in the hidden part; Today's card has them.
+  assert.equal(m.alert.body, "Nothing planned. A good day for a harder session.");
+  assert.doesNotMatch(JSON.stringify(m.alert), /Knee/);
+  assert.equal(m.changed.recommendation, "Nothing planned. A good day for a harder session. Keep in mind: Knee pain since Sunday.");
+  assert.equal(m.changed.remember, "Keep in mind: Knee pain since Sunday.");
 });
 
 test("status and illness still win over everything", () => {

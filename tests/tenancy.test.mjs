@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
-import { ensureTenancy, scopedDb, signInGoogleUser, inviteUser, setUserDisabled, userEnv, usersWithProviders, PERSONAL_TABLES, _resetTenancyForTest } from "../src/tenancy.js";
+import { ensureTenancy, scopedDb, signInGoogleUser, inviteUser, setUserDisabled, userEnv, usersWithProviders, PERSONAL_TABLES, _resetTenancyForTest, unboundUserQuery } from "../src/tenancy.js";
 import { savePersonalFood, searchPersonalFoods } from "../src/personal-foods.js";
 import { logFood, updateFoodEntry } from "../src/food-log.js";
 
@@ -79,6 +79,27 @@ test("the scoped database refuses personal-data queries without user_id", () => 
   assert.doesNotThrow(() => db.prepare("SELECT * FROM health_datapoints WHERE user_id=?"));
   assert.doesNotThrow(() => db.prepare("SELECT * FROM food_products WHERE barcode=?"));
   assert.throws(() => scopedDb(createD1(), 0));
+});
+
+test("a personal-data query not bound to the user's id is only logged, once (N7)", async () => {
+  const raw = createD1();
+  raw.sqlite.exec("CREATE TABLE food_logs (user_id INTEGER, id INTEGER, kcal REAL)");
+  const db = scopedDb(raw, 5), warned = [], warn = console.warn;
+  console.warn = (...args) => warned.push(args.join(" "));
+  try {
+    await db.prepare("SELECT * FROM food_logs WHERE user_id=? AND id=?").bind(5, 1).all();
+    await db.prepare("SELECT * FROM food_logs WHERE user_id=?").bind("5").first();
+    await db.batch([db.prepare("INSERT INTO food_logs (user_id,id,kcal) VALUES (?,?,?)").bind(5, 2, 100)]);
+    assert.deepEqual(warned, []);
+    const other = await db.prepare("SELECT * FROM food_logs WHERE user_id=? AND kcal>0").bind(7).all();
+    assert.equal(other.success, true, "log only: the query still runs");
+    await db.prepare("SELECT * FROM food_logs WHERE user_id=? AND kcal>0").bind(7).all();
+    await db.batch([db.prepare("DELETE FROM food_logs WHERE user_id=? AND id=99").bind(8)]);
+    assert.equal(warned.length, 2);
+    assert.match(warned[0], /not bound to the user's id \(log only\)/);
+  } finally { console.warn = warn; }
+  assert.equal(unboundUserQuery("SELECT * FROM food_products WHERE barcode=?", ["1"], 5), false);
+  assert.equal(unboundUserQuery("CREATE TABLE IF NOT EXISTS food_logs (user_id INTEGER)", [], 5), false);
 });
 
 test("only the owner, existing users and invited emails can sign in", async () => {
