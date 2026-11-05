@@ -105,3 +105,12 @@ export function recoveryTime({ sets = [], activities = [], now, sleep = null, hr
     ]
   };
 }
+
+// Regenerace on Today from the last days' training and the night Today shows;
+// training is null on another day than today. Only for an active athlete:
+// while sick, injured or on a break there is no hard training to count down
+// to (Today audit 15).
+export function withRecoveryTime(today, training, status, now = Date.now()) {
+  if (training && (!status || status === "active")) today.recoveryTime = recoveryTime({ ...training, now, sleep: today.sleep, hrv: today.hrv, restingHR: today.restingHR });
+  return today;
+}

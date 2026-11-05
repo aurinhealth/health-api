@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sessionRecoveryHours, recoveryTime, morningSigns, activityRecoveryHours, MAX_HOURS } from "../src/recovery-time.js";
-import { recoveryForCoach, halfDay } from "../src/coach-assistant.js";
+import { sessionRecoveryHours, recoveryTime, morningSigns, activityRecoveryHours, MAX_HOURS, withRecoveryTime } from "../src/recovery-time.js";
+import { recoveryForCoach } from "../src/coach-assistant.js";
+import { halfDay } from "../src/user-time.js";
 import { buildToday } from "../src/app-today.js";
 
 const now = Date.parse("2026-10-15T08:00:00Z"), ago = h => now - h * 3600000;
@@ -71,6 +72,14 @@ test("the coach gets half a day, after 22:00 the next morning (Prague time)", ()
   assert.equal(halfDay("2026-11-05T13:00:00Z"), "2026-11-05 afternoon");
   assert.equal(halfDay("2026-11-05T17:00:00Z"), "2026-11-05 evening");
   assert.equal(halfDay("2026-11-05T21:30:00Z"), "2026-11-06 morning");
+});
+
+test("Regenerace only for an active athlete", () => {
+  const training = { activities: [ride(14, 84, 88)] };
+  assert.ok(withRecoveryTime({}, training, "active", now).recoveryTime);
+  assert.ok(withRecoveryTime({}, training, null, now).recoveryTime);
+  for (const status of ["sick", "injured", "on_break"]) assert.equal(withRecoveryTime({}, training, status, now).recoveryTime, undefined);
+  assert.equal(withRecoveryTime({}, null, "active", now).recoveryTime, undefined);
 });
 
 test("Today carries the resting heart rate range Regenerace reads", () => {

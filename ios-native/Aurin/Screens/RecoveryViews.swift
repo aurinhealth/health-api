@@ -467,14 +467,26 @@ extension RecoveryTime {
     static func waitsForGreener(_ zone: String?) -> Bool { zone == "yellow" || zone == "red" }
 
     /// "tvrdý trénink zítra odpoledne" / "hard training tomorrow afternoon".
-    static func hardLine(_ time: RecoveryTime, today: String, zone: String?) -> String? {
-        if waitsForGreener(zone) { return L10n.tr("tvrdý trénink ne dřív než po zelenějším ránu") }
-        return time.ready.map { L10n.f("tvrdý trénink %@", part($0, today: today)) }
+    /// On a yellow or red morning the time still counts, and a greener
+    /// morning comes on top of it.
+    static func hardLine(_ time: RecoveryTime, today: String, zone: String?, now: Date = Date()) -> String? {
+        let ahead = time.ready.flatMap { $0 > now ? part($0, today: today, now: now) : nil }
+        if waitsForGreener(zone) {
+            return ahead.map { L10n.f("tvrdý trénink %@, po zelenějším ránu", $0) } ?? L10n.tr("tvrdý trénink ne dřív než po zelenějším ránu")
+        }
+        return time.ready.map { L10n.f("tvrdý trénink %@", part($0, today: today, now: now)) }
+    }
+
+    /// The hard row's time: on a yellow or red morning with a greener morning on top.
+    static func hardWhen(_ time: RecoveryTime, today: String, zone: String?, now: Date) -> String {
+        let ahead = time.ready.flatMap { $0 > now ? part($0, today: today, now: now) : nil }
+        if waitsForGreener(zone) { return ahead.map { L10n.f("%@, po zelenějším ránu", $0) } ?? L10n.tr("ne dřív než po zelenějším ránu") }
+        return ahead ?? L10n.tr("už teď")
     }
 }
 
-/// Regenerace from Today: the hours left, when easy and hard training are
-/// fine, and what makes it take that long.
+/// Regenerace from Today: half a day as an estimate, when easy and hard
+/// training are fine, and what makes it take that long.
 struct RecoveryTimeView: View {
     @Environment(AppModel.self) private var model
 
@@ -507,12 +519,12 @@ struct RecoveryTimeContent: View {
             Text("Regenerace").font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
             // Half a day at most, labelled as an estimate (Today audit 15).
             if let ready = time.ready {
-                let when = RecoveryTime.part(ready, today: today)
+                let when = RecoveryTime.part(ready, today: today, now: now)
                 Text(verbatim: when.prefix(1).uppercased(with: L10n.locale) + when.dropFirst())
                     .font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 4)
             }
             if RecoveryTime.waitsForGreener(zone) {
-                Text("tvrdý trénink ne dřív než po zelenějším ránu").font(Typo.bodyStrong).foregroundStyle(Palette.muted).padding(.top, 6)
+                Text("odhad · tvrdý trénink až po zelenějším ránu").font(Typo.bodyStrong).foregroundStyle(Palette.muted).padding(.top, 6)
             } else if time.ready != nil {
                 Text("tělo připravené na tvrdý trénink · odhad").font(Typo.bodyStrong).foregroundStyle(Palette.green).padding(.top, 6)
             }
@@ -525,12 +537,12 @@ struct RecoveryTimeContent: View {
                     let lightLater = time.light.map { $0 > now } ?? false
                     row(icon: "figure.walk", color: Palette.green, title: L10n.tr("Lehký trénink"),
                         detail: L10n.tr(time.legsTired ? "Z1–Z2, posilovna bez nohou" : "Z1–Z2, jiné svaly"),
-                        trailing: lightLater ? time.light.map { RecoveryTime.part($0, today: today) } ?? "" : L10n.tr("už teď"),
+                        trailing: lightLater ? time.light.map { RecoveryTime.part($0, today: today, now: now) } ?? "" : L10n.tr("už teď"),
                         ready: !lightLater)
                     Divider().overlay(Palette.hairline)
                     row(icon: "flame.fill", color: Palette.amber, title: L10n.tr("Tvrdý trénink"),
                         detail: L10n.tr(time.legsTired ? "intervaly, těžké nohy" : "intervaly, těžká posilovna"),
-                        trailing: RecoveryTime.waitsForGreener(zone) ? L10n.tr("ne dřív než po zelenějším ránu") : time.ready.map { RecoveryTime.part($0, today: today) } ?? "")
+                        trailing: RecoveryTime.hardWhen(time, today: today, zone: zone, now: now))
                 }
             }
 
@@ -593,7 +605,7 @@ struct RecoveryTimeContent: View {
     private func causeRow(_ c: RecoveryTime.Cause) -> some View {
         let (icon, color) = Self.look(c.kind)
         // A session: when it alone is recovered from; a sign: that it adds time.
-        let trailing = c.isSession ? (c.ready.map { RecoveryTime.part($0, today: today) } ?? "") : L10n.tr("prodlužuje")
+        let trailing = c.isSession ? (c.ready.map { RecoveryTime.part($0, today: today, now: now) } ?? "") : L10n.tr("prodlužuje")
         return row(icon: icon, color: color, title: Self.title(c), detail: Self.detail(c, today: today), trailing: trailing)
     }
 

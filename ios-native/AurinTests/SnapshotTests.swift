@@ -69,6 +69,15 @@ final class SnapshotTests: XCTestCase {
         // A yellow or red morning: hard training waits for a greener one.
         let time = DemoData.today.recoveryTime
         XCTAssertEqual(time.flatMap { RecoveryTime.hardLine($0, today: "2026-10-08", zone: "red") }, "tvrdý trénink ne dřív než po zelenějším ránu")
+        // Still recovering on a red morning: the time, and a greener morning on top.
+        parts.day = 16
+        let friday = Calendar.current.date(from: parts) ?? Date()
+        let ready = ISO8601DateFormatter().string(from: friday)
+        let recovering = RecoveryTime(readyAt: ready, from: ready, lightAt: nil, hours: 0, progress: 0, causes: [])
+        XCTAssertEqual(RecoveryTime.hardLine(recovering, today: "2026-10-15", zone: "red", now: thursday), "tvrdý trénink zítra odpoledne, po zelenějším ránu")
+        // Passed already (an older Today kept on the phone): now, never "this evening" of yesterday.
+        XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-16"), "už teď")
+        XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-15", now: thursday.addingTimeInterval(60)), "už teď")
     }
 
     /// Dnes → Den: the night, readiness, done workout and its strain, steps,

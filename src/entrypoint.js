@@ -92,7 +92,7 @@ import { lockReadiness } from "./readiness-lock.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
 import { loadMuscleFatigue, loadTrainingDoses, muscleFatigue } from "./muscle-fatigue.js";
 import { loadMuscleDetail } from "./muscle-detail.js";
-import { recoveryTime } from "./recovery-time.js";
+import { withRecoveryTime } from "./recovery-time.js";
 import { readGymPlan, ensureGymPlans } from "./gym-plan-store.js";
 import { listRecovery, addRecovery, updateRecovery, recoveryRoutine, describeRecovery } from "./recovery-plan.js";
 import { checkWeek, checkSummary, checkChips, checkSignature, strainOf, kindOfPlanned, readWeekCheck, saveWeekCheck, decideWeekCheck, shownWeekCheck } from './week-check.js';
@@ -1226,13 +1226,6 @@ async function coachPerformance(env,ctx,date){
   const trends=loaded?performanceTrends(loaded.sessions,loaded.athlete,date):null;
   const out={...(trends||{}),...(curves?{curves}:{}),...(intervals?{intervals}:{})};
   return Object.keys(out).length?out:null;
-}
-// Regenerace on Today (recovery-time.js) from the last days' training and the
-// night Today shows; training is null on another day than today. Not while
-// sick or injured: no hard training to count down to (Today audit 15).
-function withRecoveryTime(today,training,status){
-  if(training&&!['sick','injured'].includes(status))today.recoveryTime=recoveryTime({...training,now:Date.now(),sleep:today.sleep,hrv:today.hrv,restingHR:today.restingHR});
-  return today;
 }
 // Settings → Goals, "How your week is split": the split from the year (already
 // in the suggestions), the levels chosen by hand (one row) and the usual week.

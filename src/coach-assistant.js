@@ -16,7 +16,7 @@ import { isHardSession } from './session-intensity.js';
 import { aiLanguageNote, L, lang } from './lang.js';
 import { assertAiAllowance, claimAiSlot, estimateAiCostUsd, keepAiReservation, recordAiUsage } from './ai-usage.js';
 import { trendFacts } from './trend-facts.js';
-import { localDateTime } from './user-time.js';
+import { localDateTime, halfDay } from './user-time.js';
 import { sleepNeedFor, weekSleepDebt } from './recovery-model.js';
 import { SPORT_RULES, coachInstructionsFor, safetyNote } from './private/coach-assistant.js';
 export { coachInstructionsFor, safetyNote };
@@ -252,14 +252,7 @@ export function coachTrends({date,fitness,health,profile}){
 }
 // Regenerace from Today (recovery-time.js) for the coach: half a day at most,
 // as Today shows it (Today audit 15: an estimate, no clock time or hours), the
-// causes in short. After 22:00 it counts for the next morning.
-export function halfDay(iso) {
-  const at = Date.parse(iso);
-  const late = Number(localDateTime(iso).slice(11, 13)) >= 22;
-  const [date, time] = localDateTime(new Date(late ? at + 6 * 3600000 : at).toISOString()).split("T");
-  const hour = Number(time.slice(0, 2));
-  return date + " " + (hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening");
-}
+// causes in short.
 export function recoveryForCoach(r) {
   if (!r?.readyAt) return null;
   return {
