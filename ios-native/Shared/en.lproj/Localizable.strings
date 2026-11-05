@@ -3856,6 +3856,15 @@
 "Pás je tvoje obvyklé rozmezí, %@ až %@." = "The band is your usual range, %1$@ to %2$@.";
 "Index spánku za posledních %@ nocí, průměr %@." = "Sleep index over the last %1$@ nights, average %2$@.";
 "Měj na ruce nabité hodinky, ať se noc změří." = "Keep your charged watch on so the night gets measured.";
+"Vyměněno dnes" = "Swapped today";
+"Jen dnes" = "Only today";
+"I příště" = "Next time too";
+"Výměna za %@" = "Swap for %@";
+"Další tréninky dají místo něj %@. Vrátit to jde v Nastavení → Posilovna → Cviky." = "Next workouts use %@ instead. Undo in Settings → Gym → Exercises.";
+"Které tě baví a které ne" = "The ones you like and don't";
+"Zatím tu nic není. Palec dáš cviku po tréninku v Ohodnotit, nebo když ho vyměníš a zvolíš I příště." = "Nothing here yet. Give an exercise a thumb in Rate after a workout, or swap it and choose Next time too.";
+"Plány je vynechají." = "Plans leave these out.";
+"Plány je dají o něco častěji." = "Plans pick these a little more often.";
 
 /* Food → amount: what is left of the day's target before adding (DayLeftLine) */
 "Po přidání" = "After adding";
