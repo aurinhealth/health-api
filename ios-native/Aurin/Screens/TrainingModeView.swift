@@ -57,12 +57,12 @@ struct TrainingModeView: View {
     private var notes: ExerciseNotes { .shared }
     @State private var saving = false
     /// After Dokončit: each app's state of the sending (nil until the answer),
-    /// when it started, and Zavřít free once it is done or after `closeWait`.
+    /// when it started, and Zavřít free once the workout is saved or after `closeWait`.
     @State private var sendRows: [SyncReport.Row]?
     @State private var sendStarted: Date?
     @State private var closeReady = true
-    /// Sending usually takes 3–7 s (the save, then Google Health and Intervals.icu one
-    /// after the other); longer, the rest goes on in the background.
+    /// Only the save is waited for (usually under 1 s): the sending goes on after
+    /// Zavřít through the queue, and a failed one keeps its toast. At most this long.
     static let closeWait: TimeInterval = 10
     /// Dokončit trénink was tapped: the summary shows the totals.
     @State private var finishedSession = false
@@ -1025,16 +1025,13 @@ struct TrainingModeView: View {
     /// Zavřít and the X wait while the workout is saved and sent, at most closeWait.
     private var closeLocked: Bool { finishedSession && saving && !closeReady }
 
-    /// Zavřít: grey while sending, with the seconds left; then what still runs goes on in the background.
+    /// Zavřít: grey while the workout is saved; what still sends goes on in the background.
     private var closeButton: some View {
         VStack(spacing: 8) {
             PrimaryButton(title: L10n.tr("Zavřít")) { close() }
                 .disabled(closeLocked).opacity(closeLocked ? 0.4 : 1)
-            if closeLocked, let sendStarted {
-                TimelineView(.periodic(from: sendStarted, by: 1)) { context in
-                    let left = max(1, Int(sendStarted.addingTimeInterval(Self.closeWait).timeIntervalSince(context.date).rounded(.up)))
-                    Text(L10n.f("Odesílám trénink… Zavřít půjde za %@ s", String(left)))
-                }
+            if closeLocked {
+                Text("Ukládám…")
             } else if saving {
                 Text("Co ještě běží, dojede na pozadí.")
             }
@@ -1086,7 +1083,7 @@ struct TrainingModeView: View {
                     if sendRows == nil {
                         HStack(spacing: 6) {
                             ProgressView().controlSize(.small)
-                            Text(L10n.tr(closeReady ? "Na pozadí" : "Odesílám…"))
+                            Text(L10n.tr("Odesílám…"))
                         }
                         .foregroundStyle(Palette.muted)
                     } else {
@@ -1609,6 +1606,8 @@ struct TrainingModeView: View {
             do {
                 try await model.saveGym(day, date: date)
                 error = nil
+                // Saved: Zavřít is free, the sending below goes on after it too.
+                closeReady = true
             } catch {
                 self.error = L10n.f("Trénink se nepodařilo uložit: %@", error.localizedDescription)
                 return
