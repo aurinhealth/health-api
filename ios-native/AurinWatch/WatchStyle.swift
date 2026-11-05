@@ -216,6 +216,18 @@ enum W {
     }
 }
 
+extension View {
+    /// Double Tap (watchOS 11): the screen's one main button (watch audit B3).
+    /// Never on pages paged by the crown, where it would turn the page.
+    @ViewBuilder func doubleTap() -> some View {
+        if #available(watchOS 11.0, *) {
+            handGestureShortcut(.primaryAction)
+        } else {
+            self
+        }
+    }
+}
+
 extension Color {
     init(hex: UInt32) {
         self.init(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)

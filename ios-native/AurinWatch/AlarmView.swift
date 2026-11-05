@@ -263,8 +263,10 @@ struct AlarmRinging: View {
                     .foregroundStyle(W.ink)
             }
             HStack(spacing: 6) {
+                // Double Tap snoozes, never stops: a half-awake tap can't end the alarm.
                 Button(W.tr("Odložit", "Snooze")) { alarm.snoozeNow() }
                     .tint(W.tile)
+                    .doubleTap()
                 Button(W.tr("Vypnout", "Stop")) { alarm.stop() }
                     .tint(W.amber)
                     .foregroundStyle(.black)

@@ -698,14 +698,10 @@ enum GymText {
 
     /// Under the exercise's name: "Minule 97,5 × 6 · cíl: těžká" (Training
     /// mode's "Minule" and the set's planned letter); nil with neither.
+    /// "Last time 97.5 × 6"; the aim is the letter's pill beside the set (watch audit B5).
     static func info(_ lift: WatchGym.Lift) -> String? {
-        guard lift.work else { return nil }
-        var parts: [String] = []
-        if let last = lift.last { parts.append(W.tr("Minule ", "Last time ") + Self.lift(last)) }
-        if let letter = lift.intensity, let aim = aim(letter) {
-            parts.append((parts.isEmpty ? W.tr("Cíl: ", "Aim: ") : W.tr("cíl: ", "aim: ")) + aim)
-        }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        guard lift.work, let last = lift.last else { return nil }
+        return W.tr("Minule ", "Last time ") + Self.lift(last)
     }
 
     /// The planned letter in words (GymIntensity.name on the iPhone); none for a warm-up or drop set.

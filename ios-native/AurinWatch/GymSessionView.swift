@@ -21,6 +21,8 @@ struct GymSessionView: View {
     @State private var now = Date()
     @State private var list = false
     @State private var summary = false
+    /// The exercise whose set − just removed: "Set removed · Undo" for 3 s.
+    @State private var removed: Int?
     @State private var coachOpen = false
     /// Ended by itself after 30 min without a set: what was saved, until Done.
     @State private var autoSaved: AutoSaved?
@@ -348,15 +350,28 @@ struct GymSessionView: View {
             }
             // − set 2/4 +: one set fewer or one more of this exercise (mockup 20).
             HStack(spacing: 4) {
-                roundButton("minus", small: fit.small) { store.change(.removeSet, exercise: e) }
+                roundButton("minus", small: fit.small) { removeSet(e) }
                     .accessibilityLabel(W.tr("O sérii méně", "One set fewer"))
                 VStack(spacing: 0) {
-                    HStack(spacing: 4) {
-                        Text(label(lift, in: ex, superset: gym.superset(of: e) != nil, side: false))
-                            .font(.system(size: 12, weight: .medium)).foregroundStyle(W.secondary)
-                            .lineLimit(1).minimumScaleFactor(0.7)
-                        if lift.side != nil { sides(lift, in: gym, e) }
-                        if lift.work, let letter = lift.intensity { GymText.intensityPill(letter) }
+                    if removed == e {
+                        // Three seconds to take a removed set back (watch audit B5).
+                        Button { undoRemove(e) } label: {
+                            (Text(W.tr("Série odebrána · ", "Set removed · ")).foregroundColor(W.secondary)
+                             + Text(W.tr("Vrátit", "Undo")).foregroundColor(W.amber))
+                                .font(.system(size: 12, weight: .semibold))
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                                .frame(maxWidth: .infinity, minHeight: 24)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        HStack(spacing: 4) {
+                            Text(label(lift, in: ex, superset: gym.superset(of: e) != nil, side: false))
+                                .font(.system(size: 12, weight: .medium)).foregroundStyle(W.secondary)
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                            if lift.side != nil { sides(lift, in: gym, e) }
+                            if lift.work, let letter = lift.intensity { GymText.intensityPill(letter) }
+                        }
                     }
                     if fit == .tight { liveLine }
                 }
@@ -394,6 +409,7 @@ struct GymSessionView: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+            .doubleTap()
             if fit != .tight {
                 HStack(spacing: 5) {
                     // The time runs on its own, without drawing the whole set again each second.
@@ -463,25 +479,43 @@ struct GymSessionView: View {
     private func label(_ lift: WatchGym.Lift, in e: WatchGym.Exercise, superset: Bool = false, side: Bool = true) -> String {
         var text: String
         if lift.warmup {
-            text = W.tr("rozcvička", "warm-up")
+            text = W.tr("Rozcvička", "Warm-up")
         } else if lift.drop {
-            text = "drop"
+            text = "Drop"
         } else {
             let numbers = e.lifts.filter(\.work).map(\.number).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
             let at = (numbers.firstIndex(of: lift.number) ?? 0) + 1
-            text = (superset ? W.tr("kolo", "round") : W.tr("série", "set")) + " \(at)/\(numbers.count)"
+            text = (superset ? W.tr("Kolo", "Round") : W.tr("Série", "Set")) + " \(at)" + W.tr(" z ", " of ") + "\(numbers.count)"
         }
         if side, let side = lift.side { text += " · " + (side == "L" ? "L" : W.tr("P", "R")) }
         return text
     }
 
+    /// − and + beside the set's number: the circle as drawn, the tap area 32 pt (watch audit B5).
     private func roundButton(_ symbol: String, small: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol).font(.system(size: 12, weight: .bold)).foregroundStyle(W.ink)
                 .frame(width: small ? 24 : 26, height: small ? 24 : 26)
                 .background(W.tile, in: Circle())
+                .frame(width: 32, height: 32)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// One set fewer, with "Set removed · Undo" for three seconds.
+    private func removeSet(_ e: Int) {
+        store.change(.removeSet, exercise: e)
+        removed = e
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            if removed == e { removed = nil }
+        }
+    }
+
+    private func undoRemove(_ e: Int) {
+        removed = nil
+        store.change(.addSet, exercise: e)
     }
 
     private static var topKg: Double { W.imperial ? 1100 : 500 }
@@ -725,6 +759,7 @@ struct GymSessionView: View {
                 HStack(spacing: 4) {
                     Button("−15 s") { shift(-15) }
                     Button(W.tr("Přeskočit", "Skip")) { restEnd = nil }
+                        .doubleTap()
                     Button("+15 s") { shift(15) }
                 }
                 .font(.system(size: 12, weight: .semibold))
@@ -746,10 +781,11 @@ struct GymSessionView: View {
 
     /// The letters of the iPhone's sheet (GymIntensity): Easy, Medium, Hard, Failure.
     private static let ratings = [
-        Rating(letter: "E", cs: "Snadná", en: "Easy", color: W.green),
-        Rating(letter: "M", cs: "Střední", en: "Medium", color: W.amber),
-        Rating(letter: "H", cs: "Těžká", en: "Hard", color: Color(hex: 0xF0907A)),
-        Rating(letter: "F", cs: "Selhání", en: "Failure", color: W.red)
+        // The letter's colour, as on the set's pill and the iPhone (watch audit B6).
+        Rating(letter: "E", cs: "Snadná", en: "Easy", color: GymText.intensityColor("E")),
+        Rating(letter: "M", cs: "Střední", en: "Medium", color: GymText.intensityColor("M")),
+        Rating(letter: "H", cs: "Těžká", en: "Hard", color: GymText.intensityColor("H")),
+        Rating(letter: "F", cs: "Selhání", en: "Failure", color: GymText.intensityColor("F"))
     ]
 
     private func ratingButton(_ rating: Rating) -> some View {
