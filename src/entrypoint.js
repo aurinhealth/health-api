@@ -2873,7 +2873,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // let its review compare every step with the plan.
       const dailyJob=read('/analysis/daily?date='+date);
       const rideJob=dailyJob.then(d=>rideDetailsFor(env,ctx,d.training)).catch(()=>({}));
-      // The acute:chronic workload ratio and monotony need 4 weeks of daily
+      // The last 7 days against the usual 28 and monotony need 4 weeks of daily
       // loads (workload-ratio.js), from the same cached series as the Training screen.
       const workloadJob=ahead?null:fitnessSeries.then(f=>workloadMetrics(f?.wellness,date)).catch(()=>null);
       const [daily,yesterday,sleepData,rows,profile,athleteState,gym,thresholds,rideDetails,workload]=await Promise.all([

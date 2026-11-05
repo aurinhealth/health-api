@@ -137,7 +137,7 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
   - Regenerační týden pro všechny sporty nastane po týdnu ≥ 125 % udržovací zátěže (CTL × 7), po třech týdnech nad ní, nebo když 7denní průměr HRV před týdnem klesne pod osobní pásmo o víc než SWC (`src/week-planner.js`, `hrvWeekTrendDown`).
 - **Zdroje:**
   - Impellizzeri FM et al. Int J Sports Physiol Perform 2020;15:907–913.
-  - Impellizzeri FM et al. Sports Med 2021;51:581–592: poměr akutní a chronické zátěže (ACWR) nemá vlastní prediktivní hodnotu, proto ho nepoužíváme.
+  - Impellizzeri FM et al. Sports Med 2021;51:581–592: poměr akutní a chronické zátěže (ACWR) nemá vlastní prediktivní hodnotu, proto ho nepoužíváme k předpovědi rizika ani k řízení dávky. Aplikace a kouč ho ukazují jen slovy jako popis týdne: „Posledních 7 dní vs. obvyklých 28“ výrazně pod (< 0,7), pod (0,7–0,9), obvyklá (0,9–1,15), nad (1,15–1,5), výrazně nad (> 1,5); číslo poměru, „sweet spot“ ani riziko se neukazují (`src/workload-ratio.js`, Today audit D4). Hranice jsou naše popisné, ne výsledek studie.
   - Plews 2012 a Javaloyes 2019 (viz 2.1) pro spouštěč z HRV.
   - Bell L et al. Sports Med Open 2023;9:87 (Delphi konsenzus k deloadu) a Front Sports Act Living 2022;4:1073223 (deload obvykle 5–7 dní každé 4–6 týdny).
 - **Limity:** pravidla 125 % a „tři týdny“ jsou trenérská praxe, ne výsledek kontrolované studie. Pro vytrvalostní cyklus 3:1 jsme kontrolovanou studii nenašli. Spouštěč z HRV je individuální a podložený.

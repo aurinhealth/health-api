@@ -1,7 +1,7 @@
 // The Training screen of the native iPhone app (ios-native/) in one response:
 // today's strain and the week's, the next session, the main event and the
 // phase of the preparation, form (fitness, fatigue), VO2max, time in heart-rate
-// zones, the weeks' load, the acute:chronic workload ratio and monotony.
+// zones, the weeks' load, the last 7 days against the usual 28 (a level) and monotony.
 // Pure: GET /app/api/training loads the inputs.
 import { groupOfType, typeName, mark } from "./activity-type.js";
 import { mergeWellnessRows, strainScore, dayStrainParts } from "./recovery-model.js";
@@ -317,7 +317,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   const tsb = lastPmc ? round(lastPmc.fitness - lastPmc.fatigue) : null;
   const zone = formZone(tsb);
 
-  // The acute:chronic workload ratio and the week's monotony and strain from
+  // The last 7 days against the usual 28 (a level) and the week's monotony and strain from
   // the same daily loads as fitness and fatigue (workload-ratio.js); null
   // without any load on record.
   const workload = workloadMetrics(intervals, date);

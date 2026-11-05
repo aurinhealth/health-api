@@ -13,8 +13,8 @@ struct TrainingSnapshot: Decodable, Equatable {
     let event: Event?
     let form: Form?
     let load: Load
-    /// The acute:chronic workload ratio (src/workload-ratio.js); null without
-    /// any load on record (older saved answers lack it).
+    /// The last 7 days against the usual 28 as a level word (src/workload-ratio.js);
+    /// null without any load on record (older saved answers lack it).
     let acwr: ACWR?
     /// Foster's training monotony and the week's strain (older saved answers lack it).
     let monotony: Monotony?

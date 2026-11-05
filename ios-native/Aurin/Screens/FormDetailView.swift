@@ -105,6 +105,7 @@ struct FormDetailContent: View {
 /// Well below · Below · Usual · Above · Well above, the current step filled.
 struct LoadLevelScale: View {
     let level: String
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let levels = TrainingSnapshot.ACWR.levels
@@ -114,15 +115,22 @@ struct LoadLevelScale: View {
                     Capsule().fill(step == level ? Palette.ink : Palette.track).frame(height: 6)
                 }
             }
-            HStack(alignment: .top, spacing: 4) {
-                ForEach(levels, id: \.self) { step in
-                    Text(verbatim: TrainingSnapshot.ACWR.word(step) ?? "")
-                        .font(step == level ? Typo.caption.weight(.semibold) : Typo.caption)
-                        .foregroundStyle(step == level ? Palette.ink : Palette.faint)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity)
+            // At the largest text sizes five words do not fit side by side: only the current one.
+            if typeSize.isAccessibilitySize {
+                Text(verbatim: TrainingSnapshot.ACWR.word(level) ?? "")
+                    .font(Typo.caption.weight(.semibold))
+                    .foregroundStyle(Palette.ink)
+            } else {
+                HStack(alignment: .top, spacing: 4) {
+                    ForEach(levels, id: \.self) { step in
+                        Text(verbatim: TrainingSnapshot.ACWR.word(step) ?? "")
+                            .font(step == level ? Typo.caption.weight(.semibold) : Typo.caption)
+                            .foregroundStyle(step == level ? Palette.ink : Palette.faint)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity)
+                    }
                 }
             }
         }

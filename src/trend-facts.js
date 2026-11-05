@@ -12,7 +12,7 @@
 //                     word only (workload-ratio.js, Today audit D4)
 //   monotony          Foster's training monotony of the last 7 days and the
 //                     week's strain
-// Each of the last two carries a label (and the ratio its zone's) in the
+// Each of the last two carries a label (and acwr its level's) in the
 // app language, so the coach names them the way the app does.
 import { mergeWellnessRows, sleepDebtMinutes, sleepNeedMinutes } from "./recovery-model.js";
 import { workloadMetrics, WORKLOAD_LABELS, loadLevelLabel } from "./workload-ratio.js";

@@ -79,7 +79,7 @@ test("the last 7 days against the usual 28 in words, no bands or risk (Today aud
   assert.equal(loadLevel(1.5), "above");
   assert.equal(loadLevel(1.51), "wellAbove");
   assert.equal(loadLevel(null), null);
-  assert.equal(withLang("cs", () => loadLevelLabel("above")), "nad obvyklým");
+  assert.equal(withLang("cs", () => loadLevelLabel("above")), "nad obvyklou");
   assert.equal(withLang("en", () => loadLevelLabel("wellAbove")), "well above");
   assert.equal(loadLevelLabel("sweetSpot"), null);
 });
@@ -125,7 +125,7 @@ test("the coach's trend facts carry acwr and monotony with Czech and English lab
   const intervals = rows([...repeat(35, 50), ...repeat(7, 100)], "ctlLoad");
   const cs = withLang("cs", () => trendFacts({ date: DATE, intervals }));
   // The level only, never the ratio, the mean loads or a risk.
-  assert.deepEqual(cs.acwr, { label: "Posledních 7 dní vs. obvyklých 28", level: "wellAbove", levelLabel: "výrazně nad obvyklým" });
+  assert.deepEqual(cs.acwr, { label: "Posledních 7 dní vs. obvyklých 28", level: "wellAbove", levelLabel: "výrazně nad obvyklou" });
   // A week at a constant 100 has no variation: no monotony fact.
   assert.equal(cs.monotony, undefined);
   const varied = rows([...repeat(35, 50), 90, 100, 95, 100, 90, 100, 95], "ctlLoad");

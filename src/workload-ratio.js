@@ -79,11 +79,11 @@ export const WORKLOAD_LABELS = bilingual({
   acwr: "Posledních 7 dní vs. obvyklých 28",
   monotony: "Monotónnost tréninku (7 dní)",
   strain: "Tréninkový strain týdne",
-  wellBelow: "výrazně pod obvyklým",
-  below: "pod obvyklým",
+  wellBelow: "výrazně pod obvyklou",
+  below: "pod obvyklou",
   usual: "obvyklá",
-  above: "nad obvyklým",
-  wellAbove: "výrazně nad obvyklým"
+  above: "nad obvyklou",
+  wellAbove: "výrazně nad obvyklou"
 }, {
   acwr: "Last 7 days vs your usual 28",
   monotony: "Training monotony (7 days)",
