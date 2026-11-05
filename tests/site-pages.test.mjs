@@ -399,12 +399,14 @@ test('the launch terms drop only the testing sentences and keep the change rules
   assert.match(csPro,/Poslední změna: 15. prosince 2026/);
   for(const t of [en,enPro]){
     assert.match(t,/only for a good reason/);
-    assert.match(t,/at least 30 days ahead in the app or by e-mail\. You can then end the subscription without any fee/);
+    assert.match(t,/at least 30 days ahead by e-mail and in the app\. You can then end the subscription without any fee, including the remaining payments/);
+    assert.match(t,/if Apple declines, write to us and we will refund it/);
     assert.match(t,/If you are a consumer, you can also turn to the Czech Trade Inspection Authority/);
   }
   for(const t of [cs,csPro]){
     assert.match(t,/jen z dobrého důvodu/);
-    assert.match(t,/Předplatné pak můžeš bez jakéhokoli poplatku ukončit/);
+    assert.match(t,/Předplatné pak můžeš bez jakéhokoli poplatku ukončit, včetně zbývajících plateb/);
+    assert.match(t,/když Apple odmítne, napiš nám a peníze ti vrátíme/);
     assert.match(t,/Jako spotřebitel se můžeš obrátit také na Českou obchodní inspekci/);
     assert.doesNotMatch(t,/Závazné je anglické znění/);
   }
