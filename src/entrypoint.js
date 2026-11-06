@@ -77,7 +77,7 @@ import { saveCalendarFree, clearCalendarFree } from './calendar-free.js';
 import { getCheckin, readinessCheckin, saveCheckin } from './morning-checkin.js';
 import { getChecks, upcomingTest } from './threshold-check.js';
 import { saveSportChoice, sportExclusion, suggestedSports } from './sport-choice.js';
-import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories } from './athlete-state.js';
+import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories, healthMemorySince } from './athlete-state.js';
 import { recentNotes, earlierToday, chatSummary, coachNoteDays, queueDayNote, summarizeChatStart, forgetNote, usersWithNotesDue, runCoachNotes } from './coach-notes.js';
 import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planWorkoutId, planChanges, planRedMorning, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
@@ -1499,7 +1499,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       }
       // The push's swap of tomorrow's session stays first until it is answered.
       const swap=swapOffer(state,date);
-      const advice=(swap&&state.nudge.date!==date?swap:null)||easier||swap||proactiveAdvice({...inputs,state,readiness})||memoryCheck(state,date);
+      // "Is this still true?" about a pain or an illness comes right after the push's swap, so an
+      // old knee pain does not wait behind every other card (audit 4.6).
+      const advice=(swap&&state.nudge.date!==date?swap:null)||memoryCheck(state,date)||easier||swap||proactiveAdvice({...inputs,state,readiness});
       return Response.json({status:'ok',state,advice},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
@@ -2272,7 +2274,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       remembers?recentNotes(env.DB,{today:date,days:coachNoteDays(env)}).catch(()=>[]):[],
       remembers?earlierToday(env.DB,body.chatId,{today:date}).catch(()=>[]):[]
     ]);
-    const memoryCtx={...(olderPart?{chatSoFar:olderPart.text}:{}),...(recentChats.length?{recentChats}:{}),...(otherToday.length?{earlierToday:otherToday}:{}),...(remembers&&athleteState.pastMemories?.length?{pastMemory:athleteState.pastMemories.map(p=>p.text)}:{})};
+    const healthSince=healthMemorySince(athleteState);
+    const memoryCtx={...(olderPart?{chatSoFar:olderPart.text}:{}),...(recentChats.length?{recentChats}:{}),...(otherToday.length?{earlierToday:otherToday}:{}),...(remembers&&athleteState.pastMemories?.length?{pastMemory:athleteState.pastMemories.map(p=>p.text)}:{}),...(healthSince.length?{healthMemorySince:healthSince}:{})};
     // A photo needs the full context: a plan on it becomes workout cards.
     const asked=assistantTask(message,body.appContext?appContext:null,conversation),task=image&&['simple','quick','adjustment'].includes(asked)?'planning':asked,started=Date.now();
     const availabilityMinutes=Number.isFinite(Number(body.availabilityMinutes))?Number(body.availabilityMinutes):null;
