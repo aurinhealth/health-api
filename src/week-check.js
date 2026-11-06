@@ -136,9 +136,21 @@ export function checkWeek({ today, from, to, sessions = [], done = {}, start = n
     list = list.map(x => x.id === s.id ? { ...x, kind, minutes, tss: null } : x);
   };
   const remove = (s, type, to = null) => { add(s, { type, to }); list = list.filter(x => x.id !== s.id); };
-  const move = (s, date) => { add(s, { type: "move", to: { date } }); list = list.map(x => x.id === s.id ? { ...x, date } : x); };
+  // A moved gym that lands next to another gym is lighter (shorter): `minutes`.
+  const move = (s, date, minutes = null) => { add(s, { type: "move", to: minutes ? { date, minutes } : { date } }); list = list.map(x => x.id === s.id ? { ...x, date, ...(minutes ? { minutes, tss: null } : {}) } : x); };
   // A free day after `date`: nothing planned, and the athlete has time then.
-  const freeAfter = date => { for (let d = shift(date, 1); d <= (moveUntil || shift(date, 3)) && d <= shift(date, 3); d = shift(d, 1)) if (!list.some(x => x.date === d) && freeOn(d) && !list.some(x => (isHard(x) || isLong(x)) && x.date === shift(d, 1))) return d; return null; };
+  // A gym skips a day next to another gym (S28, coach eval run 43); when only
+  // such days are free, it goes to the first of them lighter.
+  const gymNextTo = (d, s) => s.sport === "gym" && [...carried, ...list].some(x => x.sport === "gym" && x.id !== s.id && (x.date === shift(d, -1) || x.date === shift(d, 1)));
+  const freeAfter = (date, s) => {
+    let nextToGym = null;
+    for (let d = shift(date, 1); d <= (moveUntil || shift(date, 3)) && d <= shift(date, 3); d = shift(d, 1)) {
+      if (list.some(x => x.date === d) || !freeOn(d) || list.some(x => (isHard(x) || isLong(x)) && x.date === shift(d, 1))) continue;
+      if (!gymNextTo(d, s)) return { date: d };
+      nextToGym ??= d;
+    }
+    return nextToGym ? { date: nextToGym, minutes: Math.max(MIN_MINUTES.gym, round5((num(s.minutes) || 60) * .7)) } : null;
+  };
   let reason = null;
   // The lowest form ahead as planned, before any change.
   const lowest = [...forecast()].sort((a, b) => a.tsb - b.tsb)[0] || null;
@@ -179,11 +191,24 @@ export function checkWeek({ today, from, to, sessions = [], done = {}, start = n
     const keyNearby = list.some(s => s.sport !== "gym" && s.date >= date && s.date <= shift(date, 1) && (isHard(s) || isLong(s)));
     const drop = keyNearby && gym ? gym : [...here].filter(open).sort((a, b) => sessionLoad(b) - sessionLoad(a))[0];
     if (!drop) continue;
-    const to = freeAfter(date);
-    if (to) move(drop, to);
+    const to = freeAfter(date, drop);
+    if (to) move(drop, to.date, to.minutes);
     else if (drop.sport === "gym") remove(drop, "recovery");
     else remove(drop, "cancel");
     reason = reason || (near.some(x => x.tsb < floor) ? "form" : "strain");
+  }
+  // A gym that left its day counts there no more: when one landed beside
+  // another, the moved gyms pick their days again in order (Saturday's to
+  // Monday once Sunday's leaves too, Sunday's to Wednesday).
+  const gymMoves = changes.filter(c => c.type === "move" && c.sport === "gym");
+  if (gymMoves.some(c => c.to.minutes)) {
+    const moved = list.filter(x => gymMoves.some(c => c.id === x.id));
+    list = list.filter(x => !moved.includes(x));
+    for (const c of gymMoves) {
+      const s = { ...moved.find(x => x.id === c.id), date: c.date, minutes: c.from.minutes }, to = freeAfter(c.date, s) || c.to;
+      c.to = to.minutes ? { date: to.date, minutes: to.minutes } : { date: to.date };
+      list.push({ ...s, date: to.date, ...(to.minutes ? { minutes: to.minutes, tss: null } : {}) });
+    }
   }
 
   // 3. The form ahead: while a day falls below the floor, the latest hard
@@ -212,7 +237,8 @@ export function checkSummary({ changes, reason, strain, lowest, today }) {
     : L("Po posledních dnech je toho dopředu moc.", "After the last few days there is too much ahead.");
   const c = changes[0], when = dayIn(c.date, today), what = { ride: L("kolo", "the ride"), run: L("běh", "the run"), gym: L("posilovnu", "the gym") }[c.sport] || L("trénink", "the session");
   const keep = { ride: L("jen gym", "only the gym"), run: L("jen gym", "only the gym"), gym: L("jen vytrvalost", "only the endurance session") }[c.sport];
-  const act = c.type === "move" ? L(`${capital(when)} bych ${what} přesunul ${weekdayTo(c.to.date)}.`, `I'd move ${what} ${when} ${weekdayTo(c.to.date)}.`)
+  const act = c.type === "move" && c.to.minutes ? L(`${capital(when)} bych ${what} přesunul ${weekdayTo(c.to.date)} a zkrátil na ${c.to.minutes} min.`, `I'd move ${what} ${when} ${weekdayTo(c.to.date)} and cut it to ${c.to.minutes} min.`)
+    : c.type === "move" ? L(`${capital(when)} bych ${what} přesunul ${weekdayTo(c.to.date)}.`, `I'd move ${what} ${when} ${weekdayTo(c.to.date)}.`)
     : c.type === "recovery" ? L(`${capital(when)} bych místo ${c.sport === "gym" ? "posilovny" : "tréninku"} dal protažení.`, `${capital(when)} I'd do stretching instead of ${what}.`)
     : c.type === "cancel" ? L(`${capital(when)} bych nechal ${keep}.`, `${capital(when)} I'd keep ${keep}.`)
     : L(`${capital(when)} bych ${what} odlehčil.`, `${capital(when)} I'd make ${what} easier.`);
@@ -266,7 +292,7 @@ export function weekCheckForCoach({ date, week, fitness, health, profile = null,
     state: strain.level === 2 ? "tired" : strain.level === 1 ? "strained" : "fresh", signs: strain.chips,
     ...(r.lowest ? { lowestForm: { date: r.lowest.date, tsb: r.lowest.tsb }, formFloor: r.floor } : {}),
     proposedChanges: r.changes.map(c => ({ date: c.date, sport: c.sport, session: c.from?.name || c.sport, eventId: String(c.id).startsWith("planned:") ? c.id : null,
-      change: c.type === "move" ? "move to " + c.to.date : c.type === "cancel" ? "cancel" : c.type === "recovery" ? "stretching instead" : "easier: " + c.to.kind + " " + c.to.minutes + " min" })),
+      change: c.type === "move" ? "move to " + c.to.date + (c.to.minutes ? ", shorter: " + c.to.minutes + " min" : "") : c.type === "cancel" ? "cancel" : c.type === "recovery" ? "stretching instead" : "easier: " + c.to.kind + " " + c.to.minutes + " min" })),
   };
 }
 

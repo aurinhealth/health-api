@@ -615,3 +615,25 @@ test('a beginner\'s 90 minutes are filled with up to 3 sets per exercise, 45 min
   assert.ok(long.timing.estimatedMinutes>=80,String(long.timing.estimatedMinutes));
   assert.ok(Math.max(...counts(90))===3&&counts(45).every(n=>n===2),counts(90)+' / '+counts(45));
 });
+
+test('chest: the heaviest press first, then another angle, also by equipment (coach eval S36)', () => {
+  const context = (setup, sets = []) => ({ date: '2026-10-22', cycling: { recentRideTss: 100, recentRideHours: 2, recentActivities: [], plannedWorkouts: [] }, recovery: {}, strength: { recentCompletedSets: sets }, ...(setup ? { trainingSetup: setup } : {}) });
+  const chest = (setup, sets) => [...new Set(generateStrengthPlan(context(setup, sets), { durationMinutes: 75, focusMuscles: ['chest', 'upper_back', 'triceps'] }).rows.filter(r => r[0] === 'WORK').map(r => r[1]))].filter(name => EXERCISES[name].muscle === 'chest');
+  const flat = name => !/incline|decline|fly|pec deck/i.test(name);
+  // The gym: barbell bench first, then incline and a fly, never three flat presses.
+  const gym = chest(null);
+  assert.equal(gym[0], 'Barbell bench press');
+  assert.ok(!flat(gym[1]), gym.join(', '));
+  assert.ok(gym.filter(flat).length <= 1, gym.join(', '));
+  // Benched two days ago: another heavy press leads.
+  const benched = chest(null, [{ workout_date: '2026-10-20', exercise: 'Barbell bench press', type: 'WORK', reps: 5, weight_kg: 60 }]);
+  assert.notEqual(benched[0], 'Barbell bench press');
+  assert.ok(EXERCISES[benched[0]].fatigue >= 1 && !/fly|pec deck/i.test(benched[0]), benched.join(', '));
+  // Dumbbells only: the dumbbell press first, then the incline, no barbell or machine.
+  for (const setup of [{ equipment: 'dumbbells' }, { equipment: 'home', stations: ['dumbbells', 'adjustable_bench'] }]) {
+    const db = chest(setup);
+    assert.match(db[0], /Dumbbell Bench Press|DB bench press/i, db.join(', '));
+    assert.equal(db[1], 'DB incline press');
+    assert.ok(db.every(name => !/barbell|machine|prime|cable|smith|pec deck/i.test(name)), db.join(', '));
+  }
+});

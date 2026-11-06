@@ -66,12 +66,24 @@ test("fresh, with the form fine ahead: the week stays", () => {
 test("strained: the gym before the long ride leaves Saturday for a free day", () => {
   const strain = { level: 1, chips: ["Připravenost 52"] };
   const r = run(strain, { date: "2026-10-20", ctl: 60, atl: 70 });
-  assert.deepEqual(r.changes.map(c => [c.id, c.type, c.to]), [["5", "move", { date: "2026-10-26" }]]);
-  assert.equal(checkSummary({ ...r, strain, today }), "Po posledních dnech je toho dopředu moc. V sobotu bych posilovnu přesunul na pondělí.");
+  // Not Monday, next to Sunday's gym.
+  assert.deepEqual(r.changes.map(c => [c.id, c.type, c.to]), [["5", "move", { date: "2026-10-27" }]]);
+  assert.equal(checkSummary({ ...r, strain, today }), "Po posledních dnech je toho dopředu moc. V sobotu bych posilovnu přesunul na úterý.");
   // Only days that have time: with Monday and Tuesday off, the gym becomes stretching.
   const off = run(strain, { date: "2026-10-20", ctl: 60, atl: 70 }, { freeOn: d => !["2026-10-26", "2026-10-27"].includes(d) });
   assert.deepEqual(off.changes.map(c => [c.id, c.type]), [["5", "recovery"]]);
   assert.match(checkSummary({ ...off, strain, today }), /V sobotu bych místo posilovny dal protažení\./);
+});
+
+test("a moved gym skips a day next to another gym; with only such days free it goes lighter (coach eval S28)", () => {
+  // Tired, both weekend days ride + gym: Saturday's gym goes to Monday, Sunday's not to Tuesday next to it.
+  const tired = { level: 2, chips: [] }, start = { date: "2026-10-20", ctl: 60, atl: 70 };
+  const r = run(tired, start);
+  assert.deepEqual(r.changes.map(c => [c.id, c.type, c.to]), [["5", "move", { date: "2026-10-26" }], ["7", "move", { date: "2026-10-28" }]]);
+  // Wednesday taken: Tuesday next to Monday's gym, shorter and lighter, never stretching.
+  const busy = run(tired, start, { freeOn: d => d !== "2026-10-28" });
+  assert.deepEqual(busy.changes.map(c => [c.id, c.type, c.to]), [["5", "move", { date: "2026-10-26" }], ["7", "move", { date: "2026-10-27", minutes: 40 }]]);
+  assert.equal(checkSummary({ changes: busy.changes.slice(1), reason: "strain", strain: tired, today }), "Tělo je po posledních dnech unavené. V neděli bych posilovnu přesunul na úterý a zkrátil na 40 min.");
 });
 
 test("a heavy double day without a key session next keeps only the gym", () => {

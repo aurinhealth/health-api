@@ -172,7 +172,9 @@ struct WeekCheckContent: View {
     /// What the session becomes, in the card's words.
     static func line(_ c: WeekCheck.Change) -> String {
         switch c.type {
-        case "move": return L10n.f("Přesunout na %@", c.to?.date.map { Fmt.weekdayName($0) } ?? "")
+        case "move":
+            let day = L10n.f("Přesunout na %@", c.to?.date.map { Fmt.weekdayName($0) } ?? "")
+            return [day, c.to?.minutes.map { Fmt.duration($0) }].compactMap { $0 }.joined(separator: " · ")
         case "cancel": return L10n.tr("Zrušit")
         case "recovery": return L10n.f("Místo toho protažení · %@", Fmt.duration(c.to?.minutes ?? 12))
         default:
