@@ -332,18 +332,24 @@ export function hrvTrend(rows, weekStart, sleepRows = []) {
   const sleep = (sleepRows || []).filter(r => r?.id >= day(-7) && r.id < weekStart && Number(r.sleepSecs) > 0).map(r => Number(r.sleepSecs) / 60);
   return { below: values.slice(7).filter(v => v != null && v < low).length, values, low: Math.round(low), high: Math.round(high), sleep: sleep.length >= 4 ? Math.round(sleep.reduce((a, b) => a + b, 0) / sleep.length) : null };
 }
-// The HRV rows the recovery-week check reads: one source only, the one with
-// the most mornings over the 67 days before the week (Intervals.icu, or one
-// device of the health rows: Apple Health, Google Health, Ultrahuman). Never a
-// mix, because devices measure HRV differently (SDNN against RMSSD).
+// The HRV rows the recovery-week check reads: one source only, never a mix,
+// because devices measure HRV differently (SDNN against RMSSD). Each device
+// of the health rows (Apple Health, Google Health, WHOOP, Ultrahuman) is its
+// own candidate, by its tag or its value in hrvBySource; the one with the most
+// mornings in the week before wins, then the most over the 67 days before it,
+// so after a switch the new watch takes over once it measures the week (and
+// stays silent until it has its own 14 mornings). Intervals.icu, whose HRV
+// has no tag and may hold both watches, only wins with more mornings that
+// week than the health rows have from any device.
 export function hrvSourceRows(intervals = [], health = [], weekStart) {
-  const day = n => new Date(Date.parse(weekStart + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10), from = day(-67);
-  const candidates = [(intervals || []).map(r => ({ id: r?.id, hrv: r?.hrv }))];
-  const keys = new Set((health || []).flatMap(r => Object.keys(r?.hrvBySource || {})));
-  for (const key of keys) candidates.push((health || []).map(r => ({ id: r?.id, hrv: r?.hrvBySource?.[key] })));
-  if (!keys.size) candidates.push((health || []).map(r => ({ id: r?.id, hrv: r?.hrv })));
-  const mornings = rows => rows.filter(r => r.id >= from && r.id < weekStart && Number(r.hrv) > 0).length;
-  return candidates.reduce((best, rows) => mornings(rows) > mornings(best) ? rows : best);
+  const day = n => new Date(Date.parse(weekStart + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
+  const mornings = (rows, from) => rows.filter(r => r.id >= from && r.id < weekStart && Number(r.hrv) > 0).length;
+  const rank = rows => ({ rows, week: mornings(rows, day(-7)), all: mornings(rows, day(-67)) });
+  const of = s => (health || []).map(r => ({ id: r?.id, hrv: r?.hrvBySource?.[s] ?? ((r?.hrvSource || "") === s ? r?.hrv : null) }));
+  const sources = new Set((health || []).flatMap(r => r?.hrvBySource ? Object.keys(r.hrvBySource) : Number(r?.hrv) > 0 ? [r.hrvSource || ""] : []));
+  const best = [...sources].map(s => rank(of(s))).reduce((a, b) => !a || b.week > a.week || (b.week === a.week && b.all > a.all) ? b : a, null);
+  const own = rank((intervals || []).map(r => ({ id: r?.id, hrv: r?.hrv }))), covered = rank((health || []).map(r => ({ id: r?.id, hrv: r?.hrv })));
+  return !best || own.week > covered.week ? own.rows : best.rows;
 }
 // Training load of the three weeks before `weekStart` from Intervals.icu
 // wellness rows, or the app's own rows without it (own-fitness.js `load`);
