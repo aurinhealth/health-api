@@ -194,7 +194,7 @@ struct CoachVisual: View {
             case "form":
                 if let f = model.training?.form { FormWidget(form: f) } else if model.training == nil { loading }
             case "nutrition":
-                if let t = model.today { FoodWidget(nutrition: t.nutrition) } else { loading }
+                if let t = model.today { FoodWidget(nutrition: t.nutrition, waterFailed: t.unavailable?.contains("fluids") == true, foodFailed: t.unavailable?.contains("food") == true) } else { loading }
             case "week":
                 if let t = model.training {
                     Card {

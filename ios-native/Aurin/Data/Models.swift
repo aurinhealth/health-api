@@ -37,8 +37,10 @@ struct TodaySnapshot: Decodable, Equatable {
     /// The day's naps for Dnes → Den, each from its start to its end
     /// (src/app-today.js napsOn); nil from an older server.
     var naps: [Nap]? = nil
-    /// Parts the server could not load this time ("sleep", "fluids"): their
-    /// place says so instead of looking empty; nil from an older server.
+    /// Parts the server could not load this time ("sleep", "fluids", "health",
+    /// "training", "food", "weight", "coach", "recovery"; src/app-today.js
+    /// todayUnavailable): their place says so instead of looking empty; nil
+    /// from an older server.
     var unavailable: [String]? = nil
 
     struct Nap: Decodable, Equatable {

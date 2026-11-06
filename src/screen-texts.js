@@ -56,6 +56,9 @@ export function screenFacts(screen, data) {
   return null;
 }
 
+// Today's parts the coach's sentence is written from.
+const FACT_PARTS = ["sleep", "health", "training", "food", "coach"];
+
 function todayFacts(d) {
   const sleep = d.sleep || null, hrv = d.hrv || null, rhr = d.restingHR || null, n = d.nutrition || {};
   const shown = (Array.isArray(d.plan) ? d.plan : []).filter(i => i && i.kind !== "bedtime");
@@ -107,8 +110,10 @@ function todayFacts(d) {
   return {
     facts, basis, chips,
     fallback: d.summary && (d.summary.text || d.summary.recommendation) ? { text: d.summary.text || null, advice: d.summary.recommendation || null } : null,
-    // Without last night the numbers are not there yet.
-    ready: sleep != null || facts.readiness != null,
+    // Without last night the numbers are not there yet. Nor over a card that
+    // failed to load this time (entrypoint.js todayUnavailable): its empty
+    // place is not "no workout" or "nothing eaten".
+    ready: (sleep != null || facts.readiness != null) && !(Array.isArray(d.unavailable) && d.unavailable.some(p => FACT_PARTS.includes(p))),
     // The plan itself is in it: a cancelled or moved session asks for a new text.
     // The coach's rule-based advice follows every change it cares about.
     // The numbers it quotes too, in steps that matter (readiness by 5, sleep

@@ -5,6 +5,8 @@
 // last days' locks to every readiness as profile.readinessLocks.
 import { readinessFor, readinessLockOf } from "./readiness.js";
 
+const loaded = v => Boolean(v) && typeof v === "object" && Object.keys(v).length > 0;
+
 async function ensure(db) {
   await db.prepare("CREATE TABLE IF NOT EXISTS readiness_locks (user_id INTEGER NOT NULL, date TEXT NOT NULL, lock_json TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, date))").run();
 }
@@ -22,7 +24,10 @@ export async function readinessLocks(db, from) {
 // Nothing happens while the night is missing or when the day is locked already.
 // A lock whose night went on after it (the rest of a night synced at a
 // wake-up) is replaced once by the readiness of the whole night.
+// Nor while an input failed to load this time ({}, what the callers fall back
+// to): the readiness would be locked for the day without its data.
 export async function lockReadiness(db, { date, health = {}, fitness = {}, sleep = {}, profile = null }) {
+  if (![health, fitness, sleep].every(loaded)) return false;
   const old = profile?.readinessLocks?.[date] || null;
   const readiness = readinessFor({ date, google: health?.wellness || [], intervals: fitness?.wellness || [], sessions: Array.isArray(sleep?.sessions) ? sleep.sessions : [], profile });
   if (old && readiness.night === old.night) return false;

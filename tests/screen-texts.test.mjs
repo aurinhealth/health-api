@@ -175,6 +175,14 @@ test("Trénink knows a paused athlete: the status is in the facts and a new stat
   assert.notEqual(active.fingerprint, sick.fingerprint);
 });
 
+test("no AI sentence over a Today card that failed to load: its empty place is not 'nothing planned'", () => {
+  assert.equal(screenFacts("today", today()).ready, true);
+  assert.equal(screenFacts("today", today({ unavailable: ["training", "food"] })).ready, false);
+  assert.equal(screenFacts("today", today({ unavailable: ["health"] })).ready, false);
+  // The drinks or the weight are not in the sentence.
+  assert.equal(screenFacts("today", today({ unavailable: ["fluids", "weight"] })).ready, true);
+});
+
 test("a change of the user's data loads the screen again at once; the same version waits 10 minutes", async () => {
   const env = owner();
   await env.DB.prepare("CREATE TABLE api_cache_versions (user_id INTEGER PRIMARY KEY, version INTEGER NOT NULL DEFAULT 0, food INTEGER NOT NULL DEFAULT 0)").run();

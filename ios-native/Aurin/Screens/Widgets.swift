@@ -8,11 +8,15 @@ struct FoodWidget: View {
     var size: WidgetSize = .medium
     /// The drinks could not be read this time: "–" and a line saying so.
     var waterFailed = false
+    /// The day's food could not be read this time: a line saying so, not 0 kcal.
+    var foodFailed = false
 
     var body: some View {
         Card {
             WidgetHeader(title: "Jídlo a pití", color: Palette.amberBar)
-            if size == .small {
+            if foodFailed {
+                PartUnavailableNote(text: "Jídlo se teď nepodařilo načíst").padding(.horizontal, -16).padding(.vertical, -6)
+            } else if size == .small {
                 VStack(alignment: .leading, spacing: 4) {
                     NumberText(value: Fmt.int(nutrition.kcal), unit: "kcal")
                     Text(L10n.f("z %@", Fmt.int(nutrition.target))).font(Typo.caption).foregroundStyle(Palette.faint)
