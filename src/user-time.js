@@ -121,27 +121,33 @@ export function dayStartUtc(date) {
 }
 
 // ---- The remembered zone of each user (migrations/0012_user_time_zone.sql) ----
+// This isolate's copy holds for an hour: after a trip a request may reach an
+// isolate that still remembers the home zone from before it while the database
+// holds the trip's zone, and the home zone was then never written back, so the
+// pushes and the coach notes stayed on the trip's hours (audit 3.3, 2026-11-06).
+// One primary-key read per user and isolate an hour.
+const KNOWN_MS = 3600000;
 const known = new Map();
 // fresh skips this isolate's memory (cron jobs: the zone may have changed in another isolate).
-export async function storedTimeZone(db, userId, { fresh = false } = {}) {
+export async function storedTimeZone(db, userId, { fresh = false, now = Date.now() } = {}) {
   if (!db || userId == null) return DEFAULT_TIME_ZONE;
-  if (!fresh && known.has(userId)) return known.get(userId);
+  const held = known.get(userId);
+  if (!fresh && held && now - held.at < KNOWN_MS) return held.zone;
   try {
     const row = await db.prepare("SELECT time_zone FROM user_time_zone WHERE user_id=?").bind(userId).first();
     const zone = validTimeZone(row?.time_zone) || DEFAULT_TIME_ZONE;
-    known.set(userId, zone);
+    known.set(userId, { zone, at: now });
     return zone;
   } catch { return DEFAULT_TIME_ZONE; }
 }
 // Saves the zone a request came with when it changed; one write per change.
-export async function rememberTimeZone(db, userId, value) {
+export async function rememberTimeZone(db, userId, value, now = Date.now()) {
   const zone = validTimeZone(value);
   if (!db || userId == null || !zone) return;
-  if (known.get(userId) === zone) return;
-  if (await storedTimeZone(db, userId) === zone) return;
+  if (await storedTimeZone(db, userId, { now }) === zone) return;
   try {
     await db.prepare("INSERT INTO user_time_zone(user_id,time_zone,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET time_zone=excluded.time_zone,updated_at=CURRENT_TIMESTAMP").bind(userId, zone).run();
-    known.set(userId, zone);
+    known.set(userId, { zone, at: now });
   } catch { /* remembered on the next request */ }
 }
 

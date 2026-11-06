@@ -1,7 +1,9 @@
 // One recovery, sleep and strain model for the dashboard and the coaches.
 // Every rule here is tied to a published method; docs/methodology.md lists the
-// sources. The functions are self-contained (no imports, no module constants),
-// so tests can run them on their own (RECOVERY_MODEL_FUNCTIONS).
+// sources. The functions are self-contained (no module constants), so tests
+// can run them on their own (RECOVERY_MODEL_FUNCTIONS); only sleepNeedFor
+// asks sleep-sessions.js which sleeps are naps (isNap, in the user's zone).
+import { isNap } from "./sleep-sessions.js";
 
 // Mean and standard deviation of a wellness field over the `days` before
 // `date` (not the day itself). `log` uses ln values, as for HRV (lnRMSSD).
@@ -134,7 +136,7 @@ export function sleepNeedFor(input) {
   const hrv = hrvStatusLow(rows, prev) ? 15 : 0;
   const debtState = weekSleepDebt(sessions, prev, { age: input.age, goal });
   const debt = debtState ? Math.min(60, debtState.minutes) : 0;
-  const naps = sessions.filter(s => (s.nap || Number(s.durationMin) < 180) && (s.date || String(s.endTime || "").slice(0, 10)) === prev).reduce((t, s) => t + (Number(s.durationMin) || 0), 0);
+  const naps = sessions.filter(s => isNap(s) && (s.date || String(s.endTime || "").slice(0, 10)) === prev).reduce((t, s) => t + (Number(s.durationMin) || 0), 0);
   const need = goal != null ? Math.max(360, Math.min(600, base + hrv + debt) - Math.round(naps)) : Math.max(420, Math.min(540, base + hrv + debt) - Math.round(naps));
   return { need, base, hrv, debt, naps: Math.round(naps) };
 }

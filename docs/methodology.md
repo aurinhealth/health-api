@@ -81,7 +81,7 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
 ### 2.2 Spánkový index, potřeba spánku a spánkový dluh
 
 - **Výpočet:** `sleepNeedMinutes`, `sleepIndexScore`, `sleepDebtMinutes` v `src/recovery-model.js`.
-  - Potřeba spánku (`sleepNeedFor`): 8 h (od 65 let 7,5 h); po zátěži dne ≥ 14 o 15 min a po ≥ 18 o 30 min víc; při nízkém HRV statusu (7denní lnRMSSD pod baseline o víc než SWC) o 15 min; se spánkovým dluhem o čtvrtinu dluhu, nejvýš 30 min. Zdřímnutí (Google je označuje jako `nap`) potřebu sníží. Výsledek vždy 7–9 h.
+  - Potřeba spánku (`sleepNeedFor`): 8 h (od 65 let 7,5 h); po zátěži dne ≥ 14 o 15 min a po ≥ 18 o 30 min víc; při nízkém HRV statusu (7denní lnRMSSD pod baseline o víc než SWC) o 15 min; se spánkovým dluhem o čtvrtinu dluhu, nejvýš 30 min. Zdřímnutí (označené zařízením jako `nap`, nebo spánek pod 3 h začatý mezi 9:00 a 20:00 místního času) potřebu sníží; krátká noc není zdřímnutí, zvýší dluh. Výsledek vždy 7–9 h.
   - Index: délka proti potřebě (50 bodů; nula při polovině potřeby, plný počet při splněné potřebě); kvalita (35): když zařízení hlásí dobu usnutí a bdění, pak efektivita od 85 % (20), usnutí do 30 min (7,5) a bdění po usnutí do 20 min (7,5), jinak jen efektivita (35); podíl hlubokého spánku ≥ 13 % a REM ≥ 20 % (15). Bez fází se přepočítá.
   - Dluh: součet nedospání za 7 dní včetně zdřímnutí; delší den spánku splatí nejvýš hodinu.
   - Noc z Intervals.icu nemá čas v posteli, takže vlastní index spočítat nejde; pak se ukáže skóre spánku ze zařízení (`sleepScore`), pokud ho Intervals.icu má (`sleepIndexFor`).
