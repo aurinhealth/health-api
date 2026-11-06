@@ -67,7 +67,7 @@ export function formZone(tsb) {
   if (tsb > 5) return { key: "fresh", label: L("čerstvý", "fresh"), text: L("Čerstvá forma: únava je pod kondicí, dobrý čas na závod nebo test.", "Fresh: fatigue is below fitness, a good time for a race or a test.") };
   if (tsb >= -10) return { key: "grey", label: L("udržování", "maintaining"), text: L("Únava a kondice jsou vyrovnané: kondice se drží, ale moc neroste.", "Fatigue and fitness are balanced: fitness holds, but barely grows.") };
   if (tsb >= -30) return { key: "optimal", label: L("budování", "building"), text: L("Únava je nad kondicí, přesně jak má při budování být. Kondice roste.", "Fatigue is above fitness, exactly as it should be while building. Fitness is growing.") };
-  return { key: "risk", label: L("vysoké riziko", "high risk"), text: L("Únava je hodně nad kondicí. Zařaď lehčí dny, jinak hrozí přetížení.", "Fatigue is far above fitness. Add easier days, or you risk overreaching.") };
+  return { key: "risk", label: L("hluboká únava", "deep fatigue"), text: L("Únava je hodně nad kondicí. Na soustředění to patří, jinak zařaď lehčí dny, ať se tělo stihne zotavit.", "Fatigue is far above fitness. That belongs to a training camp; otherwise add easier days so your body can catch up.") };
 }
 
 // Periodization towards the main event, the same rule as the coach

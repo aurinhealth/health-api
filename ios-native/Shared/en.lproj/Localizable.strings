@@ -1556,6 +1556,8 @@
 "k ověření" = "to check";
 "%@ kcal, k ověření" = "%@ kcal, to check";
 "odhad %@" = "estimate %@";
+"odhad" = "estimate";
+"%@ dne" = "%@ days";
 "hodinky %@" = "watch %@";
 "Počítat %@" = "Count %@";
 "Nechat %@" = "Keep %@";
@@ -3642,11 +3644,12 @@
 "Žádná data za 7 dní" = "No data in 7 days";
 "Základ" = "Base";
 "Naplánováno" = "Planned";
-"Cílový příjem" = "Target";
 "Klidový výdej" = "Resting burn";
 "Běžný pohyb" = "Everyday movement";
 "Cíl hmotnosti" = "Weight goal";
-"Bezpečné minimum" = "Safe minimum";
+"Dorovnání na klidový metabolismus" = "Up to resting metabolism";
+"Odhad cíle" = "Estimated target";
+"Upravuje se podle trendu tvé váhy." = "Adjusts to your weight trend.";
 "Aktivnější den" = "More active than usual";
 "Odcvičený trénink" = "Workout";
 "Plánovaný trénink" = "Planned workout";
