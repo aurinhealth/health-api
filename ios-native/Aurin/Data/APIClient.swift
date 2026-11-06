@@ -880,7 +880,7 @@ final class APIClient: @unchecked Sendable {
             }
             if http.statusCode == 402 {
                 onSubscriptionRequired?()
-                throw APIError.subscriptionRequired(message ?? L10n.tr("Tahle AI funkce je součástí AI předplatného."))
+                throw APIError.subscriptionRequired(message ?? L10n.tr("Tahle AI funkce je součástí Aurin Pro."))
             }
             throw APIError.message(message ?? L10n.f("Server odpověděl chybou %@.", String(http.statusCode)))
         }

@@ -254,7 +254,7 @@ struct ServiceConnectSheet: View {
                 PrimaryButton(title: L10n.f("Pokračovat na %@", service.name), busy: busy) { Task { await connect() } }
                     .disabled(busy || (service.google && !agree))
                     .opacity(service.google && !agree ? 0.5 : 1)
-                Link("Zásady ochrany soukromí", destination: URL(string: "https://aurin.health/privacy")!)
+                Link("Zásady ochrany soukromí", destination: L10n.legalURL("privacy"))
                     .font(Typo.small).foregroundStyle(Palette.muted)
             }
             .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 16)

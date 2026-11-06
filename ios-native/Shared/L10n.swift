@@ -33,6 +33,11 @@ enum L10n {
     // Guarded by lock.
     nonisolated(unsafe) private static var kept: String?
 
+    /// A legal page on aurin.health ("terms", "privacy"), in Czech while the app speaks Czech.
+    static func legalURL(_ page: String) -> URL {
+        URL(string: language == "cs" ? "https://aurin.health/cs/\(page)" : "https://aurin.health/\(page)")!
+    }
+
     /// The language before anyone chose one: the phone's. Czech and Slovak phones
     /// get Czech, every other phone English.
     static var defaultLanguage: String { defaultLanguage(for: Locale.preferredLanguages) }

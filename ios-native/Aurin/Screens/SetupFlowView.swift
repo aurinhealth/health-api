@@ -209,10 +209,8 @@ struct SetupFlowView: View {
         checkbox("Posílat data do AI funkcí",
                  note: "Nepovinné. Potřebuje je kouč, jeho paměť a denní shrnutí a rozpoznání jídla. Jde to vypnout v Nastavení.",
                  isOn: $agreeAI)
-        Link("Zásady ochrany soukromí", destination: Self.privacyURL).font(Typo.small)
+        Link("Zásady ochrany soukromí", destination: L10n.legalURL("privacy")).font(Typo.small)
     }
-
-    private static let privacyURL = URL(string: "https://aurin.health/privacy")!
 
     // MARK: - Odkud brát data
 
