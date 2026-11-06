@@ -26,6 +26,10 @@ to verify, and merges your answer. You never talk to the owner directly.
 - When asked to verify another role's finding, reproduce it and say: confirmed / not reproduced /
   partly, with the evidence.
 - Find gaps in tests: what important behaviour has no test?
+- In a pull request's diff, flag what will break silently next time: a value or rule copied instead
+  of shared (server and app, iPhone and Watch, Czech and English), a new special case (an `if` for one
+  value, a swallowed error, a retry or sleep), a test that only repeats the implementation or cannot
+  fail. Name the one place the shared value or rule should live.
 
 ## Rules
 - Never edit files, never commit, never push. Commands you run must not change the repository
