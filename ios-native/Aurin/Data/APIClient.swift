@@ -17,6 +17,9 @@ enum APIError: LocalizedError, Equatable {
     case notInvited(String)
     /// A sensitive change needs "Confirm it's you" first (403 step_up_required, src/step-up.js).
     case stepUpRequired(String, StepUpInfo)
+    /// The coach's answer stream ended without "done" or "error" (the server
+    /// always sends one): the connection was cut, the server goes on.
+    case interrupted
 
     var errorDescription: String? {
         switch self {
@@ -29,6 +32,7 @@ enum APIError: LocalizedError, Equatable {
         case .unknownPasskey(let text): return text
         case .notInvited(let text): return text
         case .stepUpRequired(let text, _): return text
+        case .interrupted: return L10n.tr("Spojení se přerušilo a odpověď se nedokončila.")
         }
     }
 }
@@ -146,19 +150,24 @@ final class APIClient: @unchecked Sendable {
                         continuation.finish()
                         return
                     }
+                    var finished = false
                     for try await line in bytes.lines {
                         guard let data = line.data(using: .utf8),
                               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
                         switch object["type"] as? String {
                         case "progress": continuation.yield(.progress(object["message"] as? String ?? ""))
                         case "answer": continuation.yield(.answer(object["answer"] as? String ?? ""))
+                        case "chat": if let id = object["chatId"] as? Int { continuation.yield(.chat(id)) }
                         case "error": throw APIError.message(object["message"] as? String ?? L10n.tr("Kouč teď neodpověděl."))
                         case "done":
                             let result = try JSONSerialization.data(withJSONObject: object["result"] ?? [:])
                             continuation.yield(.done(try decoder.decode(AssistantResult.self, from: result)))
+                            finished = true
                         default: break
                         }
                     }
+                    // A cut answer must not look finished.
+                    guard finished else { throw APIError.interrupted }
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: Self.readable(error))

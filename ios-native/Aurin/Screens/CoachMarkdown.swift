@@ -19,7 +19,8 @@ struct CoachMarkdown: View, Equatable {
         case heading(Int, String)
         case paragraph(String)
         case bullets([String])
-        case numbered([String])
+        /// The number the list starts at (the model's own, "3." stays 3) and its items.
+        case numbered(Int, [String])
         case table([[String]])
         case rule
     }
@@ -45,11 +46,11 @@ struct CoachMarkdown: View, Equatable {
                     }
                 }
             }
-        case .numbered(let items):
+        case .numbered(let start, let items):
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(items.enumerated()), id: \.offset) { i, item in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("\(i + 1).").font(.body.weight(.semibold).monospacedDigit()).foregroundStyle(Palette.green)
+                        Text("\(start + i).").font(.body.weight(.semibold).monospacedDigit()).foregroundStyle(Palette.green)
                         Text(Self.inline(item)).font(.body).foregroundStyle(Palette.ink).lineSpacing(2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -96,7 +97,7 @@ struct CoachMarkdown: View, Equatable {
             switch block {
             case .heading(_, let t), .paragraph(let t): return plain(t)
             case .bullets(let items): return items.map { "• " + plain($0) }.joined(separator: "\n")
-            case .numbered(let items): return items.enumerated().map { "\($0.offset + 1). " + plain($0.element) }.joined(separator: "\n")
+            case .numbered(let start, let items): return items.enumerated().map { "\(start + $0.offset). " + plain($0.element) }.joined(separator: "\n")
             case .table(let rows): return rows.map { $0.map(plain).joined(separator: "\t") }.joined(separator: "\n")
             case .rule: return nil
             }
@@ -109,23 +110,48 @@ struct CoachMarkdown: View, Equatable {
         url.scheme?.lowercased() == "https" && AppRoute.linkHosts.contains(url.host()?.lowercased() ?? "")
     }
 
+    /// Lines kept as the coach wrote them (a week of "Po: …", "Út: …" stays
+    /// a line a day). A blank line between the items of a list keeps the list
+    /// ("1. … ⏎⏎ 2. …" counts on), and an indented line under an item belongs
+    /// to that item.
     static func blocks(_ text: String) -> [Block] {
         var out: [Block] = []
         var paragraph: [String] = []
         var bullets: [String] = []
         var numbered: [String] = []
+        var start = 1
         var table: [[String]] = []
+        /// How far the open list's items are indented: a line indented more is part of the last item.
+        var listIndent = 0
+        /// A blank line after a list item: the list goes on only with another item of it.
+        var gap = false
 
         func flush() {
-            if !paragraph.isEmpty { out.append(.paragraph(paragraph.joined(separator: " "))); paragraph = [] }
+            if !paragraph.isEmpty { out.append(.paragraph(paragraph.joined(separator: "\n"))); paragraph = [] }
             if !bullets.isEmpty { out.append(.bullets(bullets)); bullets = [] }
-            if !numbered.isEmpty { out.append(.numbered(numbered)); numbered = [] }
+            if !numbered.isEmpty { out.append(.numbered(start, numbered)); numbered = [] }
             if !table.isEmpty { out.append(.table(table)); table = [] }
+            gap = false
         }
 
         for raw in text.components(separatedBy: "\n") {
             let line = raw.trimmingCharacters(in: .whitespaces)
-            if line.isEmpty { flush(); continue }
+            let inList = !bullets.isEmpty || !numbered.isEmpty
+            if line.isEmpty {
+                if inList { gap = true } else { flush() }
+                continue
+            }
+            let indent = Self.indent(raw)
+            if inList, indent > listIndent, !line.hasPrefix("|") {
+                let more = "\n" + (bullet(line).map { "• " + $0 } ?? line)
+                if !bullets.isEmpty { bullets[bullets.count - 1] += more } else { numbered[numbered.count - 1] += more }
+                gap = false
+                continue
+            }
+            if gap {
+                let goesOn = (!bullets.isEmpty && bullet(line) != nil) || (!numbered.isEmpty && number(line) != nil)
+                if goesOn { gap = false } else { flush() }
+            }
             if line.hasPrefix("|") {
                 let cells = line.trimmingCharacters(in: CharacterSet(charactersIn: "|")).components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
                 if cells.allSatisfy({ !$0.isEmpty && $0.allSatisfy { "-:".contains($0) } }) { continue }
@@ -140,13 +166,13 @@ struct CoachMarkdown: View, Equatable {
             }
             if line == "---" || line == "***" { flush(); out.append(.rule); continue }
             if let item = bullet(line) {
-                if bullets.isEmpty { flush() }
+                if bullets.isEmpty { flush(); listIndent = indent }
                 bullets.append(item)
                 continue
             }
             if let item = number(line) {
-                if numbered.isEmpty { flush() }
-                numbered.append(item)
+                if numbered.isEmpty { flush(); start = item.n; listIndent = indent }
+                numbered.append(item.text)
                 continue
             }
             if !bullets.isEmpty || !numbered.isEmpty || !table.isEmpty { flush() }
@@ -156,6 +182,11 @@ struct CoachMarkdown: View, Equatable {
         return out
     }
 
+    /// Spaces before the line, a tab as four.
+    private static func indent(_ raw: String) -> Int {
+        raw.prefix { $0 == " " || $0 == "\t" }.reduce(0) { $0 + ($1 == "\t" ? 4 : 1) }
+    }
+
     private static func heading(_ line: String) -> Int? {
         let hashes = line.prefix { $0 == "#" }.count
         guard hashes > 0, hashes <= 4, line.dropFirst(hashes).first == " " else { return nil }
@@ -163,18 +194,19 @@ struct CoachMarkdown: View, Equatable {
     }
 
     private static func bullet(_ line: String) -> String? {
-        for marker in ["- ", "* ", "• ", "– "] where line.hasPrefix(marker) {
+        for marker in ["- ", "* ", "+ ", "• ", "– "] where line.hasPrefix(marker) {
             return String(line.dropFirst(marker.count))
         }
         return nil
     }
 
-    private static func number(_ line: String) -> String? {
-        let digits = line.prefix { $0.isNumber }
-        guard !digits.isEmpty, digits.count <= 2 else { return nil }
+    /// "3. Vyjetí" → (3, "Vyjetí").
+    private static func number(_ line: String) -> (n: Int, text: String)? {
+        let digits = line.prefix { $0.isASCII && $0.isNumber }
+        guard !digits.isEmpty, digits.count <= 2, let n = Int(digits) else { return nil }
         let rest = line.dropFirst(digits.count)
         guard rest.hasPrefix(". ") || rest.hasPrefix(") ") else { return nil }
-        return String(rest.dropFirst(2))
+        return (n, String(rest.dropFirst(2)))
     }
 }
 

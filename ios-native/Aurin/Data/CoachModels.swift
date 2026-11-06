@@ -302,6 +302,9 @@ enum AssistantEvent: Equatable {
     case progress(String)
     /// The whole answer so far (not a delta).
     case answer(String)
+    /// The chat the answer will be saved in, before the model runs: after a
+    /// lost connection the finished answer is loaded from it.
+    case chat(Int)
     case done(AssistantResult)
 }
 

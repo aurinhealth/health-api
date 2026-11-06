@@ -269,6 +269,10 @@
 "Kouč píše…" = "The coach is writing…";
 "Odpověď za %lld s" = "Answered in %lld s";
 "Kouč teď neodpověděl." = "The coach didn't answer.";
+"Spojení se přerušilo a odpověď se nedokončila." = "The connection dropped and the answer wasn't finished.";
+"Spojení se přerušilo. Kouč odpověď dopíše a uloží ji do chatu." = "The connection dropped. The coach will finish the answer and save it in this chat.";
+"Načíst odpověď" = "Load answer";
+"Kouč odpověď ještě píše. Zkus to za chvíli." = "The coach is still writing the answer. Try again in a moment.";
 "Kouč čte tvůj den…" = "Coach is reading your day…";
 "Kouč včetně fotek v chatu, jeho denní shrnutí na Dnes, Tréninku a Jídle, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál." = "The coach, including photos in chat, its daily summary on Today, Training and Food, reading food photos and looking up foods send the data they need to AI. Without consent, the rest of the app keeps working.";
 "Kuřecí rizoto" = "Chicken risotto";
