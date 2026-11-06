@@ -1086,6 +1086,25 @@ final class SnapshotTests: XCTestCase {
             NavigationStack { PlanWeekContent(week: active.template.weeks[2], sport: "ride", detail: week).padding(.horizontal, 24) }.environment(model)
         }
         try render("plan-week-days", height: 700) { WeekDaysSheet(week: week, usual: 4).environment(model) }
+        // Every changed session says why; its detail shows the reason and the session it was.
+        let movedJSON = #","change":{"kind":"moved","line":"Přesunuto z út","text":"V úterý zůstal nesplněný, proto je přesunutý sem.","original":{"label":"Nad/pod prahem 3×12","minutes":90,"date":"2026-11-04"}}}"#
+        let shorterJSON = #","change":{"kind":"shorter","line":"Kratší: na 60 min je volno","text":"Volný čas toho dne na něj nechává 60 min, proto je kratší než 75 min v plánu.","original":{"label":"Z2 1 h 15","minutes":75,"date":"2026-11-06"}}}"#
+        var changedJSON = weekJSON
+        if let r = changedJSON.range(of: #""steps":"# + z2 + "}}") { changedJSON.replaceSubrange(r, with: #""steps":"# + z2 + "}" + shorterJSON) }
+        if let r = changedJSON.range(of: #""steps":"# + ss + "}}") { changedJSON.replaceSubrange(r, with: #""steps":"# + ss + "}" + movedJSON) }
+        let changed = try decoder.decode(PlanWeekDetail.self, from: Data(changedJSON.utf8))
+        XCTAssertEqual(changed.sessions.compactMap(\.change).map(\.kind), ["shorter", "moved"])
+        try render("plan-week-changed", glow: Palette.Glow.training, height: 1000) {
+            NavigationStack { PlanWeekContent(week: active.template.weeks[2], sport: "ride", detail: changed).padding(.horizontal, 24) }.environment(model)
+        }
+        // The plan follows the trend: a lighter week sooner (with the HRV line) and a level up.
+        let lighterJSON = #"{"type":"lighter","title":"Plán upraven","headline":"Tento týden je lehčí","text":"Tvoje HRV bylo 5 dní z posledních 7 pod tvým normálem a spal jsi v průměru 6 h 10 min. Odpočinkový týden se posouvá z 8. týdne na teď.","options":[{"id":"ok","label":"OK","date":null,"recommended":true}],"days":null,"button":"OK","keep":"Nechat plán","chart":{"values":[58,60,57,59,58,61,57,52,49,47,48,46,null,47],"low":52,"high":64}}"#
+        let lighter = try decoder.decode(TodaySnapshot.PlanProposal.self, from: Data(lighterJSON.utf8))
+        try render("plan-adapted-lighter", height: 520) { PlanProposalCard(proposal: lighter).padding(24).environment(model) }
+        let harder = try decoder.decode(TodaySnapshot.PlanProposal.self, from: Data(#"{"type":"harder","title":"Plán upraven","headline":"Zlepšuješ se rychle","text":"Všechny klíčové tréninky posledních 3 týdnů máš hotové a šly ti lehčeji, než plán čekal. HRV je stabilní. Od příštího týdne jsou klíčové tréninky o úroveň těžší a týden o 5 % delší.","options":[{"id":"ok","label":"OK","date":null,"recommended":true}],"days":null,"button":"OK","keep":"Nechat jak bylo"}"#.utf8))
+        try render("plan-adapted-harder", height: 420) { PlanProposalCard(proposal: harder).padding(24).environment(model) }
+        let movedChange = try XCTUnwrap(changed.sessions[2].change)
+        try render("plan-session-changed", height: 420) { PlanChangeCard(change: movedChange).padding(24) }
         // Free time by weekday, two weeks in turn, this week only and the plan's days.
         let timeJSON = #"{"days":[45,60,0,60,0,180,240],"total":585,"daysB":[0,90,90,0,90,240,120],"totalB":630,"alternate":"2026-10-26","suits":[300,420],"short":false}"#
         let time = try decoder.decode(PlanPreview.Time.self, from: Data(timeJSON.utf8))
@@ -1132,6 +1151,19 @@ final class SnapshotTests: XCTestCase {
         let run = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(runPlan.utf8)).active)
         try render("plan-race-run", glow: Palette.Glow.training, height: 700) {
             NavigationStack { ActivePlanContent(active: run, preview: nil, week: nil, editGoal: {}).padding(.horizontal, 24) }.environment(model)
+        }
+        // Checked every Monday: on track with the paces, and behind with a realistic goal.
+        let checkedOn = #""race":{"km":21.1,"estimate":6400,"estimateStart":6550,"target":6300,"goalPace":299,"verdict":"real","history":[{"week":1,"seconds":6550},{"week":3,"seconds":6500},{"week":5,"seconds":6430}],"projected":6250,"status":"on_track","badge":"Podle plánu","note":"Zbývá stáhnout 1:40 za 6 týdnů, tempem, jakým se zlepšuješ. Z tvého prahového tempa, kontrola každé pondělí.","weeksLeft":6,"checked":"2026-11-23","paces":{"race":299,"threshold":289,"thresholdBefore":292,"easy":[355,375]}}"#
+        let onTrack = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(runPlan.replacingOccurrences(of: #""race":{"km":21.1,"estimate":6190,"estimateStart":6270,"target":6120,"goalPace":290,"verdict":"bold"}"#, with: checkedOn).utf8)).active)
+        XCTAssertEqual(onTrack.race?.status, "on_track")
+        try render("plan-race-goal-on-track", glow: Palette.Glow.training, height: 1000) {
+            NavigationStack { ActivePlanContent(active: onTrack, preview: nil, week: nil, editGoal: {}).padding(.horizontal, 24) }.environment(model)
+        }
+        let checkedOff = #""race":{"km":21.1,"estimate":6430,"estimateStart":6500,"target":6000,"goalPace":284,"verdict":"hard","history":[{"week":1,"seconds":6500},{"week":4,"seconds":6460}],"projected":6390,"status":"behind","behind":390,"realistic":6420,"badge":"o 7 min pomaleji než cíl","note":"Zbývají 4 týdny. Držet 4:44 /km by znamenalo běhat každý trénink moc tvrdě. Cíl 1:47:00 sedí na tvou formu a pořád tě potáhne.","weeksLeft":4,"paces":{"race":284,"threshold":290}}"#
+        let behind = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(runPlan.replacingOccurrences(of: #""race":{"km":21.1,"estimate":6190,"estimateStart":6270,"target":6120,"goalPace":290,"verdict":"bold"}"#, with: checkedOff).utf8)).active)
+        XCTAssertEqual(behind.race?.realistic, 6420)
+        try render("plan-race-goal-behind", glow: Palette.Glow.training, height: 1000) {
+            NavigationStack { ActivePlanContent(active: behind, preview: nil, week: nil, editGoal: {}).padding(.horizontal, 24) }.environment(model)
         }
         try render("plan-goal-time", height: 620) { GoalTimeSheet(km: 21.1, estimate: 6270, weeks: 10, initial: 6120) { _ in } }
         // Multisport in English, as the post on X shows it (the server's English

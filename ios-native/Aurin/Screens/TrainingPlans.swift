@@ -93,6 +93,8 @@ struct TrainingPlans: Decodable, Equatable {
         /// A multisport plan: its sports and their sessions a week.
         var sports: [String]? = nil
         var perSport: [String: Int]? = nil
+        /// A change the plan made on its own (a lighter week sooner, a level up): OK or keep the plan.
+        var proposal: TodaySnapshot.PlanProposal? = nil
         let template: Template
 
         func done(_ week: Int) -> Int? { completion?[String(week)] }
@@ -220,6 +222,32 @@ struct PlanRace: Decodable, Equatable {
     var legs: Legs? = nil
     /// A multisport race: every leg in its order (a duathlon's two runs too).
     var legList: [Leg]? = nil
+    /// A running race plan, checked every Monday (src/race-estimate.js goalCheck):
+    /// the estimate each week so far, where it ends on race day, on_track or
+    /// behind with its badge and sentence, a realistic goal when the goal is
+    /// out of reach, and the paces.
+    var history: [Point]? = nil
+    var projected: Int? = nil
+    var status: String? = nil
+    var badge: String? = nil
+    var note: String? = nil
+    var realistic: Int? = nil
+    var weeksLeft: Int? = nil
+    /// The Monday the paces were checked.
+    var checked: String? = nil
+    var paces: Paces? = nil
+
+    struct Point: Decodable, Equatable {
+        let week: Int
+        let seconds: Int
+    }
+
+    struct Paces: Decodable, Equatable {
+        let race: Int
+        var threshold: Int? = nil
+        var thresholdBefore: Int? = nil
+        var easy: [Int]? = nil
+    }
 
     struct Legs: Decodable, Equatable {
         let swim: Leg
@@ -964,6 +992,8 @@ struct PlanProposalCard: View {
     @Environment(AppModel.self) private var model
     let proposal: TodaySnapshot.PlanProposal
     var plain = false
+    /// After an answer: the screen showing it loads again (the plan's screen).
+    var changed: () async -> Void = {}
     @State private var choice: String?
     @State private var picking = false
     @State private var busy = false
@@ -988,20 +1018,33 @@ struct PlanProposalCard: View {
                     .disabled(busy)
                 }
             } else {
-                WidgetHeader(title: proposal.title, color: Palette.amberBar)
-                Text(proposal.text).font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
-                VStack(spacing: 0) {
-                    ForEach(Array(proposal.options.enumerated()), id: \.element.id) { index, option in
-                        if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                        Button { choice = option.id } label: { row(option) }.buttonStyle(.plain)
+                WidgetHeader(title: proposal.title, color: proposal.type == "harder" ? Palette.blue : Palette.amberBar)
+                if let headline = proposal.headline {
+                    // A change the plan made already (approved mockup 1-trend-misto-jednoho-rana, 3 Nov 2026).
+                    Text(headline).font(Typo.sentence(24)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                    Text(proposal.text).font(.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+                    if let chart = proposal.chart { PlanHRVChart(chart: chart) }
+                } else {
+                    Text(proposal.text).font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                }
+                if proposal.options.count > 1 {
+                    VStack(spacing: 0) {
+                        ForEach(Array(proposal.options.enumerated()), id: \.element.id) { index, option in
+                            if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                            Button { choice = option.id } label: { row(option) }.buttonStyle(.plain)
+                        }
                     }
                 }
                 HStack(spacing: 10) {
                     PrimaryButton(title: selected?.id == "pick" ? L10n.tr("Vybrat den") : proposal.button, busy: busy) {
-                        if selected?.id == "pick" { picking = true } else { Task { await apply(selected) } }
+                        if selected?.id == "pick" { picking = true } else if proposal.keep != nil { Task { await send(["choice": .string("ok")], done: nil) } } else { Task { await apply(selected) } }
                     }
-                    SecondaryButton(title: "Nechat") { Task { await send(["choice": .string("keep")], done: nil) } }
-                        .frame(width: 120)
+                    if let keep = proposal.keep {
+                        SecondaryButton(title: keep) { Task { await send(["choice": .string("keep")], done: nil) } }
+                    } else {
+                        SecondaryButton(title: "Nechat") { Task { await send(["choice": .string("keep")], done: nil) } }
+                            .frame(width: 120)
+                    }
                 }
                 .disabled(busy || model.demo)
             }
@@ -1050,6 +1093,7 @@ struct PlanProposalCard: View {
             error = nil
             if let label { done = label } else { await model.refresh() }
             await model.refreshTraining()
+            await changed()
         } catch {
             self.error = error.localizedDescription
         }
@@ -1066,6 +1110,40 @@ struct PlanProposalCard: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+/// The last 14 mornings of HRV against the athlete's normal band: the line
+/// turns amber where it runs below the band.
+struct PlanHRVChart: View {
+    let chart: TodaySnapshot.PlanProposal.Chart
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            GeometryReader { geo in
+                let known = chart.values.compactMap { $0 }
+                let lo = min(chart.low, known.min() ?? chart.low) * 0.92, hi = max(chart.high, known.max() ?? chart.high) * 1.05
+                let y: (Double) -> CGFloat = { v in geo.size.height * CGFloat(1 - (v - lo) / max(1, hi - lo)) }
+                let x: (Int) -> CGFloat = { i in geo.size.width * CGFloat(i) / CGFloat(max(1, chart.values.count - 1)) }
+                ZStack(alignment: .topLeading) {
+                    Rectangle().fill(Palette.track).frame(height: max(2, y(chart.low) - y(chart.high))).offset(y: y(chart.high))
+                    ForEach(Array(chart.values.indices.dropLast()), id: \.self) { i in
+                        if let a = chart.values[i], let b = chart.values[i + 1] {
+                            Path { p in p.move(to: CGPoint(x: x(i), y: y(a))); p.addLine(to: CGPoint(x: x(i + 1), y: y(b))) }
+                                .stroke(b < chart.low ? Palette.amberBar : Palette.muted, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        }
+                    }
+                }
+            }
+            .frame(height: 64)
+            HStack {
+                Text(verbatim: "HRV · " + L10n.plural("%lld dní", chart.values.count)).font(Typo.caption).foregroundStyle(Palette.muted)
+                Spacer()
+                Text("pás = tvůj normál").font(Typo.caption).foregroundStyle(Palette.muted)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: L10n.tr("HRV za 14 dní proti tvému normálu")))
     }
 }
 
@@ -1152,6 +1230,7 @@ struct PlanSessionView: View {
                     if let f = session.workout?.intensity_factor { meta("IF", Fmt.decimal(f, digits: 2)) }
                 }
                 .padding(.top, 16)
+                if let change = session.change { PlanChangeCard(change: change).padding(.top, 16) }
                 if let blocks = session.workout?.steps, !WorkoutProfile.segments(blocks).isEmpty {
                     Card { WorkoutProfile(blocks: blocks, sport: sport) }.padding(.top, 16)
                     SectionLabel(text: "Průběh").padding(.top, 26)
@@ -1175,6 +1254,45 @@ struct PlanSessionView: View {
             Text(LocalizedStringKey(title)).font(Typo.caption).foregroundStyle(Palette.muted)
             Text(value).font(Typo.number(22)).foregroundStyle(Palette.ink)
         }
+    }
+}
+
+/// Why the session changed and the session it was (approved mockup
+/// 3-proc-se-trenink-zmenil, 3 Nov 2026).
+struct PlanChangeCard: View {
+    let change: PlanWeekDetail.Change
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: change.symbol).scaledFont(17, weight: .semibold).foregroundStyle(change.color)
+                Text(change.text).font(.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+            .background(change.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            if let original = change.original, let label = original.label {
+                SectionLabel(text: "Původně").padding(.top, 20)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(verbatim: label).strikethrough(change.kind != "shorter").font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                    Text(verbatim: originalLine(original)).font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .cardSurface(cornerRadius: 22)
+                .padding(.top, 10)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// "55 min · út 10. 3.": the original length and its day.
+    private func originalLine(_ o: PlanWeekDetail.Change.Original) -> String {
+        var parts: [String] = []
+        if let m = o.minutes { parts.append(planDuration(Int(m.rounded()))) }
+        if let d = o.date { parts.append(Fmt.weekdayShort(d) + " " + Fmt.dayMonth(d)) }
+        if let now = o.now { parts.append(L10n.f("teď %@", Fmt.weekdayShort(now) + " " + Fmt.dayMonth(now))) }
+        return parts.joined(separator: " · ")
     }
 }
 
