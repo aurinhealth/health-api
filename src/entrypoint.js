@@ -2922,7 +2922,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         ]);
         return {...buildShareMilestones({...inputs,today}),record};
       },{ttl:300});
-      return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+      // Apps from before swim and multisport (no ?swim=1) would name them "days in a row".
+      const items=url.searchParams.get('swim')==='1'?result.items:result.items.filter(i=>i.key!=='swim'&&i.key!=='multisport');
+      return Response.json({...result,items},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:500})}
   }
 

@@ -8,3 +8,7 @@ To bring them back, move the `AppIcon-*.appiconset` folders into `Aurin/Resource
 and the previews into its `IconPreview/`, then add the styles to `AppIconChoice.styles` and the Pro
 icons to `AppIconChoice.proIcons` (`Screens/SettingsPages/SettingsAppIcon.swift`) and update
 `tests/app-icons.test.mjs` and `AurinTests/AppIconTests.swift`.
+
+The Záře and Prstenec styles have no Plavání and Multisport icons yet: draw them with the same glyphs as
+`badge-swim` and `badge-multisport` (`mockups/ikona/zdroj/export_ikony_plavani_multisport.py` in the project files) before
+bringing the styles back.

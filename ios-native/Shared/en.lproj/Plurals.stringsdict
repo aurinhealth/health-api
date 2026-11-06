@@ -845,6 +845,22 @@
 			<string>workouts done</string>
 		</dict>
 	</dict>
+	<key>multisportovních tréninků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>multisport workout</string>
+			<key>other</key>
+			<string>multisport workouts</string>
+		</dict>
+	</dict>
 	<key>tréninků v posilovně</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

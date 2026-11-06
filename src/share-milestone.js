@@ -1,10 +1,11 @@
 // Sdílet → Milník: what the athlete has reached since joining Aurin, as the
-// app icons count it (app-milestones.js): ride and run kilometres, gym
-// sessions and days in a row, each at the last round number crossed, with
+// app icons count it (app-milestones.js): ride, run and swim kilometres,
+// multisport days (a triathlon, a duathlon or a brick), gym sessions and days
+// in a row, each at the last round number crossed, with
 // the sessions behind it for the poster's bars and the way there; and a new
 // power record from Intervals.icu (the last 30 days against the year before).
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
-import { activityMeters } from "./app-milestones.js";
+import { activityMeters, multisportDays } from "./app-milestones.js";
 
 const DAY = 86400000;
 const shift = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * DAY).toISOString().slice(0, 10);
@@ -55,9 +56,27 @@ export function buildShareMilestones({ rows = [], gymDays = [], today, since = "
     return a;
   })).filter(a => a.date >= since && a.date <= today);
   const items = [];
-  for (const kind of ["ride", "run"]) {
+  for (const kind of ["ride", "run", "swim"]) {
     const item = distanceItem(kind, activities.filter(a => a.kind === kind && a.meters > 0), since);
     if (item) items.push(item);
+  }
+
+  // Multisport: one bar a day (its minutes); the kilometres and time of each sport over all of them.
+  const multi = multisportDays(activities);
+  const multiValue = reachedStep(GYM_STEPS, multi.length);
+  if (multiValue) {
+    const legs = multi.flatMap(d => d.legs);
+    const of = kind => legs.filter(l => l.kind === kind);
+    items.push({
+      key: "multisport", value: multiValue, unit: "", total: multi.length, since, reachedOn: multi[multiValue - 1].date,
+      sessions: multi.length, minutes: round(legs.reduce((s, l) => s + l.minutes, 0)), elevation: null,
+      bars: multi.slice(-BARS).map(d => ({ date: d.date, value: round(d.legs.reduce((s, l) => s + l.minutes, 0)) })),
+      start: 0,
+      // Ride, run and swim, the ones never done left out.
+      sports: ["ride", "run", "swim"].filter(kind => of(kind).length).map(kind => ({
+        kind, km: round(of(kind).reduce((s, l) => s + l.meters, 0) / 1000, 1), minutes: round(of(kind).reduce((s, l) => s + l.minutes, 0))
+      }))
+    });
   }
 
   // Gym: a strength activity or a plan with sets logged, once a day.

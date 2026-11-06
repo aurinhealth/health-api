@@ -7,8 +7,26 @@ import UIKit
 struct Milestones: Decodable, Equatable {
     var runKm: Double = 0
     var rideKm: Double = 0
+    var swimKm: Double = 0
+    /// Days with a triathlon, a duathlon or a brick.
+    var multisportDays: Int = 0
     var gymSessions: Int = 0
     var streakDays: Int = 0
+}
+
+extension Milestones {
+    private enum CodingKeys: String, CodingKey { case runKm, rideKm, swimKm, multisportDays, gymSessions, streakDays }
+
+    /// A server without a total yet (an older release) leaves it at 0.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        runKm = try c.decodeIfPresent(Double.self, forKey: .runKm) ?? 0
+        rideKm = try c.decodeIfPresent(Double.self, forKey: .rideKm) ?? 0
+        swimKm = try c.decodeIfPresent(Double.self, forKey: .swimKm) ?? 0
+        multisportDays = try c.decodeIfPresent(Int.self, forKey: .multisportDays) ?? 0
+        gymSessions = try c.decodeIfPresent(Int.self, forKey: .gymSessions) ?? 0
+        streakDays = try c.decodeIfPresent(Int.self, forKey: .streakDays) ?? 0
+    }
 }
 
 extension APIClient {
@@ -22,7 +40,7 @@ extension APIClient {
 struct AppIconChoice: Identifiable, Equatable {
     enum Rule: Equatable {
         case free
-        case runKm(Double), rideKm(Double), gym(Int)
+        case runKm(Double), rideKm(Double), swimKm(Double), multisport(Int), gym(Int)
         case season(Int)
         case streak(Int)
         case pro
@@ -103,8 +121,10 @@ struct AppIconChoice: Identifiable, Equatable {
     }
 
     static let sections: [Section] = [
-        Section(title: "Běh", icons: sport("run", base: .runKm(100), gold: .runKm(2500))),
         Section(title: "Kolo", icons: sport("ride", base: .rideKm(1000), gold: .rideKm(10000))),
+        Section(title: "Běh", icons: sport("run", base: .runKm(100), gold: .runKm(2500))),
+        Section(title: "Plavání", icons: sport("swim", base: .swimKm(25), gold: .swimKm(500))),
+        Section(title: "Multisport", icons: sport("multisport", base: .multisport(10), gold: .multisport(100))),
         Section(title: "Posilovna", icons: sport("gym", base: .gym(50), gold: .gym(500))),
         Section(title: "Roční období", icons: styles.flatMap { style -> [AppIconChoice] in
             seasonKeys.indices.map { AppIconChoice(id: style.key + "-" + seasonKeys[$0], name: seasonNames[$0], rule: .season($0)) }
@@ -136,6 +156,8 @@ struct AppIconUnlock {
         switch icon.rule {
         case .runKm(let goal): return (milestones.runKm, goal)
         case .rideKm(let goal): return (milestones.rideKm, goal)
+        case .swimKm(let goal): return (milestones.swimKm, goal)
+        case .multisport(let goal): return (Double(milestones.multisportDays), Double(goal))
         case .gym(let goal): return (Double(milestones.gymSessions), Double(goal))
         case .streak(let goal): return (Double(milestones.streakDays), Double(goal))
         default: return nil
@@ -145,8 +167,8 @@ struct AppIconUnlock {
     /// The short note under a locked icon: "2 500 km", "50 tréninků", "jen na jaře".
     static func lockNote(_ icon: AppIconChoice) -> String {
         switch icon.rule {
-        case .runKm(let km), .rideKm(let km): return distance(km)
-        case .gym(let n): return L10n.plural("%lld tréninků", n)
+        case .runKm(let km), .rideKm(let km), .swimKm(let km): return distance(km)
+        case .gym(let n), .multisport(let n): return L10n.plural("%lld tréninků", n)
         case .streak(let n): return L10n.plural("%lld dní", n)
         case .season(let s): return L10n.tr(["jen na jaře", "jen v létě", "jen na podzim", "jen v zimě"][s])
         default: return ""
@@ -326,6 +348,8 @@ struct AppIconLockedSheet: View {
         switch icon.rule {
         case .runKm(let km): return L10n.f("Odemkneš ji, až naběháš celkem %@.", AppIconUnlock.distance(km))
         case .rideKm(let km): return L10n.f("Odemkneš ji, až najezdíš na kole celkem %@.", AppIconUnlock.distance(km))
+        case .swimKm(let km): return L10n.f("Odemkneš ji, až uplaveš celkem %@.", AppIconUnlock.distance(km))
+        case .multisport(let n): return L10n.f("Odemkneš ji po %@ multisportovních trénincích (triatlon, duatlon nebo brick).", Fmt.int(Double(n)))
         case .gym(let n): return L10n.f("Odemkneš ji po %@ trénincích v posilovně.", Fmt.int(Double(n)))
         case .streak(let n): return L10n.f("Odemkneš ji, když budeš trénovat %@ dní v řadě.", String(n))
         case .season: return L10n.tr("Dá se vybrat jen v tomto ročním období.")
@@ -335,7 +359,7 @@ struct AppIconLockedSheet: View {
 
     private func amount(_ value: Double) -> String {
         switch icon.rule {
-        case .runKm, .rideKm: return AppIconUnlock.distance(value)
+        case .runKm, .rideKm, .swimKm: return AppIconUnlock.distance(value)
         default: return Fmt.int(value.rounded(.down))
         }
     }
