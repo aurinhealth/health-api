@@ -34,81 +34,80 @@ export function readOnlyD1(query) {
   return { prepare: sql => statement(sql), batch: list => Promise.all(list.map(s => s.all())), exec: async () => ({ count: 0 }) };
 }
 
-// Candidate HRV rules for audit finding 5.4 (yellow from one morning's HRV),
-// measured on the same days as today's rule:
-// - days: the HRV of the day is the average of the last `days` mornings of
-//   the same source (ln values; Plews 2012, Javaloyes 2019, Garmin's 7-day
-//   HRV status);
-// - band: within ±`band` SD of the normal counts as the normal, further out
-//   only the part beyond it (smallest worthwhile change 0.5 SD, Plews 2012);
-// - low: the rule only softens a morning under the normal; a morning over it
-//   counts as today (a symmetric average or band also takes points from good
-//   mornings);
-// - noDrop: an HRV under the normal never costs anything, the most any HRV
-//   rule could take away from the yellow days (a bound, not a candidate).
-export const HRV_RULES = {
-  now: {}, avg3: { days: 3 }, avg7: { days: 7 }, band: { band: 0.5 }, avg7band: { days: 7, band: 0.5 },
-  avg3low: { days: 3, low: true }, avg7low: { days: 7, low: true }, bandlow: { band: 0.5, low: true },
-  avg3bandlow: { days: 3, band: 0.5, low: true }, noDrop: { noDrop: true }
+// What makes a day yellow (audit finding 5.4). The run of 2026-11-06 showed
+// that no HRV rule changes much: a 3- or 7-morning average adds yellow days,
+// a ±0.5 SD band under the normal takes 60 % to 58 %, and even an HRV that
+// never costs anything leaves 58 %. So each day is scored again from its
+// parts (HRV 50 %, resting heart rate 25 %, sleep 25 %, recovery-model.js)
+// with one part changed:
+// - band: a part under its normal (component score under 70) gets 10 points
+//   back up to 70, half an SD for HRV and resting heart rate (smallest
+//   worthwhile change, Plews 2012) and 5 % of the sleep need for sleep;
+// - free: a part under its normal costs nothing (a bound, not a candidate).
+const band = s => (s < 70 ? Math.min(70, s + 10) : s), free = s => Math.max(70, s);
+export const RULES = {
+  now: {}, hrvBand: { hrv: band }, hrvRhrBand: { hrv: band, restingHR: band }, allBand: { hrv: band, restingHR: band, sleep: band },
+  hrvFree: { hrv: free }, rhrFree: { restingHR: free }, sleepFree: { sleep: free }, allFree: { hrv: free, restingHR: free, sleep: free }
 };
+const WEIGHTS = { hrv: 0.5, restingHR: 0.25, sleep: 0.25 };
 
-// The z of the HRV under a rule: `z` today's against the baseline, `logs` the
-// ln HRV of the same source on the days before (newest first).
-export function ruleZ(rule, z, mean, sd, logs) {
-  if (rule.noDrop) return Math.max(0, z);
-  if (rule.low && z >= 0) return z;
-  let out = z;
-  if (rule.days > 1) {
-    const window = [mean + z * sd, ...logs.slice(0, rule.days - 1)];
-    out = (window.reduce((s, v) => s + v, 0) / window.length - mean) / sd;
-    if (rule.low) out = Math.max(z, out);
-  }
-  if (rule.band) out = Math.sign(out) * Math.max(0, Math.abs(out) - rule.band);
-  return out;
+// The score of a readiness (readinessFor's) again with its parts changed by
+// `rule`: the weighted parts, less the breathing and temperature points, the
+// short night's cap at 66 (readiness.js withoutNight). Null without a score.
+export function rescore(r, rule = {}) {
+  if (r?.score == null) return null;
+  const c = r.components || {}, used = Object.keys(WEIGHTS).filter(k => c[k]);
+  const sum = used.reduce((t, k) => t + WEIGHTS[k], 0);
+  let score = used.reduce((t, k) => t + WEIGHTS[k] * (rule[k] ? rule[k](c[k].score) : c[k].score), 0) / sum;
+  const skin = c.skinTemp?.elevated ? 10 : 0;
+  score -= (c.respiration?.elevated ? 10 : 0) + skin + Math.abs(c.wristTemp?.points || 0);
+  score = Math.round(Math.max(0, Math.min(100, score)));
+  return (r.flags || []).includes('short_night') ? Math.min(score, 66) : score;
+}
+const zoneOf = score => (score == null ? null : score >= 67 ? 'green' : score >= 34 ? 'yellow' : 'red');
+
+// Why today's rule made a day yellow: the short night's cap, the breathing or
+// temperature points, or else the part furthest under its normal (weighted).
+export function yellowCause(r) {
+  const c = r.components || {};
+  if ((r.flags || []).includes('short_night') && rescore({ ...r, flags: [] }) >= 67) return 'shortNight';
+  if (rescore({ ...r, flags: [], components: { ...c, respiration: null, skinTemp: null, wristTemp: null } }) >= 67) return 'breathingOrTemp';
+  let worst = 'none', most = 0;
+  for (const k of Object.keys(WEIGHTS)) if (c[k] && WEIGHTS[k] * (70 - c[k].score) > most) { most = WEIGHTS[k] * (70 - c[k].score); worst = k; }
+  return worst;
 }
 
-const ZONES = () => ({ days: 0, green: 0, yellow: 0, red: 0, none: 0, yellowHrvLow: 0, yellowSleepShort: 0, dropGreen: 0 });
+const ZONES = () => ({ days: 0, green: 0, yellow: 0, red: 0, none: 0, dropGreen: 0 });
+const CAUSES = () => ({ hrv: 0, restingHR: 0, sleep: 0, shortNight: 0, breathingOrTemp: 0, none: 0, noSleep: 0, near: 0, mismatch: 0 });
 
-// The zone counts of one account's days under each rule (HRV_RULES), days
-// without a number counted as none. `dropGreen`: days whose own HRV was more
-// than 1.5 SD under the normal that a rule shows green while today's rule did not.
+// The zone counts of one account's days under each rule (RULES), days without
+// a number counted as none; `dropGreen`: days with the morning's HRV over 1.5
+// SD under its normal that a rule shows green while today's rule did not.
+// `causes` counts today's yellow days by yellowCause, with `noSleep` (no
+// night scored), `near` (64–66, three points from green) and `mismatch` (the
+// rescored day differs from readinessFor's, a check on rescore).
 export async function accountZones(env, days = DAYS) {
   const today = localToday(), from = shift(today, -days);
   const health = await googleDashboard(env.DB, today);
   const sleep = await legacyHealthApi.fetch(new Request(`https://internal/health/sleep?start=${shift(from, -1)}&end=${shift(today, 1)}`), env).then(r => r.json()).catch(() => ({}));
   const profile = await loadEffectiveProfile(env.DB, env.USER_ID).catch(() => null);
   const locks = await readinessLocks(env.DB, from).catch(() => ({}));
-  const google = health.wellness || [], sessions = sleep.sessions || [];
-  const out = Object.fromEntries(Object.keys(HRV_RULES).map(k => [k, ZONES()]));
-  // The HRV each morning showed (the locked one when there is a lock), by day.
-  const shown = new Map();
-  for (const r of google) if (Number(r?.hrv) > 0) shown.set(r.id, { log: Math.log(Number(r.hrv)), source: r.hrvSource || null });
+  const out = Object.fromEntries(Object.keys(RULES).map(k => [k, ZONES()]));
+  out.causes = CAUSES();
   for (let d = from; d < today; d = shift(d, 1)) {
-    const input = { date: d, google, sessions, profile: { ...(profile || {}), readinessLocks: locks } };
-    const base = readinessFor(input), hrv = base.components?.hrv;
-    const row = base.rows.find(r => r.id === d);
-    if (row && Number(row.hrv) > 0) shown.set(d, { log: Math.log(Number(row.hrv)), source: row.hrvSource || null });
-    let mean = null, sd = null, logs = [];
-    if (hrv) {
-      mean = Math.log(hrv.baseline); sd = Math.log(hrv.high) - mean;
-      for (let back = 1; back < 7; back++) { const s = shown.get(shift(d, -back)); if (s && s.source === (row?.hrvSource || null)) logs.push(s.log); }
-    }
-    for (const [name, rule] of Object.entries(HRV_RULES)) {
-      let r = base;
-      const z = hrv ? ruleZ(rule, hrv.z, mean, sd, logs) : null;
-      if (hrv && Math.abs(z - hrv.z) > 1e-9) {
-        const value = Math.exp(mean + z * sd);
-        const lock = locks[d]?.row && Number(locks[d].row.hrv) > 0 ? { ...locks, [d]: { ...locks[d], row: { ...locks[d].row, hrv: value } } } : locks;
-        r = readinessFor({ ...input, google: google.map(w => w.id === d ? { ...w, hrv: value } : w), profile: { ...input.profile, readinessLocks: lock } });
-      }
-      const c = out[name];
+    const r = readinessFor({ date: d, google: health.wellness || [], sessions: sleep.sessions || [], profile: { ...(profile || {}), readinessLocks: locks } });
+    if (r.zone && rescore(r) !== r.score) out.causes.mismatch++;
+    for (const [name, rule] of Object.entries(RULES)) {
+      const zone = name === 'now' ? r.zone : zoneOf(rescore(r, rule)), c = out[name];
       c.days++;
-      if (!r.zone) { c.none++; continue; }
-      c[r.zone]++;
-      if (r.zone === 'yellow' && hrv && hrv.z < 0) c.yellowHrvLow++;
-      if (r.zone === 'yellow' && r.components?.sleep?.performance < 90) c.yellowSleepShort++;
-      if (r.zone === 'green' && base.zone !== 'green' && hrv && hrv.z <= -1.5) c.dropGreen++;
+      if (!zone) { c.none++; continue; }
+      c[zone]++;
+      if (zone === 'green' && r.zone !== 'green' && r.components?.hrv?.z <= -1.5) c.dropGreen++;
     }
+    if (r.zone !== 'yellow') continue;
+    out.causes[yellowCause(r)]++;
+    if (!r.components?.sleep) out.causes.noSleep++;
+    if (r.score >= 64) out.causes.near++;
   }
   return out;
 }
@@ -155,19 +154,22 @@ async function main() {
   const pct = (a, b) => b ? Math.round(100 * a / b) + ' %' : '–';
   const sum = name => rows.reduce((t, r) => { for (const k of Object.keys(t)) t[k] += r[name][k]; return t; }, ZONES());
   const total = sum('now');
-  const line = (label, r) => { const scored = r.green + r.yellow + r.red; return `| ${label} | ${scored} | ${r.green} | ${r.yellow} (${pct(r.yellow, scored)}) | ${r.red} | ${r.yellowHrvLow} |`; };
-  // Each candidate rule on the same days: all accounts, and the yellow share per account.
+  const line = (label, r) => { const scored = r.green + r.yellow + r.red; return `| ${label} | ${scored} | ${r.green} | ${r.yellow} (${pct(r.yellow, scored)}) | ${r.red} |`; };
+  // Each rule on the same days: all accounts, and the yellow share per account.
   const rule = name => { const t = sum(name), scored = t.green + t.yellow + t.red;
     const each = rows.map(r => pct(r[name].yellow, r[name].green + r[name].yellow + r[name].red)).join(', ');
     return `| ${name} | ${t.green} (${pct(t.green, scored)}) | ${t.yellow} (${pct(t.yellow, scored)}) | ${t.red} (${pct(t.red, scored)}) | ${each} | ${t.dropGreen} |`; };
+  const causes = rows.reduce((t, r) => { for (const k of Object.keys(t)) t[k] += r.causes[k]; return t; }, CAUSES());
   const text = [`## Readiness zones on the ${live ? 'live' : 'test'} server, last ${DAYS} days`, '',
-    `${users.length} accounts with health consent; ${rows.length} with a readiness. Left out: ${skipped.noNumber} without any day with a number, ${skipped.noDatabase} without a data database, ${skipped.failed} failed${errors.size ? ' (' + [...errors].join('; ') + ')' : ''}. Days without a number are left out.`, '',
-    '| Account | Days with a number | Green | Yellow | Red | Yellow with HRV under normal |', '|---|---|---|---|---|---|',
+    `${users.length} accounts with health consent; ${rows.length} with a readiness. Left out: ${skipped.noNumber} without any day with a number, ${skipped.noDatabase} without a data database, ${skipped.failed} failed${errors.size ? ' (' + [...errors].join('; ') + ')' : ''}. Days without a number are left out. The morning check-in is not counted.`, '',
+    '| Account | Days with a number | Green | Yellow | Red |', '|---|---|---|---|---|',
     ...rows.map((r, i) => line(String(i + 1), r.now)), line('**All**', total), '',
-    '### HRV rules on the same days (finding 5.4)', '',
-    'now = today\'s rule (one morning); avgN = average of the last N mornings; band = ±0.5 SD counts as normal. Last column: days with the morning\'s HRV over 1.5 SD under normal that the rule shows green while today\'s rule did not.', '',
+    '### Why the yellow days are yellow (finding 5.4)', '',
+    `Of ${total.yellow} yellow days: ${causes.hrv} mostly HRV, ${causes.restingHR} mostly resting heart rate, ${causes.sleep} mostly sleep, ${causes.shortNight} a short night's cap, ${causes.breathingOrTemp} breathing or temperature points, ${causes.none} no part under its normal. ${causes.noSleep} without a scored night; ${causes.near} at 64–66 (three points from green). Rescore check: ${causes.mismatch} days differ.`, '',
+    '### Rules on the same days', '',
+    'band = a part under its normal gets 10 points back up to normal (0.5 SD for HRV and resting heart rate, 5 % of the sleep need); free = a part under its normal costs nothing (a bound). Last column: days with the morning\'s HRV over 1.5 SD under normal that the rule shows green while today\'s rule did not.', '',
     '| Rule | Green | Yellow | Red | Yellow per account | Big HRV drop shown green |', '|---|---|---|---|---|---|',
-    ...Object.keys(HRV_RULES).map(rule), ''].join('\n');
+    ...Object.keys(RULES).map(rule), ''].join('\n');
   console.log(text);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, text + '\n');
 }
