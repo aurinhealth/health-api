@@ -54,6 +54,26 @@ final class WatchStore: NSObject, ObservableObject {
         session.activate()
     }
 
+    /// Woken in the background with Today from the iPhone (AurinWatchApp,
+    /// backgroundTask .watchConnectivity): the session wasn't started there,
+    /// as no view ran, so Today waited for the app to open and the watch face
+    /// kept the old one (watch audit F2: strain 1.0 on the face, 1.5 in the
+    /// app). Start it and stay up until it has handed everything over.
+    func receivePending() async {
+        guard WCSession.isSupported(), !WatchDemo.on else { return }
+        let session = WCSession.default
+        if session.delegate == nil {
+            session.delegate = self
+            session.activate()
+        }
+        let until = Date().addingTimeInterval(10)
+        while Date() < until, session.activationState != .activated || session.hasContentPending {
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        // The delegate hands Today over in a task of its own.
+        try? await Task.sleep(for: .milliseconds(300))
+    }
+
     /// The newest Today from the iPhone, when it is in reach; else, or when
     /// it has nothing for today, from the server with the watch's sign-in.
     func ask() {
@@ -222,11 +242,16 @@ final class WatchStore: NSObject, ObservableObject {
         food.water = max(0, (food.water ?? 0) + ml)
         value.food = food
         value.updated = Date()
+        keep(value)
+    }
+
+    /// A change made here (a drink, a moved alarm): kept, and the watch face
+    /// draws it too, all its complications (Aurin through the day shows the alarm).
+    private func keep(_ value: WatchSnapshot) {
         snapshot = value
         if let data = value.encoded() { UserDefaults.standard.set(data, forKey: Self.savedKey) }
         ComplicationShelf.save(value)
-        WidgetCenter.shared.reloadTimelines(ofKind: "aurin.small.drinks")
-        WidgetCenter.shared.reloadTimelines(ofKind: "aurin.wide.drinks")
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     /// The wake time the iPhone just saved, until its new Today comes.
@@ -249,8 +274,7 @@ final class WatchStore: NSObject, ObservableObject {
         }
         value.alarm = alarm
         value.updated = Date()
-        snapshot = value
-        if let data = value.encoded() { UserDefaults.standard.set(data, forKey: Self.savedKey) }
+        keep(value)
     }
 
     /// Made once, not on every redraw (the root view asks on each one); it

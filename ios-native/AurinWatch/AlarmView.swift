@@ -5,7 +5,8 @@ import WatchKit
 /// on a 24-hour dial (the moon at bedtime, the sun at the wake time), the
 /// crown moves the wake time in 5 minutes, then "Just tomorrow" or every work
 /// (weekend) day saves it on the iPhone. Swiping left shows the next mornings
-/// with their work day or weekend time. The gear holds the watch's own settings.
+/// with their work day or weekend time, the dots under them say how many.
+/// The gear holds the watch's own settings.
 struct AlarmView: View {
     @EnvironmentObject private var store: WatchStore
     @State private var settings = false
@@ -20,7 +21,8 @@ struct AlarmView: View {
                     .tag(index)
             }
         }
-        .tabViewStyle(.page(indexDisplayMode: .never))
+        .tabViewStyle(.page(indexDisplayMode: .automatic))
+        .navigationTitle(W.tr("Budík", "Alarm"))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { settings = true } label: { Image(systemName: "gearshape.fill") }
@@ -52,12 +54,24 @@ private struct AlarmDay: View {
 
     @State private var minutes: Double = 420
     @State private var saved: Int?
+    /// The crown (or VoiceOver) moved the time: until then a morning without
+    /// an alarm shows none, not 7:00 and a button to save it.
+    @State private var touched = false
     @State private var sending = false
+    /// After a save: what was saved for two seconds, or the scope to try again.
+    @State private var result: SaveResult?
     @FocusState private var focused: Bool
+
+    private enum SaveResult: Equatable {
+        case saved(String)
+        case failed(scope: String)
+    }
 
     private var weekend: Bool { WatchAlarm.weekend(morning) }
     private var wakeText: String? { WatchAlarm.wake(on: morning, alarm) }
-    private var edited: Bool { Int(minutes) != saved }
+    /// A time on the dial: the saved one, or one the crown set.
+    private var set: Bool { saved != nil || touched }
+    private var edited: Bool { touched && Int(minutes) != saved }
     /// Minutes from bedtime to the wake time: tonight's plan, else the sleep it plans and a quarter hour to fall asleep.
     private var inBed: Int { alarm.inBed ?? ((alarm.sleep ?? 480) + 15) }
     private var sleepMinutes: Int { alarm.sleep ?? max(inBed - 15, 0) }
@@ -67,12 +81,12 @@ private struct AlarmDay: View {
             Text(title)
                 .watchFont(12, .medium)
                 .foregroundStyle(W.secondary)
-            AlarmDial(bed: bedMinutes, wake: Int(minutes), on: saved != nil || edited) {
-                Text(saved == nil && !edited ? "–" : W.clock(minutes: minutes))
+            AlarmDial(bed: bedMinutes, wake: Int(minutes), on: set) {
+                Text(set ? W.clock(minutes: minutes) : "–")
                     .font(W.serif(34))
                     .foregroundStyle(W.ink)
                     .contentTransition(.numericText())
-                Text(saved == nil && !edited ? W.tr("bez budíku", "no alarm") : W.tr("budík", "alarm"))
+                Text(set ? W.tr("budík", "alarm") : W.tr("Bez budíku", "No alarm"))
                     .watchFont(12)
                     .foregroundStyle(W.muted)
             }
@@ -80,20 +94,18 @@ private struct AlarmDay: View {
             .focused($focused)
             // Detents: only whole 5-minute steps, never 7:03 while turning.
             .digitalCrownRotation(detent: $minutes, from: 0, through: 1435, by: 5, sensitivity: .low, isContinuous: true, isHapticFeedbackEnabled: true)
-            if edited {
-                HStack(spacing: 4) {
-                    if first && alarm.evening != nil {
-                        choice(W.tr("Jen zítra", "Just once"), scope: "once")
-                    }
-                    choice(weekend ? W.tr("Celý víkend", "All weekend") : W.tr("Všední dny", "All weekdays"),
-                           scope: weekend ? "weekend" : "work")
+            // VoiceOver sets the time too: swipe up or down moves it 5 minutes.
+            .accessibilityLabel(W.tr("Budík, ", "Alarm, ") + title)
+            .accessibilityValue(set ? W.clock(minutes: minutes) : W.tr("Bez budíku", "No alarm"))
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: minutes = (minutes + 5).truncatingRemainder(dividingBy: 1440)
+                case .decrement: minutes = (minutes + 1435).truncatingRemainder(dividingBy: 1440)
+                @unknown default: break
                 }
-                .disabled(sending)
-            } else {
-                Text(W.duration(minutes: Double(sleepMinutes)) + W.tr(" spánku", " of sleep"))
-                    .watchFont(12)
-                    .foregroundStyle(W.muted)
+                touched = true
             }
+            footer
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
@@ -102,6 +114,52 @@ private struct AlarmDay: View {
         }
         .onChange(of: shown) { _, now in focused = now }
         .onChange(of: alarm) { _, _ in if !edited { fill() } }
+        .onChange(of: minutes) { _, value in
+            // fill() puts the saved time (or 7:00) back: that is no turn.
+            guard touched || Int(value) != (saved ?? 420) else { return }
+            touched = true
+            if case .failed = result { result = nil }
+        }
+    }
+
+    /// Under the dial: saving, what was saved or why not, the save buttons
+    /// after a turn, the night's sleep, or how to set a morning without an alarm.
+    @ViewBuilder private var footer: some View {
+        if sending {
+            ProgressView().frame(height: 28)
+        } else if case .failed(let scope) = result {
+            Text(W.tr("Neuloženo. iPhone musí být poblíž.", "Not saved. Your iPhone needs to be nearby."))
+                .watchFont(12, .medium)
+                .foregroundStyle(W.amber)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+            choice(W.tr("Zkusit znovu", "Try again"), scope: scope, primary: true)
+        } else if case .saved(let text) = result {
+            Label(text, systemImage: "checkmark")
+                .watchFont(12, .semibold)
+                .foregroundStyle(W.green)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        } else if edited {
+            HStack(spacing: 4) {
+                if first && alarm.evening != nil {
+                    choice(W.tr("Jen zítra", "Just once"), scope: "once", primary: false)
+                }
+                choice(weekend ? W.tr("Celý víkend", "All weekend") : W.tr("Všední dny", "All weekdays"),
+                       scope: weekend ? "weekend" : "work", primary: true)
+            }
+        } else if set {
+            Text(W.duration(minutes: Double(sleepMinutes)) + W.tr(" spánku", " of sleep"))
+                .watchFont(12)
+                .foregroundStyle(W.muted)
+        } else {
+            Text(W.tr("Nastav otočením korunky", "Turn the crown to set"))
+                .watchFont(12)
+                .foregroundStyle(W.muted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
     }
 
     private var title: String {
@@ -119,25 +177,53 @@ private struct AlarmDay: View {
         minutes = Double(saved ?? 420)
     }
 
-    private func choice(_ label: String, scope: String) -> some View {
-        Button {
-            sending = true
-            let text = String(format: "%02d:%02d", Int(minutes) / 60, Int(minutes) % 60)
-            Task {
-                if await WatchAlarm.shared.move(wake: text, scope: scope, evening: alarm.evening) { saved = Int(minutes) }
-                sending = false
-            }
-        } label: {
+    private func choice(_ label: String, scope: String, primary: Bool) -> some View {
+        Button { save(scope) } label: {
             Text(label)
                 .watchFont(12, .semibold)
-                .foregroundStyle(scope == "once" ? W.ink : .black)
+                .foregroundStyle(primary ? .black : W.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 7)
-                .background(scope == "once" ? W.tile : W.indigo, in: Capsule())
+                // The main choice white, as every main button (watch audit D2).
+                .background(primary ? W.ink : W.tile, in: Capsule())
         }
         .buttonStyle(.plain)
+    }
+
+    /// Saves on the iPhone (the alarm lives there): a tap and "Saved ·
+    /// weekdays 6:45" for two seconds, or a failure tap and Try again.
+    private func save(_ scope: String) {
+        sending = true
+        result = nil
+        let wake = Int(minutes)
+        Task {
+            let ok = await WatchAlarm.shared.move(wake: String(format: "%02d:%02d", wake / 60, wake % 60), scope: scope, evening: alarm.evening)
+            sending = false
+            guard ok else {
+                WKInterfaceDevice.current().play(.failure)
+                result = .failed(scope: scope)
+                AccessibilityNotification.Announcement(W.tr("Neuloženo. iPhone musí být poblíž.", "Not saved. Your iPhone needs to be nearby.")).post()
+                return
+            }
+            saved = wake
+            WKInterfaceDevice.current().play(.success)
+            let text = W.tr("Uloženo · ", "Saved · ") + Self.scopeName(scope) + " " + W.clock(minutes: Double(wake))
+            result = .saved(text)
+            AccessibilityNotification.Announcement(text).post()
+            try? await Task.sleep(for: .seconds(2))
+            if result == .saved(text) { result = nil }
+        }
+    }
+
+    /// "weekdays", "weekend" or "tomorrow" in "Saved · weekdays 6:45".
+    static func scopeName(_ scope: String) -> String {
+        switch scope {
+        case "once": W.tr("zítra", "tomorrow")
+        case "weekend": W.tr("víkend", "weekend")
+        default: W.tr("všední dny", "weekdays")
+        }
     }
 
     /// "6:45" or "06:45" as minutes after midnight.
@@ -263,11 +349,14 @@ struct AlarmRinging: View {
                     .foregroundStyle(W.ink)
             }
             HStack(spacing: 6) {
+                // Double Tap snoozes, never stops: a half-awake tap can't end the alarm.
                 Button(W.tr("Odložit", "Snooze")) { alarm.snoozeNow() }
-                    .tint(W.tile)
-                Button(W.tr("Vypnout", "Stop")) { alarm.stop() }
-                    .tint(W.amber)
-                    .foregroundStyle(.black)
+                    .buttonStyle(.bordered)
+                    .doubleTap()
+                Button { alarm.stop() } label: {
+                    Text(W.tr("Vypnout", "Stop")).foregroundStyle(.black)
+                }
+                .mainButton()
             }
             .watchFont(14, .semibold)
         }

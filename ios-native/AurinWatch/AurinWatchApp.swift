@@ -31,6 +31,11 @@ struct AurinWatchApp: App {
             await WatchStore.shared.fromServer()
             await WatchStore.shared.scheduleMorning()
         }
+        // Today from the iPhone while the app is in the background: taken now,
+        // so the watch face moves on without opening the app (watch audit F2).
+        .backgroundTask(.watchConnectivity) {
+            await WatchStore.shared.receivePending()
+        }
         // The coach's pushes from the iPhone, in the watch's own look.
         WKNotificationScene(controller: CoachNotificationController.self, category: "COACH_SWAP")
         WKNotificationScene(controller: CoachNotificationController.self, category: "COACH_REPLY")
@@ -61,12 +66,22 @@ struct WatchRoot: View {
     @ObservedObject private var gym = GymStore.shared
     @State private var page = WatchDemo.value("-page") ?? "readiness"
     @State private var path = NavigationPath()
+    @Environment(\.legibilityWeight) private var legibility
+    /// Bold Text, for W.serif and W.news: drawn again when it changes.
+    @State private var bold = false
 
     var body: some View {
-        if WatchDemo.flag("-face"), let s = store.snapshot {
-            DemoFace(s: s)
-        } else {
-            pages
+        Group {
+            if WatchDemo.flag("-face"), let s = store.snapshot {
+                DemoFace(s: s)
+            } else {
+                pages
+            }
+        }
+        .id(bold)
+        .onChange(of: legibility, initial: true) { _, now in
+            W.boldText = now == .bold
+            bold = W.boldText
         }
     }
 
@@ -79,9 +94,9 @@ struct WatchRoot: View {
                         // Drawn again at noon, when the night stops being awaited.
                         TimelineView(.explicit([WatchStore.noon()])) { _ in
                             if store.nightPending {
-                                ReadinessHome(s: snapshot, stale: .night)
+                                ReadinessHome(s: snapshot, stale: .night, openTraining: openTraining)
                             } else {
-                                ReadinessHome(s: snapshot)
+                                ReadinessHome(s: snapshot, openTraining: openTraining)
                             }
                         }
                     } else if let snapshot = store.snapshot {
@@ -138,6 +153,12 @@ struct WatchRoot: View {
             AlarmRinging().onAppear { WatchReport.visit("alarmRinging") }
         }
         .task { openDemo() }
+    }
+
+    /// The Training page, from today's gym row on the first page (watch audit B1).
+    private var openTraining: (() -> Void)? {
+        guard store.settings.pages.contains("training") else { return nil }
+        return { withAnimation { page = "training" } }
     }
 
     /// The sample day's screenshots (WatchDemo): a detail as its complication
