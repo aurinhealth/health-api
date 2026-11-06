@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb, PERSONAL_TABLES } from "../src/tenancy.js";
-import { consentStatus, saveConsent, CONSENT_VERSION } from "../src/consent.js";
+import { consentStatus, saveConsent, CONSENT_VERSION, AI_CONSENT_VERSION } from "../src/consent.js";
 import { assertAIAccess, subscriptionStatus } from "../src/subscription.js";
 import { serverSource } from "./helpers/server-source.mjs";
 
@@ -39,6 +39,15 @@ test("AI consent can be given and taken back; the withdrawal is kept", async () 
   assert.equal((await saveConsent(env, { ai: false })).consent.aiAllowed, false);
   assert.ok(raw.sqlite.prepare("SELECT withdrawn_at FROM user_consents WHERE user_id=2 AND kind='ai'").get().withdrawn_at);
   assert.equal((await saveConsent(env, { ai: true })).consent.aiAllowed, true);
+});
+
+test("a new health text asked again: AI holds only when its box is ticked again", async () => {
+  const { env } = setup();
+  await saveConsent(env, { health: true, ai: true });
+  assert.equal((await saveConsent(env, { health: true, ai: false })).consent.aiAllowed, false);
+  const { consent } = await saveConsent(env, { health: true, ai: true });
+  assert.equal(consent.aiAllowed, true);
+  assert.equal(consent.ai.version, AI_CONSENT_VERSION);
 });
 
 test("health consent cannot be refused here, and AI needs it first", async () => {

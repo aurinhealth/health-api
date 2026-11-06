@@ -48,7 +48,7 @@
 "AI kouč" = "AI coach";
 "AI potravinu nenašla. Zadej ji ručně." = "AI couldn't find this food. Enter it manually.";
 "AI ten kód nezná." = "AI doesn't know this code.";
-"Aby mohl odpovídat, pošle Aurin potřebné údaje o zdraví, včetně dat z připojených hodinek a prstenů, a fotky, které mu pošleš, společnosti OpenAI v USA. Jde to kdykoli vypnout v Nastavení → Soukromí a data." = "To answer, Aurin sends the health data it needs, including data from your connected watches and rings, and the photos you send it to OpenAI in the USA. You can turn this off anytime in Settings → Privacy & data.";
+"Aby mohl odpovídat a pamatovat si vaše rozhovory, pošle Aurin potřebné údaje o zdraví, včetně dat z připojených hodinek a prstenů, a fotky, které mu pošleš, společnosti OpenAI v USA. Jde to kdykoli vypnout v Nastavení → Soukromí a data." = "To answer and remember your chats, Aurin sends the health data it needs, including data from your connected watches and rings, and the photos you send it to OpenAI in the USA. You can turn this off anytime in Settings → Privacy & data.";
 "Akorát" = "Just right";
 "Aktivita a cíl" = "Activity and goal";
 "Aktivní" = "Active";
@@ -245,7 +245,7 @@
 "Kdy jít spát?" = "When to go to bed?";
 "Kdy mám čas" = "When I have time";
 "Kdykoli" = "Anytime";
-"Když použiješ AI funkci (kouč, rozpoznání jídla z fotky, hodnocení tréninku a týdne), a každý den kvůli krátkému shrnutí kouče na Dnes, Tréninku a Jídle, pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI v USA. Cyklus jen po zapnutí „Kouč ví o cyklu“." = "When you use an AI feature (the coach, food recognition from photos, workout and week reviews), and every day for the coach's short summary on Today, Training and Food, Aurin sends the data it needs, including health data and the photos you send, to OpenAI in the USA. Your cycle only if you turn on “Coach knows my cycle”.";
+"Když použiješ AI funkci (kouč, rozpoznání jídla z fotky, hodnocení tréninku a týdne), každý den kvůli krátkému shrnutí kouče na Dnes, Tréninku a Jídle a v noci po dni s chatem kvůli paměti kouče, pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI v USA. Cyklus jen po zapnutí „Kouč ví o cyklu“, citlivé položky deníku jen po zapnutí „Kouč vidí citlivé položky“." = "When you use an AI feature (the coach, food recognition from photos, workout and week reviews), every day for the coach's short summary on Today, Training and Food, and at night after a day you chatted, for the coach's memory, Aurin sends the data it needs, including health data and the photos you send, to OpenAI in the USA. Your cycle only if you turn on “Coach knows my cycle”, sensitive journal items only if you turn on “The coach sees sensitive items”.";
 "Klidový tep" = "Resting heart rate";
 "Klidový tep po dnech" = "Resting heart rate by day";
 "Knihovna" = "Library";
@@ -699,7 +699,7 @@
 "Tep" = "Heart rate";
 "Bez tepu" = "No HR";
 "Tep při chůzi" = "Walking heart rate";
-"Tep, variabilita tepu (HRV), spánek, váha a tělesný tuk, jídlo a pití, tréninky a jak ti šly." = "Heart rate, heart rate variability (HRV), sleep, weight and body fat, food and drinks, workouts and how they went.";
+"Tep, variabilita tepu (HRV), spánek, dech, okysličení krve, teplota ve spánku, kroky, váha a tělesný tuk, jídlo a pití, tréninky a jak ti šly a co si zapíšeš do deníku." = "Heart rate, heart rate variability (HRV), sleep, breathing, blood oxygen, temperature in sleep, steps, weight and body fat, food and drinks, workouts and how they went, and what you note in the journal.";
 "Teplota" = "Temperature";
 "Teplota zápěstí" = "Wrist temperature";
 "Tepové zóny pro běh" = "Running heart rate zones";
@@ -870,7 +870,7 @@
 "Zdroj: %@" = "Source: %@";
 "Zdroje dat" = "Data sources";
 "Zdřímnutí" = "Naps";
-"Ze služeb, které připojíš (Apple Health, Google Health, Intervals.icu), a z toho, co zadáš sám." = "The services you connect (Apple Health, Google Health, Intervals.icu) and what you enter yourself.";
+"Ze služeb, které připojíš (třeba Apple Health, Google Health, WHOOP, prsten Ultrahuman, Intervals.icu nebo Wahoo), a z toho, co zadáš sám." = "The services you connect (e.g. Apple Health, Google Health, WHOOP, the Ultrahuman Ring, Intervals.icu or Wahoo) and what you enter yourself.";
 "Zeptat se" = "Ask";
 "Zepředu" = "Front";
 "Zezadu" = "Back";
@@ -3290,7 +3290,7 @@
 "Přidat se na čekací listinu" = "Join the waitlist";
 "Zaškrtni první políčko, ať můžeš pokračovat." = "Tick the first box to continue.";
 "Později" = "Later";
-"Nepovinné. Potřebuje je kouč, jeho denní shrnutí a rozpoznání jídla. Jde to vypnout v Nastavení." = "Optional. The coach, its daily summary and food recognition need it. You can turn it off in Settings.";
+"Nepovinné. Potřebuje je kouč, jeho paměť a denní shrnutí a rozpoznání jídla. Jde to vypnout v Nastavení." = "Optional. The coach, its memory and daily summary, and food recognition need it. You can turn it off in Settings.";
 "Čte spánek, tep, HRV, tréninky, váhu a jídlo. Bez zeptání nic nezapisuje." = "Reads sleep, heart rate, HRV, workouts, weight and food. Writes nothing without asking.";
 "Aurin potřebuje věk, výšku a váhu, aby spočítal kalorie, námahu a zotavení. Pohlaví mění výpočet kalorií a tepových zón." = "Aurin needs your age, height and weight to work out calories, strain and recovery. Sex changes how calories and heart rate zones are worked out.";
 "Zadej výšku mezi %@ a %@." = "Enter a height between %@ and %@.";
