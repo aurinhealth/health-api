@@ -350,7 +350,7 @@ test("the week strip: Monday to Sunday of the day's week, the day's own zone, no
   assert.equal(readinessWeek({ date: "2026-10-18", readiness: { score: null, zone: null, rows: [] } })[0].date, "2026-10-12", "Sunday belongs to its Monday");
 });
 
-test("a watch gym session without TSS gets one from its heart rate, so the strain detail can split the day", () => {
+test("a gym session without TSS gets one from its heart rate or its length, so the strain detail can split the day", () => {
   const wellness = Array.from({ length: 20 }, (_, i) => ({ id: `2026-10-${String(i + 1).padStart(2, "0")}`, restingHR: 56 }));
   const training = { completed: [
     { id: "gym", type: "WeightTraining", averageHeartRate: 115, durationHours: 1.1 },
@@ -360,9 +360,15 @@ test("a watch gym session without TSS gets one from its heart rate, so the strai
   const out = withHeartRateLoad(training, wellness, { age: 35 }, "2026-10-17").completed;
   assert.ok(out[0].tss > 0 && out[0].tssFromHeartRate);
   assert.equal(out[1].tss, 40);
-  assert.equal(out[2].tss, undefined);
-  // Without a resting or max heart rate nothing is guessed.
-  assert.equal(withHeartRateLoad(training, [], {}, "2026-10-17"), training);
+  // A gym session without heart rate (logged set by set in Aurin) counts by its length, RPE 6.
+  assert.equal(out[2].tss, 36);
+  assert.ok(out[2].tssFromLength);
+  // Without a resting or max heart rate only the gym's length counts; other sports get nothing guessed.
+  const bare = withHeartRateLoad(training, [], {}, "2026-10-17").completed;
+  assert.equal(bare[0].tss, 40, "the gym with heart rate counts by its length too");
+  assert.equal(bare[1].tss, 40);
+  const walk = { completed: [{ id: "walk", type: "Walk", durationHours: 0.5 }] };
+  assert.equal(withHeartRateLoad(walk, [], {}, "2026-10-17"), walk);
   // The profile's own max and resting heart rate (Tep a aktivita) are enough, without a birth date.
   const own = withHeartRateLoad(training, [], { hrmax: 188, rhr: 52 }, "2026-10-17").completed;
   assert.ok(own[0].tss > 0 && own[0].tssFromHeartRate);
