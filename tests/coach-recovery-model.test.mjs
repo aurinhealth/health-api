@@ -25,7 +25,7 @@ test('without a personal baseline the coach falls back to the older rules',()=>{
 });
 test('Intervals.icu fills only what Google Health lacks',()=>{
   const rows=mergeWellnessRows([{id:day(0),hrv:60}],[{id:day(0),hrv:90,restingHR:48},{id:day(-1),respiration:14}]);
-  assert.deepEqual(rows,[{id:day(-1),respiration:14},{id:day(0),hrv:60,restingHR:48,restingHRSource:'intervals'}]);
+  assert.deepEqual(rows,[{id:day(-1),respiration:14,respirationSource:'intervals'},{id:day(0),hrv:60,restingHR:48,restingHRSource:'intervals'}]);
 });
 test('deep endurance fatigue (TSB) protects the legs instead of a load ratio',()=>{
   const base={date,cycling:{recentRideTss:200,recentRideHours:4,plannedWorkouts:[],recentActivities:[{date:day(-3),type:'Ride',name:'Endurance',tss:60,durationHours:1.5,ctl:60,atl:90}]},recovery:{},strength:{recentCompletedSets:[]}};
@@ -72,9 +72,44 @@ test('the recovery week reads HRV from the source with the most mornings, never 
   const rows = hrvSourceRows([{ id: d(-1), hrv: 60 }], health, monday);
   assert.equal(rows.find(r => r.id === d(-1)).hrv, 55);
   assert.equal(hrvWeekTrendDown(rows, monday), true);
-  // Intervals.icu with more mornings wins.
+  // Intervals.icu (no tag, it may hold two watches) wins only with more mornings that week.
   const intervals = Array.from({ length: 67 }, (_, i) => ({ id: d(-67 + i), hrv: 70 + (i % 5) }));
-  assert.equal(hrvWeekTrendDown(hrvSourceRows(intervals, health, monday), monday), false);
+  assert.equal(hrvWeekTrendDown(hrvSourceRows(intervals, health, monday), monday), true, 'a tie keeps the watch');
+  const gaps = health.map((r, i) => i >= 64 ? { id: r.id } : r);
+  assert.equal(hrvWeekTrendDown(hrvSourceRows(intervals, gaps, monday), monday), false);
+});
+
+// Audit 5.1: WHOOP (RMSSD, ~70 ms) for two months, then an Apple Watch (SDNN,
+// ~45 ms) without a day of both. A mix reads as a falling HRV for weeks.
+const switchedWatch = (monday, appleDays) => {
+  const d = o => new Date(Date.parse(monday + 'T12:00:00Z') + o * 86400000).toISOString().slice(0, 10);
+  return Array.from({ length: 67 }, (_, i) => i >= 67 - appleDays
+    ? { id: d(-67 + i), hrv: 44 + (i % 3), hrvSource: 'apple-health:sdnn' }
+    : { id: d(-67 + i), hrv: 68 + (i % 5), hrvSource: 'whoop' });
+};
+
+test('after a switch to another watch the recovery week never mixes the two HRV scales', async () => {
+  const { hrvWeekTrendDown, hrvSourceRows } = await import('../src/week-planner.js');
+  const monday = '2026-10-05';
+  for (const days of [5, 10, 20, 30]) {
+    const health = switchedWatch(monday, days);
+    assert.equal(hrvWeekTrendDown(hrvSourceRows([], health, monday), monday), false, days + ' Apple days');
+    // Intervals.icu got both watches' values (a mix): the tagged watch still wins.
+    const intervals = health.map(r => ({ id: r.id, hrv: r.hrv }));
+    assert.equal(hrvWeekTrendDown(hrvSourceRows(intervals, health, monday), monday), false, days + ' Apple days, with Intervals.icu');
+  }
+  // The new watch's own falling week still counts once it has its 14 mornings.
+  const d = o => new Date(Date.parse(monday + 'T12:00:00Z') + o * 86400000).toISOString().slice(0, 10);
+  const low = switchedWatch(monday, 30).map(r => r.id >= d(-7) ? { ...r, hrv: 36 } : r);
+  assert.equal(hrvWeekTrendDown(hrvSourceRows([], low, monday), monday), true);
+});
+
+test('the sleep need adds no HRV-low minutes after a switch to another watch', async () => {
+  const { hrvStatusLow } = await import('../src/recovery-model.js');
+  const monday = '2026-10-05', rows = switchedWatch(monday, 8), last = rows.at(-1).id;
+  assert.equal(hrvStatusLow(rows, last), false);
+  const whoopLow = switchedWatch(monday, 0).map((r, i) => i >= 60 ? { ...r, hrv: 50 } : r);
+  assert.equal(hrvStatusLow(whoopLow, last), true, 'one watch\'s own low week still counts');
 });
 
 test('a red morning or signs of illness leave the gym out today',()=>{

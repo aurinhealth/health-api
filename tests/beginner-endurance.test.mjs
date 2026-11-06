@@ -45,9 +45,11 @@ test("a beginner's ride grows at most 10 % over the longest ride of the last two
 
 test("too little data is said as such, not as fatigue", () => {
   const none = buildCyclingCoachV2({ date, week: week([]) });
-  // Without the body's signals the load decides, and without fatigue data it is never green.
-  assert.equal(none.readiness.status, "yellow");
-  assert.ok(none.readiness.reasons.some(r => /chybí HRV nebo klidový tep/.test(r)));
+  // Without the body's signals the plan and the load decide, never a yellow
+  // nothing measured (audit 2026-11-06, 14.1); the beginner still rides easy.
+  assert.equal(none.readiness.status, "green");
+  assert.ok(none.readiness.reasons.some(r => /chybí HRV nebo klidový tep.*řídím se plánem a zátěží/.test(r)));
+  assert.ok(!none.recommendation.adaptations.some(a => /střední připravenost/.test(a)));
   assert.equal(none.recommendation.session.kind, "endurance");
   const tired = buildCyclingCoachV2({ date, week: week(history), fitness: { wellness: [{ id: date, ctl: 50, atl: 85 }] }, health: { sleep: [{ type: "sleep", durationMin: 300, endTime: date + "T06:30:00" }] }, manualReadiness: 10 });
   assert.equal(tired.readiness.status, "red");

@@ -685,7 +685,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(off.session.plannedId, "planned:2")
         let missed = try XCTUnwrap(planDay.activities.last)
         XCTAssertEqual(PlanState(missed.session), .missed)
-        XCTAssertEqual(CalendarActivityRow.detail(missed), "Neodjeto · 45 min")
+        XCTAssertEqual(CalendarActivityRow.detail(missed), "Nesplněno · 45 min")
         // October 2026 starts on a Thursday: three empty cells first.
         let grid = ISODay.monthGrid("2026-10-15")
         XCTAssertEqual(grid.first?.prefix(4).map { $0 ?? "" }, ["", "", "", "2026-10-01"])

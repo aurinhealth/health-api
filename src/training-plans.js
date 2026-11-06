@@ -1,5 +1,5 @@
 import { L, plural } from "./lang.js";
-import { buildWorkout, step, MAX_MINUTES } from "./workout-model.js";
+import { buildWorkout, step, MAX_MINUTES, swimMinutesAt } from "./workout-model.js";
 import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
 import { SWIMMING_WORKOUTS, SWIMMING_WORKOUTS_EN } from "./swimming-workouts.js";
@@ -574,12 +574,20 @@ const familyLevels = (sport, family) => [...new Set(CATALOGUE[sport].filter(w =>
 // a strong athlete (their capability in that energy system, level 3 = normal,
 // "experienced" starts at 4 and climbs with each workout done well).
 export const levelShift = capability => clamp(Math.round((Number(capability?.level) || 3) - 3), -2, 3);
+// A swim's length at the athlete's CSS (the catalogue's minutes are at 2:00/100 m).
+const swimLengths = new WeakMap();
+const lengthOf = (sport, w, swimCss) => {
+  if (sport !== "swim" || !(Number(swimCss) > 0)) return w.duration_minutes;
+  if (!swimLengths.has(w)) swimLengths.set(w, JSON.parse(w.structure_json || "[]"));
+  return Math.round(swimMinutesAt(swimLengths.get(w), swimCss));
+};
 // The catalogue workout for a family, level and length: the wanted level
 // (or an easier one) at the nearest length that fits; with none that fits,
 // the wanted level's shortest, shortened. Another length is the
 // "<id>~<minutes>" resize of workout-library.js. Never a harder level.
-export function planWorkoutId(sport, { family, level = null }, minutes, shiftBy = 0) {
-  const pool = CATALOGUE[sport].filter(w => w.family === family);
+// A swim is picked by its length at the athlete's CSS.
+export function planWorkoutId(sport, { family, level = null }, minutes, shiftBy = 0, swimCss = null) {
+  const pool = CATALOGUE[sport].filter(w => w.family === family).map(w => sport === "swim" ? { ...w, duration_minutes: lengthOf(sport, w, swimCss) } : w);
   if (!pool.length) return null;
   const levels = familyLevels(sport, family);
   const wanted = level == null || !levels.length ? null : clamp(level + shiftBy, levels[0], levels.at(-1));
@@ -591,17 +599,18 @@ export function planWorkoutId(sport, { family, level = null }, minutes, shiftBy 
     const fits = at(l).filter(w => w.duration_minutes <= target + 5);
     if (fits.length) { best = pick(fits); break; }
   }
-  best ??= at(wanted).reduce((a, w) => w.duration_minutes < a.duration_minutes ? w : a);
-  // A swim keeps its metres: never resized to a length.
-  if (sport === "swim") return best.id;
+  // A swim keeps its metres, never resized to a length: with none that fits, the shortest of an easier level too.
+  const shortest = list => list.reduce((a, w) => w.duration_minutes < a.duration_minutes ? w : a);
+  if (sport === "swim") return (best ?? shortest(pool.filter(w => wanted == null || w.level <= wanted))).id;
+  best ??= shortest(at(wanted));
   return Math.abs(best.duration_minutes - target) <= 2 ? best.id : best.id + "~" + target;
 }
 // The shortest catalogue session of a family's level: a key session gets at
 // least that much time, so its main set fits.
-export function minutesFor(sport, { family, level = null }, shiftBy = 0) {
+export function minutesFor(sport, { family, level = null }, shiftBy = 0, swimCss = null) {
   const levels = familyLevels(sport, family), wanted = level == null || !levels.length ? null : clamp(level + shiftBy, levels[0], levels.at(-1));
   const list = CATALOGUE[sport].filter(w => w.family === family && (wanted == null || w.level === wanted));
-  return list.length ? Math.min(...list.map(w => w.duration_minutes)) : null;
+  return list.length ? Math.min(...list.map(w => lengthOf(sport, w, swimCss))) : null;
 }
 const systemOf = (sport, family) => CATALOGUE[sport].find(w => w.family === family)?.primary_system || null;
 export { systemOf };
@@ -873,8 +882,8 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
   const out = items.map(x => {
     if (x.sport !== sport || (x.slot || 0) !== 0) return x;
     const s = moved.get(x) || sessionFor(x), shiftBy = s.kind === "quality" ? levelShift(shifts[systemOf(sport, s.family)]) + (spec.stepUp || 0) : 0;
-    const minutes = (s.kind !== "race" && shortened[x.date]) || (s.minutes ?? (s.kind === "race" ? day.minutes : s.kind === "quality" ? Math.max(x.minutes, minutesFor(sport, s, shiftBy) || 0) : s.kind === "test" ? Math.max(x.minutes, 60) : x.minutes));
-    const workoutId = s.workoutId || (s.family ? planWorkoutId(sport, s, minutes, shiftBy) : null);
+    const minutes = (s.kind !== "race" && shortened[x.date]) || (s.minutes ?? (s.kind === "race" ? day.minutes : s.kind === "quality" ? Math.max(x.minutes, minutesFor(sport, s, shiftBy, swimCss) || 0) : s.kind === "test" ? Math.max(x.minutes, 60) : x.minutes));
+    const workoutId = s.workoutId || (s.family ? planWorkoutId(sport, s, minutes, shiftBy, swimCss) : null);
     const label = s.kind === "test" ? testLabel(sport) : s.label || (workoutId && planName(baseName(workoutId))) || x.label;
     const role = roleOf(s), intensity = x.intensity || .7;
     return { ...x, role, label, minutes, tss: Math.round(minutes / 60 * intensity * intensity * 100), plan: { templateId: template.id, week: pw.week, weeks: pw.weeks, phase: spec.phase, kind: s.kind, family: s.family || null, level: s.level ?? null, workoutId, ...(shiftBy ? { shiftBy } : {}), ...(s.movedFrom ? { movedFrom: s.movedFrom } : {}) } };
@@ -892,8 +901,9 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
 
 // A triathlon plan's week: per sport, the long session on the day with the
 // most time (the ride at a weekend if it can), the key session on another day
-// not next to that sport's long one, the rest easy; the brick run after the
-// long ride. Race week: the three legs on race day, nothing after it.
+// away from that sport's long one and from the other sports' hard days, the
+// rest easy; the brick run after the long ride (the athlete's run that day, or
+// one added). Race week: the three legs on race day, nothing after it.
 // The athlete's skipped and shortened days count; moving a session is for
 // single-sport plans.
 function applyTriathlon(targets, plan, weekStart, pw, { thresholdPace = null, shifts = {}, ftp = null, weight = null, swimCss = null } = {}) {
@@ -913,22 +923,37 @@ function applyTriathlon(targets, plan, weekStart, pw, { thresholdPace = null, sh
   const edits = Object.fromEntries(Object.entries(plan.edits || {}).filter(([d]) => inWeek(d)));
   items = items.filter(x => !(mine(x) && x.date !== race && edits[x.date]?.skip));
   const plain = x => mine(x) && !x.brick && x.date !== race;
-  const out = new Map();
+  const nearRace = x => race && daysBetween(x.date, race) <= 1, weekend = x => weekdayOf(x.date) >= 5;
+  const subOf = sport => spec.sports?.[sport] || { q: [] }, ownOf = sport => items.filter(x => x.sport === sport && plain(x));
+  // Each sport's long day first. The run on the long ride's day is the brick
+  // (or easy), never the long run or a key session.
+  const longs = {}, freeOf = sport => ownOf(sport).filter(x => !nearRace(x) && !(sport === "run" && x.date === longs.ride?.date));
+  for (const sport of SPORTS) longs[sport] = subOf(sport).long ? [...freeOf(sport)].sort((a, b) => (sport === "swim" ? 0 : weekend(b) - weekend(a)) || b.minutes - a.minutes)[0] || null : null;
+  const longRide = longs.ride;
+  if (spec.brick && longRide && !race) { const run = ownOf("run").find(x => x.date === longRide.date); if (run) run.brick = true; }
+  // Key sessions, one per sport, each far from its sport's long day. The
+  // ride's and the run's are picked together: none next to the other or to a
+  // ride's or run's long day (the week repeats, so Sunday is next to Monday)
+  // when the week allows, the two apart first. A swim's not on their days.
+  const longDates = [longRide, longs.run].filter(Boolean).map(x => x.date), apart = (a, b) => { const d = Math.abs(daysBetween(a, b)) % 7; return Math.min(d, 7 - d); };
+  const key = {};
   // A lighter week the athlete chose has no key sessions, a week back after a break one.
   let keysLeft = spec.light ? 0 : spec.returning ? 1 : Infinity;
+  for (const sport of SPORTS) if (subOf(sport).q[0] && keysLeft > 0) { key[sport] = subOf(sport).q[0]; keysLeft--; }
+  const options = sport => key[sport] ? freeOf(sport).filter(x => x !== longs[sport]) : [], orNone = list => list.length ? list : [null];
+  const far = (sport, x) => x ? Math.abs(daysBetween(x.date, longs[sport]?.date || x.date)) : 0;
+  const near = x => x ? longDates.filter(d => apart(d, x.date) < 2).length : 0;
+  const bad = ([r, u]) => (r && u && apart(r.date, u.date) < 2 ? 10 : 0) + near(r) + near(u);
+  const total = (f, [r, u]) => f("ride", r) + f("run", u), minutes = (_, x) => x?.minutes || 0;
+  const [ride, run] = orNone(options("ride")).flatMap(r => orNone(options("run")).map(u => [r, u])).sort((a, b) => bad(a) - bad(b) || total(far, b) - total(far, a) || total(minutes, b) - total(minutes, a))[0];
+  // Next to each other whatever the days: one of them, by turns week by week.
+  const dropped = ride && run && apart(ride.date, run.date) < 2 ? (pw.week % 2 ? run : ride) : null;
+  const hard = [...longDates, ...[ride, run].filter(x => x && x !== dropped).map(x => x.date)];
+  const swim = options("swim").sort((a, b) => Number(hard.includes(a.date)) - Number(hard.includes(b.date)) || far("swim", b) - far("swim", a) || b.minutes - a.minutes)[0];
+  for (const [sport, x] of [["ride", ride], ["run", run], ["swim", swim]]) if (x && x !== dropped) x.key = key[sport];
+  const out = new Map();
   for (const sport of SPORTS) {
-    const sub = spec.sports?.[sport] || { q: [] }, own = items.filter(x => x.sport === sport && plain(x));
-    const nearRace = x => race && daysBetween(x.date, race) <= 1;
-    const free = own.filter(x => !nearRace(x));
-    const weekend = x => weekdayOf(x.date) >= 5;
-    const longDay = sub.long ? [...free].sort((a, b) => (sport === "swim" ? 0 : weekend(b) - weekend(a)) || b.minutes - a.minutes)[0] : null;
-    const keys = [];
-    for (const k of sub.q) {
-      if (keysLeft <= 0) break;
-      keysLeft--;
-      const x = free.filter(y => y !== longDay && !keys.includes(y)).sort((a, b) => Math.abs(daysBetween(b.date, longDay?.date || b.date)) - Math.abs(daysBetween(a.date, longDay?.date || a.date)) || b.minutes - a.minutes)[0];
-      if (x) keys.push(x), x.key = k;
-    }
+    const own = ownOf(sport), longDay = longs[sport], sub = subOf(sport);
     for (const x of own) {
       const s = nearRace(x) ? { kind: "easy", family: EASY_FAMILY[sport], minutes: sport === "ride" ? 40 : sport === "run" ? 20 : 20 }
         : x === longDay ? { kind: "long", family: sub.long.family || LONG_FAMILY[sport], level: sub.long.level ?? null, minutes: sub.long.minutes ?? null }
@@ -937,7 +962,6 @@ function applyTriathlon(targets, plan, weekStart, pw, { thresholdPace = null, sh
       out.set(x, s);
     }
   }
-  const longRide = [...out].find(([x, s]) => x.sport === "ride" && s.kind === "long")?.[0];
   const result = [];
   for (const x of items) {
     if (!mine(x)) { result.push(x); continue; }
@@ -951,14 +975,14 @@ function applyTriathlon(targets, plan, weekStart, pw, { thresholdPace = null, sh
       // The brick stays only after this week's long ride, at the plan's minutes.
       if (!spec.brick || !longRide || x.date !== longRide.date) continue;
       const minutes = spec.brick;
-      result.push({ ...x, minutes, maxMinutes: minutes, tss: Math.round(minutes / 60 * .5 * 100), plan: { ...base, kind: "brick", family: "run-easy", level: null, workoutId: planWorkoutId("run", { family: "run-easy" }, minutes) } });
+      result.push({ ...x, role: "recovery", label: L("Běh po kole", "Brick run"), minutes, maxMinutes: minutes, tss: Math.round(minutes / 60 * .5 * 100), plan: { ...base, kind: "brick", family: "run-easy", level: null, workoutId: planWorkoutId("run", { family: "run-easy" }, minutes) } });
       continue;
     }
     const s = out.get(x);
     if (!s) { result.push(x); continue; }
     const shiftBy = s.kind === "quality" ? levelShift(shifts[x.sport]?.[systemOf(x.sport, s.family)]) + (spec.stepUp || 0) : 0;
-    let minutes = Number(edits[x.date]?.minutes) > 0 ? Math.round(Number(edits[x.date].minutes)) : s.minutes ?? (s.kind === "quality" ? Math.max(x.minutes, minutesFor(x.sport, s, shiftBy) || 0) : x.minutes);
-    const workoutId = s.family ? planWorkoutId(x.sport, s, minutes, shiftBy) : null;
+    let minutes = Number(edits[x.date]?.minutes) > 0 ? Math.round(Number(edits[x.date].minutes)) : s.minutes ?? (s.kind === "quality" ? Math.max(x.minutes, minutesFor(x.sport, s, shiftBy, swimCss) || 0) : x.minutes);
+    const workoutId = s.family ? planWorkoutId(x.sport, s, minutes, shiftBy, swimCss) : null;
     // A swim is its metres: the time is the workout's.
     if (x.sport === "swim" && workoutId && !edits[x.date]?.minutes) minutes = CATALOGUE.swim.find(w => w.id === workoutId)?.duration_minutes ?? minutes;
     const role = s.kind === "quality" ? "quality" : s.kind === "long" ? "long" : s.kind === "recovery" ? "recovery" : "endurance", intensity = x.intensity || .7;
@@ -1023,6 +1047,8 @@ export function planChanges(items = [], original = [], plan, weekStart) {
       change = { kind: "easier", line: L("Bylo: ", "Was: ") + o.label, text: L(`Odpočinkový týden se posunul na teď: HRV pod tvým obvyklým rozmezím${p.below ? ` ${p.below} ${plural(p.below, "den", "dny", "dní", "day", "days")} ze 7` : ""}${sleep}.`, `The recovery week moved to now: HRV below your usual range${p.below ? ` on ${p.below} of 7 days` : ""}${sleep}.`), original: was(o) };
     } else if (o && x.plan.kind === "quality" && pw.spec.stepUp && x.plan.workoutId !== o.plan.workoutId) {
       change = { kind: "harder", line: L("Těžší: zvládáš víc", "Harder: ready for more"), text: L("Klíčové tréninky ti šly lehčeji, než plán čekal, a HRV je stabilní, proto je tenhle o úroveň těžší.", "Your key sessions felt easier than planned and HRV is steady, so this one is a level harder."), original: was(o) };
+    } else if (x.sport === "run" && Number(x.cappedFrom) > x.minutes) {
+      change = { kind: "shorter", line: L("Kratší: běh roste pomalu", "Shorter: running grows slowly"), text: L(`Běh je ${x.minutes} min místo ${x.cappedFrom} min v plánu: jeden běh roste nejvýš o 10 % nad tvůj nejdelší za 30 dní a týden běhu nejvýš o 10 % nad poslední týdny. Šlachy a kosti si zvykají pomaleji než srdce.`, `This run is ${x.minutes} min instead of the plan's ${x.cappedFrom} min: one run grows at most 10 % past your longest in 30 days, and a week's running at most 10 % past recent weeks. Tendons and bones adapt more slowly than heart and lungs.`), original: { label: x.label, minutes: x.cappedFrom, date: x.date } };
     } else if (Number(x.planMinutes) > x.minutes) {
       change = { kind: "shorter", line: L(`Kratší: na ${x.minutes} min je volno`, `Shorter: ${x.minutes} min free`), text: L(`Volný čas toho dne na něj nechává ${x.minutes} min, proto je kratší než ${x.planMinutes} min v plánu.`, `Your free time that day leaves ${x.minutes} min for it, so it is shorter than the plan's ${x.planMinutes} min.`), original: { label: x.label, minutes: x.planMinutes, date: x.date } };
     }

@@ -31,6 +31,9 @@ final class AppModel {
         get { todayScreen.value }
         set { todayScreen.value = newValue }
     }
+    /// An iPhone without a watch or ring (audit 14.2), from today's data:
+    /// Health and the readiness detail explain it instead of waiting for a night.
+    var noWearable: Bool { !demo && today?.readiness.withoutWearable == true }
     var training: TrainingSnapshot? {
         get { trainingScreen.value }
         set { trainingScreen.value = newValue }
@@ -141,6 +144,10 @@ final class AppModel {
     /// The "Příště přes Face ID" sheet, the next time the app opens after the
     /// first e-mail sign-in on this phone (PasskeyOfferLater, RootView).
     var passkeyOffer = false
+    /// Cycle tracking was on before it had its own consent (src/cycle-store.js
+    /// consentNeeded): its consent sheet, once per launch until answered (RootView).
+    var cycleConsentAsk = false
+    @ObservationIgnored var cycleConsentAsked = false
     /// The last sign-in failed for want of an invite: the sign-in offers the waitlist.
     var notInvited = false
     /// A full-screen flow (Režim tréninku) hides the tab bar.

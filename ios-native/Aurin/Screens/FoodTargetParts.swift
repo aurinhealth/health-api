@@ -109,7 +109,7 @@ struct TargetPartsSheet: View {
                     line("Klidový výdej", Fmt.int(lines.restingBurn))
                     if lines.movement > 0 { line("Běžný pohyb", Fmt.signed(lines.movement)) }
                     if lines.goal != 0 { line("Cíl hmotnosti", Fmt.signed(lines.goal)) }
-                    if lines.minimum > 0 { line("Bezpečné minimum", Fmt.signed(lines.minimum)) }
+                    if lines.minimum > 0 { line("Dorovnání na klidový metabolismus", Fmt.signed(lines.minimum)) }
                     if lines.moreActive > 0 { line("Aktivnější den", Fmt.signed(lines.moreActive)) }
                 } else {
                     line("Základ", Fmt.int(parts.base))
@@ -123,13 +123,16 @@ struct TargetPartsSheet: View {
                 }
 
                 HStack(alignment: .firstTextBaseline) {
-                    Text(L10n.tr("Cílový příjem")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    Text(L10n.tr("Odhad cíle")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     Spacer()
                     Text(verbatim: Fmt.int(target) + " kcal").font(Typo.number(30)).foregroundStyle(Palette.ink)
                 }
                 .padding(.top, 14)
                 .overlay(alignment: .top) { Rectangle().fill(Palette.muted.opacity(0.35)).frame(height: 1) }
                 .padding(.top, 6)
+
+                Text(L10n.tr("Upravuje se podle trendu tvé váhy."))
+                    .font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 12)
 
                 if !(parts.items ?? []).isEmpty {
                     Text(L10n.f("Tréninky se počítají ze %@ %% toho, co spálí.", Fmt.int((parts.coverage ?? 0.7) * 100)))

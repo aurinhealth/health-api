@@ -109,6 +109,7 @@ struct HealthContent: View {
 // MARK: - Readiness
 
 struct ReadinessCard: View {
+    @Environment(AppModel.self) private var model
     let readiness: HealthSnapshot.Readiness
     var date: String = ""
 
@@ -127,6 +128,8 @@ struct ReadinessCard: View {
                 PartsRow(parts: readiness.parts)
             } else if let days = readiness.learningDays {
                 ReadinessLearning(days: days, date: date, title: Typo.sentence(30, relativeTo: .title))
+            } else if model.noWearable {
+                NoWearableText(title: Typo.sentence(30, relativeTo: .title))
             } else {
                 Text("Zatím bez čísla").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Text("Připravenost potřebuje dnešní noc a aspoň 14 dní HRV nebo klidového tepu.")
@@ -285,6 +288,8 @@ enum ReadinessText {
 
 struct ReadinessDetailContent: View {
     let health: HealthSnapshot
+    /// No watch or ring (AppModel.noWearable): why no number is coming.
+    var noWearable = false
     /// Today's answer to "Jak se dnes cítíš?" (.some(nil) unanswered); nil hides the question.
     var checkin: String?? = nil
 
@@ -298,24 +303,35 @@ struct ReadinessDetailContent: View {
                     if let pill = ReadinessText.pill(r.zone) { Pill(text: pill.0, foreground: pill.1, background: pill.2) }
                 }
                 .padding(.top, 12)
+            } else if let days = r.learningDays {
+                // Without a number, why (audit 14.4): the same as the Health card.
+                ReadinessLearning(days: days, date: health.date, title: Typo.sentence(30, relativeTo: .title))
+            } else if noWearable {
+                NoWearableText(title: Typo.sentence(30, relativeTo: .title))
+            } else {
+                Text("Zatím bez čísla").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 8)
+                Text("Připravenost potřebuje dnešní noc a aspoň 14 dní HRV nebo klidového tepu.")
+                    .font(Typo.small).foregroundStyle(Palette.muted)
             }
 
             if let checkin {
                 MorningCheckinCard(feeling: checkin, keepAnswered: true, top: 24)
             }
 
-            SectionLabel(text: "Co ji dnes tvoří").padding(.top, 32)
-            VStack(spacing: 0) {
-                ForEach(r.parts) { part in
-                    if let route = Self.route(part.key) {
-                        RouteLink(route: route) { partRow(part).contentShape(Rectangle()) }
-                    } else {
-                        partRow(part)
+            if !r.parts.isEmpty {
+                SectionLabel(text: "Co ji dnes tvoří").padding(.top, 32)
+                VStack(spacing: 0) {
+                    ForEach(r.parts) { part in
+                        if let route = Self.route(part.key) {
+                            RouteLink(route: route) { partRow(part).contentShape(Rectangle()) }
+                        } else {
+                            partRow(part)
+                        }
+                        Rectangle().fill(Palette.hairline).frame(height: 1)
                     }
-                    Rectangle().fill(Palette.hairline).frame(height: 1)
                 }
+                .padding(.top, 8)
             }
-            .padding(.top, 8)
 
             if r.history.count > 1 {
                 HStack {
@@ -403,6 +419,7 @@ struct ReadinessDetailContent: View {
 // MARK: - Sleep widgets
 
 struct SleepWidget: View {
+    @Environment(AppModel.self) private var model
     let sleep: HealthSnapshot.Sleep
     var size: WidgetSize = .medium
 
@@ -417,7 +434,8 @@ struct SleepWidget: View {
                 if let index = sleep.night?.index {
                     Text(L10n.f("index %@", String(index))).font(Typo.caption).foregroundStyle(Palette.indigo)
                 } else {
-                    Text(sleep.night == nil ? "dnešní noc chybí" : " ").font(Typo.caption).foregroundStyle(Palette.faint)
+                    // Without a watch or ring no night is coming (audit 14.2).
+                    Text(sleep.night != nil ? " " : model.noWearable ? "měří hodinky" : "dnešní noc chybí").font(Typo.caption).foregroundStyle(Palette.faint)
                 }
             } chart: { height in
                 if !sleep.week.isEmpty {

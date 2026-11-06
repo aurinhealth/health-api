@@ -53,6 +53,12 @@ export const zonesFor = sport => sport === "run" ? RUNNING_ZONES : sport === "sw
 export const DEFAULT_SWIM_PACE = 120;
 // Minutes of a swim step of `meters` at `percent` of CSS speed.
 export const swimMinutes = (meters, percent, pace = DEFAULT_SWIM_PACE) => meters / 100 * pace / Math.max(n(percent, 90), 30) * 100 / 60;
+// A swim's minutes at the athlete's CSS (seconds per 100 m): the lengths at
+// that pace, the rests at the wall as they are; without a CSS at 2:00/100 m.
+export function swimMinutesAt(structure = [], css = null) {
+  const pace = Number(css) >= 60 && Number(css) <= 240 ? Number(css) : DEFAULT_SWIM_PACE;
+  return flattenSteps(structure).reduce((sum, s) => sum + n(s.durationMinutes, 0) * (s.meters && !s.rest ? pace / DEFAULT_SWIM_PACE : 1), 0);
+}
 export function totalMeters(structure = []) { return flattenSteps(structure).reduce((sum, s) => sum + n(s.meters, 0), 0); }
 // The bands are continuous: each reaches up to where the next starts, so 75.5 % is still endurance.
 export function zoneOf(power, zones = CYCLING_ZONES) { return (zones.findLast(([, lo]) => power >= lo) || zones.at(-1))[0]; }

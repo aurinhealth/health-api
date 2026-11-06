@@ -827,7 +827,8 @@ struct ThisWeekWidget: View {
                 Text(L10n.plural("tréninků hotovo", week.planned))
                     .font(Typo.caption).foregroundStyle(Palette.amber).lineLimit(1)
             } chart: { height in
-                if loads.count > 1 {
+                // Weekly load comes from Intervals.icu: without it eight empty weeks say nothing (audit 14.8).
+                if loads.count > 1 && values.contains(where: { $0 > 0 }) {
                     BarChart(values: values,
                              styles: loads.indices.map { i in
                                  i == loads.count - 1 ? BarStyle(fill: Palette.amberBar, dashed: (loads[i].planned ?? 0) > loads[i].load) : BarStyle(fill: Palette.sand)

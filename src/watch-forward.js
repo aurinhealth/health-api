@@ -16,7 +16,7 @@
 // matchActivities), so it is not sent a second time. Of two records of one
 // workout from apps that are both on (a ride on the Wahoo and the watch), only
 // the one the matching kept goes; the other only when its app is off.
-import { sendActivity, ensureSyncTables, readSyncPrefs, healthAllowed, normalizeActivity, BACKFILL_DAYS, EXTERNAL_PREFIX, LEGACY_EXTERNAL_PREFIX } from "./sync-destinations.js";
+import { sendActivity, ensureSyncTables, readSyncPrefs, healthAllowed, normalizeActivity, intervalsActivity, BACKFILL_DAYS, EXTERNAL_PREFIX, LEGACY_EXTERNAL_PREFIX } from "./sync-destinations.js";
 import { intervalsActivities, recordSent } from "./intervals-catchup.js";
 import { sameSession } from "./activity-match.js";
 import { localDate } from "./user-time.js";
@@ -52,6 +52,8 @@ const SOURCES = {
   wahoo: { family: "wahoo", type: "activity", key: id => "wahoo:" + String(id).replace(/^wahoo:/, "") }
 };
 const FAMILY_SOURCE = Object.fromEntries(Object.entries(SOURCES).map(([source, s]) => [s.family, source]));
+// The key a stored workout's send is kept under (sync_sends), or null for another source.
+export const forwardKey = row => FAMILY_SOURCE[row?.source_family] ? SOURCES[FAMILY_SOURCE[row.source_family]].key(row.external_id) : null;
 
 const parse = json => { try { return JSON.parse(json || "{}"); } catch { return null; } };
 
@@ -138,8 +140,7 @@ export async function forwardWatchWorkouts(env, { now = Date.now(), fetchImpl = 
     return startedAt(row) >= from(source) && endedAt(row) <= now - WAIT_MS && forwardable(row, on);
   });
   if (!due.length) return { status: "ok", sent: [] };
-  const keyOf = row => SOURCES[FAMILY_SOURCE[row.source_family]].key(row.external_id);
-  const keys = due.map(keyOf), done = new Set();
+  const keys = due.map(forwardKey), done = new Set();
   // D1 takes at most 100 bound values a query.
   for (let i = 0; i < keys.length; i += 90) {
     const part = keys.slice(i, i + 90);
@@ -147,7 +148,7 @@ export async function forwardWatchWorkouts(env, { now = Date.now(), fetchImpl = 
       .bind(env.USER_ID, ...part).all()).results || [];
     for (const r of found) done.add(r.activity_key);
   }
-  const open = due.filter(row => !done.has(keyOf(row)));
+  const open = due.filter(row => !done.has(forwardKey(row)));
   if (!open.length) return { status: "ok", sent: [] };
   const today = (await env.DB.prepare(`SELECT COUNT(*) AS n FROM sync_sends WHERE user_id = ? AND destination = 'intervals' AND created_at >= date('now')
     AND (activity_key LIKE 'apple:%' OR activity_key LIKE 'wahoo:%' OR activity_key LIKE 'google:%') AND status NOT IN ('same', 'skipped')`).bind(env.USER_ID).first())?.n || 0;
@@ -171,10 +172,10 @@ export async function forwardWatchWorkouts(env, { now = Date.now(), fetchImpl = 
   let sends = 0;
   for (const row of open) {
     if (sends >= allowed) break;
-    const raw = row.source_family === "wahoo" ? wahooActivity(row) : watchActivity(row, keyOf(row));
+    const raw = row.source_family === "wahoo" ? wahooActivity(row) : watchActivity(row, forwardKey(row));
     let activity = null;
     try { activity = raw && normalizeActivity(raw); } catch { activity = null; }
-    if (!activity) { await mark(keyOf(row), "skipped"); continue; }
+    if (!activity) { await mark(forwardKey(row), "skipped"); continue; }
     const ours = list.find(a => [EXTERNAL_PREFIX, LEGACY_EXTERNAL_PREFIX].some(prefix => a?.external_id === prefix + env.USER_ID + ":" + activity.key));
     if (ours?.id != null) { await recordSent(env, activity, ours.id); sent.push({ key: activity.key, status: "there" }); continue; }
     // There already, from elsewhere or sent by Aurin from another app (the
@@ -192,7 +193,11 @@ export async function forwardWatchWorkouts(env, { now = Date.now(), fetchImpl = 
     sends++;
     try {
       const result = await sendActivity(env, raw, { fetchImpl, only: ["intervals"], absent: true, forwarded: true });
-      sent.push({ key: activity.key, status: result.sends[0]?.status || "off" });
+      const status = result.sends[0]?.status || "off";
+      sent.push({ key: activity.key, status });
+      // There now: a second record of this workout later in this pass (two
+      // apps wrote it to Apple Health) finds it and stays.
+      if (status === "sent") list.push(intervalsActivity(env.USER_ID, activity));
     } catch (error) { console.error("Workout forward failed", error.message); }
   }
   return { status: "ok", sent };

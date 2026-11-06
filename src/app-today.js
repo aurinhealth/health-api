@@ -80,7 +80,8 @@ export function readinessWeek({ date, readiness, sessions = [], profile = null }
 // Without a plan (Today audit D3) the readiness sets it, never above the
 // usual day: the high end at most the 80th percentile of the last 28 days'
 // strain (usualStrain, never below a rest day's 8), or 12 until 14 of those
-// days have a strain. Only with a plan is a day with nothing planned or done
+// days have a strain (8 without a watch or ring: steps alone reach about 4
+// for 7,000 steps, audit 14.7). Only with a plan is a day with nothing planned or done
 // a rest day. The high end never falls under the low one.
 export function strainTarget({ readiness = null, zone = null, planned = null, debt = 0, rest = false, noPlan = false, usual = null, recover = false } = {}) {
   let mid = readiness != null ? 4 + 0.12 * readiness : 10;
@@ -264,6 +265,9 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
   const hasPlan = !!(trainingPlan && !trainingPlan.paused) || gymAround || planned.length > 0
     || [recovery?.yesterday, recovery?.tomorrow].some(d => (Array.isArray(d?.planned) && d.planned.length > 0) || (Array.isArray(d?.matched) && d.matched.length > 0));
   const usualDay = usualStrain(google, date, fitness.wellness);
+  // No watch or ring (audit 14.2): no HRV or resting heart rate in the 30
+  // days up to today. The app adds its own check for a paired Apple Watch.
+  const noWearable = !rows.some(r => r.id <= date && r.id > shift(date, -30) && (num(r.hrv) > 0 || num(r.restingHR) > 0));
   const plannedTss = planned.reduce((s, w) => s + (num(w.tss) || 0), 0);
 
   // Food and drink.
@@ -323,7 +327,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     status: r.done ? "done" : "planned"
   }));
   // Cycle tracking (cycle-model.js, profile.cycle from dashboard-shared.js):
-  // on a bleeding day with heavy flow, cramps or fatigue a hard ride or run
+  // on a bleeding day with cramps or fatigue a hard ride or run
   // shows as an easy one ("eased", the original kept for "vrátit"), unless
   // the athlete kept the plan that day; the pill of the pack joins the plan.
   const cycleIn = profile?.cycle || null;
@@ -401,7 +405,9 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
       verdict,
       // Nights with HRV or resting heart rate in the 30 days before today: an
       // account with the watch's history skips "Wear your watch tonight" (FirstDaysCard).
-      pastNights: rows.filter(r => r.id < date && r.id > shift(date, -30) && (num(r.hrv) > 0 || num(r.restingHR) > 0)).length },
+      pastNights: rows.filter(r => r.id < date && r.id > shift(date, -30) && (num(r.hrv) > 0 || num(r.restingHR) > 0)).length,
+      // Without a watch or ring Today explains where readiness comes from instead of waiting for a night.
+      noWearable },
     week,
     // The morning check-in: fresh, normal, tired, sick or null (not answered).
     checkin: checkin || null,
@@ -416,7 +422,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     } : null,
     // The day's naps for Dnes → Den: each sleep that began today after the night.
     naps: napsOn(sessions, date, night),
-    strain: { score: strainNow, training: strainParts.training, movement: strainParts.movement, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: hasPlan && !daySession.length, noPlan: !hasPlan && !daySession.length, usual: usualDay, recover }), rest: hasPlan && !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || (hasPlan || daySession.length ? null : usualDay != null ? L("bez plánu · ne nad obvyklý objem", "no plan · not above your usual volume") : L("bez plánu", "no plan")) } },
+    strain: { score: strainNow, training: strainParts.training, movement: strainParts.movement, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: hasPlan && !daySession.length, noPlan: !hasPlan && !daySession.length, usual: usualDay ?? (noWearable ? 8 : null), recover }), rest: hasPlan && !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || (hasPlan || daySession.length ? null : usualDay != null ? L("bez plánu · ne nad obvyklý objem", "no plan · not above your usual volume") : L("bez plánu", "no plan")) } },
     // metric: "rmssd" or "sdnn" when the source said how it measures (Apple Health), else null.
     // Today's HRV shows even before its source has the 14 days a baseline needs.
     hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") }
