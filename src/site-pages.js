@@ -823,10 +823,10 @@ export function overviewPage(request) {
       ['html:brick', 'sendBrick', 360, 'For your triathlon.', 'From sprint to full distance, or a duathlon, an aquabike or an aquathlon. A ride with a short run straight after goes to your Apple Watch as one multisport workout.', 7000]]],
     ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym. Then log every set in a tap.', 'amber', 'glow-training', [
       ['builder', 'builder', 200, 'Say how long and what.', 'Pick the day, the length and the focus, or take the workout your rested muscles suggest in one tap. Aurin builds it only from the equipment your gym has.', 8500],
-      ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, set their length and move them into the order you like. Then start.', 7000],
+      ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, set their length and move them into the order you like. Then one start runs it all as one workout, each part with its own time.', 7000],
       ['training-set', 'tickOne', 300, 'Tick off every set.', 'Every set comes filled in with its weight, reps and plates. One tap marks it done; miss your reps or hit failure and the next set comes lighter, breeze through and it comes heavier.', 6000],
       ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, longer after squats than after curls, and stays on your lock screen. The last seconds count down with a vibration.', 13500],
-      ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume, new records and the muscles you tired, sent to Apple Health and the apps you connected. Swapped an exercise? Keep it for next time. One tap says how it went.', 6000],
+      ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume, new records and the muscles you tired, sent to Apple Health and the apps you connected. Each part shows its own time, calories and heart rate. Swapped an exercise? Keep it for next time. One tap says how it went.', 6000],
       // On a phone the 3D figure gives way to this step (#svaly is hidden there); it has no piece, so it stays last.
       ['muscles', '', 0, 'Know what’s recovered.', 'From the gym and from your rides, runs and swims, every muscle shows tired, recovering or rested.', 6000, 'phone']]],
     ['vyziva', '', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [

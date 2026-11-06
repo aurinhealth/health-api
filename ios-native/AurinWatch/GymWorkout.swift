@@ -193,8 +193,71 @@ final class GymWorkout: NSObject, ObservableObject {
         reset()
     }
 
+    // MARK: The parts (each part's and exercise's own time)
+
+    /// What the gym had on the screen since the start: a part (GymDayPart's raw
+    /// value) or an exercise (exerciseKey), from when, with the calories then
+    /// and the heart rates read meanwhile. Each lasts until the next.
+    struct Segment {
+        let key: String
+        let start: Date
+        let kcal: Double
+        var beats = 0.0
+        var count = 0
+    }
+    private(set) var segments: [Segment] = []
+
+    /// An exercise by its first row: the same through a swap.
+    static func exerciseKey(_ exercise: WatchGym.Exercise) -> String { "x" + String(exercise.lifts.first?.row ?? -1) }
+
+    /// The screen turned to `key`.
+    func focus(_ key: String) {
+        guard start != nil, segments.last?.key != key else { return }
+        segments.append(Segment(key: key, start: Date(), kcal: calories))
+    }
+
+    /// Seconds on `key` before the time it is on the screen now (nil: not on it now).
+    func earlier(_ key: String) -> (seconds: Int, since: Date)? {
+        guard let last = segments.last, last.key == key else { return nil }
+        return (seconds(of: key, at: last.start), last.start)
+    }
+
+    /// Seconds spent on `key` so far, every time it was on the screen added up.
+    func seconds(of key: String, at now: Date = Date()) -> Int {
+        var sum = 0.0
+        for (i, segment) in segments.enumerated() where segment.key == key && segment.start < now {
+            let end = segments.indices.contains(i + 1) ? min(segments[i + 1].start, now) : now
+            sum += max(0, end.timeIntervalSince(segment.start))
+        }
+        return Int(sum)
+    }
+
+    struct PartStats {
+        var seconds = 0
+        var kcal = 0.0
+        var beats = 0.0
+        var count = 0
+        var heartRate: Double? { count > 0 ? beats / Double(count) : nil }
+    }
+
+    /// Each part's and exercise's time, calories and average heart rate so far.
+    func partStats(at now: Date = Date()) -> [String: PartStats] {
+        var out: [String: PartStats] = [:]
+        for (i, segment) in segments.enumerated() {
+            let next: Segment? = segments.indices.contains(i + 1) ? segments[i + 1] : nil
+            var stats = out[segment.key] ?? PartStats()
+            stats.seconds += Int(max(0, (next?.start ?? now).timeIntervalSince(segment.start)))
+            stats.kcal += max(0, (next?.kcal ?? calories) - segment.kcal)
+            stats.beats += segment.beats
+            stats.count += segment.count
+            out[segment.key] = stats
+        }
+        return out
+    }
+
     private func reset() {
         objectWillChange.send()
+        segments = []
         session = nil
         builder = nil
         start = nil
@@ -238,6 +301,10 @@ final class GymWorkout: NSObject, ObservableObject {
             objectWillChange.send()
         }
         heartRate = heart
+        if let bpm = r.heartRate, bpm > 0, !segments.isEmpty {
+            segments[segments.count - 1].beats += bpm
+            segments[segments.count - 1].count += 1
+        }
         averageHeartRate = average
         maxHeartRate = top
         calories = kcal

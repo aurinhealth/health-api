@@ -249,6 +249,8 @@ struct StretchTimerView: View {
     let stretching: GymStretching
     var kind: GymRoutineKind = .stretching
     var onItemDone: (String) -> Void
+    /// Inside Režim tréninku (not a screen of its own): after the last hold it goes on with this.
+    var onClose: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var index = 0
     @State private var left = Self.moveSeconds
@@ -266,19 +268,21 @@ struct StretchTimerView: View {
             HStack(spacing: 10) {
                 Text(verbatim: "\(min(index + 1, holds.count))/\(holds.count)").font(Typo.caption).foregroundStyle(Palette.muted)
                 Spacer()
-                if !finished { GymSignalsMenu() }
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark").scaledFont(16, weight: .semibold, cap: .denseCap).frame(width: 36, height: 36)
+                if onClose == nil {
+                    if !finished { GymSignalsMenu() }
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark").scaledFont(16, weight: .semibold, cap: .denseCap).frame(width: 36, height: 36)
+                    }
+                    .foregroundStyle(Palette.ink)
+                    .accessibilityLabel(L10n.tr("Zavřít"))
                 }
-                .foregroundStyle(Palette.ink)
-                .accessibilityLabel(L10n.tr("Zavřít"))
             }
             if finished {
                 Spacer()
                 Image(systemName: "checkmark.circle.fill").scaledFont(64).foregroundStyle(Palette.green)
                 Text(kind.doneTitle).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Spacer()
-                PrimaryButton(title: L10n.tr("Hotovo")) { dismiss() }
+                PrimaryButton(title: L10n.tr("Hotovo")) { if let onClose { onClose() } else { dismiss() } }
             } else if let hold {
                 Text(verbatim: hold.item.name).font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .multilineTextAlignment(.center)
@@ -314,8 +318,8 @@ struct StretchTimerView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(20)
-        .background { Palette.background.ignoresSafeArea() }
+        .padding(onClose == nil ? 20 : 16)
+        .background { if onClose == nil { Palette.background.ignoresSafeArea() } }
         .task { await run() }
         .onAppear {
             ScreenAwake.hold("stretching", watchMaySleep: false)
@@ -358,7 +362,7 @@ struct StretchTimerView: View {
     private func next() {
         if let hold, hold.closesItem { onItemDone(hold.item.id) }
         GymSignals.play(.end)
-        if index + 1 >= holds.count { finished = true; return }
+        if index + 1 >= holds.count { finished = true; onClose?(); return }
         index += 1
         moving = true
         left = Self.moveSeconds

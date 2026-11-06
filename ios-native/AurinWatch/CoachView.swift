@@ -95,7 +95,7 @@ private struct TurnView: View {
             if let answer = turn.answer {
                 if let seconds = turn.seconds, !turn.failed {
                     Text(W.tr("Odpověď za \(seconds) s", "Answered in \(seconds) s"))
-                        .font(.system(size: 11))
+                        .watchFont(12)
                         .foregroundStyle(W.muted)
                 }
                 Text(answer)

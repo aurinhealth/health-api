@@ -94,11 +94,83 @@ struct TrainingModeView: View {
     @AppStorage("gym.stretching.done") private var stretchesDone = ""
     /// The day's parts, their order and switches (GymDayParts).
     @AppStorage(GymDayParts.storageKey) private var dayParts = ""
+    /// The warm-up, cardio or stretching running in this screen; nil: the exercise.
+    @State private var activePart: GymDayPart?
+    /// Its cardio starts at once (tapped), not when it came on after the last set.
+    @State private var partAutoStart = true
+    /// Each part's and exercise's time, calories and heart rate, for the summary.
+    @State private var partStats: [String: LiveWorkout.PartStats] = [:]
     @Environment(\.scenePhase) private var scenePhase
     private var live: LiveWorkout { LiveWorkout.shared }
     /// The clock, heart rate and recording run only after "Začít trénink" (or
     /// for a workout already under way); opening the workout starts nothing.
     private var started: Bool { live.running || startTapped }
+
+    /// The header, the exercise or part on hand, the summary: out of body, whose
+    /// modifier chain is already long for the type checker.
+    private var screen: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            if let day, !finishedSession, let exercise = current(day) { tools(day, exercise) }
+            if loading && day == nil {
+                Spacer()
+                ProgressView().frame(maxWidth: .infinity)
+                Spacer()
+            } else if let day, !day.exercises.isEmpty {
+                let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
+                if !finishedSession, let part = activePart, let routine = parts.routine(part, day: day) {
+                    // A warm-up, cardio or stretching in this screen: the workout's
+                    // time and heart rate above it, the day's parts under it.
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            if live.running {
+                                LiveWorkoutStrip(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 14)
+                            }
+                            partRunner(part, routine, day)
+                            partsList(day, parts)
+                            Text(verbatim: L10n.tr("Ťukni na část a přepneš na ni."))
+                                .font(Typo.caption).foregroundStyle(Palette.muted)
+                                .frame(maxWidth: .infinity).padding(.top, 8)
+                        }
+                        .padding(.bottom, 24)
+                    }
+                    .scrollIndicators(.hidden)
+                } else if !finishedSession, let exercise = current(day) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            if live.running {
+                                LiveWorkoutStrip(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 14)
+                            }
+                            if !started, !parts.before(day).isEmpty || !parts.after(day).isEmpty {
+                                // Before Začít trénink: the whole workout in order, one start for all of it.
+                                partsList(day, parts)
+                                Button { startWhole(day) } label: {
+                                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
+                                        .frame(maxWidth: .infinity).frame(height: 54).background(Palette.green, in: Capsule())
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.top, 16)
+                            } else if let restEnd {
+                                rest(day, exercise, until: restEnd)
+                            } else {
+                                session(day, exercise)
+                            }
+                        }
+                        .padding(.bottom, 24)
+                    }
+                    .scrollIndicators(.hidden)
+                    .scrollDismissesKeyboard(.interactively)
+                } else {
+                    ScrollView { finished(day).padding(.bottom, 24) }
+                    .scrollIndicators(.hidden)
+                }
+            } else {
+                empty
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+    }
 
     var body: some View {
         ZStack {
@@ -112,57 +184,7 @@ struct TrainingModeView: View {
             WatchGymHooks(live: live, restEnd: restEnd, sendRest: sendRest, received: receiveRest, ended: finishIfEndedOnWatch,
                           back: { Task { await catchUpWithWatch() } })
             WatchDraftHooks(kg: kg, reps: reps, row: atHand?.row, send: sendDraft, received: receiveDraft)
-            VStack(alignment: .leading, spacing: 0) {
-                header
-                if let day, !finishedSession, let exercise = current(day) { tools(day, exercise) }
-                if loading && day == nil {
-                    Spacer()
-                    ProgressView().frame(maxWidth: .infinity)
-                    Spacer()
-                } else if let day, !day.exercises.isEmpty {
-                    if !finishedSession, let exercise = current(day) {
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 0) {
-                                if live.running {
-                                    LiveWorkoutStrip(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 14)
-                                }
-                                let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
-                                // The parts before the exercises, in the day's order, until the first set is done.
-                                if restEnd == nil, !day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
-                                    ForEach(parts.before(day)) { part in
-                                        if let routine = parts.routine(part, day: day), !routineDone(routine, kind: part.kind) {
-                                            StretchingCard(stretching: routine, date: date, kind: part.kind, compact: true).padding(.top, 14)
-                                        }
-                                    }
-                                }
-                                // Before Začít trénink: what comes at the end too.
-                                if !started {
-                                    ForEach(parts.after(day)) { part in
-                                        if let routine = parts.routine(part, day: day) {
-                                            StretchingCard(stretching: routine, date: date, kind: part.kind, compact: true).padding(.top, 10)
-                                        }
-                                    }
-                                }
-                                if let restEnd {
-                                    rest(day, exercise, until: restEnd)
-                                } else {
-                                    session(day, exercise)
-                                }
-                            }
-                            .padding(.bottom, 24)
-                        }
-                        .scrollIndicators(.hidden)
-                        .scrollDismissesKeyboard(.interactively)
-                    } else {
-                        ScrollView { finished(day).padding(.bottom, 24) }
-                        .scrollIndicators(.hidden)
-                    }
-                } else {
-                    empty
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
+            screen
         }
         .navBarVisibility(.hidden)
         .task { await load(); finishIfEndedOnWatch() }
@@ -188,7 +210,7 @@ struct TrainingModeView: View {
             ScreenAwake.release("training"); model.immersive = false
             // Left another way than the arrow (the edge swipe, a link) while the
             // workout runs: it goes on hidden, as with the arrow.
-            if !minimizing, live.running, !finishedSession, let day, current(day) != nil {
+            if !minimizing, live.running, !finishedSession, let day, current(day) != nil || activePart != nil {
                 keepMinimized(day)
                 minimizing = true
             }
@@ -208,6 +230,9 @@ struct TrainingModeView: View {
         .onChange(of: day) { _, _ in syncActivity(); live.worked() }
         .onChange(of: index) { _, _ in syncActivity(); live.worked() }
         .onChange(of: finishedSession) { _, _ in syncActivity() }
+        // Each part's and exercise's own time (LiveWorkout.segments).
+        // Keyed with the recording too: it starts a moment after Začít trénink.
+        .onChange(of: "\(live.running)|\(focusKey ?? "")", initial: true) { _, _ in if let key = focusKey { live.focus(key) } }
         // Back from the lock screen after the rest ran out: straight to the set.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, let end = restEnd, end <= Date() { restEnd = nil }
@@ -283,7 +308,7 @@ struct TrainingModeView: View {
     private var header: some View {
         HStack(spacing: 10) {
             // Under way: the arrow hides it and the workout goes on (MinimizedGymBar).
-            if started, !finishedSession, let day, current(day) != nil {
+            if started, !finishedSession, let day, current(day) != nil || activePart != nil {
                 CircleButton(systemImage: "chevron.down", label: L10n.tr("Skrýt trénink")) { minimize() }
             } else {
                 CircleButton(systemImage: "xmark", label: L10n.tr("Ukončit režim tréninku")) { close() }
@@ -296,7 +321,7 @@ struct TrainingModeView: View {
                     Text(progressLine(day)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                 }
                 Spacer(minLength: 4)
-                if !finishedSession, current(day) != nil {
+                if !finishedSession, current(day) != nil || activePart != nil {
                     if started {
                         Button { Task { await finish() } } label: {
                             Text("Dokončit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
@@ -374,9 +399,13 @@ struct TrainingModeView: View {
         let set = nextSet(exercise)
         let last = history.last(exercise.name, before: date)
         return VStack(alignment: .leading, spacing: 0) {
-            Text(exercise.name).font(Typo.sentence(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 18)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(exercise.name).font(Typo.sentence(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                if live.running { PartClock(live: live, key: exercise.name) }
+            }
+            .padding(.top, 18)
             // Named, not bare icons: what each one does shows at first use.
             HStack(spacing: 8) {
                 if set != nil {
@@ -619,7 +648,7 @@ struct TrainingModeView: View {
     private func nextExercise(_ day: GymDay) -> some View {
         // In a superset the partner comes next (A1, B1, A2…).
         let partner = Self.supersetPartner(day.exercises, of: index)
-        if let target = partner ?? (day.exercises.indices.contains(index + 1) ? index + 1 : nil), let next = day.exercises[safe: target] {
+        if let target = partner ?? Self.nextUndone(day.exercises, after: index), let next = day.exercises[safe: target] {
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
                     Button { move(target - index) } label: {
@@ -657,6 +686,8 @@ struct TrainingModeView: View {
                 }
             }
             .cardSurface(cornerRadius: 22)
+        } else if let part = nextAfterPart(day) {
+            nextPartCard(part, day)
         } else if index > 0 {
             Button { move(-1) } label: {
                 Label("Předchozí cvik", systemImage: "chevron.left").font(Typo.bodyStrong).foregroundStyle(Palette.muted)
@@ -776,6 +807,261 @@ struct TrainingModeView: View {
         return !routine.items.isEmpty && routine.items.allSatisfy { done.contains(kind.key + $0.id) }
     }
 
+    // MARK: The day's parts (one workout: warm-up, cardio, the exercises, stretching)
+
+    /// Where the workout is: a part of the day, or an exercise by its index.
+    enum Step: Equatable {
+        case part(GymDayPart)
+        case exercise(Int)
+    }
+
+    /// What is in front, for each part's and exercise's own time (only while the workout runs).
+    private var focusKey: String? {
+        guard started, !finishedSession, let day else { return nil }
+        return activePart?.rawValue ?? current(day)?.name
+    }
+
+    /// A part whose every move (or its cardio) is ticked today.
+    private func partDone(_ part: GymDayPart, _ day: GymDay) -> Bool {
+        guard let routine = GymDayParts.resolved(day, stored: dayParts, date: date).routine(part, day: day) else { return true }
+        return routineDone(routine, kind: part.kind)
+    }
+
+    /// The next exercise with sets left after `index`, else one left out before
+    /// it (its machine was taken, so another came first).
+    static func nextUndone(_ list: [GymExercise], after index: Int) -> Int? {
+        list.indices.first { $0 > index && list[$0].sets.contains { !$0.done } }
+            ?? list.indices.first { $0 < index && list[$0].sets.contains { !$0.done } }
+    }
+
+    /// The first part after the exercises not done yet (after `part` when given).
+    private func nextAfterPart(_ day: GymDay, after part: GymDayPart? = nil) -> GymDayPart? {
+        let after = GymDayParts.resolved(day, stored: dayParts, date: date).after(day)
+        let from = part.flatMap { after.firstIndex(of: $0) }.map { $0 + 1 } ?? 0
+        return after.dropFirst(from).first { !partDone($0, day) }
+    }
+
+    /// What follows `part`: the next part before the exercises, the exercises,
+    /// then the parts after them; done ones are left out.
+    private func step(after part: GymDayPart, _ day: GymDay) -> Step? {
+        let before = GymDayParts.resolved(day, stored: dayParts, date: date).before(day)
+        if let i = before.firstIndex(of: part) {
+            if let next = before.dropFirst(i + 1).first(where: { !partDone($0, day) }) { return .part(next) }
+            if let first = Self.nextUndone(day.exercises, after: -1) { return .exercise(first) }
+            return nextAfterPart(day).map { .part($0) }
+        }
+        if let next = nextAfterPart(day, after: part) { return .part(next) }
+        return Self.nextUndone(day.exercises, after: -1).map { .exercise($0) }
+    }
+
+    private func stepName(_ step: Step?, _ day: GymDay) -> String? {
+        switch step {
+        case .part(let part)?: return L10n.tr(part.kind.title)
+        case .exercise(let at)?: return day.exercises[safe: at]?.name
+        case nil: return nil
+        }
+    }
+
+    /// Turns to a part or an exercise; `auto`: its cardio starts at once.
+    private func go(_ step: Step?, auto: Bool) {
+        restEnd = nil
+        switch step {
+        case .part(let part)?:
+            partAutoStart = auto
+            activePart = part
+        case .exercise(let at)?:
+            activePart = nil
+            index = at
+        case nil:
+            activePart = nil
+        }
+    }
+
+    /// Začít trénink with the day's parts: the time and heart rate start, and
+    /// the first part not done yet comes on (or the part or exercise tapped).
+    private func startWhole(_ day: GymDay, from step: Step? = nil) {
+        Task { await start() }
+        let first = GymDayParts.resolved(day, stored: dayParts, date: date).before(day).first { !partDone($0, day) }
+        if let target = step ?? first.map({ Step.part($0) }) { go(target, auto: true) }
+    }
+
+    /// A move or the cardio done: ticked as on the gym day (StretchingCard).
+    private func tick(_ part: GymDayPart, id: String) {
+        let key = part.kind.key + id
+        if !StretchingCard.done(stretchesDone, date: date).contains(key) {
+            stretchesDone = StretchingCard.toggled(stretchesDone, date: date, id: key)
+        }
+    }
+
+    /// The warm-up's or stretching's holds, or the cardio's time, in this screen.
+    private func partRunner(_ part: GymDayPart, _ routine: GymStretching, _ day: GymDay) -> some View {
+        let then = step(after: part, day)
+        let close: () -> Void = {
+            guard let day = self.day else { return }
+            go(step(after: part, day), auto: false)
+        }
+        return Group {
+            if part.kind == .cardio, let item = routine.items.first {
+                let focused = live.focused
+                CardioTimerView(item: item, date: date, onDone: { tick(part, id: item.id) },
+                                inline: CardioTimerView.Inline(since: focused?.key == part.rawValue ? focused?.start : nil,
+                                                               autoStart: partAutoStart, next: stepName(then, day), close: close))
+            } else {
+                StretchTimerView(stretching: routine, kind: part.kind, onItemDone: { tick(part, id: $0) }, onClose: close)
+            }
+        }
+        .cardSurface(cornerRadius: 22)
+        .id(part)
+        .padding(.top, 14)
+    }
+
+    struct PartRow: Identifiable {
+        let id: String
+        let step: Step
+        /// The key of its time (LiveWorkout.segments).
+        let key: String
+        let symbol: String
+        let color: Color
+        let name: String
+        let detail: String
+        let done: Bool
+    }
+
+    /// The parts before the exercises, each exercise, the parts after them.
+    private func partRows(_ day: GymDay, _ parts: GymDayParts) -> [PartRow] {
+        func row(_ part: GymDayPart) -> PartRow {
+            PartRow(id: part.rawValue, step: .part(part), key: part.rawValue, symbol: part.kind.symbol, color: part.kind.color,
+                    name: L10n.tr(part.kind.title), detail: parts.subtitle(part, day: day), done: partDone(part, day))
+        }
+        let exercises: [PartRow] = day.exercises.enumerated().map { at, exercise in
+            PartRow(id: "\(at)-" + exercise.name, step: .exercise(at), key: exercise.name, symbol: "dumbbell", color: Palette.secondary,
+                    name: exercise.name, detail: L10n.plural("%lld/%lld sérií", exercise.doneCount, exercise.workCount),
+                    done: exercise.sets.allSatisfy(\.done))
+        }
+        return parts.before(day).map(row) + exercises + parts.after(day).map(row)
+    }
+
+    /// The day's parts in order, each with its time so far; a tap turns to it
+    /// (before Začít trénink: starts the workout with it).
+    private func partsList(_ day: GymDay, _ parts: GymDayParts) -> some View {
+        let rows = partRows(day, parts)
+        let now: String? = activePart?.rawValue ?? (started ? current(day)?.name : nil)
+        return VStack(alignment: .leading, spacing: 0) {
+            Text(verbatim: L10n.tr(started ? "Trénink" : "Dnešní trénink"))
+                .font(Typo.caption).foregroundStyle(Palette.muted).textCase(.uppercase)
+                .padding(.top, 12).padding(.bottom, 2)
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                VStack(spacing: 0) {
+                    ForEach(rows) { row in
+                        if row.id != rows.first?.id { Divider().overlay(Palette.hairline) }
+                        Button {
+                            if started { go(row.step, auto: true) } else { startWhole(day, from: row.step) }
+                        } label: {
+                            partRow(row, now: row.key == now, seconds: started ? live.seconds(of: row.key, at: context.date) : 0)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16).padding(.bottom, 4)
+        .cardSurface(cornerRadius: 22)
+        .padding(.top, 14)
+    }
+
+    private func partRow(_ row: PartRow, now: Bool, seconds: Int) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: row.symbol).scaledFont(15, cap: .denseCap).foregroundStyle(row.color)
+                .frame(width: 34, height: 34).background(row.color.opacity(0.12), in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(verbatim: row.name).font(now ? Typo.bodyStrong : .body).foregroundStyle(row.done && !now ? Palette.muted : Palette.ink).lineLimit(1)
+                Text(verbatim: row.detail).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            if seconds > 0 {
+                Text(verbatim: Self.clock(seconds)).font(Typo.small).monospacedDigit().foregroundStyle(now ? Palette.ink : Palette.muted)
+            }
+            if now {
+                Circle().fill(Palette.rust).frame(width: 8, height: 8).accessibilityHidden(true)
+            } else if row.done {
+                Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
+            }
+        }
+        .frame(minHeight: 52)
+        .contentShape(Rectangle())
+        .accessibilityAddTraits(row.done ? .isSelected : [])
+    }
+
+    /// "Další: Protažení": what comes after the last exercise; a tap starts it here.
+    private func nextPartCard(_ part: GymDayPart, _ day: GymDay) -> some View {
+        Button { go(.part(part), auto: true) } label: {
+            HStack(spacing: 12) {
+                Image(systemName: part.kind.symbol).scaledFont(15, cap: .denseCap).foregroundStyle(part.kind.color)
+                    .frame(width: 34, height: 34).background(part.kind.color.opacity(0.14), in: Circle())
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    // "Next", not the "More" the shared Další key reads in English.
+                    Text(verbatim: L10n.isEnglish ? "Next" : "Další").font(Typo.caption).foregroundStyle(Palette.muted)
+                    Text(verbatim: L10n.tr(part.kind.title)).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                    Text(verbatim: GymDayParts.resolved(day, stored: dayParts, date: date).subtitle(part, day: day))
+                        .font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "play.fill").font(.footnote).foregroundStyle(Palette.muted).accessibilityHidden(true)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .cardSurface(cornerRadius: 22)
+    }
+
+    /// The summary's parts: each one's time, calories and average heart rate.
+    private func partsSummary(_ day: GymDay) -> some View {
+        let rows = partRows(day, GymDayParts.resolved(day, stored: dayParts, date: date))
+            .filter { (partStats[$0.key]?.seconds ?? 0) > 0 }
+        // Each exercise once, though it shows under its own name only.
+        var seen = Set<String>()
+        let shown = rows.filter { seen.insert($0.key).inserted }
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text("Části").textCase(.uppercase)
+                Spacer(minLength: 4)
+                Text("Čas").textCase(.uppercase).frame(minWidth: 48, alignment: .trailing)
+                Text(verbatim: "kcal").textCase(.uppercase).frame(minWidth: 40, alignment: .trailing)
+                Text("Prům. tep").textCase(.uppercase).frame(minWidth: 40, alignment: .trailing)
+            }
+            .font(Typo.caption).foregroundStyle(Palette.muted)
+            .padding(.top, 12).padding(.bottom, 4)
+            ForEach(shown) { row in
+                let stats = partStats[row.key] ?? LiveWorkout.PartStats()
+                if row.id != shown.first?.id { Divider().overlay(Palette.hairline) }
+                HStack(spacing: 8) {
+                    Image(systemName: row.symbol).scaledFont(14, cap: .denseCap).foregroundStyle(row.color)
+                        .frame(width: 30, height: 30).background(row.color.opacity(0.12), in: Circle())
+                        .accessibilityHidden(true)
+                    Text(verbatim: row.name).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(verbatim: Self.clock(stats.seconds)).frame(minWidth: 48, alignment: .trailing)
+                    Text(verbatim: stats.kcal.map { Fmt.int($0) } ?? "–").foregroundStyle(Palette.amber).frame(minWidth: 40, alignment: .trailing)
+                    Text(verbatim: stats.avgHeartRate.map { Fmt.int($0) } ?? "–").foregroundStyle(Palette.rust).frame(minWidth: 40, alignment: .trailing)
+                }
+                .font(Typo.small).monospacedDigit()
+                .frame(minHeight: 46)
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(.horizontal, 16).padding(.bottom, 4)
+        .cardSurface(cornerRadius: 22)
+    }
+
+    /// "7:12" or "1:02:05".
+    static func clock(_ seconds: Int) -> String {
+        let h = seconds / 3600, m = seconds / 60 % 60, s = seconds % 60
+        return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
+    }
+
     private func nowLine(_ exercise: GymExercise, _ set: GymSet) -> String {
         let which: String = set.warmup ? L10n.tr("rozcvička") : set.drop ? L10n.tr("dropset") : L10n.f("série %@", set.number)
         return exercise.name + " · " + which
@@ -799,6 +1085,7 @@ struct TrainingModeView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 22)
             summaryGrid(day).padding(.top, 6)
+            if finishedSession, !partStats.isEmpty { partsSummary(day) }
             ForEach(newRecords(day)) { record in recordCard(record) }
             if let zones = totals?.zones, zones.reduce(0, +) >= 1 { ZoneMinutesCard(minutes: zones) }
             changesCard(day)
@@ -809,9 +1096,7 @@ struct TrainingModeView: View {
             // What comes after the exercises, before the session is closed (GymDayParts).
             if !finishedSession {
                 let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
-                ForEach(parts.after(day)) { part in
-                    if let routine = parts.routine(part, day: day) { StretchingCard(stretching: routine, date: date, kind: part.kind) }
-                }
+                ForEach(parts.after(day).filter { !partDone($0, day) }) { part in nextPartCard(part, day) }
             }
             if finishedSession {
                 WorkoutRatingCard(date: date, exercises: day.exerciseNames,
@@ -1469,6 +1754,8 @@ struct TrainingModeView: View {
         let rows = Set(next.exercises.filter { $0.name == name }.flatMap(\.sets).filter { !$0.done }.map(\.row))
         let onScreen = next.exercises[safe: index]?.name == name
         next.replace(exercise: name, with: alt.name, kg: alt.kg.flatMap { $0 > 0 ? GymCoach.kgText($0) : nil })
+        // Swapped before a set was done: its time so far goes with it (the watch keeps it by the row).
+        if !next.exercises.contains(where: { $0.name == name }) { live.rename(name, to: alt.name) }
         day = next
         GymSwaps.record(date, from: name, to: alt.name)
         swaps = GymSwaps.list(date)
@@ -1531,7 +1818,8 @@ struct TrainingModeView: View {
 
     private func keepMinimized(_ day: GymDay) {
         model.minimizedGym = MinimizedGym(date: date, title: title(day), day: day, index: index, restStart: restStart,
-                                          restEnd: restEnd, restTotal: restTotal, next: current(day)?.name, startTapped: startTapped)
+                                          restEnd: restEnd, restTotal: restTotal, next: current(day)?.name, startTapped: startTapped,
+                                          part: activePart)
     }
 
     /// Back from the bar: the same exercise and rest, then the lock-screen
@@ -1547,6 +1835,8 @@ struct TrainingModeView: View {
         restTotal = gym.restTotal
         restStart = gym.restStart
         restEnd = gym.restEnd.flatMap { $0 > Date() ? $0 : nil }
+        partAutoStart = true
+        activePart = gym.part
         for action in gym.pending { activityAction(action) }
     }
 
@@ -1631,6 +1921,7 @@ struct TrainingModeView: View {
     /// then the rating.
     private func finish(at end: Date = Date()) async {
         restEnd = nil
+        activePart = nil
         // The start and end in the sheet: opened again, the workout shows its
         // summary (the rating, Pokračovat v tréninku) and can go on from its start.
         if var next = day {
@@ -1641,6 +1932,7 @@ struct TrainingModeView: View {
         if live.running {
             let saved = await live.finish(at: end)
             totals = (live.minutes(at: end), live.kcal, live.avgHeartRate, live.maxHeartRate, saved, live.zoneMinutes(lows: zoneLows))
+            partStats = live.partStats(until: end)
             live.reset()
         }
         // The summary comes first, with the sending, the rating and Zahodit trénink.
@@ -1849,12 +2141,13 @@ struct TrainingModeView: View {
             rest = turn.rest == .none ? 0 : turn.rest == .round ? GymRestSettingsView.between(set, setting: restSets) : GymRestSettingsView.before(next.exercises[safe: turn.index], setting: restExercises)
         } else if let exercise = next.exercises[safe: index], exercise.sets.allSatisfy(\.done) {
             // On to the next exercise with sets left, after the longer rest.
-            if let after = next.exercises.indices.first(where: { $0 > index && next.exercises[$0].sets.contains { !$0.done } }) {
+            if let after = Self.nextUndone(next.exercises, after: index) {
                 index = after
                 rest = GymRestSettingsView.before(next.exercises[safe: after], setting: restExercises)
             } else {
-                // The last exercise is done: no rest, the workout is over.
+                // The last exercise is done: no rest; the stretching or cardio after the exercises comes on.
                 rest = 0
+                if let part = nextAfterPart(next) { go(.part(part), auto: false) }
             }
         }
         // A rest only before a set still to do on the screen it leads to.
@@ -1937,5 +2230,22 @@ struct WatchGymHooks: View {
             .onReceive(NotificationCenter.default.publisher(for: .watchRest)) { note in
                 if let rest = note.object as? WatchGym.Rest { received(rest) }
             }
+    }
+}
+
+/// The time on one exercise so far (LiveWorkout.segments), next to its name.
+struct PartClock: View {
+    let live: LiveWorkout
+    let key: String
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Label(TrainingModeView.clock(live.seconds(of: key, at: context.date)), systemImage: "clock")
+                .font(Typo.small.weight(.semibold)).monospacedDigit()
+                .foregroundStyle(Palette.amber)
+                .padding(.horizontal, 10).frame(height: 28)
+                .background(Palette.amber.opacity(0.14), in: Capsule())
+        }
+        .accessibilityLabel(Text("Čas cviku"))
     }
 }

@@ -3993,6 +3993,10 @@
 "Od %@" = "Since %@";
 "Poslat do Intervals.icu" = "Send to Intervals.icu";
 "%@, týden %lld" = "%@, week %lld";
+"Části" = "Parts";
+"Ťukni na část a přepneš na ni." = "Tap a part to switch to it.";
+"Hotovo · další: %@" = "Done · next: %@";
+"Čas cviku" = "Exercise time";
 
 /* Workout done: the sending to each app, Zavřít after it, the rating card (TrainingModeView, WorkoutRating.swift) */
 "Co ještě běží, dojede na pozadí." = "Anything still sending finishes in the background.";

@@ -206,6 +206,7 @@ final class LiveWorkout: NSObject {
         kcal = nil; heartRate = nil; heartSource = nil; avgHeartRate = nil; maxHeartRate = nil; hrSum = 0; hrCount = 0
         sensorBeats = []
         trail = []
+        segments = []
         paused = carried?.pause.duration ?? 0
         let unit = HKUnit.count().unitDivided(by: .minute())
         let beats = (carried?.samples ?? []).filter { $0.quantityType == HKQuantityType(.heartRate) }.sorted { $0.startDate < $1.startDate }
@@ -420,6 +421,7 @@ final class LiveWorkout: NSObject {
         endedOnWatch = false
         openFromWatch = nil
         start = nil
+        segments = []
         paused = 0
         carried = nil
         Checkpoint.clear()
@@ -448,6 +450,72 @@ final class LiveWorkout: NSObject {
 
     /// The minutes until `end` (an idle workout ends at its last set).
     func minutes(at end: Date) -> Int { clockStart.map { max(1, Int((end.timeIntervalSince($0) / 60).rounded())) } ?? 0 }
+
+    // MARK: The parts (Training mode as one workout)
+
+    /// What Training mode had in front since the start: a part of the day
+    /// (GymDayPart's raw value: "warmup", "cardioStart"…) or an exercise (its
+    /// name), each from when it came, with the calories then. Each lasts until the next.
+    struct Segment: Equatable {
+        let key: String
+        let start: Date
+        let kcal: Double
+    }
+    private(set) var segments: [Segment] = []
+
+    /// Training mode turned to `key` (a part or an exercise).
+    func focus(_ key: String) {
+        guard running, segments.last?.key != key else { return }
+        segments.append(Segment(key: key, start: Date(), kcal: kcal ?? 0))
+    }
+
+    /// The part or exercise in front now and since when.
+    var focused: Segment? { segments.last }
+
+    /// A swapped exercise takes the time spent on it so far.
+    func rename(_ key: String, to newKey: String) {
+        segments = segments.map { $0.key == key ? Segment(key: newKey, start: $0.start, kcal: $0.kcal) : $0 }
+    }
+
+    /// Seconds spent on `key` so far, every time it was in front added up.
+    func seconds(of key: String, at now: Date = Date()) -> Int {
+        var sum = 0.0
+        for (i, segment) in segments.enumerated() where segment.key == key {
+            let end = segments.indices.contains(i + 1) ? segments[i + 1].start : now
+            sum += max(0, end.timeIntervalSince(segment.start))
+        }
+        return Int(sum)
+    }
+
+    struct PartStats: Equatable {
+        var seconds = 0
+        var kcal: Double?
+        var avgHeartRate: Double?
+    }
+
+    /// Each part's and exercise's time, calories and average heart rate until `end`.
+    func partStats(until end: Date) -> [String: PartStats] {
+        var out: [String: PartStats] = [:]
+        var beats: [String: (sum: Double, count: Int)] = [:]
+        for (i, segment) in segments.enumerated() {
+            let next: Segment? = segments.indices.contains(i + 1) ? segments[i + 1] : nil
+            let until = min(next?.start ?? end, end)
+            guard until > segment.start else { continue }
+            var stats = out[segment.key] ?? PartStats()
+            stats.seconds += Int(until.timeIntervalSince(segment.start))
+            let burned = (next?.kcal ?? kcal ?? segment.kcal) - segment.kcal
+            if burned > 0 { stats.kcal = (stats.kcal ?? 0) + burned }
+            out[segment.key] = stats
+            for beat in trail where beat.date >= segment.start && beat.date < until {
+                var sum = beats[segment.key] ?? (sum: 0, count: 0)
+                sum.sum += beat.bpm
+                sum.count += 1
+                beats[segment.key] = sum
+            }
+        }
+        for (key, sum) in beats where sum.count > 0 { out[key]?.avgHeartRate = sum.sum / Double(sum.count) }
+        return out
+    }
 
     // MARK: Left running (IdleWorkout)
 
