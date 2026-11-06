@@ -13,8 +13,8 @@ struct TrainingSnapshot: Decodable, Equatable {
     let event: Event?
     let form: Form?
     let load: Load
-    /// The acute:chronic workload ratio (src/workload-ratio.js); null without
-    /// any load on record (older saved answers lack it).
+    /// The last 7 days against the usual 28 as a level word (src/workload-ratio.js);
+    /// null without any load on record (older saved answers lack it).
     let acwr: ACWR?
     /// Foster's training monotony and the week's strain (older saved answers lack it).
     let monotony: Monotony?
@@ -132,14 +132,25 @@ struct TrainingSnapshot: Decodable, Equatable {
         let intensity: Intensity?
     }
 
-    /// The mean daily load of the last 7 days (acute) over that of the last 28
-    /// (chronic). value is null with under 21 days of history or no chronic load.
+    /// The last 7 days' load against the usual 28, in words only (Today
+    /// audit D4: no ratio, no bands, no risk); nil with under 21 days of history.
     struct ACWR: Decodable, Equatable {
-        let value: Double?
-        /// "low" (< 0.8), "sweetSpot" (0.8–1.3), "elevated" (1.3–1.5), "high" (> 1.5).
-        let zone: String?
-        let acute: Double?
-        let chronic: Double?
+        /// "wellBelow", "below", "usual", "above" or "wellAbove" (src/workload-ratio.js).
+        let level: String?
+
+        static let levels = ["wellBelow", "below", "usual", "above", "wellAbove"]
+
+        /// "Nad obvyklou" / "Above".
+        static func word(_ level: String) -> String? {
+            switch level {
+            case "wellBelow": L10n.tr("Výrazně pod obvyklou")
+            case "below": L10n.tr("Pod obvyklou")
+            case "usual": L10n.tr("Obvyklá")
+            case "above": L10n.tr("Nad obvyklou")
+            case "wellAbove": L10n.tr("Výrazně nad obvyklou")
+            default: nil
+            }
+        }
     }
 
     /// Mean over standard deviation of the last 7 daily loads; strain is the

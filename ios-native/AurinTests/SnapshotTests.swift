@@ -756,14 +756,15 @@ final class SnapshotTests: XCTestCase {
         let older = try XCTUnwrap(DataAgePill.text(last: now.addingTimeInterval(-3 * 86400), now: now))
         XCTAssertTrue(older.hasPrefix("data z 5. 10. "), older)
 
-        let raised = TrainingSnapshot.ACWR(value: 1.42, zone: "elevated", acute: 60, chronic: 42)
+        // In words, no ratio (Today audit D4).
+        let raised = TrainingSnapshot.ACWR(level: "above")
         let monotonous = TrainingSnapshot.Monotony(value: 2.3, strain: 900, high: true)
         let normal = TrainingSnapshot.Monotony(value: 1.2, strain: 500, high: false)
-        XCTAssertEqual(FormWidget.loadNote(acwr: raised, monotony: monotonous), "Poměr zátěže 1,42 · jednotvárný týden")
-        XCTAssertEqual(FormWidget.loadNote(acwr: raised, monotony: normal), "Poměr zátěže 1,42")
-        XCTAssertEqual(FormWidget.loadNote(acwr: TrainingSnapshot.ACWR(value: 0.6, zone: "low", acute: 20, chronic: 33), monotony: monotonous), "Jednotvárný týden")
-        XCTAssertNil(FormWidget.loadNote(acwr: TrainingSnapshot.ACWR(value: 0.6, zone: "low", acute: 20, chronic: 33), monotony: normal))
-        XCTAssertNil(FormWidget.loadNote(acwr: TrainingSnapshot.ACWR(value: 1.1, zone: "sweetSpot", acute: 40, chronic: 36), monotony: nil))
+        XCTAssertEqual(FormWidget.loadNote(acwr: raised, monotony: monotonous), "Posledních 7 dní vs. obvyklých 28: Nad obvyklou · jednotvárný týden")
+        XCTAssertEqual(FormWidget.loadNote(acwr: raised, monotony: normal), "Posledních 7 dní vs. obvyklých 28: Nad obvyklou")
+        XCTAssertEqual(FormWidget.loadNote(acwr: TrainingSnapshot.ACWR(level: "below"), monotony: monotonous), "Jednotvárný týden")
+        XCTAssertNil(FormWidget.loadNote(acwr: TrainingSnapshot.ACWR(level: "wellBelow"), monotony: normal))
+        XCTAssertNil(FormWidget.loadNote(acwr: TrainingSnapshot.ACWR(level: "usual"), monotony: nil))
 
         let week: [Point] = [Point(date: "2026-10-01", value: 1), Point(date: "2026-10-02", value: 2), Point(date: "2026-10-08", value: 3)]
         XCTAssertEqual(week.lastDays(7).map(\.date), ["2026-10-02", "2026-10-08"])

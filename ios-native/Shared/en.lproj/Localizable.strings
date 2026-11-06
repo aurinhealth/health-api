@@ -1713,7 +1713,14 @@
 "data z %@" = "data from %@";
 "data ze včera %@" = "data from yesterday %@";
 " · obnovit" = " · refresh";
-"Poměr zátěže %@" = "Load ratio %@";
+"Posledních 7 dní vs. obvyklých 28: %@" = "Last 7 days vs your usual 28: %@";
+"Posledních 7 dní vs. obvyklých 28" = "Last 7 days vs your usual 28";
+"Výrazně pod obvyklou" = "Well below";
+"Pod obvyklou" = "Below";
+"Obvyklá" = "Usual";
+"Nad obvyklou" = "Above";
+"Výrazně nad obvyklou" = "Well above";
+"Jednotvárný týden" = "Monotonous week";
 "jednotvárný týden" = "monotonous week";
 "90 dní" = "90 days";
 "Typ aktivity" = "Activity type";
