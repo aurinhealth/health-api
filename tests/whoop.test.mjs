@@ -87,6 +87,20 @@ test("connecting stores the tokens; the import pages through, refreshes and save
   assert.equal(raw.sqlite.prepare("SELECT provider FROM connection_credentials").get().provider, "whoop");
 });
 
+test("WHOOP down while refreshing is an outage; only a refused refresh asks to reconnect", async () => {
+  const { db, raw } = setup();
+  const health = () => raw.sqlite.prepare("SELECT status FROM sync_status WHERE sync_name='connection_whoop'").get()?.status;
+  for (const down of [() => new Response("", { status: 503 }), () => new Response("", { status: 429 }), () => { throw new TypeError("timeout"); }]) {
+    const e = env(db, { access_token: "old", refresh_token: "r", expires_at: 1 });
+    const result = await syncWhoop(e, { days: 1, fetchImpl: async () => down(), now: NOW });
+    assert.equal(result.status, "error");
+    assert.equal(health(), undefined);
+  }
+  const e = env(db, { access_token: "old", refresh_token: "r", expires_at: 1 });
+  await syncWhoop(e, { days: 1, fetchImpl: async () => Response.json({ error: "invalid_grant" }, { status: 400 }), now: NOW });
+  assert.equal(health(), "broken");
+});
+
 test("a connection started by one account is not stored for another signed in before the callback", async () => {
   const { db, raw } = setup();
   const start = await handleWhoopOAuth(new Request("https://aurin.health/oauth/whoop"), env(db, null, { WHOOP_TOKEN: undefined, USER_ID: 11 }), "/oauth/whoop");

@@ -161,8 +161,10 @@ struct IntegrationDetailView: View {
 
             if current.id != "apple" {
                 SettingsGroup {
-                    if let error = current.lastError, current.needsReconnect == true {
-                        SettingsRow(title: "Poslední chyba", subtitle: error, chevron: false)
+                    // Only the time: the state line above says what is wrong in plain words;
+                    // the service's own text stays for the problem report.
+                    if current.needsReconnect == true, let at = current.lastErrorAt.flatMap(SourceActions.when) {
+                        SettingsRow(title: "Poslední chyba", subtitle: at, chevron: false)
                         SettingsDivider()
                     }
                     if current.id == "google" {

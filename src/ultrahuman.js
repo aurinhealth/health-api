@@ -65,7 +65,10 @@ async function tokenRequest(env, params, fetchImpl) {
     signal: AbortSignal.timeout(15000)
   }).catch(() => null);
   const data = response ? await response.json().catch(() => ({})) : {};
-  return response?.ok && data.access_token ? data : null;
+  if (response?.ok && data.access_token) return data;
+  // Ultrahuman said no to these keys (revoked access, a used refresh token);
+  // no answer, a 5xx or a 429 is only an outage (as wahoo.js).
+  return { refused: response?.status === 400 || response?.status === 401 };
 }
 
 export async function handleUltrahumanOAuth(request, env, pathname, fetchImpl = fetch) {
@@ -90,7 +93,7 @@ export async function handleUltrahumanOAuth(request, env, pathname, fetchImpl = 
   if (url.searchParams.get('error') || !code) return back(connectReturnUrl('ultrahuman-cancelled', env));
   if (!ultrahumanConfigured(env)) return back(connectReturnUrl('ultrahuman-failed', env));
   const data = await tokenRequest(env, { grant_type: 'authorization_code', code, redirect_uri: redirectUri(env, request) }, fetchImpl);
-  if (!data) { console.error('Ultrahuman OAuth token exchange failed'); return back(connectReturnUrl('ultrahuman-failed', env)); }
+  if (!data.access_token) { console.error('Ultrahuman OAuth token exchange failed'); return back(connectReturnUrl('ultrahuman-failed', env)); }
   const text = tokensText(data);
   await saveConnectionSecret(env, SOURCE, text);
   await clearConnectionHealth(env, SOURCE);
@@ -105,11 +108,15 @@ export async function ultrahumanAccessToken(env, { fetchImpl = fetch, now = Date
   if (!tokensDue(tokens, now)) return tokens.access_token;
   if (!tokens.refresh_token || !ultrahumanConfigured(env)) throw Object.assign(new Error('Ultrahuman HTTP 401'), { status: 401 });
   // One request refreshes at a time; the others take the pair it saved (connection-secrets.js).
+  let refused = false;
   const text = await refreshConnectionTokens(env, SOURCE, env.ULTRAHUMAN_TOKEN, async t => {
-    const data = t?.refresh_token && await tokenRequest(env, { grant_type: 'refresh_token', refresh_token: t.refresh_token }, fetchImpl);
+    const data = t?.refresh_token ? await tokenRequest(env, { grant_type: 'refresh_token', refresh_token: t.refresh_token }, fetchImpl) : null;
+    if (data?.refused) refused = true;
     // A refresh that names no new refresh token keeps the old one.
-    return data ? tokensText({ refresh_token: t.refresh_token, ...data }, now) : null;
+    return data?.access_token ? tokensText({ refresh_token: t.refresh_token, ...data }, now) : null;
   }, { now });
+  // Only a refused refresh asks to reconnect; an outage is tried again at the next sync.
+  if (!text && !refused) throw Object.assign(new Error('Ultrahuman: no answer'), { noAnswer: true });
   if (!text) throw Object.assign(new Error('Ultrahuman HTTP 401'), { status: 401 });
   env.ULTRAHUMAN_TOKEN = text;
   return readUltrahumanTokens(env).access_token;

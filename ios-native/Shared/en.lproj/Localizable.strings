@@ -1213,10 +1213,8 @@
 "Povolit chybějící" = "Allow missing";
 "Přístup" = "Access";
 "Zdraví a spánek" = "Health and sleep";
-"spánek, tep, HRV, kroky, váha a jídlo" = "sleep, heart rate, HRV, steps, weight and food";
 "brzy" = "soon";
 "Tréninky" = "Workouts";
-"aktivity, plán tréninků, forma a wellness" = "activities, training plan, form and wellness";
 "Profil se nepodařilo načíst, takže ho teď nejde uložit. Zkus to znovu za chvíli." = "The profile couldn't be loaded, so it can't be saved right now. Try again in a moment.";
 "zítra" = "tomorrow";
 "včera" = "yesterday";
@@ -1389,9 +1387,6 @@
 "Pod prahem" = "Below threshold";
 "Nad prahem" = "Above threshold";
 "Přidat zdroj" = "Add a source";
-"spánek, regenerace, HRV a zátěž" = "sleep, recovery, HRV and strain";
-"spánek, HRV, teplota a pohyb" = "sleep, HRV, temperature and movement";
-"jízdy a trénink na trenažeru" = "rides and indoor training";
 "přes Intervals" = "via Intervals";
 "propojeno" = "connected";
 "propojeno, data starší než 12 h" = "connected, data over 12 hours old";
@@ -2071,7 +2066,7 @@
 
 "Ultrahuman je připojený, noci z prstenu se začínají stahovat." = "Ultrahuman is connected; the ring's nights are starting to download.";
 "Připojení Ultrahumanu se nepovedlo, zkus to znovu." = "Connecting Ultrahuman didn't work. Try again.";
-"Data z prstenu se smažou a noc se zase bude brát z hodinek." = "The ring's data will be deleted and your nights will come from your watch again.";
+"Data z prstenu se smažou a noc se zase bude brát z ostatních zdrojů." = "The ring's data will be deleted and your nights will come from your other sources again.";
 "spánek, HRV, klidový tep, teplota" = "sleep, HRV, resting heart rate, temperature";
 "Odpojit a smazat data z prstenu" = "Disconnect and delete the ring's data";
 /* Vybrat: several foods or drinks at once */
@@ -2186,7 +2181,7 @@
 "Nic." = "Nothing.";
 "Aktivitu a kondici (kroky, vzdálenost, aktivní energii, tréninky a jejich trasy), zdravotní měření (tep, HRV, okysličení krve, dech, VO₂max, váhu, výšku, tělesný tuk), spánek, záznamy jídla a datum narození z účtu Google." = "Activity and fitness (steps, distance, active energy, workouts and their routes), health measurements (heart rate, HRV, blood oxygen, breathing, VO₂max, weight, height, body fat), sleep, food logs and your date of birth from your Google account.";
 "Jídlo a pití, které zapíšeš v Aurinu. Když to na stránce Googlu povolíš, i váhu a tréninky z Aurinu." = "The food and drinks you log in Aurin. If you allow it on Google's page, also your weight and workouts from Aurin.";
-"Tréninky, plán, zóny a váhu." = "Workouts, plan, zones and weight.";
+"Tréninky, plán, prahy a zóny, váhu a z wellness spánek, HRV a klidový tep." = "Workouts, plan, thresholds and zones, weight, and from wellness sleep, HRV and resting heart rate.";
 "Tréninky naplánované i odcvičené v Aurinu a kalorický cíl." = "Workouts planned and done in Aurin and your calorie target.";
 "Posílat i zdravotní data" = "Also send health data";
 "Spánek, tep, HRV, okysličení krve, dech, VO₂max, tělesný tuk, kroky, váhu a tréninky z Apple Watch. Intervals.icu je samostatná firma a zachází s nimi podle svých zásad." = "Sleep, heart rate, HRV, blood oxygen, breathing, VO₂ max, body fat, steps, weight and your Apple Watch workouts. Intervals.icu is a separate company and handles them under its own privacy policy.";

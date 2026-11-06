@@ -59,7 +59,10 @@ async function tokenRequest(env, params, fetchImpl) {
     signal: AbortSignal.timeout(15000)
   }).catch(() => null);
   const data = response ? await response.json().catch(() => ({})) : {};
-  return response?.ok && data.access_token ? data : null;
+  if (response?.ok && data.access_token) return data;
+  // WHOOP said no to these keys (revoked access, a used refresh token);
+  // no answer, a 5xx or a 429 is only an outage (as wahoo.js).
+  return { refused: response?.status === 400 || response?.status === 401 };
 }
 
 export async function handleWhoopOAuth(request, env, pathname, fetchImpl = fetch) {
@@ -84,7 +87,7 @@ export async function handleWhoopOAuth(request, env, pathname, fetchImpl = fetch
   if (url.searchParams.get('error') || !code) return back(connectReturnUrl('whoop-cancelled', env));
   if (!whoopConfigured(env)) return back(connectReturnUrl('whoop-failed', env));
   const data = await tokenRequest(env, { grant_type: 'authorization_code', code, redirect_uri: redirectUri(env, request) }, fetchImpl);
-  if (!data) { console.error('WHOOP OAuth token exchange failed'); return back(connectReturnUrl('whoop-failed', env)); }
+  if (!data.access_token) { console.error('WHOOP OAuth token exchange failed'); return back(connectReturnUrl('whoop-failed', env)); }
   const text = tokensText(data);
   await saveConnectionSecret(env, SOURCE, text);
   await clearConnectionHealth(env, SOURCE);
@@ -99,10 +102,14 @@ export async function whoopAccessToken(env, { fetchImpl = fetch, now = Date.now(
   if (!tokensDue(tokens, now)) return tokens.access_token;
   if (!tokens.refresh_token || !whoopConfigured(env)) throw Object.assign(new Error('WHOOP HTTP 401'), { status: 401 });
   // One request refreshes at a time; the others take the pair it saved (connection-secrets.js).
+  let refused = false;
   const text = await refreshConnectionTokens(env, SOURCE, env.WHOOP_TOKEN, async t => {
-    const data = t?.refresh_token && await tokenRequest(env, { grant_type: 'refresh_token', refresh_token: t.refresh_token, scope: 'offline' }, fetchImpl);
-    return data ? tokensText({ refresh_token: t.refresh_token, ...data }, now) : null;
+    const data = t?.refresh_token ? await tokenRequest(env, { grant_type: 'refresh_token', refresh_token: t.refresh_token, scope: 'offline' }, fetchImpl) : null;
+    if (data?.refused) refused = true;
+    return data?.access_token ? tokensText({ refresh_token: t.refresh_token, ...data }, now) : null;
   }, { now });
+  // Only a refused refresh asks to reconnect; an outage is tried again at the next sync.
+  if (!text && !refused) throw Object.assign(new Error('WHOOP: no answer'), { noAnswer: true });
   if (!text) throw Object.assign(new Error('WHOOP HTTP 401'), { status: 401 });
   env.WHOOP_TOKEN = text;
   return readWhoopTokens(env).access_token;

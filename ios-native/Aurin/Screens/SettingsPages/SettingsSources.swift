@@ -189,21 +189,18 @@ struct SourcesSettingsView: View {
         }
         for id in ["google", "whoop", "ultrahuman", "intervals", "wahoo"] {
             guard let provider = available.first(where: { $0.id == id }) else { continue }
-            list.append(Offer(id: id, name: provider.name ?? id, detail: Self.detail(id)))
+            list.append(Offer(id: id, name: provider.name ?? id, detail: Self.detail(provider.metrics ?? [])))
         }
         return list
     }
 
-    /// What each service gives Aurin, in a few words.
-    private static func detail(_ id: String) -> String {
-        switch id {
-        case "google": return L10n.tr("spánek, tep, HRV, kroky, váha a jídlo")
-        case "whoop": return L10n.tr("spánek, regenerace, HRV a zátěž")
-        case "ultrahuman": return L10n.tr("spánek, HRV, teplota a pohyb")
-        case "intervals": return L10n.tr("aktivity, plán tréninků, forma a wellness")
-        case "wahoo": return L10n.tr("jízdy a trénink na trenažeru")
-        default: return ""
-        }
+    /// What the service gives Aurin: the same list as on its page (src/connections.js
+    /// metrics), in lower case where a word starts it ("HRV", "VO2max" stay).
+    private static func detail(_ metrics: [String]) -> String {
+        metrics.map { metric in
+            guard metric.dropFirst().first?.isLowercase == true else { return metric }
+            return metric.prefix(1).lowercased() + metric.dropFirst()
+        }.joined(separator: ", ")
     }
 }
 

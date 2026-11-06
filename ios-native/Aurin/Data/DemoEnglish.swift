@@ -97,7 +97,9 @@ extension DemoData {
         "Aktivity": "Activities",
         "Hmotnost": "Weight",
         "Jídlo": "Food",
-        "Aktivity a plán": "Activities and plan",
-        "Fitness / únava / forma": "Fitness / fatigue / form"
+        "Tréninky a plán": "Workouts and plan",
+        "Fitness / únava / forma": "Fitness / fatigue / form",
+        "Prahy, zóny a váha": "Thresholds, zones and weight",
+        "Spánek, HRV a klidový tep": "Sleep, HRV and resting heart rate"
     ]
 }
