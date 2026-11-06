@@ -15,6 +15,7 @@ import { googleDashboard } from '../src/google-dashboard.js';
 import { loadEffectiveProfile } from '../src/profile-suggestions.js';
 import { readinessLocks } from '../src/readiness-lock.js';
 import { readinessFor } from '../src/readiness.js';
+import { sleepSettings } from '../src/energy-profile.js';
 import legacyHealthApi from '../src/index.js';
 
 const DAYS = Number(process.env.READINESS_DAYS) > 0 ? Math.min(Number(process.env.READINESS_DAYS), 90) : 60;
@@ -43,21 +44,37 @@ export function readOnlyD1(query) {
 // - band: a part under its normal (component score under 70) gets 10 points
 //   back up to 70, half an SD for HRV and resting heart rate (smallest
 //   worthwhile change, Plews 2012) and 5 % of the sleep need for sleep;
-// - free: a part under its normal costs nothing (a bound, not a candidate).
+// - free: a part under its normal costs nothing (a bound, not a candidate);
+// - debt: the week's sleep debt in the night's need capped at this many
+//   minutes (today up to 60, sleepNeedFor). The run of 2026-11-06 18:39 found
+//   sleep the main cause (69 of 123 yellow days); the critic asked for the
+//   need with the debt capped at 30 and without it before any band on sleep.
 const band = s => (s < 70 ? Math.min(70, s + 10) : s), free = s => Math.max(70, s);
 export const RULES = {
   now: {}, hrvBand: { hrv: band }, hrvRhrBand: { hrv: band, restingHR: band }, allBand: { hrv: band, restingHR: band, sleep: band },
-  hrvFree: { hrv: free }, rhrFree: { restingHR: free }, sleepFree: { sleep: free }, allFree: { hrv: free, restingHR: free, sleep: free }
+  hrvFree: { hrv: free }, rhrFree: { restingHR: free }, sleepFree: { sleep: free }, allFree: { hrv: free, restingHR: free, sleep: free },
+  debt30: { debt: 30 }, debt0: { debt: 0 }, debt30HrvRhrBand: { debt: 30, hrv: band, restingHR: band }, debt0HrvRhrBand: { debt: 0, hrv: band, restingHR: band }
 };
+
+// The sleep part again with the debt in the need capped at `cap` minutes, as
+// sleepNeedFor and recoveryReadiness count it (`goal` the athlete's own sleep goal).
+export function sleepScoreWithDebt(sleep, need, cap, goal) {
+  if (!sleep || !need) return sleep?.score;
+  const raw = need.base + need.hrv + Math.min(need.debt, cap);
+  const minutes = goal != null ? Math.max(360, Math.min(600, raw) - need.naps) : Math.max(420, Math.min(540, raw) - need.naps);
+  const performance = Math.min(105, sleep.minutes / minutes * 100);
+  return Math.round(Math.max(0, Math.min(100, 70 + 2 * (performance - 90))));
+}
 const WEIGHTS = { hrv: 0.5, restingHR: 0.25, sleep: 0.25 };
 
 // The score of a readiness (readinessFor's) again with its parts changed by
 // `rule`: the weighted parts, less the breathing and temperature points, the
 // short night's cap at 66 (readiness.js withoutNight). Null without a score.
-export function rescore(r, rule = {}) {
+export function rescore(r, rule = {}, goal = null) {
   if (r?.score == null) return null;
-  const c = r.components || {}, used = Object.keys(WEIGHTS).filter(k => c[k]);
+  const c = { ...(r.components || {}) }, used = Object.keys(WEIGHTS).filter(k => c[k]);
   const sum = used.reduce((t, k) => t + WEIGHTS[k], 0);
+  if (rule.debt != null && c.sleep) c.sleep = { ...c.sleep, score: sleepScoreWithDebt(c.sleep, r.need, rule.debt, goal) };
   let score = used.reduce((t, k) => t + WEIGHTS[k] * (rule[k] ? rule[k](c[k].score) : c[k].score), 0) / sum;
   const skin = c.skinTemp?.elevated ? 10 : 0;
   score -= (c.respiration?.elevated ? 10 : 0) + skin + Math.abs(c.wristTemp?.points || 0);
@@ -94,11 +111,12 @@ export async function accountZones(env, days = DAYS) {
   const locks = await readinessLocks(env.DB, from).catch(() => ({}));
   const out = Object.fromEntries(Object.keys(RULES).map(k => [k, ZONES()]));
   out.causes = CAUSES();
+  const goal = sleepSettings(profile || {}).goal;
   for (let d = from; d < today; d = shift(d, 1)) {
     const r = readinessFor({ date: d, google: health.wellness || [], sessions: sleep.sessions || [], profile: { ...(profile || {}), readinessLocks: locks } });
-    if (r.zone && rescore(r) !== r.score) out.causes.mismatch++;
+    if (r.zone && (rescore(r) !== r.score || rescore(r, { debt: 60 }, goal) !== r.score)) out.causes.mismatch++;
     for (const [name, rule] of Object.entries(RULES)) {
-      const zone = name === 'now' ? r.zone : zoneOf(rescore(r, rule)), c = out[name];
+      const zone = name === 'now' ? r.zone : zoneOf(rescore(r, rule, goal)), c = out[name];
       c.days++;
       if (!zone) { c.none++; continue; }
       c[zone]++;
@@ -167,7 +185,7 @@ async function main() {
     '### Why the yellow days are yellow (finding 5.4)', '',
     `Of ${total.yellow} yellow days: ${causes.hrv} mostly HRV, ${causes.restingHR} mostly resting heart rate, ${causes.sleep} mostly sleep, ${causes.shortNight} a short night's cap, ${causes.breathingOrTemp} breathing or temperature points, ${causes.none} no part under its normal. ${causes.noSleep} without a scored night; ${causes.near} at 64–66 (three points from green). Rescore check: ${causes.mismatch} days differ.`, '',
     '### Rules on the same days', '',
-    'band = a part under its normal gets 10 points back up to normal (0.5 SD for HRV and resting heart rate, 5 % of the sleep need); free = a part under its normal costs nothing (a bound). Last column: days with the morning\'s HRV over 1.5 SD under normal that the rule shows green while today\'s rule did not.', '',
+    'band = a part under its normal gets 10 points back up to normal (0.5 SD for HRV and resting heart rate, 5 % of the sleep need); free = a part under its normal costs nothing (a bound); debtN = the sleep debt of the week in the need of the night capped at N minutes (today 60). Last column: days with the morning\'s HRV over 1.5 SD under normal that the rule shows green while today\'s rule did not.', '',
     '| Rule | Green | Yellow | Red | Yellow per account | Big HRV drop shown green |', '|---|---|---|---|---|---|',
     ...Object.keys(RULES).map(rule), ''].join('\n');
   console.log(text);
