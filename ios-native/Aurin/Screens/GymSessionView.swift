@@ -99,7 +99,7 @@ struct GymSessionView: View {
             }
         }
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
-            TechniqueSheet(exercise: item.name)
+            TechniqueSheet(exercise: item.name, replace: { Task { try? await Task.sleep(for: .milliseconds(450)); alternativesFor = item.name } })
         }
         .sheet(item: Binding(get: { alternativesFor.map { Named(name: $0) } }, set: { alternativesFor = $0?.name })) { item in
             AlternativesSheet(date: date, exercise: item.name) { replacement in
@@ -545,11 +545,16 @@ struct TechniqueSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let exercise: String
+    /// "Nahradit": only where the exercise can be swapped (a generated workout,
+    /// a plan, Režim tréninku). The sheet closes first, then this runs.
+    var replace: (() -> Void)? = nil
     @State private var technique: GymTechnique?
     @State private var error: String?
     /// 0: the photo and how it's done, 1: the video.
     @State private var page = 0
     @State private var writingNote = false
+    /// The thumb: true, false or nil, saved at once (src/exercise-feedback.js).
+    @State private var liked: Bool?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -559,6 +564,7 @@ struct TechniqueSheet: View {
                 Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
             }
             .padding(.horizontal, 24).padding(.top, 24)
+            taste.padding(.horizontal, 24)
             Picker("Zobrazit", selection: $page) {
                 Text("Jak na to").tag(0)
                 Text("Video").tag(1)
@@ -577,7 +583,65 @@ struct TechniqueSheet: View {
         .task {
             await ExerciseNotes.shared.load(api: model.api, demo: model.demo)
             guard !model.demo else { error = "V ukázce se technika nenačítá."; return }
-            do { technique = try await model.api.gymTechnique(exercise: exercise) } catch { self.error = error.localizedDescription }
+            do {
+                technique = try await model.api.gymTechnique(exercise: exercise)
+                liked = technique?.liked
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+
+    /// Líbí, Nelíbí and Nahradit under the name: a disliked exercise stays out
+    /// of the next plans, and Nahradit opens the swap sheet straight away.
+    private var taste: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                tasteButton(up: true)
+                tasteButton(up: false)
+                if let replace {
+                    Spacer(minLength: 0)
+                    Button {
+                        dismiss()
+                        replace()
+                    } label: {
+                        Label("Nahradit", systemImage: "arrow.triangle.2.circlepath")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(liked == false ? Palette.onButton : Palette.ink)
+                            .padding(.horizontal, 14).frame(height: 38)
+                            .background(liked == false ? Palette.button : Palette.card, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            if liked == false {
+                Text("V dalších plánech už nebude. Vrátit to jde v Nastavení → Posilovna → Cviky.")
+                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            // A thumb that did not save (a load error shows in the page itself).
+            if technique != nil, let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+        }
+    }
+
+    private func tasteButton(up: Bool) -> some View {
+        let on = liked == up
+        let tint: Color = on ? (up ? Palette.green : Palette.rust) : Palette.ink
+        return Button { Task { await rate(on ? nil : up) } } label: {
+            Label(L10n.tr(up ? "Líbí" : "Nelíbí"), systemImage: up ? (on ? "hand.thumbsup.fill" : "hand.thumbsup") : (on ? "hand.thumbsdown.fill" : "hand.thumbsdown"))
+                .font(.subheadline.weight(.semibold)).foregroundStyle(tint)
+                .padding(.horizontal, 14).frame(height: 38)
+                .background(on ? tint.opacity(0.16) : Palette.card, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    /// The thumb moves at once; a failed save puts it back.
+    private func rate(_ value: Bool?) async {
+        let before = liked
+        liked = value
+        guard !model.demo else { return }
+        do { try await model.api.rateExercises([(exercise: exercise, liked: value)]) } catch {
+            liked = before
+            self.error = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription)
         }
     }
 

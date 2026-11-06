@@ -40,7 +40,7 @@ test('the overview follows the app section by section and every file it loads ex
   // Every screenshot of the app says what it shows.
   for(const [img] of html.matchAll(/<img src="\/site\/app\/[^>]*>/g))assert.doesNotMatch(img,/alt=""/,img);
   // Strain, the finished workout and the coach are screens built in site-demos.js, so they can move.
-  for(const text of ['5.1</b> workout <b>3.3</b> movement','Saved to Apple Health','Proposal confirmed.'])assert.ok(html.includes(text),text);
+  for(const text of ['5.1</b> workout <b>3.3</b> movement','Intervals.icu</b><span class="grn s b">','Proposal confirmed.'])assert.ok(html.includes(text),text);
   // The 3D figure's frames, its map of muscles and a close-up of every muscle the bubble can open.
   const base=html.match(/data-base="\/site\/([^"]+)"/)[1];
   for(let i=0;i<72;i++)assert.ok(existsSync(new URL(`../public/site/${base}f${String(i).padStart(2,'0')}.webp`,import.meta.url)),'frame '+i);

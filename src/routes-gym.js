@@ -6,7 +6,7 @@ import { buildStrengthContext } from "./strength-context.js";
 import { cardioFavourites, cardioFor, cardioLength, cardioMode, cardioOptions, cardioType, myRoutinesView, routineMoves, routinesFor, routineSize, typicalExtraMinutes, withRoutines } from "./stretching.js";
 import app from "./strength-gateway.js";
 import { bumpCacheVersion } from "./api-cache.js";
-import { exercisePreferences, recentWorkoutRatings } from "./exercise-feedback.js";
+import { exercisePreferences, recentWorkoutRatings, exerciseLiked } from "./exercise-feedback.js";
 import { pinnedExercises, savePinnedExercises } from "./pinned-exercises.js";
 import { exerciseNotes, saveExerciseNote } from "./exercise-notes.js";
 import { gymExerciseCatalog, gymAlternatives } from "./gym-catalog.js";
@@ -370,6 +370,8 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       if(stored)technique=techniqueFor(exercise,own,stored);
     }
     technique=absolutePhotos(technique,url);
+    // The athlete's thumb for it: Like / Dislike in the sheet.
+    if(technique)technique={...technique,liked:await exerciseLiked(env.DB,exercise)};
     return technique?Response.json({status:'ok',technique},{headers:{'Cache-Control':'no-store'}}):Response.json({message:L('Cvik není v databázi.', 'The exercise isn\'t in the database.')},{status:404});
   }
 }

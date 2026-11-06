@@ -319,7 +319,8 @@ struct GymBuilderView: View {
                            used: Set(proposal?.exercises.map(\.name) ?? [])) { ex in add(ex) }
         }
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
-            TechniqueSheet(exercise: item.name)
+            // After this sheet is gone: one sheet at a time.
+            TechniqueSheet(exercise: item.name, replace: saved ? nil : { Task { try? await Task.sleep(for: .milliseconds(450)); replacing = item.name } })
         }
         .confirmationDialog("Kde budeš cvičit?", isPresented: $askPlace, titleVisibility: .visible) {
             ForEach(starterPlaces.places) { place in

@@ -297,9 +297,10 @@ struct RootView: View {
                 try? await Task.sleep(for: .seconds(6))
                 if model.notice == shown { model.notice = nil }
             }
-            // The toast goes away on its own unless its sheet is open.
+            // The toast goes away on its own unless its sheet is open, or an app
+            // did not get the activity: that stays until it is tapped (Zkusit znovu).
             .task(id: model.syncReport?.id) {
-                guard let shown = model.syncReport?.id else { return }
+                guard let shown = model.syncReport?.id, model.syncReport?.failed == false else { return }
                 try? await Task.sleep(for: .seconds(7))
                 if !showSyncStatus && model.syncReport?.id == shown { model.syncReport = nil }
             }

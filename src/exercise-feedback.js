@@ -55,6 +55,19 @@ export async function exercisePreferences(db) {
   }
 }
 
+// One exercise's thumb (the "i" sheet): true, false or null. One row by its key.
+export async function exerciseLiked(db, exercise) {
+  const name = normalizeExerciseName(String(exercise || '').slice(0, 120));
+  if (!name) return null;
+  try {
+    const row = await db.prepare("SELECT liked FROM exercise_preferences WHERE user_id=? AND exercise=?").bind(db.userId, name).first();
+    return row ? Number(row.liked) === 1 : null;
+  } catch (error) {
+    if (!missingTable(error)) console.error('Exercise preference read failed', error.message);
+    return null;
+  }
+}
+
 // The candidates without the disliked ones, unless nothing else is left
 // (the muscle still gets its exercise).
 export function withoutDisliked(pool, disliked, nameOf = x => x) {

@@ -56,7 +56,14 @@ struct TrainingModeView: View {
     @State private var loadingBar: PlateTarget?
     private var notes: ExerciseNotes { .shared }
     @State private var saving = false
-    @State private var rating = false
+    /// After Dokončit: each app's state of the sending (nil until the answer),
+    /// when it started, and Zavřít free once the workout is saved or after `closeWait`.
+    @State private var sendRows: [SyncReport.Row]?
+    @State private var sendStarted: Date?
+    @State private var closeReady = true
+    /// Only the save is waited for (usually under 1 s): the sending goes on after
+    /// Zavřít through the queue, and a failed one keeps its toast. At most this long.
+    static let closeWait: TimeInterval = 10
     /// Dokončit trénink was tapped: the summary shows the totals.
     @State private var finishedSession = false
     @State private var totals: (minutes: Int, kcal: Double?, avgHr: Double?, maxHr: Double?, saved: Bool, zones: [Double])?
@@ -67,7 +74,7 @@ struct TrainingModeView: View {
     @State private var confirmClose = false
     /// Zahodit trénink in the summary, after Dokončit.
     @State private var confirmDiscard = false
-    /// Opened on a workout already finished: its summary, with Ohodnotit and
+    /// Opened on a workout already finished: its summary, with the rating and
     /// Pokračovat v tréninku (Zahodit has no earlier day to go back to).
     @State private var reopened = false
     @State private var picking = false
@@ -205,14 +212,12 @@ struct TrainingModeView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, let end = restEnd, end <= Date() { restEnd = nil }
         }
-        .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
+        .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { techniqueSheet($0) }
         .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
             ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name), today: date)
         }
-        // Rated or skipped: the workout is done, the mode closes.
-        .sheet(isPresented: $rating, onDismiss: { dismiss() }) {
-            GymRatingSheet(date: date, exercises: day?.exerciseNames ?? [])
-        }
+        // Zavřít waits for the sending, at most closeWait.
+        .task(id: sendStarted) { await freeCloseLater() }
         .confirmationDialog("Ukončit trénink?", isPresented: $confirmClose, titleVisibility: .visible) {
             // Later: the clock and heart rate stop now and start again on return.
             Button("Pokračovat později") { live.reset(); dismiss() }
@@ -282,6 +287,7 @@ struct TrainingModeView: View {
                 CircleButton(systemImage: "chevron.down", label: L10n.tr("Skrýt trénink")) { minimize() }
             } else {
                 CircleButton(systemImage: "xmark", label: L10n.tr("Ukončit režim tréninku")) { close() }
+                    .disabled(closeLocked).opacity(closeLocked ? 0.35 : 1)
             }
             // The summary has its own title: no exercise and sets line above it.
             if let day, !day.exercises.isEmpty, !finishedSession {
@@ -797,7 +803,7 @@ struct TrainingModeView: View {
             if let zones = totals?.zones, zones.reduce(0, +) >= 1 { ZoneMinutesCard(minutes: zones) }
             changesCard(day)
             swapsCard
-            if totals?.saved == true { healthCard }
+            if finishedSession { sendCard }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             if !finishedSession { addExerciseButton }
             // What comes after the exercises, before the session is closed (GymDayParts).
@@ -808,7 +814,9 @@ struct TrainingModeView: View {
                 }
             }
             if finishedSession {
-                PrimaryButton(title: L10n.tr("Ohodnotit"), systemImage: "hand.thumbsup") { rating = true }
+                WorkoutRatingCard(date: date, exercises: day.exerciseNames,
+                                  liked: catalog.reduce(into: [String: Bool]()) { out, item in if let liked = item.liked { out[item.name] = liked } })
+                closeButton
                 // Dokončit by mistake: back to the workout, the clock from its start.
                 if !model.demo {
                     SecondaryButton(title: "Pokračovat v tréninku", systemImage: "play.fill") { Task { await resume() } }
@@ -1009,15 +1017,94 @@ struct TrainingModeView: View {
         }
     }
 
-    private var healthCard: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "heart.fill").foregroundStyle(Palette.rust)
-            Text("Uloženo do Apple Health").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-            Spacer()
-            Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
+    // Out of the body's modifier chain, which is too long to type-check with closures inside.
+    /// Nahradit: the swap sheet once this one is gone, while the exercise has sets to do (as Vyměnit).
+    private func techniqueSheet(_ item: Named) -> some View {
+        let left = day?.exercises.first(where: { $0.name == item.name })?.sets.contains(where: { !$0.done }) == true
+        return TechniqueSheet(exercise: item.name, replace: left ? { Task { try? await Task.sleep(for: .milliseconds(450)); swapping = item.name } } : nil)
+    }
+
+    /// Zavřít free at the latest closeWait after the sending started.
+    private func freeCloseLater() async {
+        guard let started = sendStarted else { return }
+        try? await Task.sleep(for: .seconds(max(0, started.addingTimeInterval(Self.closeWait).timeIntervalSinceNow)))
+        if sendStarted == started { closeReady = true }
+    }
+
+    /// Zavřít and the X wait while the workout is saved and sent, at most closeWait.
+    private var closeLocked: Bool { finishedSession && saving && !closeReady }
+
+    /// Zavřít: grey while the workout is saved; what still sends goes on in the background.
+    private var closeButton: some View {
+        VStack(spacing: 8) {
+            PrimaryButton(title: L10n.tr("Zavřít")) { close() }
+                .disabled(closeLocked).opacity(closeLocked ? 0.4 : 1)
+            if closeLocked {
+                Text("Ukládám…")
+            } else if saving {
+                Text("Co ještě běží, dojede na pozadí.")
+            }
         }
-        .padding(16)
-        .cardSurface(cornerRadius: 22)
+        .font(Typo.caption).foregroundStyle(Palette.muted)
+        .padding(.top, 4)
+    }
+
+    /// Where the workout goes: Apple Health and the apps from Zdroje dat
+    /// (Aurin posílá), each with its state while it is sent.
+    @ViewBuilder
+    private var sendCard: some View {
+        let rows = shownSendRows
+        if !rows.isEmpty {
+            VStack(spacing: 0) {
+                ForEach(rows) { row in sendRow(row, first: row.id == rows.first?.id) }
+            }
+            .padding(.horizontal, 16)
+            .cardSurface(cornerRadius: 22)
+        }
+    }
+
+    /// The answer once there, else the apps it is on its way to.
+    private var shownSendRows: [SyncReport.Row] {
+        var rows: [SyncReport.Row] = sendRows ?? []
+        if sendRows == nil, saving {
+            let ids = UserDefaults.standard.stringArray(forKey: AppModel.activityDestinationsKey) ?? []
+            rows = ids.map { SyncReport.Row(destination: $0, status: .pending) }
+            if totals?.saved != true, AppleHealthExport.shared.writesWorkouts { rows.append(SyncReport.Row(destination: "apple", status: .pending)) }
+        }
+        // The live workout was written to Apple Health by Dokončit itself.
+        if totals?.saved == true, !rows.contains(where: { $0.destination == "apple" }) { rows.append(SyncReport.Row(destination: "apple", status: .sent)) }
+        return rows.sorted { (SyncApp.order.firstIndex(of: $0.destination) ?? 9) < (SyncApp.order.firstIndex(of: $1.destination) ?? 9) }
+    }
+
+    private func sendRow(_ row: SyncReport.Row, first: Bool) -> some View {
+        HStack(spacing: 12) {
+            SyncAppIcon(id: row.destination, size: 26)
+            Text(verbatim: SyncApp.name(row.destination)).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+            Spacer(minLength: 6)
+            Group {
+                switch row.status {
+                case .sent:
+                    Label(row.destination == "apple" ? L10n.tr("Uloženo") : L10n.tr("Odesláno"), systemImage: "checkmark")
+                        .foregroundStyle(Palette.green)
+                case .error:
+                    Label(L10n.tr("Neodesláno"), systemImage: "exclamationmark.circle.fill").foregroundStyle(Palette.rust)
+                case .pending:
+                    if sendRows == nil {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            Text(L10n.tr("Odesílám…"))
+                        }
+                        .foregroundStyle(Palette.muted)
+                    } else {
+                        Label(L10n.tr("Odesílá se"), systemImage: "clock").foregroundStyle(Palette.muted)
+                    }
+                }
+            }
+            .font(.footnote.weight(.semibold))
+            .lineLimit(1)
+        }
+        .padding(.vertical, 12)
+        .overlay(alignment: .top) { if !first { Rectangle().fill(Palette.hairline).frame(height: 1) } }
     }
 
     /// "4 × 80 kg": the work sets and their top weight.
@@ -1545,7 +1632,7 @@ struct TrainingModeView: View {
     private func finish(at end: Date = Date()) async {
         restEnd = nil
         // The start and end in the sheet: opened again, the workout shows its
-        // summary (Ohodnotit, Pokračovat v tréninku) and can go on from its start.
+        // summary (the rating, Pokračovat v tréninku) and can go on from its start.
         if var next = day {
             if next.startedAt == nil, let start = live.start { next.markStarted(start) }
             next.markFinished(end)
@@ -1556,25 +1643,32 @@ struct TrainingModeView: View {
             totals = (live.minutes(at: end), live.kcal, live.avgHeartRate, live.maxHeartRate, saved, live.zoneMinutes(lows: zoneLows))
             live.reset()
         }
-        // The summary comes first, with Ohodnotit and Zahodit trénink.
+        // The summary comes first, with the sending, the rating and Zahodit trénink.
         finishedSession = true
         if !model.demo, let day {
             saving = true
+            sendRows = nil
+            closeReady = false
+            sendStarted = Date()
             defer { saving = false }
             do {
                 try await model.saveGym(day, date: date)
                 error = nil
+                // Saved: Zavřít is free, the sending below goes on after it too.
+                closeReady = true
             } catch {
                 self.error = L10n.f("Trénink se nepodařilo uložit: %@", error.localizedDescription)
                 return
             }
+            // To Intervals.icu and Google Health as chosen in Zdroje dat (Aurin posílá),
+            // at once and beside the reloads; Apple Health has the live workout already.
+            let minutes = totals.map { max(1, $0.minutes) }
+            let model = model, date = date, appleSaved = totals?.saved == true
+            let start = minutes.map { end.addingTimeInterval(-Double($0) * 60) }
+            async let shared = model.shareGym(day, date: date, start: start, minutes: minutes, appleSaved: appleSaved)
             await model.refreshTraining()
             await model.loadMuscles()
-            // To Intervals.icu and Google Health as chosen in Zdroje dat (Aurin posílá);
-            // Apple Health has the live workout already.
-            let minutes = totals.map { max(1, $0.minutes) }
-            await model.shareGym(day, date: date, start: minutes.map { end.addingTimeInterval(-Double($0) * 60) }, minutes: minutes,
-                                 appleSaved: totals?.saved == true)
+            sendRows = await shared
         }
     }
 
