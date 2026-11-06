@@ -5,7 +5,7 @@ import { createD1 } from "./helpers/d1.mjs";
 import { userEnv } from "../src/tenancy.js";
 import { saveAppleHealth } from "../src/apple-health.js";
 import { localToday } from "../src/user-time.js";
-import { accountZones, readOnlyD1, ruleZ, HRV_RULES } from "../scripts/readiness-zones.mjs";
+import { accountZones, readOnlyD1, rescore, yellowCause, RULES } from "../scripts/readiness-zones.mjs";
 
 const shift = (day, days) => new Date(Date.parse(day + "T12:00:00Z") + days * 864e5).toISOString().slice(0, 10);
 
@@ -25,24 +25,31 @@ test("the staging measurement counts each day's zone from stored Apple days and 
   assert.equal(zones.days, 30);
   assert.equal(zones.green + zones.yellow + zones.red + zones.none, 30);
   assert.ok(zones.green + zones.yellow + zones.red > 20, JSON.stringify(zones));
-  // Every candidate HRV rule scores the same days; one that only softens a low morning never takes a green day.
-  for (const name of Object.keys(HRV_RULES)) assert.equal(all[name].green + all[name].yellow + all[name].red, zones.green + zones.yellow + zones.red, name);
-  for (const name of ["avg3low", "bandlow", "noDrop"]) assert.ok(all[name].green >= zones.green && all[name].red <= zones.red, name);
+  // Every rule scores the same days, rescoring matches readinessFor, a rule
+  // that only gives points back never takes a green day, and each yellow day has one cause.
+  for (const name of Object.keys(RULES)) assert.equal(all[name].green + all[name].yellow + all[name].red, zones.green + zones.yellow + zones.red, name);
+  assert.equal(all.causes.mismatch, 0, JSON.stringify(all.causes));
+  for (const name of ["hrvBand", "allBand", "allFree"]) assert.ok(all[name].green >= zones.green && all[name].red <= zones.red, name);
+  const c = all.causes;
+  assert.equal(c.hrv + c.restingHR + c.sleep + c.shortNight + c.breathingOrTemp + c.none, zones.yellow, JSON.stringify(c));
 });
 
-test("the candidate HRV rules: an average of the last mornings, a ±0.5 SD dead band", () => {
-  const mean = Math.log(50), sd = 0.1, at = z => mean + z * sd;
-  assert.equal(ruleZ(HRV_RULES.now, -0.8, mean, sd, [at(1)]), -0.8);
-  assert.ok(Math.abs(ruleZ(HRV_RULES.avg3, -0.9, mean, sd, [at(0.3), at(0), at(-2)]) - -0.2) < 1e-9);
-  assert.ok(Math.abs(ruleZ(HRV_RULES.band, -0.4, mean, sd, [])) < 1e-9);
-  assert.ok(Math.abs(ruleZ(HRV_RULES.band, -1.2, mean, sd, []) - -0.7) < 1e-9);
-  // A symmetric band also takes from a good morning; "low" keeps it.
-  assert.ok(Math.abs(ruleZ(HRV_RULES.band, 1, mean, sd, []) - 0.5) < 1e-9);
-  assert.equal(ruleZ(HRV_RULES.bandlow, 1, mean, sd, []), 1);
-  assert.ok(Math.abs(ruleZ(HRV_RULES.avg3low, -1, mean, sd, [at(0), at(-2)]) - -1) < 1e-9);
-  assert.equal(ruleZ(HRV_RULES.noDrop, -2, mean, sd, []), 0);
-  // Too few mornings before: the average is over the ones there are.
-  assert.ok(Math.abs(ruleZ(HRV_RULES.avg7, -1, mean, sd, [at(0)]) - -0.5) < 1e-9);
+test("a day scored again from its parts, and why it is yellow", () => {
+  const day = (hrv, rhr, sleep, extra = {}) => ({ score: 0, flags: [], components: { hrv: { score: hrv }, restingHR: { score: rhr }, sleep: { score: sleep } }, ...extra });
+  assert.equal(rescore(day(70, 70, 70)), 70);
+  assert.equal(rescore(day(62, 70, 70)), 66);
+  assert.equal(rescore(day(62, 70, 70), RULES.hrvBand), 70);
+  assert.equal(rescore(day(40, 70, 70), RULES.hrvBand), 60);
+  assert.equal(rescore(day(70, 70, 50), RULES.sleepFree), 70);
+  // Without a night the parts left are weighted up; a short night caps at 66.
+  assert.equal(rescore({ score: 0, flags: [], components: { hrv: { score: 80 }, restingHR: { score: 50 } } }), 70);
+  assert.equal(rescore(day(90, 90, 90, { flags: ["short_night"] })), 66);
+  assert.equal(rescore(day(70, 70, 70, { components: { hrv: { score: 70 }, restingHR: { score: 70 }, sleep: { score: 70 }, respiration: { elevated: true } } })), 60);
+  assert.equal(yellowCause(day(62, 70, 70)), "hrv");
+  assert.equal(yellowCause(day(66, 70, 54)), "sleep");
+  assert.equal(yellowCause(day(90, 90, 90, { flags: ["short_night"] })), "shortNight");
+  assert.equal(yellowCause(day(70, 70, 70, { components: { hrv: { score: 70 }, restingHR: { score: 70 }, sleep: { score: 70 }, wristTemp: { points: -5 } } })), "breathingOrTemp");
+  assert.equal(rescore({ score: null }), null);
 });
 
 test("the staging measurement never writes", async () => {
