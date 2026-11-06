@@ -208,7 +208,7 @@ private struct WelcomeReadiness: View {
                 HStack {
                     Text("Připravenost").font(Typo.body).foregroundStyle(Palette.muted)
                     Spacer()
-                    Pill(text: L10n.tr("vysoká"))
+                    Pill(text: L10n.tr("v obvyklém rozmezí"))
                         .scaleEffect(play.shown ? 1 : 0.6).opacity(play.shown ? 1 : 0)
                         .animation(.spring(response: 0.4, dampingFraction: 0.55).delay(1.2), value: play.shown)
                 }

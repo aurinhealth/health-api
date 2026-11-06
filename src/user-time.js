@@ -69,6 +69,15 @@ export function localDateTime(value) {
   const d = new Date(s);
   return Number.isNaN(d.getTime()) ? s.slice(0, 16) : wallClock(d).slice(0, 16);
 }
+// Regenerace's half day of a time (Today audit 15: an estimate, never a clock
+// time or hours): "2026-10-16 afternoon"; after 22:00 the next morning.
+export function halfDay(value) {
+  const at = Date.parse(value);
+  const late = Number(localDateTime(value).slice(11, 13)) >= 22;
+  const [date, time] = localDateTime(new Date(late ? at + 6 * 3600000 : at).toISOString()).split("T");
+  const hour = Number(time.slice(0, 2));
+  return date + " " + (hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening");
+}
 // The user's day ("YYYY-MM-DD") of a time, a date stays as it is.
 export function localDate(value) {
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : wallClock(value).slice(0, 10);

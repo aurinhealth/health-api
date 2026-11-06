@@ -79,7 +79,7 @@ private struct AlarmDay: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(title)
-                .font(.system(size: 12, weight: .medium))
+                .watchFont(12, .medium)
                 .foregroundStyle(W.secondary)
             AlarmDial(bed: bedMinutes, wake: Int(minutes), on: set) {
                 Text(set ? W.clock(minutes: minutes) : "–")
@@ -87,7 +87,7 @@ private struct AlarmDay: View {
                     .foregroundStyle(W.ink)
                     .contentTransition(.numericText())
                 Text(set ? W.tr("budík", "alarm") : W.tr("Bez budíku", "No alarm"))
-                    .font(.system(size: set ? 10 : 12))
+                    .watchFont(12)
                     .foregroundStyle(W.muted)
             }
             .focusable()
@@ -129,7 +129,7 @@ private struct AlarmDay: View {
             ProgressView().frame(height: 28)
         } else if case .failed(let scope) = result {
             Text(W.tr("Neuloženo. iPhone musí být poblíž.", "Not saved. Your iPhone needs to be nearby."))
-                .font(.system(size: 12, weight: .medium))
+                .watchFont(12, .medium)
                 .foregroundStyle(W.amber)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -137,7 +137,7 @@ private struct AlarmDay: View {
             choice(W.tr("Zkusit znovu", "Try again"), scope: scope, primary: true)
         } else if case .saved(let text) = result {
             Label(text, systemImage: "checkmark")
-                .font(.system(size: 12, weight: .semibold))
+                .watchFont(12, .semibold)
                 .foregroundStyle(W.green)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -151,11 +151,11 @@ private struct AlarmDay: View {
             }
         } else if set {
             Text(W.duration(minutes: Double(sleepMinutes)) + W.tr(" spánku", " of sleep"))
-                .font(.system(size: 12))
+                .watchFont(12)
                 .foregroundStyle(W.muted)
         } else {
             Text(W.tr("Nastav otočením korunky", "Turn the crown to set"))
-                .font(.system(size: 12))
+                .watchFont(12)
                 .foregroundStyle(W.muted)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -180,7 +180,7 @@ private struct AlarmDay: View {
     private func choice(_ label: String, scope: String, primary: Bool) -> some View {
         Button { save(scope) } label: {
             Text(label)
-                .font(.system(size: 12, weight: .semibold))
+                .watchFont(12, .semibold)
                 .foregroundStyle(primary ? .black : W.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -265,7 +265,7 @@ private struct AlarmDial<Content: View>: View {
         let radians = angle(minutes) * .pi / 180
         let r = (size - 18) / 2
         return Image(systemName: symbol)
-            .font(.system(size: 9, weight: .bold))
+            .watchFont(12, .bold)
             .foregroundStyle(.black)
             .frame(width: 16, height: 16)
             .background(color, in: Circle())
@@ -341,7 +341,7 @@ struct AlarmRinging: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            Image(systemName: "sun.max.fill").font(.system(size: 22)).foregroundStyle(W.amber)
+            Image(systemName: "sun.max.fill").watchFont(22).foregroundStyle(W.amber)
             Text(W.tr("Dobré ráno", "Good morning")).font(W.serif(22)).foregroundStyle(W.ink)
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 Text(context.date, format: .dateTime.hour().minute())
@@ -358,7 +358,7 @@ struct AlarmRinging: View {
                 }
                 .mainButton()
             }
-            .font(.system(size: 14, weight: .semibold))
+            .watchFont(14, .semibold)
         }
         .containerBackground(W.glow(W.Glow.strain), for: .navigation)
     }

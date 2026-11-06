@@ -29,14 +29,14 @@ final class SiriShortcutsTests: XCTestCase {
 
     func testReadinessSaysTheNumberTheWordAndTheAdvice() {
         XCTAssertEqual(SiriAnswer.readiness(score: 78, zone: "green", advice: " Dnes klidně tvrdý trénink. "),
-                       "Připravenost je dnes 78, vysoká. Dnes klidně tvrdý trénink.")
+                       "Připravenost je dnes 78, v obvyklém rozmezí. Dnes klidně tvrdý trénink.")
         XCTAssertEqual(SiriAnswer.readiness(score: 41, zone: nil, advice: nil), "Připravenost je dnes 41.")
         XCTAssertTrue(SiriAnswer.readiness(score: nil, zone: "red", advice: "x").hasPrefix("Dnešní připravenost zatím není."))
     }
 
     func testReadinessInEnglish() {
         L10n.setLanguage("en")
-        XCTAssertEqual(SiriAnswer.readiness(score: 78, zone: "yellow", advice: nil), "Your readiness today is 78, moderate.")
+        XCTAssertEqual(SiriAnswer.readiness(score: 78, zone: "yellow", advice: nil), "Your readiness today is 78, below your usual range.")
     }
 
     func testWeightSaysWhetherItWentOut() {

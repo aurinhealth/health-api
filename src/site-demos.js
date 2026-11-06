@@ -149,7 +149,7 @@ const range = (pos, color, start) => `<i class="rb"><b></b><u style="--x:${pos}%
 const HIST = [65, 69, 60, 82, 67, 71, 62, 53, 75, 80, 63, 54, 77, 78];
 const readyParts = `<div class="dm pad">
 <div class="sl">Readiness</div>
-<div class="row base"><span class="num big"${n(0, 78, 200, 1300, 'i')}>78</span><span class="pill grn"${at('1300')}>high</span></div>
+<div class="row base"><span class="num big"${n(0, 78, 200, 1300, 'i')}>78</span><span class="pill grn"${at('1300')}>within your usual range</span></div>
 <div class="sl">What makes up today’s score</div>
 ${[['Sleep', '7:12', 'your normal 7:20–8:10', 'worse than usual', 'rust', 12, '−4 readiness points'], ['Resting heart rate', '48 bpm', 'your normal 50–54 bpm', 'better than usual', 'green', 20, '+3 readiness points'], ['HRV', '64 ms', 'your normal 55–61 ms', 'better than usual', 'green', 83, '+9 readiness points']]
     .map(([k, v, nm, dir, c, x, pt], i) => `<div class="pr3"><div class="row sp base"><b>${k}</b><span class="num md">${v}</span></div><div class="row sp"><span class="mut s">${nm}</span><span class="s" style="color:var(--${c})">${dir}</span></div>${range(x, c, 500 + i * 250)}<span class="pts" style="color:var(--${c === 'rust' ? 'rust-ink' : c})">${pt}</span></div>`).join('')}
@@ -549,7 +549,7 @@ const each = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, merge
 // the sample day that rise into place and move once the part is on screen, as they do before the sign-in.
 const rise = ms => at(String(ms));
 const actReadiness = `<div class="dm wc">
-<div class="wcard"${rise(0)}><div class="row sp"><span class="mut">Readiness</span><span class="pill grn pop"${at('1200')}>high</span></div>
+<div class="wcard"${rise(0)}><div class="row sp"><span class="mut">Readiness</span><span class="pill grn pop"${at('1200')}>within your usual range</span></div>
 <div class="row w-wr"><span class="num"${n(0, 78, 200, 1300, 'i')}>78</span><p class="sent"${at('1400')}>Good night, third day in a row. <em class="grn">Go all in on strength today.</em></p></div></div>
 <div class="w-two"><div class="wcard w-sm"${rise(250)}><span class="mut w-s2">Sleep</span><span class="num w-v">7:12</span>${range(16, 'amber-bar', 700)}<span class="w-nt2 amb2">89% of need</span></div>
 <div class="wcard w-sm"${rise(400)}><span class="mut w-s2">HRV</span><span class="num w-v">64<small>ms</small></span>${range(83, 'green', 700)}<span class="w-nt2 grn">above normal</span></div></div>
@@ -614,8 +614,9 @@ const wRing = (size, r, width, frac, c, inner) => `<span class="aw-ring" style="
 const wTop = (left, time, right) => `<div class="aw-top"><span>${left}</span><span class="aw-time">${time}</span><span>${right}</span></div>`;
 const wBtn = (icon, c) => `<span class="aw-ib" style="color:${c}">${ic(icon)}</span>`;
 const watchHome = `<div class="aw-s aw-home" style="--gw:#163A2E">${wTop(wBtn('alarm', WA.ink), '7:12', wBtn('chat', WA.ink))}
-<div class="aw-hero"><span class="aw-n">78</span><span class="aw-side"><span class="aw-k">Readiness</span><span class="aw-pill" style="color:${WA.green}">high</span></span></div>
-<div class="aw-g">${[['Sleep', WA.indigo, '7:12', '', 28, WA.amber, '89%'], ['Strain', WA.amber, '8.4', '', 14, WA.neutral, 'of 11–14'], ['HRV', WA.green, '64', 'ms', 76, WA.green, 'high']].map(([k, kc, v, u, pos, c, note]) => `<div><span class="aw-k" style="color:${kc}">${k}</span><span class="aw-n aw-v">${v}${u ? `<small>${u}</small>` : ''}</span>${wRange(pos, c)}<b style="color:${c}">${note}</b></div>`).join('')}</div>
+<div class="aw-hero"><span class="aw-n">78</span><span class="aw-side"><span class="aw-k">Readiness</span></span></div>
+<div class="aw-vd" style="color:${WA.green}">Ready for a hard day</div>
+<div class="aw-g">${[['Sleep', WA.indigo, '7:12', '', 28, WA.amber, '89%'], ['Strain', WA.amber, '8.4', '', 14, WA.neutral, 'of 11–14'], ['HRV', WA.green, '64', 'ms', 76, WA.green, 'above']].map(([k, kc, v, u, pos, c, note]) => `<div><span class="aw-k" style="color:${kc}">${k}</span><span class="aw-n aw-v">${v}${u ? `<small>${u}</small>` : ''}</span>${wRange(pos, c)}<b style="color:${c}">${note}</b></div>`).join('')}</div>
 <div class="aw-next"><span style="color:${WA.amber}">${ic('gym')}</span>Strength, full body · 45′ at 5:30 PM${ic('chev', 'aw-cv')}</div></div>`;
 const watchGym = `<div class="aw-s" style="--gw:#3A2A17">${wTop(wBtn('pause', WA.ink), '5:41', `<span class="aw-ib">${ic('menu')}</span>`)}
 <div class="aw-ex"><b>Squat</b></div>
@@ -652,7 +653,7 @@ ${[['run', '5 km', '24 min', WA.red], ['bike', '20 km', '33 min', WA.amber], ['r
 <div class="aw-go">${ic('play')}Open in Workout</div></div></div>`;
 
 export const WATCH = [
-  ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness, sleep, strain and HRV, as on Today, and what’s next today in one line.', watchHome],
+  ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness with what the day calls for, sleep, strain and HRV, as on Today, and what’s next today in one line. Wrist down, the numbers hide.', watchHome],
   ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown, and the rest counts down and taps you when it’s time. Leave the iPhone in your locker: the watch keeps your sets, even without signal, and hands them over later. Nothing planned? With your iPhone nearby, build one for your rested muscles from the watch.', watchGym],
   ['glow-training', 'Race day, one tap.', 'A duathlon, aquabike, aquathlon or triathlon from your plan shows as one card, its legs in race order, and starts as one multisport workout: the watch times each leg and each change. Tap it for each leg’s target.', watchRace],
   ['glow-health', 'Water in one tap.', 'What’s left to eat today, the macros, and +250 ml for a glass of water. Your iPhone gets it at once.', watchFood],
@@ -1124,7 +1125,7 @@ html:not(.js) .stage1{display:none}
 .aw-k{color:#9AA39F;font-size:11px}
 .aw-hero{display:flex;align-items:flex-end;gap:7px;margin-top:-2px}.aw-hero .aw-n{line-height:.95}
 .aw-side{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin-bottom:7px}.aw-side .aw-k{color:#D9D6D0;font-size:12px}
-.aw-pill{padding:2px 8px;border-radius:99px;background:rgba(143,230,196,.16);font-size:11px;font-weight:600}
+.aw-vd{margin-top:3px;font-size:14px;font-weight:600}
 .aw-g{display:flex;margin-top:6px;border-radius:14px;background:rgba(255,255,255,.08)}.aw-g>div{flex:1;display:flex;flex-direction:column;padding:6px 6px 6px 7px}.aw-g>div+div{border-left:1px solid rgba(255,255,255,.1)}
 .aw-v{font-family:ui-rounded,"SF Pro Rounded",-apple-system,Inter,sans-serif;font-weight:600;font-variant-numeric:tabular-nums;font-size:17px;line-height:1.1}.aw-v small{font:10px -apple-system,Inter,sans-serif;color:#9AA39F;margin-left:2px}.aw-g b{font-size:10px;white-space:nowrap}
 .aw-rb{position:relative;display:block;height:4px;margin:4px 0 3px;border-radius:2px;background:#2A2C2E}.aw-rb:before{content:"";position:absolute;left:33%;width:34%;top:0;bottom:0;background:rgba(255,255,255,.18)}

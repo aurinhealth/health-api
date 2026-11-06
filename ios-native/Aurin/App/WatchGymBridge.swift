@@ -161,9 +161,13 @@ extension WatchBridge {
         return try? await api.gym(date: date)
     }
 
-    private func save(_ day: GymDay, date: String) async {
+    /// `kept`: the day is in the copy here and in Training mode; the watch
+    /// hears back then, not after the server's save (seconds, longer than the
+    /// watch waits for an answer before it goes on alone).
+    private func save(_ day: GymDay, date: String, kept: () -> Void = {}) async {
         gymDays[date] = day
         NotificationCenter.default.post(name: .watchGym, object: GymChange(day: day, date: date))
+        kept()
         if let model = AppModel.live {
             try? await model.saveGym(day, date: date)
         } else {
@@ -173,31 +177,30 @@ extension WatchBridge {
     }
 
     /// A set from the watch into the day's sheet.
-    func applyGym(_ done: WatchGym.Done) async {
-        guard var day = await gymDay(done.date) else { return }
+    func applyGym(_ done: WatchGym.Done, kept: () -> Void = {}) async {
+        guard var day = await gymDay(done.date) else { kept(); return }
         // The start in the sheet, as a set ticked in Training mode marks it: an
         // iPhone app closed by iOS meanwhile goes on from it, not from a new Start.
         day.apply(done, start: LiveWorkout.shared.start ?? Date())
-        await save(day, date: done.date)
+        await save(day, date: done.date, kept: kept)
     }
 
     /// How a set went, tapped on the watch during the rest.
-    func applyGym(_ rated: WatchGym.Rated) async {
-        guard var day = await gymDay(rated.date) else { return }
+    func applyGym(_ rated: WatchGym.Rated, kept: () -> Void = {}) async {
+        guard var day = await gymDay(rated.date) else { kept(); return }
         day.setIntensity(row: rated.row, rated.letter)
-        await save(day, date: rated.date)
+        await save(day, date: rated.date, kept: kept)
     }
 
-    /// A change from the watch's menu; the new plan goes back to the watch.
-    func applyGym(_ change: WatchGym.Change) async -> WatchGym? {
-        guard var day = await gymDay(change.date) else { return nil }
+    /// A change from the watch's menu; the new plan goes back to the watch (`answer`).
+    func applyGym(_ change: WatchGym.Change, answer: (WatchGym?) -> Void) async {
+        guard var day = await gymDay(change.date) else { answer(nil); return }
         guard change.kind == .parts || day.exercises.indices.contains(change.exercise) || (change.kind == .addExercise && day.exercises.isEmpty)
-        else { return watchGym(day, date: change.date) }
+        else { answer(watchGym(day, date: change.date)); return }
         // For "Vyměněno dnes" in the workout's summary on the phone.
         if change.kind == .swap, let option = change.option { GymSwaps.record(change.date, from: day.exercises[change.exercise].name, to: option.name) }
         day.apply(change)
-        await save(day, date: change.date)
-        return watchGym(day, date: change.date)
+        await save(day, date: change.date) { answer(watchGym(day, date: change.date)) }
     }
 
     /// No gym planned today and a start on the watch (mockup "jen hodinky" 6):
@@ -274,12 +277,11 @@ extension WatchBridge {
     /// keeping sets ticked here meanwhile, Training mode shows it and the
     /// newest copy waiting to be sent is this one. The plan goes back to the
     /// watch, so it has the sets ticked here too.
-    func applyGym(sheet: WatchGym.Sheet) async -> WatchGym {
+    func applyGym(sheet: WatchGym.Sheet, answer: (WatchGym) -> Void) async {
         let mine = await gymDay(sheet.date)
         var day = mine ?? GymDay(date: sheet.date, values: [], cancelled: nil)
         day.values = GymDay.merged(sheet.values, keepingDoneFrom: mine?.values ?? [])
-        await save(day, date: sheet.date)
-        return watchGym(day, date: sheet.date)
+        await save(day, date: sheet.date) { answer(watchGym(day, date: sheet.date)) }
     }
 
     /// Exercises to swap in (similar to the one given) or to add (matching the

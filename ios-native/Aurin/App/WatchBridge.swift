@@ -292,6 +292,7 @@ final class WatchBridge: NSObject {
             bedtime: tonight?.bedtime.map(clock), inBed: tonight?.inBed, sleep: tonight?.sleep ?? tonight?.need) : nil
         return WatchSnapshot(date: today.date, updated: Date(), language: L10n.language,
                              readiness: today.readiness.score, zone: today.readiness.zone, learningDays: today.readiness.learningDays,
+                             verdict: today.readiness.verdict,
                              headline: today.summary?.headline, summary: today.summary?.text,
                              sleep: sleep, restingHR: restingHR, hrv: hrv, strain: strain, steps: today.steps.today,
                              week: week, food: food, alarm: alarm, imperial: Units.imperial, drinks: watchDrinks())
@@ -432,13 +433,15 @@ extension WatchBridge: WCSessionDelegate {
                 return
             }
             if let sheet {
-                let gym = await applyGym(sheet: sheet)
-                replyHandler(gym.encoded().map { [WatchGym.replyKey: $0, "ok": true] } ?? ["ok": true])
+                await applyGym(sheet: sheet) { gym in
+                    replyHandler(gym.encoded().map { [WatchGym.replyKey: $0, "ok": true] } ?? ["ok": true])
+                }
                 return
             }
             if let change {
-                let gym = await applyGym(change)
-                replyHandler(gym?.encoded().map { [WatchGym.replyKey: $0] } ?? [:])
+                await applyGym(change) { gym in
+                    replyHandler(gym?.encoded().map { [WatchGym.replyKey: $0] } ?? [:])
+                }
                 return
             }
             if let options {
@@ -451,14 +454,13 @@ extension WatchBridge: WCSessionDelegate {
                 replyHandler(gym?.encoded().map { [WatchGym.replyKey: $0] } ?? [:])
                 return
             }
+            // Answered once the set is in the day here, before the server's save.
             if let done {
-                await applyGym(done)
-                replyHandler(["ok": true])
+                await applyGym(done) { replyHandler(["ok": true]) }
                 return
             }
             if let rated {
-                await applyGym(rated)
-                replyHandler(["ok": true])
+                await applyGym(rated) { replyHandler(["ok": true]) }
                 return
             }
             restore()

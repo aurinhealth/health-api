@@ -19,7 +19,7 @@ struct DetailPage<RingContent: View>: View {
                     .minimumScaleFactor(0.7)
                     .padding(.top, 4)
                 Text(note)
-                    .font(.system(size: 12))
+                    .watchFont(12)
                     .foregroundStyle(W.secondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -81,20 +81,20 @@ struct MetricDetail: View {
 
     private var title: String {
         guard let value = m?.value, let low = m?.low, let high = m?.high else { return metric.name }
-        if value > high { return metric == .restingHR ? W.tr("Vyšší než obvykle", "Higher than usual") : W.tr("Nad normálem", "Above normal") }
-        if value < low { return metric == .restingHR ? W.tr("Nižší než obvykle", "Lower than usual") : W.tr("Pod normálem", "Below normal") }
-        return W.tr("Normální", "Normal")
+        if value > high { return metric == .restingHR ? W.tr("Vyšší než obvykle", "Higher than usual") : W.tr("Nad obvyklým rozmezím", "Above your usual range") }
+        if value < low { return metric == .restingHR ? W.tr("Nižší než obvykle", "Lower than usual") : W.tr("Pod obvyklým rozmezím", "Below your usual range") }
+        return W.tr("V obvyklém rozmezí", "In your usual range")
     }
 
-    /// "Your normal 63–99", or by how much today is outside it (watch audit C2).
+    /// "Usual range 63–99", or by how much today is outside it (watch audit C2).
     private var note: String {
-        guard let low = m?.low, let high = m?.high else { return W.tr("Normál se ještě počítá.", "Your normal is still being worked out.") }
+        guard let low = m?.low, let high = m?.high else { return W.tr("Obvyklé rozmezí se ještě počítá.", "Your usual range is still being worked out.") }
         if let value = m?.value?.rounded(), value > high || value < low {
             let amount = W.number(value > high ? value - high : low - value) + " " + metric.unit
-            return value > high ? W.tr("O \(amount) nad tvým normálem", "\(amount) above your normal")
-                                : W.tr("O \(amount) pod tvým normálem", "\(amount) below your normal")
+            return value > high ? W.tr("O \(amount) nad obvyklým rozmezím", "\(amount) above your usual range")
+                                : W.tr("O \(amount) pod obvyklým rozmezím", "\(amount) below your usual range")
         }
-        return W.tr("Tvůj normál ", "Your normal ") + W.number(low) + "–" + W.number(high)
+        return W.tr("Obvyklé rozmezí ", "Usual range ") + W.number(low) + "–" + W.number(high)
     }
 
     private var tiles: [Tiles.Item] {
@@ -282,6 +282,6 @@ struct WhyDetail: View {
         guard let value = m?.value, let low = m?.low, let high = m?.high else { return nil }
         if value > high { return W.tr(czechHigh, "high") }
         if value < low { return W.tr(czechLow, "low") }
-        return W.tr("normál", "normal")
+        return W.tr("v rozmezí", "in range")
     }
 }

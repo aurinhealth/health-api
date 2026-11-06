@@ -31,37 +31,37 @@ test("Petr's morning: a 68 after 5:54 and three gym days gives the legs a break"
 test("one reason keeps green but no all-out", () => {
   const m = en({ score: 80, zone: "green", ...night, date, context: { activities: [] } });
   assert.equal(m.zone, "green");
-  assert.equal(m.alert.title, "Readiness 80 · Good to train");
+  assert.equal(m.alert.title, "Readiness 80 · Keep it steady today");
   assert.equal(m.alert.body, "A short night. Nothing planned. Train if you like, just no all-out efforts.");
 });
 
 test("three reasons on a yellow day make it a rest day", () => {
   const m = en({ score: 55, zone: "yellow", ...night, date, planned: [{ title: "Tempo 3×10 min", sport: "ride" }], context: { activities: threeGymDays, lowDays: 2, alcohol: true } });
   assert.equal(m.zone, "red");
-  assert.equal(m.alert.title, "Readiness 55 · Rest today");
+  assert.equal(m.alert.title, "Readiness 55 · Take it easy today");
   assert.equal(m.alert.body, "3 gym days in a row and a short night. Skip today's Tempo 3×10 min. A walk or easy mobility at most.");
 });
 
 test("a fresh green day before a hard session keeps today easy", () => {
   const fresh = { ...night, sleep: { minutes: 470 } };
   const m = en({ score: 82, zone: "green", ...fresh, date, tomorrow: [{ title: "Threshold 4×8 min", sport: "ride" }], context: { activities: [] } });
-  assert.equal(m.alert.title, "Readiness 82 · Keep today easy");
+  assert.equal(m.alert.title, "Readiness 82 · Take it easy today");
   assert.equal(m.alert.body, "Tomorrow: Threshold 4×8 min. Easy Z2 today so you're fresh for it.");
   // A hard session today too: today's plan goes first.
-  assert.equal(en({ score: 82, zone: "green", ...fresh, date, planned: [{ title: "VO2 5×4 min", sport: "ride" }], tomorrow: [{ title: "Threshold 4×8 min", sport: "ride" }], context: { activities: [] } }).alert.title, "Readiness 82 · Go hard today");
+  assert.equal(en({ score: 82, zone: "green", ...fresh, date, planned: [{ title: "VO2 5×4 min", sport: "ride" }], tomorrow: [{ title: "Threshold 4×8 min", sport: "ride" }], context: { activities: [] } }).alert.title, "Readiness 82 · Good day for a hard workout");
   // An easy ride tomorrow changes nothing.
-  assert.equal(en({ score: 82, zone: "green", ...fresh, date, tomorrow: [{ title: "Endurance 90 min", sport: "ride" }], context: { activities: [] } }).alert.title, "Readiness 82 · Go hard today");
+  assert.equal(en({ score: 82, zone: "green", ...fresh, date, tomorrow: [{ title: "Endurance 90 min", sport: "ride" }], context: { activities: [] } }).alert.title, "Readiness 82 · Good day for a hard workout");
 });
 
 test("an injury the coach knows about is remembered", () => {
   assert.equal(injuryNote(["Likes morning rides", "Knee pain since Sunday"]), "Knee pain since Sunday");
   assert.equal(injuryNote(["Had a cold last week"]), null);
   const m = en({ score: 84, zone: "green", ...night, sleep: { minutes: 470 }, date, context: { activities: [], memories: ["Knee pain since Sunday"] } });
-  assert.equal(m.alert.title, "Readiness 84 · Train with care");
+  assert.equal(m.alert.title, "Readiness 84 · Keep it steady today");
   // The words stay off the lock screen, also in the hidden part; Today's card has them.
-  assert.equal(m.alert.body, "Nothing planned. A good day for a harder session.");
+  assert.equal(m.alert.body, "Nothing planned. Train if you like, just no all-out efforts.");
   assert.doesNotMatch(JSON.stringify(m.alert), /Knee/);
-  assert.equal(m.changed.recommendation, "Nothing planned. A good day for a harder session. Keep in mind: Knee pain since Sunday.");
+  assert.equal(m.changed.recommendation, "Nothing planned. Train if you like, just no all-out efforts. Keep in mind: Knee pain since Sunday.");
   assert.equal(m.changed.remember, "Keep in mind: Knee pain since Sunday.");
 });
 
@@ -71,7 +71,7 @@ test("status and illness still win over everything", () => {
 });
 
 test("without context the advice is the score's alone", () => {
-  assert.equal(en({ score: 68, zone: "green", ...night }).alert.title, "Readiness 68 · Go hard today");
+  assert.equal(en({ score: 68, zone: "green", ...night }).alert.title, "Readiness 68 · Good day for a hard workout");
   assert.deepEqual(adviceSignals({ date, sleepMinutes: 470, context: {} }), []);
   assert.equal(isHardSession({ title: "Upper body", sport: "strength" }), false);
   assert.equal(isHardSession({ title: "Threshold 4×8 min", sport: "ride" }), true);
