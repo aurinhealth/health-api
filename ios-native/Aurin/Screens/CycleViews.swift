@@ -567,6 +567,15 @@ struct CycleCalendarView: View {
             }
             .padding(.top, 14)
 
+            // The ovulation day and the phases are counted from the calendar
+            // (src/cycle-model.js): an estimate, never contraception.
+            if let settings = model.cycle?.settings, !settings.hormonal, settings.stage == "regular" {
+                Text("Fáze a ovulace jsou odhad z kalendáře. Není to antikoncepce.")
+                    .font(Typo.caption).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 8)
+            }
+
             if let pill = model.cycle?.state?.pill, !pill.pause, pill.number != nil, let date = model.cycle?.state?.date {
                 PillCard(pill: pill, date: date).padding(.top, 12)
             }
@@ -659,6 +668,8 @@ struct CycleSettingsView: View {
     @State private var choosingLength = false
     @State private var choosingPack = false
     @State private var askingConsent = false
+    @State private var askingTrackingConsent = false
+    @State private var trackingAccepted = false
 
     private var settings: CycleSettings? { model.cycle?.settings }
     private var enabled: Bool { settings?.enabled == true }
@@ -666,7 +677,10 @@ struct CycleSettingsView: View {
     var body: some View {
         SettingsPage(title: "Cyklus") {
             SettingsGroup {
-                SettingsToggle(title: "Sledovat cyklus", isOn: Binding(get: { enabled }, set: { turn($0) }), disabled: saving)
+                // On asks for its own consent first (GDPR art. 9); off needs none.
+                SettingsToggle(title: "Sledovat cyklus", isOn: Binding(get: { enabled }, set: { on in
+                    if on { askingTrackingConsent = true } else { turn(false) }
+                }), disabled: saving)
             }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             if enabled, let settings {
@@ -711,6 +725,7 @@ struct CycleSettingsView: View {
                         SettingsDivider()
                     }
                     SettingsToggle(title: "Upravit trénink podle cyklu",
+                                   subtitle: "Na dny menstruace s křečemi nebo únavou zlehčí náročný trénink",
                                    isOn: Binding(get: { settings.adaptTraining }, set: { save(["adaptTraining": .bool($0)]) }), disabled: saving)
                     SettingsDivider()
                     CoachCycleRow(isOn: settings.shareWithCoach == true, disabled: saving,
@@ -724,6 +739,12 @@ struct CycleSettingsView: View {
         }
         .sheet(isPresented: $choosingPack) {
             DateChoiceSheet(title: "První den balení", initial: settings?.packStart) { save(["packStart": .string($0)]) }
+        }
+        // Health's permission sheet comes once the consent sheet is gone.
+        .sheet(isPresented: $askingTrackingConsent, onDismiss: {
+            if trackingAccepted { trackingAccepted = false; turn(true) }
+        }) {
+            CycleTrackingConsentSheet { trackingAccepted = true }
         }
         .sheet(isPresented: $askingConsent) {
             CoachCycleConsentSheet(isOn: settings?.shareWithCoach == true) { save(["shareWithCoach": .bool(true)]) }
@@ -763,14 +784,15 @@ struct CycleSettingsView: View {
         .cardSurface(cornerRadius: 18)
     }
 
-    /// On: Health's permission sheet, then what Health knows fills the setup.
+    /// On (after its consent sheet): Health's permission sheet, then what
+    /// Health knows fills the setup.
     private func turn(_ on: Bool) {
         guard on else { save(["enabled": .bool(false)]); return }
         saving = true
         Task {
             await CycleHealth.requestAccess()
             let found = await CycleHealth.setup()
-            var changes: JSONObject = ["enabled": .bool(true)]
+            var changes: JSONObject = ["enabled": .bool(true), "consent": .bool(true)]
             if settings?.lastPeriod == nil, let last = found.lastPeriod { changes["lastPeriod"] = .string(last) }
             if settings?.cycleLength == nil, let length = found.cycleLength { changes["cycleLength"] = .number(Double(length)) }
             if (settings?.contraception ?? "none") == "none", let c = found.contraception { changes["contraception"] = .string(c) }
@@ -1097,7 +1119,7 @@ struct CoachCycleConsentSheet: View {
 
     var body: some View {
         ConsentSheet(title: "Kouč ví o cyklu",
-                     lead: "Kouč pak plánuje a vysvětluje trénink i podle toho, kde v cyklu jsi.",
+                     lead: "Kouč pak vysvětluje trénink s ohledem na cyklus a na dny s potížemi plánuje lehčeji.",
                      legal: "Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich předáním AI kouči. Kdykoli ho vypneš a kouč je přestane dostávat.",
                      isOn: isOn, accept: accept) {
             ConsentSection("Co tím získáš")
@@ -1107,6 +1129,30 @@ struct CoachCycleConsentSheet: View {
             ConsentSection("Co kouč uvidí")
             ConsentPoint("Kde v cyklu dnes jsi a co sis zapsala")
             ConsentPoint("Starší záznamy ani přesná data", included: false)
+        }
+    }
+}
+
+/// Settings → Cyklus → "Sledovat cyklus": what tracking does, what it keeps
+/// and its own explicit consent (GDPR art. 9), shown before it turns on, and
+/// at launch to whoever had it on before the sheet existed (RootView). The
+/// server records when (src/cycle-store.js enabledAt). Turned off, the data
+/// stays until the account is deleted (privacy policy), unused.
+struct CycleTrackingConsentSheet: View {
+    let accept: () -> Void
+
+    var body: some View {
+        ConsentSheet(title: "Sledovat cyklus",
+                     lead: "Aurin ukáže tvůj cyklus, porovná připravenost s tvým normálem v každé fázi a na dny s křečemi nebo únavou zlehčí náročný trénink.",
+                     legal: "Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich zpracováním v Aurinu. Kdykoli sledování vypneš a Aurin cyklus přestane číst i používat. Uložené záznamy zůstanou, dokud nesmažeš účet.",
+                     accept: accept) {
+            ConsentSection("Co Aurin uloží")
+            ConsentPoint("Menstruace, potíže, antikoncepci a prášky, které zapíšeš")
+            ConsentPoint("Z Apple Health menstruaci, ovulační testy a příznaky, když je povolíš")
+            ConsentSection("Co to není")
+            ConsentPoint("Antikoncepce: fáze a ovulace jsou jen odhad z kalendáře", included: false)
+            ConsentSection("Co uvidí AI kouč")
+            ConsentPoint("Nic, dokud nezapneš „Kouč ví o cyklu“", included: false)
         }
     }
 }

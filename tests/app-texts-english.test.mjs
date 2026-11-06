@@ -143,9 +143,9 @@ test("Training in English: phases, form, strain band and default titles", () => 
 test("Every form zone and phase has English text", () => en(() => {
   const zones = [30, 10, 0, -20, -40].map(formZone);
   assert.deepEqual(zones.map(z => z.key), ["transition", "fresh", "grey", "optimal", "risk"]);
-  assert.deepEqual(zones.map(z => z.label), ["rested", "fresh", "maintaining", "building", "high risk"]);
+  assert.deepEqual(zones.map(z => z.label), ["rested", "fresh", "maintaining", "building", "deep fatigue"]);
   for (const z of zones) assert.doesNotMatch(z.text, CZECH, z.text);
-  assert.match(zones[4].text, /overreaching/);
+  assert.match(zones[4].text, /easier days/);
   assert.deepEqual(eventPlan({ name: "A", date: "2026-10-12" }, DATE).phases.map(p => p.label), ["Base", "Build", "Taper"]);
 }));
 

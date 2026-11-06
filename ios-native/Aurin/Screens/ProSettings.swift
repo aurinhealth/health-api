@@ -154,7 +154,7 @@ struct ProPage: View {
         } else if !state.loaded, error == nil {
             ProgressView().tint(Night.ink).frame(maxWidth: .infinity)
         }
-        Link(destination: URL(string: "https://aurin.health/terms")!) {
+        Link(destination: L10n.legalURL("terms")) {
             Text("Podmínky a ceny").font(Typo.caption).foregroundStyle(Night.muted).underline()
         }
         .frame(maxWidth: .infinity)
@@ -362,7 +362,7 @@ struct CoachPacksPage: View {
                     .font(.caption).foregroundStyle(Night.faint)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
-                Link(destination: URL(string: "https://aurin.health/terms")!) {
+                Link(destination: L10n.legalURL("terms")) {
                     Text("Podmínky").font(.caption).foregroundStyle(Night.muted).underline()
                 }
             }

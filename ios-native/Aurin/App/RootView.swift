@@ -306,6 +306,11 @@ struct RootView: View {
             }
             // The next start after the first e-mail sign-in: a passkey for next time.
             .sheet(isPresented: Binding(get: { model.passkeyOffer }, set: { model.passkeyOffer = $0 })) { PasskeyOfferSheet().dynamicTypeSize(Self.textSizes) }
+            // Cycle tracking on from before its own consent: asked for it, and paused until then.
+            .sheet(isPresented: Binding(get: { model.cycleConsentAsk && !model.passkeyOffer && !model.needsSetup }, set: { model.cycleConsentAsk = $0 })) {
+                CycleTrackingConsentSheet { Task { try? await model.saveCycleSettings(["enabled": .bool(true), "consent": .bool(true)]) } }
+                    .dynamicTypeSize(Self.textSizes)
+            }
             .fullScreenCover(isPresented: Binding(get: { model.needsSetup && !model.passkeyOffer }, set: { model.needsSetup = $0 })) { SetupFlowView().dynamicTypeSize(Self.textSizes) }
             .task {
                 if !model.demo { AppleHealth.shared.start(api: model.api) }

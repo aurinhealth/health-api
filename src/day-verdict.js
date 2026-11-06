@@ -50,14 +50,18 @@ export function dayVerdict({ score = null, zone = null, flags = [], missing = []
   const weighed = Boolean(!rest && !signs && !noSleep && date && context);
   const signals = weighed ? adviceSignals({ date, sleepMinutes: sleep?.minutes, context }) : [];
   const injury = weighed ? injuryNote(context.memories) : null;
-  // Two reasons to hold back turn green into yellow, three turn yellow into red.
-  const level = zone === "green" && signals.length >= 2 ? "yellow" : zone === "yellow" && signals.length >= 3 ? "red" : zone;
+  // Two reasons to hold back turn green into yellow. Yellow stays yellow
+  // however many there are: it warns once and still lets the athlete train,
+  // red comes only from the body (audit 2026-11-06, 4.3, Petr's answer to O4).
+  const level = zone === "green" && signals.length >= 2 ? "yellow" : zone;
   const legs = level === "yellow" && signals.some(s => s.legs);
   const saveFor = weighed && level === "green" && !signals.length && !sessions.some(isHardSession) ? (tomorrow || []).filter(s => s && s.title).find(isHardSession) || null : null;
   const key = rest ? "rest" : signs ? "no_intensity" : legs ? "legs" : saveFor ? "easy"
     : level === "green" ? (signals.length || injury ? "steady" : "hard")
     : level === "yellow" ? "steady" : level === "red" ? "easy" : null;
-  // The ring's colour: rest is red, signs of illness never green.
-  const shown = rest ? "red" : signs && level === "green" ? "yellow" : level;
+  // The ring's colour is the readiness colour Today and the Watch show, not
+  // the advice (audit 2026-11-06, 4.3); only rest is red and signs of illness
+  // never green.
+  const shown = rest ? "red" : signs && zone === "green" ? "yellow" : zone;
   return { key, level, shown: shown || null, rest, signs, noSleep, sessions, signals, injury, legs, saveFor, weighed };
 }

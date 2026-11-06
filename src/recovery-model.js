@@ -1,7 +1,9 @@
 // One recovery, sleep and strain model for the dashboard and the coaches.
 // Every rule here is tied to a published method; docs/methodology.md lists the
-// sources. The functions are self-contained (no imports, no module constants),
-// so tests can run them on their own (RECOVERY_MODEL_FUNCTIONS).
+// sources. The functions are self-contained (no module constants), so tests
+// can run them on their own (RECOVERY_MODEL_FUNCTIONS); only sleepNeedFor
+// asks sleep-sessions.js which sleeps are naps (isNap, in the user's zone).
+import { isNap } from "./sleep-sessions.js";
 
 // Mean and standard deviation of a wellness field over the `days` before
 // `date` (not the day itself). `log` uses ln values, as for HRV (lnRMSSD).
@@ -107,10 +109,16 @@ export function weekSleepDebt(sessions, date, options) {
 // HRV status low: the 7-day lnRMSSD average up to `date` below the 60-day
 // baseline before that week by more than the smallest worthwhile change, the
 // equivalent of Garmin's "unbalanced/low" HRV status (Plews 2012).
+// One source only, the one of the newest morning: WHOOP's RMSSD before a
+// switch and Apple Watch's SDNN after it are two scales, so a mix would read
+// as a low week for weeks (each source's values, hrvBySource included).
 export function hrvStatusLow(rows, date) {
   const end = Date.parse(date + "T12:00:00Z"), start = new Date(end - 6 * 86400000).toISOString().slice(0, 10);
-  const week = (rows || []).filter(r => r && r.id >= start && r.id <= date && Number(r.hrv) > 0).map(r => Math.log(Number(r.hrv)));
-  const base = personalBaseline(rows, start, "hrv", { log: true });
+  const last = (rows || []).filter(r => r && r.id <= date && Number(r.hrv) > 0).reduce((a, r) => !a || r.id > a.id ? r : a, null);
+  const source = (last && last.hrvSource) || "";
+  const own = (rows || []).filter(r => r && r.id).map(r => ({ id: r.id, hrv: r.hrvBySource && r.hrvBySource[source] != null ? r.hrvBySource[source] : (r.hrvSource || "") === source ? r.hrv : null }));
+  const week = own.filter(r => r.id >= start && r.id <= date && Number(r.hrv) > 0).map(r => Math.log(Number(r.hrv)));
+  const base = personalBaseline(own, start, "hrv", { log: true });
   if (week.length < 3 || base.mean == null) return false;
   return week.reduce((s, v) => s + v, 0) / week.length < base.mean - 0.5 * Math.max(base.sd, 0.05);
 }
@@ -134,7 +142,7 @@ export function sleepNeedFor(input) {
   const hrv = hrvStatusLow(rows, prev) ? 15 : 0;
   const debtState = weekSleepDebt(sessions, prev, { age: input.age, goal });
   const debt = debtState ? Math.min(60, debtState.minutes) : 0;
-  const naps = sessions.filter(s => (s.nap || Number(s.durationMin) < 180) && (s.date || String(s.endTime || "").slice(0, 10)) === prev).reduce((t, s) => t + (Number(s.durationMin) || 0), 0);
+  const naps = sessions.filter(s => isNap(s) && (s.date || String(s.endTime || "").slice(0, 10)) === prev).reduce((t, s) => t + (Number(s.durationMin) || 0), 0);
   const need = goal != null ? Math.max(360, Math.min(600, base + hrv + debt) - Math.round(naps)) : Math.max(420, Math.min(540, base + hrv + debt) - Math.round(naps));
   return { need, base, hrv, debt, naps: Math.round(naps) };
 }
@@ -311,8 +319,8 @@ export function recoveryReadiness(input) {
   // overlap it falls back to the baseline over every source, so the number
   // does not vanish on a new watch, flagged "restingHRMixed" for the UI and
   // the coach.
-  let rb = sourceBaseline(rows, date, "restingHR", today.restingHRSource || null), mixed = false;
-  if (rb.mean == null) { const all = personalBaseline(rows, date, "restingHR"); if (all.mean != null) { rb = all; mixed = true; } }
+  let rb = sourceBaseline(rows, date, "restingHR", today.restingHRSource || null), mixed = null;
+  if (rb.mean == null) { const all = personalBaseline(rows, date, "restingHR"); if (all.mean != null) { mixed = { own: rb.count || 0 }; rb = all; } }
   if (Number(today.restingHR) > 0 && rb.mean != null) {
     // In the luteal phase the normal is the athlete's luteal normal: the
     // baseline over all days plus the luteal rise (lutealOffset).
@@ -322,7 +330,10 @@ export function recoveryReadiness(input) {
     if (cycle) components.restingHR.cycle = cycle;
     if (mixed) flags.push("restingHRMixed");
   }
-  const bb = personalBaseline(rows, date, "respiration");
+  // Breathing in sleep the same way: a new watch can read 1 /min higher, which
+  // alone would flag every night as elevated. Its own baseline, or one carried
+  // over from an overlapping source; without either it stays silent.
+  const bb = sourceBaseline(rows, date, "respiration", today.respirationSource || null);
   if (Number(today.respiration) > 0 && bb.mean != null) {
     const rise = Number(today.respiration) - bb.mean, elevated = rise >= 1 && rise >= 2 * Math.max(bb.sd, 0.3);
     components.respiration = { value: Number(today.respiration), baseline: bb.mean, elevated };
@@ -358,12 +369,13 @@ export function recoveryReadiness(input) {
     const performance = Math.min(105, Number(night.durationMin) / need * 100);
     components.sleep = { minutes: Number(night.durationMin), need, performance: Math.round(performance), score: Math.round(Math.max(0, Math.min(100, 70 + 2 * (performance - 90)))) };
   }
-  // A baseline carried over from another source: the number is provisional
-  // until the new source has 14 days of its own.
-  const provisional = !!((components.hrv && hb.carried) || (components.restingHR && rb.carried));
+  // A baseline carried over from another source, or the resting heart rate's
+  // mixed one after a switch without overlap: the number is provisional until
+  // the new source has 14 days of its own.
+  const provisional = !!((components.hrv && hb.carried) || (components.restingHR && (rb.carried || mixed)));
   if (provisional) flags.push("provisional");
   // Days until the newest source has its own 14 (shown as "zpřesní se za …").
-  const owns = [components.hrv && hb.carried, components.restingHR && rb.carried].filter(Boolean).map(c => Math.max(1, 14 - (c.own || 0)));
+  const owns = [components.hrv && hb.carried, components.restingHR && (rb.carried || mixed)].filter(Boolean).map(c => Math.max(1, 14 - (c.own || 0)));
   const provisionalDays = owns.length ? Math.max(...owns) : null;
   // A new athlete without 14 days of HRV or resting heart rate yet: the days
   // measured so far, today included (1–14), so Today can show "Day 5 of 14"
@@ -445,21 +457,22 @@ export function dayStrainParts({ zoneMinutes = null, steps = null, sessions = []
 
 // Google Health rows first, Intervals.icu wellness filling the days and fields
 // Google has none of (Apple Watch, Garmin and others sync there), as the
-// dashboard does in vitalWellness. A resting heart rate filled this way is
-// tagged "intervals": recoveryReadiness keeps each source's own baseline.
-// A day both have keeps the Intervals.icu HRV and resting HR beside Google's
-// in hrvBySource / restingHRBySource (an untagged HRV is ""): the overlap
-// sourceBaseline learns a new source's offset from.
+// dashboard does in vitalWellness. A resting heart rate or breathing rate
+// filled this way is tagged "intervals": recoveryReadiness keeps each
+// source's own baseline. A day both have keeps the Intervals.icu value beside
+// Google's in hrvBySource / restingHRBySource / respirationBySource (an
+// untagged HRV is ""): the overlap sourceBaseline learns a new source's
+// offset from.
 export function mergeWellnessRows(google, intervals) {
   const byDate = new Map((google || []).filter(r => r && r.id).map(r => [r.id, { ...r }]));
   for (const r of intervals || []) {
     if (!r || !r.id) continue;
     const row = byDate.get(r.id) || { id: r.id };
-    for (const key of ["hrv", "restingHR"]) {
-      const theirs = key === "restingHR" ? "intervals" : "", mine = row[key + "Source"] || "";
+    for (const key of ["hrv", "restingHR", "respiration"]) {
+      const theirs = key === "hrv" ? "" : "intervals", mine = row[key + "Source"] || "";
       if (Number(row[key]) > 0 && Number(r[key]) > 0 && mine !== theirs) row[key + "BySource"] = { [mine]: Number(row[key]), ...(row[key + "BySource"] || {}), [theirs]: Number(r[key]) };
     }
-    for (const key of ["hrv", "restingHR", "respiration", "spO2"]) if (!(Number(row[key]) > 0) && Number(r[key]) > 0) { row[key] = Number(r[key]); if (key === "restingHR") row.restingHRSource = "intervals"; }
+    for (const key of ["hrv", "restingHR", "respiration", "spO2"]) if (!(Number(row[key]) > 0) && Number(r[key]) > 0) { row[key] = Number(r[key]); if (key === "restingHR" || key === "respiration") row[key + "Source"] = "intervals"; }
     byDate.set(r.id, row);
   }
   return [...byDate.values()].sort((a, b) => String(a.id).localeCompare(String(b.id)));

@@ -121,7 +121,7 @@ function withoutNight(body, night, tracks) {
 // with its night is locked (readiness-lock.js): the night and these signals
 // of the day then come from the lock; a signal the lock lacks still fills in.
 // Each group is taken from the lock whole (a value with its source).
-const LOCK_GROUPS = [["hrv", "hrvSource"], ["restingHR", "restingHRSource"], ["respiration"], ["skinTempDeviation", "skinTempSd"], ["wristTemp"]];
+const LOCK_GROUPS = [["hrv", "hrvSource"], ["restingHR", "restingHRSource"], ["respiration", "respirationSource"], ["skinTempDeviation", "skinTempSd"], ["wristTemp"]];
 const present = v => v !== null && v !== undefined && v !== "";
 
 // What to lock for `date` from a readiness (readinessFor's result): the day's

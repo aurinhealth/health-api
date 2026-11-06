@@ -32,6 +32,8 @@ final class SiriShortcutsTests: XCTestCase {
                        "Připravenost je dnes 78, v obvyklém rozmezí. Dnes klidně tvrdý trénink.")
         XCTAssertEqual(SiriAnswer.readiness(score: 41, zone: nil, advice: nil), "Připravenost je dnes 41.")
         XCTAssertTrue(SiriAnswer.readiness(score: nil, zone: "red", advice: "x").hasPrefix("Dnešní připravenost zatím není."))
+        // Without a watch or ring no number is coming (audit 14.2).
+        XCTAssertTrue(SiriAnswer.readiness(score: nil, zone: nil, advice: nil, noWearable: true).hasPrefix("Připravenost počítají hodinky nebo prsten."))
     }
 
     func testReadinessInEnglish() {
@@ -83,6 +85,7 @@ final class SiriShortcutsTests: XCTestCase {
         XCTAssertTrue(text.hasPrefix("Dnes v noci: "), text)
         XCTAssertTrue(text.contains("od 23:48 do 07:02. Index spánku 82. Potřeba byla "), text)
         XCTAssertTrue(SiriAnswer.sleep(nil).hasPrefix("Dnešní spánek zatím není."))
+        XCTAssertEqual(SiriAnswer.sleep(nil, noWearable: true), "Bez hodinek nebo prstenu spánek neměřím.")
     }
 
     func testDrinkNamesTheDrinkAndAmount() {

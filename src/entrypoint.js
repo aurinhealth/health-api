@@ -60,7 +60,7 @@ import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.
 import { loadRecoveryValidation } from "./recovery-validation.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { getStrengthHistory, parseStrengthPlan } from "./strength-history.js";
-import { explainWorkout, athleteSteps } from "./workout-explanation.js";
+import { explainWorkout, athleteSteps, athleteMinutes } from "./workout-explanation.js";
 import { libraryBricks } from "./brick-workouts.js";
 import { aiWorkoutPick } from "./ai-workout-pick.js";
 import { composeWorkout, poorFit, fewMatches, composeKey, libraryKind, COMPOSE_VARIANTS } from "./ai-workout-compose.js";
@@ -78,7 +78,7 @@ import { saveCalendarFree, clearCalendarFree } from './calendar-free.js';
 import { getCheckin, readinessCheckin, saveCheckin } from './morning-checkin.js';
 import { getChecks, upcomingTest } from './threshold-check.js';
 import { saveSportChoice, sportExclusion, suggestedSports } from './sport-choice.js';
-import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories } from './athlete-state.js';
+import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories, healthMemorySince } from './athlete-state.js';
 import { recentNotes, earlierToday, chatSummary, coachNoteDays, queueDayNote, summarizeChatStart, forgetNote, usersWithNotesDue, runCoachNotes } from './coach-notes.js';
 import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planWorkoutId, planChanges, planRedMorning, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
@@ -1081,11 +1081,11 @@ async function computeWeekTargets(env,ctx,start,prefs,{original=false}={}){
   const runCommitted=days.reduce((n,d)=>n+committedRunMinutes(d.date,today,runOn[d.date]?.planned,runOn[d.date]?.done),0);
   // The forecast decides outdoor or indoor (and so the length) unless the athlete chose.
   const weather=await weekWeather(prefs.location,start,env).catch(()=>({}));
-  const runCap=weeklyRunCap(await planningHistory(env,start,28).catch(()=>[]),start);
+  const runCap=weeklyRunCap(await planningHistory(env,start,30).catch(()=>[]),start);
   const plan=await planForWeek(env,ctx,start);
   const hrvDown=hrvWeekTrendDown(hrvSourceRows(wellness,(await googleHealthFor(env,ctx,today).catch(()=>({})))?.wellness,start),start),eventDate=plan.plan?null:athleteFocus(await dashboardProfile(env).catch(()=>null),today).event?.date||null;
   const build=p=>{
-    const roles=planWeekRoles(prefs.days,{...p.roles,...roleTime(prefs)});
+    const roles=planWeekRoles(prefs.days,{...p.roles,...roleTime(prefs,start)});
     let targets=weekTargets({roles,ctl,lastWeekLoad,weekLoads:weekLoadsBefore(wellness,start),hrvDown,rampRate:[...wellness].reverse().find(r=>Number.isFinite(Number(r.rampRate)))?.rampRate??null,days,today,weekStart:start,plan:p.load,eventDate});
     // A plan needs its sessions even before there is a fitness history.
     if(plan.plan&&targets.status!=='ok')targets=estimatedTargets(roles,start,today,days);
@@ -1522,7 +1522,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       }
       // The push's swap of tomorrow's session stays first until it is answered.
       const swap=swapOffer(state,date);
-      const advice=(swap&&state.nudge.date!==date?swap:null)||easier||swap||(verdict==='hard'?null:proactiveAdvice({...inputs,state,readiness}))||memoryCheck(state,date);
+      // "Is this still true?" about a pain or an illness comes right after the push's swap, so an
+      // old knee pain does not wait behind every other card (audit 4.6).
+      const advice=(swap&&state.nudge.date!==date?swap:null)||memoryCheck(state,date)||easier||swap||(verdict==='hard'?null:proactiveAdvice({...inputs,state,readiness}));
       return Response.json({status:'ok',state,advice},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
@@ -1558,7 +1560,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // that starts later by one step less.
       const strain=await weekCheckState(env,inputs,today).then(x=>({...x.strain,level:start>today?Math.max(0,x.strain.level-1):x.strain.level})).catch(()=>null);
       const plan=await planForWeek(env,ctx,start);
-      const [weather,history,triathlon,openWater]=await Promise.all([weekWeather(prefs.location,start,env),planningHistory(env,start<localToday()?start:localToday(),28),inputs.focus?.sport==='triathlon'?triathlonHistory(env):null,swimOpenWater(env,inputs.focus,plan.plan)]),proposal=weekProposal({triathlon,openWater,prefs,state,start,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan,strain});
+      const [weather,history,triathlon,openWater]=await Promise.all([weekWeather(prefs.location,start,env),planningHistory(env,start<localToday()?start:localToday(),30),inputs.focus?.sport==='triathlon'?triathlonHistory(env):null,swimOpenWater(env,inputs.focus,plan.plan)]),proposal=weekProposal({triathlon,openWater,prefs,state,start,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan,strain});
       // "Vygenerovat tréninky": the week's sessions to prepare. Reviewing the plan is the AI chat's job.
       return Response.json({status:'ok',start,proposal},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
@@ -1576,7 +1578,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const previous=correction&&Array.isArray(body.previous)?body.previous.slice(0,28).filter(x=>validTrainingDay(x?.date)&&WEEK_SPORTS.includes(x?.sport)).map(x=>({date:x.date,sport:x.sport,minutes:Number(x.minutes)||null,environment:x.environment==='indoor'?'indoor':x.sport==='gym'?null:'outdoor',kind:KINDS.includes(x.kind)?x.kind:null})):[];
       const [prefs,state,inputs]=await Promise.all([getWeekPlan(env.DB,start),getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,today,{performance:true})]);
       if(!inputs.week.days.some(d=>d.date===start)){const extra=await handleDashboardApi(new Request('https://internal/app/api/week?start='+start),env,ctx,new URL('https://internal/app/api/week?start='+start));const data=await extra.json();inputs.week={...inputs.week,days:[...inputs.week.days,...(data.days||[])]};}
-      const [weather,history,plan,triathlon,openWaterOf]=await Promise.all([weekWeather(prefs.location,start,env),planningHistory(env,start<today?start:today,28),planForWeek(env,ctx,start),inputs.focus?.sport==='triathlon'?triathlonHistory(env):null,swimOpenWater(env,inputs.focus)]);
+      const [weather,history,plan,triathlon,openWaterOf]=await Promise.all([weekWeather(prefs.location,start,env),planningHistory(env,start<today?start:today,30),planForWeek(env,ctx,start),inputs.focus?.sport==='triathlon'?triathlonHistory(env):null,swimOpenWater(env,inputs.focus)]);
       // A plan with swimming (an open-water race, an aquabike) reads the open-water setting too.
       const openWater=openWaterOf??(planSports(plan.plan||{}).includes('swim')?await swimOpenWater(env,inputs.focus,plan.plan):null);
       // The rules see an empty week, so they propose every day the athlete has time for.
@@ -1871,7 +1873,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // The recovery model's readiness of the reviewed day, or today's for a day ahead (the inputs are already loaded and cached).
       const readinessDate=date<localToday()?date:localToday();
       const readiness=dayReadiness({date:readinessDate,fitness:inputs.fitness,health:inputs.health,profile:inputs.profile,checkin:readinessDate===date?inputs.checkin:await readinessCheckin(env.DB,readinessDate).catch(()=>null)});
-      const input=buildReviewInput({date,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,gymRows,roles:prefs?planWeekRoles(prefs.days,{...weekPlan.roles,...roleTime(prefs)}):[],feedback,coachNotes:notes.map(r=>({date:r.date,text:r.text})),readiness});
+      const input=buildReviewInput({date,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,gymRows,roles:prefs?planWeekRoles(prefs.days,{...weekPlan.roles,...roleTime(prefs,mondayOfDate(date))}):[],feedback,coachNotes:notes.map(r=>({date:r.date,text:r.text})),readiness});
       const state=await getAthleteState(env.DB);Object.assign(input,{athleteState:state.status,statusNote:state.note,preferenceMemory:usedMemories(state),availability:availabilityOn(prefs,date),...(inputs.cycle?{cycle:inputs.cycle}:{}),...(inputs.upcomingTest?{upcomingTest:inputs.upcomingTest}:{})});
       const reviews=[await reviewDay(env,input,null,inputs.focus).catch(error=>({model:lightModel(env),error:error.message}))];
       return Response.json({status:'ok',date,reviews},{headers:{'Cache-Control':'no-store'}});
@@ -1983,7 +1985,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const monday=start?mondayOfDate(start):mondayOfDate(localToday());
       const targets=await computeWeekTargets(env,ctx,monday,prefs).catch(error=>({status:'error',message:error.message,items:[]}));
       const historyEstimate=activityHistoryEstimate(await planningHistory(env,localToday(),21),localToday());
-      return Response.json({status:'ok',prefs,roles:planWeekRoles(prefs.days,{...(await planForWeek(env,ctx,monday)).roles,...roleTime(prefs)}),start:monday,targets,historyEstimate,sports:await suggestedSports(env.DB,env.USER_ID)},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',prefs,roles:planWeekRoles(prefs.days,{...(await planForWeek(env,ctx,monday)).roles,...roleTime(prefs,monday)}),start:monday,targets,historyEstimate,sports:await suggestedSports(env.DB,env.USER_ID)},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
   // Free time from the iPhone calendar (calendar-free.js): POST {days:[{date,minutes}]}
@@ -2225,12 +2227,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // Each session the plan or the athlete changed says why and what it was (planChanges).
       for(const x of planChanges(targets.items||[],targets.original||[],plan,monday).filter(x=>sports.includes(x.sport)&&(plan.sport==='triathlon'||(x.slot||0)===0)&&x.plan?.workoutId)){
         // Shorter for the day's free time: the plan's workout at that length.
-        if(x.planMinutes&&x.plan.family&&x.sport!=='swim')x.plan.workoutId=planWorkoutId(x.sport,x.plan,x.minutes,x.plan.shiftBy||0)||x.plan.workoutId;
+        if((x.planMinutes||x.cappedFrom)&&x.plan.family&&x.sport!=='swim')x.plan.workoutId=planWorkoutId(x.sport,x.plan,x.minutes,x.plan.shiftBy||0)||x.plan.workoutId;
         const library=await getWorkout(env.DB,x.plan.workoutId).catch(()=>null);
         let workout=null;
         if(library){
           const w=renderForEnvironment(library,'outdoor');let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
-          w.steps=athleteSteps(structure,x.sport,w.environment,thresholds);
+          w.steps=athleteSteps(structure,x.sport,w.environment,thresholds);w.duration_minutes=athleteMinutes(w,structure,x.sport,thresholds);
           workout={id:w.id,name:planName(w.name),sport:w.sport,environment:w.environment,duration_minutes:w.duration_minutes,target_load:w.target_load,intensity_factor:w.intensity_factor,description:w.description,steps:w.steps};
         }
         sessions.push({date:x.date,sport:x.sport,label:planName(x.label),kind:x.plan.kind,minutes:x.minutes,workoutId:x.plan.workoutId,workout,done:done.has(x.date),editable:x.date>=today&&!done.has(x.date),edited:Boolean(plan.edits?.[x.plan.movedFrom||x.date])&&plan.edits[x.plan.movedFrom||x.date].auto!=='red',...(x.plan.change?{change:x.plan.change}:{})});
@@ -2295,7 +2297,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       remembers?recentNotes(env.DB,{today:date,days:coachNoteDays(env)}).catch(()=>[]):[],
       remembers?earlierToday(env.DB,body.chatId,{today:date}).catch(()=>[]):[]
     ]);
-    const memoryCtx={...(olderPart?{chatSoFar:olderPart.text}:{}),...(recentChats.length?{recentChats}:{}),...(otherToday.length?{earlierToday:otherToday}:{}),...(remembers&&athleteState.pastMemories?.length?{pastMemory:athleteState.pastMemories.map(p=>p.text)}:{})};
+    const healthSince=healthMemorySince(athleteState);
+    const memoryCtx={...(olderPart?{chatSoFar:olderPart.text}:{}),...(recentChats.length?{recentChats}:{}),...(otherToday.length?{earlierToday:otherToday}:{}),...(remembers&&athleteState.pastMemories?.length?{pastMemory:athleteState.pastMemories.map(p=>p.text)}:{}),...(healthSince.length?{healthMemorySince:healthSince}:{})};
     // A photo needs the full context: a plan on it becomes workout cards.
     const asked=assistantTask(message,body.appContext?appContext:null,conversation),task=image&&['simple','quick','adjustment'].includes(asked)?'planning':asked,started=Date.now();
     const availabilityMinutes=Number.isFinite(Number(body.availabilityMinutes))?Number(body.availabilityMinutes):null;
@@ -3278,7 +3281,7 @@ async function pickDetails(env,ctx,ranked,date,gymPlan){
         const g=await post('/app/api/workouts/generate',{date,sport:o.kind,environment:'auto',ai:o.best===true&&o.kind!=='swim'}),w=g?.status==='ok'?g.workout:null;
         if(!w)return;
         let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
-        const steps=athleteSteps(structure,o.kind,w.environment,thresholds);
+        const steps=athleteSteps(structure,o.kind,w.environment,thresholds);w.duration_minutes=athleteMinutes(w,structure,o.kind,thresholds);
         const {structure_json,...workout}=w;
         out[o.kind]={workout:{...workout,steps,ai:w.ai||g.ai||null},lines:workoutLines(steps,o.kind),minutes:Math.round(Number(w.duration_minutes)||0)||null};
       }else if(o.kind==='gym'){
@@ -3375,7 +3378,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       if(!event&&!library)return Response.json({status:'error',message:L('Trénink nebyl nalezen.', 'The workout wasn\'t found.')},{status:404});
       const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)),w=library?renderForEnvironment(library,link.environment==='indoor'?'indoor':'outdoor'):plannedEventWorkout(event),kind=w.sport==='run'||w.sport==='swim'?w.sport:'ride';
       let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
-      w.steps=athleteSteps(structure,kind,w.environment,thresholds);
+      w.steps=athleteSteps(structure,kind,w.environment,thresholds);w.duration_minutes=athleteMinutes(w,structure,kind,thresholds);
       // Horko (heat-advice.js) for today's ride or run outdoors, at its time (?date=&time= from the app).
       const day=url.searchParams.get('date'),time=url.searchParams.get('time');
       const heat=day===localToday()&&w.environment!=='indoor'?heatAdvice({sport:w.sport,weather:(await todayPlace(env,ctx,day)).forecast,time:/^\d{1,2}:\d{2}/.test(time||'')?time:null})?.text||null:null;
@@ -3419,7 +3422,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       // Not for swims: the AI writes rides and runs only.
       result.compose=sport!=='swim'&&date>=localToday()&&fewMatches(result.workouts,filters.system);
       // Step rows with watts or paces for each card.
-      for(const w of result.workouts){let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}w.steps=athleteSteps(structure,sport,w.environment,thresholds);
+      for(const w of result.workouts){let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}w.steps=athleteSteps(structure,sport,w.environment,thresholds);w.duration_minutes=athleteMinutes(w,structure,sport,thresholds);
         // How to ride or run it, fuelling and terrain, as the web's workout card explains it.
         try{const e=explainWorkout(w,{environment:w.environment||filters.environment,thresholds,sport});w.guide={title:e.title,how:e.how||[],fueling:e.fueling||[],environment:e.environment||[]};}catch{w.guide=null;}}
       return Response.json({...result,date,athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,source:thresholds.source,runThresholdPace:thresholds.runThresholdPace,runPaceSource:thresholds.runPaceSource},rankingContext:{...context,tsb:coach.readiness.tsb,readinessScore:coach.readiness.score},sourcePolicy:sport==='run'?L('Vlastní PFD běžecké tréninky, publikované výzkumné protokoly (Helgerud, Billat, Seiler, Daniels) a veřejně popsané metody s uvedením zdroje. Placené plány a aplikace se nekopírují.', 'Own PFD running workouts, published research protocols (Helgerud, Billat, Seiler, Daniels) and publicly described methods with their source. Paid plans and apps are not copied.'):L('Vlastní PFD workouty, publikované výzkumné protokoly a veřejně popsané tréninky profi s uvedením zdroje. Proprietární knihovny (TrainerRoad, Xert, JOIN, Zwift, TrainerDay) se nekopírují.', 'Own PFD workouts, published research protocols and publicly described pro workouts with their source. Proprietary libraries (TrainerRoad, Xert, JOIN, Zwift, TrainerDay) are not copied.')},{headers:{'Cache-Control':'no-store'}});
@@ -3440,7 +3443,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       if(!own)return Response.json({status:'empty'},{headers:{'Cache-Control':'no-store'}});
       const w=renderForEnvironment(own,environment),thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env));
       let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
-      w.steps=athleteSteps(structure,sport,w.environment,thresholds);
+      w.steps=athleteSteps(structure,sport,w.environment,thresholds);w.duration_minutes=athleteMinutes(w,structure,sport,thresholds);
       try{const e=explainWorkout(w,{environment:w.environment,thresholds,sport});w.guide={title:e.title,how:e.how||[],fueling:e.fueling||[],environment:e.environment||[]};}catch{w.guide=null;}
       return Response.json({status:'ok',workout:{...w,ai:own.ai},variant,more:variant<COMPOSE_VARIANTS},{headers:{'Cache-Control':'no-store'}});
     }
@@ -3504,7 +3507,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       let planWorkout=null;
       if(keeps){
         const minutes=resizeTo??sessionMinutes??(Number(chip?.minutes)||null);
-        const id=planned.kind==='race'||planned.kind==='test'?planned.workoutId:planWorkoutId(genSport,planned,minutes||chip?.minutes||60,planned.kind==='quality'?levelShift((await getCapabilities(env.DB,genSport))[systemOf(genSport,planned.family)]):0);
+        const id=planned.kind==='race'||planned.kind==='test'?planned.workoutId:planWorkoutId(genSport,planned,minutes||chip?.minutes||60,planned.kind==='quality'?levelShift((await getCapabilities(env.DB,genSport))[systemOf(genSport,planned.family)]):0,thresholds?.swimCss);
         const base=id?await getWorkout(env.DB,String(id).replace(/~\d+$/,'')):null;
         if(base)planWorkout={id:base.id,minutes:planned.kind==='race'||planned.kind==='test'?base.duration_minutes:(minutes||base.duration_minutes)};
       }
@@ -3528,7 +3531,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       const replaced=askedWorkout&&!workoutId?{id:askedWorkout.id,name:askedWorkout.name,why:coach.recommendation?.adaptations||[]}:null;
       if(replaced&&generated.explanation?.why)generated.explanation.why=[L('„'+askedWorkout.name+'“ dnes nahrazuje lehčí trénink: ','Today “'+askedWorkout.name+'” gives way to an easier session: ')+(replaced.why.join(', ')||L('podle připravenosti a zátěže','from your readiness and load'))+'.',...generated.explanation.why];
       // Step rows with watts or paces, so the week plan's detail draws the workout's graph.
-      for(const w of [generated.workout,...(generated.alternatives||[])]){if(!w||w.steps)continue;let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}w.steps=athleteSteps(structure,genSport,w.environment,thresholds);}
+      for(const w of [generated.workout,...(generated.alternatives||[])]){if(!w||w.steps)continue;let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}w.steps=athleteSteps(structure,genSport,w.environment,thresholds);w.duration_minutes=athleteMinutes(w,structure,genSport,thresholds);}
       // The kind asked for that the coach still eased (red, illness, a test
       // tomorrow…): what the session became and why, so the detail doesn't
       // promise intervals the steps don't have.

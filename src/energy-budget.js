@@ -1,5 +1,6 @@
 import { deviceEnergyExtra } from './app-training.js';
 import { refillMacros } from './diet.js';
+import { MAX_CALORIE_TARGET } from './energy-profile.js';
 
 export function energyBudget(daily,profile,health){
   const weight=Number(daily.weight?.current??daily.nutrition?.currentWeight),age=Number(profile.age),height=Number(profile.height),active=health?.today?.activeCalories;
@@ -7,12 +8,19 @@ export function energyBudget(daily,profile,health){
   // The watch's calories the user chose not to count (Kalorie k ověření →
   // odhad) never raise the target either, as in the day's active energy.
   const counted=Math.max(0,active-deviceEnergyExtra(daily.training?.completed));
-  const basal=10*weight+6.25*height-5*age+(profile.sex==='male'?5:-161),digestion=.1,deficit=Number(daily.nutrition?.calorieBreakdown?.weightLossDeficit)||0;
+  const b=daily.nutrition?.calorieBreakdown||{};
+  const basal=10*weight+6.25*height-5*age+(profile.sex==='male'?5:-161),digestion=.1,deficit=Number(b.weightLossDeficit)||0;
   // Active calories already cover exercise and everyday movement. Never add
   // cycling or step calories a second time. This is a running, not final, day.
   // A personal profile carries its own floor (resting metabolism); otherwise 1800 as before.
-  const floor=daily.nutrition?.calorieBreakdown?.source==='profile'?Number(daily.nutrition.calorieBreakdown.minTarget)||1800:1800;
-  return{basal:Math.round(basal),active:Math.round(counted),digestionShare:digestion,deficit:Math.max(0,deficit),surplus:Math.max(0,-deficit),target:Math.max(floor,Math.round((basal+counted)/(1-digestion)-deficit)),source:'google-health',partial:true};
+  const floor=b.source==='profile'?Number(b.minTarget)||1800:1800;
+  // The same rules as the morning target (index.js energyForDate): the
+  // workouts done count with the same share (70 % when losing), the weight
+  // trend correction holds, and the same ceiling.
+  const coverage=Number(b.trainingCoverage??1),done=(Array.isArray(b.workouts)?b.workouts:[]).filter(w=>w?.kind==='done').reduce((s,w)=>s+(Number(w.kcal)||0),0);
+  const trend=Number(b.trendAdjustment)||0,uncounted=Math.min(counted,done)*(1-Math.min(1,Math.max(0,coverage)));
+  const target=Math.max(floor,Math.min(MAX_CALORIE_TARGET,Math.round((basal+counted-uncounted)/(1-digestion)-deficit+trend)));
+  return{basal:Math.round(basal),active:Math.round(counted),digestionShare:digestion,deficit:Math.max(0,deficit),surplus:Math.max(0,-deficit),trend,target,source:'google-health',partial:true};
 }
 
 // The day's calorie target with the Google Health energy budget: the higher of

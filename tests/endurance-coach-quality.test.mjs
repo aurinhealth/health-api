@@ -14,7 +14,7 @@ const week = (completed = []) => ({ days: completed.map(a => ({ date: a.date, da
 const coach = args => buildCyclingCoachV2({ date, week: week([{ date: day(-3), type: "Ride", name: "Endurance", tss: 60, durationHours: 1.25 }]), fitness: { wellness: wellness() }, health: sleep, gym: { history: [] }, ...args });
 
 test("library interval sessions count as quality, easy ones do not", () => {
-  for (const name of ["Billat 30-30", "Norský 4×4", "Seiler 4×8 min", "Rønnestad 30/15 · 3×13", "Pro-inspired · Langvad VO₂ 7×3", "Prahové úseky", "Daniels cruise intervals 5×6 min", "UAE-style 40/20 Over-Unders"]) assert.ok(qualityDomain(name), name);
+  for (const name of ["Billat 30-30", "Norský 4×4", "Seiler 4×8 min", "Rønnestad 30/15 · 3×13", "Long VO₂ efforts 7×3", "Prahové úseky", "Daniels cruise intervals 5×6 min", "UAE-style 40/20 Over-Unders"]) assert.ok(qualityDomain(name), name);
   for (const name of ["Endurance – Aerobic Base", "Endurance 3x20 Z2", "Lehký běh", "Long Endurance", "Dlouhý běh", "Morning Ride"]) assert.equal(qualityDomain(name), null, name);
   // Tempo is a quality session in both sports.
   assert.equal(qualityDomain("Tempo"), "moderate");
@@ -116,7 +116,7 @@ test("a week's running grows at most 10 % over the recent weeks", async () => {
   // Last week 80 min, four-week average 49 min: the larger counts, +10 %.
   const history = [runDay("2026-09-08", 40), runDay("2026-09-15", 45), runDay("2026-09-22", 30), runDay("2026-09-29", 50), runDay("2026-10-01", 30), runDay("2026-10-02", 90, "Ride"), runDay("2026-10-03", 60, "Walk")];
   const cap = weeklyRunCap(history, "2026-10-05");
-  assert.deepEqual(cap, { cap: 90, base: 80, weeks: [80, 30, 45, 40] });
+  assert.deepEqual(cap, { cap: 90, base: 80, weeks: [80, 30, 45, 40], longest: 50, single: 55 });
   // Nothing run yet: a fresh start of 60 min a week is always allowed.
   assert.equal(weeklyRunCap([], "2026-10-05").cap, 60);
   const targets = { status: "ok", items: [{ sport: "run", role: "endurance", minutes: 60, tss: 61, intensity: .78 }, { sport: "run", role: "long", minutes: 70, tss: 71, intensity: .78 }, { sport: "ride", minutes: 90, tss: 70 }] };
@@ -134,6 +134,35 @@ test("a week's running grows at most 10 % over the recent weeks", async () => {
   assert.ok(runs.reduce((n, x) => n + x.minutes, 0) <= 90 + 5, JSON.stringify(runs));
   assert.equal(proposal.targets.runCap.limited, true);
   assert.equal(weekProposal({ prefs, start: "2026-10-05", today: "2026-10-05", week: { days: [] }, fitness }).targets.runCap, undefined);
+});
+
+// Frandsen 2025 (BJSM): a run more than 10 % past the longest of the last 30
+// days raised the injury risk; the week's change did not (audit 8.1).
+test("one run grows at most 10 % past the longest of the last 30 days, +5 min always allowed", async () => {
+  const { weeklyRunCap, capRunVolume } = await import("../src/week-planner.js");
+  const runDay = (date, minutes) => ({ date, daily: { training: { completed: [{ type: "Run", durationHours: minutes / 60 }] } } });
+  // A 100-min run 31 days ago no longer counts; the 60-min one does.
+  const history = [runDay("2026-09-04", 100), runDay("2026-09-20", 60), runDay("2026-09-27", 45), runDay("2026-10-01", 45)];
+  const cap = weeklyRunCap(history, "2026-10-05");
+  assert.equal(cap.longest, 60);
+  assert.equal(cap.single, 65, "60 × 1.1 = 66, down to 65");
+  assert.equal(weeklyRunCap([runDay("2026-10-01", 100)], "2026-10-05").single, 110);
+  assert.equal(weeklyRunCap([runDay("2026-10-01", 30)], "2026-10-05").single, 35, "a short longest run still grows by 5 min");
+  assert.equal(weeklyRunCap([], "2026-10-05").single, null, "no runs: only the week's cap");
+  // The marathon plan's 70-min long run after a longest of 60: 65, and says why.
+  const targets = { status: "ok", items: [{ sport: "run", role: "long", minutes: 70, tss: 71, intensity: .78 }, { sport: "run", role: "endurance", minutes: 40, tss: 40, intensity: .78 }, { sport: "run", role: "race", minutes: 200, tss: 300, intensity: .85 }] };
+  const capped = capRunVolume(targets, { ...cap, cap: 400 }, 0);
+  assert.deepEqual(capped.items.map(x => x.role + ":" + x.minutes), ["long:65", "endurance:40", "race:200"], "a race is not capped");
+  assert.equal(capped.items[0].cappedFrom, 70);
+  assert.equal(capped.items[0].tss, Math.round(65 / 60 * .78 * .78 * 100));
+  // The plan's week says why the run is shorter and what it was.
+  const { planChanges } = await import("../src/training-plans.js");
+  const plan = { templateId: "run-marathon", startDate: "2026-10-05", raceDate: "2027-01-31", raceKm: 42.2 };
+  const item = { ...capped.items[0], date: "2026-10-11", label: "Dlouhý běh", plan: { kind: "long", workoutId: "run-long-70" } };
+  const change = planChanges([item], [{ ...item }], plan, "2026-10-05")[0].plan.change;
+  assert.equal(change.kind, "shorter");
+  assert.match(change.line, /běh roste pomalu/);
+  assert.equal(change.original.minutes, 70);
 });
 
 test("proposed runs that do not fit 20 min under the running cap are left out", async () => {

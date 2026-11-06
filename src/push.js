@@ -176,8 +176,8 @@ export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Da
 // app's notification extension draws (ios-native ReadinessNotification).
 // With `date` and `context` (morning-advice.js) the advice also weighs the
 // short night, the days before, the journal, an injury and tomorrow: two
-// reasons to hold back turn green into yellow, three turn yellow into red,
-// and the body starts with them ("3 gym days in a row and a short night.").
+// reasons to hold back turn green into yellow (yellow stays yellow, the ring
+// keeps Today's colour), and the body starts with them ("3 gym days in a row and a short night.").
 export function readinessMessage(input) {
   const { score, sleep = null, hrv = null, restingHR = null } = input;
   const v = dayVerdict(input) || { key: null, level: input.zone, shown: input.zone, sessions: [], signals: [] };

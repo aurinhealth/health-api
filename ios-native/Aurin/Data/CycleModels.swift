@@ -39,6 +39,9 @@ struct CycleSettings: Codable, Equatable {
     var lifeStage: String?
     /// Hormone therapy, for the coach.
     var hrt: Bool?
+    /// Turned on before tracking had its own consent: off until it is given
+    /// (src/cycle-store.js); nil from an older server.
+    var consentNeeded: Bool?
 
     var stage: String { lifeStage ?? "regular" }
 
@@ -195,12 +198,14 @@ enum CycleText {
         L10n.tr(symptoms.first { $0.id == id }?.title ?? id).lowercased()
     }
 
+    /// The phase today. Only the period is logged; the other phases are
+    /// counted from the calendar, so they say "odhad".
     static func phase(_ phase: String?) -> String? {
         switch phase {
         case "menstrual": return L10n.tr("Menstruace")
-        case "follicular": return L10n.tr("Folikulární fáze")
-        case "ovulation": return L10n.tr("Ovulace")
-        case "luteal": return L10n.tr("Luteální fáze")
+        case "follicular": return L10n.tr("Folikulární fáze · odhad")
+        case "ovulation": return L10n.tr("Ovulace · odhad")
+        case "luteal": return L10n.tr("Luteální fáze · odhad")
         default: return nil
         }
     }

@@ -116,7 +116,9 @@ test("a hard bleeding day with cramps or fatigue eases training, unless turned o
   assert.deepEqual(cycleTrainingCaution(st), { reasons: ["cramps", "fatigue"], cycleDay: 1 });
   assert.equal(cycleTrainingCaution(cycleState({ settings: on({ adaptTraining: false }), days, date: "2026-10-30" })), null);
   assert.equal(cycleTrainingCaution(cycleState({ settings: on(), days: [...bleed("2026-10-03"), { date: "2026-10-30", flow: 1 }], date: "2026-10-30" })), null);
-  assert.deepEqual(cycleTrainingCaution(cycleState({ settings: on(), days: [...bleed("2026-10-03"), { date: "2026-10-30", flow: 3 }], date: "2026-10-30" })).reasons, ["heavy"]);
+  // Heavy flow alone eases nothing (audit O11); with cramps it does.
+  assert.equal(cycleTrainingCaution(cycleState({ settings: on(), days: [...bleed("2026-10-03"), { date: "2026-10-30", flow: 3 }], date: "2026-10-30" })), null);
+  assert.deepEqual(cycleTrainingCaution(cycleState({ settings: on(), days: [...bleed("2026-10-03"), { date: "2026-10-30", flow: 3, symptoms: ["cramps"] }], date: "2026-10-30" })).reasons, ["cramps"]);
 });
 
 test("the month shows logged days, the forecast and the pill", () => {

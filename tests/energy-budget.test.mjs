@@ -55,3 +55,19 @@ test("watch calories the user chose not to count do not raise the food target", 
   assert.equal(counted.nutrition.energyBudget.active, 1300);
   assert.equal(counted.nutrition.calorieTarget, applyEnergyBudget(day(), profile, { today: { activeCalories: 1300 } }).nutrition.calorieTarget);
 });
+
+test("the evening budget uses the morning's rules: the same training share, weight trend and ceiling", () => {
+  // Losing: the 1000 kcal workout inside the watch's active energy counts 70 %,
+  // and the weight trend takes 100 kcal off as in the morning target.
+  const losing = day();
+  Object.assign(losing.nutrition.calorieBreakdown, { trainingCoverage: 0.7, trendAdjustment: -100, workouts: [{ kind: "done", kcal: 1000 }, { kind: "planned", kcal: 400 }] });
+  const evening = applyEnergyBudget(losing, profile, { today: { activeCalories: 2000 } });
+  assert.equal(evening.nutrition.calorieTarget, Math.round((1870 + 2000 - 300) / 0.9 - 300 - 100));
+  assert.equal(evening.nutrition.energyBudget.trend, -100);
+  // Maintaining counts it in full.
+  const keep = day();
+  Object.assign(keep.nutrition.calorieBreakdown, { trainingCoverage: 1, workouts: [{ kind: "done", kcal: 1000 }] });
+  assert.equal(applyEnergyBudget(keep, profile, { today: { activeCalories: 2000 } }).nutrition.calorieTarget, 4000);
+  // One ceiling morning and evening.
+  assert.equal(applyEnergyBudget(day(), profile, { today: { activeCalories: 9000 } }).nutrition.calorieTarget, 6000);
+});

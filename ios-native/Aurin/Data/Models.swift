@@ -108,12 +108,19 @@ struct TodaySnapshot: Decodable, Equatable {
         var learningDays: Int? = nil
         /// Nights measured in the 30 days before today (the watch's history); nil from an older server.
         var pastNights: Int? = nil
+        /// No HRV or resting heart rate in the 30 days up to today (src/app-today.js); nil from an older server.
+        var noWearable: Bool? = nil
         /// What to do today, a key of src/day-verdict.js ("hard", "steady", "easy",
         /// "legs", "no_intensity", "rest"); nil on an earlier day or from an older server.
         var verdict: String? = nil
         /// What shaped the number (src/readiness.js): "short_night" (under 3 h,
         /// capped at yellow), "no_night" (no number without the night), etc.
         var flags: [String]? = nil
+
+        /// An iPhone without a watch or ring (audit 14.2): the server saw no
+        /// HRV or resting heart rate and no Apple Watch is paired, so a new
+        /// Apple Watch owner's first morning never reads as "no watch".
+        @MainActor var withoutWearable: Bool { noWearable == true && !WatchBridge.shared.watchState.paired }
     }
 
     struct Sleep: Decodable, Equatable {

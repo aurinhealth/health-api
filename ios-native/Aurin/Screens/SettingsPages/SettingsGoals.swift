@@ -29,7 +29,7 @@ struct GoalsSettingsView: View {
                 }
                 .buttonStyle(.plain)
                 SettingsDivider()
-                SettingsPicker(title: "Cíl", selection: $goal, options: Self.goals)
+                SettingsPicker(title: "Cíl", selection: $goal, options: goalOptions)
                 SettingsDivider()
                 SettingsField(title: "Cílová váha", text: $targetWeight, unit: Units.weightUnit)
             }
@@ -132,6 +132,18 @@ struct GoalsSettingsView: View {
         }
         return [("lose_0.25", lose(0.25, 2)), ("lose_0.5", lose(0.5, 1)), ("lose_0.75", lose(0.75, 2)), ("lose_1", lose(1, 0)),
                 ("maintain", L10n.tr("udržovat váhu")), ("gain_0.25", gain(0.25, 2)), ("gain_0.5", gain(0.5, 1))]
+    }
+
+    /// No pace of losing above 1 % of the body weight a week (55 kg: 0,25 and
+    /// 0,5 kg); the server caps it there anyway (src/energy-profile.js
+    /// weeklyGoalKg). A saved faster goal stays listed.
+    private var goalOptions: [(String, String)] {
+        guard let weight = model.today?.weight?.latest, weight > 0 else { return Self.goals }
+        let saved = store.profile["goal"]?.string
+        return Self.goals.filter { option in
+            guard option.0.hasPrefix("lose_"), let kg = Double(option.0.dropFirst(5)) else { return true }
+            return kg <= weight * 0.01 + 0.0001 || option.0 == saved
+        }
     }
 
     /// "automaticky · Aktivní": the usual day Aurin reads from the steps.
