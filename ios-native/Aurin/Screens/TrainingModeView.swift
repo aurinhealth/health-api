@@ -212,20 +212,12 @@ struct TrainingModeView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, let end = restEnd, end <= Date() { restEnd = nil }
         }
-        .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
-            // Nahradit: the swap sheet once this one is gone, while the exercise has sets to do (as Vyměnit).
-            let left = day?.exercises.first(where: { $0.name == item.name })?.sets.contains(where: { !$0.done }) == true
-            TechniqueSheet(exercise: item.name, replace: left ? { Task { try? await Task.sleep(for: .milliseconds(450)); swapping = item.name } } : nil)
-        }
+        .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { techniqueSheet($0) }
         .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
             ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name), today: date)
         }
         // Zavřít waits for the sending, at most closeWait.
-        .task(id: sendStarted) {
-            guard let sendStarted else { return }
-            try? await Task.sleep(for: .seconds(max(0, sendStarted.addingTimeInterval(Self.closeWait).timeIntervalSinceNow)))
-            if self.sendStarted == sendStarted { closeReady = true }
-        }
+        .task(id: sendStarted) { await freeCloseLater() }
         .confirmationDialog("Ukončit trénink?", isPresented: $confirmClose, titleVisibility: .visible) {
             // Later: the clock and heart rate stop now and start again on return.
             Button("Pokračovat později") { live.reset(); dismiss() }
@@ -1023,6 +1015,20 @@ struct TrainingModeView: View {
             GymSwaps.save(old, date: date)
             self.error = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription)
         }
+    }
+
+    // Out of the body's modifier chain, which is too long to type-check with closures inside.
+    /// Nahradit: the swap sheet once this one is gone, while the exercise has sets to do (as Vyměnit).
+    private func techniqueSheet(_ item: Named) -> some View {
+        let left = day?.exercises.first(where: { $0.name == item.name })?.sets.contains(where: { !$0.done }) == true
+        return TechniqueSheet(exercise: item.name, replace: left ? { Task { try? await Task.sleep(for: .milliseconds(450)); swapping = item.name } } : nil)
+    }
+
+    /// Zavřít free at the latest closeWait after the sending started.
+    private func freeCloseLater() async {
+        guard let started = sendStarted else { return }
+        try? await Task.sleep(for: .seconds(max(0, started.addingTimeInterval(Self.closeWait).timeIntervalSinceNow)))
+        if sendStarted == started { closeReady = true }
     }
 
     /// Zavřít and the X wait while the workout is saved and sent, at most closeWait.
