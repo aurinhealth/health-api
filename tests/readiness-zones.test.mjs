@@ -5,7 +5,7 @@ import { createD1 } from "./helpers/d1.mjs";
 import { userEnv } from "../src/tenancy.js";
 import { saveAppleHealth } from "../src/apple-health.js";
 import { localToday } from "../src/user-time.js";
-import { accountZones, readOnlyD1, rescore, yellowCause, RULES } from "../scripts/readiness-zones.mjs";
+import { accountZones, readOnlyD1, rescore, yellowCause, sleepScoreWithDebt, RULES } from "../scripts/readiness-zones.mjs";
 
 const shift = (day, days) => new Date(Date.parse(day + "T12:00:00Z") + days * 864e5).toISOString().slice(0, 10);
 
@@ -50,6 +50,13 @@ test("a day scored again from its parts, and why it is yellow", () => {
   assert.equal(yellowCause(day(90, 90, 90, { flags: ["short_night"] })), "shortNight");
   assert.equal(yellowCause(day(70, 70, 70, { components: { hrv: { score: 70 }, restingHR: { score: 70 }, sleep: { score: 70 }, wristTemp: { points: -5 } } })), "breathingOrTemp");
   assert.equal(rescore({ score: null }), null);
+  // The sleep need with the week's debt capped: 7 h against 8 h + 60 min debt
+  // is 78 % (46 points), against 8 h + 30 min 82 % (55), against 8 h 88 % (65).
+  const need = { base: 480, hrv: 0, debt: 60, naps: 0 }, sleep = { minutes: 420, score: 46 };
+  assert.equal(sleepScoreWithDebt(sleep, need, 60, null), 46);
+  assert.equal(sleepScoreWithDebt(sleep, need, 30, null), 55);
+  assert.equal(sleepScoreWithDebt(sleep, need, 0, null), 65);
+  assert.equal(rescore({ score: 0, flags: [], need, components: { hrv: { score: 70 }, restingHR: { score: 70 }, sleep } }, RULES.debt0), 69);
 });
 
 test("the staging measurement never writes", async () => {
