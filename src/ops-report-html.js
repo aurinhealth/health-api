@@ -55,9 +55,9 @@ const table = (head, body) => `<table role="presentation" style="width:100%;bord
 const heading = (title, light) => `<p style="margin:22px 0 8px;font-size:15px;font-weight:700">${escape(title)}${light ? ` ${DOT[light]}` : ""}</p>`;
 const paragraph = text => `<p style="margin:0 0 6px;font-size:14px;line-height:1.5">${escape(text)}</p>`;
 
-// rows: ops_events of the day; room, stuck, accounts: the text parts of the
+// rows: ops_events of the day; room, stuck, accounts, scans: the text parts of the
 // plain report; ai: aiSummary (ops-report.js) or null with aiLines as text.
-export function opsReportHtml({ date, rows = [], room = null, stuck = null, accounts = null, ai = null, aiLines = null, label = s => s }) {
+export function opsReportHtml({ date, rows = [], room = null, stuck = null, accounts = null, scans = null, ai = null, aiLines = null, label = s => s }) {
   const of = kind => rows.filter(row => row.kind === kind).sort((a, b) => b.count - a.count);
   const important = [], parts = [];
 
@@ -114,6 +114,8 @@ export function opsReportHtml({ date, rows = [], room = null, stuck = null, acco
     }).join("");
     parts.push(heading("Účty a limity", quiet ? "green" : "orange") + blocks);
   }
+
+  if (scans) { const [title, ...lines] = scans.split("\n"); parts.push(heading(title, null) + lines.map(line => paragraph(line.replace(/^- /, "• "))).join("")); }
 
   const n = important.length;
   const title = n ? `${n} ${things(n)} k řešení` : "Vše v pořádku";

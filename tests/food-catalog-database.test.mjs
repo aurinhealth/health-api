@@ -190,6 +190,26 @@ test('migration-aware authenticated API pauses food operations only, then serves
   const anonymous=await entrypoint.fetch(new Request('https://aurin.health/app/api/me'),f.env,{waitUntil(){}});assert.equal(anonymous.status,401);assert.equal(anonymous.headers.get('X-Food-Catalog-Routing'),null);_resetTenancyForTest();
 });
 
+test('a scanned barcode nobody has is asked of Open Food Facts live, and every scan is counted for the morning report',async()=>{
+  const f=setup();await seed(f);
+  const entrypoint=(await import('../src/entrypoint.js')).default;
+  _resetTenancyForTest();f.env.SESSION_SECRET='test-session-key';f.env.OWNER_EMAIL='owner@example.test';
+  f.core.sqlite.exec("UPDATE schema_meta SET value='legacy' WHERE key='food_catalog_state'");await migrateFoodCatalog({...f,core:'core',foods:'foods'});
+  const cookie=(await sessionCookie(4,Math.floor(Date.now()/1000)+60,f.env.SESSION_SECRET)).split(';')[0];
+  const search=async body=>(await entrypoint.fetch(new Request('https://aurin.health/app/api/food/search',{method:'POST',headers:{Cookie:cookie,Origin:'https://aurin.health','Content-Type':'application/json'},body:JSON.stringify(body)}),f.env,{waitUntil(){}})).json();
+  const original=globalThis.fetch,asked=[];
+  globalThis.fetch=async url=>{asked.push(String(url));return String(url).includes('4006381333931')?Response.json({status:1,product:{code:'4006381333931',product_name:'Nový jogurt',lang:'cs',nutriments:{'energy-kcal_100g':70,proteins_100g:4,carbohydrates_100g:8,fat_100g:2}}}):Response.json({status:0},{status:404});};
+  try{
+    assert.equal((await search({barcode:product.barcode})).product.barcode,product.barcode);
+    assert.equal(asked.length,0,'a saved food needs no OFF');
+    const live=await search({barcode:'4006381333931'});
+    assert.equal(live.product.name,'Nový jogurt');assert.equal(live.product.source_name,'Open Food Facts');
+    assert.equal((await search({barcode:'4006381333948'})).product,null);
+    await search({name:'mléko'});
+    assert.deepEqual(f.core.sqlite.prepare("SELECT service,count FROM ops_events WHERE kind='barcode' ORDER BY service").all().map(r=>[r.service,r.count]),[['missing',1],['off-live',1],['saved',1]]);
+  }finally{globalThis.fetch=original;_resetTenancyForTest();}
+});
+
 test('remote canary cleanup is exact and provisioning preserves all 20 user database bindings',async()=>{
   const f=setup();await verifyFoodDatabase(f.api,'foods');assert.equal(count(f.foods,'shared_foods'),0);
   const config=parseConfig(read('wrangler.jsonc'));config.d1_databases.push(...Array.from({length:20},(_,i)=>({binding:'USER_DATA_'+String(i+1).padStart(3,'0'),database_id:'shard-'+i})));

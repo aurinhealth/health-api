@@ -696,7 +696,7 @@ struct EventCard: View {
 
 struct FormWidget: View {
     let form: TrainingSnapshot.Form
-    /// "Poměr zátěže 1,42 · jednotvárný týden", only when out of normal.
+    /// "Posledních 7 dní vs. obvyklých 28: Nad obvyklou · jednotvárný týden", only when worth a line.
     var loadNote: String? = nil
     var size: WidgetSize = .small
 
@@ -717,7 +717,8 @@ struct FormWidget: View {
                 }
             }
             if let loadNote {
-                Text(verbatim: loadNote).font(Typo.caption).foregroundStyle(Palette.amber)
+                // In ink, never a warning colour (Today audit D4).
+                Text(verbatim: loadNote).font(Typo.caption).foregroundStyle(Palette.secondary)
                     .lineLimit(2).fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -727,16 +728,16 @@ struct FormWidget: View {
 }
 
 extension FormWidget {
-    /// The acute:chronic load ratio when raised ("elevated", "high") and a
-    /// monotonous week, in one line; nil when both are normal (a low ratio
-    /// says nothing worth a line).
+    /// The last 7 days above the usual 28 and a monotonous week, in one line,
+    /// in words without a ratio (Today audit D4); nil otherwise (a lighter
+    /// week says nothing worth a line).
     static func loadNote(acwr: TrainingSnapshot.ACWR?, monotony: TrainingSnapshot.Monotony?) -> String? {
         var parts: [String] = []
-        if let acwr, let value = acwr.value, acwr.zone == "elevated" || acwr.zone == "high" {
-            parts.append(L10n.f("Poměr zátěže %@", Fmt.decimal(value, digits: 2)))
+        if let level = acwr?.level, level == "above" || level == "wellAbove", let word = TrainingSnapshot.ACWR.word(level) {
+            parts.append(L10n.f("Posledních 7 dní vs. obvyklých 28: %@", word))
         }
         if monotony?.high == true {
-            parts.append(L10n.tr(parts.isEmpty ? "Jednotvárný týden" : "jednotvárný týden"))
+            parts.append(parts.isEmpty ? L10n.tr("Jednotvárný týden") : L10n.tr("jednotvárný týden"))
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }

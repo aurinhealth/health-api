@@ -17,7 +17,11 @@
 // anything was recorded are no rest days). It is null with fewer than MIN_HISTORY_DAYS days since
 // the first load on record (the 28-day mean is not representative yet) or
 // with a chronic load of 0.
-//   < 0.8 low · 0.8–1.3 sweet spot · 1.3–1.5 elevated · > 1.5 high
+// It is shown only in words, the last 7 days against the usual 28 (Today
+// audit D4, 2026-11-05): no ratio number, no bands, no "sweet spot" and no
+// "risk", since the ratio predicts no injuries (Impellizzeri 2021,
+// docs/methodology.md):
+//   < 0.7 well below · 0.7–0.9 below · 0.9–1.15 usual · 1.15–1.5 above · > 1.5 well above
 //
 // Monotony (Foster 1998) is the mean daily load of the last 7 days over its
 // standard deviation (population SD of the 7 days); null with fewer than 7
@@ -69,43 +73,43 @@ export function dailyLoadSeries(rows, date, days = SERIES_DAYS) {
   return { series, historyDays: first ? daysBetween(first, date) + 1 : 0 };
 }
 
-// The names of the metrics and the ACWR zones in the app language, for the
+// The names of the metrics and the levels in the app language, for the
 // coach's facts (trend-facts.js) and the "Proč?" lines (screen-texts.js).
 export const WORKLOAD_LABELS = bilingual({
-  acwr: "Poměr akutní a chronické zátěže",
+  acwr: "Posledních 7 dní vs. obvyklých 28",
   monotony: "Monotónnost tréninku (7 dní)",
   strain: "Tréninkový strain týdne",
-  low: "nízká zátěž",
-  sweetSpot: "optimální pásmo",
-  elevated: "zvýšená zátěž",
-  high: "vysoká zátěž, riziko přetížení"
+  wellBelow: "výrazně pod obvyklou",
+  below: "pod obvyklou",
+  usual: "obvyklá",
+  above: "nad obvyklou",
+  wellAbove: "výrazně nad obvyklou"
 }, {
-  acwr: "Acute:chronic workload ratio",
+  acwr: "Last 7 days vs your usual 28",
   monotony: "Training monotony (7 days)",
   strain: "Weekly training strain",
-  low: "low load",
-  sweetSpot: "sweet spot",
-  elevated: "elevated load",
-  high: "high load, overload risk"
+  wellBelow: "well below",
+  below: "below",
+  usual: "usual",
+  above: "above",
+  wellAbove: "well above"
 });
-export const acwrZoneLabel = zone => (["low", "sweetSpot", "elevated", "high"].includes(zone) ? WORKLOAD_LABELS[zone] : null);
+export const LOAD_LEVELS = ["wellBelow", "below", "usual", "above", "wellAbove"];
+export const loadLevelLabel = level => (LOAD_LEVELS.includes(level) ? WORKLOAD_LABELS[level] : null);
 
-export function acwrZone(value) {
+export function loadLevel(value) {
   if (value == null || !Number.isFinite(value)) return null;
-  if (value < 0.8) return "low";
-  if (value <= 1.3) return "sweetSpot";
-  if (value <= 1.5) return "elevated";
-  return "high";
+  return value < 0.7 ? "wellBelow" : value < 0.9 ? "below" : value <= 1.15 ? "usual" : value <= 1.5 ? "above" : "wellAbove";
 }
 
 // loads: daily loads, oldest first, the last one today.
 export function acwr(loads, historyDays = loads?.length || 0) {
   const xs = (Array.isArray(loads) ? loads : []).map(v => num(v) || 0);
-  if (xs.length < CHRONIC_DAYS) return { value: null, zone: null, acute: null, chronic: null };
+  if (xs.length < CHRONIC_DAYS) return { value: null, level: null, acute: null, chronic: null };
   const span = Math.min(CHRONIC_DAYS, Math.max(ACUTE_DAYS, historyDays));
   const acute = mean(xs.slice(-ACUTE_DAYS)), chronic = mean(xs.slice(-span));
   const value = historyDays >= MIN_HISTORY_DAYS && chronic > 0 ? round(acute / chronic, 2) : null;
-  return { value, zone: acwrZone(value), acute: round(acute, 1), chronic: round(chronic, 1) };
+  return { value, level: loadLevel(value), acute: round(acute, 1), chronic: round(chronic, 1) };
 }
 
 export function monotony(loads, historyDays = loads?.length || 0) {
@@ -125,15 +129,16 @@ export function workloadMetrics(rows, date) {
   return { acwr: acwr(loads, historyDays), monotony: monotony(loads, historyDays), historyDays };
 }
 
-// A cautionary line for the deterministic coach when the ratio is high or the
-// week is monotonous, else null.
+// A cautionary line for the deterministic coach when the last 7 days are well
+// above the usual 28 or the week is monotonous, else null. In words, no ratio
+// and no risk (Today audit D4).
 export function workloadCaution(metrics) {
-  const ratio = metrics?.acwr?.value, mono = metrics?.monotony?.value;
+  const level = metrics?.acwr?.level, mono = metrics?.monotony?.value;
   const dec = (v, d) => L(String(round(v, d)).replace(".", ","), String(round(v, d)));
   const parts = [];
-  if (ratio != null && ratio > 1.5) parts.push(L(
-    "Poměr akutní a chronické zátěže je " + dec(ratio, 2) + ": posledních 7 dní trénuješ výrazně víc, než na co tě připravily poslední 4 týdny. Zařaď pár lehčích dní, ať riziko přetížení klesne.",
-    "Your acute:chronic workload ratio is " + dec(ratio, 2) + ": the last 7 days are well above what the past 4 weeks prepared you for. Take a few easier days to bring the risk of overload down."));
+  if (level === "wellAbove") parts.push(L(
+    "Posledních 7 dní bylo výrazně nad tvými obvyklými 28. Tento týden střídej těžší a lehčí dny.",
+    "The last 7 days were well above your usual 28. Alternate harder and easier days this week."));
   if (mono != null && mono > HIGH_MONOTONY) parts.push(L(
     "Monotónnost tréninku je " + dec(mono, 2) + ": dny jsou si zátěží příliš podobné. Střídej těžší a lehčí dny a zařaď den volna.",
     "Training monotony is " + dec(mono, 2) + ": your days carry too similar a load. Alternate hard and easy days and add a rest day."));

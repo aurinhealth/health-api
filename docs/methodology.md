@@ -23,7 +23,8 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
 
 ### Progrese vah podle RPE/RIR
 
-- **Výpočet:** dvojitá progrese. Všechny pracovní série na horní hranici rozsahu opakování nebo s lehkým RPE posunou váhu o krok nahoru. RPE ≥ 9,5 vrátí krok zpět. (`src/strength-intelligence.js`)
+- **Výpočet:** dvojitá progrese. Všechny pracovní série na horní hranici rozsahu opakování nebo s lehkým RPE posunou váhu o krok nahoru. Krok zpět přijde, když pod rozsah spadne první série nebo aspoň polovina sérií; u hlavního cviku i selhání (RPE ≥ 9,5) v první sérii. Selhání s opakováními v rozsahu váhu jen podrží. Cvik po 4 a více sériích na stejný sval (série pomocného svalu za polovinu) se porovnává s posledním tréninkem na podobném místě; bez takového tréninku doplňkový cvik váhu jednou podrží i 3 opakování pod rozsahem. (`src/strength-intelligence.js`, `progressionDecision`, `priorMuscleSets`)
+- **Zdroj (pořadí a selhání):** Simão R et al. *Exercise order in resistance training.* Sports Med 2012;42:251–265, doi:10.2165/11597240-000000000-00000. Refalo MC et al. *Influence of resistance training proximity-to-failure on skeletal muscle hypertrophy: a systematic review with meta-analysis.* Sports Med 2023;53:649–665, doi:10.1007/s40279-022-01784-y.
 - **Zdroj:** Helms ER et al. *Application of the repetitions in reserve-based rating of perceived exertion scale for resistance training.* Strength Cond J 2016;38(4):42–49. Validace škály: Zourdos MC et al., J Strength Cond Res 2016;30:267–275.
 - **Co tvrdit:** autoregulace podle počtu opakování do selhání, stejný princip jako JuggernautAI a Fitbod.
 
@@ -138,7 +139,7 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
   - Regenerační týden pro všechny sporty nastane po týdnu ≥ 125 % udržovací zátěže (CTL × 7), po třech týdnech nad ní, nebo když 7denní průměr HRV před týdnem klesne pod osobní pásmo o víc než SWC (`src/week-planner.js`, `hrvWeekTrendDown`).
 - **Zdroje:**
   - Impellizzeri FM et al. Int J Sports Physiol Perform 2020;15:907–913.
-  - Impellizzeri FM et al. Sports Med 2021;51:581–592: poměr akutní a chronické zátěže (ACWR) nemá vlastní prediktivní hodnotu, proto ho nepoužíváme.
+  - Impellizzeri FM et al. Sports Med 2021;51:581–592: poměr akutní a chronické zátěže (ACWR) nemá vlastní prediktivní hodnotu, proto ho nepoužíváme k předpovědi rizika ani k řízení dávky. Aplikace a kouč ho ukazují jen slovy jako popis týdne: „Posledních 7 dní vs. obvyklých 28“ výrazně pod (< 0,7), pod (0,7–0,9), obvyklá (0,9–1,15), nad (1,15–1,5), výrazně nad (> 1,5); číslo poměru, „sweet spot“ ani riziko se neukazují (`src/workload-ratio.js`, Today audit D4). Hranice jsou naše popisné, ne výsledek studie.
   - Plews 2012 a Javaloyes 2019 (viz 2.1) pro spouštěč z HRV.
   - Bell L et al. Sports Med Open 2023;9:87 (Delphi konsenzus k deloadu) a Front Sports Act Living 2022;4:1073223 (deload obvykle 5–7 dní každé 4–6 týdny).
 - **Limity:** pravidla 125 % a „tři týdny“ jsou trenérská praxe, ne výsledek kontrolované studie. Pro vytrvalostní cyklus 3:1 jsme kontrolovanou studii nenašli. Spouštěč z HRV je individuální a podložený.

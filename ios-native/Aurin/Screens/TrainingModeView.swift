@@ -62,6 +62,8 @@ struct TrainingModeView: View {
     @State private var totals: (minutes: Int, kcal: Double?, avgHr: Double?, maxHr: Double?, saved: Bool, zones: [Double])?
     /// The day as it was before this screen, for Zahodit trénink.
     @State private var original: GymDay?
+    /// A day from the watch came while this screen loaded: newer than the load.
+    @State private var watchTook = false
     @State private var confirmClose = false
     /// Zahodit trénink in the summary, after Dokončit.
     @State private var confirmDiscard = false
@@ -100,7 +102,8 @@ struct TrainingModeView: View {
             // screen's body, every beat redrew the whole workout.
             HeartRateWatch(live: live) { syncActivity(quiet: true) }
             // The Apple Watch's gym, 1:1 (its own view: the chain below is long enough).
-            WatchGymHooks(live: live, restEnd: restEnd, sendRest: sendRest, received: receiveRest, ended: finishIfEndedOnWatch)
+            WatchGymHooks(live: live, restEnd: restEnd, sendRest: sendRest, received: receiveRest, ended: finishIfEndedOnWatch,
+                          back: { Task { await catchUpWithWatch() } })
             WatchDraftHooks(kg: kg, reps: reps, row: atHand?.row, send: sendDraft, received: receiveDraft)
             VStack(alignment: .leading, spacing: 0) {
                 header
@@ -159,7 +162,7 @@ struct TrainingModeView: View {
         // A set or a change from the Apple Watch (WatchGymBridge.swift).
         .onReceive(NotificationCenter.default.publisher(for: .watchGym)) { note in
             guard let change = note.object as? WatchBridge.GymChange, change.date == date else { return }
-            day = change.day
+            takeFromWatch(change.day)
         }
         // Discarded on the Apple Watch: the day has no workout any more.
         .onReceive(NotificationCenter.default.publisher(for: .watchGymDiscarded)) { note in
@@ -1241,8 +1244,11 @@ struct TrainingModeView: View {
         defer { loading = false }
         Task { [api = model.api] in await ExerciseNotes.shared.load(api: api, demo: false) }
         do {
-            day = try await model.gymDay(date: date)
-            original = day
+            watchTook = false
+            let loaded = try await model.gymDay(date: date)
+            // A set from the watch meanwhile: its day is newer than the load.
+            if !watchTook { day = loaded }
+            original = loaded
             startAtFirstOpen()
             // Finished earlier (Dokončit): the summary, to rate it or go on.
             if let day, day.finishedAt != nil, day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
@@ -1284,6 +1290,40 @@ struct TrainingModeView: View {
     private func sidesFor(_ name: String) -> Bool {
         if let choice = sideChoices[name] { return choice == "sides" }
         return GymSides.oneSided(name)
+    }
+
+    /// The day from the watch (a set done there, a change from its menu): the
+    /// exercise on the screen follows the watch once it has no set left.
+    private func takeFromWatch(_ fresh: GymDay) {
+        day = fresh
+        watchTook = true
+        if !finishedSession { followOpen() }
+    }
+
+    /// The exercise on the screen is done: on to the next one with sets left,
+    /// as the watch went on. The watch's rest names the exercise too, but a
+    /// rest skipped, none before the next set or one sent while this iPhone
+    /// slept leaves the screen behind.
+    private func followOpen() {
+        guard let list = day?.exercises, list[safe: index]?.sets.contains(where: { !$0.done }) == false,
+              let open = list.indices.first(where: { $0 > index && list[$0].sets.contains { !$0.done } })
+                ?? list.firstIndex(where: { $0.sets.contains { !$0.done } }) else { return }
+        index = open
+    }
+
+    /// Back on the screen while the watch leads: sets the watch saved alone
+    /// (it went on without this iPhone, which then hears nothing) show here
+    /// too. One load, only when the iPhone comes back to the screen.
+    private func catchUpWithWatch() async {
+        guard !model.demo, !finishedSession, let shown = day,
+              let fresh = try? await model.gymDay(date: date), day == shown,
+              Self.setsDone(fresh) > Self.setsDone(shown) else { return }
+        WatchBridge.shared.gymDays[date] = fresh
+        takeFromWatch(fresh)
+    }
+
+    static func setsDone(_ day: GymDay) -> Int {
+        day.exercises.reduce(0) { $0 + $1.sets.filter(\.done).count }
     }
 
     /// Opens on the first exercise with a set left.
@@ -1414,6 +1454,8 @@ struct TrainingModeView: View {
         model.minimizedGym = nil
         guard !finishedSession, let count = day?.exercises.count, count > 0 else { return }
         index = min(gym.index, count - 1)
+        // The watch went on while the workout was hidden.
+        followOpen()
         startTapped = gym.startTapped
         restTotal = gym.restTotal
         restStart = gym.restStart
@@ -1785,6 +1827,9 @@ struct WatchGymHooks: View {
     let sendRest: (Date?) -> Void
     let received: (WatchGym.Rest) -> Void
     let ended: () -> Void
+    /// Back on the screen while the watch leads the workout.
+    let back: () -> Void
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Color.clear.frame(width: 0, height: 0)
@@ -1792,6 +1837,9 @@ struct WatchGymHooks: View {
             .onChange(of: restEnd) { _, end in sendRest(end) }
             .onChange(of: live.endedOnWatch) { _, _ in ended() }
             .onChange(of: live.idleEnd) { _, _ in ended() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active, live.onWatch { back() }
+            }
             .onReceive(NotificationCenter.default.publisher(for: .watchRest)) { note in
                 if let rest = note.object as? WatchGym.Rest { received(rest) }
             }

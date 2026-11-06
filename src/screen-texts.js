@@ -10,7 +10,7 @@ import { L, lang } from "./lang.js";
 import { localToday, localDateTime } from "./user-time.js";
 import { consentStatus } from "./consent.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
-import { acwrZoneLabel } from "./workload-ratio.js";
+import { loadLevelLabel } from "./workload-ratio.js";
 import { partsForAI } from "./cycle-model.js";
 import { verdictText } from "./day-verdict.js";
 import { cacheVersion, CACHE_TTL_SECONDS } from "./api-cache.js";
@@ -147,7 +147,7 @@ function trainingFacts(d) {
     done.length > 0 && { label: L("Poslední trénink", "Last workout"), value: done.at(-1).title + (num(done.at(-1).tss) ? " · " + Math.round(num(done.at(-1).tss)) + " TSS" : "") },
     next && { label: L("Další trénink", "Next workout"), value: String(next.title || "") + (next.date ? " · " + next.date : "") },
     facts.event && { label: L("Závod", "Event"), value: (facts.event.name || "") + (facts.event.daysLeft != null ? L(" za ", " in ") + facts.event.daysLeft + L(" dní", " days") : "") },
-    num(d.acwr?.value) != null && { label: L("Akutní/chronická zátěž", "Acute:chronic load"), value: decimal(d.acwr.value, 2) + (acwrZoneLabel(d.acwr.zone) ? " (" + acwrZoneLabel(d.acwr.zone) + ")" : "") },
+    loadLevelLabel(d.acwr?.level) && { label: L("Posledních 7 dní vs. obvyklých 28", "Last 7 days vs your usual 28"), value: loadLevelLabel(d.acwr.level) },
     num(d.monotony?.value) != null && { label: L("Monotónnost", "Monotony"), value: decimal(d.monotony.value, 2) + (num(d.monotony.strain) != null ? ", strain " + Math.round(num(d.monotony.strain)) : "") }
   ].filter(Boolean);
   const chips = [

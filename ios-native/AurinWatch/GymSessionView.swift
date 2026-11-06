@@ -514,7 +514,7 @@ struct GymSessionView: View {
         .contentShape(RoundedRectangle(cornerRadius: 12))
         .onTapGesture {
             selected = field
-            crown = true
+            focusCrown()
         }
         // VoiceOver: one element that a swipe up or down changes, as the crown does.
         .accessibilityElement(children: .ignore)
@@ -612,7 +612,20 @@ struct GymSessionView: View {
         reps = Double(lift.reps ?? 8)
         // Each new set starts on the weight.
         selected = .kg
-        crown = true
+        focusCrown()
+    }
+
+    /// The crown onto the tiles. Asked for while the screen before (the
+    /// warm-up's list, the start) still held the crown, the focus never came,
+    /// and a tap set an already true `crown` again, which moved nothing: the
+    /// first set of the workout (often a warm-up set) could not be changed.
+    /// So it is let go and asked for again once the tiles are on the screen.
+    private func focusCrown() {
+        crown = false
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(80))
+            crown = true
+        }
     }
 
     private func done(_ lift: WatchGym.Lift, in gym: WatchGym) {

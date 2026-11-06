@@ -1,3 +1,4 @@
+import { L, plural } from "./lang.js";
 // Race times and race power from the athlete's thresholds: what Rekordy shows
 // as the estimate for a race, what a race plan starts from and the race day's
 // pace or power.
@@ -91,3 +92,31 @@ export function rideRace(kind, km, { ftp = null, weight = null } = {}) {
   const low = race.low ? base * race.low : base * share * .97, high = race.low ? base * race.high : base * share * 1.02;
   return { kind, km, minutes: Math.round(minutes), low: Math.round(low), high: Math.round(high), share: Math.round(share * 100), estimated: !(Number(ftp) > 0) };
 }
+
+// ---- a running race plan's goal, checked every Monday ----------------------------
+// From the estimates of the plan's Mondays (training-plans.js planTrend keeps
+// them): the line from the start to today, where the improvement so far would
+// end on race day (at most 1 % a week, the "bold" pace of goalVerdict), and
+// whether that reaches the goal. With six weeks or less left and the goal out
+// of reach, a realistic goal (that end, rounded up to the minute) unless the
+// athlete kept this goal already. Paces: race pace, threshold (before → now)
+// and easy (122–130 % of the threshold pace, about the easy zone).
+export function goalCheck({ km, target = null, estimate = null, estimateStart = null, history = [], weeksDone = 0, weeksLeft = 0, thresholdPace = null, thresholdBefore = null, kept = null } = {}) {
+  if (!(estimate > 0)) return null;
+  const rate = estimateStart > 0 && weeksDone > 0 ? clamp((estimateStart - estimate) / weeksDone, 0, estimate * .01) : 0;
+  const projected = Math.round(estimate - rate * Math.max(0, weeksLeft));
+  const pace = Number(thresholdPace) > 0 ? Math.round(Number(thresholdPace)) : null;
+  const paces = { race: Math.round((target > 0 ? target : estimate) / km), threshold: pace, thresholdBefore: Number(thresholdBefore) > 0 && Math.round(thresholdBefore) !== pace ? Math.round(thresholdBefore) : null, easy: pace ? [Math.round(pace * 1.22 / 5) * 5, Math.round(pace * 1.3 / 5) * 5] : null };
+  if (!(target > 0)) return { history, projected, status: null, paces };
+  const behind = projected - target, onTrack = behind <= target * .005;
+  const realistic = !onTrack && weeksLeft <= 6 && kept !== target ? Math.ceil(projected / 60) * 60 : null;
+  const weeks = weeksLeft + " " + plural(weeksLeft, "týden", "týdny", "týdnů", "week", "weeks"), left = weeksLeft >= 2 && weeksLeft <= 4 ? "Zbývají" : "Zbývá", checked = L(" Z tvého prahového tempa, kontrola každé pondělí.", " From your threshold pace, checked every Monday.");
+  const badge = onTrack ? L("Podle plánu", "On track") : behind >= 90 ? L(`o ${Math.round(behind / 60)} min pomaleji než cíl`, `${Math.round(behind / 60)} min slower than the goal`) : L(`o ${behind} s pomaleji než cíl`, `${behind} s slower than the goal`);
+  const note = onTrack
+    ? (estimate > target ? L(`Zbývá stáhnout ${clock(estimate - target)} za ${weeks}, tempem, jakým se zlepšuješ.`, `${clock(estimate - target)} to gain in ${weeks}, at the pace you are improving.`) : L("Na cíl máš už dnešní formou.", "Today's form already reaches the goal.")) + checked
+    : realistic ? L(`${left} ${weeks}. Držet ${clock(Math.round(target / km))} /km by znamenalo běhat každý trénink moc tvrdě. Cíl ${clock(realistic)} sedí na tvou formu a pořád tě potáhne.`, `${weeks} left. Holding ${clock(Math.round(target / km))} /km would mean running every session too hard. A goal of ${clock(realistic)} fits your form and still pushes you.`)
+    : L(`${left} ${weeks}. Tempem, jakým se zlepšuješ, vychází závod kolem ${clock(projected)}.`, `${weeks} left. At the pace you are improving the race comes out around ${clock(projected)}.`) + checked;
+  return { history, projected, status: onTrack ? "on_track" : "behind", behind: onTrack ? 0 : behind, ...(realistic ? { realistic } : {}), badge, note, paces };
+}
+// "1:46:00", "47:10", "4:44": a time or a pace.
+const clock = seconds => { const s = Math.round(seconds), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), r = String(s % 60).padStart(2, "0"); return h ? `${h}:${String(m).padStart(2, "0")}:${r}` : `${m}:${r}`; };

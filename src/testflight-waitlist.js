@@ -73,12 +73,14 @@ async function humanSent(env, request, token, fetchImpl) {
 }
 
 // Storage limitation (privacy policy): an address leaves both lists (this one
-// and signup_waitlist, tenancy.js) a year after it joined or was invited.
+// and signup_waitlist, tenancy.js) a year after it joined, and this one entirely
+// once Aurin is out in the App Store (`released`: the paywall on for everyone,
+// subscription.js paywallOn), when testing through TestFlight has no waitlist.
 export const WAITLIST_MONTHS = 12;
-export async function forgetOldWaitlist(db) {
+export async function forgetOldWaitlist(db, { released = false } = {}) {
   let removed = 0;
   for (const sql of [
-    `DELETE FROM testflight_waitlist WHERE COALESCE(invited_at, created_at) < datetime('now', '-${WAITLIST_MONTHS} months')`,
+    released ? "DELETE FROM testflight_waitlist" : `DELETE FROM testflight_waitlist WHERE created_at < datetime('now', '-${WAITLIST_MONTHS} months')`,
     `DELETE FROM signup_waitlist WHERE created_at < datetime('now', '-${WAITLIST_MONTHS} months')`
   ]) {
     try { removed += Number((await db.prepare(sql).run())?.meta?.changes) || 0; }
