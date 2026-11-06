@@ -62,7 +62,10 @@ export function evalAthlete(date, { today = {}, sleepMin = 445, profile: own = {
     : { [shift(date, -1)]: [{ id: 'eval-ride-1', name: 'Sweet spot 3x15', type: 'Ride', durationHours: 1.5, tss: 95, averagePower: 210, normalizedPower: 228, averageHeartRate: 148, payload: { icu_rpe: 7 } }],
       [shift(date, -3)]: [{ id: 'eval-ride-2', name: 'Endurance', type: 'Ride', durationHours: 2, tss: 105 }] };
   const plan = planFor ? planFor(date) : { [date]: [{ id: 'planned:9001', name: 'VO2max 5x4', type: 'Ride', durationHours: 1.25, tss: 85 }], [shift(date, 2)]: [{ id: 'planned:9002', name: 'Long ride', type: 'Ride', durationHours: 3, tss: 170 }] };
-  const from = breakDays ? -breakDays - 1 : -3, ahead = planFor ? 6 : 3;
+  // The week reaches back to the earliest session done (the app's coach sees
+  // the last week and this one).
+  const earliest = Math.min(-3, ...Object.keys(done).map(d => Math.round((Date.parse(d) - Date.parse(date)) / 86400000)));
+  const from = breakDays ? -breakDays - 1 : earliest, ahead = planFor ? 6 : 3;
   const days = Array.from({ length: ahead + 1 - from }, (_, i) => { const d = shift(date, from + i); return { date: d, daily: { training: { planned: plan[d] || [], completed: done[d] || [] } } }; });
   const thresholds = { ftp: 265, source: 'intervals', lthr: 168, maxHr: 188, restHr: 48, powerZones: [{ name: 'Z1', low: 0, high: 145 }, { name: 'Z2', low: 146, high: 199 }, { name: 'Z3', low: 200, high: 238 }, { name: 'Z4', low: 239, high: 278 }, { name: 'Z5', low: 279, high: 318 }], hrZones: [], ...ownThresholds };
   const activities = Object.entries(done).flatMap(([d, list]) => list.map(a => ({ kind: 'ride', name: a.name, tss: a.tss, minutes: a.durationHours * 60, intensity: a.intensity ?? null, end: Date.parse(d + 'T15:00:00Z') })));
@@ -221,8 +224,11 @@ function gymBlock(r, { athlete = undefined, aimed = false } = {}) {
 // equipment and muscle groups, a strength athlete, wrist temperature, the
 // coach's memory, a plan started from the chat, a detail screen and the swim card (S30–S43).
 // A pool swimmer (CSS 1:45/100 m): a CSS set yesterday, technique today, a long swim in two days.
+// A regular swimmer (four swims in eight days), so the app's coach does not
+// take them for a beginner and ease the intervals they ask for (run 43, S30).
 const SWIMMER = { focus: { sport: 'swimming', sportLabel: 'Plavání' }, thresholds: { swimCss: 105, swimZones: swimZones(105), poolLength: 25 },
-  done: date => ({ [shift(date, -1)]: [{ id: 'eval-swim-1', name: 'CSS 10×100 m', type: 'Swim', durationHours: 1, tss: 70 }], [shift(date, -3)]: [{ id: 'eval-swim-2', name: 'Vytrvalost 2,5 km', type: 'Swim', durationHours: 1, tss: 55 }] }),
+  done: date => ({ [shift(date, -1)]: [{ id: 'eval-swim-1', name: 'CSS 10×100 m', type: 'Swim', durationHours: 1, tss: 70 }], [shift(date, -3)]: [{ id: 'eval-swim-2', name: 'Vytrvalost 2,5 km', type: 'Swim', durationHours: 1, tss: 55 }],
+    [shift(date, -6)]: [{ id: 'eval-swim-3', name: 'Technika 2 km', type: 'Swim', durationHours: 0.75, tss: 35 }], [shift(date, -8)]: [{ id: 'eval-swim-4', name: 'Vytrvalost 2,5 km', type: 'Swim', durationHours: 1, tss: 55 }] }),
   plan: date => ({ [date]: [{ id: 'planned:9201', name: 'Technika 2 km', type: 'Swim', durationHours: 0.75, tss: 35 }], [shift(date, 2)]: [{ id: 'planned:9202', name: 'Vytrvalost 3 km', type: 'Swim', durationHours: 1.25, tss: 75 }] }) };
 // Never alone in open water, in the athlete's words ("Nikdy neplav sám", "s parťákem", "never swim alone").
 const NOT_ALONE = /(?:ne|nikdy|nikoli)\s+(?:ne)?(?:plav\p{L}*\s+)?sám|neplav\p{L}*\s+sám|sám\s+(?:ne|nikdy)|s\s+(?:parťák|kamarád|někým|doprovod)|parťák|doprovod|na břehu|not alone|never swim alone|buddy/iu;

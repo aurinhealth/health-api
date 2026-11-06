@@ -448,6 +448,9 @@ test('since run 37: swimming, triathlon, diet, equipment, chest, a strength athl
   // Swimming: the pace by CSS, never alone in open water.
   assert.deepEqual(names(await run('S30', 'Dej 10×100 m na 1:45 s pauzou 15 s v bazénu.')), []);
   assert.ok(names(await run('S30', 'Dej v bazénu 10×100 m volně.')).some(n => n.startsWith('quality:tempo na 100 m')));
+  // Run 43: the swimmer swims regularly, so threshold swimming tomorrow stays threshold on the card, not an easy swim.
+  const swimmer = scenarioContext(scenarioById('S30'), day, at).athlete;
+  assert.equal(cardKind(swimmer, card({ sport: 'swim', minutes: 60, kind: 'threshold', place: 'pool' })), 'threshold');
   assert.deepEqual(names(await run('S31', 'Nikdy neplav sám, vezmi parťáka, neopren a bójku.')), []);
   assert.ok(names(await run('S31', 'Vezmi neopren a bójku, začni pomalu.')).includes('safety:nikdy sám ve volné vodě'));
   assert.deepEqual(names(await run('S32', 'Plavání dej 3× krátce, protože je nejslabší, kolo 2× a běh 2×, v sobotu po dlouhé jízdě hned krátký běh (brick).')), []);
