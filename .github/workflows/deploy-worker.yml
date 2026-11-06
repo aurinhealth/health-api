@@ -179,6 +179,10 @@ jobs:
       # Without them nobody could sign in or connect, so nothing is deployed.
       # Without TURNSTILE_SECRET_KEY the website's waitlist takes nobody
       # (src/testflight-waitlist.js), so the live server needs it too.
+      # Without the others a feature stops without an error: the coach and AI
+      # workouts (OPENAI_API_KEY), e-mail codes and the morning report
+      # (EMAIL_FROM), Google sign-in and Google Health (GOOGLE_CLIENT_ID and
+      # GOOGLE_CLIENT_SECRET), notifications (APNS_KEY_ID and APNS_KEY_P8).
       - name: Check Worker secrets
         if: env.TARGET == 'production'
         env:
@@ -187,7 +191,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes wrangler@4.147.0 secret list | node scripts/require-secrets.mjs SESSION_SECRET CONNECTION_KEY TURNSTILE_SECRET_KEY
+          npx --yes wrangler@4.147.0 secret list | node scripts/require-secrets.mjs SESSION_SECRET CONNECTION_KEY TURNSTILE_SECRET_KEY OPENAI_API_KEY EMAIL_FROM GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET APNS_KEY_ID APNS_KEY_P8
 
       # The test server's own database starts empty: the tables that predate
       # the migrations first (a no-op once they exist).
