@@ -295,7 +295,6 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const wellness=latestWellness(fitness,bodyDate);
   const ctl=n(wellness.ctl),atl=n(wellness.atl),tsb=n(wellness.tsb,ctl!=null&&atl!=null?ctl-atl:null),ramp=n(wellness.rampRate??wellness.ramp_rate);
   const wellnessSleep=(Array.isArray(fitness?.wellness)?fitness.wellness:[]).filter(r=>{const age=diffDays(signalDate,r.id);return age!=null&&age>=0&&age<=1&&n(r.sleepSecs)>7200;}).sort((a,b)=>String(b.id).localeCompare(String(a.id)))[0];
-  const sleepMinutes=latestSleepMinutes(health,signalDate)??(wellnessSleep?Math.round(n(wellnessSleep.sleepSecs)/60):null);
   // Leg work in the gym does not touch a swim.
   const lowerGym=swim?[]:recentLowerGym(gym,targetDate,2);
   const todayCompleted=completed.filter(a=>isoDate(a.date)===targetDate);
@@ -319,6 +318,13 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const sessions=Array.isArray(health?.sleep)?health.sleep:[];
   const ready=readinessFor({date:signalDate,google:health?.wellness,intervals:fitness?.wellness,sessions,profile,checkin:manualReadiness==null?checkin:null});
   const rows=ready.rows,body=ready.body,bh=body.components?.hrv,br=body.components?.restingHR,bs=body.components?.sleep;
+  // Last night has not arrived yet while this athlete's nights are usually
+  // recorded (readiness.js "no_night"): Today shows no number until it syncs.
+  // The coach waits for it as well: not yesterday's sleep, no hard session
+  // suggested and no yellow either, which would only add yellow days (audit
+  // 2026-11-06, finding 4.1, Petr's answer to question O3).
+  const noNight=!farAhead&&(body.flags||[]).includes("no_night"),awaitingNight=noNight&&daysAhead===0;
+  const sleepMinutes=noNight?null:latestSleepMinutes(health,signalDate)??(wellnessSleep?Math.round(n(wellnessSleep.sleepSecs)/60):null);
   const hrv=wellnessTrend({wellness:rows},signalDate,"hrv"),rhr=wellnessTrend({wellness:rows},signalDate,"restingHR");
   if(daysAhead===1&&ready.score!=null)readinessReasons.push(L("na zítřek beru dnešní připravenost, novější data zatím nejsou","for tomorrow I use today's readiness, as there is no newer data yet"));
   if(farAhead)readinessReasons.push(L("regenerace na tento den ještě není známá, intenzitu určuje zátěž","recovery for this day isn't known yet, so the training load sets the intensity"));
@@ -340,8 +346,9 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   if(bw?.elevated)readinessReasons.push(L("teplota zápěstí ve spánku je o "+bw.deviation.toFixed(1).replace(".",",")+" °C nad tvým průměrem","wrist temperature during sleep is "+bw.deviation.toFixed(1)+" °C above your average"));
   // Without the body's signals (no watch, or under 14 days of baseline) the
   // load decides, and only fatigue data plus a full night allow green.
-  let readiness=ready.zone||(farAhead||tsb!=null&&sleepMinutes!=null&&sleepMinutes>=420?"green":"yellow");
-  if(!body.zone&&!farAhead)readinessReasons.push(L("chybí HRV nebo klidový tep s aspoň 14denním průměrem, připravenost odhaduji ze zátěže","no HRV or resting heart rate with at least a 14-day average yet, so readiness comes from the training load"));
+  let readiness=ready.zone||(farAhead||awaitingNight||tsb!=null&&sleepMinutes!=null&&sleepMinutes>=420?"green":"yellow");
+  if(noNight)readinessReasons.push(L("poslední noc se ještě nenahrála, připravenost doplním, až se spánek nasynchronizuje","last night hasn't synced yet, readiness follows once your sleep arrives"));
+  else if(!body.zone&&!farAhead)readinessReasons.push(L("chybí HRV nebo klidový tep s aspoň 14denním průměrem, připravenost odhaduji ze zátěže","no HRV or resting heart rate with at least a 14-day average yet, so readiness comes from the training load"));
   const loadCap=(zone,text)=>{readiness=lower(readiness,zone);readinessReasons.push(text);};
   if(tsb!=null&&tsb<=-30)loadCap("red",L("forma/únava je hluboko v záporných hodnotách","form is deep in negative territory")+" (TSB "+Math.round(tsb)+")");
   else if(tsb!=null&&tsb<=-20)loadCap("yellow",L("výrazná kumulovaná únava","significant accumulated fatigue")+" (TSB "+Math.round(tsb)+")");
@@ -474,8 +481,10 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     } else if(phase==="taper"){
       // After the beginner and the other sport's hard day (Revize 2026-10-16).
       // One short, sharp session keeps the form; everything else is easy and shorter.
-      if(readiness==="green"&&hard7===0&&eventDays>=3){kind="vo2";rationale.push(L("Krátká ostrá intenzita udrží formu, objem je nižší.","Short, sharp intensity keeps your form while the volume is lower."));}
+      if(readiness==="green"&&!awaitingNight&&hard7===0&&eventDays>=3){kind="vo2";rationale.push(L("Krátká ostrá intenzita udrží formu, objem je nižší.","Short, sharp intensity keeps your form while the volume is lower."));}
       else kind="endurance";
+    } else if(awaitingNight){
+      rationale.push(L("Čekám na tvoji noc. Do té doby navrhuju jen lehký trénink, kvalitu přidám, až uvidím, jak ses vyspal.","Waiting for your night. Until then I suggest only an easy session; quality comes once I see how you slept."));
     } else if(readiness==="green"&&hard7===0){
       // The quality system trained longest ago (by feedback), in phase order.
       const order=short?(phase==="build"?["threshold","vo2max","tempo"]:["threshold","tempo","vo2max"]):phase==="build"?["threshold","vo2max","sweet_spot"]:["sweet_spot","threshold","vo2max"];
@@ -540,6 +549,8 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     } else if(readiness==="yellow"&&quality()){
       if(chatAsked)adaptations.push(L("střední připravenost: tvrdá část zkrácená","moderate readiness: hard part kept short"));
       else{kind="endurance";adaptations.push(L("střední připravenost: bez intenzity","moderate readiness: no intensity"));}
+    } else if(awaitingNight&&quality()&&!chatAsked){
+      kind="endurance";adaptations.push(L("čekám na tvoji noc: tvrdý trénink až po nahrání spánku","waiting for your night: the hard session once your sleep syncs"));
     }
     if(quality()&&!insisted){
       const why=novice?W.novice:offBreak?W.off(lastRide):lastHard!=null&&lastHard<2?W.recent:waitsForRecovery?recoveryWhy(halfDay(recoveryTime.readyAt)):otherRecent?L("tvrdý trénink druhého sportu byl před méně než 48 h","a hard session of the other sport was less than 48 h ago"):hard7>=2||hardAll7>=3?L("dodržen limit kvalitních dnů","quality-day limit respected"):lowerGym.length?W.gym:recoveryWeek&&!plannedInfo?.system?L("regenerační týden: bez intenzity","recovery week: no intensity"):null;
@@ -611,13 +622,13 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const capabilitySystem=kind==="long_endurance"?"endurance":kind==="vo2"?"vo2max":kind;
   const capability=capabilities?.[capabilitySystem]||null;
   const capabilityLevel=n(capability?.level,3);
-  const progressionOffset=readiness==="green"?.45:readiness==="yellow"?-.25:-1;
+  const progressionOffset=awaitingNight&&readiness==="green"?0:readiness==="green"?.45:readiness==="yellow"?-.25:-1;
   const targetDifficulty=Math.round(clamp(capabilityLevel+progressionOffset+(phase==="build"?.2:phase==="recovery"?-.6:0)-(returning||novice?1:0),1,10)*10)/10;
   const progressionAction=readiness==="red"?"deload":targetDifficulty>capabilityLevel+.1?"progress":targetDifficulty<capabilityLevel-.1?"regress":"maintain";
   const alternatives=[];
   if(kind!=="endurance") alternatives.push(workoutTemplate("endurance",Math.min(requestedMinutes,short?60:90),cadence,sport));
   if(readiness!=="red"&&kind!=="recovery") alternatives.push(workoutTemplate("recovery",Math.min(requestedMinutes,short?40:60),cadence,sport));
-  if(requestedMinutes>=longMinutes&&kind!=="long_endurance"&&readiness==="green") alternatives.push(workoutTemplate("long_endurance",requestedMinutes,cadence,sport));
+  if(requestedMinutes>=longMinutes&&kind!=="long_endurance"&&readiness==="green"&&!awaitingNight) alternatives.push(workoutTemplate("long_endurance",requestedMinutes,cadence,sport));
 
   const missing=[];
   if(sleepMinutes==null)missing.push("recent sleep duration");
@@ -634,11 +645,11 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     // flags: the recovery model's warnings (respiration_elevated, skin_temp_elevated, wrist_temp_elevated, hrv_trend_down) and a tired or sick check-in.
     // The "HRV +15 · Tep −8 · Spánek −13" row under the readiness on Health:
     // points each signal added to or took from 70, never beats or ms.
-    readiness:{score,status:readiness,todayZone:ready.zone||null,todayScore:ready.score??null,todayParts:ready.score==null?[]:[...readinessParts(body),...(body.score!=null&&ready.score<body.score?[{key:"checkin",points:ready.score-body.score}]:[])],reasons:readinessReasons,flags:[...(body.flags||[]),...(["tired","sick"].includes(checkin)?["checkin_"+checkin]:[])],provisional:!!ready.provisional,sleepMinutes,ctl,atl,tsb,rampRate:ramp,hrv,restingHr:rhr,wristTempDeviation:bw?.deviation??null,manualReadiness:manualReadiness??null},
+    readiness:{score,status:readiness,todayZone:ready.zone||null,todayScore:ready.score??null,todayParts:ready.score==null?[]:[...readinessParts(body),...(body.score!=null&&ready.score<body.score?[{key:"checkin",points:ready.score-body.score}]:[])],reasons:readinessReasons,awaitingNight,flags:[...(body.flags||[]),...(["tired","sick"].includes(checkin)?["checkin_"+checkin]:[])],provisional:!!ready.provisional,sleepMinutes,ctl,atl,tsb,rampRate:ramp,hrv,restingHr:rhr,wristTempDeviation:bw?.deviation??null,manualReadiness:manualReadiness??null},
     load:{bikeTssRolling7d:Math.round(tss7),hardBikeDaysRolling7d:hard7,domainLoadRolling7d:domains,lowerBodyGymSignals48h:lowerGym.length},
     athleteState:policy,rationale:policy.paused?policy.guidance:rationale,week:{recoveryWeek,thisWeekLoad,lastWeekLoad},
     constraints:{availableMinutes:requestedMinutes,autoLength,novice,capacityMinutes:capacity?Math.round(capacity.minutes):null,plannedToday:plannedToday?{name:plannedToday.name,type:plannedToday.type,durationHours:plannedToday.durationHours,tss:plannedToday.tss,system:plannedInfo?.system||null,minutes:plannedInfo?.minutes||null,intensityFactor:plannedInfo?.intensityFactor??null,structure:plannedInfo?.structure||[]}:null,cadence,phase:phase||"auto"},
-    recommendation:policy.paused?{session:{kind:'rest',name:policy.headline,durationMinutes:0,steps:[],cadence:null},adaptations:policy.guidance,decisionRule:'status_pause',progression:{system:null,capabilityLevel,targetDifficulty:null,action:'pause',confidence:1}}:{session,adaptations,decisionRule:readiness==="red"?"recover":readiness==="yellow"?"maintain_quality_guardrails":"progress_if_context_allows",progression:{system:capabilitySystem,capabilityLevel,targetDifficulty,action:progressionAction,confidence:n(capability?.confidence,.2)}},
+    recommendation:policy.paused?{session:{kind:'rest',name:policy.headline,durationMinutes:0,steps:[],cadence:null},adaptations:policy.guidance,decisionRule:'status_pause',progression:{system:null,capabilityLevel,targetDifficulty:null,action:'pause',confidence:1}}:{session,adaptations,decisionRule:readiness==="red"?"recover":readiness==="yellow"?"maintain_quality_guardrails":awaitingNight?"await_night":"progress_if_context_allows",progression:{system:capabilitySystem,capabilityLevel,targetDifficulty,action:progressionAction,confidence:n(capability?.confidence,.2)}},
     alternatives:policy.paused?[]:alternatives,
     missingData:missing,
     confidence:missing.length>=4?"low":missing.length>=2?"medium":"high"
