@@ -553,7 +553,12 @@ struct ActivityDetailContent: View {
                 if let i = a.icu_intensity { stat("IF", Fmt.decimal(i > 2 ? i / 100 : i, digits: 2)) }
                 if let pace = runPace { stat(L10n.isEnglish ? "Pace" : "Tempo", pace) }
                 if let e = a.total_elevation_gain, e > 0 { stat("Převýšení", Fmt.int(e) + " m") }
-                if let h = detail.recoveryHours { stat("Regenerace", "\(h) h") }
+                if let h = detail.recoveryHours {
+                    VStack(alignment: .leading, spacing: 2) {
+                        stat("Regenerace", Self.recoveryDays(h))
+                        Text("odhad").font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                }
                 if let c = kcal ?? a.calories {
                     VStack(alignment: .leading, spacing: 2) {
                         stat("Energie", Fmt.int(c) + " kcal")
@@ -628,6 +633,12 @@ struct ActivityDetailContent: View {
     private var runPace: String? {
         guard isRun, let v = detail.activity.average_speed, v > 0 else { return nil }
         return Units.paceText(1000 / v)
+    }
+
+    /// 36 h → "≈ 1,5 dne": half days at least, an estimate like Today's (not exact hours).
+    static func recoveryDays(_ hours: Int) -> String {
+        let halves = max(1, Int((Double(hours) / 12).rounded()))
+        return "≈ " + (halves % 2 == 0 ? L10n.plural("%lld dní", halves / 2) : L10n.f("%@ dne", Fmt.decimal(Double(halves) / 2)))
     }
 
     private func stat(_ title: String, _ value: String) -> some View {
