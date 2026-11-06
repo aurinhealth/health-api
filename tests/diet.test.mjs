@@ -39,11 +39,12 @@ test("an own protein per kg replaces Auto in every style", () => {
   }
 });
 
-test("high protein: 2.2 g/kg, 2.4 while losing weight, fat 0.7", () => {
+test("high protein: 2.2 g/kg, 2.4 while losing weight, fat 0.7 g/kg or 20 % of the energy", () => {
   assert.equal(dayMacros(80, 2600, {}, { goal: "maintain", dietStyle: "high_protein" }).protein_g, 176);
   const m = dayMacros(80, 2600, {}, { ...lose, dietStyle: "high_protein" });
   assert.equal(m.protein_g, 192);
-  assert.equal(m.fat_g, 56);
+  // 0.7 g/kg is 56 g, 20 % of 2600 kcal is 58 g.
+  assert.equal(m.fat_g, 58);
 });
 
 test("keto: a net carb limit, fat fills the calories, protein at least 1.6", () => {
@@ -185,4 +186,29 @@ test("an own calorie goal on keto moves the fat, the carbs stay at the limit", (
   assert.equal(daily.nutrition.calorieTarget, 2000);
   assert.equal(daily.nutrition.macros.carbs_g, macros.carbs_g);
   assert.ok(daily.nutrition.macros.fat_g < macros.fat_g);
+});
+
+test("a long ride day: fat at least 20 % of the energy, carbs at most 12 g/kg", () => {
+  // 90 kg, 4 h ride: 0.7 g/kg alone left 10 % fat and 12.8 g/kg carbs.
+  const ride = dayMacros(90, 5800, { endurance: true, training: true, totalEnduranceHours: 4 }, { goal: "maintain" });
+  assert.ok(ride.fat_g * 9 >= 5800 * 0.2 - 9);
+  assert.ok(ride.carbs_g <= 12 * 90);
+  assert.ok(Math.abs(kcalOf(ride) - 5800) <= 10);
+  const huge = dayMacros(60, 6000, { endurance: true, training: true }, { goal: "maintain" });
+  assert.equal(huge.carbs_g, 720);
+  // A later target (the evening budget) keeps the same limits.
+  const later = refillMacros({ ...dayMacros(90, 3000, { endurance: true, training: true }, { goal: "maintain" }) }, 5800);
+  assert.equal(later.fat_g, ride.fat_g);
+  assert.equal(later.carbs_g, ride.carbs_g);
+  // An own fat (Custom) stays as chosen.
+  assert.equal(dayMacros(90, 5800, { endurance: true }, { goal: "maintain", dietStyle: "custom", customSet: "fat", customFatPerKg: 0.6 }).fat_g, 54);
+});
+
+test("a low target on a training day keeps carbs at 3 g/kg, fat gives way to its floor", () => {
+  const m = dayMacros(55, 1400, { training: true, endurance: true }, lose);
+  assert.ok(m.carbs_g >= 165);
+  assert.ok(m.fat_g < m.fat_base_g);
+  assert.ok(m.fat_g >= Math.round(55 * FAT_FLOOR_PER_KG));
+  // A rest day has no carb minimum.
+  assert.equal(dayMacros(55, 1400, {}, lose).carbs_min_g, 0);
 });

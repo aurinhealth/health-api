@@ -99,7 +99,7 @@ export function nutritionContext(n,{daily=null,week=null,fluids=null,date=null}=
   return compactObject({calorieTarget:target,macros,diet:n.diet||null,eaten,
     remaining:target==null&&!macros?null:compactObject({kcal:left(target,eaten?.kcal),protein_g:left(macros?.protein_g,eaten?.protein_g),carbs_g:left(macros?.carbs_g,eaten?.carbs_g),fat_g:left(macros?.fat_g,eaten?.fat_g)}),
     targetReason:typeof n.reason==='string'?n.reason.slice(0,400):null,
-    minimumKcal:num(b.minTarget),deficitKcal:num(b.weightLossDeficit),
+    minimumKcal:num(b.floorTarget??b.minTarget),deficitKcal:num(b.weightLossDeficit),
     weight:filled({currentKg:avg(w.current??n.currentWeight),average7dKg:avg(w.average7d),average30dKg:avg(w.average30d),goalKg:avg(n.targetWeightKg)}),
     burned:filled({dayKcal:round(num(daily?.burned?.total)),activityKcal:round(num(daily?.burned?.activity)),activeSoFarKcal:round(num(n.energyBudget?.active))}),
     drinks:fluids&&num(fluids.target?.ml)!=null?{drunkMl:round(num(fluids.hydrationMl??fluids.totalMl)||0),targetMl:num(fluids.target.ml)}:null,
