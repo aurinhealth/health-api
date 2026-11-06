@@ -236,6 +236,10 @@ struct SetupFlowView: View {
                 sourceRow(p)
             }
         }
+        // What an iPhone alone cannot measure (audit 14.6).
+        Text("HRV, tep a spánek měří hodinky nebo prsten. Bez nich uvidíš kroky, trénink a jídlo.")
+            .font(Typo.caption).foregroundStyle(Palette.muted)
+            .fixedSize(horizontal: false, vertical: true)
         SectionLabel(text: "Tréninkové aplikace").padding(.top, 10)
         SettingsGroup {
             if let intervals = provider("intervals") { sourceRow(intervals) }
@@ -334,6 +338,12 @@ struct SetupFlowView: View {
     }
 
     /// Google and Intervals.icu, also before /app/api/connections answers.
+    /// A watch or ring that measures readiness: an Apple Watch paired with
+    /// this iPhone, or a connected service that reads one (audit 14.6).
+    private var wearable: Bool {
+        WatchBridge.shared.watchState.paired || ["google", "ultrahuman", "whoop"].contains { provider($0)?.connected == true }
+    }
+
     private func provider(_ id: String) -> ConnectionsResponse.Provider? {
         if let known = providers.first(where: { $0.id == id }) { return known }
         let names = ["google": "Google Health", "intervals": "Intervals.icu"]
@@ -802,12 +812,17 @@ struct SetupFlowView: View {
             .font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 24)
-        Text("Každé ráno tvoje připravenost a kouč, když je potřeba změnit plán.")
+        // Without a watch or ring the morning readiness never comes (audit 14.6): the coach and bedtime lead.
+        Text(wearable ? "Každé ráno tvoje připravenost a kouč, když je potřeba změnit plán." : "Kouč, když je potřeba změnit plán, a kdy jít spát.")
             .font(Typo.sentence(18)).foregroundStyle(Palette.secondary)
             .fixedSize(horizontal: false, vertical: true)
         VStack(spacing: 10) {
-            NotificationPreview(title: L10n.tr("Připravenost 78 · Dobrý den na tvrdý trénink"), text: L10n.tr("Dobrá noc, třetí den v řadě. Dnes naplno do posilovny."), time: "7:02")
-            NotificationPreview(title: L10n.tr("Kouč"), text: L10n.tr("HRV je dva dny dole. Dnešní intervaly jsem posunul na čtvrtek."), time: "12:40")
+            if wearable {
+                NotificationPreview(title: L10n.tr("Připravenost 78 · Dobrý den na tvrdý trénink"), text: L10n.tr("Dobrá noc, třetí den v řadě. Dnes naplno do posilovny."), time: "7:02")
+                NotificationPreview(title: L10n.tr("Kouč"), text: L10n.tr("HRV je dva dny dole. Dnešní intervaly jsem posunul na čtvrtek."), time: "12:40")
+            } else {
+                NotificationPreview(title: L10n.tr("Kouč"), text: L10n.tr("Včera byl těžký trénink. Dnešní intervaly jsem posunul na čtvrtek."), time: "12:40")
+            }
             NotificationPreview(title: L10n.tr("Za 30 minut do postele"),
                                 text: L10n.f("Na budík v %@ potřebuješ jít spát do %@.", ClockText.format("7:15"), ClockText.format("22:40")), time: "22:10")
         }
