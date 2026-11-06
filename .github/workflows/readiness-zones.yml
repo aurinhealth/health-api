@@ -1,11 +1,16 @@
-name: Readiness zones on staging
+name: Readiness zones
 
 # How many days are green, yellow or red on the test server's accounts
-# (audit 2026-11-06, O5). Read only; the job summary shows counts per
+# (audit 2026-11-06, O5); production only once with Petr's yes (2026-11-06). Read only; the job summary shows counts per
 # account under a number, no ids and no health values. Started by hand.
 on:
   workflow_dispatch:
     inputs:
+      target:
+        description: "Server"
+        type: choice
+        options: [staging, production]
+        default: staging
       days:
         description: "Days back (at most 90)"
         required: false
@@ -18,7 +23,7 @@ jobs:
   measure:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: staging
+    environment: ${{ inputs.target == 'production' && 'production' || 'staging' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -43,4 +48,5 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           READINESS_DAYS: ${{ inputs.days }}
+          READINESS_TARGET: ${{ inputs.target }}
         run: node scripts/readiness-zones.mjs

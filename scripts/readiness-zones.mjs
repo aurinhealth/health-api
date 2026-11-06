@@ -1,11 +1,13 @@
 // How often the readiness is green, yellow or red on the test server's
-// accounts (audit 2026-11-06, owner question O5 to finding 5.4). Read only:
+// accounts, or once on the live server with the owner's yes (Petr
+// 2026-11-06, audit O5 to finding 5.4). Read only:
 // every statement that is not a SELECT is skipped, and the job prints counts
 // per account under a number, never an id, an e-mail or a health value.
 // Each day is the readiness Today shows (readiness.js readinessFor) from the
 // account's stored Google/Apple days, nights, profile and morning locks;
 // Intervals.icu wellness is not read here.
-// CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID: the GitHub environment staging.
+// CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID: the GitHub environment staging,
+// or production with READINESS_TARGET=production.
 import { appendFileSync } from 'node:fs';
 import { userEnv } from '../src/tenancy.js';
 import { withTimeZone, localToday, validTimeZone } from '../src/user-time.js';
@@ -61,15 +63,16 @@ async function main() {
     return data.result;
   };
   const all = await api('?per_page=100');
-  // Only the test server: never run with a token that sees the live databases.
-  if (all.some(d => d.name === 'health-data' || d.name?.startsWith('health-data-users-'))) throw new Error('This token sees the live databases; run it only in the GitHub environment staging');
+  // The test server's run never reads with a token that sees the live databases.
+  const live = process.env.READINESS_TARGET === 'production', prefix = live ? 'health-data' : 'health-data-staging';
+  if (!live && all.some(d => d.name === 'health-data' || d.name?.startsWith('health-data-users-'))) throw new Error('This token sees the live databases; run it only in the GitHub environment staging');
   const byName = Object.fromEntries(all.map(d => [d.name, d.uuid]));
   const binding = id => {
     const db = readOnlyD1(async (sql, params) => (await api('/' + id + '/query', { sql, params }))[0].results || []);
     return db;
   };
-  const core = byName['health-data-staging'];
-  if (!core) throw new Error('The test server database is missing');
+  const core = byName[prefix];
+  if (!core) throw new Error('The central database is missing');
   const coreDb = binding(core), shards = {};
   const users = await coreDb.prepare(`SELECT u.id, r.shard_key, s.binding_name, z.time_zone FROM users u
     JOIN user_consents k ON k.user_id=u.id AND k.kind='health' AND k.withdrawn_at IS NULL
@@ -80,7 +83,7 @@ async function main() {
   const rows = [], skipped = { noDatabase: 0, noNumber: 0, failed: 0 }, errors = new Set();
   for (const user of users) {
     const name = /^USER_DATA_(\d{3})$/.exec(user.binding_name || '')?.[1];
-    const id = name ? byName['health-data-staging-users-' + name] : user.shard_key === 'legacy' || !user.shard_key ? core : null;
+    const id = name ? byName[prefix + '-users-' + name] : user.shard_key === 'legacy' || !user.shard_key ? core : null;
     if (!id) { skipped.noDatabase++; continue; }
     shards[id] ||= binding(id);
     const env = userEnv({ DB: coreDb, USER_DATA_DB: shards[id] }, { id: user.id, email: '', role: 'user' });
@@ -92,7 +95,7 @@ async function main() {
   const pct = (a, b) => b ? Math.round(100 * a / b) + ' %' : '–';
   const total = rows.reduce((t, r) => { for (const k of Object.keys(t)) t[k] += r[k]; return t; }, { days: 0, green: 0, yellow: 0, red: 0, none: 0, yellowHrvLow: 0 });
   const line = (label, r) => { const scored = r.green + r.yellow + r.red; return `| ${label} | ${scored} | ${r.green} | ${r.yellow} (${pct(r.yellow, scored)}) | ${r.red} | ${r.yellowHrvLow} |`; };
-  const text = [`## Readiness zones on the test server, last ${DAYS} days`, '',
+  const text = [`## Readiness zones on the ${live ? 'live' : 'test'} server, last ${DAYS} days`, '',
     `${users.length} accounts with health consent; ${rows.length} with a readiness. Left out: ${skipped.noNumber} without any day with a number, ${skipped.noDatabase} without a data database, ${skipped.failed} failed${errors.size ? ' (' + [...errors].join('; ') + ')' : ''}. Days without a number are left out.`, '',
     '| Account | Days with a number | Green | Yellow | Red | Yellow with HRV under normal |', '|---|---|---|---|---|---|',
     ...rows.map((r, i) => line(String(i + 1), r)), line('**All**', total), ''].join('\n');
