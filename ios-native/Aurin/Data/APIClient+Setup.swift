@@ -50,12 +50,12 @@ extension APIClient {
     }
 
     /// The consent from the setup: health data, which covers the AI features too (as on the web).
-    /// The health-data consent and, when the user ticked it, the separate one
-    /// to send what an AI feature needs to OpenAI. Left unticked, an AI choice
-    /// made earlier stays as it was.
+    /// The health-data consent and the separate one to send what an AI feature
+    /// needs to OpenAI, as ticked on that page. Left unticked, an AI consent
+    /// given earlier ends, so after a new text it holds only when ticked again
+    /// (legal review 2026-11-05, point 4).
     func giveHealthConsent(ai: Bool) async throws {
-        var body: [String: JSONValue] = ["health": .bool(true)]
-        if ai { body["ai"] = .bool(true) }
+        let body: [String: JSONValue] = ["health": .bool(true), "ai": .bool(ai)]
         let _: JSONValue = try await send("/app/api/consent", method: "POST", body: body)
     }
 }

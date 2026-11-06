@@ -532,8 +532,8 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
       adaptations.push(L("nízká připravenost: jen krátká regenerace","low readiness: only a short recovery session"));
     } else if(illness){
       if(quality()||kind==="long_endurance")kind="endurance";
-      capAt(short?40:60,L("dech nebo teplota ve spánku nad normálem","breathing or temperature in sleep above normal"));
-      adaptations.push(L("dech nebo teplota ve spánku jsou nad normálem: bez intenzity a krátce","breathing or temperature in sleep are above normal: no intensity and short"));
+      capAt(short?40:60,L("dech nebo teplota ve spánku nad obvyklým rozmezím","breathing or temperature in sleep above your usual range"));
+      adaptations.push(L("dech nebo teplota ve spánku jsou nad obvyklým rozmezím: bez intenzity a krátce","breathing or temperature in sleep are above your usual range: no intensity and short"));
     } else if(cycleEase&&!insisted&&(quality()||kind==="long_endurance")){
       kind="endurance";capAt(short?30:45,CYCLE_TEXTS().cap);
       adaptations.push(CYCLE_TEXTS().adaptation);
