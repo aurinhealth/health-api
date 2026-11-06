@@ -124,7 +124,43 @@ test("resting HR: a carried baseline instead of the mixed one when the sources o
   const plain = rows.map(({ restingHRBySource, ...x }) => x);
   const m = recoveryReadiness({ rows: [...plain, { id: DATE, restingHR: 55, restingHRSource: "apple-health" }], date: DATE });
   assert.ok(m.flags.includes("restingHRMixed"));
-  assert.equal(m.provisional, false);
+  // Audit 5.3: the score from a borrowed range says so on Today, like a carried one.
+  assert.equal(m.provisional, true);
+  assert.ok(m.flags.includes("provisional"));
+  assert.equal(m.provisionalDays, 8, "6 own days of 14");
+});
+
+// Audit 5.2: two months of WHOOP breathing at ~14 /min, then an Apple Watch
+// that reads ~15.2 /min for the same body.
+const breathing = (appleDays, overlap = 0) => Array.from({ length: 60 }, (_, i) => {
+  const offset = i - 60, whoop = 14 + (i % 3) * 0.1, apple = whoop + 1.2, isApple = offset >= -appleDays, both = isApple && offset < -appleDays + overlap;
+  const base = { id: day(offset), hrv: 60 + (i % 5), hrvSource: "google-wearables", restingHR: 50 + (i % 2), restingHRSource: "google-wearables" };
+  if (!isApple) return { ...base, respiration: whoop, respirationSource: "whoop" };
+  return { ...base, respiration: apple, respirationSource: "apple-health", ...(both ? { respirationBySource: { whoop, "apple-health": apple } } : {}) };
+});
+
+test("breathing after a switch to another watch is not elevated by the watch alone", () => {
+  const today = { id: DATE, hrv: 62, hrvSource: "google-wearables", restingHR: 50, restingHRSource: "google-wearables", respiration: 15.3, respirationSource: "apple-health" };
+  const fresh = recoveryReadiness({ rows: [...breathing(3), today], date: DATE });
+  assert.ok(!fresh.flags.includes("respiration_elevated"), "a few new nights: silent");
+  assert.equal(fresh.components.respiration, undefined);
+  const carried = recoveryReadiness({ rows: [...breathing(6, 6), today], date: DATE });
+  assert.ok(carried.components.respiration, "the overlap carries WHOOP's range over");
+  assert.ok(!carried.flags.includes("respiration_elevated"));
+  const raised = recoveryReadiness({ rows: [...breathing(6, 6), { ...today, respiration: 17.2 }], date: DATE });
+  assert.ok(raised.flags.includes("respiration_elevated"), "a real rise on the new watch still counts");
+  // Before the fix every source shared one baseline: 15.3 against WHOOP's 14.1 was flagged.
+  const own = recoveryReadiness({ rows: [...breathing(20), today], date: DATE });
+  assert.ok(!own.flags.includes("respiration_elevated"));
+});
+
+test("the breathing rate keeps its source in the summary", () => {
+  const resp = (source, date, value) => ({ data_type: "daily-respiratory-rate", source_family: source, sample_time: date, value_numeric: value, payload_json: "{}" });
+  const s = googleHealthSummary([resp("whoop", "2026-10-07", 14.1), resp("apple-health", "2026-10-07", 15.3), resp("whoop", "2026-10-06", 14)], DATE);
+  const both = s.wellness.find(r => r.id === "2026-10-07"), one = s.wellness.find(r => r.id === "2026-10-06");
+  assert.deepEqual(both.respirationBySource, { whoop: 14.1, "apple-health": 15.3 });
+  assert.equal(one.respirationSource, "whoop");
+  assert.equal(one.respirationBySource, undefined);
 });
 
 test("every source's value of a day is kept for the overlap", () => {
