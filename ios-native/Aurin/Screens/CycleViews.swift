@@ -792,7 +792,7 @@ struct CycleSettingsView: View {
         Task {
             await CycleHealth.requestAccess()
             let found = await CycleHealth.setup()
-            var changes: JSONObject = ["enabled": .bool(true)]
+            var changes: JSONObject = ["enabled": .bool(true), "consent": .bool(true)]
             if settings?.lastPeriod == nil, let last = found.lastPeriod { changes["lastPeriod"] = .string(last) }
             if settings?.cycleLength == nil, let length = found.cycleLength { changes["cycleLength"] = .number(Double(length)) }
             if (settings?.contraception ?? "none") == "none", let c = found.contraception { changes["contraception"] = .string(c) }
@@ -1134,7 +1134,8 @@ struct CoachCycleConsentSheet: View {
 }
 
 /// Settings → Cyklus → "Sledovat cyklus": what tracking does, what it keeps
-/// and its own explicit consent (GDPR art. 9), shown before it turns on. The
+/// and its own explicit consent (GDPR art. 9), shown before it turns on, and
+/// at launch to whoever had it on before the sheet existed (RootView). The
 /// server records when (src/cycle-store.js enabledAt). Turned off, the data
 /// stays until the account is deleted (privacy policy), unused.
 struct CycleTrackingConsentSheet: View {

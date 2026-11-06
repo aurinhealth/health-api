@@ -39,6 +39,9 @@ struct CycleSettings: Codable, Equatable {
     var lifeStage: String?
     /// Hormone therapy, for the coach.
     var hrt: Bool?
+    /// Turned on before tracking had its own consent: off until it is given
+    /// (src/cycle-store.js); nil from an older server.
+    var consentNeeded: Bool?
 
     var stage: String { lifeStage ?? "regular" }
 

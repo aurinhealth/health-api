@@ -21,25 +21,34 @@ async function ensure(db) {
   }
 }
 
+// Cycle tracking counts as on only with its consent (the sheet in Settings →
+// Cycle, GDPR art. 9; enabledAt is when it was given). Turned on before the
+// sheet existed, nothing is read or processed until the app asks again
+// (consentNeeded). Every use of the cycle reads the settings through here.
+const withConsent = s => s.enabled && !s.enabledAt ? { ...s, enabled: false, consentNeeded: true } : s;
+
 export async function getCycleSettings(db) {
   await ensure(db);
   const row = await db.prepare("SELECT settings_json FROM cycle_settings WHERE user_id=?").bind(db.userId).first();
   let raw = null;
   try { raw = JSON.parse(row?.settings_json || "null"); } catch { raw = null; }
-  return normalizeCycleSettings(raw);
+  return withConsent(normalizeCycleSettings(raw));
 }
 
-// Merges `changes` into the saved settings.
+// Merges `changes` into the saved settings. Tracking turns on with its
+// consent ({enabled: true, consent: true}); on without it, it stays waiting
+// for the consent.
 export async function saveCycleSettings(db, changes) {
   const prev = await getCycleSettings(db);
-  const next = normalizeCycleSettings({ ...prev, ...(changes && typeof changes === "object" ? changes : {}) });
+  const c = changes && typeof changes === "object" ? changes : {};
+  const on = Object.hasOwn(c, "enabled") ? c.enabled === true : prev.enabled || prev.consentNeeded === true;
+  const enabledAt = on ? prev.enabledAt || (c.consent === true ? new Date().toISOString() : null) : null;
+  const next = normalizeCycleSettings({ ...prev, ...c, enabled: on, enabledAt });
   // When the athlete agreed to share the cycle with the AI coach (the consent
   // sheet in Settings → Cycle), so the consent can be shown later.
   next.shareWithCoachAt = next.shareWithCoach ? (prev.shareWithCoach && prev.shareWithCoachAt) || new Date().toISOString() : null;
-  // The same for cycle tracking itself (its own consent sheet).
-  next.enabledAt = next.enabled ? (prev.enabled && prev.enabledAt) || new Date().toISOString() : null;
   await db.prepare("INSERT INTO cycle_settings(user_id,settings_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET settings_json=excluded.settings_json,updated_at=CURRENT_TIMESTAMP").bind(db.userId, JSON.stringify(next)).run();
-  return next;
+  return withConsent(next);
 }
 
 const dayOf = r => normalizeCycleDay({
