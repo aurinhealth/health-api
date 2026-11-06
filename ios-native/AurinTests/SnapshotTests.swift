@@ -512,9 +512,29 @@ final class SnapshotTests: XCTestCase {
         let blocks = CoachMarkdown.blocks(text)
         XCTAssertEqual(blocks.first, .heading(2, "Shrnutí"))
         XCTAssertTrue(blocks.contains(.bullets(["spánek", "HRV"])))
-        XCTAssertTrue(blocks.contains(.numbered(["rozjezd", "klid"])))
+        XCTAssertTrue(blocks.contains(.numbered(1, ["rozjezd", "klid"])))
         XCTAssertTrue(blocks.contains(.table([["den", "km"], ["po", "10"]])))
         XCTAssertEqual(blocks.last, .rule)
+    }
+
+    /// The lists and lines the coach writes loosely (audit 23.2).
+    func testCoachMarkdownLooseLists() {
+        // Steps with a blank line between them count on, not "1. 1. 1.".
+        XCTAssertEqual(CoachMarkdown.blocks("1. Rozjetí\n\n2. 5×4 min VO2max\n\n3. Vyjetí"),
+                       [.numbered(1, ["Rozjetí", "5×4 min VO2max", "Vyjetí"])])
+        // A note between the steps: the next step keeps its own number.
+        XCTAssertEqual(CoachMarkdown.blocks("1. Rozjetí\n\nKlidně 10 min.\n\n2. Intervaly"),
+                       [.numbered(1, ["Rozjetí"]), .paragraph("Klidně 10 min."), .numbered(2, ["Intervaly"])])
+        XCTAssertEqual(CoachMarkdown.blocks("3. Vyjetí\n4. Protažení"), [.numbered(3, ["Vyjetí", "Protažení"])])
+        // A week a line a day stays a line a day.
+        XCTAssertEqual(CoachMarkdown.blocks("Návrh na týden:\nPo: volno\nÚt: 60 min Z2"),
+                       [.paragraph("Návrh na týden:\nPo: volno\nÚt: 60 min Z2")])
+        // An indented line belongs to the item above it; + is a bullet too.
+        XCTAssertEqual(CoachMarkdown.blocks("- Drž 112 % FTP\n  ne víc\n- Stop pod 105 %"), [.bullets(["Drž 112 % FTP\nne víc", "Stop pod 105 %"])])
+        XCTAssertEqual(CoachMarkdown.blocks("1. Dřep\n   - 3×8\n2. Výpady"), [.numbered(1, ["Dřep\n• 3×8", "Výpady"])])
+        XCTAssertEqual(CoachMarkdown.blocks("+ HRV\n+ spánek"), [.bullets(["HRV", "spánek"])])
+        XCTAssertEqual(CoachMarkdown.blocks("- spánek\n\nDnes lehce."), [.bullets(["spánek"]), .paragraph("Dnes lehce.")])
+        XCTAssertEqual(CoachMarkdown.plainText("3. Vyjetí\n\n4. Protažení"), "3. Vyjetí\n4. Protažení")
     }
 
     func testBodyFigurePaths() {

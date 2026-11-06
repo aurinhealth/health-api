@@ -25,6 +25,10 @@ struct CoachView: View {
     /// When the question went: the seconds under it and "Odpověď za 8 s".
     @State private var askedAt: Date?
     @State private var error: String?
+    /// The connection dropped while the server went on with the answer: the
+    /// chat it is saved in and the newest stored message before it (audit 23.1).
+    @State private var unfinished: (chat: Int, after: Int)?
+    @State private var loadingAnswer = false
     @State private var needsConsent = false
     /// The coach needs Aurin Pro (402): the offer instead of an error.
     @State private var needsSubscription = false
@@ -132,6 +136,7 @@ struct CoachView: View {
                             if needsSubscription { AISubscriptionCard { Paywall.present(model) } }
                             if usedUp { usedUpCard }
                             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+                            if unfinished != nil, !sending { loadAnswerButton }
                             Color.clear.frame(height: 1).id("end")
                         }
                         .padding(20)
@@ -441,6 +446,9 @@ struct CoachView: View {
         input = ""
         photo = nil
         error = nil
+        unfinished = nil
+        // A stored answer has a higher id than any before it: how "Načíst odpověď" knows it came.
+        let newestStored = messages.compactMap(\.serverId).max() ?? 0
         let mine = Bubble(mine: true, text: text, photo: picture)
         messages.append(mine)
         let reply = Bubble(mine: false, text: "")
@@ -452,6 +460,12 @@ struct CoachView: View {
         let asked = Date()
         askedAt = asked
         defer { sending = false; progress = nil }
+        // A switch to another app mid-answer: iOS gives about half a minute
+        // more before the connection is frozen and lost.
+        let background = FinishInBackground("Coach answer")
+        defer { background.end() }
+        // The chat the server saves the answer in (the "chat" event).
+        var savedIn: Int?
         // Made smaller first: the server takes one JPEG up to about 1.8 MB.
         var image: String?
         if let picture {
@@ -472,6 +486,7 @@ struct CoachView: View {
             for try await event in model.api.askCoach(text, chatId: chatId, view: view, date: date, image: image, appContext: current?.appContext) {
                 switch event {
                 case .progress(let p): progress = p
+                case .chat(let chat): savedIn = chat
                 case .answer(let a):
                     if Date().timeIntervalSince(shownAt) >= 0.1 {
                         edit(id) { $0.text = a }
@@ -528,7 +543,57 @@ struct CoachView: View {
             if let a { allowance = a }
             usedUp = true
         } catch {
-            messages.removeAll { $0.id == id && $0.text.isEmpty }
+            let answered = !(messages.first { $0.id == id }?.text.isEmpty ?? true)
+            if let savedIn, error is URLError || (error as? APIError) == .interrupted {
+                // The server finishes the answer and saves it in the chat: load it, don't ask (and count) again.
+                messages.removeAll { $0.id == id && $0.text.isEmpty }
+                chatId = savedIn
+                if aboutSubject { keepChat(savedIn) }
+                unfinished = (savedIn, newestStored)
+                self.error = L10n.tr("Spojení se přerušilo. Kouč odpověď dopíše a uloží ji do chatu.")
+            } else if !answered {
+                // Nothing came: the question goes back to the field to send again.
+                messages.removeAll { $0.id == id || $0.id == mine.id }
+                input = text
+                photo = picture
+                self.error = error.localizedDescription
+            } else {
+                self.error = error.localizedDescription
+            }
+        }
+    }
+
+    /// Under the line about the lost connection: the answer from the chat once the server saved it.
+    private var loadAnswerButton: some View {
+        Button {
+            Task { await loadAnswer() }
+        } label: {
+            HStack(spacing: 8) {
+                Text("Načíst odpověď").font(Typo.bodyStrong)
+                if loadingAnswer { ProgressView().controlSize(.small) }
+            }
+            .frame(minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Palette.ink)
+        .disabled(loadingAnswer)
+    }
+
+    private func loadAnswer() async {
+        guard let wait = unfinished, !loadingAnswer else { return }
+        loadingAnswer = true
+        defer { loadingAnswer = false }
+        do {
+            let chat = try await model.api.chat(id: wait.chat)
+            guard chat.messages.contains(where: { $0.role == "assistant" && ($0.serverId ?? 0) > wait.after }) else {
+                error = L10n.tr("Kouč odpověď ještě píše. Zkus to za chvíli.")
+                return
+            }
+            unfinished = nil
+            error = nil
+            show(chat)
+        } catch {
             self.error = error.localizedDescription
         }
     }
@@ -726,6 +791,7 @@ struct CoachView: View {
         messages = []
         chatId = nil
         error = nil
+        unfinished = nil
         aboutSubject = true
         // A new conversation gets no extra messages.
         usedUp = allowance?.usedUp == true
@@ -745,30 +811,34 @@ struct CoachView: View {
 
     private func open(_ id: Int) async {
         do {
-            let chat = try await model.api.chat(id: id)
-            chatId = chat.id
-            if aboutSubject { keepChat(chat.id) }
-            usedUp = allowance?.usedUp == true
-            // The proposals stay under the answer they came with, decided or still open.
-            let actions = chat.actions ?? []
-            messages = chat.messages.map { m in
-                guard m.role == "user" else {
-                    var bubble = Bubble(mine: false, text: Self.withoutProposalNote(m.content), serverId: m.serverId,
-                                        at: ChatsPanel.date(m.createdAt), rating: m.rating)
-                    if let id = m.serverId {
-                        bubble.actions = actions.filter { $0.messageId == id }
-                        for a in bubble.actions {
-                            guard let draft = a.draftId, let state = a.draftStatus, state != "draft" else { continue }
-                            bubble.decided[draft] = state == "confirmed" ? L10n.tr("Potvrzeno.") : state == "rejected" ? L10n.tr("Zamítnuto.") : L10n.tr("Návrh už neplatí.")
-                        }
-                    }
-                    return bubble
-                }
-                let photo = Self.withoutPhotoMark(m.content)
-                return Bubble(mine: true, text: photo.text, photoMark: photo.marked)
-            }
+            unfinished = nil
+            show(try await model.api.chat(id: id))
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+
+    private func show(_ chat: ChatDetail) {
+        chatId = chat.id
+        if aboutSubject { keepChat(chat.id) }
+        usedUp = allowance?.usedUp == true
+        // The proposals stay under the answer they came with, decided or still open.
+        let actions = chat.actions ?? []
+        messages = chat.messages.map { m in
+            guard m.role == "user" else {
+                var bubble = Bubble(mine: false, text: Self.withoutProposalNote(m.content), serverId: m.serverId,
+                                    at: ChatsPanel.date(m.createdAt), rating: m.rating)
+                if let id = m.serverId {
+                    bubble.actions = actions.filter { $0.messageId == id }
+                    for a in bubble.actions {
+                        guard let draft = a.draftId, let state = a.draftStatus, state != "draft" else { continue }
+                        bubble.decided[draft] = state == "confirmed" ? L10n.tr("Potvrzeno.") : state == "rejected" ? L10n.tr("Zamítnuto.") : L10n.tr("Návrh už neplatí.")
+                    }
+                }
+                return bubble
+            }
+            let photo = Self.withoutPhotoMark(m.content)
+            return Bubble(mine: true, text: photo.text, photoMark: photo.marked)
         }
     }
 }

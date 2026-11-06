@@ -22,6 +22,7 @@ extension WatchBridge {
                     lastProgress = text
                     sendCoach([WatchCoach.progressKey: text], queue: false)
                 case .answer(let text): answer = text
+                case .chat(let chat): result.chatId = chat
                 case .done(let done):
                     if let text = done.answer { answer = text }
                     if let chat = done.chatId { result.chatId = chat }

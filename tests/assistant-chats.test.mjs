@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createD1 } from './helpers/d1.mjs';
 import { scopedDb } from '../src/tenancy.js';
-import { appendChatTurn, chatContext, listChats, readChat, deleteChat, chatTitle } from '../src/assistant-chats.js';
+import { appendChatTurn, appendChatTurnIds, chatContext, listChats, readChat, deleteChat, chatTitle, openChatForAnswer, dropEmptyChat } from '../src/assistant-chats.js';
 
 test('a chat keeps its own turns; a new chat starts without the old context',async()=>{
   const raw=createD1(),db=scopedDb(raw,1),other=scopedDb(raw,2);
@@ -78,4 +78,24 @@ test('a chat without any thumbs reads as before',async()=>{
   const chat=await readChat(db,id);
   assert.equal(chat.messages.length,2);
   assert.ok(chat.messages.every(m=>!('rating' in m)));
+});
+
+test('a streamed answer names its chat first; the chat is listed once the answer is saved (audit 23.1)',async()=>{
+  const raw=createD1(),db=scopedDb(raw,1),other=scopedDb(raw,2);
+  const opened=await openChatForAnswer(db,null,'Jak mám jet zítra?');
+  assert.equal(opened.created,true);
+  // While the answer is written, the empty chat is not in the list.
+  assert.deepEqual(await listChats(db),[]);
+  const saved=await appendChatTurnIds(db,opened.id,'Jak mám jet zítra?','Lehce.');
+  assert.equal(saved.chatId,opened.id);
+  assert.deepEqual((await listChats(db)).map(c=>[c.id,c.title,c.messages]),[[opened.id,'Jak mám jet zítra?',2]]);
+  // A chat that goes on keeps its id; another user's id becomes a new chat.
+  assert.deepEqual(await openChatForAnswer(db,opened.id,'A v sobotu?'),{id:opened.id,created:false});
+  assert.equal((await openChatForAnswer(other,opened.id,'Ahoj')).created,true);
+  // A failed answer: the new chat goes, a chat with messages stays.
+  const failed=await openChatForAnswer(db,undefined,'Co k večeři?');
+  await dropEmptyChat(db,failed.id);
+  await dropEmptyChat(db,opened.id);
+  await dropEmptyChat(other,opened.id);
+  assert.deepEqual((await raw.prepare('SELECT id FROM assistant_chats WHERE user_id=1').all()).results.map(r=>r.id),[opened.id]);
 });
