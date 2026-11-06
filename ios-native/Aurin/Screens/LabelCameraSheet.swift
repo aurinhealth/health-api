@@ -16,7 +16,7 @@ struct LabelCameraSheet: View {
     @State private var cameraAllowed: Bool?
     @State private var torch = false
     @State private var photo: PhotosPickerItem?
-    @State private var camera = PhotoCamera()
+    @State private var camera = PhotoCamera(closeUp: true)
     @State private var taking = false
     @State private var error: String?
 
@@ -122,7 +122,8 @@ struct LabelCameraSheet: View {
     private func shoot() async {
         taking = true
         defer { taking = false }
-        if let image = await camera.capture() { onImage(image) } else { error = L10n.tr("Fotku se nepodařilo pořídit. Zkus to znovu.") }
+        // Only what the window showed, so the table gets the photo's pixels.
+        if let image = await camera.capture() { onImage(await image.middleSquare()) } else { error = L10n.tr("Fotku se nepodařilo pořídit. Zkus to znovu.") }
     }
 
     private func load(_ item: PhotosPickerItem) async {
@@ -157,6 +158,11 @@ struct CameraWindow: UIViewRepresentable {
 /// A photo from the main lens (the scanner's), set up and taken on its own
 /// queue so the screen does not wait for the camera.
 final class PhotoCamera: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
+    /// Up close (a label): zoomed so the window shows about 8 cm where the
+    /// lens is still sharp. Without it the table looked small at 20 cm, the
+    /// phone went closer than the main lens can focus and the photo was
+    /// blurred (Petr, 2026-11-06).
+    private let closeUp: Bool
     private let session = AVCaptureSession()
     private let output = AVCapturePhotoOutput()
     private let queue = DispatchQueue(label: "health.aurin.label-camera")
@@ -165,6 +171,10 @@ final class PhotoCamera: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sen
     /// The selfie camera instead of the main lens (Sdílet's camera can switch).
     private var front = false
     private var pending: CheckedContinuation<UIImage?, Never>?
+
+    init(closeUp: Bool = false) {
+        self.closeUp = closeUp
+    }
 
     func start(on layer: AVCaptureVideoPreviewLayer) {
         layer.session = session
@@ -192,7 +202,10 @@ final class PhotoCamera: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sen
                         connection.isVideoMirrored = front
                     }
                 }
-                output.capturePhoto(with: AVCapturePhotoSettings(), delegate: self)
+                let settings = AVCapturePhotoSettings()
+                // Several frames merged: small print stays sharp in a kitchen's light.
+                settings.photoQualityPrioritization = closeUp ? .quality : .balanced
+                output.capturePhoto(with: settings, delegate: self)
             }
         }
     }
@@ -227,16 +240,41 @@ final class PhotoCamera: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sen
     private func configure() -> Bool {
         guard let device = BarcodeScanner.device, let input = try? AVCaptureDeviceInput(device: device) else { return false }
         session.beginConfiguration()
-        defer { session.commitConfiguration() }
         session.sessionPreset = .photo
-        guard session.canAddInput(input), session.canAddOutput(output) else { return false }
+        guard session.canAddInput(input), session.canAddOutput(output) else {
+            session.commitConfiguration()
+            return false
+        }
         session.addInput(input)
         session.addOutput(output)
+        output.maxPhotoQualityPrioritization = .quality
         self.input = input
-        if (try? device.lockForConfiguration()) != nil {
+        // The zoom is measured on the photo format the preset chose.
+        session.commitConfiguration()
+        if closeUp {
+            BarcodeCamera.zoomForCloseUp(device, width: 80)
+        } else if (try? device.lockForConfiguration()) != nil {
             if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
+            if device.isAutoFocusRangeRestrictionSupported { device.autoFocusRangeRestriction = .none }
+            // The whole scene, not the zoom the scanner or the label camera left.
+            device.videoZoomFactor = 1
             device.unlockForConfiguration()
         }
         return true
+    }
+}
+
+extension UIImage {
+    /// The middle square: what the label camera's square window showed of
+    /// the upright photo.
+    func middleSquare() async -> UIImage {
+        await Task.detached(priority: .userInitiated) {
+            let side = min(self.size.width, self.size.height)
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = self.scale
+            return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in
+                self.draw(at: CGPoint(x: (side - self.size.width) / 2, y: (side - self.size.height) / 2))
+            }
+        }.value
     }
 }
