@@ -1097,6 +1097,12 @@ final class SnapshotTests: XCTestCase {
         try render("plan-week-changed", glow: Palette.Glow.training, height: 1000) {
             NavigationStack { PlanWeekContent(week: active.template.weeks[2], sport: "ride", detail: changed).padding(.horizontal, 24) }.environment(model)
         }
+        // The plan follows the trend: a lighter week sooner (with the HRV line) and a level up.
+        let lighterJSON = #"{"type":"lighter","title":"Plán upraven","headline":"Tento týden je lehčí","text":"Tvoje HRV bylo 5 dní z posledních 7 pod tvým normálem a spal jsi v průměru 6 h 10 min. Odpočinkový týden se posouvá z 8. týdne na teď.","options":[{"id":"ok","label":"OK","date":null,"recommended":true}],"days":null,"button":"OK","keep":"Nechat plán","chart":{"values":[58,60,57,59,58,61,57,52,49,47,48,46,null,47],"low":52,"high":64}}"#
+        let lighter = try decoder.decode(TodaySnapshot.PlanProposal.self, from: Data(lighterJSON.utf8))
+        try render("plan-adapted-lighter", height: 520) { PlanProposalCard(proposal: lighter).padding(24).environment(model) }
+        let harder = try decoder.decode(TodaySnapshot.PlanProposal.self, from: Data(#"{"type":"harder","title":"Plán upraven","headline":"Zlepšuješ se rychle","text":"Všechny klíčové tréninky posledních 3 týdnů máš hotové a šly ti lehčeji, než plán čekal. HRV je stabilní. Od příštího týdne jsou klíčové tréninky o úroveň těžší a týden o 5 % delší.","options":[{"id":"ok","label":"OK","date":null,"recommended":true}],"days":null,"button":"OK","keep":"Nechat jak bylo"}"#.utf8))
+        try render("plan-adapted-harder", height: 420) { PlanProposalCard(proposal: harder).padding(24).environment(model) }
         let movedChange = try XCTUnwrap(changed.sessions[2].change)
         try render("plan-session-changed", height: 420) { PlanChangeCard(change: movedChange).padding(24) }
         // Free time by weekday, two weeks in turn, this week only and the plan's days.

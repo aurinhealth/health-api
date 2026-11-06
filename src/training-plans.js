@@ -751,9 +751,14 @@ export function planWeek(plan, date) {
   if (!template) return null;
   const raw = Math.floor(daysBetween(plan.startDate, mondayOf(date)) / 7);
   // A lighter week chosen before repeating the first week falls before the start.
-  const index = raw === -1 && (plan.lightWeeks || []).includes(mondayOf(date)) ? 0 : raw;
+  let index = raw === -1 && (plan.lightWeeks || []).includes(mondayOf(date)) ? 0 : raw;
   if (index < 0 || index >= template.weeks.length) return null;
-  const monday = mondayOf(date), week = template.weeks[index];
+  const monday = mondayOf(date), position = index;
+  // The recovery week moved sooner (trendProposal): it takes this week's place, this week takes its place.
+  const pulled = plan.pulled;
+  if (pulled && monday === pulled.at) index = pulled.from;
+  else if (pulled && index === pulled.from && monday > pulled.at) index = pulled.to;
+  const week = template.weeks[index];
   // A multisport plan with picked sports: only their sessions.
   const picked = template.choose ? planSports({ ...plan, template }) : null;
   const base = picked ? { ...week, q: week.q.filter(k => picked.includes(k.sport)), sports: Object.fromEntries(picked.map(s => [s, week.sports[s]])) } : week;
@@ -762,14 +767,17 @@ export function planWeek(plan, date) {
   const returning = !base.race && plan.returnFrom && monday >= plan.returnFrom && monday < shift(plan.returnFrom, 7 * (plan.returnWeeks || 1));
   // A lighter week the athlete chose in a review, before repeating a week.
   const light = !base.race && (plan.lightWeeks || []).includes(monday);
+  // A level up from a Monday on (trendProposal): harder key sessions and 5 % more time, never in a lighter week.
+  const up = plan.stepUp && monday >= plan.stepUp.from && !["recovery", "taper", "race", "test"].includes(base.phase) && !base.race ? plan.stepUp.by : 0;
   const spec = light ? { ...base, phase: "recovery", load: Math.min(base.load, .65), q: [], light: true }
-    : returning ? { ...base, load: Math.min(base.load, .8), q: base.q.slice(0, 1), returning: true } : base;
-  return { template, index, week: index + 1, weeks: template.weeks.length, spec, monday };
+    : returning ? { ...base, load: Math.min(base.load, .8), q: base.q.slice(0, 1), returning: true }
+    : up ? { ...base, load: Math.round(base.load * 1.05 * 100) / 100, stepUp: up } : base;
+  return { template, index, week: position + 1, weeks: template.weeks.length, spec, monday, ...(pulled && monday === pulled.at ? { pulled: true } : {}) };
 }
 // The plan as it was made, without the changes of the athlete (moved,
 // shortened, skipped sessions, fewer days) and of the app (a lighter week, a
 // week back after a break): what planChanges compares a week against.
-export const planOriginal = plan => plan && { ...plan, moves: [], edits: {}, lightWeeks: [], returnFrom: null, weekDays: {} };
+export const planOriginal = plan => plan && { ...plan, moves: [], edits: {}, lightWeeks: [], returnFrom: null, weekDays: {}, pulled: null, stepUp: null };
 // The quality days the week planner should make for the plan's week.
 export const planQuality = pw => pw ? pw.spec.q.length : null;
 
@@ -864,7 +872,7 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
   const roleOf = s => s.kind === "quality" || s.kind === "test" ? "quality" : s.kind === "long" ? "long" : s.kind === "race" ? "race" : s.kind === "recovery" ? "recovery" : "endurance";
   const out = items.map(x => {
     if (x.sport !== sport || (x.slot || 0) !== 0) return x;
-    const s = moved.get(x) || sessionFor(x), shiftBy = s.kind === "quality" ? levelShift(shifts[systemOf(sport, s.family)]) : 0;
+    const s = moved.get(x) || sessionFor(x), shiftBy = s.kind === "quality" ? levelShift(shifts[systemOf(sport, s.family)]) + (spec.stepUp || 0) : 0;
     const minutes = (s.kind !== "race" && shortened[x.date]) || (s.minutes ?? (s.kind === "race" ? day.minutes : s.kind === "quality" ? Math.max(x.minutes, minutesFor(sport, s, shiftBy) || 0) : s.kind === "test" ? Math.max(x.minutes, 60) : x.minutes));
     const workoutId = s.workoutId || (s.family ? planWorkoutId(sport, s, minutes, shiftBy) : null);
     const label = s.kind === "test" ? testLabel(sport) : s.label || (workoutId && planName(baseName(workoutId))) || x.label;
@@ -948,7 +956,7 @@ function applyTriathlon(targets, plan, weekStart, pw, { thresholdPace = null, sh
     }
     const s = out.get(x);
     if (!s) { result.push(x); continue; }
-    const shiftBy = s.kind === "quality" ? levelShift(shifts[x.sport]?.[systemOf(x.sport, s.family)]) : 0;
+    const shiftBy = s.kind === "quality" ? levelShift(shifts[x.sport]?.[systemOf(x.sport, s.family)]) + (spec.stepUp || 0) : 0;
     let minutes = Number(edits[x.date]?.minutes) > 0 ? Math.round(Number(edits[x.date].minutes)) : s.minutes ?? (s.kind === "quality" ? Math.max(x.minutes, minutesFor(x.sport, s, shiftBy) || 0) : x.minutes);
     const workoutId = s.family ? planWorkoutId(x.sport, s, minutes, shiftBy) : null;
     // A swim is its metres: the time is the workout's.
@@ -975,6 +983,14 @@ function applyTriathlon(targets, plan, weekStart, pw, { thresholdPace = null, sh
 // shorter, easier. A session the athlete skipped is not in the week at all.
 const DAY_SHORT = () => [L("po", "Mon"), L("út", "Tue"), L("st", "Wed"), L("čt", "Thu"), L("pá", "Fri"), L("so", "Sat"), L("ne", "Sun")];
 const DAY_ON = () => [L("V pondělí", "on Monday"), L("V úterý", "on Tuesday"), L("Ve středu", "on Wednesday"), L("Ve čtvrtek", "on Thursday"), L("V pátek", "on Friday"), L("V sobotu", "on Saturday"), L("V neděli", "on Sunday")];
+const DAY_ACC = () => [L("na pondělí", "to Monday"), L("na úterý", "to Tuesday"), L("na středu", "to Wednesday"), L("na čtvrtek", "to Thursday"), L("na pátek", "to Friday"), L("na sobotu", "to Saturday"), L("na neděli", "to Sunday")];
+// A red morning (planRedMorning): the numbers that made it red and where the key session went.
+const redText = (r, to) => {
+  const hrv = r.hrv ? L(`HRV ${r.hrv} ms proti tvému normálu ${r.low}–${r.high} ms`, `HRV ${r.hrv} ms against your normal ${r.low}–${r.high} ms`) : "";
+  const sleep = r.sleep ? L(`spánek ${hours(r.sleep)}`, `sleep ${hours(r.sleep)}`) : "";
+  const numbers = [hrv, sleep].filter(Boolean).join(", ");
+  return L("Regenerace je dnes ráno v červené", "Recovery is in the red this morning") + (numbers ? ": " + numbers : "") + L(`. Náročný trénink by dnes víc vzal, než dal, proto se přesunul ${to}.`, `. A hard session today would cost more than it gives, so it moved ${to}.`);
+};
 const DAY_FROM = () => [L("z pondělí", "from Monday"), L("z úterý", "from Tuesday"), L("ze středy", "from Wednesday"), L("ze čtvrtka", "from Thursday"), L("z pátku", "from Friday"), L("ze soboty", "from Saturday"), L("z neděle", "from Sunday")];
 export function planChanges(items = [], original = [], plan, weekStart) {
   const pw = planWeek(plan, weekStart);
@@ -985,7 +1001,13 @@ export function planChanges(items = [], original = [], plan, weekStart) {
     if (!x.plan || x.brick || x.plan.kind === "race") return x;
     const from = x.plan.movedFrom, o = at(original, from || x.date, x.sport, x.slot || 0), edit = plan.edits?.[x.date];
     let change = null;
-    if (from) {
+    const red = plan.edits?.[x.date]?.auto === "red" ? plan.edits[x.date] : null, redFrom = from && plan.edits?.[from]?.auto === "red" ? plan.edits[from] : null;
+    const key = red && at(original, x.date, x.sport, x.slot || 0);
+    if (red && key && KEY_KINDS.includes(key.plan.kind)) {
+      change = { kind: "easier", alert: true, line: L("Lehčí: regenerace v červené", "Easier: red recovery"), text: redText(red, DAY_ACC()[weekdayOf(red.to)]), original: { ...was(key), now: red.to } };
+    } else if (redFrom) {
+      change = { kind: "moved", alert: true, line: L("Přesunuto z ", "Moved from ") + DAY_SHORT()[weekdayOf(from)], text: redText(redFrom, DAY_ACC()[weekdayOf(x.date)]), original: was(o) };
+    } else if (from) {
       const own = Boolean(plan.edits?.[from]?.to);
       const d = weekdayOf(from);
       change = { kind: "moved", line: L("Přesunuto z ", "Moved from ") + DAY_SHORT()[d],
@@ -996,6 +1018,11 @@ export function planChanges(items = [], original = [], plan, weekStart) {
       change = pw.spec.light
         ? { kind: "easier", line: L("Lehčí: odlehčený týden", "Easier: lighter week"), text: L("Tento týden je odlehčený podle tvé volby, bez náročných tréninků.", "You chose a lighter week, so it has no hard sessions."), original: was(o) }
         : { kind: "easier", line: L("Lehčí: návrat po pauze", "Easier: back after a break"), text: L("První týden po pauze je lehčí, nejvýš s jedním náročným tréninkem.", "The first week back after a break is lighter, with one hard session at most."), original: was(o) };
+    } else if (o && KEY_KINDS.includes(o.plan.kind) && !KEY_KINDS.includes(x.plan.kind) && pw.pulled) {
+      const p = plan.pulled || {}, sleep = p.sleep ? L(` a spánek v průměru ${hours(p.sleep)}`, `, sleep ${hours(p.sleep)} on average`) : "";
+      change = { kind: "easier", line: L("Bylo: ", "Was: ") + o.label, text: L(`Odpočinkový týden se posunul na teď: HRV pod tvým normálem${p.below ? ` ${p.below} ${plural(p.below, "den", "dny", "dní", "day", "days")} ze 7` : ""}${sleep}.`, `The recovery week moved to now: HRV below your normal${p.below ? ` on ${p.below} of 7 days` : ""}${sleep}.`), original: was(o) };
+    } else if (o && x.plan.kind === "quality" && pw.spec.stepUp && x.plan.workoutId !== o.plan.workoutId) {
+      change = { kind: "harder", line: L("Těžší: zvládáš víc", "Harder: ready for more"), text: L("Klíčové tréninky ti šly lehčeji, než plán čekal, a HRV je stabilní, proto je tenhle o úroveň těžší.", "Your key sessions felt easier than planned and HRV is steady, so this one is a level harder."), original: was(o) };
     } else if (Number(x.planMinutes) > x.minutes) {
       change = { kind: "shorter", line: L(`Kratší: na ${x.minutes} min je volno`, `Shorter: ${x.minutes} min free`), text: L(`Volný čas toho dne na něj nechává ${x.minutes} min, proto je kratší než ${x.planMinutes} min v plánu.`, `Your free time that day leaves ${x.minutes} min for it, so it is shorter than the plan's ${x.planMinutes} min.`), original: { label: x.label, minutes: x.planMinutes, date: x.date } };
     }
@@ -1216,7 +1243,7 @@ const fromRow = r => r ? { id: r.id, templateId: r.template_id, sport: r.sport, 
 // start: FTP, fitness and the estimate when the plan started (its result);
 // seen: the finished plan's result was closed; target: a running race's goal
 // time in seconds; perWeek: a gym plan's sessions a week the athlete chose.
-const STATE_KEYS = ["pauseFrom", "pauseUntil", "shiftedWeeks", "returnFrom", "returnWeeks", "reviewed", "moves", "lightWeeks", "proposal", "undo", "firstDay", "edits", "weekDays", "start", "seen", "target", "perWeek", "sports"];
+const STATE_KEYS = ["pauseFrom", "pauseUntil", "shiftedWeeks", "returnFrom", "returnWeeks", "reviewed", "moves", "lightWeeks", "proposal", "undo", "firstDay", "edits", "weekDays", "start", "seen", "target", "perWeek", "sports", "pulled", "stepUp", "trendChecked", "redChecked"];
 async function savePlan(db, plan) {
   const state = Object.fromEntries(STATE_KEYS.filter(k => plan[k] != null).map(k => [k, plan[k]]));
   await db.prepare("UPDATE training_plans SET start_date=?,state_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(plan.startDate, JSON.stringify(state), db.userId, plan.id).run();
@@ -1264,12 +1291,67 @@ export function planReview(plan, weekStart, { keyDates = [], doneDates = [] } = 
   return { plan: out, changed: true, proposed: propose };
 }
 
+// ---- the plan follows the trend --------------------------------------------------
+// Checked on Mondays, for a ride, run, swim or multisport plan (not the gym).
+// - HRV below the athlete's normal over the week before (week-planner.js
+//   hrvWeekTrendDown, as HRV-guided training: Plews 2012; Javaloyes 2019):
+//   the next recovery week within three weeks moves to this week and this
+//   week takes its place, so a race day stays. `hrv`: hrvTrend for the card.
+// - Every key session of the last three weeks done (`keysDone`), felt easy
+//   (`rpe`: the athletes' ratings, at least three, 6.5 or less on average)
+//   and HRV steady: one level up from next Monday, at most two, three weeks apart.
+// The plan applies it at once and says so; "keep" (planChoice) puts it back.
+const EASY_PHASES = ["recovery", "taper", "race", "test"];
+export function trendProposal(plan, monday, { hrvDown = false, hrv = null, keysDone = false, rpe = [] } = {}) {
+  const template = getTemplate(plan?.templateId), pw = planWeek(plan, monday);
+  if (!template || template.sport === "gym" || !pw || plan.proposal || plan.pauseFrom) return null;
+  const easy = w => !w || EASY_PHASES.includes(w.spec.phase) || w.spec.light || w.spec.returning || w.spec.race || w.pulled;
+  if (hrvDown) {
+    if (easy(pw) || (plan.pulled && monday <= plan.pulled.until)) return null;
+    for (let k = 1; k <= 3; k++) {
+      const ahead = planWeek(plan, shift(monday, 7 * k));
+      if (ahead?.spec.phase === "recovery" && !ahead.spec.race) return { type: "lighter", applied: true, weekStart: monday, from: ahead.index, to: pw.index, weeks: k, week: pw.week, recoveryWeek: ahead.week, hrv };
+    }
+    return null;
+  }
+  const ratings = rpe.map(Number).filter(v => v >= 1 && v <= 10), mean = ratings.reduce((a, b) => a + b, 0) / (ratings.length || 1);
+  const next = planWeek(plan, shift(monday, 7)), by = (plan.stepUp?.by || 0) + 1;
+  if (!keysDone || ratings.length < 3 || mean > 6.5 || by > 2 || easy(next) || (plan.stepUp && daysBetween(plan.stepUp.from, monday) < 21)) return null;
+  return { type: "harder", applied: true, weekStart: monday, from: shift(monday, 7), by };
+}
+// The Monday's check on the plan (trendProposal): the plan with the change
+// applied and the proposal saying so, or the plan only marked as checked.
+export function planTrend(plan, monday, data) {
+  const checked = { ...plan, trendChecked: monday }, proposal = trendProposal(checked, monday, data);
+  return proposal ? { ...planChoice(checked, { ...proposal, applied: false }, "ok", { today: monday }), proposal } : checked;
+}
+
+// A red morning (readiness.js zone red): today's key session of the plan, not
+// done, swaps with the first easy day ahead this week that is not next to
+// another key day (as a missed one, missedSession), never close to a race. It
+// is no question: on red the hard session does not stay (feedback rule: red
+// blocks), and its day says why (planChanges). Nothing when no day fits: the
+// coach keeps today easy. `numbers`: { hrv, low, high, sleep } for the reason.
+export function planRedMorning(plan, targets, today, numbers = {}) {
+  const sport = getTemplate(plan?.templateId)?.sport;
+  if (!sport || sport === "gym" || sport === "triathlon" || plan.edits?.[today]) return null;
+  const own = (targets?.items || []).filter(x => x.sport === sport && (x.slot || 0) === 0 && x.plan);
+  if (!own.some(x => x.date === today && ["quality", "test"].includes(x.plan.kind) && !x.plan.movedFrom)) return null;
+  const keyDays = own.filter(x => x.date > today && KEY_KINDS.includes(x.plan.kind)).map(x => x.date), race = own.find(x => x.plan.kind === "race")?.date;
+  const to = own.find(x => x.date > today && !KEY_KINDS.includes(x.plan.kind) && x.plan.kind !== "race" && !(race && daysBetween(x.date, race) <= 2) && keyDays.every(d => Math.abs(daysBetween(d, x.date)) >= 2))?.date;
+  if (!to) return null;
+  const n = v => Number(v) > 0 ? Math.round(Number(v)) : null;
+  return { ...plan, edits: { ...(plan.edits || {}), [today]: { to, auto: "red", hrv: n(numbers.hrv), low: n(numbers.low), high: n(numbers.high), sleep: n(numbers.sleep) } } };
+}
+
 // The athlete's answer to a proposal ("keep" leaves the plan as it is).
 // missed: "move" to `date`, or "skip". week: "repeat" the last week,
 // "continue", or "light" (a lighter week now, then the last week again).
 // return: "light" (a lighter week or two now), "shift" (the plan moves later
 // by the weeks away) or "continue". The plan before the change is kept for undo.
 export function planChoice(plan, proposal, choice, { today, date = null } = {}) {
+  // A change the plan made already (trendProposal): OK keeps it, "keep" puts the plan back.
+  if (proposal.applied) return choice === "keep" ? { ...planUndo(plan), proposal: null } : { ...plan, proposal: null };
   const snapshot = Object.fromEntries(["startDate", ...STATE_KEYS.filter(k => k !== "undo")].map(k => [k, plan[k] ?? null]));
   const out = { ...plan, undo: snapshot, proposal: null };
   const monday = mondayOf(today);
@@ -1282,6 +1364,10 @@ export function planChoice(plan, proposal, choice, { today, date = null } = {}) 
   } else if (proposal.type === "return") {
     if (choice === "light") Object.assign(out, { returnFrom: monday, returnWeeks: proposal.days >= 14 ? 2 : 1 });
     if (choice === "shift" && !getTemplate(plan.templateId)?.race) Object.assign(out, { startDate: shift(plan.startDate, 7 * proposal.weeks), shiftedWeeks: (plan.shiftedWeeks || 0) + proposal.weeks });
+  } else if (proposal.type === "lighter" && choice === "ok") {
+    out.pulled = { at: proposal.weekStart, from: proposal.from, to: proposal.to, until: shift(proposal.weekStart, 7 * proposal.weeks), below: proposal.hrv?.below ?? null, sleep: proposal.hrv?.sleep ?? null };
+  } else if (proposal.type === "harder" && choice === "ok") {
+    out.stepUp = { from: proposal.from, by: proposal.by };
   }
   return out;
 }
@@ -1346,6 +1432,8 @@ export function planEdit(plan, { date, op, to = null, minutes = null }, today) {
   const valid = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ""));
   if (!valid(date) || date < today) throw new Error(L("Tento trénink už nejde změnit.", "This session can no longer be changed."));
   const edits = Object.fromEntries(Object.entries(plan.edits || {}).filter(([d]) => d >= shift(mondayOf(today), -7)));
+  // A red morning's swap (planRedMorning) stays: the hard session does not come back that day.
+  if (edits[date]?.auto === "red" && (op === "reset" || op === "move")) throw new Error(L("Po červeném ránu zůstane náročný trénink na jiném dni.", "After a red morning the hard session stays on another day."));
   if (op === "move") {
     if (!valid(to) || to < today || mondayOf(to) !== mondayOf(date) || to === date) throw new Error(L("Vyber jiný den tohoto týdne.", "Pick another day of this week."));
     edits[date] = { to };
@@ -1525,5 +1613,17 @@ export function proposalView(proposal, plan, today) {
       ...(proposal.options.includes("shift") ? [{ id: "shift", label: L("Posunout plán o ", "Move the plan by ") + weeks + " " + plural(weeks, "týden", "týdny", "týdnů", "week", "weeks") }] : []),
       { id: "continue", label: L("Pokračovat beze změny", "Go on unchanged") }] };
   }
+  // A change the plan made already (trendProposal): OK, or keep the plan as it was.
+  if (proposal.type === "lighter") {
+    const h = proposal.hrv || {}, sleep = h.sleep ? L(` a spal jsi v průměru ${hours(h.sleep)}`, ` and you slept ${hours(h.sleep)} on average`) : "";
+    const why = h.below ? L(`Tvoje HRV bylo ${h.below} ${plural(h.below, "den", "dny", "dní", "day", "days")} z posledních 7 pod tvým normálem${sleep}.`, `Your HRV has been below your normal on ${h.below} of the last 7 days${sleep}.`) : L("Tvoje HRV je poslední týden pod tvým normálem.", "Your HRV has been below your normal over the last week.");
+    return { type: "lighter", title: L("Plán upraven", "Plan adapted"), headline: L("Tento týden je lehčí", "This week is lighter"), text: why + L(` Odpočinkový týden se posouvá z ${proposal.recoveryWeek}. týdne na teď.`, ` The recovery week moves forward from week ${proposal.recoveryWeek} to now.`),
+      options: [{ id: "ok", label: "OK", recommended: true }], button: "OK", keep: L("Nechat plán", "Keep the plan"), ...(h.values ? { chart: { values: h.values, low: h.low, high: h.high } } : {}) };
+  }
+  if (proposal.type === "harder") {
+    return { type: "harder", title: L("Plán upraven", "Plan adapted"), headline: L("Zlepšuješ se rychle", "You are adapting fast"), text: L("Všechny klíčové tréninky posledních 3 týdnů máš hotové a šly ti lehčeji, než plán čekal. HRV je stabilní. Od příštího týdne jsou klíčové tréninky o úroveň těžší a týden o 5 % delší.", "You finished every key session of the last 3 weeks and they felt easier than planned. HRV is steady. From next week the key sessions are one level harder and the week 5 % longer."),
+      options: [{ id: "ok", label: "OK", recommended: true }], button: "OK", keep: L("Nechat jak bylo", "Keep it as it was") };
+  }
   return null;
 }
+const hours = minutes => Math.floor(minutes / 60) + " h " + String(Math.round(minutes % 60)).padStart(2, "0") + " min";

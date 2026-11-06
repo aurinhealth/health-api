@@ -471,6 +471,9 @@
 "Průběh" = "Structure";
 "Každá změna v plánu říká proč. Klepni na trénink a uvidíš původní." = "Every change in the plan says why. Tap a session to see the original.";
 "Původně" = "Original";
+"teď %@" = "now %@";
+"pás = tvůj normál" = "band = your normal";
+"HRV za 14 dní proti tvému normálu" = "HRV over 14 days against your normal";
 "Průměr 7 dní" = "7-day average";
 "Pás" = "Treadmill";
 "PŘ" = "RDY";
