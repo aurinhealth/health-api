@@ -828,7 +828,8 @@ struct KeyNumbers: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                RouteLink(route: .sleep) { cell("Spánek", sleepFailed ? "–" : Fmt.hoursMinutes(today.sleep?.minutes), nil, sleepFailed ? Gauge(note: nil, color: Palette.indigo) : sleep) }
+                RouteLink(route: .sleep) { cell("Spánek", sleepFailed ? "–" : Fmt.hoursMinutes(today.sleep?.minutes), nil, sleepFailed ? Gauge(note: nil, color: Palette.indigo) : sleep,
+                                                       spoken: sleepFailed ? nil : Fmt.hoursMinutesSpoken(today.sleep?.minutes)) }
                 Divider().overlay(Palette.hairline)
                 RouteLink(route: .strain) { cell("Námaha", Fmt.decimal(today.strain.score), nil, strain) }
                 Divider().overlay(Palette.hairline)
@@ -907,11 +908,13 @@ struct KeyNumbers: View {
         return Gauge(note: (d >= 0 ? "↑ " : "↓ ") + Fmt.int(abs(d)) + " ms", color: d >= 0 ? Palette.green : Palette.rust)
     }
 
-    private func cell(_ title: String, _ value: String, _ unit: String?, _ gauge: Gauge) -> some View {
+    /// `spoken`: what VoiceOver says for the value ("7 hodin 12 minut" for "7:12").
+    private func cell(_ title: String, _ value: String, _ unit: String?, _ gauge: Gauge, spoken: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(value).font(Typo.number(30)).foregroundStyle(Palette.ink)
+                    .accessibilityLabel(spoken ?? value)
                 if let unit, value != "–" { Text(unit).font(Typo.caption).foregroundStyle(Palette.muted) }
             }
             .lineLimit(1).minimumScaleFactor(0.7)

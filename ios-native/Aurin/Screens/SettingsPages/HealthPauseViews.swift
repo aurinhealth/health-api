@@ -47,10 +47,10 @@ struct HealthPauseSheet: View {
                 }
                 Button { Task { await pause() } } label: {
                     HStack(spacing: 8) {
-                        if pausing { ProgressView().tint(.white) }
+                        if pausing { ProgressView().tint(Palette.onAccent) }
                         Text("Pozastavit a smazat")
                     }
-                    .font(Typo.bodyStrong).foregroundStyle(.white)
+                    .font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
                     .frame(maxWidth: .infinity).frame(height: 50)
                     .background(Palette.rust, in: Capsule())
                 }

@@ -109,7 +109,7 @@ struct IntegrationIcon: View {
                 logo("UltrahumanMark").frame(width: size * 0.56)
             default:
                 shape.fill(Palette.indigo)
-                Image(systemName: "watch.analog").font(.system(size: size * 0.45, weight: .semibold)).foregroundStyle(.white)
+                Image(systemName: "watch.analog").font(.system(size: size * 0.45, weight: .semibold)).foregroundStyle(Palette.onAccent)
             }
         }
         .frame(width: size, height: size)

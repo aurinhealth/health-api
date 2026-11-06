@@ -111,7 +111,7 @@ struct LibrarySportPanel: View {
             VStack(alignment: .leading, spacing: 6) {
                 Image(systemName: sport.symbol)
                     .scaledFont(15, weight: .semibold, cap: .denseCap)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Palette.onAccent)
                     .frame(width: 32, height: 32)
                     .background(sport.color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .padding(.bottom, 4)
@@ -136,7 +136,7 @@ struct GymLibrarySection: View {
             RouteLink(route: .gymBuilder) {
                 HStack(spacing: 12) {
                     Image(systemName: "sparkles")
-                        .scaledFont(16, weight: .semibold, cap: .denseCap).foregroundStyle(.white)
+                        .scaledFont(16, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.onAccent)
                         .frame(width: 38, height: 38)
                         .background(Palette.green, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                     Text("Sestavit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.ink)

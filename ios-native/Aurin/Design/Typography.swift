@@ -35,6 +35,12 @@ extension DynamicTypeSize {
     static let denseCap: DynamicTypeSize = .xxxLarge
 }
 
+extension EnvironmentValues {
+    /// The iPhone's text size before the screens' cap (RootView): long text
+    /// such as the coach's messages follows it past screenCap (audit 20.b1).
+    @Entry var fullTypeSize: DynamicTypeSize? = nil
+}
+
 extension View {
     /// The system font at `size` pt at the default text size, growing with the
     /// iPhone's text size like `style` (by default the text style nearest to
@@ -115,8 +121,18 @@ struct NumberText: View {
     var unit: String? = nil
     var size: CGFloat = 34
     var color: Color = Palette.ink
+    /// What VoiceOver says instead of the value and unit ("7 hodin 12 minut" for "7:12 h").
+    var spoken: String? = nil
 
     var body: some View {
+        if let spoken {
+            number.accessibilityElement(children: .ignore).accessibilityLabel(spoken)
+        } else {
+            number
+        }
+    }
+
+    private var number: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text(value).font(Typo.number(size)).foregroundStyle(color)
             if let unit {

@@ -730,7 +730,7 @@ struct SwipeToDelete: ViewModifier {
                             Image(systemName: "trash").scaledFont(15, weight: .semibold)
                             Text("Smazat").font(Typo.caption.weight(.semibold))
                         }
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Palette.onAccent)
                         .frame(width: -offset).frame(maxHeight: .infinity)
                         .background(Palette.red, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }

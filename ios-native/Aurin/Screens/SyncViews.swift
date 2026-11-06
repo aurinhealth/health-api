@@ -128,7 +128,7 @@ struct SyncAppIcon: View {
                 IntegrationIcon(id: id, size: size)
             default:
                 shape.fill(Palette.indigo)
-                Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: size * 0.45, weight: .semibold)).foregroundStyle(.white)
+                Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: size * 0.45, weight: .semibold)).foregroundStyle(Palette.onAccent)
             }
         }
         .frame(width: size, height: size)

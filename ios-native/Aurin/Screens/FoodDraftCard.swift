@@ -106,7 +106,7 @@ struct FoodDraftCard: View {
             Spacer(minLength: 4)
             if let product = item.product {
                 if logged == nil {
-                    stepper(i, product: product, amount: amount)
+                    stepper(i, name: item.product?.name ?? item.name, product: product, amount: amount)
                 } else {
                     Text(amountText(amount, product)).font(.footnote).foregroundStyle(Palette.muted).monospacedDigit()
                 }
@@ -120,12 +120,26 @@ struct FoodDraftCard: View {
         .overlay(alignment: .top) { Divider() }
     }
 
-    private func stepper(_ i: Int, product: FoodProduct, amount: Double) -> some View {
+    private func stepper(_ i: Int, name: String, product: FoodProduct, amount: Double) -> some View {
         let step = product.perPortion ? 0.5 : 10
+        let less = { if i < amounts.count { amounts[i] = max(step, amounts[i] - step) } }
+        let more = { if i < amounts.count { amounts[i] = min(product.perPortion ? 10 : 5000, amounts[i] + step) } }
         return HStack(spacing: 6) {
-            stepButton("minus") { if i < amounts.count { amounts[i] = max(step, amounts[i] - step) } }
+            stepButton("minus", action: less)
             Text(amountText(amount, product)).font(.footnote).foregroundStyle(Palette.ink).monospacedDigit().frame(minWidth: 52)
-            stepButton("plus") { if i < amounts.count { amounts[i] = min(product.perPortion ? 10 : 5000, amounts[i] + step) } }
+            stepButton("plus", action: more)
+        }
+        // VoiceOver: one adjustable amount named by its food, swiped up or down,
+        // instead of two bare "Přidat" and "Odebrat" buttons (audit 20.c1).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(name)
+        .accessibilityValue(amountText(amount, product))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: more()
+            case .decrement: less()
+            @unknown default: break
+            }
         }
     }
 

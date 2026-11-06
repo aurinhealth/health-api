@@ -788,6 +788,12 @@ struct BubbleView: View {
     var openPlan: () -> Void = {}
     /// On the line about the week's messages: "Získat další" opens the packs.
     var more: (() -> Void)? = nil
+    /// The messages are long text: they follow the iPhone's text size past the
+    /// screens' cap, the cards around them stay capped (audit 20.b1).
+    @Environment(\.fullTypeSize) private var fullTypeSize
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private var messageTypeSize: DynamicTypeSize { max(fullTypeSize ?? typeSize, typeSize) }
 
     var body: some View {
         VStack(alignment: bubble.mine ? .trailing : .leading, spacing: 8) {
@@ -816,6 +822,7 @@ struct BubbleView: View {
                 if bubble.mine {
                     Text(bubble.text)
                         .font(.body)
+                        .dynamicTypeSize(messageTypeSize)
                         .foregroundStyle(Palette.onButton)
                         .padding(.horizontal, 14).padding(.vertical, 10)
                         .background(Palette.button, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -823,6 +830,7 @@ struct BubbleView: View {
                 } else {
                     CoachMarkdown(text: bubble.text)
                         .equatable()
+                        .dynamicTypeSize(messageTypeSize)
                         .padding(.horizontal, 16).padding(.vertical, 14)
                         .cardSurface(cornerRadius: 18)
                         .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 18, style: .continuous))

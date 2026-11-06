@@ -32,6 +32,19 @@ final class PluralTests: XCTestCase {
         XCTAssertEqual(L10n.plural("%lld věcí dnes", 5), "5 věcí dnes")
     }
 
+    /// What VoiceOver says for a sleep shown as "7:12" (audit 20.c1).
+    func testSpokenHoursMinutes() {
+        L10n.setLanguage("cs")
+        XCTAssertEqual(Fmt.hoursMinutesSpoken(432), "7 hodin 12 minut")
+        XCTAssertEqual(Fmt.hoursMinutesSpoken(61), "1 hodina 1 minuta")
+        XCTAssertEqual(Fmt.hoursMinutesSpoken(120), "2 hodiny")
+        XCTAssertEqual(Fmt.hoursMinutesSpoken(45), "45 minut")
+        XCTAssertEqual(Fmt.hoursMinutesSpoken(nil), "–")
+        L10n.setLanguage("en")
+        XCTAssertEqual(Fmt.hoursMinutesSpoken(432), "7 hours 12 minutes")
+        XCTAssertEqual(Fmt.hoursMinutesSpoken(60), "1 hour")
+    }
+
     func testEnglishForms() {
         L10n.setLanguage("en")
         XCTAssertEqual(L10n.plural("%lld dní", 1), "1 day")
