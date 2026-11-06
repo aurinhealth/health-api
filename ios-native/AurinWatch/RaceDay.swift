@@ -114,8 +114,8 @@ struct RaceDetail: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 5) {
-                    Image(systemName: "flag.fill").font(.system(size: 11))
-                    Text(when.uppercased()).font(.system(size: 11, weight: .semibold))
+                    Image(systemName: "flag.fill").watchFont(12)
+                    Text(when.uppercased()).watchFont(12, .semibold)
                 }
                 .foregroundStyle(W.amber)
                 Text(race.name)
@@ -132,7 +132,7 @@ struct RaceDetail: View {
                 .padding(.top, 4)
                 if race.legs.count > 1, let minutes = race.minutes {
                     Text(W.tr("Celkem asi \(RaceDay.length(minutes)) i s depem", "About \(RaceDay.length(minutes)) with the changes"))
-                        .font(.system(size: 11))
+                        .watchFont(12)
                         .foregroundStyle(W.muted)
                         .padding(.top, 6)
                 }
@@ -152,16 +152,16 @@ struct RaceDetail: View {
         let plan = leg.eventId.flatMap { plans.plans[$0] }
         let detail = [RaceDay.distance(leg), leg.minutes.map(RaceDay.length)].compactMap { $0 }.joined(separator: " · ")
         return HStack(spacing: 7) {
-            Image(systemName: W.sportSymbol(leg.sport)).font(.system(size: 13)).foregroundStyle(RaceDay.color(leg.sport)).frame(width: 18)
+            Image(systemName: W.sportSymbol(leg.sport)).watchFont(13).foregroundStyle(RaceDay.color(leg.sport)).frame(width: 18)
             VStack(alignment: .leading, spacing: 0) {
-                Text(RaceDay.sportName(leg.sport)).font(.system(size: 13, weight: .semibold)).foregroundStyle(W.ink)
-                if !detail.isEmpty { Text(detail).font(.system(size: 11)).foregroundStyle(W.muted).lineLimit(1) }
+                Text(RaceDay.sportName(leg.sport)).watchFont(13, .semibold).foregroundStyle(W.ink)
+                if !detail.isEmpty { Text(detail).watchFont(12).foregroundStyle(W.muted).lineLimit(1) }
             }
             Spacer(minLength: 4)
             if let target = RaceDay.target(plan, sport: leg.sport) {
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text(target.value).font(W.news(17)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
-                    Text(target.unit).font(.system(size: 9)).foregroundStyle(W.muted)
+                    Text(target.unit).watchFont(12).foregroundStyle(W.muted)
                 }
             }
         }

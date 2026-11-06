@@ -11,6 +11,8 @@ final class WatchSnapshotTests: XCTestCase {
         s.updated = Date(timeIntervalSince1970: 1_791_450_000)
         XCTAssertEqual(s.date, today.date)
         XCTAssertEqual(s.readiness, 78)
+        // The day's verdict, the line under the watch's number (Today audit 17).
+        XCTAssertEqual(s.verdict, "hard")
         XCTAssertEqual(s.sleep?.minutes, 432)
         XCTAssertEqual(s.sleep?.start, "23:33")
         XCTAssertEqual(s.sleep?.end, "7:02")

@@ -292,6 +292,7 @@ final class WatchBridge: NSObject {
             bedtime: tonight?.bedtime.map(clock), inBed: tonight?.inBed, sleep: tonight?.sleep ?? tonight?.need) : nil
         return WatchSnapshot(date: today.date, updated: Date(), language: L10n.language,
                              readiness: today.readiness.score, zone: today.readiness.zone, learningDays: today.readiness.learningDays,
+                             verdict: today.readiness.verdict,
                              headline: today.summary?.headline, summary: today.summary?.text,
                              sleep: sleep, restingHR: restingHR, hrv: hrv, strain: strain, steps: today.steps.today,
                              week: week, food: food, alarm: alarm, imperial: Units.imperial, drinks: watchDrinks())
