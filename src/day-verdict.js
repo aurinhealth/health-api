@@ -13,8 +13,8 @@ import { adviceSignals, injuryNote, isHardSession } from "./morning-advice.js";
 
 // hard: green, nothing holding back. steady: yellow, or green with one reason
 // to hold back or an injury. easy: red, or green saving the legs for
-// tomorrow's hard session. legs: yellow with tired legs. no_intensity: signs
-// of illness (breathing or temperature up). rest: a sick check-in or a paused athlete.
+// tomorrow's hard session. legs: yellow with tired legs. no_intensity:
+// breathing or temperature up (easy allowed). rest: a sick check-in or a paused athlete.
 export const VERDICT_KEYS = ["hard", "steady", "easy", "legs", "no_intensity", "rest"];
 
 export function verdictText(key) {
@@ -26,6 +26,15 @@ export function verdictText(key) {
     no_intensity: L("Dnes bez intenzity", "No intensity today"),
     rest: L("Dnes odpočinek", "Rest today")
   }[key] || null;
+}
+
+// Breathing or temperature in sleep above the usual range, alone: no
+// intensity, easy training allowed. Only red, illness or pain block (Petr's
+// answer to O22, 2026-11-06). The ordinary causes come with it, so the text
+// hints at no illness (MDR); the morning push and Today's coach card say the same.
+export function signsAdvice() {
+  return L("Teplota nebo dech ve spánku jsou nad tvým obvyklým rozmezím. Může za tím být horko, alkohol, pozdní jídlo, stres nebo tvrdý trénink. Dnes bez intenzity, jen lehce.",
+    "Your temperature or breathing in sleep is above your usual range. Heat, alcohol, a late meal, stress or hard training can do this. No intensity today, easy training only.");
 }
 
 // The verdict from the readiness and what the morning weighs beside it

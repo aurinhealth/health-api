@@ -5,7 +5,7 @@ import SwiftUI
 /// One week for Týden (src/share-week.js): per day the readiness, the main
 /// sport and the training time, the totals and the week before.
 struct ShareWeek: Decodable, Equatable {
-    static let rows = ["Trénink", "Zátěž", "Tréninky", "Kolo", "Běh", "Spánek", "Připravenost"]
+    static let rows = ["Trénink", "Zátěž", "Tréninky", "Kolo", "Běh", "Plavání", "Spánek", "Připravenost"]
 
     struct Day: Decodable, Equatable {
         var date: String
@@ -15,6 +15,8 @@ struct ShareWeek: Decodable, Equatable {
         var minutes: Double?
         var sessions: Int = 0
         var tss: Double?
+        /// A triathlon, a duathlon or a brick: its sports in the order done.
+        var legs: [String]?
     }
 
     struct Totals: Decodable, Equatable {
@@ -23,6 +25,7 @@ struct ShareWeek: Decodable, Equatable {
         var tss: Double?
         var rideKm: Double?
         var runKm: Double?
+        var swimKm: Double?
         var sleepMinutes: Double?
         var readiness: Double?
     }
@@ -46,8 +49,8 @@ struct ShareWeek: Decodable, Equatable {
         case "Tréninky":
             guard t.sessions > 0 else { return nil }
             return (String(t.sessions), "", Double(t.sessions))
-        case "Kolo", "Běh":
-            guard let km = key == "Kolo" ? t.rideKm : t.runKm, km > 0 else { return nil }
+        case "Kolo", "Běh", "Plavání":
+            guard let km = key == "Kolo" ? t.rideKm : key == "Běh" ? t.runKm : t.swimKm, km > 0 else { return nil }
             let shown = Units.distance(km)
             return (Fmt.decimal(shown, digits: shown < 100 ? 1 : 0), Units.distanceUnit, km)
         case "Spánek":
@@ -69,6 +72,8 @@ struct ShareWeek: Decodable, Equatable {
             return (d < 0 ? "−" : "+") + Fmt.hoursMinutes(abs(d)) + (key == "Trénink" ? " h" : "")
         case "Kolo", "Běh":
             return Fmt.signed(Units.distance(d))
+        case "Plavání":
+            return Fmt.signed(Units.distance(d), digits: 1)
         default:
             return Fmt.signed(d)
         }
@@ -79,9 +84,15 @@ struct ShareWeek: Decodable, Equatable {
         case "Zátěž", "Kolo": return .amber
         case "Běh", "Připravenost": return .green
         case "Spánek": return .indigo
+        case "Plavání": return .blue
         default: return .ink
         }
     }
+
+    /// Whether a change against last week is good or bad: more sleep and a
+    /// higher readiness are; more or less training is neither (an easier
+    /// week is planned rest), so those stay grey.
+    static func judged(_ key: String) -> Bool { key == "Spánek" || key == "Připravenost" }
 }
 
 /// The round numbers reached since joining Aurin (src/share-milestone.js) and
@@ -94,8 +105,24 @@ struct ShareMilestones: Decodable, Equatable {
         var value: Double?
     }
 
+    /// Multisport: one sport's kilometres and time over all of its days.
+    struct Sport: Decodable, Equatable, Identifiable {
+        var kind: String
+        var km: Double?
+        var minutes: Double?
+        var id: String { kind }
+
+        var label: String { ["ride": "Kolo", "run": "Běh", "swim": "Plavání"][kind] ?? kind }
+
+        /// "810" km, "6,2" km (miles with imperial units).
+        var distance: String {
+            let shown = Units.distance(km ?? 0)
+            return Fmt.decimal(shown, digits: shown < 100 ? 1 : 0)
+        }
+    }
+
     struct Item: Decodable, Equatable, Identifiable {
-        /// ride, run, gym or streak.
+        /// ride, run, swim, multisport, gym or streak.
         var key: String
         var value: Double
         var total: Double?
@@ -107,6 +134,8 @@ struct ShareMilestones: Decodable, Equatable {
         var bars: [Bar] = []
         /// How far the sessions before the bars got.
         var start: Double?
+        /// Multisport: ride, run and swim, the ones never done left out.
+        var sports: [Sport]?
         var id: String { key }
     }
 
@@ -132,6 +161,9 @@ struct ShareMilestones: Decodable, Equatable {
 
     /// The one chosen in Upravit, else the newest.
     func item(_ key: String?) -> Item? { items.first { $0.key == key } ?? items.first }
+
+    /// The chips of Upravit in the app's order of sports.
+    static let order = ["ride", "run", "swim", "multisport", "gym", "streak"]
 }
 
 extension APIClient {
@@ -140,16 +172,16 @@ extension APIClient {
     }
 
     func shareMilestones() async throws -> ShareMilestones {
-        try await get("/app/api/share/milestones")
+        try await get("/app/api/share/milestones?swim=1")
     }
 }
 
 extension ShareMilestones.Item {
-    var isDistance: Bool { key == "ride" || key == "run" }
+    var isDistance: Bool { key == "ride" || key == "run" || key == "swim" }
 
     /// The chip in Upravit.
     var title: String {
-        ["ride": "Kolo", "run": "Běh", "gym": "Posilovna", "streak": "Dny v řadě"][key] ?? key
+        ["ride": "Kolo", "run": "Běh", "swim": "Plavání", "multisport": "Multisport", "gym": "Posilovna", "streak": "Dny v řadě"][key] ?? key
     }
 
     /// "1 000" (in miles with imperial units).
@@ -161,6 +193,8 @@ extension ShareMilestones.Item {
         switch key {
         case "ride": return L10n.tr(Units.imperial ? "mil na kole" : "kilometrů na kole")
         case "run": return L10n.tr(Units.imperial ? "naběhaných mil" : "naběhaných kilometrů")
+        case "swim": return L10n.tr(Units.imperial ? "uplavaných mil" : "uplavaných kilometrů")
+        case "multisport": return L10n.plural("multisportovních tréninků", n)
         case "gym": return L10n.plural("tréninků v posilovně", n)
         default: return L10n.plural("dní v řadě", n)
         }
@@ -178,6 +212,7 @@ extension ShareMilestones.Item {
         switch key {
         case "ride": what = L10n.tr("na kole")
         case "run": what = L10n.tr("naběháno")
+        case "swim": what = L10n.tr("uplaváno")
         default: what = noun
         }
         return [what, sinceText].compactMap { $0 }.joined(separator: " ")
@@ -300,7 +335,8 @@ struct ShareWeekCard: View {
         let u = s.u
         let later = future(day)
         let minutes = day.minutes ?? 0
-        let sport: String = later ? "" : (day.sport.map { L10n.tr(ShareWorkout(title: "", sport: $0).sportName) } ?? L10n.tr("Volno"))
+        let name = { (sport: String) in L10n.tr(ShareWorkout(title: "", sport: sport).sportName) }
+        let sport: String = later ? "" : day.legs.map { $0.map(name).joined(separator: " · ") } ?? (day.sport.map(name) ?? L10n.tr("Volno"))
         return HStack(spacing: u * 2.6) {
             Text(verbatim: ShareText.weekday(day.date)).font(s.sans(3.4)).foregroundStyle(s.t.muted)
                 .frame(width: u * 6, alignment: .leading)
@@ -376,7 +412,7 @@ struct ShareWeekCard: View {
     /// C: the week's numbers in two columns.
     private var numbers: some View {
         let u = s.u
-        let keys = ["Trénink", "Tréninky", "Kolo", "Běh", "Zátěž", "Spánek", "Připravenost"]
+        let keys = ["Trénink", "Tréninky", "Kolo", "Běh", "Plavání", "Zátěž", "Spánek", "Připravenost"]
         let list: [ShareStat] = Array(keys.filter { options.shows($0) }.compactMap { key -> ShareStat? in
             ShareWeek.value(key, week.week).map { ShareStat(label: key, value: $0.value, unit: $0.unit) }
         }.prefix(6))
@@ -408,7 +444,7 @@ struct ShareWeekCard: View {
         let u = s.u
         let hero = options.shows("Trénink") ? ShareWeek.value("Trénink", week.week) : nil
         let before = ShareWeek.value("Trénink", week.previous)?.raw ?? 0
-        let keys = ["Zátěž", "Kolo", "Běh", "Spánek", "Připravenost"].filter { key in
+        let keys = ["Zátěž", "Kolo", "Běh", "Plavání", "Spánek", "Připravenost"].filter { key in
             options.shows(key) && (ShareWeek.value(key, week.week) != nil || ShareWeek.value(key, week.previous) != nil)
         }
         return VStack(alignment: .leading, spacing: 0) {
@@ -465,7 +501,7 @@ struct ShareWeekCard: View {
     private func deltaText(_ key: String, now: Double, before: Double, size: CGFloat) -> some View {
         let up = now >= before
         return Text(verbatim: ShareWeek.delta(key, now: now, before: before)).font(s.sans(size, .semibold))
-            .foregroundStyle(before <= 0 && now <= 0 ? s.t.muted : (up ? s.t.green : s.t.rust))
+            .foregroundStyle(before <= 0 && now <= 0 || !ShareWeek.judged(key) ? s.t.muted : (up ? s.t.green : s.t.rust))
             .lineLimit(1)
     }
 
@@ -511,6 +547,7 @@ struct ShareMilestoneCard: View {
     private func poster(_ item: ShareMilestones.Item) -> some View {
         let u = s.u
         let stats = ["Tréninky", "Čas", "Převýšení"].filter { options.shows($0) }.compactMap { item.stat($0) }
+        let sports = item.sports ?? []
         return VStack(alignment: .leading, spacing: 0) {
             s.brand(dateText)
             VStack(alignment: .leading, spacing: u * 1.2) {
@@ -524,7 +561,28 @@ struct ShareMilestoneCard: View {
             .shareBlock(ShareBlock.top, s)
             .padding(.horizontal, u * 7)
             .padding(.top, u * 18)
-            if options.shows("Graf"), !item.bars.isEmpty {
+            if options.shows("Graf"), !sports.isEmpty {
+                // Multisport: each sport's kilometres and time, the bar its share of the time.
+                let total = max(1, sports.reduce(0) { $0 + ($1.minutes ?? 0) })
+                VStack(alignment: .leading, spacing: u * 5) {
+                    ForEach(sports) { sport in
+                        VStack(alignment: .leading, spacing: u * 1.4) {
+                            HStack(alignment: .firstTextBaseline, spacing: u * 2) {
+                                s.label(sport.label, size: 4).frame(width: u * 14, alignment: .leading)
+                                s.value(sport.distance, Units.distanceUnit, size: 11, color: sportColor(sport.kind)).lineLimit(1)
+                                Spacer(minLength: u * 2)
+                                if let minutes = sport.minutes, minutes > 0 {
+                                    s.value(Fmt.hoursMinutes(minutes), "h", size: 6).lineLimit(1)
+                                }
+                            }
+                            s.bar((sport.minutes ?? 0) / total, sportColor(sport.kind), height: 1.3)
+                        }
+                        .sharePiece(sport.kind, s)
+                    }
+                }
+                .padding(.horizontal, u * 7)
+                .padding(.top, u * 10)
+            } else if options.shows("Graf"), !item.bars.isEmpty {
                 ShareBars(bars: item.bars, color: s.t.amber, label: s.t.muted, u: u)
                     .frame(height: u * 34)
                     .padding(.horizontal, u * 7)
@@ -536,6 +594,15 @@ struct ShareMilestoneCard: View {
             }
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 8)
+        }
+    }
+
+    /// A sport's colour on the multisport poster: ride amber, run green, swim blue.
+    private func sportColor(_ sport: String) -> Color {
+        switch sport {
+        case "run": return s.t.green
+        case "swim": return s.t.blue
+        default: return s.t.amber
         }
     }
 

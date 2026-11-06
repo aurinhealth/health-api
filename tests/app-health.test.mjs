@@ -93,6 +93,9 @@ test("Health: heart, breathing, temperature, oxygen and weight", () => {
   assert.equal(h.restingHR.series.length, 40);
   assert.ok(h.hrv.low < h.hrv.baseline && h.hrv.baseline < h.hrv.high);
   assert.equal(h.restingHR.value, 47);
+  // One usual range for resting heart rate: the one readiness weighs it against (audit 16.2).
+  const rhrPart = h.readiness.parts.find(p => p.key === "restingHR");
+  assert.deepEqual([h.restingHR.low, h.restingHR.high], [rhrPart.low, rhrPart.high]);
   assert.equal(h.respiration.series.length, 14);
   assert.equal(h.skinTemp.series.length, 14);
   assert.equal(h.oxygen.high, 97);
@@ -138,7 +141,9 @@ test("Health: oxygen from the watch first, Intervals.icu filling the rest; the H
   const h = buildHealth({ ...input, health: { wellness: google } });
   assert.equal(h.oxygen.value, 98.2, "today's Apple value wins over Intervals");
   assert.equal(h.oxygen.series.length, 14, "the earlier days come from Intervals");
-  assert.equal(h.oxygen.high, 98.2);
+  assert.equal(h.oxygen.high, 97, "the usual range leaves the shown night out, so it can be above it (audit 16.3)");
+  const few = buildHealth({ ...input, health: { wellness: google }, fitness: { wellness: intervals.slice(-6) } }).oxygen;
+  assert.deepEqual([few.low, few.high], [98.2, 98.2], "under 7 earlier nights: no range");
   assert.equal(h.hrv.metric, "rmssd");
   assert.equal(buildHealth(input).hrv.metric, null);
   assert.equal(buildHealth({ ...input, fitness: { wellness: [] } }).oxygen, null, "no oxygen anywhere");

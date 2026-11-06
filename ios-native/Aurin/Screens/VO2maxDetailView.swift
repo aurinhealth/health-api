@@ -75,6 +75,7 @@ struct VO2maxContent: View {
                 Text(Self.text(selected?.value ?? vo2.value)).font(Typo.number(96)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                 Text("ml/kg/min").font(Typo.small).foregroundStyle(Palette.muted)
             }
+            Text(verbatim: vo2.caption).font(Typo.small).foregroundStyle(Palette.muted)
             if let change = vo2.change, change != 0 {
                 Pill(text: L10n.f("%@ %@ za 4 týdny", change > 0 ? "↑" : "↓", Fmt.decimal(abs(change))),
                      foreground: change > 0 ? Palette.green : Palette.rust,

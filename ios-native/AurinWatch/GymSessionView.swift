@@ -189,6 +189,10 @@ struct GymSessionView: View {
             }
             await workout.begin()
         }
+        // While up, this screen ends the workout (idle, the iPhone's end);
+        // closed, GymStore.endWithoutScreen does.
+        .onAppear { store.screenOpen = true }
+        .onDisappear { store.screenOpen = false }
         .onChange(of: store.endedOnPhone) { _, ended in
             // Finished in Training mode on the iPhone: saved here, as one workout.
             guard ended else { return }

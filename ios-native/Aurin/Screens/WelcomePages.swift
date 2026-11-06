@@ -235,7 +235,7 @@ private struct WelcomeReadiness: View {
                      note: L10n.f("%d %% potřeby", 89), tone: Palette.amberBar)
                     .rises(play, delay: 0.25)
                 tile(title: "HRV", value: "64", unit: "ms", bar: RangeBar(value: play.shown ? 64 : 49, low: 55, high: 61, color: Palette.green),
-                     note: RangeBar.word(64, 55, 61), tone: Palette.green)
+                     note: RangeBar.usualWord(64, 55, 61), tone: Palette.green)
                     .rises(play, delay: 0.4)
             }
             .animation(.spring(response: 1.1, dampingFraction: 0.8).delay(0.7), value: play.shown)

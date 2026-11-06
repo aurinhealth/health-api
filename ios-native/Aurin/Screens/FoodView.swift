@@ -474,6 +474,8 @@ struct DrinksCard: View {
                 .background(Palette.blue.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
+            // Horko: today's ride or run outdoors on a hot day (src/heat-advice.js); the goal stays as it is.
+            if let heat = water.heat { HeatLine(text: heat, compact: true) }
             DrinkPresetRow(add: { ml, kind in await model.addDrink(ml: ml, kind: kind) })
         }
         .sensoryFeedback(.impact(weight: .light), trigger: adds)

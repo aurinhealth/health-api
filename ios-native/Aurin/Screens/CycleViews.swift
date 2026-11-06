@@ -1143,7 +1143,7 @@ struct CycleTrackingConsentSheet: View {
 
     var body: some View {
         ConsentSheet(title: "Sledovat cyklus",
-                     lead: "Aurin ukáže tvůj cyklus, porovná připravenost s tvým normálem v každé fázi a na dny s křečemi nebo únavou zlehčí náročný trénink.",
+                     lead: "Aurin ukáže tvůj cyklus, porovná připravenost s tvým obvyklým rozmezím v každé fázi a na dny s křečemi nebo únavou zlehčí náročný trénink.",
                      legal: "Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich zpracováním v Aurinu. Kdykoli sledování vypneš a Aurin cyklus přestane číst i používat. Uložené záznamy zůstanou, dokud nesmažeš účet.",
                      accept: accept) {
             ConsentSection("Co Aurin uloží")

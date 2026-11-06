@@ -75,6 +75,10 @@ struct StepsDetailContent: View {
                     }
                 }
                 .padding(.top, 12)
+                Text("Minuta v intenzivní nebo maximální zóně se počítá dvakrát, jak to doporučuje WHO.")
+                    .font(Typo.caption).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 8)
             }
         }
     }

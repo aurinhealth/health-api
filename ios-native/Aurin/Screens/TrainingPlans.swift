@@ -1113,7 +1113,7 @@ struct PlanProposalCard: View {
     }
 }
 
-/// The last 14 mornings of HRV against the athlete's normal band: the line
+/// The last 14 mornings of HRV against the athlete's usual range: the line
 /// turns amber where it runs below the band.
 struct PlanHRVChart: View {
     let chart: TodaySnapshot.PlanProposal.Chart
@@ -1139,11 +1139,11 @@ struct PlanHRVChart: View {
             HStack {
                 Text(verbatim: "HRV · " + L10n.plural("%lld dní", chart.values.count)).font(Typo.caption).foregroundStyle(Palette.muted)
                 Spacer()
-                Text("pás = tvůj normál").font(Typo.caption).foregroundStyle(Palette.muted)
+                Text("pás = obvyklé rozmezí").font(Typo.caption).foregroundStyle(Palette.muted)
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: L10n.tr("HRV za 14 dní proti tvému normálu")))
+        .accessibilityLabel(Text(verbatim: L10n.tr("HRV za 14 dní proti obvyklému rozmezí")))
     }
 }
 

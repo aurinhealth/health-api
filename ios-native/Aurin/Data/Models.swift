@@ -5,6 +5,10 @@ struct TodaySnapshot: Decodable, Equatable {
     let date: String
     /// Connected services that need the user (src/connection-health.js connectionProblems).
     var connectionProblems: [ConnectionProblem]?
+    /// The services days and nights come from besides Apple Health, with when
+    /// Aurin last reached each (src/connection-health.js dataSources); nil from
+    /// an older server.
+    var dataSources: [DataSource]? = nil
     let readiness: Readiness
     let sleep: Sleep?
     let strain: Strain
@@ -173,6 +177,15 @@ struct TodaySnapshot: Decodable, Equatable {
         var low: Double? = nil
         var high: Double? = nil
         let series: [Point]
+
+        var usual: ClosedRange<Double>? { Self.usual(low: low, high: high, baseline: baseline) }
+
+        /// The usual range readiness uses (audit 16.2), or ±2 beats around the
+        /// baseline from an older server.
+        static func usual(low: Double?, high: Double?, baseline: Double?) -> ClosedRange<Double>? {
+            if let low, let high, low < high { return low...high }
+            return baseline.map { ($0 - 2)...($0 + 2) }
+        }
     }
 
     struct Summary: Decodable, Equatable {
@@ -258,6 +271,9 @@ struct TodaySnapshot: Decodable, Equatable {
         var end: String? = nil
         /// A ride or run still ahead outdoors on a hot day: "Horko 30 °C · …" (src/heat-advice.js).
         var heat: String? = nil
+        /// A hard ride, run or swim still ahead on a yellow morning: how to do
+        /// it ("Steady day: ride it easy …", src/app-today.js steadyOf).
+        var steady: String? = nil
 
         struct Eased: Decodable, Equatable {
             let title: String
@@ -367,6 +383,13 @@ struct TodaySnapshot: Decodable, Equatable {
         let environment: String?
         let reason: String?
     }
+}
+
+/// A service Today's days and nights come from and when Aurin last reached it.
+struct DataSource: Decodable, Equatable {
+    let provider: String
+    let name: String?
+    let lastSuccessAt: String?
 }
 
 /// A connected service whose access was refused or whose permissions are missing.

@@ -229,34 +229,59 @@ extension View {
 
 /// "Apple Health · data ze včera 21:10 · obnovit" under the day when Apple
 /// Health last reached the server more than 3 hours ago (its source named,
-/// Today audit 20); nothing while it is fresh. A tap syncs and reloads Today.
+/// Today audit 20), and the same for Google Health, Intervals.icu, Ultrahuman
+/// or WHOOP not reached for over 12 hours, when Settings → Zdroje dat turns
+/// their dot orange (wave 4, 28.3); nothing while all is fresh. A tap syncs
+/// and reloads Today.
 struct DataAgePill: View {
     @Environment(AppModel.self) private var model
     private var health: AppleHealth { AppleHealth.shared }
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 300)) { context in
-            if health.enabled, let last = health.lastSync, let text = Self.text(last: last, now: context.date) {
-                Button { Task { await model.refresh() } } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "clock").scaledFont(11, weight: .semibold)
-                        Text(verbatim: "Apple Health · " + text + L10n.tr(" · obnovit"))
-                    }
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(Palette.amber)
-                    .padding(.horizontal, 10)
-                    .frame(height: 26)
-                    .background(Palette.amberSoft, in: Capsule())
-                    // 44 pt to tap, grown only downwards: the week strip's days
-                    // sit right above it.
-                    .padding(.bottom, 18).contentShape(Rectangle()).padding(.bottom, -18)
+            let shown = lines(now: context.date)
+            if !shown.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(shown, id: \.self) { pill($0) }
                 }
-                .buttonStyle(.plain)
-                .disabled(model.loading || health.syncing)
                 // Under the day's name, past its back arrow.
                 .padding(.leading, 34)
                 .padding(.top, 2)
             }
+        }
+    }
+
+    private func lines(now: Date) -> [String] {
+        var out: [String] = []
+        if health.enabled, let last = health.lastSync, let text = Self.text(last: last, now: now) { out.append("Apple Health · " + text) }
+        return out + Self.stale(model.today?.dataSources ?? [], now: now)
+    }
+
+    private func pill(_ line: String) -> some View {
+        Button { Task { await model.refresh() } } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "clock").scaledFont(11, weight: .semibold)
+                Text(verbatim: line + L10n.tr(" · obnovit"))
+            }
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(Palette.amber)
+            .padding(.horizontal, 10)
+            .frame(height: 26)
+            .background(Palette.amberSoft, in: Capsule())
+            // 44 pt to tap, grown only downwards: the week strip's days
+            // sit right above it.
+            .padding(.bottom, 18).contentShape(Rectangle()).padding(.bottom, -18)
+        }
+        .buttonStyle(.plain)
+        .disabled(model.loading || health.syncing)
+    }
+
+    /// "Google Health · data ze včera 21:10" for each server source not reached
+    /// for over 12 hours (IntegrationCard.stale, as in Settings).
+    static func stale(_ sources: [DataSource], now: Date) -> [String] {
+        sources.compactMap { source in
+            guard let last = source.lastSuccessAt.flatMap(SourceActions.date), IntegrationCard.stale(last, now: now) else { return nil }
+            return (source.name ?? source.provider) + " · " + age(last: last, now: now)
         }
     }
 
@@ -677,7 +702,7 @@ struct NoWearableText: View {
 }
 
 /// A new athlete's first two weeks (Petr, 2026-11-01): instead of "Zatím bez
-/// čísla", readiness says it is learning their normal, with a segment for each
+/// čísla", readiness says it is learning their usual range, with a segment for each
 /// of the 14 days it needs, how many it has and about when the score comes.
 /// Also on the Health screen's readiness card.
 struct ReadinessLearning: View {
@@ -689,7 +714,7 @@ struct ReadinessLearning: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Učím se tvůj normál")
+            Text("Učím se tvoje obvyklé hodnoty")
                 .font(title)
                 .foregroundStyle(Palette.ink)
                 .padding(.top, 8)
@@ -828,7 +853,8 @@ struct KeyNumbers: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                RouteLink(route: .sleep) { cell("Spánek", sleepFailed ? "–" : Fmt.hoursMinutes(today.sleep?.minutes), nil, sleepFailed ? Gauge(note: nil, color: Palette.indigo) : sleep) }
+                RouteLink(route: .sleep) { cell("Spánek", sleepFailed ? "–" : Fmt.hoursMinutes(today.sleep?.minutes), nil, sleepFailed ? Gauge(note: nil, color: Palette.indigo) : sleep,
+                                                       spoken: sleepFailed ? nil : Fmt.hoursMinutesSpoken(today.sleep?.minutes)) }
                 Divider().overlay(Palette.hairline)
                 RouteLink(route: .strain) { cell("Námaha", Fmt.decimal(today.strain.score), nil, strain) }
                 Divider().overlay(Palette.hairline)
@@ -899,7 +925,7 @@ struct KeyNumbers: View {
     private var hrv: Gauge {
         guard let value = today.hrv?.value else { return Gauge(note: nil, color: Palette.green) }
         if let low = today.hrv?.low, let high = today.hrv?.high, high > low {
-            return Gauge(bar: (value, low, high), edges: (Fmt.int(low), Fmt.int(high)), note: RangeBar.word(value, low, high),
+            return Gauge(bar: (value, low, high), edges: (Fmt.int(low), Fmt.int(high)), note: RangeBar.usualWord(value, low, high),
                          color: RangeBar.color(value, low, high, worseAbove: false))
         }
         guard let base = today.hrv?.baseline else { return Gauge(note: nil, color: Palette.green) }
@@ -907,11 +933,13 @@ struct KeyNumbers: View {
         return Gauge(note: (d >= 0 ? "↑ " : "↓ ") + Fmt.int(abs(d)) + " ms", color: d >= 0 ? Palette.green : Palette.rust)
     }
 
-    private func cell(_ title: String, _ value: String, _ unit: String?, _ gauge: Gauge) -> some View {
+    /// `spoken`: what VoiceOver says for the value ("7 hodin 12 minut" for "7:12").
+    private func cell(_ title: String, _ value: String, _ unit: String?, _ gauge: Gauge, spoken: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(value).font(Typo.number(30)).foregroundStyle(Palette.ink)
+                    .accessibilityLabel(spoken ?? value)
                 if let unit, value != "–" { Text(unit).font(Typo.caption).foregroundStyle(Palette.muted) }
             }
             .lineLimit(1).minimumScaleFactor(0.7)
@@ -1007,7 +1035,8 @@ struct ConnectionProblemCard: View {
                             }
                             Spacer(minLength: 8)
                             Button { start(provider.id) } label: {
-                                Text("Připojit znovu")
+                                // The same words as the service's page in Settings.
+                                Text(provider.needsReconnect != true && !(provider.missingPermissions ?? []).isEmpty ? "Povolit chybějící" : "Připojit znovu")
                                 .font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
                                 .padding(.horizontal, 14).frame(height: 34)
                                 .background(Palette.button, in: Capsule())

@@ -33,6 +33,22 @@ struct TodayTrainingRow: View {
     let item: TodaySnapshot.PlanItem
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            row
+            // A yellow morning: how to do a hard session, under its name (wave 4, 28.2).
+            if let steady = item.steady {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "gauge.with.dots.needle.33percent").scaledFont(11, weight: .semibold).foregroundStyle(Palette.amber)
+                    Text(verbatim: steady).font(Typo.small).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.leading, 48)
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
+    private var row: some View {
         HStack(spacing: 12) {
             if let route = item.session.flatMap(WeekSessionsList.destination) {
                 NavigationLink(value: route) { info }.buttonStyle(.plain)

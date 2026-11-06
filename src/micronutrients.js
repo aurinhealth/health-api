@@ -3,7 +3,9 @@
 // USDA, Fineli, Ciqual and CoFID); a logged meal keeps the eaten amounts in its
 // note (note.micros), so later catalogue versions never change a past day.
 // Fibre, sugar and salt stay where they always were (fiber_g column,
-// note.sugar_g, note.salt_g) and are the free part of the Živiny page.
+// note.sugar_g, note.salt_g) and are the free part of the Živiny page. The
+// fiber_g column cannot be empty: a meal logged without a fibre value has 0
+// there and note.fiber_unknown (index.js foodLog), so it is not counted as known.
 import { L } from './lang.js';
 
 // target: adult intake per day (EFSA population reference or adequate intake,
@@ -63,7 +65,8 @@ const eatenEntries = food => (Array.isArray(food?.entries) ? food.entries : []).
 export function entryNutrients(entry) {
   const note = noteOf(entry), out = {};
   const put = (key, v) => { const x = Number(v); if (v != null && v !== '' && Number.isFinite(x)) out[key] = x; };
-  put('fiber', entry.fiber_g); put('sugar', note.sugar_g); put('salt', note.salt_g);
+  if (note.fiber_unknown !== true) put('fiber', entry.fiber_g);
+  put('sugar', note.sugar_g); put('salt', note.salt_g);
   const micros = cleanMicros(note.micros);
   if (micros) Object.assign(out, micros);
   return out;
@@ -122,9 +125,12 @@ export function buildNutrients({ days = [], profile = {}, kcalTarget = null, pro
     meals++;
     const v = entryNutrients(e);
     if (MICRO_KEYS.some(k => k in v)) withMicros++;
-    for (const [k, x] of Object.entries(v)) { totals[k] = (totals[k] || 0) + x; counted[k] = true; }
+    for (const [k, x] of Object.entries(v)) { totals[k] = (totals[k] || 0) + x; counted[k] = (counted[k] || 0) + 1; }
   }
-  const n = Math.max(1, days.length);
+  // The average is over the days something was logged on: a forgotten day is
+  // missing data, not a day without iron.
+  const loggedDays = days.filter(d => eatenEntries(d.food).length > 0).length;
+  const n = Math.max(1, loggedDays);
   const items = NUTRIENTS.map(def => {
     const locked = !pro && !FREE_KEYS.includes(def.key);
     const eaten = locked ? null : fmt((totals[def.key] || 0) / n), target = targets[def.key];
@@ -132,10 +138,14 @@ export function buildNutrients({ days = [], profile = {}, kcalTarget = null, pro
       key: def.key, name: nutrientName(def.key, language), unit: def.unit, group: def.group,
       eaten, target, limit: Boolean(def.limit), locked,
       percent: eaten == null || !target ? null : Math.round(eaten / target * 100),
-      known: locked ? null : Boolean(counted[def.key])
+      known: locked ? null : Boolean(counted[def.key]),
+      // How many of the meals carry this value ("Hodnotu má 1 z 3 jídel").
+      count: locked ? null : counted[def.key] || 0
     };
   });
-  return { days: days.length, pro, meals, withMicros, items, coach: pro ? nutrientCoach(items, days.length, language) : null };
+  // The coach speaks only when at least half the meals have vitamin and mineral values.
+  const coach = pro && meals > 0 && withMicros * 2 >= meals ? nutrientCoach(items, { days: days.length, loggedDays, partial: withMicros < meals }, language) : null;
+  return { days: days.length, loggedDays, pro, meals, withMicros, items, coach };
 }
 
 const FOODS_FOR = {
@@ -147,16 +157,21 @@ const FOODS_FOR = {
   se: ['para ořechy, ryby nebo vejce', 'Brazil nuts, fish or eggs'], vita: ['mrkev, batáty nebo špenát', 'carrots, sweet potatoes or spinach']
 };
 const GENITIVE = { fiber: 'vlákniny', sugar: 'cukrů', salt: 'soli', p: 'fosforu', vite: 'vitamínu E', vitk: 'vitamínu K', b1: 'vitamínu B1', b2: 'vitamínu B2', b3: 'niacinu', b6: 'vitamínu B6', fe: 'železa', ca: 'vápníku', mg: 'hořčíku', k: 'draslíku', zn: 'zinku', se: 'selenu', iod: 'jódu', vitd: 'vitamínu D', b12: 'vitamínu B12', vitc: 'vitamínu C', fol: 'folátu', vita: 'vitamínu A' };
-// One sentence: the two vitamins or minerals furthest under the target, with foods that have them.
-export function nutrientCoach(items, days, language) {
+// One sentence: the two vitamins or minerals furthest under the target, with
+// foods that have them. It says when the values come from part of the meals
+// or from the logged days of the week only.
+export function nutrientCoach(items, { days = 1, loggedDays = days, partial = false } = {}, language) {
   const en = language === 'en';
   const low = items.filter(i => i.known && i.target && !i.limit && !['fiber'].includes(i.key) && i.percent != null && i.percent < 60 && FOODS_FOR[i.key])
     .sort((a, b) => a.percent - b.percent).slice(0, 2);
   if (!low.length) return null;
   const names = low.map(i => en ? BY_KEY.get(i.key).en.replace(/^[A-Z]/, c => c.toLowerCase()) : (GENITIVE[i.key] || i.name));
-  const when = days > 1 ? (en ? 'All week you have had' : 'Celý týden máš') : (en ? 'Today you have had' : 'Dnes máš');
+  const when = days <= 1 ? (en ? 'Today you have had' : 'Dnes máš')
+    : loggedDays < days ? (en ? 'On the days you logged you have had' : 'V zapsaných dnech máš')
+    : (en ? 'All week you have had' : 'Celý týden máš');
   const foods = FOODS_FOR[low[0].key][en ? 1 : 0];
-  return en ? `${when} little ${names.join(' and ')}. Add ${foods}.` : `${when} málo ${names.join(' a ')}. Přidej ${foods}.`;
+  return en ? `${when} little ${names.join(' and ')}${partial ? ' in the meals with values' : ''}. Add ${foods}.`
+    : `${when}${partial ? ' v jídlech s údaji' : ''} málo ${names.join(' a ')}. Přidej ${foods}.`;
 }
 
 // One nutrient: today's amount, the 7-day average against the target, the
@@ -167,7 +182,9 @@ export function buildNutrientDetail({ key, today, week = [], profile = {}, kcalT
   const targets = targetsFor(profile, kcalTarget, { own: pro }), target = targets[key];
   const sum = food => eatenEntries(food).reduce((s, e) => s + (entryNutrients(e)[key] || 0), 0);
   const eaten = fmt(sum(today));
-  const avg = week.length ? week.reduce((s, d) => s + sum(d.food), 0) / week.length : null;
+  // Over the days something was logged on (none logged: no average).
+  const weekDays = week.filter(d => eatenEntries(d.food).length > 0).length;
+  const avg = weekDays ? week.reduce((s, d) => s + sum(d.food), 0) / weekDays : null;
   const sources = eatenEntries(today).map(e => ({ name: String(e.recipe_title || L('Jídlo', 'Food')).slice(0, 120), amount: fmt(entryNutrients(e)[key] || 0) }))
     .filter(s => s.amount > 0).sort((a, b) => b.amount - a.amount).slice(0, 8);
   return {
@@ -178,6 +195,7 @@ export function buildNutrientDetail({ key, today, week = [], profile = {}, kcalT
     autoBasis: PLANT_FACTOR[key] && ['vegetarian', 'vegan'].includes(profile?.dietEating) ? profile.dietEating : null,
     percent: target ? Math.round(eaten / target * 100) : null,
     weekPercent: avg != null && target ? Math.round(avg / target * 100) : null,
+    weekDays,
     sources,
     richTitle: language === 'en' ? `Rich in ${def.en.replace(/^[A-Z]/, c => c.toLowerCase())}` : `Hodně ${GENITIVE[key]} má`,
     rich: (Array.isArray(rich) ? rich : []).slice(0, 8).map(r => ({ name: String((language === 'en' ? r.en || r.n : r.cs || r.n) || '').slice(0, 120), per100: fmt(Number(r.v)) })).filter(r => r.name && r.per100 > 0)

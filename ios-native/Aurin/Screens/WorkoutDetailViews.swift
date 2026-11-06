@@ -545,13 +545,13 @@ struct ActivityDetailContent: View {
         VStack(alignment: .leading, spacing: 0) {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 16) {
                 if let t = a.moving_time { stat("Čas", Fmt.duration(Int(t / 60))) }
-                if let d = a.distance, d > 0 { stat("Vzdálenost", Units.distanceText(d / 1000)) }
+                if let d = a.distance, d > 0 { stat("Vzdálenost", isSwim ? Fmt.int(d) + " m" : Units.distanceText(d / 1000)) }
                 if let load = a.icu_training_load { stat("Zátěž", Fmt.int(load) + " TSS") }
                 if let w = a.icu_normalized_watts ?? a.average_watts { stat(a.icu_normalized_watts != nil ? "NP" : "Výkon", Fmt.int(w) + " W") }
                 if let hr = a.average_heartrate { stat("Prům. tep", Fmt.int(hr) + " bpm") }
                 if let hr = a.max_heartrate { stat("Max. tep", Fmt.int(hr) + " bpm") }
                 if let i = a.icu_intensity { stat("IF", Fmt.decimal(i > 2 ? i / 100 : i, digits: 2)) }
-                if let pace = runPace { stat(L10n.isEnglish ? "Pace" : "Tempo", pace) }
+                if let pace = pace(a.average_speed) { stat(L10n.isEnglish ? "Pace" : "Tempo", pace) }
                 if let e = a.total_elevation_gain, e > 0 { stat("Převýšení", Fmt.int(e) + " m") }
                 if let h = detail.recoveryHours {
                     VStack(alignment: .leading, spacing: 2) {
@@ -567,6 +567,9 @@ struct ActivityDetailContent: View {
                 }
             }
             .padding(.top, 22)
+            if a.icu_training_load != nil || a.icu_normalized_watts != nil || a.icu_intensity != nil {
+                PowerTermsButton().padding(.top, 10)
+            }
             if let compliance { compliance.padding(.top, 18) }
             if let rating { rating.padding(.top, compliance == nil ? 18 : 12) }
             if let comparison { comparison }
@@ -594,12 +597,12 @@ struct ActivityDetailContent: View {
 
             if let laps = detail.intervals, !laps.isEmpty {
                 let hasWatts = laps.contains { $0.watts != nil }, hasHr = laps.contains { $0.hr != nil }
-                let showPace = !hasWatts && isRun && laps.contains { ($0.speed ?? 0) > 0 }
+                let showPace = !hasWatts && (isRun || isSwim) && laps.contains { ($0.speed ?? 0) > 0 }
                 HStack(spacing: 0) {
                     Text("Úsek").frame(maxWidth: .infinity, alignment: .leading)
                     Text("Čas").frame(width: 56, alignment: .trailing)
                     if hasWatts { Text("Výkon").frame(width: 70, alignment: .trailing) }
-                    if showPace { Text(L10n.isEnglish ? "Pace" : "Tempo").frame(width: 70, alignment: .trailing) }
+                    if showPace { Text(L10n.isEnglish ? "Pace" : "Tempo").frame(width: paceWidth, alignment: .trailing) }
                     if hasHr { Text("Tep").frame(width: 48, alignment: .trailing) }
                 }
                 .font(.caption.weight(.medium)).tracking(1.2).textCase(.uppercase).foregroundStyle(Palette.muted)
@@ -612,7 +615,7 @@ struct ActivityDetailContent: View {
                             Text(verbatim: lap.seconds.map { clock($0) } ?? "").font(Typo.caption).foregroundStyle(Palette.muted)
                                 .frame(width: 56, alignment: .trailing)
                             if hasWatts { Text(verbatim: lap.watts.map { Fmt.int($0) + " W" } ?? "").font(Typo.number(17)).frame(width: 70, alignment: .trailing) }
-                            if showPace { Text(verbatim: lap.speed.flatMap { $0 > 0 ? Units.paceText(1000 / $0) : nil } ?? "").font(Typo.number(17)).frame(width: 70, alignment: .trailing) }
+                            if showPace { Text(verbatim: pace(lap.speed) ?? "").font(Typo.number(17)).lineLimit(1).minimumScaleFactor(0.8).frame(width: paceWidth, alignment: .trailing) }
                             if hasHr { Text(verbatim: lap.hr.map { Fmt.int($0) } ?? "").font(Typo.number(17)).foregroundStyle(Palette.rust).frame(width: 48, alignment: .trailing) }
                         }
                         .padding(.vertical, 10)
@@ -622,17 +625,22 @@ struct ActivityDetailContent: View {
             }
 
             if let hrr = detail.hrr, let drop = hrr.drop {
-                StatRow(title: "Zotavení tepu", value: Fmt.int(drop), unit: L10n.f("tepů za %@ s", Fmt.int(hrr.seconds ?? 60)))
+                StatRow(title: "Pokles tepu po poslední zátěži", value: Fmt.int(drop), unit: L10n.f("tepů za %@ s", Fmt.int(hrr.seconds ?? 60)))
                     .padding(.top, 18)
             }
         }
     }
 
     private var isRun: Bool { (detail.activity.type ?? "").lowercased().contains("run") }
+    private var isSwim: Bool { (detail.activity.type ?? "").lowercased().contains("swim") }
+    /// "1:55 /100 m" needs more room than "5:12 /km".
+    private var paceWidth: CGFloat { isSwim ? 92 : 70 }
 
-    private var runPace: String? {
-        guard isRun, let v = detail.activity.average_speed, v > 0 else { return nil }
-        return Units.paceText(1000 / v)
+    /// A speed in m/s as a run's "5:12 /km" or a swim's "1:55 /100 m"; other sports have none.
+    private func pace(_ speed: Double?) -> String? {
+        guard let v = speed, v > 0 else { return nil }
+        if isSwim { return Units.swimPaceText(100 / v) }
+        return isRun ? Units.paceText(1000 / v) : nil
     }
 
     /// 36 h → "≈ 1,5 dne": half days at least, an estimate like Today's (not exact hours).
@@ -1565,5 +1573,56 @@ struct ManualWorkoutSheet: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+/// "Co znamenají TSS, NP, IF a FTP" under a workout's numbers (and next to FTP in
+/// Records): opens one sentence for each abbreviation.
+struct PowerTermsButton: View {
+    @State private var open = false
+
+    var body: some View {
+        Button { open = true } label: {
+            Label("Co znamenají TSS, NP, IF a FTP", systemImage: "info.circle")
+                .font(Typo.caption).foregroundStyle(Palette.muted)
+                .frame(minHeight: 32).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $open) { PowerTermsSheet() }
+    }
+}
+
+/// The training abbreviations in plain words, one line each.
+struct PowerTermsSheet: View {
+    static let terms: [(String, String)] = [
+        ("TSS", "Zátěž tréninku z jeho délky a intenzity. 100 TSS je zhruba hodina na prahu."),
+        ("NP", "Normalizovaný výkon: kolik tě jízda stála, jako bys jel rovnoměrně. Tvrdé úseky váží víc, proto bývá vyšší než průměr v grafu."),
+        ("IF", "Intenzita: NP vydělený FTP. Kolem 0,75 je klidná vytrvalost, 1,0 je hodina naplno."),
+        ("FTP", "Funkční prahový výkon: nejvyšší výkon, který udržíš zhruba hodinu. Počítají se z něj zóny, IF i TSS.")
+    ]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Co znamenají zkratky")
+                    .font(Typo.sentence(28, relativeTo: .title))
+                    .foregroundStyle(Palette.ink)
+                    .padding(.bottom, 12)
+                ForEach(Array(Self.terms.enumerated()), id: \.offset) { index, term in
+                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verbatim: term.0).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        Text(verbatim: L10n.tr(term.1)).font(Typo.caption).foregroundStyle(Palette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 10)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .padding(24)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .glassSheetBackground()
     }
 }

@@ -10,6 +10,19 @@ final class FoodWeekTests: XCTestCase {
         XCTAssertNil(week.perDay)
         let empty = try JSONDecoder().decode(FoodWeek.self, from: Data(#"{"start":"2026-10-12","end":"2026-10-18","today":"2026-10-15","target":null,"base":null,"exercise":null,"eaten":0}"#.utf8))
         XCTAssertNil(empty.target)
+        // A forgotten day gone by is left out of what is left (audit 13.4).
+        let forgotten = try JSONDecoder().decode(FoodWeek.self, from: Data(#"{"start":"2026-10-12","end":"2026-10-18","today":"2026-10-16","target":17500,"base":17500,"exercise":0,"eaten":7500,"left":7500,"perDay":3750,"unlogged":1}"#.utf8))
+        XCTAssertEqual(forgotten.unlogged, 1)
+    }
+
+    /// A vitamin no meal has a value for shows "–", not 0, and is never "low" (audit 13.2).
+    func testUnknownNutrientShowsADash() throws {
+        let json = #"{"key":"vitd","name":"Vitamín D","unit":"µg","group":"vit","eaten":0,"target":15,"limit":false,"locked":false,"percent":0,"known":false,"count":0}"#
+        let item = try JSONDecoder().decode(NutrientItem.self, from: Data(json.utf8))
+        XCTAssertEqual(item.text, "– / 15 µg")
+        XCTAssertFalse(item.low)
+        let page = try JSONDecoder().decode(NutrientsPage.self, from: Data(#"{"days":7,"loggedDays":2,"pro":true,"meals":2,"withMicros":2,"items":[],"favorites":[]}"#.utf8))
+        XCTAssertEqual(page.loggedDays, 2)
     }
 
     func testRangeAndGallery() {

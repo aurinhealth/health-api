@@ -512,9 +512,29 @@ final class SnapshotTests: XCTestCase {
         let blocks = CoachMarkdown.blocks(text)
         XCTAssertEqual(blocks.first, .heading(2, "Shrnutí"))
         XCTAssertTrue(blocks.contains(.bullets(["spánek", "HRV"])))
-        XCTAssertTrue(blocks.contains(.numbered(["rozjezd", "klid"])))
+        XCTAssertTrue(blocks.contains(.numbered(1, ["rozjezd", "klid"])))
         XCTAssertTrue(blocks.contains(.table([["den", "km"], ["po", "10"]])))
         XCTAssertEqual(blocks.last, .rule)
+    }
+
+    /// The lists and lines the coach writes loosely (audit 23.2).
+    func testCoachMarkdownLooseLists() {
+        // Steps with a blank line between them count on, not "1. 1. 1.".
+        XCTAssertEqual(CoachMarkdown.blocks("1. Rozjetí\n\n2. 5×4 min VO2max\n\n3. Vyjetí"),
+                       [.numbered(1, ["Rozjetí", "5×4 min VO2max", "Vyjetí"])])
+        // A note between the steps: the next step keeps its own number.
+        XCTAssertEqual(CoachMarkdown.blocks("1. Rozjetí\n\nKlidně 10 min.\n\n2. Intervaly"),
+                       [.numbered(1, ["Rozjetí"]), .paragraph("Klidně 10 min."), .numbered(2, ["Intervaly"])])
+        XCTAssertEqual(CoachMarkdown.blocks("3. Vyjetí\n4. Protažení"), [.numbered(3, ["Vyjetí", "Protažení"])])
+        // A week a line a day stays a line a day.
+        XCTAssertEqual(CoachMarkdown.blocks("Návrh na týden:\nPo: volno\nÚt: 60 min Z2"),
+                       [.paragraph("Návrh na týden:\nPo: volno\nÚt: 60 min Z2")])
+        // An indented line belongs to the item above it; + is a bullet too.
+        XCTAssertEqual(CoachMarkdown.blocks("- Drž 112 % FTP\n  ne víc\n- Stop pod 105 %"), [.bullets(["Drž 112 % FTP\nne víc", "Stop pod 105 %"])])
+        XCTAssertEqual(CoachMarkdown.blocks("1. Dřep\n   - 3×8\n2. Výpady"), [.numbered(1, ["Dřep\n• 3×8", "Výpady"])])
+        XCTAssertEqual(CoachMarkdown.blocks("+ HRV\n+ spánek"), [.bullets(["HRV", "spánek"])])
+        XCTAssertEqual(CoachMarkdown.blocks("- spánek\n\nDnes lehce."), [.bullets(["spánek"]), .paragraph("Dnes lehce.")])
+        XCTAssertEqual(CoachMarkdown.plainText("3. Vyjetí\n\n4. Protažení"), "3. Vyjetí\n4. Protažení")
     }
 
     func testBodyFigurePaths() {
@@ -556,6 +576,24 @@ final class SnapshotTests: XCTestCase {
         XCTAssertNil(old.visuals)
         let snapshot = WidgetSnapshot.sample
         XCTAssertEqual(snapshot.readiness, 78)
+    }
+
+    /// Audit 19.2: after midnight the widgets show "–" for steps and strain, not
+    /// a real-looking 0, and say "před 3 h" from 2 hours on.
+    func testWidgetSnapshotNewDayAndAge() {
+        var saved = WidgetSnapshot.sample
+        let next = saved.current(today: "2026-10-09")
+        XCTAssertNil(next.steps)
+        XCTAssertNil(next.strain)
+        XCTAssertEqual(next.kcal, 0, "what the app logs starts again at zero")
+        XCTAssertEqual(next.waterMl, 0)
+        XCTAssertEqual(next.stepsGoal, saved.stepsGoal)
+        XCTAssertEqual(saved.current(today: saved.date), saved)
+        let now = Date()
+        saved.updated = now.addingTimeInterval(-119 * 60)
+        XCTAssertNil(saved.hoursOld(at: now))
+        saved.updated = now.addingTimeInterval(-3 * 3600 - 60)
+        XCTAssertEqual(saved.hoursOld(at: now), 3)
     }
 
     func testPlanEditing() {
@@ -778,6 +816,14 @@ final class SnapshotTests: XCTestCase {
         XCTAssertTrue(DataAgePill.age(last: now.addingTimeInterval(-2 * 3600), now: now).hasPrefix("data z "))
         XCTAssertFalse(IntegrationCard.stale(now.addingTimeInterval(-11 * 3600), now: now))
         XCTAssertTrue(IntegrationCard.stale(now.addingTimeInterval(-13 * 3600), now: now))
+        // Google Health and the other server sources get the pill on Today after the same 12 h (wave 4, 28.3).
+        let iso = ISO8601DateFormatter()
+        let sources = [DataSource(provider: "google", name: "Google Health", lastSuccessAt: iso.string(from: now.addingTimeInterval(-13 * 3600))),
+                       DataSource(provider: "whoop", name: "WHOOP", lastSuccessAt: iso.string(from: now.addingTimeInterval(-11 * 3600))),
+                       DataSource(provider: "intervals", name: nil, lastSuccessAt: nil)]
+        let stale = DataAgePill.stale(sources, now: now)
+        XCTAssertEqual(stale.count, 1, "\(stale)")
+        XCTAssertTrue(stale[0].hasPrefix("Google Health · data z "), stale[0])
 
         // In words, no ratio (Today audit D4).
         let raised = TrainingSnapshot.ACWR(level: "above")
@@ -1122,7 +1168,7 @@ final class SnapshotTests: XCTestCase {
             NavigationStack { PlanWeekContent(week: active.template.weeks[2], sport: "ride", detail: changed).padding(.horizontal, 24) }.environment(model)
         }
         // The plan follows the trend: a lighter week sooner (with the HRV line) and a level up.
-        let lighterJSON = #"{"type":"lighter","title":"Plán upraven","headline":"Tento týden je lehčí","text":"Tvoje HRV bylo 5 dní z posledních 7 pod tvým normálem a spal jsi v průměru 6 h 10 min. Odpočinkový týden se posouvá z 8. týdne na teď.","options":[{"id":"ok","label":"OK","date":null,"recommended":true}],"days":null,"button":"OK","keep":"Nechat plán","chart":{"values":[58,60,57,59,58,61,57,52,49,47,48,46,null,47],"low":52,"high":64}}"#
+        let lighterJSON = #"{"type":"lighter","title":"Plán upraven","headline":"Tento týden je lehčí","text":"Tvoje HRV bylo 5 dní z posledních 7 pod tvým obvyklým rozmezím a spal jsi v průměru 6 h 10 min. Odpočinkový týden se posouvá z 8. týdne na teď.","options":[{"id":"ok","label":"OK","date":null,"recommended":true}],"days":null,"button":"OK","keep":"Nechat plán","chart":{"values":[58,60,57,59,58,61,57,52,49,47,48,46,null,47],"low":52,"high":64}}"#
         let lighter = try decoder.decode(TodaySnapshot.PlanProposal.self, from: Data(lighterJSON.utf8))
         try render("plan-adapted-lighter", height: 520) { PlanProposalCard(proposal: lighter).padding(24).environment(model) }
         let harder = try decoder.decode(TodaySnapshot.PlanProposal.self, from: Data(#"{"type":"harder","title":"Plán upraven","headline":"Zlepšuješ se rychle","text":"Všechny klíčové tréninky posledních 3 týdnů máš hotové a šly ti lehčeji, než plán čekal. HRV je stabilní. Od příštího týdne jsou klíčové tréninky o úroveň těžší a týden o 5 % delší.","options":[{"id":"ok","label":"OK","date":null,"recommended":true}],"days":null,"button":"OK","keep":"Nechat jak bylo"}"#.utf8))

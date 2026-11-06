@@ -5,7 +5,7 @@ import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { googleToken } from "../src/index.js";
 import { connectionStatus } from "../src/connections.js";
-import { markConnectionBroken, markConnectionOk, clearConnectionHealth, readConnectionHealth, connectionProblems, withoutBrokenConnections } from "../src/connection-health.js";
+import { markConnectionBroken, markConnectionOk, clearConnectionHealth, readConnectionHealth, connectionProblems, dataSources, withoutBrokenConnections } from "../src/connection-health.js";
 
 const envFor = (db, extra = {}) => ({ DB: scopedDb(db, 4), USER_ID: 4, GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret", GOOGLE_REFRESH_TOKEN: "refresh", INTERVALS_API_KEY: "key", ...extra });
 async function withFetch(answer, fn) {
@@ -61,6 +61,22 @@ test("missing Google permissions are a problem too; tracking never throws", asyn
   assert.deepEqual(problems.map(p => [p.provider, p.needsReconnect, p.missingPermissions]), [["google", false, ["sleep"]]]);
   await markConnectionBroken({ DB: { prepare() { throw new Error("down"); }, userId: 1 }, USER_ID: 1 }, "google", "x");
   await markConnectionOk({}, "google");
+});
+
+test("Today gets when each day or night source was last reached, not Wahoo, Apple or a refused one", () => {
+  const at = "2026-11-06T06:00:00.000Z";
+  const sources = dataSources({ providers: [
+    { id: "google", name: "Google Health", connected: true, needsReconnect: false, lastSuccessAt: at },
+    { id: "intervals", name: "Intervals.icu", connected: true, needsReconnect: true, lastSuccessAt: at },
+    { id: "whoop", name: "WHOOP", connected: false, lastSuccessAt: at },
+    { id: "ultrahuman", name: "Ultrahuman", connected: true, needsReconnect: false, lastSuccessAt: null },
+    { id: "wahoo", name: "Wahoo", connected: true, needsReconnect: false, lastSuccessAt: at },
+    { id: "apple", name: "Apple Health", connected: true, needsReconnect: false, lastSuccessAt: at }
+  ] });
+  assert.deepEqual(sources, [{ provider: "google", name: "Google Health", lastSuccessAt: at }]);
+  assert.deepEqual(dataSources(null), []);
+  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  assert.match(entry, /dataSources:dataSources\(status\)/);
 });
 
 test("sync, reconnects and Today use the connection state", () => {

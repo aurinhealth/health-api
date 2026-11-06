@@ -17,7 +17,7 @@ enum DemoData {
 
     static var connections: [ConnectionsResponse.Provider] { [
         .init(id: "google", name: "Google Health", connected: true, configured: true, missingPermissions: [], metrics: ["Spánek a fáze", "Aktivity", "Hmotnost", "Jídlo"].map(local), note: nil),
-        .init(id: "intervals", name: "Intervals.icu", connected: true, configured: true, missingPermissions: nil, metrics: ["Aktivity a plán", "Fitness / únava / forma", "Wellness"].map(local), note: nil)
+        .init(id: "intervals", name: "Intervals.icu", connected: true, configured: true, missingPermissions: nil, metrics: ["Tréninky a plán", "Fitness / únava / forma", "Prahy, zóny a váha", "Spánek, HRV a klidový tep"].map(local), note: nil)
     ] }
 
     /// Sample Health and Food screens (generated with src/app-health.js and
@@ -134,7 +134,7 @@ enum DemoData {
         {"date":"2026-10-07","value":48},{"date":"2026-10-08","value":48}] },
       "summary": {
         "headline": "Jak dnes začít",
-        "text": "Spánek 7 h 12 min, kousek pod potřebou. HRV je třetí den nad normou.",
+        "text": "Spánek 7 h 12 min, kousek pod potřebou. HRV je třetí den nad obvyklým rozmezím.",
         "recommendation": "Silový trénink dej naplno, hodinu a půl před ním si dej svačinu se sacharidy."
       },
       "nutrition": {

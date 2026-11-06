@@ -234,7 +234,7 @@ struct ShareWorkout: Equatable {
     var heartRate: Double?
     var elevation: Double?
     var tss: Double?
-    /// Seconds per km, for a run or a walk.
+    /// Seconds per km for a run or a walk, per 100 m for a swim.
     var pace: Double?
     /// [latitude, longitude] along the way.
     var route: [[Double]] = []
@@ -316,7 +316,7 @@ struct ShareWorkout: Equatable {
         elevation = a.total_elevation_gain.flatMap { $0 > 0 ? $0 : nil }
         if let load = a.icu_training_load, load > 0 { tss = load }
         if kcal == nil, let calories = a.calories, calories > 0 { kcal = calories }
-        if sport == "run" || sport == "walk", let speed = a.average_speed, speed > 0 { pace = 1000 / speed }
+        if sport == "run" || sport == "walk" || sport == "swim", let speed = a.average_speed, speed > 0 { pace = (sport == "swim" ? 100 : 1000) / speed }
         route = (detail.streams?.first { $0.type == "latlng" }?.points ?? []).compactMap { p -> [Double]? in
             guard let ll = p.ll, ll.count == 2, abs(ll[0]) <= 90, abs(ll[1]) <= 180, ll[0] != 0 || ll[1] != 0 else { return nil }
             return ll
@@ -355,6 +355,7 @@ struct ShareWorkout: Equatable {
         switch stat {
         case "Vzdálenost":
             guard let km = distanceKm else { return nil }
+            if sport == "swim" { return (Fmt.int(km * 1000), "m") }
             return (Fmt.decimal(Units.distance(km), digits: km < 100 ? 1 : 0), Units.distanceUnit)
         case "Čas", "Délka":
             guard let minutes, minutes > 0 else { return nil }
@@ -370,8 +371,8 @@ struct ShareWorkout: Equatable {
             return Units.imperial ? (Fmt.int(elevation * 3.28084), "ft") : (Fmt.int(elevation), "m")
         case "Tempo":
             guard let pace else { return nil }
-            let s = Int(Units.pace(pace).rounded())
-            return ("\(s / 60):" + String(format: "%02d", s % 60), Units.paceUnit)
+            let s = Int((sport == "swim" ? pace : Units.pace(pace)).rounded())
+            return ("\(s / 60):" + String(format: "%02d", s % 60), sport == "swim" ? "/100 m" : Units.paceUnit)
         case "Zátěž":
             guard let tss, tss > 0 else { return nil }
             return (Fmt.int(tss), "TSS")

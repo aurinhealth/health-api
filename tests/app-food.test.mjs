@@ -78,7 +78,9 @@ test("Food stays usable without data", () => {
 test("The server answers GET /app/api/food-today with buildFood", () => {
   const src = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   assert.match(src, /url\.pathname==='\/app\/api\/food-today'&&request\.method==='GET'/);
-  assert.match(src, /buildFood\(\{date,hour:date===localToday\(\)\?localHour\(\):null,daily,food,fluids,slots:profile\?\.meals\}\)/);
+  assert.match(src, /buildFood\(\{date,hour:date===localToday\(\)\?localHour\(\):null,daily,food,fluids,slots:profile\?\.meals,forecast:place\.forecast\}\)/);
+  // Today's forecast for the Pití card's heat hint, only for today.
+  assert.match(src, /date===localToday\(\)\?todayPlace\(env,ctx,date\):\{forecast:null\}/);
   // Meals copied or planned into the coming days can be opened there.
   assert.match(src, /requested<=shiftDate\(localToday\(\),14\)\?requested:localToday\(\)/);
 });

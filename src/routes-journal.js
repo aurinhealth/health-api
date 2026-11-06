@@ -194,7 +194,7 @@ export async function journalCard(db, today, hour) {
 
 // The Zdraví card: the biggest effects on readiness (the last findings), at most 5.
 export function journalTop(settings, findings) {
-  return (findings?.ranked || []).filter(r => Math.abs(r.effect) >= 3 && findItem(settings, r.key))
+  return (findings?.ranked || []).filter(r => Math.abs(r.effect) >= DISCOVERY_PERCENT && findItem(settings, r.key))
     .sort((a, b) => Math.abs(b.effect) - Math.abs(a.effect)).slice(0, 5)
     .map(r => { const v = itemView(findItem(settings, r.key)); return { key: r.key, name: v.name, icon: v.icon, effect: r.effect }; });
 }
@@ -226,7 +226,7 @@ export async function journalForCoach(db, date) {
   const shown = item => item && !NEVER_TO_AI.has(item.key) && (settings.shareSensitive || !isSensitive(item));
   const answers = pinnedItems(settings).filter(shown).map(i => journalItemOnDay(i, entries.get(yesterday)?.get(i.key), auto[yesterday]?.[i.key])).filter(v => v.answered)
     .map(v => ({ item: v.name, answer: v.type === "yesno" ? (v.answer ? "yes" : "no") : v.value || (v.answer ? "yes" : "no") }));
-  const top = (findings?.ranked || []).filter(r => Math.abs(r.effect) >= 3 && shown(findItem(settings, r.key))).sort((a, b) => Math.abs(b.effect) - Math.abs(a.effect)).slice(0, 6)
+  const top = (findings?.ranked || []).filter(r => Math.abs(r.effect) >= DISCOVERY_PERCENT && shown(findItem(settings, r.key))).sort((a, b) => Math.abs(b.effect) - Math.abs(a.effect)).slice(0, 6)
     .map(r => ({ item: journalNameOf(settings, r.key), nextMorningReadinessPercent: r.effect, daysWith: r.yes, daysWithout: r.no }));
   if (!top.length && !answers.length) return null;
   return { ...(top.length ? { findings: top } : {}), ...(answers.length ? { yesterday: { date: yesterday, answers } } : {}) };

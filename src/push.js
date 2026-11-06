@@ -12,7 +12,7 @@
 import { L, storedLanguage, withLang } from "./lang.js";
 import { localDate, localHour, localToday, storedTimeZone, withTimeZone } from "./user-time.js";
 import { reasonsSentence } from "./morning-advice.js";
-import { dayVerdict, verdictText } from "./day-verdict.js";
+import { dayVerdict, verdictText, signsAdvice } from "./day-verdict.js";
 
 const shiftDay = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 
@@ -190,7 +190,7 @@ export function readinessMessage(input) {
   let body;
   if (noSleep) body = L("Otevři Aurin, ať se noc nahraje; skóre se může změnit.", "Open Aurin to sync last night; the score may change.");
   else if (rest) body = names ? L(`${names} dnes vynech a dej tělu klid.`, `Skip today's ${names} and let your body recover.`) : L("Dej tělu klid.", "Let your body recover today.");
-  else if (signs) body = L("Dech nebo teplota ve spánku jsou nad tvým obvyklým rozmezím. Dnes odpočívej a napiš kouči, jak se cítíš.", "Your breathing or temperature in sleep is above your usual range. Rest today and tell the coach how you feel.");
+  else if (signs) body = signsAdvice();
   else if (saveFor) body = L(`Zítra: ${saveFor.title}. Dnes lehce v Z2, ať na něj máš síly.`, `Tomorrow: ${saveFor.title}. Easy Z2 today so you're fresh for it.`);
   else if (level === "green" && (signals.length === 1 || injury)) body = names ? L(`Dnešní plán: ${names}. Odtrénuj ho podle plánu, nic navíc.`, `Today's plan: ${names}. Train as planned, nothing extra.`) : L("Nic naplánováno. Klidně trénuj, jen bez maxim.", "Nothing planned. Train if you like, just no all-out efforts.");
   else if (level === "green") body = names ? L(`Dnešní plán: ${names}. Tělo je připravené, do toho.`, `Today's plan: ${names}. Your body is ready, go for it.`) : L("Nic naplánováno. Dobrý den na těžší trénink.", "Nothing planned. A good day for a harder session.");

@@ -61,10 +61,11 @@ struct WidgetSnapshot: Codable, Equatable {
         AurinControls.reload(AurinControls.water)
     }
 
-    /// The snapshot as it stands on `today`: from an earlier day the day's
-    /// counts start again at zero (the targets stay), and the night and the
-    /// plan are unknown until the app refreshes. Without this the widgets
-    /// showed yesterday's calories, water and steps as today's after midnight.
+    /// The snapshot as it stands on `today`: from an earlier day what the app
+    /// logs (calories, water) starts again at zero (the targets stay), and the
+    /// night, the plan, the steps and the strain are unknown ("–") until the app
+    /// refreshes: a "0 kroků" at 9:00 read as a real count. Without this the
+    /// widgets showed yesterday's calories, water and steps as today's after midnight.
     func current(today: String) -> WidgetSnapshot {
         guard date != today else { return self }
         var s = self
@@ -74,13 +75,13 @@ struct WidgetSnapshot: Codable, Equatable {
         s.sleepMinutes = nil
         s.sleepIndex = nil
         s.hrv = nil
-        s.strain = 0
+        s.strain = nil
         s.kcal = 0
         s.waterMl = 0
         s.protein = protein == nil ? nil : 0
         s.carbs = carbs == nil ? nil : 0
         s.fat = fat == nil ? nil : 0
-        s.steps = 0
+        s.steps = nil
         s.bedtime = nil
         s.nextTitle = nil
         s.nextTime = nil
@@ -94,6 +95,13 @@ struct WidgetSnapshot: Codable, Equatable {
         UserDefaults(suiteName: group)?.removeObject(forKey: key)
     }
 
+    /// How many hours old the data is at `now`, from 2 hours on (Background App
+    /// Refresh off, Low Power Mode): the widgets then say "před 3 h". Nil while fresh.
+    func hoursOld(at now: Date) -> Int? {
+        let hours = Int(now.timeIntervalSince(updated) / 3600)
+        return hours >= 2 ? hours : nil
+    }
+
     static let sample = WidgetSnapshot(date: "2026-10-08", updated: Date(), readiness: 78, zone: "green", sleepMinutes: 432, sleepIndex: 82,
                                        strain: 8.4, strainPlanned: 14, hrv: 58, kcal: 1240, kcalTarget: 2650, waterMl: 1200, waterTarget: 2800,
                                        protein: 64, proteinTarget: 150, carbs: 140, carbsTarget: 320, fat: 38, fatTarget: 80,
@@ -103,7 +111,8 @@ struct WidgetSnapshot: Codable, Equatable {
 }
 
 /// The week for the large widget: Monday to Sunday's training time, how many
-/// planned sessions are done and the next ones. Written when Training loads.
+/// planned sessions are done and the next ones. Written when Training loads,
+/// and when Today shows the saved week is out of date (WidgetBridge.followWeek).
 struct WidgetWeek: Codable, Equatable {
     static let key = "widgetWeek"
 

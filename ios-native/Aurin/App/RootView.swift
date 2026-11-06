@@ -34,6 +34,8 @@ struct RootView: View {
     @State private var wide = false
     private static let tabs: [AppTab] = [.today, .training, .food, .health]
     @Environment(\.scenePhase) private var scenePhase
+    /// Not capped yet: the screens below cap it (textSizes).
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         if model.updateRequired {
@@ -42,6 +44,7 @@ struct RootView: View {
             screens
                 .onGeometryChange(for: Bool.self) { $0.size.width >= WideLayout.minWidth } action: { wide = $0 }
                 .environment(\.wideLayout, wide)
+                .environment(\.fullTypeSize, typeSize)
         }
     }
 

@@ -133,7 +133,7 @@ struct ReadinessHome: View {
         HStack(alignment: .lastTextBaseline, spacing: 8) {
             if s.readiness == nil, let days = learning {
                 // A new athlete: the day of the 14 readiness needs ("5/14"),
-                // as "Učím se tvůj normál" on the iPhone.
+                // as "Učím se tvoje obvyklé hodnoty" on the iPhone.
                 HStack(alignment: .lastTextBaseline, spacing: 0) {
                     Text(String(days)).foregroundStyle(W.ink)
                     Text(verbatim: "/14").foregroundStyle(W.secondary)

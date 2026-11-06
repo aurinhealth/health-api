@@ -19,11 +19,14 @@ const hrvRow = c => ({ id: 'hrv', label: 'HRV', value: signed((c.hrv.value / c.h
 const restingRow = c => ({ id: 'restingHR', label: L('Klidový tep', 'Resting heart rate'), value: signed(c.restingHR.value - c.restingHR.baseline, 0) + L(' tepů/min', ' bpm') + vsUsual() });
 
 // The values outside the usual range in the readiness (recovery-model.js
-// recoveryReadiness components), each as a row for the card.
+// recoveryReadiness components), each as a row for the card. The wrist
+// temperature counts from +1 °C, the threshold of the morning verdict
+// (day-verdict.js signs), so the card and the verdict read the night alike
+// (audit 2026-11-06, 25.1); +0.5 °C only lowers the readiness a little.
 export function nightOffValues(readiness) {
   const c = readiness?.components || {}, rows = [];
   let warm = false;
-  if (c.wristTemp?.raised) { warm = true; rows.push({ id: 'temperature', label: L('Teplota zápěstí', 'Wrist temperature'), value: signed(c.wristTemp.deviation, 1) + ' °C' + vsUsual() }); }
+  if (c.wristTemp?.elevated) { warm = true; rows.push({ id: 'temperature', label: L('Teplota zápěstí', 'Wrist temperature'), value: signed(c.wristTemp.deviation, 1) + ' °C' + vsUsual() }); }
   else if (c.skinTemp?.elevated) { warm = true; rows.push({ id: 'temperature', label: L('Teplota kůže', 'Skin temperature'), value: signed(c.skinTemp.deviation, 1) + ' °C' + vsUsual() }); }
   if (c.respiration?.elevated) { warm = true; rows.push({ id: 'respiration', label: L('Dech ve spánku', 'Breathing in sleep'), value: signed(c.respiration.value - c.respiration.baseline, 1) + ' /min' + vsUsual() }); }
   if (hrvLow(c)) rows.push(hrvRow(c));
@@ -48,9 +51,10 @@ export function restingHRAbove(readiness, yesterday = null) {
 // The card for `date`, or null. yesterday: the night before's readiness (for
 // the resting heart rate). offer: the swap of today's hard session
 // (coach-push.js swapOffer) when there is one. signal says which card it is. Hidden once dismissed, or once
-// the athlete swapped or kept today's session.
-export function easierDayCard({ date, readiness, yesterday = null, state = {}, offer = null }) {
-  if ((state.status || 'active') !== 'active') return null;
+// the athlete swapped or kept today's session, and on a day the verdict
+// (day-verdict.js) calls hard: one verdict a morning (audit 2026-11-06, 25.1).
+export function easierDayCard({ date, readiness, yesterday = null, state = {}, offer = null, verdict = null }) {
+  if ((state.status || 'active') !== 'active' || verdict === 'hard') return null;
   const id = date + ':easier';
   if ((state.dismissed || []).includes(id)) return null;
   if (state.nudge?.day === date && state.nudge.date === date && state.nudge.status && state.nudge.status !== 'pending') return null;

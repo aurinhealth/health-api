@@ -141,7 +141,7 @@ struct TrainingModeView: View {
                             if live.running {
                                 LiveWorkoutStrip(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 14)
                             }
-                            if !started, !parts.before(day).isEmpty || !parts.after(day).isEmpty {
+                            if !started, showsParts(day, parts) {
                                 // Before Začít trénink: the whole workout in order, one start for all of it.
                                 partsList(day, parts)
                                 Button { startWhole(day) } label: {
@@ -164,6 +164,8 @@ struct TrainingModeView: View {
                     ScrollView { finished(day).padding(.bottom, 24) }
                     .scrollIndicators(.hidden)
                 }
+            } else if day == nil, let error {
+                loadFailed(error)
             } else {
                 empty
             }
@@ -325,7 +327,7 @@ struct TrainingModeView: View {
                     if started {
                         Button { Task { await finish() } } label: {
                             Text("Dokončit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
-                                .padding(.horizontal, 14).frame(height: 36).background(Palette.button, in: Capsule())
+                                .padding(.horizontal, 18).frame(height: 44).background(Palette.button, in: Capsule())
                         }
                         .buttonStyle(.plain)
                         .disabled(saving)
@@ -671,13 +673,16 @@ struct TrainingModeView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    if next.sets.contains(where: { !$0.done }) {
-                        SmallInfoButton(label: "Nahradit cvik", systemImage: "arrow.triangle.swap") { swapping = next.name }
+                    // Each its own 44 pt, side by side: a sweaty finger hits the one it means.
+                    HStack(spacing: 0) {
+                        if next.sets.contains(where: { !$0.done }) {
+                            SmallInfoButton(label: "Nahradit cvik", systemImage: "arrow.triangle.swap") { swapping = next.name }
+                        }
+                        SmallInfoButton { technique = next.name }
+                        foldButton("next")
                     }
-                    SmallInfoButton { technique = next.name }
-                    foldButton("next")
                 }
-                .padding(.horizontal, 16).padding(.vertical, 12)
+                .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 12)
                 if unfolded.contains("next") {
                     RestSetsList(exercise: next, last: history.last(next.name, before: date)) { typed in
                         Task { await setWeight(LiftWeight.kgText(typed), of: next) }
@@ -710,7 +715,7 @@ struct TrainingModeView: View {
             withAnimation(.snappy) { if unfolded.contains(key) { unfolded.remove(key) } else { unfolded.insert(key) } }
         } label: {
             Image(systemName: unfolded.contains(key) ? "chevron.up" : "chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(Palette.faint)
-                .frame(width: 28, height: 34).tapTarget(width: 28, height: 34)
+                .frame(width: 44, height: 34).tapTarget(width: 44, height: 34)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.tr(unfolded.contains(key) ? "Skrýt série" : "Ukázat série"))
@@ -759,8 +764,10 @@ struct TrainingModeView: View {
                         Spacer(minLength: 6)
                         Text(plannedLine(set, in: exercise))
                             .font(Typo.number(22)).foregroundStyle(Palette.ink).lineLimit(1)
-                        SmallInfoButton { technique = exercise.name }.padding(.leading, 4)
-                        foldButton("now")
+                        HStack(spacing: 0) {
+                            SmallInfoButton { technique = exercise.name }
+                            foldButton("now")
+                        }
                     }
                     if let previous = GymSessionMath.lastTime(set, in: exercise, last: last) {
                         Text(L10n.f("Minule %@", previous)).font(Typo.caption).foregroundStyle(Palette.muted)
@@ -925,10 +932,13 @@ struct TrainingModeView: View {
         let name: String
         let detail: String
         let done: Bool
+        /// The warm-up, cardio or stretching (nil: an exercise).
+        var part: GymDayPart? { if case .part(let part) = step { return part }; return nil }
     }
 
-    /// The parts before the exercises, each exercise, the parts after them.
-    private func partRows(_ day: GymDay, _ parts: GymDayParts) -> [PartRow] {
+    /// The parts before the exercises, each exercise, the parts after them;
+    /// `withOff`: the parts switched off for the day too (the list before the start).
+    private func partRows(_ day: GymDay, _ parts: GymDayParts, withOff: Bool = false) -> [PartRow] {
         func row(_ part: GymDayPart) -> PartRow {
             PartRow(id: part.rawValue, step: .part(part), key: part.rawValue, symbol: part.kind.symbol, color: part.kind.color,
                     name: L10n.tr(part.kind.title), detail: parts.subtitle(part, day: day), done: partDone(part, day))
@@ -938,13 +948,33 @@ struct TrainingModeView: View {
                     name: exercise.name, detail: L10n.plural("%lld/%lld sérií", exercise.doneCount, exercise.workCount),
                     done: exercise.sets.allSatisfy(\.done))
         }
-        return parts.before(day).map(row) + exercises + parts.after(day).map(row)
+        let shown = parts.visible(day)
+        guard withOff, let i = shown.firstIndex(of: .exercises) else {
+            return parts.before(day).map(row) + exercises + parts.after(day).map(row)
+        }
+        return shown[..<i].map(row) + exercises + shown[(i + 1)...].map(row)
+    }
+
+    /// Before Začít trénink: the list with the switches, also when every part is
+    /// off but the plan made a warm-up or stretching (else it could not come back on).
+    /// Nothing switched on and none made (all off in Nastavení): straight to the exercise.
+    private func showsParts(_ day: GymDay, _ parts: GymDayParts) -> Bool {
+        !parts.before(day).isEmpty || !parts.after(day).isEmpty || day.warmup != nil || day.stretching != nil
+    }
+
+    /// A part switched on or off for the day, as in GymPartsCard.
+    private func setPart(_ part: GymDayPart, on: Bool, _ parts: GymDayParts) {
+        var next = parts
+        next.off.removeAll { $0 == part }
+        if !on { next.off.append(part) }
+        dayParts = GymDayParts.saving(next, date: date, into: dayParts)
     }
 
     /// The day's parts in order, each with its time so far; a tap turns to it
-    /// (before Začít trénink: starts the workout with it).
+    /// (before Začít trénink: starts the workout with it, and the warm-up,
+    /// cardio and stretching have their switch for the day).
     private func partsList(_ day: GymDay, _ parts: GymDayParts) -> some View {
-        let rows = partRows(day, parts)
+        let rows = partRows(day, parts, withOff: !started)
         let now: String? = activePart?.rawValue ?? (started ? current(day)?.name : nil)
         return VStack(alignment: .leading, spacing: 0) {
             Text(verbatim: L10n.tr(started ? "Trénink" : "Dnešní trénink"))
@@ -954,12 +984,24 @@ struct TrainingModeView: View {
                 VStack(spacing: 0) {
                     ForEach(rows) { row in
                         if row.id != rows.first?.id { Divider().overlay(Palette.hairline) }
-                        Button {
-                            if started { go(row.step, auto: true) } else { startWhole(day, from: row.step) }
-                        } label: {
-                            partRow(row, now: row.key == now, seconds: started ? live.seconds(of: row.key, at: context.date) : 0)
+                        let on = row.part.map(parts.isOn) ?? true
+                        HStack(spacing: 10) {
+                            Button {
+                                if started { go(row.step, auto: true) } else { startWhole(day, from: row.step) }
+                            } label: {
+                                partRow(row, now: row.key == now, seconds: started ? live.seconds(of: row.key, at: context.date) : 0)
+                                    // Off stays readable: only the row fades, the switch keeps its colours.
+                                    .opacity(on ? 1 : 0.55)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!on)
+                            if !started, let part = row.part {
+                                Toggle(isOn: Binding(get: { on }, set: { setPart(part, on: $0, parts) })) { EmptyView() }
+                                    .toggleStyle(AurinToggleStyle())
+                                    .fixedSize()
+                                    .accessibilityLabel(Text(verbatim: row.name))
+                            }
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -1405,6 +1447,23 @@ struct TrainingModeView: View {
             Text(value).font(Typo.number(24)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
             if let change { Text(change).font(Typo.caption).foregroundStyle(better ? Palette.green : Palette.rust) }
         }
+    }
+
+    /// The day didn't load (no signal and no copy on the phone, a server error):
+    /// not Prázdný trénink, whose Přidat cvik would save a sheet over the plan.
+    /// Again, or back, as in GymLive.
+    private func loadFailed(_ message: String) -> some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Text(message).font(Typo.small).foregroundStyle(Palette.rust).multilineTextAlignment(.center)
+            SecondaryButton(title: "Zkusit znovu") { error = nil; Task { await load() } }
+            Button { dismiss() } label: {
+                Text("Zpět").font(Typo.bodyStrong).foregroundStyle(Palette.ink).frame(maxWidth: .infinity).frame(height: 46)
+            }
+            .buttonStyle(.plain)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
     }
 
     /// Nothing planned: an empty workout the exercises are added to one by one.

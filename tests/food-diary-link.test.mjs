@@ -25,6 +25,8 @@ test("food logged by the coach goes straight into the app's diary", async () => 
   assert.equal(row.status, null);
   assert.equal(row.consumed_at, "2026-10-05T12:30:00");
   assert.equal(JSON.parse(row.note).mealType, "lunch");
+  // No fibre given: unknown, not 0 g (audit 13.1).
+  assert.equal(JSON.parse(row.note).fiber_unknown, true);
   // A correction changes the same row.
   await updateFoodEntry(db, { id: meal.id, servings: 2 });
   assert.equal(rows(raw)[0].kcal, 1280);

@@ -63,9 +63,28 @@ export async function appendChatTurnIds(db, chatId, message, answer) {
   return { chatId: chat.id, messageId };
 }
 
+// A streamed answer names its chat before the model runs (entrypoint.js), so
+// a phone that loses the connection can load the answer once it is saved: the
+// chat it goes on, or a new one with the question's title and no messages yet.
+export async function openChatForAnswer(db, chatId, message) {
+  await ensureAssistantChats(db);
+  const chat = await ownedChat(db, chatId);
+  if (chat) return { id: chat.id, created: false };
+  const created = await db.prepare('INSERT INTO assistant_chats(user_id,title) VALUES(?,?)').bind(db.userId, chatTitle(message)).run();
+  const id = Number(created.meta?.last_row_id) || null;
+  return id ? { id, created: true } : null;
+}
+
+// That new chat again when its answer failed and nothing was saved in it.
+export async function dropEmptyChat(db, chatId) {
+  if (!validId(chatId)) return;
+  await db.prepare('DELETE FROM assistant_chats WHERE user_id=? AND id=? AND NOT EXISTS (SELECT 1 FROM assistant_messages WHERE user_id=? AND chat_id=?)').bind(db.userId, Number(chatId), db.userId, Number(chatId)).run();
+}
+
+// A chat whose first answer is still being written is not listed yet.
 export async function listChats(db, limit = 50) {
   await ensureAssistantChats(db);
-  const rows = (await db.prepare('SELECT c.id,c.title,c.updated_at,(SELECT COUNT(*) FROM assistant_messages m WHERE m.chat_id=c.id AND m.user_id=c.user_id) AS messages FROM assistant_chats c WHERE c.user_id=? ORDER BY c.updated_at DESC, c.id DESC LIMIT ?').bind(db.userId, limit).all()).results || [];
+  const rows = (await db.prepare('SELECT c.id,c.title,c.updated_at,(SELECT COUNT(*) FROM assistant_messages m WHERE m.chat_id=c.id AND m.user_id=c.user_id) AS messages FROM assistant_chats c WHERE c.user_id=? AND EXISTS (SELECT 1 FROM assistant_messages m WHERE m.chat_id=c.id AND m.user_id=c.user_id) ORDER BY c.updated_at DESC, c.id DESC LIMIT ?').bind(db.userId, limit).all()).results || [];
   return rows.map(r => ({ id: r.id, title: r.title, updatedAt: r.updated_at, messages: Number(r.messages) || 0 }));
 }
 

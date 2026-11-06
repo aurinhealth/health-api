@@ -114,6 +114,38 @@
 			<string>%lld exercises</string>
 		</dict>
 	</dict>
+	<key>%lld nezapsaný den se nepočítá.</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld unlogged day is left out.</string>
+			<key>other</key>
+			<string>%lld unlogged days are left out.</string>
+		</dict>
+	</dict>
+	<key>%lld zapsaných dní</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld logged day</string>
+			<key>other</key>
+			<string>%lld logged days</string>
+		</dict>
+	</dict>
 	<key>%lld dní</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -843,6 +875,22 @@
 			<string>workout done</string>
 			<key>other</key>
 			<string>workouts done</string>
+		</dict>
+	</dict>
+	<key>multisportovních tréninků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>multisport workout</string>
+			<key>other</key>
+			<string>multisport workouts</string>
 		</dict>
 	</dict>
 	<key>tréninků v posilovně</key>

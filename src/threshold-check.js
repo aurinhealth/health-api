@@ -178,11 +178,13 @@ export function returnAfterBreak(dates, today, { window = 35 } = {}) {
 // was first seen, confirmed or the offer declined). Friel retests every 4–6
 // weeks; 8 weeks is an estimate.
 export const OLD_DAYS = 56;
-export function thresholdOffer({ sport, sessions, current, estimate, check = null, today, since = null, back = null }) {
+export function thresholdOffer({ sport, sessions, current, estimate: found, check = null, today, since = null, back = null }) {
   const recent = (sessions || []).filter(s => s.kind === sport && s.date > shift(today, -42) && s.date <= today);
   if (recent.length < 4) return null;
   if (check && ["scheduled", "measured"].includes(check.status)) return null;
   const metric = sport === "run" ? "runThresholdPace" : sport === "swim" ? "swimCss" : current?.ftp || recent.some(s => s.avgPower > 50) ? "ftp" : "lthr";
+  // The ride estimate is an FTP in watts: a heart-rate-only rider (LTHR) never compares it.
+  const estimate = metric === "lthr" ? null : found;
   const now = finite(current?.[metric]);
   let reason = null, change = null;
   if (!now) reason = "missing";

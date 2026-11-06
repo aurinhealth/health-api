@@ -156,6 +156,9 @@ struct MetricWidgetView: View {
     var body: some View {
         if let s = entry.snapshot {
             let v = entry.metric.value(s)
+            // Steps from hours ago would read as now (Background App Refresh off): "cíl 10 000 · před 3 h".
+            let notes = [v.note, entry.metric == .steps ? W.age(s, at: entry.date) : nil].compactMap { $0 }
+            let note = notes.isEmpty ? nil : notes.joined(separator: " · ")
             switch family {
             case .accessoryInline:
                 Text(entry.metric.title + " " + v.number + (v.unit.isEmpty ? "" : " " + v.unit))
@@ -163,7 +166,7 @@ struct MetricWidgetView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(entry.metric.title).font(.caption)
                     Text(v.number + (v.unit.isEmpty ? "" : " " + v.unit)).font(.headline)
-                    if let note = v.note { Text(note).font(.caption) }
+                    if let note { Text(note).font(.caption) }
                 }
             default:
                 let trend = entry.metric.trend(s)
@@ -184,8 +187,8 @@ struct MetricWidgetView: View {
                         WidgetTrend(values: trend.values, low: trend.low, high: trend.high, color: entry.metric.color)
                             .frame(height: 30)
                         if let note = v.note { Text(note + " · " + L10n.tr("7 dní")).font(.caption2).foregroundStyle(W.muted).lineLimit(1).padding(.top, 4) }
-                    } else if let note = v.note {
-                        Text(note).font(.caption2).foregroundStyle(W.muted).lineLimit(1)
+                    } else if let note {
+                        Text(note).font(.caption2).foregroundStyle(W.muted).lineLimit(1).minimumScaleFactor(0.8)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -251,6 +254,7 @@ struct WeekWidget: Widget {
 }
 
 struct WeekWidgetView: View {
+    @Environment(\.widgetRenderingMode) private var renderingMode
     let entry: WeekEntry
 
     var body: some View {
@@ -295,7 +299,8 @@ struct WeekWidgetView: View {
     }
 
     /// Done training as solid bars in the day's readiness colour, what the
-    /// plan still has as dashed ones; today's letter in a dark dot.
+    /// plan still has as dashed ones; today's letter in a dark dot, or in a
+    /// ring on a tinted Home Screen, where the dot and the letter get one colour.
     private func bars(_ week: WidgetWeek) -> some View {
         let most = max(60, week.days.map { max($0.minutes, $0.planned) }.max() ?? 0)
         return HStack(alignment: .bottom, spacing: 8) {
@@ -314,10 +319,15 @@ struct WeekWidgetView: View {
                         RoundedRectangle(cornerRadius: 3).fill(W.muted.opacity(0.18)).frame(height: 5)
                     }
                     let today = day.date == entry.today
+                    let filled = renderingMode == .fullColor
                     Text(weekday(day.date)).font(.caption2.weight(today ? .bold : .medium))
-                        .foregroundStyle(today ? Palette.onButton : W.muted)
+                        .foregroundStyle(today ? (filled ? Palette.onButton : W.ink) : W.muted)
                         .frame(width: 20, height: 20)
-                        .background(Circle().fill(today ? Palette.button : .clear))
+                        .background {
+                            if today {
+                                if filled { Circle().fill(Palette.button) } else { Circle().strokeBorder(W.ink, lineWidth: 1.5) }
+                            }
+                        }
                 }
                 .frame(maxWidth: .infinity)
             }

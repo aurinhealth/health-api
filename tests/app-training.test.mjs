@@ -148,6 +148,7 @@ test("Form, load per week, zones and VO2max", () => {
   assert.equal(t.zones.minutes, 262);
   assert.equal(t.zones.light, 180);
   assert.equal(t.vo2max.value, 49.2);
+  assert.equal(t.vo2max.source, "watch", "the estimate names where it comes from (audit 16.5)");
   assert.equal(t.activeCalories.today, 180);
   assert.equal(t.activeCalories.usual, 400);
 });

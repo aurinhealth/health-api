@@ -5,7 +5,7 @@
 // Pure: GET /app/api/training loads the inputs.
 import { groupOfType, typeName, mark } from "./activity-type.js";
 import { mergeWellnessRows, strainScore, dayStrainParts } from "./recovery-model.js";
-import { sessionLoad } from "./training-load.js";
+import { sessionLoad, strengthLoad } from "./training-load.js";
 import { athleteFocus } from "./athlete-focus.js";
 import { localDateTime } from "./user-time.js";
 import { L } from "./lang.js";
@@ -41,20 +41,29 @@ function actualStrain(row, done = []) {
 // one from its average heart rate, so the strain detail can split the day
 // between training and movement (StrainDetailView). Resting and max HR are the
 // profile's (Tep a aktivita: rhr, hrmax), else the median of the last 30 days
-// and from age (Tanaka).
+// and from age (Tanaka). A gym session without heart rate (the one logged set
+// by set in Aurin has none) counts by its length as an ordinary session (RPE
+// 6, training-load.js strengthLoad), as the fitness and fatigue count it: a
+// 78-minute leg day read 0.0 beside two walks (Petr, 2026-11-06).
 export function withHeartRateLoad(training, wellness, profile, date) {
   const completed = Array.isArray(training?.completed) ? training.completed : [];
   const rest = (Array.isArray(wellness) ? wellness : []).filter(r => r && r.id <= date && r.id >= shift(date, -30)).map(r => num(r.restingHR)).filter(v => v > 0).sort((a, b) => a - b);
   const age = num(profile?.age);
   const athlete = { restHr: num(profile?.restHr ?? profile?.rhr) || (rest.length ? rest[Math.floor(rest.length / 2)] : null), maxHr: num(profile?.maxHr ?? profile?.hrmax) || (age ? Math.round(208 - 0.7 * age) : null), sex: profile?.sex || null };
-  if (!athlete.restHr || !athlete.maxHr || !completed.some(a => num(a?.tss) == null)) return training;
+  const strength = a => /weight|strength|gym/i.test(String(a.type || ""));
+  const hrKnown = athlete.restHr && athlete.maxHr;
+  if (!completed.some(a => a && num(a.tss) == null && (hrKnown || strength(a)))) return training;
   return {
     ...training,
     completed: completed.map(a => {
       if (!a || num(a.tss) != null) return a;
-      const avgHr = num(a.averageHeartRate ?? a.payload?.average_heartrate), minutes = (num(a.durationHours) || 0) * 60;
-      if (!(avgHr > 0) || !(minutes > 0)) return a;
-      const tss = sessionLoad({ minutes, avgHr, kind: /weight|strength|gym/i.test(String(a.type || "")) ? "strength" : "other" }, athlete);
+      const avgHr = hrKnown ? num(a.averageHeartRate ?? a.payload?.average_heartrate) : null, minutes = (num(a.durationHours) || 0) * 60;
+      if (!(minutes > 0)) return a;
+      if (!(avgHr > 0)) {
+        const tss = strength(a) ? strengthLoad({ minutes }) : null;
+        return tss != null ? { ...a, tss, tssFromLength: true } : a;
+      }
+      const tss = sessionLoad({ minutes, avgHr, kind: strength(a) ? "strength" : "other" }, athlete);
       return tss != null ? { ...a, tss, tssFromHeartRate: true } : a;
     })
   };
@@ -352,7 +361,8 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   });
   const zoneWeeksTotal = zoneWeeks.reduce((s, w) => s + w.light + w.moderate + w.vigorous + w.peak, 0);
 
-  // VO2max over half a year: Google's daily estimate, else Intervals.icu's.
+  // VO2max over half a year: the watch's daily estimate (Apple, Google), else
+  // Intervals.icu's; `source` names it under the number (audit 16.5, MDR).
   const vo2 = rows.filter(r => num(r.vo2max) > 0).map(r => ({ date: r.id, value: round(num(r.vo2max), 1) }));
   const vo2Source = vo2.length ? vo2 : intervals.filter(r => num(r.vo2max) > 0).map(r => ({ date: r.id, value: round(num(r.vo2max), 1) }));
   const vo2Latest = vo2Source.at(-1) || null;
@@ -385,7 +395,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     acwr: workload.historyDays > 0 && workload.acwr.level ? { level: workload.acwr.level } : null,
     monotony: workload.historyDays > 0 ? workload.monotony : null,
     zones: zoneTotal > 0 || zoneWeeksTotal > 0 ? { ...Object.fromEntries(Object.entries(zones).map(([k, v]) => [k, Math.round(v)])), minutes: Math.round(zoneTotal), weeks: zoneWeeks } : null,
-    vo2max: vo2Latest ? { value: vo2Latest.value, change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,
+    vo2max: vo2Latest ? { value: vo2Latest.value, source: vo2.length ? "watch" : "intervals", change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,
     activeCalories: activeDays.length ? { today: active.find(p => p.date === date)?.value ?? null, excluded: extraOn(date) || null, usual: usualActive.length ? Math.round(usualActive.reduce((a, b) => a + b, 0) / usualActive.length) : null, week: active, days: activeDays } : null,
     sessions,
     thisWeek: { done: doneCount, planned: plannedCount, doneLoad: Math.round(doneTss), plannedLoad: Math.round(Math.max(plannedTss, doneTss)) },

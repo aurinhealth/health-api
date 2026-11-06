@@ -142,6 +142,46 @@
 			<string>%lld cviků</string>
 		</dict>
 	</dict>
+	<key>%lld nezapsaný den se nepočítá.</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld nezapsané dny se nepočítají.</string>
+			<key>many</key>
+			<string>%lld nezapsaných dní se nepočítá.</string>
+			<key>one</key>
+			<string>%lld nezapsaný den se nepočítá.</string>
+			<key>other</key>
+			<string>%lld nezapsaných dní se nepočítá.</string>
+		</dict>
+	</dict>
+	<key>%lld zapsaných dní</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld zapsané dny</string>
+			<key>many</key>
+			<string>%lld zapsaných dní</string>
+			<key>one</key>
+			<string>%lld zapsaný den</string>
+			<key>other</key>
+			<string>%lld zapsaných dní</string>
+		</dict>
+	</dict>
 	<key>%lld dní</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -1055,6 +1095,26 @@
 			<string>tréninku hotovo</string>
 			<key>other</key>
 			<string>tréninků hotovo</string>
+		</dict>
+	</dict>
+	<key>multisportovních tréninků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>multisportovní tréninky</string>
+			<key>many</key>
+			<string>multisportovních tréninků</string>
+			<key>one</key>
+			<string>multisportovní trénink</string>
+			<key>other</key>
+			<string>multisportovních tréninků</string>
 		</dict>
 	</dict>
 	<key>tréninků v posilovně</key>

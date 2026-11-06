@@ -1,7 +1,7 @@
 /* English for Aurin. Each key is the Czech text (Czech is the source language). */
 
 "%@ %@ v %@ %@. Série jsou uložené i pro příští plán." = "%1$@ %2$@ across %3$@ %4$@. Your sets are saved for the next plan too.";
-"%@ %@ za 2 měsíce" = "%@ %@ in 2 months";
+"%@ %@ od %@" = "%@ %@ since %@";
 "%@ %@ za 30 dní" = "%@ %@ in 30 days";
 "%@ %@ za 4 týdny" = "%@ %@ in 4 weeks";
 "%@ a %@" = "%@ and %@";
@@ -10,7 +10,6 @@
 "%@ je připojené, data se začínají stahovat." = "%@ is connected, data is starting to sync.";
 "%@ let" = "%@ years";
 "%@ na ruku" = "%@ per dumbbell";
-"%@ od normy" = "%@ from usual";
 "%@ opakování · %@" = "%@ reps · %@";
 "%@ po %@" = "%1$@ by %2$@";
 "%@ týdně" = "%@ a week";
@@ -269,6 +268,10 @@
 "Kouč píše…" = "The coach is writing…";
 "Odpověď za %lld s" = "Answered in %lld s";
 "Kouč teď neodpověděl." = "The coach didn't answer.";
+"Spojení se přerušilo a odpověď se nedokončila." = "The connection dropped and the answer wasn't finished.";
+"Spojení se přerušilo. Kouč odpověď dopíše a uloží ji do chatu." = "The connection dropped. The coach will finish the answer and save it in this chat.";
+"Načíst odpověď" = "Load answer";
+"Kouč odpověď ještě píše. Zkus to za chvíli." = "The coach is still writing the answer. Try again in a moment.";
 "Kouč čte tvůj den…" = "Coach is reading your day…";
 "Kouč včetně fotek v chatu, jeho denní shrnutí na Dnes, Tréninku a Jídle, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál." = "The coach, including photos in chat, its daily summary on Today, Training and Food, reading food photos and looking up foods send the data they need to AI. Without consent, the rest of the app keeps working.";
 "Kuřecí rizoto" = "Chicken risotto";
@@ -337,7 +340,15 @@
 "Nejdelší jízda časem" = "Longest ride by time";
 "Nejdřív nastav, kdy máš na trénink čas." = "First set when you have time to train.";
 "Nejdřív zapni budík na pracovní dny nebo víkend." = "First turn on the weekday or weekend alarm.";
-"Nejlepší výkon (20+ min)" = "Best power (20+ min)";
+"Nejvyšší NP jízdy (20+ min)" = "Highest ride NP (20+ min)";
+"Co znamenají TSS, NP, IF a FTP" = "What TSS, NP, IF and FTP mean";
+"Co znamenají zkratky" = "What the abbreviations mean";
+"Zátěž tréninku z jeho délky a intenzity. 100 TSS je zhruba hodina na prahu." = "Training load from a workout's length and intensity. 100 TSS is about an hour at threshold.";
+"Normalizovaný výkon: kolik tě jízda stála, jako bys jel rovnoměrně. Tvrdé úseky váží víc, proto bývá vyšší než průměr v grafu." = "Normalized power: what the ride cost you, as if you had ridden it evenly. Hard efforts weigh more, so it is usually above the chart's average.";
+"Intenzita: NP vydělený FTP. Kolem 0,75 je klidná vytrvalost, 1,0 je hodina naplno." = "Intensity factor: NP divided by FTP. About 0.75 is easy endurance, 1.0 is an hour all out.";
+"Funkční prahový výkon: nejvyšší výkon, který udržíš zhruba hodinu. Počítají se z něj zóny, IF i TSS." = "Functional threshold power: the highest power you can hold for about an hour. Zones, IF and TSS are counted from it.";
+"Pokles tepu po poslední zátěži" = "Heart rate drop after the last effort";
+"Minuta v intenzivní nebo maximální zóně se počítá dvakrát, jak to doporučuje WHO." = "A minute in the vigorous or peak zone counts twice, as WHO recommends.";
 "Nejníž" = "Lowest";
 "Nejrychlejší tempo na 5+ km" = "Fastest pace over 5K+";
 "Nejvíc nastoupáno" = "Most climbing";
@@ -349,7 +360,6 @@
 "Neuloženo – %@: %@" = "Not saved – %@: %@";
 "Nic v plánu." = "Nothing planned.";
 "Nohy" = "Legs";
-"Norma (60 dní)" = "Normal (60 days)";
 "Nová konverzace" = "New conversation";
 "Nový den" = "New day";
 "Nový recept" = "New recipe";
@@ -393,6 +403,9 @@
 "Otevře detail formy a kondice" = "Opens form and fitness details";
 "Otevře nastavení spánku" = "Opens sleep settings";
 "Otevři aplikaci, ať se data načtou." = "Open the app to load your data.";
+"Aurin: otevři aplikaci" = "Aurin: open the app";
+"před %@ h" = "%@ h ago";
+"před %@ dny" = "%@ days ago";
 "Otevřít Nastavení" = "Open Settings";
 "Otevřít nastavení iPhonu" = "Open iPhone Settings";
 "Ověřuji…" = "Verifying…";
@@ -442,7 +455,7 @@
 "Potraviny · %@" = "Foods · %@";
 "Potvrdit" = "Confirm";
 "Potřeba a dluh" = "Need and debt";
-"Potřeba na dnešní noc" = "Need for tonight";
+"Potřeba na dnešní noc · odhad" = "Need for tonight · estimate";
 "Povolit AI" = "Allow AI";
 "Poznat z fotky nebo webu" = "Detect from photos or website";
 "Poznámka" = "Note";
@@ -475,8 +488,6 @@
 "Každá změna v plánu říká proč. Klepni na trénink a uvidíš původní." = "Every change in the plan says why. Tap a session to see the original.";
 "Původně" = "Original";
 "teď %@" = "now %@";
-"pás = tvůj normál" = "band = your normal";
-"HRV za 14 dní proti tvému normálu" = "HRV over 14 days against your normal";
 "Cíl závodu" = "Race goal";
 "odhad dnes" = "estimate today";
 "dnes · týden %@" = "today · week %@";
@@ -869,7 +880,6 @@
 "Zapsat váhu" = "Log weight";
 "Zapsáno do Intervals.icu" = "Written to Intervals.icu";
 "Zatím bez čísla" = "No score yet";
-"Učím se tvůj normál" = "Learning your normal";
 "Den %@ ze 14" = "Day %@ of 14";
 "Číslo zhruba od %@" = "Score from about %@";
 "Zatím nic" = "Nothing yet";
@@ -904,7 +914,6 @@
 "Změnit zadání" = "Change settings";
 "Zobrazit" = "Show";
 "Zobrazit diagnostiku" = "View diagnostics";
-"Zotavení tepu" = "Heart rate recovery";
 "Zotavení tepu po tréninku" = "Heart rate recovery after training";
 "Zpět" = "Back";
 "Zrušit" = "Cancel";
@@ -999,7 +1008,6 @@
 "moje potravina" = "my food";
 "muž" = "male";
 "nad %@" = "above %@";
-"nad normou" = "above normal";
 "naposledy %@" = "latest %@";
 "naposledy · %@" = "latest · %@";
 "nemoc" = "sick";
@@ -1009,16 +1017,12 @@
 "noc" = "night";
 "noci" = "nights";
 "nocí" = "nights";
-"norma %@" = "normal %@";
-"norma %@–%@ ms" = "normal %@–%@ ms";
-"norma ± 2 bpm" = "normal ± 2 bpm";
 "nový" = "new";
 "nízká" = "low";
 "o víkendu v %@" = "on weekends at %@";
 "obvykle %@ kcal" = "usually %@ kcal";
 "od %@" = "since %@";
 "od %@ do %@" = "from %@ to %@";
-"odchylka v normě" = "normal deviation";
 "odhad 1RM %@" = "est. 1RM %@";
 "odpočinkový týden" = "recovery week";
 "op." = "reps";
@@ -1030,7 +1034,6 @@
 "plán navrhne jakoukoli váhu" = "the plan suggests any weight";
 "plán ~%@" = "plan ~%@";
 "pod %@" = "below %@";
-"pod normou" = "below normal";
 "podle věku" = "by age";
 "podle záznamů" = "from my data";
 "pondělí až pátek" = "Monday to Friday";
@@ -1082,7 +1085,6 @@
 "tréninky" = "workouts";
 "tréninků" = "workouts";
 "tuky" = "fat";
-"tvoje norma" = "your normal range";
 "týden" = "week";
 "týden %@" = "week %@";
 "týdny" = "weeks";
@@ -1092,7 +1094,6 @@
 "udržovat váhu" = "maintain weight";
 "uvnitř" = "indoor";
 "už ani jedno opakování" = "not a single rep left";
-"v normě" = "normal";
 "v plánu" = "in plan";
 "v pracovní dny v %@" = "on weekdays at %@";
 "vah" = "weights";
@@ -1160,9 +1161,7 @@
 "žena" = "female";
 "žádný" = "none";
 "„%@“" = "“%@”";
-"↑ %@ nad normou" = "↑ %@ above normal";
 "↑ stoupá" = "↑ rising";
-"↓ %@ pod normou" = "↓ %@ below normal";
 "↓ klesá" = "↓ falling";
 "✓ Nalezeno" = "✓ Found";
 "Je potřeba nová verze" = "A new version is needed";
@@ -1213,10 +1212,8 @@
 "Povolit chybějící" = "Allow missing";
 "Přístup" = "Access";
 "Zdraví a spánek" = "Health and sleep";
-"spánek, tep, HRV, kroky, váha a jídlo" = "sleep, heart rate, HRV, steps, weight and food";
 "brzy" = "soon";
 "Tréninky" = "Workouts";
-"aktivity, plán tréninků, forma a wellness" = "activities, training plan, form and wellness";
 "Profil se nepodařilo načíst, takže ho teď nejde uložit. Zkus to znovu za chvíli." = "The profile couldn't be loaded, so it can't be saved right now. Try again in a moment.";
 "zítra" = "tomorrow";
 "včera" = "yesterday";
@@ -1389,9 +1386,6 @@
 "Pod prahem" = "Below threshold";
 "Nad prahem" = "Above threshold";
 "Přidat zdroj" = "Add a source";
-"spánek, regenerace, HRV a zátěž" = "sleep, recovery, HRV and strain";
-"spánek, HRV, teplota a pohyb" = "sleep, HRV, temperature and movement";
-"jízdy a trénink na trenažeru" = "rides and indoor training";
 "přes Intervals" = "via Intervals";
 "propojeno" = "connected";
 "propojeno, data starší než 12 h" = "connected, data over 12 hours old";
@@ -1428,10 +1422,11 @@
 "aktivních min" = "active min";
 "Forma dnes" = "Form today";
 "Forma %@" = "Form %@";
-"riziko přetížení" = "overload risk";
-"optimální trénink" = "optimal training";
-"neutrální" = "neutral";
+"odpočatý" = "rested";
 "čerstvý" = "fresh";
+"udržování" = "maintaining";
+"budování" = "building";
+"hluboká únava" = "deep fatigue";
 "Video" = "Video";
 "Otevřít v YouTube" = "Open in YouTube";
 "Podobný cvik" = "Similar exercise";
@@ -1789,7 +1784,7 @@
 "Upravit trénink podle cyklu" = "Adjust training to the cycle";
 "Na dny menstruace s křečemi nebo únavou zlehčí náročný trénink" = "Eases hard training on period days with cramps or fatigue";
 "Fáze a ovulace jsou odhad z kalendáře. Není to antikoncepce." = "Phases and ovulation are estimates from the calendar. This is not contraception.";
-"Aurin ukáže tvůj cyklus, porovná připravenost s tvým normálem v každé fázi a na dny s křečemi nebo únavou zlehčí náročný trénink." = "Aurin shows your cycle, compares your readiness with your own normal in each phase and eases hard training on days with cramps or fatigue.";
+"Aurin ukáže tvůj cyklus, porovná připravenost s tvým obvyklým rozmezím v každé fázi a na dny s křečemi nebo únavou zlehčí náročný trénink." = "Aurin shows your cycle, compares your readiness with your own usual range in each phase and eases hard training on days with cramps or fatigue.";
 "Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich zpracováním v Aurinu. Kdykoli sledování vypneš a Aurin cyklus přestane číst i používat. Uložené záznamy zůstanou, dokud nesmažeš účet." = "This is health data (GDPR Art. 9). By turning this on you explicitly consent to Aurin processing it. Turn tracking off any time and Aurin stops reading and using your cycle. Saved entries stay until you delete your account.";
 "Co Aurin uloží" = "What Aurin keeps";
 "Menstruace, potíže, antikoncepci a prášky, které zapíšeš" = "The periods, symptoms, contraception and pills you log";
@@ -2087,7 +2082,7 @@
 
 "Ultrahuman je připojený, noci z prstenu se začínají stahovat." = "Ultrahuman is connected; the ring's nights are starting to download.";
 "Připojení Ultrahumanu se nepovedlo, zkus to znovu." = "Connecting Ultrahuman didn't work. Try again.";
-"Data z prstenu se smažou a noc se zase bude brát z hodinek." = "The ring's data will be deleted and your nights will come from your watch again.";
+"Data z prstenu se smažou a noc se zase bude brát z ostatních zdrojů." = "The ring's data will be deleted and your nights will come from your other sources again.";
 "spánek, HRV, klidový tep, teplota" = "sleep, HRV, resting heart rate, temperature";
 "Odpojit a smazat data z prstenu" = "Disconnect and delete the ring's data";
 /* Vybrat: several foods or drinks at once */
@@ -2202,7 +2197,7 @@
 "Nic." = "Nothing.";
 "Aktivitu a kondici (kroky, vzdálenost, aktivní energii, tréninky a jejich trasy), zdravotní měření (tep, HRV, okysličení krve, dech, VO₂max, váhu, výšku, tělesný tuk), spánek, záznamy jídla a datum narození z účtu Google." = "Activity and fitness (steps, distance, active energy, workouts and their routes), health measurements (heart rate, HRV, blood oxygen, breathing, VO₂max, weight, height, body fat), sleep, food logs and your date of birth from your Google account.";
 "Jídlo a pití, které zapíšeš v Aurinu. Když to na stránce Googlu povolíš, i váhu a tréninky z Aurinu." = "The food and drinks you log in Aurin. If you allow it on Google's page, also your weight and workouts from Aurin.";
-"Tréninky, plán, zóny a váhu." = "Workouts, plan, zones and weight.";
+"Tréninky, plán, prahy a zóny, váhu a z wellness spánek, HRV a klidový tep." = "Workouts, plan, thresholds and zones, weight, and from wellness sleep, HRV and resting heart rate.";
 "Tréninky naplánované i odcvičené v Aurinu a kalorický cíl." = "Workouts planned and done in Aurin and your calorie target.";
 "Posílat i zdravotní data" = "Also send health data";
 "Spánek, tep, HRV, okysličení krve, dech, VO₂max, tělesný tuk, kroky, váhu a tréninky z Apple Watch. Intervals.icu je samostatná firma a zachází s nimi podle svých zásad." = "Sleep, heart rate, HRV, blood oxygen, breathing, VO₂ max, body fat, steps, weight and your Apple Watch workouts. Intervals.icu is a separate company and handles them under its own privacy policy.";
@@ -2301,6 +2296,8 @@
 "Ikonu se nepodařilo změnit. Zkus to znovu." = "The icon couldn't be changed. Try again.";
 "Odemkneš ji, až naběháš celkem %@." = "Unlocks once you've run %@ in total.";
 "Odemkneš ji, až najezdíš na kole celkem %@." = "Unlocks once you've ridden %@ in total.";
+"Odemkneš ji, až uplaveš celkem %@." = "Unlocks once you've swum %@ in total.";
+"Odemkneš ji po %@ multisportovních trénincích (triatlon, duatlon nebo brick)." = "Unlocks after %@ multisport workouts (triathlon, duathlon or brick).";
 "Odemkneš ji po %@ trénincích v posilovně." = "Unlocks after %@ gym workouts.";
 "Odemkneš ji, když budeš trénovat %@ dní v řadě." = "Unlocks when you train %@ days in a row.";
 "Dá se vybrat jen v tomto ročním období." = "Can only be picked during its season.";
@@ -2403,15 +2400,11 @@
 "nižší" = "lower";
 "delší" = "longer";
 "kratší" = "shorter";
-"v normálu" = "normal";
-"nad normálem" = "above normal";
-"pod normálem" = "below normal";
 "lepší než obvykle" = "better than usual";
 "horší než obvykle" = "worse than usual";
 "bod" = "point";
 "bodů" = "points";
 "%@ %@ připravenosti" = "%@ readiness %@";
-"tvůj normál %@" = "your normal %@";
 "níž" = "lower";
 "výš" = "higher";
 "tvrdý trénink %@" = "hard training %@";
@@ -2510,6 +2503,13 @@
 "Dny v řadě" = "Days in a row";
 "na kole" = "on the bike";
 "naběháno" = "run";
+"uplaváno" = "swum";
+"uplavaných kilometrů" = "kilometres swum";
+"uplavaných mil" = "miles swum";
+"multisportovní trénink" = "multisport workout";
+"multisportovní tréninky" = "multisport workouts";
+"multisportovních tréninků" = "multisport workouts";
+"Multisport" = "Multisport";
 "sekunda" = "second";
 "sekundy" = "seconds";
 "sekund" = "seconds";
@@ -2600,6 +2600,9 @@
 "max" = "max";
 "z" = "of";
 "Průměr za 7 dní: %@ %%" = "7-day average: %@%%";
+"Průměr za %@: %@ %%" = "Average over %@: %@%%";
+"Průměr za %@." = "Average over %@.";
+"Hodnotu má %@ z %@ jídel." = "%@ of %@ meals have a value.";
 "Dnes z" = "Today from";
 "Na obrazovce Jídlo" = "On the Food screen";
 "Oblíbené · %@ ze 3" = "Favourites · %@ of 3";
@@ -2672,16 +2675,13 @@
 "Dechů za minutu ve spánku" = "Breaths per minute in sleep";
 "Dech po nocích" = "Breathing by night";
 "Teplota po nocích" = "Temperature by night";
-"Odchylka od tvého normálu v noci" = "Overnight difference from your normal";
 "Teplota zápěstí v noci" = "Overnight wrist temperature";
 "Nocí" = "Nights";
-"Norma" = "Normal";
 "Nasycení krve kyslíkem ve spánku" = "Blood oxygen saturation in sleep";
 "Kyslík po nocích" = "Oxygen by night";
 "Podíl tuku v těle" = "Share of fat in your body";
 "Svalová hmota z chytré váhy" = "Muscle mass from a smart scale";
 "Po měřeních" = "By measurement";
-"Za 2 měsíce" = "In 2 months";
 "Zatím žádné měření." = "No measurement yet.";
 "Ostrý" = "Live";
 "Testovací" = "Test";
@@ -2731,8 +2731,9 @@
 "vždy ano" = "always yes";
 "vždy ne" = "always no";
 "Ukážu, až bude dost dní s ✓ i s ✕." = "Shows up once there are enough days with ✓ and with ✕.";
-"Škodí" = "Hurts";
-"Pomáhá" = "Helps";
+"Spojené s horším" = "Linked to worse";
+"Spojené s lepším" = "Linked to better";
+"Zatím bez jasného rozdílu: %@" = "No clear difference yet: %@";
 "Málo dní:" = "Too few days:";
 "✦ automaticky" = "✦ automatic";
 "Sledovat deník" = "Keep a journal";
@@ -3146,8 +3147,6 @@
 "Maraton" = "Marathon";
 "Ptáš se na" = "You're asking about";
 "Série %@ z %@" = "Set %@ of %@";
-"normál %@–%@ ms" = "normal %@–%@ ms";
-"normál %@ bpm" = "normal %@ bpm";
 "Potvrzeno." = "Confirmed.";
 "Návrh už neplatí." = "This proposal no longer applies.";
 "Odpovědět" = "Reply";
@@ -3316,7 +3315,7 @@
 "Režim tréninku v iPhonu spustí posilovnu i na hodinkách. Hodinky měří tep a kalorie a trénink uloží do Zdraví jednou." = "Training mode on your iPhone starts the gym on your watch too. The watch measures heart rate and calories and saves the workout to Health once.";
 
 /* Charts: what a line or a scale stands for */
-"potřeba" = "need";
+"odhad potřeby" = "est. need";
 "obvykle" = "usual";
 "6 týdnů" = "6 weeks";
 "před půl rokem" = "6 months ago";
@@ -3405,9 +3404,6 @@
 "Málo dní: %@" = "Too few days: %@";
 "Dnes %@ ms" = "Today %@ ms";
 "Dnes %@ bpm" = "Today %@ bpm";
-"tvůj normál %@–%@ ms" = "your normal %@–%@ ms";
-"tvůj normál %@–%@ bpm" = "your normal %@–%@ bpm";
-"tvůj normál %@–%@ /min" = "your normal %@–%@ /min";
 "prům. %@ %@" = "avg %@ %@";
 "Tep z %@–%@" = "Heart rate from %@–%@";
 "%@ aktivních min" = "%@ active min";
@@ -3985,10 +3981,11 @@
 "Dnes odpočinek" = "Rest today";
 /* Today audit 1, 12, D2 (MDR): breathing, temperature and blood oxygen against the usual range, the easier-day card. */
 "odhad zařízení" = "device estimate";
+"odhad z Intervals.icu" = "Intervals.icu estimate";
 "obvyklé rozmezí" = "usual range";
 "obvyklé rozmezí %@" = "usual range %@";
 "obvyklé rozmezí %@–%@ /min" = "usual range %@–%@ /min";
-"obvyklé rozmezí %@–%@ %% · 14 nocí" = "usual range %@–%@%% · 14 nights";
+"obvyklé rozmezí %@–%@ %%" = "usual range %@–%@%%";
 "Odchylka od obvyklé teploty v noci" = "Night temperature against your usual";
 "Obvykle" = "Usual";
 "v obvyklém rozmezí" = "within your usual range";
@@ -4001,6 +3998,11 @@
 "Ulehčit dnešek" = "Make today easier";
 "obvyklé rozmezí %@–%@ ms" = "usual range %@–%@ ms";
 "obvyklé rozmezí %@–%@ bpm" = "usual range %@–%@ bpm";
+"Průměr (60 dní)" = "Average (60 days)";
+"Učím se tvoje obvyklé hodnoty" = "Learning your usual range";
+"pás = obvyklé rozmezí" = "band = usual range";
+"HRV za 14 dní proti obvyklému rozmezí" = "HRV over 14 days against your usual range";
+"%@ od obvyklé" = "%@ from usual";
 "Aurin není zdravotnický prostředek. Před zdravotním rozhodnutím se poraď s lékařem." = "Aurin isn't a medical device. Check with a doctor before making medical decisions.";
 "%@ proti obvyklému" = "%@ vs usual";
 
@@ -4038,3 +4040,7 @@
 "Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit. Předplatné Aurin Pro se tím nezruší, zrušíš ho v App Store." = "Everything Aurin keeps for you goes and can't be restored. This doesn't cancel Aurin Pro; cancel it in the App Store.";
 "Pak začne Aurin Pro za %@ měsíčně po 12 měsíců. Zrušit ho můžeš v Nastavení → Aurin Pro." = "Then Aurin Pro starts at %@ a month for 12 months. You can cancel it in Settings → Aurin Pro.";
 "Načítám ceny z App Store…" = "Loading prices from the App Store…";
+
+/* Settings → Zones: where the max heart rate comes from when none is typed (ZonesSettingsView.swift heartNote) */
+"Odhad podle věku" = "Estimate from age";
+"Nejvyšší tep z tréninků za 6 měsíců" = "Highest heart rate in 6 months of workouts";

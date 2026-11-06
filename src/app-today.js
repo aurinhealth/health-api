@@ -11,7 +11,7 @@ import { sleepSettings, tonightChoice } from "./energy-profile.js";
 import { L } from "./lang.js";
 import { dayCalories } from "./app-food.js";
 import { readinessMessage } from "./push.js";
-import { verdictText } from "./day-verdict.js";
+import { verdictText, signsAdvice } from "./day-verdict.js";
 import { activityKindOf } from "./activity-match.js";
 import { daySessions, deviceEnergyExtra, withHeartRateLoad } from "./app-training.js";
 export { withHeartRateLoad };
@@ -172,7 +172,7 @@ export function readinessSummary(summary, readiness = {}, checkin = null, hasPla
   if (!(readiness?.zone === "red" || sick || signs || (yellow && !trained))) return morning && !trained ? { ...(summary || { text: null }), ...morning } : summary;
   if (yellow && !sick && !signs && morning) return { ...(summary || { text: null }), ...morning };
   const recommendation = sick ? L("Když je ti špatně, trénink dnes vynech a odpočívej. Vrať se, až budeš zase fit.", "If you feel unwell, skip training today and rest. Come back when you're well again.")
-    : signs ? L("Dech nebo teplota ve spánku jsou nad tvým obvyklým rozmezím. Dnes bez intenzity, a když se necítíš dobře, odpočívej.", "Your breathing or temperature in sleep is above your usual range. No intensity today, and rest if you don't feel well.")
+    : signs ? signsAdvice()
     : trained ? L("Připravenost je dnes nízká a trénink máš za sebou: zbytek dne odpočívej, najez se a jdi dřív spát.", "Readiness is low today and your training is done: rest for the rest of the day, eat well and get to bed earlier.")
     : yellow ? (hasPlan ? L("Dnes raději lehčeji: plánovaný trénink odjeď v klidném tempu a intenzitu nech na jiný den.", "Take today easier: do the planned session at an easy pace and save the intensity for another day.")
       : L("Dnes raději lehčeji: když budeš trénovat, tak v klidném tempu.", "Take today easier: if you train, keep the pace easy."))
@@ -215,7 +215,7 @@ export function latestNightSource(nights, date) {
   return (last && nights.get(last).source) || null;
 }
 
-export function buildToday({ date, hour = null, morning = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null, unavailable = [] }) {
+export function buildToday({ date, hour = null, morning = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], dataSources = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null, unavailable = [] }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
   const nights = primaryNights(sessions);
@@ -350,8 +350,9 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     status: pill.taken ? "done" : "planned"
   }] : [];
   const byTime = (a, b) => String(a.time || "99").localeCompare(String(b.time || "99"));
-  // Horko (heat-advice.js): a ride or run still ahead, outdoors, on a hot day.
-  const heatOf = s => s.status !== "planned" ? null : heatAdvice({ sport: s.sport, weather: forecast, time: s.time, indoor: indoorText(s.title + " " + (s.type || "")) })?.short || null;
+  // Horko (heat-advice.js): a ride or run still ahead, outdoors, on a hot day,
+  // judged over its whole length; the interval clauses only for a hard session.
+  const heatOf = s => s.status !== "planned" ? null : heatAdvice({ sport: s.sport, weather: forecast, time: s.time, minutes: s.minutes, intervals: isHardSession(s.title, s.sport), indoor: indoorText(s.title + " " + (s.type || "")) })?.short || null;
   const planItems = [
     ...[...done, ...open].map(s => easy(s, {
       kind: "workout",
@@ -383,9 +384,18 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
   const recover = (checkin === "sick" || (readiness.flags || []).some(f => f === "checkin_sick" || /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f)))
     || Boolean(morning?.athleteState && morning.athleteState !== "active");
   const summary = readinessSummary(coaches.morningSummary || null, readiness, checkin, planned.length > 0, done.length > 0 && !open.length, morning ? message?.changed || null : null, verdict);
+  // A yellow morning that keeps it steady: under a hard ride, run or swim
+  // still ahead, how to do it (wave 4, 28.2). Nothing is blocked; the
+  // hero's verdict is the warning, this line says how.
+  const steadyOf = item => verdict !== "steady" || readiness.zone !== "yellow" || item.kind !== "workout" || item.done || item.status !== "planned" || item.eased
+    || !["ride", "run", "swim"].includes(item.sport) || !isHardSession(item.session?.title || item.title, item.sport) ? null
+    : item.sport === "run" ? L("Den s mírou: běž v klidném tempu a intenzitu si nech na jiný den.", "Steady day: run it easy and save the intensity for another day.")
+    : item.sport === "swim" ? L("Den s mírou: plav v klidném tempu a intenzitu si nech na jiný den.", "Steady day: swim it easy and save the intensity for another day.")
+    : L("Den s mírou: jeď v klidném tempu a intenzitu si nech na jiný den.", "Steady day: ride it easy and save the intensity for another day.");
+  const withSteady = item => steadyOf(item) ? { ...item, steady: steadyOf(item) } : item;
   // Done first in the order of the day, then what is still open, then bedtime
   // with the planned wake time (Den draws the night ahead dashed to it).
-  const ordered = [...planItems.filter(i => i.done).sort(byTime), ...planItems.filter(i => !i.done),
+  const ordered = [...planItems.filter(i => i.done).sort(byTime), ...planItems.filter(i => !i.done).map(withSteady),
     ...(plan ? [{ kind: "bedtime", time: clock(plan.bed), end: clock(plan.wake), title: L("Do postele", "Bedtime"), detail: (choice.chosen != null ? L("spánek ", "sleep ") : L("potřeba spánku ", "sleep need ")) + Math.floor(tonightNeed / 60) + " h " + String(tonightNeed % 60).padStart(2, "0") + " min", done: false }] : [])
   ];
 
@@ -396,6 +406,8 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     unavailable: Array.isArray(unavailable) ? unavailable : [],
     // Connected services that need the user (connection-health.js), shown at the top.
     connectionProblems: Array.isArray(connectionProblems) ? connectionProblems : [],
+    // The services days and nights come from and when each was last reached (connection-health.js dataSources).
+    dataSources: Array.isArray(dataSources) ? dataSources : [],
     // provisional: the baseline is carried over from another source until the
     // new one has 14 days of its own (recovery-model.js sourceBaseline).
     readiness: { score: readiness.score, zone: readiness.zone, missing: readiness.missing || [], flags: readiness.flags || [], provisional: !!readiness.provisional, provisionalDays: readiness.provisional ? readiness.provisionalDays ?? null : null,

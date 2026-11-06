@@ -8,7 +8,7 @@ import { withLang } from '../src/lang.js';
 import { planValues } from '../src/gym-plan-store.js';
 import { todayGymContext,prepareGymSwap,applyGymSwap } from '../src/coach-gym-adjustment.js';
 import { validateCoachActions } from '../src/coach-actions.js';
-import { askCoach,assistantTask } from '../src/coach-assistant.js';
+import { askCoach,assistantTask,aiFailureText } from '../src/coach-assistant.js';
 import { partialCoachAnswer,readOpenAIStream,assistantStreamResponse } from '../src/assistant-stream.js';
 import { startDashboardSync,dashboardSyncStatus } from '../src/dashboard-sync.js';
 const date='2026-10-04';
@@ -144,6 +144,19 @@ test('coach streams readable answer before returning validated structured output
     assert.equal(request.stream,true);assert.equal(request.text.format.name,'coach_reply');assert.ok(seen.length>1);assert.equal(seen.at(-1),reply.answer);assert.equal(result.answer,reply.answer);assert.equal(result.usage.output_tokens,50);assert.deepEqual(result.actions,[]);
   }finally{globalThis.fetch=original;}
 });
+test('the stream names the chat, and a failure reads in the coach\'s voice without a status code (audit 23.1, 23.4)',async()=>{
+  const frames=async work=>(await assistantStreamResponse(work).text()).trim().split('\n').map(JSON.parse);
+  const named=await frames(async(emit,progress,chat)=>{chat(42);emit('Ahoj');return {answer:'Ahoj',chatId:42,actions:[]};});
+  assert.deepEqual(named.map(f=>f.type),['start','chat','answer','done']);assert.equal(named[1].chatId,42);
+  const busy=Object.assign(new Error(aiFailureText(429)),{ai:true,status:429}),down=Object.assign(new Error(aiFailureText(503)),{ai:true,status:503});
+  for(const [error,text] of [[busy,'Kouč teď neodpověděl, AI služba je přetížená. Zkus to za chvíli.'],[down,'Kouč teď neodpověděl. Zkus to za chvíli.'],[new Error('Database unavailable'),'Kouč teď neodpověděl. Zkus to za chvíli.']]){
+    const last=(await frames(async()=>{throw error;})).at(-1);
+    assert.equal(last.type,'error');assert.equal(last.message,text);assert.doesNotMatch(last.message,/AI \d{3}|\)\./);
+  }
+  const limit=Object.assign(new Error('Denní limit AI je vyčerpaný.'),{limit:true});
+  assert.equal((await frames(async()=>{throw limit;})).at(-1).message,'Denní limit AI je vyčerpaný.');
+});
+
 test('failed streamed work never publishes a completed reply or proposed actions',async()=>{
   const response=assistantStreamResponse(async emit=>{emit('Část odpovědi');throw new Error('Database unavailable');});
   const frames=(await response.text()).trim().split('\n').map(JSON.parse);

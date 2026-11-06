@@ -249,6 +249,10 @@ enum JournalText {
         ("readiness", "Připravenost"), ("hrv", "HRV"), ("sleep", "Spánek"), ("rhr", "Tep")
     ]
 
+    /// A difference of 5 % or more (journal-impact.js DISCOVERY_PERCENT) is a
+    /// clear one; a smaller one is not yet better or worse (audit 16.6).
+    static func isClear(_ effect: Int) -> Bool { abs(effect) >= 5 }
+
     /// "+11 %", "−17 %".
     static func percent(_ effect: Int) -> String {
         (effect < 0 ? "−" : "+") + String(abs(effect)) + Fmt.percentSign

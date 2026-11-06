@@ -764,7 +764,7 @@ struct DrinkFigurePicker: View {
                         .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.blue, lineWidth: on ? 2.5 : 0) }
                         .overlay(alignment: .topTrailing) {
                             if on {
-                                Image(systemName: "checkmark").scaledFont(10, weight: .bold, cap: .denseCap).foregroundStyle(.white)
+                                Image(systemName: "checkmark").scaledFont(10, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onAccent)
                                     .frame(width: 20, height: 20).background(Palette.blue, in: Circle()).padding(7)
                             }
                         }

@@ -30,8 +30,8 @@ extension DemoData {
         "Sucho, nejvýš 13°.": "Dry, high of 13°.",
         "Sucho, nejvýš 9°.": "Dry, high of 9°.",
         "Jak dnes začít": "How to start today",
-        "Spánek 7 h 12 min, kousek pod potřebou. HRV je třetí den nad normou.":
-            "Sleep 7 h 12 min, a little under your need. HRV is above normal for the third day.",
+        "Spánek 7 h 12 min, kousek pod potřebou. HRV je třetí den nad obvyklým rozmezím.":
+            "Sleep 7 h 12 min, a little under your need. HRV is above your usual range for the third day.",
         "Silový trénink dej naplno, hodinu a půl před ním si dej svačinu se sacharidy.":
             "Go all in on strength today, with a carb snack an hour and a half before.",
         "Silový trénink": "Strength training",
@@ -97,7 +97,9 @@ extension DemoData {
         "Aktivity": "Activities",
         "Hmotnost": "Weight",
         "Jídlo": "Food",
-        "Aktivity a plán": "Activities and plan",
-        "Fitness / únava / forma": "Fitness / fatigue / form"
+        "Tréninky a plán": "Workouts and plan",
+        "Fitness / únava / forma": "Fitness / fatigue / form",
+        "Prahy, zóny a váha": "Thresholds, zones and weight",
+        "Spánek, HRV a klidový tep": "Sleep, HRV and resting heart rate"
     ]
 }

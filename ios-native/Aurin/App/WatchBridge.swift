@@ -275,7 +275,7 @@ final class WatchBridge: NSObject {
         let next = today.plan.first { $0.kind == "workout" && !$0.done }
         let strain = WatchSnapshot.Strain(score: today.strain.score, low: today.strain.target?.low, high: today.strain.target?.high,
                                           training: today.strain.training, movement: today.strain.movement,
-                                          planned: today.strain.planned, nextTitle: next?.title, nextTime: next?.time)
+                                          planned: today.strain.planned, nextTitle: next?.title, nextTime: next?.time, nextNote: next?.steady)
         let week = training?.sessions?.filter { $0.status != "missed" }.map {
             WatchSnapshot.Session(date: $0.date, time: $0.time, title: $0.title, sport: $0.sport, minutes: $0.minutes, done: $0.status == "done",
                                   eventId: $0.eventId, after: $0.after, next: $0.next, race: $0.race)

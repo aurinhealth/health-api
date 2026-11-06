@@ -127,11 +127,14 @@ export function hrvStatusLow(rows, date) {
 // Coach uses (age, the day's activity, sleep history, naps, HRV status) and
 // within its 7–9 h: the age baseline and the strain of the day before
 // (sleepNeedMinutes), +15 min when the HRV status is low, the 7-day sleep debt
-// up to an hour (more sleep opportunity under high load and after restricted
+// up to 30 minutes (more sleep opportunity under high load and after restricted
 // sleep, Walsh 2021; WHOOP adds the debt to the need), and minus the day's
 // naps (WHOOP and Garmin both lower the need by a nap), never under 7 h. The
-// +15 and the one-hour cap are our calibration: neither Garmin nor WHOOP
-// publishes its amounts.
+// +15 and the 30-minute cap are our calibration: neither Garmin nor WHOOP
+// publishes its amounts. The cap was an hour until audit 5.4 (2026-11-06):
+// on the live accounts sleep made 69 of 123 yellow days, an hour of debt
+// cost a 7 h night ~9 more sleep points, and 30 minutes took yellow days
+// from 60 % to 56 % (51 % with the half-SD band in recoveryComponentScore).
 export function sleepNeedFor(input) {
   const date = input.date, prev = new Date(Date.parse(date + "T12:00:00Z") - 86400000).toISOString().slice(0, 10);
   const rows = input.rows || [], sessions = input.sessions || [];
@@ -141,14 +144,14 @@ export function sleepNeedFor(input) {
   const base = sleepNeedMinutes({ age: input.age, strain, goal });
   const hrv = hrvStatusLow(rows, prev) ? 15 : 0;
   const debtState = weekSleepDebt(sessions, prev, { age: input.age, goal });
-  const debt = debtState ? Math.min(60, debtState.minutes) : 0;
+  const debt = debtState ? Math.min(30, debtState.minutes) : 0;
   const naps = sessions.filter(s => isNap(s) && (s.date || String(s.endTime || "").slice(0, 10)) === prev).reduce((t, s) => t + (Number(s.durationMin) || 0), 0);
   const need = goal != null ? Math.max(360, Math.min(600, base + hrv + debt) - Math.round(naps)) : Math.max(420, Math.min(540, base + hrv + debt) - Math.round(naps));
   return { need, base, hrv, debt, naps: Math.round(naps) };
 }
 // When to go to bed for the night after `date`, as WHOOP's Sleep Planner
 // does: wake at the usual time and spend in bed the night's need plus the
-// usual time awake in bed. The wake time is the median of the last 14 nights
+// usual time awake in bed, at most an hour more than the need. The wake time is the median of the last 14 nights
 // of the same kind of morning (work day or weekend, all nights when fewer
 // than 3), the efficiency the median of asleep / in bed (0.8–0.97, 0.9
 // without data). `nights` are primary nights with their wake-up date and
@@ -170,7 +173,11 @@ export function bedtimePlan(input) {
   const wake = chosen != null ? Math.round(chosen) : Math.round(median(wakeNights.map(n => Number(n.wakeMin))));
   const ratios = recent.filter(n => Number(n.timeInBedMin) >= Number(n.durationMin)).map(n => Number(n.durationMin) / Number(n.timeInBedMin));
   const efficiency = ratios.length ? Math.max(0.8, Math.min(0.97, median(ratios))) : 0.9;
-  const inBed = Math.round(need / efficiency / 5) * 5;
+  // At most an hour more in bed than the night's need (audit 2026-11-06,
+  // 25.5): a low efficiency (often the iPhone's "in bed" window) would ask for
+  // 11 h in bed, and lying awake longer only feeds it (time in bed
+  // restriction in insomnia treatment, Spielman 1987).
+  const inBed = Math.min(need + 60, Math.round(need / efficiency / 5) * 5);
   return { wake, inBed, need, efficiency, bed: ((Math.round((wake - inBed) / 5) * 5) % 1440 + 1440) % 1440, nights: wakeNights.length, weekend: [0, 6].includes(morning), wakeSource: chosen != null ? "setting" : "usual" };
 }
 // Sleep index 0–100: duration against the personal need (50, from none at
@@ -265,11 +272,16 @@ export function lutealOffset(rows, date, key, fallback, max) {
 }
 
 // A component score from a z-score: the personal average is 70 (normal), one
-// SD on the bad side 50 and two 30. The personal normal range is the mean ±
-// 1 SD; HRV-guided training eases off when a value leaves it (Kiviniemi 2007,
-// Javaloyes 2019).
+// SD on the bad side 60 and two 40, 20 points per SD. Half an SD under the
+// average still counts as the average: that is the smallest worthwhile change
+// (Plews 2012, Javaloyes 2019), and day-to-day noise inside it used to make
+// ordinary mornings yellow (audit 5.4, 2026-11-06: with the 30-minute debt cap
+// in sleepNeedFor, yellow days on the live accounts 60 % to 51 %, red 14 to 6,
+// no HRV drop of 1.5 SD or more shown green). The good side is unchanged. The
+// personal normal range is the mean ± 1 SD; HRV-guided training eases off when
+// a value leaves it (Kiviniemi 2007, Javaloyes 2019).
 export function recoveryComponentScore(z) {
-  return Math.round(Math.max(0, Math.min(100, 70 + 20 * z)));
+  return Math.round(Math.max(0, Math.min(100, 70 + 20 * (z < 0 ? Math.min(0, z + 0.5) : z))));
 }
 
 // Recovery 0–100 from the morning signals against the athlete's own 60-day

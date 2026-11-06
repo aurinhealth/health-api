@@ -20,7 +20,7 @@ test('sleep debt accumulates, a long night repays at most an hour',()=>{
   assert.deepEqual({...sleepDebtMinutes(nights,day(6),480),average:0},{minutes:300,nights:7,average:0,need:480});
   assert.equal(sleepDebtMinutes([],day(6)),null);
 });
-test('component score: personal mean 70, −1 SD 50, −2 SD 30',()=>{assert.equal(recoveryComponentScore(0),70);assert.equal(recoveryComponentScore(-1),50);assert.equal(recoveryComponentScore(-2),30);assert.equal(recoveryComponentScore(3),100);});
+test('component score: personal mean 70, half an SD under it still 70, −1 SD 60, −2 SD 40, the good side unchanged (audit 5.4)',()=>{assert.equal(recoveryComponentScore(0),70);assert.equal(recoveryComponentScore(-0.4),70);assert.equal(recoveryComponentScore(-0.5),70);assert.equal(recoveryComponentScore(-1),60);assert.equal(recoveryComponentScore(-2),40);assert.equal(recoveryComponentScore(0.5),80);assert.equal(recoveryComponentScore(1),90);assert.equal(recoveryComponentScore(3),100);assert.equal(recoveryComponentScore(-5),0);});
 test('recovery: HRV trend below the smallest worthwhile change and raised breathing are flagged',()=>{
   const rows=history(40,i=>({hrv:60+(i%2?4:-4),restingHR:50+(i%2),respiration:14+(i%2)*0.2}));
   for(let i=34;i<40;i++)rows[i].hrv=50;
@@ -78,7 +78,8 @@ test('sleep need: naps lower it, a low HRV status and sleep debt raise it, withi
   const low=calm.map((r,i)=>i>=34?{...r,hrv:45}:r);
   assert.equal(sleepNeedFor({date,age:30,rows:low,sessions:nights}).hrv,15);
   const short=nights.map(n=>({...n,durationMin:390}));
-  const s=sleepNeedFor({date,age:30,rows:calm,sessions:short});assert.equal(s.debt,60);assert.equal(s.need,540);
+  // A week 90 min short each night: the debt adds at most 30 min (audit 5.4).
+  const s=sleepNeedFor({date,age:30,rows:calm,sessions:short});assert.equal(s.debt,30);assert.equal(s.need,510);
   assert.equal(sleepNeedFor({date,age:30,strain:19,rows:low,sessions:short}).need,540);
 });
 
@@ -114,6 +115,11 @@ test('bedtimePlan wakes at the usual time of that kind of morning and adds the t
   assert.equal(weekend.weekend, true);
   assert.equal(weekend.wake, 480);
   assert.equal(bedtimePlan({ date: '2026-10-08', need: 480, nights: [] }), null);
+  // At most an hour more in bed than the need (audit 25.5): 9 h at 80 % would be 11 h 15 min.
+  const restless = nights.map(n => ({ ...n, timeInBedMin: 600 }));
+  const capped = bedtimePlan({ date: '2026-10-08', need: 540, nights: restless });
+  assert.equal(capped.inBed, 600);
+  assert.equal(capped.bed, 1230); // 20:30, not 19:15
 });
 
 test("an own sleep goal replaces the age baseline and a set alarm plans bedtime without nights", () => {

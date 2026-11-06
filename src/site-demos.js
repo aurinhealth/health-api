@@ -115,7 +115,7 @@ const sleepNight = `<div class="dm pad">
 // "Why 8 h 30 min": the need for tonight built up row by row.
 const sleepNeed = `<div class="dm pad">
 <div class="sl">Need and debt</div>
-<div class="nd"><div class="row sp base"><b class="nt">Need for tonight</b><span class="num md"${n(480, 510, 600, 2600, 'hmc')}>8:30</span></div>
+<div class="nd"><div class="row sp base"><b class="nt">Need for tonight · estimate</b><span class="num md"${n(480, 510, 600, 2600, 'hmc')}>8:30</span></div>
 <div class="nr"${at('100')}><span>Baseline for your age</span><span class="mono">8:00</span></div>
 <div class="nr"${at('900')}><span>Today’s strain</span><span class="mono">+ 0:15</span></div>
 <div class="nr"${at('1700')}><span>Paying back debt</span><span class="mono">+ 0:30</span></div>
@@ -156,7 +156,7 @@ const readyParts = `<div class="dm pad">
 <div class="sl">Readiness</div>
 <div class="row base"><span class="num big"${n(0, 78, 200, 1300, 'i')}>78</span><span class="pill grn"${at('1300')}>within your usual range</span></div>
 <div class="sl">What makes up today’s score</div>
-${[['Sleep', '7:12', 'your normal 7:20–8:10', 'worse than usual', 'rust', 12, '−4 readiness points'], ['Resting heart rate', '48 bpm', 'your normal 50–54 bpm', 'better than usual', 'green', 20, '+3 readiness points'], ['HRV', '64 ms', 'your normal 55–61 ms', 'better than usual', 'green', 83, '+9 readiness points']]
+${[['Sleep', '7:12', 'usual range 7:20–8:10', 'worse than usual', 'rust', 12, '−4 readiness points'], ['Resting heart rate', '48 bpm', 'usual range 50–54 bpm', 'better than usual', 'green', 20, '+3 readiness points'], ['HRV', '64 ms', 'usual range 55–61 ms', 'better than usual', 'green', 83, '+9 readiness points']]
     .map(([k, v, nm, dir, c, x, pt], i) => `<div class="pr3"><div class="row sp base"><b>${k}</b><span class="num md">${v}</span></div><div class="row sp"><span class="mut s">${nm}</span><span class="s" style="color:var(--${c})">${dir}</span></div>${range(x, c, 500 + i * 250)}<span class="pts" style="color:var(--${c === 'rust' ? 'rust-ink' : c})">${pt}</span></div>`).join('')}
 </div>`;
 
@@ -164,8 +164,9 @@ const journal = `<div class="dm pad">
 <div class="sl">Yesterday</div>
 <div class="jt">${[['Sauna', 'flame', 600], ['Late meal', 'run', -1], ['Alcohol', 'x', 1100], ['Outdoors 30+ min', 'sun', 1600]].map(([k, icn, t]) => `<span class="jc${t > 0 ? '' : ' no'}"${t > 0 ? at(String(t)) : ''}><i>${ic(t > 0 ? 'check' : 'x')}</i>${k}</span>`).join('')}</div>
 <div class="sent jh">What affects you</div>
-<div class="row sp s"><b style="color:var(--rust)">Hurts</b><span class="mut">readiness the next morning</span><b style="color:var(--green)">Helps</b></div>
-<div class="imp">${[['Alcohol', -17], ['Late meal', -9], ['Phone in bed', -5], ['Outdoors 30+ min', 4], ['Magnesium', 6], ['Sauna', 11]].map(([k, v], i) => `<div class="ir"><span class="nm${v < 0 ? ' r' : ''}">${k}</span><i class="iv${v < 0 ? ' neg' : ''}" style="--w:${Math.abs(v) / 22 * 50}%"${at(String(2200 + i * 260))}><b class="num">${v < 0 ? '−' : '+'}${Math.abs(v)} %</b></i></div>`).join('')}</div>
+<div class="row sp s"><b style="color:var(--rust)">Linked to worse</b><span class="mut">readiness the next morning</span><b style="color:var(--green)">Linked to better</b></div>
+<div class="imp">${[['Alcohol', -17], ['Late meal', -9], ['Phone in bed', -5], ['Magnesium', 6], ['Sauna', 11]].map(([k, v], i) => `<div class="ir"><span class="nm${v < 0 ? ' r' : ''}">${k}</span><i class="iv${v < 0 ? ' neg' : ''}" style="--w:${Math.abs(v) / 22 * 50}%"${at(String(2200 + i * 260))}><b class="num">${v < 0 ? '−' : '+'}${Math.abs(v)} %</b></i></div>`).join('')}</div>
+<div class="mut s">No clear difference yet: Outdoors 30+ min</div>
 </div>`;
 
 // ---- Strain (StrainDetailView.swift) ----
@@ -323,7 +324,7 @@ ${setRow('3', '77.5 × 8', '80', '6–8', '<i class="ip dash">H</i>', 'next')}
 const readyOne = `<div class="dm pad one">
 <div class="row sp base"><b>HRV</b><span class="s grn">better than usual</span></div>
 <div class="row base one-v"><span class="num big"${n(55, 64, 300, 900, 'i')}>64</span><span class="mut">ms</span></div>
-<div class="mut">your normal 55–61 ms</div>
+<div class="mut">usual range 55–61 ms</div>
 ${range(83, 'green', 600)}
 <div class="one-pt grn"${at('1300')}>+9 readiness points</div>
 </div>`;
@@ -354,7 +355,7 @@ const sleepOne = `<div class="dm pad one">
 <div class="one-pt ind"${at('1500')}>19% deep sleep, usually 15–20%</div>
 </div>`;
 const needOne = `<div class="dm pad one">
-<div class="row sp base"><b>Need for tonight</b><span class="mut">baseline 8:00</span></div>
+<div class="row sp base"><b>Need for tonight · estimate</b><span class="mut">baseline 8:00</span></div>
 <div class="row base one-v"><span class="num big"${n(480, 510, 400, 1600, 'hmc')}>8:30</span><span class="mut">h</span></div>
 <div class="mut">+0:15 today’s strain · −0:15 nap</div>
 <div class="one-pt amb"${at('1800')}>+0:30 for sleep debt</div>
@@ -367,11 +368,11 @@ const foodOne = `<div class="dm pad one">
 </div>`;
 
 // Readiness in the luteal phase (recovery-model.js lutealOffset): the normal for resting heart rate moves up by the
-// athlete's own luteal rise. The sample day is day 21, so its "your normal 50–54 bpm" above is already this phase's
-// normal; on other days it is 48–52.
+// athlete's own luteal rise. The sample day is day 21, so its "usual range 50–54 bpm" above is already this phase's
+// usual range; on other days it is 48–52.
 const cycleOne = `<div class="dm pad one">
 <span class="pill pnk">Day 21 · Luteal · estimate</span>
-<b class="cy-k">Resting heart rate normal</b>
+<b class="cy-k">Usual resting heart rate</b>
 <div class="row base one-v"><span class="num big" data-tx="0|48–52;1300|50–54">50–54</span><span class="mut">bpm</span></div>
 <div class="mut">48–52 bpm on other days</div>
 <div class="one-pt grn cy-p"${at('2000')}>A usual rise costs no points</div>
@@ -490,7 +491,7 @@ const coachScreen = `<div class="app glow-today chat">${STATUS}
 <div class="nav c"><span class="cb">${ic('x')}</span><b>Coach</b><span class="cb">⋯</span></div>
 <div class="msgs">
 <div class="u">How should I train today?</div>
-<div class="c1"><span>Readiness is 78 and HRV is above normal for the third day. Your upper body is rested, so today is a good day for strength. Keep squats moderate after this morning’s run.</span></div>
+<div class="c1"><span>Readiness is 78 and HRV is above your usual range for the third day. Your upper body is rested, so today is a good day for strength. Keep squats moderate after this morning’s run.</span></div>
 <div class="u"${at('1300')}>I’d like a gym workout this evening, about an hour.</div>
 ${coachWait(1300, 3200)}
 ${answeredIn(4300, 3)}
@@ -561,7 +562,7 @@ const actReadiness = `<div class="dm wc">
 <div class="wcard"${rise(0)}><div class="row sp"><span class="mut">Readiness</span><span class="pill grn pop"${at('1200')}>within your usual range</span></div>
 <div class="row w-wr"><span class="num"${n(0, 78, 200, 1300, 'i')}>78</span><p class="sent"${at('1400')}>Good night, third day in a row. <em class="grn">Go all in on strength today.</em></p></div></div>
 <div class="w-two"><div class="wcard w-sm"${rise(250)}><span class="mut w-s2">Sleep</span><span class="num w-v">7:12</span>${range(16, 'amber-bar', 700)}<span class="w-nt2 amb2">89% of need</span></div>
-<div class="wcard w-sm"${rise(400)}><span class="mut w-s2">HRV</span><span class="num w-v">64<small>ms</small></span>${range(83, 'green', 700)}<span class="w-nt2 grn">above normal</span></div></div>
+<div class="wcard w-sm"${rise(400)}><span class="mut w-s2">HRV</span><span class="num w-v">64<small>ms</small></span>${range(83, 'green', 700)}<span class="w-nt2 grn">↑ above usual</span></div></div>
 </div>`;
 // Training: Training mode's table of sets (TrainingModeView.swift, GymSetRow in TrainingModeParts.swift). Set 2
 // is ticked off with Set done and set 3 comes up; a tap on its weight slides up the plate loader (PlateLoader.swift)

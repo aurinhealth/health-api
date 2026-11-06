@@ -637,28 +637,30 @@ final class BarcodeCamera: @unchecked Sendable {
         session.addInput(input)
         session.addOutput(output)
         output.metadataObjectTypes = BarcodeScanner.symbologies.filter(output.availableMetadataObjectTypes.contains)
-        Self.zoomForCodes(device)
+        Self.zoomForCloseUp(device, width: 35 / 0.6)
         return true
     }
 
     /// The main lens of newer iPhones focuses only from 15–20 cm, where a code
-    /// is small; zoom in so a 35 mm wide code fills most of the window a bit
-    /// beyond that (Apple's recipe from AVCamBarcode). The earlier cap of 2.5×
-    /// filled the window only closer than the lens can focus, so the code was
-    /// blurred just as it looked big enough (Petr, 2026-11-03).
-    private static func zoomForCodes(_ device: AVCaptureDevice) {
+    /// is small; zoom in so the window shows `width` millimetres a bit beyond
+    /// that (Apple's recipe from AVCamBarcode): a 35 mm wide code then fills
+    /// most of it. The earlier cap of 2.5× filled the window only closer than
+    /// the lens can focus, so the code was blurred just as it looked big
+    /// enough (Petr, 2026-11-03). The label camera zooms the same way.
+    static func zoomForCloseUp(_ device: AVCaptureDevice, width: Double) {
         guard (try? device.lockForConfiguration()) != nil else { return }
         defer { device.unlockForConfiguration() }
         if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
         if device.isAutoFocusRangeRestrictionSupported { device.autoFocusRangeRestriction = .near }
+        // The lens keeps its zoom from the camera before (the label's or the scanner's).
+        device.videoZoomFactor = 1
         let closest = Double(device.minimumFocusDistance)
         guard closest > 0 else { return }
         // The window's width is the sensor's shorter side (the phone is upright).
         let dims = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
         let wide = Double(device.activeFormat.videoFieldOfView) * .pi / 180
         let short = 2 * atan(tan(wide / 2) * Double(min(dims.width, dims.height)) / Double(max(dims.width, dims.height)))
-        let filled = 35 / 0.6
-        let distance = filled / 2 / tan(short / 2)
+        let distance = width / 2 / tan(short / 2)
         // A fifth beyond the closest focus, where the picture is sharp.
         let sharp = closest * 1.2
         guard distance < sharp else { return }

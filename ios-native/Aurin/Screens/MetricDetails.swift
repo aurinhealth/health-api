@@ -22,20 +22,21 @@ struct MetricDetailView: View {
     let metric: HealthMetric
     let health: HealthSnapshot
 
-    /// The coach about this value: today's number against the athlete's normal.
+    /// The coach about this value: today's number against the athlete's usual range.
     private var coach: CoachSubject {
         switch metric {
         case .hrv:
             let h = health.hrv
             var line: String? = h?.value.map { L10n.f("Dnes %@ ms", Fmt.int($0)) }
-            if let line0 = line, let low = h?.low, let high = h?.high { line = line0 + " · " + L10n.f("normál %@–%@ ms", Fmt.int(low), Fmt.int(high)) }
+            if let line0 = line, let low = h?.low, let high = h?.high { line = line0 + " · " + L10n.f("obvyklé rozmezí %@–%@ ms", Fmt.int(low), Fmt.int(high)) }
             let isLow = h?.value != nil && h?.low != nil && h!.value! < h!.low!
             return .metric(metric, line: line, low: isLow, date: health.date)
         case .restingHR:
             let r = health.restingHR
             var line: String? = r?.value.map { L10n.f("Dnes %@ bpm", Fmt.int($0)) }
-            if let line0 = line, let base = r?.baseline { line = line0 + " · " + L10n.f("normál %@ bpm", Fmt.int(base)) }
-            let high = r?.value != nil && r?.baseline != nil && r!.value! > r!.baseline! + 3
+            let usual = r?.usual
+            if let line0 = line, let usual { line = line0 + " · " + L10n.f("obvyklé rozmezí %@–%@ bpm", Fmt.int(usual.lowerBound), Fmt.int(usual.upperBound)) }
+            let high = r?.value != nil && usual != nil && r!.value! > usual!.upperBound
             return .metric(metric, line: line, low: high, date: health.date)
         default:
             return .metric(metric, line: nil, date: health.date)
@@ -50,7 +51,7 @@ struct MetricDetailView: View {
 }
 
 /// The detail of one value, all in the same order: what is measured, the
-/// number with its state, the athlete's normal, the trend and three cells.
+/// number with its state, the athlete's usual range, the trend and three cells.
 struct MetricDetailContent: View {
     let metric: HealthMetric
     let health: HealthSnapshot
@@ -82,9 +83,9 @@ struct MetricDetailContent: View {
             }
             MetricChart(title: "HRV po nocích", color: Palette.green) {
                 TrendChart(points: hrv.series, color: Palette.green, unit: "ms",
-                           band: MetricMath.range(hrv.low, hrv.high), bandLabel: MetricMath.normLabel(hrv.low, hrv.high), worse: .below)
+                           band: MetricMath.range(hrv.low, hrv.high), bandLabel: MetricMath.usualLabel(hrv.low, hrv.high), worse: .below)
             }
-            ThreeCells(cells: [("7 dní", Fmt.int(hrv.week)), ("Norma (60 dní)", Fmt.int(hrv.baseline)), ("Trend", MetricMath.trendText(hrv.trend))])
+            ThreeCells(cells: [("7 dní", Fmt.int(hrv.week)), ("Průměr (60 dní)", Fmt.int(hrv.baseline)), ("Trend", MetricMath.trendText(hrv.trend))])
                 .padding(.top, 20)
         } else {
             MetricEmpty()
@@ -96,17 +97,17 @@ struct MetricDetailContent: View {
     @ViewBuilder private var restingHR: some View {
         if let rhr = health.restingHR {
             MetricHeadline(caption: "Nejnižší tep dne v klidu", value: Fmt.int(rhr.value ?? rhr.series.last?.value), unit: "bpm",
-                           status: rhr.value.flatMap { v in rhr.baseline.map { MetricStatus.compare(v, low: $0 - 2, high: $0 + 2, worseAbove: true) } })
-            if let value = rhr.value, let base = rhr.baseline {
-                DetailRange(value: value, low: base - 2, high: base + 2,
-                            label: L10n.f("obvyklé rozmezí %@–%@ bpm", Fmt.int(base - 2), Fmt.int(base + 2)), worseAbove: true)
+                           status: rhr.value.flatMap { v in rhr.usual.map { MetricStatus.compare(v, low: $0.lowerBound, high: $0.upperBound, worseAbove: true) } })
+            if let value = rhr.value, let usual = rhr.usual {
+                DetailRange(value: value, low: usual.lowerBound, high: usual.upperBound,
+                            label: L10n.f("obvyklé rozmezí %@–%@ bpm", Fmt.int(usual.lowerBound), Fmt.int(usual.upperBound)), worseAbove: true)
                     .padding(.top, 14)
             }
             MetricChart(title: "Klidový tep po dnech", color: Palette.rust) {
                 TrendChart(points: rhr.series, color: Palette.rust, unit: "bpm",
-                           band: rhr.baseline.map { ($0 - 2)...($0 + 2) }, bandLabel: L10n.tr("norma ± 2 bpm"), worse: .above)
+                           band: rhr.usual, bandLabel: L10n.tr("obvyklé rozmezí"), worse: .above)
             }
-            ThreeCells(cells: [("7 dní", Fmt.int(MetricMath.week(rhr.series))), ("Norma", Fmt.int(rhr.baseline)), ("Trend", MetricMath.trend(rhr.series, step: 1))])
+            ThreeCells(cells: [("7 dní", Fmt.int(MetricMath.week(rhr.series))), ("Průměr (60 dní)", Fmt.int(rhr.baseline)), ("Trend", MetricMath.trend(rhr.series, step: 1))])
                 .padding(.top, 20)
         } else {
             MetricEmpty()
@@ -147,7 +148,7 @@ struct MetricDetailContent: View {
     // MARK: Temperature
 
     /// Apple Watch's wrist temperature, else Google's skin temperature: both as
-    /// the night's distance from the athlete's own normal.
+    /// the night's distance from the athlete's own usual.
     @ViewBuilder private var temperature: some View {
         let unit = Units.temperatureUnit
         let change: (Double) -> Double = { Units.temperatureChange($0) }
@@ -205,11 +206,12 @@ struct MetricDetailContent: View {
     @ViewBuilder private var oxygen: some View {
         if let o = health.oxygen {
             let digits = o.value.rounded() == o.value ? 0 : 1
-            // No fixed 95 % line: only the athlete's own 14 nights (MDR, Today audit 1).
+            // No fixed 95 % line: only the athlete's own nights before this one (MDR, Today audit 1;
+            // audit 16.3: the shown night is not in its own range).
             MetricHeadline(caption: L10n.tr("Nasycení krve kyslíkem ve spánku") + " · " + L10n.tr("odhad zařízení"), value: Fmt.decimal(o.value, digits: digits), unit: "%",
                            status: o.high > o.low ? MetricStatus.usual(o.value, low: o.low, high: o.high) : nil)
             if o.high > o.low {
-                DetailRange(value: o.value, low: o.low, high: o.high, label: L10n.f("obvyklé rozmezí %@–%@ %% · 14 nocí", Fmt.int(o.low), Fmt.int(o.high)), tint: Palette.blue)
+                DetailRange(value: o.value, low: o.low, high: o.high, label: L10n.f("obvyklé rozmezí %@–%@ %%", Fmt.int(o.low), Fmt.int(o.high)), tint: Palette.blue)
                     .padding(.top, 14)
             }
             MetricChart(title: "Kyslík po nocích", color: Palette.blue) {
@@ -230,11 +232,14 @@ struct MetricDetailContent: View {
             let convert: (Double) -> Double = { weight ? Units.weight($0) : $0 }
             let series = value.series.map { Point(date: $0.date, value: convert($0.value)) }
             let good = value.change.map { lowerIsBetter ? $0 < 0 : $0 > 0 }
-            MetricHeadline(caption: caption, value: Fmt.decimal(convert(value.value)), unit: unit, status: Self.changeStatus(value.change, convert: convert, good: good == true))
+            // The change runs from the first measurement of the 60 days, so it says
+            // since when (audit 16.8), not "za 2 měsíce".
+            let since = value.series.first.map { Fmt.dayMonthShort($0.date) } ?? ""
+            MetricHeadline(caption: caption, value: Fmt.decimal(convert(value.value)), unit: unit, status: Self.changeStatus(value.change, since: since, convert: convert, good: good == true))
             MetricChart(title: "Po měřeních", color: color) {
                 TrendChart(points: series, color: color, unit: unit, digits: 1)
             }
-            ThreeCells(cells: [("Měření", String(series.count)), ("Za 2 měsíce", value.change.map { Fmt.signed(convert($0), digits: 1) } ?? "–"),
+            ThreeCells(cells: [("Měření", String(series.count)), (L10n.f("Od %@", since), value.change.map { Fmt.signed(convert($0), digits: 1) } ?? "–"),
                                ("Trend", MetricMath.trend(series, step: 0.3))])
                 .padding(.top, 20)
         } else {
@@ -244,10 +249,10 @@ struct MetricDetailContent: View {
 }
 
 extension MetricDetailContent {
-    /// "↓ 0,8 za 2 měsíce", green when it moved the good way.
-    static func changeStatus(_ change: Double?, convert: (Double) -> Double, good: Bool) -> MetricStatus? {
+    /// "↓ 0,8 od 12. 9.", green when it moved the good way.
+    static func changeStatus(_ change: Double?, since: String, convert: (Double) -> Double, good: Bool) -> MetricStatus? {
         guard let change, change != 0 else { return nil }
-        return MetricStatus(text: L10n.f("%@ %@ za 2 měsíce", change > 0 ? "↑" : "↓", Fmt.decimal(abs(convert(change)))),
+        return MetricStatus(text: L10n.f("%@ %@ od %@", change > 0 ? "↑" : "↓", Fmt.decimal(abs(convert(change))), since),
                             color: good ? Palette.green : Palette.amber)
     }
 }
@@ -282,9 +287,9 @@ struct MetricStatus {
     }
 
     static func compare(_ value: Double, low: Double, high: Double, worseAbove: Bool) -> MetricStatus {
-        if value > high { return MetricStatus(text: L10n.tr("nad normou"), color: worseAbove ? Palette.rust : Palette.green) }
-        if value < low { return MetricStatus(text: L10n.tr("pod normou"), color: worseAbove ? Palette.green : Palette.rust) }
-        return MetricStatus(text: L10n.tr("v normě"), color: Palette.green)
+        if value > high { return MetricStatus(text: "↑ " + L10n.tr("nad obvyklým rozmezím"), color: worseAbove ? Palette.rust : Palette.green) }
+        if value < low { return MetricStatus(text: "↓ " + L10n.tr("pod obvyklým rozmezím"), color: worseAbove ? Palette.green : Palette.rust) }
+        return MetricStatus(text: L10n.tr("v obvyklém rozmezí"), color: Palette.green)
     }
 }
 
@@ -323,10 +328,10 @@ enum MetricMath {
         return trendText(change > step ? "up" : change < -step ? "down" : "stable")
     }
 
-    /// "norma 56–66 ms".
-    static func normLabel(_ low: Double?, _ high: Double?) -> String {
-        guard let low, let high else { return L10n.tr("tvoje norma") }
-        return L10n.f("norma %@–%@ ms", Fmt.int(low), Fmt.int(high))
+    /// "obvyklé rozmezí 56–66 ms".
+    static func usualLabel(_ low: Double?, _ high: Double?) -> String {
+        guard let low, let high else { return L10n.tr("obvyklé rozmezí") }
+        return L10n.f("obvyklé rozmezí %@–%@ ms", Fmt.int(low), Fmt.int(high))
     }
 
     static func range(_ low: Double?, _ high: Double?) -> ClosedRange<Double>? {

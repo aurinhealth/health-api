@@ -120,5 +120,5 @@ test("messages sent at once take the last one only once, and a failed answer giv
 
 test("the coach route gives a message back when its answer fails", () => {
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
-  assert.match(entry, /return answerMessage\(show,onProgress\)\.catch\(async error=>\{if\(!shown\)await releaseCoachMessage\(env,claim\)/);
+  assert.match(entry, /return answerMessage\(show,onProgress\)\.catch\(async error=>\{if\(newChat\)await dropEmptyChat\(env\.DB,newChat\)[^;]*;if\(!shown\)await releaseCoachMessage\(env,claim\)/);
 });
