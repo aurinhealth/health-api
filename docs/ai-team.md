@@ -104,6 +104,12 @@ The "promises against the code" check (`privacy-compliance`), the four-point che
 on 2026-11-04. The skills themselves are not installed here: they target another stack and would
 clash with this process.
 
+The "should these pieces change together?" check in `critic` (hidden links, needless links, surplus,
+special cases) and the copied-rule check of `qa-tester` adapt the `untangle-codebase` skill in
+[caldoai/skills](https://github.com/caldoai/skills) (MIT), read on 2026-11-06. The skill itself is not
+installed or run: it refactors a whole codebase in one pass, which clashes with small pull requests
+per area.
+
 The legal checklists of `privacy-compliance` (GDPR art. 13 and 14, DPIA, transfers, consumer terms,
 the AI Act, the Cyber Resilience Act and the Data Act) adapt, in our own words, expert skills read on
 [Lawwe AI](https://lawve.ai) on 2026-11-05; the role file lists them with their licences. Nothing is

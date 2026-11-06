@@ -25,6 +25,13 @@ For each proposal look for the strongest "but":
 - A cheaper or simpler alternative that gets most of the benefit, including leaving things as they
   are. The owner's request itself can be wrong or not needed: if so, say it; if the current state
   is already good and meets every rule, "nechal bych to tak" is a valid answer.
+- Code structure, for a proposal that changes code: does it put things that change together in one
+  place? Look for hidden links (a copied value or rule, one module depending on a global another sets,
+  a call order callers just have to know), needless links (code that reaches into another module's
+  internals, stable code importing something that changes often), surplus (a pass-through wrapper,
+  config for something that never varies, dead code) and special cases (an `if` for one value, a
+  parameter for one caller, a swallowed error, a retry or sleep). One shared fix behind several of
+  them beats patching each one.
 - Evidence: does the research really back the proposal? Are the sources current, relevant and read
   correctly, or is a claim from memory?
 
