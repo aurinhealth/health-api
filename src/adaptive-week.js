@@ -275,9 +275,12 @@ export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null,
 export function weekProposal({ prefs, start, today, week = {}, fitness = {}, state = {}, weather = {}, focus = null, history = null, plan = null, health = null, strain = null, triathlon = null, openWater = null }) {
   const historyEstimate=activityHistoryEstimate(history||week.days||[],today<start?today:start);
   const split = focus?.sport === 'triathlon' ? triathlonSplit({ ...(triathlon || {}), sessions: prefs.weeklyActivities ?? historyEstimate.count, minutes: (prefs.availability || []).reduce((n, d) => n + (Number(d?.minutes) || 0), 0) || null, daysToRace: focus.event?.daysLeft ?? null }) : null;
-  const proposedPrefs = proposeEmptyDays({ prefs, start, today, week, focus, history, split, planSports: plan?.plan ? planSports(plan.plan) : [] });
+  const planOn = plan?.plan ? planSports(plan.plan) : [];
+  const proposedPrefs = proposeEmptyDays({ prefs, start, today, week, focus, history, split, planSports: planOn });
   const warnings = [], existing = (week.days || []).filter(d => d.date >= start && d.date <= shift(start, 6));
   if(prefs.weeklyActivities==null&&historyEstimate.status!=='ready')warnings.push({text:historyEstimate.message});
+  const off = ['ride', 'run', 'swim', 'gym'].filter(s => !planOn.includes(s) && !allowedSport(focus, s) && (prefs.days || []).some(d => d.includes(s)));
+  if (off.length) warnings.push({ text: L('Vypnuto v Nastavení, do týdne nedávám: ', 'Off in Settings, left out of the week: ') + off.map(s => L({ ride: 'kolo', run: 'běh', swim: 'plavání', gym: 'posilovna' }[s], s)).join(', ') + '.' });
   for (const d of existing.filter(d => d.date >= today)) {
     const sessions = sessionsOn(d), minutes = sessions.reduce((n, a) => n + (Number(a.durationHours) || 0) * 60, 0), available = availabilityOn(prefs, d.date);
     if (available.minutes != null && minutes > available.minutes) warnings.push({ date: d.date, text: L('Plán má ', 'The plan has ') + Math.round(minutes) + L(' min, dostupných je ', ' min, you have ') + available.minutes + L(' min.', ' min available.') });

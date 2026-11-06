@@ -40,6 +40,7 @@ test('a sport turned off in Settings stays out of the usual week, unless the pla
   const sports = weekProposal({ prefs, start: '2026-04-13', today: '2026-04-10', focus }).items.map(x => x.sport);
   assert.ok(sports.length);
   assert.ok(sports.every(s => s === 'ride' || s === 'gym'), sports.join());
+  assert.ok(weekProposal({ prefs, start: '2026-04-13', today: '2026-04-10', focus }).warnings.some(w => w.text === 'Vypnuto v Nastavení, do týdne nedávám: běh, plavání.'));
   const plan = { plan: { sport: 'run' } };
   const withPlan = weekProposal({ prefs, start: '2026-04-13', today: '2026-04-10', focus, plan }).items.map(x => x.sport);
   assert.ok(withPlan.includes('run'));
