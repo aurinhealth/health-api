@@ -143,3 +143,20 @@ test("a hard workout needs 10 easy minutes before its first effort; an easier on
   const tempo = [block(300, 55, 65), { repeats: 3, steps: [{ label: "tempo", seconds: 600, low: 80, high: 85 }, { label: "lehce", seconds: 180, low: 50, high: 55 }] }, block(60, 50, 55)];
   assert.ok(!(await composeWorkout(env, { ...day, ask: answer(tempo) })).ai.fallback);
 });
+
+test("a draft the editor refuses (a step under 30 %) is asked for once more and then comes from the library, not nothing (runs 44/45, W01)", async () => {
+  const env = owner(), none = async () => null;
+  const zero = [block(600, 55, 65), { repeats: 3, steps: [{ label: "tempo", seconds: 480, low: 80, high: 85 }, { label: "stát", seconds: 180, low: 0, high: 0 }] }, block(120, 50, 55)];
+  const notes = [], ask = async (e, args) => { notes.push(args.instructions); return answer(notes.length > 1 ? tempo45 : zero)(); };
+  const w = await composeWorkout(env, { ...day, ask });
+  assert.equal(notes.length, 2, "asked once more");
+  assert.match(notes[1], /rejected: invalid .*30.*200/);
+  assert.ok(w && w.ai.composed && !w.ai.fallback, "the second draft is kept");
+  const twice = await composeWorkout(env, { ...day, ask: answer(zero) });
+  assert.ok(twice?.ai?.fallback && twice.primary_system === "tempo", "twice refused: the library's");
+  assert.match(twice.ai.tried, /^invalid /);
+  assert.match((await composeWorkout(env, { ...day, ask: answer(zero), fallback: none, diagnose: true })).rejected, /^invalid /);
+  assert.equal(await composeWorkout(env, { ...day, ask: answer(zero), fallback: none }), null);
+  const banded = await composeWorkout(env, { ...day, coach: { readiness: { status: "green" } }, asked: { minDifficulty: 4.5, maxDifficulty: 10 }, ask: answer(zero) });
+  assert.ok(banded?.ai?.fallback && !/difficulty/.test(banded.ai.tried), "no difficulty for a refused draft");
+});

@@ -11,6 +11,10 @@ on:
         description: "Situations to run, e.g. S02,S04 (empty = all)"
         required: false
         default: ""
+      repeat:
+        description: "Rounds of the same situations, 1–5 (3 = is every reply stable?)"
+        required: false
+        default: "1"
 
 permissions:
   contents: read
@@ -47,6 +51,7 @@ jobs:
         env:
           COACH_EVAL_TOKEN: ${{ steps.oidc.outputs.token }}
           COACH_EVAL_SCENARIOS: ${{ inputs.scenarios }}
+          COACH_EVAL_REPEAT: ${{ inputs.repeat }}
         run: node scripts/coach-eval.mjs
 
       - name: Keep the replies

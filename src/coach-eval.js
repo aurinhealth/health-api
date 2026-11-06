@@ -491,7 +491,8 @@ const KEEP = /(?<!\p{L})(?:po)?nechal|\bkeep\b/iu;
 const changing = x => String(x).split(/[;,]\s*/).filter(part => !KEEP.test(part)).join('; ');
 const KIND_WORDS = { recovery: /regenera|lehk|lehc|volně|klidn|recovery|easy/i, endurance: /vytrval|lehk|lehc|Z2|aerob|klidn|endurance|easy/i, long: /dlouh|long/i, tempo: /tempo/i, sweet_spot: /sweet/i, threshold: /prah|práh|threshold/i, vo2max: /vo2|vo₂/i };
 // A rest or a move: any change of the planned session ("nejel bych" with a move to Sunday).
-const cardWords = a => ['rest', 'move'].includes(a.type) ? /vynech|zruš|odpad|místo|odpoč|volno|nahrad|nejel|neběž|přesu|posu|odlož|skip|cancel|instead|rest|drop|move|shift|postpone|push/i
+// Run 44, S04: "dnes VO2 intervaly nejezdi", "Dnes netrénuj" cancel today's session too.
+const cardWords = a => ['rest', 'move'].includes(a.type) ? /vynech|zruš|odpad|místo|odpoč|volno|nahrad|nejel|nejezd|nejeď|neběž|neběhej|netrénuj|přesu|posu|odlož|skip|cancel|instead|rest|drop|move|shift|postpone|push|don't (?:ride|run|train)/i
   : a.sport === 'gym' ? /posilov|gym|horní|dolní|nohy|celé tělo|upper|lower|legs|strength/i
   : new RegExp([a.workoutName && String(a.workoutName).split(/\s+/)[0].replace(/[^\p{L}\p{N}]/gu, ''), KIND_WORDS[a.kind || a.card]?.source, 'jízd|jet|jeď|běh|ride|run'].filter(Boolean).join('|'), 'i');
 // The card's day and the day of the planned session it changes.
@@ -637,6 +638,11 @@ export function effortsBackToBackText(description) {
   return flat.some((kind, i) => kind === 'interval' && flat[i - 1] === 'interval');
 }
 
+// Words of the other sport in a composed ride or run (a ride's "meziklus", run 45).
+const RUNNING_WORDS = /(?<!\p{L})(?:mezi|vý|po|roz)?klus\p{L}*|(?<!\p{L})běh\p{L}*|(?<!\p{L})běž\p{L}*|(?<!\p{L})jog\p{L}*|(?<!\p{L})run(?:s|ning)?(?!\p{L})/giu;
+const CYCLING_WORDS = /(?<!\p{L})šlap\p{L}*|(?<!\p{L})jízd\p{L}*|(?<!\p{L})jeď\p{L}*|(?<!\p{L})ride(?:s)?(?!\p{L})|(?<!\p{L})pedal\p{L}*|(?<!\p{L})spin(?!\p{L})/giu;
+export const otherSportWords = (sport, text) => [...new Set(String(text || '').match(sport === 'run' ? CYCLING_WORDS : RUNNING_WORDS) || [])];
+
 // A W situation: the library choice composed by Luna, as the app does, nothing kept.
 export async function runComposeScenario(env, scenario, { compose = composeWorkout } = {}) {
   const c = scenario.compose, started = Date.now(), coach = { readiness: { status: c.zone, score: c.score } };
@@ -667,6 +673,9 @@ export async function runComposeScenario(env, scenario, { compose = composeWorko
   }
   // Runs 27 and 28, W01/W02: an effort right before the repeat, two efforts in a row.
   checks.push(...runs.filter(r => r.workout).map(({ label, workout: w }) => quality(`${label}: úseky oddělené odpočinkem`, !effortsBackToBackText(w.intervals_description))));
+  // Run 45, W01: a ride's recovery called "meziklus", a running word.
+  checks.push(...runs.filter(r => r.workout).map(({ label, workout: w }) => { const words = otherSportWords(c.sport, [w.name, w.ai?.reason, w.intervals_description].join('\n'));
+    return quality(`${label}: slova jen ${c.sport === 'run' ? 'z běhu' : 'z kola'}`, !words.length, words.join(', ')); }));
   if (c.zone !== 'green') checks.push(quality('na horší den upozorní jen u těžkého typu', runs.every(r => !r.workout || Boolean(r.workout.ai?.warning) === isHardKind(c.kind))));
   // Run 20, W03: a yellow day's endurance stays in the lower half of the zone (cycling to 68 % FTP, running to 83 %).
   if (c.zone !== 'green' && ['endurance', 'long'].includes(c.kind)) {
