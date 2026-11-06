@@ -144,7 +144,7 @@ const TEXT = {
   'kontrolovaný první blok': 'controlled first block',
   'Z2 mezi stoupáními': 'Z2 between climbs',
   'rovinka – svižně, uvolněně': 'stride – quick and relaxed',
-  'do kopce 5–8 %, tvrdě': 'uphill 5–8 %, hard',
+  'do kopce 5–8 %, tvrdě podle pocitu, ne podle tempa': 'uphill 5–8 %, hard by effort, not by pace',
   'sprint do kopce 8–10 %, naplno': 'uphill sprint 8–10 %, all-out',
   'chůze dolů, plná pauza': 'walk down, full rest',
   'lehce, konverzační tempo': 'easy, conversational pace',

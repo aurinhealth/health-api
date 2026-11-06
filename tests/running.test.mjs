@@ -119,3 +119,23 @@ test("run sweet spot maps to threshold; outdoor paces get a range and hill notes
   const search = await searchWorkoutLibrary(db, { sport: "run", system: "vo2max", durationMinutes: 45, limit: 5 });
   assert.ok(search.workouts.length > 0 && search.workouts.every(w => w.sport === "run"));
 });
+
+// Audit 8.4: on a 5–8 % slope a flat-ground pace target costs far more than
+// VO2max (Minetti 2002), so the watch would alarm the whole rep: hill reps go
+// by effort, as the hill sprints do, and say so instead of "all-out".
+test("hill repeats go by effort: no pace target on the watch or in Intervals.icu", async () => {
+  const { structureHow } = await import("../src/workout-explanation.js");
+  for (const w of RUNNING_WORKOUTS.filter(x => x.family === "run-hills")) {
+    const structure = JSON.parse(w.structure_json), up = structure.flatMap(b => b.steps || [b]).find(s => /do kopce/.test(s.note || ""));
+    assert.equal(up.free, true, w.id);
+    for (const environment of ["indoor", "outdoor"]) assert.doesNotMatch(renderForEnvironment(w, environment).intervals_description, /106% Pace|103-109% Pace/, w.id);
+    const rows = stepRows(structure, { sport: "run", thresholdPace: 270 }).flatMap(b => b.steps).filter(s => s.free);
+    assert.ok(rows.length && rows.every(s => s.paceSlow == null && s.paceFast == null), w.id);
+    const how = structureHow(structure, { system: w.primary_system, sport: "run", thresholdPace: 270 }).join(" ");
+    assert.match(how, /tvrdě podle pocitu/, w.id);
+    assert.doesNotMatch(how, /naplno/, w.id);
+  }
+  // A sprint stays all-out.
+  const sprint = [{ repeats: 6, steps: [{ durationMinutes: .5, power: 140, free: true }, { durationMinutes: 2, power: 55 }] }];
+  assert.match(structureHow(sprint, { system: "sprint", sport: "run" }).join(" "), /naplno/);
+});

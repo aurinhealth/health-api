@@ -114,3 +114,34 @@ test("swims are a sport of the week plan and of planned events", () => {
   assert.equal(plannedEventWorkout({ type: "OpenWaterSwim", name: "Lake" }).environment, "outdoor");
   assert.equal(plannedEventWorkout({ type: "Swim", name: "CSS" }).sport, "swim");
 });
+
+// Audit 8.3: the catalogue's minutes are at 2:00/100 m; a plan's 45-min swim
+// for a swimmer at CSS 2:40 must last about 45 min at their pace, not 61.
+test("a plan's swim is picked by its length at the athlete's CSS", async () => {
+  const { planWorkoutId, minutesFor } = await import("../src/training-plans.js");
+  const { swimMinutesAt } = await import("../src/workout-model.js");
+  const { athleteMinutes } = await import("../src/workout-explanation.js");
+  const { resizeWorkout } = await import("../src/workout-library.js");
+  const at = (id, css) => Math.round(swimMinutesAt(JSON.parse(SWIMMING_WORKOUTS.find(w => w.id === id).structure_json), css));
+  const slow = planWorkoutId("swim", { family: "swim-endurance", level: 6 }, 45, 0, 160);
+  assert.ok(at(slow, 160) <= 50, slow + " lasts " + at(slow, 160) + " min at 2:40");
+  assert.ok(at(planWorkoutId("swim", { family: "swim-endurance", level: 6 }, 45), 160) > 55, "by the catalogue it would be longer");
+  // Without a CSS: as before, the catalogue's minutes.
+  assert.equal(planWorkoutId("swim", { family: "swim-endurance", level: 6 }, 45, 0, null), planWorkoutId("swim", { family: "swim-endurance", level: 6 }, 45));
+  // Nothing fits: the shortest, an easier level too, never a longer one.
+  const short = planWorkoutId("swim", { family: "swim-css", level: 6 }, 30, 0, 160);
+  assert.equal(at(short, 160), Math.min(...SWIMMING_WORKOUTS.filter(w => w.family === "swim-css" && w.level <= 6).map(w => at(w.id, 160))));
+  // A key session gets at least its shortest main set at the athlete's pace.
+  assert.ok(minutesFor("swim", { family: "swim-css", level: 3 }, 0, 160) > minutesFor("swim", { family: "swim-css", level: 3 }));
+  // Rests at the wall keep their length; a faster swimmer's swim is shorter.
+  const w = SWIMMING_WORKOUTS.find(x => x.id === slow), structure = JSON.parse(w.structure_json);
+  assert.equal(Math.round(swimMinutesAt(structure, 120)), w.duration_minutes);
+  assert.ok(swimMinutesAt(structure, 90) < w.duration_minutes);
+  // The header says what the step rows add up to; a ride stays as it is.
+  assert.equal(athleteMinutes(w, structure, "swim", { swimCss: 160 }), at(slow, 160));
+  assert.equal(athleteMinutes(w, structure, "swim", {}), w.duration_minutes);
+  assert.equal(athleteMinutes({ duration_minutes: 60 }, [], "ride", { swimCss: 160 }), 60);
+  // Another length of a swim (Změnit délku) is chosen at the athlete's CSS too.
+  const resized = resizeWorkout(w, 45, { swimCss: 160 });
+  assert.ok(Math.abs(at(resized.id, 160) - 45) <= 6, resized.id + " " + at(resized.id, 160));
+});
