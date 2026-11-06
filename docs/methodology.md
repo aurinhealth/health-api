@@ -23,7 +23,8 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
 
 ### Progrese vah podle RPE/RIR
 
-- **Výpočet:** dvojitá progrese. Všechny pracovní série na horní hranici rozsahu opakování nebo s lehkým RPE posunou váhu o krok nahoru. RPE ≥ 9,5 vrátí krok zpět. (`src/strength-intelligence.js`)
+- **Výpočet:** dvojitá progrese. Všechny pracovní série na horní hranici rozsahu opakování nebo s lehkým RPE posunou váhu o krok nahoru. Krok zpět přijde, když pod rozsah spadne první série nebo aspoň polovina sérií; u hlavního cviku i selhání (RPE ≥ 9,5) v první sérii. Selhání s opakováními v rozsahu váhu jen podrží. Cvik po 4 a více sériích na stejný sval (série pomocného svalu za polovinu) se porovnává s posledním tréninkem na podobném místě; bez takového tréninku doplňkový cvik váhu jednou podrží i 3 opakování pod rozsahem. (`src/strength-intelligence.js`, `progressionDecision`, `priorMuscleSets`)
+- **Zdroj (pořadí a selhání):** Simão R et al. *Exercise order in resistance training.* Sports Med 2012;42:251–265, doi:10.2165/11597240-000000000-00000. Refalo MC et al. *Influence of resistance training proximity-to-failure on skeletal muscle hypertrophy: a systematic review with meta-analysis.* Sports Med 2023;53:649–665, doi:10.1007/s40279-022-01784-y.
 - **Zdroj:** Helms ER et al. *Application of the repetitions in reserve-based rating of perceived exertion scale for resistance training.* Strength Cond J 2016;38(4):42–49. Validace škály: Zourdos MC et al., J Strength Cond Res 2016;30:267–275.
 - **Co tvrdit:** autoregulace podle počtu opakování do selhání, stejný princip jako JuggernautAI a Fitbod.
 

@@ -170,19 +170,23 @@ struct GymProposal: Equatable {
         ExerciseOrder.letter(block.first(where: { $0.count > 12 })?[12].string)
     }
 
-    /// Whether the exercise (with its superset) can move one place up (-1) or down (+1).
-    func canMove(_ index: Int, by step: Int) -> Bool {
-        let units = ExerciseOrder.runs(supersets)
-        guard let u = units.firstIndex(where: { $0.contains(index) }) else { return false }
-        return units.indices.contains(u + step)
-    }
-
     /// Moves an exercise one place up (-1) or down (+1); a superset moves as one.
     mutating func moveExercise(_ index: Int, by step: Int) {
         let (list, rest) = blocks
         var units = ExerciseOrder.runs(list.map { Self.superset(of: $0) })
         guard let u = units.firstIndex(where: { $0.contains(index) }), units.indices.contains(u + step) else { return }
         units.swapAt(u, u + step)
+        rows = units.flatMap { (unit: Range<Int>) -> [[JSONValue]] in unit.flatMap { list[$0] } } + rest
+    }
+
+    /// Moves an exercise (with its superset) to the place of another one, as a
+    /// drag drops it there. Within one superset nothing moves.
+    mutating func moveExercise(_ index: Int, to target: Int) {
+        let (list, rest) = blocks
+        var units = ExerciseOrder.runs(list.map { Self.superset(of: $0) })
+        guard let u = units.firstIndex(where: { $0.contains(index) }),
+              let t = units.firstIndex(where: { $0.contains(target) }), u != t else { return }
+        units.move(fromOffsets: IndexSet(integer: u), toOffset: t > u ? t + 1 : t)
         rows = units.flatMap { (unit: Range<Int>) -> [[JSONValue]] in unit.flatMap { list[$0] } } + rest
     }
 

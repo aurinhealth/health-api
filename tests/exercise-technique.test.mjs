@@ -20,6 +20,15 @@ test('every catalog exercise has a technique card with steps and a valid video o
   assert.equal(techniqueFor('Neexistující cvik'),null);
 });
 
+test('every catalog exercise names its primary muscles, variants included, and secondary ones apart',()=>{
+  for(const name of Object.keys(EXERCISES))assert.ok(techniqueFor(name).primaryMuscles.length,name+' has no primary muscles');
+  const pushdown=techniqueFor('Machine Cable V Bar Push Downs');
+  assert.deepEqual([pushdown.primaryMuscles,pushdown.secondaryMuscles],[['triceps'],[]]);
+  const row=techniqueFor('Barbell row');
+  assert.deepEqual([row.primaryMuscles,row.secondaryMuscles],[['upper_back'],['biceps','rear_delts']]);
+  assert.equal(row.muscles.length,3);
+});
+
 test('YouTube links of every shape give the video id; other links do not',()=>{
   for(const url of ['https://www.youtube.com/watch?v=abcdefghijk&t=10','https://youtu.be/abcdefghijk?si=x','https://m.youtube.com/shorts/abcdefghijk','https://www.youtube-nocookie.com/embed/abcdefghijk'])assert.equal(youtubeId(url),'abcdefghijk',url);
   for(const url of ['https://vimeo.com/123','javascript:alert(1)','https://youtube.com/watch?v=short','nonsense'])assert.equal(youtubeId(url),null,url);

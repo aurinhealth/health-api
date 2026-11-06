@@ -8,6 +8,7 @@ import { getCycleSettings, saveCycleSettings, listCycleDays, saveCycleDay, impor
 import { cycleState, cycleMonth, askPeriodToday } from "./cycle-model.js";
 import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
+import { UNCHANGED_HEADER } from "./api-cache.js";
 
 const shift = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 const noStore = { headers: { "Cache-Control": "no-store" } };
@@ -43,8 +44,9 @@ export async function handleCycleApi(request, env, ctx, url, session) {
       return Response.json({ status: "ok", day, ...(await cycleView(env.DB, today, body.month)) }, noStore);
     }
     if (url.pathname === "/app/api/cycle/apple") {
-      const saved = await importAppleCycle(env.DB, body.days);
-      return Response.json({ status: "ok", saved }, noStore);
+      const { saved, changed } = await importAppleCycle(env.DB, body.days);
+      // The same days again (every app launch): nothing the coach reads is outdated.
+      return Response.json({ status: "ok", saved, changed }, changed ? noStore : { headers: { ...noStore.headers, [UNCHANGED_HEADER]: "1" } });
     }
     return Response.json({ message: "Not found" }, { status: 404 });
   } catch (error) {

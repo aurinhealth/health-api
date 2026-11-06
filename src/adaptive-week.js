@@ -121,17 +121,21 @@ export function capWeekTargets(targets, prefs, days = [], weather = {}) {
     const auto = environmentFor(x.date, x.sport, weather[x.date]);
     const env = own.environment ? { environment: own.environment, reason: L('Zvoleno ručně.', 'Chosen by hand.') } : auto;
     const open = openCounts.get(x.date);openCounts.set(x.date,open-1);
-    let minutes;
+    let minutes, short = false;
     if (own.minutes) minutes = own.minutes;
     else {
       minutes = Math.min(x.minutes, x.maxMinutes ?? Infinity, remaining.get(x.date) / open);
+      const free = remaining.get(x.date) / open;
+      short = free < Math.min(x.minutes, x.maxMinutes ?? Infinity);
       if (env.environment === 'indoor') minutes = Math.min(minutes, indoorMinutes(x.sport, x.minutes));
       minutes = Math.floor(minutes / 5) * 5;
+      short = short && minutes === Math.floor(free / 5) * 5;
       const minimum = x.brick || x.sport === 'swim' ? 15 : x.sport === 'run' ? 20 : 30;
       if (minutes < minimum) { skipped.push({ ...x, reason: L('Na tento trénink nezbývá dost času.', 'There isn\'t enough time left for this workout.') }); continue; }
     }
     remaining.set(x.date, remaining.get(x.date) - minutes);
-    items.push({ ...x, minutes, tss: Math.round(x.tss * minutes / x.minutes), ...env, autoEnvironment: auto.environment, chosenMinutes: Boolean(own.minutes), chosenEnvironment: Boolean(own.environment), window: available.window, startTime: parseTimeWindow(available.window)?.start || null });
+    // A plan's session shorter than the plan made it, for the free time that day (training-plans.js planChanges).
+    items.push({ ...x, minutes, ...(short && x.plan && x.minutes - minutes >= 10 ? { planMinutes: x.minutes } : {}), tss: Math.round(x.tss * minutes / x.minutes), ...env, autoEnvironment: auto.environment, chosenMinutes: Boolean(own.minutes), chosenEnvironment: Boolean(own.environment), window: available.window, startTime: parseTimeWindow(available.window)?.start || null });
   }
   return { ...targets, items, skipped };
 }

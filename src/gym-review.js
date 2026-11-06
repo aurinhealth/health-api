@@ -4,7 +4,8 @@
 // progression the generator uses) and the day's recovery. Texts follow the app
 // language of the request (src/lang.js).
 import { parseStrengthPlan } from './strength-history.js';
-import { progressionDecision, EXERCISE_INTELLIGENCE } from './strength-intelligence.js';
+import { progressionDecision, priorMuscleSets, historyFamily, EXERCISE_INTELLIGENCE } from './strength-intelligence.js';
+import { normalizeExerciseName } from './strength-normalization.js';
 import { strengthSetOptions } from './gym-set-options.js';
 import { recoverySignals } from './ride-review.js';
 import { L as t, isEnglish, isImperial, kgToLb } from './lang.js';
@@ -34,6 +35,9 @@ export function buildGymReview({ values = null, history = [], date, wellness = [
   const before = (history || []).filter(r => String(r.workout_date || '').slice(0, 10) < date);
   const byExercise = new Map();
   for (const r of work) (byExercise.get(r.exercise) || byExercise.set(r.exercise, []).get(r.exercise)).push(r);
+  // Today's done sets in their order next to the history: how many sets for the
+  // same muscle came before each exercise (priorMuscleSets).
+  const day = [...before, ...work.filter(r => r.completed && n(r.actualReps) != null).map((r, i) => ({ workout_date: date, plan_row: i + 1, type: 'WORK', exercise: r.exercise, completed: 1 }))];
 
   const exercises = [], wins = [], fixes = [], next = [], load = [];
   for (const [name, rows] of byExercise) {
@@ -44,12 +48,16 @@ export function buildGymReview({ values = null, history = [], date, wellness = [
     });
     const finished = sets.filter(s => s.status !== 'missing');
     const best = finished.reduce((a, s) => Math.max(a, e1rm(s.kg, s.reps) || 0), 0);
-    const own = before.filter(r => r.exercise === name);
-    const lastDate = own.map(r => String(r.workout_date).slice(0, 10)).sort().at(-1);
-    const lastBest = lastDate ? own.filter(r => String(r.workout_date).slice(0, 10) === lastDate).reduce((a, r) => Math.max(a, e1rm(n(r.actual_kg), n(r.actual_reps)) || 0), 0) : null;
+    // The same history as the plan's next load: the exercise and its variants.
+    const family = new Set(historyFamily(name)), own = before.filter(r => family.has(normalizeExerciseName(r.exercise)));
     const range = repRange(rows[0].plannedReps);
-    const rows4progression = [...own, ...finished.map(s => ({ workout_date: date, actual_kg: s.kg, actual_reps: s.reps, rpe: s.rpe, toFailure: s.toFailure }))];
-    const decision = finished.length ? progressionDecision(rows4progression, name, rows[0].plannedReps, 1, date) : null;
+    const rows4progression = [...own, ...finished.map((s, i) => ({ workout_date: date, set_no: i + 1, actual_kg: s.kg, actual_reps: s.reps, rpe: s.rpe, toFailure: s.toFailure }))];
+    const prior = priorMuscleSets(day, name);
+    const decision = finished.length ? progressionDecision(rows4progression, name, rows[0].plannedReps, 1, date, prior) : null;
+    // Against the last session at a similar place in the workout: an exercise
+    // moved to the end lifts less without being weaker.
+    const lastDate = decision ? decision.similarDate : own.map(r => String(r.workout_date).slice(0, 10)).sort().at(-1);
+    const lastBest = lastDate ? own.filter(r => String(r.workout_date).slice(0, 10) === lastDate).reduce((a, r) => Math.max(a, e1rm(n(r.actual_kg), n(r.actual_reps)) || 0), 0) : null;
     // A set prescribed to failure is meant to be at RPE 10: no "keep reps in reserve" for it.
     const rpes = finished.filter(s => !strengthSetOptions(s).toFailure).map(s => s.rpe).filter(v => v != null && v > 0);
     exercises.push({ name, muscle: EXERCISE_INTELLIGENCE[name]?.muscle || null, plannedSets: sets.length, doneSets: finished.length, sets, best, lastBest, lastDate, decision, maxRpe: rpes.length ? Math.max(...rpes) : null, range });
@@ -80,6 +88,7 @@ export function buildGymReview({ values = null, history = [], date, wellness = [
     const d = e.decision, kg = kgText(d.kg);
     if (d.decision === 'increase') return t(e.name + ' ' + kg + ' (+' + loadNum(d.kg - d.topKg) + ')', e.name + ' ' + kg + ' (+' + loadNum(d.kg - d.topKg) + ')');
     if (d.decision === 'decrease') return t(e.name + ' ' + kg + ' (−' + loadNum(d.topKg - d.kg) + ')', e.name + ' ' + kg + ' (−' + loadNum(d.topKg - d.kg) + ')');
+    if (d.fatigueHold) return t(e.name + ' ' + kg + ', stejná váha (po ' + Math.round(d.fatigue) + ' sériích na ' + muscleName(e.muscle) + ')', e.name + ' ' + kg + ', same weight (after ' + Math.round(d.fatigue) + ' ' + muscleName(e.muscle) + ' sets)');
     return t(e.name + ' ' + kg + ', přidat opakování', e.name + ' ' + kg + ', add reps') + (d.stalled ? t(' (třetí trénink beze změny, zkus jinou variantu)', ' (third session without change, try a variation)') : '');
   });
   if (plan.length) next.push(...plan.slice(0, 6));

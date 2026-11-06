@@ -472,6 +472,19 @@
 "Proč se dnes hodí" = "Why it fits today";
 "Práh" = "Threshold";
 "Průběh" = "Structure";
+"Každá změna v plánu říká proč. Klepni na trénink a uvidíš původní." = "Every change in the plan says why. Tap a session to see the original.";
+"Původně" = "Original";
+"teď %@" = "now %@";
+"pás = tvůj normál" = "band = your normal";
+"HRV za 14 dní proti tvému normálu" = "HRV over 14 days against your normal";
+"Cíl závodu" = "Race goal";
+"odhad dnes" = "estimate today";
+"dnes · týden %@" = "today · week %@";
+"Změnit na %@" = "Change to %@";
+"Tempa" = "Paces";
+"Závodní tempo" = "Race pace";
+"Lehce" = "Easy";
+"Odhad %@, cíl %@" = "Estimate %@, goal %@";
 "Průměr 7 dní" = "7-day average";
 "Pás" = "Treadmill";
 "PŘ" = "RDY";
@@ -1395,6 +1408,7 @@
 "Po dnech v týdnu" = "By weekday";
 "Posunout výš" = "Move up";
 "Posunout níž" = "Move down";
+"Podrž cvik a přetáhni ho jinam" = "Hold an exercise and drag to move it";
 "Jak na %@" = "How to do %@";
 "Supersérie %@" = "Superset %@";
 "Do selhání" = "To failure";
@@ -3035,6 +3049,8 @@
 "Poznámka · %@" = "Note · %@";
 "Poznámku se nepodařilo uložit: %@" = "The note couldn't be saved: %@";
 "Moje poznámka" = "My note";
+"Hlavní svaly" = "Primary muscles";
+"Pomocné svaly" = "Secondary muscles";
 
 /* Training plans: cycling races, gym plans, race estimates */
 "Se závodem" = "With a race";

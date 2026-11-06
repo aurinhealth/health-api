@@ -3,6 +3,7 @@
 import { searchRecipes } from "./personal-recipes.js";
 import { savePersonalFood, listPersonalFoods, searchFoodCatalog as searchPersonalFoods } from "./personal-foods.js";
 import { searchWorldFoods, barcodeKey, microsFor } from "./world-foods.js";
+import { lookupOpenFoodFacts, shareWithOpenFoodFacts } from "./open-food-facts.js";
 
 import { readBarcodeWithAI, readFoodPhotoWithAI, readPackageFrontWithAI } from "./food-photo.js";
 import { foodIntake } from "./food-portions.js";
@@ -13,6 +14,7 @@ import { sendFoodApproved } from "./push.js";
 import { saveFoodSuggestion, saveNewFoodSuggestion, listFoodSuggestions, decideFoodSuggestion, saveFoodReport, markReported } from "./food-suggestions.js";
 import { listFluids, foodDrinks, dayActivityHours, hydrationTarget, hydrationMl, addFluid, updateFluid, deleteFluid, bulkFluids, FluidInputError } from "./fluids.js";
 import { mealConsumedAt } from "./food-log.js";
+import { recordOpsEvent } from "./ops-report.js";
 import { updateFoodEntry, copyFoodEntry, deleteFoodEntry, bulkFoodEntries } from "./food-entry-management.js";
 import legacyHealthApi, { googleToken } from "./index.js";
 import { L } from "./lang.js";
@@ -59,8 +61,12 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
   if(url.pathname==='/app/api/food/search'&&request.method==='POST'){
     // Private saved foods first, then the common food-label catalogue, then
     // the read-only world catalogue in R2. A food users saved or corrected
-    // replaces the world record with the same barcode.
-    try {const body=await request.json(),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24),[saved,world]=await Promise.all([Promise.all([searchPersonalFoods(env.DB,name,barcode),barcode?[]:searchRecipes(env.DB,name)]).then(([foods,recipes])=>[...foods,...recipes]),searchWorldFoods(env,{name,barcode}).catch(error=>{console.error('world foods',error?.message);return [];})]),codes=new Set(saved.map(p=>barcodeKey(p.barcode)).filter(Boolean)),candidates=await markReported(env.RAW_DB||env.DB,[...saved,...world.filter(p=>!codes.has(barcodeKey(p.barcode)))],env.USER_ID);return Response.json({status:'ok',candidates,product:candidates[0]||null},{headers:{'Cache-Control':'no-store'}});}
+    // replaces the world record with the same barcode. A barcode none of them
+    // knows is asked of Open Food Facts live (open-food-facts.js), and where
+    // each scan was found is counted for the morning report (ops-report.js).
+    try {const body=await request.json(),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24),[saved,catalogue]=await Promise.all([Promise.all([searchPersonalFoods(env.DB,name,barcode),barcode?[]:searchRecipes(env.DB,name)]).then(([foods,recipes])=>[...foods,...recipes]),searchWorldFoods(env,{name,barcode}).catch(error=>{console.error('world foods',error?.message);return [];})]),live=barcode&&!saved.length&&!catalogue.length?await lookupOpenFoodFacts(env,barcode):[],world=[...catalogue,...live],codes=new Set(saved.map(p=>barcodeKey(p.barcode)).filter(Boolean));
+      if(barcode){const counting=recordOpsEvent(env.RAW_DB||env.DB,'barcode',saved.length?'saved':catalogue.length?'world':live.length?'off-live':'missing');if(ctx?.waitUntil)ctx.waitUntil(counting);else await counting;}
+      const candidates=await markReported(env.RAW_DB||env.DB,[...saved,...world.filter(p=>!codes.has(barcodeKey(p.barcode)))],env.USER_ID);return Response.json({status:'ok',candidates,product:candidates[0]||null},{headers:{'Cache-Control':'no-store'}});}
     catch(error){console.error('Food search failed',error.message);return Response.json({message:L('Uložené potraviny se nepodařilo načíst. Zkus to znovu nebo zadej hodnoty z etikety.', 'Saved foods couldn\'t be loaded. Try again or enter the values from the label.')},{status:500});}
   }
   // "Navrhnout opravu pro všechny": a correction of a catalogue food for the
@@ -89,6 +95,8 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
       const {notify,...decided}=await decideFoodSuggestion(raw,env.DB,body);
       // The authors hear the food is fixed (push.js); the owner's answer doesn't wait for Apple.
       if(notify?.users?.length){const sending=sendFoodApproved(env,raw,notify).catch(error=>console.warn('food push',error?.message));if(ctx?.waitUntil)ctx.waitUntil(sending);else await sending;}
+      // An approved food with a barcode Open Food Facts lacks goes there too (open-food-facts.js).
+      if(notify?.product){const sharing=shareWithOpenFoodFacts(env,notify.product).then(result=>result==='skipped'?null:recordOpsEvent(raw,'off-share',result));if(ctx?.waitUntil)ctx.waitUntil(sharing);else await sharing;}
       return Response.json(decided,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:error.status||500});}
   }
