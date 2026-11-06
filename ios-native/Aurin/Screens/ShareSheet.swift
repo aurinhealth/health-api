@@ -397,7 +397,7 @@ struct ShareEditView: View {
                 if kind == .milestone && options.variant != 2 && milestones.count > 1 {
                     SectionLabel(text: "Milník").padding(.top, 26).padding(.horizontal, 4)
                     let chosen = milestones.first { item in item.key == options.milestone }?.key ?? milestones[0].key
-                    ChipFlow(items: milestones.map(\.key), label: { key in L10n.tr(milestones.first { item in item.key == key }?.title ?? key) },
+                    ChipFlow(items: milestones.map(\.key).sorted { (ShareMilestones.order.firstIndex(of: $0) ?? 99) < (ShareMilestones.order.firstIndex(of: $1) ?? 99) }, label: { key in L10n.tr(milestones.first { item in item.key == key }?.title ?? key) },
                              isOn: { key in key == chosen },
                              toggle: { key in options.milestone = key })
                         .padding(.top, 10)

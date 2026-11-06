@@ -15,6 +15,8 @@ struct ShareWeek: Decodable, Equatable {
         var minutes: Double?
         var sessions: Int = 0
         var tss: Double?
+        /// A triathlon, a duathlon or a brick: its sports in the order done.
+        var legs: [String]?
     }
 
     struct Totals: Decodable, Equatable {
@@ -101,10 +103,24 @@ struct ShareMilestones: Decodable, Equatable {
     struct Bar: Decodable, Equatable {
         var date: String
         var value: Double?
+        /// Multisport: the day's sports in the order done.
+        var legs: [Leg]?
+    }
+
+    struct Leg: Decodable, Equatable {
+        var kind: String
+        var minutes: Double?
+    }
+
+    /// Multisport: the kilometres of each sport over all of its days.
+    struct Kilometres: Decodable, Equatable {
+        var ride: Double?
+        var run: Double?
+        var swim: Double?
     }
 
     struct Item: Decodable, Equatable, Identifiable {
-        /// ride, run, gym or streak.
+        /// ride, run, swim, multisport, gym or streak.
         var key: String
         var value: Double
         var total: Double?
@@ -116,6 +132,7 @@ struct ShareMilestones: Decodable, Equatable {
         var bars: [Bar] = []
         /// How far the sessions before the bars got.
         var start: Double?
+        var km: Kilometres?
         var id: String { key }
     }
 
@@ -141,6 +158,9 @@ struct ShareMilestones: Decodable, Equatable {
 
     /// The one chosen in Upravit, else the newest.
     func item(_ key: String?) -> Item? { items.first { $0.key == key } ?? items.first }
+
+    /// The chips of Upravit in the app's order of sports.
+    static let order = ["ride", "run", "swim", "multisport", "gym", "streak"]
 }
 
 extension APIClient {
@@ -149,16 +169,33 @@ extension APIClient {
     }
 
     func shareMilestones() async throws -> ShareMilestones {
-        try await get("/app/api/share/milestones")
+        try await get("/app/api/share/milestones?swim=1")
     }
 }
 
 extension ShareMilestones.Item {
-    var isDistance: Bool { key == "ride" || key == "run" }
+    var isDistance: Bool { key == "ride" || key == "run" || key == "swim" }
 
     /// The chip in Upravit.
     var title: String {
-        ["ride": "Kolo", "run": "Běh", "gym": "Posilovna", "streak": "Dny v řadě"][key] ?? key
+        ["ride": "Kolo", "run": "Běh", "swim": "Plavání", "multisport": "Multisport", "gym": "Posilovna", "streak": "Dny v řadě"][key] ?? key
+    }
+
+    struct SportStat: Identifiable {
+        let sport: String
+        let stat: ShareStat
+        var id: String { sport }
+    }
+
+    /// Multisport: each sport's kilometres in the app's order, the ones never done left out.
+    var sportStats: [SportStat] {
+        guard let km else { return [] }
+        let list: [(String, String, Double?)] = [("ride", "Kolo", km.ride), ("run", "Běh", km.run), ("swim", "Plavání", km.swim)]
+        return list.compactMap { sport, label, value -> SportStat? in
+            guard let value, value > 0 else { return nil }
+            let shown = Units.distance(value)
+            return SportStat(sport: sport, stat: ShareStat(label: label, value: Fmt.decimal(shown, digits: shown < 100 ? 1 : 0), unit: Units.distanceUnit))
+        }
     }
 
     /// "1 000" (in miles with imperial units).
@@ -170,6 +207,8 @@ extension ShareMilestones.Item {
         switch key {
         case "ride": return L10n.tr(Units.imperial ? "mil na kole" : "kilometrů na kole")
         case "run": return L10n.tr(Units.imperial ? "naběhaných mil" : "naběhaných kilometrů")
+        case "swim": return L10n.tr(Units.imperial ? "uplavaných mil" : "uplavaných kilometrů")
+        case "multisport": return L10n.plural("multisportovních tréninků", n)
         case "gym": return L10n.plural("tréninků v posilovně", n)
         default: return L10n.plural("dní v řadě", n)
         }
@@ -187,6 +226,7 @@ extension ShareMilestones.Item {
         switch key {
         case "ride": what = L10n.tr("na kole")
         case "run": what = L10n.tr("naběháno")
+        case "swim": what = L10n.tr("uplaváno")
         default: what = noun
         }
         return [what, sinceText].compactMap { $0 }.joined(separator: " ")
@@ -309,7 +349,8 @@ struct ShareWeekCard: View {
         let u = s.u
         let later = future(day)
         let minutes = day.minutes ?? 0
-        let sport: String = later ? "" : (day.sport.map { L10n.tr(ShareWorkout(title: "", sport: $0).sportName) } ?? L10n.tr("Volno"))
+        let name = { (sport: String) in L10n.tr(ShareWorkout(title: "", sport: sport).sportName) }
+        let sport: String = later ? "" : day.legs.map { $0.map(name).joined(separator: " · ") } ?? (day.sport.map(name) ?? L10n.tr("Volno"))
         return HStack(spacing: u * 2.6) {
             Text(verbatim: ShareText.weekday(day.date)).font(s.sans(3.4)).foregroundStyle(s.t.muted)
                 .frame(width: u * 6, alignment: .leading)
@@ -520,6 +561,7 @@ struct ShareMilestoneCard: View {
     private func poster(_ item: ShareMilestones.Item) -> some View {
         let u = s.u
         let stats = ["Tréninky", "Čas", "Převýšení"].filter { options.shows($0) }.compactMap { item.stat($0) }
+        let sports = item.sportStats
         return VStack(alignment: .leading, spacing: 0) {
             s.brand(dateText)
             VStack(alignment: .leading, spacing: u * 1.2) {
@@ -534,17 +576,45 @@ struct ShareMilestoneCard: View {
             .padding(.horizontal, u * 7)
             .padding(.top, u * 18)
             if options.shows("Graf"), !item.bars.isEmpty {
-                ShareBars(bars: item.bars, color: s.t.amber, label: s.t.muted, u: u)
+                ShareBars(bars: item.bars, color: s.t.amber, label: s.t.muted, u: u, legColor: { sportColor($0) })
                     .frame(height: u * 34)
                     .padding(.horizontal, u * 7)
                     .padding(.top, u * 10)
+                if !sports.isEmpty {
+                    HStack(spacing: u * 4) {
+                        ForEach(sports) { entry in
+                            HStack(spacing: u * 1.2) {
+                                Circle().fill(sportColor(entry.sport)).frame(width: u * 2.4, height: u * 2.4)
+                                Text(L10n.tr(entry.stat.label)).font(s.sans(3)).foregroundStyle(s.t.muted)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, u * 7)
+                    .padding(.top, u * 3)
+                }
             }
             Spacer(minLength: 0)
             HStack(alignment: .top, spacing: u * 9) {
-                ForEach(stats) { s.number($0.label, $0.value, $0.unit, size: 7.4).sharePiece($0.id, s) }
+                if sports.isEmpty {
+                    ForEach(stats) { s.number($0.label, $0.value, $0.unit, size: 7.4).sharePiece($0.id, s) }
+                } else {
+                    // Multisport: the kilometres of each sport instead of the sessions and time.
+                    ForEach(sports) { entry in
+                        s.number(entry.stat.label, entry.stat.value, entry.stat.unit, size: 7.4, color: sportColor(entry.sport)).sharePiece(entry.stat.id, s)
+                    }
+                }
             }
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 8)
+        }
+    }
+
+    /// A sport's colour on the multisport poster: ride amber, run green, swim blue.
+    private func sportColor(_ sport: String) -> Color {
+        switch sport {
+        case "run": return s.t.green
+        case "swim": return s.t.blue
+        default: return s.t.amber
         }
     }
 
@@ -619,6 +689,8 @@ struct ShareBars: View {
     let color: Color
     let label: Color
     let u: CGFloat
+    /// Multisport: a bar of legs, each in its sport's colour (the first at the bottom).
+    var legColor: ((String) -> Color)? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -630,11 +702,24 @@ struct ShareBars: View {
             ZStack(alignment: .topLeading) {
                 ForEach(Array(bars.enumerated()), id: \.offset) { i, bar in
                     let h = max(u * 1, chart * CGFloat((bar.value ?? 0) / top))
-                    Capsule()
-                        .fill(LinearGradient(colors: [color, color.opacity(0.25)], startPoint: .top, endPoint: .bottom))
-                        .frame(width: width, height: h)
-                        .shadow(color: color.opacity(0.35), radius: u * 0.8)
+                    if let legs = bar.legs, let legColor, !legs.isEmpty {
+                        let total = max(1, legs.reduce(0) { $0 + ($1.minutes ?? 0) })
+                        VStack(spacing: u * 0.4) {
+                            ForEach(Array(Array(legs.enumerated()).reversed()), id: \.offset) { _, leg in
+                                RoundedRectangle(cornerRadius: u * 0.6, style: .continuous).fill(legColor(leg.kind))
+                                    .frame(height: max(u * 0.8, (h - u * 0.4 * CGFloat(legs.count - 1)) * CGFloat((leg.minutes ?? 0) / total)))
+                                    .shadow(color: legColor(leg.kind).opacity(0.35), radius: u * 0.8)
+                            }
+                        }
+                        .frame(width: width, height: h, alignment: .bottom)
                         .offset(x: CGFloat(i) * (width + gap), y: chart - h)
+                    } else {
+                        Capsule()
+                            .fill(LinearGradient(colors: [color, color.opacity(0.25)], startPoint: .top, endPoint: .bottom))
+                            .frame(width: width, height: h)
+                            .shadow(color: color.opacity(0.35), radius: u * 0.8)
+                            .offset(x: CGFloat(i) * (width + gap), y: chart - h)
+                    }
                 }
                 ForEach(Array(monthStarts(step: width + gap).enumerated()), id: \.offset) { _, month in
                     Text(verbatim: month.text).font(.system(size: u * 2.8, weight: .medium)).foregroundStyle(label)

@@ -1057,6 +1057,26 @@
 			<string>tréninků hotovo</string>
 		</dict>
 	</dict>
+	<key>multisportovních tréninků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>multisportovní tréninky</string>
+			<key>many</key>
+			<string>multisportovních tréninků</string>
+			<key>one</key>
+			<string>multisportovní trénink</string>
+			<key>other</key>
+			<string>multisportovních tréninků</string>
+		</dict>
+	</dict>
 	<key>tréninků v posilovně</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
