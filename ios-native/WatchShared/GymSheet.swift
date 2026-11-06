@@ -140,12 +140,13 @@ struct GymDay: Decodable, Equatable {
     /// Swaps an exercise for another in the sets not done yet.
     /// With kg (the load estimated for the new exercise) its sets take it;
     /// a drop set a fifth less than the row before it (as D adds one), a
-    /// warm-up's weight is left empty.
+    /// warm-up its step of the ramp (warmupKg(work:number:of:)).
     mutating func replace(exercise: String, with name: String, kg: String? = nil) {
         var before = kg ?? ""
-        for index in values.indices where index >= Self.firstSetRow {
-            guard values[index].count > 1, values[index][1].string == exercise else { continue }
-            if values[index].count > 8, Self.isDone(values[index][8].string) { continue }
+        let open = values.indices.filter { $0 >= Self.firstSetRow && values[$0].count > 1 && values[$0][1].string == exercise
+            && !(values[$0].count > 8 && Self.isDone(values[$0][8].string)) }
+        let warmups = Set(open.filter { Self.isWarmupRow(values[$0]) }.map { cell(values[$0], 2) ?? "" }).count
+        for index in open {
             values[index][1] = .string(name)
             let type = (cell(values[index], 0) ?? "").uppercased()
             if type == "DROP" {
@@ -153,9 +154,19 @@ struct GymDay: Decodable, Equatable {
                 set(row: index, column: 3, before)
             } else {
                 before = kg ?? ""
-                set(row: index, column: 3, type == "WARMUP" ? "" : before)
+                set(row: index, column: 3, type == "WARMUP" ? Self.warmupKg(work: kg, number: cell(values[index], 2), of: warmups) : before)
             }
         }
+    }
+
+    /// A warm-up's weight from the work weight, as the generator ramps it
+    /// (src/strength-generator.js warmupRows): of three sets 40, 65 and 80 %,
+    /// a single one 65 %. Empty without a work weight.
+    static func warmupKg(work: String?, number: String?, of count: Int) -> String {
+        guard let kg = Self.number(work ?? ""), kg > 0 else { return "" }
+        let ramp = count == 1 ? [0.65] : [0.4, 0.65, 0.8]
+        let step = min(max((Int(number ?? "") ?? 1) - 1, 0), ramp.count - 1)
+        return warmupKg(kg * ramp[step])
     }
 
     // MARK: Editing the plan (Režim tréninku → Upravit plán)

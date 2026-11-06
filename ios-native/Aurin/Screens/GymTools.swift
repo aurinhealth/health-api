@@ -713,9 +713,11 @@ struct GymBuilderView: View {
     private func replace(_ name: String, with alt: GymAlternative) {
         guard var p = proposal else { return }
         let kg = alt.kg.map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1).replacingOccurrences(of: ",", with: ".") } ?? ""
+        let isWarmup = { (row: [JSONValue]) in (row.first?.string ?? "").uppercased() == "WARMUP" }
+        let warmups = Set(p.rows.filter { $0.count > 3 && $0[1].string == name && isWarmup($0) }.map { $0[2].string ?? "" }).count
         for i in p.rows.indices where p.rows[i].count > 3 && p.rows[i][1].string == name {
             p.rows[i][1] = .string(alt.name)
-            p.rows[i][3] = .string((p.rows[i][0].string ?? "").uppercased() == "WARMUP" ? "" : kg)
+            p.rows[i][3] = .string(isWarmup(p.rows[i]) ? GymDay.warmupKg(work: kg, number: p.rows[i][2].string, of: warmups) : kg)
         }
         p.muscles[name] = nil
         if let map = catalog.first(where: { $0.name == alt.name })?.muscles { p.muscles[alt.name] = map }
