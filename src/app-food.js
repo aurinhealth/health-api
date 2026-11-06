@@ -6,6 +6,9 @@
 import { localDateTime, localToday } from "./user-time.js";
 import { MEAL_DEFAULT_TIMES } from "./food-log.js";
 import { L } from "./lang.js";
+import { daySessions } from "./app-training.js";
+import { heatAdvice, indoorText } from "./heat-advice.js";
+import { isHardSession } from "./session-intensity.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -115,7 +118,7 @@ export function targetParts(nutrition = {}, { past = false } = {}) {
   return { base, workouts: done.total, planned: planned.total, coverage, lines, items: [...done.items, ...planned.items] };
 }
 
-export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {}, slots = null }) {
+export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {}, slots = null, forecast = null }) {
   const chosen = Array.isArray(slots) && slots.length ? MEALS.filter(m => slots.includes(m.type)).map(m => m.type) : USUAL;
   const nutrition = daily.nutrition || {};
   const macros = nutrition.macros || {};
@@ -198,6 +201,7 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
   });
 
   const weight = daily.weight || {};
+  const heat = heatLine(date, daily, forecast);
   return {
     status: "ok",
     date,
@@ -232,9 +236,22 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
       ml: num(fluids.hydrationMl ?? fluids.totalMl), target: num(fluids.target?.ml), drunkMl: num(fluids.totalMl),
       entries: (Array.isArray(fluids.entries) ? fluids.entries : []).filter(f => f && f.kind !== "food").length,
       drinks: (Array.isArray(fluids.entries) ? fluids.entries : []).filter(f => f && f.kind !== "food" && Number(f.id) > 0)
-        .map(f => ({ id: Number(f.id), kind: f.kind, ml: num(f.ml), hydrationMl: num(f.hydrationMl ?? f.ml), time: entryTime(f.consumedAt), ...(f.app ? { app: String(f.app) } : {}) }))
+        .map(f => ({ id: Number(f.id), kind: f.kind, ml: num(f.ml), hydrationMl: num(f.hydrationMl ?? f.ml), time: entryTime(f.consumedAt), ...(f.app ? { app: String(f.app) } : {}) })),
+      ...(heat ? { heat } : {})
     }
   };
+}
+
+// Pití: the heat hint of today's ride or run still ahead outdoors (heat-advice.js),
+// the same session and forecast as Plán dne. The goal itself stays as it is.
+function heatLine(date, daily, forecast) {
+  if (!forecast || date !== localToday()) return null;
+  const sessions = daySessions(date, date, daily?.training || {}, null).sessions.filter(s => s.status === "planned");
+  for (const s of sessions) {
+    const heat = heatAdvice({ sport: s.sport, weather: forecast, time: s.time, minutes: s.minutes, intervals: isHardSession(s.title, s.sport), indoor: indoorText(s.title + " " + (s.type || "")) });
+    if (heat) return heat.drink;
+  }
+  return null;
 }
 
 function sentence({ eaten, target, bonus, left, next }) {

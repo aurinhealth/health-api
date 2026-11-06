@@ -3,11 +3,12 @@
 // amount, Build-up a start that moves day by day with what the athlete drinks,
 // up to the Auto target. Training days add their extra on top of Custom and
 // Build-up, and a day is judged against its own goal with that extra.
-import { L } from "./lang.js";
+import { L, isImperial } from "./lang.js";
 import { hydrationMl, activityHoursByDay, hydrationTarget, drinkFromFoodEntry } from "./fluids.js";
 import { shiftDate } from "./dashboard-shared.js";
 
 const MIN_ML = 1000, MAX_ML = 6000, STEP = 100, MAX_JUMP = 300, OVER_AVERAGE = 500, CATCH_UP_DAYS = 14;
+const ML_PER_FL_OZ = 29.5735;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const floor100 = ml => Math.floor(ml / 100) * 100;
 
@@ -136,10 +137,12 @@ export function waterNudge({ hour, drunkMl, goalMl }) {
   if (!(goal > 0) || ![14, 18].includes(hour)) return null;
   const due = goal * clamp((hour - 8) / 13, 0, 1), drunk = Number(drunkMl) || 0;
   if (drunk >= due * 0.7) return null;
-  const litres = ml => (Math.round(ml / 100) / 10).toLocaleString(L("cs-CZ", "en-US"), { minimumFractionDigits: 1 });
+  // "1,2 l", or "41 fl oz" for an imperial user (as the Pití card shows it).
+  const amount = ml => isImperial() ? Math.round(ml / ML_PER_FL_OZ) + " fl oz"
+    : (Math.round(ml / 100) / 10).toLocaleString(L("cs-CZ", "en-US"), { minimumFractionDigits: 1 }) + " l";
   return {
     title: L("Pití", "Water"),
-    body: L(`Zatím ${litres(drunk)} l. Sklenice teď tě vrátí na cestu k ${litres(goal)} l.`,
-      `${litres(drunk)} l so far. A glass now gets you back on track for ${litres(goal)} l today.`)
+    body: L(`Zatím ${amount(drunk)}. Sklenice teď tě vrátí na cestu k ${amount(goal)}.`,
+      `${amount(drunk)} so far. A glass now gets you back on track for ${amount(goal)} today.`)
   };
 }
