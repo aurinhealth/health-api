@@ -109,7 +109,7 @@ export function targetParts(nutrition = {}, { past = false } = {}) {
     // Whole numbers that add up to the base: the goal takes the rounding.
     const expected = Math.round(rest + movement), goal = expected - Math.round(resting) - Math.round(movement);
     const minimum = Math.max(0, (everyday ?? expected) - expected), moreActive = base - expected - minimum;
-    // Only at the 4000 kcal ceiling would the lines not add up: then the base alone.
+    // Only at the calorie ceiling (MAX_CALORIE_TARGET) would the lines not add up: then the base alone.
     if (moreActive >= 0) lines = { restingBurn: Math.round(resting), movement: Math.round(movement), goal, minimum, moreActive };
   }
   return { base, workouts: done.total, planned: planned.total, coverage, lines, items: [...done.items, ...planned.items] };
@@ -209,7 +209,7 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
     targetParts: targetParts(nutrition, { past: date < localToday() }),
     // For the coach's text (screen-texts.js): the hour, the safe minimum and the weight goal.
     hour,
-    minimumKcal: num(breakdown.minTarget),
+    minimumKcal: num(breakdown.floorTarget ?? breakdown.minTarget),
     goal: {
       weightKg: num(weight.current ?? nutrition.currentWeight), average7dKg: num(weight.average7d), average30dKg: num(weight.average30d),
       targetWeightKg: num(nutrition.targetWeightKg), deficitKcal: num(breakdown.weightLossDeficit)

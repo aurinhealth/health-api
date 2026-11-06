@@ -383,3 +383,19 @@ test("the day's strain counts the training and the steps when the zones saw litt
   // Nothing measured: no score.
   assert.equal(dayStrainParts({}).score, null);
 });
+
+test("an iPhone without a watch or ring: noWearable and a strain target steps can reach (audit 14.2, 14.7)", () => {
+  // Ten days of steps only: no HRV, no resting heart rate, no nights, no plan.
+  const steps = Array.from({ length: 10 }, (_, i) => ({ id: day(i - 9), steps: 7000 }));
+  const t = buildToday({ date: DATE, hour: 12, health: { wellness: steps }, sleep: { sessions: [] }, daily: {} });
+  assert.equal(t.readiness.score, null);
+  assert.equal(t.readiness.noWearable, true);
+  assert.deepEqual([t.strain.target.low, t.strain.target.high], [5, 8]);
+  // With the watch's data it is not set, and the target stays as before.
+  const watch = buildToday({ ...input, hour: 12 });
+  assert.equal(watch.readiness.noWearable, false);
+  // One resting heart rate in the last 30 days is enough to count as a wearable.
+  const one = buildToday({ date: DATE, hour: 12, health: { wellness: [...steps.slice(0, 9), { id: DATE, steps: 7000, restingHR: 52 }] }, sleep: { sessions: [] }, daily: {} });
+  assert.equal(one.readiness.noWearable, false);
+  assert.deepEqual([one.strain.target.low, one.strain.target.high], [8.5, 11.5]);
+});

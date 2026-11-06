@@ -44,7 +44,7 @@ test("a workout that breaks the limits twice comes from the library; no consent 
   assert.match(fromLibrary(await composeWorkout(env, { ...day, ask: answer(longer) })).ai.tried, /^length \d+ min$/, "too long, twice");
   assert.equal(await composeWorkout(env, { ...day, ask: answer(longer), fallback: none }), null, "too long and no library");
   // 45 min with 24 minutes of VO2max: over the yellow morning's 20.
-  const hard = [block(480, 55, 65), { repeats: 6, steps: [{ label: "VO2", seconds: 240, low: 110, high: 118 }, { label: "lehce", seconds: 120, low: 50, high: 55 }] }, block(60, 50, 55)];
+  const hard = [block(600, 55, 65), { repeats: 6, steps: [{ label: "VO2", seconds: 240, low: 110, high: 118 }, { label: "lehce", seconds: 120, low: 50, high: 55 }] }, block(60, 50, 55)];
   const capped = await composeWorkout(env, { ...day, kind: "vo2", ask: answer(hard) });
   assert.ok(capped.ai.fallback && capped.primary_system === "vo2max", "over the yellow hard-minute cap: the library's");
   assert.ok(!(await composeWorkout(env, { ...day, kind: "vo2", coach: { readiness: { status: "green" } }, ask: answer(hard) })).ai.fallback, "fine on a green morning");
@@ -66,7 +66,7 @@ test("the search offers the AI's own workout when few of the chosen type are lef
 });
 
 test("the athlete's choice passes a hard type on a worse morning, with a warning, and is written once", async () => {
-  const env = owner(), hard = [block(480, 55, 65), { repeats: 6, steps: [{ label: "VO2", seconds: 240, low: 110, high: 118 }, { label: "lehce", seconds: 120, low: 50, high: 55 }] }, block(60, 50, 55)];
+  const env = owner(), hard = [block(600, 55, 65), { repeats: 6, steps: [{ label: "VO2", seconds: 240, low: 110, high: 118 }, { label: "lehce", seconds: 120, low: 50, high: 55 }] }, block(60, 50, 55)];
   let calls = 0, sent = null;
   const ask = async (_env, request) => { calls += 1; sent = request; return answer(hard)(); };
   const key = composeKey({ date: "2026-10-19", sport: "ride", environment: "indoor", kind: "vo2max", minutes: 45 });
@@ -126,9 +126,20 @@ test("a draft outside the band is asked for once more with the reason; two misse
 
 test("two efforts in a row without a recovery are rejected", async () => {
   const env = owner(), green = { ...day, kind: "vo2max", coach: { readiness: { status: "green" } } };
-  const split = [block(480, 50, 75), block(240, 112, 118), { repeats: 4, steps: [{ label: "vo2", seconds: 240, low: 112, high: 118 }, { label: "lehce", seconds: 120, low: 45, high: 55 }] }, block(540, 45, 55)];
+  const split = [block(600, 50, 75), block(240, 112, 118), { repeats: 4, steps: [{ label: "vo2", seconds: 240, low: 112, high: 118 }, { label: "lehce", seconds: 120, low: 45, high: 55 }] }, block(420, 45, 55)];
   assert.equal((await composeWorkout(env, { ...green, ask: answer(split), diagnose: true, fallback: async () => null })).rejected, "efforts back to back");
   assert.ok((await composeWorkout(env, { ...green, ask: answer(split) })).ai.fallback, "the library's VO2max instead");
-  const whole = [block(480, 50, 75), { repeats: 5, steps: [{ label: "vo2", seconds: 240, low: 112, high: 118 }, { label: "lehce", seconds: 120, low: 45, high: 55 }] }, block(420, 45, 55)];
+  const whole = [block(600, 50, 75), { repeats: 5, steps: [{ label: "vo2", seconds: 240, low: 112, high: 118 }, { label: "lehce", seconds: 120, low: 45, high: 55 }] }, block(300, 50, 55)];
   assert.ok(await composeWorkout(env, { ...green, ask: answer(whole) }), "the same efforts in one repeat pass");
+});
+
+// Coach evaluation runs 35, 38 and 41: "VO2max 5×4 · 45 min" with 7 min of warm-up.
+test("a hard workout needs 10 easy minutes before its first effort; an easier one does not", async () => {
+  const env = owner(), green = { ...day, kind: "vo2max", coach: { readiness: { status: "green" } } };
+  const short = [block(420, 50, 75), { repeats: 5, steps: [{ label: "vo2", seconds: 240, low: 112, high: 118 }, { label: "lehce", seconds: 120, low: 45, high: 55 }] }, block(480, 45, 55)];
+  assert.equal((await composeWorkout(env, { ...green, ask: answer(short), diagnose: true, fallback: async () => null })).rejected, "warm-up 7 min");
+  assert.ok((await composeWorkout(env, { ...green, ask: answer(short) })).ai.fallback, "the library's VO2max instead");
+  // A tempo ride may start sooner: the check is for threshold and harder.
+  const tempo = [block(300, 55, 65), { repeats: 3, steps: [{ label: "tempo", seconds: 600, low: 80, high: 85 }, { label: "lehce", seconds: 180, low: 50, high: 55 }] }, block(60, 50, 55)];
+  assert.ok(!(await composeWorkout(env, { ...day, ask: answer(tempo) })).ai.fallback);
 });

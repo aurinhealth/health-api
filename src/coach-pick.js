@@ -151,15 +151,28 @@ export function doneSentence(done = []) {
 
 function reasonFor(best, { status, ride, lowerTired, planned, trainedToday, done }) {
   if (trainedToday) return doneSentence(done) + " " + (best.kind === "sauna" ? L("Doporučuju saunu 3 × 12 minut na regeneraci.", "I recommend the sauna, 3 × 12 minutes, to recover.") : best.kind === "rest" ? L("Doporučuju 15 minut protažení a večer lehkou procházku.", "I recommend 15 minutes of stretching and a light walk in the evening.") : L("Další trénink dnes jen lehce.", "Any more training today only easy."));
-  const why = (ride?.readiness?.reasons || []).filter(r => !/chybí HRV|no HRV/i.test(r))[0];
+  const why = (ride?.readiness?.reasons || []).filter(r => !/chybí HRV|no HRV|noc se ještě nenahrála|night hasn't synced/i.test(r))[0];
   if (status === "red") return [sentence(why) || L("Připravenost je dnes nízká.", "Readiness is low today."), L("Dnes radši odpočívej.", "Rest today instead.")].join(" ");
-  if (planned.includes(best.kind)) return L("Sedí to s plánem na dnešek a připravenost na to máš.", "It fits today's plan and you're ready for it.");
+  // Before last night syncs (cycling-coach-v2.js awaitingNight) the coach
+  // waits for it and says so, without a colour (audit 2026-11-06, 4.1).
+  const coach = ride?.readiness || {};
+  if (coach.awaitingNight) return L("Čekám na tvoji noc. Do té doby jen lehce, tvrdší trénink navrhnu, až ji uvidím.", "Waiting for your night. Keep it easy until then; I'll suggest something harder once I see it.");
+  // Only words the readiness backs (audit 2026-11-06, 5.7): ready for the
+  // plan only on a green day, the body rested only with a readiness number;
+  // without one (a new athlete) the load and sleep decided.
+  const scored = coach.score != null;
+  if (planned.includes(best.kind)) return status === "green" ? (scored ? L("Sedí to s plánem na dnešek a připravenost na to máš.", "It fits today's plan and you're ready for it.") : L("Sedí to s plánem na dnešek.", "It fits today's plan."))
+    : L("Sedí to s plánem, jen dnes klidněji.", "It fits today's plan, just take it easier today.");
   if (best.kind === "gym" && lowerTired) return L("Nohy po posilovně ještě nejsou čerstvé, dnes horní polovina.", "Your legs aren't fresh after the gym yet, so upper body today.");
   // The words follow the option: "quality" only when the pick is a hard session.
-  if (status === "green") return lowerTired ? L("Tělo je odpočaté, jen nohy nech ještě odpočinout.", "You're rested, just let the legs recover a bit more.")
+  if (status === "green" && scored) return lowerTired ? L("Tělo je odpočaté, jen nohy nech ještě odpočinout.", "You're rested, just let the legs recover a bit more.")
     : best.hard ? L("Tělo je odpočaté, dnes je prostor na kvalitu.", "You're rested, today there's room for quality.")
     : best.kind === "ride" || best.kind === "run" ? L("Tělo je odpočaté, dnes to stačí v klidném tempu.", "You're rested, an easy pace is enough today.")
     : L("Tělo je odpočaté, tohle dnes sedí nejlíp.", "You're rested, this fits today best.");
+  if (status === "green") return lowerTired ? L("Podle zátěže a spánku můžeš trénovat, jen nohy nech ještě odpočinout.", "Going by your load and sleep you can train, just let the legs recover a bit more.")
+    : best.hard ? L("Podle zátěže a spánku je dnes prostor na kvalitu.", "Going by your load and sleep, today there's room for quality.")
+    : best.kind === "ride" || best.kind === "run" ? L("Podle zátěže a spánku to dnes stačí v klidném tempu.", "Going by your load and sleep, an easy pace is enough today.")
+    : L("Podle zátěže a spánku tohle dnes sedí nejlíp.", "Going by your load and sleep, this fits today best.");
   return best.hard ? L("Připravenost je střední, kvalitu dnes dávkuj opatrně.", "Readiness is moderate, so dose the quality carefully today.")
     : L("Připravenost je střední, dnes spíš lehčí objem.", "Readiness is moderate, so a lighter volume today.");
 }

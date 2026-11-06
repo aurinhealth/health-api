@@ -33,10 +33,12 @@ export async function loadThresholdSessions(env,ctx,today){
   ]);
   const byActivity=new Map(),activities=[];
   for(const row of rows){const a=activityFromRow(row);if(a){byActivity.set(a,row);activities.push(a);}}
-  const sessions=thresholdSessions(dedupeActivities(activities),byActivity);
+  const unique=dedupeActivities(activities),sessions=thresholdSessions(unique,byActivity);
+  // Swims only count for the CSS test offer (the estimates and laps are rides and runs).
+  const swims=unique.filter(a=>a.kind==='swim').map(a=>({date:a.date,kind:'swim',minutes:a.minutes}));
   const age=Number(profile?.age)||null;
   const athlete={ftp:thresholds.ftp,lthr:thresholds.lthr,runLthr:thresholds.runLthr,maxHr:thresholds.maxHr||(age?Math.round(208-0.7*age):null),restHr:thresholds.restHr||(rest.length?rest[Math.floor(rest.length/2)]:null)};
-  return {sessions,thresholds,athlete};
+  return {sessions,swims,thresholds,athlete};
 }
 // The test ride's own curves (time, watts) when its laps hold no 20-min effort:
 // Intervals.icu's streams of the activity (no per-ride power curve in its
@@ -55,14 +57,14 @@ async function testCurves(env,id){
 }
 
 export async function thresholdCheckState(env,ctx,today){
-  const [{sessions,thresholds,athlete},checks]=await Promise.all([loadThresholdSessions(env,ctx,today),getChecks(env.DB)]);
+  const [{sessions,swims,thresholds,athlete},checks]=await Promise.all([loadThresholdSessions(env,ctx,today),getChecks(env.DB)]);
   const current={ftp:thresholds.ftp||null,lthr:thresholds.lthr||null,runThresholdPace:thresholds.runThresholdPace||null,swimCss:thresholds.swimCss||null};
   const estimates={ride:estimateRideFtp(sessions,athlete,today),run:estimateRunPace(sessions,athlete,today)};
   // Since when each value is known (the old-threshold offer): the row
   // "seen" keeps each value with the day it first came, written only when one
   // changes (audit wave 2, 7.2).
   const seen=checks.seen?.estimate||{},fresh={...seen};
-  for(const metric of ['ftp','lthr','runThresholdPace'])if(current[metric]&&seen[metric]?.value!==current[metric])fresh[metric]={value:current[metric],since:today};
+  for(const metric of ['ftp','lthr','runThresholdPace','swimCss'])if(current[metric]&&seen[metric]?.value!==current[metric])fresh[metric]={value:current[metric],since:today};
   if(JSON.stringify(fresh)!==JSON.stringify(seen))await saveCheck(env.DB,'seen',{status:'seen',estimate:fresh}).catch(()=>{});
   const sinceOf=(metric,c)=>{const touched=['applied','dismissed'].includes(c?.status)?String(c.updatedAt||'').slice(0,10):null,first=fresh[metric]?.since||null;return [first,touched].filter(Boolean).sort().at(-1)||null;};
   // The active plan's weeks set the days' roles (weekRoleOptions, as on Today).
@@ -85,7 +87,7 @@ export async function thresholdCheckState(env,ctx,today){
     if(!weeks.has(monday))weeks.set(monday,weekOf(monday));
     const {pw,options}=weeks.get(monday);
     if(!pw?.spec.q[0]?.test)continue;
-    const prefs=await getWeekPlan(env.DB,monday).catch(()=>null),roles=prefs?planWeekRoles(prefs.days,{...await options,...roleTime(prefs)}):[];
+    const prefs=await getWeekPlan(env.DB,monday).catch(()=>null),roles=prefs?planWeekRoles(prefs.days,{...await options,...roleTime(prefs,monday)}):[];
     const i=roles.findIndex(d=>d.items.some(x=>x.sport===active.sport&&x.role==='quality'));
     const testDate=i>=0?shiftDate(monday,i):null,c=checks[active.sport];
     if(!testDate||testDate<=today||testDate>shiftDate(today,10))continue;
@@ -95,7 +97,8 @@ export async function thresholdCheckState(env,ctx,today){
     checks[active.sport]={sport:active.sport,status:'scheduled',testId,testDate,estimate:estimates[active.sport]};
   }
   const offers=[],scheduled=[],results=[],manual=[];
-  // Swimming: only the plan's CSS test, no estimate to offer one from.
+  // Swimming has no estimate from the data: a swimmer without a CSS gets the
+  // test offered, as a rider or runner without a threshold does (all sports equal).
   for(const sport of ['ride','run','swim']){
     const check=checks[sport];
     // A planned test that has passed: its result, or the athlete's values.
@@ -122,9 +125,8 @@ export async function thresholdCheckState(env,ctx,today){
     const c=checks[sport];
     if(c?.status==='scheduled'){const w=getTestWorkout(c.testId);scheduled.push({sport,testId:c.testId,testDate:c.testDate,name:w?.name||null,minutes:w?.duration_minutes||null});continue;}
     if(c?.status==='measured'){results.push({sport,testId:c.testId,testDate:c.testDate,result:c.result,current});continue;}
-    if(sport==='swim')continue;
-    const metric=sport==='run'?'runThresholdPace':current.ftp?'ftp':'lthr';
-    const offer=thresholdOffer({sport,sessions,current,estimate:estimates[sport],check:c,today,since:sinceOf(metric,c),back:returnAfterBreak(sessions.filter(x=>x.kind===sport).map(x=>x.date),today)});
+    const metric=sport==='run'?'runThresholdPace':sport==='swim'?'swimCss':current.ftp?'ftp':'lthr',dates=(sport==='swim'?swims:sessions).filter(x=>x.kind===sport).map(x=>x.date);
+    const offer=thresholdOffer({sport,sessions:sport==='swim'?swims:sessions,current,estimate:estimates[sport],check:c,today,since:sinceOf(metric,c),back:returnAfterBreak(dates,today)});
     if(!offer)continue;
     const w=getTestWorkout(offer.testId);
     const when=recommendTestDay({today,sport,minutes:w.duration_minutes,days:days.map(d=>({date:d.date,sports:d.sports,minutes:d.minutes,role:d.prefs?roleFor(d.prefs,d.date,sport,d.options)?.role||null:null}))});

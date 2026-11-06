@@ -22,6 +22,12 @@ export const KETO_CARBS = { min: 20, max: 50, default: 30 };
 const LOWER_CARB_CAP = 100, LOWER_CARB_TRAINING_PER_KG = 2.0;
 // Fat never below this (essential fatty acids, vitamins A, D, E, K).
 export const FAT_FLOOR_PER_KG = 0.5;
+// Balanced and high protein: fat at least 20 % of the energy (AND/DC/ACSM
+// 2016: 20–35 %) and carbs at most 12 g/kg, the top of the range for extreme
+// loads, so a 4 h ride day stays eatable; on a training day carbs at least
+// 3 g/kg (IOC REDs 2023: less adds to low energy availability), fat then
+// down to its floor if needed.
+export const FAT_ENERGY_SHARE = 0.2, CARBS_PER_KG = { min: 3, max: 12 };
 
 // The diet fields of the profile, cleaned (normalizeProfile spreads them in).
 export function normalizeDiet(p = {}) {
@@ -96,7 +102,7 @@ export function dayMacros(kg, kcal, context = {}, profile = {}) {
   if (d.proteinPerKg == null && d.dietStyle === "keto") perKg = Math.max(auto, 1.6);
   const protein = Math.round(kg * perKg), floor = Math.round(kg * FAT_FLOOR_PER_KG);
   const rest = kcal - protein * 4;
-  let carbs, fat, fill = "carbs", carbsMax = false, net = false;
+  let carbs, fat, fill = "carbs", carbsMax = false, net = false, limits = {};
   if (d.dietStyle === "keto" || d.dietStyle === "lower_carb" || (d.dietStyle === "custom" && d.customSet === "carbs")) {
     const wanted = d.dietStyle === "keto" ? d.netCarbLimit ?? KETO_CARBS.default
       : d.dietStyle === "lower_carb" ? (bigDay(context) ? Math.max(LOWER_CARB_CAP, Math.round(kg * LOWER_CARB_TRAINING_PER_KG)) : LOWER_CARB_CAP)
@@ -109,15 +115,27 @@ export function dayMacros(kg, kcal, context = {}, profile = {}) {
   } else {
     const fatPerKg = d.dietStyle === "custom" ? d.customFatPerKg ?? 0.9 : d.dietStyle === "high_protein" ? 0.7 : balancedFatPerKg(context);
     fat = Math.max(floor, Math.round(kg * fatPerKg));
+    // An own fat (Custom) stays as chosen.
+    if (d.dietStyle !== "custom") {
+      limits = { fat_base_g: fat, carbs_min_g: context.training ? Math.round(kg * CARBS_PER_KG.min) : 0, carbs_cap_g: Math.round(kg * CARBS_PER_KG.max) };
+      fat = splitFat({ protein_g: protein, fat_floor_g: floor, ...limits }, kcal);
+    }
     carbs = Math.max(0, Math.round((rest - fat * 9) / 4));
   }
   return {
     protein_g: protein, carbs_g: carbs, fat_g: fat,
-    fill, carbs_max: carbsMax, net_carbs: net, fat_floor_g: floor,
+    fill, carbs_max: carbsMax, net_carbs: net, fat_floor_g: floor, ...limits,
     protein_per_kg: Math.round(perKg * 10) / 10, protein_auto: d.proteinPerKg == null,
     // About 0.25 g/kg at a meal (ISSN), 20–40 g: what the next meal should bring.
     protein_per_meal_g: Math.max(20, Math.min(40, Math.round(kg * 0.25 / 5) * 5))
   };
+}
+
+// Fat for a target by the limits above (fat_base_g is the g/kg amount).
+function splitFat(m, kcal) {
+  const rest = kcal - Number(m.protein_g) * 4;
+  const fat = Math.max(m.fat_base_g, kcal * FAT_ENERGY_SHARE / 9, (rest - m.carbs_cap_g * 4) / 9);
+  return Math.max(m.fat_floor_g, Math.round(Math.min(fat, (rest - m.carbs_min_g * 4) / 9)));
 }
 
 // A new calorie target for macros already worked out: protein stays, the
@@ -133,7 +151,8 @@ export function refillMacros(macros, kcal) {
     // Too few calories for the carbs and the fat floor: the carbs give way.
     if (left < m.fat_g * 9) m.carbs_g = Math.max(0, Math.round((target - protein * 4 - m.fat_g * 9) / 4));
   } else {
-    m.carbs_g = Math.max(0, Math.round((target - protein * 4 - fat * 9) / 4));
+    if (m.fat_base_g != null) m.fat_g = splitFat({ ...m, protein_g: protein }, target);
+    m.carbs_g = Math.max(0, Math.round((target - protein * 4 - Number(m.fat_g ?? fat) * 9) / 4));
   }
   return m;
 }

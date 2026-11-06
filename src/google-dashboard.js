@@ -34,9 +34,9 @@ export function googleHealthSummary(rows,today,zoneRows=[]){
     if(row.data_type==='daily-wrist-temperature'){key='wristTemp';value=finite(row.value_numeric)??finite(obj.temperatureCelsius);}
     if(row.data_type==='steps'){key='steps';value=finite(row.value_numeric)??finite(obj.count);}
     if(row.data_type==='active-energy-burned'){key='activeCalories';value=finite(row.value_numeric)??finite(obj.kcal);}
-    // Every source's HRV and resting HR of the day: the days two sources share
-    // carry a new source's baseline over (recovery-model.js sourceBaseline).
-    if(['hrv','restingHR'].includes(key)&&value!=null&&row.source_family)(item[key+'BySource']||(item[key+'BySource']={}))[row.source_family+(key==='hrv'&&['rmssd','sdnn'].includes(obj.metric)?':'+obj.metric:'')]=value;
+    // Every source's HRV, resting HR and breathing of the day: the days two
+    // sources share carry a new source's baseline over (recovery-model.js sourceBaseline).
+    if(['hrv','restingHR','respiration'].includes(key)&&value!=null&&row.source_family)(item[key+'BySource']||(item[key+'BySource']={}))[row.source_family+(key==='hrv'&&['rmssd','sdnn'].includes(obj.metric)?':'+obj.metric:'')]=value;
     // A day's Apple Health HRV wins over a Google copy of it (Google Health on the
     // iPhone imports Apple Health), so the day keeps the baseline of its source.
     if(key==='hrv'&&String(item.hrvSource||'').startsWith('apple-health')&&row.source_family!=='apple-health')continue;
@@ -45,10 +45,11 @@ export function googleHealthSummary(rows,today,zoneRows=[]){
     // the iPhone app says which it sent (apple-health.js metric), so an Apple day
     // is "apple-health:sdnn" or "apple-health:rmssd": the recovery model compares
     // each day only with days of the same source and measure. Resting heart rate
-    // differs by source too (each watch's own night algorithm), so it is tagged
-    // the same way; Intervals.icu values get "intervals" in mergeWellnessRows.
+    // differs by source too (each watch's own night algorithm), and so does the
+    // breathing rate in sleep (two watches can sit 1 /min apart), so both are
+    // tagged the same way; Intervals.icu values get "intervals" in mergeWellnessRows.
     const metric=key==='hrv'&&['rmssd','sdnn'].includes(obj.metric)?':'+obj.metric:'';
-    if(['hrv','restingHR'].includes(key)&&value!=null&&row.source_family)item[key+'Source']=row.source_family+metric;
+    if(['hrv','restingHR','respiration'].includes(key)&&value!=null&&row.source_family)item[key+'Source']=row.source_family+metric;
     if(key==='steps'&&value!=null){const local=localDateTime(row.start_time||row.sample_time||obj.interval?.startTime||''),d=local.slice(0,10),h=Number(local.slice(11,13));
       if(local.length>=13&&d>=hourFrom&&d<=today&&h>=0&&h<24)(stepsByHour[d]||(stepsByHour[d]=Array(24).fill(0)))[h]+=value;}
     days.set(date,item);
@@ -63,7 +64,7 @@ export function googleHealthSummary(rows,today,zoneRows=[]){
     if(key==='light'&&z.source_family==='google-wearables')continue;
     const item=days.get(date)||{id:date,source:'google-health'},zones=item.hrZoneMinutes||(item.hrZoneMinutes={light:0,moderate:0,vigorous:0,peak:0});zones[key]=Math.round((zones[key]+minutes)*10)/10;days.set(date,item);coverage['time-in-heart-rate-zone']=[coverage['time-in-heart-rate-zone'],date].filter(Boolean).sort().at(-1);}
   // One source on a day has nothing to compare: only the days of two stay.
-  for(const item of days.values())for(const k of ['hrvBySource','restingHRBySource'])if(item[k]&&Object.keys(item[k]).length<2)delete item[k];
+  for(const item of days.values())for(const k of ['hrvBySource','restingHRBySource','respirationBySource'])if(item[k]&&Object.keys(item[k]).length<2)delete item[k];
   return{status:'ok',source:'google-health',coverage,stepsByHour,wellness:[...days.values()].sort((a,b)=>a.id.localeCompare(b.id)),today:days.get(today)||{id:today,source:'google-health'}};
 }
 export async function googleDashboard(db,today){

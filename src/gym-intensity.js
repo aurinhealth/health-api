@@ -41,7 +41,8 @@ export function assignIntensities(rows, { phaseRpe = null } = {}) {
     if (r[0] === 'WARMUP') letter = 'W';
     else if (r[0] === 'DROP') letter = 'D';
     else if (/^(true|1)$/i.test(String(r[11] ?? ''))) letter = 'F';
-    else if (/3–4 (?:opakování|reps)|rezervou 3–4|3 opakování v rezervě|3 reps in reserve/.test(note)) letter = 'E';
+    // "2–3 reps in reserve" ends in "3 reps in reserve": a 3 after "2–" is M.
+    else if (/3–4 (?:opakování|reps)|rezervou 3–4|(?<!2–)3 opakování v rezervě|(?<!2–)3 reps in reserve/.test(note)) letter = 'E';
     else if (/2–3 (?:opakování|reps)|rezervu 2–3/.test(note)) letter = 'M';
     else if (Number.isFinite(phase) && phase > 0) letter = phase < 7 ? 'E' : phase < 8.5 ? 'M' : 'H';
     else letter = lastWork.get(r[1]) === i ? 'H' : 'M';

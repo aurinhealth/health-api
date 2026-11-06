@@ -69,7 +69,7 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
   // "Use memory": off, the coach neither reads nor saves memories.
   if (typeof patch.memoryOff === 'boolean') state.memoryOff = patch.memoryOff;
   // "Still true": the coach asks again in two weeks.
-  if (patch.keep != null && state.memoryMeta[patch.keep]?.check) state.memoryMeta[patch.keep].check = shiftDate(date, CHECK_DAYS);
+  if (patch.keep != null && state.memoryMeta[patch.keep]?.check) Object.assign(state.memoryMeta[patch.keep], { check: shiftDate(date, CHECK_DAYS), keptAt: date });
   // Settings → Oznámení: the morning readiness, the coach's own messages, the
   // water push and hiding the values in them (push.js hidesValues), on until turned off.
   if (patch.notify && typeof patch.notify === 'object') {
@@ -129,6 +129,10 @@ export function memoryCheck(state, date = localToday()) {
   const due = memoryList(state).filter(m => m.check && m.check <= date).sort((a, b) => a.check.localeCompare(b.check))[0];
   return due ? { id: 'memory:' + due.check + ':' + due.text, kind: 'memory_check', memory: due.text, headline: L('Platí to pořád?', 'Is this still true?'), reasons: [due.text], message: null } : null;
 }
+// The day each Health memory was told or last confirmed with "Still true",
+// so the coach sees a knee pain from six weeks ago as old (audit 4.6).
+export const healthMemorySince = state => state?.memoryOff ? [] : memoryList(state).filter(m => m.group === 'health')
+  .map(m => ({ text: m.text, since: state.memoryMeta?.[m.text]?.keptAt || m.since })).filter(m => m.since);
 // What the coach's answer says to forget or rewrite, kept only when it names a
 // memory exactly as it is saved; a rewrite to the same text is no change.
 export function memoryChanges(proposed, memories = []) {
