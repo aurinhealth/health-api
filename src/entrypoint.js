@@ -1064,7 +1064,7 @@ async function computeWeekTargets(env,ctx,start,prefs,{original=false}={}){
   const plan=await planForWeek(env,ctx,start);
   const hrvDown=hrvWeekTrendDown(hrvSourceRows(wellness,(await googleHealthFor(env,ctx,today).catch(()=>({})))?.wellness,start),start),eventDate=plan.plan?null:athleteFocus(await dashboardProfile(env).catch(()=>null),today).event?.date||null;
   const build=p=>{
-    const roles=planWeekRoles(prefs.days,{...p.roles,...roleTime(prefs)});
+    const roles=planWeekRoles(prefs.days,{...p.roles,...roleTime(prefs,start)});
     let targets=weekTargets({roles,ctl,lastWeekLoad,weekLoads:weekLoadsBefore(wellness,start),hrvDown,rampRate:[...wellness].reverse().find(r=>Number.isFinite(Number(r.rampRate)))?.rampRate??null,days,today,weekStart:start,plan:p.load,eventDate});
     // A plan needs its sessions even before there is a fitness history.
     if(plan.plan&&targets.status!=='ok')targets=estimatedTargets(roles,start,today,days);
@@ -1850,7 +1850,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // The recovery model's readiness of the reviewed day, or today's for a day ahead (the inputs are already loaded and cached).
       const readinessDate=date<localToday()?date:localToday();
       const readiness=dayReadiness({date:readinessDate,fitness:inputs.fitness,health:inputs.health,profile:inputs.profile,checkin:readinessDate===date?inputs.checkin:await readinessCheckin(env.DB,readinessDate).catch(()=>null)});
-      const input=buildReviewInput({date,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,gymRows,roles:prefs?planWeekRoles(prefs.days,{...weekPlan.roles,...roleTime(prefs)}):[],feedback,coachNotes:notes.map(r=>({date:r.date,text:r.text})),readiness});
+      const input=buildReviewInput({date,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,gymRows,roles:prefs?planWeekRoles(prefs.days,{...weekPlan.roles,...roleTime(prefs,mondayOfDate(date))}):[],feedback,coachNotes:notes.map(r=>({date:r.date,text:r.text})),readiness});
       const state=await getAthleteState(env.DB);Object.assign(input,{athleteState:state.status,statusNote:state.note,preferenceMemory:usedMemories(state),availability:availabilityOn(prefs,date),...(inputs.cycle?{cycle:inputs.cycle}:{}),...(inputs.upcomingTest?{upcomingTest:inputs.upcomingTest}:{})});
       const reviews=[await reviewDay(env,input,null,inputs.focus).catch(error=>({model:lightModel(env),error:error.message}))];
       return Response.json({status:'ok',date,reviews},{headers:{'Cache-Control':'no-store'}});
@@ -1962,7 +1962,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const monday=start?mondayOfDate(start):mondayOfDate(localToday());
       const targets=await computeWeekTargets(env,ctx,monday,prefs).catch(error=>({status:'error',message:error.message,items:[]}));
       const historyEstimate=activityHistoryEstimate(await planningHistory(env,localToday(),21),localToday());
-      return Response.json({status:'ok',prefs,roles:planWeekRoles(prefs.days,{...(await planForWeek(env,ctx,monday)).roles,...roleTime(prefs)}),start:monday,targets,historyEstimate,sports:await suggestedSports(env.DB,env.USER_ID)},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',prefs,roles:planWeekRoles(prefs.days,{...(await planForWeek(env,ctx,monday)).roles,...roleTime(prefs,monday)}),start:monday,targets,historyEstimate,sports:await suggestedSports(env.DB,env.USER_ID)},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
   // Free time from the iPhone calendar (calendar-free.js): POST {days:[{date,minutes}]}

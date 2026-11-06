@@ -158,11 +158,19 @@ test("the plan's key days hold, and hard days in the calendar, deep fatigue and 
   assert.deepEqual([item.kind, item.focus, item.label], ["threshold", null, "Test FTP"]);
   // A hard ride already in the calendar on Tuesday keeps Wednesday easy.
   assert.equal(sanitizeWeekDays([{ date: "2026-10-14", sport: "ride", minutes: 60, kind: "threshold", reason: "" }], { start, today, prefs, fixedHard: ["2026-10-13"] })[0].kind, "endurance");
-  for (const opts of [{ tsb: -25 }, { recoveryWeek: true }]) {
+  for (const opts of [{ tsb: -35 }, { recoveryWeek: true }]) {
     const [d] = sanitizeWeekDays([{ date: "2026-10-17", sport: "ride", minutes: 60, kind: "threshold", reason: "Práh." }], { start, today, prefs, ...opts });
     assert.equal(d.kind, "endurance");
     assert.match(d.reason, opts.tsb ? /TSB/ : /odpočinkový/);
   }
+  // Form −20 to −30, the usual build: one hard day stays, a second one is eased.
+  const built = sanitizeWeekDays([{ date: "2026-10-14", sport: "ride", minutes: 60, kind: "threshold", reason: "" }, { date: "2026-10-17", sport: "run", minutes: 45, kind: "vo2max", reason: "" }], { start, today, prefs, tsb: -25 });
+  assert.deepEqual(built.map(d => d.kind), ["threshold", "endurance"]);
+  assert.match(built[1].reason, /jeden tvrdý den/);
+  // A hard day next to the long ride is eased.
+  const [hard] = sanitizeWeekDays([{ date: "2026-10-17", sport: "run", minutes: 45, kind: "threshold", reason: "" }, { date: "2026-10-18", sport: "ride", minutes: 150, kind: "long", reason: "" }], { start, today, prefs });
+  assert.equal(hard.kind, "endurance");
+  assert.match(hard.reason, /dlouhý trénink/);
 });
 
 test("Upravit s AI counts the day's other sessions against its free time", async () => {
