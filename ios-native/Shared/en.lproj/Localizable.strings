@@ -670,7 +670,7 @@
 "Smazat „%@“ z plánu?" = "Remove “%@” from the plan?";
 "Smazat „%@“?" = "Delete “%@”?";
 "Smazáním účtu v Nastavení → Účet, kde si předtím můžeš stáhnout všechna svoje data." = "Delete your account in Settings → Account, where you can first download all your data.";
-"Smaže účet i všechna data na serveru. Nejde vrátit. Data v Intervals.icu a Google zůstanou, kde jsou." = "Deletes your account and all data on the server. This can't be undone. Data in Intervals.icu and Google stays where it is.";
+"Smaže účet i všechna data na serveru. Nejde vrátit. Data v Apple Health, Intervals.icu, Google a Wahoo zůstanou, kde jsou." = "Deletes your account and all data on the server. This can't be undone. Data in Apple Health, Intervals.icu, Google and Wahoo stays where it is.";
 "Snídaně" = "Breakfast";
 "Snímek obrazovky" = "Screenshot";
 "Souhlas" = "Consent";
@@ -1227,7 +1227,7 @@
 "Předplatné" = "Subscription";
 "zdarma" = "free";
 "Předplatné je aktivní" = "Subscription active";
-"Tahle AI funkce je součástí AI předplatného." = "This AI feature is part of the AI subscription.";
+"Tahle AI funkce je součástí Aurin Pro." = "This AI feature is part of Aurin Pro.";
 "Nemoc" = "Sick";
 "Zranění" = "Injured";
 "Stav sportovce: %@, %@" = "Athlete status: %1$@, %2$@";
@@ -1472,7 +1472,6 @@
 "každou sobotu" = "every Saturday";
 "Podle plánu" = "On plan";
 "Odchylka od plánu" = "Different from plan";
-"Neodjeto" = "Missed";
 "Čeká" = "Upcoming";
 "Mimo plán" = "Outside the plan";
 "plán bez aktivity" = "a plan with no activity";
@@ -1556,6 +1555,8 @@
 "k ověření" = "to check";
 "%@ kcal, k ověření" = "%@ kcal, to check";
 "odhad %@" = "estimate %@";
+"odhad" = "estimate";
+"%@ dne" = "%@ days";
 "hodinky %@" = "watch %@";
 "Počítat %@" = "Count %@";
 "Nechat %@" = "Keep %@";
@@ -1753,7 +1754,7 @@
 "Chuť k jídlu" = "Appetite";
 "Cyklus" = "Cycle";
 "Délka cyklu" = "Cycle length";
-"Folikulární fáze" = "Follicular phase";
+"Folikulární fáze · odhad" = "Follicular phase · estimate";
 "Bolest hlavy" = "Headache";
 "Hormonální tělísko" = "Hormonal IUD";
 "Implantát" = "Implant";
@@ -1762,13 +1763,13 @@
 "Kroužek" = "Ring";
 "Krvácení" = "Bleeding";
 "Křeče" = "Cramps";
-"Luteální fáze" = "Luteal phase";
+"Luteální fáze · odhad" = "Luteal phase · estimate";
 "Menstruace" = "Period";
 "Měděné tělísko" = "Copper IUD";
 "Nadýmání" = "Bloating";
 "Nálada" = "Mood";
 "Náplast" = "Patch";
-"Ovulace" = "Ovulation";
+"Ovulace · odhad" = "Ovulation · estimate";
 "Pauza mezi baleními" = "Break between packs";
 "Pilulka" = "Pill";
 "Poslední krvácení" = "Last bleeding";
@@ -1782,6 +1783,17 @@
 "Slabé" = "Light";
 "Sledovat cyklus" = "Track cycle";
 "Upravit trénink podle cyklu" = "Adjust training to the cycle";
+"Na dny menstruace s křečemi nebo únavou zlehčí náročný trénink" = "Eases hard training on period days with cramps or fatigue";
+"Fáze a ovulace jsou odhad z kalendáře. Není to antikoncepce." = "Phases and ovulation are estimates from the calendar. This is not contraception.";
+"Aurin ukáže tvůj cyklus, porovná připravenost s tvým normálem v každé fázi a na dny s křečemi nebo únavou zlehčí náročný trénink." = "Aurin shows your cycle, compares your readiness with your own normal in each phase and eases hard training on days with cramps or fatigue.";
+"Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich zpracováním v Aurinu. Kdykoli sledování vypneš a Aurin cyklus přestane číst i používat. Uložené záznamy zůstanou, dokud nesmažeš účet." = "This is health data (GDPR Art. 9). By turning this on you explicitly consent to Aurin processing it. Turn tracking off any time and Aurin stops reading and using your cycle. Saved entries stay until you delete your account.";
+"Co Aurin uloží" = "What Aurin keeps";
+"Menstruace, potíže, antikoncepci a prášky, které zapíšeš" = "The periods, symptoms, contraception and pills you log";
+"Z Apple Health menstruaci, ovulační testy a příznaky, když je povolíš" = "Periods, ovulation tests and symptoms from Apple Health, if you allow them";
+"Co to není" = "What it is not";
+"Antikoncepce: fáze a ovulace jsou jen odhad z kalendáře" = "Contraception: phases and ovulation are only estimates from the calendar";
+"Co uvidí AI kouč" = "What the AI coach sees";
+"Nic, dokud nezapneš „Kouč ví o cyklu“" = "Nothing until you turn on “Coach knows my cycle”";
 "Vzato" = "Taken";
 "Vzato %@" = "Taken %@";
 "Za 30 minut" = "In 30 minutes";
@@ -1818,7 +1830,7 @@
 "nastavit" = "set";
 "Kouč ví o cyklu" = "Coach knows my cycle";
 "Co to znamená" = "What this means";
-"Kouč pak plánuje a vysvětluje trénink i podle toho, kde v cyklu jsi." = "The coach then plans and explains your training with your cycle in mind.";
+"Kouč pak vysvětluje trénink s ohledem na cyklus a na dny s potížemi plánuje lehčeji." = "The coach then explains your training with your cycle in mind and plans easier days when you have symptoms.";
 "Co tím získáš" = "What you get";
 "Trénink, který sedí na to, jak se zrovna cítíš" = "Training that fits how you feel right now";
 "Srozumitelnější vysvětlení, proč ti kouč co radí" = "Clearer reasons behind the coach's advice";
@@ -3360,6 +3372,15 @@
 "Zeptej se kouče" = "Ask the coach something";
 "Zná tvůj spánek, trénink i jídlo." = "It knows your sleep, training and food.";
 "S historií z hodinek budou čísla hotová zítra. Bez ní potřebuje připravenost asi 14 nocí, než se ustálí." = "With your watch’s history the numbers are ready tomorrow. Without it, readiness needs about 14 nights to settle.";
+/* An iPhone without a watch or ring (audit 14.2–14.6). */
+"Bez hodinek nebo prstenu" = "No watch or ring";
+"Připravenost počítají hodinky nebo prsten z HRV, klidového tepu a spánku. Bez nich ti radím podle tréninku a zátěže. Připojíš je v Nastavení → Zdroje dat." = "A watch or ring works out readiness from HRV, resting heart rate and sleep. Without one, I base my advice on your training and load. Connect one in Settings → Data sources.";
+"měří hodinky" = "needs a watch";
+"Připravenost počítají hodinky nebo prsten. Bez nich ti radím podle tréninku a zátěže." = "Readiness comes from a watch or ring. Without one, I base my advice on your training and load.";
+"Bez hodinek nebo prstenu spánek neměřím." = "Without a watch or ring, I can’t measure your sleep.";
+"HRV, tep a spánek měří hodinky nebo prsten. Bez nich uvidíš kroky, trénink a jídlo." = "A watch or ring measures HRV, heart rate and sleep. Without one, you’ll see steps, training and food.";
+"Kouč, když je potřeba změnit plán, a kdy jít spát." = "The coach when your plan needs to change, and when to go to bed.";
+"Včera byl těžký trénink. Dnešní intervaly jsem posunul na čtvrtek." = "Yesterday was a hard session. I moved today’s intervals to Thursday.";
 "od %@ do %@ %@" = "from %@ to %@ %@";
 "naposledy %@ %@" = "latest %@ %@";
 "Začít %@ %@" = "Start %@ %@";
@@ -3642,11 +3663,12 @@
 "Žádná data za 7 dní" = "No data in 7 days";
 "Základ" = "Base";
 "Naplánováno" = "Planned";
-"Cílový příjem" = "Target";
 "Klidový výdej" = "Resting burn";
 "Běžný pohyb" = "Everyday movement";
 "Cíl hmotnosti" = "Weight goal";
-"Bezpečné minimum" = "Safe minimum";
+"Dorovnání na klidový metabolismus" = "Up to resting metabolism";
+"Odhad cíle" = "Estimated target";
+"Upravuje se podle trendu tvé váhy." = "Adjusts to your weight trend.";
 "Aktivnější den" = "More active than usual";
 "Odcvičený trénink" = "Workout";
 "Plánovaný trénink" = "Planned workout";
@@ -4009,3 +4031,6 @@
 "Nelíbí" = "Dislike";
 "Nahradit" = "Replace";
 "V dalších plánech už nebude. Vrátit to jde v Nastavení → Posilovna → Cviky." = "Won't be in your next plans. Undo in Settings → Gym → Exercises.";
+"Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit. Předplatné Aurin Pro se tím nezruší, zrušíš ho v App Store." = "Everything Aurin keeps for you goes and can't be restored. This doesn't cancel Aurin Pro; cancel it in the App Store.";
+"Pak začne Aurin Pro za %@ měsíčně po 12 měsíců. Zrušit ho můžeš v Nastavení → Aurin Pro." = "Then Aurin Pro starts at %@ a month for 12 months. You can cancel it in Settings → Aurin Pro.";
+"Načítám ceny z App Store…" = "Loading prices from the App Store…";

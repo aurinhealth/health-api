@@ -70,6 +70,17 @@ export function sleepSessionFromRow(row) {
   };
 }
 
+// A nap: flagged by the device, or a sleep under 3 h begun between 09:00 and
+// 20:00 in the user's zone (as journal-store.js counts naps). A short night
+// (asleep at 1:00, up at 3:30) stays a night: it adds to the sleep debt and
+// does not lower the next night's need as a nap would.
+export function isNap(s) {
+  if (!s) return false;
+  if (s.nap === true) return true;
+  const minutes = Number(s.durationMin), hour = s.startTime ? localDateTime(s.startTime).slice(11, 13) : "";
+  return minutes > 0 && minutes < 180 && hour >= "09" && hour < "20";
+}
+
 // Up in the morning for a while and asleep again: Google and Apple keep the
 // second sleep as its own session (Google flags it a nap), so the night ended
 // at the first wake-up and the rest of it lowered the next night's need as a

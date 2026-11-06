@@ -74,5 +74,5 @@ export async function assertAIAccess(env){
   const status=await subscriptionStatus(env);
   if(status.aiAccess)return;
   if(!status.aiConsent){const error=new Error(L('AI funkce potřebují tvůj souhlas. Zapneš je v Nastavení → Soukromí a data.', 'AI features need your consent. Turn them on in Settings → Privacy & data.'));error.status=403;error.ai=true;error.consent=true;throw error;}
-  const error=new Error(L('Tato AI funkce vyžaduje AI předplatné. Přehled najdeš v Nastavení → Předplatné.', 'This AI feature needs an AI subscription. See Settings → Subscription.'));error.status=402;error.ai=true;error.limit=true;throw error;
+  const error=new Error(L('Tato AI funkce je součástí Aurin Pro. Najdeš ho v Nastavení → Aurin Pro.', 'This AI feature is part of Aurin Pro. See Settings → Aurin Pro.'));error.status=402;error.ai=true;error.limit=true;throw error;
 }

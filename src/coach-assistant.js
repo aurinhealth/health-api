@@ -99,7 +99,7 @@ export function nutritionContext(n,{daily=null,week=null,fluids=null,date=null}=
   return compactObject({calorieTarget:target,macros,diet:n.diet||null,eaten,
     remaining:target==null&&!macros?null:compactObject({kcal:left(target,eaten?.kcal),protein_g:left(macros?.protein_g,eaten?.protein_g),carbs_g:left(macros?.carbs_g,eaten?.carbs_g),fat_g:left(macros?.fat_g,eaten?.fat_g)}),
     targetReason:typeof n.reason==='string'?n.reason.slice(0,400):null,
-    minimumKcal:num(b.minTarget),deficitKcal:num(b.weightLossDeficit),
+    minimumKcal:num(b.floorTarget??b.minTarget),deficitKcal:num(b.weightLossDeficit),
     weight:filled({currentKg:avg(w.current??n.currentWeight),average7dKg:avg(w.average7d),average30dKg:avg(w.average30d),goalKg:avg(n.targetWeightKg)}),
     burned:filled({dayKcal:round(num(daily?.burned?.total)),activityKcal:round(num(daily?.burned?.activity)),activeSoFarKcal:round(num(n.energyBudget?.active))}),
     drinks:fluids&&num(fluids.target?.ml)!=null?{drunkMl:round(num(fluids.hydrationMl??fluids.totalMl)||0),targetMl:num(fluids.target.ml)}:null,
@@ -198,8 +198,8 @@ function legsTired(engine,week,date){
   });
 }
 // The engine's day turned into a gym day by readiness: red is mobility and
-// light strength, yellow a lighter session without sets to failure, green a
-// full one. Tired legs leave an upper-body day. The time is the athlete's
+// light strength, yellow (or a morning before last night syncs) a lighter
+// session without sets to failure, green a full one. Tired legs leave an upper-body day. The time is the athlete's
 // (asked, planned or the week plan's for the day); 0 is no training today.
 // The endurance session stays an alternative for when the athlete asks.
 export function strengthDay(engine,{availabilityMinutes=null,dayMinutes=null,week=null,date=null}={}){
@@ -211,7 +211,7 @@ export function strengthDay(engine,{availabilityMinutes=null,dayMinutes=null,wee
   const fit=(usual,max)=>Math.min(time??usual,max);
   const session=time===0?{kind:'rest',name:L('Dnes bez tréninku','No training today'),durationMinutes:0,focus:null,intensity:null}
     :status==='red'?{kind:'gym_recovery',name:L('Mobilita a lehká síla','Mobility and light strength'),durationMinutes:fit(30,30),focus,intensity:'RPE <= 5'}
-    :status==='yellow'?{kind:'gym',name:L('Silový trénink, lehčí','Strength training, lighter'),durationMinutes:fit(45,60),focus,intensity:'RPE <= 7, no sets to failure'}
+    :status==='yellow'||engine.readiness?.awaitingNight?{kind:'gym',name:L('Silový trénink, lehčí','Strength training, lighter'),durationMinutes:fit(45,60),focus,intensity:'RPE <= 7, no sets to failure'}
     :{kind:'gym',name:L('Silový trénink','Strength training'),durationMinutes:fit(60,90),focus,intensity:'RPE 7-9'};
   const endurance=engine.recommendation?.session;
   return {...engine,sport:'gym',recommendation:{session,adaptations:[legs&&time!==0&&status!=='red'?L('Nohy pracovaly v posledních 48 h: dnes horní polovina těla.','Legs worked in the last 48 h: upper body today.'):null].filter(Boolean),decisionRule:'strength_main_sport',progression:null},

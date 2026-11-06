@@ -57,9 +57,14 @@ struct TrainingCalendarCard: View {
                 strip
             }
             handle
-            // An empty day shows no row at all, only the strip.
+            // An empty day shows no row at all, only the strip, unless the week
+            // ahead has nothing planned: then the way to plan it (audit 11.3).
             if model.calendar[day].map({ !CalendarDayList.shown($0.activities, hidePlanned: hidePlanned).isEmpty }) ?? true {
                 CalendarDayList(date: day, today: today, day: model.calendar[day], hidePlanned: hidePlanned)
+                    .daySlide(date: day)
+                    .padding(.top, 6)
+            } else if day >= today && weekAheadEmpty {
+                planWeek
                     .daySlide(date: day)
                     .padding(.top, 6)
             }
@@ -85,6 +90,27 @@ struct TrainingCalendarCard: View {
             }
         }
         .task { await model.loadCalendar(from: stripDays.first ?? today, to: stripDays.last ?? today) }
+    }
+
+    /// Today and the six days after it are loaded and none has a workout planned.
+    private var weekAheadEmpty: Bool {
+        ISODay.range(today, ISODay.shift(today, 6)).allSatisfy { model.calendar[$0].map { $0.planned == 0 } ?? false }
+    }
+
+    /// "Nic v plánu." with Naplánovat týden (the Plán týdne tile at the bottom of Trénink).
+    private var planWeek: some View {
+        NavigationLink(value: AppRoute.weekPlan) {
+            HStack(spacing: 8) {
+                Text("Nic v plánu.").font(Typo.small).foregroundStyle(Palette.muted)
+                Spacer()
+                Text("Naplánovat týden").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                Image(systemName: "chevron.right").scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+            }
+            .padding(.horizontal, 16)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Strip
@@ -514,7 +540,7 @@ struct CalendarActivityRow: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// "Kolo · 1 h 30 min · 42,3 km", "V plánu · 45 min" or "Neodjeto · 1 h".
+    /// "Kolo · 1 h 30 min · 42,3 km", "V plánu · 45 min" or "Nesplněno · 1 h".
     static func detail(_ a: CalendarActivity) -> String {
         let head: String
         switch a.status {

@@ -370,7 +370,7 @@ const foodOne = `<div class="dm pad one">
 // athlete's own luteal rise. The sample day is day 21, so its "your normal 50–54 bpm" above is already this phase's
 // normal; on other days it is 48–52.
 const cycleOne = `<div class="dm pad one">
-<span class="pill pnk">Day 21 · Luteal</span>
+<span class="pill pnk">Day 21 · Luteal · estimate</span>
 <b class="cy-k">Resting heart rate normal</b>
 <div class="row base one-v"><span class="num big" data-tx="0|48–52;1300|50–54">50–54</span><span class="mut">bpm</span></div>
 <div class="mut">48–52 bpm on other days</div>
@@ -541,13 +541,15 @@ const coachWeek = `<div class="dm pad wk"${at('6900')}>
 
 // The cycle calendar (CycleViews.swift CycleCalendarView) in October of the sample day: the period began on 18 September,
 // so Thursday 8 October is day 21 of a 28-day cycle. Ovulation on 1 October in amber, the next period forecast for
-// 15–17 October dashed in pink, today ringed. October 2026 starts on a Thursday: three empty cells.
+// 15–17 October dashed in pink, today ringed, and the app's line that both are estimates. October 2026 starts on a
+// Thursday: three empty cells.
 const CYCLE_DAY = d => d === 1 ? 'ov' : d >= 15 && d <= 17 ? 'cast' : '';
 const cycleScreen = `<div class="app glow-today cyc">${STATUS}
 <div class="nav"><span class="cb">${ic('chev', 'flip')}</span></div>
 <div class="mut s cy-l">Cycle</div>
 <div class="row sp cy-m"><span>${ic('chev', 'flip')}</span><span class="sent">October</span><span class="faint">${ic('chev')}</span></div>
 <div class="card cy-g">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d => `<span class="cy-w">${d}</span>`).join('')}${'<span></span>'.repeat(3)}${Array.from({length: 31}, (_, i) => i + 1).map(d => `<span class="cy-d ${CYCLE_DAY(d)}${d === 8 ? ' today' : ''}"><i>${d}</i></span>`).join('')}</div>
+<div class="mut s cy-n">Phases and ovulation are estimates from the calendar. This is not contraception.</div>
 <div class="cy-b">${ic('plus')}Log period</div>
 </div>`;
 
@@ -1103,7 +1105,7 @@ html:not(.js) .stage1{display:none}
 .app .cy-g{display:grid;grid-template-columns:repeat(7,1fr);gap:8px 4px;margin-top:14px}.cy-w{font-size:12px;color:var(--muted);text-align:center}
 .cy-d{display:flex;justify-content:center;height:42px}.cy-d i{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;font:normal 500 13px/1 -apple-system,system-ui,sans-serif;color:var(--sec)}
 .cy-d.ov i{background:var(--amber-soft);color:var(--amber)}.cy-d.cast i{border:1.5px dashed var(--pink);color:var(--pink)}.cy-d.today i{box-shadow:inset 0 0 0 2px var(--text)}
-.cy-b{display:flex;align-items:center;justify-content:center;gap:6px;height:46px;margin-top:12px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--line);font-weight:600}
+.cy-n{margin-top:8px}.cy-b{display:flex;align-items:center;justify-content:center;gap:6px;height:46px;margin-top:12px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--line);font-weight:600}
 /* The coach's memory: the green line under an answer and the list it keeps. */
 .afoot{align-self:stretch;display:flex;align-items:center;gap:18px;padding:0 4px;color:var(--muted)}.afoot .di{width:16px;height:16px;stroke-width:1.6}.afoot span{margin-left:auto;font-size:12px}
 .mchip{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:var(--green-soft);color:var(--green);font-size:13px;font-weight:500;transition:opacity .3s,transform .3s!important}

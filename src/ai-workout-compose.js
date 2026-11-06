@@ -194,8 +194,9 @@ export async function libraryFallback(env, { sport = "ride", type, length, cap, 
     let structure = [];
     try { structure = JSON.parse(resized.structure_json || "[]"); } catch { return null; }
     const d = Number(resized.difficulty);
-    // A curated workout may run a surge straight after a tempo step; the other checks hold.
-    if (composeFaults({ structure, sport, type, length, cap, band }).some(f => !f.startsWith("efforts")) || (band && (d < band[0] || d > band[1]))) return null;
+    // A curated workout may run a surge straight after a tempo step, and a
+    // shortened run keeps 8 min of warm-up; the other checks hold.
+    if (composeFaults({ structure, sport, type, length, cap, band }).some(f => !f.startsWith("efforts") && !f.startsWith("warm-up")) || (band && (d < band[0] || d > band[1]))) return null;
     return { resized, score: Math.abs(Number(resized.duration_minutes) - length) + (aim == null ? 0 : Math.abs(d - aim)) };
   }).filter(Boolean).sort((a, b) => a.score - b.score);
   if (!fits.length) return null;
@@ -215,7 +216,26 @@ export function composeFaults({ structure, sport = "ride", type, length, cap, ba
     if (!(d >= band[0] - 1 && d <= band[1] + 1)) faults.push(`difficulty ${d}`);
   }
   if (effortsBackToBack(structure, sport)) faults.push("efforts back to back");
+  const warm = HARD_TYPES.includes(type) ? warmupMinutes(structure, sport) : null;
+  if (warm != null && warm < MIN_WARMUP) faults.push(`warm-up ${Math.round(warm)} min`);
   return faults;
+}
+
+// A hard session starts after at least 10 easy minutes (the library's own
+// VO2max rides have 15–18 with openers); Coach evaluation runs 35, 38 and 41
+// let 7 min through, which only the prompt asked about.
+export const MIN_WARMUP = 10;
+const HARD_TYPES = ["threshold", "vo2max", "anaerobic", "sprint"];
+// Minutes before the first effort (an "interval" step).
+export function warmupMinutes(structure = [], sport = "ride") {
+  const kinds = stepIntensities(structure, sport);
+  let minutes = 0;
+  for (const [i, block] of structure.entries()) {
+    const steps = Array.isArray(block.steps) ? block.steps : [block], list = Array.isArray(kinds[i]) ? kinds[i] : [kinds[i]];
+    for (let k = 0; k < (Array.isArray(block.steps) ? Math.max(1, Number(block.repeats) || 1) : 1); k++)
+      for (const [j, st] of steps.entries()) { if (list[j] === "interval") return minutes; minutes += Number(st.durationMinutes) || 0; }
+  }
+  return minutes;
 }
 
 // Two efforts with no recovery between them: an effort as its own section

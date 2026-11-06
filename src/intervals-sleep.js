@@ -7,9 +7,11 @@
 // sleepScore (readiness.js sleepIndexFor).
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { intervalsReads } from "./intervals-reads.js";
+import { isNap } from "./sleep-sessions.js";
 
 export function mergeIntervalsSleep(sessions = [], wellness = [], { start = "", end = "9999-12-31" } = {}) {
-  const known = new Set(sessions.map(s => s.date || String(s.endTime || "").slice(0, 10)));
+  // A nap on a day does not mean its night is there (sleep-sessions.js isNap).
+  const known = new Set(sessions.filter(s => !isNap(s)).map(s => s.date || String(s.endTime || "").slice(0, 10)));
   const extra = (Array.isArray(wellness) ? wellness : [])
     .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(String(w?.id)) && Number(w.sleepSecs) > 0 && w.id >= start && w.id < end && !known.has(w.id))
     .map(w => ({
