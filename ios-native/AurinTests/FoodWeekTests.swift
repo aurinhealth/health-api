@@ -17,11 +17,11 @@ final class FoodWeekTests: XCTestCase {
 
     /// A vitamin no meal has a value for shows "–", not 0, and is never "low" (audit 13.2).
     func testUnknownNutrientShowsADash() throws {
-        let json = #"{"key":"vitd","name":"Vitamín D","unit":"µg","group":"vit","eaten":0,"target":15,"percent":0,"known":false,"count":0}"#
+        let json = #"{"key":"vitd","name":"Vitamín D","unit":"µg","group":"vit","eaten":0,"target":15,"limit":false,"locked":false,"percent":0,"known":false,"count":0}"#
         let item = try JSONDecoder().decode(NutrientItem.self, from: Data(json.utf8))
         XCTAssertEqual(item.text, "– / 15 µg")
         XCTAssertFalse(item.low)
-        let page = try JSONDecoder().decode(NutrientsPage.self, from: Data(#"{"days":7,"loggedDays":2,"pro":true,"meals":2,"withMicros":2,"items":[]}"#.utf8))
+        let page = try JSONDecoder().decode(NutrientsPage.self, from: Data(#"{"days":7,"loggedDays":2,"pro":true,"meals":2,"withMicros":2,"items":[],"favorites":[]}"#.utf8))
         XCTAssertEqual(page.loggedDays, 2)
     }
 
