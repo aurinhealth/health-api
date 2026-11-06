@@ -38,6 +38,10 @@ struct FormDetailContent: View {
                     Text(Fmt.signed(form.form)).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                     Pill(text: form.label, foreground: zoneColor(form.zone), background: form.zone == "risk" ? Palette.rust.opacity(0.14) : form.zone == "optimal" || form.zone == "fresh" ? Palette.greenSoft : Palette.amberSoft)
                 }
+                // What the zone means (the server's text, audit 16.4).
+                Text(verbatim: form.text).font(Typo.small).foregroundStyle(Palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 10)
                 Card {
                     HStack(spacing: 18) {
                         legend("Kondice", form.fitness, Palette.green)
@@ -72,6 +76,7 @@ struct FormDetailContent: View {
                     }
                 }
                 .padding(.top, 10)
+                Text(verbatim: vo2.caption).font(Typo.small).foregroundStyle(Palette.muted)
             }
 
             if let intensity = training.load.intensity {

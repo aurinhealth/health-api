@@ -180,7 +180,12 @@ struct HealthSnapshot: Decodable, Equatable {
     struct RestingHR: Decodable, Equatable {
         let value: Double?
         let baseline: Double?
+        /// The usual range readiness weighs it against; nil from an older server.
+        var low: Double? = nil
+        var high: Double? = nil
         let series: [Point]
+
+        var usual: ClosedRange<Double>? { TodaySnapshot.RestingHR.usual(low: low, high: high, baseline: baseline) }
     }
 
     struct Respiration: Decodable, Equatable {

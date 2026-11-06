@@ -160,8 +160,8 @@ struct RestingHRWidget: View {
 
     private var values: [Double] { restingHR.series.map(\.value) }
 
-    /// The usual resting heart rate, ±2 beats around the baseline.
-    private var range: ClosedRange<Double>? { restingHR.baseline.map { ($0 - 2)...($0 + 2) } }
+    /// The usual resting heart rate, the same range readiness uses.
+    private var range: ClosedRange<Double>? { restingHR.usual }
 }
 
 struct HRVWidget: View {
@@ -194,7 +194,7 @@ struct HRVWidget: View {
 
     /// "30 dní" without a usual range, with the resting heart rate on the wider sizes.
     private var note: String {
-        var text = L10n.tr(status)
+        var text = status
         if size != .small, let rhr = restingHR { text += " · " + L10n.f("tep %@", Fmt.int(rhr)) }
         return text
     }
@@ -205,8 +205,8 @@ struct HRVWidget: View {
     }
 
     private var status: String {
-        guard let v = hrv.value, let low = hrv.low, let high = hrv.high else { return "30 dní" }
-        return v > high ? "nad normou" : v < low ? "pod normou" : "v normě"
+        guard let v = hrv.value, let low = hrv.low, let high = hrv.high else { return L10n.tr("30 dní") }
+        return RangeBar.usualWord(v, low, high)
     }
 }
 

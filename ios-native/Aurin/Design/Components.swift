@@ -168,16 +168,8 @@ struct RangeBar: View {
         value > high ? 1 : value < low ? -1 : 0
     }
 
-    /// "v normálu", "nad normálem", "pod normálem" under a tile's bar.
-    static func word(_ value: Double, _ low: Double, _ high: Double) -> String {
-        switch side(value, low, high) {
-        case 1: return L10n.tr("nad normálem")
-        case -1: return L10n.tr("pod normálem")
-        default: return L10n.tr("v normálu")
-        }
-    }
-
-    /// "↑ nad obvyklým", "↓ pod obvyklým", "obvyklé": where the value is, no judgement.
+    /// "↑ nad obvyklým", "↓ pod obvyklým", "obvyklé" under a tile's bar (never
+    /// "normal": audit 16.1); the bar's colour says better or worse where it may.
     static func usualWord(_ value: Double, _ low: Double, _ high: Double) -> String {
         switch side(value, low, high) {
         case 1: return "↑ " + L10n.tr("nad obvyklým")
@@ -199,7 +191,7 @@ struct TileRange: View {
     let low: Double
     let high: Double
     var worseAbove = false
-    /// Replaces "v normálu" (Váha: "cíl 76 kg").
+    /// Replaces "obvyklé" (Váha: "cíl 76 kg").
     var text: String? = nil
     /// The band's values under its ends.
     var edges: (low: String, high: String)? = nil
@@ -216,7 +208,7 @@ struct TileRange: View {
         let color = tint ?? (text == nil ? RangeBar.color(value, low, high, worseAbove: worseAbove) : Palette.blue)
         VStack(alignment: .leading, spacing: 8) {
             RangeBar(value: value, low: low, high: high, color: color, edges: edges)
-            Text(verbatim: text ?? (tint != nil ? RangeBar.usualWord(value, low, high) : RangeBar.word(value, low, high)))
+            Text(verbatim: text ?? RangeBar.usualWord(value, low, high))
                 .font(Typo.caption.weight(.medium)).foregroundStyle(color)
                 .lineLimit(1).minimumScaleFactor(0.8)
         }
@@ -224,7 +216,7 @@ struct TileRange: View {
     }
 }
 
-/// A detail's range bar under its big number: "níž · tvůj normál 52–68 ms · výš".
+/// A detail's range bar under its big number: "níž · obvyklé rozmezí 52–68 ms · výš".
 struct DetailRange: View {
     let value: Double
     let low: Double

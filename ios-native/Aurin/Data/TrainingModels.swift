@@ -193,8 +193,13 @@ struct TrainingSnapshot: Decodable, Equatable {
 
     struct VO2max: Decodable, Equatable {
         let value: Double
+        /// "watch" or "intervals"; nil from an older server.
+        var source: String? = nil
         let change: Double?
         let series: [TodaySnapshot.Point]
+
+        /// The value is an estimate and says whose (MDR, audit 16.5).
+        var caption: String { L10n.tr(source == "intervals" ? "odhad z Intervals.icu" : "odhad zařízení") }
     }
 
     struct ActiveCalories: Decodable, Equatable {

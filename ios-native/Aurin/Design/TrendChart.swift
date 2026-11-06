@@ -2,7 +2,7 @@ import Charts
 import SwiftUI
 
 /// A value over days: each day a faint dot, the 7-day average as a line, the
-/// personal normal as a band, a finger to read any day ("8. října · 64 ms")
+/// usual range as a band, a finger to read any day ("8. října · 64 ms")
 /// and 7 / 30 / 90 days to pick above it.
 struct TrendChart: View {
     /// Which side of the band is the bad one: its days get an amber dot.
@@ -140,7 +140,7 @@ struct TrendChart: View {
             .chartXSelection(value: $picked)
             .frame(height: height)
             HStack(spacing: 14) {
-                if band != nil { legend(color.opacity(0.25), bandLabel ?? "tvoje norma") }
+                if band != nil { legend(color.opacity(0.25), bandLabel ?? "obvyklé rozmezí") }
                 Spacer()
             }
         }

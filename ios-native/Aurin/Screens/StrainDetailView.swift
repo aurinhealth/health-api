@@ -431,27 +431,41 @@ struct FitnessChart: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Forma dnes").font(Typo.caption).foregroundStyle(Palette.muted)
                         Text(verbatim: signed(form.form)).font(Typo.number(30)).foregroundStyle(Palette.ink)
-                        Text(verbatim: form.label).font(Typo.caption).foregroundStyle(Palette.green)
+                        Text(verbatim: form.label).font(Typo.caption).foregroundStyle(zoneColor(form.zone))
                     }
                     Spacer()
                     if let endForm, let end = upcoming.last?.date {
                         VStack(alignment: .trailing, spacing: 2) {
                             Text(verbatim: L10n.f("Forma %@ %@", Fmt.weekdayShort(end), Fmt.dayMonth(end))).font(Typo.caption).foregroundStyle(Palette.muted)
                             Text(verbatim: signed(endForm)).font(Typo.number(30)).foregroundStyle(Palette.ink)
-                            Text(verbatim: L10n.tr(Self.formWord(endForm))).font(Typo.caption).foregroundStyle(endForm < -30 ? Palette.rust : Palette.green)
+                            let zone = Self.formZone(endForm)
+                            Text(verbatim: zone == form.zone ? form.label : L10n.tr(Self.formWord(zone))).font(Typo.caption).foregroundStyle(zoneColor(zone))
                         }
                     }
                 }
+                Text(verbatim: form.text).font(Typo.small).foregroundStyle(Palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
-    static func formWord(_ tsb: Double) -> String {
-        switch tsb {
-        case ..<(-30): return "riziko přetížení"
-        case ..<(-10): return "optimální trénink"
-        case ..<5: return "neutrální"
-        default: return "čerstvý"
+    /// The server's form zones (app-training.js formZone), so the forecast
+    /// uses the same words and limits as today's form (audit 16.4).
+    static func formZone(_ tsb: Double) -> String {
+        if tsb > 25 { return "transition" }
+        if tsb > 5 { return "fresh" }
+        if tsb >= -10 { return "grey" }
+        if tsb >= -30 { return "optimal" }
+        return "risk"
+    }
+
+    static func formWord(_ zone: String) -> String {
+        switch zone {
+        case "transition": return "odpočatý"
+        case "fresh": return "čerstvý"
+        case "grey": return "udržování"
+        case "optimal": return "budování"
+        default: return "hluboká únava"
         }
     }
 

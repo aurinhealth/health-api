@@ -20,6 +20,8 @@ const clock = minutes => {
   return String(Math.floor(m / 60) % 24).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
 };
 const mean = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+// The lowest and highest of earlier values, or the value itself both ways under 7 of them.
+const usualRange = (before, value) => (before.length >= 7 ? { low: Math.min(...before), high: Math.max(...before) } : { low: value, high: value });
 
 // Readiness = 70 (the personal normal) + each signal's weighted distance from
 // its normal; a raised breathing rate or skin temperature costs 10 each, a
@@ -229,10 +231,13 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
     },
     // metric: "rmssd" or "sdnn" when the source said how it measures (Apple Health), else null.
     hrv: c.hrv ? { value: round(c.hrv.value), baseline: round(c.hrv.baseline), low: round(c.hrv.low), high: round(c.hrv.high), trend: c.hrv.trend, week: round(mean(lastWeek)), metric: hrvMetric(today), series: hrvSeries } : hrvSeries.length ? { value: null, baseline: null, low: null, high: null, trend: null, week: round(mean(lastWeek)), metric: hrvMetric(today), series: hrvSeries } : null,
-    restingHR: rhrSeries.length ? { value: c.restingHR ? round(c.restingHR.value) : round(num(today.restingHR)), baseline: c.restingHR ? round(c.restingHR.baseline, 1) : null, series: rhrSeries } : null,
+    // low and high: the usual range readiness weighs it against (recovery-model.js), the same on Today and the detail.
+    restingHR: rhrSeries.length ? { value: c.restingHR ? round(c.restingHR.value) : round(num(today.restingHR)), baseline: c.restingHR ? round(c.restingHR.baseline, 1) : null, low: c.restingHR ? round(c.restingHR.low, 1) : null, high: c.restingHR ? round(c.restingHR.high, 1) : null, series: rhrSeries } : null,
     respiration: respiration.length ? { value: c.respiration ? round(c.respiration.value, 1) : respiration.at(-1).value, baseline: c.respiration ? round(c.respiration.baseline, 1) : null, elevated: !!c.respiration?.elevated, series: respiration } : null,
     skinTemp: skin.length ? { deviation: c.skinTemp ? round(c.skinTemp.deviation, 2) : skin.at(-1).value, elevated: !!c.skinTemp?.elevated, series: skin } : null,
-    oxygen: spo2.length ? { value: spo2.at(-1).value, low: Math.min(...spo2.map(p => p.value)), high: Math.max(...spo2.map(p => p.value)), series: spo2 } : null,
+    // The usual range from the nights before the shown one (at least 7), so a low night can fall outside it;
+    // fewer nights send low = high = the value, which the app shows without a range.
+    oxygen: spo2.length ? { value: spo2.at(-1).value, ...usualRange(spo2.slice(0, -1).map(p => p.value), spo2.at(-1).value), series: spo2 } : null,
     walkingHR: walkingHR.length ? { value: walkingHR.at(-1).value, series: walkingHR } : null,
     hrRecovery: hrRecovery.length ? { value: hrRecovery.at(-1).value, series: hrRecovery } : null,
     wristTemp: wristLast ? { value: round(wristLast.value, 2), deviation: wristLast.deviation, series: wrist, deviations: wristDeviations } : null,

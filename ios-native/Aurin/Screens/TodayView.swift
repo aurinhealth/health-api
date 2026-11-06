@@ -702,7 +702,7 @@ struct NoWearableText: View {
 }
 
 /// A new athlete's first two weeks (Petr, 2026-11-01): instead of "Zatím bez
-/// čísla", readiness says it is learning their normal, with a segment for each
+/// čísla", readiness says it is learning their usual range, with a segment for each
 /// of the 14 days it needs, how many it has and about when the score comes.
 /// Also on the Health screen's readiness card.
 struct ReadinessLearning: View {
@@ -714,7 +714,7 @@ struct ReadinessLearning: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Učím se tvůj normál")
+            Text("Učím se tvoje obvyklé hodnoty")
                 .font(title)
                 .foregroundStyle(Palette.ink)
                 .padding(.top, 8)
@@ -925,7 +925,7 @@ struct KeyNumbers: View {
     private var hrv: Gauge {
         guard let value = today.hrv?.value else { return Gauge(note: nil, color: Palette.green) }
         if let low = today.hrv?.low, let high = today.hrv?.high, high > low {
-            return Gauge(bar: (value, low, high), edges: (Fmt.int(low), Fmt.int(high)), note: RangeBar.word(value, low, high),
+            return Gauge(bar: (value, low, high), edges: (Fmt.int(low), Fmt.int(high)), note: RangeBar.usualWord(value, low, high),
                          color: RangeBar.color(value, low, high, worseAbove: false))
         }
         guard let base = today.hrv?.baseline else { return Gauge(note: nil, color: Palette.green) }

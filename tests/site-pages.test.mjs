@@ -73,7 +73,7 @@ test('the numbers around the hero phone are the sample morning its screenshot sh
   const html=await overviewPage().text();
   const clock=m=>Math.floor(m/60)+':'+String(m%60).padStart(2,'0');
   assert.match(html,new RegExp('readiness '+today.readiness.score+','));
-  assert.match(html,new RegExp('<div class="k">HRV</div><div class="v">'+today.hrv.value+' ms</div><div class="d up">↑ '+(today.hrv.value-today.hrv.baseline)+' ms above normal'));
+  assert.match(html,new RegExp('<div class="k">HRV</div><div class="v">'+today.hrv.value+' ms</div><div class="d up">↑ '+(today.hrv.value-today.hrv.baseline)+' ms above your average'));
   assert.match(html,new RegExp('<div class="k">Sleep</div><div class="v">'+clock(today.sleep.minutes)+'</div><div class="d sleep">score '+today.sleep.index+'<'));
   // The strain screen built for the site splits the day as the sample day does (DemoData strain.training/movement).
   assert.ok(html.includes('<b>'+today.strain.training+'</b> workout <b>'+today.strain.movement+'</b> movement'),'strain split');

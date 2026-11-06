@@ -1010,7 +1010,7 @@ const DAY_ON = () => [L("V pondělí", "on Monday"), L("V úterý", "on Tuesday"
 const DAY_ACC = () => [L("na pondělí", "to Monday"), L("na úterý", "to Tuesday"), L("na středu", "to Wednesday"), L("na čtvrtek", "to Thursday"), L("na pátek", "to Friday"), L("na sobotu", "to Saturday"), L("na neděli", "to Sunday")];
 // A red morning (planRedMorning): the numbers that made it red and where the key session went.
 const redText = (r, to) => {
-  const hrv = r.hrv ? L(`HRV ${r.hrv} ms proti tvému normálu ${r.low}–${r.high} ms`, `HRV ${r.hrv} ms against your normal ${r.low}–${r.high} ms`) : "";
+  const hrv = r.hrv ? L(`HRV ${r.hrv} ms proti tvému obvyklému rozmezí ${r.low}–${r.high} ms`, `HRV ${r.hrv} ms against your usual range ${r.low}–${r.high} ms`) : "";
   const sleep = r.sleep ? L(`spánek ${hours(r.sleep)}`, `sleep ${hours(r.sleep)}`) : "";
   const numbers = [hrv, sleep].filter(Boolean).join(", ");
   return L("Regenerace je dnes ráno v červené", "Recovery is in the red this morning") + (numbers ? ": " + numbers : "") + L(`. Náročný trénink by dnes víc vzal, než dal, proto se přesunul ${to}.`, `. A hard session today would cost more than it gives, so it moved ${to}.`);
@@ -1044,7 +1044,7 @@ export function planChanges(items = [], original = [], plan, weekStart) {
         : { kind: "easier", line: L("Lehčí: návrat po pauze", "Easier: back after a break"), text: L("První týden po pauze je lehčí, nejvýš s jedním náročným tréninkem.", "The first week back after a break is lighter, with one hard session at most."), original: was(o) };
     } else if (o && KEY_KINDS.includes(o.plan.kind) && !KEY_KINDS.includes(x.plan.kind) && pw.pulled) {
       const p = plan.pulled || {}, sleep = p.sleep ? L(` a spánek v průměru ${hours(p.sleep)}`, `, sleep ${hours(p.sleep)} on average`) : "";
-      change = { kind: "easier", line: L("Bylo: ", "Was: ") + o.label, text: L(`Odpočinkový týden se posunul na teď: HRV pod tvým normálem${p.below ? ` ${p.below} ${plural(p.below, "den", "dny", "dní", "day", "days")} ze 7` : ""}${sleep}.`, `The recovery week moved to now: HRV below your normal${p.below ? ` on ${p.below} of 7 days` : ""}${sleep}.`), original: was(o) };
+      change = { kind: "easier", line: L("Bylo: ", "Was: ") + o.label, text: L(`Odpočinkový týden se posunul na teď: HRV pod tvým obvyklým rozmezím${p.below ? ` ${p.below} ${plural(p.below, "den", "dny", "dní", "day", "days")} ze 7` : ""}${sleep}.`, `The recovery week moved to now: HRV below your usual range${p.below ? ` on ${p.below} of 7 days` : ""}${sleep}.`), original: was(o) };
     } else if (o && x.plan.kind === "quality" && pw.spec.stepUp && x.plan.workoutId !== o.plan.workoutId) {
       change = { kind: "harder", line: L("Těžší: zvládáš víc", "Harder: ready for more"), text: L("Klíčové tréninky ti šly lehčeji, než plán čekal, a HRV je stabilní, proto je tenhle o úroveň těžší.", "Your key sessions felt easier than planned and HRV is steady, so this one is a level harder."), original: was(o) };
     } else if (x.sport === "run" && Number(x.cappedFrom) > x.minutes) {
@@ -1647,7 +1647,7 @@ export function proposalView(proposal, plan, today) {
   // A change the plan made already (trendProposal): OK, or keep the plan as it was.
   if (proposal.type === "lighter") {
     const h = proposal.hrv || {}, sleep = h.sleep ? L(` a spal jsi v průměru ${hours(h.sleep)}`, ` and you slept ${hours(h.sleep)} on average`) : "";
-    const why = h.below ? L(`Tvoje HRV bylo ${h.below} ${plural(h.below, "den", "dny", "dní", "day", "days")} z posledních 7 pod tvým normálem${sleep}.`, `Your HRV has been below your normal on ${h.below} of the last 7 days${sleep}.`) : L("Tvoje HRV je poslední týden pod tvým normálem.", "Your HRV has been below your normal over the last week.");
+    const why = h.below ? L(`Tvoje HRV bylo ${h.below} ${plural(h.below, "den", "dny", "dní", "day", "days")} z posledních 7 pod tvým obvyklým rozmezím${sleep}.`, `Your HRV has been below your usual range on ${h.below} of the last 7 days${sleep}.`) : L("Tvoje HRV je poslední týden pod tvým obvyklým rozmezím.", "Your HRV has been below your usual range over the last week.");
     return { type: "lighter", title: L("Plán upraven", "Plan adapted"), headline: L("Tento týden je lehčí", "This week is lighter"), text: why + L(` Odpočinkový týden se posouvá z ${proposal.recoveryWeek}. týdne na teď.`, ` The recovery week moves forward from week ${proposal.recoveryWeek} to now.`),
       options: [{ id: "ok", label: "OK", recommended: true }], button: "OK", keep: L("Nechat plán", "Keep the plan"), ...(h.values ? { chart: { values: h.values, low: h.low, high: h.high } } : {}) };
   }

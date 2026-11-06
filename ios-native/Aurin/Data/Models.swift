@@ -177,6 +177,15 @@ struct TodaySnapshot: Decodable, Equatable {
         var low: Double? = nil
         var high: Double? = nil
         let series: [Point]
+
+        var usual: ClosedRange<Double>? { Self.usual(low: low, high: high, baseline: baseline) }
+
+        /// The usual range readiness uses (audit 16.2), or ±2 beats around the
+        /// baseline from an older server.
+        static func usual(low: Double?, high: Double?, baseline: Double?) -> ClosedRange<Double>? {
+            if let low, let high, low < high { return low...high }
+            return baseline.map { ($0 - 2)...($0 + 2) }
+        }
     }
 
     struct Summary: Decodable, Equatable {

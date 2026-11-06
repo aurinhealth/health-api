@@ -21,6 +21,12 @@ enum JournalStyle {
         }
     }
 
+    /// Green with better mornings, rust with worse, grey while the difference
+    /// is not clear yet (audit 16.6).
+    static func effectColor(_ effect: Int) -> Color {
+        JournalText.isClear(effect) ? (effect < 0 ? Palette.rust : Palette.green) : Palette.muted
+    }
+
     /// "HH:mm" of a picked time.
     static func clock(_ date: Date) -> String {
         let f = DateFormatter()
@@ -167,7 +173,7 @@ struct JournalHealthCard: View {
     }
 
     private func effectView(_ effect: JournalEffect) -> some View {
-        let color = effect.effect < 0 ? Palette.rust : Palette.green
+        let color = JournalStyle.effectColor(effect.effect)
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 Image(systemName: effect.icon).scaledFont(15, weight: .medium).foregroundStyle(color)
@@ -640,7 +646,7 @@ struct JournalImpactLink: View {
                         Text(verbatim: effect.name).font(.subheadline.weight(.medium)).foregroundStyle(Palette.secondary)
                         Spacer(minLength: 8)
                         Text(verbatim: JournalText.percent(effect.effect)).font(Typo.number(22))
-                            .foregroundStyle(effect.effect < 0 ? Palette.rust : Palette.green)
+                            .foregroundStyle(JournalStyle.effectColor(effect.effect))
                     }
                 }
             }

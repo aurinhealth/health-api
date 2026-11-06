@@ -27,7 +27,7 @@ struct SleepHeartRateContent: View {
                            status: stats?.avgHr.flatMap { v in norm.map { MetricStatus.compare(v, low: $0.lowerBound, high: $0.upperBound, worseAbove: true) } })
             if let avg = stats?.avgHr, let norm {
                 DetailRange(value: avg, low: norm.lowerBound, high: norm.upperBound,
-                            label: L10n.f("tvůj normál %@–%@ bpm", Fmt.int(norm.lowerBound), Fmt.int(norm.upperBound)), worseAbove: true)
+                            label: L10n.f("obvyklé rozmezí %@–%@ bpm", Fmt.int(norm.lowerBound), Fmt.int(norm.upperBound)), worseAbove: true)
                     .padding(.top, 14)
             }
 
@@ -68,7 +68,7 @@ struct SleepHeartRateContent: View {
             let nights = (night.hrNights ?? []).map { Point(date: $0.date, value: $0.avgHr) }
             if nights.count > 1 {
                 MetricChart(title: "Tep po nocích", color: Palette.rust) {
-                    TrendChart(points: nights, color: Palette.rust, unit: "bpm", band: norm, bandLabel: L10n.tr("tvoje norma"), worse: .above)
+                    TrendChart(points: nights, color: Palette.rust, unit: "bpm", band: norm, bandLabel: L10n.tr("obvyklé rozmezí"), worse: .above)
                 }
                 .padding(.top, 4)
             }
