@@ -100,9 +100,11 @@ test("VO2 recommendation uses persisted vo2max capability key",()=>{
   assert.equal(result.recommendation.progression.capabilityLevel,5.8);
 });
 
-test("missing recovery signals cannot appear green",()=>{
+test("missing recovery signals are not yellow, and a new athlete still gets no intervals",()=>{
+  // Audit 2026-11-06, 14.1 (O7): nothing measured the body, so no yellow every day.
   const result=buildCyclingCoachV2({date:"2026-09-29",week:{days:[]},fitness:{wellness:[]},health:{},gym:{history:[]},goal:{phase:"build"}});
-  assert.notEqual(result.readiness.status,"green");
+  assert.notEqual(result.readiness.status,"yellow");
+  assert.equal(result.readiness.noBodyData,true);
   assert.notEqual(result.recommendation.session.kind,"vo2");
 });
 

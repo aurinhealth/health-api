@@ -35,7 +35,7 @@ test("names: the same words in both sports, tempo included", () => {
 test("shapes: library workouts, week sessions, planned events and done activities", () => {
   // A library workout: its system decides, whatever the name says.
   assert.ok(isHardSession({ id: "tempo-2x20", name: "Tempo 2×20", primary_system: "tempo" }));
-  assert.ok(isHardSession({ name: "Pro-inspired · Pidcock MTB Champs 45", primary_system: "anaerobic" }));
+  assert.ok(isHardSession({ name: "MTB race repeats · 45", primary_system: "anaerobic" }));
   assert.ok(!isHardSession({ name: "Endurance se silovými úseky · 60 min", primary_system: "endurance" }));
   assert.equal(intensityClass({ primary_system: "sprint" }), "high");
   // A week plan's session and the coach's session kind.

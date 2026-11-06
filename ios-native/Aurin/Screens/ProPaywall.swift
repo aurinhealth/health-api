@@ -50,13 +50,20 @@ struct ProOffer: Identifiable, Equatable {
     var id: String { kind.rawValue }
     var product: String { kind == .monthly ? ProStore.monthlyID : ProStore.yearlyID }
 
+    /// The price before the App Store answers (no signal, still loading): no
+    /// fixed Czech price for a buyer in another country, and nothing to buy yet.
+    static let unpriced = "–"
+    var priced: Bool { price != Self.unpriced }
+
     /// Yearly paid monthly (where the App Store offers it), yearly paid once, monthly.
+    /// The snapshot tests, without the App Store, show the fixed Czech prices.
     @MainActor
     static func all(_ store: ProStore) -> [ProOffer] {
-        plans(yearly: store.price(ProStore.yearlyID) ?? L10n.tr("1 490 Kč"),
-              monthly: store.price(ProStore.monthlyID) ?? L10n.tr("199 Kč"),
-              perMonth: store.perMonth(ProStore.yearlyID), commitment: store.commitment,
-              trial: store.trialEligible)
+        let fixed = ProStore.hostsUnitTests
+        return plans(yearly: store.price(ProStore.yearlyID) ?? (fixed ? L10n.tr("1 490 Kč") : unpriced),
+                     monthly: store.price(ProStore.monthlyID) ?? (fixed ? L10n.tr("199 Kč") : unpriced),
+                     perMonth: store.perMonth(ProStore.yearlyID), commitment: store.commitment,
+                     trial: store.trialEligible)
     }
 
     /// The plans from the shown prices; what each saves against paying monthly
@@ -118,6 +125,7 @@ struct ProOffer: Identifiable, Equatable {
     /// What Apple asks for by the button (guideline 3.1.2): the price, the
     /// period, what is charged when, that it renews and how cancelling works.
     func terms(trialDays: Bool) -> String {
+        guard priced else { return L10n.tr("Načítám ceny z App Store…") }
         switch kind {
         case .yearMonthly:
             let start = trialDays ? L10n.tr("Dnes se nic neúčtuje. Po 7 dnech ") : ""
@@ -184,7 +192,7 @@ struct PaywallView: View {
         .environment(\.colorScheme, .dark)
         .environment(demo)
         .sheet(isPresented: $allPlans) {
-            AllProPlans(offers: offers, selected: $plan, buying: store.purchasing, start: { allPlans = false; next() },
+            AllProPlans(offers: offers, selected: $plan, buying: store.purchasing || !chosen.priced, start: { allPlans = false; next() },
                         redeem: { allPlans = false; redeemCode = true }, restore: restore)
                 .presentationDetents([.large])
                 .presentationBackground(Night.bottom)
@@ -299,7 +307,7 @@ struct PaywallView: View {
                 .frame(maxWidth: .infinity).frame(height: 54).background(Night.lavender, in: Capsule())
             }
             .buttonStyle(.plain)
-            .disabled(store.purchasing)
+            .disabled(store.purchasing || !chosen.priced)
             if notNow && !more {
                 Button(action: close) {
                     Text("Teď ne").font(Typo.bodyStrong).foregroundStyle(Night.ink)
@@ -329,9 +337,9 @@ struct PaywallView: View {
         VStack(spacing: 3) {
             Text(verbatim: chosen.terms(trialDays: withTrial)).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 6) {
-                Link(destination: URL(string: "https://aurin.health/terms")!) { Text("Podmínky").underline() }
+                Link(destination: L10n.legalURL("terms")) { Text("Podmínky").underline() }
                 Text(verbatim: "·")
-                Link(destination: URL(string: "https://aurin.health/privacy")!) { Text("Soukromí").underline() }
+                Link(destination: L10n.legalURL("privacy")) { Text("Soukromí").underline() }
                 Text(verbatim: "·")
                 Button(action: restore) { Text("Obnovit").underline() }.buttonStyle(.plain)
             }
@@ -815,9 +823,9 @@ struct AllProPlans: View {
                         .padding(.top, 12)
                 }
                 HStack(spacing: 6) {
-                    Link(destination: URL(string: "https://aurin.health/terms")!) { Text("Podmínky").underline() }
+                    Link(destination: L10n.legalURL("terms")) { Text("Podmínky").underline() }
                     Text(verbatim: "·")
-                    Link(destination: URL(string: "https://aurin.health/privacy")!) { Text("Soukromí").underline() }
+                    Link(destination: L10n.legalURL("privacy")) { Text("Soukromí").underline() }
                 }
                 .font(.caption2).foregroundStyle(Night.faint).padding(.top, 3).padding(.bottom, 16)
             }

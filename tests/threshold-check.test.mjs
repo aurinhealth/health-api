@@ -114,3 +114,20 @@ test("without a 20-min lap the test takes the ride's best 20 minutes", () => {
   assert.equal(bestPower(time.slice(0, 500), watts.slice(0, 500)), null);
   assert.equal(bestPower(time, watts.map(() => null)), null);
 });
+
+// All sports equal (audit O13): a swimmer without a CSS gets the CSS test
+// offered, as a rider or runner without a threshold does; with a CSS set there
+// is no estimate to compare, so nothing.
+test("a swimmer without a CSS gets the CSS test offered", async () => {
+  const swims = Array.from({ length: 4 }, (_, i) => ({ date: day(i * 5 + 1), kind: "swim", minutes: 40 }));
+  const offer = thresholdOffer({ sport: "swim", sessions: swims, current: {}, estimate: undefined, today });
+  assert.deepEqual([offer.reason, offer.metric, offer.testId], ["missing", "swimCss", "test-swim-css"]);
+  assert.equal(thresholdOffer({ sport: "swim", sessions: swims, current: { swimCss: 110 }, estimate: undefined, today }), null);
+  assert.equal(thresholdOffer({ sport: "swim", sessions: swims.slice(0, 3), current: {}, estimate: undefined, today }), null, "3 swims in 6 weeks: not a swimmer yet");
+  assert.equal(thresholdOffer({ sport: "swim", sessions: swims, current: {}, check: { status: "dismissed", updatedAt: day(7) }, today }), null, "declined a week ago");
+  // The state offers it from the swims, which stay out of the ride and run estimates.
+  const { readFileSync } = await import("node:fs");
+  const state = readFileSync(new URL("../src/threshold-check-state.js", import.meta.url), "utf8");
+  assert.doesNotMatch(state, /if\(sport==='swim'\)continue;/);
+  assert.match(state, /sessions:sport==='swim'\?swims:sessions/);
+});

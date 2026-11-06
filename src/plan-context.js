@@ -114,7 +114,7 @@ export async function planTrendCheck(env,plan,monday,{hrvDown=false,hrv=null,thr
 export async function planKeyDates(env,plan,monday){
   const pw=planWeek(plan,monday),prefs=pw?await getWeekPlan(env.DB,monday).catch(()=>null):null;
   if(!prefs?.days)return [];
-  const roles=planWeekRoles(prefs.days,{...await weekRoleOptions(env,null,plan,pw),...roleTime(prefs)});
+  const roles=planWeekRoles(prefs.days,{...await weekRoleOptions(env,null,plan,pw),...roleTime(prefs,monday)});
   return roles.map((d,i)=>d.items.some(x=>planSports(plan).includes(x.sport)&&['quality','long'].includes(x.role))?shiftDate(monday,i):null).filter(Boolean);
 }
 

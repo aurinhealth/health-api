@@ -21,7 +21,8 @@ test("training days in a row up to yesterday, walks and short sessions aside", (
 
 test("Petr's morning: a 68 after 5:54 and three gym days gives the legs a break", () => {
   const m = en({ score: 68, zone: "green", ...night, date, context: { activities: threeGymDays } });
-  assert.equal(m.zone, "yellow");
+  // The ring keeps Today's colour; the advice says what changed.
+  assert.equal(m.zone, "green");
   assert.equal(m.alert.title, "Readiness 68 · Give your legs a break");
   assert.equal(m.alert.body, "3 gym days in a row and a short night. Upper body or an easy Z2 ride, no legs today.");
   assert.equal(withLang("cs", () => readinessMessage({ score: 68, zone: "green", ...night, date, context: { activities: threeGymDays } })).alert.body,
@@ -35,11 +36,12 @@ test("one reason keeps green but no all-out", () => {
   assert.equal(m.alert.body, "A short night. Nothing planned. Train if you like, just no all-out efforts.");
 });
 
-test("three reasons on a yellow day make it a rest day", () => {
+test("a yellow day stays yellow however many reasons there are: a warning, never a rest day", () => {
   const m = en({ score: 55, zone: "yellow", ...night, date, planned: [{ title: "Tempo 3×10 min", sport: "ride" }], context: { activities: threeGymDays, lowDays: 2, alcohol: true } });
-  assert.equal(m.zone, "red");
-  assert.equal(m.alert.title, "Readiness 55 · Take it easy today");
-  assert.equal(m.alert.body, "3 gym days in a row and a short night. Skip today's Tempo 3×10 min. A walk or easy mobility at most.");
+  assert.equal(m.zone, "yellow");
+  assert.equal(m.alert.title, "Readiness 55 · Give your legs a break");
+  assert.equal(m.alert.body, "3 gym days in a row and a short night. Today's plan: Tempo 3×10 min. Keep it easy in Z2 instead, intervals another day.");
+  assert.doesNotMatch(m.alert.body, /Skip|walk/);
 });
 
 test("a fresh green day before a hard session keeps today easy", () => {

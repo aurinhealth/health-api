@@ -59,7 +59,7 @@ enum PlanState: CaseIterable {
         switch self {
         case .good: return "Podle plánu"
         case .off: return "Odchylka od plánu"
-        case .missed: return "Neodjeto"
+        case .missed: return "Nesplněno"
         case .upcoming: return "Čeká"
         case .offPlan: return "Mimo plán"
         }

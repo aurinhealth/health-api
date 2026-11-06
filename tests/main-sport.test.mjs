@@ -142,9 +142,9 @@ test("a support sport gets no long or quality day and a smaller share", () => {
 });
 
 test("the own long day on the support sport takes no quality day from the main sport", () => {
-  const days = [["ride"], [], ["ride"], [], ["ride"], [], ["run"]];
-  const roles = planWeekRoles(days, { mainSport: "ride", longDay: 6, quality: 3 });
-  assert.equal(roles.filter(d => d.items.some(x => x.sport === "ride" && x.role === "quality")).length, 3);
+  const days = [[], ["ride"], [], ["ride"], [], [], ["run"]];
+  const roles = planWeekRoles(days, { mainSport: "ride", longDay: 6, quality: 2 });
+  assert.equal(roles.filter(d => d.items.some(x => x.sport === "ride" && x.role === "quality")).length, 2);
   assert.equal(roles[6].items[0].role, "long");
 });
 

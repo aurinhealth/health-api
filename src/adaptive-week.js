@@ -118,10 +118,13 @@ export function capWeekTargets(targets, prefs, days = [], weather = {}) {
     const available = availabilityOn(prefs, x.date), used = sessionsOn(days.find(d => d.date === x.date)).reduce((n, a) => n + (Number(a.durationHours) || 0) * 60, 0);
     remaining.set(x.date, available.minutes == null ? Infinity : Math.max(0, available.minutes - used));
   }
-  const items = [], skipped = [], openCounts=new Map();
-  for(const x of targets.items||[])openCounts.set(x.date,(openCounts.get(x.date)||0)+1);
-  for (const x of targets.items || []) {
-    const available = availabilityOn(prefs, x.date), own = prefs?.sessions?.[weekdayOf(x.date) + '|' + x.sport + '|' + (x.slot || 0)] || {};
+  const list = targets.items || [], out = [], openCounts=new Map();
+  for(const x of list)openCounts.set(x.date,(openCounts.get(x.date)||0)+1);
+  // A day's sessions with a set length (a brick, a capped one) take their
+  // minutes first, the day's main session (long or quality) gets the rest.
+  const rank = x => x.brick || x.maxMinutes != null ? 0 : ['long', 'quality'].includes(x.role) ? 2 : 1;
+  for (const i of list.map((x, i) => i).sort((a, b) => rank(list[a]) - rank(list[b]) || a - b)) {
+    const x = list[i], available = availabilityOn(prefs, x.date), own = prefs?.sessions?.[weekdayOf(x.date) + '|' + x.sport + '|' + (x.slot || 0)] || {};
     const auto = environmentFor(x.date, x.sport, weather[x.date]);
     const env = own.environment ? { environment: own.environment, reason: L('Zvoleno ručně.', 'Chosen by hand.') } : auto;
     const open = openCounts.get(x.date);openCounts.set(x.date,open-1);
@@ -132,16 +135,18 @@ export function capWeekTargets(targets, prefs, days = [], weather = {}) {
       const free = remaining.get(x.date) / open;
       short = free < Math.min(x.minutes, x.maxMinutes ?? Infinity);
       if (env.environment === 'indoor') minutes = Math.min(minutes, indoorMinutes(x.sport, x.minutes));
-      minutes = Math.floor(minutes / 5) * 5;
+      // A session that fits keeps its length (a plan's swim is its metres); a shortened one goes by 5 min.
+      if (minutes < x.minutes) minutes = Math.floor(minutes / 5) * 5;
       short = short && minutes === Math.floor(free / 5) * 5;
-      const minimum = x.brick || x.sport === 'swim' ? 15 : x.sport === 'run' ? 20 : 30;
-      if (minutes < minimum) { skipped.push({ ...x, reason: L('Na tento trénink nezbývá dost času.', 'There isn\'t enough time left for this workout.') }); continue; }
+      // Shorter than this is not worth it, unless the session itself is (a 400 m swim).
+      const minimum = Math.min(x.brick || x.sport === 'swim' ? 15 : x.sport === 'run' ? 20 : 30, x.minutes);
+      if (minutes < minimum) { out[i] = { skip: { ...x, reason: L('Na tento trénink nezbývá dost času.', 'There isn\'t enough time left for this workout.') } }; continue; }
     }
     remaining.set(x.date, remaining.get(x.date) - minutes);
     // A plan's session shorter than the plan made it, for the free time that day (training-plans.js planChanges).
-    items.push({ ...x, minutes, ...(short && x.plan && x.minutes - minutes >= 10 ? { planMinutes: x.minutes } : {}), tss: Math.round(x.tss * minutes / x.minutes), ...env, autoEnvironment: auto.environment, chosenMinutes: Boolean(own.minutes), chosenEnvironment: Boolean(own.environment), window: available.window, startTime: parseTimeWindow(available.window)?.start || null });
+    out[i] = { item: { ...x, minutes, ...(short && x.plan && x.minutes - minutes >= 10 ? { planMinutes: x.minutes } : {}), tss: Math.round(x.tss * minutes / x.minutes), ...env, autoEnvironment: auto.environment, chosenMinutes: Boolean(own.minutes), chosenEnvironment: Boolean(own.environment), window: available.window, startTime: parseTimeWindow(available.window)?.start || null } };
   }
-  return { ...targets, items, skipped };
+  return { ...targets, items: out.filter(o => o.item).map(o => o.item), skipped: out.filter(o => o.skip).map(o => o.skip) };
 }
 // split: a triathlete's week (triathlon-split.js): the days take ride, run and
 // swim by its counts, and one ride day with time to spare gets the brick run.
@@ -265,7 +270,19 @@ export function weekProposal({ prefs, start, today, week = {}, fitness = {}, sta
   const wellness = (fitness.wellness || []).filter(w => w.id <= today).at(-1), ctl = Number(wellness?.ctl) || null;
   const loads = existing.map(d => ({ date: d.date, done: Number(d.daily?.training?.actualTss) || (d.daily?.training?.completed || []).reduce((n, a) => n + (Number(a.tss) || 0), 0), planned: (d.daily?.training?.planned || []).reduce((n, a) => n + (Number(a.tss) || 0), 0), sports: sessionsOn(d).map(sportOf) }));
   const level = strain?.level || 0;
-  const roles = planWeekRoles(proposedPrefs.days, { readiness: Number(wellness?.tsb) < -20 || level >= 2 ? 'red' : level >= 1 ? 'yellow' : 'green', ...(split?.weak ? { avoid: split.learning, prefer: split.strong } : {}), ...(plan?.roles || {}), ...roleTime(proposedPrefs) });
+  // Form (TSB) as Intervals.icu zones it: −20 to −30 the usual build = one key
+  // session, below −30 (high risk) none. It is today's form, so it speaks for
+  // this week only: a later week has the strain one step lower (entrypoint).
+  const tsb = start <= today && wellness?.tsb != null && Number.isFinite(Number(wellness.tsb)) ? Math.round(Number(wellness.tsb)) : null;
+  const readiness = (tsb != null && tsb < -30) || level >= 2 ? 'red' : (tsb != null && tsb < -20) || level >= 1 ? 'yellow' : 'green';
+  const roleOptions = { ...(split?.weak ? { avoid: split.learning, prefer: split.strong } : {}), ...(plan?.roles || {}), ...roleTime(proposedPrefs, start) };
+  const roles = planWeekRoles(proposedPrefs.days, { readiness, ...roleOptions });
+  // One line when the state takes key sessions the week would have had.
+  const keyCount = list => list.reduce((n, d) => n + d.items.filter(x => x.role === 'quality').length, 0);
+  if (readiness !== 'green' && keyCount(planWeekRoles(proposedPrefs.days, { ...roleOptions, readiness: 'green' })) > keyCount(roles)) {
+    const why = tsb != null && tsb < -20 ? L('Forma ', 'Form ') + String(tsb).replace('-', '−') : L('Poslední dny je tělo unavené', 'Your body has been tired the last few days');
+    warnings.push({ text: why + (readiness === 'yellow' ? L(': tento týden jen jeden klíčový trénink.', ': just one key session this week.') : L(': tento týden žádný klíčový trénink, jen lehké.', ': no key sessions this week, only easy ones.')) });
+  }
   const withPlan = t => plan?.apply ? plan.apply(t) : t;
   // Running this week so far (done, and planned still ahead or today) counts against the weekly running cap.
   const runOf = list => (list || []).filter(isRunActivity).reduce((m, a) => m + (Number(a.durationHours) || 0) * 60, 0);
@@ -274,8 +291,10 @@ export function weekProposal({ prefs, start, today, week = {}, fitness = {}, sta
   // Without fitness data the estimate keeps the same running cap: a beginner's
   // runs share the floor (60 min a week) or what the recent weeks allow.
   if (!ctl) targets = capRunVolume(withPlan(estimatedTargets(roles, start, today, loads)), weeklyRunCap(history || [], start), runCommitted);
-  if (split) targets = { ...targets, items: (targets.items || []).map(x => splitItem(x, split, proposedPrefs.days[(Date.parse(x.date + 'T12:00:00Z') - Date.parse(start + 'T12:00:00Z')) / 86400000] || [])) };
-  if (proposedPrefs.bricks?.length) targets = { ...targets, items: (targets.items || []).map(x => ownBrick(x, proposedPrefs.bricks, start, split)) };
+  // A triathlon plan has made its own brick and lengths (training-plans.js applyTriathlon).
+  const own = x => !(x.plan && plan?.plan?.sport === 'triathlon');
+  if (split) targets = { ...targets, items: (targets.items || []).map(x => own(x) ? splitItem(x, split, proposedPrefs.days[(Date.parse(x.date + 'T12:00:00Z') - Date.parse(start + 'T12:00:00Z')) / 86400000] || []) : x) };
+  if (proposedPrefs.bricks?.length) targets = { ...targets, items: (targets.items || []).map(x => own(x) ? ownBrick(x, proposedPrefs.bricks, start, split) : x) };
   targets = capWeekTargets(targets, proposedPrefs, existing, weather);
   // The race: the athlete's main event, or the race of a running plan (an open-water race, an aquabike).
   const planRace = plan?.plan?.raceDate ? Math.round((Date.parse(plan.plan.raceDate + 'T12:00:00Z') - Date.parse(start + 'T12:00:00Z')) / 86400000) : null;

@@ -1,7 +1,7 @@
 // Human explanation of a recommended workout: why this one today, how to ride
 // it, fuelling, and the step list with % FTP and watts (running: % threshold
 // pace and min/km).
-import { n, outdoorWidth, stepIntensities } from "./workout-model.js";
+import { n, outdoorWidth, stepIntensities, swimMinutesAt } from "./workout-model.js";
 import { zoneForPercent, formatPace } from "./training-zones.js";
 import { rideFtpFor } from "./intervals-athlete.js";
 import { L, paceText } from "./lang.js";
@@ -70,6 +70,9 @@ function targetText(power, { sport, ftp, thresholdPace }) {
   return p + " % FTP" + (ftp ? " (≈ " + Math.round(ftp * p / 100) + " W)" : "");
 }
 
+// An effort without a target: a sprint all-out, a hill rep by feel (its pace
+// uphill means nothing, Minetti 2002).
+const freeText = w => n(w.power, 0) >= 126 ? L(" naplno", " all-out") : L(" tvrdě podle pocitu", " hard by effort");
 // Concrete lines about the main set, the time in the target intensity and pacing.
 export function structureHow(structure = [], { system, sport = "ride", ftp = null, thresholdPace = null } = {}) {
   const from = (WORK_FROM[sport] || WORK_FROM.ride)[system] ?? 999, opts = { sport, ftp, thresholdPace };
@@ -86,7 +89,7 @@ export function structureHow(structure = [], { system, sport = "ride", ftp = nul
     const rest = steps.filter(st => !isWork(st));
     if (work.length === 1) {
       const w = work[0];
-      const what = w.free ? minLabel(w.durationMinutes) + L(" naplno", " all-out") : minLabel(w.durationMinutes) + L(" na ", " at ") + targetText(w.ramp ? w.powerEnd : w.power, opts) + (w.ramp ? L(" (stupňuj od ", " (build from ") + Math.round(w.powerStart) + " %)" : "");
+      const what = w.free ? minLabel(w.durationMinutes) + freeText(w) : minLabel(w.durationMinutes) + L(" na ", " at ") + targetText(w.ramp ? w.powerEnd : w.power, opts) + (w.ramp ? L(" (stupňuj od ", " (build from ") + Math.round(w.powerStart) + " %)" : "");
       const pause = rest.length ? L(", mezi nimi ", ", with ") + minLabel(rest.reduce((x, r) => x + n(r.durationMinutes, 0), 0)) + " " + EASY(sport) + L("", " between") : "";
       const cadence = w.cadence && sport !== "run" ? L(" při ", " at ") + String(w.cadence).replace(/rpm/i, "").trim().replace("-", "–") + " rpm" : "";
       sets.push((reps > 1 ? reps + "× " : "") + what + cadence + (reps > 1 ? pause : ""));
@@ -97,7 +100,7 @@ export function structureHow(structure = [], { system, sport = "ride", ftp = nul
       steps.forEach((st, i) => { if (!isWork(st)) return; const next = steps[i + 1] && !isWork(steps[i + 1]) && i + 2 < steps.length ? steps[i + 1] : null; pairs.push({ w: st, r: next }); });
       const groups = [];
       for (const pr of pairs) { const key = [pr.w.durationMinutes, pr.w.power, pr.w.free, pr.r?.durationMinutes].join("|"), last = groups.at(-1); if (last && last.key === key) last.count++; else groups.push({ key, count: 1, ...pr }); }
-      const parts = groups.map(g => (g.count > 1 ? g.count + "× " : "") + minLabel(g.w.durationMinutes) + (g.w.free ? L(" naplno", " all-out") : L(" na ", " at ") + targetText(g.w.power, opts)) + (g.r ? " / " + minLabel(g.r.durationMinutes) + " " + EASY(sport) : ""));
+      const parts = groups.map(g => (g.count > 1 ? g.count + "× " : "") + minLabel(g.w.durationMinutes) + (g.w.free ? freeText(g.w) : L(" na ", " at ") + targetText(g.w.power, opts)) + (g.r ? " / " + minLabel(g.r.durationMinutes) + " " + EASY(sport) : ""));
       // Alternating patterns (over-unders): "4× (2 min na 88 % …, 1 min na 102 % …)".
       let text = join(parts);
       for (let k = 1; k <= parts.length / 2; k++) if (parts.length % k === 0 && parts.every((x, i) => x === parts[i % k])) { text = parts.length / k + "× (" + parts.slice(0, k).join(", ") + ")"; break; }
@@ -388,6 +391,12 @@ function swimFocusLine(rendered, thresholds) {
   const meters = n(rendered.distance_meters), pace = n(thresholds?.swimCss);
   return [L("Zaměření: ", "Focus: ") + (FOCUS_LABELS()[rendered.primary_system] || L("Plavání", "Swim")) + " " + where + ", " + Math.round(n(rendered.duration_minutes, 0)) + " min" + (meters ? ", " + meters + " m" : "") + ".",
     pace ? L("Prahové tempo (CSS) " + formatPace(pace) + " /100 m.", "Threshold pace (CSS) " + formatPace(pace) + " /100 m.") : ""].filter(Boolean).join(" ");
+}
+
+// A workout's minutes for the athlete: a swim at their CSS, as its step rows
+// are (the catalogue's minutes are at 2:00/100 m); anything else as it is.
+export function athleteMinutes(workout, structure, sport, thresholds = {}) {
+  return sport === "swim" && Number(thresholds?.swimCss) > 0 && structure?.length ? Math.round(swimMinutesAt(structure, thresholds.swimCss)) : workout?.duration_minutes;
 }
 
 // The step rows of a ride, run or swim with the athlete's own targets

@@ -12,6 +12,12 @@ test('Intervals nights fill only the nights Google does not have', () => {
   assert.equal(merged[1].startTime, null);
 });
 
+test('a nap on a day does not hide its Intervals night (audit 3.2)', () => {
+  const nap = { id: 'g2', date: '2026-10-03', startTime: '2026-10-03T12:00:00Z', endTime: '2026-10-03T12:40:00Z', durationMin: 40, nap: true };
+  const merged = mergeIntervalsSleep([google, nap], wellness, { start: '2026-10-01', end: '2026-10-06' });
+  assert.deepEqual(merged.filter(s => s.date === '2026-10-03').map(s => s.source || 'google').sort(), ['google', 'intervals']);
+});
+
 test('without Intervals.icu the sleep answer stays as it is', async () => {
   const data = { status: 'ok', sessions: [google] };
   assert.equal(await withIntervalsSleep({}, data, '2026-10-01', '2026-10-06'), data);

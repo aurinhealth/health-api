@@ -43,8 +43,9 @@ struct FirstDaysCard: View {
     /// Readiness has a number, or it has started learning the normal (a measured night).
     private var night: Bool { today.readiness.score != nil || (today.readiness.learningDays ?? 0) > 0 }
     /// The watch's history came in (nights before today): no need to ask for
-    /// tonight, nor to explain the 14 nights.
-    private var history: Bool { (today.readiness.pastNights ?? 0) > 0 }
+    /// tonight, nor to explain the 14 nights. Without a watch or ring (audit
+    /// 14.3) the same: that row could never be done.
+    private var history: Bool { (today.readiness.pastNights ?? 0) > 0 || model.noWearable }
     private var steps: [Bool] { (history ? [] : [night]) + [meal, coach] }
     private var doneCount: Int { steps.filter { $0 }.count }
 
