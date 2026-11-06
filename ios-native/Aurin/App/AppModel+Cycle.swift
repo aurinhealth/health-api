@@ -10,6 +10,10 @@ extension AppModel {
         guard let response = try? await api.cycle(month: month), stillSignedIn(account) else { return }
         cycle = response
         Reminders.storePill(response.enabled ? response.settings : nil, usual: response.state?.pill?.usual)
+        if response.settings?.consentNeeded == true && !cycleConsentAsked {
+            cycleConsentAsked = true
+            cycleConsentAsk = true
+        }
         if response.enabled && !cycleHealthSynced {
             cycleHealthSynced = true
             await CycleHealth.sync(api: api)

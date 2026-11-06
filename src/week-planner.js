@@ -176,9 +176,11 @@ export async function resetWeekPlan(db, date) {
 }
 
 // Roles for the selected weekdays (0 = Monday). Rules:
-// - one long session on the weekend (a day without gym first, then the later day);
+// - one long session on the weekend (a ride or run day before a swim day, a day
+//   without gym first, then the later day);
 // - up to two quality days (one with fewer than four endurance days), never on
-//   neighbouring days and not right before or after the long day if avoidable;
+//   neighbouring days; only the first may sit right before or after the long
+//   day, when no other day can take it (the second is then left out);
 // - the endurance day after a quality or long day is easy;
 // - gym on a quality or long day, or the day before quality, is upper body only.
 // A training plan (training-plans.js) sets how many quality days the week has
@@ -189,7 +191,9 @@ export async function resetWeekPlan(db, date) {
 // mainSport (ride, run, swim or gym, or a list of them): the athlete's main sport(s); the other
 // endurance sports only support it: no long or quality session, a smaller
 // share. With the gym as main sport every endurance day supports it.
-export function planWeekRoles(days = [], { readiness = "green", quality = null, prefer = null, minutes = null, avoid = null, longDay = null, mainSport = null } = {}) {
+// week (its Monday): with several endurance sports leading and none preferred,
+// the quality days' sport takes turns by week, so the weekday order never decides it.
+export function planWeekRoles(days = [], { readiness = "green", quality = null, prefer = null, minutes = null, avoid = null, longDay = null, mainSport = null, week = null } = {}) {
   const has = (i, s) => (days[i] || []).includes(s);
   const endurance = [0, 1, 2, 3, 4, 5, 6].filter(i => has(i, "ride") || has(i, "run") || has(i, "swim"));
   // A sport that supports the main one: every endurance sport when the gym is
@@ -203,6 +207,8 @@ export function planWeekRoles(days = [], { readiness = "green", quality = null, 
   const sportsOf = i => { const list = (days[i] || []).filter(s => s !== "gym"); return leads ? [...list.filter(s => enduranceMains.includes(s)), ...list.filter(s => !enduranceMains.includes(s))] : list; };
   const main = i => sportsOf(i)[0];
   const supports = i => supporting(main(i));
+  const turns = ["ride", "run", "swim"].filter(s => (!enduranceMains.length || enduranceMains.includes(s)) && endurance.some(i => has(i, s)));
+  if (!prefer && week && turns.length >= 2) prefer = turns[Math.floor(Date.parse(week + "T12:00:00Z") / 604800000) % turns.length];
   const avoidedSport = i => [].concat(avoid || []).includes(main(i));
   const avoided = i => avoidedSport(i) || supports(i);
   // The long day and the quality days are counted from the main sport's days only.
@@ -210,7 +216,7 @@ export function planWeekRoles(days = [], { readiness = "green", quality = null, 
   const role = {};
   const timed = Array.isArray(minutes) && endurance.length > 0 && endurance.every(i => Number(minutes[i]) > 0);
   const free = i => timed ? Number(minutes[i]) : 0;
-  const weekend = endurance.filter(i => i >= 5 && !avoided(i)).sort((a, b) => Number(has(a, "gym")) - Number(has(b, "gym")) || b - a);
+  const weekend = endurance.filter(i => i >= 5 && !avoided(i)).sort((a, b) => Number(main(a) === "swim") - Number(main(b) === "swim") || Number(has(a, "gym")) - Number(has(b, "gym")) || b - a);
   let long = weekend[0];
   if (long == null && keyDays.length >= 3) long = keyDays.filter(i => !avoided(i)).at(-1);
   // A clearly longer weekday (30 minutes more than the weekend's day) takes the long session.
@@ -237,6 +243,7 @@ export function planWeekRoles(days = [], { readiness = "green", quality = null, 
   const apart = (a, b) => Math.min(Math.abs(a - b), 7 - Math.abs(a - b)), before = i => (i + 6) % 7;
   const qualityDays = [];
   for (const gap of [2, 1]) {
+    if (gap === 1 && qualityDays.length) break;
     for (const i of picks) {
       if (qualityDays.length >= wanted || role[i] || avoided(i)) continue;
       const far = qualityDays.every(q => apart(q, i) >= 2) && (role[long] !== "long" || apart(long, i) >= gap) && !(own && i === before(long));
@@ -266,7 +273,8 @@ export function planWeekRoles(days = [], { readiness = "green", quality = null, 
 // The free time per weekday (Monday first) for planWeekRoles.
 export const freeMinutes = prefs => (prefs?.availability || []).map(a => a?.minutes ?? null);
 // What planWeekRoles takes from the week plan: the free time and the own long day.
-export const roleTime = prefs => ({ minutes: freeMinutes(prefs), longDay: Number.isInteger(prefs?.longDay) ? prefs.longDay : null });
+// week: the week's Monday, for the quality days' sport taking turns.
+export const roleTime = (prefs, week = null) => ({ minutes: freeMinutes(prefs), longDay: Number.isInteger(prefs?.longDay) ? prefs.longDay : null, ...(week ? { week } : {}) });
 
 // The week roles a training plan sets (training-plans.js): its quality days,
 // its sport first and as main sport (a triathlon plan keeps its own split).
@@ -284,7 +292,7 @@ export function roleFor(prefs, date, sport, options = {}) {
   const d = new Date(String(date) + "T12:00:00Z");
   if (Number.isNaN(d.getTime())) return null;
   const weekday = (d.getUTCDay() + 6) % 7;
-  return planWeekRoles(prefs?.days || [], { ...roleTime(prefs), ...options })[weekday].items.find(x => x.sport === sport) || null;
+  return planWeekRoles(prefs?.days || [], { ...roleTime(prefs, new Date(d.getTime() - weekday * 86400000).toISOString().slice(0, 10)), ...options })[weekday].items.find(x => x.sport === sport) || null;
 }
 
 // ---- One recovery week for the whole app -----------------------------------
@@ -332,18 +340,24 @@ export function hrvTrend(rows, weekStart, sleepRows = []) {
   const sleep = (sleepRows || []).filter(r => r?.id >= day(-7) && r.id < weekStart && Number(r.sleepSecs) > 0).map(r => Number(r.sleepSecs) / 60);
   return { below: values.slice(7).filter(v => v != null && v < low).length, values, low: Math.round(low), high: Math.round(high), sleep: sleep.length >= 4 ? Math.round(sleep.reduce((a, b) => a + b, 0) / sleep.length) : null };
 }
-// The HRV rows the recovery-week check reads: one source only, the one with
-// the most mornings over the 67 days before the week (Intervals.icu, or one
-// device of the health rows: Apple Health, Google Health, Ultrahuman). Never a
-// mix, because devices measure HRV differently (SDNN against RMSSD).
+// The HRV rows the recovery-week check reads: one source only, never a mix,
+// because devices measure HRV differently (SDNN against RMSSD). Each device
+// of the health rows (Apple Health, Google Health, WHOOP, Ultrahuman) is its
+// own candidate, by its tag or its value in hrvBySource; the one with the most
+// mornings in the week before wins, then the most over the 67 days before it,
+// so after a switch the new watch takes over once it measures the week (and
+// stays silent until it has its own 14 mornings). Intervals.icu, whose HRV
+// has no tag and may hold both watches, only wins with more mornings that
+// week than the health rows have from any device.
 export function hrvSourceRows(intervals = [], health = [], weekStart) {
-  const day = n => new Date(Date.parse(weekStart + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10), from = day(-67);
-  const candidates = [(intervals || []).map(r => ({ id: r?.id, hrv: r?.hrv }))];
-  const keys = new Set((health || []).flatMap(r => Object.keys(r?.hrvBySource || {})));
-  for (const key of keys) candidates.push((health || []).map(r => ({ id: r?.id, hrv: r?.hrvBySource?.[key] })));
-  if (!keys.size) candidates.push((health || []).map(r => ({ id: r?.id, hrv: r?.hrv })));
-  const mornings = rows => rows.filter(r => r.id >= from && r.id < weekStart && Number(r.hrv) > 0).length;
-  return candidates.reduce((best, rows) => mornings(rows) > mornings(best) ? rows : best);
+  const day = n => new Date(Date.parse(weekStart + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
+  const mornings = (rows, from) => rows.filter(r => r.id >= from && r.id < weekStart && Number(r.hrv) > 0).length;
+  const rank = rows => ({ rows, week: mornings(rows, day(-7)), all: mornings(rows, day(-67)) });
+  const of = s => (health || []).map(r => ({ id: r?.id, hrv: r?.hrvBySource?.[s] ?? ((r?.hrvSource || "") === s ? r?.hrv : null) }));
+  const sources = new Set((health || []).flatMap(r => r?.hrvBySource ? Object.keys(r.hrvBySource) : Number(r?.hrv) > 0 ? [r.hrvSource || ""] : []));
+  const best = [...sources].map(s => rank(of(s))).reduce((a, b) => !a || b.week > a.week || (b.week === a.week && b.all > a.all) ? b : a, null);
+  const own = rank((intervals || []).map(r => ({ id: r?.id, hrv: r?.hrv }))), covered = rank((health || []).map(r => ({ id: r?.id, hrv: r?.hrv })));
+  return !best || own.week > covered.week ? own.rows : best.rows;
 }
 // Training load of the three weeks before `weekStart` from Intervals.icu
 // wellness rows, or the app's own rows without it (own-fitness.js `load`);
@@ -437,15 +451,21 @@ export const RUN_FLOOR_MINUTES = 60;
 const dayShift = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
 export const isRunActivity = a => /run/i.test(String(a?.type || a?.sport || "")) && !/walk/i.test(String(a?.type || ""));
 const runMinutes = list => (list || []).filter(isRunActivity).reduce((n, a) => n + (Number(a.durationHours) || 0) * 60, 0);
+// One run, too, stays within 10 % above the longest of the last 30 days
+// (Frandsen 2025, BJSM: a longer one raised the injury risk, the weekly change
+// did not); +5 min is always allowed, so a short longest run can still grow.
 export function weeklyRunCap(history = [], weekStart) {
   const weeks = [1, 2, 3, 4].map(k => { const from = dayShift(weekStart, -7 * k), to = dayShift(weekStart, -7 * (k - 1)); return Math.round((history || []).filter(d => d.date >= from && d.date < to).reduce((n, d) => n + runMinutes(d.daily?.training?.completed), 0)); });
   const base = Math.max(weeks[0], weeks.reduce((a, b) => a + b, 0) / 4);
-  return { cap: Math.max(RUN_FLOOR_MINUTES, round5(base * 1.1)), base: Math.round(base), weeks };
+  const month = (history || []).filter(d => d.date >= dayShift(weekStart, -30) && d.date < weekStart);
+  const longest = Math.round(Math.max(0, ...month.flatMap(d => (d.daily?.training?.completed || []).filter(isRunActivity).map(a => (Number(a.durationHours) || 0) * 60))));
+  return { cap: Math.max(RUN_FLOOR_MINUTES, round5(base * 1.1)), base: Math.round(base), weeks, longest, single: longest ? Math.max(longest + 5, Math.floor(longest * 1.1 / 5) * 5) : null };
 }
 // Proposed runs share what is left under the cap, at least 20 min each: a run
 // that would get less is left out (the shortest first) and the rest share again.
 export function capRunVolume(targets, runCap, committed = 0) {
   if (!runCap || !["ok", "estimated"].includes(targets?.status)) return targets;
+  if (runCap.single) targets = { ...targets, items: targets.items.map(x => x.sport !== "run" || x.role === "race" || x.minutes <= runCap.single ? x : { ...x, minutes: runCap.single, tss: Math.round(runCap.single / 60 * (x.intensity || RUN_IF[x.role] || .78) ** 2 * 100), capped: true, cappedFrom: x.minutes }) };
   const runs = targets.items.filter(x => x.sport === "run"), proposed = runs.reduce((n, x) => n + x.minutes, 0), room = Math.max(0, runCap.cap - committed);
   const info = { ...runCap, committed: Math.round(committed), proposed, limited: false };
   if (!runs.length || proposed <= room) return { ...targets, runCap: info };
@@ -453,7 +473,7 @@ export function capRunVolume(targets, runCap, committed = 0) {
   const share = list => { const total = list.reduce((n, x) => n + x.minutes, 0), near = list.map(x => round5(x.minutes * room / total)); return near.reduce((a, b) => a + b, 0) <= room ? near : list.map(x => Math.floor(x.minutes * room / total / 5) * 5); };
   let kept = runs, shares = share(kept);
   while (kept.length && Math.min(...shares) < 20) { const out = shares.indexOf(Math.min(...shares)); kept = kept.filter((_, i) => i !== out); shares = kept.length ? share(kept) : []; }
-  const items = targets.items.filter(x => x.sport !== "run" || kept.includes(x)).map(x => { if (x.sport !== "run") return x; const minutes = shares[kept.indexOf(x)], intensity = x.intensity || RUN_IF[x.role] || .78; return { ...x, minutes, tss: Math.round(minutes / 60 * intensity * intensity * 100), capped: true }; });
+  const items = targets.items.filter(x => x.sport !== "run" || kept.includes(x)).map(x => { if (x.sport !== "run") return x; const minutes = shares[kept.indexOf(x)], intensity = x.intensity || RUN_IF[x.role] || .78; return { ...x, minutes, tss: Math.round(minutes / 60 * intensity * intensity * 100), capped: true, cappedFrom: x.cappedFrom ?? x.minutes }; });
   return { ...targets, items, runCap: { ...info, proposed: items.filter(x => x.sport === "run").reduce((n, x) => n + x.minutes, 0), limited: true } };
 }
 // Running minutes a day adds to the week: the done runs before today, the

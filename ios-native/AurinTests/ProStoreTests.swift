@@ -129,7 +129,8 @@ final class ProStoreTests: XCTestCase {
 
         let outcome = try await step("purchase yearly") { try await store.purchase(ProStore.yearlyID) }
         XCTAssertEqual(outcome, .purchased(trial: true))
-        XCTAssertEqual(reminded, yearly, "the day-5 reminder names the price")
+        XCTAssertEqual(reminded, ProStore.trialEndText(price: yearly, monthly: nil), "the day-5 reminder names the price")
+        XCTAssertTrue(reminded?.contains(yearly) == true, reminded ?? "no reminder")
         XCTAssertTrue(store.entitled)
         XCTAssertFalse(store.trialEligible, "the free week once per Apple ID")
         XCTAssertEqual(session.allTransactions().count, 1)
@@ -173,6 +174,16 @@ final class ProStoreTests: XCTestCase {
             print("ProStoreTests open transaction: \(transaction.productID) \(transaction.id), bought \(transaction.purchaseDate); finished here: \(finished.map { $0.id })")
         }
         _ = session
+    }
+
+    /// The year paid monthly: the reminder names the monthly payment, not the
+    /// yearly price paid at once (Aurin.storekit has no commitment plan to buy).
+    func testTrialEndTextForTheYearPaidMonthly() {
+        let commitment = ProStore.Commitment(monthly: "149 Kč", total: "1 788 Kč")
+        let monthly = ProStore.trialEndText(price: "1 490 Kč", monthly: commitment)
+        XCTAssertTrue(monthly.contains("149 Kč"), monthly)
+        XCTAssertFalse(monthly.contains("1 490"), monthly)
+        XCTAssertTrue(ProStore.trialEndText(price: "1 490 Kč", monthly: nil).contains("1 490 Kč"))
     }
 
     func testTrialReminderOnDayFive() throws {

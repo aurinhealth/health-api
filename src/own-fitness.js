@@ -5,6 +5,8 @@ import { loadSeries, dailyLoads, sessionsFrom, gymSessions, watchOnly } from "./
 import { athleteThresholds } from "./intervals-athlete.js";
 import { shiftDate, dashboardProfile } from "./dashboard-shared.js";
 import { localToday, dayStartUtc } from "./user-time.js";
+import { countedByIntervals } from "./sync-destinations.js";
+import { forwardKey } from "./watch-forward.js";
 
 // CTL, ATL and TSB from the athlete's own workouts when Intervals.icu is not
 // connected. 120 days before `from` warm the averages up, so CTL is close to
@@ -35,7 +37,7 @@ export async function ownFitness(env,from,to){
 // day after `to` and its midnight in UTC (a New York evening is the next UTC day).
 export function loadActivityRows(env,start,to){
   const end=shiftDate(to,1),utcEnd=dayStartUtc(end);
-  return rowsOf(env.DB.prepare("SELECT start_time,end_time,source_family,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,start,utcEnd>end?utcEnd:end).all());
+  return rowsOf(env.DB.prepare("SELECT start_time,end_time,source_family,external_id,matched_activity_id,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,start,utcEnd>end?utcEnd:end).all());
 }
 // FTP, LTHR, heart-rate range and sex for the load of a session (training-load.js).
 export async function loadAthlete(env,to,ctx=null){
@@ -52,13 +54,23 @@ export async function loadAthlete(env,to,ctx=null){
 // (training-load.js watchOnly, addLoads); null when there are none.
 export async function watchOnlyFitness(env,ctx,from,to){
   const warmup=120,start=shiftDate(from,-warmup);
-  const rows=await loadActivityRows(env,start,to);
-  const byActivity=new Map(),watch=[],intervals=[];
-  for(const row of rows){const a=activityFromRow(row);if(!a)continue;byActivity.set(a,row);
-    if(row.source_family==='google-wearables'||row.source_family==='apple-health'||row.source_family==='wahoo')watch.push(a);else if(row.source_family==='intervals')intervals.push(a);}
-  const extra=watchOnly(dedupeActivities(watch),intervals);
+  const [rows,counted]=await Promise.all([loadActivityRows(env,start,to),countedByIntervals(env.DB,env.USER_ID)]);
+  const byActivity=new Map();
+  const extra=watchOnlyActivities(rows,counted,byActivity);
   if(!extra.length)return null;
   return loadSeries(dailyLoads(sessionsFrom(extra,byActivity,[]),await loadAthlete(env,to,ctx)),{from,to,warmup});
+}
+// The watch's and Wahoo's workouts Intervals.icu does not count itself.
+// Left out besides the ones it has (watchOnly): one paired with its record
+// (a Strava activity it shows only as a stub, whose load it still counts) and
+// one Aurin sent there that it counts (countedByIntervals). `byActivity` gets each activity's row.
+export function watchOnlyActivities(rows,counted=new Set(),byActivity=new Map()){
+  const watch=[],intervals=[];
+  for(const row of rows){const a=activityFromRow(row);if(!a)continue;byActivity.set(a,row);
+    if(row.source_family==='google-wearables'||row.source_family==='apple-health'||row.source_family==='wahoo'){
+      if(!/^intervals:/.test(String(row.matched_activity_id||''))&&!counted.has(forwardKey(row)))watch.push(a);
+    }else if(row.source_family==='intervals')intervals.push(a);}
+  return watchOnly(dedupeActivities(watch),intervals);
 }
 // The days /app/api/fitness covers: `days` back to the user's today, both included.
 export function fitnessDays(days,at=new Date()){const to=localToday(at);return{from:shiftDate(to,-days),to};}

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getAthleteState, updateAthleteState, memoryList, memoryCheck, memoryChanges } from '../src/athlete-state.js';
+import { getAthleteState, updateAthleteState, memoryList, memoryCheck, memoryChanges, healthMemorySince } from '../src/athlete-state.js';
+import { readFileSync } from 'node:fs';
 import { coachAnswerText } from '../src/coach-assistant.js';
 import { COACH_ACTION_FORMAT } from '../src/coach-actions.js';
 import { scopedDb } from '../src/tenancy.js';
@@ -25,6 +26,19 @@ test('a pain is checked after two weeks, a taste is not', async () => {
   const gone = await updateAthleteState(db, { forget: due.memory }, { date: '2026-10-28' });
   assert.deepEqual(gone.memories, ['Mám rád dlouhé jízdy o víkendu']);
   assert.equal(gone.memoryMeta['Nechci běhat, bolí mě koleno'], undefined);
+});
+
+test('the coach gets the day a pain was told or last confirmed, and the check comes first on Today (audit 4.6)', async () => {
+  const db = scopedDb(createD1(), 1);
+  await updateAthleteState(db, { memory: 'Bolí mě koleno' }, { date });
+  await updateAthleteState(db, { memory: 'Mám rád dlouhé jízdy o víkendu' }, { date });
+  assert.deepEqual(healthMemorySince(await getAthleteState(db, { date })), [{ text: 'Bolí mě koleno', since: date }]);
+  const kept = await updateAthleteState(db, { keep: 'Bolí mě koleno' }, { date: '2026-10-28' });
+  assert.deepEqual(healthMemorySince(kept), [{ text: 'Bolí mě koleno', since: '2026-10-28' }]);
+  assert.deepEqual(healthMemorySince({ ...kept, memoryOff: true }), []);
+  const src = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
+  assert.match(src, /const advice=\(swap&&state\.nudge\.date!==date\?swap:null\)\|\|memoryCheck\(state,date\)\|\|easier/);
+  assert.match(src, /healthMemorySince:healthSince/);
 });
 
 test('editing keeps the place in the list and an empty edit is refused', async () => {

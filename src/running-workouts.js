@@ -46,7 +46,7 @@ const FAMILIES = [
     core: l => [rep(1, l.flatMap(m => [step(m, m >= 3 ? 105 : 108), jog(m, 75)]))], desc: "Pyramida délek s klusem stejně dlouhým – pestrá VO₂ jednotka, jde běžet i v terénu." },
   { key: "run-hills", system: "vo2max", secondary: "anaerobic", label: l => `Kopce ${l[0]}×${l[1] === 1.5 ? "90 s" : l[1] + " min"}`, warmup: WU_STRIDES, tags: ["hills"],
     levels: [[6, 1.5], [8, 1.5], [6, 2], [8, 2], [10, 2]],
-    core: ([r, m]) => [rep(r, [step(m, 106, null, "do kopce 5–8 %, tvrdě"), step(m, 65, null, "dolů klusem")])], desc: "Úseky do kopce – síla, odraz a VO₂ bez velkého nárazu na nohy." },
+    core: ([r, m]) => [rep(r, [{ ...step(m, 106, null, "do kopce 5–8 %, tvrdě podle pocitu, ne podle tempa"), free: true }, step(m, 65, null, "dolů klusem")])], desc: "Úseky do kopce – síla, odraz a VO₂ bez velkého nárazu na nohy." },
   // ---- anaerobic / speed -------------------------------------------------
   { key: "run-reps", system: "anaerobic", secondary: "vo2max", label: l => `Rychlé úseky ${l[0]}×${l[1] === 1 ? "1 min" : l[1] === .75 ? "45 s" : "90 s"}`, warmup: WU_STRIDES,
     levels: [[8, .75], [10, .75], [8, 1], [10, 1], [12, 1], [6, 1.5], [8, 1.5]],

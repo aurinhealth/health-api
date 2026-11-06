@@ -122,7 +122,7 @@ struct TodayContent: View {
     /// Readiness and, in the first two weeks, what fills Today.
     @ViewBuilder private var readiness: some View {
         RouteLink(route: .readiness) {
-            ReadinessHero(readiness: today.readiness, date: today.date, nightMissing: today.sleep == nil, isToday: today.steps.hour != nil)
+            ReadinessHero(readiness: today.readiness, date: today.date, nightMissing: today.sleep == nil, isToday: today.steps.hour != nil, noWearable: model.noWearable)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
         }
@@ -593,6 +593,8 @@ struct ReadinessHero: View {
     var date: String = ""
     var nightMissing = false
     var isToday = true
+    /// No watch or ring (audit 14.2): say where readiness comes from instead of waiting for a night.
+    var noWearable = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -623,6 +625,8 @@ struct ReadinessHero: View {
                 }
             } else if let days = readiness.learningDays {
                 ReadinessLearning(days: days, date: date)
+            } else if noWearable {
+                NoWearableText()
             } else if readiness.flags?.contains("no_night") == true && (!isToday || Calendar.current.component(.hour, from: Date()) >= 12) {
                 // Today from noon on: the night is not coming any more.
                 Text("Bez zaznamenané noci")
@@ -651,6 +655,24 @@ struct ReadinessHero: View {
             return L10n.plural("Orientační: nový zdroj dat, zpřesní se za %lld dní.", days)
         }
         return L10n.tr("Orientační: nový zdroj dat, číslo se ještě zpřesní.")
+    }
+}
+
+/// Readiness without a watch or ring (audit 14.2), on Today, the Health card
+/// and the readiness detail: no number is coming, and the advice still works.
+struct NoWearableText: View {
+    var title: Font = Typo.sentence(34, relativeTo: .largeTitle)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Bez hodinek nebo prstenu")
+                .font(title)
+                .foregroundStyle(Palette.ink)
+                .padding(.top, 8)
+            Text("Připravenost počítají hodinky nebo prsten z HRV, klidového tepu a spánku. Bez nich ti radím podle tréninku a zátěže. Připojíš je v Nastavení → Zdroje dat.")
+                .font(Typo.small).foregroundStyle(Palette.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
@@ -793,7 +815,8 @@ struct MorningCheckinCard: View {
 
 /// Sleep · Strain · HRV under the readiness number, each on a range bar:
 /// sleep against the night's need, the strain against today's goal, the HRV
-/// against the athlete's usual range.
+/// against the athlete's usual range (without a watch or ring, the steps
+/// against their goal).
 struct KeyNumbers: View {
     @Environment(AppModel.self) private var model
     let today: TodaySnapshot
@@ -809,7 +832,12 @@ struct KeyNumbers: View {
                 Divider().overlay(Palette.hairline)
                 RouteLink(route: .strain) { cell("Námaha", Fmt.decimal(today.strain.score), nil, strain) }
                 Divider().overlay(Palette.hairline)
-                RouteLink(route: .metric(.hrv)) { cell("HRV", Fmt.int(today.hrv?.value), "ms", hrv) }
+                // Without a watch or ring HRV stays empty for good: the day's steps instead (audit 14.2).
+                if model.noWearable {
+                    RouteLink(route: .steps) { cell("Kroky", Fmt.int(today.steps.today), nil, steps) }
+                } else {
+                    RouteLink(route: .metric(.hrv)) { cell("HRV", Fmt.int(today.hrv?.value), "ms", hrv) }
+                }
             }
             .fixedSize(horizontal: false, vertical: true)
             .onGeometryChange(for: Bool.self) { $0.size.width < 300 } action: { compact = $0 }
@@ -860,6 +888,12 @@ struct KeyNumbers: View {
                          color: RangeBar.side(score, t.low, t.high) == 0 ? Palette.green : Palette.amber)
         }
         return Gauge(note: today.strain.planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }, color: Palette.amber)
+    }
+
+    private var steps: Gauge {
+        guard today.steps.goal > 0 else { return Gauge(note: nil, color: Palette.green) }
+        return Gauge(note: L10n.f("cíl %@", Fmt.int(today.steps.goal)),
+                     color: (today.steps.today ?? 0) >= today.steps.goal ? Palette.green : Palette.amber)
     }
 
     private var hrv: Gauge {
