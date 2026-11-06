@@ -46,7 +46,7 @@ struct PrivacySettingsView: View {
                 }
             }
             SettingsGroup {
-                Link(destination: Self.policyURL) {
+                Link(destination: L10n.legalURL("privacy")) {
                     SettingsRow(title: "Zásady ochrany soukromí", chevron: false)
                         .overlay(alignment: .trailing) {
                             Image(systemName: "arrow.up.right.square").scaledFont(14).foregroundStyle(Palette.faint)
@@ -63,7 +63,7 @@ struct PrivacySettingsView: View {
                         .disabled(model.demo)
                 }
             }
-            SettingsGroup(footer: "Smaže účet i všechna data na serveru. Nejde vrátit. Data v Intervals.icu a Google zůstanou, kde jsou.") {
+            SettingsGroup(footer: "Smaže účet i všechna data na serveru. Nejde vrátit. Data v Apple Health, Intervals.icu, Google a Wahoo zůstanou, kde jsou.") {
                 Button { confirmDelete = true } label: { SettingsRow(title: "Smazat účet", chevron: false, titleColor: Palette.rust) }
                     .buttonStyle(.plain)
                     .disabled(model.demo)
@@ -87,7 +87,10 @@ struct PrivacySettingsView: View {
             Button("Smazat účet", role: .destructive) { Task { await delete() } }
             Button("Zrušit", role: .cancel) {}
         } message: {
-            Text("Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit.")
+            // Apple's account-deletion guidance: billing goes on until cancelled in the App Store.
+            Text(verbatim: ProStore.shared.entitled
+                 ? L10n.tr("Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit. Předplatné Aurin Pro se tím nezruší, zrušíš ho v App Store.")
+                 : L10n.tr("Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit."))
         }
         .stepUpSheet($stepUp)
     }
@@ -95,11 +98,6 @@ struct PrivacySettingsView: View {
     private func fact(_ symbol: String, _ color: Color, _ title: String, _ text: String) -> some View {
         SettingsRow(icon: SettingsIcon(systemImage: symbol, color: color), title: title, subtitle: text, chevron: false)
             .accessibilityElement(children: .combine)
-    }
-
-    /// The policy on aurin.health, in Czech while the app speaks Czech.
-    private static var policyURL: URL {
-        URL(string: L10n.language == "cs" ? "https://aurin.health/privacy?lang=cs" : "https://aurin.health/privacy")!
     }
 
     private func export() async {

@@ -670,7 +670,7 @@
 "Smazat „%@“ z plánu?" = "Remove “%@” from the plan?";
 "Smazat „%@“?" = "Delete “%@”?";
 "Smazáním účtu v Nastavení → Účet, kde si předtím můžeš stáhnout všechna svoje data." = "Delete your account in Settings → Account, where you can first download all your data.";
-"Smaže účet i všechna data na serveru. Nejde vrátit. Data v Intervals.icu a Google zůstanou, kde jsou." = "Deletes your account and all data on the server. This can't be undone. Data in Intervals.icu and Google stays where it is.";
+"Smaže účet i všechna data na serveru. Nejde vrátit. Data v Apple Health, Intervals.icu, Google a Wahoo zůstanou, kde jsou." = "Deletes your account and all data on the server. This can't be undone. Data in Apple Health, Intervals.icu, Google and Wahoo stays where it is.";
 "Snídaně" = "Breakfast";
 "Snímek obrazovky" = "Screenshot";
 "Souhlas" = "Consent";
@@ -1227,7 +1227,7 @@
 "Předplatné" = "Subscription";
 "zdarma" = "free";
 "Předplatné je aktivní" = "Subscription active";
-"Tahle AI funkce je součástí AI předplatného." = "This AI feature is part of the AI subscription.";
+"Tahle AI funkce je součástí Aurin Pro." = "This AI feature is part of Aurin Pro.";
 "Nemoc" = "Sick";
 "Zranění" = "Injured";
 "Stav sportovce: %@, %@" = "Athlete status: %1$@, %2$@";
@@ -4009,3 +4009,6 @@
 "Nelíbí" = "Dislike";
 "Nahradit" = "Replace";
 "V dalších plánech už nebude. Vrátit to jde v Nastavení → Posilovna → Cviky." = "Won't be in your next plans. Undo in Settings → Gym → Exercises.";
+"Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit. Předplatné Aurin Pro se tím nezruší, zrušíš ho v App Store." = "Everything Aurin keeps for you goes and can't be restored. This doesn't cancel Aurin Pro; cancel it in the App Store.";
+"Pak začne Aurin Pro za %@ měsíčně po 12 měsíců. Zrušit ho můžeš v Nastavení → Aurin Pro." = "Then Aurin Pro starts at %@ a month for 12 months. You can cancel it in Settings → Aurin Pro.";
+"Načítám ceny z App Store…" = "Loading prices from the App Store…";
