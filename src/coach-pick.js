@@ -4,7 +4,8 @@
 // tired), swimming, the sauna or a day off. Readiness, the plan for the day,
 // what was done lately and the main sport rank them; an option the athlete
 // turns down loses weight for two weeks (the coach learns from declines).
-import { L } from "./lang.js";
+import { L, paceText, isImperial } from "./lang.js";
+import { parsePace } from "./training-zones.js";
 import { isHardKind } from "./session-intensity.js";
 import { activityKindOf, sessionOf } from "./activity-match.js";
 import { addRecovery, ensureRecoveryTable } from "./recovery-plan.js";
@@ -259,7 +260,8 @@ export async function setLess(db, userId, kind, less = true) {
 // the day really changes, not when only the sauna or the day off moves.
 const DETAILED = new Set(["ride", "run", "swim", "gym"]);
 export function pickSignature(ranked) {
-  return JSON.stringify([ranked.status, ranked.lowerTired ? 1 : 0, ...ranked.options.filter(o => DETAILED.has(o.kind)).map(o => [o.kind, o.title, o.best ? 1 : 0])]);
+  // Imperial units are added only for imperial users: the run lines carry "/mi", a metric user's signature stays as before.
+  return JSON.stringify([ranked.status, ranked.lowerTired ? 1 : 0, ...ranked.options.filter(o => DETAILED.has(o.kind)).map(o => [o.kind, o.title, o.best ? 1 : 0]), ...(isImperial() ? ["imperial"] : [])]);
 }
 
 export async function storedDetails(db, userId, date, signature) {
@@ -281,7 +283,7 @@ export function workoutLines(steps = [], sport = "ride") {
   if (sport === "swim") return swimLines(steps);
   const run = sport === "run";
   const minutes = s => Math.round((s.durationSeconds || 0) / 60);
-  const target = s => run ? (s.paceFast ? s.paceFast + "/km" : null) : s.wattsLow != null ? Math.round((s.wattsLow + (s.wattsHigh ?? s.wattsLow)) / 2) + " W" : Math.round((s.percentLow + s.percentHigh) / 2) + " % FTP";
+  const target = s => run ? (s.paceFast ? paceText(parsePace(s.paceFast)) : null) : s.wattsLow != null ? Math.round((s.wattsLow + (s.wattsHigh ?? s.wattsLow)) / 2) + " W" : Math.round((s.percentLow + s.percentHigh) / 2) + " % FTP";
   const value = s => [minutes(s) + " min", target(s)].filter(Boolean).join(" · ");
   const name = (s, i, last) => s.note || (i === 0 ? (run ? L("Rozklus", "Warm-up") : L("Rozjetí", "Warm-up")) : i === last ? (run ? L("Výklus", "Cool-down") : L("Vyjetí", "Cool-down")) : L("Úsek", "Section"));
   const last = steps.length - 1;

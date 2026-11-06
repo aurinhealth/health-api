@@ -1057,7 +1057,7 @@ struct PlanProposalBlock: View {
         let weeks = action.weeksCount ?? action.trainingPlan?.weeks.count ?? 0
         let length = L10n.plural("%lld týdnů", weeks)
         if let race = action.raceDate {
-            out.append((L10n.tr("Závod"), day(race) + (action.raceKm.map { " · " + Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) + " km" } ?? "")))
+            out.append((L10n.tr("Závod"), day(race) + (action.raceKm.map { " · " + raceDistance($0) } ?? "")))
             out.append((L10n.tr("Délka"), action.startDate.map { L10n.plural("%lld týdnů od %@", weeks, Fmt.dayMonth(action.firstDay ?? $0)) } ?? length))
         } else {
             if let start = action.firstDay ?? action.startDate { out.append((L10n.tr("Začátek"), day(start))) }

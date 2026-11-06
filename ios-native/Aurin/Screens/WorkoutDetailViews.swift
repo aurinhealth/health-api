@@ -545,14 +545,14 @@ struct ActivityDetailContent: View {
         VStack(alignment: .leading, spacing: 0) {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 16) {
                 if let t = a.moving_time { stat("Čas", Fmt.duration(Int(t / 60))) }
-                if let d = a.distance, d > 0 { stat("Vzdálenost", isSwim ? Fmt.int(d) + " m" : Units.distanceText(d / 1000)) }
+                if let d = a.distance, d > 0 { stat("Vzdálenost", isSwim ? Units.swimDistanceText(d) : Units.distanceText(d / 1000)) }
                 if let load = a.icu_training_load { stat("Zátěž", Fmt.int(load) + " TSS") }
                 if let w = a.icu_normalized_watts ?? a.average_watts { stat(a.icu_normalized_watts != nil ? "NP" : "Výkon", Fmt.int(w) + " W") }
                 if let hr = a.average_heartrate { stat("Prům. tep", Fmt.int(hr) + " bpm") }
                 if let hr = a.max_heartrate { stat("Max. tep", Fmt.int(hr) + " bpm") }
                 if let i = a.icu_intensity { stat("IF", Fmt.decimal(i > 2 ? i / 100 : i, digits: 2)) }
                 if let pace = pace(a.average_speed) { stat(L10n.isEnglish ? "Pace" : "Tempo", pace) }
-                if let e = a.total_elevation_gain, e > 0 { stat("Převýšení", Fmt.int(e) + " m") }
+                if let e = a.total_elevation_gain, e > 0 { stat("Převýšení", Units.imperial ? Fmt.int(e * 3.28084) + " ft" : Fmt.int(e) + " m") }
                 if let h = detail.recoveryHours { stat("Regenerace", "\(h) h") }
                 if let c = kcal ?? a.calories {
                     VStack(alignment: .leading, spacing: 2) {
@@ -628,13 +628,13 @@ struct ActivityDetailContent: View {
 
     private var isRun: Bool { (detail.activity.type ?? "").lowercased().contains("run") }
     private var isSwim: Bool { (detail.activity.type ?? "").lowercased().contains("swim") }
-    /// "1:55 /100 m" needs more room than "5:12 /km".
-    private var paceWidth: CGFloat { isSwim ? 92 : 70 }
+    /// "1:55 /100 m" or "1:45 /100 yd" needs more room than "5:12 /km".
+    private var paceWidth: CGFloat { isSwim ? 96 : 70 }
 
-    /// A speed in m/s as a run's "5:12 /km" or a swim's "1:55 /100 m"; other sports have none.
+    /// A speed in m/s as a run's "5:12 /km" or a swim's "1:55 /100 m" ("/100 yd" in imperial); other sports have none.
     private func pace(_ speed: Double?) -> String? {
         guard let v = speed, v > 0 else { return nil }
-        if isSwim { return Units.swimPaceText(100 / v) }
+        if isSwim { return Units.swimSpeedText(v) }
         return isRun ? Units.paceText(1000 / v) : nil
     }
 

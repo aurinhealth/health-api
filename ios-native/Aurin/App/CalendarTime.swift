@@ -249,7 +249,7 @@ final class CalendarTime {
         for plan in [plans?.active, plans?.activeGym].compactMap({ $0 }) {
             guard let race = plan.raceDate, race >= today else { continue }
             entries.append(Entry(key: "race|" + plan.templateId, date: race, title: L10n.f("Závod · %@", plan.name), minutes: nil, time: nil,
-                                 notes: plan.raceKm.map { Fmt.decimal($0) + " km" } ?? "", link: URL(string: "aurin://open/training")))
+                                 notes: plan.raceKm.map { raceDistance($0) } ?? "", link: URL(string: "aurin://open/training")))
         }
         _ = read()
         do {

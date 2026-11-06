@@ -150,7 +150,7 @@ import { coachNudge, swapOffer, hardSession, easierSwap, zoneShiftHours, COACH_P
 import { waterNudge } from "./water-goal.js";
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
 import { cachedPage } from './page-cache.js';
-import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, L } from "./lang.js";
+import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, units, L } from "./lang.js";
 import { appUpdateRequired } from "./app-version.js";
 import { compactOldData } from "./heart-rate-compaction.js";
 import { upkeepHourSummary } from "./hour-summary.js";
@@ -2889,7 +2889,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if(url.pathname==='/app/api/share/milestones'&&request.method==='GET'){
     try{
       const today=localToday();
-      const result=await cached(env,ctx,'share-milestones:'+today,async()=>{
+      const result=await cached(env,ctx,'share-milestones:'+today+':'+units(),async()=>{
         const [inputs,record]=await Promise.all([
           milestoneInputs(env,today),
           intervalsRecord(env,intervalsAuthorization(env.INTERVALS_API_KEY),today).catch(()=>null)

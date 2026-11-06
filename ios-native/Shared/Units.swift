@@ -100,7 +100,30 @@ enum Units {
         return "\(s / 60):" + String(format: "%02d", s % 60) + " " + paceUnit
     }
 
-    /// A swim pace, "1:52 /100 m": pools are measured in metres everywhere we ship.
+    // MARK: A swim done (its detail, laps and share card)
+    // Planned swims, CSS and records stay in metres: the workouts are written in pool metres.
+
+    private static let metresPerYard = 0.9144
+    static var swimDistanceUnit: String { imperial ? "yd" : "m" }
+    static func swimDistance(_ metres: Double) -> Double { imperial ? metres / metresPerYard : metres }
+    static var swimPaceUnit: String { imperial ? "/100 yd" : "/100 m" }
+    /// Seconds per 100 m → seconds per 100 yd.
+    static func swimPace(_ secondsPer100m: Double) -> Double { imperial ? secondsPer100m * metresPerYard : secondsPer100m }
+
+    /// "1 500 m" or "1,640 yd".
+    static func swimDistanceText(_ metres: Double?) -> String {
+        guard let metres else { return "–" }
+        return number(swimDistance(metres), digits: 0) + " " + swimDistanceUnit
+    }
+
+    /// A swim done from its speed in m/s: "1:55 /100 m" or "1:45 /100 yd".
+    static func swimSpeedText(_ metresPerSecond: Double?) -> String? {
+        guard let v = metresPerSecond, v > 0 else { return nil }
+        let s = Int(swimPace(100 / v).rounded())
+        return "\(s / 60):" + String(format: "%02d", s % 60) + " " + swimPaceUnit
+    }
+
+    /// A planned swim's pace, "1:52 /100 m".
     static func swimPaceText(_ secondsPer100m: Double?) -> String {
         guard let secondsPer100m, secondsPer100m > 0 else { return "–" }
         let s = Int(secondsPer100m.rounded())

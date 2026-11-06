@@ -1,4 +1,4 @@
-import { L } from './lang.js';
+import { L, isImperial, num } from './lang.js';
 import { availabilityOn, parseTimeWindow } from './training-availability.js';
 import { planWeekRoles, roleTime, weekTargets, weekLoadsBefore, weeklyRunCap, capRunVolume, committedRunMinutes, isRunActivity, hrvWeekTrendDown, hrvSourceRows } from './week-planner.js';
 import { timeZone } from "./user-time.js";
@@ -50,15 +50,19 @@ export function weatherReason(date, sport, weather) {
   if (!weather) return e.reason;
   const n = v => Number.isFinite(Number(v)) && v !== null ? Math.round(Number(v)) : null;
   const max = n(weather.max), wind = n(weather.wind), chance = n(weather.rainProb), rain = Number(weather.rain);
-  const mm = Number.isFinite(rain) ? String(Math.round(rain * 10) / 10) : null;
+  // The limits stay metric; an imperial reader sees °F, mph and inches.
+  const imperial = isImperial();
+  const deg = max == null ? null : imperial ? Math.round(Number(weather.max) * 9 / 5 + 32) + '°F' : max + '°';
+  const windText = wind == null ? null : imperial ? Math.round(Number(weather.wind) / 1.609344) + ' mph' : wind + ' km/h';
+  const rainText = !Number.isFinite(rain) ? null : imperial ? num(rain / 25.4, 2) + ' in' : num(rain, 1) + ' mm';
   if (Number(weather.code) >= 95) return L('Hlásí bouřky.', 'Storms are forecast.');
-  if (max != null && max < (sport === 'ride' ? 8 : 0)) return L('Nejvýš ' + max + '°, venku je zima.', 'High of ' + max + '°, too cold outside.');
-  if (wind != null && wind >= (sport === 'ride' ? 35 : 50)) return L('Vítr až ' + wind + ' km/h.', 'Wind up to ' + wind + ' km/h.');
-  if (mm != null && rain >= 3) return L('Naprší ' + mm.replace('.', ',') + ' mm.', mm + ' mm of rain.');
+  if (max != null && max < (sport === 'ride' ? 8 : 0)) return L('Nejvýš ' + deg + ', venku je zima.', 'High of ' + deg + ', too cold outside.');
+  if (wind != null && wind >= (sport === 'ride' ? 35 : 50)) return L('Vítr až ' + windText + '.', 'Wind up to ' + windText + '.');
+  if (rainText != null && rain >= 3) return L('Naprší ' + rainText + '.', rainText + ' of rain.');
   if (chance != null && chance >= 70) return L('Déšť na ' + chance + ' %.', chance + ' % chance of rain.');
   if (e.environment === 'indoor') return e.reason;
   if (max == null) return e.reason;
-  return chance != null && chance >= 30 ? L('Nejvýš ' + max + '°, déšť na ' + chance + ' %.', 'High of ' + max + '°, ' + chance + ' % chance of rain.') : L('Sucho, nejvýš ' + max + '°.', 'Dry, high of ' + max + '°.');
+  return chance != null && chance >= 30 ? L('Nejvýš ' + deg + ', déšť na ' + chance + ' %.', 'High of ' + deg + ', ' + chance + ' % chance of rain.') : L('Sucho, nejvýš ' + deg + '.', 'Dry, high of ' + deg + '.');
 }
 // Weather is fetched on the server as well as in the calendar. Client data is
 // never the authority for training or health constraints. With the WeatherKit

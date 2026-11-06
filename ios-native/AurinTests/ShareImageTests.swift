@@ -83,6 +83,24 @@ final class ShareImageTests: XCTestCase {
         XCTAssertEqual(swim.value("Tempo")?.unit, "/100 m")
     }
 
+    /// The same swim for an imperial swimmer: yards and a pace per 100 yd (audit O24);
+    /// a race of 10 km reads "6.2 mi", not "6 mi" (29.5).
+    func testImperialSwimInYards() throws {
+        Units.setSystem("imperial")
+        defer { Units.setSystem("metric") }
+        let json = #"{"activity": {"type": "Swim", "distance": 1500, "moving_time": 1725, "average_speed": 0.8696}}"#
+        let detail = try JSONDecoder().decode(ActivityDetail.self, from: Data(json.utf8))
+        var swim = ShareWorkout(title: "Plavání", sport: "swim")
+        swim.add(detail)
+        XCTAssertEqual(swim.value("Vzdálenost")?.value, Fmt.int(1640))
+        XCTAssertEqual(swim.value("Vzdálenost")?.unit, "yd")
+        XCTAssertEqual(swim.value("Tempo")?.value, "1:45")
+        XCTAssertEqual(swim.value("Tempo")?.unit, "/100 yd")
+        XCTAssertEqual(Units.swimSpeedText(0.8696), "1:45 /100 yd")
+        XCTAssertEqual(raceDistance(10), Units.distanceText(10, digits: 1))
+        XCTAssertEqual(raceDistance(160.934), Units.distanceText(160.934, digits: 0))
+    }
+
     func testOptionsAreKept() throws {
         var options = ShareOptions()
         options.variant = 2

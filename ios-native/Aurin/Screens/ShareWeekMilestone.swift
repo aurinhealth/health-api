@@ -560,14 +560,17 @@ struct ShareMilestoneCard: View {
         }
     }
 
-    /// A quarter, a half and three quarters of the way, where the line crosses them.
+    /// A quarter, a half and three quarters of the way, where the line crosses them,
+    /// round in the shown unit ("25 mi", not "16").
     private func marks(_ item: ShareMilestones.Item) -> [(at: Double, text: String)] {
         let values = item.path
         let first = values.first ?? 0, last = values.last ?? 0
+        let perKm = item.isDistance ? Units.distance(1) : 1
         return [0.25, 0.5, 0.75].compactMap { share -> (at: Double, text: String)? in
-            let mark = (item.value * share).rounded()
+            let shown = (item.value * perKm * share).rounded()
+            let mark = shown / perKm
             guard mark > first, mark < last else { return nil }
-            return (mark, Fmt.int(item.isDistance ? Units.distance(mark) : mark))
+            return (mark, Fmt.int(shown))
         }
     }
 
