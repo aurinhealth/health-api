@@ -29,7 +29,7 @@ import { manualPairs } from "./manual-pairs.js";
 import { readDay } from "./day-reads.js";
 import { matchPlannedWorkouts } from "./plan-match.js";
 export { matchPlannedWorkouts };
-import { readSyncPrefs, healthAllowed, sentIntervalsIds, sentByAurin } from "./sync-destinations.js";
+import { readSyncPrefs, healthAllowed, sentIntervalsIds, sentByAurin, countedStatement } from "./sync-destinations.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -1330,7 +1330,11 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays,del
 
   for (const sourceActivity of activities) {
     const id = String(sourceActivity.id);
-    if (sentByAurin(sourceActivity) || sentHere.has(id)) continue;
+    if (sentByAurin(sourceActivity) || sentHere.has(id)) {
+      const counted = countedStatement(env.DB, env.USER_ID, sentHere.get(id), sourceActivity);
+      if (counted) statements.push(counted);
+      continue;
+    }
     if (!existingById.has("activity:" + id)) added++;
     let a = sourceActivity;
     if (sourceActivity?._note && !sourceActivity.name && !sourceActivity.type) {
