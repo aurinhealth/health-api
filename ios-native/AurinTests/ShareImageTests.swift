@@ -71,6 +71,18 @@ final class ShareImageTests: XCTestCase {
         XCTAssertEqual(ShareWorkout.smooth(Array(repeating: 100, count: 600)).count, 60)
     }
 
+    /// A pool swim: metres and a pace per 100 m, never km or /km (audit 15.1, 24.2).
+    func testSwimShowsMetresAndPacePer100m() throws {
+        let json = #"{"activity": {"type": "Swim", "distance": 1500, "moving_time": 1725, "average_speed": 0.8696}}"#
+        let detail = try JSONDecoder().decode(ActivityDetail.self, from: Data(json.utf8))
+        var swim = ShareWorkout(title: "Plavání", sport: "swim")
+        swim.add(detail)
+        XCTAssertEqual(swim.value("Vzdálenost")?.value, Fmt.int(1500))
+        XCTAssertEqual(swim.value("Vzdálenost")?.unit, "m")
+        XCTAssertEqual(swim.value("Tempo")?.value, "1:55")
+        XCTAssertEqual(swim.value("Tempo")?.unit, "/100 m")
+    }
+
     func testOptionsAreKept() throws {
         var options = ShareOptions()
         options.variant = 2

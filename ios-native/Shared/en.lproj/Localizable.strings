@@ -337,7 +337,15 @@
 "Nejdelší jízda časem" = "Longest ride by time";
 "Nejdřív nastav, kdy máš na trénink čas." = "First set when you have time to train.";
 "Nejdřív zapni budík na pracovní dny nebo víkend." = "First turn on the weekday or weekend alarm.";
-"Nejlepší výkon (20+ min)" = "Best power (20+ min)";
+"Nejvyšší NP jízdy (20+ min)" = "Highest ride NP (20+ min)";
+"Co znamenají TSS, NP, IF a FTP" = "What TSS, NP, IF and FTP mean";
+"Co znamenají zkratky" = "What the abbreviations mean";
+"Zátěž tréninku z jeho délky a intenzity. 100 TSS je zhruba hodina na prahu." = "Training load from a workout's length and intensity. 100 TSS is about an hour at threshold.";
+"Normalizovaný výkon: kolik tě jízda stála, jako bys jel rovnoměrně. Tvrdé úseky váží víc, proto bývá vyšší než průměr v grafu." = "Normalized power: what the ride cost you, as if you had ridden it evenly. Hard efforts weigh more, so it is usually above the chart's average.";
+"Intenzita: NP vydělený FTP. Kolem 0,75 je klidná vytrvalost, 1,0 je hodina naplno." = "Intensity factor: NP divided by FTP. About 0.75 is easy endurance, 1.0 is an hour all out.";
+"Funkční prahový výkon: nejvyšší výkon, který udržíš zhruba hodinu. Počítají se z něj zóny, IF i TSS." = "Functional threshold power: the highest power you can hold for about an hour. Zones, IF and TSS are counted from it.";
+"Pokles tepu po poslední zátěži" = "Heart rate drop after the last effort";
+"Minuta v intenzivní nebo maximální zóně se počítá dvakrát, jak to doporučuje WHO." = "A minute in the vigorous or peak zone counts twice, as WHO recommends.";
 "Nejníž" = "Lowest";
 "Nejrychlejší tempo na 5+ km" = "Fastest pace over 5K+";
 "Nejvíc nastoupáno" = "Most climbing";
@@ -904,7 +912,6 @@
 "Změnit zadání" = "Change settings";
 "Zobrazit" = "Show";
 "Zobrazit diagnostiku" = "View diagnostics";
-"Zotavení tepu" = "Heart rate recovery";
 "Zotavení tepu po tréninku" = "Heart rate recovery after training";
 "Zpět" = "Back";
 "Zrušit" = "Cancel";
