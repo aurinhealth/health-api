@@ -81,6 +81,19 @@ test('sleep need: naps lower it, a low HRV status and sleep debt raise it, withi
   const s=sleepNeedFor({date,age:30,rows:calm,sessions:short});assert.equal(s.debt,60);assert.equal(s.need,540);
   assert.equal(sleepNeedFor({date,age:30,strain:19,rows:low,sessions:short}).need,540);
 });
+
+test('sleep need: a short night is not a nap, an unflagged daytime sleep under 3 h is (audit 3.1)',()=>{
+  const date='2026-10-08',prev='2026-10-07';
+  // 01:30–04:00 in Prague: a short night, it must not lower tonight's need.
+  const night={date:prev,startTime:'2026-10-06T23:30:00Z',endTime:'2026-10-07T02:00:00Z',durationMin:150};
+  assert.equal(sleepNeedFor({date,age:30,rows:[],sessions:[night]}).naps,0);
+  assert.ok(sleepNeedFor({date,age:30,rows:[],sessions:[night]}).need>420,'the short night raises the need through the debt');
+  // 14:00–15:00 in Prague without the device's flag: a nap.
+  const nap={date:prev,startTime:'2026-10-07T12:00:00Z',endTime:'2026-10-07T13:00:00Z',durationMin:60};
+  assert.equal(sleepNeedFor({date,age:30,rows:[],sessions:[nap]}).naps,60);
+  // A night without times (Intervals) is never a nap.
+  assert.equal(sleepNeedFor({date,age:30,rows:[],sessions:[{date:prev,durationMin:150,source:'intervals'}]}).naps,0);
+});
 test('sleep debt adds a day\'s naps to its night',()=>{
   const s=[{date:day(6),durationMin:420},{date:day(6),durationMin:40,nap:true}];
   assert.equal(sleepDebtMinutes(s,day(6),480).minutes,20);

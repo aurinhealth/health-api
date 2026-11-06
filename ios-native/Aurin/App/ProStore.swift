@@ -59,8 +59,8 @@ final class ProStore {
         let ends: Date
     }
     private(set) var purchasing = false
-    /// Plans the day-5 reminder when a free week starts (the tests plan nothing).
-    @ObservationIgnored var trialReminder: @MainActor (Date, String) async -> Void = { await ProStore.remindTrialEnd(purchased: $0, price: $1) }
+    /// Plans the day-5 reminder when a free week starts, with its text (the tests plan nothing).
+    @ObservationIgnored var trialReminder: @MainActor (Date, String) async -> Void = { await ProStore.remindTrialEnd(purchased: $0, body: $1) }
     /// Finishes a pack's transaction. The pack test records it: StoreKit's test
     /// session on iOS 27 can keep listing a finished pack in Transaction.unfinished.
     @ObservationIgnored var finishTransaction: @MainActor (Transaction) async -> Void = { await $0.finish() }
@@ -189,7 +189,8 @@ final class ProStore {
         defer { purchasing = false }
         var options: Set<Product.PurchaseOption> = []
         if let token = await accountUUID() { options.insert(.appAccountToken(token)) }
-        if #available(iOS 26.4, *), monthly, id == Self.yearlyID, commitment != nil { options.insert(.billingPlanType(.monthly)) }
+        let paidMonthly = monthly && id == Self.yearlyID ? commitment : nil
+        if #available(iOS 26.4, *), paidMonthly != nil { options.insert(.billingPlanType(.monthly)) }
         switch try await Self.presentPurchase(product, options: options) {
         case .success(let result):
             guard case .verified(let transaction) = result else {
@@ -197,7 +198,7 @@ final class ProStore {
             }
             let trial = transaction.offer?.type == .introductory && transaction.offer?.paymentMode == .freeTrial
             await handle(result)
-            if trial { await trialReminder(transaction.purchaseDate, product.displayPrice) }
+            if trial { await trialReminder(transaction.purchaseDate, Self.trialEndText(price: product.displayPrice, monthly: paidMonthly)) }
             trialEligible = false
             return .purchased(trial: trial)
         case .pending:
@@ -425,7 +426,7 @@ final class ProStore {
     /// Day 5 of the free week at 10:00: it ends in two days. Asks for
     /// notifications now if nobody has yet, since the offer promised it;
     /// turned off, nothing is planned.
-    static func remindTrialEnd(purchased: Date, price: String) async {
+    static func remindTrialEnd(purchased: Date, body: String) async {
         let center = UNUserNotificationCenter.current()
         var status = await center.notificationSettings().authorizationStatus
         if status == .notDetermined { status = await Reminders.requestPermission() ? .authorized : .denied }
@@ -434,10 +435,19 @@ final class ProStore {
         guard let fire = trialReminderDate(purchased: purchased, calendar: calendar), fire > Date() else { return }
         let content = UNMutableNotificationContent()
         content.title = L10n.tr("Týden zdarma končí za 2 dny")
-        content.body = L10n.f("Pak začne roční předplatné Aurin Pro za %@. Zrušit ho můžeš v Nastavení → Aurin Pro.", price)
+        content.body = body
         content.sound = .default
         let trigger = UNCalendarNotificationTrigger(dateMatching: calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fire), repeats: false)
         try? await center.add(UNNotificationRequest(identifier: trialReminderID, content: content, trigger: trigger))
+    }
+
+    /// What the plan costs once the free week ends: the yearly price, or for the
+    /// year paid monthly the monthly payment, not the yearly price paid at once.
+    static func trialEndText(price: String, monthly: Commitment?) -> String {
+        if let monthly {
+            return L10n.f("Pak začne Aurin Pro za %@ měsíčně po 12 měsíců. Zrušit ho můžeš v Nastavení → Aurin Pro.", monthly.monthly)
+        }
+        return L10n.f("Pak začne roční předplatné Aurin Pro za %@. Zrušit ho můžeš v Nastavení → Aurin Pro.", price)
     }
 
     /// 10:00 on day 5 of the free week, the day of the purchase being day 1.

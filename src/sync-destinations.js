@@ -577,12 +577,35 @@ export async function retrySyncSends(env, { fetchImpl = fetch, googleToken = nul
 }
 
 // The Intervals.icu ids of activities the app sent there, so the activity
-// import skips them (the app keeps its own copy).
+// import skips them (the app keeps its own copy): id -> { key, counted }.
+const COUNTED = "CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.intervalsLoad') END";
 export async function sentIntervalsIds(db, userId) {
   try {
-    const rows = (await db.prepare("SELECT remote_id FROM sync_sends WHERE user_id = ? AND destination = 'intervals' AND remote_id IS NOT NULL").bind(userId).all()).results || [];
-    return new Set(rows.map(r => String(r.remote_id)));
-  } catch { return new Set(); }
+    const rows = (await db.prepare(`SELECT remote_id, activity_key, ${COUNTED} AS counted FROM sync_sends WHERE user_id = ? AND destination = 'intervals' AND remote_id IS NOT NULL`).bind(userId).all()).results || [];
+    return new Map(rows.map(r => [String(r.remote_id), { key: r.activity_key, counted: r.counted === 1 }]));
+  } catch { return new Map(); }
+}
+// A workout of another app that Aurin sent there (watch-forward.js) and the
+// import met again: whether Intervals.icu counts it into its fitness (a Wahoo
+// FIT file always, a watch summary only when it can tell the load from the
+// heart rate). Kept on the send, written only when it changes; null when nothing to write.
+export function countedStatement(db, userId, sent, activity) {
+  const counted = Number(activity?.icu_training_load) > 0;
+  if (!sent || !/^(apple|google|wahoo):/.test(sent.key) || sent.counted === counted) return null;
+  return db.prepare("UPDATE sync_sends SET payload_json = json_set(CASE WHEN json_valid(payload_json) THEN payload_json ELSE '{}' END, '$.intervalsLoad', ?) WHERE user_id = ? AND activity_key = ? AND destination = 'intervals'")
+    .bind(counted ? 1 : 0, userId, sent.key);
+}
+// The keys of the other apps' workouts Intervals.icu counts itself: sent and
+// counted there, or there already from elsewhere ('same'). own-fitness.js
+// does not add their load to its fitness a second time.
+export async function countedByIntervals(db, userId) {
+  try {
+    const rows = (await db.prepare(`SELECT activity_key FROM sync_sends WHERE user_id = ? AND destination = 'intervals' AND (status = 'same' OR (remote_id IS NOT NULL AND ${COUNTED} = 1))`).bind(userId).all()).results || [];
+    return new Set(rows.map(r => r.activity_key));
+  } catch (error) {
+    if (/no such table/i.test(String(error?.message || error))) return new Set();
+    throw error;
+  }
 }
 // Aurin's own records at Intervals.icu carry external_id "aurin:<user>:<key>";
 // ones sent before 2026-11 keep their "loadwise:…" (renaming them there would make copies).

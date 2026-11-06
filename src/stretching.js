@@ -236,19 +236,24 @@ const possible = (catalog, stations) => Array.isArray(stations)
   : catalog.filter(s => !s.needs);
 // Moves that suit the main sport besides the day's muscles: a cyclist sits bent
 // forward for hours (hip flexors, hamstrings, chest, upper back), a runner needs
-// calves, hips and the back of the legs, a triathlete swims too (lats, chest).
+// calves, hips and the back of the legs, a swimmer loads the shoulders, lats and
+// chest, a triathlete needs a bit of all.
 const SPORT_MOVES = {
   cycling: { warmup: ['open_book', 'hip_flexor_rock', 'cat_cow', 'worlds_greatest'], stretching: ['hip_flexor', 'hamstring', 'figure_four', 'chest', 'cat'] },
   running: { warmup: ['leg_swings', 'hip_circles', 'walking_knee_hugs', 'single_leg_balance', 'band_ankle'], stretching: ['calf', 'hip_flexor', 'hamstring', 'quad', 'figure_four'] },
+  swimming: { warmup: ['arm_circles', 'band_pull_apart', 'open_book', 'quadruped_rotation', 'band_dislocates'], stretching: ['lat', 'cross_body', 'chest', 'triceps', 'wall_shoulder_opener'] },
   triathlon: { warmup: ['arm_circles', 'leg_swings', 'open_book', 'hip_flexor_rock'], stretching: ['hip_flexor', 'calf', 'hamstring', 'lat', 'chest'] }
 };
-/** The catalog's moves that fit, best first: the worked muscles (a move's first muscle counts fully) and the main sport's moves. */
+/**
+ * The catalog's moves that fit the worked muscles, best first (a move's first
+ * muscle counts fully). The main sport's moves win a tie and, when they fit
+ * none, come after them in the sport's own order.
+ */
 function ranked(catalog, sets, sportIds = []) {
   const fit = s => s.muscles.reduce((sum, m, i) => sum + (sets.get(m) || 0) * (i ? 0.5 : 1), 0);
-  const top = Math.max(0, ...catalog.map(fit));
-  const bonus = Math.max(1, top * 0.5);
-  return catalog.map((s, order) => ({ s, score: fit(s) + (sportIds.includes(s.id) ? bonus : 0), order })).filter(x => x.score > 0)
-    .sort((a, b) => b.score - a.score || a.order - b.order);
+  const sportRank = x => (sportIds.indexOf(x.s.id) + 1) || 99;
+  return catalog.map((s, order) => ({ s, score: fit(s) + (sportIds.includes(s.id) ? 0.25 : 0), order })).filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score || sportRank(a) - sportRank(b) || a.order - b.order);
 }
 // A small seeded random, so a day's routine stays the same however often it is built.
 function seeded(text) {
@@ -268,38 +273,41 @@ function seeded(text) {
  * moves on another day. The rest follow, best first.
  */
 function inTurn(catalog, sets, { date, sport, kind } = {}) {
-  const list = ranked(catalog, sets, SPORT_MOVES[sport]?.[kind] || []);
-  if (!date || list.length < 2) return list;
-  const good = list.filter(x => x.score >= list[0].score * 0.4), rest = list.slice(good.length);
-  const random = seeded(date + '|' + kind), drawn = [];
-  while (good.length) {
-    let pick = random() * good.reduce((sum, x) => sum + x.score, 0), i = 0;
-    while (i < good.length - 1 && (pick -= good[i].score) > 0) i++;
-    drawn.push(good.splice(i, 1)[0]);
+  const sportIds = SPORT_MOVES[sport]?.[kind] || [];
+  let list = ranked(catalog, sets, sportIds);
+  if (date && list.length >= 2) {
+    const good = list.filter(x => x.score >= list[0].score * 0.4), rest = list.slice(good.length);
+    const random = seeded(date + '|' + kind), drawn = [];
+    while (good.length) {
+      let pick = random() * good.reduce((sum, x) => sum + x.score, 0), i = 0;
+      while (i < good.length - 1 && (pick -= good[i].score) > 0) i++;
+      drawn.push(good.splice(i, 1)[0]);
+    }
+    list = [...drawn, ...rest];
   }
-  return [...drawn, ...rest];
+  // The first two places stay with the muscles worked most; the third goes to
+  // the main sport's best move not among them.
+  const i = list.findIndex((x, j) => j >= 2 && sportIds.includes(x.s.id));
+  if (i > 2) list.splice(2, 0, ...list.splice(i, 1));
+  return list;
 }
 /**
  * `count` moves, or with `minutes` as many as fill that time (`finish` already
- * counted in): best fit first. A short list repeats its moves in rounds to fill it.
+ * counted in): best fit first. A short list repeats its moves, at most three
+ * rounds of a move (ACSM: 2–4 holds a muscle), then takes the place's other
+ * moves once each; when even those run out, the routine ends shorter.
  */
 function pickMoves(catalog, sets, { count, minutes, finishSeconds = 0, ...turn }) {
   const order = inTurn(catalog, sets, turn);
   let picked;
   if (minutes > 0) {
-    const target = minutes * 60 - finishSeconds;
+    const target = minutes * 60 - finishSeconds, full = () => total >= target - 20;
     picked = [];
     let total = 0;
-    for (const x of order) {
-      if (total >= target - 20) break;
-      picked.push({ ...x, rounds: 1 });
-      total += itemSeconds({ ...x.s, rounds: 1 });
-    }
-    for (let i = 0; picked.length && total < target - 20 && i < 40; i++) {
-      const x = picked[i % picked.length];
-      total += itemSeconds({ ...x.s, rounds: 1 });
-      x.rounds++;
-    }
+    const add = x => { if (full()) return; picked.push({ ...x, rounds: 1 }); total += itemSeconds({ ...x.s, rounds: 1 }); };
+    order.forEach(add);
+    for (let round = 2; round <= 3; round++) for (const x of picked) if (!full()) { total += itemSeconds({ ...x.s, rounds: 1 }); x.rounds++; }
+    catalog.forEach((s, i) => { if (!picked.some(x => x.s === s)) add({ s, score: 0, order: i }); });
   } else picked = order.slice(0, count).map(x => ({ ...x, rounds: 1 }));
   return picked.sort((a, b) => b.score - a.score || a.order - b.order).map(x => ({ ...x.s, rounds: x.rounds }));
 }

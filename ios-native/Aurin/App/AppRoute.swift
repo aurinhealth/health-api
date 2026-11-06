@@ -249,7 +249,7 @@ struct HealthRoute: View {
             case .readiness:
                 // Today's check-in stays changeable here once Today hides it.
                 DetailScreen(glow: Palette.Glow.health, title: "Připravenost") {
-                    ReadinessDetailContent(health: health)
+                    ReadinessDetailContent(health: health, noWearable: model.noWearable)
                 }
             case .metric(let metric): MetricDetailView(metric: metric, health: health)
             case .weight: WeightDetailView(health: health)

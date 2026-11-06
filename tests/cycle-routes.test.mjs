@@ -54,7 +54,7 @@ test("the store keeps the app's log over Apple Health's and merges partial write
   const { saveCycleSettings, getCycleSettings, saveCycleDay, importAppleCycle, listCycleDays, cycleInputs } = await import("../src/cycle-store.js");
   const db = createD1(); db.userId = 7;
   assert.equal(await cycleInputs(db, "2026-10-12"), null);
-  const s = await saveCycleSettings(db, { enabled: true, cycleLength: 31, contraception: "bogus" });
+  const s = await saveCycleSettings(db, { enabled: true, consent: true, cycleLength: 31, contraception: "bogus" });
   assert.deepEqual([s.enabled, s.cycleLength, s.contraception], [true, 31, "none"]);
   assert.equal((await saveCycleSettings(db, { lastPeriod: "2026-10-03" })).cycleLength, 31);
   assert.equal((await getCycleSettings(db)).lastPeriod, "2026-10-03");
@@ -77,7 +77,7 @@ test("Apple Health's hot flashes and night sweats fill days the athlete did not 
   const { createD1 } = await import("./helpers/d1.mjs");
   const { saveCycleSettings, saveCycleDay, importAppleCycle, listCycleDays } = await import("../src/cycle-store.js");
   const db = createD1(); db.userId = 8;
-  await saveCycleSettings(db, { enabled: true, lifeStage: "menopause" });
+  await saveCycleSettings(db, { enabled: true, consent: true, lifeStage: "menopause" });
   await importAppleCycle(db, [{ date: "2026-10-10", symptoms: ["hot_flashes", "night_sweats", "x"] }, { date: "2026-10-11", symptoms: ["hot_flashes"] }]);
   await saveCycleDay(db, { date: "2026-10-11", symptoms: ["joint_pain"] });
   const days = await listCycleDays(db, "2026-10-01", "2026-10-31");
@@ -89,11 +89,44 @@ test("turning on 'Coach knows my cycle' records when, and turning it off clears 
   const { scopedDb } = await import("../src/tenancy.js");
   const { saveCycleSettings } = await import("../src/cycle-store.js");
   const db = scopedDb(createD1(), 1);
-  assert.equal((await saveCycleSettings(db, { enabled: true })).shareWithCoachAt, null);
+  assert.equal((await saveCycleSettings(db, { enabled: true, consent: true })).shareWithCoachAt, null);
   const on = await saveCycleSettings(db, { shareWithCoach: true, shareWithCoachAt: "2000-01-01T00:00:00Z" });
   assert.ok(on.shareWithCoachAt > "2026-");
   assert.equal((await saveCycleSettings(db, { adaptTraining: false })).shareWithCoachAt, on.shareWithCoachAt);
   assert.equal((await saveCycleSettings(db, { shareWithCoach: false })).shareWithCoachAt, null);
+});
+
+test("turning cycle tracking on records the consent's time, and turning it off clears it", async () => {
+  const { createD1 } = await import("./helpers/d1.mjs");
+  const { scopedDb } = await import("../src/tenancy.js");
+  const { saveCycleSettings } = await import("../src/cycle-store.js");
+  const db = scopedDb(createD1(), 1);
+  assert.equal((await saveCycleSettings(db, { cycleLength: 30 })).enabledAt, null);
+  const on = await saveCycleSettings(db, { enabled: true, consent: true, enabledAt: "2000-01-01T00:00:00Z" });
+  assert.ok(on.enabledAt > "2026-");
+  assert.equal((await saveCycleSettings(db, { adaptTraining: false })).enabledAt, on.enabledAt);
+  assert.equal((await saveCycleSettings(db, { enabled: false })).enabledAt, null);
+});
+
+test("tracking turned on before its consent existed processes nothing until the consent is given", async () => {
+  const { createD1 } = await import("./helpers/d1.mjs");
+  const { scopedDb } = await import("../src/tenancy.js");
+  const { getCycleSettings, saveCycleSettings, cycleInputs } = await import("../src/cycle-store.js");
+  const { handleCycleApi } = await import("../src/routes-cycle.js");
+  const db = scopedDb(createD1(), 1), env = { DB: db, USER_ID: 1 };
+  // An older app turned it on with no consent sheet.
+  await saveCycleSettings(db, { enabled: true, shareWithCoach: true });
+  const waiting = await getCycleSettings(db);
+  assert.deepEqual([waiting.enabled, waiting.consentNeeded, waiting.enabledAt], [false, true, null]);
+  assert.equal(await cycleInputs(db, "2026-11-06"), null);
+  const url = new URL("https://aurin.health/app/api/cycle/apple");
+  const apple = new Request(url, { method: "POST", headers: { Origin: url.origin }, body: JSON.stringify({ days: [{ date: "2026-11-05", flow: 2 }] }) });
+  assert.deepEqual((await (await handleCycleApi(apple, env, null, url, { signedIn: true })).json()).saved, 0);
+  // Another setting keeps it waiting; the consent turns it on.
+  assert.equal((await saveCycleSettings(db, { cycleLength: 30 })).consentNeeded, true);
+  const on = await saveCycleSettings(db, { enabled: true, consent: true });
+  assert.deepEqual([on.enabled, on.consentNeeded, on.enabledAt > "2026-"], [true, undefined, true]);
+  assert.ok(await cycleInputs(db, "2026-11-06"));
 });
 
 test("cycle tracking is open whatever the profile's sex", async () => {
@@ -102,7 +135,7 @@ test("cycle tracking is open whatever the profile's sex", async () => {
   const { handleCycleApi } = await import("../src/routes-cycle.js");
   const env = { DB: scopedDb(createD1(), 1), USER_ID: 1 };
   const url = new URL("https://aurin.health/app/api/cycle/settings");
-  const post = new Request(url, { method: "POST", headers: { Origin: url.origin }, body: JSON.stringify({ enabled: true }) });
+  const post = new Request(url, { method: "POST", headers: { Origin: url.origin }, body: JSON.stringify({ enabled: true, consent: true }) });
   const saved = await (await handleCycleApi(post, env, null, url, { signedIn: true })).json();
   assert.equal(saved.settings.enabled, true);
   const getUrl = new URL("https://aurin.health/app/api/cycle");
@@ -115,7 +148,7 @@ test("a pill marked as taken stays taken when the day is read back, and clearing
   const { saveCycleSettings, saveCycleDay, listCycleDays, cycleInputs } = await import("../src/cycle-store.js");
   const { normalizeCycleDay, cycleMonth } = await import("../src/cycle-model.js");
   const db = createD1(); db.userId = 9;
-  await saveCycleSettings(db, { enabled: true, contraception: "pill", packStart: "2026-10-05" });
+  await saveCycleSettings(db, { enabled: true, consent: true, contraception: "pill", packStart: "2026-10-05" });
   assert.equal((await saveCycleDay(db, { date: "2026-10-12", pill: true })).pill, "taken");
   assert.equal((await listCycleDays(db, "2026-10-01", "2026-10-31"))[0].pill, "taken");
   const inputs = await cycleInputs(db, "2026-10-12");
@@ -128,8 +161,10 @@ test("a pill marked as taken stays taken when the day is read back, and clearing
 test("the same Apple Health cycle days again answer unchanged, so nothing cached is dropped", async () => {
   const { createD1 } = await import("./helpers/d1.mjs");
   const { handleCycleApi } = await import("../src/routes-cycle.js");
+  const { saveCycleSettings } = await import("../src/cycle-store.js");
   const { UNCHANGED_HEADER } = await import("../src/api-cache.js");
   const db = createD1(); db.userId = 7;
+  await saveCycleSettings(db, { enabled: true, consent: true });
   const url = new URL("https://aurin.health/app/api/cycle/apple");
   const send = () => handleCycleApi(new Request(url, { method: "POST", headers: { Origin: url.origin }, body: JSON.stringify({ days: [{ date: "2026-10-03", flow: 2 }] }) }), { DB: db }, null, url, { signedIn: true });
   const first = await send();

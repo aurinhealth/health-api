@@ -57,7 +57,9 @@ enum WatchToday {
         let sameDay = last?.date == today.date
         let points = { (p: [Today.Point]?) in (p ?? []).map { WatchSnapshot.Day(date: $0.date, value: $0.value) } }
         let metric = { (m: Today.Metric?, old: WatchSnapshot.Metric?, spread: Double) -> WatchSnapshot.Metric? in
-            guard let m else { return old }
+            // No value from the server: the iPhone's value is today's only on the same day;
+            // an older one keeps its chart but not yesterday's number as today's.
+            guard let m else { return sameDay ? old : old.map { WatchSnapshot.Metric(value: nil, low: $0.low, high: $0.high, series: $0.series) } }
             let series = points(m.series)
             return WatchSnapshot.Metric(value: m.value, low: m.low ?? m.baseline.map { $0 - spread },
                                         high: m.high ?? m.baseline.map { $0 + spread },

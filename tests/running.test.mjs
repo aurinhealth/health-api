@@ -69,9 +69,10 @@ test("run coach: a week off brings you back with an easy run", () => {
   const coach = buildCyclingCoachV2({ date: "2026-09-30", week: week([["2026-09-20", [], [{ type: "Run", name: "Easy", durationHours: 1 }]]]), fitness: wellness, sport: "run" });
   assert.equal(coach.recommendation.session.kind, "endurance");
   assert.match(coach.rationale[0], /bez běhu/);
-  // CTL 50 → 70 rTSS ≈ 49 min, shortened for the comeback (no sleep data → yellow).
+  // CTL 50 → 70 rTSS ≈ 49 min, shortened for the comeback (no body data: not yellow, audit 14.1).
   assert.match(coach.rationale.at(-1), /návrat po pauze −30 %/);
-  assert.ok(coach.constraints.availableMinutes <= 35);
+  assert.notEqual(coach.readiness.status, "yellow");
+  assert.ok(coach.constraints.availableMinutes <= 40, String(coach.constraints.availableMinutes));
 });
 
 test("a planned Intervals run is classified from its % Pace steps", () => {
@@ -118,4 +119,24 @@ test("run sweet spot maps to threshold; outdoor paces get a range and hill notes
   assert.equal(work.percentHigh - work.percentLow, 4);
   const search = await searchWorkoutLibrary(db, { sport: "run", system: "vo2max", durationMinutes: 45, limit: 5 });
   assert.ok(search.workouts.length > 0 && search.workouts.every(w => w.sport === "run"));
+});
+
+// Audit 8.4: on a 5–8 % slope a flat-ground pace target costs far more than
+// VO2max (Minetti 2002), so the watch would alarm the whole rep: hill reps go
+// by effort, as the hill sprints do, and say so instead of "all-out".
+test("hill repeats go by effort: no pace target on the watch or in Intervals.icu", async () => {
+  const { structureHow } = await import("../src/workout-explanation.js");
+  for (const w of RUNNING_WORKOUTS.filter(x => x.family === "run-hills")) {
+    const structure = JSON.parse(w.structure_json), up = structure.flatMap(b => b.steps || [b]).find(s => /do kopce/.test(s.note || ""));
+    assert.equal(up.free, true, w.id);
+    for (const environment of ["indoor", "outdoor"]) assert.doesNotMatch(renderForEnvironment(w, environment).intervals_description, /106% Pace|103-109% Pace/, w.id);
+    const rows = stepRows(structure, { sport: "run", thresholdPace: 270 }).flatMap(b => b.steps).filter(s => s.free);
+    assert.ok(rows.length && rows.every(s => s.paceSlow == null && s.paceFast == null), w.id);
+    const how = structureHow(structure, { system: w.primary_system, sport: "run", thresholdPace: 270 }).join(" ");
+    assert.match(how, /tvrdě podle pocitu/, w.id);
+    assert.doesNotMatch(how, /naplno/, w.id);
+  }
+  // A sprint stays all-out.
+  const sprint = [{ repeats: 6, steps: [{ durationMinutes: .5, power: 140, free: true }, { durationMinutes: 2, power: 55 }] }];
+  assert.match(structureHow(sprint, { system: "sprint", sport: "run" }).join(" "), /naplno/);
 });

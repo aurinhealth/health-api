@@ -59,6 +59,20 @@ test("the zone is remembered per user and written only when it changes", async (
   assert.equal(await storedTimeZone(db, 2), "Europe/Prague");
 });
 
+test("back from a trip, an isolate that remembers the home zone from before still writes it back (audit 3.3)", async () => {
+  _resetTimeZonesForTest();
+  const raw = createD1();
+  raw.sqlite.exec(migration);
+  const t0 = Date.parse("2026-11-01T08:00:00Z"), hour = 3600000;
+  // This isolate saw the home zone before the trip.
+  await rememberTimeZone(raw, 1, "Europe/Prague", t0);
+  // Another isolate wrote the trip's zone.
+  raw.prepare("INSERT INTO user_time_zone(user_id,time_zone) VALUES(1,'America/New_York') ON CONFLICT(user_id) DO UPDATE SET time_zone=excluded.time_zone").run();
+  // Home again a week later: this isolate's copy is too old to trust.
+  await rememberTimeZone(raw, 1, "Europe/Prague", t0 + 7 * 24 * hour);
+  assert.equal(await storedTimeZone(raw, 1, { fresh: true }), "Europe/Prague");
+});
+
 test("a night belongs to the day the user wakes up on in their zone", () => {
   const row = { external_id: "n", start_time: "2026-10-07T13:00:00Z", end_time: "2026-10-07T21:30:00Z", payload_json: "{}" };
   assert.equal(sleepSessionFromRow(row).date, "2026-10-07");

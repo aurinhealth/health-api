@@ -26,8 +26,12 @@ test("the baseline comes from sex, age, height, weight and everyday activity", (
   assert.equal(active.baselineRestTDEE, Math.round(1320.25 * 1.6));
   assert.equal(active.deficit, 0);
   assert.equal(energyBaseline({ ...woman, goal: "lose_0.25" }, 60).deficit, 275);
-  assert.equal(energyBaseline({ ...woman, goal: "lose_0.75" }, 60).deficit, 825);
-  assert.equal(energyBaseline({ ...woman, goal: "lose_1" }, 60).deficit, 1100);
+  // Losing goes at most 1 % of the weight a week: 0.6 kg at 60 kg.
+  assert.equal(energyBaseline({ ...woman, goal: "lose_0.5" }, 60).deficit, 550);
+  assert.equal(energyBaseline({ ...woman, goal: "lose_0.75" }, 60).deficit, 660);
+  assert.equal(energyBaseline({ ...woman, goal: "lose_1" }, 60).deficit, 660);
+  assert.equal(energyBaseline({ ...woman, goal: "lose_0.75" }, 80).deficit, 825);
+  assert.equal(energyBaseline({ ...woman, goal: "lose_1" }, 100).deficit, 1100);
 });
 
 test("weight is required for a calorie target, for everyone", () => {

@@ -79,7 +79,7 @@ test("the coach engine eases a period day for the app, the AI sees no reason unl
   const engine = {
     readiness: { todayParts: [{ key: "restingHR", points: -2, cycle: true }] },
     rationale: ["Duration 30 of 60 min: period.", "Other reason."],
-    recommendation: { adaptations: ["period with heavy flow, cramps or fatigue: easy and short today"], session: { kind: "endurance" } }
+    recommendation: { adaptations: ["period with cramps or fatigue: easy and short today"], session: { kind: "endurance" } }
   };
   const ai = engineForAI(engine, { cycleShared: false });
   assert.doesNotMatch(JSON.stringify(ai), CYCLE_WORDS);

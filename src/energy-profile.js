@@ -29,6 +29,21 @@ export const GOALS = {
   "gain_0.5": { kgPerWeek: 0.5, label: "Nabrat 0,5 kg týdně" }
 };
 
+// Losing weight goes at most 1 % of body weight a week, whatever the goal
+// says: in athletes 0.7 %/week kept lean mass and performance better than
+// 1–1.4 % (Garthe 2011), 0.5–1 % is advised to keep muscle (Helms 2014).
+// 1 kg a week would be 1.8 % for a 55 kg runner. Settings offers no faster pace.
+export const MAX_LOSS_SHARE = 0.01;
+export function weeklyGoalKg(goalKey, weightKg) {
+  const goal = (GOALS[goalKey] || GOALS["lose_0.5"]).kgPerWeek, kg = num(weightKg);
+  return goal < 0 && kg > 0 ? Math.max(goal, -kg * MAX_LOSS_SHARE) : goal;
+}
+
+// The highest calorie target of a day, morning and evening alike: a sanity
+// limit against wrong data that still leaves room for a long training day
+// (a 90 kg rider's 4 h ride day is about 5 800 kcal). Own goals go to 6000 too.
+export const MAX_CALORIE_TARGET = 6000;
+
 // Extra energy of an hour of sport above rest, per kg of body weight.
 const SPORT_KCAL_PER_KG_HOUR = 6;
 
@@ -137,11 +152,11 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
   const missing = [];
   if (!(weight > 0)) missing.push("weight");
   for (const key of ["sex", "age", "height", "activity", "goal"]) if (!p[key]) missing.push(key);
-  const goal = GOALS[p.goal] || GOALS["lose_0.5"];
+  const deficitOf = key => Math.round(-weeklyGoalKg(key, weight) * 7700 / 7) || 0;
   if (missing.length) {
     // The owner keeps the calibrated baseline until the profile is complete;
     // weight stays required for everyone.
-    if (isOwner && weight > 0) return { ready: true, source: "owner-calibration", missing, weightKg: weight, bmr: null, sportDaily: 0, targetWeightKg: p.targetWeight ?? OWNER_CALIBRATION.targetWeightKg, ...OWNER_CALIBRATION, deficit: p.goal ? Math.round(-goal.kgPerWeek * 7700 / 7) || 0 : OWNER_CALIBRATION.deficit };
+    if (isOwner && weight > 0) return { ready: true, source: "owner-calibration", missing, weightKg: weight, bmr: null, sportDaily: 0, targetWeightKg: p.targetWeight ?? OWNER_CALIBRATION.targetWeightKg, ...OWNER_CALIBRATION, deficit: p.goal ? deficitOf(p.goal) : OWNER_CALIBRATION.deficit };
     return { ready: false, source: null, missing, weightKg: weight > 0 ? weight : null };
   }
   const bmr = restingMetabolicRate(p, weight);
@@ -156,8 +171,9 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
     baselineRestTDEE: Math.round(bmr * ACTIVITY_LEVELS[p.activity].factor),
     sportDaily: Math.round(sportDaily),
     // Calories below expenditure per day; 0 when maintaining.
-    deficit: Math.round(-goal.kgPerWeek * 7700 / 7) || 0,
+    deficit: deficitOf(p.goal),
     // Never plan below resting metabolism, nor below common safe minimums.
+    // On a training day the training comes on top (index.js energyForDate).
     floor: Math.round(Math.max(bmr, p.sex === "male" ? 1500 : 1200)),
     targetWeightKg: p.targetWeight
   };
@@ -182,10 +198,11 @@ export function proteinReferenceKg(weightKg, heightCm) {
 // weeks. No change while the rate is within the goal's range: losing between
 // half and 1.5× the goal, maintaining within ±0.25 kg a week.
 // The loop also corrects a systematic error of the wearable's energy figures.
-export function trendAdjustment(goalKey, trend) {
+// With the weight, losing is measured against the pace capped at 1 % a week.
+export function trendAdjustment(goalKey, trend, weightKg = null) {
   const rate = Number(trend?.weeklyRateKg), samples = Number(trend?.samples || 0), span = trend?.spanDays;
   if (trend?.weeklyRateKg == null || !Number.isFinite(rate) || samples < 4 || (span != null && Number(span) < 21)) return { adjustment: 0, reason: "insufficient_weight_history" };
-  const goal = (GOALS[goalKey] || GOALS["lose_0.5"]).kgPerWeek;
+  const goal = weeklyGoalKg(goalKey, weightKg);
   const step = gap => { const kcal = Math.max(-250, Math.min(250, -gap * 7700 / 7 * 0.5)); return Math.round(kcal / 25) * 25 || 0; };
   if (goal < 0) {
     if (rate > goal / 2) return { adjustment: step(rate - goal), reason: "loss_below_target" };

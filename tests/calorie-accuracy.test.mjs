@@ -134,3 +134,63 @@ test("the weekly weight rate is a least-squares slope, not two end points", asyn
   // The end points alone would say −0.25 kg/week.
   assert.equal(trend.weeklyRateKg, -0.3);
 });
+
+// Audit 2026-11-06, points 1.1–1.4.
+const run = (d, kcal, type = "Run", hours = 1) => point(d, "intervals", "activity", type + kcal, { start: "2099-01-05T07:00:00", payload: { type, name: type, calories: kcal, moving_time: hours * 3600 } });
+
+test("losing goes at most 1 % of the weight a week, the trend is judged against that pace", async () => {
+  const d = db();
+  profile(d, { sex: "female", age: 30, height: 160, activity: "sedentary", goal: "lose_1", sportHours: "0" });
+  point(d, "manual", "weight", "w", { sample: "2098-12-30T07:00:00Z", value: 55 });
+  assert.equal((await daily(d)).nutrition.calorieBreakdown.weightLossDeficit, Math.round(0.55 * 7700 / 7));
+  // 0.4 kg a week at 60 kg is within the capped 0.6 kg goal, not "slower than the goal".
+  const trend = { samples: 5, weeklyRateKg: -0.4, spanDays: 28 };
+  assert.equal(trendAdjustment("lose_1", trend, 60).adjustment, 0);
+  assert.equal(trendAdjustment("lose_1", trend).reason, "loss_below_target");
+});
+
+test("on a training day the target never falls below resting metabolism plus the training", async () => {
+  const d = db();
+  profile(d, { sex: "female", age: 30, height: 160, activity: "sedentary", goal: "lose_0.5", sportHours: "0" });
+  point(d, "manual", "weight", "w", { sample: "2098-12-30T07:00:00Z", value: 55 });
+  run(d, 550);
+  const day = await daily(d), b = day.nutrition.calorieBreakdown;
+  const rmr = Math.round(10 * 55 + 6.25 * 160 - 5 * 30 - 161);
+  assert.equal(day.nutrition.calorieTarget, rmr + 550);
+  assert.equal(b.floorTarget, rmr + 550);
+  assert.equal(b.floorApplied, true);
+  // The floor carries the whole run, so the Food screen says 100 %.
+  assert.equal(b.trainingCoverage, 1);
+  assert.match(day.nutrition.reason, new RegExp(`bezpečné minimum ${rmr + 550} kcal`));
+  // Carbs at least 3 g/kg on a training day.
+  assert.ok(day.nutrition.macros.carbs_g >= 3 * 55);
+});
+
+test("training counts in full when maintaining or gaining, 70 % when losing", async () => {
+  const at = async (goal, activity = "light") => {
+    const d = db();
+    profile(d, { ...man, goal, activity });
+    point(d, "manual", "weight", "w", { sample: "2098-12-30T07:00:00Z", value: 80 });
+    run(d, 500);
+    return (await daily(d)).nutrition;
+  };
+  const tdee = Math.round(1780 * 1.3);
+  const keep = await at("maintain");
+  assert.equal(keep.calorieTarget, tdee + 500);
+  assert.equal(keep.calorieBreakdown.trainingCoverage, 1);
+  assert.equal((await at("gain_0.25")).calorieBreakdown.trainingCoverage, 1);
+  const lose = await at("lose_0.5", "heavy");
+  assert.equal(lose.calorieTarget, Math.round(1780 * 1.6) - 550 + 350);
+  assert.equal(lose.calorieBreakdown.trainingCoverage, 0.7);
+});
+
+test("a 4 h ride day is not cut at 4000 kcal and its macros stay eatable", async () => {
+  const d = db();
+  profile(d, { ...man, goal: "maintain", activity: "active" });
+  point(d, "manual", "weight", "w", { sample: "2098-12-30T07:00:00Z", value: 90 });
+  run(d, 3000, "Ride", 4);
+  const n = (await daily(d)).nutrition, target = Math.round(1880 * 1.45) + 3000;
+  assert.equal(n.calorieTarget, target);
+  assert.ok(n.macros.fat_g * 9 >= target * 0.2 - 9, "fat at least 20 % of the energy");
+  assert.ok(n.macros.carbs_g <= 12 * 90, "carbs at most 12 g/kg");
+});
