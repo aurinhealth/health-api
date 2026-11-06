@@ -597,7 +597,7 @@ struct ActivityDetailContent: View {
                     Text("Úsek").frame(maxWidth: .infinity, alignment: .leading)
                     Text("Čas").frame(width: 56, alignment: .trailing)
                     if hasWatts { Text("Výkon").frame(width: 70, alignment: .trailing) }
-                    if showPace { Text(L10n.isEnglish ? "Pace" : "Tempo").frame(width: 70, alignment: .trailing) }
+                    if showPace { Text(L10n.isEnglish ? "Pace" : "Tempo").frame(width: paceWidth, alignment: .trailing) }
                     if hasHr { Text("Tep").frame(width: 48, alignment: .trailing) }
                 }
                 .font(.caption.weight(.medium)).tracking(1.2).textCase(.uppercase).foregroundStyle(Palette.muted)
@@ -610,7 +610,7 @@ struct ActivityDetailContent: View {
                             Text(verbatim: lap.seconds.map { clock($0) } ?? "").font(Typo.caption).foregroundStyle(Palette.muted)
                                 .frame(width: 56, alignment: .trailing)
                             if hasWatts { Text(verbatim: lap.watts.map { Fmt.int($0) + " W" } ?? "").font(Typo.number(17)).frame(width: 70, alignment: .trailing) }
-                            if showPace { Text(verbatim: pace(lap.speed) ?? "").font(Typo.number(17)).frame(width: 70, alignment: .trailing) }
+                            if showPace { Text(verbatim: pace(lap.speed) ?? "").font(Typo.number(17)).lineLimit(1).minimumScaleFactor(0.8).frame(width: paceWidth, alignment: .trailing) }
                             if hasHr { Text(verbatim: lap.hr.map { Fmt.int($0) } ?? "").font(Typo.number(17)).foregroundStyle(Palette.rust).frame(width: 48, alignment: .trailing) }
                         }
                         .padding(.vertical, 10)
@@ -628,6 +628,8 @@ struct ActivityDetailContent: View {
 
     private var isRun: Bool { (detail.activity.type ?? "").lowercased().contains("run") }
     private var isSwim: Bool { (detail.activity.type ?? "").lowercased().contains("swim") }
+    /// "1:55 /100 m" needs more room than "5:12 /km".
+    private var paceWidth: CGFloat { isSwim ? 92 : 70 }
 
     /// A speed in m/s as a run's "5:12 /km" or a swim's "1:55 /100 m"; other sports have none.
     private func pace(_ speed: Double?) -> String? {
