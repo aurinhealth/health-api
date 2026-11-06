@@ -12,6 +12,16 @@ import { dayStartUtc, timeZone, localToday } from "./user-time.js";
 // sync changes (every five minutes, or the Obnovit button, which drops the cache).
 export const googleHealthFor = (env, ctx, date) => cached(env, ctx, "google-dashboard:" + date, () => googleDashboard(env.DB, date), { ttl: 120 });
 
+// The Google Health read a week's days take their active energy from (the
+// /app/api/week calorie budget). Today's read covers every day of the last 30
+// (google-dashboard.js) and is the one Today and the coach already read, so a
+// week starting within them shares it; a week ahead has nothing measured yet.
+// The coach's three weeks used to read it four times (~2,000 rows each).
+export function weekHealthDate(start, today) {
+  if (start > today) return null;
+  return start >= shiftDate(today, -30) ? today : shiftDate(start, 6);
+}
+
 // The dashboard profile (age, height, sex, …) with height and activity from
 // Google Health and steps filling the gaps; null when there is nothing yet.
 // With cycle tracking on, `cycle` carries its settings and logged days, so
