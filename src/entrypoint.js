@@ -10,7 +10,7 @@ import {deletePersonalFood} from './personal-foods.js';
 import {retryWorkoutExports,syncLocalWorkout,completeLocalWorkout,storeLocalEvent} from './local-workouts.js';
 import {heartRateWindow,heartRateKcal,watchWorkoutIn} from './manual-heart-rate.js';
 import {latestStoredWeight} from './athlete-weight.js';
-import {runRaceSeconds,rideRace,runEstimates,rideEstimates,goalVerdict} from './race-estimate.js';
+import {runRaceSeconds,rideRace,runEstimates,rideEstimates,goalVerdict,goalCheck} from './race-estimate.js';
 import app from "./strength-gateway.js";
 import { foodRecommend } from "./food-recommend.js";
 import { buildCoachCouncil } from "./coach-engine.js";
@@ -1071,9 +1071,9 @@ async function computeWeekTargets(env,ctx,start,prefs,{original=false}={}){
     return capWeekTargets(capRunVolume(p.apply(targets),runCap,runCommitted),prefs,[],weather);
   };
   // Monday: the plan follows the trend of the week before (planTrendCheck); changed, the week is built again.
-  if(plan.plan&&start===mondayOfDate(today)&&!(plan.plan.trendChecked>=start)&&!plan.plan.proposal){
+  if(plan.plan&&start===mondayOfDate(today)&&!(plan.plan.trendChecked>=start)){
     const rows=hrvSourceRows(wellness,(await googleHealthFor(env,ctx,today).catch(()=>({})))?.wellness,start);
-    const changed=await planTrendCheck(env,plan.plan,start,{hrvDown,hrv:hrvDown?hrvTrend(rows,start,wellness):null}).catch(()=>null);
+    const changed=await planTrendCheck(env,plan.plan,start,{hrvDown,hrv:hrvDown?hrvTrend(rows,start,wellness):null,thresholdPace:plan.thresholdPace}).catch(()=>null);
     if(changed)return computeWeekTargets(env,ctx,start,prefs,{original});
   }
   const targets=build(plan);
@@ -2026,6 +2026,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           if(t!=null&&!(t>=600&&t<=86400))throw new Error(L('Zadej cílový čas.', 'Enter a goal time.'));
           await savePlanState(env.DB,{...plan,target:t});
         }
+        // Keep the goal the realistic goal would replace: not offered again for it (goalCheck).
+        else if(body.action==='goalKeep'){const plan=await current();await savePlanState(env.DB,{...plan,goalKept:plan.target??null});}
         // The free time by weekday (the usual week), with shift work week B and
         // whether this week is week B. Every plan and the week planner use it.
         else if(body.action==='freeTime'){
@@ -2125,6 +2127,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(summary&&template?.race){
         const [thresholds,weight]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),['ride','triathlon'].includes(template.sport)?latestStoredWeight(env.DB,env.USER_ID).catch(()=>null):null]);
         summary.race=raceInfo(template,active.raceKm||template.race.km,{thresholds,weight:weightKg(weight),target:active.target,estimateStart:active.start?.estimate,weeks:template.weeks.length-Math.max(0,summary.week-1)});
+        // A running race: the goal checked every Monday, the paces and a realistic goal when it is out of reach (goalCheck).
+        if(summary.race&&template.sport==='run'&&summary.started){
+          const km=summary.race.km,weekOf=d=>Math.floor((Date.parse(d+'T12:00:00Z')-Date.parse(active.startDate+'T12:00:00Z'))/604800000)+1;
+          const history=[...(active.start?.estimate?[{week:1,seconds:active.start.estimate}]:[]),...Object.entries(active.estimates||{}).sort(([a],[b])=>a.localeCompare(b)).map(([d,seconds])=>({week:weekOf(d),seconds})).filter(x=>x.week>1)];
+          const weeksLeft=Math.max(0,Math.ceil((Date.parse(active.raceDate+'T12:00:00Z')-Date.parse(today+'T12:00:00Z'))/604800000));
+          const check=goalCheck({km,target:active.target,estimate:summary.race.estimate,estimateStart:active.start?.estimate,history,weeksDone:Math.max(0,summary.week-1),weeksLeft,thresholdPace:thresholds.runThresholdPace,thresholdBefore:active.threshold?.before,kept:active.goalKept??null});
+          if(check)summary.race={...summary.race,...check,weeksLeft,checked:active.threshold?.at||active.trendChecked||null};
+        }
       }
       if(!active)finished=await planResult(env,ctx,today).catch(error=>{console.error('Plan result failed',error.message);return null;});
       if(!gym)finishedGym=await gymPlanResult(env,today).catch(error=>{console.error('Gym plan result failed',error.message);return null;});

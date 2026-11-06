@@ -562,6 +562,7 @@ struct ActivePlanView: View {
                     if let active {
                         ActivePlanContent(active: active, preview: preview, week: week, error: error, editDays: { editingDays = true },
                                           editGoal: active.template.sport == "run" && active.race != nil ? { editingGoal = true } : nil,
+                                          takeGoal: { seconds in Task { await saveGoal(seconds) } }, keepGoal: { Task { await keepGoal() } },
                                           editPlanDays: { editingPlanDays = true }, editSports: active.template.choose == true ? { editingSports = true } : nil,
                                           reschedule: { rescheduling = true },
                                           choose: { choosing = true }, stop: { confirmStop = true }) { await reload() }
@@ -614,6 +615,15 @@ struct ActivePlanView: View {
         }
     }
 
+    private func keepGoal() async {
+        do {
+            _ = try await model.api.trainingPlanAction(["action": .string("goalKeep")])
+            await reload()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     private func reload() async {
         guard !model.demo else { return }
         do {
@@ -652,6 +662,9 @@ struct ActivePlanContent: View {
     var editDays: () -> Void = {}
     /// A running race plan: change the goal time.
     var editGoal: (() -> Void)? = nil
+    /// The realistic goal taken (seconds), or the goal kept.
+    var takeGoal: (Int) -> Void = { _ in }
+    var keepGoal: () -> Void = {}
     var editPlanDays: () -> Void = {}
     /// A multisport plan without a race: change its sports.
     var editSports: (() -> Void)? = nil
@@ -762,8 +775,85 @@ struct ActivePlanContent: View {
         return preview?.time?.daysB != nil ? text + " · " + L10n.tr("dva týdny") : text
     }
 
-    /// A running race: the goal, the estimate now and how far it moved since the start.
-    private func runGoal(_ race: PlanRace) -> some View {
+    /// A running race: the goal and the estimate today, checked every Monday:
+    /// the line from week 1 to today and on to race day, on track or behind,
+    /// a realistic goal when it is out of reach, and the paces (approved
+    /// mockup 2-cil-zavodu-kazdy-tyden, 3 Nov 2026).
+    @ViewBuilder private func runGoal(_ race: PlanRace) -> some View {
+        if race.status != nil || race.paces != nil { checkedGoal(race) } else { plainGoal(race) }
+    }
+
+    @ViewBuilder private func checkedGoal(_ race: PlanRace) -> some View {
+        let behind = race.status == "behind"
+        Card {
+            WidgetHeader(title: L10n.tr("Cíl závodu"), color: behind ? Palette.amberBar : Palette.green, trailing: active.raceDate.map { Fmt.dayMonth($0) })
+            HStack(alignment: .top, spacing: 28) {
+                goalNumber(race.target.map(raceTime) ?? "–", L10n.tr("cíl"))
+                goalNumber(race.estimate.map(raceTime) ?? "–", L10n.tr("odhad dnes"))
+                Spacer(minLength: 0)
+            }
+            if let goal = race.target, let now = race.estimate, let history = race.history, !history.isEmpty {
+                GoalLine(history: history, now: now, week: active.week, weeks: active.weeksCount, goal: goal, projected: race.projected ?? now, behind: behind)
+                    .frame(height: 110)
+                HStack {
+                    Text(verbatim: L10n.f("Týden %@", "1")).font(Typo.caption).foregroundStyle(Palette.faint)
+                    Spacer()
+                    Text(verbatim: L10n.f("dnes · týden %@", String(active.week))).font(Typo.caption).foregroundStyle(Palette.faint)
+                    Spacer()
+                    Text("závod").font(Typo.caption).foregroundStyle(Palette.faint)
+                }
+            }
+            if let badge = race.badge {
+                Text(verbatim: badge).font(Typo.caption.weight(.semibold)).foregroundStyle(behind ? Palette.amber : Palette.green)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(behind ? Palette.amberSoft : Palette.greenSoft, in: Capsule())
+            }
+            if let note = race.note {
+                Text(verbatim: note).font(behind ? .body : Typo.small).foregroundStyle(behind ? Palette.ink : Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            if let realistic = race.realistic, let goal = race.target {
+                HStack(spacing: 10) {
+                    PrimaryButton(title: L10n.f("Změnit na %@", raceTime(realistic))) { takeGoal(realistic) }
+                    SecondaryButton(title: L10n.f("Nechat %@", raceTime(goal))) { keepGoal() }
+                }
+            }
+        }
+        if let paces = race.paces {
+            Card {
+                WidgetHeader(title: L10n.tr("Tempa"), color: Palette.blue, trailing: race.checked.map { Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) })
+                VStack(spacing: 0) {
+                    paceRow(L10n.tr("Závodní tempo"), Units.paceText(Double(paces.race)))
+                    if let now = paces.threshold {
+                        Rectangle().fill(Palette.hairline).frame(height: 1)
+                        paceRow(L10n.tr("Práh"), (paces.thresholdBefore.map { Units.paceText(Double($0)) + " → " } ?? "") + Units.paceText(Double(now)))
+                    }
+                    if let easy = paces.easy, easy.count == 2 {
+                        Rectangle().fill(Palette.hairline).frame(height: 1)
+                        paceRow(L10n.tr("Lehce"), Units.paceText(Double(easy[0])).replacingOccurrences(of: " /km", with: "").replacingOccurrences(of: " /mi", with: "") + "–" + Units.paceText(Double(easy[1])))
+                    }
+                }
+            }
+        }
+    }
+
+    private func goalNumber(_ value: String, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(verbatim: value).font(Typo.number(30)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
+            Text(verbatim: label).font(Typo.caption).foregroundStyle(Palette.muted)
+        }
+    }
+
+    private func paceRow(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(verbatim: title).font(.body).foregroundStyle(Palette.secondary)
+            Spacer()
+            Text(verbatim: value).font(.body.monospacedDigit()).foregroundStyle(Palette.ink)
+        }
+        .padding(.vertical, 12)
+    }
+
+    /// A running race before its first Monday check: the goal, the estimate now and how far it moved since the start.
+    private func plainGoal(_ race: PlanRace) -> some View {
         Card {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -845,6 +935,45 @@ struct ActivePlanContent: View {
         }
     }
 
+}
+
+/// The race estimate week by week (solid), on to race day at the pace of
+/// improvement (dotted, amber when it misses), against the goal (dashed).
+/// Lower is faster, so faster times sit higher.
+struct GoalLine: View {
+    let history: [PlanRace.Point]
+    let now: Int
+    let week: Int
+    let weeks: Int
+    let goal: Int
+    let projected: Int
+    let behind: Bool
+
+    var body: some View {
+        GeometryReader { geo in
+            let points = history.filter { $0.week < week } + [PlanRace.Point(week: week, seconds: now)]
+            let all = points.map(\.seconds) + [goal, projected]
+            let fast = Double(all.min() ?? goal), slow = Double(all.max() ?? goal), span = max(30, slow - fast)
+            let x: (Int) -> CGFloat = { w in geo.size.width * CGFloat(w - 1) / CGFloat(max(1, weeks - 1)) }
+            let y: (Int) -> CGFloat = { s in 8 + (geo.size.height - 16) * CGFloat((Double(s) - fast) / span) }
+            ZStack(alignment: .topLeading) {
+                Path { p in p.move(to: CGPoint(x: 0, y: y(goal))); p.addLine(to: CGPoint(x: geo.size.width, y: y(goal))) }
+                    .stroke(Palette.green, style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
+                Path { p in
+                    for (i, pt) in points.enumerated() {
+                        let at = CGPoint(x: x(pt.week), y: y(pt.seconds))
+                        if i == 0 { p.move(to: at) } else { p.addLine(to: at) }
+                    }
+                }
+                .stroke(Palette.ink, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                Path { p in p.move(to: CGPoint(x: x(week), y: y(now))); p.addLine(to: CGPoint(x: geo.size.width, y: y(projected))) }
+                    .stroke(behind ? Palette.amberBar : Palette.muted, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [2, 6]))
+                Circle().fill(Palette.ink).frame(width: 10, height: 10).position(x: x(week), y: y(now))
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: L10n.f("Odhad %@, cíl %@", raceTime(now), raceTime(goal))))
+    }
 }
 
 /// "Změnit začátek": the plan starts again from another day.

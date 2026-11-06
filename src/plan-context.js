@@ -11,7 +11,8 @@ import { getWeekPlan, planWeekRoles, roleTime, planRoleOptions } from "./week-pl
 import { getAthleteState } from "./athlete-state.js";
 import { loadProfiles } from "./profile-suggestions.js";
 import { sportKinds } from "./athlete-focus.js";
-import { reviewPlan, planWeek, planQuality, planLoad, applyPlan, activePlan, planSports, planDoneSports, planOriginal, planTrend, savePlanState } from "./training-plans.js";
+import { reviewPlan, planWeek, planQuality, planLoad, applyPlan, activePlan, planSports, planDoneSports, planOriginal, planTrend, savePlanState, getTemplate } from "./training-plans.js";
+import { runRaceSeconds } from "./race-estimate.js";
 import { weekWeather, dayHours } from "./adaptive-week.js";
 import { weatherKitConfigured, weatherKitDetail } from "./weatherkit.js";
 import { ensureGymPlans } from "./gym-plan-store.js";
@@ -43,7 +44,7 @@ export async function planForWeek(env,ctx,start){
   const options={thresholdPace:thresholds.runThresholdPace,hasPower:Number(thresholds.ftp)>0,shifts:capabilities,ftp:Number(thresholds.ftp)||null,weight:weightKg(weight),swimCss:thresholds.swimCss||null};
   // The same week of the plan as it was made, for what changed and why (planChanges).
   const base=planOriginal(plan),opw=planWeek(base,start);
-  return {plan,pw,roles:await weekRoleOptions(env,ctx,plan,pw),load:planLoad(pw),apply:t=>applyPlan(t,plan,start,options),
+  return {plan,pw,thresholdPace:options.thresholdPace||null,roles:await weekRoleOptions(env,ctx,plan,pw),load:planLoad(pw),apply:t=>applyPlan(t,plan,start,options),
     original:opw?{roles:planRoleOptions(base,planQuality(opw),planSports(base)),load:planLoad(opw),apply:t=>applyPlan(t,base,start,options)}:null};
 }
 // The options planWeekRoles takes for a week (week-planner.js), the same for
@@ -90,8 +91,10 @@ export async function planSportMinutes(env,of,from,to){
 // of the last three weeks was done (a read of the activities, three of the
 // week plans) and how hard they felt (one read of the ratings). Returns the
 // plan when it changed, else null.
-export async function planTrendCheck(env,plan,monday,{hrvDown=false,hrv=null}={}){
-  if(!plan||plan.trendChecked>=monday||plan.proposal||plan.pauseFrom||plan.sport==='gym')return null;
+export async function planTrendCheck(env,plan,monday,{hrvDown=false,hrv=null,thresholdPace=null}={}){
+  if(!plan||plan.trendChecked>=monday||plan.pauseFrom||plan.sport==='gym')return null;
+  // A running race plan keeps the week's estimate and threshold pace for its goal card.
+  const template=getTemplate(plan.templateId),estimate=template?.sport==='run'&&template.race?runRaceSeconds(Number(plan.raceKm)||template.race.km,thresholdPace):null;
   let keysDone=false,rpe=[];
   if(!hrvDown){
     const from=shiftDate(monday,-21),[done,keys,rows]=await Promise.all([
@@ -103,9 +106,9 @@ export async function planTrendCheck(env,plan,monday,{hrvDown=false,hrv=null}={}
     keysDone=keys.every(k=>k.length>0)&&all.every(d=>done.includes(d));
     rpe=rows.map(r=>Number(r.rpe));
   }
-  const next=planTrend(plan,monday,{hrvDown,hrv,keysDone,rpe});
+  const next=planTrend(plan,monday,{hrvDown,hrv,keysDone,rpe,estimate,thresholdPace:template?.sport==='run'?thresholdPace:null});
   await savePlanState(env.DB,next);
-  return next.proposal?next:null;
+  return next.proposal&&next.proposal!==plan.proposal?next:null;
 }
 // The key days (quality, test, long) the plan put in a week.
 export async function planKeyDates(env,plan,monday){

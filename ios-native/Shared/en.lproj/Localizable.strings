@@ -474,6 +474,14 @@
 "teď %@" = "now %@";
 "pás = tvůj normál" = "band = your normal";
 "HRV za 14 dní proti tvému normálu" = "HRV over 14 days against your normal";
+"Cíl závodu" = "Race goal";
+"odhad dnes" = "estimate today";
+"dnes · týden %@" = "today · week %@";
+"Změnit na %@" = "Change to %@";
+"Tempa" = "Paces";
+"Závodní tempo" = "Race pace";
+"Lehce" = "Easy";
+"Odhad %@, cíl %@" = "Estimate %@, goal %@";
 "Průměr 7 dní" = "7-day average";
 "Pás" = "Treadmill";
 "PŘ" = "RDY";
