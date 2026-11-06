@@ -242,6 +242,9 @@ struct DataAgePill: View {
                     .padding(.horizontal, 10)
                     .frame(height: 26)
                     .background(Palette.amberSoft, in: Capsule())
+                    // 44 pt to tap, grown only downwards: the week strip's days
+                    // sit right above it.
+                    .padding(.bottom, 18).contentShape(Rectangle()).padding(.bottom, -18)
                 }
                 .buttonStyle(.plain)
                 .disabled(model.loading || health.syncing)
@@ -382,6 +385,7 @@ struct TabHeader<Extra: View>: View {
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .alignmentGuide(VerticalAlignment.center) { $0[.firstTextBaseline] - capHeight / 2 }
+                    .accessibilityLabel(Fmt.monthTitleSpoken(date))
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 4)
                 if let back = backToToday {
@@ -391,6 +395,7 @@ struct TabHeader<Extra: View>: View {
                             .lineLimit(1).fixedSize()
                             .padding(.horizontal, 12).frame(height: 36)
                             .contentShape(Capsule())
+                            .tapTarget(width: 44, height: 36)
                     }
                     .buttonStyle(.plain)
                     .chromeGlass(in: Capsule())
@@ -603,12 +608,24 @@ struct ReadinessHero: View {
                         .foregroundStyle(Palette.ink)
                         .accessibilityIdentifier("today.verdict")
                 }
+                if readiness.flags?.contains("short_night") == true {
+                    Text("Krátká noc: méně než 3 hodiny spánku.")
+                        .font(Typo.small).foregroundStyle(Palette.muted)
+                }
                 if readiness.provisional == true {
                     Text(provisionalLine)
                         .font(Typo.small).foregroundStyle(Palette.muted)
                 }
             } else if let days = readiness.learningDays {
                 ReadinessLearning(days: days, date: date)
+            } else if readiness.flags?.contains("no_night") == true && (!isToday || Calendar.current.component(.hour, from: Date()) >= 12) {
+                // Today from noon on: the night is not coming any more.
+                Text("Bez zaznamenané noci")
+                    .font(Typo.sentence(34, relativeTo: .largeTitle))
+                    .foregroundStyle(Palette.ink)
+                    .padding(.top, 8)
+                Text("Bez spánku z té noci se připravenost nepočítá. HRV a klidový tep najdeš níže.")
+                    .font(Typo.small).foregroundStyle(Palette.muted)
             } else {
                 Text(nightMissing && isToday ? "Čeká na dnešní noc" : "Zatím bez čísla")
                     .font(Typo.sentence(34, relativeTo: .largeTitle))
@@ -950,6 +967,7 @@ struct ConnectionProblemCard: View {
                                 .font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
                                 .padding(.horizontal, 14).frame(height: 34)
                                 .background(Palette.button, in: Capsule())
+                                .tapTarget(width: 44, height: 34)
                             }
                             .buttonStyle(.plain)
                         }

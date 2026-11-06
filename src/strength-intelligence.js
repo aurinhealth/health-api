@@ -491,35 +491,56 @@ function selectReference(rows, targetReps) {
 }
 
 // Double progression from the latest session: all work sets at the top of the
-// rep range (or an easy RPE) earn the next load step, a missed range or a
-// near-maximal set takes a step back, anything else keeps the load and aims
-// for more reps. The change is at least one real step of the equipment, so
-// rounding never swallows it, and older sessions only count for the trend.
+// rep range (or an easy RPE) earn the next load step, a missed range takes a
+// step back, anything else keeps the load and aims for more reps. The change
+// is at least one real step of the equipment, so rounding never swallows it,
+// and older sessions only count for the trend.
+// A failure (F) with the reps in range is effort, not a load too heavy:
+// failure and non-failure training build muscle alike (Refalo 2023,
+// doi:10.1007/s40279-022-01784-y), so it only holds the load; on a main lift a
+// failed first set still steps back. The range counts as missed when the
+// first set or half of the sets fall short, not one late set (reps fall from
+// set to set: Willardson 2005, PMID 15705039).
+// An exercise done after many sets for the same muscle (prior, from
+// priorMuscleSets) lifts less for the same effort (Simão 2012,
+// doi:10.2165/11597240-000000000-00000). It is compared with its last session
+// at a similar place in the workout; without one, an accessory exercise keeps
+// its load once down to 3 reps under the range (2 under a range from below 8).
 function stepDown(value, step, min = 0) { return Math.max(min, Math.floor(value / step + 1e-9) * step); }
-export function progressionDecision(rows, exercise, targetReps, loadFactor = 1, today = null) {
+const PRE_FATIGUE_SETS = 4, SIMILAR_FATIGUE = 2;
+export function progressionDecision(rows, exercise, targetReps, loadFactor = 1, today = null, prior = null) {
   const sessions = new Map();
   for (const r of rows || []) {
     const kg = n(r.actual_kg), reps = n(r.actual_reps), date = dateKey(r.workout_date);
     if (kg == null || reps == null || !date) continue;
     // A set the plan sent to failure is stored as RPE 10; that is the plan,
     // not a sign the load was too heavy, so its RPE doesn't decide the step.
-    (sessions.get(date) || sessions.set(date, []).get(date)).push({ kg, reps, rpe: strengthSetOptions(r).toFailure ? null : normalizeRpe(r.rpe) });
+    (sessions.get(date) || sessions.set(date, []).get(date)).push({ kg, reps, set: n(r.set_no), rpe: strengthSetOptions(r).toFailure ? null : normalizeRpe(r.rpe) });
   }
   const dates = [...sessions.keys()].sort((a, b) => b.localeCompare(a));
   if (!dates.length) return null;
   const range = parseRepRange(targetReps), meta = EXERCISE_INTELLIGENCE[normalizeExerciseName(exercise)], rule = loadRule(meta), step = rule.step;
-  const latest = sessions.get(dates[0]);
-  // The working load is the heaviest one that reached the bottom of the range.
-  const inRange = latest.filter(s => !range || s.reps >= range.min);
-  const topKg = Math.max(...(inRange.length ? inRange : latest).map(s => s.kg));
-  const atTop = latest.filter(s => s.kg === topKg);
+  // The working load is the heaviest one that reached the bottom of the range,
+  // its sets in the order they were done.
+  const topSets = list => {
+    const inRange = list.filter(s => !range || s.reps >= range.min);
+    const top = Math.max(...(inRange.length ? inRange : list).map(s => s.kg));
+    return list.filter(s => s.kg === top).sort((a, b) => (a.set ?? 0) - (b.set ?? 0));
+  };
+  const short = (sets, slack) => Boolean(range) && (sets[0].reps < range.min - slack || sets.filter(s => s.reps < range.min - slack).length * 2 >= sets.length);
+  const atTop = topSets(sessions.get(dates[0])), topKg = atTop[0].kg;
   const minReps = Math.min(...atTop.map(s => s.reps));
   const rpes = atTop.map(s => s.rpe).filter(x => x != null), maxRpe = rpes.length ? Math.max(...rpes) : null;
+  const accessory = (meta?.fatigue ?? 1) < 0.7;
+  const fatigueOf = d => prior?.get(d) ?? 0, fatigue = fatigueOf(dates[0]);
+  const similar = dates.slice(1).filter(d => Math.abs(fatigueOf(d) - fatigue) <= SIMILAR_FATIGUE);
+  const tooHeavy = range ? short(atTop, 1) || (!accessory && atTop[0].rpe != null && atTop[0].rpe >= 9.5) : maxRpe != null && maxRpe >= 9.5;
+  const fatigueHold = tooHeavy && Boolean(range) && accessory && fatigue >= PRE_FATIGUE_SETS && !similar.length && !short(atTop, range.min >= 8 ? 3 : 2);
   let decision = "hold", kg = topKg;
-  if ((range && minReps < range.min - 1) || (maxRpe != null && maxRpe >= 9.5)) {
+  if (tooHeavy && !fatigueHold) {
     decision = "decrease";
     kg = Math.min(topKg - step, stepDown(topKg * 0.925, step, rule.min));
-  } else if ((range && minReps >= range.max && (maxRpe == null || maxRpe <= 9)) || (range && minReps >= range.min && maxRpe != null && maxRpe <= 7)) {
+  } else if (!tooHeavy && ((range && minReps >= range.max && (maxRpe == null || maxRpe <= 9)) || (range && minReps >= range.min && maxRpe != null && maxRpe <= 7))) {
     decision = "increase";
     const easy = maxRpe != null && maxRpe <= 6.5 && (!range || minReps >= range.max);
     kg = topKg + Math.max(step, stepDown(topKg * (easy ? 0.05 : 0.025), step));
@@ -536,14 +557,40 @@ export function progressionDecision(rows, exercise, targetReps, loadFactor = 1, 
   // off, a step back (or a return after a break) adds a step of it.
   if (meta?.loadUnit === LOAD_UNITS.ASSISTANCE_KG) kg = decision === "increase" ? Math.max(rule.min, topKg - step) : decision === "decrease" || decision === "return" ? topKg + step : topKg;
   kg = resolveLoad(exercise, kg);
-  // Stagnation: the same load for the last three sessions without more reps.
-  const previous = dates.slice(1, 3).map(d => sessions.get(d));
-  const stalled = decision === "hold" && previous.length === 2 && previous.every(p => Math.max(...p.map(s => s.kg)) === topKg && Math.min(...p.filter(s => s.kg === topKg).map(s => s.reps)) >= minReps);
-  return { kg, decision, stalled, topKg, minReps, maxRpe, sets: atTop.length, date: dates[0], sessions: dates.length, range };
+  // Stagnation: the same load for the last three sessions at a similar place
+  // in the workout without more reps; a hold for fatigue is no stagnation.
+  const previous = similar.slice(0, 2).map(d => sessions.get(d));
+  const stalled = decision === "hold" && !fatigueHold && previous.length === 2 && previous.every(p => Math.max(...p.map(s => s.kg)) === topKg && Math.min(...p.filter(s => s.kg === topKg).map(s => s.reps)) >= minReps);
+  return { kg, decision, stalled, topKg, minReps, maxRpe, sets: atTop.length, date: dates[0], sessions: dates.length, range, fatigue, fatigueHold: decision === "hold" && fatigueHold, similarDate: similar[0] || null };
 }
 
-function estimateFromOwnHistory(own, exercise, targetReps, loadFactor, today = null) {
-  const result = progressionDecision(own, exercise, targetReps, loadFactor, today);
+// Fatigue carried into an exercise on each day it was done: the work sets for
+// its muscle done earlier that day, a synergist's at half (a press for the
+// triceps, a row or pulldown for the biceps), as date → sets. A superset
+// partner for another muscle adds nothing.
+const SYNERGIST = { horizontal_push: { triceps: 0.5 }, incline_push: { triceps: 0.5 }, vertical_push: { triceps: 0.5 }, horizontal_pull: { biceps: 0.5 }, vertical_pull: { biceps: 0.5 } };
+export function priorMuscleSets(history, exercise) {
+  exercise = normalizeExerciseName(exercise);
+  const muscle = EXERCISE_INTELLIGENCE[exercise]?.muscle, family = new Set(historyFamily(exercise)), out = new Map();
+  if (!muscle) return out;
+  const names = new Map(), canonical = name => names.get(name) ?? names.set(name, normalizeExerciseName(name)).get(name);
+  const share = name => { const m = EXERCISE_INTELLIGENCE[canonical(name)]; return !m ? 0 : m.muscle === muscle ? 1 : SYNERGIST[m.pattern]?.[muscle] || 0; };
+  const days = new Map();
+  for (const r of history || []) {
+    const date = dateKey(r.workout_date);
+    if (!date || r.planned || String(r.type || "WORK").toUpperCase() !== "WORK" || (r.completed != null && Number(r.completed) !== 1)) continue;
+    (days.get(date) || days.set(date, []).get(date)).push(r);
+  }
+  for (const [date, list] of days) {
+    const sorted = list.map((r, i) => ({ r, i })).sort((a, b) => Number(a.r.plan_row ?? 0) - Number(b.r.plan_row ?? 0) || a.i - b.i).map(x => x.r);
+    const first = sorted.findIndex(r => family.has(canonical(r.exercise)));
+    if (first >= 0) out.set(date, sorted.slice(0, first).reduce((sum, r) => sum + share(r.exercise), 0));
+  }
+  return out;
+}
+
+function estimateFromOwnHistory(own, exercise, targetReps, loadFactor, today = null, prior = null) {
+  const result = progressionDecision(own, exercise, targetReps, loadFactor, today, prior);
   if (!result) return null;
   const confidence = clamp(0.72 + Math.min(result.sessions, 5) * 0.055, 0.72, 1);
   return {
@@ -552,6 +599,7 @@ function estimateFromOwnHistory(own, exercise, targetReps, loadFactor, today = n
     referenceReps: result.minReps, referenceRpe: result.maxRpe,
     referenceDate: result.date, performanceCount: Math.min(result.sessions, 5),
     progression: result.decision, stalled: result.stalled, referenceSets: result.sets,
+    fatigueHold: result.fatigueHold, priorSets: result.fatigue,
     deltaPct: result.topKg ? Math.round((result.kg / result.topKg - 1) * 1000) / 10 : 0
   };
 }
@@ -584,7 +632,8 @@ export function estimateStartingLoad({ exercise, history = [], targetReps = "8�
   const def = EXERCISE_INTELLIGENCE[exercise];
   if (!def) return { kg: fallbackKg, source: fallbackKg == null ? "unknown" : "fallback", confidence: fallbackKg == null ? 0 : 0.2 };
   const family = historyFamily(exercise);
-  const ownEstimate = estimateFromOwnHistory(family.flatMap(name => completedRowsForExercise(history, name)), exercise, targetReps, loadFactor, today);
+  const own = family.flatMap(name => completedRowsForExercise(history, name));
+  const ownEstimate = own.length ? estimateFromOwnHistory(own, exercise, targetReps, loadFactor, today, priorMuscleSets(history, exercise)) : null;
   if (ownEstimate) return ownEstimate;
   const candidates = [];
   for (const name of Object.keys(EXERCISE_INTELLIGENCE)) {

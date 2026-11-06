@@ -48,6 +48,13 @@ struct FormDetailContent: View {
                 .padding(.top, 24)
             }
 
+            // The last 7 days against the usual 28 on a scale in ink, no
+            // ratio, bands or colours (Today audit D4).
+            if let level = training.acwr?.level, TrainingSnapshot.ACWR.levels.contains(level) {
+                header("Posledních 7 dní vs. obvyklých 28", trailing: nil)
+                LoadLevelScale(level: level).padding(.top, 14)
+            }
+
             if training.load.weeks.count > 1 {
                 header("Zátěž po týdnech", trailing: L10n.f("týden %@", "\(training.week)"))
                 WeeklyLoadChart(weeks: training.load.weeks)
@@ -92,6 +99,43 @@ struct FormDetailContent: View {
             if let trailing { Text(trailing).font(Typo.caption).foregroundStyle(Palette.faint) }
         }
         .padding(.top, 34)
+    }
+}
+
+/// Well below · Below · Usual · Above · Well above, the current step filled.
+struct LoadLevelScale: View {
+    let level: String
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        let levels = TrainingSnapshot.ACWR.levels
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 4) {
+                ForEach(levels, id: \.self) { step in
+                    Capsule().fill(step == level ? Palette.ink : Palette.track).frame(height: 6)
+                }
+            }
+            // At the largest text sizes five words do not fit side by side: only the current one.
+            if typeSize.isAccessibilitySize {
+                Text(verbatim: TrainingSnapshot.ACWR.word(level) ?? "")
+                    .font(Typo.caption.weight(.semibold))
+                    .foregroundStyle(Palette.ink)
+            } else {
+                HStack(alignment: .top, spacing: 4) {
+                    ForEach(levels, id: \.self) { step in
+                        Text(verbatim: TrainingSnapshot.ACWR.word(step) ?? "")
+                            .font(step == level ? Typo.caption.weight(.semibold) : Typo.caption)
+                            .foregroundStyle(step == level ? Palette.ink : Palette.faint)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: L10n.f("Posledních 7 dní vs. obvyklých 28: %@", TrainingSnapshot.ACWR.word(level) ?? "")))
     }
 }
 

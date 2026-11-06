@@ -23,7 +23,8 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
 
 ### Progrese vah podle RPE/RIR
 
-- **Výpočet:** dvojitá progrese. Všechny pracovní série na horní hranici rozsahu opakování nebo s lehkým RPE posunou váhu o krok nahoru. RPE ≥ 9,5 vrátí krok zpět. (`src/strength-intelligence.js`)
+- **Výpočet:** dvojitá progrese. Všechny pracovní série na horní hranici rozsahu opakování nebo s lehkým RPE posunou váhu o krok nahoru. Krok zpět přijde, když pod rozsah spadne první série nebo aspoň polovina sérií; u hlavního cviku i selhání (RPE ≥ 9,5) v první sérii. Selhání s opakováními v rozsahu váhu jen podrží. Cvik po 4 a více sériích na stejný sval (série pomocného svalu za polovinu) se porovnává s posledním tréninkem na podobném místě; bez takového tréninku doplňkový cvik váhu jednou podrží i 3 opakování pod rozsahem. (`src/strength-intelligence.js`, `progressionDecision`, `priorMuscleSets`)
+- **Zdroj (pořadí a selhání):** Simão R et al. *Exercise order in resistance training.* Sports Med 2012;42:251–265, doi:10.2165/11597240-000000000-00000. Refalo MC et al. *Influence of resistance training proximity-to-failure on skeletal muscle hypertrophy: a systematic review with meta-analysis.* Sports Med 2023;53:649–665, doi:10.1007/s40279-022-01784-y.
 - **Zdroj:** Helms ER et al. *Application of the repetitions in reserve-based rating of perceived exertion scale for resistance training.* Strength Cond J 2016;38(4):42–49. Validace škály: Zourdos MC et al., J Strength Cond Res 2016;30:267–275.
 - **Co tvrdit:** autoregulace podle počtu opakování do selhání, stejný princip jako JuggernautAI a Fitbod.
 
@@ -64,6 +65,7 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
   - Teplota kůže ve spánku o ≥ 0,5 °C a zároveň 2 noční SD nad 30denní baseline Google Health ubere 10 bodů (Google Health typ `daily-sleep-temperature-derivations`).
   - Potřebuje 14 předchozích měření.
   - HRV a klidový tep se porovnávají jen se dny stejného zdroje (Apple SDNN, Google RMSSD, Intervals.icu). Nový zdroj s méně než 14 dny převezme baseline jiného zdroje, pokud se oba aspoň 5 dní překrývají: posun je průměrný rozdíl ve dnech překryvu (ln HRV, tepy/min). Dokud nový zdroj nemá 14 vlastních dní, je číslo orientační (`provisional`, `sourceBaseline`). Bez překryvu platí původní pravidlo.
+  - Noc: hlavní noc dne je nejdelší spánek (3 h a víc). Když domovský zdroj zachytil jen úlomek pod 3 h a jiné zařízení celou noc, platí ta delší (jen spánek; HRV a klidový tep zůstávají u domovského zařízení, `src/source-priority.js`). Noc pod 3 h se započítá a připravenost má nejvýš horní hranici žluté (66) se štítkem „krátká noc“. Když noc chybí a hodinky jinak noci zaznamenávají (aspoň jedna za 14 dní), připravenost nemá číslo: probdělá noc a hodinky na stole vypadají stejně. HRV a klidový tep se ukážou dál. Bez jakýchkoli nocí (spánek se neměří) zůstává číslo z HRV a tepu (`src/readiness.js`, `shortNight`, `withoutNight`). Zdroj: Craven J et al. Sports Med 2022;52:2669–2690, [PMC9584849](https://pmc.ncbi.nlm.nih.gov/articles/PMC9584849/): akutní ztráta spánku sníží výkon o 7,6 %.
   - Dnes, Zdraví, kouč kola a běhu, kouč posilovny i revize dne berou číslo z jedné funkce se stejnými vstupy: 90 dní wellness, spánek za 30 dní, cíl spánku z profilu, zátěž předchozího dne a ranní pocit (`src/readiness.js`, `readinessFor`).
 - **Zdroje:**
   - Plews DJ et al. Eur J Appl Physiol 2012;112:3729–3741, [PMID 22367011](https://pubmed.ncbi.nlm.nih.gov/22367011/): 7denní průměr lnRMSSD zachytil přetrénování, jednotlivé dny ne.
@@ -137,7 +139,7 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
   - Regenerační týden pro všechny sporty nastane po týdnu ≥ 125 % udržovací zátěže (CTL × 7), po třech týdnech nad ní, nebo když 7denní průměr HRV před týdnem klesne pod osobní pásmo o víc než SWC (`src/week-planner.js`, `hrvWeekTrendDown`).
 - **Zdroje:**
   - Impellizzeri FM et al. Int J Sports Physiol Perform 2020;15:907–913.
-  - Impellizzeri FM et al. Sports Med 2021;51:581–592: poměr akutní a chronické zátěže (ACWR) nemá vlastní prediktivní hodnotu, proto ho nepoužíváme.
+  - Impellizzeri FM et al. Sports Med 2021;51:581–592: poměr akutní a chronické zátěže (ACWR) nemá vlastní prediktivní hodnotu, proto ho nepoužíváme k předpovědi rizika ani k řízení dávky. Aplikace a kouč ho ukazují jen slovy jako popis týdne: „Posledních 7 dní vs. obvyklých 28“ výrazně pod (< 0,7), pod (0,7–0,9), obvyklá (0,9–1,15), nad (1,15–1,5), výrazně nad (> 1,5); číslo poměru, „sweet spot“ ani riziko se neukazují (`src/workload-ratio.js`, Today audit D4). Hranice jsou naše popisné, ne výsledek studie.
   - Plews 2012 a Javaloyes 2019 (viz 2.1) pro spouštěč z HRV.
   - Bell L et al. Sports Med Open 2023;9:87 (Delphi konsenzus k deloadu) a Front Sports Act Living 2022;4:1073223 (deload obvykle 5–7 dní každé 4–6 týdny).
 - **Limity:** pravidla 125 % a „tři týdny“ jsou trenérská praxe, ne výsledek kontrolované studie. Pro vytrvalostní cyklus 3:1 jsme kontrolovanou studii nenašli. Spouštěč z HRV je individuální a podložený.
@@ -175,6 +177,13 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
   - Racette SB et al. Am J Physiol Endocrinol Metab 2012;302:E441–E448: příjem = výdej + změna zásob; regrese denních vážení je nejspolehlivější odhad změny zásob.
   - Hall KD et al. Lancet 2011;378:826–837: statické pravidlo 7700 kcal/kg přeceňuje dlouhodobý úbytek. Proto bereme polovinu a strop.
 - **Proti konkurenci:** Garmin a Whoop berou výdej z hodinek. Ten má chybu přes 20 % a navíc nemá jednotný směr (O'Driscoll R et al. Br J Sports Med 2020;54:332–340). Naše smyčka podle váhy tuto systematickou chybu postupně opraví, podobně jako aplikace s adaptivním výdejem.
+
+### 2.10 Klidový tep nad obvyklým rozmezím (karta „Dnes se hodí lehčí den“)
+
+- **Práh zátěže:** klidový tep aspoň 2 obvyklé odchylky nad obvyklou hodnotou 2 noci po sobě, nebo 1 noc a zároveň HRV pod svým obvyklým rozmezím (`restingHRAbove` v `src/night-check.js`). Jen proti vlastnímu obvyklému rozmezí zdroje (14 nocí z těch samých hodinek): s rozmezím převzatým z jiných hodinek (nové hodinky, `restingHRMixed` nebo provizorní) se signál nespouští, protože by posun nového zařízení četl jako vzestup.
+- **Text:** „Resting heart rate is above your usual range. Alcohol, heat, a late meal, stress or hard training can do this.“ Karta nabízí lehčí den (stejná výměna jako u ostatních nočních hodnot). Nikdy nepíše „abnormal“, nemoc ani infekci.
+- **Proč dvě noci:** klidový tep je u jednotlivce stabilní, ale pětina lidí má aspoň jeden týden s výkyvem ≥ 10 tepů/min (Quer G et al., PLoS One 2020;15:e0227709), takže jedna noc dává falešné poplachy. Změny tepu a HRV dávají smysl jen spolu s dalšími znaky přetížení (Bosquet L et al., Br J Sports Med 2008). Alkohol zvyšuje tep v noci v závislosti na dávce (Pietilä J et al., JMIR Ment Health 2018). Horko zvyšuje tep při stejné zátěži (Racinais S et al., Scand J Med Sci Sports 2015, konsenzus k tréninku v horku).
+- **Limity:** je to práh zátěže pro úpravu tréninku, ne hodnocení zdraví.
 
 ## Co zbývá
 
