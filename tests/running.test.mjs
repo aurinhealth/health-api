@@ -69,9 +69,10 @@ test("run coach: a week off brings you back with an easy run", () => {
   const coach = buildCyclingCoachV2({ date: "2026-09-30", week: week([["2026-09-20", [], [{ type: "Run", name: "Easy", durationHours: 1 }]]]), fitness: wellness, sport: "run" });
   assert.equal(coach.recommendation.session.kind, "endurance");
   assert.match(coach.rationale[0], /bez běhu/);
-  // CTL 50 → 70 rTSS ≈ 49 min, shortened for the comeback (no sleep data → yellow).
+  // CTL 50 → 70 rTSS ≈ 49 min, shortened for the comeback (no body data: not yellow, audit 14.1).
   assert.match(coach.rationale.at(-1), /návrat po pauze −30 %/);
-  assert.ok(coach.constraints.availableMinutes <= 35);
+  assert.notEqual(coach.readiness.status, "yellow");
+  assert.ok(coach.constraints.availableMinutes <= 40, String(coach.constraints.availableMinutes));
 });
 
 test("a planned Intervals run is classified from its % Pace steps", () => {
