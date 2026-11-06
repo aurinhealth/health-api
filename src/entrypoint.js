@@ -2,7 +2,7 @@ import {initialImport,recentDashboardImport} from './account-sync.js';
 import { recordOpsEvent, routeName, sendDailyOpsReport, withOpsScope } from "./ops-report.js";
 import { elapsed, serverTiming, slowness, timed } from "./request-timing.js";
 import { trainingSetup } from './onboarding.js';
-import { subscriptionStatus, assertAIAccess, plansUnlocked, assertPlanAccess } from './subscription.js';
+import { subscriptionStatus, assertAIAccess, plansUnlocked, assertPlanAccess, paywallOn } from './subscription.js';
 import { claimCoachMessage, recordCoachMessage, releaseCoachMessage } from './coach-allowance.js';
 import { buildNutrients, buildNutrientDetail, nutrientFavorites, saveNutrientFavorites, microTop, FREE_KEYS } from './micronutrients.js';
 import { listRecipes, saveRecipe, deleteRecipe } from './personal-recipes.js';
@@ -728,7 +728,7 @@ async function serverErrorReason(response) {
 async function staticRoute(url, request, env) {
   if (url.pathname === "/") return overviewPage(request);
   if (url.pathname === "/privacy" || url.pathname === "/cs/privacy") return privacyPage(request, { apple: true, email: emailConfigured(env), open: openSignup(env) });
-  if (url.pathname === "/terms" || url.pathname === "/cs/terms") return termsPage(request);
+  if (url.pathname === "/terms" || url.pathname === "/cs/terms") return termsPage(request, { pro: paywallOn(env) });
   if (url.pathname === "/health-data") return healthDataPage(request);
   if (url.pathname === "/support") return supportPage(request, { apple: true, email: emailConfigured(env), open: openSignup(env) });
   if (url.pathname === "/robots.txt") return robotsTxt(request);
