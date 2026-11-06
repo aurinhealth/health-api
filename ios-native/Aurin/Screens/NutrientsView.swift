@@ -85,6 +85,11 @@ struct NutrientsContent: View {
                 // The coach card of Jídlo, with this page's rule-based sentence.
                 CoachTextCard(screen: "nutrients", fallbackText: coach, live: false).padding(.top, 16)
             }
+            if page.days > 1, let logged = page.loggedDays, logged < page.days {
+                // A day with nothing logged is missing data, not a day without iron.
+                Text(L10n.f("Průměr za %@.", L10n.plural("%lld zapsaných dní", logged)))
+                    .font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 16)
+            }
             section("Hlavní", group("main"))
             if page.pro {
                 section("Minerály", group("min"))
@@ -106,7 +111,15 @@ struct NutrientsContent: View {
                 if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
                 HStack(spacing: 4) {
                     NavigationLink { NutrientDetailView(key: item.key, date: date) } label: {
-                        NutrientRow(item: item, week: page.days > 1).padding(.vertical, 12)
+                        VStack(alignment: .leading, spacing: 2) {
+                            NutrientRow(item: item, week: page.days > 1)
+                            // Fibre, sugar and salt are not on every label: how many meals have them.
+                            if item.group == "main", item.known == true, let count = item.count, count < page.meals {
+                                Text(L10n.f("Hodnotu má %@ z %@ jídel.", String(count), String(page.meals)))
+                                    .font(Typo.caption).foregroundStyle(Palette.muted).padding(.leading, 108)
+                            }
+                        }
+                        .padding(.vertical, 12)
                     }
                     .buttonStyle(.plain)
                     if let editTarget, item.target != nil { gear(item, editTarget) }
@@ -330,7 +343,10 @@ struct NutrientDetailContent: View {
             ProgressLine(fraction: (detail.eaten ?? 0) / max(detail.target ?? 1, 0.001), color: over ? Palette.rust : Palette.green, height: 4)
                 .padding(.top, 8)
             if let week = detail.weekPercent {
-                Text(L10n.f("Průměr za 7 dní: %@ %%", Fmt.int(week))).font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 10)
+                // Over the days something was logged on.
+                let text = (detail.weekDays ?? 7) < 7 ? L10n.f("Průměr za %@: %@ %%", L10n.plural("%lld zapsaných dní", detail.weekDays ?? 0), Fmt.int(week))
+                    : L10n.f("Průměr za 7 dní: %@ %%", Fmt.int(week))
+                Text(text).font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 10)
             }
             if let editTarget, detail.target != nil {
                 Button(action: editTarget) {

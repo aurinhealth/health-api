@@ -392,18 +392,21 @@ struct NutrientItem: Decodable, Equatable, Identifiable {
     var limit: Bool = false
     var locked: Bool = false
     var percent: Double? = nil
+    /// False when no meal has a value for it: shown as "–", not as 0.
     var known: Bool? = nil
+    /// How many of the meals have a value for it.
+    var count: Int? = nil
 
     var id: String { key }
 
     /// Under half the target: shown in rust in the 7-day average only, as a
-    /// day still going is not wrong yet.
-    var low: Bool { !limit && !locked && (percent ?? 100) <= 50 }
+    /// day still going is not wrong yet. Never without any value.
+    var low: Bool { !limit && !locked && known != false && (percent ?? 100) <= 50 }
     var over: Bool { limit && (eaten ?? 0) > (target ?? .infinity) }
 
-    /// "9 / 18 mg", "41 / max 66 g".
+    /// "9 / 18 mg", "41 / max 66 g", "– / 15 µg" without any value.
     var text: String {
-        let value = Self.amount(eaten ?? 0)
+        let value = known == false ? "–" : Self.amount(eaten ?? 0)
         guard let target else { return value + " " + unit }
         return value + (limit ? " / max " : " / ") + Self.amount(target) + " " + unit
     }
@@ -418,6 +421,8 @@ struct NutrientsPage: Decodable, Equatable {
     let pro: Bool
     let meals: Int
     let withMicros: Int
+    /// The days with something logged: the 7-day average is over them.
+    var loggedDays: Int? = nil
     let items: [NutrientItem]
     var coach: String? = nil
     var favorites: [String] = []
@@ -435,6 +440,8 @@ struct NutrientDetail: Decodable, Equatable, Identifiable {
     var target: Double? = nil
     var percent: Double? = nil
     var weekPercent: Double? = nil
+    /// The days of the week with something logged: the average is over them.
+    var weekDays: Int? = nil
     var sources: [Source] = []
     var richTitle: String? = nil
     var rich: [Rich] = []

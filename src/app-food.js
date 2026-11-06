@@ -136,7 +136,8 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
         protein: round(num(e.protein_g), 1),
         carbs: round(num(e.carbs_g), 1),
         fat: round(num(e.fat_g), 1),
-        fiber: round(num(e.fiber_g), 1),
+        // Unknown fibre is stored as 0 with a flag (micronutrients.js): shown as "–".
+        fiber: note.fiber_unknown === true ? null : round(num(e.fiber_g), 1),
         sugar: round(num(note.sugar_g), 1),
         salt: round(num(note.salt_g), 2),
         amount: amount != null && unit ? round(amount, 1) + " " + unitLabel(unit, round(amount, 1)) : null,

@@ -5,21 +5,27 @@
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
-// days: [{ date, kcal, target, trainingBonus, everyday }] for Monday to
-// Sunday, as buildFood returns them; today: the user's local date.
+// days: [{ date, kcal, target, trainingBonus, everyday, logged }] for Monday
+// to Sunday, as buildFood returns them (logged: false when nothing was
+// logged); today: the user's local date.
 export function buildFoodWeek({ today, days }) {
   const list = (Array.isArray(days) ? days : []).map(d => {
     const target = num(d?.target) != null ? Math.round(num(d.target)) : null;
     // The day without training (an older day without it: the target less the training part).
     const everyday = target != null ? Math.max(0, Math.min(target, Math.round(num(d?.everyday) ?? target - Math.max(0, num(d?.trainingBonus) ?? 0)))) : null;
     const ahead = d.date > today;
+    // A day gone by with nothing logged was forgotten or logged elsewhere, not
+    // a day without food: it is "nezapsáno" and the rest of the week leaves it
+    // out, so nobody is asked to eat it back.
+    const unlogged = d.date < today && d?.logged === false;
     return {
       date: d.date,
       target,
       everyday,
       // Nothing is eaten on a day still ahead (meals planned there are not eaten yet).
-      eaten: ahead ? null : Math.round(num(d?.kcal) ?? 0),
-      ahead
+      eaten: ahead || unlogged ? null : Math.round(num(d?.kcal) ?? 0),
+      ahead,
+      ...(unlogged ? { unlogged: true } : {})
     };
   });
   const known = list.filter(d => d.target != null);
@@ -40,9 +46,12 @@ export function buildFoodWeek({ today, days }) {
   const inWeek = today >= list[0].date && today <= list.at(-1).date;
   // Where the bar should be by tonight: the everyday intake of the days up to
   // today and what training added on them.
-  const upToToday = list.filter(d => d.date <= today);
+  const upToToday = list.filter(d => d.date <= today && !d.unlogged);
   const byToday = daily * upToToday.length + sum(upToToday, "exercise");
-  const left = target - eaten;
+  // The rest counts only the days that can be eaten in: an unlogged day takes
+  // its own target with it.
+  const unlogged = list.filter(d => d.unlogged);
+  const left = target - eaten - daily * unlogged.length - sum(unlogged, "exercise");
   // What is left shared by the days after today; it shrinks with every meal
   // logged today. On Sunday (and in a week gone by) there is no day after.
   const daysAfter = list.filter(d => d.date > today).length;
@@ -59,6 +68,7 @@ export function buildFoodWeek({ today, days }) {
     left: Math.max(0, left),
     over: Math.max(0, -left),
     perDay: left > 0 && daysAfter > 0 ? Math.round(left / daysAfter / 10) * 10 : null,
+    unlogged: unlogged.length,
     days: list
   };
 }

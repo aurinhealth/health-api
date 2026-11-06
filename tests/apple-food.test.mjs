@@ -22,6 +22,8 @@ test("food and water other apps wrote to Apple Health land in the diary and stay
   assert.equal(JSON.parse(rows[0].note).mealType, "breakfast");
   assert.equal(rows[1].source, "apple-health");
   assert.equal(JSON.parse(rows[1].note).sugar_g, 5.6);
+  // Yazio wrote no fibre: unknown, not 0 g (audit 13.1).
+  assert.equal(JSON.parse(rows[1].note).fiber_unknown, true);
   const drinks = await listFluids(db, "2026-10-13");
   assert.deepEqual(drinks.map(d => [d.ml, d.app]), [[300, "Yazio"]]);
 

@@ -2778,8 +2778,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const day=async date=>{
         const [daily,food]=await Promise.all([read('/analysis/daily?date='+date),read('/food/log?date='+date)]);
         applyEnergyBudget(daily,profile,date===today?healthToday:{today:health?.wellness?.find(w=>w.id===date)||{}});
-        const {kcal,target,trainingBonus,everyday}=buildFood({date,daily,food});
-        return {date,kcal,target,trainingBonus,everyday};
+        const {kcal,target,trainingBonus,everyday,meals}=buildFood({date,daily,food});
+        // A day with nothing logged is "nezapsáno", not 0 kcal (app-food-week.js).
+        return {date,kcal,target,trainingBonus,everyday,logged:meals.some(m=>m.entries.length>0)};
       };
       // Days gone by are cached until the user changes something (the cache version).
       const days=await mapLimit(dates,3,date=>date<today?cached(env,ctx,'food-week-day:'+date,()=>day(date),{ttl:600}):day(date));
@@ -2981,7 +2982,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           protein_g: Number(entry.protein_g || 0),
           carbs_g: Number(entry.carbs_g || 0),
           fat_g: Number(entry.fat_g || 0),
-          fiber_g: Number(entry.fiber_g || 0),
+          // Without a value fibre stays unknown, not 0 g (index.js foodLog).
+          fiber_g: entry.fiber_g == null || entry.fiber_g === "" ? null : Number(entry.fiber_g),
           source: entry.source || "dashboard",
           note: JSON.stringify({...note,mealType:String(entry.mealType||note.mealType||'snack').toLowerCase()})
         };

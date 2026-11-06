@@ -61,6 +61,8 @@ export function appleFood(r) {
   const name = text(r.name, 120) || app;
   const time = CLOCK.test(String(r.time || "")) ? r.time : null;
   const note = { external_id: id, app, sugar_g: round(num(r.sugar, 0, 1000)), salt_g: round(num(r.salt, 0, 200), 2) };
+  // Fibre the other app did not record stays unknown, not 0 g (micronutrients.js).
+  if (num(r.fiber, 0, 500) == null) note.fiber_unknown = true;
   const meal = mealTypeOfName(r.name) || GOOGLE_MEALS[r.mealType] || null;
   if (meal) note.mealType = meal;
   return {
