@@ -11,7 +11,7 @@ import { sleepSettings, tonightChoice } from "./energy-profile.js";
 import { L } from "./lang.js";
 import { dayCalories } from "./app-food.js";
 import { readinessMessage } from "./push.js";
-import { verdictText } from "./day-verdict.js";
+import { verdictText, signsAdvice } from "./day-verdict.js";
 import { activityKindOf } from "./activity-match.js";
 import { daySessions, deviceEnergyExtra, withHeartRateLoad } from "./app-training.js";
 export { withHeartRateLoad };
@@ -172,7 +172,7 @@ export function readinessSummary(summary, readiness = {}, checkin = null, hasPla
   if (!(readiness?.zone === "red" || sick || signs || (yellow && !trained))) return morning && !trained ? { ...(summary || { text: null }), ...morning } : summary;
   if (yellow && !sick && !signs && morning) return { ...(summary || { text: null }), ...morning };
   const recommendation = sick ? L("Když je ti špatně, trénink dnes vynech a odpočívej. Vrať se, až budeš zase fit.", "If you feel unwell, skip training today and rest. Come back when you're well again.")
-    : signs ? L("Dech nebo teplota ve spánku jsou nad tvým obvyklým rozmezím. Dnes bez intenzity, a když se necítíš dobře, odpočívej.", "Your breathing or temperature in sleep is above your usual range. No intensity today, and rest if you don't feel well.")
+    : signs ? signsAdvice()
     : trained ? L("Připravenost je dnes nízká a trénink máš za sebou: zbytek dne odpočívej, najez se a jdi dřív spát.", "Readiness is low today and your training is done: rest for the rest of the day, eat well and get to bed earlier.")
     : yellow ? (hasPlan ? L("Dnes raději lehčeji: plánovaný trénink odjeď v klidném tempu a intenzitu nech na jiný den.", "Take today easier: do the planned session at an easy pace and save the intensity for another day.")
       : L("Dnes raději lehčeji: když budeš trénovat, tak v klidném tempu.", "Take today easier: if you train, keep the pace easy."))
