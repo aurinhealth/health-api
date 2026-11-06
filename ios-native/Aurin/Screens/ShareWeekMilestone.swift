@@ -5,7 +5,7 @@ import SwiftUI
 /// One week for Týden (src/share-week.js): per day the readiness, the main
 /// sport and the training time, the totals and the week before.
 struct ShareWeek: Decodable, Equatable {
-    static let rows = ["Trénink", "Zátěž", "Tréninky", "Kolo", "Běh", "Spánek", "Připravenost"]
+    static let rows = ["Trénink", "Zátěž", "Tréninky", "Kolo", "Běh", "Plavání", "Spánek", "Připravenost"]
 
     struct Day: Decodable, Equatable {
         var date: String
@@ -23,6 +23,7 @@ struct ShareWeek: Decodable, Equatable {
         var tss: Double?
         var rideKm: Double?
         var runKm: Double?
+        var swimKm: Double?
         var sleepMinutes: Double?
         var readiness: Double?
     }
@@ -46,8 +47,8 @@ struct ShareWeek: Decodable, Equatable {
         case "Tréninky":
             guard t.sessions > 0 else { return nil }
             return (String(t.sessions), "", Double(t.sessions))
-        case "Kolo", "Běh":
-            guard let km = key == "Kolo" ? t.rideKm : t.runKm, km > 0 else { return nil }
+        case "Kolo", "Běh", "Plavání":
+            guard let km = key == "Kolo" ? t.rideKm : key == "Běh" ? t.runKm : t.swimKm, km > 0 else { return nil }
             let shown = Units.distance(km)
             return (Fmt.decimal(shown, digits: shown < 100 ? 1 : 0), Units.distanceUnit, km)
         case "Spánek":
@@ -69,6 +70,8 @@ struct ShareWeek: Decodable, Equatable {
             return (d < 0 ? "−" : "+") + Fmt.hoursMinutes(abs(d)) + (key == "Trénink" ? " h" : "")
         case "Kolo", "Běh":
             return Fmt.signed(Units.distance(d))
+        case "Plavání":
+            return Fmt.signed(Units.distance(d), digits: 1)
         default:
             return Fmt.signed(d)
         }
@@ -79,9 +82,15 @@ struct ShareWeek: Decodable, Equatable {
         case "Zátěž", "Kolo": return .amber
         case "Běh", "Připravenost": return .green
         case "Spánek": return .indigo
+        case "Plavání": return .blue
         default: return .ink
         }
     }
+
+    /// Whether a change against last week is good or bad: more sleep and a
+    /// higher readiness are; more or less training is neither (an easier
+    /// week is planned rest), so those stay grey.
+    static func judged(_ key: String) -> Bool { key == "Spánek" || key == "Připravenost" }
 }
 
 /// The round numbers reached since joining Aurin (src/share-milestone.js) and
@@ -376,7 +385,7 @@ struct ShareWeekCard: View {
     /// C: the week's numbers in two columns.
     private var numbers: some View {
         let u = s.u
-        let keys = ["Trénink", "Tréninky", "Kolo", "Běh", "Zátěž", "Spánek", "Připravenost"]
+        let keys = ["Trénink", "Tréninky", "Kolo", "Běh", "Plavání", "Zátěž", "Spánek", "Připravenost"]
         let list: [ShareStat] = Array(keys.filter { options.shows($0) }.compactMap { key -> ShareStat? in
             ShareWeek.value(key, week.week).map { ShareStat(label: key, value: $0.value, unit: $0.unit) }
         }.prefix(6))
@@ -408,7 +417,7 @@ struct ShareWeekCard: View {
         let u = s.u
         let hero = options.shows("Trénink") ? ShareWeek.value("Trénink", week.week) : nil
         let before = ShareWeek.value("Trénink", week.previous)?.raw ?? 0
-        let keys = ["Zátěž", "Kolo", "Běh", "Spánek", "Připravenost"].filter { key in
+        let keys = ["Zátěž", "Kolo", "Běh", "Plavání", "Spánek", "Připravenost"].filter { key in
             options.shows(key) && (ShareWeek.value(key, week.week) != nil || ShareWeek.value(key, week.previous) != nil)
         }
         return VStack(alignment: .leading, spacing: 0) {
@@ -465,7 +474,7 @@ struct ShareWeekCard: View {
     private func deltaText(_ key: String, now: Double, before: Double, size: CGFloat) -> some View {
         let up = now >= before
         return Text(verbatim: ShareWeek.delta(key, now: now, before: before)).font(s.sans(size, .semibold))
-            .foregroundStyle(before <= 0 && now <= 0 ? s.t.muted : (up ? s.t.green : s.t.rust))
+            .foregroundStyle(before <= 0 && now <= 0 || !ShareWeek.judged(key) ? s.t.muted : (up ? s.t.green : s.t.rust))
             .lineLimit(1)
     }
 

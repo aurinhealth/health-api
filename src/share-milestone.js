@@ -1,10 +1,11 @@
 // Sdílet → Milník: what the athlete has reached since joining Aurin, as the
-// app icons count it (app-milestones.js): ride and run kilometres, gym
-// sessions and days in a row, each at the last round number crossed, with
+// app icons count it (app-milestones.js): ride, run and swim kilometres,
+// multisport days (a triathlon, a duathlon or a brick), gym sessions and days
+// in a row, each at the last round number crossed, with
 // the sessions behind it for the poster's bars and the way there; and a new
 // power record from Intervals.icu (the last 30 days against the year before).
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
-import { activityMeters } from "./app-milestones.js";
+import { activityMeters, multisportDays } from "./app-milestones.js";
 
 const DAY = 86400000;
 const shift = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * DAY).toISOString().slice(0, 10);
@@ -55,9 +56,23 @@ export function buildShareMilestones({ rows = [], gymDays = [], today, since = "
     return a;
   })).filter(a => a.date >= since && a.date <= today);
   const items = [];
-  for (const kind of ["ride", "run"]) {
+  for (const kind of ["ride", "run", "swim"]) {
     const item = distanceItem(kind, activities.filter(a => a.kind === kind && a.meters > 0), since);
     if (item) items.push(item);
+  }
+
+  // Multisport: one bar a day, its legs in the order done; the kilometres of each sport over all of them.
+  const multi = multisportDays(activities);
+  const multiValue = reachedStep(GYM_STEPS, multi.length);
+  if (multiValue) {
+    const legs = multi.flatMap(d => d.legs);
+    const km = kind => round(legs.filter(l => l.kind === kind).reduce((s, l) => s + l.meters, 0) / 1000, 1);
+    items.push({
+      key: "multisport", value: multiValue, unit: "", total: multi.length, since, reachedOn: multi[multiValue - 1].date,
+      sessions: multi.length, minutes: round(legs.reduce((s, l) => s + l.minutes, 0)), elevation: null,
+      bars: multi.slice(-BARS).map(d => ({ date: d.date, value: round(d.legs.reduce((s, l) => s + l.minutes, 0)), legs: d.legs.map(l => ({ kind: l.kind, minutes: round(l.minutes) })) })),
+      start: 0, km: { ride: km("ride"), run: km("run"), swim: km("swim") }
+    });
   }
 
   // Gym: a strength activity or a plan with sets logged, once a day.

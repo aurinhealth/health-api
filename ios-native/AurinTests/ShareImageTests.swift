@@ -182,6 +182,11 @@ final class ShareImageTests: XCTestCase {
         XCTAssertEqual(ShareWeek.delta("Běh", now: 18, before: 22), "−4")
         XCTAssertEqual(ShareWeek.delta("Zátěž", now: 486, before: 412), "+74")
         XCTAssertNil(ShareWeek.value("Kolo", ShareWeek.Totals()))
+        XCTAssertEqual(ShareWeek.value("Plavání", ShareWeek.Totals(swimKm: 6.4))?.value, "6,4")
+        XCTAssertEqual(ShareWeek.delta("Plavání", now: 4.2, before: 6.4), "−2,2")
+        // Less training is no worse (a planned easier week); less sleep is.
+        XCTAssertFalse(ShareWeek.judged("Trénink") || ShareWeek.judged("Zátěž") || ShareWeek.judged("Plavání"))
+        XCTAssertTrue(ShareWeek.judged("Spánek") && ShareWeek.judged("Připravenost"))
         XCTAssertEqual(ShareText.range("2026-10-12", "2026-10-18"), "12.–18. 10.")
         XCTAssertEqual(ShareText.range("2026-09-28", "2026-10-04"), "28. 9. – 4. 10.")
         XCTAssertEqual(ShareText.weekday("2026-10-12"), "Po")
