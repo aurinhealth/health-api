@@ -1081,14 +1081,14 @@ async function computeWeekTargets(env,ctx,start,prefs,{original=false}={}){
   const runCommitted=days.reduce((n,d)=>n+committedRunMinutes(d.date,today,runOn[d.date]?.planned,runOn[d.date]?.done),0);
   // The forecast decides outdoor or indoor (and so the length) unless the athlete chose.
   const weather=await weekWeather(prefs.location,start,env).catch(()=>({}));
-  const runCap=weeklyRunCap(await planningHistory(env,start,30).catch(()=>[]),start);
+  const history=await planningHistory(env,start,30).catch(()=>[]),runCap=weeklyRunCap(history,start);
   const plan=await planForWeek(env,ctx,start);
   const hrvDown=hrvWeekTrendDown(hrvSourceRows(wellness,(await googleHealthFor(env,ctx,today).catch(()=>({})))?.wellness,start),start),eventDate=plan.plan?null:athleteFocus(await dashboardProfile(env).catch(()=>null),today).event?.date||null;
   const build=p=>{
     const roles=planWeekRoles(prefs.days,{...p.roles,...roleTime(prefs,start)});
     let targets=weekTargets({roles,ctl,lastWeekLoad,weekLoads:weekLoadsBefore(wellness,start),hrvDown,rampRate:[...wellness].reverse().find(r=>Number.isFinite(Number(r.rampRate)))?.rampRate??null,days,today,weekStart:start,plan:p.load,eventDate});
     // A plan needs its sessions even before there is a fitness history.
-    if(plan.plan&&targets.status!=='ok')targets=estimatedTargets(roles,start,today,days);
+    if(plan.plan&&targets.status!=='ok')targets=estimatedTargets(roles,start,today,days,history);
     return capWeekTargets(capRunVolume(p.apply(targets),runCap,runCommitted),prefs,[],weather);
   };
   // Monday: the plan follows the trend of the week before (planTrendCheck); changed, the week is built again.
