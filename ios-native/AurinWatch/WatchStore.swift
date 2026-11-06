@@ -14,6 +14,9 @@ final class WatchStore: NSObject, ObservableObject {
     /// The day neither the iPhone nor the server gave today when the watch
     /// last asked: the home page says "No connection" instead of "Getting today…".
     @Published private var failedDay: String?
+    /// The iPhone in reach now (WCSession.isReachable, which isn't observed):
+    /// what only it can do turns off without it (watch audit B2).
+    @Published private(set) var phoneNear = false
     var todayFailed: Bool { failedDay == Self.localDate(Date()) }
     /// Settings → Apple Watch on the iPhone.
     @Published private(set) var settings: WatchSettings = UserDefaults.standard.data(forKey: WatchSettings.contextKey)
@@ -300,7 +303,9 @@ extension WatchStore: WCSessionDelegate {
         let gym = context[WatchGym.replyKey] as? Data
         let settings = context[WatchSettings.contextKey] as? Data
         let empty = context.isEmpty
+        let near = session.isReachable
         Task { @MainActor in
+            WatchStore.shared.phoneNear = near
             if let settings { WatchStore.shared.receive(settings: settings) }
             if let gym { GymStore.shared.received(gym) }
             if let data { WatchStore.shared.receive(data) } else if !empty { WatchStore.shared.receive(nil) }
@@ -360,7 +365,9 @@ extension WatchStore: WCSessionDelegate {
     }
 
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
-        guard session.isReachable else { return }
+        let near = session.isReachable
+        Task { @MainActor in WatchStore.shared.phoneNear = near }
+        guard near else { return }
         Task { @MainActor in
             WatchStore.shared.ask()
             GymStore.shared.loadIfWaiting()

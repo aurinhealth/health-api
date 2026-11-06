@@ -97,32 +97,52 @@ struct TrainingPage: View {
         return true
     }
 
+    /// A rest day of the coach's plan: the week has workouts, today none at
+    /// all (a ride day or a week with no plan isn't one).
+    private var restDay: Bool {
+        sessions.contains { $0.date != today } && !sessions.contains { $0.date == today }
+    }
+
     /// Repeat last workout, Build from rested, Empty workout: the iPhone puts
-    /// it in the day (an empty one starts here alone too) and it opens.
+    /// it in the day (an empty one starts here alone too) and it opens. Watch
+    /// audit B2: on a rest day it asks "Train anyway?" with all three grey,
+    /// and without the iPhone the two it builds are off.
     private var noGym: some View {
         let settings = watch.settings
+        let rest = restDay
+        let near = watch.phoneNear || WatchDemo.on
         return VStack(alignment: .leading, spacing: 5) {
-            Text(W.tr("Posilovna není v plánu", "No gym planned"))
+            Text(rest ? W.tr("Den volna", "Rest day") : W.tr("Posilovna není v plánu", "No gym planned"))
                 .watchFont(15, .semibold).foregroundStyle(W.ink)
             if let last = settings.lastGym {
                 Text(W.tr("Minule: ", "Last: ") + W.dayName(last) + (settings.lastGymExercises.map { " · " + Self.exercises($0) } ?? ""))
                     .watchFont(12).foregroundStyle(W.secondary)
             }
+            if rest {
+                Text(W.tr("Přesto trénovat?", "Train anyway?"))
+                    .watchFont(12, .semibold).foregroundStyle(W.ink)
+                    .padding(.top, 4)
+            }
             if store.starting {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 6)
             } else {
                 if settings.lastGym != nil {
-                    startButton(.repeatLast, W.tr("Zopakovat minulý", "Repeat last workout"), prominent: true)
+                    startButton(.repeatLast, W.tr("Zopakovat minulý", "Repeat last workout"), prominent: !rest && near, off: !near)
                 }
-                startButton(.rested, W.tr("Sestavit z odpočatých", "Build from rested"), prominent: settings.lastGym == nil)
-                startButton(.empty, W.tr("Prázdný trénink", "Empty workout"), prominent: false)
+                startButton(.rested, W.tr("Sestavit z odpočatých", "Build from rested"), prominent: !rest && near && settings.lastGym == nil, off: !near)
+                if !near {
+                    Text(W.tr("Potřebuje iPhone poblíž", "Needs your iPhone nearby"))
+                        .watchFont(12).foregroundStyle(W.muted)
+                        .frame(maxWidth: .infinity)
+                }
+                startButton(.empty, W.tr("Prázdný trénink", "Empty workout"), prominent: !rest && !near)
             }
         }
         .padding(.top, 12)
     }
 
     /// The main one white, the others the system's grey (watch audit D2).
-    @ViewBuilder private func startButton(_ kind: WatchGym.Start.Kind, _ title: String, prominent: Bool) -> some View {
+    @ViewBuilder private func startButton(_ kind: WatchGym.Start.Kind, _ title: String, prominent: Bool, off: Bool = false) -> some View {
         let button = Button {
             Task { if await store.start(kind) { running = true } }
         } label: {
@@ -130,6 +150,7 @@ struct TrainingPage: View {
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
         }
+        .disabled(off)
         if prominent {
             button.mainButton().padding(.top, 3)
         } else {

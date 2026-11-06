@@ -1,5 +1,7 @@
 import Foundation
+import SwiftUI
 import WatchConnectivity
+import WatchKit
 
 /// The coach on the watch: the question goes to the iPhone, which asks the
 /// server in the app's chat (WatchShared/WatchCoach.swift); what it is doing
@@ -13,6 +15,8 @@ final class CoachStore: ObservableObject {
     struct Turn: Identifiable, Equatable {
         let id: String
         let question: String
+        /// Where it was asked ("today", "gym"), for Try again.
+        var view = "today"
         var answer: String?
         var failed = false
         var proposal = false
@@ -44,7 +48,7 @@ final class CoachStore: ObservableObject {
         let question = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, !waiting else { return }
         let id = UUID().uuidString
-        turns.append(Turn(id: id, question: question))
+        turns.append(Turn(id: id, question: question, view: view))
         waiting = true
         progress = nil
         askedAt = Date()
@@ -95,6 +99,21 @@ final class CoachStore: ObservableObject {
         if let chat = answer.chatId { chatId = chat }
         waiting = false
         progress = nil
+        arrived(answer.text, failed: answer.failed)
+    }
+
+    /// Watch audit G3: the answer taps the wrist and VoiceOver reads it, as
+    /// the watch is often down while the coach thinks.
+    private func arrived(_ text: String, failed: Bool) {
+        WKInterfaceDevice.current().play(failed ? .failure : .notification)
+        AccessibilityNotification.Announcement(text).post()
+    }
+
+    /// Try again under an answer that didn't come: the same question, asked anew.
+    func retry(_ id: String) {
+        guard !waiting, let index = turns.firstIndex(where: { $0.id == id && $0.failed }) else { return }
+        let turn = turns.remove(at: index)
+        ask(turn.question, view: turn.view)
     }
 
     private func fail(_ id: String, _ text: String) {
@@ -104,6 +123,7 @@ final class CoachStore: ObservableObject {
         }
         waiting = false
         progress = nil
+        arrived(text, failed: true)
     }
 
     func clear() {
