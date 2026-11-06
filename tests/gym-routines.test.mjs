@@ -37,6 +37,29 @@ test('the main sport adds its moves: a cyclist stretches the hip flexors after a
   assert.ok(ids(stretchingFor(upper, muscleOf, { count: 4, sport: 'cycling' })).includes('hip_flexor'));
 });
 
+test('a swimmer gets shoulder and lat moves after a leg day', () => {
+  assert.ok(!ids(stretchingFor(legs, muscleOf, { count: 4 })).some(id => ['lat', 'cross_body', 'chest'].includes(id)));
+  assert.ok(ids(stretchingFor(legs, muscleOf, { count: 4, sport: 'swimming' })).includes('lat'));
+  assert.ok(ids(warmupFor(legs, muscleOf, { count: 4, sport: 'swimming' })).includes('arm_circles'));
+});
+
+test('the sport takes the third place, so the two muscles worked most keep theirs', () => {
+  const backChest = [...Array(4).fill(['WORK', 'back']), ...Array(4).fill(['WORK', 'chest'])];
+  const run = ids(stretchingFor(backChest, muscleOf, { count: 3, doubled: 1, sport: 'running' }));
+  assert.ok(run.includes('lat') && run.includes('chest') && run.includes('calf'), run.join());
+  assert.equal(ids(stretchingFor(backChest, muscleOf, { count: 2, sport: 'running' })).filter(id => id !== 'child').every(id => ['lat', 'chest', 'wall_shoulder_opener'].includes(id)), true);
+});
+
+test('a narrow day repeats a move at most three times and fills the rest with other moves', () => {
+  const shoulders = Array(6).fill(['WORK', 'side_delts']);
+  for (const minutes of [15, 30]) {
+    const r = stretchingFor(shoulders, muscleOf, { minutes, stations: [] });
+    assert.ok(r.items.every(i => i.rounds <= 3), r.items.map(i => i.id + '×' + i.rounds).join());
+    assert.equal(r.items[0].id, 'cross_body');
+    assert.ok(r.items.length > 4);
+  }
+});
+
 test('own routines are cleaned, built and picked instead of the automatic one', () => {
   const mine = normalizeMyRoutines({ warmup: [
     { id: 'legs', name: 'Legs', items: [{ move: 'hip_circles' }, { name: 'Rowing machine', seconds: 300 }, { name: '', seconds: 30 }, { move: 'nope' }] },
