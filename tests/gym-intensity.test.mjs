@@ -31,6 +31,17 @@ test('a generated plan gets a letter per set from what it already says', () => {
   assert.deepEqual(assignIntensities([work('Bench', 1, '40')], { phaseRpe: '6' }).map(r => r[14]), ['E']);
 });
 
+test('"2–3 reps in reserve" is M in both languages, "3 reps in reserve" stays E (audit 2026-11-06, 6.1)', () => {
+  const letters = notes => assignIntensities(notes.map((n, i) => work('Curl', i + 1, '10', n))).map(r => r[14]);
+  assert.deepEqual(letters([
+    'nový cvik: váha je odhad, uprav ji tak, aby ti zbyla 2–3 opakování v rezervě',
+    'new exercise: the weight is an estimate; adjust it so you have 2–3 reps in reserve',
+    'odlehčený týden: stejná váha, 3 opakování v rezervě',
+    'deload week: same weight, 3 reps in reserve',
+    'sportovní zátěž: nech si 3–4 opakování v rezervě (RPE 6–7)'
+  ]), ['M', 'M', 'E', 'E', 'E']);
+});
+
 test('the letter goes to history as a note tag, a drop set as type DROP the coach reads but progression does not', async () => {
   assert.equal(strengthOptionNote({ note: 'x', intensity: 'PR' }), 'x [Intenzita PR]');
   assert.equal(strengthSetOptions({ note: 'x [Intenzita PR]' }).intensity, 'PR');

@@ -24,6 +24,12 @@ test('coach pairs compatible accessory equipment, prescribes one failure set onl
   configureStrengthCoaching(rows,EXERCISES,{factor:.9});assert.equal(rows.filter(r=>r[11]==='TRUE').length,0);
 });
 
+test('a jump is never the set to failure; the next isolation exercise takes it (audit 2026-11-06, 6.5)',()=>{
+  const rows=[row('Pogo Hops',1),row('Pogo Hops',2),row('Standing calf raise',1),row('Standing calf raise',2)];
+  configureStrengthCoaching(rows,EXERCISES);
+  assert.deepEqual(rows.filter(r=>r[11]==='TRUE').map(r=>r[1]+' '+r[2]),['Standing calf raise 2']);
+});
+
 test('a 30 minute strength session still fits with warm-up, rests and a buffer',()=>{
   for(const focus of [undefined,'upper','lower']){
     const plan=generateStrengthPlan({date:'2026-10-04',strength:{recentCompletedSets:[]},cycling:{recentActivities:[],plannedWorkouts:[]},recovery:{}},{durationMinutes:30,focus});

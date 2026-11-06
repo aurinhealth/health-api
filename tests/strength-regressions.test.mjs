@@ -238,7 +238,8 @@ test("generator reduces leg dose while retaining strength work around hard rides
   assert.ok(plan.rows.length > 0);
   const legs=plan.loadEstimates.filter(x => ["Pivot leg press", "Pendulum squat", "Prone leg curl Prime", "Hip thrust", "DB Romanian deadlift", "DB Bulgarian split squat", "Leg extension Prime"].includes(x.exercise));
   assert.ok(legs.length>=2);assert.ok(legs.every(x=>x.reducedDose&&x.sets<=2));
-  assert.ok(plan.rows.filter(r=>r[0]==='WORK'&&legs.some(x=>x.exercise===r[1])).every(r=>/3–4 opakování v rezervě/.test(r[9])));
+  // Heavy with fewer sets: the usual weight, 2–3 reps in reserve, M (audit 2026-11-06, 6.2).
+  assert.ok(plan.rows.filter(r=>r[0]==='WORK'&&legs.some(x=>x.exercise===r[1])).every(r=>/váha jako obvykle, nech si 2–3 opakování v rezervě/.test(r[9])&&r[14]==='M'));
 });
 
 test("lower-body plan includes a unilateral movement when fresh", () => {
@@ -510,19 +511,30 @@ test('a pain the coach remembers leaves out the exercises that load it (Revize 2
   assert.ok(painfulExercises(['knee hurts']).avoid.has('Barbell back squat'));
 });
 
-test('legs spared for a key session hold the load and keep at most 2 sets (Revize 2026-10-16, nález 26)', () => {
+test('legs spared for a key session keep their rep range and progression, with at most 2 sets (audit 2026-11-06, 6.2)', () => {
   const set=(exercise,kg,n)=>({exercise,workout_date:'2026-09-21',type:'WORK',set_no:n,actual_kg:kg,actual_reps:8,rpe:7,completed:1});
   const legMuscles=new Set(['quads','hamstrings','glutes','adductors','abductors','calves']);
   const history=[1,2,3].flatMap(n=>[set('Prone leg curl Prime',40,n),set('Barbell hip thrust',80,n)]);
   const ctx={date:'2026-09-28',cycling:{recentRideTss:100,recentRideHours:2,recentActivities:[],nextRide:null},recovery:{},strength:{recentCompletedSets:history},trainingSetup:{goal:'strength',experience:'experienced'}};
-  for(const [keep,kg] of [['Prone leg curl Prime','40'],['Barbell hip thrust','80']]){
+  for(const [keep,from] of [['Prone leg curl Prime',40],['Barbell hip thrust',80]]){
     const plan=generateStrengthPlan(ctx,{durationMinutes:90,focus:'upper',focusSource:'week',excludeExercises:Object.keys(EXERCISES).filter(n=>legMuscles.has(EXERCISES[n].muscle)&&n!==keep)});
     const work=plan.rows.filter(r=>r[0]==='WORK'&&r[1]===keep);
     assert.equal(plan.protectedLegs,true);
     assert.ok(work.length>=1&&work.length<=2,keep+': '+work.length+' sets');
-    for(const r of work)assert.deepEqual([r[3],r[4]],[kg,'8–12'],keep);
-    assert.doesNotMatch(work[0][9],/↑|\+2,5 kg/,keep);
+    // 3× 8 reps at RPE 7 in a 6–8 range: the weight goes up, the range stays.
+    for(const r of work)assert.ok(Number(r[3].replace(',','.'))>from&&r[4]!=='8–12',keep+' '+r[3]+' '+r[4]);
+    assert.match(work[0][9],/↑/,keep);
   }
+});
+
+test('a hard ride already done earlier today is behind the gym, not a key session ahead (audit 2026-11-06, 6.2)', () => {
+  const ride={name:'VO2 5x4',type:'Ride',date:'2026-09-28',durationHours:1.25,intensity:true};
+  const base=done=>({date:'2026-09-28',cycling:{recentRideTss:100,recentRideHours:2,recentActivities:done?[{...ride,tss:90}]:[],plannedWorkouts:[ride],nextRide:ride},recovery:{},strength:{recentCompletedSets:[]}});
+  assert.equal(generateStrengthPlan(base(false),{durationMinutes:60}).protectedLegs,true);
+  assert.equal(generateStrengthPlan(base(true),{durationMinutes:60}).protectedLegs,false);
+  // Tomorrow's key ride still spares the legs after today's ride.
+  const tomorrow={...ride,name:'Threshold',date:'2026-09-29'},ctx=base(true);ctx.cycling.plannedWorkouts.push(tomorrow);
+  assert.equal(generateStrengthPlan(ctx,{durationMinutes:60}).protectedLegs,true);
 });
 
 test('a swap\'s warm-ups follow the equipment step and the focus understands "legs" (Revize 2026-10-16, nález 28)', async () => {
@@ -594,4 +606,12 @@ test('the main sport decides: a cyclist gets heavy legs and back first, a runner
   assert.ok(ride.some(ex => ['DB Romanian deadlift', 'Barbell Romanian deadlift', 'Pivot leg press', 'Pendulum squat', 'Barbell back squat', 'Hip thrust'].includes(ex)), ride.join());
   // The Nordic curl is strength work, not a floor stand-in.
   assert.equal(EXERCISES['Nordic Hamstring Curl'] && !standIn('Nordic Hamstring Curl'), true);
+});
+
+test('a beginner\'s 90 minutes are filled with up to 3 sets per exercise, 45 minutes stay at 2 (audit 2026-11-06, 6.4)', () => {
+  const ctx={date:'2026-10-04',strength:{recentCompletedSets:[]},cycling:{recentActivities:[],plannedWorkouts:[]},recovery:{},trainingSetup:{experience:'beginner'}};
+  const counts=min=>{const by={};for(const r of generateStrengthPlan(ctx,{durationMinutes:min}).rows)if(r[0]==='WORK')by[r[1]]=(by[r[1]]||0)+1;return Object.values(by);};
+  const long=generateStrengthPlan(ctx,{durationMinutes:90});
+  assert.ok(long.timing.estimatedMinutes>=80,String(long.timing.estimatedMinutes));
+  assert.ok(Math.max(...counts(90))===3&&counts(45).every(n=>n===2),counts(90)+' / '+counts(45));
 });

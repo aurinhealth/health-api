@@ -151,6 +151,11 @@ test("dumbbells are picked before the note: a step up reaches the next dumbbell,
   const top = dumbbellFor({ kg: 26, referenceKg: 25, progression: "increase" }, have);
   assert.deepEqual([top.kg, top.progression], [25, "hold"]);
   assert.equal(dumbbellFor({ kg: 21, progression: "increase" }, []).kg, 21);
+  // Pairs every 2 kg: a 2,5 kg step goes to the next pair, not past it (audit 2026-11-06, 6.3).
+  const pairs = [2, 4, 6, 8, 10, 12, 14, 16];
+  assert.deepEqual([[4, 6.5], [12, 14.5]].map(([from, kg]) => dumbbellFor({ kg, referenceKg: from, progression: "increase" }, pairs).kg), [6, 14]);
+  assert.deepEqual([[8, 5, "decrease"], [8, 5, "return"]].map(([from, kg, progression]) => dumbbellFor({ kg, referenceKg: from, progression }, pairs).kg), [6, 6]);
+  assert.equal(dumbbellFor({ kg: 2, referenceKg: 2, progression: "decrease" }, pairs).kg, 2);
 });
 
 test("a machine's weight carries over to no other exercise, and an estimate stays near the catalogue",()=>{
