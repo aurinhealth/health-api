@@ -7,7 +7,7 @@ import { reconcileCancelledGymPlans } from './planned-events.js';
 import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck,settleEnergyCheck} from './activity-energy-check.js';
 import {energyChoices,applyEnergyChoice} from './activity-energy-choices.js';
 import { sleepSessionFromRow, joinSplitNights } from "./sleep-sessions.js";
-import { energyBaseline, MISSING_LABELS, proteinReferenceKg, trendAdjustment, TREND_REASONS } from "./energy-profile.js";
+import { energyBaseline, MISSING_LABELS, MAX_CALORIE_TARGET, proteinReferenceKg, trendAdjustment, TREND_REASONS } from "./energy-profile.js";
 import { dayMacros, dietSummary } from "./diet.js";
 import { d1WeightTrend } from "./strength-context.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
@@ -2147,19 +2147,35 @@ async function energyForDate(env, date) {
   }
 
   // Rest-day intake is the personal resting expenditure minus the weekly goal;
-  // tracked training adds 70 % of its cost, untracked sport its daily average.
+  // tracked training adds its cost, untracked sport its daily average.
   const deficit = baseline.ready ? baseline.deficit : 0;
   // Today and ahead, the weight trend corrects the estimate by energy balance
   // (up to ±250 kcal) when the weight moves clearly off the chosen goal
   // (trendAdjustment).
-  const trend = baseline.ready && !isCompleteDay ? trendAdjustment(profile?.goal, await d1WeightTrend(env, date)) : { adjustment: 0, reason: null };
+  const trend = baseline.ready && !isCompleteDay ? trendAdjustment(profile?.goal, await d1WeightTrend(env, date), weight?.value_numeric) : { adjustment: 0, reason: null };
   const restIntakeTarget = baseline.ready ? baseline.baselineRestTDEE - deficit + trend.adjustment : null;
   const plannedTrainingCalories = baseline.ready && estimatedTDEE != null ? Math.max(0, estimatedTDEE - baseline.baselineRestTDEE - baseline.sportDaily) : 0;
-  const trainingCoverage = 0.70;
-  const computedTarget = baseline.ready ? Math.min(4000, Math.round(restIntakeTarget + baseline.sportDaily + plannedTrainingCalories * trainingCoverage)) : null;
-  const target = baseline.ready ? Math.max(baseline.floor, computedTarget) : null;
+  // Maintaining or gaining, training counts in full; losing, 70 % of it, a
+  // margin for the watch, which can be 20–30 % off (Shcherbina 2017). The
+  // evening budget from the watch's active energy uses the same share.
+  const ruleCoverage = deficit > 0 ? 0.70 : 1;
+  const computedTarget = baseline.ready ? Math.min(MAX_CALORIE_TARGET, Math.round(restIntakeTarget + baseline.sportDaily + plannedTrainingCalories * ruleCoverage)) : null;
+  // Never below resting metabolism, and on a training day not below resting
+  // metabolism plus what the training burns: what is left after training then
+  // stays near 30 kcal per kg of lean mass, where low energy availability
+  // begins (IOC REDs 2023). Lean mass is not measured, resting metabolism
+  // stands in for it.
+  const floorTarget = baseline.ready ? Math.round(baseline.floor + plannedTrainingCalories) : null;
+  const target = baseline.ready ? Math.max(floorTarget, computedTarget) : null;
   // The safety floor holds the target up: the chosen pace is not reachable.
-  const floorGapKcal = baseline.ready && computedTarget < baseline.floor ? baseline.floor - computedTarget : 0;
+  const floorGapKcal = baseline.ready && computedTarget < floorTarget ? floorTarget - computedTarget : 0;
+  // The share of the training the target really carries: more than the rule
+  // when the floor holds the day up (100 % when the floor alone decides), so
+  // the Food screen's parts and "Tréninky se počítají ze …" stay true.
+  const everydayTarget = baseline.ready ? Math.max(baseline.floor, restIntakeTarget + baseline.sportDaily) : null;
+  const trainingCoverage = plannedTrainingCalories > 0 && target != null
+    ? Math.round(Math.min(1, Math.max(ruleCoverage, (target - everydayTarget) / plannedTrainingCalories)) * 100) / 100
+    : ruleCoverage;
   const context = {
     ...nutritionContext({ completedActivities: completed, unmatchedPlannedWorkouts: unmatchedPlanned }),
     ...(await nearbyRideContext(env, date))
@@ -2190,12 +2206,14 @@ async function energyForDate(env, date) {
       baselineRestTDEE: baseline.baselineRestTDEE ?? null,
       sportDailyAverage: baseline.sportDaily ?? 0,
       activityAdjustment: Math.max(0, plannedTrainingCalories),
-      trainingCoverage: 0.70,
+      trainingCoverage,
       restIntakeTarget,
       weightLossDeficit: Math.round(deficit),
       uncappedTarget: estimatedTDEE != null && baseline.ready ? Math.round(estimatedTDEE - deficit) : null,
       minTarget: baseline.floor ?? null,
-      maxTarget: 4000,
+      // The day's own minimum: resting metabolism plus the day's training.
+      floorTarget,
+      maxTarget: MAX_CALORIE_TARGET,
       floorApplied: floorGapKcal > 0,
       floorGapKcal,
       trendAdjustment: trend.adjustment,
@@ -2327,7 +2345,7 @@ async function analysisDaily(
           ? L("Dnešní cíl zohledňuje plánovaný/dokončený trénink a ", "Today's goal accounts for your planned/completed training and ") + goalPhrase(energy) + "."
           : L("Dnešní cíl vychází z klidového energetického základu a ", "Today's goal is based on your resting energy baseline and ") + goalPhrase(energy) + ".")
         + (energy.calorieBreakdown?.trendAdjustment ? L(" Podle vývoje váhy: ", " Based on your weight trend: ") + TREND_REASONS[energy.calorieBreakdown.trendReason] + L(", o ", ", ") + Math.abs(energy.calorieBreakdown.trendAdjustment) + " kcal " + (energy.calorieBreakdown.trendAdjustment < 0 ? L("méně", "less") : L("víc", "more")) + "." : "")
-        + (energy.calorieBreakdown?.floorApplied ? L(` Cíl drží bezpečné minimum ${energy.calorieBreakdown.minTarget} kcal, takže hubnutí půjde pomaleji než zvolené tempo.`, ` The goal stays at the safe minimum of ${energy.calorieBreakdown.minTarget} kcal, so weight loss will be slower than the chosen rate.`) : ""),
+        + (energy.calorieBreakdown?.floorApplied ? L(` Cíl drží bezpečné minimum ${energy.calorieBreakdown.floorTarget ?? energy.calorieBreakdown.minTarget} kcal, takže hubnutí půjde pomaleji než zvolené tempo.`, ` The goal stays at the safe minimum of ${energy.calorieBreakdown.floorTarget ?? energy.calorieBreakdown.minTarget} kcal, so weight loss will be slower than the chosen rate.`) : ""),
       foodLog
     },
 
