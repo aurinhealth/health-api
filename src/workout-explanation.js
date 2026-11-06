@@ -4,7 +4,7 @@
 import { n, outdoorWidth, stepIntensities, swimMinutesAt } from "./workout-model.js";
 import { zoneForPercent, formatPace } from "./training-zones.js";
 import { rideFtpFor } from "./intervals-athlete.js";
-import { L } from "./lang.js";
+import { L, paceText } from "./lang.js";
 
 const SYSTEM_LABELS = () => ({ recovery: "Recovery", endurance: "Endurance", tempo: "Tempo", sweet_spot: "Sweet Spot", threshold: "Threshold", vo2max: "VO₂max", anaerobic: L("Anaerobní kapacita", "Anaerobic capacity"), sprint: "Sprint" });
 
@@ -66,7 +66,7 @@ const EASY = sport => sport === "run" ? L("klus", "jog") : L("lehce", "easy");
 // "91 % FTP (≈ 237 W)" or "99 % prahu (4:37 /km)".
 function targetText(power, { sport, ftp, thresholdPace }) {
   const p = Math.round(n(power, 0));
-  if (sport === "run") return p + L(" % prahu", " % of threshold") + (thresholdPace ? " (" + formatPace(thresholdPace * 100 / p) + " /km)" : "");
+  if (sport === "run") return p + L(" % prahu", " % of threshold") + (thresholdPace ? " (" + paceText(thresholdPace * 100 / p) + ")" : "");
   return p + " % FTP" + (ftp ? " (≈ " + Math.round(ftp * p / 100) + " W)" : "");
 }
 
@@ -323,7 +323,7 @@ function explainRun(workout, structure, { coach, environment, thresholds, planne
   else if (p) why.push(progressLine(p, workout, RUN_LABELS()));
   if (!coach.rationale?.length && !planned) why.push(L("Na tento den nemáš v plánu žádný běh, proto vybírám podle běhů posledních dní a tvé úrovně.", "You have no run planned for this day, so I'm choosing based on your recent runs and your level."));
   const how = [...structureHow(structure, { system, sport: "run", thresholdPace: pace }), ...(RUN_HOW()[system] || RUN_HOW().endurance).slice(0, 2)];
-  if (pace) how.unshift(L("Tempa počítám z tvého prahového tempa ", "I calculate paces from your threshold pace of ") + formatPace(pace) + " /km" + ({ manual: L(" (nastaveno v aplikaci)", " (set in the app)") }[thresholds.runPaceSource] || L(" (z Intervals.icu)", " (from Intervals.icu)")) + ".");
+  if (pace) how.unshift(L("Tempa počítám z tvého prahového tempa ", "I calculate paces from your threshold pace of ") + paceText(pace) + ({ manual: L(" (nastaveno v aplikaci)", " (set in the app)") }[thresholds.runPaceSource] || L(" (z Intervals.icu)", " (from Intervals.icu)")) + ".");
   else how.unshift(L("Prahové tempo neznám – cíle jsou v % prahového tempa. Zadej nebo spočítej ho v Nastavení → FTP a zóny → Běh.", "I don't know your threshold pace – targets are in % of threshold pace. Enter or calculate it in Settings → FTP and zones → Run."));
   const lthr = thresholds.runLthr;
   const hrZ2 = (thresholds.runHrZones || []).find(z => z.zone === 2);

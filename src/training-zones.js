@@ -2,7 +2,7 @@
 // as ascending upper bounds in % of the reference (FTP, LTHR, HRmax or HR
 // reserve); the last zone is open-ended.
 
-import { L } from './lang.js';
+import { L, paceText } from './lang.js';
 
 const round = x => Math.round(x);
 const positive = v => Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null;
@@ -98,7 +98,7 @@ export function sanitizeTrainingProfile(input = {}) {
     if (base) out.runHrZoneBase = base;
   }
   const pace = parsePace(input.runThresholdPace);
-  if (pace != null) { if (pace < 150 || pace > 600) throw new Error(L("Prahové tempo musí být 2:30–10:00 /km.", "Threshold pace must be 2:30–10:00 /km.")); out.runThresholdPace = round(pace); }
+  if (pace != null) { if (pace < 150 || pace > 600) throw new Error(L("Prahové tempo musí být ", "Threshold pace must be ") + paceRange() + "."); out.runThresholdPace = round(pace); }
   if (input.paceMethod && PACE_METHODS[input.paceMethod]) out.paceMethod = input.paceMethod;
   const runLthr = positive(input.runLthr);
   if (runLthr != null) { if (runLthr < 100 || runLthr > 220) throw new Error(L("Běžecký LTHR musí být 100–220 bpm.", "Running LTHR must be 100–220 bpm.")); out.runLthr = round(runLthr); }
@@ -206,6 +206,8 @@ export function zoneForPercent(zones, percent) {
 // Paces are seconds per km. Zone bounds are % of threshold *speed* (as in
 // Intervals.icu, 100 % = threshold pace, higher % = faster).
 
+// The accepted threshold paces, 150–600 s/km, as "2:30–10:00 /km" or "4:01–16:06 /mi".
+const paceRange = () => paceText(150).split(" ")[0] + "–" + paceText(600);
 export function formatPace(secondsPerKm) {
   const s = Math.round(Number(secondsPerKm));
   if (!Number.isFinite(s) || s <= 0) return null;
@@ -244,7 +246,7 @@ export function estimateThresholdPace(method, inputs = {}) {
   if (!m) throw new Error(L("Neznámá metoda výpočtu prahového tempa.", "Unknown threshold pace calculation method."));
   const values = Object.fromEntries(m.inputs.map(([key]) => [key, inputs[key]]));
   const pace = m.pace(values);
-  if (!positive(pace) || pace < 150 || pace > 600) throw new Error(L("Zkontroluj zadané hodnoty – vypočtené tempo je mimo rozumný rozsah (2:30–10:00 /km).", "Check the values you entered – the calculated pace is outside a reasonable range (2:30–10:00 /km)."));
+  if (!positive(pace) || pace < 150 || pace > 600) throw new Error(L("Zkontroluj zadané hodnoty – vypočtené tempo je mimo rozumný rozsah (", "Check the values you entered – the calculated pace is outside a reasonable range (") + paceRange() + ").");
   return { method, label: m.label, thresholdPace: round(pace), formatted: formatPace(pace) };
 }
 

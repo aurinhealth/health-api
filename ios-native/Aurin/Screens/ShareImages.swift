@@ -355,7 +355,7 @@ struct ShareWorkout: Equatable {
         switch stat {
         case "Vzdálenost":
             guard let km = distanceKm else { return nil }
-            if sport == "swim" { return (Fmt.int(km * 1000), "m") }
+            if sport == "swim" { return (Fmt.int(Units.swimDistance(km * 1000)), Units.swimDistanceUnit) }
             return (Fmt.decimal(Units.distance(km), digits: km < 100 ? 1 : 0), Units.distanceUnit)
         case "Čas", "Délka":
             guard let minutes, minutes > 0 else { return nil }
@@ -371,8 +371,8 @@ struct ShareWorkout: Equatable {
             return Units.imperial ? (Fmt.int(elevation * 3.28084), "ft") : (Fmt.int(elevation), "m")
         case "Tempo":
             guard let pace else { return nil }
-            let s = Int((sport == "swim" ? pace : Units.pace(pace)).rounded())
-            return ("\(s / 60):" + String(format: "%02d", s % 60), sport == "swim" ? "/100 m" : Units.paceUnit)
+            let s = Int((sport == "swim" ? Units.swimPace(pace) : Units.pace(pace)).rounded())
+            return ("\(s / 60):" + String(format: "%02d", s % 60), sport == "swim" ? Units.swimPaceUnit : Units.paceUnit)
         case "Zátěž":
             guard let tss, tss > 0 else { return nil }
             return (Fmt.int(tss), "TSS")
