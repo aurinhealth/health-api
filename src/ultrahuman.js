@@ -21,6 +21,7 @@ import { saveConnectionSecret, deleteConnectionSecret, refreshConnectionTokens, 
 import { connectReturnUrl, oauthStateValue, startedBy } from './connect-return.js';
 import { appOrigin } from './app-origin.js';
 import { markConnectionBroken, markConnectionOk, clearConnectionHealth } from './connection-health.js';
+import { againAfterOutage } from './outage-retry.js';
 import { healthPointJson } from './health-point-json.js';
 import { localDate } from './user-time.js';
 import { L } from './lang.js';
@@ -118,9 +119,9 @@ export async function ultrahumanAccessToken(env, { fetchImpl = fetch, now = Date
 export async function fetchUltrahumanDay(token, date, { fetchImpl = fetch } = {}) {
   let response;
   try {
-    response = await fetchImpl(API + '/user_data/metrics?date=' + encodeURIComponent(date), {
+    response = await againAfterOutage(() => fetchImpl(API + '/user_data/metrics?date=' + encodeURIComponent(date), {
       headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' }, signal: AbortSignal.timeout(15000)
-    });
+    }));
   } catch (error) { throw Object.assign(new Error('No answer: ' + (error?.name || error?.message)), { noAnswer: true }); }
   if (!response.ok) throw Object.assign(new Error('Ultrahuman HTTP ' + response.status), { status: response.status });
   const data = await response.json().catch(() => null);

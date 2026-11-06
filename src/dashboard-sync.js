@@ -13,12 +13,14 @@ export async function dashboardSyncStatus(db,name='dashboard_recent'){
   const details=parse(row);
   // A connector's refresh must not wait for or report another connector's errors.
   if(name!=='dashboard_recent')return {...details,results:details.results||[],status:row?.status||'idle',updatedAt:row?.updated_at||null};
-  const googleRows=(await db.prepare("SELECT sync_name,status,finished_at,updated_at FROM sync_status WHERE user_id=? AND sync_name IN ('google','google_recent')").bind(db.userId).all()).results||[];
-  const google=googleRows.find(r=>r.sync_name==='google'),recent=googleRows.find(r=>r.sync_name==='google_recent');
-  // The five-minute sync of the last two days (index.js syncGoogleRecent) went
-  // fine after it: an older Google failure is over, and "Last sync had errors"
-  // no longer stays all day after one Google outage (2026-11-06).
-  const recentOk=recent?.status==='ok'?when(recent.updated_at):0;
+  const states=(await db.prepare("SELECT sync_name,status,finished_at,updated_at FROM sync_status WHERE user_id=? AND sync_name IN ('google','google_recent','connection_intervals','connection_wahoo','connection_whoop','connection_ultrahuman')").bind(db.userId).all()).results||[];
+  const state=name=>states.find(r=>r.sync_name===name),google=state('google');
+  // A service's later sync went fine: its older failure is over, and "Last sync
+  // had errors" no longer stays all day after one outage (2026-11-06). Google:
+  // the five-minute sync of the last two days (index.js syncGoogleRecent); the
+  // others: their last accepted call (connection-health.js markConnectionOk).
+  const okAt=source=>{const r=source==='google'?state('google_recent'):state('connection_'+source);return r?.status==='ok'?when(source==='google'?r.updated_at:r.finished_at||r.updated_at):0;};
+  const recentOk=okAt('google');
   const initial=(await db.prepare("SELECT sync_name,status,details_json,updated_at,finished_at FROM sync_status WHERE user_id=? AND sync_name LIKE 'initial_%'").bind(db.userId).all()).results||[];
   const running=row?.status==='running'||google?.status==='running'||initial.some(r=>r.status==='running');
   // Keep the latest result for each source. A successful full retry replaces
@@ -34,8 +36,10 @@ export async function dashboardSyncStatus(db,name='dashboard_recent'){
       if(!previous||time>=previous.time)latest.set(key,{time,result:{...(run.status==='error'?{...entry,status:'error'}:entry),...(time?{at:new Date(time).toISOString()}:{})}});
     }
   }
-  const failedGoogle=latest.get('google');
-  if(failedGoogle&&['partial','error'].includes(failedGoogle.result.status)&&recentOk>failedGoogle.time)latest.set('google',{time:recentOk,result:{source:'google',status:'ok',at:new Date(recentOk).toISOString()}});
+  for(const source of ['google','intervals','wahoo','whoop','ultrahuman']){
+    const failed=latest.get(source),ok=okAt(source);
+    if(failed&&['partial','error'].includes(failed.result.status)&&ok>failed.time)latest.set(source,{time:ok,result:{source,status:'ok',at:new Date(ok).toISOString()}});
+  }
   const googleStatus=['partial','error'].includes(google?.status)&&recentOk>when(google.finished_at||google.updated_at)?'completed':google?.status||null;
   const results=[...latest.values()].map(r=>r.result);
   const partial=['partial','error'].includes(googleStatus)||results.some(r=>['partial','error'].includes(r.status));

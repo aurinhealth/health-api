@@ -24,6 +24,7 @@ import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-
 import { bumpCacheVersion, closedDay } from "./api-cache.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { markConnectionBroken, markConnectionOk, isGoogleAuthFailure, isIntervalsAuthFailure } from "./connection-health.js";
+import { againAfterOutage } from "./outage-retry.js";
 import { manualPairs } from "./manual-pairs.js";
 import { readDay } from "./day-reads.js";
 import { matchPlannedWorkouts } from "./plan-match.js";
@@ -341,16 +342,8 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   }
 }
 
-// Google answers a moment of its own outage with HTTP 5xx (503 "The service is
-// currently unavailable", the token's "internal_failure"): asked once more a
-// second later, so a sync does not miss last night for it (2026-11-06: sleep
-// came 2 minutes later with the next sync). Other answers come back at once.
-async function googleFetch(url, options, timeoutMs, wait = 1000) {
-  const response = await fetchWithTimeout(url, options, timeoutMs);
-  if (response.status < 500) return response;
-  await new Promise(resolve => setTimeout(resolve, wait));
-  return fetchWithTimeout(url, options, timeoutMs);
-}
+// Google's 5xx (the data's 503, the token's "internal_failure") is asked once more (outage-retry.js).
+const googleFetch = (url, options, timeoutMs) => againAfterOutage(() => fetchWithTimeout(url, options, timeoutMs));
 
 // An access token for the given scopes (Google Health by default, with weight
 // writing when the user granted it).
@@ -414,7 +407,7 @@ async function intervalsGet(
   env,
   path
 ) {
-  const response = await fetch(
+  const response = await againAfterOutage(() => fetch(
     "https://intervals.icu/api/v1" +
     path,
     {
@@ -427,7 +420,7 @@ async function intervalsGet(
           "application/json"
       }
     }
-  );
+  ));
 
   const text =
     await response.text();

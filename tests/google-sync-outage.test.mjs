@@ -5,6 +5,7 @@ import {createD1} from './helpers/d1.mjs';
 import {scopedDb} from '../src/tenancy.js';
 import {dashboardSyncStatus} from '../src/dashboard-sync.js';
 import app,{googleToken} from '../src/index.js';
+import {fetchUltrahumanDay} from '../src/ultrahuman.js';
 const schema=readFileSync(new URL('../staging/schema.sql',import.meta.url),'utf8');
 function setup(){const raw=createD1();raw.sqlite.exec(schema);return scopedDb(raw,1);}
 const put=(db,name,status,{details=null,finished=null,updated})=>db.prepare("INSERT INTO sync_status(user_id,sync_name,status,finished_at,details_json,updated_at) VALUES(?,?,?,?,?,?)").bind(1,name,status,finished,details&&JSON.stringify(details),updated).run();
@@ -19,9 +20,14 @@ test('a Google outage in Sync everything stops showing once the five-minute sync
  await db.prepare("UPDATE sync_status SET status='ok',updated_at='2026-11-06 09:15:33' WHERE user_id=? AND sync_name='google_recent'").bind(1).run();
  status=await dashboardSyncStatus(db);
  assert.equal(status.status,'done');assert.equal(status.results.find(r=>r.source==='google').status,'ok');assert.equal(status.googleStatus,'completed');
- // Another source's failure stays.
- await db.prepare("UPDATE sync_status SET details_json=? WHERE user_id=? AND sync_name='dashboard_recent'").bind(JSON.stringify({results:[{source:'google',status:'ok'},{source:'intervals',status:'error',message:'x'}]}),1).run();
- assert.equal((await dashboardSyncStatus(db)).status,'partial');
+ // Another service's failure stays until that service answers fine again.
+ await db.prepare("UPDATE sync_status SET details_json=? WHERE user_id=? AND sync_name='dashboard_recent'").bind(JSON.stringify({results:[{source:'google',status:'ok'},{source:'wahoo',status:'error',message:'x'},{source:'weight',status:'error'}]}),1).run();
+ await put(db,'connection_wahoo','ok',{finished:'2026-11-06T09:10:00.000Z',updated:'2026-11-06 09:10:00'});
+ status=await dashboardSyncStatus(db);assert.equal(status.results.find(r=>r.source==='wahoo').status,'error');
+ await db.prepare("UPDATE sync_status SET finished_at='2026-11-06T09:35:00.000Z' WHERE user_id=? AND sync_name='connection_wahoo'").bind(1).run();
+ status=await dashboardSyncStatus(db);assert.equal(status.results.find(r=>r.source==='wahoo').status,'ok');
+ // What is not a service (weight sent to Intervals.icu) stays.
+ assert.equal(status.status,'partial');assert.equal(status.results.find(r=>r.source==='weight').status,'error');
 });
 
 test('a Google 5xx is asked once more a second later; other answers are not',async()=>{
@@ -33,6 +39,11 @@ test('a Google 5xx is asked once more a second later; other answers are not',asy
   calls=0;globalThis.fetch=async()=>{calls++;return Response.json({error:'invalid_request'},{status:400});};
   await assert.rejects(googleToken(env,['scope']),/invalid_request/);assert.equal(calls,1);
  }finally{globalThis.fetch=original;}
+});
+
+test('a read from another service is asked again after its 5xx too',async()=>{
+ let calls=0;const fetchImpl=async()=>++calls===1?new Response('',{status:502}):Response.json({data:{metric_data:[{type:'sleep_rhr',object:{value:50}}]}});
+ assert.equal((await fetchUltrahumanDay('t','2026-11-06',{fetchImpl})).length,1);assert.equal(calls,2);
 });
 
 test('a nightly Google run left partial does not reopen the first import; the first import’s own end does',async()=>{
