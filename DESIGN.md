@@ -229,3 +229,13 @@ Still light in dark mode: the share image and the overview images for Reddit and
 Plain, second person, short sentences, no hype words ("revolutionary", "unlock", "supercharge"). Say what the
 app does today and nothing it doesn't. Prices and availability exactly as in the app. Quotes and ratings only
 when they are real.
+
+## App: readiness words
+
+One vocabulary on every surface (Today audit points 7, 26, D1). The label by the readiness number only
+describes the body, in the zone's colour: "within your usual range" (green), "below your usual range"
+(yellow and red), never "normal". What to do today is a separate line, one key from `src/day-verdict.js`
+that the server sends and the app, the morning push and the AI facts all use: hard "Good day for a hard
+workout", steady "Keep it steady today", easy "Take it easy today", legs "Give your legs a break",
+no_intensity "No intensity today", rest "Rest today". Yellow and red never say to keep the plan; no word
+predicts or hints at illness.

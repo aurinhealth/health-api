@@ -74,7 +74,7 @@ struct DayTimeline: View {
                         Text("Připravenost").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         Text(String(score)).font(Typo.number(22)).foregroundStyle(ReadinessText.pill(zone)?.1 ?? Palette.green)
                         if let pill = ReadinessText.pill(zone) {
-                            Pill(text: L10n.tr(pill.0), foreground: pill.1, background: pill.2)
+                            Pill(text: pill.0, foreground: pill.1, background: pill.2)
                         }
                     }
                 }

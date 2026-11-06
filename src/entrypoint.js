@@ -24,7 +24,7 @@ import { activityDetail, rideIntervals } from './activity-detail.js';
 import { watchDetail, withWatch } from './watch-detail.js';
 import {googleDashboard} from './google-dashboard.js';
 import {applyEnergyBudget} from './energy-budget.js';
-import {buildToday,todayUnavailable} from './app-today.js';
+import {buildToday,todayUnavailable,todayWorkouts} from './app-today.js';
 import {withIdempotency} from './idempotency.js';
 import {buildTraining, weekStart} from './app-training.js';
 import {buildCalendar} from './app-calendar.js';
@@ -773,7 +773,7 @@ async function todayReadiness(env, ctx, date, { fresh = false, plan = false } = 
   if (date === localToday() && profile) ctx.waitUntil(lockReadiness(env.DB, { date, health, fitness, sleep, profile }).catch(() => false));
   const today = buildToday({ date, hour: localHour(), daily: daily || {}, health, fitness, sleep, profile: profile || {}, checkin, gym: gym?.[date] || null });
   if (!plan) return today.readiness;
-  const planned = (today.plan || []).filter(i => i.kind === 'workout' && i.status === 'planned').map(i => ({ title: i.title, sport: i.sport }));
+  const planned = todayWorkouts(today.plan);
   const morning = await morningContext(env, { date, health, fitness, sleep, profile, read }).catch(error => { console.error('Morning advice context failed', error.message); return { tomorrow: [], context: null }; });
   return { ...today.readiness, sleep: today.sleep, hrv: today.hrv, restingHR: today.restingHR, planned, ...morning };
 }

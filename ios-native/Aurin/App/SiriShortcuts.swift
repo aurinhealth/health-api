@@ -411,18 +411,14 @@ struct LogWeightIntent: AppIntent {
 enum SiriAnswer {
     static var signedOut: String { L10n.tr("Nejdřív se přihlas v aplikaci Aurin.") }
 
-    /// "Připravenost je dnes 78, vysoká." and Today's advice when there is one.
+    /// "Připravenost je dnes 78, v obvyklém rozmezí." and Today's advice when there is one.
     static func readiness(score: Int?, zone: String?, advice: String?) -> String {
         guard let score else {
             return L10n.tr("Dnešní připravenost zatím není. Ukáže se, až hodinky nahrají dnešní spánek.")
         }
-        let word: String? = switch zone {
-        case "green": "vysoká"
-        case "yellow": "střední"
-        case "red": "nízká"
-        default: nil
-        }
-        var text = word.map { L10n.f("Připravenost je dnes %d, %@.", score, L10n.tr($0)) } ?? L10n.f("Připravenost je dnes %d.", score)
+        // The same words as the label by the number on Today (ReadinessText.pill).
+        let word = ReadinessText.pill(zone)?.0
+        var text = word.map { L10n.f("Připravenost je dnes %d, %@.", score, $0) } ?? L10n.f("Připravenost je dnes %d.", score)
         if let advice = advice?.trimmingCharacters(in: .whitespacesAndNewlines), !advice.isEmpty { text += " " + advice }
         return text
     }

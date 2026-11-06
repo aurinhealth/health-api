@@ -591,9 +591,16 @@ struct ReadinessHero: View {
                     Text(String(score))
                         .font(Typo.number(132)).lineLimit(1).minimumScaleFactor(0.5)
                         .foregroundStyle(Palette.ink)
-                    if let pill = pill {
-                        Pill(text: pill.text, foreground: pill.fg, background: pill.bg)
+                    if let pill = ReadinessText.pill(readiness.zone) {
+                        Pill(text: pill.0, foreground: pill.1, background: pill.2)
                     }
+                }
+                // What to do today (src/day-verdict.js), only for today.
+                if let verdict = ReadinessText.verdict(readiness.verdict) {
+                    Text(verdict)
+                        .font(Typo.sentence(26, relativeTo: .title2))
+                        .foregroundStyle(Palette.ink)
+                        .accessibilityIdentifier("today.verdict")
                 }
                 if readiness.flags?.contains("short_night") == true {
                     Text("Krátká noc: méně než 3 hodiny spánku.")
@@ -633,15 +640,6 @@ struct ReadinessHero: View {
             return L10n.plural("Orientační: nový zdroj dat, zpřesní se za %lld dní.", days)
         }
         return L10n.tr("Orientační: nový zdroj dat, číslo se ještě zpřesní.")
-    }
-
-    private var pill: (text: String, fg: Color, bg: Color)? {
-        switch readiness.zone {
-        case "green": return ("vysoká", Palette.green, Palette.greenSoft)
-        case "yellow": return ("střední", Palette.amber, Palette.amberSoft)
-        case "red": return ("nízká", Palette.rust, Palette.rust.opacity(0.14))
-        default: return nil
-        }
     }
 }
 

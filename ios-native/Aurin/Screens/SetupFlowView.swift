@@ -806,7 +806,7 @@ struct SetupFlowView: View {
             .font(Typo.sentence(18)).foregroundStyle(Palette.secondary)
             .fixedSize(horizontal: false, vertical: true)
         VStack(spacing: 10) {
-            NotificationPreview(title: L10n.tr("Připravenost 78 · vysoká"), text: L10n.tr("Dobrá noc, třetí den v řadě. Dnes naplno do posilovny."), time: "7:02")
+            NotificationPreview(title: L10n.tr("Připravenost 78 · Dobrý den na tvrdý trénink"), text: L10n.tr("Dobrá noc, třetí den v řadě. Dnes naplno do posilovny."), time: "7:02")
             NotificationPreview(title: L10n.tr("Kouč"), text: L10n.tr("HRV je dva dny dole. Dnešní intervaly jsem posunul na čtvrtek."), time: "12:40")
             NotificationPreview(title: L10n.tr("Za 30 minut do postele"),
                                 text: L10n.f("Na budík v %@ potřebuješ jít spát do %@.", ClockText.format("7:15"), ClockText.format("22:40")), time: "22:10")
