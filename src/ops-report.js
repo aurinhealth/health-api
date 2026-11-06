@@ -228,6 +228,24 @@ export async function accountStats(env, date, { now = Date.now() } = {}) {
   return stats;
 }
 
+// Where yesterday's barcode scans were found (routes-food.js food search) and
+// what went to Open Food Facts (open-food-facts.js), as one line each.
+const SCAN_PLACES = [["saved", "uložené u nás"], ["world", "světový katalog"], ["off-live", "živě z Open Food Facts"], ["missing", "nenalezeno"]];
+const SHARE_RESULTS = [["sent", "přidáno"], ["exists", "už tam hodnoty měly"], ["failed", "selhalo"]];
+export function barcodeReport(rows) {
+  const count = (kind, service) => rows.filter(row => row.kind === kind && row.service === service).reduce((sum, row) => sum + (Number(row.count) || 0), 0);
+  const scans = SCAN_PLACES.reduce((sum, [service]) => sum + count("barcode", service), 0);
+  const shared = SHARE_RESULTS.map(([service, name]) => [name, count("off-share", service)]).filter(([, n]) => n);
+  if (!scans && !shared.length) return null;
+  const lines = [];
+  if (scans) {
+    const places = SCAN_PLACES.map(([service, name]) => [service, name, count("barcode", service)]).filter(([, , n]) => n);
+    lines.push(`- ${scans} ${scans === 1 ? "sken" : scans <= 4 ? "skeny" : "skenů"}: ${places.map(([service, name, n]) => `${name} ${n}${service === "missing" ? ` (${Math.round(n / scans * 100)} %)` : ""}`).join(", ")}`);
+  }
+  if (shared.length) lines.push(`- Schválené potraviny do Open Food Facts: ${shared.map(([name, n]) => `${name} ${n}`).join(", ")}`);
+  return `Čárové kódy včera\n${lines.join("\n")}`;
+}
+
 // ai: aiSummary (or its text); accounts: accountsReport's text.
 export function opsReport(rows, capacity, date, ai = null, stuckDeletions = [], accounts = null) {
   const of = kind => rows.filter(row => row.kind === kind).sort((a, b) => b.count - a.count);
@@ -246,13 +264,15 @@ export function opsReport(rows, capacity, date, ai = null, stuckDeletions = [], 
   const stuck = stuckDeletions?.length ? stuckDeletions.map(row => `- účet #${row.user_id} smazaný ${String(row.requested_at || "").slice(0, 10)}: ${row.attempts}× selhalo${row.last_error ? ` (naposledy: ${row.last_error})` : ""}`).join("\n") : null;
   if (stuck) sections.push(`Nedokončená smazání účtů (cron je opakuje, data zatím zůstávají)\n${stuck}`);
   if (accounts) sections.push(accounts);
+  const scans = barcodeReport(rows);
+  if (scans) sections.push(scans);
   const aiLines = typeof ai === "string" ? ai : aiText(ai);
   if (aiLines) sections.push(aiLines);
   if (!sections.length) return null;
   return {
     subject: `Aurin: přehled za ${date}`,
     text: `Přehled za ${date} (UTC).\n\n${sections.join("\n\n")}\n\nPodrobnosti jsou v Cloudflare → Workers → health-api → Logs.\n`,
-    html: opsReportHtml({ date, rows, room, stuck, accounts, ai: typeof ai === "string" ? null : ai, aiLines, label })
+    html: opsReportHtml({ date, rows, room, stuck, accounts, scans, ai: typeof ai === "string" ? null : ai, aiLines, label })
   };
 }
 

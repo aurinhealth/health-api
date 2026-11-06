@@ -10,8 +10,9 @@ import { L, lang } from "./lang.js";
 import { localToday, localDateTime } from "./user-time.js";
 import { consentStatus } from "./consent.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
-import { acwrZoneLabel } from "./workload-ratio.js";
+import { loadLevelLabel } from "./workload-ratio.js";
 import { partsForAI } from "./cycle-model.js";
+import { verdictText } from "./day-verdict.js";
 import { cacheVersion, CACHE_TTL_SECONDS } from "./api-cache.js";
 import { READINESS_RULE, TRENDS_RULE, FOOD_RULE, instructions } from './private/screen-texts.js';
 
@@ -55,6 +56,9 @@ export function screenFacts(screen, data) {
   return null;
 }
 
+// Today's parts the coach's sentence is written from.
+const FACT_PARTS = ["sleep", "health", "training", "food", "coach"];
+
 function todayFacts(d) {
   const sleep = d.sleep || null, hrv = d.hrv || null, rhr = d.restingHR || null, n = d.nutrition || {};
   const shown = (Array.isArray(d.plan) ? d.plan : []).filter(i => i && i.kind !== "bedtime");
@@ -70,6 +74,8 @@ function todayFacts(d) {
     readinessParts: partsForAI(d.readinessDetail?.parts, Boolean(d.coachCycle)),
     readinessFlags: Array.isArray(d.readiness?.flags) ? d.readiness.flags.filter(f => f !== "provisional") : [],
     checkin: d.checkin || null,
+    // The day's verdict in words (day-verdict.js): the AI may soften it, never raise it.
+    dayVerdict: verdictText(d.readiness?.verdict),
     athleteState: d.athleteState && d.athleteState !== "active" ? d.athleteState : null,
     // The cycle only as cycle-model.js cycleForCoach gives it, so only with
     // "Kouč ví o cyklu" on (the route adds it as coachCycle). Today's own
@@ -104,8 +110,10 @@ function todayFacts(d) {
   return {
     facts, basis, chips,
     fallback: d.summary && (d.summary.text || d.summary.recommendation) ? { text: d.summary.text || null, advice: d.summary.recommendation || null } : null,
-    // Without last night the numbers are not there yet.
-    ready: sleep != null || facts.readiness != null,
+    // Without last night the numbers are not there yet. Nor over a card that
+    // failed to load this time (entrypoint.js todayUnavailable): its empty
+    // place is not "no workout" or "nothing eaten".
+    ready: (sleep != null || facts.readiness != null) && !(Array.isArray(d.unavailable) && d.unavailable.some(p => FACT_PARTS.includes(p))),
     // The plan itself is in it: a cancelled or moved session asks for a new text.
     // The coach's rule-based advice follows every change it cares about.
     // The numbers it quotes too, in steps that matter (readiness by 5, sleep
@@ -144,7 +152,7 @@ function trainingFacts(d) {
     done.length > 0 && { label: L("Poslední trénink", "Last workout"), value: done.at(-1).title + (num(done.at(-1).tss) ? " · " + Math.round(num(done.at(-1).tss)) + " TSS" : "") },
     next && { label: L("Další trénink", "Next workout"), value: String(next.title || "") + (next.date ? " · " + next.date : "") },
     facts.event && { label: L("Závod", "Event"), value: (facts.event.name || "") + (facts.event.daysLeft != null ? L(" za ", " in ") + facts.event.daysLeft + L(" dní", " days") : "") },
-    num(d.acwr?.value) != null && { label: L("Akutní/chronická zátěž", "Acute:chronic load"), value: decimal(d.acwr.value, 2) + (acwrZoneLabel(d.acwr.zone) ? " (" + acwrZoneLabel(d.acwr.zone) + ")" : "") },
+    loadLevelLabel(d.acwr?.level) && { label: L("Posledních 7 dní vs. obvyklých 28", "Last 7 days vs your usual 28"), value: loadLevelLabel(d.acwr.level) },
     num(d.monotony?.value) != null && { label: L("Monotónnost", "Monotony"), value: decimal(d.monotony.value, 2) + (num(d.monotony.strain) != null ? ", strain " + Math.round(num(d.monotony.strain)) : "") }
   ].filter(Boolean);
   const chips = [
@@ -336,9 +344,10 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
       let parsed = null; try { parsed = JSON.parse(r.text); } catch { parsed = null; }
       const text = String(parsed?.text || "").trim().slice(0, 400);
       let advice = String(parsed?.advice || "").trim().slice(0, 160);
-      // A red or sick day: advice that pushes the plan or intensity gives way to the rule-based one.
-      if (holdBack(info.facts) && PUSHES.test(text)) throw new Error("pushes");
-      if (holdBack(info.facts) && PUSHES.test(advice)) advice = info.fallback?.advice || L("Dnes volno nebo jen lehký pohyb.", "Rest today or just easy movement.");
+      // A red or sick day: advice that pushes the plan or intensity gives way to
+      // the rule-based one; a yellow day: advice to keep the plan (day-verdict.js).
+      if (pushes(info.facts, text)) throw new Error("pushes");
+      if (pushes(info.facts, advice)) advice = info.fallback?.advice || L("Dnes volno nebo jen lehký pohyb.", "Rest today or just easy movement.");
       if (!text) throw new Error("empty");
       const createdAt = new Date(now).toISOString();
       // In the background only over the text it replaces: the user's own
@@ -376,6 +385,11 @@ const headline = (screen, fingerprint) => (screen === "today" ? String(fingerpri
 const holdBack = f => (f?.readinessZone || f?.readiness?.zone) === "red" || f?.checkin === "sick" || Boolean(f?.athleteState)
   || (f?.readinessFlags || f?.readiness?.flags || []).some(x => /^(respiration|skin_temp|wrist_temp)_elevated$|^checkin_sick$/.test(x));
 const PUSHES = /drž(?:et)? se plánu|podle plánu|dodrž|interval|vo2|práh|sweet spot|stick to (?:the|your) plan|as planned|threshold/i;
+const KEEPS_PLAN = /drž(?:et)? se plánu|podle plánu|dodrž|stick to (?:the|your) plan|as planned/i;
+// Not on a yellow day, nor when the day's verdict is anything but a hard day (two reasons turn green into yellow).
+export const pushesForTest = (f, s) => pushes(f, s);
+const pushes = (f, s) => holdBack(f) ? PUSHES.test(s)
+  : ((f?.readinessZone || f?.readiness?.zone) === "yellow" || (f?.dayVerdict && f.dayVerdict !== verdictText("hard"))) && KEEPS_PLAN.test(s);
 
 function parseBasis(json) {
   try { const v = JSON.parse(json || "{}"); return { chips: Array.isArray(v.chips) ? v.chips : [], basis: Array.isArray(v.basis) ? v.basis : [], version: v.version ?? null, checked: v.checked ?? 0 }; }

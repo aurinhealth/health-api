@@ -318,6 +318,20 @@ export function hrvWeekTrendDown(wellness, weekStart) {
   if (week.length < 5 || base.mean == null) return false;
   return week.reduce((a, v) => a + v, 0) / week.length < base.mean - 0.5 * Math.max(base.sd, 0.05);
 }
+// What the plan's lighter-week card shows (training-plans.js trendProposal):
+// the mornings of the last 7 below the athlete's normal band (the same rule
+// as hrvWeekTrendDown), the last 14 mornings and the band in ms, and the
+// average sleep of the week in minutes (Intervals.icu sleepSecs), or null.
+export function hrvTrend(rows, weekStart, sleepRows = []) {
+  const day = n => new Date(Date.parse(weekStart + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
+  const base = personalBaseline(rows || [], day(-7), "hrv", { log: true });
+  if (base.mean == null) return null;
+  const sd = Math.max(base.sd, 0.05), low = Math.exp(base.mean - 0.5 * sd), high = Math.exp(base.mean + 0.5 * sd);
+  const at = d => { const v = Number((rows || []).find(r => r?.id === d)?.hrv); return v > 0 ? Math.round(v) : null; };
+  const values = Array.from({ length: 14 }, (_, i) => at(day(i - 14)));
+  const sleep = (sleepRows || []).filter(r => r?.id >= day(-7) && r.id < weekStart && Number(r.sleepSecs) > 0).map(r => Number(r.sleepSecs) / 60);
+  return { below: values.slice(7).filter(v => v != null && v < low).length, values, low: Math.round(low), high: Math.round(high), sleep: sleep.length >= 4 ? Math.round(sleep.reduce((a, b) => a + b, 0) / sleep.length) : null };
+}
 // The HRV rows the recovery-week check reads: one source only, the one with
 // the most mornings over the 67 days before the week (Intervals.icu, or one
 // device of the health rows: Apple Health, Google Health, Ultrahuman). Never a

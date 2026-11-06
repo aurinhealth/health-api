@@ -48,7 +48,7 @@
 "AI kouč" = "AI coach";
 "AI potravinu nenašla. Zadej ji ručně." = "AI couldn't find this food. Enter it manually.";
 "AI ten kód nezná." = "AI doesn't know this code.";
-"Aby mohl odpovídat, pošle Aurin potřebné údaje o zdraví, včetně dat z připojených hodinek a prstenů, a fotky, které mu pošleš, společnosti OpenAI v USA. Jde to kdykoli vypnout v Nastavení → Soukromí a data." = "To answer, Aurin sends the health data it needs, including data from your connected watches and rings, and the photos you send it to OpenAI in the USA. You can turn this off anytime in Settings → Privacy & data.";
+"Aby mohl odpovídat a pamatovat si vaše rozhovory, pošle Aurin potřebné údaje o zdraví, včetně dat z připojených hodinek a prstenů, a fotky, které mu pošleš, společnosti OpenAI v USA. Jde to kdykoli vypnout v Nastavení → Soukromí a data." = "To answer and remember your chats, Aurin sends the health data it needs, including data from your connected watches and rings, and the photos you send it to OpenAI in the USA. You can turn this off anytime in Settings → Privacy & data.";
 "Akorát" = "Just right";
 "Aktivita a cíl" = "Activity and goal";
 "Aktivní" = "Active";
@@ -245,7 +245,7 @@
 "Kdy jít spát?" = "When to go to bed?";
 "Kdy mám čas" = "When I have time";
 "Kdykoli" = "Anytime";
-"Když použiješ AI funkci (kouč, rozpoznání jídla z fotky, hodnocení tréninku a týdne), a každý den kvůli krátkému shrnutí kouče na Dnes, Tréninku a Jídle, pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI v USA. Cyklus jen po zapnutí „Kouč ví o cyklu“." = "When you use an AI feature (the coach, food recognition from photos, workout and week reviews), and every day for the coach's short summary on Today, Training and Food, Aurin sends the data it needs, including health data and the photos you send, to OpenAI in the USA. Your cycle only if you turn on “Coach knows my cycle”.";
+"Když použiješ AI funkci (kouč, rozpoznání jídla z fotky, hodnocení tréninku a týdne), každý den kvůli krátkému shrnutí kouče na Dnes, Tréninku a Jídle a v noci po dni s chatem kvůli paměti kouče, pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI v USA. Cyklus jen po zapnutí „Kouč ví o cyklu“, citlivé položky deníku jen po zapnutí „Kouč vidí citlivé položky“." = "When you use an AI feature (the coach, food recognition from photos, workout and week reviews), every day for the coach's short summary on Today, Training and Food, and at night after a day you chatted, for the coach's memory, Aurin sends the data it needs, including health data and the photos you send, to OpenAI in the USA. Your cycle only if you turn on “Coach knows my cycle”, sensitive journal items only if you turn on “The coach sees sensitive items”.";
 "Klidový tep" = "Resting heart rate";
 "Klidový tep po dnech" = "Resting heart rate by day";
 "Knihovna" = "Library";
@@ -469,6 +469,19 @@
 "Proč se dnes hodí" = "Why it fits today";
 "Práh" = "Threshold";
 "Průběh" = "Structure";
+"Každá změna v plánu říká proč. Klepni na trénink a uvidíš původní." = "Every change in the plan says why. Tap a session to see the original.";
+"Původně" = "Original";
+"teď %@" = "now %@";
+"pás = tvůj normál" = "band = your normal";
+"HRV za 14 dní proti tvému normálu" = "HRV over 14 days against your normal";
+"Cíl závodu" = "Race goal";
+"odhad dnes" = "estimate today";
+"dnes · týden %@" = "today · week %@";
+"Změnit na %@" = "Change to %@";
+"Tempa" = "Paces";
+"Závodní tempo" = "Race pace";
+"Lehce" = "Easy";
+"Odhad %@, cíl %@" = "Estimate %@, goal %@";
 "Průměr 7 dní" = "7-day average";
 "Pás" = "Treadmill";
 "PŘ" = "RDY";
@@ -699,7 +712,7 @@
 "Tep" = "Heart rate";
 "Bez tepu" = "No HR";
 "Tep při chůzi" = "Walking heart rate";
-"Tep, variabilita tepu (HRV), spánek, váha a tělesný tuk, jídlo a pití, tréninky a jak ti šly." = "Heart rate, heart rate variability (HRV), sleep, weight and body fat, food and drinks, workouts and how they went.";
+"Tep, variabilita tepu (HRV), spánek, dech, okysličení krve, teplota ve spánku, kroky, váha a tělesný tuk, jídlo a pití, tréninky a jak ti šly a co si zapíšeš do deníku." = "Heart rate, heart rate variability (HRV), sleep, breathing, blood oxygen, temperature in sleep, steps, weight and body fat, food and drinks, workouts and how they went, and what you note in the journal.";
 "Teplota" = "Temperature";
 "Teplota zápěstí" = "Wrist temperature";
 "Tepové zóny pro běh" = "Running heart rate zones";
@@ -870,7 +883,7 @@
 "Zdroj: %@" = "Source: %@";
 "Zdroje dat" = "Data sources";
 "Zdřímnutí" = "Naps";
-"Ze služeb, které připojíš (Apple Health, Google Health, Intervals.icu), a z toho, co zadáš sám." = "The services you connect (Apple Health, Google Health, Intervals.icu) and what you enter yourself.";
+"Ze služeb, které připojíš (třeba Apple Health, Google Health, WHOOP, prsten Ultrahuman, Intervals.icu nebo Wahoo), a z toho, co zadáš sám." = "The services you connect (e.g. Apple Health, Google Health, WHOOP, the Ultrahuman Ring, Intervals.icu or Wahoo) and what you enter yourself.";
 "Zeptat se" = "Ask";
 "Zepředu" = "Front";
 "Zezadu" = "Back";
@@ -1378,6 +1391,8 @@
 "jízdy a trénink na trenažeru" = "rides and indoor training";
 "přes Intervals" = "via Intervals";
 "propojeno" = "connected";
+"propojeno, data starší než 12 h" = "connected, data over 12 hours old";
+"poslední noc dorazila" = "last night arrived";
 "spánek, tréninky, srdce, pohyb" = "sleep, workouts, heart, movement";
 "tréninky, plán, zóny" = "workouts, plan, zones";
 "spánek, tep, kroky" = "sleep, heart rate, steps";
@@ -1392,6 +1407,7 @@
 "Po dnech v týdnu" = "By weekday";
 "Posunout výš" = "Move up";
 "Posunout níž" = "Move down";
+"Podrž cvik a přetáhni ho jinam" = "Hold an exercise and drag to move it";
 "Jak na %@" = "How to do %@";
 "Supersérie %@" = "Superset %@";
 "Do selhání" = "To failure";
@@ -1699,7 +1715,14 @@
 "data z %@" = "data from %@";
 "data ze včera %@" = "data from yesterday %@";
 " · obnovit" = " · refresh";
-"Poměr zátěže %@" = "Load ratio %@";
+"Posledních 7 dní vs. obvyklých 28: %@" = "Last 7 days vs your usual 28: %@";
+"Posledních 7 dní vs. obvyklých 28" = "Last 7 days vs your usual 28";
+"Výrazně pod obvyklou" = "Well below";
+"Pod obvyklou" = "Below";
+"Obvyklá" = "Usual";
+"Nad obvyklou" = "Above";
+"Výrazně nad obvyklou" = "Well above";
+"Jednotvárný týden" = "Monotonous week";
 "jednotvárný týden" = "monotonous week";
 "90 dní" = "90 days";
 "Typ aktivity" = "Activity type";
@@ -2377,9 +2400,28 @@
 "Lehký trénink" = "Easy training";
 "Tvrdý trénink" = "Hard training";
 "už teď" = "now";
+/* Regenerace in half days, an estimate (Today audit 15). */
+"dnes dopoledne" = "this morning";
+"dnes odpoledne" = "this afternoon";
+"dnes večer" = "this evening";
+"zítra dopoledne" = "tomorrow morning";
+"zítra odpoledne" = "tomorrow afternoon";
+"zítra večer" = "tomorrow evening";
+"za %@" = "in %@";
+"dopoledne" = "morning";
+"odpoledne" = "afternoon";
+"večer" = "evening";
+"tělo připravené na tvrdý trénink · odhad" = "ready for hard training · estimate";
+"tvrdý trénink ne dřív než po zelenějším ránu" = "hard training not before a greener morning";
+"tvrdý trénink %@, po zelenějším ránu" = "hard training %@, after a greener morning";
+"%@, po zelenějším ránu" = "%@, after a greener morning";
+"odhad · tvrdý trénink až po zelenějším ránu" = "estimate · hard training only after a greener morning";
+"ne dřív než po zelenějším ránu" = "not before a greener morning";
+"Není se z čeho zotavovat. Co se dnes hodí, rozhodne dnešní připravenost." = "Nothing left to recover from. Today's readiness decides what fits.";
+"prodlužuje" = "adds time";
+"svaly" = "muscles";
 "Co ji prodlužuje" = "What makes it longer";
 "Na co je tělo připravené" = "Your body is ready for";
-"svaly %d h" = "muscles %d h";
 "Z1–Z2, posilovna bez nohou" = "Z1–Z2, gym without legs";
 "Z1–Z2, jiné svaly" = "Z1–Z2, other muscles";
 "intervaly, těžké nohy" = "intervals, legs";
@@ -2735,6 +2777,9 @@
 "Bez zaznamenané noci" = "No night recorded";
 "Bez spánku z té noci se připravenost nepočítá. HRV a klidový tep najdeš níže." = "Readiness needs that night’s sleep. HRV and resting heart rate are below.";
 "Pití se teď nepodařilo načíst" = "Drinks couldn’t load right now";
+"Data ze zdraví se teď nepodařilo načíst" = "Health data couldn’t load right now";
+"Trénink se teď nepodařilo načíst" = "Training couldn’t load right now";
+"Jídlo se teď nepodařilo načíst" = "Food couldn’t load right now";
 
 /* Gym equipment picker (GymPlaces.swift) */
 "Přidat posilovnu" = "Add a gym";
@@ -3032,6 +3077,8 @@
 "Poznámka · %@" = "Note · %@";
 "Poznámku se nepodařilo uložit: %@" = "The note couldn't be saved: %@";
 "Moje poznámka" = "My note";
+"Hlavní svaly" = "Primary muscles";
+"Pomocné svaly" = "Secondary muscles";
 
 /* Training plans: cycling races, gym plans, race estimates */
 "Se závodem" = "With a race";
@@ -3290,14 +3337,14 @@
 "Přidat se na čekací listinu" = "Join the waitlist";
 "Zaškrtni první políčko, ať můžeš pokračovat." = "Tick the first box to continue.";
 "Později" = "Later";
-"Nepovinné. Potřebuje je kouč, jeho denní shrnutí a rozpoznání jídla. Jde to vypnout v Nastavení." = "Optional. The coach, its daily summary and food recognition need it. You can turn it off in Settings.";
+"Nepovinné. Potřebuje je kouč, jeho paměť a denní shrnutí a rozpoznání jídla. Jde to vypnout v Nastavení." = "Optional. The coach, its memory and daily summary, and food recognition need it. You can turn it off in Settings.";
 "Čte spánek, tep, HRV, tréninky, váhu a jídlo. Bez zeptání nic nezapisuje." = "Reads sleep, heart rate, HRV, workouts, weight and food. Writes nothing without asking.";
 "Aurin potřebuje věk, výšku a váhu, aby spočítal kalorie, námahu a zotavení. Pohlaví mění výpočet kalorií a tepových zón." = "Aurin needs your age, height and weight to work out calories, strain and recovery. Sex changes how calories and heart rate zones are worked out.";
 "Zadej výšku mezi %@ a %@." = "Enter a height between %@ and %@.";
 "Zadej váhu mezi %@ a %@." = "Enter a weight between %@ and %@.";
 "Ozveme se, když na tom záleží" = "A message when it matters";
 "Každé ráno tvoje připravenost a kouč, když je potřeba změnit plán." = "Your readiness every morning, and the coach when your plan should change.";
-"Připravenost 78 · vysoká" = "Readiness 78 · high";
+"Připravenost 78 · Dobrý den na tvrdý trénink" = "Readiness 78 · Good day for a hard workout";
 "Dobrá noc, třetí den v řadě. Dnes naplno do posilovny." = "Good night, third day in a row. Go all in on strength today.";
 "HRV je dva dny dole. Dnešní intervaly jsem posunul na čtvrtek." = "HRV is down two days running. I moved today’s intervals to Thursday.";
 "Za 30 minut do postele" = "Bedtime in 30 minutes";
@@ -3901,6 +3948,13 @@
 "%@ g bílkovin · %@ g sacharidů · %@ g tuků" = "%@ g protein · %@ g carbs · %@ g fat";
 "Množství jsou odhad z fotky. Omáčky a olej jsou nejméně přesné." = "Amounts are estimated from the photo. Sauces and oil are the least precise.";
 
+/* Today audit 7, 26, D1: the label by the readiness number and the day's verdict (src/day-verdict.js). */
+"Dobrý den na tvrdý trénink" = "Good day for a hard workout";
+"Dnes s mírou" = "Keep it steady today";
+"Dnes v klidu" = "Take it easy today";
+"Dej nohám pauzu" = "Give your legs a break";
+"Dnes bez intenzity" = "No intensity today";
+"Dnes odpočinek" = "Rest today";
 /* Today audit 1, 12, D2 (MDR): breathing, temperature and blood oxygen against the usual range, the easier-day card. */
 "odhad zařízení" = "device estimate";
 "obvyklé rozmezí" = "usual range";

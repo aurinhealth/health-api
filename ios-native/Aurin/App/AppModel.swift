@@ -259,17 +259,14 @@ final class AppModel {
         if !demo {
             connectWrites()
             Self.live = self
-            // Water from Siri or Shortcuts (AddWaterIntent) goes out now, not on the next refresh.
-            drinkObserver = NotificationCenter.default.addObserver(forName: PendingDrinks.added, object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in _ = await self?.writes.send(reloadToday: true) }
-            }
+            // Water from Siri, Shortcuts or the Voda control goes out now, not on the next refresh.
+            PendingDrinks.sendNow = { [weak self] in _ = await self?.writes.send(reloadToday: true) }
         }
     }
 
     /// The signed-in app's model, for Siri and Shortcuts (SiriShortcuts.swift),
     /// which run in the app's process but outside its views.
     static weak var live: AppModel?
-    @ObservationIgnored private var drinkObserver: NSObjectProtocol?
 
 
     /// Notes whether a refresh reached the server; true when the error was a

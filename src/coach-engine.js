@@ -82,7 +82,7 @@ function morningAdvice({plan,low,heavy,sleepLow,done}){
   return L('Dnešní plán (','You can stick to today\'s plan (')+plan.names.join(', ')+L(') můžeš dodržet; při rozcvičení ověř, že se cítíš dobře.','); check during the warm-up that you feel good.');
 }
 // caution: the workload line (workload-ratio.js workloadCaution) when the
-// acute:chronic ratio is above 1.5 or the week's monotony above 2.0.
+// last 7 days are well above the usual 28 or the week's monotony above 2.0.
 function morningSummary({date,sleep,fitness,yesterday,planned,policy,todayGym,caution,completed=[]}){
   const facts=[],previous=yesterday?.training?.completed||[],done=doneToday(completed,todayGym),plan=planToday(planned,todayGym,done.gym);
   if(sleep.last!=null){

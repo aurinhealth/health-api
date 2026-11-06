@@ -5,12 +5,18 @@
 // version of the health text asks everyone again.
 import { L } from './lang.js';
 
-export const CONSENT_VERSION = '2026-10-11';
+// 2026-11-06: the sources as examples (WHOOP, Ultrahuman, Wahoo too), breathing,
+// blood oxygen, temperature, steps and the journal named (legal review
+// 2026-11-05, point 4).
+export const CONSENT_VERSION = '2026-11-06';
 // The AI text has its own version, stored with each AI consent, so it shows
 // which text was agreed to (art. 7(1) GDPR). 2026-11-04: the coach's daily
 // summary on Today, Training and Food named in the text (Today audit point 11).
-// A new AI version does not ask again: only the health version does.
-export const AI_CONSENT_VERSION = '2026-11-04';
+// 2026-11-06: the coach's memory and the journal's sensitive items named.
+// A new AI version does not ask again: only the health version does. Its page
+// sends the AI box as ticked, so an AI consent to an older text ends there
+// unless it is ticked again.
+export const AI_CONSENT_VERSION = '2026-11-06';
 export const CONSENT_KINDS = ['health', 'ai'];
 
 async function consentRows(db, userId) {

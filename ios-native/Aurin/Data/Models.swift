@@ -37,8 +37,10 @@ struct TodaySnapshot: Decodable, Equatable {
     /// The day's naps for Dnes → Den, each from its start to its end
     /// (src/app-today.js napsOn); nil from an older server.
     var naps: [Nap]? = nil
-    /// Parts the server could not load this time ("sleep", "fluids"): their
-    /// place says so instead of looking empty; nil from an older server.
+    /// Parts the server could not load this time ("sleep", "fluids", "health",
+    /// "training", "food", "weight", "coach", "recovery"; src/app-today.js
+    /// todayUnavailable): their place says so instead of looking empty; nil
+    /// from an older server.
     var unavailable: [String]? = nil
 
     struct Nap: Decodable, Equatable {
@@ -79,6 +81,18 @@ struct TodaySnapshot: Decodable, Equatable {
         /// For a missed session: the days left in the week.
         let days: [String]?
         let button: String
+        /// A change the plan made already (a lighter week sooner, a level up):
+        /// the headline, the button that puts the plan back and, for the
+        /// lighter week, the last 14 mornings of HRV with the normal band.
+        var headline: String? = nil
+        var keep: String? = nil
+        var chart: Chart? = nil
+
+        struct Chart: Decodable, Equatable {
+            let values: [Double?]
+            let low: Double
+            let high: Double
+        }
     }
 
     struct Readiness: Decodable, Equatable {
@@ -94,6 +108,9 @@ struct TodaySnapshot: Decodable, Equatable {
         var learningDays: Int? = nil
         /// Nights measured in the 30 days before today (the watch's history); nil from an older server.
         var pastNights: Int? = nil
+        /// What to do today, a key of src/day-verdict.js ("hard", "steady", "easy",
+        /// "legs", "no_intensity", "rest"); nil on an earlier day or from an older server.
+        var verdict: String? = nil
         /// What shaped the number (src/readiness.js): "short_night" (under 3 h,
         /// capped at yellow), "no_night" (no number without the night), etc.
         var flags: [String]? = nil

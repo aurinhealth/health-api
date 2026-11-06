@@ -11,6 +11,7 @@ import { sleepSettings, tonightChoice } from "./energy-profile.js";
 import { L } from "./lang.js";
 import { dayCalories } from "./app-food.js";
 import { readinessMessage } from "./push.js";
+import { verdictText } from "./day-verdict.js";
 import { activityKindOf } from "./activity-match.js";
 import { daySessions, deviceEnergyExtra, withHeartRateLoad } from "./app-training.js";
 export { withHeartRateLoad };
@@ -60,8 +61,8 @@ export function dayStrain(rows, date) {
 // its middle (50 → 10, 72 → 12.6, 90 → 14.8; without a number 10), the day's
 // plan pulls it halfway to the plan's strain, the week's sleep debt takes off
 // 0.5 per half hour (at most 2), and a yellow morning caps it at 12, a red one
-// at 6, as WHOOP's strain target follows recovery. The morning check-in is in
-// the readiness already. ±1.5 around the middle.
+// at 6, as WHOOP's strain target follows recovery, and a day to rest (a sick
+// check-in, signs of illness, a paused athlete) at 3. ±1.5 around the middle.
 // The week strip above Dnes (Mon–Sun of the day's week): each day up to the
 // shown one with its readiness zone ("green", "yellow", "red", null without
 // a number); later days have no zone.
@@ -81,7 +82,7 @@ export function readinessWeek({ date, readiness, sessions = [], profile = null }
 // strain (usualStrain, never below a rest day's 8), or 12 until 14 of those
 // days have a strain. Only with a plan is a day with nothing planned or done
 // a rest day. The high end never falls under the low one.
-export function strainTarget({ readiness = null, zone = null, planned = null, debt = 0, rest = false, noPlan = false, usual = null } = {}) {
+export function strainTarget({ readiness = null, zone = null, planned = null, debt = 0, rest = false, noPlan = false, usual = null, recover = false } = {}) {
   let mid = readiness != null ? 4 + 0.12 * readiness : 10;
   if (planned > 0) mid = (mid + planned) / 2;
   // A day with nothing planned or done is a rest day: walking, light movement.
@@ -89,6 +90,9 @@ export function strainTarget({ readiness = null, zone = null, planned = null, de
   else if (noPlan) mid = Math.min(mid, Math.max(usual ?? 12, 8) - 1.5);
   mid -= Math.min(2, (Number(debt) || 0) / 30 * 0.5);
   if (zone === "red") mid = Math.min(mid, 6); else if (zone === "yellow") mid = Math.min(mid, 12);
+  // A sick check-in, signs of illness or a paused athlete (day-verdict.js
+  // "rest", "no_intensity"): rest first (IOC 2022), whatever the plan says.
+  if (recover) mid = Math.min(mid, 3);
   const r1 = v => Math.round(v * 10) / 10;
   const low = r1(Math.max(1, mid - 1.5));
   return { low, high: Math.max(low, r1(Math.min(20, mid + 1.5))) };
@@ -148,24 +152,38 @@ export function todayWeather(location, forecast, date) {
   };
 }
 
-// The coach's morning summary obeys the readiness: on a red morning, a sick
-// check-in or signs of illness (breathing or temperature up) it never says to
-// keep the plan; the advice is rest or an easy session. Its facts stay.
+// The coach's morning summary obeys the day's verdict (day-verdict.js): on a
+// yellow or red morning, a sick check-in or signs of illness (breathing or
+// temperature up) it never says to keep the plan; its headline is the
+// verdict's words, the advice an easier session or rest. Its facts stay.
 // trained: today's workouts are done and nothing is left: the advice is rest for the rest of the day.
 // morning: the morning push's advice when the days before, the journal, an
 // injury or tomorrow changed it (push.js readinessMessage `changed`), so the
 // card and the notification say the same; not once today's training is done.
-export function readinessSummary(summary, readiness = {}, checkin = null, hasPlan = false, trained = false, morning = null) {
+export function readinessSummary(summary, readiness = {}, checkin = null, hasPlan = false, trained = false, morning = null, verdict = null) {
   const flags = readiness?.flags || [];
   const sick = checkin === "sick" || flags.includes("checkin_sick");
   const signs = flags.some(f => /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f));
-  if (!(readiness?.zone === "red" || sick || signs)) return morning && !trained ? { ...(summary || { text: null }), ...morning } : summary;
+  // Yellow only for today (an earlier day keeps the coach's own card).
+  const yellow = readiness?.zone === "yellow" && verdict != null;
+  // A paused athlete: the coach's own pause guidance (training-status.js) under the verdict's words.
+  if (verdict === "rest" && !sick) return { ...(summary || { text: null }), headline: verdictText(verdict) };
+  if (!(readiness?.zone === "red" || sick || signs || (yellow && !trained))) return morning && !trained ? { ...(summary || { text: null }), ...morning } : summary;
+  if (yellow && !sick && !signs && morning) return { ...(summary || { text: null }), ...morning };
   const recommendation = sick ? L("Když je ti špatně, trénink dnes vynech a odpočívej. Vrať se, až budeš zase fit.", "If you feel unwell, skip training today and rest. Come back when you're well again.")
-    : signs ? L("Dech nebo teplota ve spánku jsou nad tvým normálem. Dnes bez intenzity, a když se necítíš dobře, odpočívej.", "Your breathing or temperature in sleep is above your normal. No intensity today, and rest if you don't feel well.")
+    : signs ? L("Dech nebo teplota ve spánku jsou nad tvým obvyklým rozmezím. Dnes bez intenzity, a když se necítíš dobře, odpočívej.", "Your breathing or temperature in sleep is above your usual range. No intensity today, and rest if you don't feel well.")
     : trained ? L("Připravenost je dnes nízká a trénink máš za sebou: zbytek dne odpočívej, najez se a jdi dřív spát.", "Readiness is low today and your training is done: rest for the rest of the day, eat well and get to bed earlier.")
+    : yellow ? (hasPlan ? L("Dnes raději lehčeji: plánovaný trénink odjeď v klidném tempu a intenzitu nech na jiný den.", "Take today easier: do the planned session at an easy pace and save the intensity for another day.")
+      : L("Dnes raději lehčeji: když budeš trénovat, tak v klidném tempu.", "Take today easier: if you train, keep the pace easy."))
     : hasPlan ? L("Připravenost je dnes nízká: náročný trénink vynech a dej volno nebo jen lehký pohyb do 45 minut.", "Readiness is low today: skip the hard session and take a rest day or just easy movement up to 45 minutes.")
     : L("Připravenost je dnes nízká: dej si volno, procházku a jdi dřív spát.", "Readiness is low today: take a rest day, go for a walk and get to bed earlier.");
-  return { ...(summary || { text: null }), headline: sick || readiness?.zone === "red" ? L("Den na odpočinek", "A day to recover") : L("Dnes opatrně", "Take care today"), recommendation };
+  const headline = verdictText(verdict) || (sick || readiness?.zone === "red" ? L("Den na odpočinek", "A day to recover") : yellow ? verdictText("steady") : L("Dnes opatrně", "Take care today"));
+  return { ...(summary || { text: null }), headline, recommendation };
+}
+
+// The sessions still to do today in Today's plan, as the morning push names them.
+export function todayWorkouts(plan) {
+  return (plan || []).filter(i => i && i.kind === "workout" && i.status === "planned" && i.title).map(i => ({ title: i.title, sport: i.sport }));
 }
 
 // Sleep that began on `date` other than the night, in the order of the day.
@@ -178,10 +196,16 @@ export function napsOn(sessions, date, night) {
 }
 
 // The parts of Today that failed (their paths), by the card they feed: the
-// nights (Spánek) and the drinks (Voda in Jídlo a pití).
-const TODAY_PARTS = { "/health/sleep": "sleep", "/app/api/fluids": "fluids" };
+// nights (Spánek), the drinks (Voda in Jídlo a pití), the watch's day and the
+// fitness rows (health: readiness, HRV, resting HR, strain), the day's
+// analysis (training and food), the gym plans (training), the weight, the
+// coaches' morning summary (coach) and "Regenerace na dnes" (recovery).
+const TODAY_PARTS = {
+  "/health/sleep": ["sleep"], "/app/api/fluids": ["fluids"], "google-health": ["health"], "/app/api/fitness": ["health"],
+  "/analysis/daily": ["training", "food"], "gym-plans": ["training"], "/health/weight": ["weight"], "/app/api/coaches": ["coach"], recovery: ["recovery"]
+};
 export function todayUnavailable(failed) {
-  return [...new Set([...failed].map(path => TODAY_PARTS[path]).filter(Boolean))];
+  return [...new Set([...failed].flatMap(path => TODAY_PARTS[path] || []))];
 }
 
 // The source of the latest night up to `date`, null without one or without a source.
@@ -261,10 +285,6 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
   const cumulative = hours => hours.reduce((out, v) => [...out, (out.at(-1) || 0) + (num(v) || 0)], []);
   const earlier = Object.keys(byHour).filter(d => d < date && byHour[d].some(v => v > 0)).sort().slice(-14).map(d => cumulative(byHour[d]));
   const usual = earlier.length ? Array.from({ length: 24 }, (_, h) => Math.round(earlier.reduce((s, c) => s + c[h], 0) / earlier.length)) : null;
-  // The same advice as the morning push (push.js), from the same signals (entrypoint.js morningContext).
-  const morningAdvice = morning && readiness.score != null ? readinessMessage({ score: readiness.score, zone: readiness.zone, flags: readiness.flags || [], missing: readiness.missing || [], checkin, athleteState: morning.athleteState || null,
-    sleep: night ? { minutes: num(night.durationMin) } : null, planned: planned.filter(w => w?.name).map(w => ({ title: w.name, sport: activityKindOf(w.type) })), tomorrow: morning.tomorrow || [], context: morning.context, date }).changed || null : null;
-  const summary = readinessSummary(coaches.morningSummary || null, readiness, checkin, planned.length > 0, done.length > 0 && !open.length, morningAdvice);
 
   // The day's plan: what was done at its time, then what is still planned in
   // the order of the plan (no clock: it comes after the last record, whenever
@@ -348,6 +368,17 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     ...recoveryItems,
     ...pillItems
   ];
+  // The day's verdict (day-verdict.js), the same as the morning push's: from
+  // the same signals (entrypoint.js morningContext) and the sessions still
+  // planned in this plan (todayWorkouts), so both name the same workouts.
+  // Only for today: an earlier day has nothing left to decide.
+  const message = hour != null && readiness.score != null ? readinessMessage({ score: readiness.score, zone: readiness.zone, flags: readiness.flags || [], missing: readiness.missing || [], checkin, athleteState: morning?.athleteState || null,
+    sleep: night ? { minutes: num(night.durationMin) } : null, planned: todayWorkouts(planItems), tomorrow: morning?.tomorrow || [], context: morning?.context || null, date }) : null;
+  const verdict = message?.verdict || null;
+  // A sick check-in, signs of illness or a paused athlete: rest, also on a morning without a score.
+  const recover = (checkin === "sick" || (readiness.flags || []).some(f => f === "checkin_sick" || /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f)))
+    || Boolean(morning?.athleteState && morning.athleteState !== "active");
+  const summary = readinessSummary(coaches.morningSummary || null, readiness, checkin, planned.length > 0, done.length > 0 && !open.length, morning ? message?.changed || null : null, verdict);
   // Done first in the order of the day, then what is still open, then bedtime
   // with the planned wake time (Den draws the night ahead dashed to it).
   const ordered = [...planItems.filter(i => i.done).sort(byTime), ...planItems.filter(i => !i.done),
@@ -366,6 +397,8 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     readiness: { score: readiness.score, zone: readiness.zone, missing: readiness.missing || [], flags: readiness.flags || [], provisional: !!readiness.provisional, provisionalDays: readiness.provisional ? readiness.provisionalDays ?? null : null,
       // Days of baseline so far while a new athlete has under 14 (recovery-model.js).
       learningDays: readiness.learningDays ?? null,
+      // What to do today, a key of day-verdict.js VERDICT_KEYS (the app says it under the number); null on an earlier day.
+      verdict,
       // Nights with HRV or resting heart rate in the 30 days before today: an
       // account with the watch's history skips "Wear your watch tonight" (FirstDaysCard).
       pastNights: rows.filter(r => r.id < date && r.id > shift(date, -30) && (num(r.hrv) > 0 || num(r.restingHR) > 0)).length },
@@ -383,7 +416,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     } : null,
     // The day's naps for Dnes → Den: each sleep that began today after the night.
     naps: napsOn(sessions, date, night),
-    strain: { score: strainNow, training: strainParts.training, movement: strainParts.movement, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: hasPlan && !daySession.length, noPlan: !hasPlan && !daySession.length, usual: usualDay }), rest: hasPlan && !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || (hasPlan || daySession.length ? null : usualDay != null ? L("bez plánu · ne nad obvyklý objem", "no plan · not above your usual volume") : L("bez plánu", "no plan")) } },
+    strain: { score: strainNow, training: strainParts.training, movement: strainParts.movement, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: hasPlan && !daySession.length, noPlan: !hasPlan && !daySession.length, usual: usualDay, recover }), rest: hasPlan && !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || (hasPlan || daySession.length ? null : usualDay != null ? L("bez plánu · ne nad obvyklý objem", "no plan · not above your usual volume") : L("bez plánu", "no plan")) } },
     // metric: "rmssd" or "sdnn" when the source said how it measures (Apple Health), else null.
     // Today's HRV shows even before its source has the 14 days a baseline needs.
     hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") }

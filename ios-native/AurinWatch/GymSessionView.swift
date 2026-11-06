@@ -337,7 +337,7 @@ struct GymSessionView: View {
     private func setStack(_ gym: WatchGym, _ lift: WatchGym.Lift, _ ex: WatchGym.Exercise, _ e: Int, _ fit: Fit) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             if let line = supersetLine(gym, lift, e) {
-                Text(line).font(.system(size: 10, weight: .semibold)).foregroundStyle(W.amber)
+                Text(line).watchFont(12, .semibold).foregroundStyle(W.amber)
                     .lineLimit(1).minimumScaleFactor(0.6)
             }
             // A tap on the name: its technique, the record and my note (mockup "u cviku" 5).
@@ -345,13 +345,13 @@ struct GymSessionView: View {
                 info = Info(exercise: ex)
             } label: {
                 HStack(spacing: 4) {
-                    Text(ex.title).font(.system(size: fit.small ? 14 : 16, weight: .semibold)).foregroundStyle(W.ink)
+                    Text(ex.title).watchFont(fit.small ? 14 : 16, .semibold).foregroundStyle(W.ink)
                         .lineLimit(1).minimumScaleFactor(0.7)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     // Its own time, running on by itself (the screen stays still between taps).
                     if let time = workout.earlier(GymWorkout.exerciseKey(ex)) {
                         Text(timerInterval: time.since.addingTimeInterval(-Double(time.seconds))...Date.distantFuture, countsDown: false)
-                            .font(.system(size: 11, weight: .semibold).monospacedDigit()).foregroundStyle(W.amber)
+                            .watchFont(12, .semibold).monospacedDigit().foregroundStyle(W.amber)
                             .lineLimit(1).fixedSize()
                             .padding(.horizontal, 6).padding(.vertical, 1)
                             .background(W.amber.opacity(0.18), in: Capsule())
@@ -364,7 +364,7 @@ struct GymSessionView: View {
             // "Last time 97.5 × 6 · aim: hard" (mockup "u cviku" 4); the tightest
             // fit keeps it only without the superset's line above.
             if let line = GymText.info(lift), fit != .tight || supersetLine(gym, lift, e) == nil {
-                Text(line).font(.system(size: 10)).foregroundStyle(W.muted)
+                Text(line).watchFont(12).foregroundStyle(W.muted)
                     .lineLimit(1).minimumScaleFactor(0.7)
             }
             // − set 2/4 +: one set fewer or one more of this exercise (mockup 20).
@@ -374,7 +374,7 @@ struct GymSessionView: View {
                 VStack(spacing: 0) {
                     HStack(spacing: 4) {
                         Text(label(lift, in: ex, superset: gym.superset(of: e) != nil, side: false))
-                            .font(.system(size: 12, weight: .medium)).foregroundStyle(W.secondary)
+                            .watchFont(12, .medium).foregroundStyle(W.secondary)
                             .lineLimit(1).minimumScaleFactor(0.7)
                         if lift.side != nil { sides(lift, in: gym, e) }
                         if lift.work, let letter = lift.intensity { GymText.intensityPill(letter) }
@@ -407,7 +407,7 @@ struct GymSessionView: View {
             } label: {
                 // Lower than the system's prominent button, which left no room for the tiles.
                 Text(W.tr("Série hotová", "Set done"))
-                    .font(.system(size: 15, weight: .semibold))
+                    .watchFont(15, .semibold)
                     .foregroundStyle(.black)
                     .frame(maxWidth: .infinity)
                     .frame(height: fit.button)
@@ -467,7 +467,7 @@ struct GymSessionView: View {
             ForEach(["L", "P"], id: \.self) { s in
                 let on = side == s
                 Text(s == "L" ? (short ? "L" : W.tr("LEVÁ", "LEFT")) : (short ? W.tr("P", "R") : W.tr("PRAVÁ", "RIGHT")))
-                    .font(.system(size: 10, weight: .bold))
+                    .watchFont(12, .bold)
                     .foregroundStyle(on ? .black : W.secondary)
                     .lineLimit(1)
                     .fixedSize()
@@ -498,7 +498,7 @@ struct GymSessionView: View {
 
     private func roundButton(_ symbol: String, small: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 12, weight: .bold)).foregroundStyle(W.ink)
+            Image(systemName: symbol).watchFont(12, .bold).foregroundStyle(W.ink)
                 .frame(width: small ? 24 : 26, height: small ? 24 : 26)
                 .background(W.tile, in: Circle())
         }
@@ -526,7 +526,7 @@ struct GymSessionView: View {
         let on = selected == field
         return VStack(spacing: 0) {
             Text(value).font(W.serif(small ? 22 : 28)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.6)
-            Text(unit).font(.system(size: 10)).foregroundStyle(W.secondary)
+            Text(unit).watchFont(12).foregroundStyle(W.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, small ? 1 : 2)
@@ -535,7 +535,7 @@ struct GymSessionView: View {
         .contentShape(RoundedRectangle(cornerRadius: 12))
         .onTapGesture {
             selected = field
-            crown = true
+            focusCrown()
         }
         // VoiceOver: one element that a swipe up or down changes, as the crown does.
         .accessibilityElement(children: .ignore)
@@ -553,14 +553,14 @@ struct GymSessionView: View {
         HStack(spacing: 5) {
             clock.foregroundStyle(W.ink)
             HStack(spacing: 2) {
-                Image(systemName: "heart.fill").font(.system(size: 9))
+                Image(systemName: "heart.fill").watchFont(12)
                 Text(workout.heartRate.map { W.number($0) } ?? "–")
             }
             .foregroundStyle(W.pink)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(W.tr("Tep", "Heart rate"))
         }
-        .font(.system(size: 12, weight: .semibold).monospacedDigit())
+        .watchFont(12, .semibold).monospacedDigit()
         .lineLimit(1).minimumScaleFactor(0.7)
     }
 
@@ -575,9 +575,9 @@ struct GymSessionView: View {
 
     private func timeCell(small: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(W.tr("Čas", "Time")).font(.system(size: 10)).foregroundStyle(W.secondary)
+            Text(W.tr("Čas", "Time")).watchFont(12).foregroundStyle(W.secondary)
             clock
-            .font(.system(size: small ? 15 : 17, weight: .semibold).monospacedDigit()).foregroundStyle(W.ink)
+            .watchFont(small ? 15 : 17, .semibold).monospacedDigit().foregroundStyle(W.ink)
             .lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -590,8 +590,8 @@ struct GymSessionView: View {
     @ViewBuilder private func heartCell(small: Bool) -> some View {
         if workout.noHealth, workout.heartRate == nil {
             VStack(alignment: .leading, spacing: 0) {
-                Text(W.tr("Tep", "Heart")).font(.system(size: 10)).foregroundStyle(W.secondary)
-                Text(W.tr("Povol ve Zdraví", "Allow in Health")).font(.system(size: 12, weight: .semibold)).foregroundStyle(W.pink)
+                Text(W.tr("Tep", "Heart")).watchFont(12).foregroundStyle(W.secondary)
+                Text(W.tr("Povol ve Zdraví", "Allow in Health")).watchFont(12, .semibold).foregroundStyle(W.pink)
                     .lineLimit(2).minimumScaleFactor(0.7)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -607,10 +607,10 @@ struct GymSessionView: View {
 
     private func cell(_ title: String, _ value: String, _ unit: String?, _ color: Color, small: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(title).font(.system(size: 10)).foregroundStyle(W.secondary)
+            Text(title).watchFont(12).foregroundStyle(W.secondary)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(value).font(.system(size: small ? 15 : 17, weight: .semibold)).foregroundStyle(color)
-                if let unit, value != "–" { Text(unit).font(.system(size: 9)).foregroundStyle(W.secondary) }
+                Text(value).watchFont(small ? 15 : 17, .semibold).foregroundStyle(color)
+                if let unit, value != "–" { Text(unit).watchFont(12).foregroundStyle(W.secondary) }
             }
             .lineLimit(1).minimumScaleFactor(0.7)
         }
@@ -633,7 +633,20 @@ struct GymSessionView: View {
         reps = Double(lift.reps ?? 8)
         // Each new set starts on the weight.
         selected = .kg
-        crown = true
+        focusCrown()
+    }
+
+    /// The crown onto the tiles. Asked for while the screen before (the
+    /// warm-up's list, the start) still held the crown, the focus never came,
+    /// and a tap set an already true `crown` again, which moved nothing: the
+    /// first set of the workout (often a warm-up set) could not be changed.
+    /// So it is let go and asked for again once the tiles are on the screen.
+    private func focusCrown() {
+        crown = false
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(80))
+            crown = true
+        }
     }
 
     private func done(_ lift: WatchGym.Lift, in gym: WatchGym) {
@@ -670,18 +683,18 @@ struct GymSessionView: View {
     private var paused: some View {
         ScrollView {
             VStack(spacing: 4) {
-                Text(W.tr("POZASTAVENO", "PAUSED")).font(.system(size: 12, weight: .semibold)).foregroundStyle(W.amber)
+                Text(W.tr("POZASTAVENO", "PAUSED")).watchFont(12, .semibold).foregroundStyle(W.amber)
                 Text(GymText.elapsed(workout.elapsed)).font(W.serif(40)).foregroundStyle(W.muted).monospacedDigit()
                 if let gym = store.gym, let lift = currentLift(in: gym),
                    let e = gym.exercises.first(where: { $0.lifts.contains { $0.row == lift.row } }) {
-                    Text(e.title + " · " + label(lift, in: e)).font(.system(size: 11)).foregroundStyle(W.muted)
+                    Text(e.title + " · " + label(lift, in: e)).watchFont(12).foregroundStyle(W.muted)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
                 Button {
                     workout.resume()
                 } label: {
                     Label(W.tr("Pokračovat", "Resume"), systemImage: "play.fill")
-                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
+                        .watchFont(15, .semibold).foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -690,7 +703,7 @@ struct GymSessionView: View {
                 Button(role: .destructive) {
                     summary = true
                 } label: {
-                    Text(W.tr("Ukončit trénink", "End workout")).font(.system(size: 13, weight: .semibold))
+                    Text(W.tr("Ukončit trénink", "End workout")).watchFont(13, .semibold)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -723,13 +736,13 @@ struct GymSessionView: View {
                     .frame(width: 56, height: 56)
                     if let gym, let lift, let e = gym.exercises.first(where: { $0.lifts.contains { $0.row == lift.row } }) {
                         VStack(alignment: .leading, spacing: 0) {
-                            Text(W.tr("Další · ", "Next · ") + e.title).font(.system(size: 10)).foregroundStyle(W.secondary)
+                            Text(W.tr("Další · ", "Next · ") + e.title).watchFont(12).foregroundStyle(W.secondary)
                                 .lineLimit(1).minimumScaleFactor(0.7)
-                            Text(GymText.weight(lift.kg ?? 0) + " × \(lift.reps ?? 0)").font(.system(size: 15, weight: .semibold))
+                            Text(GymText.weight(lift.kg ?? 0) + " × \(lift.reps ?? 0)").watchFont(15, .semibold)
                                 .foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
                             liveLine
                             if let hint = hint {
-                                Text(hint.text).font(.system(size: 10, weight: .semibold)).foregroundStyle(hint.color)
+                                Text(hint.text).watchFont(12, .semibold).foregroundStyle(hint.color)
                                     .lineLimit(1).minimumScaleFactor(0.7)
                             }
                         }
@@ -748,7 +761,7 @@ struct GymSessionView: View {
                     Button(W.tr("Přeskočit", "Skip")) { restEnd = nil }
                     Button("+15 s") { shift(15) }
                 }
-                .font(.system(size: 12, weight: .semibold))
+                .watchFont(12, .semibold)
                 // "Přeskočit" broke into two lines on a 46 mm watch.
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -779,7 +792,7 @@ struct GymSessionView: View {
             rate(rating.letter)
         } label: {
             Text(W.tr(rating.cs, rating.en))
-                .font(.system(size: 14, weight: .semibold))
+                .watchFont(14, .semibold)
                 .foregroundStyle(on ? .black : rating.color)
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity, minHeight: 36)
@@ -862,15 +875,15 @@ struct GymSessionView: View {
     private var emptyWorkout: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 6) {
-                Text(W.tr("Prázdný trénink", "Empty workout")).font(.system(size: 16, weight: .semibold)).foregroundStyle(W.ink)
-                Text(W.tr("Přidej první cvik.", "Add your first exercise.")).font(.system(size: 12)).foregroundStyle(W.muted)
+                Text(W.tr("Prázdný trénink", "Empty workout")).watchFont(16, .semibold).foregroundStyle(W.ink)
+                Text(W.tr("Přidej první cvik.", "Add your first exercise.")).watchFont(12).foregroundStyle(W.muted)
                 NavigationLink {
                     GymOptionsView(title: W.tr("Přidat cvik", "Add exercise"), exercise: nil) { option in
                         store.change(.addExercise, exercise: 0, option: option)
                     }
                 } label: {
                     Label(W.tr("Přidat cvik", "Add exercise"), systemImage: "plus")
-                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
+                        .watchFont(15, .semibold).foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -887,16 +900,16 @@ struct GymSessionView: View {
         let sets = store.gym?.setsDone ?? 0
         return ScrollView {
             VStack(alignment: .leading, spacing: 4) {
-                Text(W.tr("Zahodit trénink?", "Discard workout?")).font(.system(size: 16, weight: .semibold)).foregroundStyle(W.ink)
+                Text(W.tr("Zahodit trénink?", "Discard workout?")).watchFont(16, .semibold).foregroundStyle(W.ink)
                 Text(sets > 0
                      ? W.tr("Dnešní hotové série (\(sets)) se smažou a do Zdraví nic nepůjde.", "The \(sets) sets done today are deleted and nothing goes to Apple Health.")
                      : W.tr("Trénink zmizí z dneška a do Zdraví nic nepůjde.", "The workout leaves today and nothing goes to Apple Health."))
-                    .font(.system(size: 12)).foregroundStyle(W.muted)
+                    .watchFont(12).foregroundStyle(W.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 Button(role: .destructive) {
                     discard()
                 } label: {
-                    Text(W.tr("Zahodit", "Discard")).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                    Text(W.tr("Zahodit", "Discard")).watchFont(15, .semibold).foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -905,7 +918,7 @@ struct GymSessionView: View {
                 Button {
                     discarding = false
                 } label: {
-                    Text(W.tr("Pokračovat v tréninku", "Keep training")).font(.system(size: 15, weight: .semibold))
+                    Text(W.tr("Pokračovat v tréninku", "Keep training")).watchFont(15, .semibold)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -935,16 +948,16 @@ struct GymSessionView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 4) {
                 Text(W.tr("Posilovna", "Gym") + " · \(Int(workout.elapsed / 60)) min")
-                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(W.amber).textCase(.uppercase)
+                    .watchFont(12, .semibold).foregroundStyle(W.amber).textCase(.uppercase)
                 Text(W.tr("Pořád cvičíš?", "Still working out?")).font(W.serif(24)).foregroundStyle(W.ink)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(W.tr("Žádná série 10 minut.", "No set for 10 min.")).font(.system(size: 13)).foregroundStyle(W.muted)
+                Text(W.tr("Žádná série 10 minut.", "No set for 10 min.")).watchFont(13).foregroundStyle(W.muted)
                 Button {
                     idleStop = workout.lastWork
                     workout.dismissAsk()
                     summary = true
                 } label: {
-                    Text(W.tr("Ukončit trénink", "End workout")).font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
+                    Text(W.tr("Ukončit trénink", "End workout")).watchFont(15, .semibold).foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -953,7 +966,7 @@ struct GymSessionView: View {
                 Button {
                     workout.worked()
                 } label: {
-                    Text(W.tr("Ještě cvičím", "Keep going")).font(.system(size: 15, weight: .semibold))
+                    Text(W.tr("Ještě cvičím", "Keep going")).watchFont(15, .semibold)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -967,10 +980,10 @@ struct GymSessionView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 4) {
                 Text(W.tr("Trénink uložen", "Workout saved"))
-                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(W.green).textCase(.uppercase)
+                    .watchFont(12, .semibold).foregroundStyle(W.green).textCase(.uppercase)
                 Text(W.tr("Posilovna", "Gym") + " · \(s.minutes) min").font(W.serif(24)).foregroundStyle(W.ink)
                 Text(W.tr("Konec při poslední sérii, ", "Ended at your last set, ") + W.dateFormatter("H:mm", posix: true).string(from: s.end) + ".")
-                    .font(.system(size: 13)).foregroundStyle(W.muted)
+                    .watchFont(13).foregroundStyle(W.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 6) {
                     savedTile(W.tr("Série", "Sets"), "\(s.sets)")
@@ -982,7 +995,7 @@ struct GymSessionView: View {
                     store.openedFromPhone = false
                     dismiss()
                 } label: {
-                    Text(W.tr("Hotovo", "Done")).font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
+                    Text(W.tr("Hotovo", "Done")).watchFont(15, .semibold).foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -995,7 +1008,7 @@ struct GymSessionView: View {
 
     private func savedTile(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(label).font(.system(size: 11)).foregroundStyle(W.muted)
+            Text(label).watchFont(12).foregroundStyle(W.muted)
             Text(value).font(W.serif(22)).foregroundStyle(W.ink)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1053,7 +1066,7 @@ struct GymExerciseList: View {
                         switch line {
                         case .part(let part):
                             if part == .exercises {
-                                Text(W.tr("Cviky", "Exercises")).font(.system(size: 14)).foregroundStyle(W.secondary)
+                                Text(W.tr("Cviky", "Exercises")).watchFont(14).foregroundStyle(W.secondary)
                             } else {
                                 partLine(part)
                             }
@@ -1108,7 +1121,7 @@ struct GymExerciseList: View {
             HStack {
                 // A superset's exercises under their letter, as on the iPhone.
                 if let letter = e.superset, store.gym?.superset(of: index) != nil {
-                    Text(letter).font(.system(size: 11, weight: .bold)).foregroundStyle(W.amber)
+                    Text(letter).watchFont(12, .bold).foregroundStyle(W.amber)
                 }
                 Text(e.title).foregroundStyle(index == current && running == nil ? W.amber : W.ink).lineLimit(2)
                 Spacer(minLength: 4)
@@ -1117,7 +1130,7 @@ struct GymExerciseList: View {
                 let seconds = GymWorkout.shared.seconds(of: GymWorkout.exerciseKey(e))
                 if seconds > 0 { Text(GymText.elapsed(Double(seconds))).foregroundStyle(W.ink).monospacedDigit() }
             }
-            .font(.system(size: 14))
+            .watchFont(14)
         }
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
@@ -1143,11 +1156,11 @@ struct GymExerciseList: View {
             HStack(spacing: 6) {
                 Button { openPart(part) } label: {
                     HStack(spacing: 4) {
-                        if done { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(W.green) }
+                        if done { Image(systemName: "checkmark").watchFont(12, .bold).foregroundStyle(W.green) }
                         VStack(alignment: .leading, spacing: 0) {
-                            Text(GymPartView.name(part)).font(.system(size: 14))
+                            Text(GymPartView.name(part)).watchFont(14)
                                 .foregroundStyle(part == running ? W.amber : (on && !done ? W.ink : W.muted)).lineLimit(1)
-                            Text(subtitle(part, parts: parts, day: day)).font(.system(size: 11)).foregroundStyle(on ? W.secondary : W.dim)
+                            Text(subtitle(part, parts: parts, day: day)).watchFont(12).foregroundStyle(on ? W.secondary : W.dim)
                                 .lineLimit(1).minimumScaleFactor(0.7)
                         }
                     }
@@ -1158,7 +1171,7 @@ struct GymExerciseList: View {
                 // Its time once it ran; the switch only before that.
                 let seconds = GymWorkout.shared.seconds(of: part.rawValue)
                 if seconds > 0 {
-                    Text(GymText.elapsed(Double(seconds))).font(.system(size: 13).monospacedDigit()).foregroundStyle(W.ink)
+                    Text(GymText.elapsed(Double(seconds))).watchFont(13).monospacedDigit().foregroundStyle(W.ink)
                 } else {
                     Toggle("", isOn: Binding(get: { on }, set: { value in
                         var next = parts
@@ -1258,11 +1271,11 @@ struct GymOptionsView: View {
                 ProgressView().frame(maxWidth: .infinity)
             } else if options.isEmpty {
                 Text(W.tr("Nic jsem nenašel. Měj iPhone u sebe.", "Nothing found. Keep your iPhone close."))
-                    .font(.system(size: 13)).foregroundStyle(W.secondary)
+                    .watchFont(13).foregroundStyle(W.secondary)
             }
             if saved, !options.isEmpty {
                 Text(W.tr("Uloženo pro offline", "Saved for offline"))
-                    .font(.system(size: 12)).foregroundStyle(W.secondary)
+                    .watchFont(12).foregroundStyle(W.secondary)
                     .listRowBackground(Color.clear)
             }
             ForEach(options) { option in
@@ -1271,9 +1284,9 @@ struct GymOptionsView: View {
                     dismiss()
                 } label: {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(option.shown).font(.system(size: 14)).foregroundStyle(W.ink).lineLimit(2)
+                        Text(option.shown).watchFont(14).foregroundStyle(W.ink).lineLimit(2)
                         if let line = line(option) {
-                            Text(line).font(.system(size: 11)).foregroundStyle(W.secondary)
+                            Text(line).watchFont(12).foregroundStyle(W.secondary)
                         }
                     }
                 }
@@ -1320,12 +1333,12 @@ struct GymSummary: View {
                 let part = stats[row.key] ?? GymWorkout.PartStats()
                 HStack(spacing: 4) {
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(row.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(W.ink).lineLimit(1)
+                        Text(row.name).watchFont(13, .semibold).foregroundStyle(W.ink).lineLimit(1)
                         Text(W.number(part.kcal) + " kcal" + (part.heartRate.map { " · " + W.number($0) + " bpm" } ?? ""))
-                            .font(.system(size: 10)).foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
+                            .watchFont(12).foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
                     }
                     Spacer(minLength: 4)
-                    Text(GymText.elapsed(Double(part.seconds))).font(.system(size: 13, weight: .semibold).monospacedDigit()).foregroundStyle(W.ink)
+                    Text(GymText.elapsed(Double(part.seconds))).watchFont(13, .semibold).monospacedDigit().foregroundStyle(W.ink)
                 }
                 .accessibilityElement(children: .combine)
             }
@@ -1365,17 +1378,17 @@ struct GymSummary: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 6) {
-                Text(W.tr("Hotovo", "Done")).font(.system(size: 12, weight: .semibold)).foregroundStyle(W.amber)
+                Text(W.tr("Hotovo", "Done")).watchFont(12, .semibold).foregroundStyle(W.amber)
                 HStack(spacing: 5) {
                     Image(systemName: "dumbbell.fill").foregroundStyle(W.amber)
                     Text(W.tr("Posilovna", "Gym") + (workout.start != nil ? " · \(Int(workout.elapsed / 60)) min" : ""))
-                        .font(.system(size: 16, weight: .semibold)).foregroundStyle(W.ink)
+                        .watchFont(16, .semibold).foregroundStyle(W.ink)
                 }
                 // New records first (mockup "jen hodinky" 7, Training mode's Nový rekord).
                 ForEach(store.gym?.newRecords ?? []) { record in
                     HStack(spacing: 6) {
-                        Text("PR").font(.system(size: 11, weight: .bold)).foregroundStyle(Color(hex: 0xE8C25A))
-                        Text(record.title + " " + GymText.lift(record.set)).font(.system(size: 12, weight: .semibold)).foregroundStyle(W.ink)
+                        Text("PR").watchFont(12, .bold).foregroundStyle(Color(hex: 0xE8C25A))
+                        Text(record.title + " " + GymText.lift(record.set)).watchFont(12, .semibold).foregroundStyle(W.ink)
                             .lineLimit(1).minimumScaleFactor(0.7)
                     }
                     .padding(.horizontal, 8)
@@ -1402,11 +1415,11 @@ struct GymSummary: View {
                             Text("\(done.count) × \(done.last?.reps ?? 0) · " + GymText.weight(done.map { $0.kg ?? 0 }.max() ?? 0))
                                 .foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
                         }
-                        .font(.system(size: 12))
+                        .watchFont(12)
                     }
                 }
                 if (store.gym?.setsDone ?? 0) > 0 {
-                    Text(W.tr("Jak ti trénink sedl?", "How was it?")).font(W.label()).foregroundStyle(W.muted).padding(.top, 6)
+                    Text(W.tr("Jak ti trénink sedl?", "How was it?")).watchFont(12, .semibold).foregroundStyle(W.muted).padding(.top, 6)
                     HStack(spacing: 4) {
                         ForEach(Self.fits) { fit in
                             let on = rating == fit.id
@@ -1414,7 +1427,7 @@ struct GymSummary: View {
                                 rating = on ? nil : fit.id
                                 WKInterfaceDevice.current().play(.click)
                             } label: {
-                                Text(fit.symbol).font(.system(size: 18))
+                                Text(fit.symbol).watchFont(18)
                                     .frame(maxWidth: .infinity, minHeight: 34)
                                     .background(on ? W.amber : W.tile, in: RoundedRectangle(cornerRadius: 10))
                             }
@@ -1424,7 +1437,7 @@ struct GymSummary: View {
                         }
                     }
                     if let fit = Self.fits.first(where: { $0.id == rating }) {
-                        Text(W.tr(fit.cs, fit.en)).font(.system(size: 11, weight: .semibold)).foregroundStyle(W.amber)
+                        Text(W.tr(fit.cs, fit.en)).watchFont(12, .semibold).foregroundStyle(W.amber)
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -1432,7 +1445,7 @@ struct GymSummary: View {
                     if let rating, let date = store.gym?.date { store.rateWorkout(rating, date: date) }
                     finish()
                 } label: {
-                    Text(W.tr("Dokončit", "Finish")).font(.system(size: 16, weight: .semibold)).foregroundStyle(.black)
+                    Text(W.tr("Dokončit", "Finish")).watchFont(16, .semibold).foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -1444,8 +1457,8 @@ struct GymSummary: View {
 
     private func stat(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(title).font(.system(size: 10)).foregroundStyle(W.secondary)
-            Text(value).font(.system(size: 16, weight: .semibold)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
+            Text(title).watchFont(12).foregroundStyle(W.secondary)
+            Text(value).watchFont(16, .semibold).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
         }
     }
 }
@@ -1461,11 +1474,11 @@ struct GymExerciseInfo: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 3) {
-                Text(exercise.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(W.ink)
+                Text(exercise.title).watchFont(15, .semibold).foregroundStyle(W.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 if let record = exercise.record {
                     Text(W.tr("Rekord ", "Record ") + GymText.lift(record))
-                        .font(.system(size: 11, weight: .semibold)).foregroundStyle(W.amber)
+                        .watchFont(12, .semibold).foregroundStyle(W.amber)
                 }
                 // An exercise outside the catalog has no steps: no heading either.
                 if loading || steps != [] {
@@ -1476,16 +1489,16 @@ struct GymExerciseInfo: View {
                 } else if let steps {
                     if !steps.isEmpty {
                         Text(steps.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n"))
-                            .font(.system(size: 12)).foregroundStyle(W.secondary)
+                            .watchFont(12).foregroundStyle(W.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 } else {
                     Text(W.tr("Bez připojení se technika nenačetla.", "No connection to load the technique."))
-                        .font(.system(size: 12)).foregroundStyle(W.muted)
+                        .watchFont(12).foregroundStyle(W.muted)
                 }
                 if let note = exercise.note {
                     heading(W.tr("MOJE POZNÁMKA", "MY NOTE"))
-                    Text(note).font(.system(size: 12, weight: .medium)).foregroundStyle(W.ink)
+                    Text(note).watchFont(12, .medium).foregroundStyle(W.ink)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1501,6 +1514,6 @@ struct GymExerciseInfo: View {
     }
 
     private func heading(_ text: String) -> some View {
-        Text(text).font(W.label()).foregroundStyle(W.muted).padding(.top, 6)
+        Text(text).watchFont(12, .semibold).foregroundStyle(W.muted).padding(.top, 6)
     }
 }

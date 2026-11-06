@@ -6,12 +6,12 @@ import WidgetKit
 // symbol, the title and the value; the kinds and the shared state are in
 // Shared/AurinControls.swift.
 
-/// Voda: one glass of the user's size (AddWaterIntent), with the day's water and its target.
+/// Voda: one glass of the user's size (WaterControlIntent), with the day's water and its target.
 @available(iOS 18.0, *)
 struct WaterControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: AurinControls.water, provider: Provider()) { value in
-            ControlWidgetButton(action: AddWaterIntent()) {
+            ControlWidgetButton(action: WaterControlIntent()) {
                 Label(L10n.tr("Voda"), systemImage: "waterbottle.fill")
                 // Redacted in Control Center and on the Lock Screen while the phone is locked.
                 Text(verbatim: value).privacySensitive()

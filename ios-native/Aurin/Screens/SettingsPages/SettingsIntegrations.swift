@@ -39,8 +39,15 @@ struct IntegrationOfferCard: View {
 /// One connected service: its icon, name and state (no subtitle, only a problem shows).
 struct IntegrationCard: View {
     let provider: ConnectionsResponse.Provider
-    let lastSync: String?
+    /// When its newest data reached Aurin (Today audit 20: every source, not
+    /// only Apple Health), and whether this morning's night came from it.
+    var dataAt: Date? = nil
+    var lastNight = false
     var working = false
+    var now = Date()
+
+    /// Older than 12 hours: the dot turns orange.
+    static func stale(_ date: Date, now: Date) -> Bool { now.timeIntervalSince(date) > 12 * 3600 }
 
     var body: some View {
         HStack(spacing: 14) {
@@ -49,14 +56,25 @@ struct IntegrationCard: View {
                 Text(verbatim: provider.name ?? provider.id).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
                 if let problem = provider.problemText {
                     Text(problem).font(Typo.caption).foregroundStyle(Palette.rust)
+                } else if let dataAt {
+                    Text(verbatim: DataAgePill.age(last: dataAt, now: now) + (lastNight ? " · " + L10n.tr("poslední noc dorazila") : ""))
+                        .font(Typo.caption).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 8)
-            Text(working ? L10n.tr("připojuji…") : provider.needsAttention ? L10n.tr("Opravit") : L10n.tr("propojeno"))
-                .font(Typo.caption.weight(.semibold))
-                .foregroundStyle(provider.needsAttention ? Palette.onButton : working ? Palette.ink : Palette.green)
-                .padding(.horizontal, 12).frame(height: 30)
-                .background(provider.needsAttention ? Palette.rust : working ? Palette.ink.opacity(0.07) : Palette.greenSoft, in: Capsule())
+            if working || provider.needsAttention {
+                Text(working ? L10n.tr("připojuji…") : L10n.tr("Opravit"))
+                    .font(Typo.caption.weight(.semibold))
+                    .foregroundStyle(provider.needsAttention ? Palette.onButton : Palette.ink)
+                    .padding(.horizontal, 12).frame(height: 30)
+                    .background(provider.needsAttention ? Palette.rust : Palette.ink.opacity(0.07), in: Capsule())
+            } else {
+                // Connected: green, orange once its data is over 12 hours old.
+                let old = dataAt.map { Self.stale($0, now: now) } ?? false
+                Circle().fill(old ? Palette.amber : Palette.green).frame(width: 10, height: 10)
+                    .accessibilityLabel(old ? L10n.tr("propojeno, data starší než 12 h") : L10n.tr("propojeno"))
+            }
         }
         .padding(14)
         .cardSurface(cornerRadius: 18)

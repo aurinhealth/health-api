@@ -16,6 +16,9 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
     /// A new athlete's days of baseline so far (1–14) while readiness has no
     /// number yet (TodaySnapshot.Readiness.learningDays).
     var learningDays: Int? = nil
+    /// What to do today, a key of src/day-verdict.js ("hard", "steady",
+    /// "easy", "legs", "no_intensity", "rest"); nil from an older iPhone.
+    var verdict: String? = nil
     /// Today's summary from the server (src/app-today.js), in the app's language.
     var headline: String?
     var summary: String?
@@ -175,6 +178,15 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
         var planned: Double?
         var nextTitle: String?
         var nextTime: String?
+    }
+
+    /// Today without last night yet (no sleep, no readiness, not a new
+    /// athlete's first days) for an athlete whose nights bring HRV or resting
+    /// HR: the ones it has are not this morning's, so they show "–" (Today
+    /// audit 20). Without any such history there is no night to wait for.
+    var awaitingNight: Bool {
+        guard readiness == nil, learningDays == nil, (sleep?.minutes ?? 0) <= 0 else { return false }
+        return !(hrv?.series.isEmpty ?? true) || !(restingHR?.series.isEmpty ?? true)
     }
 
     func encoded() -> Data? {

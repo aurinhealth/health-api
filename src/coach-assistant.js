@@ -16,7 +16,7 @@ import { isHardSession } from './session-intensity.js';
 import { aiLanguageNote, L, lang } from './lang.js';
 import { assertAiAllowance, claimAiSlot, estimateAiCostUsd, keepAiReservation, recordAiUsage } from './ai-usage.js';
 import { trendFacts } from './trend-facts.js';
-import { localDateTime } from './user-time.js';
+import { localDateTime, halfDay } from './user-time.js';
 import { sleepNeedFor, weekSleepDebt } from './recovery-model.js';
 import { SPORT_RULES, coachInstructionsFor, safetyNote } from './private/coach-assistant.js';
 export { coachInstructionsFor, safetyNote };
@@ -250,14 +250,15 @@ export function coachTrends({date,fitness,health,profile}){
   const trends=trendFacts({date,wellness:health?.wellness,intervals:fitness?.wellness,sessions:health?.sleep,age:profile?.age??null,sleepGoal:profile?.sleepGoal??null});
   return trends?{trends}:{};
 }
-// Regenerace from Today (recovery-time.js) for the coach: local times, the causes in short.
+// Regenerace from Today (recovery-time.js) for the coach: half a day at most,
+// as Today shows it (Today audit 15: an estimate, no clock time or hours), the
+// causes in short.
 export function recoveryForCoach(r) {
   if (!r?.readyAt) return null;
   return {
-    hardFrom: localDateTime(r.readyAt).replace("T", " "),
-    easyFrom: r.lightAt ? localDateTime(r.lightAt).replace("T", " ") : "now",
-    hoursLeft: r.hours,
-    causes: (r.causes || []).map(c => [c.title || c.kind, c.date, c.detail, "+" + c.hours + " h"].filter(Boolean).join(", "))
+    hardFrom: halfDay(r.readyAt),
+    easyFrom: r.lightAt ? halfDay(r.lightAt) : "now",
+    causes: (r.causes || []).map(c => [c.title || c.kind, c.date, c.detail].filter(Boolean).join(", "))
   };
 }
 

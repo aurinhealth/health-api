@@ -14,6 +14,7 @@ import { stationLabel } from './gym-equipment.js';
 import { normalizeExerciseName } from './strength-normalization.js';
 import { exercisePhotos, exercisePhotoAspect, exercisePhotoCredit } from './exercise-photos.js';
 import { techniqueInstructions } from './private/exercise-technique.js';
+import { exerciseMuscles } from './fitness-insights.js';
 
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 
@@ -36,10 +37,16 @@ export function techniqueFor(name, own = null, stored = null) {
   if (!t && !def) return null;
   const query = t?.query || exercise + ' exercise proper form';
   const ownId = youtubeId(own?.url);
+  // Primary muscles carry at least half of the set's load (the same split as
+  // the muscle chips in Training mode), secondary ones less.
+  const weights = Object.entries(exerciseMuscles(exercise)).sort((a, b) => b[1] - a[1]);
+  const primaryMuscles = weights.filter(([, w]) => w >= .5).map(([id]) => id);
+  const secondaryMuscles = weights.filter(([, w]) => w < .5).map(([id]) => id);
   const video = ownId ? { id: ownId, source: 'own' } : t?.video?.id && YOUTUBE_ID.test(t.video.id) ? { id: t.video.id, title: t.video.title || '', source: 'library', similar: t.video.similar === true } : null;
   return {
     exercise,
-    muscles: Object.values(FOCUS_GROUPS).filter(g => g.exercises.includes(exercise)).map(g => g.label),
+    muscles: [...primaryMuscles, ...secondaryMuscles].map(id => FOCUS_GROUPS[id].label),
+    primaryMuscles, secondaryMuscles,
     station: stationLabel(exercise),
     note: def?.note || '',
     setup: t?.setup || [], steps: t?.steps || [], mistakes: t?.mistakes || [], breathing: t?.breathing || '',

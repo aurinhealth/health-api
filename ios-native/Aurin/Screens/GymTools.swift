@@ -1,6 +1,7 @@
 import PhotosUI
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 // MARK: - Training → tools
 
@@ -240,6 +241,8 @@ struct GymBuilderView: View {
     @State private var replacing: String?
     @State private var adding = false
     @State private var technique: String?
+    /// The exercise held and dragged to another place.
+    @State private var dragging: String?
     /// "Kde budeš cvičit?" before the first workout of an account without places.
     @State private var askPlace = false
     /// The length was picked on the proposal, so the server no longer chooses it.
@@ -524,6 +527,10 @@ struct GymBuilderView: View {
             .padding(.top, 18)
 
             SectionLabel(text: "Cviky").padding(.top, 26)
+            if !saved && p.exercises.count > 1 {
+                Label("Podrž cvik a přetáhni ho jinam", systemImage: "line.3.horizontal")
+                    .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 4)
+            }
             exerciseList(p)
             if !saved {
                 Button { adding = true } label: {
@@ -601,20 +608,44 @@ struct GymBuilderView: View {
         }
     }
 
-    /// The exercises in order; a superset together under its mark.
+    /// The exercises in order; a superset together under its mark. Keyed by
+    /// name, so a dragged exercise slides and the others make room.
     private func exerciseList(_ p: GymProposal) -> some View {
-        let list = p.exercises
-        let groups = p.supersets
+        let names: [String] = p.exercises.map { $0.name }
+        let runs: [Range<Int>] = ExerciseOrder.runs(p.supersets)
         return VStack(spacing: 0) {
-            ForEach(ExerciseOrder.runs(groups), id: \.lowerBound) { (run: Range<Int>) in
-                if let letter = ExerciseOrder.letter(groups[run.lowerBound]) {
+            ForEach(runs.map { names[$0.lowerBound] }, id: \.self) { (first: String) in
+                let run: Range<Int> = runs.first { names[$0.lowerBound] == first } ?? 0..<0
+                if let letter = ExerciseOrder.letter(p.supersets[run.lowerBound]) {
                     SupersetGroup(letter: letter) {
-                        ForEach(Array(run), id: \.self) { (index: Int) in exerciseRow(p, index, list[index]) }
+                        ForEach(run.map { names[$0] }, id: \.self) { (name: String) in movableRow(p, names.firstIndex(of: name) ?? 0) }
                     }
                 } else {
-                    ForEach(Array(run), id: \.self) { (index: Int) in exerciseRow(p, index, list[index]) }
+                    ForEach(run.map { names[$0] }, id: \.self) { (name: String) in movableRow(p, names.firstIndex(of: name) ?? 0) }
                 }
             }
+        }
+    }
+
+    /// Held and dragged onto another exercise, it takes that place; VoiceOver
+    /// moves it one place with its actions.
+    @ViewBuilder private func movableRow(_ p: GymProposal, _ index: Int) -> some View {
+        let ex = p.exercises[index]
+        if saved {
+            exerciseRow(p, index, ex)
+        } else {
+            exerciseRow(p, index, ex)
+                .contentShape(Rectangle())
+                .onDrag {
+                    dragging = ex.name
+                    return NSItemProvider(object: ex.name as NSString)
+                }
+                .onDrop(of: [UTType.text], delegate: ExerciseDropDelegate(target: ex.name, dragging: $dragging) { name, target in
+                    move(name, to: target)
+                })
+                .accessibilityElement(children: .contain)
+                .accessibilityAction(named: Text("Posunout výš")) { move(index, by: -1) }
+                .accessibilityAction(named: Text("Posunout níž")) { move(index, by: 1) }
         }
     }
 
@@ -633,10 +664,6 @@ struct GymBuilderView: View {
                 ExerciseInfoButton(name: ex.name) { technique = ex.name }
                 if !saved {
                     Menu {
-                        Button { move(index, by: -1) } label: { Label("Posunout výš", systemImage: "arrow.up") }
-                            .disabled(!p.canMove(index, by: -1))
-                        Button { move(index, by: 1) } label: { Label("Posunout níž", systemImage: "arrow.down") }
-                            .disabled(!p.canMove(index, by: 1))
                         Button { replacing = ex.name } label: { Label("Nahradit jiným", systemImage: "arrow.triangle.swap") }
                         Button(role: .destructive) { remove(ex.name) } label: { Label("Odebrat", systemImage: "trash") }
                             .disabled(p.exercises.count < 2)
@@ -668,6 +695,13 @@ struct GymBuilderView: View {
         proposal = p
     }
 
+    private func move(_ name: String, to target: String) {
+        guard var p = proposal, let from = p.exercises.firstIndex(where: { $0.name == name }),
+              let to = p.exercises.firstIndex(where: { $0.name == target }) else { return }
+        p.moveExercise(from, to: to)
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { proposal = p }
+    }
+
     private func remove(_ name: String) {
         guard var p = proposal else { return }
         p.rows.removeAll { $0.count > 1 && $0[1].string == name }
@@ -679,9 +713,11 @@ struct GymBuilderView: View {
     private func replace(_ name: String, with alt: GymAlternative) {
         guard var p = proposal else { return }
         let kg = alt.kg.map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1).replacingOccurrences(of: ",", with: ".") } ?? ""
+        let isWarmup = { (row: [JSONValue]) in (row.first?.string ?? "").uppercased() == "WARMUP" }
+        let warmups = Set(p.rows.filter { $0.count > 3 && $0[1].string == name && isWarmup($0) }.map { $0[2].string ?? "" }).count
         for i in p.rows.indices where p.rows[i].count > 3 && p.rows[i][1].string == name {
             p.rows[i][1] = .string(alt.name)
-            p.rows[i][3] = .string((p.rows[i][0].string ?? "").uppercased() == "WARMUP" ? "" : kg)
+            p.rows[i][3] = .string(isWarmup(p.rows[i]) ? GymDay.warmupKg(work: kg, number: p.rows[i][2].string, of: warmups) : kg)
         }
         p.muscles[name] = nil
         if let map = catalog.first(where: { $0.name == alt.name })?.muscles { p.muscles[alt.name] = map }
@@ -1245,5 +1281,26 @@ enum GymLength {
         case "rested": return L10n.tr("Odpočaté")
         default: return L10n.tr("Celé tělo")
         }
+    }
+}
+
+/// Moves the held exercise to the one it is over, so the others make room.
+private struct ExerciseDropDelegate: DropDelegate {
+    let target: String
+    @Binding var dragging: String?
+    let move: (String, String) -> Void
+
+    func dropEntered(info: DropInfo) {
+        guard let moving = dragging, moving != target else { return }
+        move(moving, target)
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
     }
 }

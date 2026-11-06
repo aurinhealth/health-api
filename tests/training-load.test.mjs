@@ -58,6 +58,11 @@ test("/app/api/fitness falls back to the athlete's own load without Intervals.ic
   assert.match(entry, /if \(!apiKey\) return Response\.json\(\{status:"ok",source:"aurin",connected:false,days,wellness:await ownFitness\(env,from,to\)\}/);
 });
 
+test("/app/api/fitness with a revoked Intervals.icu key answers with the own load, so Today does not fail every time", () => {
+  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  assert.match(entry, /if \(response\.status===401\|\|response\.status===403\) return Response\.json\(\{status:"ok",source:"aurin",connected:false,needsReconnect:true,days,wellness:await ownFitness\(env,from,to\)\}/);
+});
+
 test("a gym session's load follows its RPE and length from the logged sets, not a fixed 36", async () => {
   const { gymSessions, strengthLoad, SRPE_SCALE } = await import("../src/training-load.js");
   const set = (date, exercise, set_no, kg, reps, rpe, type = "WORK") => ({ workout_date: date, type, exercise, set_no, actual_kg: kg, actual_reps: reps, rpe });

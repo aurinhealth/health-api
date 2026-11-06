@@ -40,9 +40,18 @@ final class ExerciseOrderTests: XCTestCase {
 
         var s = GymProposal(draftId: 1, planName: "Plán", rationale: nil,
                             rows: [row("Squat"), row("Bench", superset: "A"), row("Row", superset: "A"), row("Curl")], muscles: [:])
-        XCTAssertFalse(s.canMove(0, by: -1))
+        s.moveExercise(0, by: -1)
+        XCTAssertEqual(s.exercises.map { $0.name }, ["Squat", "Bench", "Row", "Curl"])
         s.moveExercise(3, by: -1)
         XCTAssertEqual(s.exercises.map { $0.name }, ["Squat", "Curl", "Bench", "Row"])
+
+        // Dragged: to the place of the exercise it is dropped on, a superset as one.
+        s.moveExercise(3, to: 0)
+        XCTAssertEqual(s.exercises.map { $0.name }, ["Bench", "Row", "Squat", "Curl"])
+        s.moveExercise(2, to: 3)
+        XCTAssertEqual(s.exercises.map { $0.name }, ["Bench", "Row", "Curl", "Squat"])
+        s.moveExercise(0, to: 1)
+        XCTAssertEqual(s.exercises.map { $0.name }, ["Bench", "Row", "Curl", "Squat"])
     }
 
     func testDayInsertAfterTheDoneExercises() {

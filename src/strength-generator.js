@@ -6,7 +6,7 @@
 export function fitsEquipment(name,setup){const equipment=typeof setup==='string'?setup:setup?.equipment;if(!equipment||equipment==='gym')return availableInGym(name);const allowed=(equipment==='custom'||equipment==='home')&&Array.isArray(setup?.stations)&&setup.stations.length?[...setup.stations,'floor_mats']:equipment==='dumbbells'?['dumbbells','adjustable_bench','floor_mats']:['floor_mats'];return EXERCISE_STATIONS[name]?.every(id=>allowed.includes(id))===true;}
 import { assignIntensities } from './gym-intensity.js';
 import { L, isImperial, kgToLb } from './lang.js';
-import { estimateStartingLoad, resolveLoad, progressionDecision, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
+import { estimateStartingLoad, resolveLoad, progressionDecision, priorMuscleSets, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
 import { withoutDisliked } from './exercise-feedback.js';
 import { isIntensity } from "./strength-context.js";
@@ -964,7 +964,7 @@ export function stalledExercises(rows, date) {
     if (!EXERCISES[ex] || String(r.type || "WORK").toUpperCase() !== "WORK" || r.planned) continue;
     (byExercise.get(ex) || byExercise.set(ex, []).get(ex)).push(r);
   }
-  return new Set([...byExercise].filter(([ex, list]) => progressionDecision(list, ex, EXERCISES[ex].reps, 1, date)?.stalled).map(([ex]) => ex));
+  return new Set([...byExercise].filter(([ex, list]) => progressionDecision(list, ex, EXERCISES[ex].reps, 1, date, priorMuscleSets(rows, ex))?.stalled).map(([ex]) => ex));
 }
 
 // The athlete's thumbs (exercise-feedback.js): disliked exercises are left
@@ -1282,6 +1282,7 @@ function progressionNote(estimate) {
   if (estimate.progression === "increase") return "↑ " + last + " → " + signed;
   if (estimate.progression === "decrease") return "↓ " + last + " → " + signed + L(", ať udržíš rozsah opakování", " to stay in the rep range");
   if (estimate.progression === "return") return L("po delší pauze lehčeji (", "lighter after a longer break (") + last + ")";
+  if (estimate.fatigueHold) return "= " + last + L(" po " + Math.round(estimate.priorSets) + " sériích na stejný sval – váha zůstává", " after " + Math.round(estimate.priorSets) + " sets for the same muscle – weight stays");
   if (estimate.stalled) return "= " + last + L(" – 3× bez posunu: přidej opakování, jinak příště vyměníme cvik", " – 3× without progress: add a rep, otherwise we'll swap the exercise next time");
   return "= " + last + L(" – cíl: o opakování víc", " – goal: one more rep");
 }
@@ -1440,7 +1441,7 @@ export function generateStrengthPlan(context, options = {}) {
   // sleep, a sick check-in) leave the gym out today, as the ride and the run
   // (Revize doporučování tréninků 2026-10-16, nález 22).
   const today=context?.adaptive?.recovery,ill=(today?.flags||[]).some(f=>/^(respiration|skin_temp|wrist_temp)_elevated$/.test(f))||context?.checkin==='sick';
-  if(!options.diagnosticPreview&&(today?.zone==='red'||ill))throw new Error(ill?L('Dech nebo teplota ve spánku jsou nad tvým normálem. Posilovnu dnes vynech, nanejvýš lehké protažení.','Your breathing or temperature in sleep is above your normal. Skip the gym today, at most some easy stretching.'):L('Připravenost je dnes nízká (červená zóna). Posilovnu dnes vynech, nanejvýš lehké protažení.','Readiness is low today (red zone). Skip the gym today, at most some easy stretching.'));
+  if(!options.diagnosticPreview&&(today?.zone==='red'||ill))throw new Error(ill?L('Dech nebo teplota ve spánku jsou nad tvým obvyklým rozmezím. Posilovnu dnes vynech, nanejvýš lehké protažení.','Your breathing or temperature in sleep is above your usual range. Skip the gym today, at most some easy stretching.'):L('Připravenost je dnes nízká (červená zóna). Posilovnu dnes vynech, nanejvýš lehké protažení.','Readiness is low today (red zone). Skip the gym today, at most some easy stretching.'));
   options = { ...options, focus: normalizeGymFocus(options.focus) };
   const pain = painfulExercises(context?.athleteState?.memories);
   if (pain.avoid.size) options = { ...options, excludeExercises: [...(options.excludeExercises || []), ...pain.avoid] };

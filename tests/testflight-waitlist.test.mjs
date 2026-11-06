@@ -92,7 +92,7 @@ test("the App Store Connect token is an ES256 JWT that verifies with the key", a
   assert.ok(await webcrypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, publicKey, Buffer.from(s, "base64url"), new TextEncoder().encode(h + "." + p)));
 });
 
-test("addresses a year on the lists are forgotten, newer ones stay", async () => {
+test("addresses a year after joining are forgotten, also invited ones, newer ones stay", async () => {
   const db = createD1();
   assert.equal(await forgetOldWaitlist(db), 0);
   await signup({ DB: db, SESSION_SECRET: "s" }, "new@example.com");
@@ -100,8 +100,18 @@ test("addresses a year on the lists are forgotten, newer ones stay", async () =>
     INSERT INTO testflight_waitlist (email, status, created_at, invited_at) VALUES ('invited@example.com', 'invited', datetime('now', '-14 months'), datetime('now', '-2 months'));
     CREATE TABLE signup_waitlist (email TEXT PRIMARY KEY, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
     INSERT INTO signup_waitlist (email, created_at) VALUES ('full@example.com', datetime('now', '-13 months')), ('later@example.com', datetime('now'));`);
-  assert.equal(await forgetOldWaitlist(db), 2);
-  assert.deepEqual(db.sqlite.prepare("SELECT email FROM testflight_waitlist ORDER BY email").all().map(r => r.email), ["invited@example.com", "new@example.com"]);
+  assert.equal(await forgetOldWaitlist(db), 3);
+  assert.deepEqual(db.sqlite.prepare("SELECT email FROM testflight_waitlist ORDER BY email").all().map(r => r.email), ["new@example.com"]);
+  assert.deepEqual(db.sqlite.prepare("SELECT email FROM signup_waitlist").all().map(r => r.email), ["later@example.com"]);
+});
+
+test("once Aurin is out in the App Store the TestFlight waitlist is emptied, the sign-up list keeps its year", async () => {
+  const db = createD1();
+  await signup({ DB: db, SESSION_SECRET: "s" }, "new@example.com");
+  db.sqlite.exec(`CREATE TABLE signup_waitlist (email TEXT PRIMARY KEY, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+    INSERT INTO signup_waitlist (email) VALUES ('later@example.com');`);
+  assert.equal(await forgetOldWaitlist(db, { released: true }), 1);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM testflight_waitlist").get().n, 0);
   assert.deepEqual(db.sqlite.prepare("SELECT email FROM signup_waitlist").all().map(r => r.email), ["later@example.com"]);
 });
 
