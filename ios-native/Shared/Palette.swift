@@ -16,9 +16,13 @@ enum Palette {
     static let cardEdge = Color(light: 0xFFFFFF, dark: 0x3A3E40)
     static let ink = Color(light: 0x1B1A17, dark: 0xECEAE6)
     static let secondary = Color(light: 0x3B3832, dark: 0xD9D6D0)
-    static let muted = Color(light: 0x6D6A63, dark: 0x9AA39F)
-    // Light: about 4:1 on the paper background (small captions), was 3.1:1.
-    static let faint = Color(light: 0x76726A, dark: 0x7C837F)
+    /// At least 4.5:1 (WCAG AA for small text) on every surface, the section
+    /// glows at the top of a screen included (Today audit 25).
+    static let muted = Color(light: 0x69665F, dark: 0x9AA39F)
+    /// At least 4.5:1 on the paper, the settings paper and the cards in both
+    /// modes (Today audit 25: 4.07:1 and 3.8:1 before). Over a section glow
+    /// only for what WCAG exempts (a day that can't be picked yet, icons).
+    static let faint = Color(light: 0x6F6B64, dark: 0x88908C)
     static let hairline = Color(light: 0x1B1A17, dark: 0xECEAE6, alpha: 0.08)
     static let track = Color(light: 0x1B1A17, dark: 0xECEAE6, alpha: 0.08)
 

@@ -205,6 +205,11 @@ struct SettingsMenu: View {
             Text(verbatim: "Aurin \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
                 .font(Typo.caption).foregroundStyle(Palette.faint)
                 .frame(maxWidth: .infinity)
+            // App Store 1.4.1 and the intended purpose (docs/intended-purpose.md, Today audit 12).
+            Text(L10n.tr("Aurin není zdravotnický prostředek. Před zdravotním rozhodnutím se poraď s lékařem."))
+                .font(Typo.caption).foregroundStyle(Palette.faint)
+                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
             // The credit RepDB's free tier asks for: some exercise drawings are theirs.
             Link(destination: URL(string: "https://repdb.co")!) {
                 Text(verbatim: "Exercise data by RepDB (repdb.co)")

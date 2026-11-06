@@ -181,9 +181,12 @@ export async function claimAiSlot(env, { waitMs = AI_SLOT_WAIT_MS, pollMs = 800,
   if (!tracked(env) || (aiMonthlyLimitUsd(env) == null && aiDailyLimitUsd(env) == null)) return async () => {};
   await ensureAiUsage(env.DB);
   const reserve = Math.max(0, n(reserveUsd) || 0), today = await limitToday(env);
+  // A running call is from today or, just after midnight, yesterday: the index
+  // (user_id, day) then reads two days of the user's calls, not all of them.
+  const yesterday = new Date(Date.parse(today + "T12:00:00Z") - 86400000).toISOString().slice(0, 10);
   const claim = () => env.DB.prepare(`INSERT INTO ai_usage (user_id, day, feature, model, cost_usd) SELECT ?, ?, ?, 'pending', ?
-    WHERE (SELECT COUNT(*) FROM ai_usage WHERE user_id = ? AND model = 'pending' AND created_at > datetime('now', '-${AI_PENDING_MINUTES} minutes')) < ? RETURNING id`)
-    .bind(env.USER_ID, today, feature || 'pending', reserve, env.USER_ID, AI_PARALLEL_CALLS).first();
+    WHERE (SELECT COUNT(*) FROM ai_usage WHERE user_id = ? AND day >= ? AND model = 'pending' AND created_at > datetime('now', '-${AI_PENDING_MINUTES} minutes')) < ? RETURNING id`)
+    .bind(env.USER_ID, today, feature || 'pending', reserve, env.USER_ID, yesterday, AI_PARALLEL_CALLS).first();
   const deadline = Date.now() + Math.max(0, waitMs);
   let claimed = await claim();
   while (!claimed && Date.now() < deadline) {
