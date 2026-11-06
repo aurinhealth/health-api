@@ -586,10 +586,38 @@ final class GymStore: ObservableObject {
     /// Training mode on the iPhone finished: the session here ends and saves.
     @Published var endedOnPhone = false
 
+    /// The gym screen (GymSessionView) is up: it ends the workout itself.
+    var screenOpen = false
+
     func openFromPhone() {
-        guard !GymWorkout.shared.running else { return }
+        let workout = GymWorkout.shared
+        if workout.running, !screenOpen, let gym, gym.date != WatchStore.localDate(Date()) {
+            // A workout left running from an earlier day (its screen closed with
+            // the ✕): it ends at its last set, then the iPhone's gym opens.
+            // The iPhone closed that day long ago, so it isn't told.
+            Task {
+                await endWithoutScreen(at: workout.idleEnd ?? workout.lastWork, tellPhone: false)
+                openFromPhone()
+            }
+            return
+        }
+        guard !workout.running else { return }
         load()
         openedFromPhone = true
+    }
+
+    /// Ends the workout with its screen closed (the cover's ✕ leaves it
+    /// running), as GymSessionView.end does: idle for 30 min, finished in
+    /// Training mode on the iPhone, or left from an earlier day. Saved when
+    /// sets were done. Left alone, it ran on for days and held the watch on
+    /// that day's gym: the iPhone's next start never opened here.
+    func endWithoutScreen(at end: Date?, endedOnPhone: Bool = false, tellPhone: Bool = true) async {
+        let workout = GymWorkout.shared
+        guard workout.running else { return }
+        let save = (gym?.setsDone ?? 0) > 0
+        if !endedOnPhone { finished(at: end ?? Date()) }
+        await workout.finish(save: save, at: end)
+        if tellPhone, !endedOnPhone { workout.endOnPhone() }
     }
 
     /// Opened by the iPhone before the watch's connection was up (a cold

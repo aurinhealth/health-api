@@ -278,10 +278,13 @@ final class LiveWorkout: NSObject {
     /// A reading from the watch's workout (WatchBridge): the watch measures,
     /// and Apple Health gets the watch's workout instead of this one.
     func watch(_ live: WatchGym.Live) {
+        // A workout left running on the watch for hours (its screen closed) is
+        // not this one: it never takes over today's Training mode here.
+        guard Date().timeIntervalSince(live.start) < 4 * 3600 else { return }
         if start == nil {
             // Started on the watch: Training mode starts here too, from the
             // watch's start, unless this workout was closed here already.
-            guard live.start != closedWatchStart, Date().timeIntervalSince(live.start) < 4 * 3600 else { return }
+            guard live.start != closedWatchStart else { return }
             onWatch = true
             watchStart = live.start
             openFromWatch = AppModel.localDate(live.start)

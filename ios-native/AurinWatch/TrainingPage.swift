@@ -197,7 +197,8 @@ struct TrainingPage: View {
     @ViewBuilder private func content(_ day: String) -> some View {
         let planned = Self.joined(sessions.filter { $0.date == day && !$0.done })
         let done = sessions.filter { $0.date == day && $0.done }
-        let gym = day == today ? store.gym : preview
+        // Today's own plan: a gym kept from an earlier day shows only while its workout still runs.
+        let gym = day == today ? store.gym.flatMap { $0.date == today || GymWorkout.shared.running ? $0 : nil } : preview
         let gymPlanned = gym.map { !$0.exercises.isEmpty } ?? false
         if let race = RaceDay(planned) {
             // Race day (mockup hodinky-zavod): the race as one card, anything else of the day

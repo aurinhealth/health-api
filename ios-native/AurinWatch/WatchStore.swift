@@ -355,7 +355,14 @@ extension WatchStore: WCSessionDelegate {
         let rest = (message[WatchGym.restKey] as? Data).flatMap(WatchGym.Rest.decode)
         Task { @MainActor in
             if let rest, GymWorkout.shared.running { GymStore.shared.phoneRest = rest }
-            if ended, GymWorkout.shared.running { GymStore.shared.endedOnPhone = true }
+            if ended, GymWorkout.shared.running {
+                // The gym screen ends it when open; closed, it ends here.
+                if GymStore.shared.screenOpen {
+                    GymStore.shared.endedOnPhone = true
+                } else {
+                    Task { await GymStore.shared.endWithoutScreen(at: nil, endedOnPhone: true) }
+                }
+            }
             if open { GymStore.shared.openFromPhone() }
             if let draft, GymWorkout.shared.running { GymStore.shared.phoneDraft = draft }
             if let gym { GymStore.shared.received(gym) }
