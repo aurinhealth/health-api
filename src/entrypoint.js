@@ -2,7 +2,7 @@ import {initialImport,recentDashboardImport} from './account-sync.js';
 import { recordOpsEvent, routeName, sendDailyOpsReport, withOpsScope } from "./ops-report.js";
 import { elapsed, serverTiming, slowness, timed } from "./request-timing.js";
 import { trainingSetup } from './onboarding.js';
-import { subscriptionStatus, assertAIAccess, plansUnlocked, assertPlanAccess } from './subscription.js';
+import { subscriptionStatus, assertAIAccess, plansUnlocked, assertPlanAccess, paywallOn } from './subscription.js';
 import { claimCoachMessage, recordCoachMessage, releaseCoachMessage } from './coach-allowance.js';
 import { buildNutrients, buildNutrientDetail, nutrientFavorites, saveNutrientFavorites, microTop, FREE_KEYS } from './micronutrients.js';
 import { listRecipes, saveRecipe, deleteRecipe } from './personal-recipes.js';
@@ -476,8 +476,8 @@ const worker = {
     }
     // Remembered AI limits of deleted accounts whose week and month are over (ai-limit-memory.js).
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 5) await forgetExpiredAiLimits(env.DB).catch(error => console.error("AI limit memory cleanup failed", error.message));
-    // Waitlist addresses older than a year (testflight-waitlist.js, privacy policy).
-    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 7) await forgetOldWaitlist(env.DB).catch(error => console.error("Waitlist cleanup failed", error.message));
+    // Waitlist addresses a year after they joined, and all of them once Aurin is out (testflight-waitlist.js, privacy policy).
+    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 7) await forgetOldWaitlist(env.DB, { released: paywallOn(env) }).catch(error => console.error("Waitlist cleanup failed", error.message));
     // Request limits nobody has used for two days (ip-rate-limit.js).
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 3) await forgetStaleRequestLimits(env.DB).catch(error => console.error("Request limit cleanup failed", error.message));
     // Apple sign-in tokens past their expiry: they cannot sign in anyway (apple-login.js).
