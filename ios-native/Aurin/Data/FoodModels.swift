@@ -134,6 +134,8 @@ struct FoodSnapshot: Decodable, Equatable {
         /// All that was drunk, before the hydration factors.
         var drunkMl: Double? = nil
         var drinks: [Drink]? = nil
+        /// Today's ride or run outdoors on a hot day: how much to drink on it (src/heat-advice.js).
+        var heat: String? = nil
     }
 
     struct Drink: Decodable, Equatable, Identifiable {

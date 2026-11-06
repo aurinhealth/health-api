@@ -6,6 +6,7 @@ import { createD1 } from "./helpers/d1.mjs";
 import { applyEnergyBudget } from "../src/energy-budget.js";
 import { dayCalories } from "../src/app-food.js";
 import { normalizeProfile } from "../src/energy-profile.js";
+import { withLang, withUnits } from "../src/lang.js";
 
 const auto = { ml: 3700, baseMl: 3200, exerciseMl: 500 };
 
@@ -90,6 +91,13 @@ test("one push only on a day behind, at 14:00 and 18:00", () => {
   assert.ok(waterNudge({ hour: 14, drunkMl: 600, goalMl: 2000 }));
   assert.equal(waterNudge({ hour: 14, drunkMl: 1000, goalMl: 2000 }), null);
   assert.equal(waterNudge({ hour: 15, drunkMl: 0, goalMl: 2000 }), null);
+});
+
+test("the water push in fl oz for an imperial user (audit 21.3)", () => {
+  assert.equal(waterNudge({ hour: 14, drunkMl: 600, goalMl: 2000 }).body, "Zatím 0,6 l. Sklenice teď tě vrátí na cestu k 2,0 l.");
+  withLang("en", () => withUnits("imperial", () => {
+    assert.equal(waterNudge({ hour: 14, drunkMl: 600, goalMl: 2000 }).body, "20 fl oz so far. A glass now gets you back on track for 68 fl oz today.");
+  }));
 });
 
 test("an own calorie goal replaces the target and keeps the computed one", () => {

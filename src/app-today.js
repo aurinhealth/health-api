@@ -346,8 +346,9 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     status: pill.taken ? "done" : "planned"
   }] : [];
   const byTime = (a, b) => String(a.time || "99").localeCompare(String(b.time || "99"));
-  // Horko (heat-advice.js): a ride or run still ahead, outdoors, on a hot day.
-  const heatOf = s => s.status !== "planned" ? null : heatAdvice({ sport: s.sport, weather: forecast, time: s.time, indoor: indoorText(s.title + " " + (s.type || "")) })?.short || null;
+  // Horko (heat-advice.js): a ride or run still ahead, outdoors, on a hot day,
+  // judged over its whole length; the interval clauses only for a hard session.
+  const heatOf = s => s.status !== "planned" ? null : heatAdvice({ sport: s.sport, weather: forecast, time: s.time, minutes: s.minutes, intervals: isHardSession(s.title, s.sport), indoor: indoorText(s.title + " " + (s.type || "")) })?.short || null;
   const planItems = [
     ...[...done, ...open].map(s => easy(s, {
       kind: "workout",
