@@ -61,6 +61,10 @@ struct ZonesDetailContent: View {
                 zoneRow(ZoneStyle.peak, "Maximální", "85 % a víc")
             }
             .padding(.top, 12)
+            Text("Minuta v intenzivní nebo maximální zóně se počítá dvakrát, jak to doporučuje WHO.")
+                .font(Typo.caption).foregroundStyle(Palette.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 12)
         }
     }
 

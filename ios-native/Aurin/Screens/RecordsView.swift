@@ -42,7 +42,7 @@ struct InsightsView: View {
 
     private static let rideMetrics: [(String, String)] = [
         ("longestRide", "Nejdelší jízda"), ("longestRideTime", "Nejdelší jízda časem"), ("mostElevation", "Nejvíc nastoupáno"),
-        ("bestRidePower", "Nejlepší výkon (20+ min)"), ("ftp", "FTP")
+        ("bestRidePower", "Nejvyšší NP jízdy (20+ min)"), ("ftp", "FTP")
     ]
     private static let runMetrics: [(String, String)] = [("longestRun", "Nejdelší běh"), ("runPace", "Nejrychlejší tempo na 5+ km")]
     /// Pool swims only for the pace: open water is measured by GPS.
@@ -410,6 +410,7 @@ struct InsightsView: View {
             if key != "all" {
                 Text("Změna proti nejlepšímu výkonu před tímto obdobím.").font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 8)
             }
+            if sport == .ride { PowerTermsButton().padding(.top, 4) }
         }
     }
 
