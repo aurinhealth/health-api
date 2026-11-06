@@ -651,10 +651,9 @@ struct TechniqueSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             if let t = technique {
                 photo
+                muscleChips("Hlavní svaly", t.primaryMuscles, primary: true)
+                muscleChips("Pomocné svaly", t.secondaryMuscles, primary: false)
                 ownNote
-                if let muscles = t.muscles, !muscles.isEmpty {
-                    Text(muscles.joined(separator: " · ")).font(Typo.small).foregroundStyle(Palette.muted)
-                }
                 list("Příprava", t.setup)
                 list("Provedení", t.steps)
                 list("Časté chyby", t.mistakes)
@@ -667,6 +666,30 @@ struct TechniqueSheet: View {
             }
         }
         .padding(.top, 6)
+    }
+
+    /// Hlavní svaly as solid green chips, Pomocné svaly outlined; nothing when the exercise has none.
+    @ViewBuilder
+    private func muscleChips(_ title: String, _ ids: [String]?, primary: Bool) -> some View {
+        if let ids, !ids.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel(text: title)
+                FlowLayout(spacing: 7) {
+                    ForEach(ids, id: \.self) { id in
+                        HStack(spacing: 7) {
+                            if primary { Circle().fill(Palette.green).frame(width: 7, height: 7) }
+                            Text(BodyFigure.label(id))
+                        }
+                        .font(Typo.small.weight(primary ? .semibold : .medium))
+                        .foregroundStyle(primary ? Palette.green : Palette.secondary)
+                        .padding(.horizontal, 13).frame(minHeight: 32)
+                        .background(primary ? Palette.greenSoft : .clear, in: Capsule())
+                        .overlay { if !primary { Capsule().stroke(Palette.green.opacity(0.3), lineWidth: 1.5) } }
+                    }
+                }
+            }
+            .padding(.top, 6)
+        }
     }
 
     /// Moje poznámka: the athlete's note on the exercise, the pencil changes it.

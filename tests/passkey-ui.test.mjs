@@ -20,7 +20,7 @@ test("the privacy policy and support page describe only the sign-in methods that
   assert.match(plain, /<strong>Passkeys\.<\/strong>/);
   assert.match(plain, /You sign in with Google or a passkey,/);
   assert.doesNotMatch(plain, /Apple ID|Codes sent by email|Email Service/);
-  assert.match(plain, /connections, passkeys and assistant history/);
+  assert.match(plain, /connections, passkeys, assistant history and the coach’s memory/);
   const all = await privacyPage(visit("/privacy"), { apple: true, email: true }).text();
   assert.match(all, /When you sign in with Apple/);
   assert.match(all, /<strong>Codes sent by email\.<\/strong>/);

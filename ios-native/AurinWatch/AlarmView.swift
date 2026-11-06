@@ -65,7 +65,7 @@ private struct AlarmDay: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(title)
-                .font(.system(size: 12, weight: .medium))
+                .watchFont(12, .medium)
                 .foregroundStyle(W.secondary)
             AlarmDial(bed: bedMinutes, wake: Int(minutes), on: saved != nil || edited) {
                 Text(saved == nil && !edited ? "–" : W.clock(minutes: minutes))
@@ -73,7 +73,7 @@ private struct AlarmDay: View {
                     .foregroundStyle(W.ink)
                     .contentTransition(.numericText())
                 Text(saved == nil && !edited ? W.tr("bez budíku", "no alarm") : W.tr("budík", "alarm"))
-                    .font(.system(size: 10))
+                    .watchFont(12)
                     .foregroundStyle(W.muted)
             }
             .focusable()
@@ -91,7 +91,7 @@ private struct AlarmDay: View {
                 .disabled(sending)
             } else {
                 Text(W.duration(minutes: Double(sleepMinutes)) + W.tr(" spánku", " of sleep"))
-                    .font(.system(size: 12))
+                    .watchFont(12)
                     .foregroundStyle(W.muted)
             }
         }
@@ -129,7 +129,7 @@ private struct AlarmDay: View {
             }
         } label: {
             Text(label)
-                .font(.system(size: 12, weight: .semibold))
+                .watchFont(12, .semibold)
                 .foregroundStyle(scope == "once" ? W.ink : .black)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -179,7 +179,7 @@ private struct AlarmDial<Content: View>: View {
         let radians = angle(minutes) * .pi / 180
         let r = (size - 18) / 2
         return Image(systemName: symbol)
-            .font(.system(size: 9, weight: .bold))
+            .watchFont(12, .bold)
             .foregroundStyle(.black)
             .frame(width: 16, height: 16)
             .background(color, in: Circle())
@@ -255,7 +255,7 @@ struct AlarmRinging: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            Image(systemName: "sun.max.fill").font(.system(size: 22)).foregroundStyle(W.amber)
+            Image(systemName: "sun.max.fill").watchFont(22).foregroundStyle(W.amber)
             Text(W.tr("Dobré ráno", "Good morning")).font(W.serif(22)).foregroundStyle(W.ink)
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 Text(context.date, format: .dateTime.hour().minute())
@@ -269,7 +269,7 @@ struct AlarmRinging: View {
                     .tint(W.amber)
                     .foregroundStyle(.black)
             }
-            .font(.system(size: 14, weight: .semibold))
+            .watchFont(14, .semibold)
         }
         .containerBackground(W.glow(W.Glow.strain), for: .navigation)
     }

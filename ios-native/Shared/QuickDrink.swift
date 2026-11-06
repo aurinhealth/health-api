@@ -1,4 +1,5 @@
 import AppIntents
+import ActivityKit
 import Foundation
 import WidgetKit
 
@@ -23,8 +24,27 @@ enum PendingDrinks {
         get { UserDefaults(suiteName: WidgetSnapshot.group)?.object(forKey: accountKey) as? Int }
         set { UserDefaults(suiteName: WidgetSnapshot.group)?.set(newValue, forKey: accountKey) }
     }
-    /// Posted after a drink is added; the app, when it runs (Siri), sends it at once.
-    static let added = Notification.Name("PendingDrinks.added")
+    /// The app's send of its outbox (AppModel sets it): an intent run in the
+    /// app's process (Siri, the Voda control) sends the drink before it returns.
+    /// nil in the widget extension, where the drink waits for the app.
+    @MainActor static var sendNow: (@MainActor () async -> Void)?
+
+    /// A drink from an intent: queued, counted in the widget's snapshot and the
+    /// Voda control at once, and sent when the app's process runs it.
+    @MainActor
+    static func record(_ ml: Int) async {
+        let today = localDate()
+        add(ml, on: today)
+        // After midnight the old day's snapshot starts the new day at zero water.
+        if let saved = WidgetSnapshot.load() {
+            var snapshot = saved.current(today: today)
+            snapshot.waterMl = (snapshot.waterMl ?? 0) + Double(ml)
+            snapshot.save()
+        }
+        WidgetCenter.shared.reloadAllTimelines()
+        AurinControls.reload(AurinControls.water)
+        await sendNow?()
+    }
 
     /// The user's glass of water: the smallest amount saved for water in Jídlo →
     /// Pití (DrinkPrefs, the app's own defaults), else 250 ml or 8 fl oz.
@@ -90,16 +110,24 @@ struct AddWaterIntent: AppIntent {
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let ml = min(max(self.ml ?? PendingDrinks.glassMl, 1), 3000)
-        let today = PendingDrinks.localDate()
-        PendingDrinks.add(ml, on: today)
-        // After midnight the old day's snapshot starts the new day at zero water.
-        if let saved = WidgetSnapshot.load() {
-            var snapshot = saved.current(today: today)
-            snapshot.waterMl = (snapshot.waterMl ?? 0) + Double(ml)
-            snapshot.save()
-        }
-        WidgetCenter.shared.reloadAllTimelines()
-        NotificationCenter.default.post(name: PendingDrinks.added, object: nil)
+        await PendingDrinks.record(ml)
         return .result(dialog: IntentDialog("\(L10n.f("Zapsáno %@ vody.", Units.volumeText(Double(ml))))"))
+    }
+}
+
+/// Voda in Control Center and on the Lock Screen, also on an Apple Watch
+/// (watchOS 26 shows the iPhone's controls): the user's glass, as
+/// AddWaterIntent. A Live Activity intent runs in the app's process (iOS
+/// starts it in the background), not in the widget extension, so the glass
+/// goes to the server at once instead of waiting for the app's next open, and
+/// the control shows the new total.
+struct WaterControlIntent: LiveActivityIntent {
+    static let title: LocalizedStringResource = "Zapsat vodu"
+    static let isDiscoverable = false
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+
+    func perform() async throws -> some IntentResult {
+        await PendingDrinks.record(PendingDrinks.glassMl)
+        return .result()
     }
 }

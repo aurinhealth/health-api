@@ -54,7 +54,7 @@ struct Morning {
     var subtitle: String
     var body: String
 
-    /// "Readiness 78 · Go hard today" → "Go hard today".
+    /// "Readiness 78 · Good day for a hard workout" → "Good day for a hard workout".
     var advice: String? {
         guard let range = title.range(of: " · ") else { return nil }
         return String(title[range.upperBound...])

@@ -2,7 +2,13 @@ import { classifyPlannedWorkout } from "./planned-workout.js";
 import { trainingStatus } from './training-status.js';
 import { intensityClass, isHardSession, isHardKind } from './session-intensity.js';
 import { recoveryWeek as recoveryWeek_, weekLoadsBefore, hrvWeekTrendDown, hrvSourceRows } from './week-planner.js';
-import { localToday, localDateTime } from "./user-time.js";
+import { localToday, localDateTime, halfDay } from "./user-time.js";
+// "regenerace po posledních trénincích potrvá zhruba do 16. 10. odpoledne": half a
+// day, an estimate, never a clock time (Today audit 15).
+function recoveryWhy(half){
+  const [date,part]=half.split(" "),day=Number(date.slice(8,10))+". "+Number(date.slice(5,7))+".";
+  return L("regenerace po posledních trénincích potrvá zhruba do "+day+" "+{morning:"dopoledne",afternoon:"odpoledne",evening:"večer"}[part],"recovery from the last sessions lasts until about "+date+" "+part);
+}
 import { cycleState, cycleTrainingCaution } from "./cycle-model.js";
 import { L, plural as pluralWord } from "./lang.js";
 import { readinessFor } from "./readiness.js";
@@ -536,7 +542,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
       else{kind="endurance";adaptations.push(L("střední připravenost: bez intenzity","moderate readiness: no intensity"));}
     }
     if(quality()&&!insisted){
-      const why=novice?W.novice:offBreak?W.off(lastRide):lastHard!=null&&lastHard<2?W.recent:waitsForRecovery?L("regenerace po posledních trénincích potrvá do "+hardFrom.slice(8,10).replace(/^0/,"")+". "+hardFrom.slice(5,7).replace(/^0/,"")+". "+hardFrom.slice(11,16),"recovery from the last sessions lasts until "+hardFrom.slice(0,10)+" "+hardFrom.slice(11,16)):otherRecent?L("tvrdý trénink druhého sportu byl před méně než 48 h","a hard session of the other sport was less than 48 h ago"):hard7>=2||hardAll7>=3?L("dodržen limit kvalitních dnů","quality-day limit respected"):lowerGym.length?W.gym:recoveryWeek&&!plannedInfo?.system?L("regenerační týden: bez intenzity","recovery week: no intensity"):null;
+      const why=novice?W.novice:offBreak?W.off(lastRide):lastHard!=null&&lastHard<2?W.recent:waitsForRecovery?recoveryWhy(halfDay(recoveryTime.readyAt)):otherRecent?L("tvrdý trénink druhého sportu byl před méně než 48 h","a hard session of the other sport was less than 48 h ago"):hard7>=2||hardAll7>=3?L("dodržen limit kvalitních dnů","quality-day limit respected"):lowerGym.length?W.gym:recoveryWeek&&!plannedInfo?.system?L("regenerační týden: bez intenzity","recovery week: no intensity"):null;
       if(why){kind=recoveryWeek&&!plannedInfo?.system&&!novice&&!offBreak&&requestedMinutes<=75?"recovery":"endurance";adaptations.push(why);}
     }
     if(offBreak&&!novice){

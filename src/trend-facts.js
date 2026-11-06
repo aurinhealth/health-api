@@ -8,14 +8,14 @@
 //   sleepDebt7d       the sleep debt over the last 7 nights, in hours
 //   nightsUnderNeed   nights in a row (up to last night) shorter than the need
 //   ctlChange6w       fitness (CTL) now against six weeks ago
-//   acwr              the acute:chronic workload ratio (7-day over 28-day mean
-//                     daily load) and its zone (workload-ratio.js)
+//   acwr              the last 7 days' load against the usual 28, as a level
+//                     word only (workload-ratio.js, Today audit D4)
 //   monotony          Foster's training monotony of the last 7 days and the
 //                     week's strain
-// Each of the last two carries a label (and the ratio its zone's) in the
+// Each of the last two carries a label (and acwr its level's) in the
 // app language, so the coach names them the way the app does.
 import { mergeWellnessRows, sleepDebtMinutes, sleepNeedMinutes } from "./recovery-model.js";
-import { workloadMetrics, WORKLOAD_LABELS, acwrZoneLabel } from "./workload-ratio.js";
+import { workloadMetrics, WORKLOAD_LABELS, loadLevelLabel } from "./workload-ratio.js";
 
 const DAY = 86400000;
 const shift = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * DAY).toISOString().slice(0, 10);
@@ -88,7 +88,8 @@ export function trendFacts({ date, wellness = [], intervals = [], sessions = [],
   if (ctlNow && ctlThen) facts.ctlChange6w = { now: round(Number(ctlNow.ctl), 1), before: round(Number(ctlThen.ctl), 1), change: round(Number(ctlNow.ctl) - Number(ctlThen.ctl), 1) };
 
   const workload = workloadMetrics(Array.isArray(intervals) ? intervals : [], date);
-  if (workload.acwr.value != null) facts.acwr = { label: WORKLOAD_LABELS.acwr, ...workload.acwr, zoneLabel: acwrZoneLabel(workload.acwr.zone) };
+  // In words only (Today audit D4): the level, never the ratio or the mean loads.
+  if (workload.acwr.level) facts.acwr = { label: WORKLOAD_LABELS.acwr, level: workload.acwr.level, levelLabel: loadLevelLabel(workload.acwr.level) };
   if (workload.monotony.value != null) facts.monotony = { label: WORKLOAD_LABELS.monotony, ...workload.monotony, strainLabel: WORKLOAD_LABELS.strain };
 
   return Object.keys(facts).length ? facts : null;

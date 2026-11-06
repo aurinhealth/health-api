@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readinessFor, readinessLockOf } from "../src/readiness.js";
+import { lockReadiness, readinessLocks } from "../src/readiness-lock.js";
+import { createD1 } from "./helpers/d1.mjs";
+import { scopedDb } from "../src/tenancy.js";
 
 const DATE = "2026-10-08";
 const day = offset => new Date(Date.parse(DATE + "T12:00:00Z") + offset * 86400000).toISOString().slice(0, 10);
@@ -75,4 +78,28 @@ test("the main device's night arriving after another watch's takes the lock over
   const relock = readinessLockOf(later, DATE);
   const evening = readinessFor({ date: DATE, google: at(fitbit, { hrv: 61 }), sessions, profile: { readinessLocks: { [DATE]: relock } } });
   assert.equal(evening.components.hrv.value, 50);
+});
+
+test("a lock from the Intervals.icu copy of the night gives way to the main source's night", () => {
+  // 6:00: only the Intervals.icu wellness night (no times, intervals-sleep.js).
+  const copy = sessions.map(s => (s.date === DATE ? { id: "intervals-sleep:" + DATE, date: DATE, startTime: null, endTime: null, durationMin: 380, source: "intervals", stages: {} } : s));
+  const lock = readinessLockOf(readinessFor({ date: DATE, google: wellness, sessions: copy }), DATE);
+  assert.ok(lock && lock.night && !lock.night.startTime, "locked on the copy");
+  // 7:30: the Google/Apple night with its times arrives.
+  const later = readinessFor({ date: DATE, google: wellness, sessions, profile: { readinessLocks: { [DATE]: lock } } });
+  assert.equal(later.night.durationMin, 412);
+  assert.equal(later.score, readinessFor({ date: DATE, google: wellness, sessions }).score);
+  // A night with its times is not given up for the copy.
+  const own = readinessLockOf(later, DATE);
+  const kept = readinessFor({ date: DATE, google: wellness, sessions: copy, profile: { readinessLocks: { [DATE]: own } } });
+  assert.equal(kept.night.durationMin, 412);
+});
+
+test("nothing is locked while the watch's day, fitness or the nights failed to load", async () => {
+  const db = scopedDb(createD1(), 1);
+  const inputs = { date: DATE, health: { wellness }, fitness: { status: "ok", wellness: [] }, sleep: { sessions }, profile: {} };
+  for (const failed of ["health", "fitness", "sleep"]) assert.equal(await lockReadiness(db, { ...inputs, [failed]: {} }), false, failed);
+  assert.deepEqual(await readinessLocks(db, DATE), {});
+  assert.equal(await lockReadiness(db, inputs), true);
+  assert.ok((await readinessLocks(db, DATE))[DATE]);
 });

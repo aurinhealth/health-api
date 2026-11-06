@@ -50,19 +50,34 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testRecoveryTimeDays() {
-        // Days only, never a clock time; after 22:00 it counts for the next morning.
+        // Half a day at most, never a clock time or hours (Today audit 15);
+        // after 22:00 it counts for the next morning.
         var parts = DateComponents(year: 2026, month: 10, day: 15, hour: 23, minute: 30)
         let lateThursday = Calendar.current.date(from: parts) ?? Date()
-        XCTAssertEqual(RecoveryTime.when(lateThursday, today: "2026-10-15"), "pátek")
-        XCTAssertEqual(RecoveryTime.phrase(lateThursday, today: "2026-10-15"), "v pátek")
+        XCTAssertEqual(RecoveryTime.part(lateThursday, today: "2026-10-15"), "zítra dopoledne")
         parts.hour = 17
         let thursday = Calendar.current.date(from: parts) ?? Date()
-        XCTAssertEqual(RecoveryTime.when(thursday, today: "2026-10-15"), "dnes")
-        XCTAssertEqual(RecoveryTime.phrase(thursday, today: "2026-10-14"), "ve čtvrtek")
+        XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-15"), "dnes večer")
+        XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-14"), "zítra večer")
+        XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-13"), "za 2 dny")
+        parts.hour = 14
+        XCTAssertEqual(RecoveryTime.short(Calendar.current.date(from: parts) ?? Date()), "Čt odpoledne")
         XCTAssertEqual(RecoveryTime.dayName("2026-10-11", today: "2026-10-15"), "neděle")
         XCTAssertEqual(RecoveryTime.dayName("2026-10-14", today: "2026-10-15"), "včera")
         let gym = RecoveryTime.Cause(kind: "gym", title: "Posilovna, celé tělo", detail: nil, date: "2026-10-11", hours: 96, readyAt: "2026-10-15T15:49:00Z")
-        XCTAssertEqual(RecoveryTimeContent.detail(gym, today: "2026-10-15"), "neděle · svaly 96 h")
+        XCTAssertEqual(RecoveryTimeContent.detail(gym, today: "2026-10-15"), "neděle · svaly")
+        // A yellow or red morning: hard training waits for a greener one.
+        let time = DemoData.today.recoveryTime
+        XCTAssertEqual(time.flatMap { RecoveryTime.hardLine($0, today: "2026-10-08", zone: "red") }, "tvrdý trénink ne dřív než po zelenějším ránu")
+        // Still recovering on a red morning: the time, and a greener morning on top.
+        parts.day = 16
+        let friday = Calendar.current.date(from: parts) ?? Date()
+        let ready = ISO8601DateFormatter().string(from: friday)
+        let recovering = RecoveryTime(readyAt: ready, from: ready, lightAt: nil, hours: 0, progress: 0, causes: [])
+        XCTAssertEqual(RecoveryTime.hardLine(recovering, today: "2026-10-15", zone: "red", now: thursday), "tvrdý trénink zítra odpoledne, po zelenějším ránu")
+        // Passed already (an older Today kept on the phone): now, never "this evening" of yesterday.
+        XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-16"), "už teď")
+        XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-15", now: thursday.addingTimeInterval(60)), "už teď")
     }
 
     /// Dnes → Den: the night, readiness, done workout and its strain, steps,
@@ -101,6 +116,9 @@ final class SnapshotTests: XCTestCase {
         let time = try XCTUnwrap(today.recoveryTime)
         try render("today-recovery", glow: Palette.Glow.today) {
             RecoveryTimeContent(time: time, today: today.date, now: RecoveryTime.date("2026-10-08T08:00:00Z") ?? Date()).padding(24).padding(.top, 30)
+        }
+        try render("today-recovery-yellow", glow: Palette.Glow.today) {
+            RecoveryTimeContent(time: time, today: today.date, zone: "yellow", now: RecoveryTime.date("2026-10-08T08:00:00Z") ?? Date()).padding(24).padding(.top, 30)
         }
     }
 
@@ -266,6 +284,7 @@ final class SnapshotTests: XCTestCase {
             Units.setSystem("metric")
         }
         XCTAssertEqual(L10n.tr("Spánek"), "Sleep")
+        XCTAssertEqual(RecoveryTime.part(Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 16, hour: 14)) ?? Date(), today: "2026-10-15"), "tomorrow afternoon")
         XCTAssertEqual(Fmt.monthTitleSpoken("2026-11-05"), "November 2026, week 45")
         XCTAssertEqual(L10n.tr("text bez překladu"), "text bez překladu")
         XCTAssertEqual(L10n.plural("dní", 5), "days")
@@ -755,15 +774,20 @@ final class SnapshotTests: XCTestCase {
         XCTAssertTrue(yesterday.hasPrefix("data ze včera "), yesterday)
         let older = try XCTUnwrap(DataAgePill.text(last: now.addingTimeInterval(-3 * 86400), now: now))
         XCTAssertTrue(older.hasPrefix("data z 5. 10. "), older)
+        // Every source in Settings → Data sources says how old its data are; orange after 12 h (Today audit 20).
+        XCTAssertTrue(DataAgePill.age(last: now.addingTimeInterval(-2 * 3600), now: now).hasPrefix("data z "))
+        XCTAssertFalse(IntegrationCard.stale(now.addingTimeInterval(-11 * 3600), now: now))
+        XCTAssertTrue(IntegrationCard.stale(now.addingTimeInterval(-13 * 3600), now: now))
 
-        let raised = TrainingSnapshot.ACWR(value: 1.42, zone: "elevated", acute: 60, chronic: 42)
+        // In words, no ratio (Today audit D4).
+        let raised = TrainingSnapshot.ACWR(level: "above")
         let monotonous = TrainingSnapshot.Monotony(value: 2.3, strain: 900, high: true)
         let normal = TrainingSnapshot.Monotony(value: 1.2, strain: 500, high: false)
-        XCTAssertEqual(FormWidget.loadNote(acwr: raised, monotony: monotonous), "Poměr zátěže 1,42 · jednotvárný týden")
-        XCTAssertEqual(FormWidget.loadNote(acwr: raised, monotony: normal), "Poměr zátěže 1,42")
-        XCTAssertEqual(FormWidget.loadNote(acwr: TrainingSnapshot.ACWR(value: 0.6, zone: "low", acute: 20, chronic: 33), monotony: monotonous), "Jednotvárný týden")
-        XCTAssertNil(FormWidget.loadNote(acwr: TrainingSnapshot.ACWR(value: 0.6, zone: "low", acute: 20, chronic: 33), monotony: normal))
-        XCTAssertNil(FormWidget.loadNote(acwr: TrainingSnapshot.ACWR(value: 1.1, zone: "sweetSpot", acute: 40, chronic: 36), monotony: nil))
+        XCTAssertEqual(FormWidget.loadNote(acwr: raised, monotony: monotonous), "Posledních 7 dní vs. obvyklých 28: Nad obvyklou · jednotvárný týden")
+        XCTAssertEqual(FormWidget.loadNote(acwr: raised, monotony: normal), "Posledních 7 dní vs. obvyklých 28: Nad obvyklou")
+        XCTAssertEqual(FormWidget.loadNote(acwr: TrainingSnapshot.ACWR(level: "below"), monotony: monotonous), "Jednotvárný týden")
+        XCTAssertNil(FormWidget.loadNote(acwr: TrainingSnapshot.ACWR(level: "wellBelow"), monotony: normal))
+        XCTAssertNil(FormWidget.loadNote(acwr: TrainingSnapshot.ACWR(level: "usual"), monotony: nil))
 
         let week: [Point] = [Point(date: "2026-10-01", value: 1), Point(date: "2026-10-02", value: 2), Point(date: "2026-10-08", value: 3)]
         XCTAssertEqual(week.lastDays(7).map(\.date), ["2026-10-02", "2026-10-08"])
@@ -1086,6 +1110,25 @@ final class SnapshotTests: XCTestCase {
             NavigationStack { PlanWeekContent(week: active.template.weeks[2], sport: "ride", detail: week).padding(.horizontal, 24) }.environment(model)
         }
         try render("plan-week-days", height: 700) { WeekDaysSheet(week: week, usual: 4).environment(model) }
+        // Every changed session says why; its detail shows the reason and the session it was.
+        let movedJSON = #","change":{"kind":"moved","line":"Přesunuto z út","text":"V úterý zůstal nesplněný, proto je přesunutý sem.","original":{"label":"Nad/pod prahem 3×12","minutes":90,"date":"2026-11-04"}}}"#
+        let shorterJSON = #","change":{"kind":"shorter","line":"Kratší: na 60 min je volno","text":"Volný čas toho dne na něj nechává 60 min, proto je kratší než 75 min v plánu.","original":{"label":"Z2 1 h 15","minutes":75,"date":"2026-11-06"}}}"#
+        var changedJSON = weekJSON
+        if let r = changedJSON.range(of: #""steps":"# + z2 + "}}") { changedJSON.replaceSubrange(r, with: #""steps":"# + z2 + "}" + shorterJSON) }
+        if let r = changedJSON.range(of: #""steps":"# + ss + "}}") { changedJSON.replaceSubrange(r, with: #""steps":"# + ss + "}" + movedJSON) }
+        let changed = try decoder.decode(PlanWeekDetail.self, from: Data(changedJSON.utf8))
+        XCTAssertEqual(changed.sessions.compactMap(\.change).map(\.kind), ["shorter", "moved"])
+        try render("plan-week-changed", glow: Palette.Glow.training, height: 1000) {
+            NavigationStack { PlanWeekContent(week: active.template.weeks[2], sport: "ride", detail: changed).padding(.horizontal, 24) }.environment(model)
+        }
+        // The plan follows the trend: a lighter week sooner (with the HRV line) and a level up.
+        let lighterJSON = #"{"type":"lighter","title":"Plán upraven","headline":"Tento týden je lehčí","text":"Tvoje HRV bylo 5 dní z posledních 7 pod tvým normálem a spal jsi v průměru 6 h 10 min. Odpočinkový týden se posouvá z 8. týdne na teď.","options":[{"id":"ok","label":"OK","date":null,"recommended":true}],"days":null,"button":"OK","keep":"Nechat plán","chart":{"values":[58,60,57,59,58,61,57,52,49,47,48,46,null,47],"low":52,"high":64}}"#
+        let lighter = try decoder.decode(TodaySnapshot.PlanProposal.self, from: Data(lighterJSON.utf8))
+        try render("plan-adapted-lighter", height: 520) { PlanProposalCard(proposal: lighter).padding(24).environment(model) }
+        let harder = try decoder.decode(TodaySnapshot.PlanProposal.self, from: Data(#"{"type":"harder","title":"Plán upraven","headline":"Zlepšuješ se rychle","text":"Všechny klíčové tréninky posledních 3 týdnů máš hotové a šly ti lehčeji, než plán čekal. HRV je stabilní. Od příštího týdne jsou klíčové tréninky o úroveň těžší a týden o 5 % delší.","options":[{"id":"ok","label":"OK","date":null,"recommended":true}],"days":null,"button":"OK","keep":"Nechat jak bylo"}"#.utf8))
+        try render("plan-adapted-harder", height: 420) { PlanProposalCard(proposal: harder).padding(24).environment(model) }
+        let movedChange = try XCTUnwrap(changed.sessions[2].change)
+        try render("plan-session-changed", height: 420) { PlanChangeCard(change: movedChange).padding(24) }
         // Free time by weekday, two weeks in turn, this week only and the plan's days.
         let timeJSON = #"{"days":[45,60,0,60,0,180,240],"total":585,"daysB":[0,90,90,0,90,240,120],"totalB":630,"alternate":"2026-10-26","suits":[300,420],"short":false}"#
         let time = try decoder.decode(PlanPreview.Time.self, from: Data(timeJSON.utf8))
@@ -1132,6 +1175,19 @@ final class SnapshotTests: XCTestCase {
         let run = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(runPlan.utf8)).active)
         try render("plan-race-run", glow: Palette.Glow.training, height: 700) {
             NavigationStack { ActivePlanContent(active: run, preview: nil, week: nil, editGoal: {}).padding(.horizontal, 24) }.environment(model)
+        }
+        // Checked every Monday: on track with the paces, and behind with a realistic goal.
+        let checkedOn = #""race":{"km":21.1,"estimate":6400,"estimateStart":6550,"target":6300,"goalPace":299,"verdict":"real","history":[{"week":1,"seconds":6550},{"week":3,"seconds":6500},{"week":5,"seconds":6430}],"projected":6250,"status":"on_track","badge":"Podle plánu","note":"Zbývá stáhnout 1:40 za 6 týdnů, tempem, jakým se zlepšuješ. Z tvého prahového tempa, kontrola každé pondělí.","weeksLeft":6,"checked":"2026-11-23","paces":{"race":299,"threshold":289,"thresholdBefore":292,"easy":[355,375]}}"#
+        let onTrack = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(runPlan.replacingOccurrences(of: #""race":{"km":21.1,"estimate":6190,"estimateStart":6270,"target":6120,"goalPace":290,"verdict":"bold"}"#, with: checkedOn).utf8)).active)
+        XCTAssertEqual(onTrack.race?.status, "on_track")
+        try render("plan-race-goal-on-track", glow: Palette.Glow.training, height: 1000) {
+            NavigationStack { ActivePlanContent(active: onTrack, preview: nil, week: nil, editGoal: {}).padding(.horizontal, 24) }.environment(model)
+        }
+        let checkedOff = #""race":{"km":21.1,"estimate":6430,"estimateStart":6500,"target":6000,"goalPace":284,"verdict":"hard","history":[{"week":1,"seconds":6500},{"week":4,"seconds":6460}],"projected":6390,"status":"behind","behind":390,"realistic":6420,"badge":"o 7 min pomaleji než cíl","note":"Zbývají 4 týdny. Držet 4:44 /km by znamenalo běhat každý trénink moc tvrdě. Cíl 1:47:00 sedí na tvou formu a pořád tě potáhne.","weeksLeft":4,"paces":{"race":284,"threshold":290}}"#
+        let behind = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(runPlan.replacingOccurrences(of: #""race":{"km":21.1,"estimate":6190,"estimateStart":6270,"target":6120,"goalPace":290,"verdict":"bold"}"#, with: checkedOff).utf8)).active)
+        XCTAssertEqual(behind.race?.realistic, 6420)
+        try render("plan-race-goal-behind", glow: Palette.Glow.training, height: 1000) {
+            NavigationStack { ActivePlanContent(active: behind, preview: nil, week: nil, editGoal: {}).padding(.horizontal, 24) }.environment(model)
         }
         try render("plan-goal-time", height: 620) { GoalTimeSheet(km: 21.1, estimate: 6270, weeks: 10, initial: 6120) { _ in } }
         // Multisport in English, as the post on X shows it (the server's English

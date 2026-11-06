@@ -18,7 +18,7 @@ struct DemoFace: View {
         let entry = DayEntry(date: WatchDemo.now, snapshot: s)
         VStack(alignment: .leading, spacing: 6) {
             Text(Self.day)
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .watchFont(15, .semibold, design: .rounded)
                 .textCase(.uppercase)
                 .foregroundStyle(W.amber)
             WideView(kind: .today, entry: entry)

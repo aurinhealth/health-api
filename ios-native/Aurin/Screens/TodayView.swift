@@ -163,7 +163,12 @@ struct TodayContent: View {
             // suggests something else; without a plan the activity of the day
             // in full (CoachPick.swift, Petr 2026-11-02).
             let planned = TodayTrainingCard.planned(today)
-            if planned.isEmpty {
+            if planned.isEmpty && today.unavailable?.contains("training") == true {
+                // The day's plan could not be read: not "nothing planned".
+                PartUnavailableNote(text: "Trénink se teď nepodařilo načíst")
+                    .cardSurface(cornerRadius: 22)
+                    .padding(.top, 12)
+            } else if planned.isEmpty {
                 CoachPickCard(top: 12)
             } else {
                 TodayTrainingCard(items: planned, red: today.readiness.zone == "red").padding(.top, 12)
@@ -222,9 +227,9 @@ extension View {
     }
 }
 
-/// "data ze včera 21:10 · obnovit" under the day when Apple Health last
-/// reached the server more than 3 hours ago; nothing while it is fresh.
-/// A tap syncs and reloads Today.
+/// "Apple Health · data ze včera 21:10 · obnovit" under the day when Apple
+/// Health last reached the server more than 3 hours ago (its source named,
+/// Today audit 20); nothing while it is fresh. A tap syncs and reloads Today.
 struct DataAgePill: View {
     @Environment(AppModel.self) private var model
     private var health: AppleHealth { AppleHealth.shared }
@@ -235,7 +240,7 @@ struct DataAgePill: View {
                 Button { Task { await model.refresh() } } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "clock").scaledFont(11, weight: .semibold)
-                        Text(verbatim: text + L10n.tr(" · obnovit"))
+                        Text(verbatim: "Apple Health · " + text + L10n.tr(" · obnovit"))
                     }
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(Palette.amber)
@@ -259,6 +264,12 @@ struct DataAgePill: View {
     /// last sync is over 3 hours old; nil before.
     static func text(last: Date, now: Date, calendar: Calendar = .current) -> String? {
         guard now.timeIntervalSince(last) > 3 * 3600 else { return nil }
+        return age(last: last, now: now, calendar: calendar)
+    }
+
+    /// "data z 6:42", "data ze včera 21:10" or "data z 9. 10. 21:10", also for
+    /// each source in Settings → Data sources.
+    static func age(last: Date, now: Date, calendar: Calendar = .current) -> String {
         let time = ClockText.format(last)
         if calendar.isDate(last, inSameDayAs: now) { return L10n.f("data z %@", time) }
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(last, inSameDayAs: yesterday) {
@@ -591,9 +602,16 @@ struct ReadinessHero: View {
                     Text(String(score))
                         .font(Typo.number(132)).lineLimit(1).minimumScaleFactor(0.5)
                         .foregroundStyle(Palette.ink)
-                    if let pill = pill {
-                        Pill(text: pill.text, foreground: pill.fg, background: pill.bg)
+                    if let pill = ReadinessText.pill(readiness.zone) {
+                        Pill(text: pill.0, foreground: pill.1, background: pill.2)
                     }
+                }
+                // What to do today (src/day-verdict.js), only for today.
+                if let verdict = ReadinessText.verdict(readiness.verdict) {
+                    Text(verdict)
+                        .font(Typo.sentence(26, relativeTo: .title2))
+                        .foregroundStyle(Palette.ink)
+                        .accessibilityIdentifier("today.verdict")
                 }
                 if readiness.flags?.contains("short_night") == true {
                     Text("Krátká noc: méně než 3 hodiny spánku.")
@@ -633,15 +651,6 @@ struct ReadinessHero: View {
             return L10n.plural("Orientační: nový zdroj dat, zpřesní se za %lld dní.", days)
         }
         return L10n.tr("Orientační: nový zdroj dat, číslo se ještě zpřesní.")
-    }
-
-    private var pill: (text: String, fg: Color, bg: Color)? {
-        switch readiness.zone {
-        case "green": return ("vysoká", Palette.green, Palette.greenSoft)
-        case "yellow": return ("střední", Palette.amber, Palette.amberSoft)
-        case "red": return ("nízká", Palette.rust, Palette.rust.opacity(0.14))
-        default: return nil
-        }
     }
 }
 
@@ -804,7 +813,10 @@ struct KeyNumbers: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             .onGeometryChange(for: Bool.self) { $0.size.width < 300 } action: { compact = $0 }
-            if sleepFailed {
+            if healthFailed {
+                Divider().overlay(Palette.hairline)
+                PartUnavailableNote(text: "Data ze zdraví se teď nepodařilo načíst")
+            } else if sleepFailed {
                 Divider().overlay(Palette.hairline)
                 PartUnavailableNote(text: "Spánek se teď nepodařilo načíst")
             }
@@ -815,6 +827,8 @@ struct KeyNumbers: View {
 
     /// The server could not read the nights this time (not: no night yet).
     private var sleepFailed: Bool { today.unavailable?.contains("sleep") == true && today.sleep?.minutes == nil }
+    /// The watch's day or the fitness rows (HRV, resting HR, strain) could not be read this time.
+    private var healthFailed: Bool { today.unavailable?.contains("health") == true }
 
     /// A cell's bar (when it has a range), its band's values and the line under it.
     struct Gauge {
