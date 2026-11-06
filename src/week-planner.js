@@ -443,15 +443,21 @@ export const RUN_FLOOR_MINUTES = 60;
 const dayShift = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
 export const isRunActivity = a => /run/i.test(String(a?.type || a?.sport || "")) && !/walk/i.test(String(a?.type || ""));
 const runMinutes = list => (list || []).filter(isRunActivity).reduce((n, a) => n + (Number(a.durationHours) || 0) * 60, 0);
+// One run, too, stays within 10 % above the longest of the last 30 days
+// (Frandsen 2025, BJSM: a longer one raised the injury risk, the weekly change
+// did not); +5 min is always allowed, so a short longest run can still grow.
 export function weeklyRunCap(history = [], weekStart) {
   const weeks = [1, 2, 3, 4].map(k => { const from = dayShift(weekStart, -7 * k), to = dayShift(weekStart, -7 * (k - 1)); return Math.round((history || []).filter(d => d.date >= from && d.date < to).reduce((n, d) => n + runMinutes(d.daily?.training?.completed), 0)); });
   const base = Math.max(weeks[0], weeks.reduce((a, b) => a + b, 0) / 4);
-  return { cap: Math.max(RUN_FLOOR_MINUTES, round5(base * 1.1)), base: Math.round(base), weeks };
+  const month = (history || []).filter(d => d.date >= dayShift(weekStart, -30) && d.date < weekStart);
+  const longest = Math.round(Math.max(0, ...month.flatMap(d => (d.daily?.training?.completed || []).filter(isRunActivity).map(a => (Number(a.durationHours) || 0) * 60))));
+  return { cap: Math.max(RUN_FLOOR_MINUTES, round5(base * 1.1)), base: Math.round(base), weeks, longest, single: longest ? Math.max(longest + 5, Math.floor(longest * 1.1 / 5) * 5) : null };
 }
 // Proposed runs share what is left under the cap, at least 20 min each: a run
 // that would get less is left out (the shortest first) and the rest share again.
 export function capRunVolume(targets, runCap, committed = 0) {
   if (!runCap || !["ok", "estimated"].includes(targets?.status)) return targets;
+  if (runCap.single) targets = { ...targets, items: targets.items.map(x => x.sport !== "run" || x.role === "race" || x.minutes <= runCap.single ? x : { ...x, minutes: runCap.single, tss: Math.round(runCap.single / 60 * (x.intensity || RUN_IF[x.role] || .78) ** 2 * 100), capped: true, cappedFrom: x.minutes }) };
   const runs = targets.items.filter(x => x.sport === "run"), proposed = runs.reduce((n, x) => n + x.minutes, 0), room = Math.max(0, runCap.cap - committed);
   const info = { ...runCap, committed: Math.round(committed), proposed, limited: false };
   if (!runs.length || proposed <= room) return { ...targets, runCap: info };
@@ -459,7 +465,7 @@ export function capRunVolume(targets, runCap, committed = 0) {
   const share = list => { const total = list.reduce((n, x) => n + x.minutes, 0), near = list.map(x => round5(x.minutes * room / total)); return near.reduce((a, b) => a + b, 0) <= room ? near : list.map(x => Math.floor(x.minutes * room / total / 5) * 5); };
   let kept = runs, shares = share(kept);
   while (kept.length && Math.min(...shares) < 20) { const out = shares.indexOf(Math.min(...shares)); kept = kept.filter((_, i) => i !== out); shares = kept.length ? share(kept) : []; }
-  const items = targets.items.filter(x => x.sport !== "run" || kept.includes(x)).map(x => { if (x.sport !== "run") return x; const minutes = shares[kept.indexOf(x)], intensity = x.intensity || RUN_IF[x.role] || .78; return { ...x, minutes, tss: Math.round(minutes / 60 * intensity * intensity * 100), capped: true }; });
+  const items = targets.items.filter(x => x.sport !== "run" || kept.includes(x)).map(x => { if (x.sport !== "run") return x; const minutes = shares[kept.indexOf(x)], intensity = x.intensity || RUN_IF[x.role] || .78; return { ...x, minutes, tss: Math.round(minutes / 60 * intensity * intensity * 100), capped: true, cappedFrom: x.cappedFrom ?? x.minutes }; });
   return { ...targets, items, runCap: { ...info, proposed: items.filter(x => x.sport === "run").reduce((n, x) => n + x.minutes, 0), limited: true } };
 }
 // Running minutes a day adds to the week: the done runs before today, the
