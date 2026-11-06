@@ -398,6 +398,7 @@ extension View {
     func endButton() -> some View {
         buttonStyle(.bordered).foregroundStyle(W.red)
     }
+}
 
 /// Text in the watch app (Today audit 17): never under 12 pt, and growing
 /// with the wearer's text size (Settings → Display & Brightness → Text Size).
