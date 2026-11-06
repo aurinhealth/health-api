@@ -488,6 +488,7 @@ test('since run 37: swimming, triathlon, diet, equipment, chest, a strength athl
   assert.deepEqual(names(await run('S40', 'Plán na půlmaraton bych zakládal, až budu vědět víc. Kolik teď týdně běháš?')), []);
   assert.deepEqual(names(await run('S40', 'Začneme plánem Start do běhu, půlmaraton přijde po něm.', [plan({ planId: 'run-5k-start', date: '' })])), []);
   assert.ok(names(await run('S40', 'Zakládám ti plán Půlmaraton na 12 týdnů, datum závodu je zatím odhad.', [plan({ planId: 'run-half', raceKm: 21.1 })])).includes('quality:bez běhů: zeptá se, kolik běhá, nebo dá začátečnický plán'));
+  assert.ok(!names(await run('S40', 'Plán Půlmaraton končí předběžně 17. ledna. Kdy přesně závod běžíš?', [plan({ planId: 'run-half', raceKm: 21.1 })])).includes('quality:datum závodu podá jako odhad nebo se na něj zeptá'));
   assert.deepEqual(names(await run('S37', 'Dnes posilovna na horní polovinu těla.')), []);
   assert.deepEqual(names(await run('S41', 'Včerejší sweet spot: NP 228 W při RPE 7, povedlo se.')), []);
 });

@@ -443,8 +443,9 @@ export const COACH_EVAL_SCENARIOS = [
       // Run 43: a cyclist with no runs got the intermediate half-marathon plan; first ask or start with a beginner plan.
       const level = plan && coachPlanTemplates().find(t => t.id === plan.planId)?.level;
       return [quality('bez běhů: zeptá se, kolik běhá, nebo dá začátečnický plán', plan ? level === 'beginner' : says(r, /\?/) && says(r, /běh|run/i), plan ? plan.planId + ' (' + level + ')' : 'bez karty plánu'),
+        // Run 45: "předběžný konec plánu" and "Kdy přesně závod běžíš?" also count.
         // Run 39: "s cílem 13. ledna 2027" was today + 12 weeks presented as the race date; the athlete gave only weeks.
-        quality('datum závodu podá jako odhad nebo se na něj zeptá', plan?.planId !== 'run-half' || says(r, /odhad|přibližn|zhruba|orientačn|kdy (?:je|máš|běžíš|poběžíš) (?:ten )?závod|jaké (?:je )?datum|datum závodu|estimate|approximate|when is (?:the|your) race/i)), quality('jen jeden plán', r.kept.filter(a => a.type === 'plan').length <= 1),
+        quality('datum závodu podá jako odhad nebo se na něj zeptá', plan?.planId !== 'run-half' || says(r, /odhad|přibližn|zhruba|orientačn|předběžn|kdy přesně|kdy (?:\S+ ){0,2}závod|jaké (?:je )?datum|datum závodu|estimate|approximate|when is (?:the|your) race/i)), quality('jen jeden plán', r.kept.filter(a => a.type === 'plan').length <= 1),
         // Run 38: the plan came with a rest and an easy ride for today's VO2max nobody asked about.
         quality('vedle plánu žádná další karta (bez vyžádání)', !r.kept.some(a => a.type !== 'plan'), r.kept.filter(a => a.type !== 'plan').map(a => [a.type, a.kind || a.sport, a.date].filter(Boolean).join(' ')).join(', '))]; } },
   { id: 'S41', title: 'Dotaz z detailu včerejší jízdy', message: 'Jak se mi to povedlo?', context: detailContext,
