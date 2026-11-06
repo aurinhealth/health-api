@@ -81,7 +81,7 @@ export default {
       }
 
       if (url.pathname === "/sync/google") {
-        const start = await startGoogleSync(env);
+        const start = await startGoogleSync(env, { initial: true });
 
         if (start.started && ctx?.waitUntil) {
           ctx.waitUntil(
@@ -341,13 +341,24 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   }
 }
 
+// Google answers a moment of its own outage with HTTP 5xx (503 "The service is
+// currently unavailable", the token's "internal_failure"): asked once more a
+// second later, so a sync does not miss last night for it (2026-11-06: sleep
+// came 2 minutes later with the next sync). Other answers come back at once.
+async function googleFetch(url, options, timeoutMs, wait = 1000) {
+  const response = await fetchWithTimeout(url, options, timeoutMs);
+  if (response.status < 500) return response;
+  await new Promise(resolve => setTimeout(resolve, wait));
+  return fetchWithTimeout(url, options, timeoutMs);
+}
+
 // An access token for the given scopes (Google Health by default, with weight
 // writing when the user granted it).
 export async function googleToken(env, scopes = healthScopes(env)) {
   // Without a connection Google would only answer "missing refresh_token".
   if (!env.GOOGLE_REFRESH_TOKEN) throw new Error(L("Google Health není připojené.", "Google Health isn't connected."));
   if (!scopes.length) throw new Error(L("Aurin nemá od Googlu povolená žádná data. Povol je v Nastavení → Zdroje dat → Google Health.", "Aurin has no access to your Google Health data. Allow it in Settings → Data sources → Google Health."));
-  const response = await fetchWithTimeout(
+  const response = await googleFetch(
     "https://oauth2.googleapis.com/token",
 
     {
@@ -455,7 +466,11 @@ async function setGoogleSyncStatus(env, status, details = null) {
   await ensureSyncStatusTable(env);
   await env.DB.prepare('INSERT INTO sync_status (user_id, sync_name, status, started_at, finished_at, details_json, updated_at) VALUES (?, \'google\', ?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(user_id, sync_name) DO UPDATE SET status = excluded.status, started_at = COALESCE(excluded.started_at, sync_status.started_at), finished_at = excluded.finished_at, details_json = excluded.details_json, updated_at = CURRENT_TIMESTAMP')
     .bind(env.USER_ID, status, details?.started_at || null, details?.finished_at || null, details ? JSON.stringify(details) : null).run();
-  if(['completed','partial','error'].includes(status))await env.DB.prepare("UPDATE sync_status SET status=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND sync_name='initial_google'").bind(status==='completed'?'done':status,env.USER_ID).run();
+  // Only the import a connection or "Sync everything" started (startGoogleSync
+  // initial) answers for initial_google: a nightly run that one Google outage
+  // left partial made every "Sync everything" the next day read the whole
+  // history again (~25 min of "syncing", 2026-11-06).
+  if(details?.initial&&['completed','partial','error'].includes(status))await env.DB.prepare("UPDATE sync_status SET status=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND sync_name='initial_google'").bind(status==='completed'?'done':status,env.USER_ID).run();
 }
 
 async function googleSyncStatus(env) {
@@ -838,7 +853,7 @@ async function googleReconcilePage(
   if (pageToken) params.set("pageToken", pageToken);
   params.set('pageSize',filterType==='sleep'||filterType==='exercise'?'25':'500');
 
-  const response = await fetchWithTimeout(
+  const response = await googleFetch(
     `https://health.googleapis.com/v4/users/me/dataTypes/${type}/dataPoints:reconcile?${params.toString()}`,
     {
       headers: {
@@ -1068,7 +1083,7 @@ async function readGoogleSyncState(env) {
   return { ...row, details };
 }
 
-async function startGoogleSync(env) {
+async function startGoogleSync(env, { initial = false } = {}) {
   const current = await readGoogleSyncState(env);
   const now = new Date().toISOString();
 
@@ -1088,7 +1103,8 @@ async function startGoogleSync(env) {
     completed_configs: 0,
     total_configs: GOOGLE_SYNC_CONFIGS.length,
     current: GOOGLE_SYNC_CONFIGS[0]?.[0] || null,
-    results: []
+    results: [],
+    ...(initial ? { initial: true } : {})
   };
 
   await setGoogleSyncStatus(env, "running", details);
