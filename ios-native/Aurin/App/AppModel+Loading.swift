@@ -117,6 +117,8 @@ extension AppModel {
                 async let cycle: Void = loadCycle()
                 await Reminders.reschedule(from: today)
                 WidgetBridge.update(today)
+                let client = api
+                scope.task { await WidgetBridge.followWeek(today, api: client) }
                 prefetchAround(Self.localDate(Date()))
                 await cycle
             }
