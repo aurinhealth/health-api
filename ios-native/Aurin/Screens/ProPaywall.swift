@@ -602,6 +602,8 @@ struct ProCoachSample: View {
             }
         }
         .padding(.horizontal, 16)
+        // A sample in a capped page: the bubbles stay at the page's size.
+        .environment(\.fullTypeSize, nil)
     }
 }
 

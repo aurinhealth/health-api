@@ -40,6 +40,7 @@ struct SleepDetailContent: View {
             if let night = sleep.night {
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
                     Text(Fmt.hoursMinutes(night.minutes)).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
+                        .accessibilityLabel(Fmt.hoursMinutesSpoken(night.minutes))
                     if let index = night.index {
                         // Taps down to what makes up the index.
                         Button { withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(Self.partsAnchor, anchor: .top) } } label: {
@@ -134,6 +135,7 @@ struct SleepDetailContent: View {
                     Text("Potřeba na dnešní noc").font(.body)
                     Spacer()
                     Text(Fmt.hoursMinutes(Double(sleep.tonight.need))).font(Typo.number(28))
+                        .accessibilityLabel(Fmt.hoursMinutesSpoken(Double(sleep.tonight.need)))
                 }
                 VStack(spacing: 6) {
                     NeedRow(title: "Základ podle věku", minutes: sleep.tonight.base, signed: false)
@@ -148,6 +150,7 @@ struct SleepDetailContent: View {
                         Text("Spánkový dluh za 7 dní").font(.body)
                         Spacer()
                         Text(Fmt.hoursMinutes(Double(debt.minutes))).font(Typo.number(28)).foregroundStyle(Palette.amber)
+                            .accessibilityLabel(Fmt.hoursMinutesSpoken(Double(debt.minutes)))
                     }
                     ProgressLine(fraction: Double(debt.minutes) / 360, color: Palette.amberBar)
                 }
@@ -237,6 +240,7 @@ struct NeedRow: View {
             Text(title)
             Spacer()
             Text((signed ? (minutes < 0 ? "−" : "+") : "") + Fmt.hoursMinutes(Double(abs(minutes))))
+                .accessibilityLabel((signed ? (minutes < 0 ? "−" : "+") : "") + Fmt.hoursMinutesSpoken(Double(abs(minutes))))
         }
         .font(Typo.small).foregroundStyle(Palette.muted)
     }
@@ -323,7 +327,7 @@ struct StageTotals: View {
                 .frame(width: 40, alignment: .trailing)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.tr(label) + " " + Fmt.hoursMinutes(minutes) + ", " + Self.note(share: share, wakeups: wakeups))
+        .accessibilityLabel(L10n.tr(label) + " " + Fmt.hoursMinutesSpoken(minutes) + ", " + Self.note(share: share, wakeups: wakeups))
     }
 
     /// Under the stage's bar: the middle half of the user's nights. Words, no
@@ -356,7 +360,8 @@ struct SleepIndexParts: View {
         VStack(alignment: .leading, spacing: 0) {
             if let parts = night.parts {
                 part("Délka", value: L10n.f("%@ z %@", Fmt.hoursMinutes(parts.length.minutes), Fmt.hoursMinutes(parts.length.need)),
-                     note: L10n.tr("spánek proti potřebě na minulou noc"), fill: parts.length.fill, first: true)
+                     note: L10n.tr("spánek proti potřebě na minulou noc"), fill: parts.length.fill, first: true,
+                     spoken: L10n.f("%@ z %@", Fmt.hoursMinutesSpoken(parts.length.minutes), Fmt.hoursMinutesSpoken(parts.length.need)))
                 part("Kvalita", value: L10n.f("efektivita %@", String(parts.quality.efficiency) + Fmt.percentSign),
                      note: qualityNote(parts.quality), fill: parts.quality.fill)
                 if let stages = parts.stages {
@@ -383,7 +388,7 @@ struct SleepIndexParts: View {
         return bits.isEmpty ? L10n.tr("čas v posteli, kdy spíš") : bits.joined(separator: " · ")
     }
 
-    private func part(_ title: String, value: String, note: String, fill: Double, first: Bool = false) -> some View {
+    private func part(_ title: String, value: String, note: String, fill: Double, first: Bool = false, spoken: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline) {
                 Text(verbatim: L10n.tr(title)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
@@ -396,7 +401,7 @@ struct SleepIndexParts: View {
         .padding(.vertical, 12)
         .overlay(alignment: .top) { if !first { Rectangle().fill(Palette.hairline).frame(height: 1) } }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.tr(title) + ", " + value + ", " + note)
+        .accessibilityLabel(L10n.tr(title) + ", " + (spoken ?? value) + ", " + note)
     }
 }
 
