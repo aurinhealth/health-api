@@ -141,7 +141,7 @@ struct TrainingModeView: View {
                             if live.running {
                                 LiveWorkoutStrip(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 14)
                             }
-                            if !started, !parts.before(day).isEmpty || !parts.after(day).isEmpty {
+                            if !started, showsParts(day, parts) {
                                 // Before Začít trénink: the whole workout in order, one start for all of it.
                                 partsList(day, parts)
                                 Button { startWhole(day) } label: {
@@ -925,10 +925,13 @@ struct TrainingModeView: View {
         let name: String
         let detail: String
         let done: Bool
+        /// The warm-up, cardio or stretching (nil: an exercise).
+        var part: GymDayPart? { if case .part(let part) = step { return part }; return nil }
     }
 
-    /// The parts before the exercises, each exercise, the parts after them.
-    private func partRows(_ day: GymDay, _ parts: GymDayParts) -> [PartRow] {
+    /// The parts before the exercises, each exercise, the parts after them;
+    /// `withOff`: the parts switched off for the day too (the list before the start).
+    private func partRows(_ day: GymDay, _ parts: GymDayParts, withOff: Bool = false) -> [PartRow] {
         func row(_ part: GymDayPart) -> PartRow {
             PartRow(id: part.rawValue, step: .part(part), key: part.rawValue, symbol: part.kind.symbol, color: part.kind.color,
                     name: L10n.tr(part.kind.title), detail: parts.subtitle(part, day: day), done: partDone(part, day))
@@ -938,13 +941,33 @@ struct TrainingModeView: View {
                     name: exercise.name, detail: L10n.plural("%lld/%lld sérií", exercise.doneCount, exercise.workCount),
                     done: exercise.sets.allSatisfy(\.done))
         }
-        return parts.before(day).map(row) + exercises + parts.after(day).map(row)
+        let shown = parts.visible(day)
+        guard withOff, let i = shown.firstIndex(of: .exercises) else {
+            return parts.before(day).map(row) + exercises + parts.after(day).map(row)
+        }
+        return shown[..<i].map(row) + exercises + shown[(i + 1)...].map(row)
+    }
+
+    /// Before Začít trénink: the list with the switches, also when every part is
+    /// off but the plan made a warm-up or stretching (else it could not come back on).
+    /// Nothing switched on and none made (all off in Nastavení): straight to the exercise.
+    private func showsParts(_ day: GymDay, _ parts: GymDayParts) -> Bool {
+        !parts.before(day).isEmpty || !parts.after(day).isEmpty || day.warmup != nil || day.stretching != nil
+    }
+
+    /// A part switched on or off for the day, as in GymPartsCard.
+    private func setPart(_ part: GymDayPart, on: Bool, _ parts: GymDayParts) {
+        var next = parts
+        next.off.removeAll { $0 == part }
+        if !on { next.off.append(part) }
+        dayParts = GymDayParts.saving(next, date: date, into: dayParts)
     }
 
     /// The day's parts in order, each with its time so far; a tap turns to it
-    /// (before Začít trénink: starts the workout with it).
+    /// (before Začít trénink: starts the workout with it, and the warm-up,
+    /// cardio and stretching have their switch for the day).
     private func partsList(_ day: GymDay, _ parts: GymDayParts) -> some View {
-        let rows = partRows(day, parts)
+        let rows = partRows(day, parts, withOff: !started)
         let now: String? = activePart?.rawValue ?? (started ? current(day)?.name : nil)
         return VStack(alignment: .leading, spacing: 0) {
             Text(verbatim: L10n.tr(started ? "Trénink" : "Dnešní trénink"))
@@ -954,12 +977,24 @@ struct TrainingModeView: View {
                 VStack(spacing: 0) {
                     ForEach(rows) { row in
                         if row.id != rows.first?.id { Divider().overlay(Palette.hairline) }
-                        Button {
-                            if started { go(row.step, auto: true) } else { startWhole(day, from: row.step) }
-                        } label: {
-                            partRow(row, now: row.key == now, seconds: started ? live.seconds(of: row.key, at: context.date) : 0)
+                        let on = row.part.map(parts.isOn) ?? true
+                        HStack(spacing: 10) {
+                            Button {
+                                if started { go(row.step, auto: true) } else { startWhole(day, from: row.step) }
+                            } label: {
+                                partRow(row, now: row.key == now, seconds: started ? live.seconds(of: row.key, at: context.date) : 0)
+                                    // Off stays readable: only the row fades, the switch keeps its colours.
+                                    .opacity(on ? 1 : 0.55)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!on)
+                            if !started, let part = row.part {
+                                Toggle(isOn: Binding(get: { on }, set: { setPart(part, on: $0, parts) })) { EmptyView() }
+                                    .toggleStyle(AurinToggleStyle())
+                                    .fixedSize()
+                                    .accessibilityLabel(Text(verbatim: row.name))
+                            }
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
