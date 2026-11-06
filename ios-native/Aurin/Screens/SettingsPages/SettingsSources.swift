@@ -10,7 +10,6 @@ struct SourcesSettingsView: View {
     @Environment(AppModel.self) private var model
     let store: SettingsStore
     @State private var actions = SourceActions()
-    @State private var syncing = false
     @State private var connectingApple = false
     @State private var flow = ConnectFlowState()
     @State private var choosing: PriorityPart?
@@ -78,22 +77,22 @@ struct SourcesSettingsView: View {
 
             SettingsGroup(title: "Data") {
                 Button {
-                    Task { syncing = true; await store.syncNow(); syncing = false }
+                    Task { await store.syncNow() }
                 } label: {
                     HStack {
-                        Text(syncing ? "Synchronizuji…" : "Synchronizovat vše").font(.body).foregroundStyle(Palette.ink)
+                        Text(store.syncing ? "Synchronizuji…" : "Synchronizovat vše").font(.body).foregroundStyle(Palette.ink)
                         Spacer()
-                        if syncing { ProgressView() } else if let at = lastSync { Text(at).font(.subheadline).foregroundStyle(Palette.muted) }
+                        if store.syncing { ProgressView() } else if let at = lastSync { Text(at).font(.subheadline).foregroundStyle(Palette.muted) }
                     }
                     .padding(.horizontal, 16)
                     .frame(minHeight: 50)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(syncing || store.demo || connected.isEmpty)
+                .disabled(store.syncing || store.demo || connected.isEmpty)
                 // The last sync left a source out (src/dashboard-sync.js results, googleStatus).
                 // Each source that failed in the last day: what and when (src/dashboard-sync.js).
-                if !syncing, let failures = store.sync?.failures(), !failures.isEmpty {
+                if !store.syncing, let failures = store.sync?.failures(), !failures.isEmpty {
                     SettingsDivider()
                     SettingsRow(icon: SettingsIcon(systemImage: "exclamationmark.circle.fill", color: Palette.rust), title: "Poslední synchronizace s chybou", chevron: false)
                     ForEach(failures) { failure in
@@ -105,7 +104,7 @@ struct SourcesSettingsView: View {
                 SettingsToggle(title: "Sloučit stejné záznamy", subtitle: "Když stejnou noc nebo trénink pošle víc zdrojů, započítá se jednou.", isOn: .constant(true), disabled: true)
             }
 
-            if let message = store.errorMessage, !syncing {
+            if let message = store.errorMessage, !store.syncing {
                 Text(message).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
             }
             if let message = actions.message {
