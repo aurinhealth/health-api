@@ -229,34 +229,59 @@ extension View {
 
 /// "Apple Health · data ze včera 21:10 · obnovit" under the day when Apple
 /// Health last reached the server more than 3 hours ago (its source named,
-/// Today audit 20); nothing while it is fresh. A tap syncs and reloads Today.
+/// Today audit 20), and the same for Google Health, Intervals.icu, Ultrahuman
+/// or WHOOP not reached for over 12 hours, when Settings → Zdroje dat turns
+/// their dot orange (wave 4, 28.3); nothing while all is fresh. A tap syncs
+/// and reloads Today.
 struct DataAgePill: View {
     @Environment(AppModel.self) private var model
     private var health: AppleHealth { AppleHealth.shared }
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 300)) { context in
-            if health.enabled, let last = health.lastSync, let text = Self.text(last: last, now: context.date) {
-                Button { Task { await model.refresh() } } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "clock").scaledFont(11, weight: .semibold)
-                        Text(verbatim: "Apple Health · " + text + L10n.tr(" · obnovit"))
-                    }
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(Palette.amber)
-                    .padding(.horizontal, 10)
-                    .frame(height: 26)
-                    .background(Palette.amberSoft, in: Capsule())
-                    // 44 pt to tap, grown only downwards: the week strip's days
-                    // sit right above it.
-                    .padding(.bottom, 18).contentShape(Rectangle()).padding(.bottom, -18)
+            let shown = lines(now: context.date)
+            if !shown.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(shown, id: \.self) { pill($0) }
                 }
-                .buttonStyle(.plain)
-                .disabled(model.loading || health.syncing)
                 // Under the day's name, past its back arrow.
                 .padding(.leading, 34)
                 .padding(.top, 2)
             }
+        }
+    }
+
+    private func lines(now: Date) -> [String] {
+        var out: [String] = []
+        if health.enabled, let last = health.lastSync, let text = Self.text(last: last, now: now) { out.append("Apple Health · " + text) }
+        return out + Self.stale(model.today?.dataSources ?? [], now: now)
+    }
+
+    private func pill(_ line: String) -> some View {
+        Button { Task { await model.refresh() } } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "clock").scaledFont(11, weight: .semibold)
+                Text(verbatim: line + L10n.tr(" · obnovit"))
+            }
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(Palette.amber)
+            .padding(.horizontal, 10)
+            .frame(height: 26)
+            .background(Palette.amberSoft, in: Capsule())
+            // 44 pt to tap, grown only downwards: the week strip's days
+            // sit right above it.
+            .padding(.bottom, 18).contentShape(Rectangle()).padding(.bottom, -18)
+        }
+        .buttonStyle(.plain)
+        .disabled(model.loading || health.syncing)
+    }
+
+    /// "Google Health · data ze včera 21:10" for each server source not reached
+    /// for over 12 hours (IntegrationCard.stale, as in Settings).
+    static func stale(_ sources: [DataSource], now: Date) -> [String] {
+        sources.compactMap { source in
+            guard let last = source.lastSuccessAt.flatMap(SourceActions.date), IntegrationCard.stale(last, now: now) else { return nil }
+            return (source.name ?? source.provider) + " · " + age(last: last, now: now)
         }
     }
 

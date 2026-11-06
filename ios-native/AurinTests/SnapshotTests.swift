@@ -778,6 +778,14 @@ final class SnapshotTests: XCTestCase {
         XCTAssertTrue(DataAgePill.age(last: now.addingTimeInterval(-2 * 3600), now: now).hasPrefix("data z "))
         XCTAssertFalse(IntegrationCard.stale(now.addingTimeInterval(-11 * 3600), now: now))
         XCTAssertTrue(IntegrationCard.stale(now.addingTimeInterval(-13 * 3600), now: now))
+        // Google Health and the other server sources get the pill on Today after the same 12 h (wave 4, 28.3).
+        let iso = ISO8601DateFormatter()
+        let sources = [DataSource(provider: "google", name: "Google Health", lastSuccessAt: iso.string(from: now.addingTimeInterval(-13 * 3600))),
+                       DataSource(provider: "whoop", name: "WHOOP", lastSuccessAt: iso.string(from: now.addingTimeInterval(-11 * 3600))),
+                       DataSource(provider: "intervals", name: nil, lastSuccessAt: nil)]
+        let stale = DataAgePill.stale(sources, now: now)
+        XCTAssertEqual(stale.count, 1, "\(stale)")
+        XCTAssertTrue(stale[0].hasPrefix("Google Health · data z "), stale[0])
 
         // In words, no ratio (Today audit D4).
         let raised = TrainingSnapshot.ACWR(level: "above")
