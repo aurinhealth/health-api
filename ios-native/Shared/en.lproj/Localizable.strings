@@ -1,7 +1,7 @@
 /* English for Aurin. Each key is the Czech text (Czech is the source language). */
 
 "%@ %@ v %@ %@. Série jsou uložené i pro příští plán." = "%1$@ %2$@ across %3$@ %4$@. Your sets are saved for the next plan too.";
-"%@ %@ za 2 měsíce" = "%@ %@ in 2 months";
+"%@ %@ od %@" = "%@ %@ since %@";
 "%@ %@ za 30 dní" = "%@ %@ in 30 days";
 "%@ %@ za 4 týdny" = "%@ %@ in 4 weeks";
 "%@ a %@" = "%@ and %@";
@@ -10,7 +10,6 @@
 "%@ je připojené, data se začínají stahovat." = "%@ is connected, data is starting to sync.";
 "%@ let" = "%@ years";
 "%@ na ruku" = "%@ per dumbbell";
-"%@ od normy" = "%@ from usual";
 "%@ opakování · %@" = "%@ reps · %@";
 "%@ po %@" = "%1$@ by %2$@";
 "%@ týdně" = "%@ a week";
@@ -349,7 +348,6 @@
 "Neuloženo – %@: %@" = "Not saved – %@: %@";
 "Nic v plánu." = "Nothing planned.";
 "Nohy" = "Legs";
-"Norma (60 dní)" = "Normal (60 days)";
 "Nová konverzace" = "New conversation";
 "Nový den" = "New day";
 "Nový recept" = "New recipe";
@@ -442,7 +440,7 @@
 "Potraviny · %@" = "Foods · %@";
 "Potvrdit" = "Confirm";
 "Potřeba a dluh" = "Need and debt";
-"Potřeba na dnešní noc" = "Need for tonight";
+"Potřeba na dnešní noc · odhad" = "Need for tonight · estimate";
 "Povolit AI" = "Allow AI";
 "Poznat z fotky nebo webu" = "Detect from photos or website";
 "Poznámka" = "Note";
@@ -475,8 +473,6 @@
 "Každá změna v plánu říká proč. Klepni na trénink a uvidíš původní." = "Every change in the plan says why. Tap a session to see the original.";
 "Původně" = "Original";
 "teď %@" = "now %@";
-"pás = tvůj normál" = "band = your normal";
-"HRV za 14 dní proti tvému normálu" = "HRV over 14 days against your normal";
 "Cíl závodu" = "Race goal";
 "odhad dnes" = "estimate today";
 "dnes · týden %@" = "today · week %@";
@@ -869,7 +865,6 @@
 "Zapsat váhu" = "Log weight";
 "Zapsáno do Intervals.icu" = "Written to Intervals.icu";
 "Zatím bez čísla" = "No score yet";
-"Učím se tvůj normál" = "Learning your normal";
 "Den %@ ze 14" = "Day %@ of 14";
 "Číslo zhruba od %@" = "Score from about %@";
 "Zatím nic" = "Nothing yet";
@@ -999,7 +994,6 @@
 "moje potravina" = "my food";
 "muž" = "male";
 "nad %@" = "above %@";
-"nad normou" = "above normal";
 "naposledy %@" = "latest %@";
 "naposledy · %@" = "latest · %@";
 "nemoc" = "sick";
@@ -1009,16 +1003,12 @@
 "noc" = "night";
 "noci" = "nights";
 "nocí" = "nights";
-"norma %@" = "normal %@";
-"norma %@–%@ ms" = "normal %@–%@ ms";
-"norma ± 2 bpm" = "normal ± 2 bpm";
 "nový" = "new";
 "nízká" = "low";
 "o víkendu v %@" = "on weekends at %@";
 "obvykle %@ kcal" = "usually %@ kcal";
 "od %@" = "since %@";
 "od %@ do %@" = "from %@ to %@";
-"odchylka v normě" = "normal deviation";
 "odhad 1RM %@" = "est. 1RM %@";
 "odpočinkový týden" = "recovery week";
 "op." = "reps";
@@ -1030,7 +1020,6 @@
 "plán navrhne jakoukoli váhu" = "the plan suggests any weight";
 "plán ~%@" = "plan ~%@";
 "pod %@" = "below %@";
-"pod normou" = "below normal";
 "podle věku" = "by age";
 "podle záznamů" = "from my data";
 "pondělí až pátek" = "Monday to Friday";
@@ -1082,7 +1071,6 @@
 "tréninky" = "workouts";
 "tréninků" = "workouts";
 "tuky" = "fat";
-"tvoje norma" = "your normal range";
 "týden" = "week";
 "týden %@" = "week %@";
 "týdny" = "weeks";
@@ -1092,7 +1080,6 @@
 "udržovat váhu" = "maintain weight";
 "uvnitř" = "indoor";
 "už ani jedno opakování" = "not a single rep left";
-"v normě" = "normal";
 "v plánu" = "in plan";
 "v pracovní dny v %@" = "on weekdays at %@";
 "vah" = "weights";
@@ -1160,9 +1147,7 @@
 "žena" = "female";
 "žádný" = "none";
 "„%@“" = "“%@”";
-"↑ %@ nad normou" = "↑ %@ above normal";
 "↑ stoupá" = "↑ rising";
-"↓ %@ pod normou" = "↓ %@ below normal";
 "↓ klesá" = "↓ falling";
 "✓ Nalezeno" = "✓ Found";
 "Je potřeba nová verze" = "A new version is needed";
@@ -1428,10 +1413,11 @@
 "aktivních min" = "active min";
 "Forma dnes" = "Form today";
 "Forma %@" = "Form %@";
-"riziko přetížení" = "overload risk";
-"optimální trénink" = "optimal training";
-"neutrální" = "neutral";
+"odpočatý" = "rested";
 "čerstvý" = "fresh";
+"udržování" = "maintaining";
+"budování" = "building";
+"hluboká únava" = "deep fatigue";
 "Video" = "Video";
 "Otevřít v YouTube" = "Open in YouTube";
 "Podobný cvik" = "Similar exercise";
@@ -1556,6 +1542,7 @@
 "k ověření" = "to check";
 "%@ kcal, k ověření" = "%@ kcal, to check";
 "odhad %@" = "estimate %@";
+"odhad" = "estimate";
 "hodinky %@" = "watch %@";
 "Počítat %@" = "Count %@";
 "Nechat %@" = "Keep %@";
@@ -2387,15 +2374,11 @@
 "nižší" = "lower";
 "delší" = "longer";
 "kratší" = "shorter";
-"v normálu" = "normal";
-"nad normálem" = "above normal";
-"pod normálem" = "below normal";
 "lepší než obvykle" = "better than usual";
 "horší než obvykle" = "worse than usual";
 "bod" = "point";
 "bodů" = "points";
 "%@ %@ připravenosti" = "%@ readiness %@";
-"tvůj normál %@" = "your normal %@";
 "níž" = "lower";
 "výš" = "higher";
 "tvrdý trénink %@" = "hard training %@";
@@ -2656,16 +2639,13 @@
 "Dechů za minutu ve spánku" = "Breaths per minute in sleep";
 "Dech po nocích" = "Breathing by night";
 "Teplota po nocích" = "Temperature by night";
-"Odchylka od tvého normálu v noci" = "Overnight difference from your normal";
 "Teplota zápěstí v noci" = "Overnight wrist temperature";
 "Nocí" = "Nights";
-"Norma" = "Normal";
 "Nasycení krve kyslíkem ve spánku" = "Blood oxygen saturation in sleep";
 "Kyslík po nocích" = "Oxygen by night";
 "Podíl tuku v těle" = "Share of fat in your body";
 "Svalová hmota z chytré váhy" = "Muscle mass from a smart scale";
 "Po měřeních" = "By measurement";
-"Za 2 měsíce" = "In 2 months";
 "Zatím žádné měření." = "No measurement yet.";
 "Ostrý" = "Live";
 "Testovací" = "Test";
@@ -2715,8 +2695,9 @@
 "vždy ano" = "always yes";
 "vždy ne" = "always no";
 "Ukážu, až bude dost dní s ✓ i s ✕." = "Shows up once there are enough days with ✓ and with ✕.";
-"Škodí" = "Hurts";
-"Pomáhá" = "Helps";
+"Spojené s horším" = "Linked to worse";
+"Spojené s lepším" = "Linked to better";
+"Zatím bez jasného rozdílu: %@" = "No clear difference yet: %@";
 "Málo dní:" = "Too few days:";
 "✦ automaticky" = "✦ automatic";
 "Sledovat deník" = "Keep a journal";
@@ -3130,8 +3111,6 @@
 "Maraton" = "Marathon";
 "Ptáš se na" = "You're asking about";
 "Série %@ z %@" = "Set %@ of %@";
-"normál %@–%@ ms" = "normal %@–%@ ms";
-"normál %@ bpm" = "normal %@ bpm";
 "Potvrzeno." = "Confirmed.";
 "Návrh už neplatí." = "This proposal no longer applies.";
 "Odpovědět" = "Reply";
@@ -3300,7 +3279,7 @@
 "Režim tréninku v iPhonu spustí posilovnu i na hodinkách. Hodinky měří tep a kalorie a trénink uloží do Zdraví jednou." = "Training mode on your iPhone starts the gym on your watch too. The watch measures heart rate and calories and saves the workout to Health once.";
 
 /* Charts: what a line or a scale stands for */
-"potřeba" = "need";
+"odhad potřeby" = "est. need";
 "obvykle" = "usual";
 "6 týdnů" = "6 weeks";
 "před půl rokem" = "6 months ago";
@@ -3380,9 +3359,6 @@
 "Málo dní: %@" = "Too few days: %@";
 "Dnes %@ ms" = "Today %@ ms";
 "Dnes %@ bpm" = "Today %@ bpm";
-"tvůj normál %@–%@ ms" = "your normal %@–%@ ms";
-"tvůj normál %@–%@ bpm" = "your normal %@–%@ bpm";
-"tvůj normál %@–%@ /min" = "your normal %@–%@ /min";
 "prům. %@ %@" = "avg %@ %@";
 "Tep z %@–%@" = "Heart rate from %@–%@";
 "%@ aktivních min" = "%@ active min";
@@ -3959,10 +3935,11 @@
 "Dnes odpočinek" = "Rest today";
 /* Today audit 1, 12, D2 (MDR): breathing, temperature and blood oxygen against the usual range, the easier-day card. */
 "odhad zařízení" = "device estimate";
+"odhad z Intervals.icu" = "Intervals.icu estimate";
 "obvyklé rozmezí" = "usual range";
 "obvyklé rozmezí %@" = "usual range %@";
 "obvyklé rozmezí %@–%@ /min" = "usual range %@–%@ /min";
-"obvyklé rozmezí %@–%@ %% · 14 nocí" = "usual range %@–%@%% · 14 nights";
+"obvyklé rozmezí %@–%@ %%" = "usual range %@–%@%%";
 "Odchylka od obvyklé teploty v noci" = "Night temperature against your usual";
 "Obvykle" = "Usual";
 "v obvyklém rozmezí" = "within your usual range";
@@ -3975,6 +3952,11 @@
 "Ulehčit dnešek" = "Make today easier";
 "obvyklé rozmezí %@–%@ ms" = "usual range %@–%@ ms";
 "obvyklé rozmezí %@–%@ bpm" = "usual range %@–%@ bpm";
+"Průměr (60 dní)" = "Average (60 days)";
+"Učím se tvoje obvyklé hodnoty" = "Learning your usual range";
+"pás = obvyklé rozmezí" = "band = usual range";
+"HRV za 14 dní proti obvyklému rozmezí" = "HRV over 14 days against your usual range";
+"%@ od obvyklé" = "%@ from usual";
 "Aurin není zdravotnický prostředek. Před zdravotním rozhodnutím se poraď s lékařem." = "Aurin isn't a medical device. Check with a doctor before making medical decisions.";
 "%@ proti obvyklému" = "%@ vs usual";
 

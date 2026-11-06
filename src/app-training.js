@@ -352,7 +352,8 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   });
   const zoneWeeksTotal = zoneWeeks.reduce((s, w) => s + w.light + w.moderate + w.vigorous + w.peak, 0);
 
-  // VO2max over half a year: Google's daily estimate, else Intervals.icu's.
+  // VO2max over half a year: the watch's daily estimate (Apple, Google), else
+  // Intervals.icu's; `source` names it under the number (audit 16.5, MDR).
   const vo2 = rows.filter(r => num(r.vo2max) > 0).map(r => ({ date: r.id, value: round(num(r.vo2max), 1) }));
   const vo2Source = vo2.length ? vo2 : intervals.filter(r => num(r.vo2max) > 0).map(r => ({ date: r.id, value: round(num(r.vo2max), 1) }));
   const vo2Latest = vo2Source.at(-1) || null;
@@ -385,7 +386,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     acwr: workload.historyDays > 0 && workload.acwr.level ? { level: workload.acwr.level } : null,
     monotony: workload.historyDays > 0 ? workload.monotony : null,
     zones: zoneTotal > 0 || zoneWeeksTotal > 0 ? { ...Object.fromEntries(Object.entries(zones).map(([k, v]) => [k, Math.round(v)])), minutes: Math.round(zoneTotal), weeks: zoneWeeks } : null,
-    vo2max: vo2Latest ? { value: vo2Latest.value, change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,
+    vo2max: vo2Latest ? { value: vo2Latest.value, source: vo2.length ? "watch" : "intervals", change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,
     activeCalories: activeDays.length ? { today: active.find(p => p.date === date)?.value ?? null, excluded: extraOn(date) || null, usual: usualActive.length ? Math.round(usualActive.reduce((a, b) => a + b, 0) / usualActive.length) : null, week: active, days: activeDays } : null,
     sessions,
     thisWeek: { done: doneCount, planned: plannedCount, doneLoad: Math.round(doneTss), plannedLoad: Math.round(Math.max(plannedTss, doneTss)) },

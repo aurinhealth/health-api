@@ -790,7 +790,7 @@ struct VO2maxWidget: View {
 
     var body: some View {
         Card {
-            WidgetHeader(title: "VO2max", color: Palette.green)
+            WidgetHeader(title: "VO2max", color: Palette.green, trailing: L10n.tr("odhad"))
             SizedWidgetBody(size: size) {
                 NumberText(value: Fmt.decimal(vo2.value, digits: vo2.value.rounded() == vo2.value ? 0 : 1), unit: size == .small ? nil : "ml/kg/min")
                 if let change = vo2.change, change != 0 {

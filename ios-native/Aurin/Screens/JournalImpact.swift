@@ -55,32 +55,44 @@ struct JournalImpactView: View {
         }
     }
 
-    /// Hurts left, helps right, from a centre line; the value at the bar's
-    /// end, the item on the other side of the line. Items without enough days
-    /// are named in one line underneath.
+    /// Worse mornings left, better right, from a centre line; the value at the
+    /// bar's end, the item on the other side of the line. Only clear
+    /// differences get a bar: the rest, and items without enough days, are
+    /// named in a line underneath. Linked, never "hurts" or "helps": a few
+    /// days show a link, not a cause (audit 16.6).
     private func chart(_ impact: JournalImpact) -> some View {
         let scale = Double(Swift.max(20, impact.items.map { abs($0.effect) }.max() ?? 20)) * 1.3
-        let items = impact.items.sorted { $0.effect < $1.effect }
+        let items = impact.items.filter { JournalText.isClear($0.effect) }.sorted { $0.effect < $1.effect }
+        let unclear = impact.items.filter { !JournalText.isClear($0.effect) }
         return VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Škodí").foregroundStyle(Palette.rust)
-                Spacer()
-                Text("Pomáhá").foregroundStyle(Palette.green)
-            }
-            .font(.caption.weight(.medium))
-            .padding(.bottom, 6)
-            VStack(spacing: 0) {
-                ForEach(items) { item in
-                    Button { model.push(.journalItem(item.key, impact.metric)) } label: {
-                        ImpactBarRow(item: item, scale: scale)
+            if !items.isEmpty {
+                HStack {
+                    Text("Spojené s horším").foregroundStyle(Palette.rust)
+                    Spacer()
+                    Text("Spojené s lepším").foregroundStyle(Palette.green)
+                }
+                .font(.caption.weight(.medium))
+                .padding(.bottom, 6)
+                VStack(spacing: 0) {
+                    ForEach(items) { item in
+                        Button { model.push(.journalItem(item.key, impact.metric)) } label: {
+                            ImpactBarRow(item: item, scale: scale)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(item.name + ", " + JournalText.percent(item.effect))
+                        .accessibilityHint(L10n.f("%@ dní s ✓, %@ s ✕", String(item.yes), String(item.no)))
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(item.name + ", " + JournalText.percent(item.effect))
-                    .accessibilityHint(L10n.f("%@ dní s ✓, %@ s ✕", String(item.yes), String(item.no)))
+                }
+                .background(alignment: .center) {
+                    Rectangle().fill(Palette.ink.opacity(0.22)).frame(width: 1)
                 }
             }
-            .background(alignment: .center) {
-                Rectangle().fill(Palette.ink.opacity(0.22)).frame(width: 1)
+            if !unclear.isEmpty {
+                if !items.isEmpty { Rectangle().fill(Palette.hairline).frame(height: 1).padding(.top, 14) }
+                Text(verbatim: L10n.f("Zatím bez jasného rozdílu: %@", unclear.map(\.name).joined(separator: ", ")))
+                    .font(.footnote).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, items.isEmpty ? 0 : 12)
             }
             if !impact.waiting.isEmpty {
                 Rectangle().fill(Palette.hairline).frame(height: 1).padding(.top, 14)
@@ -106,7 +118,7 @@ struct ImpactBarRow: View {
 
     var body: some View {
         let hurts = item.effect < 0
-        let color = hurts ? Palette.rust : Palette.green
+        let color = JournalStyle.effectColor(item.effect)
         GeometryReader { geo in
             let half = geo.size.width / 2
             let length = Swift.max(4, half * CGFloat(Swift.min(1, Double(abs(item.effect)) / scale)))
@@ -210,7 +222,7 @@ struct JournalItemView: View {
 
     private func tone(_ d: JournalDetail) -> Color {
         guard let effect = d.effect else { return JournalStyle.color(nil) }
-        return effect < 0 ? Palette.rust : Palette.green
+        return JournalStyle.effectColor(effect)
     }
 
     private func nextMorning(_ d: JournalDetail) -> some View {

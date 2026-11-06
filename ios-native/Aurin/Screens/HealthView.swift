@@ -227,12 +227,12 @@ enum ReadinessText {
         return value > high ? 1 : value < low ? -1 : 0
     }
 
-    /// "↑ vyšší", "↓ kratší", "v normálu" on the card.
+    /// "↑ vyšší", "↓ kratší", "obvyklé" on the card.
     static func word(_ part: HealthSnapshot.Part) -> String {
         switch side(part) {
         case 1: return "↑ " + L10n.tr(part.key == "sleep" ? "delší" : "vyšší")
         case -1: return "↓ " + L10n.tr(part.key == "sleep" ? "kratší" : "nižší")
-        default: return L10n.tr("v normálu")
+        default: return L10n.tr("obvyklé")
         }
     }
 
@@ -240,10 +240,10 @@ enum ReadinessText {
     /// colour of its points, since a lower resting heart rate helps and a shorter
     /// night costs (the bar above already shows the direction).
     static func longWord(_ part: HealthSnapshot.Part) -> String {
-        if side(part) == 0 { return L10n.tr("v normálu") }
+        if side(part) == 0 { return L10n.tr("v obvyklém rozmezí") }
         if part.points > 0 { return L10n.tr("lepší než obvykle") }
         if part.points < 0 { return L10n.tr("horší než obvykle") }
-        return side(part) == 1 ? "↑ " + L10n.tr("nad normálem") : "↓ " + L10n.tr("pod normálem")
+        return side(part) == 1 ? "↑ " + L10n.tr("nad obvyklým rozmezím") : "↓ " + L10n.tr("pod obvyklým rozmezím")
     }
 
     /// Green when the value helps the readiness, rust when it costs points.
@@ -367,7 +367,7 @@ struct ReadinessDetailContent: View {
             }
             if part.low != nil, part.high != nil, part.value != nil {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(L10n.f("tvůj normál %@", ReadinessText.range(part))).font(Typo.caption).foregroundStyle(Palette.muted)
+                    Text(L10n.f("obvyklé rozmezí %@", ReadinessText.range(part))).font(Typo.caption).foregroundStyle(Palette.muted)
                     Spacer()
                     Text(ReadinessText.longWord(part)).font(Typo.caption.weight(.medium)).foregroundStyle(ReadinessText.color(part))
                 }
@@ -429,7 +429,7 @@ struct SleepWidget: View {
                              highlighted: sleep.week.count - 1,
                              spacing: size == .small ? 3 : 4,
                              height: height,
-                             targetTag: (name: L10n.tr("potřeba"), value: Fmt.hoursMinutes(Double(sleep.need))))
+                             targetTag: (name: L10n.tr("odhad potřeby"), value: Fmt.hoursMinutes(Double(sleep.need))))
                 }
             }
         }
@@ -474,7 +474,8 @@ struct OxygenWidget: View {
                 if oxygen.high > oxygen.low {
                     TileRange(value: oxygen.value, low: oxygen.low, high: oxygen.high, edges: (Fmt.int(oxygen.low), Fmt.int(oxygen.high)), tint: Palette.blue)
                 } else {
-                    Text(L10n.f("14 dní %@–%@ %%", Fmt.int(oxygen.low), Fmt.int(oxygen.high))).font(Typo.caption).foregroundStyle(Palette.faint)
+                    // Too few nights for a usual range: the span of the 14 days shown.
+                    Text(L10n.f("14 dní %@–%@ %%", Fmt.int(values.min() ?? oxygen.value), Fmt.int(values.max() ?? oxygen.value))).font(Typo.caption).foregroundStyle(Palette.faint)
                 }
             } chart: { height in
                 VStack(spacing: 6) {
@@ -600,7 +601,7 @@ struct MuscleWidget: View {
             SizedWidgetBody(size: size, mediumChart: 44) {
                 NumberText(value: Fmt.decimal(Units.weight(muscle.value)), unit: Units.weightUnit)
                 if let change = muscle.change, change != 0 {
-                    Text(L10n.f("%@ %@ za 2 měsíce", change > 0 ? "↑" : "↓", Fmt.decimal(abs(Units.weight(change))))).font(Typo.caption)
+                    Text(L10n.f("%@ %@ od %@", change > 0 ? "↑" : "↓", Fmt.decimal(abs(Units.weight(change))), Fmt.dayMonthShort(muscle.series.first?.date ?? ""))).font(Typo.caption)
                         .foregroundStyle(change > 0 ? Palette.green : Palette.amber)
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
@@ -626,7 +627,7 @@ struct BodyFatWidget: View {
             SizedWidgetBody(size: size, mediumChart: 44) {
                 NumberText(value: Fmt.decimal(fat.value), unit: "%")
                 if let change = fat.change, change != 0 {
-                    Text(L10n.f("%@ %@ za 2 měsíce", change < 0 ? "↓" : "↑", Fmt.decimal(abs(change)))).font(Typo.caption)
+                    Text(L10n.f("%@ %@ od %@", change < 0 ? "↓" : "↑", Fmt.decimal(abs(change)), Fmt.dayMonthShort(fat.series.first?.date ?? ""))).font(Typo.caption)
                         .foregroundStyle(change < 0 ? Palette.green : Palette.amber)
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }

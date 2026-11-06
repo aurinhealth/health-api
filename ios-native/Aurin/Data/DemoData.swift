@@ -134,7 +134,7 @@ enum DemoData {
         {"date":"2026-10-07","value":48},{"date":"2026-10-08","value":48}] },
       "summary": {
         "headline": "Jak dnes začít",
-        "text": "Spánek 7 h 12 min, kousek pod potřebou. HRV je třetí den nad normou.",
+        "text": "Spánek 7 h 12 min, kousek pod potřebou. HRV je třetí den nad obvyklým rozmezím.",
         "recommendation": "Silový trénink dej naplno, hodinu a půl před ním si dej svačinu se sacharidy."
       },
       "nutrition": {

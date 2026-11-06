@@ -332,7 +332,7 @@ struct WidgetData {
 
     /// Health's numbers on Zdraví, Today's elsewhere.
     var restingHR: TodaySnapshot.RestingHR? {
-        let fromHealth = health?.restingHR.map { TodaySnapshot.RestingHR(value: $0.value, baseline: $0.baseline, series: $0.series.lastDays(30)) }
+        let fromHealth = health?.restingHR.map { TodaySnapshot.RestingHR(value: $0.value, baseline: $0.baseline, low: $0.low, high: $0.high, series: $0.series.lastDays(30)) }
         return panel == .health ? (fromHealth ?? today?.restingHR) : (today?.restingHR ?? fromHealth)
     }
 

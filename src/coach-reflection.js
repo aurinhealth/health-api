@@ -144,7 +144,7 @@ export function reflectionSignals({ date, feedback = {}, workout = {}, activitie
   if (hrv != null && hrvUsual && hrv <= hrvUsual * 0.9) {
     const minus = round((1 - hrv / hrvUsual) * 100);
     signal(out, "hrv_low", 2, ownHrv
-      ? L(`HRV ${round(hrv)} ms je pod tvou normou ${round(hrvUsual)} ms (−${minus} %).`, `HRV ${round(hrv)} ms is below your normal of ${round(hrvUsual)} ms (−${minus} %).`)
+      ? L(`HRV ${round(hrv)} ms je pod obvyklými ${round(hrvUsual)} ms (−${minus} %).`, `HRV ${round(hrv)} ms is below your usual ${round(hrvUsual)} ms (−${minus} %).`)
       : L(`HRV ${round(hrv)} ms je pod tvým průměrem ${round(hrvUsual)} ms (−${minus} %).`, `HRV ${round(hrv)} ms is below your average of ${round(hrvUsual)} ms (−${minus} %).`), { hrv, usual: round(hrvUsual) });
   }
   const rhr = ownRhr ? n(ownRhr.value) : n(w.get(date)?.restingHR), rhrUsual = ownRhr ? n(ownRhr.usual) : mean(before.map(x => n(x.restingHR)));

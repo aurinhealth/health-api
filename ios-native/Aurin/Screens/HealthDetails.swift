@@ -122,7 +122,7 @@ struct SleepDetailContent: View {
                 }
                 if let r = health.respiration { MetricRow(metric: .respiration, title: "Dechová frekvence", value: Fmt.decimal(r.value), unit: "/ min") }
                 if let d = health.wristTemp?.deviation ?? health.skinTemp?.deviation {
-                    MetricRow(metric: .temperature, title: "Teplota zápěstí", value: Fmt.signed(Units.temperatureChange(d), digits: 1), unit: L10n.f("%@ od normy", Units.temperatureUnit))
+                    MetricRow(metric: .temperature, title: "Teplota zápěstí", value: Fmt.signed(Units.temperatureChange(d), digits: 1), unit: L10n.f("%@ od obvyklé", Units.temperatureUnit))
                 }
                 if let o = health.oxygen { MetricRow(metric: .oxygen, title: "Kyslík v krvi", value: Fmt.decimal(o.value, digits: o.value.rounded() == o.value ? 0 : 1), unit: "%") }
             }
@@ -131,7 +131,7 @@ struct SleepDetailContent: View {
             SectionLabel(text: "Potřeba a dluh").padding(.top, 32)
             Card {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Potřeba na dnešní noc").font(.body)
+                    Text("Potřeba na dnešní noc · odhad").font(.body)
                     Spacer()
                     Text(Fmt.hoursMinutes(Double(sleep.tonight.need))).font(Typo.number(28))
                 }

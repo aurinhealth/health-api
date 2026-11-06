@@ -6,7 +6,7 @@ import { withLang } from "../src/lang.js";
 import { CATALOG, DEFAULT_PINNED, CATEGORIES, normalizeCustomItem, itemView, catalogItem, usualPart, moodText } from "../src/journal-catalog.js";
 import { percentEffect, impactOf, thresholdOf, rankImpacts, newDiscovery, dayState, itemDetail, morningMetrics, timeLevel, levelTime, shiftDay } from "../src/journal-impact.js";
 import { saveJournalEntry, listJournalEntries, getJournalSettings, saveCustomItem, autoDays, sickDays, saunaRisks, caffeineMg, alcoholDrinks, setJournalOptions, setFixed } from "../src/journal-store.js";
-import { journalDay, journalCard, journalCatalog, thresholdText, waitingText, valueText, handleJournalApi, journalForCoach } from "../src/routes-journal.js";
+import { journalDay, journalCard, journalCatalog, thresholdText, waitingText, valueText, handleJournalApi, journalForCoach, journalTop } from "../src/routes-journal.js";
 import { exportPages } from "../src/account-data.js";
 import { localToday } from "../src/user-time.js";
 import { coachContext } from "../src/coach-assistant.js";
@@ -557,3 +557,8 @@ test("sexual activity from Apple Health has its own consent, kept with its time;
   assert.equal(sex(), 1);
 });
 
+test("the Zdraví card lists only clear differences, 5 % or more (audit 16.6)", () => {
+  const settings = { pinned: [], custom: [] };
+  const ranked = [{ key: "alcohol", effect: -17 }, { key: "sauna", effect: 4 }, { key: "magnesium", effect: 5 }];
+  assert.deepEqual(journalTop(settings, { ranked }).map(r => r.key), ["alcohol", "magnesium"]);
+});

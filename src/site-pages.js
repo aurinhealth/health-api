@@ -806,8 +806,8 @@ export function overviewPage(request) {
   // shows]. A screen is the app's screenshot (public/site/app/), or "html:" and a screen built in site-demos.js
   // where the screenshot cannot show the step (a moving screen, or one the sample day draws wrong).
   const scenes = [
-    ['pripravenost', '', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal.', 'green', 'glow-today', [
-      ['readiness-parts', 'readyOne', 330, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal. One line under the number says what to do today, and the morning notification says the same, weighing the days before and tomorrow’s workout, and keeps the numbers off your lock screen.', 7000],
+    ['pripravenost', '', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own usual range.', 'green', 'glow-today', [
+      ['readiness-parts', 'readyOne', 330, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own usual range. One line under the number says what to do today, and the morning notification says the same, weighing the days before and tomorrow’s workout, and keeps the numbers off your lock screen.', 7000],
       ['html:strain', 'strainMade', 200, 'Know when to push.', 'Every workout and every step adds up. Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000],
       ['journal-impact', 'journalOne', 330, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000],
       ['html:cycle', 'cycleOne', 300, 'Readiness that knows your cycle.', 'Turn on cycle tracking and, in the days before your period, your resting heart rate and temperature are weighed against your own days in that phase. A usual rise costs no points.', 7000]]],
@@ -931,7 +931,7 @@ ${sun(72)}
 <div class="xw"><span class="xe" id="xw-t">Works with what you already wear</span><ul aria-labelledby="xw-t">${WEARABLES.map(wearable).join('')}</ul></div>
 </div>
 <div class="stage"><div class="rig">
-<div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">${day.hrv} ms</div><div class="d up">↑ ${day.hrv - day.hrvBaseline} ms above normal</div></div>
+<div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">${day.hrv} ms</div><div class="d up">↑ ${day.hrv - day.hrvBaseline} ms above your average</div></div>
 <div class="glass g2" aria-hidden="true"><div class="k">Sleep</div><div class="v">${day.sleep}</div><div class="d sleep">score ${day.sleepScore}</div></div>
 <div class="glass g3" aria-hidden="true"><div class="k">Coach</div><div style="margin-top:4px">Go all in on strength today.</div></div>
 <div class="device" role="img" aria-label="Aurin on a phone: the Today screen with readiness ${day.readiness} and your status, sleep, strain and HRV, today’s workout and the weather"><div class="bezel"><div class="screen" aria-hidden="true"><div class="scr on">${shot('today', false)}</div></div></div></div>
@@ -941,7 +941,7 @@ ${sun(72)}
 
 
 <section class="morning"><div class="wrap"><div class="eyebrow">One morning with Aurin</div>
-<p class="say">You slept <b class="sleep">${day.sleep}</b>, your HRV is <b class="up">${day.hrv - day.hrvBaseline} ms above normal</b> and your readiness is <b class="up">${day.readiness}</b>. So the coach says: <em>go all in on strength today.</em></p>
+<p class="say">You slept <b class="sleep">${day.sleep}</b>, your HRV is <b class="up">${day.hrv - day.hrvBaseline} ms above your average</b> and your readiness is <b class="up">${day.readiness}</b>. So the coach says: <em>go all in on strength today.</em></p>
 </div></section>
 
 ${ACT_LIST.map(a => act(a) + '\n' + a[4].map(id => id === 'svaly' ? muscles : chapter(scenes.find(x => x[0] === id), scenes.findIndex(x => x[0] === id))).join('\n')).join('\n')}
