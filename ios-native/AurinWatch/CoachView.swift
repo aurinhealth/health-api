@@ -67,7 +67,7 @@ struct CoachView: View {
                     .watchFont(24, .semibold)
                     .foregroundStyle(.black)
                     .frame(width: 58, height: 58)
-                    .background(W.amber, in: Circle())
+                    .background(W.indigo, in: Circle())
                 Text(coach.turns.isEmpty ? W.tr("Zeptej se kouče", "Ask the coach") : W.tr("Další otázka", "Ask again"))
                     .watchFont(12)
                     .foregroundStyle(W.muted)
@@ -107,12 +107,19 @@ private struct TurnView: View {
                         .watchFont(12)
                         .foregroundStyle(W.secondary)
                 }
-                if !turn.failed {
+                if turn.failed {
+                    // Watch audit G3: the question again, without dictating it anew.
+                    Button { CoachStore.shared.retry(turn.id) } label: {
+                        Label(W.tr("Zkusit znovu", "Try again"), systemImage: "arrow.clockwise")
+                            .watchFont(13, .medium)
+                    }
+                    .buttonStyle(.bordered)
+                } else {
                     Button { speaker.read(answer) } label: {
                         Label(W.tr("Přečíst", "Read aloud"), systemImage: "speaker.wave.2.fill")
                             .watchFont(13, .medium)
                     }
-                    .tint(W.amber)
+                    .tint(W.indigo)
                 }
             }
         }

@@ -2,7 +2,7 @@ import SwiftUI
 import WatchConnectivity
 import WidgetKit
 
-/// A planned ride's or run's steps (mockup 44): asked from the iPhone when it
+/// A planned ride's, run's or swim's steps (mockup 44): asked from the iPhone when it
 /// is in reach, else from the server with the watch's own sign-in, and kept
 /// on the watch for the day, so a relaunch shows them without asking again.
 /// A session whose name or length changed (the coach swapped it) is asked again.
@@ -143,6 +143,7 @@ struct PlanBars: View {
 /// crown every step with its length and zone.
 struct RideDetail: View {
     let session: WatchSnapshot.Session
+    @EnvironmentObject private var watch: WatchStore
     @ObservedObject private var plans = PlanStore.shared
 
     var body: some View {
@@ -161,14 +162,18 @@ struct RideDetail: View {
                 if let plan, !plan.steps.isEmpty {
                     PlanBars(plan: plan).frame(height: 40).padding(.top, 10)
                     axis(plan).padding(.top, 3)
+                    // Today's start, as on the Training page's card (a brick starts with its next leg).
+                    if WorkoutOpener.canStart(session, plan: plan, today: today, sessions: sessions) {
+                        OpenInWorkoutButton { try await WorkoutOpener.start(session, plan: plan, sessions: sessions) }
+                            .padding(.top, 8)
+                    }
                     VStack(spacing: 0) {
                         ForEach(Array(rows(plan).enumerated()), id: \.offset) { _, row in
                             stepRow(row)
                         }
                     }
                     .padding(.top, 6)
-                    Text(W.tr("Jeď ho z Wahoo nebo z aplikace Cvičení. Kouč ho změní v iPhonu.",
-                              "Ride it from Wahoo or the Workout app. Your coach can change it on your iPhone."))
+                    Text(footer)
                         .watchFont(12)
                         .foregroundStyle(W.muted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -177,7 +182,11 @@ struct RideDetail: View {
                     Text(W.tr("Kroky teď nejdou načíst. Otevři Aurin v iPhonu.", "The steps won't load right now. Open Aurin on your iPhone."))
                         .watchFont(12).foregroundStyle(W.secondary).padding(.top, 10)
                 } else if session.eventId != nil, plan == nil {
-                    ProgressView().frame(maxWidth: .infinity).padding(.top, 16)
+                    HStack(spacing: 6) {
+                        ProgressView().frame(width: 20, height: 20)
+                        Text(W.tr("Načítám kroky…", "Loading steps…")).watchFont(12).foregroundStyle(W.secondary)
+                    }
+                    .padding(.top, 14)
                 } else {
                     Text(W.tr("Tenhle trénink nemá kroky.", "This session has no steps."))
                         .watchFont(12).foregroundStyle(W.secondary).padding(.top, 10)
@@ -185,11 +194,31 @@ struct RideDetail: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .onAppear { plans.load(session) }
+        .onAppear {
+            plans.load(session)
+            if let leg = WorkoutOpener.nextLeg(session, in: sessions) { plans.load(leg, shelf: false) }
+        }
         .containerBackground(W.glow(W.Glow.strain), for: .navigation)
     }
 
     private var plan: WatchPlan? { session.eventId.flatMap { plans.plans[$0] } }
+    private var today: String { WatchStore.localDate(WatchDemo.now) }
+    private var sessions: [WatchSnapshot.Session] {
+        guard let s = watch.snapshot, s.date == today else { return [] }
+        return s.week ?? []
+    }
+
+    /// Where it starts, by sport: only a ride from Wahoo too.
+    private var footer: String {
+        switch session.sport {
+        case "ride": W.tr("Jeď ho z Wahoo nebo z aplikace Cvičení. Kouč ho změní v iPhonu.",
+                          "Ride it from Wahoo or the Workout app. Your coach can change it on your iPhone.")
+        case "swim": W.tr("Plav ho z aplikace Cvičení. Kouč ho změní v iPhonu.",
+                          "Swim it from the Workout app. Your coach can change it on your iPhone.")
+        default: W.tr("Běž ho z aplikace Cvičení. Kouč ho změní v iPhonu.",
+                      "Run it from the Workout app. Your coach can change it on your iPhone.")
+        }
+    }
 
     /// "ZÍTRA · 60 MIN".
     private var when: String {

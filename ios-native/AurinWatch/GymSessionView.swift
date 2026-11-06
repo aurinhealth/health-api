@@ -21,7 +21,8 @@ struct GymSessionView: View {
     @State private var now = Date()
     @State private var list = false
     @State private var summary = false
-    @State private var coachOpen = false
+    /// The exercise whose set − just removed: "Set removed · Undo" for 3 s.
+    @State private var removed: Int?
     /// Ended by itself after 30 min without a set: what was saved, until Done.
     @State private var autoSaved: AutoSaved?
     /// End workout on "Still working out?": the workout ends at the last set.
@@ -97,7 +98,7 @@ struct GymSessionView: View {
                 } else if workout.askStill, !summary {
                     stillWorking
                 } else if summary {
-                    GymSummary(finish: finish)
+                    GymSummary(finish: finish, keepTraining: keepTraining)
                 } else if workout.pausedAt != nil {
                     paused
                 } else if let part = shownPart, let day = store.sheetDay, let parts = store.dayParts {
@@ -118,19 +119,13 @@ struct GymSessionView: View {
                 }
             }
             .toolbar {
-                if autoSaved == nil, !discarding, !workout.askStill, !summary, workout.pausedAt == nil, restEnd.map({ $0 > now }) != true, store.gym?.allDone != true || shownPart != nil {
+                if autoSaved == nil, !discarding, !workout.askStill, !summary, workout.pausedAt == nil, store.gym?.allDone != true || shownPart != nil {
                     // In the cover's own corner: at .topBarLeading the cover's ✕
                     // took its place (and closed the screen with the workout running).
+                    // During the rest too (watch audit B4); the coach is under ≡.
                     ToolbarItem(placement: .cancellationAction) {
                         Button { workout.pause() } label: { Image(systemName: "pause.fill") }
                             .accessibilityLabel(W.tr("Pauza", "Pause"))
-                    }
-                }
-                if !summary, !discarding, restEnd.map({ $0 > now }) == true {
-                    // The coach during the rest: it knows the workout is on.
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button { coachOpen = true } label: { Image(systemName: "bubble.left.and.text.bubble.right") }
-                            .accessibilityLabel(W.tr("Kouč", "Coach"))
                     }
                 }
                 if autoSaved == nil, !discarding, !summary, workout.pausedAt == nil, store.gym?.allDone != true || shownPart != nil {
@@ -164,9 +159,6 @@ struct GymSessionView: View {
                         discarding = true
                     }
                 }
-            }
-            .sheet(isPresented: $coachOpen) {
-                NavigationStack { CoachView(view: "gym") }
             }
             .sheet(item: $info) { info in
                 NavigationStack {
@@ -304,7 +296,7 @@ struct GymSessionView: View {
                     // Not in the sample day's screenshot, where their tops would show cut off.
                     if !WatchDemo.on {
                         LazyVGrid(columns: [GridItem(.flexible(), spacing: 5), GridItem(.flexible(), spacing: 5)], spacing: 5) {
-                            cell(W.tr("Objem", "Volume"), GymText.volume(gym.volume), nil, W.indigo, small: false)
+                            cell(W.tr("Objem", "Volume"), GymText.volume(gym.volume), nil, W.amber, small: false)
                             cell(W.tr("Kalorie", "Calories"), W.number(workout.calories), "kcal", W.amber, small: false)
                         }
                     }
@@ -355,15 +347,28 @@ struct GymSessionView: View {
             }
             // − set 2/4 +: one set fewer or one more of this exercise (mockup 20).
             HStack(spacing: 4) {
-                roundButton("minus", small: fit.small) { store.change(.removeSet, exercise: e) }
+                roundButton("minus", small: fit.small) { removeSet(e) }
                     .accessibilityLabel(W.tr("O sérii méně", "One set fewer"))
                 VStack(spacing: 0) {
-                    HStack(spacing: 4) {
-                        Text(label(lift, in: ex, superset: gym.superset(of: e) != nil, side: false))
-                            .watchFont(12, .medium).foregroundStyle(W.secondary)
-                            .lineLimit(1).minimumScaleFactor(0.7)
-                        if lift.side != nil { sides(lift, in: gym, e) }
-                        if lift.work, let letter = lift.intensity { GymText.intensityPill(letter) }
+                    if removed == e {
+                        // Three seconds to take a removed set back (watch audit B5).
+                        Button { undoRemove(e) } label: {
+                            (Text(W.tr("Série odebrána · ", "Set removed · ")).foregroundColor(W.secondary)
+                             + Text(W.tr("Vrátit", "Undo")).foregroundColor(W.amber))
+                                .watchFont(12, .semibold)
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                                .frame(maxWidth: .infinity, minHeight: 24)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        HStack(spacing: 4) {
+                            Text(label(lift, in: ex, superset: gym.superset(of: e) != nil, side: false))
+                                .watchFont(12, .medium).foregroundStyle(W.secondary)
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                            if lift.side != nil { sides(lift, in: gym, e) }
+                            if lift.work, let letter = lift.intensity { GymText.intensityPill(letter) }
+                        }
                     }
                     if fit == .tight { liveLine }
                 }
@@ -401,6 +406,7 @@ struct GymSessionView: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+            .doubleTap()
             if fit != .tight {
                 HStack(spacing: 5) {
                     // The time runs on its own, without drawing the whole set again each second.
@@ -436,7 +442,8 @@ struct GymSessionView: View {
             sidePill(lift.side, short: false)
             sidePill(lift.side, short: true)
         }
-        .contentShape(Capsule())
+        // 28 pt to tap around the 20 pt pill, without moving the row (watch audit G2).
+        .contentShape(Rectangle().inset(by: -4))
         .onTapGesture {
             guard let other else { return }
             WKInterfaceDevice.current().play(.click)
@@ -470,25 +477,43 @@ struct GymSessionView: View {
     private func label(_ lift: WatchGym.Lift, in e: WatchGym.Exercise, superset: Bool = false, side: Bool = true) -> String {
         var text: String
         if lift.warmup {
-            text = W.tr("rozcvička", "warm-up")
+            text = W.tr("Rozcvička", "Warm-up")
         } else if lift.drop {
-            text = "drop"
+            text = "Drop"
         } else {
             let numbers = e.lifts.filter(\.work).map(\.number).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
             let at = (numbers.firstIndex(of: lift.number) ?? 0) + 1
-            text = (superset ? W.tr("kolo", "round") : W.tr("série", "set")) + " \(at)/\(numbers.count)"
+            text = (superset ? W.tr("Kolo", "Round") : W.tr("Série", "Set")) + " \(at)" + W.tr(" z ", " of ") + "\(numbers.count)"
         }
         if side, let side = lift.side { text += " · " + (side == "L" ? "L" : W.tr("P", "R")) }
         return text
     }
 
+    /// − and + beside the set's number: the circle as drawn, the tap area 32 pt (watch audit B5).
     private func roundButton(_ symbol: String, small: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol).watchFont(12, .bold).foregroundStyle(W.ink)
                 .frame(width: small ? 24 : 26, height: small ? 24 : 26)
                 .background(W.tile, in: Circle())
+                .frame(width: 32, height: 32)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// One set fewer, with "Set removed · Undo" for three seconds.
+    private func removeSet(_ e: Int) {
+        store.change(.removeSet, exercise: e)
+        removed = e
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            if removed == e { removed = nil }
+        }
+    }
+
+    private func undoRemove(_ e: Int) {
+        removed = nil
+        store.change(.addSet, exercise: e)
     }
 
     private static var topKg: Double { W.imperial ? 1100 : 500 }
@@ -683,17 +708,16 @@ struct GymSessionView: View {
                         .watchFont(15, .semibold).foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(W.green)
+                .mainButton()
                 .padding(.top, 6)
                 Button(role: .destructive) {
                     summary = true
                 } label: {
                     Text(W.tr("Ukončit trénink", "End workout")).watchFont(13, .semibold)
+                        .foregroundStyle(W.red)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
-                .tint(W.red)
+                .endButton()
             }
             .frame(maxWidth: .infinity)
         }
@@ -716,10 +740,13 @@ struct GymSessionView: View {
                             .stroke(W.amber, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                             .rotationEffect(.degrees(-90))
                             .animation(.linear(duration: 1), value: left)
-                        Text(GymText.elapsed(left.rounded(.up))).font(W.serif(20)).foregroundStyle(W.ink)
+                        Text(GymText.elapsed(left.rounded(.up))).font(W.digits(18)).foregroundStyle(W.ink)
                             .lineLimit(1).minimumScaleFactor(0.7)
                     }
                     .frame(width: 56, height: 56)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(W.tr("Pauza", "Rest"))
+                    .accessibilityValue(W.tr("zbývá ", "") + W.spoken(seconds: left.rounded(.up)) + W.tr("", " left"))
                     if let gym, let lift, let e = gym.exercises.first(where: { $0.lifts.contains { $0.row == lift.row } }) {
                         VStack(alignment: .leading, spacing: 0) {
                             Text(W.tr("Další · ", "Next · ") + e.title).watchFont(12).foregroundStyle(W.secondary)
@@ -745,6 +772,7 @@ struct GymSessionView: View {
                 HStack(spacing: 4) {
                     Button("−15 s") { shift(-15) }
                     Button(W.tr("Přeskočit", "Skip")) { restEnd = nil }
+                        .doubleTap()
                     Button("+15 s") { shift(15) }
                 }
                 .watchFont(12, .semibold)
@@ -766,10 +794,11 @@ struct GymSessionView: View {
 
     /// The letters of the iPhone's sheet (GymIntensity): Easy, Medium, Hard, Failure.
     private static let ratings = [
-        Rating(letter: "E", cs: "Snadná", en: "Easy", color: W.green),
-        Rating(letter: "M", cs: "Střední", en: "Medium", color: W.amber),
-        Rating(letter: "H", cs: "Těžká", en: "Hard", color: Color(hex: 0xF0907A)),
-        Rating(letter: "F", cs: "Selhání", en: "Failure", color: W.red)
+        // The letter's colour, as on the set's pill and the iPhone (watch audit B6).
+        Rating(letter: "E", cs: "Snadná", en: "Easy", color: GymText.intensityColor("E")),
+        Rating(letter: "M", cs: "Střední", en: "Medium", color: GymText.intensityColor("M")),
+        Rating(letter: "H", cs: "Těžká", en: "Hard", color: GymText.intensityColor("H")),
+        Rating(letter: "F", cs: "Selhání", en: "Failure", color: GymText.intensityColor("F"))
     ]
 
     private func ratingButton(_ rating: Rating) -> some View {
@@ -839,6 +868,14 @@ struct GymSessionView: View {
 
     private func finish() { end(onPhone: false, at: idleStop) }
 
+    /// Keep training on a summary reached by End workout with sets left: back
+    /// to the sets (out of the pause), the workout never ended.
+    private func keepTraining() {
+        idleStop = nil
+        summary = false
+        if workout.pausedAt != nil { workout.resume() }
+    }
+
     /// Finished here (the summary) or in Training mode on the iPhone; finished
     /// here, the iPhone hears of it. `at`: an idle workout's end at its last
     /// set; `keepOpen`: the screen says it was saved until Done.
@@ -872,8 +909,7 @@ struct GymSessionView: View {
                         .watchFont(15, .semibold).foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(W.green)
+                .mainButton()
                 .disabled(store.changing)
                 .padding(.top, 6)
             }
@@ -895,11 +931,10 @@ struct GymSessionView: View {
                 Button(role: .destructive) {
                     discard()
                 } label: {
-                    Text(W.tr("Zahodit", "Discard")).watchFont(15, .semibold).foregroundStyle(.white)
+                    Text(W.tr("Zahodit", "Discard")).watchFont(15, .semibold).foregroundStyle(W.red)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color(hex: 0xE5484D))
+                .endButton()
                 .padding(.top, 8)
                 Button {
                     discarding = false
@@ -943,11 +978,10 @@ struct GymSessionView: View {
                     workout.dismissAsk()
                     summary = true
                 } label: {
-                    Text(W.tr("Ukončit trénink", "End workout")).watchFont(15, .semibold).foregroundStyle(.black)
+                    Text(W.tr("Ukončit trénink", "End workout")).watchFont(15, .semibold).foregroundStyle(W.red)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(W.ink)
+                .endButton()
                 .padding(.top, 8)
                 Button {
                     workout.worked()
@@ -984,8 +1018,7 @@ struct GymSessionView: View {
                     Text(W.tr("Hotovo", "Done")).watchFont(15, .semibold).foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(W.ink)
+                .mainButton()
                 .padding(.top, 6)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -995,7 +1028,7 @@ struct GymSessionView: View {
     private func savedTile(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(label).watchFont(12).foregroundStyle(W.muted)
-            Text(value).font(W.serif(22)).foregroundStyle(W.ink)
+            Text(value).font(W.digits(20)).foregroundStyle(W.ink)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 9).padding(.vertical, 4)
@@ -1084,6 +1117,10 @@ struct GymExerciseList: View {
                 } footer: {
                     Text(W.tr("Potáhni cvik doleva: vyměnit nebo odebrat. Podrž a přetáhni: jiné pořadí.", "Swipe an exercise left to swap or remove it. Touch and hold to drag it to another place."))
                 }
+            }
+            // The coach, here since the pause took its corner in the rest (watch audit B4); it knows the workout is on.
+            NavigationLink { CoachView(view: "gym") } label: {
+                Label(W.tr("Kouč", "Coach"), systemImage: "bubble.left.and.text.bubble.right")
             }
             Button(role: .destructive) { end() } label: {
                 Text(W.tr("Ukončit trénink", "End workout"))
@@ -1300,6 +1337,8 @@ struct GymSummary: View {
     @ObservedObject private var store = GymStore.shared
     @ObservedObject private var workout = GymWorkout.shared
     let finish: () -> Void
+    /// Back to the sets: only while some are left (End workout came early).
+    var keepTraining: (() -> Void)? = nil
     /// How the plan suited, sent with Finish (the iPhone's rating after a workout).
     @State private var rating: String?
     /// Rate exercises: a thumb for each exercise done, as on the iPhone's summary.
@@ -1322,12 +1361,17 @@ struct GymSummary: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 6) {
-                Text(W.tr("Hotovo", "Done")).watchFont(12, .semibold).foregroundStyle(W.amber)
-                HStack(spacing: 5) {
-                    Image(systemName: "dumbbell.fill").foregroundStyle(W.amber)
-                    Text(W.tr("Posilovna", "Gym") + (workout.start != nil ? " · \(Int(workout.elapsed / 60)) min" : ""))
-                        .watchFont(16, .semibold).foregroundStyle(W.ink)
+                // Watch audit B4: the time is the main number, what is left under it.
+                VStack(alignment: .leading, spacing: 0) {
+                    Label(W.tr("Posilovna", "Gym"), systemImage: "dumbbell.fill")
+                        .watchFont(12, .semibold).foregroundStyle(W.amber)
+                    Text("\(Int(workout.elapsed / 60)) min").font(W.serif(34)).foregroundStyle(W.ink)
+                    if setsLeft > 0 {
+                        Text(leftText)
+                            .watchFont(12).foregroundStyle(W.secondary)
+                    }
                 }
+                .accessibilityElement(children: .combine)
                 // New records first (mockup "jen hodinky" 7, Training mode's Nový rekord).
                 ForEach(store.gym?.newRecords ?? []) { record in
                     HStack(spacing: 6) {
@@ -1341,12 +1385,11 @@ struct GymSummary: View {
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(W.tr("Nový rekord: ", "New record: ") + record.title + " " + GymText.lift(record.set))
                 }
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3), alignment: .leading, spacing: 6) {
-                    stat(W.tr("Kalorie", "Calories"), W.number(workout.calories))
-                    stat(W.tr("Tep ø", "Avg HR"), workout.averageHeartRate.map { W.number($0) } ?? "–")
-                    stat("Max", workout.maxHeartRate.map { W.number($0) } ?? "–")
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 2), spacing: 6) {
                     stat(W.tr("Série", "Sets"), "\(store.gym?.setsDone ?? 0)")
                     stat(W.tr("Objem", "Volume"), GymText.volume(store.gym?.volume ?? 0))
+                    stat(W.tr("Kalorie", "Calories"), W.number(workout.calories))
+                    stat(W.tr("Tep ø", "Avg HR"), workout.averageHeartRate.map { W.number($0) } ?? "–")
                 }
                 if let gym = store.gym {
                     Divider()
@@ -1405,9 +1448,15 @@ struct GymSummary: View {
                     Text(W.tr("Dokončit", "Finish")).watchFont(16, .semibold).foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(W.green)
+                .mainButton()
                 .padding(.top, 4)
+                if let keepTraining, setsLeft > 0 {
+                    Button(action: keepTraining) {
+                        Text(W.tr("Cvičit dál", "Keep training")).watchFont(15, .semibold)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
         }
         .navigationDestination(isPresented: $rateOpen) {
@@ -1415,11 +1464,24 @@ struct GymSummary: View {
         }
     }
 
+    private var setsLeft: Int { store.gym?.setsLeft ?? 0 }
+
+    /// "4 sets left" / "Zbývají 4 série".
+    private var leftText: String {
+        let n = setsLeft
+        if W.english { return n == 1 ? "1 set left" : "\(n) sets left" }
+        return n == 1 ? "Zbývá 1 série" : n < 5 ? "Zbývají \(n) série" : "Zbývá \(n) sérií"
+    }
+
     private func stat(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(title).watchFont(12).foregroundStyle(W.secondary)
             Text(value).watchFont(16, .semibold).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
+            Text(title).watchFont(12).foregroundStyle(W.secondary)
         }
+        .padding(.horizontal, 8).padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(W.tile, in: RoundedRectangle(cornerRadius: 9))
+        .accessibilityElement(children: .combine)
     }
 }
 

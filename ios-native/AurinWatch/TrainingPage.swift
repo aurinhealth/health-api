@@ -1,5 +1,6 @@
 import HealthKit
 import SwiftUI
+import WatchKit
 import WorkoutKit
 
 /// The second page by the crown (mockups 14 and 16): the day's training from
@@ -28,21 +29,17 @@ struct TrainingPage: View {
         ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Text(W.tr("Trénink", "Training"))
-                        .watchFont(12, .semibold)
-                        .foregroundStyle(W.amber)
-                    Spacer()
-                    if day != today {
-                        Text(day == tomorrow ? W.tr("ZÍTRA", "TOMORROW") : W.dayName(day).uppercased())
-                            .watchFont(12, .bold)
-                            .foregroundStyle(.black)
-                            .padding(.horizontal, 7).padding(.vertical, 2)
-                            .background(W.amber, in: Capsule())
-                    }
+                // The page's name is the system title (watch audit D3); the
+                // day shown, when not today, on a row of its own.
+                if day != today {
+                    Text(day == tomorrow ? W.tr("ZÍTRA", "TOMORROW") : W.dayName(day).uppercased())
+                        .watchFont(12, .bold)
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(W.amber, in: Capsule())
+                        .padding(.bottom, 6)
                 }
                 WeekRow(days: weekDays, today: today, shown: day, sessions: sessions) { picked = $0 }
-                    .padding(.top, 6)
                     // Where the sample day's screenshot scrolls to (-week): 8 pt into
                     // the week, so it stays whole under the clock and Continue whole
                     // above the screen's edge. The id sits on the 1 pt line itself:
@@ -70,6 +67,7 @@ struct TrainingPage: View {
             }
         }
         }
+        .navigationTitle(W.tr("Trénink", "Training"))
         // Each turn of the crown to this page shows it again: the plan only
         // when there is none for today or it is older than 10 minutes (the
         // iPhone sends every change it saves on its own).
@@ -99,41 +97,65 @@ struct TrainingPage: View {
         return true
     }
 
+    /// A rest day of the coach's plan: the week has workouts, today none at
+    /// all (a ride day or a week with no plan isn't one).
+    private var restDay: Bool {
+        sessions.contains { $0.date != today } && !sessions.contains { $0.date == today }
+    }
+
     /// Repeat last workout, Build from rested, Empty workout: the iPhone puts
-    /// it in the day (an empty one starts here alone too) and it opens.
+    /// it in the day (an empty one starts here alone too) and it opens. Watch
+    /// audit B2: on a rest day it asks "Train anyway?" with all three grey,
+    /// and without the iPhone the two it builds are off.
     private var noGym: some View {
         let settings = watch.settings
+        let rest = restDay
+        let near = watch.phoneNear || WatchDemo.on
         return VStack(alignment: .leading, spacing: 5) {
-            Text(W.tr("Posilovna není v plánu", "No gym planned"))
+            Text(rest ? W.tr("Den volna", "Rest day") : W.tr("Posilovna není v plánu", "No gym planned"))
                 .watchFont(15, .semibold).foregroundStyle(W.ink)
             if let last = settings.lastGym {
                 Text(W.tr("Minule: ", "Last: ") + W.dayName(last) + (settings.lastGymExercises.map { " · " + Self.exercises($0) } ?? ""))
                     .watchFont(12).foregroundStyle(W.secondary)
             }
+            if rest {
+                Text(W.tr("Přesto trénovat?", "Train anyway?"))
+                    .watchFont(12, .semibold).foregroundStyle(W.ink)
+                    .padding(.top, 4)
+            }
             if store.starting {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 6)
             } else {
                 if settings.lastGym != nil {
-                    startButton(.repeatLast, W.tr("Zopakovat minulý", "Repeat last workout"), prominent: true)
+                    startButton(.repeatLast, W.tr("Zopakovat minulý", "Repeat last workout"), prominent: !rest && near, off: !near)
                 }
-                startButton(.rested, W.tr("Sestavit z odpočatých", "Build from rested"), prominent: settings.lastGym == nil)
-                startButton(.empty, W.tr("Prázdný trénink", "Empty workout"), prominent: false)
+                startButton(.rested, W.tr("Sestavit z odpočatých", "Build from rested"), prominent: !rest && near && settings.lastGym == nil, off: !near)
+                if !near {
+                    Text(W.tr("Potřebuje iPhone poblíž", "Needs your iPhone nearby"))
+                        .watchFont(12).foregroundStyle(W.muted)
+                        .frame(maxWidth: .infinity)
+                }
+                startButton(.empty, W.tr("Prázdný trénink", "Empty workout"), prominent: !rest && !near)
             }
         }
         .padding(.top, 12)
     }
 
-    private func startButton(_ kind: WatchGym.Start.Kind, _ title: String, prominent: Bool) -> some View {
-        Button {
+    /// The main one white, the others the system's grey (watch audit D2).
+    @ViewBuilder private func startButton(_ kind: WatchGym.Start.Kind, _ title: String, prominent: Bool, off: Bool = false) -> some View {
+        let button = Button {
             Task { if await store.start(kind) { running = true } }
         } label: {
             Text(title).watchFont(15, .semibold).foregroundStyle(prominent ? .black : W.ink)
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.borderedProminent)
-        .tint(prominent ? W.ink : W.tile)
-        .padding(.top, 3)
+        .disabled(off)
+        if prominent {
+            button.mainButton().padding(.top, 3)
+        } else {
+            button.buttonStyle(.bordered).padding(.top, 3)
+        }
     }
 
     /// "5 cviků", "5 exercises".
@@ -184,8 +206,7 @@ struct TrainingPage: View {
             raceCard(race)
             ForEach(Array(others.enumerated()), id: \.offset) { _, other in
                 if other.sport != "strength", other.eventId != nil {
-                    NavigationLink(value: other) { planCard(other) }
-                        .buttonStyle(.plain)
+                    planCard(other)
                         .padding(.top, 6)
                 } else {
                     sideCard(other, day: day, gym: gym)
@@ -210,8 +231,7 @@ struct TrainingPage: View {
                 }
             }
         } else if let main = planned.first, main.sport != "strength", main.eventId != nil {
-            NavigationLink(value: main) { planCard(main) }
-                .buttonStyle(.plain)
+            planCard(main)
                 .padding(.top, 8)
         } else if let main = planned.first ?? (gymPlanned && done.isEmpty ? WatchSnapshot.Session(date: day, title: W.tr("Posilovna", "Gym"), sport: "strength", minutes: gym?.minutes, done: false) : nil) {
             single(main, day: day, gym: gym)
@@ -259,8 +279,7 @@ struct TrainingPage: View {
                             .watchFont(16, .semibold).foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(W.green)
+                    .mainButton()
                     // The button's own width, centred in the page.
                     .frame(maxWidth: .infinity)
                     .padding(.top, 8)
@@ -286,8 +305,7 @@ struct TrainingPage: View {
     /// The picked one of a day's workouts, open, with an amber edge.
     @ViewBuilder private func pickedCard(_ s: WatchSnapshot.Session, day: String, gym: WatchGym?) -> some View {
         if s.sport != "strength", s.eventId != nil {
-            NavigationLink(value: s) { planCard(s, picked: true) }
-                .buttonStyle(.plain)
+            planCard(s, picked: true)
                 .padding(.top, 6)
         } else {
             VStack(alignment: .leading, spacing: 0) { single(s, day: day, gym: gym) }
@@ -335,10 +353,31 @@ struct TrainingPage: View {
     }
 
     /// A ride or run (mockup 4): when and how long, its name, its steps as
-    /// bars, and today Open in Workout with the plan's steps.
+    /// bars (a tap opens the detail), and today Open in Workout with the plan's
+    /// steps, outside the link so a tap on it never opens the detail.
     private func planCard(_ s: WatchSnapshot.Session, picked: Bool = false) -> some View {
         let plan = s.eventId.flatMap { plans.plans[$0] }
         return VStack(alignment: .leading, spacing: 0) {
+            NavigationLink(value: s) { planInfo(s, plan: plan) }
+                .buttonStyle(.plain)
+            if let plan, canStart(s, plan: plan) {
+                OpenInWorkoutButton { try await start(s, plan: plan) }
+                    .padding(.top, 8)
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
+        .overlay { if picked { RoundedRectangle(cornerRadius: 14).stroke(W.amber, lineWidth: 1.5) } }
+        .onAppear {
+            plans.load(s)
+            // The next leg's plan only for the multisport start: the complication keeps this one's.
+            if let leg = nextLeg(s) { plans.load(leg, shelf: false) }
+        }
+    }
+
+    private func planInfo(_ s: WatchSnapshot.Session, plan: WatchPlan?) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(subtitle(s, day: s.date, length: false)).watchFont(12, .semibold).foregroundStyle(W.amber)
                 Spacer(minLength: 4)
@@ -370,33 +409,15 @@ struct TrainingPage: View {
             }
             .frame(height: 26)
             .padding(.top, 7)
-            if let plan, canStart(s, plan: plan) {
-                Button {
-                    Task { await start(s, plan: plan) }
-                } label: {
-                    Label(W.tr("Otevřít ve Cvičení", "Open in Workout"), systemImage: "play.fill")
-                        .watchFont(14, .semibold).foregroundStyle(.black)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(W.green)
-                .padding(.top, 8)
-            }
         }
-        .padding(.horizontal, 10).padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
-        .overlay { if picked { RoundedRectangle(cornerRadius: 14).stroke(W.amber, lineWidth: 1.5) } }
-        .onAppear {
-            plans.load(s)
-            // The next leg's plan only for the multisport start: the complication keeps this one's.
-            if let leg = nextLeg(s) { plans.load(leg, shelf: false) }
-        }
+        .contentShape(Rectangle())
     }
 
     /// A race (mockup hodinky-zavod): when and how long, its name, each leg
     /// with its distance and time, and today one start for the whole race.
     private func raceCard(_ race: RaceDay) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
         NavigationLink(value: race) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
@@ -433,24 +454,19 @@ struct TrainingPage: View {
                         Text(target.unit).watchFont(12).foregroundStyle(W.muted)
                     }
                 }
-                if canStart(race) {
-                    Button {
-                        Task { await start(race) }
-                    } label: {
-                        Label(W.tr("Otevřít ve Cvičení", "Open in Workout"), systemImage: "play.fill")
-                            .watchFont(14, .semibold).foregroundStyle(.black)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(W.green)
-                    .padding(.top, 6)
-                }
             }
-            .padding(.horizontal, 10).padding(.vertical, 9)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        if canStart(race) {
+            OpenInWorkoutButton { try await start(race) }
+                .padding(.top, 6)
+        }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
         .padding(.top, 8)
         .id("race")
         // The first leg's plan also for the complication; the others only for the start.
@@ -466,41 +482,27 @@ struct TrainingPage: View {
     /// The whole race as one multisport workout: the Workout app times each
     /// leg and each change. One leg, or sports this watch can't put in this
     /// order, opens the first leg with its steps.
-    private func start(_ race: RaceDay) async {
+    private func start(_ race: RaceDay) async throws {
         let legs = race.legs.compactMap { leg in leg.eventId.flatMap { plans.plans[$0] }.map { (sport: leg.sport, plan: $0) } }
         var workout: WorkoutPlan?
         if race.legs.count > 1, legs.count == race.legs.count { workout = WorkoutOpener.multisport(legs, name: race.name) }
         if workout == nil, let first = race.first.eventId.flatMap({ plans.plans[$0] }) {
             workout = WorkoutOpener.workout(first, sport: race.first.sport, name: race.legs.count == 1 ? race.name : Self.name(race.first))
         }
-        guard let workout else { return }
-        try? await workout.openInWorkoutApp()
+        guard let workout else { throw WorkoutOpener.Failed() }
+        try await workout.openInWorkoutApp()
     }
 
-    /// Open in Workout shows today once what it starts is known: a brick
-    /// waits for its next leg's plan, and a leg without steps goes only with it.
     private func canStart(_ s: WatchSnapshot.Session, plan: WatchPlan) -> Bool {
-        guard s.date == today else { return false }
-        guard let id = nextLeg(s)?.eventId else { return !plan.steps.isEmpty }
-        guard let legPlan = plans.plans[id] else { return plans.failed.contains(id) && !plan.steps.isEmpty }
-        return !plan.steps.isEmpty || (plan.steady && legPlan.steady)
+        WorkoutOpener.canStart(s, plan: plan, today: today, sessions: sessions)
     }
 
-    /// A brick of steady legs as one multisport workout (as the iPhone sends
-    /// it, WatchWorkout.multisport), else the leg itself with its steps.
-    private func start(_ s: WatchSnapshot.Session, plan: WatchPlan) async {
-        var multi: WorkoutPlan?
-        if let leg = nextLeg(s), let legPlan = leg.eventId.flatMap({ plans.plans[$0] }), plan.steady, legPlan.steady {
-            multi = WorkoutOpener.multisport([(s.sport, plan), (leg.sport, legPlan)], name: Self.name(s) + " + " + Self.name(leg))
-        }
-        guard let workout = multi ?? WorkoutOpener.workout(plan, sport: s.sport, name: Self.name(s)) else { return }
-        try? await workout.openInWorkoutApp()
+    private func start(_ s: WatchSnapshot.Session, plan: WatchPlan) async throws {
+        try await WorkoutOpener.start(s, plan: plan, sessions: sessions)
     }
 
-    /// The not yet done leg that follows this one right after (a brick).
     private func nextLeg(_ s: WatchSnapshot.Session) -> WatchSnapshot.Session? {
-        guard let next = s.next else { return nil }
-        return sessions.first { $0.eventId == next && !$0.done }
+        WorkoutOpener.nextLeg(s, in: sessions)
     }
 
     /// "Hned po kole" / "Right after the ride": a brick's second leg.
@@ -584,8 +586,23 @@ struct WeekRow: View {
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.plain)
+                // "Thursday, today, planned", not "T" (watch audit G1).
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(spoken(day))
+                .accessibilityAddTraits(day == shown ? [.isButton, .isSelected] : .isButton)
             }
         }
+    }
+
+    private func spoken(_ day: String) -> String {
+        var parts = [W.dayName(day).capitalized(with: W.locale)]
+        if day == today { parts.append(W.tr("dnes", "today")) }
+        if sessions.contains(where: { $0.date == day && $0.done }) {
+            parts.append(W.tr("odcvičeno", "done"))
+        } else if sessions.contains(where: { $0.date == day && !$0.done }) {
+            parts.append(W.tr("naplánováno", "planned"))
+        }
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder private func dot(_ day: String) -> some View {
@@ -600,6 +617,76 @@ struct WeekRow: View {
         } else {
             Circle().fill(W.track)
         }
+    }
+}
+
+/// Open in Workout (watch audit B1): one button for the Training page's cards
+/// and a ride's, run's or swim's detail, outside any link; when the Workout
+/// app doesn't open, a failure tap and a line say so.
+struct OpenInWorkoutButton: View {
+    let open: () async throws -> Void
+    @State private var opening = false
+    @State private var failed = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                opening = true
+                Task {
+                    do {
+                        try await open()
+                        failed = false
+                    } catch {
+                        failed = true
+                        WKInterfaceDevice.current().play(.failure)
+                    }
+                    opening = false
+                }
+            } label: {
+                Label(W.tr("Otevřít ve Cvičení", "Open in Workout"), systemImage: "play.fill")
+                    .watchFont(14, .semibold).foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+            }
+            .mainButton()
+            .disabled(opening)
+            if failed {
+                Text(W.tr("Aplikace Cvičení se neotevřela. Zkus to znovu.", "Couldn't open the Workout app. Try again."))
+                    .watchFont(12).foregroundStyle(W.amber)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+extension WorkoutOpener {
+    /// Nothing the Workout app can take (an activity this watch lacks).
+    struct Failed: Error {}
+
+    /// The not yet done leg that follows this one right after (a brick).
+    static func nextLeg(_ s: WatchSnapshot.Session, in sessions: [WatchSnapshot.Session]) -> WatchSnapshot.Session? {
+        guard let next = s.next else { return nil }
+        return sessions.first { $0.eventId == next && !$0.done }
+    }
+
+    /// Open in Workout shows today once what it starts is known: a brick
+    /// waits for its next leg's plan, and a leg without steps goes only with it.
+    static func canStart(_ s: WatchSnapshot.Session, plan: WatchPlan, today: String, sessions: [WatchSnapshot.Session]) -> Bool {
+        guard s.date == today else { return false }
+        let plans = PlanStore.shared
+        guard let id = nextLeg(s, in: sessions)?.eventId else { return !plan.steps.isEmpty }
+        guard let legPlan = plans.plans[id] else { return plans.failed.contains(id) && !plan.steps.isEmpty }
+        return !plan.steps.isEmpty || (plan.steady && legPlan.steady)
+    }
+
+    /// A brick of steady legs as one multisport workout (as the iPhone sends
+    /// it, WatchWorkout.multisport), else the leg itself with its steps.
+    static func start(_ s: WatchSnapshot.Session, plan: WatchPlan, sessions: [WatchSnapshot.Session]) async throws {
+        var multi: WorkoutPlan?
+        if let leg = nextLeg(s, in: sessions), let legPlan = leg.eventId.flatMap({ PlanStore.shared.plans[$0] }), plan.steady, legPlan.steady {
+            multi = Self.multisport([(s.sport, plan), (leg.sport, legPlan)], name: TrainingPage.name(s) + " + " + TrainingPage.name(leg))
+        }
+        guard let opened = multi ?? Self.workout(plan, sport: s.sport, name: TrainingPage.name(s)) else { throw Failed() }
+        try await opened.openInWorkoutApp()
     }
 }
 
@@ -698,14 +785,10 @@ enum GymText {
 
     /// Under the exercise's name: "Minule 97,5 × 6 · cíl: těžká" (Training
     /// mode's "Minule" and the set's planned letter); nil with neither.
+    /// "Last time 97.5 × 6"; the aim is the letter's pill beside the set (watch audit B5).
     static func info(_ lift: WatchGym.Lift) -> String? {
-        guard lift.work else { return nil }
-        var parts: [String] = []
-        if let last = lift.last { parts.append(W.tr("Minule ", "Last time ") + Self.lift(last)) }
-        if let letter = lift.intensity, let aim = aim(letter) {
-            parts.append((parts.isEmpty ? W.tr("Cíl: ", "Aim: ") : W.tr("cíl: ", "aim: ")) + aim)
-        }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        guard lift.work, let last = lift.last else { return nil }
+        return W.tr("Minule ", "Last time ") + Self.lift(last)
     }
 
     /// The planned letter in words (GymIntensity.name on the iPhone); none for a warm-up or drop set.

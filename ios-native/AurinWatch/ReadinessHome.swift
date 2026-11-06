@@ -16,6 +16,8 @@ struct ReadinessHome: View {
     @Environment(\.isLuminanceReduced) private var dimmed
     /// Why `s` is not this morning's numbers; nil when it is.
     var stale: Stale? = nil
+    /// Turns to the Training page (the gym's Start); nil when that page is off.
+    var openTraining: (() -> Void)? = nil
 
     /// `s` is an older day's (greyed, its details closed).
     private var older: Bool { stale == .loading || stale == .failed }
@@ -37,6 +39,10 @@ struct ReadinessHome: View {
         VStack(alignment: .leading, spacing: 0) {
             NavigationLink(value: Page.why) { hero }
                 .buttonStyle(.plain)
+                // One element, not "66", "Readiness", "moderate" (watch audit G1).
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(title + " " + (s.readiness.map { String($0) } ?? "–") + (pill.map { ", " + $0.text } ?? ""))
+                .accessibilityAddTraits(.isButton)
                 // An older day's details would read as today's.
                 .disabled(stale != nil)
             if stale == .failed {
@@ -58,13 +64,23 @@ struct ReadinessHome: View {
             if let race = todayRace {
                 // Race day: the race opens its legs (RaceDetail).
                 NavigationLink(value: race) {
-                    todayRow(text: race.name + (race.first.time.map { " · " + W.clockText($0) } ?? ""), symbol: "flag.fill")
+                    todayRow(text: race.name + (race.first.time.map { " · " + W.clockText($0) } ?? ""), symbol: "flag.fill", opens: true)
                 }
                 .buttonStyle(.plain)
             } else if let today = todayLine {
-                NavigationLink(value: today.session) { todayRow(text: today.text, symbol: today.symbol) }
-                    .buttonStyle(.plain)
-                    .disabled(today.session.sport != "ride" && today.session.sport != "run")
+                // Watch audit B1: the row leads to the start, the gym to the
+                // Training page (its Start), a ride, run or swim to its steps
+                // with Open in Workout.
+                let session = today.session
+                if ["ride", "run", "swim"].contains(session.sport), session.eventId != nil {
+                    NavigationLink(value: session) { todayRow(text: today.text, symbol: today.symbol, opens: true) }
+                        .buttonStyle(.plain)
+                } else if session.sport == "strength", let openTraining {
+                    Button(action: openTraining) { todayRow(text: today.text, symbol: today.symbol, opens: true) }
+                        .buttonStyle(.plain)
+                } else {
+                    todayRow(text: today.text, symbol: today.symbol, opens: false)
+                }
             }
             Spacer(minLength: 0)
         }
@@ -72,13 +88,14 @@ struct ReadinessHome: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 NavigationLink(value: Page.alarm) {
-                    Image(systemName: "alarm.fill").foregroundStyle(W.indigo)
+                    // In ink, as the iPhone's header icons (watch audit D4).
+                    Image(systemName: "alarm.fill").foregroundStyle(W.ink)
                 }
                 .accessibilityLabel(W.tr("Budík", "Alarm"))
             }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink(value: Page.coach) {
-                    Image(systemName: "bubble.left.and.text.bubble.right").foregroundStyle(W.amber)
+                    Image(systemName: "bubble.left.and.text.bubble.right").foregroundStyle(W.ink)
                 }
                 .accessibilityLabel(W.tr("Kouč", "Coach"))
             }
@@ -206,12 +223,17 @@ struct ReadinessHome: View {
         return RaceDay((s.week ?? []).filter { $0.date == s.date && !$0.done })
     }
 
-    private func todayRow(text: String, symbol: String) -> some View {
+    /// With `opens`, a › at the end: a tap leads to the start.
+    private func todayRow(text: String, symbol: String, opens: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
             Image(systemName: symbol).watchFont(12, .semibold).foregroundStyle(W.amber)
             Text(text).watchFont(13, .semibold).foregroundStyle(W.ink)
                 .lineLimit(2).minimumScaleFactor(0.8)
                 .fixedSize(horizontal: false, vertical: true)
+            if opens {
+                Spacer(minLength: 2)
+                Image(systemName: "chevron.right").watchFont(12, .semibold).foregroundStyle(W.muted)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 7)
@@ -226,13 +248,7 @@ struct ReadinessHome: View {
         var text = next.name
         if let minutes = next.minutes { text += " · \(minutes)′" }
         if let time = next.time { text += W.tr(" v ", " at ") + time }
-        let symbol = switch next.sport {
-        case "ride": "figure.outdoor.cycle"
-        case "run": "figure.run"
-        case "strength": "dumbbell.fill"
-        default: "figure.mixed.cardio"
-        }
-        return (text, symbol, next)
+        return (text, W.sportSymbol(next.sport), next)
     }
 
     // MARK: Sleep, strain, HRV
@@ -245,6 +261,8 @@ struct ReadinessHome: View {
         var bar: (value: Double, low: Double, high: Double)? = nil
         var note: String? = nil
         var color: Color
+        /// What VoiceOver says after the title, when the screen's words don't say it.
+        var said: String? = nil
     }
 
     private var gauges: some View {
@@ -268,9 +286,10 @@ struct ReadinessHome: View {
 
     private func cell(_ g: Gauge) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(g.title).watchFont(12, .medium).foregroundStyle(W.muted).lineLimit(1)
+            // The name in its kind's colour, the state in the dot and the word under it (watch audit C1b).
+            Text(g.title).watchFont(12, .medium).foregroundStyle(Self.kind(g.page)).lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(g.value).font(W.serif(19)).foregroundStyle(W.ink)
+                Text(g.value).font(W.digits(17)).foregroundStyle(W.ink)
                 if let unit = g.unit, g.value != "–" { Text(unit).watchFont(12).foregroundStyle(W.muted) }
             }
             .lineLimit(1)
@@ -288,6 +307,19 @@ struct ReadinessHome: View {
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(g.title)
+        .accessibilityValue(g.said ?? ([g.value + (g.unit.map { " " + $0 } ?? "")] + [g.note].compactMap { $0 }).joined(separator: ", "))
+    }
+
+    /// Sleep indigo, strain amber, HRV green: what the number is, never how it stands.
+    static func kind(_ page: Page) -> Color {
+        switch page {
+        case .sleep: W.indigo
+        case .strain: W.amber
+        case .hrv: W.green
+        default: W.muted
+        }
     }
 
     /// Always On: the name stays, the number, bar and note hide.
@@ -309,6 +341,8 @@ struct ReadinessHome: View {
         let low = need - 30, high = need + 30
         g.bar = (minutes, low, high)
         g.note = W.tr("\(W.number(minutes / need * 100)) %", "\(W.number(minutes / need * 100))%")
+        // "4 hours 45 minutes, 53% of need": "4:45" reads as a time, "53%" says not of what.
+        g.said = W.spoken(seconds: minutes * 60) + ", " + (g.note ?? "") + W.tr(" potřeby", " of need")
         // As on the watch face: red under three quarters of the need.
         g.color = minutes >= low ? W.green : minutes >= need * 0.75 ? W.amber : W.red
         return g
@@ -324,7 +358,12 @@ struct ReadinessHome: View {
         g.color = W.green
         if let score = s.strain.score {
             g.bar = (score, low, high)
-            g.color = WatchRangeBar.side(score, low, high) == 0 ? W.green : W.amber
+            // As on the watch face: under the target is fine until 18:00.
+            switch WatchSnapshot.Strain.standing(score, low: low, high: high, at: WatchDemo.now) {
+            case .neutral: g.color = W.secondary
+            case .onTarget: g.color = W.green
+            case .off, nil: g.color = W.amber
+            }
         }
         return g
     }
