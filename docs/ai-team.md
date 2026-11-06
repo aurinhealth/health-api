@@ -11,12 +11,19 @@ roles are sub agents defined in `.claude/agents/`:
 | iOS & watchOS Designer | `ios-designer` | no |
 | Data & Integrations Engineer | `data-engineer` | read-only commands |
 | Security (red team) | `security-red-team` | yes, staging.aurin.health or local only |
-| Privacy & Compliance | `privacy-compliance` | no |
+| Privacy, Compliance & Legal | `privacy-compliance` | no |
 | Tester (QA) | `qa-tester` | yes, tests, local and staging only |
 | Performance & Cost Engineer | `performance-cost` | yes, tests, local and timing on staging |
 | Monetization & Unit Economics Analyst | `monetization-analyst` | read-only commands |
 | Critic | `critic` | no |
 | Marketing | `marketing` | read-only commands, public web |
+| Cycling Coach | `cycling-coach` | no |
+| Running Coach | `running-coach` | no |
+| Swimming Coach | `swimming-coach` | no |
+| Triathlon & Duathlon Coach | `triathlon-coach` | no |
+| Strength Coach | `strength-coach` | no |
+| Sports Nutritionist | `sports-nutritionist` | no |
+| Physiotherapist | `physiotherapist` | no |
 
 ## Rules
 - Every role is read-only: no role edits files, commits or pushes. Changes are made only after the
@@ -35,11 +42,20 @@ roles are sub agents defined in `.claude/agents/`:
 - Every pull request that changes the server or how data loads: `performance-cost` writes the
   "Rychlost a náklady" paragraph (speed, D1 rows, Cloudflare limits) for its description.
 - Security, payments, user data and accounts: `security-red-team` and `privacy-compliance` review it.
+- Legal texts (privacy, terms, support, health data), App Store texts and Review Notes, subscriptions,
+  AI disclosures and other companies' names and logos: `privacy-compliance`.
 - AI features, AI limits, the paywall and prices: `monetization-analyst` checks they never block a
   normal user and that every user earns more than they cost.
 - Every request or point to discuss: `research-analyst` first researches competitors, medical and
   sport-science literature, guidelines, news and studies, each claim with a source. The other roles
   build their proposals on that brief.
+- Training, plans, workouts and the coach's training advice: the coach of each sport the change touches
+  (`cycling-coach`, `running-coach`, `swimming-coach`, `strength-coach`) checks that a professional coach
+  would prescribe it this way, fitted to the user's real time and goal. A week plan across several sports
+  adds `triathlon-coach`. Fuelling goes to `sports-nutritionist`, pain, injury, warm-ups, mobility and
+  return to training to `physiotherapist`. The coaches judge the practice; `health-scientist` still owns
+  method, sources and MDR, and `ai-coach-engineer` the prompts and code.
+- Food features and food advice: `sports-nutritionist`.
 - Every team run: `critic` reviews the proposals before the owner's document.
 - Social posts and replies on X: `marketing` drafts and reviews them. The Product Manager schedules
   posts in Typefully; replies under other people's posts the owner posts himself.
@@ -48,10 +64,22 @@ roles are sub agents defined in `.claude/agents/`:
 - A full team run (all roles, two rounds) costs a lot of credits: only when the owner asks for it.
   Usually 2–3 roles are enough.
 
+## The owner's requests are input, not a finished brief
+The owner's requests, notes and proposals are a starting point, not a task to carry out as written,
+and they are not always right.
+- The PM and every role first judge whether the request makes sense. If it is wrong or not needed,
+  they say so plainly with the reason and propose a better way, or leave things as they are.
+- The goal is not to please the owner. When the current state is good and meets every rule, the
+  answer is "nechal bych to tak", and nobody invents a flaw or an improvement because he asked.
+- The final document may say so for a whole request or for single points; a point that should stay
+  as it is gets "nechat beze změny" as its proposal.
+
 ## How a task runs
 1. The owner gives a task (e.g. "audit the Today screen").
 2. The Product Manager restates it, asks what is unclear, proposes the roles and the scope, and starts
-   only after the owner says yes. Then it briefs only the roles the task needs.
+   only after the owner says yes. Then it briefs only the roles the task needs. It first judges whether
+   the request makes sense (see "The owner's requests are input" below) and says so before the team
+   spends credits on a request that is wrong or not needed.
 3. Research: `research-analyst` writes an evidence brief for every point (competitors, studies,
    guidelines, rules, news), with sources and the strength of the evidence.
 4. Round 1: the roles work in parallel from that brief and return findings in a common format
@@ -75,3 +103,8 @@ The "promises against the code" check (`privacy-compliance`), the four-point che
 [phuryn/product-engineering](https://github.com/phuryn/product-engineering) (MIT, Pawel Huryn), read
 on 2026-11-04. The skills themselves are not installed here: they target another stack and would
 clash with this process.
+
+The legal checklists of `privacy-compliance` (GDPR art. 13 and 14, DPIA, transfers, consumer terms,
+the AI Act, the Cyber Resilience Act and the Data Act) adapt, in our own words, expert skills read on
+[Lawwe AI](https://lawve.ai) on 2026-11-05; the role file lists them with their licences. Nothing is
+installed and no text is copied.

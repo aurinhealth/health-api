@@ -150,8 +150,8 @@ struct RideDetail: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 5) {
-                    Image(systemName: W.sportSymbol(session.sport)).font(.system(size: 12))
-                    Text(when.uppercased()).font(.system(size: 11, weight: .semibold))
+                    Image(systemName: W.sportSymbol(session.sport)).watchFont(12)
+                    Text(when.uppercased()).watchFont(12, .semibold)
                 }
                 .foregroundStyle(W.amber)
                 Text(TrainingPage.name(session))
@@ -174,22 +174,22 @@ struct RideDetail: View {
                     }
                     .padding(.top, 6)
                     Text(footer)
-                        .font(.system(size: 11))
+                        .watchFont(12)
                         .foregroundStyle(W.muted)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 8)
                 } else if let id = session.eventId, plans.failed.contains(id) {
                     Text(W.tr("Kroky teď nejdou načíst. Otevři Aurin v iPhonu.", "The steps won't load right now. Open Aurin on your iPhone."))
-                        .font(.system(size: 12)).foregroundStyle(W.secondary).padding(.top, 10)
+                        .watchFont(12).foregroundStyle(W.secondary).padding(.top, 10)
                 } else if session.eventId != nil, plan == nil {
                     HStack(spacing: 6) {
                         ProgressView().frame(width: 20, height: 20)
-                        Text(W.tr("Načítám kroky…", "Loading steps…")).font(.system(size: 12)).foregroundStyle(W.secondary)
+                        Text(W.tr("Načítám kroky…", "Loading steps…")).watchFont(12).foregroundStyle(W.secondary)
                     }
                     .padding(.top, 14)
                 } else {
                     Text(W.tr("Tenhle trénink nemá kroky.", "This session has no steps."))
-                        .font(.system(size: 12)).foregroundStyle(W.secondary).padding(.top, 10)
+                        .watchFont(12).foregroundStyle(W.secondary).padding(.top, 10)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -236,7 +236,7 @@ struct RideDetail: View {
             Spacer()
             Text("\(total)")
         }
-        .font(.system(size: 10))
+        .watchFont(12)
         .foregroundStyle(W.muted)
     }
 
@@ -258,11 +258,11 @@ struct RideDetail: View {
     private func stepRow(_ row: Row) -> some View {
         HStack(spacing: 7) {
             RoundedRectangle(cornerRadius: 2).fill(PlanStore.color(row.zone)).frame(width: 4, height: 16)
-            Text(row.length).font(.system(size: 12, weight: .semibold)).foregroundStyle(W.ink)
+            Text(row.length).watchFont(12, .semibold).foregroundStyle(W.ink)
                 .frame(minWidth: 40, alignment: .leading)
-            Text(row.label).font(.system(size: 12)).foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.8)
+            Text(row.label).watchFont(12).foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.8)
             Spacer(minLength: 2)
-            Text("Z\(row.zone)").font(.system(size: 11, weight: .semibold)).foregroundStyle(PlanStore.color(row.zone))
+            Text("Z\(row.zone)").watchFont(12, .semibold).foregroundStyle(PlanStore.color(row.zone))
         }
         .padding(.vertical, 3)
     }

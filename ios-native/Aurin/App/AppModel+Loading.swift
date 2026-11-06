@@ -74,15 +74,12 @@ extension AppModel {
         defer { if round == refreshRound { loading = false } }
         if announce { syncStatus = .syncing }
         if Self.accountUnconfirmed { await loadAccountInitial() }
-        // The waiting writes and the free time from the iPhone calendar (before
-        // Aktivita dne is made) go out together, both before Today.
+        // The Apple Health sync, the waiting writes and the free time from the
+        // iPhone calendar start together (Today audit point 39): the saved Today
+        // is on screen meanwhile. Today waits for the writes and the free time
+        // (Aktivita dne is made from it), not for the sync to start after them.
         let calendarClient = api
         async let calendarSent: Void = CalendarTime.shared.send(api: calendarClient)
-        let wrote = await sendOutbox()
-        await calendarSent
-        // The planned workouts into the iPhone calendar, alongside Today.
-        let mirror = api
-        Task { await CalendarTime.shared.mirror(api: mirror) }
         let health = AppleHealth.shared
         // Until a late-morning sync, last night and the morning's HRV from the
         // watch go out before Today is computed, waiting at most 8 s. Later in
@@ -90,6 +87,11 @@ extension AppModel {
         // only when it brought something new.
         let client = api
         var sync: Task<AppleHealth.SyncOutcome, Never>? = Task { await health.run(api: client) }
+        let wrote = await sendOutbox()
+        await calendarSent
+        // The planned workouts into the iPhone calendar, alongside Today.
+        let mirror = api
+        Task { await CalendarTime.shared.mirror(api: mirror) }
         var changed = false
         if !health.hasMorningData, let task = sync, let outcome = await Self.outcome(of: task, within: 8) {
             changed = outcome.changed

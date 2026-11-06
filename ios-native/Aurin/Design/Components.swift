@@ -75,7 +75,7 @@ struct HealthKitTag: View {
     }
 }
 
-/// Small rounded status label next to a number ("vysoká", "cíl 12–14").
+/// Small rounded status label next to a number ("v obvyklém rozmezí", "cíl 12–14").
 struct Pill: View {
     let text: String
     var foreground: Color = Palette.green

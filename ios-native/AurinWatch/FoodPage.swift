@@ -16,7 +16,7 @@ struct FoodPage: View {
                 content(food)
             } else {
                 VStack(spacing: 6) {
-                    Image(systemName: "fork.knife").font(.system(size: 22)).foregroundStyle(W.amber)
+                    Image(systemName: "fork.knife").watchFont(22).foregroundStyle(W.amber)
                     Text(W.tr("Jídlo z iPhonu", "Food from your iPhone"))
                         .font(W.serif(19))
                         .multilineTextAlignment(.center)
@@ -46,7 +46,7 @@ struct FoodPage: View {
                         .minimumScaleFactor(0.8)
                         .fixedSize(horizontal: false, vertical: true)
                     if (food.kcal ?? 0) <= 0 {
-                        Text(W.tr("zapiš ho v iPhonu", "log it on your iPhone")).font(.system(size: 10)).foregroundStyle(W.muted)
+                        Text(W.tr("zapiš ho v iPhonu", "log it on your iPhone")).watchFont(12).foregroundStyle(W.muted)
                     }
                 }
             }
@@ -78,12 +78,12 @@ struct FoodPage: View {
         let limit = m.limit == true
         let over = limit && (m.eaten ?? 0) > (m.target ?? .infinity)
         return VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.system(size: 9, weight: .semibold)).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.7)
+            Text(title).watchFont(12, .semibold).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.7)
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 Text(W.number(m.eaten ?? 0)).foregroundStyle(over ? W.rust : W.ink)
                 Text((m.target.map { (limit ? "/max " : "/") + W.number($0) } ?? "") + " g").foregroundStyle(W.muted)
             }
-            .font(.system(size: 11, weight: .medium).monospacedDigit())
+            .watchFont(12, .medium).monospacedDigit()
             .lineLimit(1)
             .minimumScaleFactor(0.6)
             Bar(fraction: fraction(m.eaten, m.target), color: over ? W.rust : color)
@@ -107,7 +107,7 @@ struct FoodPage: View {
                     drinks = true
                 } label: {
                     Image(systemName: "waterbottle.fill")
-                        .font(.system(size: 14))
+                        .watchFont(14)
                         .foregroundStyle(W.blue)
                         .frame(width: 32, height: 32)
                         .background(Color.white.opacity(0.14), in: Circle())
@@ -132,7 +132,7 @@ struct FoodPage: View {
                 added += 1
             } label: {
                 Text(W.glassText)
-                    .font(.system(size: 13, weight: .semibold))
+                    .watchFont(13, .semibold)
                     .foregroundStyle(.black)
                     .lineLimit(1)
                     .fixedSize()
@@ -160,13 +160,13 @@ struct FoodPage: View {
     private func waterInfo(_ food: WatchSnapshot.Food, undo: String?) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(store.drink.flatMap(\.name).map { $0 + " · " + W.water(food.water ?? 0) } ?? waterLine(food))
-                .font(.system(size: 12, weight: .medium).monospacedDigit())
+                .watchFont(12, .medium).monospacedDigit()
                 .foregroundStyle(W.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             if let undo {
                 (Text(undo + " · ").foregroundColor(W.secondary) + Text(W.tr("Zpět", "Undo")).foregroundColor(W.ink))
-                    .font(.system(size: 10, weight: .semibold))
+                    .watchFont(12, .semibold)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
@@ -216,9 +216,9 @@ struct DrinksList: View {
             Button { add(drink) } label: {
                 HStack(spacing: 8) {
                     Image(systemName: drink.symbol).foregroundStyle(drink.kind == "coffee" ? W.amber : W.blue)
-                    Text(drink.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(W.ink).lineLimit(1)
+                    Text(drink.name).watchFont(15, .semibold).foregroundStyle(W.ink).lineLimit(1)
                     Spacer(minLength: 4)
-                    Text(W.glass(drink.ml)).font(.system(size: 13)).foregroundStyle(W.muted).lineLimit(1)
+                    Text(W.glass(drink.ml)).watchFont(13).foregroundStyle(W.muted).lineLimit(1)
                 }
             }
         }

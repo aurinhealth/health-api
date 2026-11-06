@@ -65,17 +65,18 @@ enum W {
     /// (watch audit D1). Set by WatchRoot from its environment.
     nonisolated(unsafe) static var boldText = false
 
+    /// The big numbers keep their size, so they fit the screen at any text size.
     static func serif(_ size: CGFloat) -> Font {
         boldText ? .system(size: size, weight: .semibold, design: .serif) : .custom("InstrumentSerif-Regular", size: size)
     }
+    /// Reading text grows with the wearer's text size, never under 12 pt (Today audit 17).
     static func news(_ size: CGFloat) -> Font {
-        boldText ? .system(size: size, weight: .medium, design: .serif) : .custom("Newsreader-Regular", size: size)
+        boldText ? .system(size: max(size, 12), weight: .medium, design: .serif) : .custom("Newsreader-Regular", size: max(size, 12), relativeTo: .body)
     }
     /// Numbers in tiles, cards and small rings: the serif only for a page's
     /// main number (24 pt and up), as its thin "1" read "111" as "lll" (watch
     /// audit D1); the complications' rounded face.
     static func digits(_ size: CGFloat) -> Font { .system(size: size, weight: .semibold, design: .rounded).monospacedDigit() }
-    static func label(_ size: CGFloat = 9) -> Font { .system(size: size, weight: .semibold) }
 
     // MARK: Language
 
@@ -332,7 +333,7 @@ struct RingValue: View {
             .minimumScaleFactor(0.6)
             .accessibilityLabel(said ?? value)
         Text(label.uppercased())
-            .font(W.label(8.5))
+            .watchFont(12, .semibold)
             .tracking(0.5)
             .foregroundStyle(color)
             .lineLimit(1)
@@ -363,7 +364,7 @@ struct Tiles: View {
                         .minimumScaleFactor(0.6)
                         .frame(height: 20)
                     Text(item.label)
-                        .font(W.label(8))
+                        .watchFont(12, .semibold)
                         .foregroundStyle(W.secondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -397,4 +398,51 @@ extension View {
     func endButton() -> some View {
         buttonStyle(.bordered).foregroundStyle(W.red)
     }
+
+/// Text in the watch app (Today audit 17): never under 12 pt, and growing
+/// with the wearer's text size (Settings → Display & Brightness → Text Size).
+struct WatchFont: ViewModifier {
+    @ScaledMetric private var size: CGFloat
+    private let weight: Font.Weight
+    private let design: Font.Design?
+
+    init(size: CGFloat, weight: Font.Weight, design: Font.Design?) {
+        _size = ScaledMetric(wrappedValue: max(size, 12), relativeTo: .body)
+        self.weight = weight
+        self.design = design
+    }
+
+    func body(content: Content) -> some View {
+        content.font(.system(size: max(size, 12), weight: weight, design: design))
+    }
+}
+
+extension View {
+    func watchFont(_ size: CGFloat, _ weight: Font.Weight = .regular, design: Font.Design? = nil) -> some View {
+        modifier(WatchFont(size: size, weight: weight, design: design))
+    }
+}
+
+/// Always On (wrist down): a health detail page, its rings and bars too,
+/// hides until the wrist is raised (Today audit 17); a workout's live numbers
+/// stay (their own screens).
+struct HiddenInAlwaysOn: ViewModifier {
+    @Environment(\.isLuminanceReduced) private var dimmed
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(dimmed ? 0 : 1)
+            .overlay {
+                if dimmed {
+                    Text(W.tr("Zvedni zápěstí", "Raise your wrist"))
+                        .watchFont(14, .semibold)
+                        .foregroundStyle(W.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+    }
+}
+
+extension View {
+    func hiddenInAlwaysOn() -> some View { modifier(HiddenInAlwaysOn()) }
 }

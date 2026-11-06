@@ -93,8 +93,8 @@ struct WatchRoot: View {
                     if let snapshot = store.snapshot, snapshot.date == WatchStore.localDate(WatchDemo.now) {
                         // Drawn again at noon, when the night stops being awaited.
                         TimelineView(.explicit([WatchStore.noon()])) { _ in
-                            if let night = store.nightPending {
-                                ReadinessHome(s: night, stale: .night, today: snapshot, openTraining: openTraining)
+                            if store.nightPending {
+                                ReadinessHome(s: snapshot, stale: .night, openTraining: openTraining)
                             } else {
                                 ReadinessHome(s: snapshot, openTraining: openTraining)
                             }
@@ -136,11 +136,11 @@ struct WatchRoot: View {
                 Group {
                     if let s = store.snapshot {
                         switch page {
-                        case .why: WhyDetail(s: s)
-                        case .sleep: SleepDetail(s: s)
-                        case .restingHR: MetricDetail(s: s, metric: .restingHR)
-                        case .hrv: MetricDetail(s: s, metric: .hrv)
-                        case .strain: StrainDetail(s: s)
+                        case .why: WhyDetail(s: s).hiddenInAlwaysOn()
+                        case .sleep: SleepDetail(s: s).hiddenInAlwaysOn()
+                        case .restingHR: MetricDetail(s: s, metric: .restingHR).hiddenInAlwaysOn()
+                        case .hrv: MetricDetail(s: s, metric: .hrv).hiddenInAlwaysOn()
+                        case .strain: StrainDetail(s: s).hiddenInAlwaysOn()
                         case .alarm: AlarmView()
                         case .coach: CoachView()
                         }
@@ -193,7 +193,7 @@ struct WaitingView: View {
         VStack(spacing: 8) {
             Ring(fraction: 0, color: W.green, size: 64) {
                 Image(systemName: "iphone")
-                    .font(.system(size: 20))
+                    .watchFont(20)
                     .foregroundStyle(W.green)
             }
             Text(W.tr("Otevři Aurin v iPhonu", "Open Aurin on your iPhone"))

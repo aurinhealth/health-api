@@ -32,7 +32,7 @@ struct HistoryPage: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 4) {
                 Text(header)
-                    .font(W.label(10))
+                    .watchFont(12, .semibold)
                     .tracking(0.6)
                     .foregroundStyle(metric.color)
                     .lineLimit(1)
@@ -40,8 +40,8 @@ struct HistoryPage: View {
                 Spacer(minLength: 2)
                 if band != nil, !sleep {
                     RoundedRectangle(cornerRadius: 2).fill(metric.color.opacity(0.35)).frame(width: 9, height: 5)
-                    Text(W.tr("normál", "normal"))
-                        .font(W.label(8))
+                    Text(W.tr("obvyklé", "usual"))
+                        .watchFont(12, .semibold)
                         .foregroundStyle(metric.color)
                 }
             }
@@ -51,21 +51,21 @@ struct HistoryPage: View {
                     .foregroundStyle(W.ink)
                 // "5:26 avg", not "5:26 h avg" (watch audit C4).
                 Text((sleep ? "" : metric.unit + " ") + W.tr("průměr", "avg"))
-                    .font(.system(size: 11))
+                    .watchFont(12)
                     .foregroundStyle(W.secondary)
                 if let need {
                     Spacer(minLength: 2)
                     // The dashed line in the chart.
                     Rectangle().fill(W.amber).frame(width: 8, height: 1.5)
                     Text(W.tr("potřeba", "need") + " " + W.clock(minutes: need))
-                        .font(.system(size: 11, weight: .semibold))
+                        .watchFont(12, .semibold)
                         .foregroundStyle(W.amber)
                 }
             }
             // Against what (watch audit C2): "↑ 21 ms vs first week".
             if !sleep, let change {
                 Text(change.0)
-                    .font(.system(size: 11, weight: .semibold))
+                    .watchFont(12, .semibold)
                     .foregroundStyle(change.1)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -79,7 +79,7 @@ struct HistoryPage: View {
                 .frame(height: Self.chartHeight - (spans.count > 1 ? 32 : 0) - (!sleep && change != nil ? 14 : 0))
             if shown == 90 {
                 Text(trend)
-                    .font(.system(size: 11))
+                    .watchFont(12)
                     .foregroundStyle(W.secondary)
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
@@ -112,7 +112,7 @@ struct HistoryPage: View {
                     span = value
                 } label: {
                     Text("\(value)D")
-                        .font(.system(size: 12, weight: .semibold))
+                        .watchFont(12, .semibold)
                         .foregroundStyle(value == shown ? Color.black : W.ink)
                         .frame(maxWidth: .infinity)
                         // 28 pt to tap (watch audit G2; was 22).
@@ -194,7 +194,7 @@ struct HistoryPage: View {
                     Tiles.Item(label: W.tr("Nejdelší", "Longest"), value: highest)]
         }
         let range = normal.map { W.number($0.lowerBound) + "–" + W.number($0.upperBound) } ?? "–"
-        return [Tiles.Item(label: W.tr("Normál", "Normal"), value: range),
+        return [Tiles.Item(label: W.tr("Obvykle", "Usual"), value: range),
                 Tiles.Item(label: W.tr("Nejnižší", "Lowest"), value: lowest),
                 Tiles.Item(label: W.tr("Nejvyšší", "Highest"), value: highest)]
     }
@@ -292,7 +292,7 @@ struct HistoryPage: View {
                         .foregroundStyle(W.track)
                     AxisValueLabel {
                         Text(tickLabel(value.as(Double.self) ?? 0))
-                            .font(.system(size: 10))
+                            .watchFont(12)
                             .foregroundStyle(W.muted)
                     }
                 }
@@ -306,7 +306,7 @@ struct HistoryPage: View {
                 Spacer(minLength: 2)
                 Text(W.tr("Dnes", "Today"))
             }
-            .font(.system(size: 10))
+            .watchFont(12)
             .foregroundStyle(W.muted)
             .lineLimit(1)
             .padding(.trailing, 24)

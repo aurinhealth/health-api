@@ -43,11 +43,11 @@ struct CoachNotificationView: View {
                     Text("\(readiness)").font(W.serif(30)).foregroundStyle(W.ink)
                     // The zone in a word, not only the ring's colour (watch audit C1b).
                     Text(W.zoneWord(today?.zone) ?? W.tr("připravenost", "readiness"))
-                        .font(.system(size: 9, weight: .semibold)).foregroundStyle(W.zoneColor(today?.zone))
+                        .watchFont(12, .semibold).foregroundStyle(W.zoneColor(today?.zone))
                 }
             } else {
                 Image(systemName: "bubble.left.and.text.bubble.right")
-                    .font(.system(size: 24))
+                    .watchFont(24)
                     .foregroundStyle(W.amber)
                     .frame(height: 40)
             }

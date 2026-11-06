@@ -11,9 +11,6 @@ final class WatchStore: NSObject, ObservableObject {
     private static let savedKey = "watchSnapshot"
 
     @Published private(set) var snapshot: WatchSnapshot?
-    /// The day before `snapshot`'s, kept for the morning: until last night's
-    /// sleep arrives the home page shows it greyed (ReadinessHome.Stale.night).
-    @Published private(set) var previous: WatchSnapshot?
     /// The day neither the iPhone nor the server gave today when the watch
     /// last asked: the home page says "No connection" instead of "Getting today…".
     @Published private var failedDay: String?
@@ -32,22 +29,16 @@ final class WatchStore: NSObject, ObservableObject {
         if let data = UserDefaults.standard.data(forKey: Self.savedKey) {
             snapshot = WatchSnapshot.decode(data)
         }
-        if let data = UserDefaults.standard.data(forKey: Self.previousKey) {
-            previous = WatchSnapshot.decode(data)
-        }
+        // The day before, which older versions kept for the morning.
+        UserDefaults.standard.removeObject(forKey: "watchSnapshotPrevious")
     }
 
-    private static let previousKey = "watchSnapshotPrevious"
-
-    /// Today came without last night's sleep and without a readiness number
-    /// (the wearable has not synced the night yet): until noon the home page
-    /// shows the day before, greyed, as long as that one had a number.
-    var nightPending: WatchSnapshot? {
-        guard let snapshot, snapshot.date == Self.localDate(Date()), snapshot.readiness == nil,
-              snapshot.learningDays == nil, (snapshot.sleep?.minutes ?? 0) <= 0,
-              let previous, previous.date < snapshot.date, previous.readiness != nil,
-              Date() < Self.noon() else { return nil }
-        return previous
+    /// Today came without last night (the wearable has not synced it yet):
+    /// until noon the home page says "Waiting for last night" with "–" for
+    /// readiness, sleep and HRV, never the day before's (Today audit 20).
+    var nightPending: Bool {
+        guard let snapshot, snapshot.date == Self.localDate(Date()), snapshot.awaitingNight else { return false }
+        return Date() < Self.noon()
     }
 
     /// Today at 12:00, when the night stops being awaited (WatchRoot redraws then).
@@ -150,10 +141,8 @@ final class WatchStore: NSObject, ObservableObject {
         guard let data else {
             // The iPhone signed out.
             snapshot = nil
-            previous = nil
             GymStore.shared.clear()
             UserDefaults.standard.removeObject(forKey: Self.savedKey)
-            UserDefaults.standard.removeObject(forKey: Self.previousKey)
             ComplicationShelf.clear()
             WidgetCenter.shared.reloadAllTimelines()
             return
@@ -169,11 +158,6 @@ final class WatchStore: NSObject, ObservableObject {
         // The iPhone sends the same Today by context, reply and message: draw it once.
         if let snapshot, Self.same(snapshot, value) { return }
         if value.date == Self.localDate(Date()) { failedDay = nil }
-        // A new day: the last one stays for the morning (nightPending).
-        if let old = snapshot, old.date < value.date {
-            previous = old
-            UserDefaults.standard.set(old.encoded(), forKey: Self.previousKey)
-        }
         snapshot = value
         UserDefaults.standard.set(data, forKey: Self.savedKey)
         WatchAlarm.shared.schedule()

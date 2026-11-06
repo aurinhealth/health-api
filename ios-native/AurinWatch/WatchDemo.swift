@@ -53,10 +53,10 @@ enum WatchDemo {
         let rhr = (0..<29).map { [53.0, 50, 51, 52][$0 % 4] } + [48]
         let hrv = (0..<29).map { [55.0, 62, 60, 58, 56, 54, 61, 59, 57][$0 % 9] } + [64]
         return WatchSnapshot(
-            date: day(0), updated: now, language: english ? "en" : "cs", readiness: 78, zone: "green",
+            date: day(0), updated: now, language: english ? "en" : "cs", readiness: 78, zone: "green", verdict: "hard",
             headline: tr("Jak dnes začít", "How to start today"),
-            summary: tr("Spánek 7 h 12 min, kousek pod potřebou. HRV je třetí den nad normou.",
-                        "Sleep 7 h 12 min, a little under your need. HRV is above normal for the third day."),
+            summary: tr("Spánek 7 h 12 min, kousek pod potřebou. HRV je třetí den nad obvyklým rozmezím.",
+                        "Sleep 7 h 12 min, a little under your need. HRV is above your usual range for the third day."),
             sleep: WatchSnapshot.Sleep(minutes: 432, need: 485, start: "23:33", end: "7:02", deep: 83, rem: 94, light: 255,
                                        nights: series([442, 455, 468, 411, 424, 437, 432])),
             restingHR: WatchSnapshot.Metric(value: 48, low: 49.5, high: 53.5, series: series(rhr)),

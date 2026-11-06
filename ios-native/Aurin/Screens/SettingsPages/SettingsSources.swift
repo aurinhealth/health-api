@@ -42,7 +42,8 @@ struct SourcesSettingsView: View {
                     NavigationLink {
                         IntegrationDetailView(provider: provider, store: store, actions: actions)
                     } label: {
-                        IntegrationCard(provider: provider, lastSync: lastSync, working: actions.working == provider.id)
+                        IntegrationCard(provider: provider, dataAt: dataAt(provider), lastNight: lastNight(provider),
+                                        working: actions.working == provider.id)
                     }
                     .buttonStyle(.plain)
                 }
@@ -142,6 +143,22 @@ struct SourcesSettingsView: View {
             SettingsRow(title: part.title, value: SourcePrioritySheet.name(value))
         }
         .buttonStyle(.plain)
+    }
+
+    /// When the source's data last reached Aurin: Apple Health from the phone,
+    /// the others the server's last good fetch.
+    private func dataAt(_ provider: ConnectionsResponse.Provider) -> Date? {
+        if provider.id == "apple", let last = AppleHealth.shared.lastSync { return last }
+        return provider.lastSuccessAt.flatMap(SourceActions.date)
+    }
+
+    /// This morning's night came from this source (Today's tonight.source,
+    /// "apple-health", "google-wearables", "whoop" …).
+    private func lastNight(_ provider: ConnectionsResponse.Provider) -> Bool {
+        guard let today = model.today, today.date == AppModel.localDate(Date()), today.sleep?.minutes != nil,
+              let source = today.tonight?.source else { return false }
+        let id = ["apple-health": "apple", "google-wearables": "google"][source] ?? source
+        return id == provider.id
     }
 
     /// The newest finished sync: a connected service's last good fetch (the server

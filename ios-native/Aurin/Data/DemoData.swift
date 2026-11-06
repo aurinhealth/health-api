@@ -115,7 +115,7 @@ enum DemoData {
     {
       "status": "ok",
       "date": "2026-10-08",
-      "readiness": { "score": 78, "zone": "green" },
+      "readiness": { "score": 78, "zone": "green", "verdict": "hard" },
       "sleep": { "minutes": 432, "inBedMinutes": 458, "index": 82, "need": 485, "start": "23:33", "end": "07:02" },
       "strain": { "score": 8.4, "training": 5.1, "movement": 3.3, "planned": 13.1, "target": { "low": 11.4, "high": 14.4, "readiness": 78, "debt": 291, "feeling": null, "plan": "Silový trénink, celé tělo" } },
       "hrv": { "value": 64, "baseline": 58, "low": 55, "high": 61, "trend": "up", "series": [
