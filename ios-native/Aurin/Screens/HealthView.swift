@@ -196,7 +196,7 @@ enum ReadinessText {
         case "sleep": return "Spánek"
         case "respiration": return "Dech"
         case "skinTemp", "wristTemp": return "Teplota"
-        case "checkin": return "Pocit"
+        case "checkin": return "Nemoc v Deníku"
         default: return key
         }
     }

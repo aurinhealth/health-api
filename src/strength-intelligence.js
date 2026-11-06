@@ -550,8 +550,10 @@ export function progressionDecision(rows, exercise, targetReps, loadFactor = 1, 
   if (decision === "increase" && meta?.loadUnit === LOAD_UNITS.BODYWEIGHT && topKg === 0) { decision = "hold"; kg = 0; }
   // A poor recovery day keeps the load instead of adding to it.
   if (decision === "increase" && loadFactor < 0.9) { decision = "hold"; kg = topKg; }
-  // After three weeks without the exercise, start a little lighter.
+  // After two weeks without the exercise the load holds (audit wave 2, 9.4:
+  // Chen 2022, two weeks off lower strength); after three, a little lighter.
   const gap = today ? (Date.parse(dateKey(today) + "T12:00:00Z") - Date.parse(dates[0] + "T12:00:00Z")) / 86400000 : 0;
+  if (gap >= 14 && decision === "increase") { decision = "hold"; kg = topKg; }
   if (gap > 21 && decision !== "decrease") { decision = "return"; kg = Math.min(topKg, stepDown(topKg * 0.9, step, rule.min) || topKg); }
   // An assisted machine works the other way: progress takes counterweight
   // off, a step back (or a return after a break) adds a step of it.

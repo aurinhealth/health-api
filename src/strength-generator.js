@@ -1441,6 +1441,17 @@ export function templateStrengthPlan(context, template, options = {}) {
   return { date: context.date, planName: String(template.name || L('Trénink', 'Workout')).slice(0, 80), deload: null, rationale, timing, focusMuscles: [], loadFactor: factor, protectedLegs: false, recentCompletedSets: history.length, loadEstimates, rows, template: true, ...routines };
 }
 
+// The first gym session within two weeks of Nemoc ending (athlete-state.js
+// recoveredAt): the loads hold and there is a set less, as in a deload
+// (audit wave 2, 9.3; Elliott 2020, a graded return).
+function afterIllness(context) {
+  const back = dateKey(context?.athleteState?.recoveredAt), date = dateKey(context?.date);
+  if (!back || !date || date < back) return null;
+  const days = (Date.parse(date + "T12:00:00Z") - Date.parse(back + "T12:00:00Z")) / 86400000;
+  if (days > 13 || (context?.strength?.recentCompletedSets || []).some(r => dateKey(r.workout_date) >= back && dateKey(r.workout_date) < date)) return null;
+  return { illness: true, reason: L("První trénink po nemoci: váhy se drží a série je o jednu méně. Když se potíže vrátí, přestaň a odpočívej.", "Your first workout after being ill: the weights hold and there is one set less. If the symptoms come back, stop and rest.") };
+}
+
 export function generateStrengthPlan(context, options = {}) {
   const policy=trainingStatus(context?.athleteState);
   // The gateway explicitly marks its read-only deployment diagnostic; ordinary
@@ -1450,14 +1461,15 @@ export function generateStrengthPlan(context, options = {}) {
   // sleep, a sick check-in) leave the gym out today, as the ride and the run
   // (Revize doporučování tréninků 2026-10-16, nález 22).
   const today=context?.adaptive?.recovery,ill=(today?.flags||[]).some(f=>/^(respiration|skin_temp|wrist_temp)_elevated$/.test(f))||context?.checkin==='sick';
-  if(!options.diagnosticPreview&&(today?.zone==='red'||ill))throw new Error(ill?L('Dech nebo teplota ve spánku jsou nad tvým obvyklým rozmezím. Posilovnu dnes vynech, nanejvýš lehké protažení.','Your breathing or temperature in sleep is above your usual range. Skip the gym today, at most some easy stretching.'):L('Připravenost je dnes nízká (červená zóna). Posilovnu dnes vynech, nanejvýš lehké protažení.','Readiness is low today (red zone). Skip the gym today, at most some easy stretching.'));
+  if(!options.diagnosticPreview&&(today?.zone==='red'||ill))throw new Error(context?.checkin==='sick'?L('V Deníku máš Nemoc. Posilovnu dnes vynech a odpočívej.','You marked Sick in your Journal. Skip the gym today and rest.'):ill?L('Dech nebo teplota ve spánku jsou nad tvým obvyklým rozmezím. Posilovnu dnes vynech, nanejvýš lehké protažení.','Your breathing or temperature in sleep is above your usual range. Skip the gym today, at most some easy stretching.'):L('Připravenost je dnes nízká (červená zóna). Posilovnu dnes vynech, nanejvýš lehké protažení.','Readiness is low today (red zone). Skip the gym today, at most some easy stretching.'));
   options = { ...options, focus: normalizeGymFocus(options.focus) };
   const pain = painfulExercises(context?.athleteState?.memories);
   if (pain.avoid.size) options = { ...options, excludeExercises: [...(options.excludeExercises || []), ...pain.avoid] };
   // The shared recovery week decides when it is known; four solid gym weeks
   // in a row are the fallback for athletes without Intervals.icu loads.
   const shared = context?.recoveryWeek;
-  const deload = options.noDeload ? null : shared?.recovery ? { shared: true, reason: L("Regenerační týden pro celý trénink (" + (shared.reason === "three_weeks" ? "po třech týdnech nad udržovací zátěží" : shared.reason === "hrv_trend" ? "HRV za poslední týden pod tvým běžným pásmem" : "po náročném týdnu") + "): posilovna je odlehčená – méně sérií, váha se drží, RPE do 7.", "Recovery week for all training (" + (shared.reason === "three_weeks" ? "after three weeks above maintenance load" : shared.reason === "hrv_trend" ? "HRV over the last week below your usual range" : "after a hard week") + "): the gym is lighter – fewer sets, weights held, RPE up to 7.") } : shared?.known ? null : strengthDeload(context?.strength?.recentCompletedSets, context.date);
+  // The first gym session after Nemoc holds the loads like a deload, with a set less (afterIllness).
+  const deload = options.noDeload ? null : afterIllness(context) || (shared?.recovery ? { shared: true, reason: L("Regenerační týden pro celý trénink (" + (shared.reason === "three_weeks" ? "po třech týdnech nad udržovací zátěží" : shared.reason === "hrv_trend" ? "HRV za poslední týden pod tvým běžným pásmem" : "po náročném týdnu") + "): posilovna je odlehčená – méně sérií, váha se drží, RPE do 7.", "Recovery week for all training (" + (shared.reason === "three_weeks" ? "after three weeks above maintenance load" : shared.reason === "hrv_trend" ? "HRV over the last week below your usual range" : "after a hard week") + "): the gym is lighter – fewer sets, weights held, RPE up to 7.") } : shared?.known ? null : strengthDeload(context?.strength?.recentCompletedSets, context.date));
   // A deload week holds the loads (no increase, no set to failure).
   const chosen = choosePlan(context, options), factor = deload ? Math.min(recoveryFactor(context), 0.89) : recoveryFactor(context), history = context?.strength?.recentCompletedSets || [], historyMap = recentExerciseMap(history);
   const firstSession = !history.length;
@@ -1588,7 +1600,7 @@ export function generateStrengthPlan(context, options = {}) {
     if(planPhase)for(const row of work.rows)row[9]+=L('; '+planPhase.phaseName+': RPE '+planPhase.rpe,'; '+planPhase.phaseName+': RPE '+planPhase.rpe);
     if(reducedDose)for(const row of work.rows)row[9]+=L('; sportovní zátěž: nejvýše 2 pracovní série, nech si 3–4 opakování v rezervě (RPE 6–7)','; load from other sports: at most 2 work sets, keep 3–4 reps in reserve (RPE 6–7)');
     // One instruction per set: the deload's reserve replaces "one more rep".
-    if(deload)for(const row of work.rows)row[9]=row[9].replace(/ – (?:cíl: o opakování víc|goal: one more rep)/,'')+L('; odlehčený týden: stejná váha, 3 opakování v rezervě','; deload week: same weight, 3 reps in reserve');
+    if(deload)for(const row of work.rows)row[9]=row[9].replace(/ – (?:cíl: o opakování víc|goal: one more rep)/,'')+(deload.illness?L('; po nemoci: stejná váha, 3 opakování v rezervě','; after being ill: same weight, 3 reps in reserve'):L('; odlehčený týden: stejná váha, 3 opakování v rezervě','; deload week: same weight, 3 reps in reserve'));
     if(moderated)for(const row of work.rows)row[9]+=explicitLegs?L('; blízko je náročný trénink: nech si 2–3 opakování v rezervě (RPE 7)','; a hard session is coming up: keep 2–3 reps in reserve (RPE 7)'):L('; nohy po vytrvalostním tréninku: nech si 2–3 opakování v rezervě (RPE 7)','; legs after endurance training: keep 2–3 reps in reserve (RPE 7)');
     if(stallSwaps[exercise])for(const row of work.rows)row[9]+=L('; místo '+stallSwaps[exercise]+': 3 tréninky bez posunu, nový podnět (k původnímu cviku se vrátíme)','; instead of '+stallSwaps[exercise]+': 3 sessions without progress, a new stimulus (we\'ll return to the original exercise)');
     const warmup = warmupRows(exercise, work.kg, !warmedUp);
@@ -1647,7 +1659,7 @@ export function generateStrengthPlan(context, options = {}) {
   snapDumbbells(rows, context?.trainingSetup?.dumbbellWeights);
   assignIntensities(rows, { phaseRpe: planPhase?.rpe });
   if(!rows.some(r=>r[0]==='WORK'))throw new Error(L('Pro toto vybavení nebyl nalezen vhodný cvik. Uprav vybavení v průvodci.', 'No suitable exercise was found for this equipment. Adjust your equipment in the setup guide.'));
-  return { date: context.date, planName: (focusMuscles ? L('Cílený trénink · ', 'Targeted workout · ') + focusLabels : planPhase ? planPhase.name : chosen.name) + (deload ? L(' · odlehčený týden', ' · deload week') : ''), deload, rationale: (deload ? deload.reason + ' ' : '') + (planPhase ? planPhase.rationale + ' ' : '') + rationale + L(' Časový plán: přibližně ' + timing.estimatedMinutes + ' z ' + requestedMinutes + ' minut včetně rozcvičení, pauz, nastavování strojů a rezervy.', ' Time plan: about ' + timing.estimatedMinutes + ' of ' + requestedMinutes + ' minutes including warm-up, rests, machine setup and a buffer.') + extraText, timing: { ...timing, routineSeconds: (warmup?.seconds || 0) + (stretching?.seconds || 0) }, warmup, stretching, spare: planRoutines(rows, muscleOf, context.trainingSetup || {}, requestedMinutes, routineOptions).spare, cardio: cardioFor(context.trainingSetup || {}, size.cardio), goal, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, balance:{sportMuscleLoad:Object.fromEntries(sportLoad),strengthCoverage:strengthCoverage(context,EXERCISES)}, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
+  return { date: context.date, planName: (focusMuscles ? L('Cílený trénink · ', 'Targeted workout · ') + focusLabels : planPhase ? planPhase.name : chosen.name) + (deload ? deload.illness ? L(' · po nemoci', ' · after being ill') : L(' · odlehčený týden', ' · deload week') : ''), deload, rationale: (deload ? deload.reason + ' ' : '') + (planPhase ? planPhase.rationale + ' ' : '') + rationale + L(' Časový plán: přibližně ' + timing.estimatedMinutes + ' z ' + requestedMinutes + ' minut včetně rozcvičení, pauz, nastavování strojů a rezervy.', ' Time plan: about ' + timing.estimatedMinutes + ' of ' + requestedMinutes + ' minutes including warm-up, rests, machine setup and a buffer.') + extraText, timing: { ...timing, routineSeconds: (warmup?.seconds || 0) + (stretching?.seconds || 0) }, warmup, stretching, spare: planRoutines(rows, muscleOf, context.trainingSetup || {}, requestedMinutes, routineOptions).spare, cardio: cardioFor(context.trainingSetup || {}, size.cardio), goal, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, balance:{sportMuscleLoad:Object.fromEntries(sportLoad),strengthCoverage:strengthCoverage(context,EXERCISES)}, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
 }
 
 export { EXERCISES };

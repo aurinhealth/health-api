@@ -6,7 +6,7 @@ import { athleteThresholds } from "./intervals-athlete.js";
 import { getWeekPlan, planWeekRoles, roleTime, roleFor } from "./week-planner.js";
 import { weekRoleOptions } from "./plan-context.js";
 import { availabilityOn } from "./training-availability.js";
-import { getChecks, thresholdSessions, estimateRideFtp, estimateRunPace, saveCheck, testResult, curveTestResult, getTestWorkout, thresholdOffer, recommendTestDay, testFor } from "./threshold-check.js";
+import { getChecks, thresholdSessions, estimateRideFtp, estimateRunPace, saveCheck, testResult, curveTestResult, getTestWorkout, thresholdOffer, recommendTestDay, testFor, returnAfterBreak } from "./threshold-check.js";
 import { intervalsReads } from "./intervals-reads.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { wahooStreams } from "./wahoo-detail.js";
@@ -58,6 +58,13 @@ export async function thresholdCheckState(env,ctx,today){
   const [{sessions,thresholds,athlete},checks]=await Promise.all([loadThresholdSessions(env,ctx,today),getChecks(env.DB)]);
   const current={ftp:thresholds.ftp||null,lthr:thresholds.lthr||null,runThresholdPace:thresholds.runThresholdPace||null,swimCss:thresholds.swimCss||null};
   const estimates={ride:estimateRideFtp(sessions,athlete,today),run:estimateRunPace(sessions,athlete,today)};
+  // Since when each value is known (the old-threshold offer): the row
+  // "seen" keeps each value with the day it first came, written only when one
+  // changes (audit wave 2, 7.2).
+  const seen=checks.seen?.estimate||{},fresh={...seen};
+  for(const metric of ['ftp','lthr','runThresholdPace'])if(current[metric]&&seen[metric]?.value!==current[metric])fresh[metric]={value:current[metric],since:today};
+  if(JSON.stringify(fresh)!==JSON.stringify(seen))await saveCheck(env.DB,'seen',{status:'seen',estimate:fresh}).catch(()=>{});
+  const sinceOf=(metric,c)=>{const touched=['applied','dismissed'].includes(c?.status)?String(c.updatedAt||'').slice(0,10):null,first=fresh[metric]?.since||null;return [first,touched].filter(Boolean).sort().at(-1)||null;};
   // The active plan's weeks set the days' roles (weekRoleOptions, as on Today).
   const active=await activePlan(env.DB,today).catch(()=>null);
   const live=active&&!active.pauseFrom?active:null;
@@ -116,7 +123,8 @@ export async function thresholdCheckState(env,ctx,today){
     if(c?.status==='scheduled'){const w=getTestWorkout(c.testId);scheduled.push({sport,testId:c.testId,testDate:c.testDate,name:w?.name||null,minutes:w?.duration_minutes||null});continue;}
     if(c?.status==='measured'){results.push({sport,testId:c.testId,testDate:c.testDate,result:c.result,current});continue;}
     if(sport==='swim')continue;
-    const offer=thresholdOffer({sport,sessions,current,estimate:estimates[sport],check:c,today});
+    const metric=sport==='run'?'runThresholdPace':current.ftp?'ftp':'lthr';
+    const offer=thresholdOffer({sport,sessions,current,estimate:estimates[sport],check:c,today,since:sinceOf(metric,c),back:returnAfterBreak(sessions.filter(x=>x.kind===sport).map(x=>x.date),today)});
     if(!offer)continue;
     const w=getTestWorkout(offer.testId);
     const when=recommendTestDay({today,sport,minutes:w.duration_minutes,days:days.map(d=>({date:d.date,sports:d.sports,minutes:d.minutes,role:d.prefs?roleFor(d.prefs,d.date,sport,d.options)?.role||null:null}))});

@@ -46,14 +46,21 @@ the phase, the coach itself), the same check runs before its length is set. Only
 openers keep their kind.
 
 - Red: only recovery, at most 45 min (run 30).
-- Signs of illness (breathing or skin/wrist temperature raised in sleep, a sick check-in): no intensity,
+- Nemoc ticked in Deník today, or yesterday without a ✕ today: a rest day, as with the status Nemoc
+  (the status itself is only offered).
+- Signs of illness (breathing or skin/wrist temperature raised in sleep): no intensity,
   at most 60 min (run 40).
 - Yellow: no intensity, tempo included.
 - Intensity (tempo, sweet spot, threshold, VO₂max) becomes easy for a beginner, after 7+ days without
   the sport, within 48 h of a hard day of either sport, after two quality days in 7, after lower-body
   gym in 48 h and in a recovery week.
-- After a break: no long session, at most 90 min (run 45). The three days after Nemoc: no intensity,
-  day 1 at most 45 min (run 30), days 2–3 at most 75 min (run 40).
+- After a break: no long session, at most 90 min (run 45). Back after 14+ days without the sport: the
+  whole first week without intensity, then a threshold test is offered (days 7–21 back); a threshold
+  8 weeks old is offered a test too.
+- The three days after Nemoc (a week after more than 7 days ill): no intensity, day 1 at most 45 min
+  (run 30), the next days at most 75 min (run 40). The first gym session after Nemoc holds the weights
+  with a set less; an exercise not done for 14+ days keeps its weight.
+- These numbers are estimates (audit wave 2, 9.2–9.4): no trial sets them.
 
 `tests/coach-matrix.test.mjs` checks these rules over 1080 days (6 mornings × 9 loads × 10 situations ×
 ride and run).

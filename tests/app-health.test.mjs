@@ -144,12 +144,13 @@ test("Health: oxygen from the watch first, Intervals.icu filling the rest; the H
   assert.equal(buildHealth({ ...input, fitness: { wellness: [] } }).oxygen, null, "no oxygen anywhere");
 });
 
-test("Health: the morning check-in lowers readiness as on Today and shows as its own part", () => {
+test("Health: Nemoc in Deník lowers readiness as on Today and shows as its own part", () => {
   const body = buildHealth(input).readiness;
-  const tired = buildHealth({ ...input, checkin: "tired" }).readiness;
-  assert.equal(tired.score, Math.min(body.score, 60));
-  assert.equal(tired.zone, "yellow");
-  assert.equal(tired.checkin, "tired");
+  const tired = buildHealth({ ...input, checkin: "sick" }).readiness;
+  assert.equal(tired.score, Math.min(body.score, 25));
+  assert.equal(tired.zone, "red");
+  // No answer card: the check-in question is gone (morning-checkin.js).
+  assert.equal(tired.checkin, null);
   assert.deepEqual(tired.parts.at(-1), { key: "checkin", points: tired.score - body.score });
   assert.ok(Math.abs(70 + tired.parts.reduce((s, p) => s + p.points, 0) - tired.score) <= 2, "parts still add up");
   assert.equal(buildHealth({ ...input, checkin: "fresh" }).readiness.score, body.score, "a good answer never raises it");

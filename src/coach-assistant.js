@@ -262,7 +262,7 @@ export function recoveryForCoach(r) {
   };
 }
 
-export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,appContext=null,message='',dayMinutes=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[],recoveryTime=null,journal=null}) {
+export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,appContext=null,message='',dayMinutes=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[],recoveryTime=null,journal=null,returns=null}) {
   const strengthSince=shiftDay(date,-14);
   const strengthSets=(gym?.history||[]).filter(r=>r.workout_date>=strengthSince&&r.workout_date<=date&&/^(WORK|DROP)$/.test(String(r.type||'WORK').toUpperCase())).sort((a,b)=>String(b.workout_date).localeCompare(String(a.workout_date))).slice(0,120);
   const days = week?.days?.map(row => ({
@@ -278,7 +278,7 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
   const engine = buildCyclingCoachV2({
     date, daily, week, fitness, health, gym,
     preferences:{cadence:"85–95 rpm",...preferences},
-    availabilityMinutes, goal:goal||focusGoal(focus), manualReadiness, capabilities,athleteState,sport:sport||engineSport(focus),focus,profile,checkin,upcomingTest,recoveryTime
+    availabilityMinutes, goal:goal||focusGoal(focus), manualReadiness, capabilities,athleteState,sport:sport||engineSport(focus),focus,profile,checkin,upcomingTest,recoveryTime,returns
   });
   // One place for every caller (chat, week planning, coach evaluation): a
   // strength athlete's day is a gym day unless a ride, run or swim is asked or planned.

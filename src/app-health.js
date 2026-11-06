@@ -193,7 +193,9 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
       // Days of baseline so far while a new athlete has under 14 (recovery-model.js).
       learningDays: readiness.learningDays ?? null,
       parts: [...readinessParts(body), ...(body.score != null && readiness.score < body.score ? [{ key: "checkin", points: readiness.score - body.score }] : [])],
-      checkin: checkin || null,
+      // The check-in question is gone; the only answer left is Nemoc from Deník
+      // (morning-checkin.js), shown as its own part, so no answer card.
+      checkin: null,
       hrv: c.hrv ? round(c.hrv.value) : null,
       restingHR: c.restingHR ? round(c.restingHR.value) : null,
       sleepMinutes: c.sleep ? c.sleep.minutes : null,
