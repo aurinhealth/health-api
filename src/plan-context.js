@@ -11,7 +11,7 @@ import { getWeekPlan, planWeekRoles, roleTime, planRoleOptions } from "./week-pl
 import { getAthleteState } from "./athlete-state.js";
 import { loadProfiles } from "./profile-suggestions.js";
 import { sportKinds } from "./athlete-focus.js";
-import { reviewPlan, planWeek, planQuality, planLoad, applyPlan, activePlan, planSports, planDoneSports } from "./training-plans.js";
+import { reviewPlan, planWeek, planQuality, planLoad, applyPlan, activePlan, planSports, planDoneSports, planOriginal } from "./training-plans.js";
 import { weekWeather, dayHours } from "./adaptive-week.js";
 import { weatherKitConfigured, weatherKitDetail } from "./weatherkit.js";
 import { ensureGymPlans } from "./gym-plan-store.js";
@@ -41,7 +41,10 @@ export async function planForWeek(env,ctx,start){
   const tri=plan.sport==='triathlon',capabilitiesOf=()=>tri?Promise.all(planSports(plan).map(s=>getCapabilities(env.DB,s).catch(()=>({})))).then(list=>Object.fromEntries(planSports(plan).map((s,i)=>[s,list[i]]))):getCapabilities(env.DB,plan.sport).catch(()=>({}));
   const [thresholds,capabilities,weight]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),capabilitiesOf(),plan.sport==='ride'||tri?latestStoredWeight(env.DB).catch(()=>null):null]);
   const options={thresholdPace:thresholds.runThresholdPace,hasPower:Number(thresholds.ftp)>0,shifts:capabilities,ftp:Number(thresholds.ftp)||null,weight:weightKg(weight),swimCss:thresholds.swimCss||null};
-  return {plan,pw,roles:await weekRoleOptions(env,ctx,plan,pw),load:planLoad(pw),apply:t=>applyPlan(t,plan,start,options)};
+  // The same week of the plan as it was made, for what changed and why (planChanges).
+  const base=planOriginal(plan),opw=planWeek(base,start);
+  return {plan,pw,roles:await weekRoleOptions(env,ctx,plan,pw),load:planLoad(pw),apply:t=>applyPlan(t,plan,start,options),
+    original:opw?{roles:planRoleOptions(base,planQuality(opw),planSports(base)),load:planLoad(opw),apply:t=>applyPlan(t,base,start,options)}:null};
 }
 // The options planWeekRoles takes for a week (week-planner.js), the same for
 // every caller: a plan's week sets its quality days and its sport as the main

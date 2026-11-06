@@ -1086,6 +1086,19 @@ final class SnapshotTests: XCTestCase {
             NavigationStack { PlanWeekContent(week: active.template.weeks[2], sport: "ride", detail: week).padding(.horizontal, 24) }.environment(model)
         }
         try render("plan-week-days", height: 700) { WeekDaysSheet(week: week, usual: 4).environment(model) }
+        // Every changed session says why; its detail shows the reason and the session it was.
+        let movedJSON = #","change":{"kind":"moved","line":"Přesunuto z út","text":"V úterý zůstal nesplněný, proto je přesunutý sem.","original":{"label":"Nad/pod prahem 3×12","minutes":90,"date":"2026-11-04"}}}"#
+        let shorterJSON = #","change":{"kind":"shorter","line":"Kratší: na 60 min je volno","text":"Volný čas toho dne na něj nechává 60 min, proto je kratší než 75 min v plánu.","original":{"label":"Z2 1 h 15","minutes":75,"date":"2026-11-06"}}}"#
+        var changedJSON = weekJSON
+        if let r = changedJSON.range(of: #""steps":"# + z2 + "}}") { changedJSON.replaceSubrange(r, with: #""steps":"# + z2 + "}" + shorterJSON) }
+        if let r = changedJSON.range(of: #""steps":"# + ss + "}}") { changedJSON.replaceSubrange(r, with: #""steps":"# + ss + "}" + movedJSON) }
+        let changed = try decoder.decode(PlanWeekDetail.self, from: Data(changedJSON.utf8))
+        XCTAssertEqual(changed.sessions.compactMap(\.change).map(\.kind), ["shorter", "moved"])
+        try render("plan-week-changed", glow: Palette.Glow.training, height: 1000) {
+            NavigationStack { PlanWeekContent(week: active.template.weeks[2], sport: "ride", detail: changed).padding(.horizontal, 24) }.environment(model)
+        }
+        let movedChange = try XCTUnwrap(changed.sessions[2].change)
+        try render("plan-session-changed", height: 420) { PlanChangeCard(change: movedChange).padding(24) }
         // Free time by weekday, two weeks in turn, this week only and the plan's days.
         let timeJSON = #"{"days":[45,60,0,60,0,180,240],"total":585,"daysB":[0,90,90,0,90,240,120],"totalB":630,"alternate":"2026-10-26","suits":[300,420],"short":false}"#
         let time = try decoder.decode(PlanPreview.Time.self, from: Data(timeJSON.utf8))

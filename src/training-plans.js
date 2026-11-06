@@ -766,6 +766,10 @@ export function planWeek(plan, date) {
     : returning ? { ...base, load: Math.min(base.load, .8), q: base.q.slice(0, 1), returning: true } : base;
   return { template, index, week: index + 1, weeks: template.weeks.length, spec, monday };
 }
+// The plan as it was made, without the changes of the athlete (moved,
+// shortened, skipped sessions, fewer days) and of the app (a lighter week, a
+// week back after a break): what planChanges compares a week against.
+export const planOriginal = plan => plan && { ...plan, moves: [], edits: {}, lightWeeks: [], returnFrom: null, weekDays: {} };
 // The quality days the week planner should make for the plan's week.
 export const planQuality = pw => pw ? pw.spec.q.length : null;
 
@@ -865,7 +869,7 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
     const workoutId = s.workoutId || (s.family ? planWorkoutId(sport, s, minutes, shiftBy) : null);
     const label = s.kind === "test" ? testLabel(sport) : s.label || (workoutId && planName(baseName(workoutId))) || x.label;
     const role = roleOf(s), intensity = x.intensity || .7;
-    return { ...x, role, label, minutes, tss: Math.round(minutes / 60 * intensity * intensity * 100), plan: { templateId: template.id, week: pw.week, weeks: pw.weeks, phase: spec.phase, kind: s.kind, family: s.family || null, level: s.level ?? null, workoutId, ...(s.movedFrom ? { movedFrom: s.movedFrom } : {}) } };
+    return { ...x, role, label, minutes, tss: Math.round(minutes / 60 * intensity * intensity * 100), plan: { templateId: template.id, week: pw.week, weeks: pw.weeks, phase: spec.phase, kind: s.kind, family: s.family || null, level: s.level ?? null, workoutId, ...(shiftBy ? { shiftBy } : {}), ...(s.movedFrom ? { movedFrom: s.movedFrom } : {}) } };
   });
   let kept = out.filter(x => !(x.sport === sport && (x.slot || 0) === 0 && dropped.has(x.date)));
   // Time for fewer days this week: the easy sessions go first, then the long one; key sessions stay.
@@ -961,6 +965,42 @@ function applyTriathlon(targets, plan, weekStart, pw, { thresholdPace = null, sh
   }
   result.sort((a, b) => a.date.localeCompare(b.date) || (a.slot || 0) - (b.slot || 0));
   return { ...targets, items: result, plan: { templateId: template.id, name: template.name, week: pw.week, weeks: pw.weeks, phase: spec.phase, phaseLabel: phaseLabel(spec.phase, "triathlon"), load: spec.load, returning: Boolean(spec.returning) } };
+}
+
+// ---- why a session changed ------------------------------------------------------
+// The week's plan sessions (`items`, applyPlan then capWeekTargets) against
+// the same week of the plan as it was made (`original`, planOriginal): each
+// changed session gets `change`, what changed, why in a few words (`line`) and
+// a sentence (`text`), and the session it was (`original`). kind: moved,
+// shorter, easier. A session the athlete skipped is not in the week at all.
+const DAY_SHORT = () => [L("po", "Mon"), L("út", "Tue"), L("st", "Wed"), L("čt", "Thu"), L("pá", "Fri"), L("so", "Sat"), L("ne", "Sun")];
+const DAY_ON = () => [L("V pondělí", "on Monday"), L("V úterý", "on Tuesday"), L("Ve středu", "on Wednesday"), L("Ve čtvrtek", "on Thursday"), L("V pátek", "on Friday"), L("V sobotu", "on Saturday"), L("V neděli", "on Sunday")];
+const DAY_FROM = () => [L("z pondělí", "from Monday"), L("z úterý", "from Tuesday"), L("ze středy", "from Wednesday"), L("ze čtvrtka", "from Thursday"), L("z pátku", "from Friday"), L("ze soboty", "from Saturday"), L("z neděle", "from Sunday")];
+export function planChanges(items = [], original = [], plan, weekStart) {
+  const pw = planWeek(plan, weekStart);
+  if (!pw) return items;
+  const at = (list, date, sport, slot = 0) => list.find(o => o.plan && o.date === date && o.sport === sport && (o.slot || 0) === slot && !o.brick);
+  const was = o => o ? { label: o.label, minutes: o.minutes, date: o.date } : null;
+  return items.map(x => {
+    if (!x.plan || x.brick || x.plan.kind === "race") return x;
+    const from = x.plan.movedFrom, o = at(original, from || x.date, x.sport, x.slot || 0), edit = plan.edits?.[x.date];
+    let change = null;
+    if (from) {
+      const own = Boolean(plan.edits?.[from]?.to);
+      const d = weekdayOf(from);
+      change = { kind: "moved", line: L("Přesunuto z ", "Moved from ") + DAY_SHORT()[d],
+        text: own ? L("Přesunuto ", "You moved it here ") + DAY_FROM()[d] + "." : L(DAY_ON()[d] + " zůstal nesplněný, proto je přesunutý sem.", "Missed " + DAY_ON()[d] + ", so it moved here."), original: was(o) };
+    } else if (Number(edit?.minutes) > 0 && o && x.minutes < o.minutes) {
+      change = { kind: "shorter", line: L("Kratší: tvoje úprava", "Shorter: your change"), text: L(`Zkráceno z ${o.minutes} na ${x.minutes} min podle tvé volby.`, `You shortened it from ${o.minutes} to ${x.minutes} min.`), original: was(o) };
+    } else if (o && KEY_KINDS.includes(o.plan.kind) && !KEY_KINDS.includes(x.plan.kind) && (pw.spec.light || pw.spec.returning)) {
+      change = pw.spec.light
+        ? { kind: "easier", line: L("Lehčí: odlehčený týden", "Easier: lighter week"), text: L("Tento týden je odlehčený podle tvé volby, bez náročných tréninků.", "You chose a lighter week, so it has no hard sessions."), original: was(o) }
+        : { kind: "easier", line: L("Lehčí: návrat po pauze", "Easier: back after a break"), text: L("První týden po pauze je lehčí, nejvýš s jedním náročným tréninkem.", "The first week back after a break is lighter, with one hard session at most."), original: was(o) };
+    } else if (Number(x.planMinutes) > x.minutes) {
+      change = { kind: "shorter", line: L(`Kratší: na ${x.minutes} min je volno`, `Shorter: ${x.minutes} min free`), text: L(`Volný čas toho dne na něj nechává ${x.minutes} min, proto je kratší než ${x.planMinutes} min v plánu.`, `Your free time that day leaves ${x.minutes} min for it, so it is shorter than the plan's ${x.planMinutes} min.`), original: { label: x.label, minutes: x.planMinutes, date: x.date } };
+    }
+    return change ? { ...x, plan: { ...x.plan, change } } : x;
+  });
 }
 
 const KEY_KINDS = ["quality", "test", "long"];

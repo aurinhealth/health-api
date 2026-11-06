@@ -896,10 +896,44 @@ struct PlanWeekDetail: Decodable, Equatable {
         /// Today or later and not done yet: it can be moved, shortened or skipped.
         var editable: Bool? = nil
         var edited: Bool? = nil
+        /// Changed by the athlete or the plan: what changed, why, and the session it was.
+        var change: Change? = nil
 
         var name: String { workout?.name ?? label ?? "" }
         var length: Int { Int((workout?.duration_minutes ?? minutes ?? 0).rounded()) }
         var isKey: Bool { ["quality", "test", "race"].contains(kind) }
+    }
+    /// Why a session changed (src/training-plans.js planChanges): kind moved,
+    /// shorter, easier or harder; `line` a few words under the session, `text`
+    /// the reason in a sentence, `original` the session it was.
+    struct Change: Decodable, Equatable {
+        let kind: String
+        let line: String
+        let text: String
+        var original: Original? = nil
+
+        struct Original: Decodable, Equatable {
+            let label: String?
+            let minutes: Double?
+            var date: String? = nil
+        }
+
+        var symbol: String {
+            switch kind {
+            case "moved": "arrow.uturn.left"
+            case "shorter": "clock"
+            case "harder": "chart.line.uptrend.xyaxis"
+            default: "info.circle"
+            }
+        }
+
+        var color: Color {
+            switch kind {
+            case "moved", "easier": Palette.amber
+            case "harder": Palette.blue
+            default: Palette.muted
+            }
+        }
     }
     let week: Int
     let weeksCount: Int
@@ -1002,6 +1036,7 @@ struct PlanSessionList: View {
     private var today: String { AppModel.localDate(Date()) }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
         Card {
             VStack(spacing: 0) {
                 ForEach(Array(detail.sessions.enumerated()), id: \.element.id) { index, s in
@@ -1013,6 +1048,12 @@ struct PlanSessionList: View {
                 }
             }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+        }
+        if detail.sessions.contains(where: { $0.change != nil }) {
+            Text("Každá změna v plánu říká proč. Klepni na trénink a uvidíš původní.")
+                .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 4)
+        }
         }
         .sheet(item: $moving) { s in
             MoveSessionSheet(session: s, detail: detail) { to in await edit(["date": .string(s.date), "op": .string("move"), "to": .string(to)]) }
@@ -1045,6 +1086,11 @@ struct PlanSessionList: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(s.name).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     Text(subtitle(s)).font(Typo.caption).foregroundStyle(Palette.muted)
+                    if let change = s.change {
+                        Label(change.line, systemImage: change.symbol)
+                            .font(Typo.caption.weight(.medium)).foregroundStyle(change.color)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Spacer()
                 badge(s)
