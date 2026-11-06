@@ -4036,3 +4036,7 @@
 "Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit. Předplatné Aurin Pro se tím nezruší, zrušíš ho v App Store." = "Everything Aurin keeps for you goes and can't be restored. This doesn't cancel Aurin Pro; cancel it in the App Store.";
 "Pak začne Aurin Pro za %@ měsíčně po 12 měsíců. Zrušit ho můžeš v Nastavení → Aurin Pro." = "Then Aurin Pro starts at %@ a month for 12 months. You can cancel it in Settings → Aurin Pro.";
 "Načítám ceny z App Store…" = "Loading prices from the App Store…";
+
+/* Settings → Zones: where the max heart rate comes from when none is typed (ZonesSettingsView.swift heartNote) */
+"Odhad podle věku" = "Estimate from age";
+"Nejvyšší tep z tréninků za 6 měsíců" = "Highest heart rate in 6 months of workouts";

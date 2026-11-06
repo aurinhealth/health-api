@@ -180,10 +180,18 @@ struct SettingsField: View {
     var unit: String? = nil
     var keyboard: UIKeyboardType = .decimalPad
     var placeholder = "–"
+    /// A line under the title, e.g. where a threshold comes from and how old it is.
+    var note: String? = nil
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(title).font(.body).foregroundStyle(Palette.ink)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.body).foregroundStyle(Palette.ink)
+                if let note {
+                    Text(note).font(Typo.caption).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             Spacer(minLength: 8)
             TextField(L10n.tr(placeholder), text: $text)
                 .keyboardType(keyboard)

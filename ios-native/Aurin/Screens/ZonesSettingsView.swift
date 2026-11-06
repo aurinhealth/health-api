@@ -54,7 +54,7 @@ struct ZonesSettingsView: View {
         SettingsPage(title: "Zóny") {
             if let error = store.errorMessage { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             SettingsGroup(title: "Tep") {
-                SettingsField(title: "Maximální tep", text: $hrmax, unit: "bpm", keyboard: .numberPad, placeholder: suggested("hrmax"))
+                SettingsField(title: "Maximální tep", text: $hrmax, unit: "bpm", keyboard: .numberPad, placeholder: suggested("hrmax"), note: heartNote)
                 SettingsDivider()
                 SettingsField(title: "Klidový tep", text: $rhr, unit: "bpm", keyboard: .numberPad, placeholder: suggested("rhr"))
             }
@@ -108,9 +108,9 @@ struct ZonesSettingsView: View {
     @ViewBuilder
     private func run(_ t: TrainingProfileResponse, _ zones: LiveZones) -> some View {
         SettingsGroup(title: "Prahové hodnoty") {
-            SettingsField(title: "Prahové tempo", text: $runPace, unit: Units.paceUnit, keyboard: .numbersAndPunctuation, placeholder: t.resolved.runThresholdPace.map { Self.pace(Units.pace($0)) } ?? "m:ss")
+            SettingsField(title: "Prahové tempo", text: $runPace, unit: Units.paceUnit, keyboard: .numbersAndPunctuation, placeholder: t.resolved.runThresholdPace.map { Self.pace(Units.pace($0)) } ?? "m:ss", note: note(t, "runThresholdPace"))
             SettingsDivider()
-            SettingsField(title: "Prahový tep", text: $runLthr, unit: "bpm", keyboard: .numberPad, placeholder: t.resolved.runLthr.map { Fmt.int($0) } ?? "–")
+            SettingsField(title: "Prahový tep", text: $runLthr, unit: "bpm", keyboard: .numberPad, placeholder: t.resolved.runLthr.map { Fmt.int($0) } ?? "–", note: note(t, "runLthr"))
         }
         SettingsGroup(title: "Tempové zóny", footer: editing == .pace ? editFooter(.pace) : nil,
                       action: editAction(.pace, zones)) {
@@ -149,11 +149,11 @@ struct ZonesSettingsView: View {
     @ViewBuilder
     private func bike(_ t: TrainingProfileResponse, _ zones: LiveZones) -> some View {
         SettingsGroup(title: "Prahové hodnoty") {
-            SettingsField(title: "FTP", text: $ftp, unit: "W", keyboard: .numberPad, placeholder: t.resolved.ftp.map { Fmt.int($0) } ?? "–")
+            SettingsField(title: "FTP", text: $ftp, unit: "W", keyboard: .numberPad, placeholder: t.resolved.ftp.map { Fmt.int($0) } ?? "–", note: note(t, "ftp"))
             SettingsDivider()
-            SettingsField(title: "Prahový tep", text: $lthr, unit: "bpm", keyboard: .numberPad, placeholder: t.resolved.lthr.map { Fmt.int($0) } ?? "–")
+            SettingsField(title: "Prahový tep", text: $lthr, unit: "bpm", keyboard: .numberPad, placeholder: t.resolved.lthr.map { Fmt.int($0) } ?? "–", note: note(t, "lthr"))
             SettingsDivider()
-            SettingsField(title: "Maximální tep na kole", text: $maxHr, unit: "bpm", keyboard: .numberPad, placeholder: t.resolved.maxHr.map { Fmt.int($0) } ?? "–")
+            SettingsField(title: "Maximální tep na kole", text: $maxHr, unit: "bpm", keyboard: .numberPad, placeholder: t.resolved.maxHr.map { Fmt.int($0) } ?? "–", note: note(t, "maxHr"))
         }
         SettingsGroup(title: "Výkonové zóny", footer: editing == .power ? editFooter(.power) : nil,
                       action: editAction(.power, zones)) {
@@ -197,7 +197,7 @@ struct ZonesSettingsView: View {
     @ViewBuilder
     private func swim(_ t: TrainingProfileResponse, _ zones: LiveZones) -> some View {
         SettingsGroup(title: "Prahové hodnoty", footer: "CSS je tempo, které udržíš zhruba 30 minut. Z něj jsou plavecké zóny.") {
-            SettingsField(title: "CSS", text: $swimCss, unit: "/100 m", keyboard: .numbersAndPunctuation, placeholder: t.resolved.swimCss.map { Self.pace($0) } ?? "m:ss")
+            SettingsField(title: "CSS", text: $swimCss, unit: "/100 m", keyboard: .numbersAndPunctuation, placeholder: t.resolved.swimCss.map { Self.pace($0) } ?? "m:ss", note: note(t, "swimCss"))
         }
         SettingsGroup(title: "Test 400 + 200 m", footer: "Po rozplavání 400 m naplno, pak 5 minut volně a 200 m naplno.") {
             SettingsField(title: "400 m", text: $test400, unit: "min", keyboard: .numbersAndPunctuation, placeholder: "m:ss")
@@ -835,6 +835,24 @@ struct ZonesSettingsView: View {
     // MARK: Heart rate (the profile)
 
     /// The worked-out value shown in an empty field.
+    /// Where a threshold comes from and how old it is, while its field still
+    /// shows the saved value (a typed change is the athlete's own).
+    private func note(_ t: TrainingProfileResponse, _ key: String) -> String? {
+        changes[key] == original[key] ? t.notes?[key] : nil
+    }
+
+    /// The max heart rate the app works with when none is typed: an estimate
+    /// from age must not look like a measured one.
+    private var heartNote: String? {
+        guard hrmax.trimmingCharacters(in: .whitespaces).isEmpty, store.suggestions["hrmax"]?.number != nil,
+              case .object(let sources)? = store.suggestions["sources"] else { return nil }
+        switch sources["hrmax"]?.string {
+        case "age-estimate": return L10n.tr("Odhad podle věku")
+        case "activities-6m": return L10n.tr("Nejvyšší tep z tréninků za 6 měsíců")
+        default: return nil
+        }
+    }
+
     private func suggested(_ key: String) -> String {
         (store.suggestions[key]?.number).map { Fmt.int($0) } ?? "–"
     }

@@ -11,7 +11,7 @@ import { getChecks, saveCheck } from "./threshold-check.js";
 import { setPlannedEnvironment, movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
 import { plannedDestinations, sendPlanned } from "./planned-send.js";
 import { linkPlanned } from "./planned-links.js";
-import { saveTrainingProfile, getTrainingProfile } from "./training-profile.js";
+import { saveTrainingProfile, getTrainingProfile, thresholdNotes } from "./training-profile.js";
 import { estimateThresholdPace, estimateFtp, FTP_METHODS, PACE_METHODS, PACE_ZONE_MODELS, POWER_ZONE_MODELS, HR_ZONE_MODELS, SWIM_ZONE_OFFSETS, swimZoneNames } from "./training-zones.js";
 import { writeIntervalsZones } from "./intervals-zones.js";
 import { writeWahooZones, writeWahooZonesLater } from "./wahoo.js";
@@ -130,7 +130,7 @@ export async function handleThresholdApi(request,env,ctx,url,session,internalAut
         else if(sport==='swim'){if(num(v.swimCss)>=60&&num(v.swimCss)<=240)patch.swimCss=num(v.swimCss);}
         else {if(num(v.runThresholdPace)>=150&&num(v.runThresholdPace)<=600)patch.runThresholdPace=num(v.runThresholdPace);if(num(v.runLthr)&&num(v.runLthr)<=230)patch.runLthr=num(v.runLthr);}
         if(!Object.keys(patch).length)throw new Error(L('Chybí hodnota k uložení.','There is no value to save.'));
-        await saveTrainingProfile(env.DB,{...await getTrainingProfile(env.DB),...patch});
+        await saveTrainingProfile(env.DB,{...await getTrainingProfile(env.DB),...patch},{today,by:check?.testId||'manual',keys:Object.keys(patch)});
         const t=await athleteThresholds(env);
         // Like Nastavení → Zóny: Intervals.icu only with "Write to Intervals.icu" on.
         const intervals=env.INTERVALS_API_KEY&&body.writeIntervals!==false?await writeIntervalsZones(env,t).catch(error=>({status:'error',message:error.message})):null;
@@ -148,7 +148,7 @@ export async function handleThresholdApi(request,env,ctx,url,session,internalAut
       if(request.method==='POST'&&url.pathname.endsWith('/estimate')){const body=await request.json().catch(()=>({}));return Response.json({status:'ok',...(body.kind==='pace'?estimateThresholdPace(String(body.method||''),body.inputs||{}):estimateFtp(String(body.method||''),body.inputs||{}))});}
       let body=null;
       let powerBefore=null;
-      if(request.method==='POST'){body=await request.json().catch(()=>({}));if(env.WAHOO_TOKEN&&body.writeWahoo!==false&&body.wahooAgain!==true)powerBefore=powerKey(await getTrainingProfile(env.DB));await saveTrainingProfile(env.DB,body);}
+      if(request.method==='POST'){body=await request.json().catch(()=>({}));if(env.WAHOO_TOKEN&&body.writeWahoo!==false&&body.wahooAgain!==true)powerBefore=powerKey(await getTrainingProfile(env.DB));await saveTrainingProfile(env.DB,body,{today:localToday()});}
       else if(request.method!=='GET')return Response.json({message:'Method not allowed'},{status:405});
       const t=await athleteThresholds(env);
       // Saved zones go to Intervals.icu too, unless the form says not to.
@@ -156,7 +156,7 @@ export async function handleThresholdApi(request,env,ctx,url,session,internalAut
       // Changed FTP or power zones go to Wahoo too, unless the form's "Write to Wahoo" is off (wahoo.js writeWahooZones).
       const toWahoo=Boolean(body&&env.WAHOO_TOKEN&&body.writeWahoo!==false&&(body.wahooAgain===true||powerKey(t.profile)!==powerBefore));
       const wahoo=toWahoo?await writeWahooZones(env,t).catch(error=>({status:'error',message:error.message})):null;
-      return Response.json({status:'ok',intervals,intervalsConnected:Boolean(env.INTERVALS_API_KEY),wahoo,wahooConnected:Boolean(env.WAHOO_TOKEN),profile:t.profile,resolved:{ftp:t.ftp,ftpSource:t.source,indoorFtp:t.indoorFtp,intervalsFtp:t.intervalsFtp,latestRideFtp:t.latestRideFtp,lthr:t.lthr,maxHr:t.maxHr,restHr:t.restHr,runThresholdPace:t.runThresholdPace,runPaceSource:t.runPaceSource,intervalsRunPace:t.intervalsRunPace,runLthr:t.runLthr,swimCss:t.swimCss,swimCssSource:t.swimCssSource,poolLength:t.poolLength,poolLengthSource:t.poolLengthSource,openWater:t.openWater},swimZones:t.swimZones,powerZones:t.powerZones,hrZones:t.hrZones,paceZones:t.paceZones,runHrZones:t.runHrZones,
+      return Response.json({status:'ok',intervals,intervalsConnected:Boolean(env.INTERVALS_API_KEY),wahoo,wahooConnected:Boolean(env.WAHOO_TOKEN),profile:t.profile,resolved:{ftp:t.ftp,ftpSource:t.source,indoorFtp:t.indoorFtp,intervalsFtp:t.intervalsFtp,latestRideFtp:t.latestRideFtp,lthr:t.lthr,maxHr:t.maxHr,restHr:t.restHr,runThresholdPace:t.runThresholdPace,runPaceSource:t.runPaceSource,intervalsRunPace:t.intervalsRunPace,runLthr:t.runLthr,swimCss:t.swimCss,swimCssSource:t.swimCssSource,poolLength:t.poolLength,poolLengthSource:t.poolLengthSource,openWater:t.openWater},notes:thresholdNotes(t,localToday()),swimZones:t.swimZones,powerZones:t.powerZones,hrZones:t.hrZones,paceZones:t.paceZones,runHrZones:t.runHrZones,
         // For working the zones out on the phone while a value is typed: the thresholds without the athlete's own, the models in use and the swim zones' defaults.
         preview:t.preview,hrModel:t.hrModel,runHrModel:t.runHrModel,runHrAuto:t.runHrAuto,runMaxHr:t.runMaxHr,swimZoneModel:{offsets:SWIM_ZONE_OFFSETS,names:swimZoneNames()},
         ftpMethods:Object.entries(FTP_METHODS).map(([id,m])=>({id,label:m.label,inputs:m.inputs.map(([key,label])=>({key,label}))})),
