@@ -85,3 +85,24 @@ test("Training adds only what it raises the target by above the safe minimum", (
   // An active day the Google Health budget raised: the day still shows only training.
   assert.deepEqual(dayCalories({ calorieTarget: 2600, calorieBreakdown: { ...breakdown, activityAdjustment: 0 } }), { target: 2600, everyday: 1592, bonus: 0 });
 });
+
+// Audit 13.4: Tuesday was forgotten (or logged in another app). It is not a
+// day of 0 kcal to eat back on the days ahead.
+test("A day gone by with nothing logged is left out of what is left", () => {
+  const days = dates.map((d, i) => day(i, i < 4 ? 2500 : 0, 2500, 0, 2500));
+  const forgotten = buildFoodWeek({ today: "2026-10-16", days: days.map((d, i) => i === 1 ? { ...d, kcal: 0, logged: false } : { ...d, logged: i < 5 }) });
+  assert.equal(forgotten.days[1].unlogged, true);
+  assert.equal(forgotten.days[1].eaten, null);
+  assert.equal(forgotten.unlogged, 1);
+  assert.equal(forgotten.target, 17500, "the week's target stays the week's");
+  assert.equal(forgotten.eaten, 7500);
+  assert.equal(forgotten.left, 7500, "Friday to Sunday, without Tuesday's 2500");
+  assert.equal(forgotten.perDay, 3750, "Saturday and Sunday, not 5000 each");
+  assert.equal(forgotten.byToday, 10000, "Monday, Wednesday, Thursday and Friday");
+  // Today with nothing logged yet is not "nezapsáno": the day is still going.
+  assert.equal(forgotten.days[4].unlogged, undefined);
+  // A day logged at 0 kcal (only water, a fasting day) still counts.
+  const logged = buildFoodWeek({ today: "2026-10-16", days: days.map((d, i) => i === 1 ? { ...d, kcal: 0, logged: true } : d) });
+  assert.equal(logged.unlogged, 0);
+  assert.equal(logged.left, 10000);
+});

@@ -2596,6 +2596,9 @@
 "max" = "max";
 "z" = "of";
 "Průměr za 7 dní: %@ %%" = "7-day average: %@%%";
+"Průměr za %@: %@ %%" = "Average over %@: %@%%";
+"Průměr za %@." = "Average over %@.";
+"Hodnotu má %@ z %@ jídel." = "%@ of %@ meals have a value.";
 "Dnes z" = "Today from";
 "Na obrazovce Jídlo" = "On the Food screen";
 "Oblíbené · %@ ze 3" = "Favourites · %@ of 3";

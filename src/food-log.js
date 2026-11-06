@@ -57,7 +57,8 @@ export async function logFood(db, input = {}) {
   const calories=n(input.calories), protein=n(input.protein_g), carbs=n(input.carbs_g), fat=n(input.fat_g);
   const each = (v, scale = servings) => v == null ? null : v * scale;
   const meal = diaryMealType(input.meal_type || input.mealType, input.meal_time || input.mealTime);
-  const note = compactNote({ mealType: meal, salt_g: each(n(input.salt_g, null)), amount_g: n(input.amount_g ?? input.grams, null), brand: text(input.brand) || null, barcode: normalizeBarcode(input.barcode) || null, text: text(input.note) || null });
+  // Without a fibre value the column keeps 0 and the note says it is unknown (micronutrients.js).
+  const note = compactNote({ mealType: meal, ...(n(input.fiber_g, null) == null ? { fiber_unknown: true } : {}), salt_g: each(n(input.salt_g, null)), amount_g: n(input.amount_g ?? input.grams, null), brand: text(input.brand) || null, barcode: normalizeBarcode(input.barcode) || null, text: text(input.note) || null });
   const result=await db.prepare("INSERT INTO food_logs (user_id,consumed_date,consumed_at,cookbook_page,recipe_title,servings,kcal,protein_g,carbs_g,fat_g,fiber_g,source,note,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(db.userId,
     date,consumedAt(date,input.meal_time||input.mealTime),null,text(input.name)||"Jídlo",servings,
     each(calories)??0,each(protein)??0,each(carbs)??0,each(fat)??0,each(n(input.fiber_g,null))??0,

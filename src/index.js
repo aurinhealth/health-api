@@ -2513,6 +2513,15 @@ async function foodLogForDate(env, date) {
   return { entries, totals };
 }
 
+function fiberUnknownNote(note) {
+  if (note == null || note === "") return JSON.stringify({ fiber_unknown: true });
+  try {
+    const parsed = JSON.parse(note);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return JSON.stringify({ ...parsed, fiber_unknown: true });
+  } catch {}
+  return note;
+}
+
 async function foodLog(env, request, url) {
   if (request.method === "GET") {
     const date = url.searchParams.get("date") || localToday();
@@ -2539,6 +2548,9 @@ async function foodLog(env, request, url) {
 
   const name = body.name || "Manual entry";
   const source = body.source || "manual";
+  // fiber_g cannot be empty in D1: a meal without a fibre value (voluntary on
+  // EU labels) keeps 0 there and says so in its note (micronutrients.js).
+  const note = body.fiber_g == null || body.fiber_g === "" ? fiberUnknownNote(body.note) : body.note || null;
 
   if (!name || !Number.isFinite(scaled.kcal)) {
     return Response.json({ status: "error", message: "name and kcal are required" }, { status: 400 });
@@ -2561,7 +2573,7 @@ async function foodLog(env, request, url) {
     scaled.fat_g,
     scaled.fiber_g,
     source,
-    body.note || null
+    note
   ).run();
 
   return Response.json({

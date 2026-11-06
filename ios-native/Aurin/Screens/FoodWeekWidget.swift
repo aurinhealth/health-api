@@ -18,6 +18,8 @@ struct FoodWeek: Decodable, Equatable {
     var over: Double? = nil
     /// What is left shared by today and the days ahead.
     var perDay: Double? = nil
+    /// Days gone by with nothing logged: left out of what is left, not eaten back.
+    var unlogged: Int? = nil
 }
 
 extension APIClient {
@@ -84,9 +86,10 @@ struct FoodWeekWidget: View {
         if let over = week.over, over > 0 {
             return Text(L10n.f("O %@ kcal víc", Fmt.int(over))).foregroundColor(Palette.red) + Text(verbatim: " " + L10n.tr("než cíl týdne"))
         }
-        let left = Text(L10n.f("Zbývá %@ kcal", Fmt.int(week.left ?? 0))).foregroundColor(Palette.ink)
-        guard let perDay = week.perDay else { return left }
-        return left + Text(verbatim: " · " + L10n.f("zhruba %@ na den", Fmt.int(perDay)))
+        var left = Text(L10n.f("Zbývá %@ kcal", Fmt.int(week.left ?? 0))).foregroundColor(Palette.ink)
+        if let perDay = week.perDay { left = left + Text(verbatim: " · " + L10n.f("zhruba %@ na den", Fmt.int(perDay))) }
+        guard let unlogged = week.unlogged, unlogged > 0 else { return left }
+        return left + Text(verbatim: "\n" + L10n.plural("%lld nezapsaný den se nepočítá.", unlogged))
     }
 
     /// "13.–19. 10.", "Oct 13–19".
