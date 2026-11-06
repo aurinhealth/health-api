@@ -92,7 +92,7 @@ import { lockReadiness } from "./readiness-lock.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
 import { loadMuscleFatigue, loadTrainingDoses, muscleFatigue } from "./muscle-fatigue.js";
 import { loadMuscleDetail } from "./muscle-detail.js";
-import { recoveryTime } from "./recovery-time.js";
+import { withRecoveryTime } from "./recovery-time.js";
 import { readGymPlan, ensureGymPlans } from "./gym-plan-store.js";
 import { listRecovery, addRecovery, updateRecovery, recoveryRoutine, describeRecovery } from "./recovery-plan.js";
 import { checkWeek, checkSummary, checkChips, checkSignature, strainOf, kindOfPlanned, readWeekCheck, saveWeekCheck, decideWeekCheck, shownWeekCheck } from './week-check.js';
@@ -1251,12 +1251,6 @@ async function coachPerformance(env,ctx,date){
   const out={...(trends||{}),...(curves?{curves}:{}),...(intervals?{intervals}:{})};
   return Object.keys(out).length?out:null;
 }
-// Regenerace on Today (recovery-time.js) from the last days' training and the
-// night Today shows; training is null on another day than today.
-function withRecoveryTime(today,training){
-  if(training)today.recoveryTime=recoveryTime({...training,now:Date.now(),sleep:today.sleep,hrv:today.hrv,restingHR:today.restingHR});
-  return today;
-}
 // Settings → Goals, "How your week is split": the split from the year (already
 // in the suggestions), the levels chosen by hand (one row) and the usual week.
 // The open-water choice of a swimmer or triathlete (Zóny → Plavání); one row, only for them.
@@ -1334,8 +1328,9 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   const [daily,fitness,gym,sleep,[profile,fluids,checkin,training],weekData]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),extras,weeksLoading]);
   applyEnergyBudget(daily,profile,health);
   // Regenerace of today, as Today shows it (recovery-time.js).
-  const regeneration=training?withRecoveryTime(buildToday({date,hour:localHour(),health,fitness,sleep,profile:profile||{},checkin}),training).recoveryTime:null;
-  return {date,daily,fitness,gym,fluids,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:await coachProfile(env,profile),athleteState:await getAthleteState(env.DB),cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin,recoveryTime:regeneration,journal:await journalForCoach(env.DB,date).catch(()=>null),upcomingTest:await getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null)};
+  const athleteState=await getAthleteState(env.DB);
+  const regeneration=training?withRecoveryTime(buildToday({date,hour:localHour(),health,fitness,sleep,profile:profile||{},checkin}),training,athleteState?.status).recoveryTime??null:null;
+  return {date,daily,fitness,gym,fluids,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:await coachProfile(env,profile),athleteState,cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin,recoveryTime:regeneration,journal:await journalForCoach(env.DB,date).catch(()=>null),upcomingTest:await getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null)};
 }
 
 // Everything the coach's note looks at for one day: 5 weeks of activities
@@ -2731,7 +2726,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         .then(([state,m])=>({...m,athleteState:state?.status||null,context:m.context?{...m.context,memories:usedMemories(state)}:null})).catch(()=>null):null;
       applyEnergyBudget(daily,profile,health);
       return Response.json(withRecoveryTime(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,location:place.location,forecast:place.forecast,gym:gym[date]||null,checkin,trainingPlan,
-        recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess,risks},unavailable:todayUnavailable(failed),morning}),training),{headers:{'Cache-Control':'no-store'}});
+        recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess,risks},unavailable:todayUnavailable(failed),morning}),training,morning?.athleteState),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 
