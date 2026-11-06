@@ -36,8 +36,9 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
 
 ### Zóny a FTP
 
-- **Výpočet:** `src/training-zones.js`, mimo jiné dvouparametrový model kritického výkonu (CP z testů 3 a 12 min).
-- **Zdroj:** Monod H, Scherrer J. Ergonomics 1965;8:329–338. Poole DC et al. *Critical power: an important fatigue threshold in exercise physiology.* Med Sci Sports Exerc 2016;48:2320–2334. [PMC5070974](https://pmc.ncbi.nlm.nih.gov/articles/PMC5070974/).
+- **Výpočet:** zóny jsou % prahu podle předvoleb jako v Intervals.icu (`src/training-zones.js`). Práh je hodnota zadaná v aplikaci nebo potvrzená testem (20min test × 0,95, Frielův 30min test pro prahový tep a tempo, CSS z 400 + 200 m), jinak hodnota z Intervals.icu. Nastavení → Zóny u každého prahu ukazuje, odkud je a jak je starý; odhad (z věku, z poslední jízdy) je označený jako odhad (`thresholdNotes` v `src/training-profile.js`). Bez FTP dostanou kroky jízdy tep podle Frielových zón podle toho, co trénují: sweet spot Z4, práh Z5a, VO2max Z5b (`src/workout-explanation.js`).
+- **CP z testů 3 a 12 min** (`FTP_METHODS.criticalPower`) je jen pro vlastníka a aplikace ho nevolá. Není to metoda zón: z pokusů kratších než 12 min vychází CP nad maximálním laktátovým ustáleným stavem.
+- **Zdroj:** Allen H, Coggan A. *Training and Racing with a Power Meter.* VeloPress (2. vyd. 2010). Friel J. *Quick guide to setting zones*, [TrainingPeaks](https://www.trainingpeaks.com/learn/articles/joe-friel-s-quick-guide-to-setting-zones). Přesnost odhadů FTP (asi ±5–10 %): Klitzke Borszcz FA et al. Int J Sports Physiol Perform 2019, doi:10.1123/ijspp.2018-0572; Inglis EC et al. Int J Sports Physiol Perform 2020, doi:10.1123/ijspp.2019-0214. CP nad MLSS: Mattioni Maturana F et al. Appl Physiol Nutr Metab 2016, doi:10.1139/apnm-2016-0248; J Sci Med Sport 2018, doi:10.1016/j.jsams.2017.11.015. 4×4 při 90–95 % max. tepu: Helgerud J et al. Med Sci Sports Exerc 2007;39:665–671, doi:10.1249/mss.0b013e3180304570.
 
 ### Pitný režim
 

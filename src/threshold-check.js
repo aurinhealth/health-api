@@ -155,11 +155,13 @@ export function estimateRunPace(sessions, athlete = {}, today) {
 // train the sport (4+ sessions in 6 weeks). A declined offer, or a value just
 // confirmed, comes back after 4 weeks, or sooner when the estimate moved
 // another 5 %.
-export function thresholdOffer({ sport, sessions, current, estimate, check = null, today }) {
+export function thresholdOffer({ sport, sessions, current, estimate: found, check = null, today }) {
   const recent = (sessions || []).filter(s => s.kind === sport && s.date > shift(today, -42) && s.date <= today);
   if (recent.length < 4) return null;
   if (check && ["scheduled", "measured"].includes(check.status)) return null;
   const metric = sport === "run" ? "runThresholdPace" : current?.ftp || recent.some(s => s.avgPower > 50) ? "ftp" : "lthr";
+  // The ride estimate is an FTP in watts: a heart-rate-only rider (LTHR) never compares it.
+  const estimate = metric === "lthr" ? null : found;
   const now = finite(current?.[metric]);
   let reason = null, change = null;
   if (!now) reason = "missing";

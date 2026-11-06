@@ -114,3 +114,11 @@ test("without a 20-min lap the test takes the ride's best 20 minutes", () => {
   assert.equal(bestPower(time.slice(0, 500), watts.slice(0, 500)), null);
   assert.equal(bestPower(time, watts.map(() => null)), null);
 });
+
+test("a heart-rate-only rider never compares the FTP estimate in watts with the LTHR", () => {
+  // The last six weeks without power; the estimate comes from older power rides.
+  const base = { sport: "ride", sessions: rides.map(r => ({ ...r, avgPower: 0 })), today, estimate: { value: 245, confidence: "medium" } };
+  assert.equal(thresholdOffer({ ...base, current: { lthr: 160 } }), null);
+  const missing = thresholdOffer({ ...base, current: {} });
+  assert.deepEqual([missing.metric, missing.reason, missing.estimate, missing.testId], ["lthr", "missing", null, "test-ride-lthr30"]);
+});

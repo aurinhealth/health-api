@@ -44,6 +44,8 @@ async function lastSettings(env, store) {
 }
 
 export async function athleteThresholds(env, fetchImpl = intervalsReads(env), { store = globalThis.caches?.default } = {}) {
+  // Where each threshold came from, for Nastavení → Zóny (thresholdNotes).
+  const sources = {};
   const out = { ftp: null, indoorFtp: null, lthr: null, maxHr: null, runThresholdPace: null, runPaceSource: null, intervalsRunPace: null, runLthr: null, runMaxHr: null, swimCss: null, swimCssSource: null, source: null, intervalsFtp: null, latestRideFtp: null };
   if (env.INTERVALS_API_KEY) {
     let settings = null, problem = null, thrown = false;
@@ -70,13 +72,14 @@ export async function athleteThresholds(env, fetchImpl = intervalsReads(env), { 
       // Intervals.icu stores swim threshold pace as speed (m/s) too.
       const swimSpeed = n(swim?.threshold_pace), css = swimSpeed ? (swimSpeed < 5 ? 100 / swimSpeed : swimSpeed) : null;
       if (css >= 60 && css <= 240) { out.swimCss = Math.round(css); out.swimCssSource = "intervals-settings"; }
-      if (ride) { out.ftp = n(ride.ftp); out.indoorFtp = n(ride.indoor_ftp); out.lthr = n(ride.lthr); out.maxHr = n(ride.max_hr); }
+      if (ride) { out.ftp = n(ride.ftp); out.indoorFtp = n(ride.indoor_ftp); out.lthr = n(ride.lthr); out.maxHr = n(ride.max_hr); if (out.lthr) sources.lthr = "intervals-settings"; if (out.maxHr) sources.maxHr = "intervals-settings"; }
       if (run) {
         // Intervals.icu stores threshold pace as speed (m/s); accept s/km too.
         const v = n(run.threshold_pace);
         const pace = v == null ? null : v < 20 ? 1000 / v : v;
         if (pace && pace >= 150 && pace <= 600) { out.runThresholdPace = Math.round(pace); out.intervalsRunPace = out.runThresholdPace; out.runPaceSource = "intervals-settings"; }
         out.runLthr = n(run.lthr); out.runMaxHr = n(run.max_hr);
+        if (out.runLthr) sources.runLthr = "intervals-settings";
       }
       if (out.ftp) { out.source = "intervals-settings"; out.intervalsFtp = out.ftp; }
     }
@@ -95,7 +98,7 @@ export async function athleteThresholds(env, fetchImpl = intervalsReads(env), { 
   if (env.DB) { try { profile = await getTrainingProfile(env.DB); } catch (error) { console.error("Training profile unavailable", error.message); } }
   // A manual FTP replaces the Intervals values, including its indoor FTP.
   if (profile.ftp) { out.ftp = profile.ftp; out.indoorFtp = null; out.source = "manual"; }
-  for (const key of ["lthr", "maxHr"]) if (profile[key]) out[key] = profile[key];
+  for (const key of ["lthr", "maxHr"]) if (profile[key]) { out[key] = profile[key]; sources[key] = "manual"; }
   // Max and resting heart rate typed in Nastavení → Tep a aktivita beat
   // Intervals.icu; the values calibrated from the activities and the wellness
   // (refreshed once a day) only fill what nothing else has.
@@ -104,14 +107,14 @@ export async function athleteThresholds(env, fetchImpl = intervalsReads(env), { 
     if (!out.maxHr || !profile.restHr) { try { await refreshSuggestions(env, { fetchImpl }); } catch (error) { console.error("Profile suggestions not refreshed", error.message); } }
     try { ({ saved: own, suggested, effective: personal } = await loadProfiles(env.DB, env.USER_ID)); } catch (error) { console.error("Profile unavailable", error.message); }
   }
-  if (!profile.maxHr && n(own?.hrmax)) { out.maxHr = n(own.hrmax); out.runMaxHr = null; }
-  if (!out.maxHr && n(personal?.hrmax)) out.maxHr = n(personal.hrmax);
+  if (!profile.maxHr && n(own?.hrmax)) { out.maxHr = n(own.hrmax); out.runMaxHr = null; sources.maxHr = "heart"; }
+  if (!out.maxHr && n(personal?.hrmax)) { out.maxHr = n(personal.hrmax); sources.maxHr = suggested?.sources?.hrmax || null; }
   out.restHr = profile.restHr || n(personal?.rhr) || null;
   // Without the max and resting rate typed in the app: Intervals.icu, then the calibrated values.
   if (!preview.maxHr) preview.maxHr = n(suggested?.hrmax);
   preview.restHr = n(suggested?.rhr);
   if (profile.runThresholdPace) { out.runThresholdPace = profile.runThresholdPace; out.runPaceSource = "manual"; }
-  if (profile.runLthr) out.runLthr = profile.runLthr;
+  if (profile.runLthr) { out.runLthr = profile.runLthr; sources.runLthr = "manual"; }
   out.paceZones = paceZones(profile, out.runThresholdPace);
   if (profile.swimCss) { out.swimCss = profile.swimCss; out.swimCssSource = "manual"; }
   out.swimZones = swimZones(out.swimCss, profile);
@@ -133,6 +136,7 @@ export async function athleteThresholds(env, fetchImpl = intervalsReads(env), { 
   // The preset the running zones come from without the athlete's own (Reset).
   out.runHrAuto = hrModelFor(runModel, out.runLthr, out.runMaxHr || out.maxHr, out.restHr);
   out.profile = profile;
+  out.sources = { ...sources, ftp: out.source, runThresholdPace: out.runPaceSource, swimCss: out.swimCssSource };
   out.powerZones = powerZones(profile, out.ftp);
   out.hrModel = hrModelFor(profile.hrZoneModel || "frielLthr", out.lthr, out.maxHr, out.restHr);
   out.hrZones = hrZones({ ...profile, hrZoneModel: out.hrModel, lthr: out.lthr, maxHr: out.maxHr, restHr: out.restHr });
