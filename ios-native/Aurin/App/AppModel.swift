@@ -31,6 +31,9 @@ final class AppModel {
         get { todayScreen.value }
         set { todayScreen.value = newValue }
     }
+    /// An iPhone without a watch or ring (audit 14.2), from today's data:
+    /// Health and the readiness detail explain it instead of waiting for a night.
+    var noWearable: Bool { !demo && today?.readiness.withoutWearable == true }
     var training: TrainingSnapshot? {
         get { trainingScreen.value }
         set { trainingScreen.value = newValue }

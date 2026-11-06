@@ -122,7 +122,7 @@ struct ReadinessTodayIntent: AppIntent {
         var today = await SiriData.today(fresh: false)
         if today?.readiness.score == nil { today = await SiriData.today(fresh: true) }
         let text = SiriAnswer.readiness(score: today?.readiness.score, zone: today?.readiness.zone,
-                                        advice: today?.summary?.recommendation)
+                                        advice: today?.summary?.recommendation, noWearable: today?.readiness.withoutWearable == true)
         return .result(dialog: SiriAnswer.dialog(text))
     }
 }
@@ -171,7 +171,7 @@ struct SleepLastNightIntent: AppIntent {
         guard SiriData.signedIn else { return .result(dialog: SiriAnswer.dialog(SiriAnswer.signedOut)) }
         var today = await SiriData.today(fresh: false)
         if today?.sleep?.minutes == nil { today = await SiriData.today(fresh: true) }
-        return .result(dialog: SiriAnswer.dialog(SiriAnswer.sleep(today?.sleep)))
+        return .result(dialog: SiriAnswer.dialog(SiriAnswer.sleep(today?.sleep, noWearable: today?.readiness.withoutWearable == true)))
     }
 }
 
@@ -412,8 +412,10 @@ enum SiriAnswer {
     static var signedOut: String { L10n.tr("Nejdřív se přihlas v aplikaci Aurin.") }
 
     /// "Připravenost je dnes 78, v obvyklém rozmezí." and Today's advice when there is one.
-    static func readiness(score: Int?, zone: String?, advice: String?) -> String {
+    static func readiness(score: Int?, zone: String?, advice: String?, noWearable: Bool = false) -> String {
         guard let score else {
+            // Without a watch or ring no number is coming (audit 14.2).
+            if noWearable { return L10n.tr("Připravenost počítají hodinky nebo prsten. Bez nich ti radím podle tréninku a zátěže.") }
             return L10n.tr("Dnešní připravenost zatím není. Ukáže se, až hodinky nahrají dnešní spánek.")
         }
         // The same words as the label by the number on Today (ReadinessText.pill).
@@ -459,8 +461,9 @@ enum SiriAnswer {
     }
 
     /// "Dnes v noci: 7 hodin 12 minut spánku, od 23:48 do 7:02. Index spánku 82."
-    static func sleep(_ sleep: TodaySnapshot.Sleep?) -> String {
+    static func sleep(_ sleep: TodaySnapshot.Sleep?, noWearable: Bool = false) -> String {
         guard let minutes = sleep?.minutes, minutes > 0 else {
+            if noWearable { return L10n.tr("Bez hodinek nebo prstenu spánek neměřím.") }
             return L10n.tr("Dnešní spánek zatím není. Ukáže se, až hodinky nahrají noc.")
         }
         var text = L10n.f("Dnes v noci: %@ spánku.", spoken(minutes: Int(minutes.rounded())))
