@@ -59,7 +59,8 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
   - HRV (50 %) jako lnRMSSD proti průměru a SD předchozích 60 dní.
   - Klidový tep (25 %) proti stejné baseline.
   - Spánek (25 %) jako procento potřeby spánku.
-  - Každá složka: osobní průměr = 70, −1 SD = 50, −2 SD = 30. Celkem 0–100; zelená ≥ 67, žlutá 34–66, červená < 34.
+  - Každá složka: osobní průměr = 70, −1 SD = 60, −2 SD = 40. Do −0,5 SD pod průměrem se HRV i klidový tep počítají jako průměr (nejmenší významná změna, Plews 2012; Javaloyes 2019), nad průměrem beze změny (+1 SD = 90). Celkem 0–100; zelená ≥ 67, žlutá 34–66, červená < 34.
+  - Proč tolerance (audit 5.4, 2026-11-06): na ostrém serveru (5 účtů, 205 dní) bylo 60 % dní žlutých, 69 ze 123 hlavně kvůli spánku, 47 kvůli HRV. Tolerance spolu s dluhem v potřebě spánku nejvýš 30 min snížila žluté dny na 51 % a červené ze 14 na 6, žádný pokles HRV o 1,5 SD a víc se neukázal zeleně. 3denní ani 7denní průměr HRV nepomohl (67 % a 70 % žlutých). Měření: `scripts/readiness-zones.mjs`.
   - Trend: 7denní průměr lnRMSSD pod průměrem o víc než nejmenší významnou změnu (0,5 SD).
   - Dech ve spánku o ≥ 1 dech/min a 2 SD nad baseline ubere 10 bodů.
   - Teplota kůže ve spánku o ≥ 0,5 °C a zároveň 2 noční SD nad 30denní baseline Google Health ubere 10 bodů (Google Health typ `daily-sleep-temperature-derivations`).
@@ -83,7 +84,7 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
 ### 2.2 Spánkový index, potřeba spánku a spánkový dluh
 
 - **Výpočet:** `sleepNeedMinutes`, `sleepIndexScore`, `sleepDebtMinutes` v `src/recovery-model.js`.
-  - Potřeba spánku (`sleepNeedFor`): 8 h (od 65 let 7,5 h); po zátěži dne ≥ 14 o 15 min a po ≥ 18 o 30 min víc; při nízkém HRV statusu (7denní lnRMSSD pod baseline o víc než SWC) o 15 min; se spánkovým dluhem o čtvrtinu dluhu, nejvýš 30 min. Zdřímnutí (označené zařízením jako `nap`, nebo spánek pod 3 h začatý mezi 9:00 a 20:00 místního času) potřebu sníží; krátká noc není zdřímnutí, zvýší dluh. Výsledek vždy 7–9 h.
+  - Potřeba spánku (`sleepNeedFor`): 8 h (od 65 let 7,5 h); po zátěži dne ≥ 14 o 15 min a po ≥ 18 o 30 min víc; při nízkém HRV statusu (7denní lnRMSSD pod baseline o víc než SWC) o 15 min; se spánkovým dluhem 7 nocí o dluh, nejvýš 30 min (do 2026-11-06 nejvýš 60 min, audit 5.4). Zdřímnutí (označené zařízením jako `nap`, nebo spánek pod 3 h začatý mezi 9:00 a 20:00 místního času) potřebu sníží; krátká noc není zdřímnutí, zvýší dluh. Výsledek vždy 7–9 h.
   - Index: délka proti potřebě (50 bodů; nula při polovině potřeby, plný počet při splněné potřebě); kvalita (35): když zařízení hlásí dobu usnutí a bdění, pak efektivita od 85 % (20), usnutí do 30 min (7,5) a bdění po usnutí do 20 min (7,5), jinak jen efektivita (35); podíl hlubokého spánku ≥ 13 % a REM ≥ 20 % (15). Bez fází se přepočítá.
   - Dluh: součet nedospání za 7 dní včetně zdřímnutí; delší den spánku splatí nejvýš hodinu.
   - Noc z Intervals.icu nemá čas v posteli, takže vlastní index spočítat nejde; pak se ukáže skóre spánku ze zařízení (`sleepScore`), pokud ho Intervals.icu má (`sleepIndexFor`).
@@ -96,7 +97,7 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
   - Ohayon MM et al. Sleep 2004;27:1255–1273 (65 studií, 3 577 lidí): podíl hlubokého spánku a REM s věkem klesá, po 60 letech už klesá jen efektivita. Přesná čísla podle věku z tabulek studie zatím nemáme, proto prahy nepřizpůsobujeme věku.
   - Van Dongen HP et al. Sleep 2003;26:117–126: nedospání se sčítá.
   - Walsh NP et al. Br J Sports Med 2021;55:356–368 (expertní konsenzus): univerzální doporučení 7–9 h pro sportovce „pravděpodobně není ideální“, doporučuje individuální přístup, více příležitosti ke spánku při vysoké tréninkové zátěži a zdřímnutí 20–90 min. Podle toho přidáváme čas po náročném dni a se spánkovým dluhem.
-  - Whoop: potřeba spánku = základ + dluh + zátěž − zdřímnutí (složky jsou v jejich API). Garmin Sleep Coach: věk, aktivita, historie spánku, zdřímnutí a HRV status, vždy 7–9 h. Ani jeden nezveřejňuje velikost jednotlivých přídavků; naše +15 min za HRV a čtvrtina dluhu jsou kalibrace.
+  - Whoop: potřeba spánku = základ + dluh + zátěž − zdřímnutí (složky jsou v jejich API). Garmin Sleep Coach: věk, aktivita, historie spánku, zdřímnutí a HRV status, vždy 7–9 h. Ani jeden nezveřejňuje velikost jednotlivých přídavků; naše +15 min za HRV a strop dluhu 30 min jsou kalibrace.
   - Přesnost fází z hodinek je 60–85 % proti polysomnografii, proto mají fáze nejmenší váhu.
 - **Proti konkurenci:** stejné vstupy jako Garmin Sleep Coach (věk, aktivita, historie spánku, zdřímnutí, HRV) i jeho rozmezí 7–9 h; navíc kritéria kvality spánku NSF, která Garmin ani Whoop nezveřejňují.
 
@@ -191,4 +192,4 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
 
 - **Výsledky ověření (bod 2.8):** nástroj je hotový, ale tvrzení „index předpovídá průběh tréninku“ lze použít až po spuštění na reálných datech (aspoň desítky tréninkových dní u více uživatelů).
 - **Normy fází spánku podle věku:** přesná čísla z tabulek Ohayon 2004 jsme z prostředí nezískali; prahy fází proto nejsou věkově upravené.
-- **Přídavky k potřebě spánku:** +15 min za nízké HRV a čtvrtina dluhu jsou naše kalibrace; Garmin ani Whoop své hodnoty nezveřejňují.
+- **Přídavky k potřebě spánku:** +15 min za nízké HRV a strop dluhu 30 min jsou naše kalibrace; Garmin ani Whoop své hodnoty nezveřejňují.

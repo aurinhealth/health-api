@@ -114,7 +114,7 @@ export async function accountZones(env, days = DAYS) {
   const goal = sleepSettings(profile || {}).goal;
   for (let d = from; d < today; d = shift(d, 1)) {
     const r = readinessFor({ date: d, google: health.wellness || [], sessions: sleep.sessions || [], profile: { ...(profile || {}), readinessLocks: locks } });
-    if (r.zone && (rescore(r) !== r.score || rescore(r, { debt: 60 }, goal) !== r.score)) out.causes.mismatch++;
+    if (r.zone && (rescore(r) !== r.score || rescore(r, { debt: 30 }, goal) !== r.score)) out.causes.mismatch++;
     for (const [name, rule] of Object.entries(RULES)) {
       const zone = name === 'now' ? r.zone : zoneOf(rescore(r, rule, goal)), c = out[name];
       c.days++;
@@ -185,7 +185,7 @@ async function main() {
     '### Why the yellow days are yellow (finding 5.4)', '',
     `Of ${total.yellow} yellow days: ${causes.hrv} mostly HRV, ${causes.restingHR} mostly resting heart rate, ${causes.sleep} mostly sleep, ${causes.shortNight} a short night's cap, ${causes.breathingOrTemp} breathing or temperature points, ${causes.none} no part under its normal. ${causes.noSleep} without a scored night; ${causes.near} at 64–66 (three points from green). Rescore check: ${causes.mismatch} days differ.`, '',
     '### Rules on the same days', '',
-    'band = a part under its normal gets 10 points back up to normal (0.5 SD for HRV and resting heart rate, 5 % of the sleep need); free = a part under its normal costs nothing (a bound); debtN = the sleep debt of the week in the need of the night capped at N minutes (today 60). Last column: days with the morning\'s HRV over 1.5 SD under normal that the rule shows green while today\'s rule did not.', '',
+    'band = a part under its normal gets 10 points back up to normal (0.5 SD for HRV and resting heart rate, 5 % of the sleep need); free = a part under its normal costs nothing (a bound); debtN = the sleep debt of the week in the need of the night capped at N minutes (today 30, 60 before audit 5.4). Last column: days with the morning\'s HRV over 1.5 SD under normal that the rule shows green while today\'s rule did not.', '',
     '| Rule | Green | Yellow | Red | Yellow per account | Big HRV drop shown green |', '|---|---|---|---|---|---|',
     ...Object.keys(RULES).map(rule), ''].join('\n');
   console.log(text);
