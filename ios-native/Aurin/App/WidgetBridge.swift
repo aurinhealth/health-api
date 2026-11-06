@@ -22,12 +22,14 @@ enum WidgetBridge {
                                       weekZones: today.week.map { days in Dictionary(days.compactMap { d in d.zone.map { (d.date, $0) } }, uniquingKeysWith: { a, _ in a }) },
                                       hrvSeries: today.hrv.map { Array($0.series.suffix(7).map(\.value)) },
                                       restingSeries: today.restingHR.map { Array($0.series.suffix(7).map(\.value)) })
-        // The same day again (a refresh with nothing new) leaves the widgets
-        // alone: reloads are budgeted, and the time saved is never shown.
-        var saved = WidgetSnapshot.load()
-        saved?.updated = snapshot.updated
-        if saved != snapshot {
-            snapshot.save()
+        // The same day again (a refresh with nothing new) keeps the new time,
+        // but redraws the widgets only when they may show "před 3 h" by now:
+        // reloads are budgeted.
+        let saved = WidgetSnapshot.load()
+        var same = saved
+        same?.updated = snapshot.updated
+        snapshot.save()
+        if same != snapshot || saved?.hoursOld(at: snapshot.updated) != nil {
             WidgetCenter.shared.reloadAllTimelines()
         }
         Task { @MainActor in
@@ -54,6 +56,23 @@ enum WidgetBridge {
         if week.save() { WidgetCenter.shared.reloadTimelines(ofKind: "week") }
         AurinSpotlight.index(ahead)
     }
+
+    /// The week for the large widget when Today shows the saved one is out of
+    /// date: a new week (Monday), or today's workouts differ from it (one done,
+    /// added or moved). Before, it waited for a visit to Training and asked to
+    /// open the app all Monday. Training loads only then, once for the same Today.
+    @MainActor
+    static func followWeek(_ today: TodaySnapshot, api: APIClient) async {
+        let sessions = today.plan.compactMap(\.session)
+        func minutes(_ status: String) -> Double { Double(sessions.filter { $0.status == status }.compactMap(\.minutes).reduce(0, +)) }
+        let day = WidgetWeek.load()?.days.first { $0.date == today.date }
+        if let day, day.minutes == minutes("done"), day.planned == minutes("planned") { return }
+        let mark = [today.date, String(minutes("done")), String(minutes("planned"))].joined(separator: "|")
+        guard mark != followed, let training = try? await api.training(), !Task.isCancelled else { return }
+        followed = mark
+        update(training: training)
+    }
+    @MainActor private static var followed: String?
 
     /// Redraws the widgets in a new language or new units.
     static func reload() {

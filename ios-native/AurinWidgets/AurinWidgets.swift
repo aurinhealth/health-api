@@ -88,6 +88,12 @@ enum W {
         }
     }
 
+    /// "před 3 h" when the snapshot is 2 hours old or more at the entry's time.
+    static func age(_ s: WidgetSnapshot, at date: Date) -> String? {
+        guard let hours = s.hoursOld(at: date) else { return nil }
+        return hours < 48 ? L10n.f("před %@ h", String(hours)) : L10n.f("před %@ dny", String(hours / 24))
+    }
+
     static func hm(_ minutes: Double?) -> String {
         guard let m = minutes else { return "–" }
         let total = Int(m.rounded())
@@ -181,14 +187,30 @@ struct WidgetTrend: View {
 }
 
 /// Without a saved snapshot (not signed in yet, or the App Group is missing).
+/// The Lock Screen's round and one-line spaces get the "open the app" symbol
+/// and a short line: the sentence did not fit there.
 struct EmptyWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(verbatim: "Aurin").font(.caption.weight(.semibold)).foregroundStyle(W.muted)
-            Spacer()
-            Text(L10n.tr("Otevři aplikaci, ať se data načtou.")).font(.caption).foregroundStyle(W.ink)
+        switch family {
+        case .accessoryCircular:
+            ZStack {
+                AccessoryWidgetBackground()
+                Image(systemName: "arrow.up.forward.app").font(.title3)
+            }
+            .accessibilityElement()
+            .accessibilityLabel(Text(verbatim: L10n.tr("Otevři aplikaci, ať se data načtou.")))
+        case .accessoryInline:
+            Label(L10n.tr("Aurin: otevři aplikaci"), systemImage: "arrow.up.forward.app")
+        default:
+            VStack(alignment: .leading, spacing: 4) {
+                Text(verbatim: "Aurin").font(.caption.weight(.semibold)).foregroundStyle(W.muted)
+                Spacer()
+                Text(L10n.tr("Otevři aplikaci, ať se data načtou.")).font(.caption).foregroundStyle(W.ink)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 }
 
@@ -329,21 +351,29 @@ struct DayWidgetView: View {
 
     var body: some View {
         if let s = entry.snapshot {
+            // Steps and strain from hours ago would read as now (Background App Refresh off).
+            let age = W.age(s, at: entry.date)
             HStack(alignment: .top, spacing: 14) {
                 Link(destination: URL(string: "aurin://open/readiness")!) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.tr("Připravenost")).font(.caption.weight(.medium)).foregroundStyle(W.muted)
                         Text(s.readiness.map(String.init) ?? "–").font(W.number(50)).foregroundStyle(W.ink)
-                        Circle().fill(W.zoneColor(s.zone)).frame(width: 8, height: 8)
+                        // The zone in a word, not only a coloured dot: readable
+                        // without colour and on a tinted Home Screen.
+                        if let word = W.zoneWord(s.zone) {
+                            Text(word.capitalized(with: L10n.locale)).font(.caption2.weight(.semibold)).foregroundStyle(W.zoneColor(s.zone)).widgetAccentable()
+                        }
                         Spacer(minLength: 0)
                         if let title = s.nextTitle {
-                            Text((s.nextTime.map { ClockText.format($0) + " " } ?? "") + title).font(.caption2.weight(.semibold)).foregroundStyle(W.amber).lineLimit(2)
+                            Text((s.nextTime.map { ClockText.format($0) + " " } ?? "") + title).font(.caption2.weight(.semibold)).foregroundStyle(W.amber)
+                                .lineLimit(age == nil ? 2 : 1)
                         }
+                        if let age { Text(age).font(.caption2).foregroundStyle(W.muted).lineLimit(1) }
                     }
                 }
                 VStack(alignment: .leading, spacing: 7) {
                     Link(destination: URL(string: "aurin://open/sleep")!) { row("moon.fill", W.indigo, "Spánek", W.hm(s.sleepMinutes)) }
-                    Link(destination: URL(string: "aurin://open/training")!) { row("flame.fill", W.amber, "Námaha", W.decimal(s.strain) + (s.strainPlanned.map { " / " + W.decimal($0) } ?? "")) }
+                    Link(destination: URL(string: "aurin://open/strain")!) { row("flame.fill", W.amber, "Námaha", W.decimal(s.strain) + (s.strainPlanned.map { " / " + W.decimal($0) } ?? "")) }
                     Link(destination: URL(string: "aurin://open/food")!) { row("fork.knife", W.rust, "Jídlo", W.int(s.kcal) + (s.kcalTarget.map { " / " + W.int($0) } ?? "") + " kcal") }
                     Link(destination: URL(string: "aurin://open/food")!) { row("drop.fill", W.blue, "Pití", W.water(s.waterMl, s.waterTarget)) }
                     if let bed = s.bedtime {

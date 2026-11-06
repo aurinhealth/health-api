@@ -393,6 +393,9 @@
 "Otevře detail formy a kondice" = "Opens form and fitness details";
 "Otevře nastavení spánku" = "Opens sleep settings";
 "Otevři aplikaci, ať se data načtou." = "Open the app to load your data.";
+"Aurin: otevři aplikaci" = "Aurin: open the app";
+"před %@ h" = "%@ h ago";
+"před %@ dny" = "%@ days ago";
 "Otevřít Nastavení" = "Open Settings";
 "Otevřít nastavení iPhonu" = "Open iPhone Settings";
 "Ověřuji…" = "Verifying…";

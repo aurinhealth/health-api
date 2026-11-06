@@ -558,6 +558,24 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.readiness, 78)
     }
 
+    /// Audit 19.2: after midnight the widgets show "–" for steps and strain, not
+    /// a real-looking 0, and say "před 3 h" from 2 hours on.
+    func testWidgetSnapshotNewDayAndAge() {
+        var saved = WidgetSnapshot.sample
+        let next = saved.current(today: "2026-10-09")
+        XCTAssertNil(next.steps)
+        XCTAssertNil(next.strain)
+        XCTAssertEqual(next.kcal, 0, "what the app logs starts again at zero")
+        XCTAssertEqual(next.waterMl, 0)
+        XCTAssertEqual(next.stepsGoal, saved.stepsGoal)
+        XCTAssertEqual(saved.current(today: saved.date), saved)
+        let now = Date()
+        saved.updated = now.addingTimeInterval(-119 * 60)
+        XCTAssertNil(saved.hoursOld(at: now))
+        saved.updated = now.addingTimeInterval(-3 * 3600 - 60)
+        XCTAssertEqual(saved.hoursOld(at: now), 3)
+    }
+
     func testPlanEditing() {
         var day = DemoData.gym
         day.moveExercise(from: 2, to: 0)
