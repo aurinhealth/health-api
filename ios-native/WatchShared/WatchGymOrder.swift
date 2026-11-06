@@ -96,6 +96,8 @@ extension WatchGym {
     }
 
     var setsDone: Int { exercises.flatMap(\.lifts).filter { $0.done && !$0.warmup }.count }
+    /// Sets still to do (not the warm-up): "4 sets left" on a summary reached by End workout.
+    var setsLeft: Int { exercises.flatMap(\.lifts).filter { !$0.done && !$0.warmup }.count }
 }
 
 extension WatchGym {

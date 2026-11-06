@@ -26,14 +26,8 @@ struct CoachView: View {
                         TurnView(turn: turn, speaker: speaker).id(turn.id)
                     }
                     if coach.waiting {
-                        HStack(spacing: 6) {
-                            ProgressView().frame(width: 18, height: 18)
-                            Text(coach.progress ?? W.tr("Kouč přemýšlí…", "The coach is thinking…"))
-                                .font(W.news(14))
-                                .foregroundStyle(W.secondary)
-                                .lineLimit(3)
-                        }
-                        .id("waiting")
+                        WaitRow(text: coach.progress ?? W.tr("Kouč přemýšlí…", "The coach is thinking…"), since: coach.askedAt)
+                            .id("waiting")
                     } else {
                         input
                         if coach.turns.isEmpty {
@@ -73,7 +67,7 @@ struct CoachView: View {
                     .watchFont(24, .semibold)
                     .foregroundStyle(.black)
                     .frame(width: 58, height: 58)
-                    .background(W.amber, in: Circle())
+                    .background(W.indigo, in: Circle())
                 Text(coach.turns.isEmpty ? W.tr("Zeptej se kouče", "Ask the coach") : W.tr("Další otázka", "Ask again"))
                     .watchFont(12)
                     .foregroundStyle(W.muted)
@@ -99,6 +93,11 @@ private struct TurnView: View {
                 .watchFont(12)
                 .foregroundStyle(W.muted)
             if let answer = turn.answer {
+                if let seconds = turn.seconds, !turn.failed {
+                    Text(W.tr("Odpověď za \(seconds) s", "Answered in \(seconds) s"))
+                        .watchFont(12)
+                        .foregroundStyle(W.muted)
+                }
                 Text(answer)
                     .font(W.news(17))
                     .foregroundStyle(turn.failed ? W.amber : W.ink)
@@ -108,15 +107,61 @@ private struct TurnView: View {
                         .watchFont(12)
                         .foregroundStyle(W.secondary)
                 }
-                if !turn.failed {
+                if turn.failed {
+                    // Watch audit G3: the question again, without dictating it anew.
+                    Button { CoachStore.shared.retry(turn.id) } label: {
+                        Label(W.tr("Zkusit znovu", "Try again"), systemImage: "arrow.clockwise")
+                            .watchFont(13, .medium)
+                    }
+                    .buttonStyle(.bordered)
+                } else {
                     Button { speaker.read(answer) } label: {
                         Label(W.tr("Přečíst", "Read aloud"), systemImage: "speaker.wave.2.fill")
                             .watchFont(13, .medium)
                     }
-                    .tint(W.amber)
+                    .tint(W.indigo)
                 }
             }
         }
+    }
+}
+
+/// What the coach is doing, as on the iPhone: the dots, the step and "· 4 s"
+/// from 3 s. VoiceOver reads the step only.
+private struct WaitRow: View {
+    let text: String
+    let since: Date?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let still = reduceMotion || ProcessInfo.processInfo.isLowPowerModeEnabled
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            TimelineView(.animation(minimumInterval: 1.0 / 20, paused: still)) { context in
+                let t = context.date.timeIntervalSinceReferenceDate
+                HStack(spacing: 3) {
+                    ForEach(0..<3, id: \.self) { i in
+                        Circle().fill(W.ink).frame(width: 5, height: 5)
+                            .opacity(still ? 0.55 : Self.opacity(t, i))
+                    }
+                }
+            }
+            .fixedSize()
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let seconds = since.map { Int(context.date.timeIntervalSince($0)) } ?? 0
+                (Text(verbatim: text).foregroundColor(W.secondary)
+                    + Text(verbatim: seconds >= 3 ? " · \(seconds) s" : "").foregroundColor(W.muted))
+                    .font(W.news(14))
+                    .lineLimit(3)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
+    }
+
+    /// Each dot brightens in turn, once a second (CoachDots in the app).
+    private static func opacity(_ t: TimeInterval, _ i: Int) -> Double {
+        let phase = (t - Double(i) * 0.18).truncatingRemainder(dividingBy: 1.0)
+        return 0.25 + 0.75 * max(0, sin(phase * .pi))
     }
 }
 

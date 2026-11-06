@@ -190,6 +190,10 @@ struct SyncReport: Identifiable, Equatable {
 
     enum Status: Equatable { case sent, pending, error }
 
+    /// The apps that did not get it, "Intervals.icu, Google Health".
+    var failedNames: [String] { rows.filter { $0.status == .error }.map { SyncApp.name($0.destination) } }
+    var failed: Bool { !failedNames.isEmpty }
+
     static func status(_ text: String) -> Status {
         switch text {
         case "sent": return .sent

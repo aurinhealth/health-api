@@ -31,6 +31,11 @@ struct AurinWatchApp: App {
             await WatchStore.shared.fromServer()
             await WatchStore.shared.scheduleMorning()
         }
+        // Today from the iPhone while the app is in the background: taken now,
+        // so the watch face moves on without opening the app (watch audit F2).
+        .backgroundTask(.watchConnectivity) {
+            await WatchStore.shared.receivePending()
+        }
         // The coach's pushes from the iPhone, in the watch's own look.
         WKNotificationScene(controller: CoachNotificationController.self, category: "COACH_SWAP")
         WKNotificationScene(controller: CoachNotificationController.self, category: "COACH_REPLY")
@@ -61,12 +66,22 @@ struct WatchRoot: View {
     @ObservedObject private var gym = GymStore.shared
     @State private var page = WatchDemo.value("-page") ?? "readiness"
     @State private var path = NavigationPath()
+    @Environment(\.legibilityWeight) private var legibility
+    /// Bold Text, for W.serif and W.news: drawn again when it changes.
+    @State private var bold = false
 
     var body: some View {
-        if WatchDemo.flag("-face"), let s = store.snapshot {
-            DemoFace(s: s)
-        } else {
-            pages
+        Group {
+            if WatchDemo.flag("-face"), let s = store.snapshot {
+                DemoFace(s: s)
+            } else {
+                pages
+            }
+        }
+        .id(bold)
+        .onChange(of: legibility, initial: true) { _, now in
+            W.boldText = now == .bold
+            bold = W.boldText
         }
     }
 
@@ -79,9 +94,9 @@ struct WatchRoot: View {
                         // Drawn again at noon, when the night stops being awaited.
                         TimelineView(.explicit([WatchStore.noon()])) { _ in
                             if store.nightPending {
-                                ReadinessHome(s: snapshot, stale: .night)
+                                ReadinessHome(s: snapshot, stale: .night, openTraining: openTraining)
                             } else {
-                                ReadinessHome(s: snapshot)
+                                ReadinessHome(s: snapshot, openTraining: openTraining)
                             }
                         }
                     } else if let snapshot = store.snapshot {
@@ -140,6 +155,12 @@ struct WatchRoot: View {
         .task { openDemo() }
     }
 
+    /// The Training page, from today's gym row on the first page (watch audit B1).
+    private var openTraining: (() -> Void)? {
+        guard store.settings.pages.contains("training") else { return nil }
+        return { withAnimation { page = "training" } }
+    }
+
     /// The sample day's screenshots (WatchDemo): a detail as its complication
     /// opens it, or the gym session as Training mode on the iPhone does.
     private func openDemo() {
@@ -166,22 +187,53 @@ struct WatchRoot: View {
     }
 }
 
-/// Nothing from the iPhone yet (the first launch).
+/// Nothing from the iPhone yet, the first launch (watch audit G4): getting it, not signed in
+/// (the iPhone signs the watch in), or no connection with Try again; before,
+/// it always said to open Aurin on the iPhone, while it was loading too.
 struct WaitingView: View {
+    @EnvironmentObject private var store: WatchStore
+
+    private enum Phase { case loading, signedOut, failed }
+
+    private var state: Phase {
+        if !WatchAPI.signedIn, !WatchDemo.on { return .signedOut }
+        return store.todayFailed ? .failed : .loading
+    }
+
     var body: some View {
+        let state = state
         VStack(spacing: 8) {
             Ring(fraction: 0, color: W.green, size: 64) {
-                Image(systemName: "iphone")
-                    .watchFont(20)
-                    .foregroundStyle(W.green)
+                if state == .loading {
+                    ProgressView()
+                } else {
+                    Image(systemName: "iphone")
+                        .watchFont(20)
+                        .foregroundStyle(W.green)
+                }
             }
-            Text(W.tr("Otevři Aurin v iPhonu", "Open Aurin on your iPhone"))
-                .font(W.serif(19))
-                .multilineTextAlignment(.center)
-            Text(W.tr("Hodinky dostanou dnešek z iPhonu.", "Your watch gets today from your iPhone."))
-                .font(W.news(13))
-                .foregroundStyle(W.secondary)
-                .multilineTextAlignment(.center)
+            switch state {
+            case .loading:
+                Text(W.tr("Načítám dnešek…", "Getting today…"))
+                    .font(W.serif(19))
+            case .signedOut:
+                Text(W.tr("Otevři Aurin v iPhonu", "Open Aurin on your iPhone"))
+                    .font(W.serif(19))
+                    .multilineTextAlignment(.center)
+                Text(W.tr("Jednou ho otevři a hodinky se přihlásí.", "Open Aurin on your iPhone once to sign in."))
+                    .font(W.news(13))
+                    .foregroundStyle(W.secondary)
+                    .multilineTextAlignment(.center)
+            case .failed:
+                Text(W.tr("Bez spojení.", "No connection."))
+                    .font(W.serif(19))
+                Text(W.tr("Otevři Aurin v iPhonu.", "Open Aurin on your iPhone."))
+                    .font(W.news(13))
+                    .foregroundStyle(W.secondary)
+                    .multilineTextAlignment(.center)
+                Button(W.tr("Zkusit znovu", "Try again")) { store.ask() }
+                    .buttonStyle(.bordered)
+            }
         }
         .padding(.horizontal, 6)
         .containerBackground(W.glow(W.Glow.readiness), for: .navigation)

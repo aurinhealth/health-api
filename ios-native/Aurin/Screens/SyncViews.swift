@@ -566,14 +566,17 @@ struct SyncToastView: View {
                             .overlay { RoundedRectangle(cornerRadius: 24 * 0.27, style: .continuous).stroke(Palette.card, lineWidth: 2) }
                     }
                 }
-                Text(verbatim: L10n.plural("Odesláno do %lld aplikací", report.rows.count))
-                    .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
-                Spacer(minLength: 8)
-                if report.rows.contains(where: { $0.status == .error }) {
-                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Palette.rust)
-                        .accessibilityLabel("Něco se nepodařilo odeslat")
+                if report.failed {
+                    Text(verbatim: L10n.f("Neodesláno do %@", report.failedNames.joined(separator: ", ")))
+                        .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+                    Spacer(minLength: 8)
+                    Text("Zkusit znovu").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.amber)
+                } else {
+                    Text(verbatim: L10n.plural("Odesláno do %lld aplikací", report.rows.count))
+                        .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                 }
-                Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)

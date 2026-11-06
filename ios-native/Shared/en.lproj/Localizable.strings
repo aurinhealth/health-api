@@ -265,6 +265,9 @@
 "Kouč den nezhodnotil." = "The coach couldn't review the day.";
 "Kouč používá AI" = "The coach uses AI";
 "Kouč přemýšlí…" = "Coach is thinking…";
+"Kouč čte tvoje data…" = "The coach is reading your data…";
+"Kouč píše…" = "The coach is writing…";
+"Odpověď za %lld s" = "Answered in %lld s";
 "Kouč teď neodpověděl." = "The coach didn't answer.";
 "Kouč čte tvůj den…" = "Coach is reading your day…";
 "Kouč včetně fotek v chatu, jeho denní shrnutí na Dnes, Tréninku a Jídle, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál." = "The coach, including photos in chat, its daily summary on Today, Training and Food, reading food photos and looking up foods send the data they need to AI. Without consent, the rest of the app keeps working.";
@@ -724,7 +727,7 @@
 "Trenažér" = "Trainer";
 "Trend" = "Trend";
 "Trenér" = "Coach";
-"Trenér píše zpětnou vazbu…" = "The coach is writing feedback…";
+"Kouč píše zpětnou vazbu…" = "The coach is writing feedback…";
 "Triceps" = "Triceps";
 "Trochu" = "A little";
 "Trénink" = "Training";
@@ -1613,7 +1616,6 @@
 "Odesláno do %@ %@" = "Sent to %@ %@";
 "aplikace" = "app";
 "aplikací" = "apps";
-"Něco se nepodařilo odeslat" = "Something couldn't be sent";
 "Odeslání" = "Sending";
 "Odesláno" = "Sent";
 "odešle se" = "will be sent";
@@ -3995,3 +3997,15 @@
 "Ťukni na část a přepneš na ni." = "Tap a part to switch to it.";
 "Hotovo · další: %@" = "Done · next: %@";
 "Čas cviku" = "Exercise time";
+
+/* Workout done: the sending to each app, Zavřít after it, the rating card (TrainingModeView, WorkoutRating.swift) */
+"Co ještě běží, dojede na pozadí." = "Anything still sending finishes in the background.";
+"Neodesláno do %@" = "Didn't send to %@";
+"Ohodnotit cviky" = "Rate exercises";
+"Uloží se hned. Cviky s palcem dolů v dalších plánech nebudou." = "Saved right away. Disliked exercises stay out of your next plans.";
+
+/* Exercise "i" sheet: Like, Dislike and Replace (GymSessionView.swift TechniqueSheet) */
+"Líbí" = "Like";
+"Nelíbí" = "Dislike";
+"Nahradit" = "Replace";
+"V dalších plánech už nebude. Vrátit to jde v Nastavení → Posilovna → Cviky." = "Won't be in your next plans. Undo in Settings → Gym → Exercises.";

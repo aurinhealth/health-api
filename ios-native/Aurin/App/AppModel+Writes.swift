@@ -135,12 +135,14 @@ extension AppModel {
     /// A finished gym session (Posilovna or Režim tréninku) to those apps, under
     /// the day's key, so finishing it again updates the same activity.
     /// `appleSaved`: the live workout is in Apple Health already.
-    func shareGym(_ day: GymDay, date: String, start: Date? = nil, minutes: Int? = nil, appleSaved: Bool = false) async {
+    /// Each app's state, for the Workout done screen; empty when it went nowhere.
+    @discardableResult
+    func shareGym(_ day: GymDay, date: String, start: Date? = nil, minutes: Int? = nil, appleSaved: Bool = false) async -> [SyncReport.Row] {
         let done = day.exercises.filter { $0.doneCount > 0 }
-        guard !done.isEmpty, let start = day.startedAt ?? start else { return }
+        guard !done.isEmpty, let start = day.startedAt ?? start else { return [] }
         let length = max(1, minutes ?? day.loggedMinutes ?? Int((Date().timeIntervalSince(start) / 60).rounded()))
         let sets = done.map { $0.name + ": " + GymCoach.setsLine($0.sets) }.joined(separator: "\n")
-        await shareActivity(ActivityToSync(key: "gym:" + date, sport: "gym", name: day.planName ?? L10n.tr("Silový trénink"), date: date,
+        return await shareActivity(ActivityToSync(key: "gym:" + date, sport: "gym", name: day.planName ?? L10n.tr("Silový trénink"), date: date,
                                            start: start, minutes: length, notes: sets), apple: !appleSaved)
     }
 
@@ -148,8 +150,9 @@ extension AppModel {
     /// in Zdroje dat (Aurin posílá); `sends` when the server already sent it (a manual
     /// workout). Shows the toast when it went anywhere.
     /// `toApple` false when the workout is in Apple Health already.
-    func shareActivity(_ activity: ActivityToSync, sends: [SyncSend]? = nil, apple toApple: Bool = true) async {
-        guard !demo else { return }
+    @discardableResult
+    func shareActivity(_ activity: ActivityToSync, sends: [SyncSend]? = nil, apple toApple: Bool = true) async -> [SyncReport.Row] {
+        guard !demo else { return [] }
         var rows: [SyncReport.Row] = []
         if let sends {
             rows = sends.map { SyncReport.Row(destination: $0.destination, status: SyncReport.status($0.status), message: $0.message, needsScope: $0.needsScope) }
@@ -178,6 +181,7 @@ extension AppModel {
         }
         rows.sort { (SyncApp.order.firstIndex(of: $0.destination) ?? 9) < (SyncApp.order.firstIndex(of: $1.destination) ?? 9) }
         syncReport = rows.isEmpty ? nil : SyncReport(activity: activity, rows: rows)
+        return rows
     }
 
     /// "Zkusit znovu" in the toast's sheet.

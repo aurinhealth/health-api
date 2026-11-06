@@ -334,8 +334,9 @@ enum CoachPush {
 
     static var category: UNNotificationCategory {
         UNNotificationCategory(identifier: categoryID, actions: [
-            UNNotificationAction(identifier: swapAction, title: L10n.tr("Vyměnit"), options: [.authenticationRequired]),
+            // The answer that changes nothing first: Double Tap on Apple Watch runs the first action.
             UNNotificationAction(identifier: keepAction, title: L10n.tr("Nechat"), options: [.authenticationRequired]),
+            UNNotificationAction(identifier: swapAction, title: L10n.tr("Vyměnit"), options: [.authenticationRequired]),
             reply
         ], intentIdentifiers: [], options: [])
     }
@@ -346,8 +347,8 @@ enum CoachPush {
 
     static var actionCategory: UNNotificationCategory {
         UNNotificationCategory(identifier: actionCategoryID, actions: [
-            UNNotificationAction(identifier: confirmAction, title: L10n.tr("Potvrdit"), options: [.authenticationRequired]),
             UNNotificationAction(identifier: rejectAction, title: L10n.tr("Ne"), options: [.authenticationRequired]),
+            UNNotificationAction(identifier: confirmAction, title: L10n.tr("Potvrdit"), options: [.authenticationRequired]),
             reply
         ], intentIdentifiers: [], options: [])
     }

@@ -33,7 +33,8 @@ enum W {
         static let restingHR = Color(hex: 0x3D1D2A)
         static let strain = Color(hex: 0x3A2A17)
         static let food = Color(hex: 0x163047)
-        static let coach = Color(hex: 0x3D2614)
+        /// Indigo, the coach's colour as on the iPhone (watch audit D4).
+        static let coach = Color(hex: 0x25233F)
     }
 
     /// A shape style, for containerBackground: the colour fades into black.
@@ -49,10 +50,33 @@ enum W {
         }
     }
 
+    /// The zone in a word, as the first page's pill: the colour never alone.
+    static func zoneWord(_ zone: String?) -> String? {
+        switch zone {
+        case "green": tr("vysoká", "high")
+        case "yellow": tr("střední", "moderate")
+        case "red": tr("nízká", "low")
+        default: nil
+        }
+    }
+
+    /// Bold Text (Settings → Accessibility): the serifs don't thicken by
+    /// themselves, so with it on they become the system serif, heavier
+    /// (watch audit D1). Set by WatchRoot from its environment.
+    nonisolated(unsafe) static var boldText = false
+
     /// The big numbers keep their size, so they fit the screen at any text size.
-    static func serif(_ size: CGFloat) -> Font { .custom("InstrumentSerif-Regular", size: size) }
-    /// Reading text grows with the wearer's text size (Today audit 17).
-    static func news(_ size: CGFloat) -> Font { .custom("Newsreader-Regular", size: max(size, 12), relativeTo: .body) }
+    static func serif(_ size: CGFloat) -> Font {
+        boldText ? .system(size: size, weight: .semibold, design: .serif) : .custom("InstrumentSerif-Regular", size: size)
+    }
+    /// Reading text grows with the wearer's text size, never under 12 pt (Today audit 17).
+    static func news(_ size: CGFloat) -> Font {
+        boldText ? .system(size: max(size, 12), weight: .medium, design: .serif) : .custom("Newsreader-Regular", size: max(size, 12), relativeTo: .body)
+    }
+    /// Numbers in tiles, cards and small rings: the serif only for a page's
+    /// main number (24 pt and up), as its thin "1" read "111" as "lll" (watch
+    /// audit D1); the complications' rounded face.
+    static func digits(_ size: CGFloat) -> Font { .system(size: size, weight: .semibold, design: .rounded).monospacedDigit() }
 
     // MARK: Language
 
@@ -66,6 +90,17 @@ enum W {
     static func tr(_ czech: String, _ english: String) -> String { self.english ? english : czech }
 
     static var locale: Locale { Locale(identifier: english ? "en_US" : "cs_CZ") }
+
+    /// "4 hours 45 minutes" for VoiceOver, where "4:45" reads as a time of day.
+    static func spoken(seconds: Double) -> String {
+        let formatter = DateComponentsFormatter()
+        formatter.unitsStyle = .full
+        formatter.allowedUnits = seconds >= 3600 ? [.hour, .minute] : seconds >= 60 ? [.minute, .second] : [.second]
+        var calendar = Calendar.current
+        calendar.locale = locale
+        formatter.calendar = calendar
+        return formatter.string(from: max(0, seconds)) ?? ""
+    }
 
     // MARK: Numbers
 
@@ -130,13 +165,6 @@ enum W {
     static var glassMl: Int { imperial ? Int((8 * mlPerFluidOunce).rounded()) : 250 }
     static var glassText: String { imperial ? "+8 fl oz" : "+250 ml" }
 
-    /// A signed change: "+4", "−2", "0".
-    static func change(_ value: Double, digits: Int = 0) -> String {
-        let text = number(abs(value), digits: digits)
-        if text == number(0, digits: digits) { return text }
-        return (value > 0 ? "+" : "−") + text
-    }
-
     /// 432 minutes as "7:12".
     static func clock(minutes: Double) -> String {
         let m = Int(minutes.rounded())
@@ -146,6 +174,8 @@ enum W {
     /// 432 minutes as "7h 12m" ("7 h 12 min" in Czech).
     static func duration(minutes: Double) -> String {
         let m = Int(minutes.rounded())
+        // "9h of sleep", not "9h 0m".
+        if m % 60 == 0 { return english ? "\(m / 60)h" : "\(m / 60) h" }
         return english ? "\(m / 60)h \(m % 60)m" : "\(m / 60) h \(m % 60) min"
     }
 
@@ -212,7 +242,20 @@ enum W {
         case "strength", "gym": "dumbbell.fill"
         case "swim": "figure.pool.swim"
         case "walk": "figure.walk"
+        case "stretch": "figure.flexibility"
         default: "figure.mixed.cardio"
+        }
+    }
+}
+
+extension View {
+    /// Double Tap (watchOS 11): the screen's one main button (watch audit B3).
+    /// Never on pages paged by the crown, where it would turn the page.
+    @ViewBuilder func doubleTap() -> some View {
+        if #available(watchOS 11.0, *) {
+            handGestureShortcut(.primaryAction)
+        } else {
+            self
         }
     }
 }
@@ -229,9 +272,13 @@ struct Ring<Content: View>: View {
     let fraction: Double
     let color: Color
     var size: CGFloat = 94
+    /// The normal or the target as a share of the ring: a thin line outside
+    /// its segments, as under the Day complication's steps (watch audit C3).
+    var goal: ClosedRange<Double>? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
+        let marked = (0..<10).filter { goal?.contains((Double($0) + 0.5) / 10) == true }
         ZStack {
             Circle().fill(W.disc)
             ForEach(0..<10, id: \.self) { i in
@@ -239,6 +286,11 @@ struct Ring<Content: View>: View {
                     .stroke(i < Int((fraction * 10).rounded()) ? color : W.track,
                             style: StrokeStyle(lineWidth: size * 0.08, lineCap: .butt))
                     .frame(width: size * 0.8, height: size * 0.8)
+            }
+            if let first = marked.first, let last = marked.last {
+                Arc(start: 135 + Double(first) * 27 + 2, end: 135 + Double(last) * 27 + 25)
+                    .stroke(Color.white.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    .frame(width: size * 0.97, height: size * 0.97)
             }
             VStack(spacing: 1) { content }
         }
@@ -264,6 +316,8 @@ struct RingValue: View {
     let label: String
     let color: Color
     var size: CGFloat = 32
+    /// What VoiceOver says for the value ("7 hours 12 minutes" for "7:12").
+    var said: String? = nil
 
     var body: some View {
         VStack(spacing: 1) {
@@ -277,6 +331,7 @@ struct RingValue: View {
             .foregroundStyle(W.ink)
             .lineLimit(1)
             .minimumScaleFactor(0.6)
+            .accessibilityLabel(said ?? value)
         Text(label.uppercased())
             .watchFont(12, .semibold)
             .tracking(0.5)
@@ -286,8 +341,8 @@ struct RingValue: View {
     }
 }
 
-/// The three tiles at the bottom of a page, all the same height; the first
-/// one is the highlighted one, with its colour along the top.
+/// The three tiles at the bottom of a page, all alike (watch audit C6: the
+/// first one was highlighted for no reason).
 struct Tiles: View {
     struct Item {
         let label: String
@@ -295,23 +350,22 @@ struct Tiles: View {
     }
 
     let items: [Item]
-    let color: Color
 
     var body: some View {
         HStack(spacing: 5) {
-            ForEach(Array(items.prefix(3).enumerated()), id: \.offset) { index, item in
+            ForEach(Array(items.prefix(3).enumerated()), id: \.offset) { _, item in
                 VStack(spacing: 2) {
                     Text(item.value)
-                        // Numbers in the serif, words ("short", "high") in the system font.
-                        .font(item.value.contains(where: \.isLetter) ? .system(.footnote, weight: .semibold)
-                              : W.serif(item.value.count < 4 ? 19 : 15))
+                        // Numbers rounded (watch audit D1), words ("short", "high") in the system font.
+                        .font(item.value.contains(where: \.isLetter) ? .system(size: 13, weight: .semibold)
+                              : W.digits(item.value.count < 4 ? 17 : 14))
                         .foregroundStyle(W.ink)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
                         .frame(height: 20)
                     Text(item.label)
                         .watchFont(12, .semibold)
-                        .foregroundStyle(index == 0 ? color : W.secondary)
+                        .foregroundStyle(W.secondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
@@ -320,12 +374,29 @@ struct Tiles: View {
                 .background(W.tile, in: RoundedRectangle(cornerRadius: 12))
                 .overlay(alignment: .top) {
                     Rectangle()
-                        .fill(index == 0 ? color : W.dim)
+                        .fill(W.dim)
                         .frame(height: 2)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(item.label + ", " + item.value)
             }
         }
+    }
+}
+
+/// The three button roles, as on the iPhone (watch audit D2): the main one
+/// white with black text, a secondary one the system's grey, one that ends
+/// something grey with red text. System styles only, so watchOS 26 gives
+/// them its Liquid Glass; green is left for a state (done, on target).
+@MainActor
+extension View {
+    func mainButton() -> some View {
+        buttonStyle(.borderedProminent).tint(W.ink)
+    }
+
+    func endButton() -> some View {
+        buttonStyle(.bordered).foregroundStyle(W.red)
     }
 }
 

@@ -14,6 +14,9 @@ final class WatchStore: NSObject, ObservableObject {
     /// The day neither the iPhone nor the server gave today when the watch
     /// last asked: the home page says "No connection" instead of "Getting today…".
     @Published private var failedDay: String?
+    /// The iPhone in reach now (WCSession.isReachable, which isn't observed):
+    /// what only it can do turns off without it (watch audit B2).
+    @Published private(set) var phoneNear = false
     var todayFailed: Bool { failedDay == Self.localDate(Date()) }
     /// Settings → Apple Watch on the iPhone.
     @Published private(set) var settings: WatchSettings = UserDefaults.standard.data(forKey: WatchSettings.contextKey)
@@ -52,6 +55,26 @@ final class WatchStore: NSObject, ObservableObject {
         guard session.delegate == nil else { ask(); return }
         session.delegate = self
         session.activate()
+    }
+
+    /// Woken in the background with Today from the iPhone (AurinWatchApp,
+    /// backgroundTask .watchConnectivity): the session wasn't started there,
+    /// as no view ran, so Today waited for the app to open and the watch face
+    /// kept the old one (watch audit F2: strain 1.0 on the face, 1.5 in the
+    /// app). Start it and stay up until it has handed everything over.
+    func receivePending() async {
+        guard WCSession.isSupported(), !WatchDemo.on else { return }
+        let session = WCSession.default
+        if session.delegate == nil {
+            session.delegate = self
+            session.activate()
+        }
+        let until = Date().addingTimeInterval(10)
+        while Date() < until, session.activationState != .activated || session.hasContentPending {
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        // The delegate hands Today over in a task of its own.
+        try? await Task.sleep(for: .milliseconds(300))
     }
 
     /// The newest Today from the iPhone, when it is in reach; else, or when
@@ -222,11 +245,16 @@ final class WatchStore: NSObject, ObservableObject {
         food.water = max(0, (food.water ?? 0) + ml)
         value.food = food
         value.updated = Date()
+        keep(value)
+    }
+
+    /// A change made here (a drink, a moved alarm): kept, and the watch face
+    /// draws it too, all its complications (Aurin through the day shows the alarm).
+    private func keep(_ value: WatchSnapshot) {
         snapshot = value
         if let data = value.encoded() { UserDefaults.standard.set(data, forKey: Self.savedKey) }
         ComplicationShelf.save(value)
-        WidgetCenter.shared.reloadTimelines(ofKind: "aurin.small.drinks")
-        WidgetCenter.shared.reloadTimelines(ofKind: "aurin.wide.drinks")
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     /// The wake time the iPhone just saved, until its new Today comes.
@@ -249,8 +277,7 @@ final class WatchStore: NSObject, ObservableObject {
         }
         value.alarm = alarm
         value.updated = Date()
-        snapshot = value
-        if let data = value.encoded() { UserDefaults.standard.set(data, forKey: Self.savedKey) }
+        keep(value)
     }
 
     /// Made once, not on every redraw (the root view asks on each one); it
@@ -276,7 +303,9 @@ extension WatchStore: WCSessionDelegate {
         let gym = context[WatchGym.replyKey] as? Data
         let settings = context[WatchSettings.contextKey] as? Data
         let empty = context.isEmpty
+        let near = session.isReachable
         Task { @MainActor in
+            WatchStore.shared.phoneNear = near
             if let settings { WatchStore.shared.receive(settings: settings) }
             if let gym { GymStore.shared.received(gym) }
             if let data { WatchStore.shared.receive(data) } else if !empty { WatchStore.shared.receive(nil) }
@@ -336,7 +365,9 @@ extension WatchStore: WCSessionDelegate {
     }
 
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
-        guard session.isReachable else { return }
+        let near = session.isReachable
+        Task { @MainActor in WatchStore.shared.phoneNear = near }
+        guard near else { return }
         Task { @MainActor in
             WatchStore.shared.ask()
             GymStore.shared.loadIfWaiting()

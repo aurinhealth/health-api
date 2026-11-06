@@ -49,7 +49,8 @@ struct HistoryPage: View {
                 Text(days.average.map(format) ?? "–")
                     .font(W.serif(24))
                     .foregroundStyle(W.ink)
-                Text(metric.unit + " " + W.tr("průměr", "avg"))
+                // "5:26 avg", not "5:26 h avg" (watch audit C4).
+                Text((sleep ? "" : metric.unit + " ") + W.tr("průměr", "avg"))
                     .watchFont(12)
                     .foregroundStyle(W.secondary)
                 if let need {
@@ -59,16 +60,23 @@ struct HistoryPage: View {
                     Text(W.tr("potřeba", "need") + " " + W.clock(minutes: need))
                         .watchFont(12, .semibold)
                         .foregroundStyle(W.amber)
-                } else if let change {
-                    Text(change.0)
-                        .watchFont(12, .semibold)
-                        .foregroundStyle(change.1)
                 }
+            }
+            // Against what (watch audit C2): "↑ 21 ms vs first week".
+            if !sleep, let change {
+                Text(change.0)
+                    .watchFont(12, .semibold)
+                    .foregroundStyle(change.1)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             if spans.count > 1 { picker.padding(.top, 2) }
             chart
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(header.capitalized(with: W.locale))
+                .accessibilityValue(chartSummary)
                 .padding(.top, 6)
-                .frame(height: Self.chartHeight - (spans.count > 1 ? 26 : 0))
+                .frame(height: Self.chartHeight - (spans.count > 1 ? 32 : 0) - (!sleep && change != nil ? 14 : 0))
             if shown == 90 {
                 Text(trend)
                     .watchFont(12)
@@ -78,7 +86,7 @@ struct HistoryPage: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 4)
             } else {
-                Tiles(items: tiles, color: sleep ? W.amber : metric.color)
+                Tiles(items: tiles)
                     .padding(.top, 4)
             }
         }
@@ -107,14 +115,32 @@ struct HistoryPage: View {
                         .watchFont(12, .semibold)
                         .foregroundStyle(value == shown ? Color.black : W.ink)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 22)
+                        // 28 pt to tap (watch audit G2; was 22).
+                        .frame(height: 28)
                         .background(value == shown ? metric.color : Color.clear, in: Capsule())
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .accessibilityAddTraits(value == shown ? .isSelected : [])
             }
         }
         .padding(2)
         .background(W.tile, in: Capsule())
+    }
+
+    /// The chart for VoiceOver in one sentence (watch audit G1): "Average 81 ms,
+    /// lowest 49, highest 111, today 94." instead of each day as "Den, Hodnota".
+    private var chartSummary: String {
+        let values = days.map(\.value)
+        let say = { (v: Double) in sleep ? W.spoken(seconds: v * 60) : W.number(v) + " " + metric.unit }
+        var parts: [String] = []
+        if let average = days.average { parts.append(W.tr("Průměr ", "Average ") + say(average)) }
+        if let low = values.min(), let high = values.max() {
+            parts.append(W.tr("nejméně ", "lowest ") + say(low))
+            parts.append(W.tr("nejvíc ", "highest ") + say(high))
+        }
+        if let last = days.last, last.date == today { parts.append(W.tr("dnes ", "today ") + say(last.value)) }
+        return parts.joined(separator: ", ")
     }
 
     /// A value in the metric's unit: "50", or "7:04" for sleep.
@@ -131,12 +157,14 @@ struct HistoryPage: View {
         return after - before
     }
 
+    /// The span's last week against its first week, said so (HRV, resting HR).
     private var change: (String, Color)? {
-        guard let diff else { return nil }
-        let value = sleep ? diff : diff.rounded()
-        if abs(value) < (sleep ? 5 : 1) { return (W.change(0), W.muted) }
+        guard !sleep, let diff else { return nil }
+        let value = diff.rounded()
+        let against = W.tr(" proti 1. týdnu", " vs first week")
+        if abs(value) < 1 { return (W.tr("= jako 1. týden", "= same as first week"), W.muted) }
         let good = metric.higherIsBetter ? value > 0 : value < 0
-        return (sleep ? W.minutesChange(value) : W.change(value), good ? W.green : W.amber)
+        return ((value > 0 ? "↑ " : "↓ ") + W.number(abs(value)) + " " + metric.unit + against, good ? W.green : W.amber)
     }
 
     private var trend: String {
@@ -229,15 +257,10 @@ struct HistoryPage: View {
             Chart {
                 if sleep, let need {
                     // The night's need as one dashed line over the bars.
+                    // Named in the header ("— need 9:00"), not on the line, where it was cut off.
                     RuleMark(y: .value("Potřeba", need / 60))
                         .foregroundStyle(W.amber)
                         .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
-                        // Says what the line is, above it on the left, clear of the scale.
-                        .annotation(position: .top, alignment: .leading, spacing: 1) {
-                            Text(W.tr("potřeba", "need"))
-                                .watchFont(12, .semibold)
-                                .foregroundStyle(W.amber)
-                        }
                 } else if let band {
                     RectangleMark(xStart: .value("Od", first), xEnd: .value("Do", last),
                                   yStart: .value("Nízko", band.lowerBound), yEnd: .value("Vysoko", band.upperBound))

@@ -1002,6 +1002,15 @@ const sportFavours = (sport, name) => (SPORT_FAVOURITES[sport] || []).includes(n
 export const PLYOMETRICS = ["Box Jump", "Squat Jump", "Pogo Hops"];
 const PLYO_SPORTS = new Set(["running", "triathlon"]);
 const PLYO_EVERY_DAYS = 6;
+// "Another suggestion" in the gym builder: the exercises already shown (a
+// variant as its main exercise too) go to the back of their movement's
+// queue. A preference, not a filter: a movement with nothing else keeps them.
+const SHOWN_PENALTY = 20;
+function shownBefore(options) {
+  const shown = new Set();
+  for (const name of options.avoidExercises || []) { const ex = normalizeExerciseName(name); if (!ex) continue; shown.add(ex); if (EXERCISES[ex]?.variantOf) shown.add(EXERCISES[ex].variantOf); }
+  return shown;
+}
 function taste(options) {
   return { liked: new Set((options.likedExercises || []).map(normalizeExerciseName)), disliked: new Set((options.dislikedExercises || []).map(normalizeExerciseName)) };
 }
@@ -1041,7 +1050,7 @@ function choosePlan(context, options = {}) {
   const score = (ex, rank = 0, withStall = true) => {
     const def = EXERCISES[ex], last = lastExerciseDate.get(ex);
     const recent = last && daysBetween(last, context.date) <= 4 ? 3 : 0;
-    return recent + groupRecency(ex) + (adjacentGroups.has(groupOf[ex]) ? 6 : 0) + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0) + (withStall && stalled.has(ex) ? 3 : 0) + (isStandIn(ex) ? STAND_IN_PENALTY : 0) - (sportFavours(sport, ex) ? SPORT_BONUS : 0) - (liked.has(ex) ? LIKED_BONUS : 0);
+    return (shown.has(ex) ? SHOWN_PENALTY : 0) + recent + groupRecency(ex) + (adjacentGroups.has(groupOf[ex]) ? 6 : 0) + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0) + (withStall && stalled.has(ex) ? 3 : 0) + (isStandIn(ex) ? STAND_IN_PENALTY : 0) - (sportFavours(sport, ex) ? SPORT_BONUS : 0) - (liked.has(ex) ? LIKED_BONUS : 0);
   };
 
   // Only a close call between variants: recency and muscle load still decide.
@@ -1051,7 +1060,7 @@ function choosePlan(context, options = {}) {
 
   const forceUpper = options.forceProtectLegs === true || options.focus === "upper"&&options.focusSource!=='week';
   const forceLower = options.focus === "lower";
-  const { liked, disliked } = taste(options), sport = mainSportOf(context);
+  const { liked, disliked } = taste(options), sport = mainSportOf(context), shown = shownBefore(options);
   const recovery=recoverySignals(context),acuteRecovery=(context?.adaptive?.recovery?.score??100)<55||recovery.sleepMin!=null&&recovery.sleepMin<330;
 
   const candidatesByPattern = {
@@ -1456,7 +1465,7 @@ export function generateStrengthPlan(context, options = {}) {
   const planPhase = !focusMuscles && options.planPhase?.exercises?.length ? options.planPhase : null;
   if (options.focusMuscles != null && !focusMuscles) throw new Error(L('Vyber 1 až 5 známých partií.', 'Choose 1 to 5 known muscle groups.'));
   const excluded = new Set((options.excludeExercises || []).map(normalizeExerciseName));
-  const { liked, disliked } = taste(options), mainSport = mainSportOf(context);
+  const { liked, disliked } = taste(options), mainSport = mainSportOf(context), shown = shownBefore(options);
   const selection = selectionHistory(context);
   const weeklyExposure = recentMuscleExposure(selection, context.date);
   const weeklyLoad = recentMuscleLoad(selection, context.date);
@@ -1478,7 +1487,7 @@ export function generateStrengthPlan(context, options = {}) {
       // The group's list is curated main movement first (hip thrust before
       // abduction), so its order breaks near ties.
       const order = FOCUS_GROUPS[group].exercises.indexOf(name) * .05;
-      return recent + (weeklyExposure.get(def.muscle) || 0) * .3 + (weeklyLoad.get(def.muscle) || 0) * .2 + legPenalty + def.fatigue * .1 + order + (withStall && stalled.has(name) ? 3 : 0) + (isStandIn(name) ? STAND_IN_PENALTY : 0) - (sportFavours(mainSport, name) ? SPORT_BONUS : 0) - (liked.has(name) ? LIKED_BONUS : 0);
+      return (shown.has(name) ? SHOWN_PENALTY : 0) + recent + (weeklyExposure.get(def.muscle) || 0) * .3 + (weeklyLoad.get(def.muscle) || 0) * .2 + legPenalty + def.fatigue * .1 + order + (withStall && stalled.has(name) ? 3 : 0) + (isStandIn(name) ? STAND_IN_PENALTY : 0) - (sportFavours(mainSport, name) ? SPORT_BONUS : 0) - (liked.has(name) ? LIKED_BONUS : 0);
     };
     const ranked = candidates.slice().sort((a, b) => score(a) - score(b)), best = ranked[0], plain = candidates.slice().sort((a, b) => score(a, false) - score(b, false))[0];
     if (plain !== best && stalled.has(plain)) stallSwaps[best] = plain;

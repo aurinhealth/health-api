@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { parseExerciseFeedback, saveExerciseFeedback, exercisePreferences, withoutDisliked, parseWorkoutRating, saveWorkoutRating, workoutRatings } from "../src/exercise-feedback.js";
+import { parseExerciseFeedback, saveExerciseFeedback, exercisePreferences, exerciseLiked, withoutDisliked, parseWorkoutRating, saveWorkoutRating, workoutRatings } from "../src/exercise-feedback.js";
 import { generateStrengthPlan, FOCUS_GROUPS } from "../src/strength-generator.js";
 import { gymAlternatives } from "../src/gym-catalog.js";
 import { createD1 } from "./helpers/d1.mjs";
@@ -28,6 +28,16 @@ test("exercise preferences are stored per user and a null removes one", async ()
   await saveExerciseFeedback(db, { exercise: "Lat pulldown", liked: null });
   await saveExerciseFeedback(db, { exercise: "DB curl", liked: false });
   assert.deepEqual(await exercisePreferences(db), { liked: [], disliked: ["DB curl"] });
+});
+
+test("one exercise's thumb reads back as true, false or null", async () => {
+  const raw = createD1(), db = scopedDb(raw, 3), other = scopedDb(raw, 4);
+  assert.equal(await exerciseLiked(db, "Cable fly"), null, "nothing before the first rating (no table yet)");
+  await saveExerciseFeedback(db, { items: [{ exercise: "Cable fly", liked: false }, { exercise: "DB curl", liked: true }] });
+  assert.equal(await exerciseLiked(db, "Cable fly"), false);
+  assert.equal(await exerciseLiked(db, "DB curl"), true);
+  assert.equal(await exerciseLiked(other, "Cable fly"), null, "another user's thumb is not read");
+  assert.equal(await exerciseLiked(db, ""), null);
 });
 
 test("disliked candidates go unless nothing else is left", () => {

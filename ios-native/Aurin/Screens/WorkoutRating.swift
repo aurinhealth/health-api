@@ -135,6 +135,112 @@ struct GymRatingSheet: View {
     }
 }
 
+/// Workout done, under the sending: how well the plan fitted (one tap) and,
+/// behind "Ohodnotit cviky", a thumb up or down for each exercise (the next
+/// plans leave out the disliked ones). Each tap saves at once; nothing is required.
+struct WorkoutRatingCard: View {
+    @Environment(AppModel.self) private var model
+    let date: String
+    let exercises: [String]
+    @State var liked: [String: Bool] = [:]
+    @State private var fit: String?
+    @State private var text = ""
+    @State private var open = false
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Jak se ti trénink líbil?").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+            PlanFitPicker(rating: $fit)
+            if fit != nil {
+                TextField("Co nesedělo? (nepovinné)", text: $text)
+                    .submitLabel(.done)
+                    .onSubmit { Task { await saveFit() } }
+                    .padding(12)
+                    .background(Palette.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            if !exercises.isEmpty {
+                Button { withAnimation(.snappy) { open.toggle() } } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "hand.thumbsup").scaledFont(15, cap: .denseCap)
+                        Text("Ohodnotit cviky").font(.subheadline.weight(.medium))
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).rotationEffect(.degrees(open ? 90 : 0))
+                    }
+                    .foregroundStyle(Palette.muted)
+                    .frame(minHeight: 32)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if open {
+                    VStack(spacing: 0) {
+                        ForEach(exercises, id: \.self) { (name: String) in row(name) }
+                    }
+                    Text("Uloží se hned. Cviky s palcem dolů v dalších plánech nebudou.")
+                        .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+        }
+        .padding(16)
+        .cardSurface(cornerRadius: 22)
+        .onChange(of: fit) { _, _ in Task { await saveFit() } }
+    }
+
+    private func row(_ name: String) -> some View {
+        let value: Bool? = liked[name]
+        return HStack(spacing: 8) {
+            Text(ExerciseCatalog.shownName(name)).font(.body).foregroundStyle(Palette.ink).lineLimit(2)
+            Spacer(minLength: 8)
+            thumb(name, up: true, on: value == true)
+            thumb(name, up: false, on: value == false)
+        }
+        .padding(.vertical, 4)
+        .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
+    }
+
+    private func thumb(_ name: String, up: Bool, on: Bool) -> some View {
+        Button {
+            Task { await rate(name, on ? nil : up) }
+        } label: {
+            Image(systemName: up ? (on ? "hand.thumbsup.fill" : "hand.thumbsup") : (on ? "hand.thumbsdown.fill" : "hand.thumbsdown"))
+                .scaledFont(18, cap: .denseCap)
+                .foregroundStyle(on ? (up ? Palette.green : Palette.rust) : Palette.muted)
+                .frame(width: 40, height: 40)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.tr(up ? "Baví mě" : "Nebaví mě"))
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    /// The thumb moves at once; a failed save puts it back.
+    private func rate(_ name: String, _ value: Bool?) async {
+        let before = liked[name]
+        liked[name] = value
+        guard !model.demo else { return }
+        do {
+            try await model.api.rateExercises([(exercise: name, liked: value)])
+            error = nil
+        } catch {
+            liked[name] = before
+            self.error = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription)
+        }
+    }
+
+    /// The fit with its note (a fit tapped off stays as it was saved).
+    private func saveFit() async {
+        guard let fit, !model.demo else { return }
+        do {
+            try await model.api.rateWorkout(date: date, sessionId: "gym:" + date, sport: "strength", rating: fit,
+                                            text: text.trimmingCharacters(in: .whitespacesAndNewlines))
+            error = nil
+        } catch {
+            self.error = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription)
+        }
+    }
+}
+
 extension GymDay {
     /// Each exercise of the day once, in the plan's order.
     var exerciseNames: [String] {
