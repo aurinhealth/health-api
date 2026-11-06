@@ -215,7 +215,7 @@ export function latestNightSource(nights, date) {
   return (last && nights.get(last).source) || null;
 }
 
-export function buildToday({ date, hour = null, morning = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null, unavailable = [] }) {
+export function buildToday({ date, hour = null, morning = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], dataSources = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null, unavailable = [] }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
   const nights = primaryNights(sessions);
@@ -383,9 +383,18 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
   const recover = (checkin === "sick" || (readiness.flags || []).some(f => f === "checkin_sick" || /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f)))
     || Boolean(morning?.athleteState && morning.athleteState !== "active");
   const summary = readinessSummary(coaches.morningSummary || null, readiness, checkin, planned.length > 0, done.length > 0 && !open.length, morning ? message?.changed || null : null, verdict);
+  // A yellow morning that keeps it steady: under a hard ride, run or swim
+  // still ahead, how to do it (wave 4, 28.2). Nothing is blocked; the
+  // hero's verdict is the warning, this line says how.
+  const steadyOf = item => verdict !== "steady" || readiness.zone !== "yellow" || item.kind !== "workout" || item.done || item.status !== "planned" || item.eased
+    || !["ride", "run", "swim"].includes(item.sport) || !isHardSession(item.session?.title || item.title, item.sport) ? null
+    : item.sport === "run" ? L("Den s mírou: běž v klidném tempu a intenzitu si nech na jiný den.", "Steady day: run it easy and save the intensity for another day.")
+    : item.sport === "swim" ? L("Den s mírou: plav v klidném tempu a intenzitu si nech na jiný den.", "Steady day: swim it easy and save the intensity for another day.")
+    : L("Den s mírou: jeď v klidném tempu a intenzitu si nech na jiný den.", "Steady day: ride it easy and save the intensity for another day.");
+  const withSteady = item => steadyOf(item) ? { ...item, steady: steadyOf(item) } : item;
   // Done first in the order of the day, then what is still open, then bedtime
   // with the planned wake time (Den draws the night ahead dashed to it).
-  const ordered = [...planItems.filter(i => i.done).sort(byTime), ...planItems.filter(i => !i.done),
+  const ordered = [...planItems.filter(i => i.done).sort(byTime), ...planItems.filter(i => !i.done).map(withSteady),
     ...(plan ? [{ kind: "bedtime", time: clock(plan.bed), end: clock(plan.wake), title: L("Do postele", "Bedtime"), detail: (choice.chosen != null ? L("spánek ", "sleep ") : L("potřeba spánku ", "sleep need ")) + Math.floor(tonightNeed / 60) + " h " + String(tonightNeed % 60).padStart(2, "0") + " min", done: false }] : [])
   ];
 
@@ -396,6 +405,8 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     unavailable: Array.isArray(unavailable) ? unavailable : [],
     // Connected services that need the user (connection-health.js), shown at the top.
     connectionProblems: Array.isArray(connectionProblems) ? connectionProblems : [],
+    // The services days and nights come from and when each was last reached (connection-health.js dataSources).
+    dataSources: Array.isArray(dataSources) ? dataSources : [],
     // provisional: the baseline is carried over from another source until the
     // new one has 14 days of its own (recovery-model.js sourceBaseline).
     readiness: { score: readiness.score, zone: readiness.zone, missing: readiness.missing || [], flags: readiness.flags || [], provisional: !!readiness.provisional, provisionalDays: readiness.provisional ? readiness.provisionalDays ?? null : null,

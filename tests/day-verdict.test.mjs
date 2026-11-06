@@ -124,3 +124,20 @@ test("the AI may not say to keep the plan when the verdict is anything but a har
   assert.equal(pushesForTest({ readinessZone: "green", dayVerdict: verdictText("steady") }, "Stick to the plan today."), true);
   assert.equal(pushesForTest({ readinessZone: "green", dayVerdict: verdictText("hard") }, "Stick to the plan today."), false);
 });
+
+// Wave 4, 28.2: on a yellow morning a hard ride still ahead says how to do it
+// in its own card; an easy one, a green and a red morning get nothing.
+test("a yellow morning puts one line under a hard planned session, not under an easy one", () => withTimeZone("Europe/Prague", () => withLang("en", () => {
+  const day = (hrv, rhr) => Array.from({ length: 40 }, (_, i) => ({ id: shift(DAY, i - 39), hrv: i === 39 ? hrv : 56 + (i % 5), restingHR: i === 39 ? rhr : 50 + (i % 3), steps: 8000 }));
+  const plan = (name, type = "Ride") => ({ training: { planned: [{ start: DAY + "T17:30:00", durationHours: 1, tss: 80, name, type }], matched: [] } });
+  const today = (hrv, rhr, name, type) => buildToday({ date: DAY, hour: 8, daily: plan(name, type), health: { wellness: day(hrv, rhr) }, sleep: { sessions: nights("05:02") }, profile: { age: 38 } });
+  const steady = t => t.plan.find(i => i.kind === "workout")?.steady;
+  const yellow = today(54, 52, "VO2max 5×4 min");
+  assert.equal(yellow.readiness.zone, "yellow");
+  assert.equal(yellow.readiness.verdict, "steady");
+  assert.equal(steady(yellow), "Steady day: ride it easy and save the intensity for another day.");
+  assert.match(steady(today(54, 52, "Threshold 3×10 min", "Run")), /^Steady day: run it easy/);
+  assert.equal(steady(today(54, 52, "Endurance 2 h")), undefined);
+  assert.equal(steady(today(66, 47, "VO2max 5×4 min")), undefined, "green");
+  assert.equal(steady(today(45, 55, "VO2max 5×4 min")), undefined, "red: the activity of the day offers the easier one");
+})));
