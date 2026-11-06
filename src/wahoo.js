@@ -30,6 +30,7 @@ import { saveConnectionSecret, deleteConnectionSecret, refreshConnectionTokens, 
 import { connectReturnUrl, oauthStateValue, startedBy } from './connect-return.js';
 import { appOrigin } from './app-origin.js';
 import { markConnectionBroken, markConnectionOk, clearConnectionHealth } from './connection-health.js';
+import { againAfterOutage } from './outage-retry.js';
 import { healthPointJson } from './health-point-json.js';
 import { localDateTime, localToday, zonedTime, withTimeZone, validTimeZone } from './user-time.js';
 import { parseIntervalsWorkoutText } from './planned-workout.js';
@@ -143,12 +144,14 @@ async function wahooApi(env, path, { method = 'GET', form = null, fetchImpl = fe
   const token = await wahooAccessToken(env, { fetchImpl, now });
   let response;
   try {
-    response = await fetchImpl(API + path, {
+    const call = () => fetchImpl(API + path, {
       method,
       headers: { Authorization: 'Bearer ' + token, Accept: 'application/json', ...(form ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}) },
       ...(form ? { body: new URLSearchParams(form) } : {}),
       signal: AbortSignal.timeout(15000)
     });
+    // A read is asked again after Wahoo's 5xx; a plan sent is not sent twice (outage-retry.js).
+    response = method === 'GET' ? await againAfterOutage(call) : await call();
   } catch (error) { throw Object.assign(new Error('No answer: ' + (error?.name || error?.message)), { noAnswer: true }); }
   if (response.status === 401 || (response.status === 403 && !scoped)) await markConnectionBroken(env, SOURCE, 'Wahoo HTTP ' + response.status);
   if (!response.ok && !(method === 'DELETE' && response.status === 404)) throw Object.assign(new Error('Wahoo HTTP ' + response.status), { status: response.status });
