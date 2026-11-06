@@ -101,6 +101,11 @@ test('bedtimePlan wakes at the usual time of that kind of morning and adds the t
   assert.equal(weekend.weekend, true);
   assert.equal(weekend.wake, 480);
   assert.equal(bedtimePlan({ date: '2026-10-08', need: 480, nights: [] }), null);
+  // At most an hour more in bed than the need (audit 25.5): 9 h at 80 % would be 11 h 15 min.
+  const restless = nights.map(n => ({ ...n, timeInBedMin: 600 }));
+  const capped = bedtimePlan({ date: '2026-10-08', need: 540, nights: restless });
+  assert.equal(capped.inBed, 600);
+  assert.equal(capped.bed, 1230); // 20:30, not 19:15
 });
 
 test("an own sleep goal replaces the age baseline and a set alarm plans bedtime without nights", () => {

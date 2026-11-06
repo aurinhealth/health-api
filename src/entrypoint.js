@@ -18,6 +18,7 @@ import { connectionStatus } from "./connections.js";
 import { saveSourcePriority } from "./source-priority.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, backfillConnectionAccounts } from "./connection-secrets.js";
 import { withIntervalsSleep, intervalsWellness } from './intervals-sleep.js';
+import { dayVerdict } from './day-verdict.js';
 import { cached, cachedOnly, forgetCached, bumpCacheVersion, FOOD_WRITE, UNCHANGED_HEADER, closedDay, CLOSED_DAY_TTL_SECONDS } from './api-cache.js';
 import { manualPairs } from './manual-pairs.js';
 import { activityDetail, rideIntervals } from './activity-detail.js';
@@ -875,12 +876,14 @@ async function coachPush(env, ctx) {
   if (!nudge && (morningDue || eveningDue) && state.status === 'active') {
     // The coach's inputs when a card has just made them, else only what the push reads.
     const inputs = await cachedOnly(env, 'coach-inputs:' + date) || await loadPushInputs(env, ctx, internalHeaders(), date);
-    const upcoming = await upcomingSessions(env, (inputs.week?.days || []).filter(d => d.date >= date && d.date <= shiftDate(date, 1)));
+    const upcoming = await upcomingSessions(env, (inputs.week?.days || []).filter(d => d.date >= date && d.date <= shiftDate(date, 1)), ALL_SPORTS);
     const readinessOn = day => readinessFor({ date: day, google: inputs.health?.wellness || [], intervals: inputs.fitness?.wellness || [], sessions: inputs.health?.sleep || [], profile: inputs.profile });
     const readiness = morningDue ? readinessOn(date) : null;
-    nudge = coachNudge({ date, hour, morning: morningDue, evening: eveningDue, upcoming, sleep: inputs.health?.sleep || [],
-      easier: morningDue ? easierDayCard({ date, readiness, yesterday: readinessOn(shiftDate(date, -1)), state }) : null,
-      recovery: morningDue ? proactiveAdvice({ ...inputs, state, readiness }) : null });
+    const easier = morningDue ? easierDayCard({ date, readiness, yesterday: readinessOn(shiftDate(date, -1)), state }) : null;
+    const recovery = morningDue ? proactiveAdvice({ ...inputs, state, readiness }) : null;
+    // The morning verdict only when the coach has something to say (25.1).
+    const verdict = easier || recovery ? await todayVerdict(env, ctx, date, state) : null;
+    nudge = coachNudge({ date, hour, morning: morningDue, evening: eveningDue, upcoming, sleep: inputs.health?.sleep || [], easier, recovery, verdict });
   }
   if (!nudge) return { sent: 0, reason: 'nothing-to-say' };
   // A swap Today already offers (the easier day, /app/api/coach/check-in) is not replaced by another.
@@ -939,18 +942,36 @@ async function waterPush(env, ctx) {
   return { sent };
 }
 
-// The ride and run sessions planned on `days` (/app/api/week days), with the
+// Today's verdict (day-verdict.js) as the morning push and Today give it: on
+// a day it calls hard, the coach's morning push and Today's easier-day and
+// break cards stay silent (audit 2026-11-06, 25.1). Read only on a morning one
+// of them has something to say, and kept for the cache's minutes.
+async function todayVerdict(env, ctx, date, state) {
+  const value = await cached(env, ctx, 'day-verdict:' + date, async () => {
+    const r = await todayReadiness(env, ctx, date, { plan: true });
+    return { key: dayVerdict({ ...r, athleteState: state?.status || null, context: r?.context ? { ...r.context, memories: usedMemories(state) } : null, date })?.key || null };
+  }).catch(() => null);
+  return value?.key || null;
+}
+
+// The coach's push and Today's swap read every sport (audit 25.4); the week's revision rides and runs.
+const ALL_SPORTS = ['ride', 'run', 'swim', 'gym'];
+// The sessions of `sports` planned on `days` (/app/api/week days), with the
 // kind and place of the workout behind each: [{eventId, date, sport, name,
-// minutes, kind, environment}].
-async function upcomingSessions(env, days) {
+// minutes, kind, environment, done}]. done: a session of that sport is
+// already done that day. A gym session's kind is "gym".
+async function upcomingSessions(env, days, sports = ['ride', 'run']) {
   const links = new Map(), upcoming = [];
   for (const d of [...days].sort((a, b) => a.date.localeCompare(b.date))) {
     for (const a of (d.daily?.training?.planned || [])) {
-      const sport = sportOf(a); if (!['ride', 'run'].includes(sport) || !String(a.id || '').startsWith('planned:')) continue;
+      const sport = sportOf(a); if (!sports.includes(sport) || !String(a.id || '').startsWith('planned:')) continue;
+      const done = (d.daily?.training?.completed || []).some(c => sportOf(c) === sport);
+      if (sport === 'gym') { upcoming.push({ eventId: a.id, date: d.date, sport, name: a.name || null, minutes: Math.round((Number(a.durationHours) || 1) * 60), kind: 'gym', done }); continue; }
       const id = String(a.id).replace(/^planned:/, '');
       const link = links.get(id) ?? await env.DB.prepare('SELECT workout_id,environment FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=? ORDER BY id DESC LIMIT 1').bind(env.USER_ID, id).first().catch(() => null); links.set(id, link);
       const workout = link?.workout_id ? await getWorkout(env.DB, link.workout_id).catch(() => null) : null;
-      upcoming.push({ eventId: 'planned:' + id, date: d.date, sport, name: a.name || workout?.name || null, minutes: Math.round((Number(a.durationHours) || Number(workout?.duration_minutes) / 60 || 1) * 60), kind: kindOfSystem(workout?.primary_system || a.name, 'endurance'), environment: link?.environment || (/virtual/i.test(String(a.type || '')) ? 'indoor' : 'outdoor') });
+      // A swim without a chosen place: the generator picks it (pool unless open water is due).
+      upcoming.push({ eventId: 'planned:' + id, date: d.date, sport, name: a.name || workout?.name || null, minutes: Math.round((Number(a.durationHours) || Number(workout?.duration_minutes) / 60 || 1) * 60), kind: kindOfSystem(workout?.primary_system || a.name, 'endurance'), environment: link?.environment || (sport === 'swim' ? 'auto' : /virtual/i.test(String(a.type || '')) ? 'indoor' : 'outdoor'), done });
     }
   }
   return upcoming;
@@ -1486,20 +1507,22 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // today's hard ride or run swapped for an easy one), then the general break advice.
       const readinessOn=day=>readinessFor({date:day,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile});
       const readiness=readinessOn(date),yesterday=readinessOn(shiftDate(date,-1));
-      let easier=easierDayCard({date,readiness,yesterday,state});
+      // One verdict a morning (audit 25.1): the verdict read only when a card has something to say.
+      const verdict=easierDayCard({date,readiness,yesterday,state})||proactiveAdvice({...inputs,state,readiness})?await todayVerdict(env,ctx,date,state):null;
+      let easier=easierDayCard({date,readiness,yesterday,state,verdict});
       if(easier){
         // The swap waits in the athlete's state, so Ulehčit dnešek answers it as the push's Vyměnit does
         // (/app/api/coach/nudge); a swap already offered for today stays. Today's sessions only, read only now.
         if(!(state.nudge?.day===date&&state.nudge.status==='pending')){
-          const hard=hardSession(await upcomingSessions(env,(inputs.week?.days||[]).filter(d=>d.date===date)),[date]);
+          const hard=hardSession(await upcomingSessions(env,(inputs.week?.days||[]).filter(d=>d.date===date),ALL_SPORTS),[date]);
           if(hard){state.nudge={...easierSwap(hard),title:easier.headline,day:date,status:'pending'};await updateAthleteState(env.DB,{nudge:state.nudge});}
         }
         const offer=state.nudge?.date===date?swapOffer(state,date):null;
-        easier=offer?easierDayCard({date,readiness,yesterday,state,offer}):easier;
+        easier=offer?easierDayCard({date,readiness,yesterday,state,offer,verdict}):easier;
       }
       // The push's swap of tomorrow's session stays first until it is answered.
       const swap=swapOffer(state,date);
-      const advice=(swap&&state.nudge.date!==date?swap:null)||easier||swap||proactiveAdvice({...inputs,state,readiness})||memoryCheck(state,date);
+      const advice=(swap&&state.nudge.date!==date?swap:null)||easier||swap||(verdict==='hard'?null:proactiveAdvice({...inputs,state,readiness}))||memoryCheck(state,date);
       return Response.json({status:'ok',state,advice},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
