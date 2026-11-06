@@ -1035,7 +1035,8 @@ struct ConnectionProblemCard: View {
                             }
                             Spacer(minLength: 8)
                             Button { start(provider.id) } label: {
-                                Text("Připojit znovu")
+                                // The same words as the service's page in Settings.
+                                Text(provider.needsReconnect != true && !(provider.missingPermissions ?? []).isEmpty ? "Povolit chybějící" : "Připojit znovu")
                                 .font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
                                 .padding(.horizontal, 14).frame(height: 34)
                                 .background(Palette.button, in: Capsule())

@@ -100,7 +100,7 @@ struct ConnectFlowSheets: ViewModifier {
                 }
             } message: {
                 // Ultrahuman's, WHOOP's and Wahoo's data is deleted on disconnecting (src/ultrahuman.js, src/whoop.js, src/wahoo.js).
-                Text(flow.disconnecting?.id == "ultrahuman" ? "Data z prstenu se smažou a noc se zase bude brát z hodinek."
+                Text(flow.disconnecting?.id == "ultrahuman" ? "Data z prstenu se smažou a noc se zase bude brát z ostatních zdrojů."
                      : flow.disconnecting?.id == "whoop" ? "Data z WHOOPu se smažou a noc se zase bude brát z ostatních zdrojů."
                      : flow.disconnecting?.id == "wahoo" ? "Jízdy a běhy z Wahoo se v Aurinu smažou a plán do Wahoo přestane chodit."
                      : "Data, která už Aurin má, zůstanou. Nová přestanou chodit.")
@@ -147,7 +147,7 @@ struct ServiceConnectSheet: View {
                            writes: L10n.tr("Jídlo a pití, které zapíšeš v Aurinu. Když to na stránce Googlu povolíš, i váhu a tréninky z Aurinu."), google: true)
         case "intervals":
             return Service(name: "Intervals.icu",
-                           reads: L10n.tr("Tréninky, plán, zóny a váhu."),
+                           reads: L10n.tr("Tréninky, plán, prahy a zóny, váhu a z wellness spánek, HRV a klidový tep."),
                            writes: L10n.tr("Tréninky naplánované i odcvičené v Aurinu a kalorický cíl."), healthOptIn: true)
         case "whoop":
             return Service(name: "WHOOP",

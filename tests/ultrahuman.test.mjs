@@ -143,6 +143,19 @@ test("a refused token marks the connection for reconnecting", async () => {
   assert.deepEqual([ring.connected, ring.needsReconnect, ring.connectUrl], [true, true, "/oauth/ultrahuman"]);
 });
 
+test("Ultrahuman down while refreshing is an outage; only a refused refresh asks to reconnect", async () => {
+  const { raw, db } = setup();
+  const health = () => raw.sqlite.prepare("SELECT status FROM sync_status WHERE sync_name='connection_ultrahuman'").get()?.status;
+  for (const down of [() => new Response("", { status: 502 }), () => new Response("", { status: 429 }), () => { throw new TypeError("timeout"); }]) {
+    const e = env(db, { access_token: "old", refresh_token: "r", expires_at: 1000 });
+    assert.equal((await syncUltrahuman(e, { days: 1, fetchImpl: async () => down(), today: "2026-10-12" })).status, "error");
+    assert.equal(health(), undefined);
+  }
+  const e = env(db, { access_token: "old", refresh_token: "r", expires_at: 1000 });
+  await syncUltrahuman(e, { days: 1, fetchImpl: async () => Response.json({ error: "invalid_grant" }, { status: 401 }), today: "2026-10-12" });
+  assert.equal(health(), "broken");
+});
+
 test("disconnecting deletes the ring's data and gives the days back to Apple", async () => {
   const { raw, db } = setup();
   await saveAppleHealth(db, 1, { records: [{ type: "daily-heart-rate-variability", id: "hrv:2026-10-12", date: "2026-10-12", value: 40, metric: "sdnn" }] }, { now: Date.parse("2026-10-12T12:00:00Z") });

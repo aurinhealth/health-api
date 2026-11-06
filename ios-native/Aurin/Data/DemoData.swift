@@ -17,7 +17,7 @@ enum DemoData {
 
     static var connections: [ConnectionsResponse.Provider] { [
         .init(id: "google", name: "Google Health", connected: true, configured: true, missingPermissions: [], metrics: ["Spánek a fáze", "Aktivity", "Hmotnost", "Jídlo"].map(local), note: nil),
-        .init(id: "intervals", name: "Intervals.icu", connected: true, configured: true, missingPermissions: nil, metrics: ["Aktivity a plán", "Fitness / únava / forma", "Wellness"].map(local), note: nil)
+        .init(id: "intervals", name: "Intervals.icu", connected: true, configured: true, missingPermissions: nil, metrics: ["Tréninky a plán", "Fitness / únava / forma", "Prahy, zóny a váha", "Spánek, HRV a klidový tep"].map(local), note: nil)
     ] }
 
     /// Sample Health and Food screens (generated with src/app-health.js and
