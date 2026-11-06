@@ -205,11 +205,11 @@ final class ShareImageTests: XCTestCase {
         XCTAssertEqual(ShareMilestones.Record.duration(60), "1 minuta")
         XCTAssertTrue(ShareMilestones(items: [], record: nil).isEmpty)
 
-        // Multisport: each day's legs and the kilometres of the sports done, in the app's order.
-        let multi = #"{"items":[{"key":"multisport","value":10,"total":11,"sessions":11,"minutes":1280,"bars":[{"date":"2026-10-04","value":120,"legs":[{"kind":"swim","minutes":30},{"kind":"ride","minutes":60},{"kind":"run","minutes":30}]}],"start":0,"km":{"ride":410,"run":96,"swim":0}}],"record":null}"#
+        // Multisport: the kilometres and time of the sports done, in the app's order.
+        let multi = #"{"items":[{"key":"multisport","value":10,"total":11,"sessions":11,"minutes":1280,"bars":[{"date":"2026-10-04","value":120}],"start":0,"sports":[{"kind":"ride","km":410,"minutes":1630},{"kind":"run","km":96,"minutes":740}]}],"record":null}"#
         let item = try XCTUnwrap(JSONDecoder().decode(ShareMilestones.self, from: Data(multi.utf8)).items.first)
-        XCTAssertEqual(item.bars.first?.legs?.map(\.kind), ["swim", "ride", "run"])
-        XCTAssertEqual(item.sportStats.map(\.sport), ["ride", "run"])
+        XCTAssertEqual(item.sports?.map(\.label), ["Kolo", "Běh"])
+        XCTAssertEqual(item.sports?.first?.distance, "410")
         XCTAssertEqual(item.noun, "multisportovních tréninků")
         XCTAssertFalse(item.isDistance)
         XCTAssertEqual(["streak", "swim", "gym", "ride", "multisport", "run"].sorted { ShareMilestones.order.firstIndex(of: $0)! < ShareMilestones.order.firstIndex(of: $1)! },

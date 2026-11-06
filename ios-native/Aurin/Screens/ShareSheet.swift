@@ -370,6 +370,7 @@ struct ShareEditView: View {
     var hasPhoto = false
     let card: (ShareOptions, CGFloat) -> ShareCard
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         ScrollView {
@@ -397,10 +398,22 @@ struct ShareEditView: View {
                 if kind == .milestone && options.variant != 2 && milestones.count > 1 {
                     SectionLabel(text: "Milník").padding(.top, 26).padding(.horizontal, 4)
                     let chosen = milestones.first { item in item.key == options.milestone }?.key ?? milestones[0].key
-                    ChipFlow(items: milestones.map(\.key).sorted { (ShareMilestones.order.firstIndex(of: $0) ?? 99) < (ShareMilestones.order.firstIndex(of: $1) ?? 99) }, label: { key in L10n.tr(milestones.first { item in item.key == key }?.title ?? key) },
-                             isOn: { key in key == chosen },
-                             toggle: { key in options.milestone = key })
-                        .padding(.top, 10)
+                    let keys = milestones.map(\.key).sorted { (ShareMilestones.order.firstIndex(of: $0) ?? 99) < (ShareMilestones.order.firstIndex(of: $1) ?? 99) }
+                    // Tiles as the sports of Plán týdne; capsules at the largest text sizes.
+                    Group {
+                        if typeSize.isAccessibilitySize {
+                            ChipFlow(items: keys, label: { key in L10n.tr(milestones.first { item in item.key == key }?.title ?? key) },
+                                     isOn: { key in key == chosen },
+                                     toggle: { key in options.milestone = key })
+                        } else {
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                                ForEach(keys, id: \.self) { key in
+                                    milestoneTile(key, title: milestones.first { $0.key == key }?.title ?? key, on: key == chosen)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.top, 10)
                 }
                 if !(kind == .milestone && options.variant == 2) && !(kind == .week && options.variant == 1) {
                     SectionLabel(text: kind == .day && options.variant == 0 ? "Na ose" : "Údaje").padding(.top, 26).padding(.horizontal, 4)
@@ -412,6 +425,27 @@ struct ShareEditView: View {
         }
         .background { Palette.background.ignoresSafeArea() }
         .navBarVisibility(.hidden)
+    }
+
+    /// A milestone as a tile with its sport's symbol and colour (as TrainingPlansSheet.sports).
+    private func milestoneTile(_ key: String, title: String, on: Bool) -> some View {
+        let sport = TrainingPlansSheet.sports.first { $0.id == (key == "multisport" ? "triathlon" : key) }
+        let color = sport?.color ?? Palette.amber
+        return Button { options.milestone = key } label: {
+            VStack(spacing: 5) {
+                Image(systemName: sport?.symbol ?? "flame.fill").scaledFont(17, weight: .semibold)
+                    .foregroundStyle(on ? Palette.onAccent : color)
+                Text(L10n.tr(title)).font(Typo.caption.weight(.semibold))
+                    .foregroundStyle(on ? Palette.onAccent : Palette.ink)
+                    .lineLimit(1).minimumScaleFactor(0.75)
+            }
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity, minHeight: 58)
+            .background(on ? color : Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Palette.hairline, lineWidth: on ? 0 : 1) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     private var header: some View {

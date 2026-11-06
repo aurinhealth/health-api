@@ -61,17 +61,21 @@ export function buildShareMilestones({ rows = [], gymDays = [], today, since = "
     if (item) items.push(item);
   }
 
-  // Multisport: one bar a day, its legs in the order done; the kilometres of each sport over all of them.
+  // Multisport: one bar a day (its minutes); the kilometres and time of each sport over all of them.
   const multi = multisportDays(activities);
   const multiValue = reachedStep(GYM_STEPS, multi.length);
   if (multiValue) {
     const legs = multi.flatMap(d => d.legs);
-    const km = kind => round(legs.filter(l => l.kind === kind).reduce((s, l) => s + l.meters, 0) / 1000, 1);
+    const of = kind => legs.filter(l => l.kind === kind);
     items.push({
       key: "multisport", value: multiValue, unit: "", total: multi.length, since, reachedOn: multi[multiValue - 1].date,
       sessions: multi.length, minutes: round(legs.reduce((s, l) => s + l.minutes, 0)), elevation: null,
-      bars: multi.slice(-BARS).map(d => ({ date: d.date, value: round(d.legs.reduce((s, l) => s + l.minutes, 0)), legs: d.legs.map(l => ({ kind: l.kind, minutes: round(l.minutes) })) })),
-      start: 0, km: { ride: km("ride"), run: km("run"), swim: km("swim") }
+      bars: multi.slice(-BARS).map(d => ({ date: d.date, value: round(d.legs.reduce((s, l) => s + l.minutes, 0)) })),
+      start: 0,
+      // Ride, run and swim, the ones never done left out.
+      sports: ["ride", "run", "swim"].filter(kind => of(kind).length).map(kind => ({
+        kind, km: round(of(kind).reduce((s, l) => s + l.meters, 0) / 1000, 1), minutes: round(of(kind).reduce((s, l) => s + l.minutes, 0))
+      }))
     });
   }
 

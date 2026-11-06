@@ -77,7 +77,7 @@ test("the curves asked from Intervals.icu", async () => {
 
 const leg = (id, start, type, minutes, distance) => ({ source_family: "intervals", external_id: id, start_time: start, end_time: null, payload_json: JSON.stringify({ id, type, distance, moving_time: minutes * 60, start_date_local: start }) });
 
-test("swim kilometres and multisport days, the sports of each day and their kilometres", () => {
+test("swim kilometres and multisport days with the kilometres and time of each sport", () => {
   const rows = [];
   for (let i = 1; i <= 5; i++) {
     const d = `2026-10-0${i}`;
@@ -90,6 +90,6 @@ test("swim kilometres and multisport days, the sports of each day and their kilo
   assert.equal(byKey.swim.total, 10.5);
   assert.equal(byKey.multisport.value, 5);
   assert.equal(byKey.multisport.reachedOn, "2026-10-05");
-  assert.deepEqual(byKey.multisport.km, { ride: 150, run: 35, swim: 7.5 });
-  assert.deepEqual(byKey.multisport.bars[0], { date: "2026-10-01", value: 120, legs: [{ kind: "swim", minutes: 30 }, { kind: "ride", minutes: 60 }, { kind: "run", minutes: 30 }] });
+  assert.deepEqual(byKey.multisport.sports, [{ kind: "ride", km: 150, minutes: 300 }, { kind: "run", km: 35, minutes: 150 }, { kind: "swim", km: 7.5, minutes: 150 }]);
+  assert.deepEqual(byKey.multisport.bars[0], { date: "2026-10-01", value: 120 });
 });
