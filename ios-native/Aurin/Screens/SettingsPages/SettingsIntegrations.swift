@@ -130,7 +130,6 @@ struct IntegrationDetailView: View {
     let store: SettingsStore
     let actions: SourceActions
     @State private var flow = ConnectFlowState()
-    @State private var syncing = false
     /// What "Synchronizovat znovu" brought, until the page is left (SyncStatus.pageLine).
     @State private var syncLine: (text: String, problem: Bool, at: Date)? = nil
     @State private var sync: SyncSettingsStore?
@@ -186,14 +185,14 @@ struct IntegrationDetailView: View {
                         Task { await syncAgain() }
                     } label: {
                         HStack {
-                            Text(syncing ? "Synchronizuji…" : "Synchronizovat znovu").font(.body).foregroundStyle(Palette.ink)
+                            Text(store.syncing ? "Synchronizuji…" : "Synchronizovat znovu").font(.body).foregroundStyle(Palette.ink)
                             Spacer()
-                            if syncing { ProgressView() } else { Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(Palette.faint) }
+                            if store.syncing { ProgressView() } else { Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(Palette.faint) }
                         }
                         .padding(.horizontal, 16).frame(minHeight: 50).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .disabled(syncing || store.demo)
+                    .disabled(store.syncing || store.demo)
                 }
                 if let line = syncLine {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -241,7 +240,6 @@ struct IntegrationDetailView: View {
 
     /// "Synchronizovat znovu": the sync, then one line on what it brought from this service.
     private func syncAgain() async {
-        syncing = true
         syncLine = nil
         await store.syncNow()
         let failed = store.errorMessage
@@ -249,7 +247,6 @@ struct IntegrationDetailView: View {
         let status = store.sync ?? SyncStatus(status: nil, updatedAt: nil, results: nil, googleStatus: nil)
         let line = status.pageLine(source: current.id, name: current.name ?? current.id, failed: failed)
         withAnimation { syncLine = (line.text, line.problem, Date()) }
-        syncing = false
     }
 
     /// "Aurin čte": Google's permissions, Apple Health's switches, or what the service gives.

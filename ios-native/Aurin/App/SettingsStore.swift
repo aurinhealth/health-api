@@ -19,6 +19,9 @@ final class SettingsStore {
     /// Per service the server reads, the types it sent in the last week (nil until loaded).
     private(set) var sending: [String: [String]]?
     private(set) var sync: SyncStatus?
+    /// A sync started here is running (syncNow): kept by the store, not the page,
+    /// so Data sources and a service's page show it after going back and forth.
+    private(set) var syncing = false
     private(set) var loaded = false
     /// The profile really came from the server. The server replaces the whole
     /// profile on save, so saving changes onto an empty one would wipe the rest.
@@ -151,7 +154,9 @@ final class SettingsStore {
     }
 
     func syncNow() async {
-        guard !demo else { return }
+        guard !demo, !syncing else { return }
+        syncing = true
+        defer { syncing = false }
         await AppleHealth.shared.sync(api: api, force: true)
         // Apple Health alone has nothing for the server to fetch.
         guard connections.contains(where: { $0.connected == true && $0.id != "apple" }) || connections.isEmpty else { return }
