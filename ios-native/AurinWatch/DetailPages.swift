@@ -222,7 +222,8 @@ struct StrainDetail: View {
     private var note: String {
         if let title = strain.nextTitle, let planned = strain.planned, planned > 0 {
             let at = strain.nextTime.map { " " + $0 } ?? ""
-            return title + at + W.tr(" přidá asi ", " adds about ") + W.number(planned, digits: 1)
+            // A yellow morning: how to do it, as under the workout on the iPhone (wave 4, 28.2).
+            return title + at + W.tr(" přidá asi ", " adds about ") + W.number(planned, digits: 1) + (strain.nextNote.map { "\n" + $0 } ?? "")
         }
         guard let low = strain.low, let high = strain.high else { return "" }
         return W.tr("Dnešní cíl", "Today's target") + " " + W.number(low) + "–" + W.number(high)

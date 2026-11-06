@@ -240,6 +240,7 @@ struct SleepDial: View {
                 VStack(spacing: 2) {
                     Text(Fmt.hoursMinutes(Double(sleep))).font(Typo.number(42)).foregroundStyle(Palette.ink)
                         .contentTransition(.numericText())
+                        .accessibilityLabel(Fmt.hoursMinutesSpoken(Double(sleep)))
                     Text("spánek").font(Typo.small).foregroundStyle(Palette.muted)
                 }
                 .position(c)

@@ -75,6 +75,7 @@ enum BackgroundRefresh {
         guard let today = try? await api.today() else { return false }
         WidgetBridge.update(today)
         await Reminders.reschedule(from: today)
+        if !Task.isCancelled { await WidgetBridge.followWeek(today, api: api) }
         if pick, !Task.isCancelled { _ = try? await api.coachPick() }
         return true
     }

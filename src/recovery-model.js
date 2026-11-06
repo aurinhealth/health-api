@@ -148,7 +148,7 @@ export function sleepNeedFor(input) {
 }
 // When to go to bed for the night after `date`, as WHOOP's Sleep Planner
 // does: wake at the usual time and spend in bed the night's need plus the
-// usual time awake in bed. The wake time is the median of the last 14 nights
+// usual time awake in bed, at most an hour more than the need. The wake time is the median of the last 14 nights
 // of the same kind of morning (work day or weekend, all nights when fewer
 // than 3), the efficiency the median of asleep / in bed (0.8–0.97, 0.9
 // without data). `nights` are primary nights with their wake-up date and
@@ -170,7 +170,11 @@ export function bedtimePlan(input) {
   const wake = chosen != null ? Math.round(chosen) : Math.round(median(wakeNights.map(n => Number(n.wakeMin))));
   const ratios = recent.filter(n => Number(n.timeInBedMin) >= Number(n.durationMin)).map(n => Number(n.durationMin) / Number(n.timeInBedMin));
   const efficiency = ratios.length ? Math.max(0.8, Math.min(0.97, median(ratios))) : 0.9;
-  const inBed = Math.round(need / efficiency / 5) * 5;
+  // At most an hour more in bed than the night's need (audit 2026-11-06,
+  // 25.5): a low efficiency (often the iPhone's "in bed" window) would ask for
+  // 11 h in bed, and lying awake longer only feeds it (time in bed
+  // restriction in insomnia treatment, Spielman 1987).
+  const inBed = Math.min(need + 60, Math.round(need / efficiency / 5) * 5);
   return { wake, inBed, need, efficiency, bed: ((Math.round((wake - inBed) / 5) * 5) % 1440 + 1440) % 1440, nights: wakeNights.length, weekend: [0, 6].includes(morning), wakeSource: chosen != null ? "setting" : "usual" };
 }
 // Sleep index 0–100: duration against the personal need (50, from none at

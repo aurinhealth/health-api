@@ -30,6 +30,15 @@ enum Fmt {
         return "\(m / 60):" + String(format: "%02d", m % 60)
     }
 
+    /// 432 → "7 hodin 12 minut": what VoiceOver says for a "7:12", which it
+    /// could read as a clock time (audit 20.c1).
+    static func hoursMinutesSpoken(_ minutes: Double?) -> String {
+        guard let minutes else { return "–" }
+        let m = Int(minutes.rounded()), h = m / 60, rest = m % 60
+        if h == 0 { return L10n.plural("%lld minut", rest) }
+        return L10n.plural("%lld hodin", h) + (rest > 0 ? " " + L10n.plural("%lld minut", rest) : "")
+    }
+
     /// A signed change with a real minus sign: "+6", "−2".
     static func signed(_ value: Double, digits: Int = 0) -> String {
         let text = digits == 0 ? int(abs(value)) : decimal(abs(value), digits: digits)

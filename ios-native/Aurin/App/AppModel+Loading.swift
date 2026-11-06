@@ -117,6 +117,8 @@ extension AppModel {
                 async let cycle: Void = loadCycle()
                 await Reminders.reschedule(from: today)
                 WidgetBridge.update(today)
+                let client = api
+                scope.task { await WidgetBridge.followWeek(today, api: client) }
                 prefetchAround(Self.localDate(Date()))
                 await cycle
             }
@@ -176,6 +178,17 @@ extension AppModel {
         applyOutbox()
         errorMessage = nil
         _ = noteConnection(nil)
+        cacheTodaysGym()
+    }
+
+    /// A gym workout planned today: its plan kept on the phone now, while there
+    /// is signal, so Training mode opens it in a gym without any. Once a day
+    /// (one light request); Training mode and every save keep the copy fresh after.
+    private func cacheTodaysGym() {
+        let date = Self.localDate(Date())
+        guard !demo, selectedDate == nil, let today, GymDayCache.load(date: date) == nil,
+              TodayTrainingCard.planned(today).contains(where: { $0.sport == "strength" }) else { return }
+        Task { _ = try? await gymDay(date: date) }
     }
 
     /// Today again after a meal or drink went out: without the Apple Health

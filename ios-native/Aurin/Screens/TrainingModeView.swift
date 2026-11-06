@@ -164,6 +164,8 @@ struct TrainingModeView: View {
                     ScrollView { finished(day).padding(.bottom, 24) }
                     .scrollIndicators(.hidden)
                 }
+            } else if day == nil, let error {
+                loadFailed(error)
             } else {
                 empty
             }
@@ -325,7 +327,7 @@ struct TrainingModeView: View {
                     if started {
                         Button { Task { await finish() } } label: {
                             Text("Dokončit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
-                                .padding(.horizontal, 14).frame(height: 36).background(Palette.button, in: Capsule())
+                                .padding(.horizontal, 18).frame(height: 44).background(Palette.button, in: Capsule())
                         }
                         .buttonStyle(.plain)
                         .disabled(saving)
@@ -671,13 +673,16 @@ struct TrainingModeView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    if next.sets.contains(where: { !$0.done }) {
-                        SmallInfoButton(label: "Nahradit cvik", systemImage: "arrow.triangle.swap") { swapping = next.name }
+                    // Each its own 44 pt, side by side: a sweaty finger hits the one it means.
+                    HStack(spacing: 0) {
+                        if next.sets.contains(where: { !$0.done }) {
+                            SmallInfoButton(label: "Nahradit cvik", systemImage: "arrow.triangle.swap") { swapping = next.name }
+                        }
+                        SmallInfoButton { technique = next.name }
+                        foldButton("next")
                     }
-                    SmallInfoButton { technique = next.name }
-                    foldButton("next")
                 }
-                .padding(.horizontal, 16).padding(.vertical, 12)
+                .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 12)
                 if unfolded.contains("next") {
                     RestSetsList(exercise: next, last: history.last(next.name, before: date)) { typed in
                         Task { await setWeight(LiftWeight.kgText(typed), of: next) }
@@ -710,7 +715,7 @@ struct TrainingModeView: View {
             withAnimation(.snappy) { if unfolded.contains(key) { unfolded.remove(key) } else { unfolded.insert(key) } }
         } label: {
             Image(systemName: unfolded.contains(key) ? "chevron.up" : "chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(Palette.faint)
-                .frame(width: 28, height: 34).tapTarget(width: 28, height: 34)
+                .frame(width: 44, height: 34).tapTarget(width: 44, height: 34)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.tr(unfolded.contains(key) ? "Skrýt série" : "Ukázat série"))
@@ -759,8 +764,10 @@ struct TrainingModeView: View {
                         Spacer(minLength: 6)
                         Text(plannedLine(set, in: exercise))
                             .font(Typo.number(22)).foregroundStyle(Palette.ink).lineLimit(1)
-                        SmallInfoButton { technique = exercise.name }.padding(.leading, 4)
-                        foldButton("now")
+                        HStack(spacing: 0) {
+                            SmallInfoButton { technique = exercise.name }
+                            foldButton("now")
+                        }
                     }
                     if let previous = GymSessionMath.lastTime(set, in: exercise, last: last) {
                         Text(L10n.f("Minule %@", previous)).font(Typo.caption).foregroundStyle(Palette.muted)
@@ -1405,6 +1412,23 @@ struct TrainingModeView: View {
             Text(value).font(Typo.number(24)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
             if let change { Text(change).font(Typo.caption).foregroundStyle(better ? Palette.green : Palette.rust) }
         }
+    }
+
+    /// The day didn't load (no signal and no copy on the phone, a server error):
+    /// not Prázdný trénink, whose Přidat cvik would save a sheet over the plan.
+    /// Again, or back, as in GymLive.
+    private func loadFailed(_ message: String) -> some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Text(message).font(Typo.small).foregroundStyle(Palette.rust).multilineTextAlignment(.center)
+            SecondaryButton(title: "Zkusit znovu") { error = nil; Task { await load() } }
+            Button { dismiss() } label: {
+                Text("Zpět").font(Typo.bodyStrong).foregroundStyle(Palette.ink).frame(maxWidth: .infinity).frame(height: 46)
+            }
+            .buttonStyle(.plain)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
     }
 
     /// Nothing planned: an empty workout the exercises are added to one by one.

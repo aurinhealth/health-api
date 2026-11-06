@@ -109,6 +109,17 @@ export async function withoutBrokenConnections(env, now = new Date()) {
   return out;
 }
 
+// The services Today's days and nights come from, with when Aurin last reached
+// each (Today audit 28.3). The app marks one not reached for over 12 hours above
+// the day, as Settings → Zdroje dat turns its dot orange. Apple Health is the
+// phone's own sync; Wahoo brings only done workouts; a refused one is on the
+// problem card already.
+const DAY_AND_NIGHT = ["google", "intervals", "ultrahuman", "whoop"];
+export function dataSources(status) {
+  return (status?.providers || []).filter(p => p.connected && DAY_AND_NIGHT.includes(p.id) && !p.needsReconnect && p.lastSuccessAt)
+    .map(p => ({ provider: p.id, name: p.name, lastSuccessAt: p.lastSuccessAt }));
+}
+
 // The connected providers that need the user: access refused, or Google
 // permissions left unticked. Shown on Today and in Settings.
 export function connectionProblems(status) {

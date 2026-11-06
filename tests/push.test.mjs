@@ -352,7 +352,10 @@ test("the morning push waits for last night and never says 'intervals' to a sick
   const signs = readinessMessage({ score: 80, zone: "green", flags: ["skin_temp_elevated"], planned: [{ title: "Intervaly", sport: "ride" }] });
   assert.equal(signs.alert.title, "Připravenost 80 · Dnes bez intenzity");
   assert.match(signs.alert.body, /nad tvým obvyklým rozmezím/);
-  assert.doesNotMatch(signs.alert.body, /nemoc/);
+  assert.doesNotMatch(signs.alert.body, /nemoc|odpočívej|kouči/);
+  // Petr's answer to O22: no intensity, easy allowed, with the ordinary causes (MDR).
+  assert.equal(signs.alert.body, "Teplota nebo dech ve spánku jsou nad tvým obvyklým rozmezím. Může za tím být horko, alkohol, pozdní jídlo, stres nebo tvrdý trénink. Dnes bez intenzity, jen lehce.");
+  for (const lang of ["cs", "en"]) assert.doesNotMatch(withLang(lang, () => readinessMessage({ score: 80, zone: "green", flags: ["wrist_temp_elevated"] })).alert.body, /nemoc|sick|ill\b|infek|infect|fever|horečk|doctor|lékař|\brest\b|odpočív/i, lang);
   // A green score with a sign of illness gets an amber ring, never a green one.
   assert.equal(signs.zone, "yellow");
   assert.deepEqual(readinessMessage({ score: 80, zone: "green", flags: ["checkin_sick"] }), { alert: { title: "Připravenost 80 · Dnes odpočinek", body: "Dej tělu klid." }, zone: "red", verdict: "rest" });

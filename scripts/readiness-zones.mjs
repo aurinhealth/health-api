@@ -76,22 +76,24 @@ async function main() {
     LEFT JOIN user_data_routes r ON r.user_id=u.id LEFT JOIN user_data_shards s ON s.shard_key=r.shard_key
     LEFT JOIN user_time_zone z ON z.user_id=u.id
     WHERE u.disabled=0 GROUP BY u.id ORDER BY u.id`).all().then(r => r.results);
-  const rows = [];
+  // Why an account has no row: no data database, an error, or no day with a number.
+  const rows = [], skipped = { noDatabase: 0, noNumber: 0, failed: 0 }, errors = new Set();
   for (const user of users) {
     const name = /^USER_DATA_(\d{3})$/.exec(user.binding_name || '')?.[1];
     const id = name ? byName['health-data-staging-users-' + name] : user.shard_key === 'legacy' || !user.shard_key ? core : null;
-    if (!id) continue;
+    if (!id) { skipped.noDatabase++; continue; }
     shards[id] ||= binding(id);
     const env = userEnv({ DB: coreDb, USER_DATA_DB: shards[id] }, { id: user.id, email: '', role: 'user' });
     const zones = await withTimeZone(validTimeZone(user.time_zone), () => accountZones(env)).catch(error => ({ error: error.message }));
-    if (zones.error || zones.days === zones.none) continue;
+    if (zones.error) { skipped.failed++; errors.add(zones.error.slice(0, 160)); continue; }
+    if (zones.days === zones.none) { skipped.noNumber++; continue; }
     rows.push(zones);
   }
   const pct = (a, b) => b ? Math.round(100 * a / b) + ' %' : '–';
   const total = rows.reduce((t, r) => { for (const k of Object.keys(t)) t[k] += r[k]; return t; }, { days: 0, green: 0, yellow: 0, red: 0, none: 0, yellowHrvLow: 0 });
   const line = (label, r) => { const scored = r.green + r.yellow + r.red; return `| ${label} | ${scored} | ${r.green} | ${r.yellow} (${pct(r.yellow, scored)}) | ${r.red} | ${r.yellowHrvLow} |`; };
   const text = [`## Readiness zones on the test server, last ${DAYS} days`, '',
-    `${rows.length} accounts with a readiness (health consent, Google or Apple data). Days without a number are left out.`, '',
+    `${users.length} accounts with health consent; ${rows.length} with a readiness. Left out: ${skipped.noNumber} without any day with a number, ${skipped.noDatabase} without a data database, ${skipped.failed} failed${errors.size ? ' (' + [...errors].join('; ') + ')' : ''}. Days without a number are left out.`, '',
     '| Account | Days with a number | Green | Yellow | Red | Yellow with HRV under normal |', '|---|---|---|---|---|---|',
     ...rows.map((r, i) => line(String(i + 1), r)), line('**All**', total), ''].join('\n');
   console.log(text);

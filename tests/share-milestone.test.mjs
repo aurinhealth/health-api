@@ -74,3 +74,22 @@ test("the curves asked from Intervals.icu", async () => {
   assert.equal(r.isNew, true);
   assert.equal(await intervalsRecord({}, "", "2026-10-15", fetchImpl), null);
 });
+
+const leg = (id, start, type, minutes, distance) => ({ source_family: "intervals", external_id: id, start_time: start, end_time: null, payload_json: JSON.stringify({ id, type, distance, moving_time: minutes * 60, start_date_local: start }) });
+
+test("swim kilometres and multisport days with the kilometres and time of each sport", () => {
+  const rows = [];
+  for (let i = 1; i <= 5; i++) {
+    const d = `2026-10-0${i}`;
+    rows.push(leg(`s${i}`, d + "T07:00:00", "Swim", 30, 1500), leg(`b${i}`, d + "T07:35:00", "Ride", 60, 30000), leg(`r${i}`, d + "T08:40:00", "Run", 30, 7000));
+  }
+  rows.push(leg("x", "2026-10-08T07:00:00", "Swim", 60, 3000));
+  const m = buildShareMilestones({ rows, today: "2026-10-09", since: "2026-09-01" });
+  const byKey = Object.fromEntries(m.items.map(i => [i.key, i]));
+  assert.equal(byKey.swim.value, 10);
+  assert.equal(byKey.swim.total, 10.5);
+  assert.equal(byKey.multisport.value, 5);
+  assert.equal(byKey.multisport.reachedOn, "2026-10-05");
+  assert.deepEqual(byKey.multisport.sports, [{ kind: "ride", km: 150, minutes: 300 }, { kind: "run", km: 35, minutes: 150 }, { kind: "swim", km: 7.5, minutes: 150 }]);
+  assert.deepEqual(byKey.multisport.bars[0], { date: "2026-10-01", value: 120 });
+});

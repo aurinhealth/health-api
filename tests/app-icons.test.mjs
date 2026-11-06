@@ -46,7 +46,7 @@ test("the picker's styles and Pro icons all have icons", () => {
   const swift = readFileSync(new URL("../ios-native/Aurin/Screens/SettingsPages/SettingsAppIcon.swift", import.meta.url), "utf8");
   const styles = [...swift.matchAll(/Style\(key: "([a-z-]+)"/g)].map(m => m[1]);
   assert.deepEqual(styles, ["badge", "track"]);
-  const slots = ["run", "run-gold", "ride", "ride-gold", "gym", "gym-gold", "spring", "summer", "autumn", "winter", "streak"];
+  const slots = ["ride", "ride-gold", "run", "run-gold", "swim", "swim-gold", "multisport", "multisport-gold", "gym", "gym-gold", "spring", "summer", "autumn", "winter", "streak"];
   for (const style of styles) for (const slot of slots) assert.ok(icons.includes(`${style}-${slot}`), `${style}-${slot}`);
   const pro = [...swift.slice(swift.indexOf("static let proIcons")).split("\n    ]")[0].matchAll(/\("([a-z-]+)", "/g)].map(m => m[1]);
   assert.equal(pro.length, 5);

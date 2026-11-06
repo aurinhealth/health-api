@@ -1,10 +1,11 @@
 // Sdílet → Týden: one week (Monday to Sunday) for the share image, and the
 // week before it for "Proti minulému". Per day the morning readiness, the
-// main sport and the training time; for the week the training time, the
-// number of sessions, the load, ride and run kilometres, the average night
+// main sport (and the sports of a triathlon, a duathlon or a brick) and the
+// training time; for the week the training time, the number of sessions, the
+// load, ride, run and swim kilometres, the average night
 // and the average readiness. Walks are not training here, as in the streak.
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
-import { activityMeters } from "./app-milestones.js";
+import { activityMeters, multisportDays } from "./app-milestones.js";
 import { readinessFor, primaryNights } from "./readiness.js";
 
 const DAY = 86400000;
@@ -35,12 +36,14 @@ function totals(days, activities, nights) {
     tss: round(inWeek.reduce((s, a) => s + (a.tss || 0), 0)),
     rideKm: km("ride"),
     runKm: km("run"),
+    swimKm: km("swim"),
     sleepMinutes: round(mean(sleep)),
     readiness: round(mean(readiness))
   };
 }
 
 function weekDays(monday, { today, activities, gymDays, scores }) {
+  const multi = new Map(multisportDays(activities).map(d => [d.date, d.legs.map(l => l.kind)]));
   return Array.from({ length: 7 }, (_, i) => {
     const date = shift(monday, i);
     const list = activities.filter(a => a.date === date);
@@ -58,7 +61,9 @@ function weekDays(monday, { today, activities, gymDays, scores }) {
       sport,
       minutes: round(list.reduce((s, a) => s + (a.minutes || 0), 0)),
       sessions: list.length + (gym ? 1 : 0),
-      tss: round(list.reduce((s, a) => s + (a.tss || 0), 0))
+      tss: round(list.reduce((s, a) => s + (a.tss || 0), 0)),
+      // A triathlon, a duathlon or a brick: its sports in the order done.
+      ...(multi.has(date) ? { legs: multi.get(date) } : {})
     };
   });
 }

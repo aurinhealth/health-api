@@ -64,6 +64,7 @@ struct DayTimeline: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Šlofík").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         Text(Fmt.hoursMinutes(Double(nap.minutes))).font(Typo.number(26)).foregroundStyle(Palette.ink)
+                            .accessibilityLabel(Fmt.hoursMinutesSpoken(Double(nap.minutes)))
                     }
                 }
             }
@@ -113,6 +114,7 @@ struct DayTimeline: View {
         VStack(alignment: .leading, spacing: 3) {
             Text("Spánek").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
             Text(Fmt.hoursMinutes(sleep.minutes)).font(Typo.number(26)).foregroundStyle(Palette.ink)
+                .accessibilityLabel(Fmt.hoursMinutesSpoken(sleep.minutes))
             HStack(spacing: 6) {
                 if let hrv = today.hrv?.value { DayChip(label: "HRV", value: Fmt.int(hrv), unit: "ms") }
                 if let rhr = today.restingHR?.value { DayChip(label: L10n.tr("Tep"), value: Fmt.int(rhr), unit: "bpm") }

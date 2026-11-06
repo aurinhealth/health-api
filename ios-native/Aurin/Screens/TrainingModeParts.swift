@@ -560,7 +560,9 @@ struct HeartSourceButton: View {
     }
 }
 
-/// The small "i" beside an exercise in the rest: how it is done.
+/// The small "i" beside an exercise in the rest: how it is done. A 30 pt
+/// circle in its own 44 × 44 pt to tap (laid out 44 wide, 30 high, so its row
+/// stays as tall as before), so two side by side don't share a finger.
 struct SmallInfoButton: View {
     var label = "Technika"
     var systemImage = "info"
@@ -570,6 +572,7 @@ struct SmallInfoButton: View {
         Button(action: action) {
             Image(systemName: systemImage).scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                 .frame(width: 30, height: 30).background(Palette.track, in: Circle())
+                .frame(width: 44).tapTarget(width: 44, height: 30)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.tr(label))
@@ -727,7 +730,7 @@ struct SwipeToDelete: ViewModifier {
                             Image(systemName: "trash").scaledFont(15, weight: .semibold)
                             Text("Smazat").font(Typo.caption.weight(.semibold))
                         }
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Palette.onAccent)
                         .frame(width: -offset).frame(maxHeight: .infinity)
                         .background(Palette.red, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }

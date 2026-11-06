@@ -269,9 +269,9 @@ struct FoodEntryCard: View {
                 }
             }
             HStack(spacing: 6) {
-                value(L10n.isEnglish ? "C" : "S", entry.carbs, Palette.carbs)
-                value(L10n.isEnglish ? "P" : "B", entry.protein, Palette.protein)
-                value(L10n.isEnglish ? "F" : "T", entry.fat, Palette.fat)
+                value(L10n.isEnglish ? "C" : "S", entry.carbs, Palette.carbs, letter: Self.darkLetter)
+                value(L10n.isEnglish ? "P" : "B", entry.protein, Palette.protein, letter: Self.darkLetter)
+                value(L10n.isEnglish ? "F" : "T", entry.fat, Palette.fat, letter: Palette.onAccent)
             }
             Text(Self.extras(entry)).font(Typo.caption).foregroundStyle(Palette.muted)
         }
@@ -282,9 +282,13 @@ struct FoodEntryCard: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    private func value(_ letter: String, _ grams: Double?, _ color: Color) -> some View {
+    /// The letter on the light carbs and protein dots: white read at 2.8:1 and
+    /// 4.1:1 there in light mode, near black reads at 7.1:1 and 4.8:1 (audit 20.d1).
+    private static let darkLetter = Color(hex: 0x0A0B0C)
+
+    private func value(_ text: String, _ grams: Double?, _ color: Color, letter: Color) -> some View {
         HStack(spacing: 4) {
-            Text(verbatim: letter).scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(.white)
+            Text(verbatim: text).scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(letter)
                 .frame(width: 18, height: 18).background(color, in: Circle())
             Text(Fmt.decimal(grams ?? 0, digits: (grams ?? 0) < 10 ? 1 : 0) + " g").font(.footnote.weight(.semibold).monospacedDigit()).foregroundStyle(Palette.ink)
         }

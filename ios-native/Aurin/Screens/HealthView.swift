@@ -428,7 +428,7 @@ struct SleepWidget: View {
             WidgetHeader(title: "Spánek", color: Palette.indigo)
             SizedWidgetBody(size: size) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    NumberText(value: Fmt.hoursMinutes(sleep.night?.minutes), unit: "h")
+                    NumberText(value: Fmt.hoursMinutes(sleep.night?.minutes), unit: "h", spoken: Fmt.hoursMinutesSpoken(sleep.night?.minutes))
                     Image(systemName: "chevron.right").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint)
                 }
                 if let index = sleep.night?.index {
@@ -462,12 +462,12 @@ struct SleepDebtWidget: View {
         Card {
             WidgetHeader(title: "Spánkový dluh", color: Palette.amberBar)
             if size == .small {
-                NumberText(value: Fmt.hoursMinutes(Double(debt.minutes)), unit: "h")
+                NumberText(value: Fmt.hoursMinutes(Double(debt.minutes)), unit: "h", spoken: Fmt.hoursMinutesSpoken(Double(debt.minutes)))
                 Text(nights).font(Typo.caption).foregroundStyle(Palette.faint)
                 ProgressLine(fraction: Double(debt.minutes) / 360, color: color)
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    NumberText(value: Fmt.hoursMinutes(Double(debt.minutes)), unit: "h")
+                    NumberText(value: Fmt.hoursMinutes(Double(debt.minutes)), unit: "h", spoken: Fmt.hoursMinutesSpoken(Double(debt.minutes)))
                     Spacer(minLength: 8)
                     Text(nights).font(Typo.caption).foregroundStyle(Palette.faint)
                 }
