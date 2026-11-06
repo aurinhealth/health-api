@@ -479,6 +479,7 @@ struct FoodAmountView: View {
     @State private var sugar = ""
     @State private var fat = ""
     @State private var fiber = ""
+    @State private var salt = ""
 
     private var target: String { chosenMeal ?? meal }
 
@@ -488,7 +489,7 @@ struct FoodAmountView: View {
                 BackSlot { dismiss() }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(current.name).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                    if product.source == "ai-estimate" { AIEstimateTag() }
+                    if product.isEstimate { AIEstimateTag() }
                     HStack(spacing: 8) {
                         if let brand = current.brand { Text(brand).font(Typo.small).foregroundStyle(Palette.muted) }
                         if fixed { FixedTag() } else if product.canReport && (product.reported == true || reportedNow) { ReportedTag() }
@@ -541,6 +542,8 @@ struct FoodAmountView: View {
                         SettingsField(title: "Tuky", text: $fat, unit: "g")
                         SettingsDivider()
                         SettingsField(title: "Vláknina", text: $fiber, unit: "g")
+                        SettingsDivider()
+                        SettingsField(title: "Sůl", text: $salt, unit: "g")
                     }
                 }
 
@@ -549,6 +552,7 @@ struct FoodAmountView: View {
                     Text("Doplň energii v kcal, jinak by se jídlo počítalo jako 0 kcal.").font(Typo.small).foregroundStyle(Palette.amber)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                MissingMacrosLine(missing: current.missingMacros)
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
                 if product.canSuggestNew && !model.demo && pick == nil {
                     SettingsGroup { SettingsToggle(title: "Navrhnout pro všechny", isOn: $suggestNew) }
@@ -600,6 +604,7 @@ struct FoodAmountView: View {
         sugar = product.sugars_100g.map(Self.text) ?? ""
         fat = product.fat_100g.map(Self.text) ?? ""
         fiber = product.fiber_100g.map(Self.text) ?? ""
+        salt = product.salt_100g.map(Self.text) ?? ""
     }
 
     /// The product with the corrections.
@@ -614,6 +619,7 @@ struct FoodAmountView: View {
         p.sugars_100g = Self.number(sugar)
         p.fat_100g = Self.number(fat)
         p.fiber_100g = Self.number(fiber)
+        p.salt_100g = Self.number(salt)
         return p
     }
 
@@ -682,11 +688,12 @@ struct NutritionCells: View {
         }
     }
 
-    /// "z toho cukry 5,6 g · vláknina 2 g", for what the food has.
+    /// "z toho cukry 5,6 g · vláknina 2 g · sůl 0,8 g", for what the food has.
     private var extras: [String] {
         var out: [String] = []
         if let g = product.grams(product.sugars_100g, for: amount) { out.append(L10n.f("z toho cukry %@", Self.grams(g))) }
         if let g = product.grams(product.fiber_100g, for: amount) { out.append(L10n.f("vláknina %@", Self.grams(g))) }
+        if let g = product.grams(product.salt_100g, for: amount) { out.append(L10n.f("sůl %@", Self.grams(g))) }
         return out
     }
 
@@ -734,7 +741,7 @@ struct ManualFoodView: View {
             VStack(alignment: .leading, spacing: 20) {
                 BackSlot { dismiss() }
                 Text("Zadat ručně").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
-                SettingsGroup(title: "Jedna porce") {
+                SettingsGroup(title: "Jedna porce", footer: L10n.tr("Co necháš prázdné, počítá se jako 0 g.")) {
                     SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: "Kuřecí rizoto")
                     SettingsDivider()
                     SettingsField(title: "Energie", text: $kcal, unit: "kcal", keyboard: .numberPad)
@@ -768,6 +775,25 @@ struct ManualFoodView: View {
         saving = true
         defer { saving = false }
         if let message = await model.logFood(product: product, amount: 1, meal: target) { error = message } else { done() }
+    }
+}
+
+/// "Chybí bílkoviny, počítají se jako 0 g.": the macros a label, the catalogue
+/// or AI left out, which are logged as 0 (FoodProduct.forLogging).
+struct MissingMacrosLine: View {
+    let missing: [String]
+
+    var body: some View {
+        if !missing.isEmpty {
+            Text(Self.text(missing)).font(Typo.small).foregroundStyle(Palette.amber)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    static func text(_ missing: [String]) -> String {
+        let list = ListFormatter()
+        list.locale = L10n.locale
+        return L10n.f("Chybí %@, počítají se jako 0 g.", list.string(from: missing) ?? missing.joined(separator: ", "))
     }
 }
 
