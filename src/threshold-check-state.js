@@ -78,7 +78,7 @@ export async function thresholdCheckState(env,ctx,today){
     if(!weeks.has(monday))weeks.set(monday,weekOf(monday));
     const {pw,options}=weeks.get(monday);
     if(!pw?.spec.q[0]?.test)continue;
-    const prefs=await getWeekPlan(env.DB,monday).catch(()=>null),roles=prefs?planWeekRoles(prefs.days,{...await options,...roleTime(prefs)}):[];
+    const prefs=await getWeekPlan(env.DB,monday).catch(()=>null),roles=prefs?planWeekRoles(prefs.days,{...await options,...roleTime(prefs,monday)}):[];
     const i=roles.findIndex(d=>d.items.some(x=>x.sport===active.sport&&x.role==='quality'));
     const testDate=i>=0?shiftDate(monday,i):null,c=checks[active.sport];
     if(!testDate||testDate<=today||testDate>shiftDate(today,10))continue;

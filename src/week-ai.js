@@ -67,7 +67,9 @@ const easedNote = why => L("Lehčí trénink: ", "An easier session: ") + {
   red: L("dnes máš červenou připravenost.", "your readiness is red today."),
   neighbour: L("vedle je jiný tvrdý den.", "there's another hard day next to it."),
   count: L("v týdnu už jsou dva tvrdé dny.", "the week already has two hard days."),
-  fatigue: L("forma (TSB) je pod −20, tělo potřebuje ubrat.", "your form (TSB) is below −20, so the body needs less."),
+  fatigue: L("forma (TSB) je pod −30, tělo potřebuje ubrat.", "your form (TSB) is below −30, so the body needs less."),
+  form: L("forma (TSB) je pod −20, tento týden jen jeden tvrdý den.", "your form (TSB) is below −20, so just one hard day this week."),
+  long: L("vedle je dlouhý trénink.", "there's a long session next to it."),
   tired: L("poslední dny je tělo unavené, potřebuje ubrat.", "your body has been tired the last few days and needs less."),
   recovery: L("tento týden je odpočinkový.", "this is a recovery week.")
 }[why];
@@ -84,8 +86,9 @@ export function gymNote(text) {
 // fixedHard: dates with a hard session the AI didn't plan (already in the
 // calendar, done, or a key session of the training plan); they count toward
 // the two hard days and keep the AI's hard days off their neighbours.
-// tsb and recoveryWeek turn the prompt's rules into checks: no hard day below
-// TSB −20 or in a recovery week. strain: the athlete's state (week-check.js
+// tsb and recoveryWeek turn the prompt's rules into checks: one hard day at
+// TSB −20 to −30, none below −30 or in a recovery week, never one next to a
+// ride's or run's long session. strain: the athlete's state (week-check.js
 // strainOf); tired (2) allows no hard day, strained (1) one. A day of the plan
 // (`plan`) is never eased.
 // split: a triathlete's week (triathlon-split.js); the discipline being learnt
@@ -119,15 +122,18 @@ export function sanitizeWeekDays(days, { start, today, prefs = null, readiness =
     out.push({ date, sport, minutes, environment, kind, reason: sport === "gym" ? gymNote(reason) : sessionNote(reason), ...(raw?.plan ? { plan: raw.plan, label: raw.label || null } : {}) });
   }
   out.sort((a, b) => a.date.localeCompare(b.date) || WEEK_SPORTS.indexOf(a.sport) - WEEK_SPORTS.indexOf(b.sport));
-  // Hard days: none on a red morning (today), below TSB −20 or in a recovery
-  // week; two at most, the fixed ones included, and never next to another.
+  // Hard days: none on a red morning (today), below TSB −30 or in a recovery
+  // week, one at TSB −20 to −30; two at most, the fixed ones included, never
+  // next to another or to a ride's or run's long session.
   const hardDates = new Set((fixedHard || []).filter(d => d >= shift(first, -1) && d <= shift(last, 1)));
   for (const x of out) if (x.plan && HARD_KINDS.has(x.kind)) hardDates.add(x.date);
+  const longDates = out.filter(x => x.kind === "long" && ["ride", "run"].includes(x.sport)).map(x => x.date);
+  const nextTo = (dates, date) => dates.some(d => Math.abs((Date.parse(d) - Date.parse(date)) / 86400000) <= 1);
   let hardDays = [...hardDates].filter(d => d >= first && d <= last).length, eased = 0;
-  const near = date => [...hardDates].some(d => Math.abs((Date.parse(d) - Date.parse(date)) / 86400000) <= 1);
+  const near = date => nextTo([...hardDates], date);
   for (const x of out) {
     if (x.plan || !HARD_KINDS.has(x.kind)) continue;
-    const why = readiness === "red" && x.date === today ? "red" : num(tsb) != null && num(tsb) < -20 ? "fatigue" : strain >= 2 || (strain >= 1 && hardDays >= 1) ? "tired" : recoveryWeek ? "recovery" : near(x.date) ? "neighbour" : hardDays >= 2 ? "count" : null;
+    const why = readiness === "red" && x.date === today ? "red" : num(tsb) != null && num(tsb) < -30 ? "fatigue" : strain >= 2 || (strain >= 1 && hardDays >= 1) ? "tired" : num(tsb) != null && num(tsb) < -20 && hardDays >= 1 ? "form" : recoveryWeek ? "recovery" : near(x.date) ? "neighbour" : nextTo(longDates, x.date) ? "long" : hardDays >= 2 ? "count" : null;
     if (why) { x.kind = "endurance"; x.reason = easedNote(why); eased++; continue; }
     hardDays++;
     hardDates.add(x.date);

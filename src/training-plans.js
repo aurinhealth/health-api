@@ -892,8 +892,9 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
 
 // A triathlon plan's week: per sport, the long session on the day with the
 // most time (the ride at a weekend if it can), the key session on another day
-// not next to that sport's long one, the rest easy; the brick run after the
-// long ride. Race week: the three legs on race day, nothing after it.
+// away from that sport's long one and from the other sports' hard days, the
+// rest easy; the brick run after the long ride (the athlete's run that day, or
+// one added). Race week: the three legs on race day, nothing after it.
 // The athlete's skipped and shortened days count; moving a session is for
 // single-sport plans.
 function applyTriathlon(targets, plan, weekStart, pw, { thresholdPace = null, shifts = {}, ftp = null, weight = null, swimCss = null } = {}) {
@@ -913,22 +914,37 @@ function applyTriathlon(targets, plan, weekStart, pw, { thresholdPace = null, sh
   const edits = Object.fromEntries(Object.entries(plan.edits || {}).filter(([d]) => inWeek(d)));
   items = items.filter(x => !(mine(x) && x.date !== race && edits[x.date]?.skip));
   const plain = x => mine(x) && !x.brick && x.date !== race;
-  const out = new Map();
+  const nearRace = x => race && daysBetween(x.date, race) <= 1, weekend = x => weekdayOf(x.date) >= 5;
+  const subOf = sport => spec.sports?.[sport] || { q: [] }, ownOf = sport => items.filter(x => x.sport === sport && plain(x));
+  // Each sport's long day first. The run on the long ride's day is the brick
+  // (or easy), never the long run or a key session.
+  const longs = {}, freeOf = sport => ownOf(sport).filter(x => !nearRace(x) && !(sport === "run" && x.date === longs.ride?.date));
+  for (const sport of SPORTS) longs[sport] = subOf(sport).long ? [...freeOf(sport)].sort((a, b) => (sport === "swim" ? 0 : weekend(b) - weekend(a)) || b.minutes - a.minutes)[0] || null : null;
+  const longRide = longs.ride;
+  if (spec.brick && longRide && !race) { const run = ownOf("run").find(x => x.date === longRide.date); if (run) run.brick = true; }
+  // Key sessions, one per sport, each far from its sport's long day. The
+  // ride's and the run's are picked together: none next to the other or to a
+  // ride's or run's long day (the week repeats, so Sunday is next to Monday)
+  // when the week allows, the two apart first. A swim's not on their days.
+  const longDates = [longRide, longs.run].filter(Boolean).map(x => x.date), apart = (a, b) => { const d = Math.abs(daysBetween(a, b)) % 7; return Math.min(d, 7 - d); };
+  const key = {};
   // A lighter week the athlete chose has no key sessions, a week back after a break one.
   let keysLeft = spec.light ? 0 : spec.returning ? 1 : Infinity;
+  for (const sport of SPORTS) if (subOf(sport).q[0] && keysLeft > 0) { key[sport] = subOf(sport).q[0]; keysLeft--; }
+  const options = sport => key[sport] ? freeOf(sport).filter(x => x !== longs[sport]) : [], orNone = list => list.length ? list : [null];
+  const far = (sport, x) => x ? Math.abs(daysBetween(x.date, longs[sport]?.date || x.date)) : 0;
+  const near = x => x ? longDates.filter(d => apart(d, x.date) < 2).length : 0;
+  const bad = ([r, u]) => (r && u && apart(r.date, u.date) < 2 ? 10 : 0) + near(r) + near(u);
+  const total = (f, [r, u]) => f("ride", r) + f("run", u), minutes = (_, x) => x?.minutes || 0;
+  const [ride, run] = orNone(options("ride")).flatMap(r => orNone(options("run")).map(u => [r, u])).sort((a, b) => bad(a) - bad(b) || total(far, b) - total(far, a) || total(minutes, b) - total(minutes, a))[0];
+  // Next to each other whatever the days: one of them, by turns week by week.
+  const dropped = ride && run && apart(ride.date, run.date) < 2 ? (pw.week % 2 ? run : ride) : null;
+  const hard = [...longDates, ...[ride, run].filter(x => x && x !== dropped).map(x => x.date)];
+  const swim = options("swim").sort((a, b) => Number(hard.includes(a.date)) - Number(hard.includes(b.date)) || far("swim", b) - far("swim", a) || b.minutes - a.minutes)[0];
+  for (const [sport, x] of [["ride", ride], ["run", run], ["swim", swim]]) if (x && x !== dropped) x.key = key[sport];
+  const out = new Map();
   for (const sport of SPORTS) {
-    const sub = spec.sports?.[sport] || { q: [] }, own = items.filter(x => x.sport === sport && plain(x));
-    const nearRace = x => race && daysBetween(x.date, race) <= 1;
-    const free = own.filter(x => !nearRace(x));
-    const weekend = x => weekdayOf(x.date) >= 5;
-    const longDay = sub.long ? [...free].sort((a, b) => (sport === "swim" ? 0 : weekend(b) - weekend(a)) || b.minutes - a.minutes)[0] : null;
-    const keys = [];
-    for (const k of sub.q) {
-      if (keysLeft <= 0) break;
-      keysLeft--;
-      const x = free.filter(y => y !== longDay && !keys.includes(y)).sort((a, b) => Math.abs(daysBetween(b.date, longDay?.date || b.date)) - Math.abs(daysBetween(a.date, longDay?.date || a.date)) || b.minutes - a.minutes)[0];
-      if (x) keys.push(x), x.key = k;
-    }
+    const own = ownOf(sport), longDay = longs[sport], sub = subOf(sport);
     for (const x of own) {
       const s = nearRace(x) ? { kind: "easy", family: EASY_FAMILY[sport], minutes: sport === "ride" ? 40 : sport === "run" ? 20 : 20 }
         : x === longDay ? { kind: "long", family: sub.long.family || LONG_FAMILY[sport], level: sub.long.level ?? null, minutes: sub.long.minutes ?? null }
@@ -937,7 +953,6 @@ function applyTriathlon(targets, plan, weekStart, pw, { thresholdPace = null, sh
       out.set(x, s);
     }
   }
-  const longRide = [...out].find(([x, s]) => x.sport === "ride" && s.kind === "long")?.[0];
   const result = [];
   for (const x of items) {
     if (!mine(x)) { result.push(x); continue; }
@@ -951,7 +966,7 @@ function applyTriathlon(targets, plan, weekStart, pw, { thresholdPace = null, sh
       // The brick stays only after this week's long ride, at the plan's minutes.
       if (!spec.brick || !longRide || x.date !== longRide.date) continue;
       const minutes = spec.brick;
-      result.push({ ...x, minutes, maxMinutes: minutes, tss: Math.round(minutes / 60 * .5 * 100), plan: { ...base, kind: "brick", family: "run-easy", level: null, workoutId: planWorkoutId("run", { family: "run-easy" }, minutes) } });
+      result.push({ ...x, role: "recovery", label: L("Běh po kole", "Brick run"), minutes, maxMinutes: minutes, tss: Math.round(minutes / 60 * .5 * 100), plan: { ...base, kind: "brick", family: "run-easy", level: null, workoutId: planWorkoutId("run", { family: "run-easy" }, minutes) } });
       continue;
     }
     const s = out.get(x);

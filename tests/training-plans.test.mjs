@@ -294,7 +294,7 @@ test("the plan follows the trend: a lighter week sooner, a level up, a red morni
   const up = planChanges(targets(steady, week(2)).items, targets(planOriginal(steady), week(2)).items, steady, week(2)).filter(x => x.plan?.change);
   assert.ok(up.some(x => x.plan.change.kind === "harder"));
   // A red morning: today's key session swaps with an easy day ahead; it stays there.
-  const runDays = [["run"], [], ["run"], ["run"], [], ["run"], ["run"]];
+  const runDays = [["run"], [], ["run"], ["run"], [], ["run"], []];
   const t2 = (p, start) => { const pw = planWeek(p, start); return applyPlan(weekTargets({ roles: planWeekRoles(runDays, { quality: planQuality(pw), prefer: "run" }), ctl: 50, days: [], today: start, weekStart: start, plan: planLoad(pw) }), p, start, { thresholdPace: 280 }); };
   const start = week(2), key = t2(plan, start).items.filter(x => x.sport === "run" && x.plan?.kind === "quality")[1];
   const red = planRedMorning(plan, t2(plan, start), key.date, { hrv: 38, low: 52, high: 64, sleep: 320 });
