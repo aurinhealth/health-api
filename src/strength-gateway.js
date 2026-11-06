@@ -108,7 +108,9 @@ async function generateStrengthPlanRoute(env, request, url, ctx) {
       durationMinutes: duration == null ? undefined : Number(duration),
       maxExercises: body?.maxExercises == null ? undefined : Number(body.maxExercises),
       focusMuscles: body?.focusMuscles,
-      excludeExercises: Array.isArray(body?.excludeExercises) ? body.excludeExercises.map(String) : []
+      excludeExercises: Array.isArray(body?.excludeExercises) ? body.excludeExercises.map(String) : [],
+      // "Another suggestion": what the builder has shown, picked last where there is a choice.
+      avoidExercises: Array.isArray(body?.avoidExercises) ? body.avoidExercises.slice(0, 60).map(x => String(x).slice(0, 80)) : []
     };
     // The week plan builds its gym days one by one before saving any: the ones
     // built so far (their rows) and the dates still to come, so the days

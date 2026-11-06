@@ -109,7 +109,7 @@ extension APIClient {
     /// each other instead of repeating one session.
     func previewGym(date: String, minutes: Int, focus: String?, muscles: [String], fromWeek: Bool = false,
                     gymDays: [String] = [], weekSessions: [(date: String, rows: [[JSONValue]])] = [],
-                    autoLength: Bool = false, usualMinutes: Int? = nil) async throws -> GymProposal {
+                    autoLength: Bool = false, usualMinutes: Int? = nil, avoidExercises: [String] = []) async throws -> GymProposal {
         var body: JSONObject = ["date": .string(date), "durationMinutes": .number(Double(minutes)), "preview": .bool(true), "userInitiated": .bool(true)]
         // The quick workout from Svaly: the server takes the usual length, capped by the day's free time.
         if autoLength {
@@ -121,6 +121,8 @@ extension APIClient {
         if !weekSessions.isEmpty {
             body["weekSessions"] = .array(weekSessions.map { .object(["date": .string($0.date), "rows": .array($0.rows.map { .array($0) })]) })
         }
+        // "Jiný návrh": the exercises shown so far come last where there is another choice.
+        if !avoidExercises.isEmpty { body["avoidExercises"] = .array(avoidExercises.suffix(60).map { .string($0) }) }
         if !muscles.isEmpty { body["focusMuscles"] = .array(muscles.map { .string($0) }) }
         else if let focus { body["focus"] = .string(focus); if fromWeek { body["focusSource"] = .string("week") } }
         let r: GymPreviewResponse = try await send("/app/api/gym/generate", method: "POST", body: body)
