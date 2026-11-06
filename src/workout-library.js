@@ -371,7 +371,7 @@ export function resizeWorkout(base, minutes, { maxDifficulty = null, easyOnly = 
   // closest to it at the athlete's CSS, not a stretched set.
   if (sport === "swim") {
     const target = Math.round(clamp(n(minutes, n(base.duration_minutes, 40)), 15, 120));
-    const at = w => { if (!(Number(swimCss) > 0)) return n(w.duration_minutes, 0); try { return swimMinutesAt(JSON.parse(w.structure_json || "[]"), swimCss); } catch { return n(w.duration_minutes, 0); } };
+    const lengths = new Map(), at = w => { if (!(Number(swimCss) > 0)) return n(w.duration_minutes, 0); if (!lengths.has(w)) { let m; try { m = swimMinutesAt(JSON.parse(w.structure_json || "[]"), swimCss); } catch { m = n(w.duration_minutes, 0); } lengths.set(w, m); } return lengths.get(w); };
     const off = w => Math.abs(at(w) - target);
     const best = (builtIn().swim || []).filter(w => w.family === base.family && (!Number.isFinite(Number(maxDifficulty)) || n(w.difficulty, 0) <= Number(maxDifficulty) || w.id === base.id)).sort((a, b) => off(a) - off(b))[0];
     return !best || best.id === base.id ? base : { ...best, resized_from: base.id, resize_notes: [L("stejný typ plavání v délce ", "the same kind of swim at ") + Math.round(at(best)) + L(" min z knihovny", " min from the library")] };
