@@ -13,12 +13,19 @@ final class FoodMissingValuesTests: XCTestCase {
         L10n.setLanguage("cs")
         var food = FoodProduct(name: "Jogurt", calories_100g: 60, protein_100g: nil, carbs_100g: 4, fat_100g: nil)
         XCTAssertEqual(food.missingMacros, ["bílkoviny", "tuky"])
-        XCTAssertEqual(MissingMacrosLine.text(food.missingMacros), "Chybí bílkoviny a tuky, počítají se jako 0 g.")
+        XCTAssertEqual(Self.plain(MissingMacrosLine.text(food.missingMacros)), "Chybí bílkoviny a tuky, počítají se jako 0 g.")
         L10n.setLanguage("en")
-        XCTAssertEqual(MissingMacrosLine.text(food.missingMacros), "Missing protein and fat: counted as 0 g.")
+        XCTAssertEqual(Self.plain(MissingMacrosLine.text(food.missingMacros)), "Missing protein and fat: counted as 0 g.")
         food.protein_100g = 3.5
         food.fat_100g = 0
         XCTAssertTrue(food.missingMacros.isEmpty)
+    }
+
+    /// Czech ListFormatter joins with "a" and a no-break space (and may add
+    /// invisible marks): the test reads the text as a person sees it.
+    static func plain(_ text: String) -> String {
+        text.unicodeScalars.filter { $0.properties.generalCategory != .format }
+            .map { CharacterSet.whitespaces.contains($0) ? " " : String($0) }.joined()
     }
 
     func testEstimateKeepsItsMarkAndSaltCountsAsAValue() {
