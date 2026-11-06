@@ -50,6 +50,9 @@ export function normalizeCycleSettings(raw) {
   const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(s.pillReminderTime || "")) ? s.pillReminderTime : "21:00";
   return {
     enabled: s.enabled === true,
+    // When the athlete agreed to cycle tracking (its consent sheet in
+    // Settings → Cycle, GDPR art. 9), so the consent can be shown later.
+    enabledAt: s.enabled === true && typeof s.enabledAt === "string" ? s.enabledAt : null,
     lastPeriod: isDate(s.lastPeriod) ? s.lastPeriod : null,
     cycleLength: Number.isFinite(len) && len >= 21 && len <= 40 ? len : null,
     periodLength: Number.isFinite(per) && per >= 2 && per <= 10 ? per : null,
@@ -198,16 +201,16 @@ export function askPeriodToday(state) {
   return state.lastStart < next.from;
 }
 
-// How the cycle bears on today's training: on a bleeding day with heavy flow,
-// cramps or fatigue, hard sessions become easy ones. Nothing with the
-// adjustment turned off. Returns the reason the coach states, or null.
+// How the cycle bears on today's training: on a bleeding day with cramps or
+// fatigue logged, hard sessions become easy ones. Heavy flow alone or the
+// phase alone changes nothing (McNulty 2020: the phase effect is trivial).
+// Nothing with the adjustment turned off. Returns the reason the coach
+// states, or null.
 export function cycleTrainingCaution(state) {
   if (!state || !state.adaptTraining || !state.today) return null;
   const t = state.today;
   if (!(t.flow > 0)) return null;
-  const reasons = [];
-  if (t.flow >= 3) reasons.push("heavy");
-  for (const s of ["cramps", "fatigue"]) if (t.symptoms.includes(s)) reasons.push(s);
+  const reasons = ["cramps", "fatigue"].filter(s => t.symptoms.includes(s));
   return reasons.length ? { reasons, cycleDay: state.cycleDay ?? null } : null;
 }
 

@@ -44,7 +44,8 @@ export async function handleCycleApi(request, env, ctx, url, session) {
       return Response.json({ status: "ok", day, ...(await cycleView(env.DB, today, body.month)) }, noStore);
     }
     if (url.pathname === "/app/api/cycle/apple") {
-      const { saved, changed } = await importAppleCycle(env.DB, body.days);
+      // Nothing is kept from Apple Health without the tracking's consent.
+      const { saved, changed } = (await getCycleSettings(env.DB)).enabled ? await importAppleCycle(env.DB, body.days) : { saved: 0, changed: 0 };
       // The same days again (every app launch): nothing the coach reads is outdated.
       return Response.json({ status: "ok", saved, changed }, changed ? noStore : { headers: { ...noStore.headers, [UNCHANGED_HEADER]: "1" } });
     }

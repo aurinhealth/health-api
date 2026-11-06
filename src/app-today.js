@@ -323,7 +323,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     status: r.done ? "done" : "planned"
   }));
   // Cycle tracking (cycle-model.js, profile.cycle from dashboard-shared.js):
-  // on a bleeding day with heavy flow, cramps or fatigue a hard ride or run
+  // on a bleeding day with cramps or fatigue a hard ride or run
   // shows as an easy one ("eased", the original kept for "vrátit"), unless
   // the athlete kept the plan that day; the pill of the pack joins the plan.
   const cycleIn = profile?.cycle || null;

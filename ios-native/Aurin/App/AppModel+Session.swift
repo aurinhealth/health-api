@@ -190,6 +190,8 @@ extension AppModel {
     func forgetAccountData() {
         cycle = nil
         cycleHealthSynced = false
+        cycleConsentAsk = false
+        cycleConsentAsked = false
         Reminders.forgetPill()
         AppleHealthExport.shared.reset()
     }
