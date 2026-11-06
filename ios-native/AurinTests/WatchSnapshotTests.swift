@@ -25,6 +25,17 @@ final class WatchSnapshotTests: XCTestCase {
         XCTAssertEqual(s.strain.score, 8.4)
         XCTAssertEqual(s.strain.low, 11.4)
 
+        // A morning with last night: its HRV is this morning's (Today audit 20).
+        XCTAssertFalse(s.awaitingNight)
+        var waiting = s
+        waiting.readiness = nil
+        waiting.sleep?.minutes = nil
+        XCTAssertTrue(waiting.awaitingNight)
+        // No HRV or resting HR history (no wearable at night): nothing to wait for.
+        waiting.hrv = nil
+        waiting.restingHR = nil
+        XCTAssertFalse(waiting.awaitingNight)
+
         // Through WatchConnectivity and back.
         let data = try XCTUnwrap(s.encoded())
         XCTAssertEqual(WatchSnapshot.decode(data), s)

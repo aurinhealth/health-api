@@ -322,13 +322,14 @@ enum Small {
             return SmallValue(fraction: share, color: share >= 1 ? C.green : C.blue, word: word(m), text: "\(percent)%",
                               line: name(m) + " \(percent) %", symbol: share >= 1 ? "checkmark" : "drop.fill")
         case .hrv:
-            guard let metric = today?.hrv, let v = metric.value else { return empty }
+            // Before the night comes it is the night before's (Today audit 20).
+            guard today?.awaitingNight != true, let metric = today?.hrv, let v = metric.value else { return empty }
             var value = SmallValue(fraction: band(v, metric), color: C.normal(v, metric, higherIsBetter: true), word: word(m),
                                    text: Days.int(v), line: "HRV " + Days.int(v) + " ms", symbol: symbol(m))
             value.arrow = arrow(metric, step: 3, higherIsBetter: true)
             return value
         case .restingHR:
-            guard let metric = today?.restingHR, let v = metric.value else { return empty }
+            guard today?.awaitingNight != true, let metric = today?.restingHR, let v = metric.value else { return empty }
             var value = SmallValue(fraction: band(v, metric), color: C.normal(v, metric, higherIsBetter: false), word: word(m),
                                    text: Days.int(v), line: name(m) + " " + Days.int(v), symbol: symbol(m))
             value.arrow = arrow(metric, step: 2, higherIsBetter: false)
@@ -727,7 +728,7 @@ struct WideView: View {
                     head(dimmed ? tr("RÁNO", "MORNING") : tr("RÁNO · ", "MORNING · ") + (today.zone.map(zoneWord) ?? ""), dimmed ? C.muted : C.zone(today.zone))
                     Text(dimmed ? tr("Spánek ––", "Sleep ––") : today.sleep?.minutes.map { tr("Spánek ", "Slept ") + Days.hm($0) } ?? tr("Spánek –", "Sleep –"))
                         .font(.system(size: 14, weight: .semibold)).lineLimit(1)
-                    if !dimmed, let hrv = today.hrv?.value {
+                    if !dimmed, !today.awaitingNight, let hrv = today.hrv?.value {
                         Text(hrvLine(hrv, today.hrv))
                         .font(.system(size: 11)).foregroundStyle(C.muted).lineLimit(1)
                     }

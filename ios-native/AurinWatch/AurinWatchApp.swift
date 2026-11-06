@@ -78,8 +78,8 @@ struct WatchRoot: View {
                     if let snapshot = store.snapshot, snapshot.date == WatchStore.localDate(WatchDemo.now) {
                         // Drawn again at noon, when the night stops being awaited.
                         TimelineView(.explicit([WatchStore.noon()])) { _ in
-                            if let night = store.nightPending {
-                                ReadinessHome(s: night, stale: .night, today: snapshot)
+                            if store.nightPending {
+                                ReadinessHome(s: snapshot, stale: .night)
                             } else {
                                 ReadinessHome(s: snapshot)
                             }

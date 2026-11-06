@@ -774,6 +774,10 @@ final class SnapshotTests: XCTestCase {
         XCTAssertTrue(yesterday.hasPrefix("data ze včera "), yesterday)
         let older = try XCTUnwrap(DataAgePill.text(last: now.addingTimeInterval(-3 * 86400), now: now))
         XCTAssertTrue(older.hasPrefix("data z 5. 10. "), older)
+        // Every source in Settings → Data sources says how old its data are; orange after 12 h (Today audit 20).
+        XCTAssertTrue(DataAgePill.age(last: now.addingTimeInterval(-2 * 3600), now: now).hasPrefix("data z "))
+        XCTAssertFalse(IntegrationCard.stale(now.addingTimeInterval(-11 * 3600), now: now))
+        XCTAssertTrue(IntegrationCard.stale(now.addingTimeInterval(-13 * 3600), now: now))
 
         // In words, no ratio (Today audit D4).
         let raised = TrainingSnapshot.ACWR(level: "above")
