@@ -34,21 +34,81 @@ export function readOnlyD1(query) {
   return { prepare: sql => statement(sql), batch: list => Promise.all(list.map(s => s.all())), exec: async () => ({ count: 0 }) };
 }
 
-// The zone counts of one account's days, newest day first left out when it has no number yet.
+// Candidate HRV rules for audit finding 5.4 (yellow from one morning's HRV),
+// measured on the same days as today's rule:
+// - days: the HRV of the day is the average of the last `days` mornings of
+//   the same source (ln values; Plews 2012, Javaloyes 2019, Garmin's 7-day
+//   HRV status);
+// - band: within ±`band` SD of the normal counts as the normal, further out
+//   only the part beyond it (smallest worthwhile change 0.5 SD, Plews 2012);
+// - low: the rule only softens a morning under the normal; a morning over it
+//   counts as today (a symmetric average or band also takes points from good
+//   mornings);
+// - noDrop: an HRV under the normal never costs anything, the most any HRV
+//   rule could take away from the yellow days (a bound, not a candidate).
+export const HRV_RULES = {
+  now: {}, avg3: { days: 3 }, avg7: { days: 7 }, band: { band: 0.5 }, avg7band: { days: 7, band: 0.5 },
+  avg3low: { days: 3, low: true }, avg7low: { days: 7, low: true }, bandlow: { band: 0.5, low: true },
+  avg3bandlow: { days: 3, band: 0.5, low: true }, noDrop: { noDrop: true }
+};
+
+// The z of the HRV under a rule: `z` today's against the baseline, `logs` the
+// ln HRV of the same source on the days before (newest first).
+export function ruleZ(rule, z, mean, sd, logs) {
+  if (rule.noDrop) return Math.max(0, z);
+  if (rule.low && z >= 0) return z;
+  let out = z;
+  if (rule.days > 1) {
+    const window = [mean + z * sd, ...logs.slice(0, rule.days - 1)];
+    out = (window.reduce((s, v) => s + v, 0) / window.length - mean) / sd;
+    if (rule.low) out = Math.max(z, out);
+  }
+  if (rule.band) out = Math.sign(out) * Math.max(0, Math.abs(out) - rule.band);
+  return out;
+}
+
+const ZONES = () => ({ days: 0, green: 0, yellow: 0, red: 0, none: 0, yellowHrvLow: 0, yellowSleepShort: 0, dropGreen: 0 });
+
+// The zone counts of one account's days under each rule (HRV_RULES), days
+// without a number counted as none. `dropGreen`: days whose own HRV was more
+// than 1.5 SD under the normal that a rule shows green while today's rule did not.
 export async function accountZones(env, days = DAYS) {
   const today = localToday(), from = shift(today, -days);
   const health = await googleDashboard(env.DB, today);
   const sleep = await legacyHealthApi.fetch(new Request(`https://internal/health/sleep?start=${shift(from, -1)}&end=${shift(today, 1)}`), env).then(r => r.json()).catch(() => ({}));
   const profile = await loadEffectiveProfile(env.DB, env.USER_ID).catch(() => null);
   const locks = await readinessLocks(env.DB, from).catch(() => ({}));
-  const out = { days: 0, green: 0, yellow: 0, red: 0, none: 0, yellowHrvLow: 0 };
+  const google = health.wellness || [], sessions = sleep.sessions || [];
+  const out = Object.fromEntries(Object.keys(HRV_RULES).map(k => [k, ZONES()]));
+  // The HRV each morning showed (the locked one when there is a lock), by day.
+  const shown = new Map();
+  for (const r of google) if (Number(r?.hrv) > 0) shown.set(r.id, { log: Math.log(Number(r.hrv)), source: r.hrvSource || null });
   for (let d = from; d < today; d = shift(d, 1)) {
-    const r = readinessFor({ date: d, google: health.wellness || [], sessions: sleep.sessions || [], profile: { ...(profile || {}), readinessLocks: locks } });
-    out.days++;
-    if (!r.zone) { out.none++; continue; }
-    out[r.zone]++;
-    const hrv = r.components?.hrv;
-    if (r.zone === 'yellow' && hrv?.value != null && hrv?.baseline != null && hrv.value < hrv.baseline) out.yellowHrvLow++;
+    const input = { date: d, google, sessions, profile: { ...(profile || {}), readinessLocks: locks } };
+    const base = readinessFor(input), hrv = base.components?.hrv;
+    const row = base.rows.find(r => r.id === d);
+    if (row && Number(row.hrv) > 0) shown.set(d, { log: Math.log(Number(row.hrv)), source: row.hrvSource || null });
+    let mean = null, sd = null, logs = [];
+    if (hrv) {
+      mean = Math.log(hrv.baseline); sd = Math.log(hrv.high) - mean;
+      for (let back = 1; back < 7; back++) { const s = shown.get(shift(d, -back)); if (s && s.source === (row?.hrvSource || null)) logs.push(s.log); }
+    }
+    for (const [name, rule] of Object.entries(HRV_RULES)) {
+      let r = base;
+      const z = hrv ? ruleZ(rule, hrv.z, mean, sd, logs) : null;
+      if (hrv && Math.abs(z - hrv.z) > 1e-9) {
+        const value = Math.exp(mean + z * sd);
+        const lock = locks[d]?.row && Number(locks[d].row.hrv) > 0 ? { ...locks, [d]: { ...locks[d], row: { ...locks[d].row, hrv: value } } } : locks;
+        r = readinessFor({ ...input, google: google.map(w => w.id === d ? { ...w, hrv: value } : w), profile: { ...input.profile, readinessLocks: lock } });
+      }
+      const c = out[name];
+      c.days++;
+      if (!r.zone) { c.none++; continue; }
+      c[r.zone]++;
+      if (r.zone === 'yellow' && hrv && hrv.z < 0) c.yellowHrvLow++;
+      if (r.zone === 'yellow' && r.components?.sleep?.performance < 90) c.yellowSleepShort++;
+      if (r.zone === 'green' && base.zone !== 'green' && hrv && hrv.z <= -1.5) c.dropGreen++;
+    }
   }
   return out;
 }
@@ -89,16 +149,25 @@ async function main() {
     const env = userEnv({ DB: coreDb, USER_DATA_DB: shards[id] }, { id: user.id, email: '', role: 'user' });
     const zones = await withTimeZone(validTimeZone(user.time_zone), () => accountZones(env)).catch(error => ({ error: error.message }));
     if (zones.error) { skipped.failed++; errors.add(zones.error.slice(0, 160)); continue; }
-    if (zones.days === zones.none) { skipped.noNumber++; continue; }
+    if (zones.now.days === zones.now.none) { skipped.noNumber++; continue; }
     rows.push(zones);
   }
   const pct = (a, b) => b ? Math.round(100 * a / b) + ' %' : '–';
-  const total = rows.reduce((t, r) => { for (const k of Object.keys(t)) t[k] += r[k]; return t; }, { days: 0, green: 0, yellow: 0, red: 0, none: 0, yellowHrvLow: 0 });
+  const sum = name => rows.reduce((t, r) => { for (const k of Object.keys(t)) t[k] += r[name][k]; return t; }, ZONES());
+  const total = sum('now');
   const line = (label, r) => { const scored = r.green + r.yellow + r.red; return `| ${label} | ${scored} | ${r.green} | ${r.yellow} (${pct(r.yellow, scored)}) | ${r.red} | ${r.yellowHrvLow} |`; };
+  // Each candidate rule on the same days: all accounts, and the yellow share per account.
+  const rule = name => { const t = sum(name), scored = t.green + t.yellow + t.red;
+    const each = rows.map(r => pct(r[name].yellow, r[name].green + r[name].yellow + r[name].red)).join(', ');
+    return `| ${name} | ${t.green} (${pct(t.green, scored)}) | ${t.yellow} (${pct(t.yellow, scored)}) | ${t.red} (${pct(t.red, scored)}) | ${each} | ${t.dropGreen} |`; };
   const text = [`## Readiness zones on the ${live ? 'live' : 'test'} server, last ${DAYS} days`, '',
     `${users.length} accounts with health consent; ${rows.length} with a readiness. Left out: ${skipped.noNumber} without any day with a number, ${skipped.noDatabase} without a data database, ${skipped.failed} failed${errors.size ? ' (' + [...errors].join('; ') + ')' : ''}. Days without a number are left out.`, '',
     '| Account | Days with a number | Green | Yellow | Red | Yellow with HRV under normal |', '|---|---|---|---|---|---|',
-    ...rows.map((r, i) => line(String(i + 1), r)), line('**All**', total), ''].join('\n');
+    ...rows.map((r, i) => line(String(i + 1), r.now)), line('**All**', total), '',
+    '### HRV rules on the same days (finding 5.4)', '',
+    'now = today\'s rule (one morning); avgN = average of the last N mornings; band = ±0.5 SD counts as normal. Last column: days with the morning\'s HRV over 1.5 SD under normal that the rule shows green while today\'s rule did not.', '',
+    '| Rule | Green | Yellow | Red | Yellow per account | Big HRV drop shown green |', '|---|---|---|---|---|---|',
+    ...Object.keys(HRV_RULES).map(rule), ''].join('\n');
   console.log(text);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, text + '\n');
 }
