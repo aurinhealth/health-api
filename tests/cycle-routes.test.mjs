@@ -96,6 +96,18 @@ test("turning on 'Coach knows my cycle' records when, and turning it off clears 
   assert.equal((await saveCycleSettings(db, { shareWithCoach: false })).shareWithCoachAt, null);
 });
 
+test("turning cycle tracking on records the consent's time, and turning it off clears it", async () => {
+  const { createD1 } = await import("./helpers/d1.mjs");
+  const { scopedDb } = await import("../src/tenancy.js");
+  const { saveCycleSettings } = await import("../src/cycle-store.js");
+  const db = scopedDb(createD1(), 1);
+  assert.equal((await saveCycleSettings(db, { cycleLength: 30 })).enabledAt, null);
+  const on = await saveCycleSettings(db, { enabled: true, enabledAt: "2000-01-01T00:00:00Z" });
+  assert.ok(on.enabledAt > "2026-");
+  assert.equal((await saveCycleSettings(db, { adaptTraining: false })).enabledAt, on.enabledAt);
+  assert.equal((await saveCycleSettings(db, { enabled: false })).enabledAt, null);
+});
+
 test("cycle tracking is open whatever the profile's sex", async () => {
   const { createD1 } = await import("./helpers/d1.mjs");
   const { scopedDb } = await import("../src/tenancy.js");

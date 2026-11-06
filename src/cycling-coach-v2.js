@@ -256,7 +256,7 @@ const WORDS_EN={
 // cycle with the coach, otherwise the neutral words (engineForAI).
 const CYCLE_TEXTS=()=>({
   cap:L("menstruace","period"),
-  adaptation:L("menstruace se silným krvácením, křečemi nebo únavou: dnes lehce a krátce","period with heavy flow, cramps or fatigue: easy and short today")
+  adaptation:L("menstruace s křečemi nebo únavou: dnes lehce a krátce","period with cramps or fatigue: easy and short today")
 });
 const NEUTRAL_TEXTS=()=>({cap:L("lehčí den","an easier day"),adaptation:L("dnes lehce a krátce","easy and short today")});
 // The engine's result as the AI may see it. Without the cycle shared
