@@ -11,15 +11,15 @@ extension WatchBridge {
         var chatId = ask.chatId
         if chatId == nil, let latest = try? await api.chats().first, Self.recent(latest.updatedAt) { chatId = latest.id }
         var answer = ""
-        var lastProgress = Date.distantPast
+        var lastProgress = ""
         var result = WatchCoach.Answer(id: ask.id, text: "", chatId: chatId, failed: false, proposal: false)
         do {
             for try await event in api.askCoach(ask.text, chatId: chatId, view: ask.view) {
                 switch event {
                 case .progress(let text):
-                    // A line every few seconds is enough for the wrist.
-                    guard !text.isEmpty, Date().timeIntervalSince(lastProgress) > 2 else { continue }
-                    lastProgress = Date()
+                    // Each new step goes (a few in all: the data, the ride, writing, the proposals).
+                    guard !text.isEmpty, text != lastProgress else { continue }
+                    lastProgress = text
                     sendCoach([WatchCoach.progressKey: text], queue: false)
                 case .answer(let text): answer = text
                 case .done(let done):
