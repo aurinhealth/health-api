@@ -255,6 +255,9 @@ struct TodaySnapshot: Decodable, Equatable {
         var end: String? = nil
         /// A ride or run still ahead outdoors on a hot day: "Horko 30 °C · …" (src/heat-advice.js).
         var heat: String? = nil
+        /// A hard ride, run or swim still ahead on a yellow morning: how to do
+        /// it ("Steady day: ride it easy …", src/app-today.js steadyOf).
+        var steady: String? = nil
 
         struct Eased: Decodable, Equatable {
             let title: String

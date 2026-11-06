@@ -33,7 +33,7 @@ enum WatchToday {
         struct Macro: Decodable { var eaten: Double?; var target: Double?; var limit: Bool? }
         struct Water: Decodable { var ml: Double?; var target: Double? }
         struct Nutrition: Decodable { var kcal: Double?; var target: Double?; var protein: Macro?; var carbs: Macro?; var fat: Macro?; var water: Water? }
-        struct PlanItem: Decodable { var kind: String?; var time: String?; var title: String?; var done: Bool? }
+        struct PlanItem: Decodable { var kind: String?; var time: String?; var title: String?; var done: Bool?; var steady: String? }
         struct Steps: Decodable { var today: Double? }
     }
 
@@ -71,7 +71,7 @@ enum WatchToday {
         let next = (today.plan ?? []).first { $0.kind == "workout" && $0.done != true }
         let strain = WatchSnapshot.Strain(score: today.strain?.score, low: today.strain?.target?.low, high: today.strain?.target?.high,
                                           training: today.strain?.training, movement: today.strain?.movement,
-                                          planned: today.strain?.planned, nextTitle: next?.title, nextTime: next?.time)
+                                          planned: today.strain?.planned, nextTitle: next?.title, nextTime: next?.time, nextNote: next?.steady)
         let week = training?.sessions?.filter { $0.status != "missed" }.map {
             WatchSnapshot.Session(date: $0.date, time: $0.time, title: $0.title, sport: $0.sport ?? "other", minutes: $0.minutes,
                                   done: $0.status == "done", eventId: $0.eventId,

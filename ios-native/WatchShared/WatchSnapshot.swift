@@ -178,6 +178,8 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
         var planned: Double?
         var nextTitle: String?
         var nextTime: String?
+        /// A hard session on a yellow morning: how to do it (src/app-today.js steadyOf).
+        var nextNote: String? = nil
 
         /// Today's strain against its target, one rule for the watch app and
         /// its complications: under it before 18:00 is neutral (the morning is
