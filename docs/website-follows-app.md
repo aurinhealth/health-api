@@ -1,6 +1,6 @@
 # The website follows the app (details)
 
-Short rule in `CLAUDE.md`. This file holds the how-to.
+Short rule in `.claude/rules/website.md`. This file holds the how-to.
 
 The public overview on aurin.health (`overviewPage` in `src/site-pages.js`) describes what the
 iPhone app (`ios-native/`) does today. The "Website copy" workflow (`.github/workflows/site-copy.yml`)
