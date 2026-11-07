@@ -455,6 +455,11 @@ struct GymSet: Equatable, Identifiable {
     var id: Int { row }
     /// A work set: not a warm-up nor a drop set (counts, progression, history).
     var work: Bool { !warmup && !drop }
+    /// Which set the weight and reps fields are for. The row alone is not
+    /// enough: a set swiped away or a drop set added moves the rows after it,
+    /// so the next exercise's first set (or the new drop set) can take the
+    /// row of the set at hand, and its fields kept the old weight.
+    func fieldKey(in exercise: String) -> String { "\(exercise)|\(row)|\(number)|\(side ?? "")|\(drop)" }
     /// The rest the plan gives after this set, "[Pauza 150 s]" in its note
     /// (src/strength-timing.js: by the kind of exercise and the gym goal).
     var plannedRest: Int? {
