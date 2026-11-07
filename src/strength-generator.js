@@ -360,6 +360,9 @@ const EXERCISES = {
   "Wide-Grip Pull-Up": { pattern: "pull_vertical", muscle: "back", unilateral: false, sets: 3, reps: "5–10", baseKg: 0, warmup: true, note: "Široký sval zádový; shyby širokým nadhmatem, kg = přidaná zátěž", fatigue: 0.9, variantOf: "Pull-up" }
 };
 
+// The groups' names in English, and the leg groups a key ride keeps fresh.
+const FOCUS_GROUP_EN = { chest: 'chest', upper_back: 'upper back', lats: 'lats', front_delts: 'front delts', side_delts: 'side delts', rear_delts: 'rear delts', biceps: 'biceps', triceps: 'triceps', abs: 'abs', obliques: 'obliques', quads: 'quads', hamstrings: 'hamstrings', hips: 'glutes and hips', calves: 'calves', forearms: 'forearms', traps: 'traps', lower_back: 'lower back' };
+const LEG_GROUPS = ['quads', 'hamstrings', 'hips', 'calves'];
 export const FOCUS_GROUPS = {
   chest: {label:'Hrudník', exercises:['DB bench press','Chest flat press Prime','Barbell bench press','DB incline press','Pec deck','Cable fly','Low-to-high cable fly','Smith machine incline press','Barbell incline bench press','Smith Machine Bench Press','Cable Bench Chest Fly','Cable Bench Press','Cable Chest Press','Cable Decline Bench Press','Cable High-to-Low Fly','Cable Incline Bench Press','Cable Standing Single Arm Chest Press','Single-Arm Cable Fly','Decline Machine Chest Press','Incline Machine Chest Press','Dumbbell Chest Fly']},
   upper_back: {label:'Horní záda', exercises:['Low row','Standing rowing machine','One-arm DB row','Single-arm cable row','Wide-grip low row','Barbell row','T-bar row','Chest-supported row','TRX row','Inverted Row','Smith Machine Bent-Over Row','Cable Row Bar Standing Row','Cable Supinating Row','Machine Underhand Row','Hammer Strength Iso-Lateral Row','Seal Row','Kettlebell Gorilla Row','Kettlebell Renegade Rows','Band Row','Barbell Landmine Row','Meadows Row']},
@@ -1557,6 +1560,7 @@ export function generateStrengthPlan(context, options = {}) {
     return ranked;
   };
   const maxExercises = Number(options.maxExercises) || exerciseCountFor(options.durationMinutes);
+  const wished = (Array.isArray(context?.athleteState?.focusGroups) ? context.athleteState.focusGroups : []).filter(g => FOCUS_GROUPS[g]), added = [];
   let exercises;
   if (focusMuscles) {
     // Chosen groups fill the session's length: the best exercise of each group
@@ -1592,6 +1596,17 @@ export function generateStrengthPlan(context, options = {}) {
     exercises = [...new Set(planPhase.exercises.map(slot => [].concat(slot).find(usable) || sameMuscle(slot)).filter(Boolean))].slice(0, maxExercises);
   } else {
     exercises = chosen.exercises.filter(ex => !excluded.has(ex)&&fitsEquipment(ex,context.trainingSetup)).slice(0, maxExercises);
+    // A lasting wish ("chci víc zad", point 10): a full-body session without
+    // the group gets its best exercise third, so the length trim keeps it;
+    // one group a session, in turns, so the session stays balanced. A split
+    // day, legs kept fresh or a plan's phase stay as they are.
+    const turn = Math.floor(Date.parse(dateKey(context.date) + 'T12:00:00Z') / 864e5) % (wished.length || 1);
+    for (const group of [...wished.slice(turn), ...wished.slice(0, turn)]) {
+      if (added.length) break;
+      if (chosen.split || exercises.some(ex => FOCUS_GROUPS[group].exercises.includes(ex)) || (chosen.protectedLegs && LEG_GROUPS.includes(group))) continue;
+      let best = null; try { best = rankedExercises(group).find(ex => !exercises.includes(ex)); } catch { /* none fits */ }
+      if (best) { exercises = [...exercises.slice(0, 2), best, ...exercises.slice(2)].slice(0, Math.max(maxExercises, 3)); added.push(group); }
+    }
   }
 
   // A main exercise with variants (variantOf): the same one for five weeks,
@@ -1723,8 +1738,9 @@ export function generateStrengthPlan(context, options = {}) {
     fitness: L('kondice: hodně opakování a krátké pauzy', 'fitness: many reps and short rests')
   }[goal];
   const goalText = goalLine ? (chosenGoal === 'auto' ? L('Cíl podle tvého sportu – ', 'Goal from your sport – ') : L('Cíl ', 'Goal ')) + goalLine + '. ' : '';
+  const wishText = added.length ? L('Víc partie ' + added.map(g => FOCUS_GROUPS[g].label.toLowerCase()).join(', ') + ', jak sis přál. ', 'More ' + added.map(g => FOCUS_GROUP_EN[g] || g).join(', ') + ', as you asked. ') : '';
   const brokenText = broken.length ? L('Mimo provoz: ' + broken.map(stationName).join(', ') + '. ', 'Out of order: ' + broken.map(stationName).join(', ') + '. ') : '';
-  const rationale = goalText + brokenText + (firstSession ? L('První trénink v aplikaci: váhy jsou opatrný odhad a žádná série nejde do selhání; po zapsání skutečných vah se další trénink řídí tvými výkony. ', 'Your first workout in the app: weights are a careful estimate and no set goes to failure; once you log your actual weights, the next workout follows your performance. ') : '') + baseRationale + (pain.parts.length ? L(' Podle toho, co si trenér pamatuje o bolesti (' + pain.parts.join(', ') + '), vynechávám cviky, které ji zatěžují.', ' From what the coach remembers about pain (' + pain.parts.join(', ') + '), I leave out exercises that load it.') : '') + (sportLoad.size?L(' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.', ' Load from other sports adjusts the dose for the muscles involved; it doesn\'t replace their strength training.'):'') + (nearby.length ? L(' Cviky se liší od plánu na ' + nearby.join(' a ') + '.', ' The exercises differ from the plan for ' + nearby.join(' and ') + '.') : '') + (swapped.length ? L(' Po třech trénincích bez posunu nová varianta: ', ' A new variant after three sessions without progress: ') + swapped.join(', ') + '.' : '') + (jump ? L(' Jednou týdně na začátku krátké výskoky (' + jump + '): pružnější šlachy a úspornější běh.', ' Once a week short jumps at the start (' + jump + '): springier tendons and a more economical stride.') : '');
+  const rationale = goalText + wishText + brokenText + (firstSession ? L('První trénink v aplikaci: váhy jsou opatrný odhad a žádná série nejde do selhání; po zapsání skutečných vah se další trénink řídí tvými výkony. ', 'Your first workout in the app: weights are a careful estimate and no set goes to failure; once you log your actual weights, the next workout follows your performance. ') : '') + baseRationale + (pain.parts.length ? L(' Podle toho, co si trenér pamatuje o bolesti (' + pain.parts.join(', ') + '), vynechávám cviky, které ji zatěžují.', ' From what the coach remembers about pain (' + pain.parts.join(', ') + '), I leave out exercises that load it.') : '') + (sportLoad.size?L(' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.', ' Load from other sports adjusts the dose for the muscles involved; it doesn\'t replace their strength training.'):'') + (nearby.length ? L(' Cviky se liší od plánu na ' + nearby.join(' a ') + '.', ' The exercises differ from the plan for ' + nearby.join(' and ') + '.') : '') + (swapped.length ? L(' Po třech trénincích bez posunu nová varianta: ', ' A new variant after three sessions without progress: ') + swapped.join(', ') + '.' : '') + (jump ? L(' Jednou týdně na začátku krátké výskoky (' + jump + '): pružnější šlachy a úspornější běh.', ' Once a week short jumps at the start (' + jump + '): springier tendons and a more economical stride.') : '');
   snapDumbbells(rows, context?.trainingSetup?.dumbbellWeights);
   assignIntensities(rows, { phaseRpe: planPhase?.rpe });
   if(!rows.some(r=>r[0]==='WORK'))throw new Error(L('Pro toto vybavení nebyl nalezen vhodný cvik. Uprav vybavení v průvodci.', 'No suitable exercise was found for this equipment. Adjust your equipment in the setup guide.'));

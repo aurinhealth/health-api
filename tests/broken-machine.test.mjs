@@ -38,7 +38,7 @@ test('the coach gets the stations only when a machine is said not to work, and t
   for (const t of ['Leg press nefunguje', 'Kladky jsou rozbité', 'The cable machine is out of order', 'Smith je mimo provoz']) assert.ok(BROKEN_WORDS.test(t), t);
   for (const t of ['Dej mi zítra nohy', 'Funguje to skvěle']) assert.ok(!BROKEN_WORDS.test(t), t);
   const save = COACH_ACTION_FORMAT.schema.properties.memory.properties.save.items;
-  assert.deepEqual(save.required, ['text', 'group', 'station', 'until']);
+  assert.deepEqual(save.required, ['text', 'group', 'station', 'muscles', 'until']);
   const src = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
   assert.match(src, /BROKEN_WORDS\.test\(message\)\?\{gymStations:stationList\(\)\}/);
   // Saved before the previews, so the gym card made now leaves the machine out.

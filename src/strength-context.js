@@ -1,6 +1,6 @@
 import { HEART_RATE_BUCKET_TYPE, HEART_RATE_HOUR_TYPE } from "./heart-rate-compaction.js";
 import {trainingSetup} from './onboarding.js';
-import { getAthleteState, usedMemories, brokenStations } from './athlete-state.js';
+import { getAthleteState, usedMemories, brokenStations, focusGroups } from './athlete-state.js';
 import { isHardSession } from './session-intensity.js';
 import { dateFormat } from "./date-format.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
@@ -255,7 +255,7 @@ export async function buildStrengthContext(env, requestedDate = null) {
   } catch { context.sleepSessions = []; }
   const athleteState=await getAthleteState(env.DB);
   // Memories too: a remembered pain leaves out exercises (Revize 2026-10-16, nález 24).
-  context.athleteState={status:athleteState.status,note:athleteState.note,memories:usedMemories(athleteState),brokenStations:brokenStations(athleteState,date),recoveredAt:athleteState.recoveredAt||null};
+  context.athleteState={status:athleteState.status,note:athleteState.note,memories:usedMemories(athleteState),brokenStations:brokenStations(athleteState,date),focusGroups:focusGroups(athleteState,date),recoveredAt:athleteState.recoveredAt||null};
   context.nutrition = buildNutritionPlan(context, { weightTrend: context.weightTrend });
   const { buildAdaptiveDecision } = await import("./adaptive-engine.js");
   context.adaptive = buildAdaptiveDecision(context, null);

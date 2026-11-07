@@ -48,7 +48,7 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
   // A memory added by hand ("memory", with its group) or saved by the coach from
   // the athlete's own words ("saves", marked New in the list for a week).
   if (patch.memory) remember(state, clean(patch.memory), date, { group: patch.group });
-  for (const save of Array.isArray(patch.saves) ? patch.saves : []) remember(state, clean(save?.text), date, { group: save?.group, by: 'coach', station: save?.station, until: save?.until });
+  for (const save of Array.isArray(patch.saves) ? patch.saves : []) remember(state, clean(save?.text), date, { group: save?.group, by: 'coach', station: save?.station, until: save?.until, muscles: save?.muscles });
   if (patch.forget != null) {
     const meta = state.memoryMeta[patch.forget];
     // "No longer true" about a pain or an illness keeps it under Past: the coach
@@ -113,10 +113,15 @@ const BADGE_DAYS = 7;
 // A machine that does not work is left out until the day the athlete said, two
 // weeks without one; then the coach asks whether it still holds (point 11).
 const BROKEN_DAYS = 14;
-function remember(state, text, date, { group = null, by = null, station = null, until = null } = {}) {
+// A lasting wish to train a muscle group more ("chci víc zad"): the gym plan
+// adds it until the day the athlete said, six weeks without one (point 10).
+const FOCUS_DAYS = 42;
+const muscleIds = list => Array.isArray(list) ? [...new Set(list.filter(m => /^[a-z_]{2,20}$/.test(m)))].slice(0, 3) : [];
+function remember(state, text, date, { group = null, by = null, station = null, until = null, muscles = null } = {}) {
   if (!text || state.memories.includes(text)) return;
   state.memories = [...state.memories, text].slice(-MEMORY_KEEP);
-  const broken = knownStation(station) ? { station, check: validDay(until) && until > date ? until : shiftDate(date, BROKEN_DAYS) } : {};
+  const until_ = days => validDay(until) && until > date ? until : shiftDate(date, days);
+  const broken = knownStation(station) ? { station, check: until_(BROKEN_DAYS) } : muscleIds(muscles).length ? { muscles: muscleIds(muscles), check: until_(FOCUS_DAYS) } : {};
   state.memoryMeta[text] = { ...memoryMeta(text, date), group: validGroup(group) || groupOf(text), ...broken, ...(by === 'coach' ? { changed: 'new', changedAt: date } : {}) };
   state.pastMemories = (state.pastMemories || []).filter(p => p.text !== text);
   for (const key of Object.keys(state.memoryMeta)) if (!state.memories.includes(key)) delete state.memoryMeta[key];
@@ -154,6 +159,9 @@ export function statusCheck(state, date = localToday()) {
 // The stations that do not work now: the gym plan, swaps and the coach leave them out.
 export const brokenStations = (state, date = localToday()) => state?.memoryOff ? [] : [...new Set((state?.memories || [])
   .map(text => state.memoryMeta?.[text]).filter(m => m?.station && m.check > date).map(m => m.station))];
+// The muscle groups the athlete wants trained more for a while.
+export const focusGroups = (state, date = localToday()) => state?.memoryOff ? [] : [...new Set((state?.memories || [])
+  .map(text => state.memoryMeta?.[text]).filter(m => m?.muscles?.length && m.check > date).flatMap(m => m.muscles))];
 // The day each Health memory was told or last confirmed with "Still true",
 // so the coach sees a knee pain from six weeks ago as old (audit 4.6).
 export const healthMemorySince = state => state?.memoryOff ? [] : memoryList(state).filter(m => m.group === 'health')
@@ -175,7 +183,7 @@ export function memorySaves(proposed, memories = []) {
   const known = new Set(memories), saves = [];
   for (const s of Array.isArray(proposed?.save) ? proposed.save : []) {
     const text = clean(s?.text).slice(0, 200);
-    if (text && !known.has(text) && !saves.some(x => x.text === text)) saves.push({ text, group: validGroup(s?.group) || 'training', ...(knownStation(s?.station) ? { station: s.station, until: validDay(s?.until) ? s.until : null } : {}) });
+    if (text && !known.has(text) && !saves.some(x => x.text === text)) saves.push({ text, group: validGroup(s?.group) || 'training', ...(knownStation(s?.station) ? { station: s.station, until: validDay(s?.until) ? s.until : null } : muscleIds(s?.muscles).length ? { muscles: muscleIds(s.muscles), until: validDay(s?.until) ? s.until : null } : {}) });
   }
   return saves.slice(0, 3);
 }
