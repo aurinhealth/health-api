@@ -5,7 +5,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { spawnSync } from "node:child_process";
-import { MUSCLE_MODEL_FORMATS } from "../src/muscle-model.js";
+import { MUSCLE_MODEL_FORMATS, sha256Hex } from "../src/muscle-model.js";
 
 const [file, format = "1"] = process.argv.slice(2);
 const key = MUSCLE_MODEL_FORMATS[format];
@@ -16,4 +16,4 @@ writeFileSync(gz, gzipSync(readFileSync(file), { level: 9 }));
 const r = spawnSync("npx", ["--yes", "wrangler@4.147.0", "r2", "object", "put", `aurin-food-catalog/${key}`, "--file", gz, "--remote", "--content-type", "application/octet-stream"],
   { stdio: "inherit", shell: process.platform === "win32" });
 if (r.status !== 0) throw new Error("Upload failed");
-console.log(`Done: ${key}`);
+console.log(`Done: ${key}\nPut its SHA-256 in src/muscle-model.js MUSCLE_MODEL_SHA256[${format}]: ${await sha256Hex(readFileSync(gz))}`);

@@ -62,7 +62,7 @@ export function summarizeWeeks({activities=[],strengthSets=[]}={},mondays=null){
 export function experienceFromWeeks(weeks=[],{weightKg=null,ftp=null,runThresholdPace=null,crossOver=true}={}){
   const rank=l=>EXPERIENCE_LEVELS.indexOf(l),max=(a,b)=>rank(a)>=rank(b)?a:b;
   const monthOf=w=>shiftDate(w.week,3).slice(0,7);
-  const activeMonths=key=>{const per={};for(const w of weeks)per[monthOf(w)]=(per[monthOf(w)]||0)+(Number(w[key])||0);return Object.values(per).filter(n=>n>=4).length;};
+  const activeMonths=(key,min=4)=>{const per={};for(const w of weeks)per[monthOf(w)]=(per[monthOf(w)]||0)+(Number(w[key])||0);return Object.values(per).filter(n=>n>=min).length;};
   let strength=activeMonths('gym_n')>12?'experienced':activeMonths('gym_n')>=3?'regular':'beginner';
   const kg=Number(weightKg)>=35?Number(weightKg):null;
   if(kg){
@@ -70,12 +70,14 @@ export function experienceFromWeeks(weeks=[],{weightKg=null,ftp=null,runThreshol
     if(best('squat')>=1.5||best('bench')>=1.1||best('deadlift')>=1.8)strength='experienced';
     else if(best('squat')>=1.0||best('bench')>=0.75)strength=max(strength,'regular');
   }
-  const byMonths=m=>m>24?'experienced':m>=3?'regular':'beginner';
+  // Ride, run and swim: advanced after 12 of the 24 months with about three sessions a week
+  // (12+ that month). The weeks span exactly 24 months, so "more than 24" was out of reach.
+  const endurance=key=>activeMonths(key,12)>=12?'experienced':activeMonths(key)>=3?'regular':'beginner';
   const latest=key=>[...weeks].reverse().find(w=>w[key]>0)?.[key]??null;
-  let ride=byMonths(activeMonths('ride_n'));
+  let ride=endurance('ride_n');
   const rideFtp=Number(ftp)>0?Number(ftp):latest('ftp');
   if(kg&&rideFtp&&rideFtp/kg>=3.5)ride='experienced';
-  let run=byMonths(activeMonths('run_n'));
+  let run=endurance('run_n');
   const pace=Number(runThresholdPace)>0?Number(runThresholdPace):latest('run_pace');
   if(pace&&pace<285)run='experienced';
   const km={};for(const w of weeks)km[monthOf(w)]=(km[monthOf(w)]||0)+(Number(w.run_km)||0);
@@ -83,7 +85,7 @@ export function experienceFromWeeks(weeks=[],{weightKg=null,ftp=null,runThreshol
   const own={strength,ride,run},out={};
   for(const sport of Object.keys(own)){const other=Math.max(...Object.keys(own).filter(s=>s!==sport).map(s=>rank(own[s])));out[sport]=crossOver?EXPERIENCE_LEVELS[Math.max(rank(own[sport]),Math.min(other,rank(own[sport])+1))]:own[sport];}
   // Swimming is technique: fitness from the other sports doesn't make a swimmer.
-  out.swim=byMonths(activeMonths('swim_n'));
+  out.swim=endurance('swim_n');
   return out;
 }
 export function sportExperience({activities=[],strengthSets=[],weightKg=null,ftp=null,runThresholdPace=null}={}){
@@ -198,7 +200,26 @@ export async function trainingHistory(db,userId=db.userId,{now=Date.now()}={}){
   const poolLength=[...activities].reverse().find(a=>a.kind==='swim'&&POOL_LENGTHS.some(m=>Math.abs(m-a.poolLength)<.1))?.poolLength??[...weeks].reverse().find(w=>w.pool>0)?.pool??null;
   return {mainSport,supportSports:support,regularSports,experience,sportExperience:sportExperienceLevels,sportExperienceOwn,sports,poolLength,weeklyMinutes,weeklyHours:Math.round(weeklyMinutes/60*10)/10,automaticSportAvailable:recent.length>0,activeWeeks,activityCount:training.length,yearCount,recentCount:recent.length,recentActiveWeeks:new Set(recent.map(a=>mondayOfDate(a.date))).size,weekdayMinutes,periods:{sportDays:364,experienceDays:84,sportExperienceDays:EXPERIENCE_DAYS,volumeDays:28}};
 }
-export function starterPlan(history,experience=history.experience){
+// The levels chosen by hand in Profile → Experience, 'auto' where none.
+// The single "experience" of older versions is the gym's.
+export function experienceChoices(saved={}){
+  const raw=saved.experienceBySport&&typeof saved.experienceBySport==='object'?saved.experienceBySport:{};
+  const pick=v=>EXPERIENCE_LEVELS.includes(v)?v:'auto';
+  return {strength:pick(raw.strength??saved.experience),ride:pick(raw.ride),run:pick(raw.run),swim:pick(raw.swim)};
+}
+// The starter week's level: the one chosen by hand for the main sport (without
+// a main sport yet, the highest endurance one chosen), else the last 12 weeks.
+// Never the gym's for an endurance athlete, never the two-year Auto level: an
+// athlete back after a long pause starts from what they do now.
+const KIND_OF_MAIN={cycling:'ride',running:'run',swimming:'swim',strength:'strength'};
+export function starterExperience(history,chosen={}){
+  const kind=KIND_OF_MAIN[history.mainSport],manual=s=>EXPERIENCE_LEVELS.includes(chosen[s])?chosen[s]:null;
+  if(kind)return manual(kind)||history.experience;
+  const levels=['ride','run','swim'].map(manual).filter(Boolean);
+  return levels.length?levels.reduce((a,b)=>EXPERIENCE_LEVELS.indexOf(b)>EXPERIENCE_LEVELS.indexOf(a)?b:a):history.experience;
+}
+export function starterPlan(history,chosen={}){
+  const experience=starterExperience(history,chosen);
   // These are app templates, not published averages of free time. An inactive
   // beginner starts below the WHO target and can increase volume gradually.
   const templates={beginner:[30,0,30,0,0,45,0],regular:[30,0,30,0,30,60,0],experienced:[30,30,0,30,30,60,60]};

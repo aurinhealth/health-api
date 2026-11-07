@@ -84,6 +84,20 @@ test("the plan sets the week: quality days, the long run, a lighter week", () =>
   assert.equal(targetsFor(plan, 2, { weekLoads: [600] }).target, Math.round(350 * .7));
 });
 
+test("three run days keep one key session, so one run stays easy", () => {
+  const plan = { templateId: "run-10k", startDate: monday, raceDate: week(9).replace(/12$/, "20"), raceKm: 10 };
+  const three = [["gym"], ["run"], [], ["run"], ["gym"], [], ["run"]], start = week(2), pw = planWeek(plan, start);
+  const runs = applyPlan(weekTargets({ roles: planWeekRoles(three, { quality: planQuality(pw), prefer: "run" }), ctl: 50, days: [], today: start, weekStart: start, plan: planLoad(pw) }), plan, start, { thresholdPace: 280 }).items.filter(x => x.sport === "run");
+  assert.equal(runs.length, 3);
+  assert.deepEqual(runs.filter(x => x.role === "quality").map(x => x.plan.family), ["run-vo2-short"]);
+  assert.equal(runs.filter(x => x.role === "long").length, 1);
+  assert.equal(runs.filter(x => x.role === "endurance").length, 1, JSON.stringify(runs.map(x => x.role)));
+  // Four run days, of which only three this week: one key session too.
+  const fourDays = { ...plan, weekDays: { [start]: 3 } };
+  const left = targetsFor(fourDays, 2).items.filter(x => x.sport === "run");
+  assert.equal(left.filter(x => x.role === "quality").length, 1, JSON.stringify(left.map(x => x.role)));
+});
+
 test("race week: the race on its day, nothing of the sport after it", () => {
   const plan = { templateId: "run-10k", startDate: monday, raceDate: "2026-12-19", raceKm: 10 };
   const items = targetsFor(plan, 9).items.filter(x => x.sport === "run");

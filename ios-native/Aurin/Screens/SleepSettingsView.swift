@@ -257,7 +257,13 @@ struct SleepSettingsForm: View {
     private func syncAlarm(_ on: Bool) async {
         guard on else { SystemAlarm.cancel(); return }
         let work = workAlarm ? Self.text(workTime) : nil, weekend = weekendAlarm ? Self.text(weekendTime) : nil
-        guard work != nil || weekend != nil else { alarmOK = false; alarmNote = L10n.tr("Nejdřív zapni budík na pracovní dny nebo víkend."); return }
+        // Both alarms turned off and saved: the ones set before go too.
+        guard work != nil || weekend != nil else {
+            SystemAlarm.cancel()
+            alarmOK = false
+            alarmNote = L10n.tr("Nejdřív zapni budík na pracovní dny nebo víkend.")
+            return
+        }
         if let problem = await SystemAlarm.sync(work: work, weekend: weekend) {
             alarmOK = false
             alarmNote = problem
