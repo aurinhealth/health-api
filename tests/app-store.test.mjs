@@ -10,7 +10,7 @@ import { createHash, createPrivateKey, sign, X509Certificate } from "node:crypto
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { APPLE_ROOT_CA_G3, verifyAppStoreJws, saveAppTransaction, saveAppInstall, handleAppStoreNotification, appAccountToken, storePurchase } from "../src/app-store.js";
-import { subscriptionStatus } from "../src/subscription.js";
+import { subscriptionStatus, plansUnlocked } from "../src/subscription.js";
 import { handleAccountApi } from "../src/routes-account.js";
 
 const fixture = name => readFileSync(new URL(`./fixtures/app-store/${name}`, import.meta.url), "utf8");
@@ -83,15 +83,18 @@ test("the app's transaction unlocks Pro for the account until it expires", async
   assert.equal(Date.parse(saved.validUntil), now + 7 * DAY);
   assert.equal(row(raw, 1).original_transaction_id, "2000000000");
   assert.deepEqual([row(raw, 1).free_trial, row(raw, 1).offer_type], [1, 1], "the free week, Apple's introductory offer");
-  const purchase = await storePurchase(env);
+  const purchase = await storePurchase({ ...env, ENVIRONMENT: "staging" });
   assert.equal(purchase.active, true);
+  assert.equal((await storePurchase(env)).active, false, "a Sandbox purchase is not Pro on the live server");
   assert.equal(purchase.productId, "health.aurin.app.pro.yearly");
   assert.equal(purchase.environment, "Sandbox");
   // With the paywall on, the bought plan is what gives AI.
   const paid = { ...env, AI_PAYWALL_ENABLED: "true", CONSENT_REQUIRED: false, DB: env.DB };
   raw.sqlite.exec("CREATE TABLE IF NOT EXISTS user_consents (user_id INTEGER NOT NULL, kind TEXT NOT NULL, version TEXT, granted_at TEXT, withdrawn_at TEXT, PRIMARY KEY(user_id, kind))");
   raw.sqlite.prepare("INSERT INTO user_consents VALUES (1,'health','2026-10-11','2026-10-11',NULL),(1,'ai','2026-10-11','2026-10-11',NULL),(2,'health','2026-10-11','2026-10-11',NULL),(2,'ai','2026-10-11','2026-10-11',NULL)").run();
-  assert.equal((await subscriptionStatus(paid)).plan, "ai");
+  // The purchase is a Sandbox one: Pro on the test server, not on the live one.
+  assert.equal((await subscriptionStatus({ ...paid, ENVIRONMENT: "staging" })).plan, "ai");
+  assert.equal((await subscriptionStatus(paid)).plan, "free");
   assert.equal((await subscriptionStatus({ ...user(2), AI_PAYWALL_ENABLED: "true" })).plan, "free");
   // In the pilot everyone has AI, bought or not.
   const pilot = await subscriptionStatus(user(2));
@@ -324,4 +327,25 @@ test("an ended TestFlight purchase does not push out the App Store one", async (
   await notify(notification("EXPIRED", transaction({ appAccountToken: token, originalTransactionId: "3000000000", expiresDate: now - DAY, signedDate: now + 2000 })), { DB: raw });
   assert.equal(row(raw, 1).original_transaction_id, "2000000000");
   assert.equal((await storePurchase(env)).active, true);
+});
+
+test("a Sandbox purchase gives Pro on the live server only to the owner and the App Review account", async () => {
+  const { raw, user } = setup();
+  const env = user(1);
+  const token = await appAccountToken(env);
+  await saveAppTransaction(env, { signedTransaction: jws(transaction({ appAccountToken: token, offerType: undefined })) }, { roots });
+  raw.sqlite.exec("CREATE TABLE IF NOT EXISTS user_consents (user_id INTEGER NOT NULL, kind TEXT NOT NULL, version TEXT, granted_at TEXT, withdrawn_at TEXT, PRIMARY KEY(user_id, kind))");
+  raw.sqlite.prepare("INSERT INTO user_consents VALUES (1,'health','2026-10-11','2026-10-11',NULL),(1,'ai','2026-10-11','2026-10-11',NULL)").run();
+  const live = { ...env, AI_PAYWALL_ENABLED: "true", CONSENT_REQUIRED: false };
+  const tester = await subscriptionStatus(live);
+  assert.deepEqual([tester.plan, tester.aiAccess], ["free", false], "a tester's free Sandbox purchase unlocks nothing");
+  assert.equal((await storePurchase(live)).active, false, "Settings does not show it as active");
+  assert.equal(await plansUnlocked(live), false);
+  assert.equal((await subscriptionStatus({ ...live, USER_IS_OWNER: true })).plan, "ai", "the owner tests the paid app");
+  assert.equal((await subscriptionStatus({ ...live, APP_REVIEW_EMAIL: "review@aurin.health", USER_EMAIL: "Review@aurin.health" })).plan, "ai", "App Review buys in Sandbox");
+  assert.equal(await plansUnlocked({ ...live, ENVIRONMENT: "staging" }), true);
+  // A Production purchase is Pro for everyone.
+  raw.sqlite.prepare("UPDATE subscriptions SET store_environment='Production' WHERE user_id=1").run();
+  assert.equal((await subscriptionStatus(live)).plan, "ai");
+  assert.equal((await storePurchase(live)).active, true);
 });

@@ -20,6 +20,8 @@
 // APP_STORE_BUNDLE_ID: optional, health.aurin.app unless set.
 import { L } from './lang.js';
 import { packProducts, savePackTransaction, refundPackTransaction } from './coach-packs.js';
+import { isStaging } from './staging.js';
+import { isReviewAccount } from './app-review.js';
 
 // SHA-256 of Apple Root CA - G3 (https://www.apple.com/certificateauthority/).
 export const APPLE_ROOT_CA_G3 = '63343abfb89a6a03ebb57e9b3f5fa7be7c4f5c756f3017b3a8c488c3653e9179';
@@ -184,12 +186,28 @@ async function accountToken(env) {
   return (await env.DB.prepare('SELECT app_account_token FROM subscriptions WHERE user_id=?').bind(env.USER_ID).first())?.app_account_token || token;
 }
 
+// Pro bought and not expired. A Sandbox purchase (TestFlight, sandbox testers)
+// costs nothing, so on the live server it gives Pro only to the owner (testing
+// the paid app) and the App Review account (Apple reviews with Sandbox
+// purchases); on the test server to everyone, like a Sandbox coach pack
+// (coach-packs.js counts). Petr, 7 Nov 2026.
+export function proActive(env, row, now = Date.now()) {
+  if (!(row?.plan === 'ai' && row.valid_until && Date.parse(row.valid_until) > now)) return false;
+  return row.store_environment !== 'Sandbox' || isStaging(env) || env?.USER_IS_OWNER === true || isReviewAccount(env);
+}
+
+// The account's plan row as proActive reads it; null without one.
+export async function subscriptionRow(env) {
+  const db = env.DB, id = env.USER_ID ?? db.userId;
+  return withColumns(db, () => db.prepare('SELECT plan,valid_until,store_environment FROM subscriptions WHERE user_id=?').bind(id).first());
+}
+
 // What the App Store says about the account's purchase, for /app/api/subscription.
 export async function storePurchase(env) {
   if (!env?.DB || !(Number(env.USER_ID) > 0)) return null;
   const row = await withColumns(env.DB, () => env.DB.prepare('SELECT plan,valid_until,product_id,store_environment,auto_renew,original_transaction_id FROM subscriptions WHERE user_id=?').bind(env.USER_ID).first());
   if (!row?.original_transaction_id) return null;
-  const active = row.plan === 'ai' && Boolean(row.valid_until) && Date.parse(row.valid_until) > Date.now();
+  const active = proActive(env, row);
   return { active, productId: row.product_id, expiresAt: row.valid_until, environment: row.store_environment, autoRenew: row.auto_renew == null ? null : row.auto_renew === 1 };
 }
 
