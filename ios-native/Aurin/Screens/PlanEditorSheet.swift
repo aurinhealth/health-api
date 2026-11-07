@@ -343,9 +343,8 @@ struct ExercisePicker: View {
                     ScrollView(.horizontal) {
                         HStack(spacing: 8) {
                             chip("Vše", muscle == nil) { muscle = nil }
-                            ForEach(BodyFigure.muscles.indices, id: \.self) { i in
-                                let m = BodyFigure.muscles[i]
-                                chip(m.label, muscle == m.id) { muscle = muscle == m.id ? nil : m.id }
+                            ForEach(BodyFigure.choices, id: \.self) { id in
+                                chip(BodyFigure.name(id), muscle == id) { muscle = muscle == id ? nil : id }
                             }
                         }
                     }

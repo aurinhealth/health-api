@@ -636,8 +636,7 @@ struct GymExerciseSearch: View {
                 if model.muscles.map({ !$0.tired.isEmpty }) == true {
                     chip(L10n.tr("Odpočaté"), rested, dot: Palette.green) { rested.toggle() }
                 }
-                ForEach(BodyFigure.muscles.indices, id: \.self) { i in
-                    let id = BodyFigure.muscles[i].id
+                ForEach(BodyFigure.choices, id: \.self) { id in
                     chip(BodyFigure.label(id), muscle == id) { muscle = muscle == id ? nil : id }
                 }
             }
