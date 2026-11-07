@@ -66,7 +66,12 @@ struct SleepDetailContent: View {
                 }
                 // The window is the last 14 nights, however many of them were measured.
                 if let index = sleep.index, index.nights.count >= 2 {
-                    SectionLabel(text: L10n.f("Posledních %@ nocí · průměr %@", "14", String(index.average))).padding(.top, 30)
+                    HStack(alignment: .firstTextBaseline) {
+                        SectionLabel(text: L10n.f("Index spánku · posledních %@ nocí", "14"))
+                        Spacer(minLength: 8)
+                        Text(verbatim: L10n.f("průměr %@ / 100", String(index.average))).font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                    .padding(.top, 30)
                     Card { SleepIndexNights(index: index, date: health.date) }.padding(.top, 14)
                 }
                 if let stages = night.stages {
@@ -152,7 +157,7 @@ struct SleepDetailContent: View {
                         Text(Fmt.hoursMinutes(Double(debt.minutes))).font(Typo.number(28)).foregroundStyle(Palette.amber)
                             .accessibilityLabel(Fmt.hoursMinutesSpoken(Double(debt.minutes)))
                     }
-                    ProgressLine(fraction: Double(debt.minutes) / 360, color: Palette.amberBar)
+                    DebtStrip(minutes: debt.minutes)
                 }
             }
             .padding(.top, 14)
@@ -405,39 +410,115 @@ struct SleepIndexParts: View {
     }
 }
 
-/// "Posledních 14 nocí": the index of each night as a bar, last night in full
-/// indigo, the user's usual range (the middle half of the nights) as a band.
+/// "Posledních 14 nocí": a sentence on last night against the usual range,
+/// then the index of each night as a dot on a 40–100 scale (lower when a night
+/// is under 40), a thin line between neighbouring nights and a gap for a night
+/// not measured, the usual range (the middle half of the nights before the
+/// rated one, server) as a band with dashed edges and a letter for each day
+/// (chart review 1: bars from 40 made 57 against 68 look twice as much).
 struct SleepIndexNights: View {
     let index: HealthSnapshot.IndexNights
     let date: String
+    static let slots = 14
+
+    private struct Mark: Identifiable {
+        let slot: Int
+        let value: Double
+        var id: Int { slot }
+    }
+
+    /// The 14 days up to `date`, oldest first.
+    private var days: [String] { (0..<Self.slots).map { ISODay.shift(date, $0 - (Self.slots - 1)) } }
 
     var body: some View {
-        let values = index.nights.map(\.value)
-        // From a round step under the lowest night, so the nights differ visibly.
-        let lo = max(0, ((values.min() ?? 0) - 15) / 10).rounded(.down) * 10
-        let height: CGFloat = 64
-        VStack(alignment: .leading, spacing: 6) {
-            ZStack(alignment: .bottomLeading) {
-                if let low = index.low, let high = index.high {
-                    let at = { (v: Double) in height * min(max((v - lo) / (100 - lo), 0), 1) }
-                    Rectangle().fill(Palette.indigo.opacity(0.1))
-                        .frame(height: max(2, at(high) - at(low)))
-                        .offset(y: -at(low))
+        let byDate = Dictionary(index.nights.map { ($0.date, $0.value) }, uniquingKeysWith: { a, _ in a })
+        let marks = days.enumerated().compactMap { i, d in byDate[d].map { Mark(slot: i, value: $0) } }
+        let lowest = index.nights.map(\.value).min() ?? 40
+        let lo = max(0, min(40, ((lowest - 5) / 10).rounded(.down) * 10))
+        let height: CGFloat = 120
+        VStack(alignment: .leading, spacing: 10) {
+            Text(verbatim: summary).font(.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+            GeometryReader { geo in
+                let w = geo.size.width - scaleWidth, step = w / CGFloat(Self.slots)
+                let y: (Double) -> CGFloat = { height * (1 - CGFloat((min(max($0, lo), 100) - lo) / (100 - lo))) }
+                let x: (Int) -> CGFloat = { step * (CGFloat($0) + 0.5) }
+                ZStack(alignment: .topLeading) {
+                    ChartScale(ticks: [50.0, 75, 100].filter { $0 > lo }.map { ScaleTick(value: $0, text: Fmt.int($0)) }, width: w, y: y)
+                    if let low = index.low, let high = index.high {
+                        Rectangle().fill(Palette.indigo.opacity(0.2))
+                            .frame(width: w, height: max(2, y(low) - y(high)))
+                            .offset(y: y(high))
+                        ForEach([low, high], id: \.self) { edge in
+                            DashedLine().stroke(Palette.indigo.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                                .frame(width: w, height: 1)
+                                .offset(y: y(edge))
+                        }
+                    }
+                    // A line only between nights next to each other: a missing night stays a gap.
+                    Path { p in
+                        for (a, b) in zip(marks, marks.dropFirst()) where b.slot == a.slot + 1 {
+                            p.move(to: CGPoint(x: x(a.slot), y: y(a.value)))
+                            p.addLine(to: CGPoint(x: x(b.slot), y: y(b.value)))
+                        }
+                    }
+                    .stroke(Palette.indigo.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    ForEach(marks) { m in
+                        let last = m.id == marks.last?.id
+                        Circle().fill(last ? Palette.indigo : Palette.indigo.opacity(0.6))
+                            .frame(width: last ? 11 : 6, height: last ? 11 : 6)
+                            .position(x: x(m.slot), y: y(m.value))
+                        if last {
+                            Text(verbatim: Fmt.int(m.value))
+                                .scaledFont(chartText, weight: .semibold, cap: .denseCap)
+                                .foregroundStyle(Palette.ink)
+                                .fixedSize()
+                                .position(x: x(m.slot) - 16, y: y(m.value))
+                        }
+                    }
                 }
-                BarChart(values: values, styles: index.nights.map { BarStyle(fill: $0.date == date ? Palette.indigo : Palette.indigo.opacity(0.35)) },
-                         lo: lo, hi: 100, height: height)
+                .frame(width: geo.size.width, height: height, alignment: .topLeading)
             }
             .frame(height: height)
-            ChartSpan(start: index.nights.first.map { Fmt.dayMonthShort($0.date) } ?? "",
-                      end: index.nights.last?.date == date ? L10n.tr("dnes") : index.nights.last.map { Fmt.dayMonthShort($0.date) } ?? "")
-            if let low = index.low, let high = index.high {
-                Text(L10n.f("Pás je tvoje obvyklé rozmezí, %@ až %@.", Fmt.int(low), Fmt.int(high)))
-                    .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 4)
+            HStack(spacing: 0) {
+                ForEach(days, id: \.self) { d in
+                    Text(verbatim: String(Fmt.weekdayShort(d).prefix(1)))
+                        .scaledFont(chartText, cap: .denseCap)
+                        .foregroundStyle(Palette.faint)
+                        .frame(maxWidth: .infinity)
+                }
             }
+            .padding(.trailing, scaleWidth)
+            HStack(spacing: 14) {
+                if let low = index.low, let high = index.high {
+                    HStack(spacing: 5) {
+                        RoundedRectangle(cornerRadius: 2).fill(Palette.indigo.opacity(0.3)).frame(width: 14, height: 6)
+                        Text(verbatim: L10n.f("obvyklé rozmezí %@–%@", Fmt.int(low), Fmt.int(high))).font(Typo.tiny).foregroundStyle(Palette.muted)
+                    }
+                }
+                HStack(spacing: 5) {
+                    Circle().fill(Palette.indigo).frame(width: 7, height: 7)
+                    Text("poslední noc").font(Typo.tiny).foregroundStyle(Palette.muted)
+                }
+            }
+            Text(verbatim: L10n.f("Změřeno %@ ze %@ nocí", String(marks.count), String(Self.slots)))
+                .font(Typo.caption).foregroundStyle(Palette.muted)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.f("Index spánku za posledních %@ nocí, průměr %@.", String(index.nights.count), String(index.average))
-            + (index.low.flatMap { low in index.high.map { " " + L10n.f("Pás je tvoje obvyklé rozmezí, %@ až %@.", Fmt.int(low), Fmt.int($0)) } } ?? ""))
+        .accessibilityLabel(summary + " " + L10n.f("Index spánku za posledních %@ nocí, průměr %@.", String(marks.count), String(index.average)))
+    }
+
+    /// "Last night 61, in your usual range of 57–68.", above or below it, or
+    /// that the range needs 7 nights first.
+    var summary: String {
+        guard let last = index.nights.last else { return "" }
+        let value = Fmt.int(last.value)
+        let night = last.date == date ? L10n.f("Poslední noc %@", value) : L10n.f("Noc na %@: %@", Fmt.dayMonth(last.date), value)
+        guard let low = index.low, let high = index.high else { return night + ". " + L10n.tr("Tvoje obvyklé rozmezí se ukáže po 7 nocích.") }
+        switch RangeBar.side(last.value, low, high) {
+        case 1: return L10n.f("%@, nad tvým obvyklým rozmezím %@–%@.", night, Fmt.int(low), Fmt.int(high))
+        case -1: return L10n.f("%@, pod tvým obvyklým rozmezím %@–%@.", night, Fmt.int(low), Fmt.int(high))
+        default: return L10n.f("%@, v tvém obvyklém rozmezí %@–%@.", night, Fmt.int(low), Fmt.int(high))
+        }
     }
 }
 
