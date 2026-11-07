@@ -111,7 +111,7 @@ import { reviewRefusal, isReviewAccount } from "./app-review.js";
 import { updateFitnessEstimate } from "./own-vo2max-store.js";
 import { ensureReviewSample } from "./review-sample.js";
 import { handleNativeAppleLogin, forgetUsedAppleTokens } from "./apple-login.js";
-import { ensureAssistantChats, chatContext, appendChatTurnIds, openChatForAnswer, dropEmptyChat, listChats, readChat, deleteChat, startChatWithCoach, ownedChat, saveAnswerFeedback } from "./assistant-chats.js";
+import { ensureAssistantChats, chatContext, appendChatTurnIds, openChatForAnswer, dropEmptyChat, listChats, searchChats, readChat, deleteChat, startChatWithCoach, ownedChat, saveAnswerFeedback } from "./assistant-chats.js";
 import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedReplyPush, foreignPushReply } from "./coach-push-reply.js";
 import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
@@ -2498,6 +2498,16 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if(url.pathname==='/app/api/assistant/chats'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     return Response.json({status:'ok',chats:await listChats(env.DB)},{headers:{'Cache-Control':'no-store'}});
+  }
+  // A word in the athlete's own chats, no AI (assistant-chats.js searchChats).
+  // POST, so the word stays out of the address the request logs keep.
+  if(url.pathname==='/app/api/assistant/chats/search'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    const limited=await limitBody(request,1024);
+    if(limited.response)return limited.response;
+    let body;try{body=JSON.parse(await limited.request.text())||{};}catch{body={};}
+    return Response.json({status:'ok',results:await searchChats(env.DB,body.q)},{headers:{'Cache-Control':'no-store'}});
   }
   const chatPath=url.pathname.match(/^\/app\/api\/assistant\/chats\/(\d+)$/);
   if(chatPath){

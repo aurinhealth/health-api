@@ -104,6 +104,41 @@ export async function listChats(db, limit = 50) {
   return rows.map(r => ({ id: r.id, title: r.title, updatedAt: r.updated_at, messages: Number(r.messages) || 0 }));
 }
 
+// Searching the athlete's own chats for a word, without AI: the newest
+// matching message of each chat, with a short piece of text around the word.
+// It reads the user's chats and their messages by the two indexes
+// (assistant_chats_user, assistant_messages_chat) and writes nothing; the
+// word comes in the body of a POST and is neither stored nor logged.
+export const SEARCH_RESULTS = 20;
+const SEARCH_MIN = 2, SEARCH_MAX = 100;
+
+export async function searchChats(db, query) {
+  const q = String(query || '').replace(/\s+/g, ' ').trim().slice(0, SEARCH_MAX);
+  if ([...q].length < SEARCH_MIN) return [];
+  await ensureAssistantChats(db);
+  // SQLite's LIKE ignores case for A–Z only, so "Únava" also as "únava".
+  const lower = q.toLocaleLowerCase();
+  const forms = [...new Set([q, lower, lower.charAt(0).toLocaleUpperCase() + lower.slice(1)])];
+  const like = forms.map(() => "n.content LIKE ? ESCAPE '\\'").join(' OR ');
+  const patterns = forms.map(f => '%' + f.replace(/[\\%_]/g, c => '\\' + c) + '%');
+  const rows = (await db.prepare(`SELECT m.id,m.chat_id,m.role,m.content,m.created_at,c.title,c.updated_at FROM assistant_messages m JOIN assistant_chats c ON c.id=m.chat_id AND c.user_id=m.user_id WHERE m.user_id=? AND m.id IN (SELECT MAX(n.id) FROM assistant_chats d JOIN assistant_messages n ON n.chat_id=d.id AND n.user_id=d.user_id WHERE d.user_id=? AND d.ghost=0 AND (${like}) GROUP BY n.chat_id ORDER BY MAX(n.id) DESC LIMIT ?) ORDER BY m.id DESC`).bind(db.userId, db.userId, ...patterns, SEARCH_RESULTS).all()).results || [];
+  return rows.map(r => ({ chatId: r.chat_id, title: r.title, updatedAt: r.updated_at, messageId: r.id, role: r.role, createdAt: r.created_at, snippet: searchSnippet(r.content, lower) }));
+}
+
+// About a line and a half around the first match, on word boundaries, without
+// the notes the app hides ("[Fotka] ", "[Návrhy: …]") and Markdown marks.
+export function searchSnippet(content, lower) {
+  const text = String(content || '')
+    .replace(/^\[(?:Fotka|Photo)\] /, '')
+    .replace(/\s*\[(?:Návrhy|Proposals): [^\]]*\]\s*$/, '')
+    .replace(/[*_#`>]+/g, '').replace(/\s+/g, ' ').trim();
+  const at = Math.max(0, text.toLocaleLowerCase().indexOf(lower));
+  let start = Math.max(0, at - 40), end = Math.min(text.length, at + lower.length + 110);
+  if (start > 0) { const space = text.indexOf(' ', start); start = space > -1 && space < at ? space + 1 : start; }
+  if (end < text.length) { const space = text.lastIndexOf(' ', end); end = space > at + lower.length ? space : end; }
+  return (start > 0 ? '…' : '') + text.slice(start, end) + (end < text.length ? '…' : '');
+}
+
 export async function readChat(db, id) {
   await ensureAssistantChats(db);
   const chat = await ownedChat(db, id);

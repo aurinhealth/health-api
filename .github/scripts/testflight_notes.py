@@ -41,7 +41,9 @@ file with Czech first and "--- English ---" still reads.
       "Vydat": sets the notes on build BUILD_NUMBER (already in TestFlight),
       and, only with EXTERNAL=true (Vydat's "external" ticked), adds it to the
       external testers' group (EXTERNAL_GROUP, or the only external group) and
-      sends it to Apple's beta review. Same environment
+      sends it to Apple's beta review. Its twin with the Apple Watch app
+      (BUILD_NUMBER.1, ios-testflight.yml) gets the same notes and goes to
+      WATCH_GROUP (default "Close testers"). Same environment
       as upload, without MARKETING_VERSION. With RELEASE_ALL=1, write takes
       every pull request since BASE_SHA, not only the ones touching ios-native/.
 
@@ -280,6 +282,37 @@ def external_group(groups, name=""):
 
 
 
+def add_to_group(app, build, number, name):
+    """The Apple Watch build (number) in the group called name, and to Apple's
+    beta review when that group is external. A warning, never a failure: the
+    release itself is done by then."""
+    groups = [g for g in call("GET", f"/apps/{app}/betaGroups?limit=200")["data"] if g["attributes"].get("name") == name]
+    if not groups:
+        print(f"::warning::Skupina „{name}“ v TestFlightu není; build {number} s hodinkami přidej do své skupiny ručně.")
+        return
+    group = groups[0]
+    added = call("POST", f"/betaGroups/{group['id']}/relationships/builds",
+                 {"data": [{"type": "builds", "id": build["id"]}]}, allow=(409, 422))
+    print(f"Build {number} {'already in' if added.get('status') else 'added to'} {name}")
+    if not group["attributes"].get("isInternalGroup"):
+        call("POST", "/betaAppReviewSubmissions",
+             {"data": {"type": "betaAppReviewSubmissions",
+                       "relationships": {"build": {"data": {"type": "builds", "id": build["id"]}}}}}, allow=(409,))
+
+
+def release_watch(app, notes):
+    """Build N.1, the one with the Apple Watch app; builds uploaded before
+    the split have none."""
+    env = os.environ
+    number = f"{env['BUILD_NUMBER']}.1"
+    builds = call("GET", f"/builds?filter[app]={app}&filter[version]={number}")["data"]
+    if not builds or builds[0]["attributes"].get("processingState") != "VALID" or builds[0]["attributes"].get("expired"):
+        print(f"::warning::Build {number} s hodinkami v TestFlightu není připravený; testeři dostanou build {env['BUILD_NUMBER']} bez hodinek.")
+        return
+    set_notes(app, builds[0]["id"], notes)
+    add_to_group(app, builds[0], number, env.get("WATCH_GROUP") or "Close testers")
+
+
 def release(notes_file):
     notes = open(notes_file, encoding="utf-8").read()
     env = os.environ
@@ -294,6 +327,7 @@ def release(notes_file):
     if build["attributes"].get("expired"):
         sys.exit(f"::error::Build {env['BUILD_NUMBER']} v TestFlightu vypršel.")
     set_notes(app, build["id"], notes)
+    release_watch(app, notes)
     if env.get("EXTERNAL") != "true":
         print("External testers: not sent (Vydat's \"external\" not ticked; add the build by hand in App Store Connect)")
         return

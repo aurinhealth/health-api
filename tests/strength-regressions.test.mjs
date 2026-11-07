@@ -682,3 +682,12 @@ test("breathing in sleep is not the night's minutes in the legacy recovery", asy
   const out = buildAdaptiveDecision({ date: "2026-09-23", recovery: { "respiratory-rate-sleep-summary": [{ sampleTime: "2026-09-23T05:00:00Z", value: 15 }], "daily-sleep-temperature-derivations": [{ sampleTime: "2026-09-23", value: 34.1 }] } }, null);
   assert.equal(out.recovery.sleepMinutes, null);
 });
+
+test('upright rows are side-delt exercises too, so a shoulder workout can pick them', async () => {
+  const { exerciseMuscles } = await import('../src/fitness-insights.js');
+  for (const name of ['Barbell Upright Row', 'Dumbbell Upright Row', 'Cable upright row']) {
+    assert.ok(FOCUS_GROUPS.side_delts.exercises.includes(name), name);
+    assert.ok(FOCUS_GROUPS.traps.exercises.includes(name), name);
+    assert.equal(exerciseMuscles(name).side_delts, 1, name);
+  }
+});

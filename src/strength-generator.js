@@ -8,6 +8,7 @@ import { assignIntensities } from './gym-intensity.js';
 import { L, isImperial, kgToLb } from './lang.js';
 import { estimateStartingLoad, resolveLoad, progressionDecision, priorMuscleSets, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
+import { PAIN_WORDS } from './pain-words.js';
 import { withoutDisliked } from './exercise-feedback.js';
 import { isIntensity } from "./strength-context.js";
 import { availableAt as availableInGym, hasKnownStations, EXERCISE_STATIONS } from "./gym-equipment.js";
@@ -364,7 +365,7 @@ export const FOCUS_GROUPS = {
   upper_back: {label:'Horní záda', exercises:['Low row','Standing rowing machine','One-arm DB row','Single-arm cable row','Wide-grip low row','Barbell row','T-bar row','Chest-supported row','TRX row','Inverted Row','Smith Machine Bent-Over Row','Cable Row Bar Standing Row','Cable Supinating Row','Machine Underhand Row','Hammer Strength Iso-Lateral Row','Seal Row','Kettlebell Gorilla Row','Kettlebell Renegade Rows','Band Row','Barbell Landmine Row','Meadows Row']},
   lats: {label:'Široký sval zádový', exercises:['Lat pulldown','Cable pullover','Close-grip lat pulldown','Pull-up','Assisted pull-up','Chin-up','Straight-Arm Lat Pulldown','Neutral-Grip Lat Pulldown','Single-Arm Lat Pulldown','Wide-Grip Lat Pulldown','Hammer Strength High Row','Machine Lat Pullover','Dumbbell Pullover','Barbell Pullover','Band Kneeling Pulldown']},
   front_delts: {label:'Přední ramena', exercises:['DB shoulder press','Shoulder press Prime','DB Arnold press','Barbell overhead press','Landmine press','Smith Machine Overhead Press','Cable Front Raise','Cable Overhead Press','Dumbbell Front Raise','Dumbbell Push Press','Dumbbell Single Arm Clean And Press','Kettlebell Clean & Press (Double)','Two-Arm Kettlebell Military Press','Band Overhead Press']},
-  side_delts: {label:'Boční ramena', exercises:['Standing multi flight','Cable lateral raise','DB lateral raise','Leaning Cable Lateral Raise','Band Lateral Raise']},
+  side_delts: {label:'Boční ramena', exercises:['Standing multi flight','Cable lateral raise','DB lateral raise','Leaning Cable Lateral Raise','Band Lateral Raise','Cable upright row','Dumbbell Upright Row','Barbell Upright Row']},
   rear_delts: {label:'Zadní ramena', exercises:['Rear delt pec deck','Cable rear delt fly','Face pull','DB rear delt fly','Band pull-apart','Cable External Rotation','Cable Single Arm Rear Delt Row','Cuban Press','Barbell Rear Delt Row','Prone Y-T Raises']},
   biceps: {label:'Biceps', exercises:['Cable curl','DB curl','Hammer curl','DB incline curl','Cable rope hammer curl','EZ bar curl','Preacher curl','Machine Preacher Curl','Bayesian Curl','Dumbbell Concentration Curl','Zottman Curl','Barbell Curl','Spider Curl','Band Curl']},
   triceps: {label:'Triceps', exercises:['Cable triceps extension','Cable overhead triceps extension','Cable triceps kickback','DB overhead triceps extension','EZ bar skull crusher','Dips','Assisted dip','Smith Machine Close Grip Bench Press','Cable Bar Pushdown','Cable Overhead Straight Bar Extensions','Cross-Body Cable Tricep Extension','Reverse-Grip Tricep Pushdown','Single-Arm Overhead Cable Extension','Machine Tricep Extension','Close-Grip Push-Up off a Dumbbell','Bench Dips','Diamond Push Ups','Barbell Close Grip Bench Press']},
@@ -732,7 +733,7 @@ export function validateFocusMuscles(value){
 // the exercises that load that part: the knee squats, lunges and presses, the
 // shoulder overhead and bench presses, the lower back deadlifts and good
 // mornings (Revize 2026-10-16, nález 24). "Nebolí" is no pain.
-const PAIN = /(?<!ne)bol[ií]|bolest|zran|nat[áa]h|podvrt|v[ýy]ron|natekl|hurt|pain|sore|injur|sprain|strain|ache/i;
+const PAIN = PAIN_WORDS;
 const PAIN_AREAS = [
   { part: /kolen|knee/i, exercises: /squat|lunge|leg press|step-up|leg extension/i, label: ['kolena', 'knee'] },
   { part: /ramen|shoulder/i, exercises: /shoulder press|overhead press|military press|push press|arnold|landmine press|bench press|incline press|floor press|chest flat press|chest press|standing dumbbell press|clean (?:&|and) press|cuban press|thruster|^dips$|assisted dip|bench dips/i, label: ['ramene', 'shoulder'] },
@@ -1270,11 +1271,11 @@ function choosePlan(context, options = {}) {
   };
 }
 // Three ramp-up sets before the first main lift; later main lifts need one.
-function warmupRows(exercise, workKg = null, first = true) {
+function warmupRows(exercise, workKg = null, first = true, step = null) {
   const def = EXERCISES[exercise]; if (!def?.warmup) return [];
   const reference = workKg ?? def.baseKg; if (reference == null) return [];
   const rawKg = Math.max(2, reference * 0.4), rawKg2 = Math.max(2, reference * 0.65), rawKg3 = Math.max(2, reference * 0.8);
-  const kg = resolveLoad(exercise, rawKg), kg2 = resolveLoad(exercise, rawKg2), kg3 = resolveLoad(exercise, rawKg3);
+  const kg = resolveLoad(exercise, rawKg, step), kg2 = resolveLoad(exercise, rawKg2, step), kg3 = resolveLoad(exercise, rawKg3, step);
   const execution = def.unilateral ? "UNILATERAL" : DEFAULT_EXECUTION, fmt = x => String(x).replace(".", ",");
   if (!first) return [["WARMUP", exercise, "1", fmt(kg2), "5", "", "", "", "FALSE", "[WARMUP]", "🎥 Video", "", execution]];
   return [["WARMUP", exercise, "1", fmt(kg), "8", "", "", "", "FALSE", "[WARMUP]", "🎥 Video", "", execution], ["WARMUP", exercise, "2", fmt(kg2), "5", "", "", "", "FALSE", "[WARMUP]", "", "", execution], ["WARMUP", exercise, "3", fmt(kg3), "3", "", "", "", "FALSE", "[WARMUP]", "", "", execution]];
@@ -1454,7 +1455,7 @@ export function templateStrengthPlan(context, template, options = {}) {
     const work = workRows(exercise, historyMap, factor, false, new Map(), 1, 10, sex, context.date, firstSession, reps, 'auto', '', context?.trainingSetup?.dumbbellWeights);
     const first = work.rows[0];
     const own = Array.from({ length: sets }, (_, i) => { const r = first.slice(); r[2] = String(i + 1); r[4] = CORE_PATTERNS.has(EXERCISES[exercise].pattern) ? first[4] : reps; r[10] = i === 0 ? first[10] : ""; return r; });
-    const warmup = warmupRows(exercise, work.kg, !warmedUp);
+    const warmup = warmupRows(exercise, work.kg, !warmedUp, work.estimate?.step);
     if (warmup.length) warmedUp = true;
     rows.push(...warmup, ...own);
     loadEstimates.push({ exercise, sets, ...work.estimate });
@@ -1643,7 +1644,7 @@ export function generateStrengthPlan(context, options = {}) {
       const cap = earlier.kg == null ? null : chosen.lighterDay ? earlier.kg * 0.9 : earlier.kg;
       for (const row of work.rows) {
         const kg = Number(String(row[3]).replace(",", "."));
-        if (cap != null && row[3] !== "" && Number.isFinite(kg) && kg > cap) row[3] = kgText(resolveLoad(exercise, cap));
+        if (cap != null && row[3] !== "" && Number.isFinite(kg) && kg > cap) row[3] = kgText(resolveLoad(exercise, cap, work.estimate?.step));
         if (earlier.reps) row[4] = earlier.reps;
       }
       if (cap != null && work.kg != null) work.kg = Math.min(work.kg, cap);
@@ -1654,7 +1655,7 @@ export function generateStrengthPlan(context, options = {}) {
     if(deload)for(const row of work.rows)row[9]=row[9].replace(/ – (?:cíl: o opakování víc|goal: one more rep)/,'')+(deload.illness?L('; po nemoci: stejná váha, 3 opakování v rezervě','; after being ill: same weight, 3 reps in reserve'):L('; odlehčený týden: stejná váha, 3 opakování v rezervě','; deload week: same weight, 3 reps in reserve'));
     if(moderated)for(const row of work.rows)row[9]+=explicitLegs?L('; blízko je náročný trénink: nech si 2–3 opakování v rezervě (RPE 7)','; a hard session is coming up: keep 2–3 reps in reserve (RPE 7)'):L('; nohy po vytrvalostním tréninku: nech si 2–3 opakování v rezervě (RPE 7)','; legs after endurance training: keep 2–3 reps in reserve (RPE 7)');
     if(stallSwaps[exercise])for(const row of work.rows)row[9]+=L('; místo '+stallSwaps[exercise]+': 3 tréninky bez posunu, nový podnět (k původnímu cviku se vrátíme)','; instead of '+stallSwaps[exercise]+': 3 sessions without progress, a new stimulus (we\'ll return to the original exercise)');
-    const warmup = warmupRows(exercise, work.kg, !warmedUp);
+    const warmup = warmupRows(exercise, work.kg, !warmedUp, work.estimate?.step);
     if (warmup.length) warmedUp = true;
     rows.push(...warmup, ...work.rows);
     loadEstimates.push({ exercise, sets: work.sets, reducedDose, moderated, ...work.estimate });

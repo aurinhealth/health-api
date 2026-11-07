@@ -4,6 +4,7 @@ import { ATHLETE_STATUSES } from './training-status.js';
 import { validDay } from './training-availability.js';
 import { L, plural } from './lang.js';
 import { localToday } from "./user-time.js";
+import { PASSING_WORDS } from './pain-words.js';
 import { MEMORY_RULE } from './private/athlete-state.js';
 export { MEMORY_RULE };
 export { ATHLETE_STATUSES } from './training-status.js';
@@ -95,7 +96,7 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
 // athlete to delete it.
 const CHECK_DAYS = 14;
 const shiftDate = (day, days) => new Date(Date.parse(day + 'T12:00:00Z') + days * 864e5).toISOString().slice(0, 10);
-const PASSING = /bol[ií]|bolest|zran|natáh|natah|podvrt|výron|vyron|nateklé|natekl|nemoc|nachlaz|chřip|chrip|těhot|tehot|hurt|pain|sore|injur|sprain|strain|ill\b|sick|cold\b|flu\b|pregnan/i;
+const PASSING = PASSING_WORDS;
 const memoryMeta = (text, date) => ({ at: date, check: PASSING.test(text) ? shiftDate(date, CHECK_DAYS) : null });
 // What the coach remembers, in four groups (the WHOOP-like sections of the list).
 export const MEMORY_GROUPS = ['goals', 'training', 'health', 'life'];

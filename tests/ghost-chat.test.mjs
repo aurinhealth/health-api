@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { appendChatTurn, appendChatTurnIds, openChatForAnswer, listChats, readChat, deleteChat, dropIdleGhostChats, ensureAssistantChats } from '../src/assistant-chats.js';
+import { appendChatTurn, appendChatTurnIds, openChatForAnswer, listChats, searchChats, readChat, deleteChat, dropIdleGhostChats, ensureAssistantChats } from '../src/assistant-chats.js';
 import { writeDayNote, earlierToday, ensureCoachNotes, ensureNoteQueue } from '../src/coach-notes.js';
 import { ensureCoachInboxTable, recentCoachProposals } from '../src/coach-inbox.js';
 import { scopedDb } from '../src/tenancy.js';
@@ -21,6 +21,7 @@ test('a ghost chat is kept for its answers but never listed, and a gone one is n
   assert.equal(await appendChatTurn(db, ghost, 'A víno?', 'Podobně.', { ghost: true }), ghost);
   assert.equal((await readChat(db, ghost)).messages.length, 4);
   assert.deepEqual((await listChats(db)).map(c => c.id), [normal]);
+  assert.deepEqual(await searchChats(db, 'pivo'), []);
   // A normal chat never turns into a ghost one, and a ghost one left while the answer was written stays gone.
   assert.deepEqual(await appendChatTurnIds(db, normal, 'X', 'Y', { ghost: true }), { chatId: null, messageId: null });
   await deleteChat(db, ghost);

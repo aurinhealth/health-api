@@ -209,6 +209,14 @@ final class APIClient: @unchecked Sendable {
         return r.chats ?? []
     }
 
+    /// A word in the athlete's own chats; POST keeps it out of the request logs.
+    func searchChats(_ query: String) async throws -> [ChatSearchResult] {
+        struct Body: Encodable { let q: String }
+        struct Response: Decodable { let results: [ChatSearchResult]? }
+        let r: Response = try await send("/app/api/assistant/chats/search", method: "POST", body: Body(q: query))
+        return r.results ?? []
+    }
+
     func chat(id: Int) async throws -> ChatDetail {
         struct Response: Decodable { let chat: ChatDetail }
         let r: Response = try await get("/app/api/assistant/chats/\(id)")
