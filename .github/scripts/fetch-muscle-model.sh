@@ -23,6 +23,14 @@ trap 'rm -rf "$tmp"' EXIT
 AWS_ACCESS_KEY_ID="$MUSCLE_MODEL_R2_KEY_ID" AWS_SECRET_ACCESS_KEY="$MUSCLE_MODEL_R2_SECRET" AWS_DEFAULT_REGION=auto \
   aws s3 cp --only-show-errors "s3://aurin-food-catalog/$key" "$tmp/model.gz" \
   --endpoint-url "https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com"
+# Only the file the owner uploaded: its SHA-256 is pinned in src/muscle-model.js (security audit
+# 2026-11-04, point 37), since the food catalogue's R2 key can write this bucket too.
+pinned="$(grep -o 'MUSCLE_MODEL_SHA256 = { 1: "[0-9a-f]\{64\}"' "$(git rev-parse --show-toplevel)/src/muscle-model.js" | grep -o '[0-9a-f]\{64\}')"
+actual="$(shasum -a 256 "$tmp/model.gz" | cut -d' ' -f1)"
+if [ -z "$pinned" ] || [ "$actual" != "$pinned" ]; then
+  echo "::error::$key has SHA-256 $actual, not the one pinned in src/muscle-model.js"
+  exit 1
+fi
 gunzip -c "$tmp/model.gz" > "$tmp/model.bin"
 # The format build-muscle-model.mjs writes starts with AURM.
 if [ "$(head -c 4 "$tmp/model.bin")" != "AURM" ]; then
