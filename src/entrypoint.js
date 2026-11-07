@@ -79,7 +79,7 @@ import { saveCalendarFree, clearCalendarFree } from './calendar-free.js';
 import { getCheckin, readinessCheckin, saveCheckin } from './morning-checkin.js';
 import { getChecks, upcomingTest } from './threshold-check.js';
 import { saveSportChoice, sportExclusion, suggestedSports } from './sport-choice.js';
-import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories, healthMemorySince } from './athlete-state.js';
+import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories, healthMemorySince, statusCheck } from './athlete-state.js';
 import { recentNotes, earlierToday, chatSummary, coachNoteDays, queueDayNote, summarizeChatStart, forgetNote, usersWithNotesDue, runCoachNotes } from './coach-notes.js';
 import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, planSessionsLeft, proposalView, phaseLabel, planWeek, planWorkoutId, planChanges, planRedMorning, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
@@ -111,7 +111,7 @@ import { reviewRefusal, isReviewAccount } from "./app-review.js";
 import { updateFitnessEstimate } from "./own-vo2max-store.js";
 import { ensureReviewSample } from "./review-sample.js";
 import { handleNativeAppleLogin, forgetUsedAppleTokens } from "./apple-login.js";
-import { chatContext, appendChatTurnIds, openChatForAnswer, dropEmptyChat, listChats, searchChats, readChat, deleteChat, startChatWithCoach, ownedChat, saveAnswerFeedback } from "./assistant-chats.js";
+import { ensureAssistantChats, chatContext, appendChatTurnIds, openChatForAnswer, dropEmptyChat, listChats, searchChats, readChat, deleteChat, startChatWithCoach, ownedChat, saveAnswerFeedback } from "./assistant-chats.js";
 import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedReplyPush, foreignPushReply } from "./coach-push-reply.js";
 import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
@@ -1557,7 +1557,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const swap=swapOffer(state,date);
       // "Is this still true?" about a pain or an illness comes right after the push's swap, so an
       // old knee pain does not wait behind every other card (audit 4.6).
-      const advice=(swap&&state.nudge.date!==date?swap:null)||memoryCheck(state,date)||easier||swap||(verdict==='hard'?null:proactiveAdvice({...inputs,state,readiness}));
+      const advice=(swap&&state.nudge.date!==date?swap:null)||statusCheck(state,date)||memoryCheck(state,date)||easier||swap||(verdict==='hard'?null:proactiveAdvice({...inputs,state,readiness}));
       return Response.json({status:'ok',state,advice},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
@@ -2307,14 +2307,18 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     // so the answer keeps to it; it is a setting with Undo, not a memory.
     // With AI the coach itself saves what to remember (memory.save); the
     // sentence rule is left for the answer without AI.
-    const noSport=sportExclusion(message),athleteState=await getAthleteState(env.DB);
-    const memory=noSport||env.OPENAI_API_KEY||athleteState.memoryOff?null:explicitPreference(message);
+    // A ghost chat (Dočasný chat, assistant-chats.js): the coach reads what he
+    // knows, but nothing of the chat is kept: no memory, note, summary or sport
+    // setting. The chat decides, so a ghost chat stays one whatever the request says.
+    const ghost=body.ghost===true||Boolean(body.chatId&&(await ensureAssistantChats(env.DB).then(()=>ownedChat(env.DB,body.chatId)).catch(()=>null))?.ghost);
+    const noSport=ghost?null:sportExclusion(message),athleteState=await getAthleteState(env.DB);
+    const memory=noSport||ghost||env.OPENAI_API_KEY||athleteState.memoryOff?null:explicitPreference(message);
     const saveMemory=()=>memory?updateAthleteState(env.DB,{memory}).catch(error=>{console.error('Preference save failed',error.message);}):null;
     // Each answer belongs to a chat; without a known chat id a new chat starts.
     // The answer's id comes back as messageId: copy and the thumbs under it point to it.
     // A streamed answer knows its chat before the model runs (reply below).
     let answerChat=body.chatId;
-    const remember=async answer=>appendChatTurnIds(env.DB,answerChat,saved,answer).catch(error=>{console.error('Chat save failed',error.message);return {chatId:null,messageId:null};});
+    const remember=async answer=>appendChatTurnIds(env.DB,answerChat,saved,answer,{ghost}).catch(error=>{console.error('Chat save failed',error.message);return {chatId:null,messageId:null};});
     if(!env.OPENAI_API_KEY){if(!memory)return Response.json({status:'unavailable',message:L('AI teď není dostupná. Zkus to později.', 'AI isn\'t available right now. Try again later.')},{status:503});await saveMemory();return Response.json({status:'ok',answer:L('Zapamatoval jsem si: ','I\'ll remember: ')+memory,memorySaved:memory,...await remember('Zapamatoval jsem si: '+memory)});}
     // "Měl jsem snickers": a draft of food entries to confirm, not a coach answer.
     if(body.mode!=='coach'&&!image&&isFoodLogMessage(message)){
@@ -2330,13 +2334,16 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     // What the coach knows beyond this chat's last 60 messages (coach-notes.js):
     // the older part of a long chat, the notes of the last days, the end of
     // another chat today and what no longer holds. Nothing of it with memory off.
-    const remembers=!athleteState.memoryOff;
+    const remembers=!athleteState.memoryOff,keeps=remembers&&!ghost;
     const [olderPart,recentChats,otherToday]=await Promise.all([
       chat.more?chatSummary(env.DB,body.chatId).catch(()=>null):null,
       remembers?recentNotes(env.DB,{today:date,days:coachNoteDays(env)}).catch(()=>[]):[],
       remembers?earlierToday(env.DB,body.chatId,{today:date}).catch(()=>[]):[]
     ]);
     const healthSince=healthMemorySince(athleteState);
+    // Nemoc or Zranění for days without an end: the coach asks once a day, in the day's first chat (point 3).
+    // Not in a ghost chat: the answer there would not be kept, so the next chat would ask again.
+    const askIfBetter=!ghost&&!!statusCheck(athleteState,date)&&!conversation.length&&!otherToday.length;
     const memoryCtx={...(olderPart?{chatSoFar:olderPart.text}:{}),...(recentChats.length?{recentChats}:{}),...(otherToday.length?{earlierToday:otherToday}:{}),...(remembers&&athleteState.pastMemories?.length?{pastMemory:athleteState.pastMemories.map(p=>p.text)}:{}),...(healthSince.length?{healthMemorySince:healthSince}:{})};
     // A photo needs the full context: a plan on it becomes workout cards.
     const asked=assistantTask(message,body.appContext?appContext:null,conversation),task=image&&['simple','quick','adjustment'].includes(asked)?'planning':asked,started=Date.now();
@@ -2391,7 +2398,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if(reviews.length)coachCtx.completedRideReviews=reviews;
         if(blockHistory)Object.assign(coachCtx,{blockHistory,blockFitness:compactWellness(inputs.fitness.wellness,{date,days:90})||[],historyPeriod:{from:shiftDate(date,-84),to:date,source:'cached activities; missing records remain unknown'}});
       }else focus=await dashboardProfile(env).then(profile=>athleteFocus(profile,date)).catch(()=>null);
-      Object.assign(coachCtx,{userInitiated:true,...(focus?.cannotSwim100m?{cannotSwim100m:true}:{}),athleteState:athleteState.status,statusNote:athleteState.note,statusUntil:athleteState.statusUntil,...(athleteState.cancelled?.length?{cancelledSessions:athleteState.cancelled}:{}),preferenceMemory:memory?[...new Set([...usedMemories(athleteState),memory])]:usedMemories(athleteState),...memoryCtx,...(sportChanges?{sportsToSuggestChange:{turnedOff:noSport}}:{}),...(coachCtx.focus?{}:{focus}),conversation});
+      Object.assign(coachCtx,{userInitiated:true,...(focus?.cannotSwim100m?{cannotSwim100m:true}:{}),athleteState:athleteState.status,statusNote:athleteState.note,statusUntil:athleteState.statusUntil,...(askIfBetter?{askIfBetter:true}:{}),...(athleteState.cancelled?.length?{cancelledSessions:athleteState.cancelled}:{}),preferenceMemory:memory?[...new Set([...usedMemories(athleteState),memory])]:usedMemories(athleteState),...memoryCtx,...(sportChanges?{sportsToSuggestChange:{turnedOff:noSport}}:{}),...(ghost?{ghostChat:true}:{}),...(coachCtx.focus?{}:{focus}),conversation});
       const sport=engineSport(focus,selected?.appContext||appContext,message);
       // The library offer is for the day, length and kind the message asks
       // for (chat-ask.js; Revize doporučování tréninků 2026-10-16, nález 9).
@@ -2429,21 +2436,22 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // under the answer with Undo. What the answer says no longer holds is only
       // proposed: the athlete confirms it under the answer (Forget / Update), so
       // text from the data the coach reads cannot quietly change the memory.
-      const saves=remembers&&!noSport?memorySaves(answer.memory,athleteState.memories):[];
+      const saves=keeps&&!noSport?memorySaves(answer.memory,athleteState.memories):[];
       if(saves.length)await updateAthleteState(env.DB,{saves}).catch(error=>{console.error('Coach memory save failed',error.message);saves.length=0;});
-      const changes=remembers?memoryChanges(answer.memory,athleteState.memories):{forgotten:[],updated:[]};
+      const changes=keeps?memoryChanges(answer.memory,athleteState.memories):{forgotten:[],updated:[]};
       // The chat keeps a one-line summary of the proposals, so later turns can refer to them.
       const note=actionsNote(actions),{chatId,messageId}=await remember(answer.answer+(note?'\n\n'+note:''));
       // The day gets its note after midnight; a long chat's older part its summary, after the answer.
-      if(remembers)await queueDayNote(env.DB,date).catch(error=>console.error('Day note not queued',error.message));
-      if(chat.more&&chatId&&chat.firstId)ctx.waitUntil(summarizeChatStart(env,chatId,chat.firstId).catch(error=>console.error('Chat summary failed',error.message)));
+      if(remembers||ghost)await queueDayNote(env.DB,date).catch(error=>console.error('Day note not queued',error.message));
+      if(chat.more&&chatId&&chat.firstId&&!ghost)ctx.waitUntil(summarizeChatStart(env,chatId,chat.firstId).catch(error=>console.error('Chat summary failed',error.message)));
       const coachAllowance=await recordCoachMessage(env,chatId,claim).catch(error=>{console.error('Coach message not counted',error.message);return null;});
       // Proposals from earlier days no longer show up as open.
       await env.DB.prepare("UPDATE coach_inbox SET status='expired' WHERE user_id=? AND status='draft' AND created_at<? AND draft_json LIKE '%\"coach_action\"%'").bind(env.USER_ID,dayStartSql(date)).run().catch(error=>console.error('Draft expiry failed',error.message));
       // A workout card keeps the context its quick changes check (coach-quick-change.js).
       const quick=actions.some(a=>a.type==='workout')?quickSnapshot(coachCtx,date):null;
       // Each proposal points to the answer it came with (messageId), so a reopened chat shows it there.
-      for(const action of actions){const own=action.type==='workout'?quick:null,draft={kind:'coach_action',action,chatId,...(messageId?{messageId}:{}),...(own?{quick:own}:{})};const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling',message,JSON.stringify(draft)).run();const options=own?quickOptions(action,own):null;proposals.push({...action,draftId:ins.meta?.last_row_id,...(options?{quick:options}:{})});}
+      // A ghost chat left while its answer was written keeps no proposal either.
+      for(const action of ghost&&!chatId?[]:actions){const own=action.type==='workout'?quick:null,draft={kind:'coach_action',action,chatId,...(messageId?{messageId}:{}),...(own?{quick:own}:{}),...(ghost?{ghost:true}:{})};const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling',message,JSON.stringify(draft)).run();const options=own?quickOptions(action,own):null;proposals.push({...action,draftId:ins.meta?.last_row_id,...(options?{quick:options}:{})});}
       delete answer.memory;
       return {...answer,chatId,messageId,actions:proposals,coachAllowance,memorySaved:memory||saves[0]?.text||null,memoryChanges:{saved:memory||saves[0]?.text||null,saves:memory?[{text:memory,group:null}]:saves,forgotten:[],updated:[]},memoryProposals:changes,...(sportChanges?{sportChanges}:{}),costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
     };
@@ -2457,7 +2465,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(noSport)sportChanges=await saveSportChoice(env.DB,env.USER_ID,noSport,false).then(async r=>{if(!r.changed)return null;await bumpCacheVersion(env.DB);return {removed:[noSport]};}).catch(error=>{console.error('Sport choice failed',error.message);return null;});
       // The app learns the chat first: when the connection drops, the answer
       // the server finishes is loaded from it instead of asked (and counted) again.
-      if(onChat){const opened=await openChatForAnswer(env.DB,body.chatId,saved).catch(error=>{console.error('Chat not opened',error.message);return null;});if(opened){answerChat=opened.id;if(opened.created)newChat=opened.id;onChat(opened.id);}}
+      if(onChat){const opened=await openChatForAnswer(env.DB,body.chatId,saved,{ghost}).catch(error=>{console.error('Chat not opened',error.message);return null;});if(opened){answerChat=opened.id;if(opened.created)newChat=opened.id;onChat(opened.id);}}
       return answerMessage(show,onProgress).catch(async error=>{if(newChat)await dropEmptyChat(env.DB,newChat).catch(e=>console.error('Empty chat not dropped',e.message));if(!shown)await releaseCoachMessage(env,claim).catch(e=>console.error('Coach message not released',e.message));if(sportChanges&&!shown)await saveSportChoice(env.DB,env.USER_ID,noSport,true).then(()=>bumpCacheVersion(env.DB)).catch(e=>console.error('Sport choice not undone',e.message));throw error;});
     };
     if(body.stream)return assistantStreamResponse(reply,{waitUntil:promise=>ctx.waitUntil(promise)});
@@ -3384,9 +3392,10 @@ async function adjustCoachDraft(env,ctx,row,draft,body){
   if(updated.meta?.changes!==1)throw new Error(L('Návrh už byl vyřízen.', 'The proposal has already been handled.'));
   // Earlier changes of this month's cards, for "the same choice a third time".
   let memory=null;
-  if(chip!=='undo'&&chip!=='day'){
+  // A ghost chat's card (assistant-chats.js) teaches the coach nothing, and is not counted.
+  if(chip!=='undo'&&chip!=='day'&&!draft.ghost){
     const rows=await env.DB.prepare("SELECT id,draft_json FROM coach_inbox WHERE user_id=? AND id<>? AND created_at>=datetime('now','-30 days') AND draft_json LIKE '%\"quickChanges\"%'").bind(env.USER_ID,row.id).all().catch(()=>({results:[]}));
-    const earlier=(rows.results||[]).flatMap(r=>{try{return JSON.parse(r.draft_json).quickChanges||[];}catch{return [];}});
+    const earlier=(rows.results||[]).flatMap(r=>{try{const d=JSON.parse(r.draft_json);return d.ghost?[]:d.quickChanges||[];}catch{return [];}});
     const state=await getAthleteState(env.DB).catch(()=>({memories:[]}));
     memory=state.memoryOff?null:quickMemory(chip,next.date,[...earlier,...history],state.memories||[]);
     if(memory)await updateAthleteState(env.DB,{memory}).catch(error=>{console.error('Quick change memory failed',error.message);memory=null;});

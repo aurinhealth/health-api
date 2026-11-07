@@ -767,9 +767,23 @@ enum GymText {
         W.number(value, digits: value.rounded() == value ? 0 : 1)
     }
 
-    /// "77,5 kg" or "171 lb", by Settings → Units on the iPhone.
-    static func weight(_ kg: Double) -> String {
-        Self.kg(W.weight(kg)) + " " + W.weightUnit
+    /// "77,5 kg" or "171 lb", by Settings → Units on the iPhone, or "75 lb"
+    /// on a machine in pounds while the app is in kilos.
+    static func weight(_ kg: Double, machineLb: Bool = false) -> String {
+        Self.kg(shown(kg, machineLb: machineLb)) + " " + (machineLb ? "lb" : W.weightUnit)
+    }
+
+    /// kg as the tiles show it. A machine in pounds (LiftUnits on the iPhone):
+    /// pounds typed come back as typed, the plan's kilos to the nearest 5 lb, as on the iPhone.
+    static func shown(_ kg: Double, machineLb: Bool) -> Double {
+        guard machineLb else { return W.weight(kg) }
+        let pounds = kg * 2.2046226218, half = (pounds * 2).rounded() / 2
+        return abs(pounds - half) < 0.05 ? half : (pounds / 5).rounded() * 5
+    }
+
+    /// What the tiles show back in kg.
+    static func kgOf(_ shown: Double, machineLb: Bool) -> Double {
+        machineLb ? shown / 2.2046226218 : W.kg(shown)
     }
 
     /// 2140 kg as "2,1 t", or "4,718 lb".
@@ -779,17 +793,17 @@ enum GymText {
     }
 
     /// "97,5 × 6", "12 op." with body weight: a set from the history, in the athlete's units.
-    static func lift(_ set: WatchGym.Last) -> String {
+    static func lift(_ set: WatchGym.Last, machineLb: Bool = false) -> String {
         guard let kg = set.kg, kg > 0 else { return W.tr("\(set.reps) op.", "\(set.reps) reps") }
-        return Self.kg(W.weight(kg)) + " × \(set.reps)"
+        return Self.kg(shown(kg, machineLb: machineLb)) + " × \(set.reps)"
     }
 
     /// Under the exercise's name: "Minule 97,5 × 6 · cíl: těžká" (Training
     /// mode's "Minule" and the set's planned letter); nil with neither.
     /// "Last time 97.5 × 6"; the aim is the letter's pill beside the set (watch audit B5).
-    static func info(_ lift: WatchGym.Lift) -> String? {
+    static func info(_ lift: WatchGym.Lift, machineLb: Bool = false) -> String? {
         guard lift.work, let last = lift.last else { return nil }
-        return W.tr("Minule ", "Last time ") + Self.lift(last)
+        return W.tr("Minule ", "Last time ") + Self.lift(last, machineLb: machineLb)
     }
 
     /// The planned letter in words (GymIntensity.name on the iPhone); none for a warm-up or drop set.

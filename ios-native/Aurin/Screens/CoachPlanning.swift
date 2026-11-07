@@ -7,7 +7,7 @@ import SwiftUI
 
 /// The coach speaks first when several signs say the body needs a break, when
 /// several night values are outside the usual range (an easier day fits), or
-/// when a pain it remembers may have passed. A thing in the coach's card on
+/// when a pain it remembers may have passed, or when Nemoc or Zranění has been on for days. A thing in the coach's card on
 /// Today (CoachThingsCard).
 struct CoachCheckInCard: View {
     @Environment(AppModel.self) private var model
@@ -61,6 +61,15 @@ struct CoachCheckInCard: View {
                     if let swapError {
                         Text(swapError).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
                     }
+                } else if advice.kind == "status_check" {
+                    // Nemoc or Zranění for days without an end day: back to Active, or ask again in a few days.
+                    HStack(spacing: 10) {
+                        PrimaryButton(title: L10n.tr("Už jsem v pořádku")) { Task { await backToActive() } }
+                        SecondaryButton(title: "Ještě ne") { Task { await dismiss(advice) } }
+                    }
+                    if let swapError {
+                        Text(swapError).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
+                    }
                 } else if advice.kind == "memory_check", let memory = advice.memory {
                     // A pain or an illness the coach remembers: still true, or forget it.
                     HStack(spacing: 10) {
@@ -94,6 +103,17 @@ struct CoachCheckInCard: View {
     private func settle(_ memory: String, keep: Bool) async {
         withAnimation { things.advice = nil }
         if keep { _ = try? await model.api.keepMemory(memory) } else { _ = try? await model.api.forgetMemory(memory, toPast: true) }
+    }
+
+    /// "Už jsem v pořádku": Active again; the coach offers the cancelled sessions back.
+    private func backToActive() async {
+        swapError = nil
+        do {
+            try await model.setAthleteStatus("active", until: nil, note: nil)
+            withAnimation { things.advice = nil }
+        } catch {
+            swapError = error.localizedDescription
+        }
     }
 
     private func dismiss(_ advice: CoachCheckIn.Advice) async {

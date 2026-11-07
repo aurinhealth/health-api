@@ -18,6 +18,8 @@ struct FoodWeek: Decodable, Equatable {
     var over: Double? = nil
     /// What is left shared by today and the days ahead.
     var perDay: Double? = nil
+    /// What today can still eat of that share; 0 once today is past it.
+    var todayLeft: Double? = nil
     /// Days gone by with nothing logged: left out of what is left, not eaten back.
     var unlogged: Int? = nil
 }
@@ -87,7 +89,15 @@ struct FoodWeekWidget: View {
             return Text(L10n.f("O %@ kcal víc", Fmt.int(over))).foregroundColor(Palette.red) + Text(verbatim: " " + L10n.tr("než cíl týdne"))
         }
         var left = Text(L10n.f("Zbývá %@ kcal", Fmt.int(week.left ?? 0))).foregroundColor(Palette.ink)
-        if let perDay = week.perDay { left = left + Text(verbatim: " · " + L10n.f("zhruba %@ na den", Fmt.int(perDay))) }
+        if let perDay = week.perDay {
+            left = left + Text(verbatim: " · " + L10n.f("zhruba %@ na den", Fmt.int(perDay)))
+            // Today's part of it: "1 150 kcal more today", or past it the rest is the days ahead's.
+            if let today = week.todayLeft {
+                left = left + Text(verbatim: "\n") + (today > 0
+                    ? Text(L10n.f("Dnes ještě %@ kcal", Fmt.int(today))).foregroundColor(Palette.ink) + Text(verbatim: L10n.f(", pak zhruba %@ na den", Fmt.int(perDay)))
+                    : Text(L10n.tr("Dnešek má svůj díl, zbytek patří dalším dnům")))
+            }
+        }
         guard let unlogged = week.unlogged, unlogged > 0 else { return left }
         return left + Text(verbatim: "\n" + L10n.plural("%lld nezapsaný den se nepočítá.", unlogged))
     }

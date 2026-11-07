@@ -122,6 +122,9 @@ final class AppModel {
     /// Bumped only when Today comes from the server (not by a waiting write over it),
     /// so Today's cards ask their own endpoints once per load.
     var todayRevision = 0
+    /// When the two revisions last moved: opening the app or pulling down with
+    /// the same Today answer moves them again only after ten minutes.
+    @ObservationIgnored var coachAskedAt = Date.distantPast
     /// The day the screens show: the chosen one, else today (so a load from
     /// 23:58 counts as stale after midnight).
     var shownDay: String { selectedDate ?? Self.localDate(Date()) }

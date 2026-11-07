@@ -13,6 +13,12 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same pull request cancels the older run: only the newest
+# commit's result matters.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest

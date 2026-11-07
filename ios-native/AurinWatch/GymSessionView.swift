@@ -16,6 +16,8 @@ struct GymSessionView: View {
     @State private var kg: Double = 0
     @State private var reps: Double = 8
     @State private var row: Int?
+    /// The set the crown's numbers were loaded for (Lift.fieldKey).
+    @State private var loaded: String?
     @State private var restEnd: Date?
     @State private var restTotal: Double = 90
     @State private var now = Date()
@@ -324,14 +326,14 @@ struct GymSessionView: View {
         .ignoresSafeArea(.container, edges: .bottom)
         // The crown starts on the weight, also when the tiles come back after a rest.
         .defaultFocus($crown, true)
-        .onAppear { load(lift) }
-        .onChange(of: lift.row) { _, _ in load(lift) }
+        .onAppear { load(lift, of: ex.name, in: gym) }
+        .onChange(of: lift.fieldKey(in: ex.name)) { _, _ in load(lift, of: ex.name, in: gym) }
         // The weight and reps the same on the iPhone at once, both ways.
         .onChange(of: kg) { _, _ in sendDraft(gym) }
         .onChange(of: reps) { _, _ in sendDraft(gym) }
         .onChange(of: store.phoneDraft) { _, draft in
             guard let draft, draft.date == gym.date, draft.row == row else { return }
-            let shown = W.weight(draft.kg)
+            let shown = GymText.shown(draft.kg, machineLb: gym.machineLb(row: row))
             if abs(shown - kg) >= 0.05 { kg = shown }
             if Double(draft.reps) != reps { reps = Double(draft.reps) }
         }
@@ -366,7 +368,7 @@ struct GymSessionView: View {
             .accessibilityHint(W.tr("Technika a poznámka", "Technique and note"))
             // "Last time 97.5 × 6 · aim: hard" (mockup "u cviku" 4); the tightest
             // fit keeps it only without the superset's line above.
-            if let line = GymText.info(lift), fit != .tight || supersetLine(gym, lift, e) == nil {
+            if let line = GymText.info(lift, machineLb: gym.machineLb(row: lift.row)), fit != .tight || supersetLine(gym, lift, e) == nil {
                 Text(line).watchFont(12).foregroundStyle(W.muted)
                     .lineLimit(1).minimumScaleFactor(0.7)
             }
@@ -407,16 +409,17 @@ struct GymSessionView: View {
             // moved the crown off the weight.
             // Detents: the value moves only by whole steps (0.5 kg or 1 lb, one rep),
             // never through the in-between values the plain rotation shows.
-            // `kg` holds the weight as shown, in pounds with imperial units.
+            // `kg` holds the weight as shown, in pounds with imperial units or on a machine in lb.
+            let lb = gym.machineLb(row: lift.row)
             HStack(spacing: 6) {
-                tile(GymText.kg(kg), unit: W.weightUnit, field: .kg, value: $kg, step: W.weightStep, top: Self.topKg, small: fit.small)
+                tile(GymText.kg(kg), unit: lb ? "lb" : W.weightUnit, field: .kg, value: $kg, step: lb ? 1 : W.weightStep, top: Self.topKg(lb), small: fit.small)
                 tile("\(Int(reps))", unit: Self.repsUnit(lift.plannedReps), field: .reps, value: $reps, step: 1, top: 100, small: fit.small)
             }
             .focusable(true)
             .focused($crown)
             .focusEffectDisabled()
-            .digitalCrownRotation(detent: crownValue, from: 0, through: selected == .kg ? Self.topKg : 100,
-                                  by: selected == .kg ? W.weightStep : 1, sensitivity: selected == .kg ? .medium : .low,
+            .digitalCrownRotation(detent: crownValue, from: 0, through: selected == .kg ? Self.topKg(lb) : 100,
+                                  by: selected == .kg ? (lb ? 1 : W.weightStep) : 1, sensitivity: selected == .kg ? .medium : .low,
                                   isContinuous: false, isHapticFeedbackEnabled: true)
             Button {
                 done(lift, in: gym)
@@ -541,7 +544,7 @@ struct GymSessionView: View {
         store.change(.addSet, exercise: e)
     }
 
-    private static var topKg: Double { W.imperial ? 1100 : 500 }
+    private static func topKg(_ machineLb: Bool) -> Double { W.imperial || machineLb ? 1100 : 500 }
 
     /// "reps", or with the plan's range as the iPhone shows it: "8–12 reps".
     static func repsUnit(_ planned: String?) -> String {
@@ -659,13 +662,14 @@ struct GymSessionView: View {
     /// The set at hand as it is now, to the iPhone; not what came from it.
     private func sendDraft(_ gym: WatchGym) {
         guard let row else { return }
-        store.sendDraft(WatchGym.Draft(date: gym.date, row: row, kg: W.kg(kg), reps: Int(reps)))
+        store.sendDraft(WatchGym.Draft(date: gym.date, row: row, kg: GymText.kgOf(kg, machineLb: gym.machineLb(row: row)), reps: Int(reps)))
     }
 
-    private func load(_ lift: WatchGym.Lift) {
-        guard row != lift.row else { return }
+    private func load(_ lift: WatchGym.Lift, of exercise: String, in gym: WatchGym) {
+        guard loaded != lift.fieldKey(in: exercise) else { return }
+        loaded = lift.fieldKey(in: exercise)
         row = lift.row
-        kg = W.weight(lift.kg ?? 0)
+        kg = GymText.shown(lift.kg ?? 0, machineLb: gym.machineLb(row: lift.row))
         reps = Double(lift.reps ?? 8)
         // Each new set starts on the weight.
         selected = .kg
@@ -688,8 +692,9 @@ struct GymSessionView: View {
     private func done(_ lift: WatchGym.Lift, in gym: WatchGym) {
         let next = gym.next(after: lift.row)
         picked = nil
-        store.complete(row: lift.row, kg: W.kg(kg), reps: Int(reps))
-        rated = lift.work ? Rated(row: lift.row, kg: W.kg(kg), before: lift.intensity, sameExercise: next.map { !$0.newExercise } ?? false) : nil
+        let done = GymText.kgOf(kg, machineLb: gym.machineLb(row: lift.row))
+        store.complete(row: lift.row, kg: done, reps: Int(reps))
+        rated = lift.work ? Rated(row: lift.row, kg: done, before: lift.intensity, sameExercise: next.map { !$0.newExercise } ?? false) : nil
         WKInterfaceDevice.current().play(.success)
         guard let next else {
             // The cardio or stretching after the exercises first, then the summary.
@@ -776,7 +781,7 @@ struct GymSessionView: View {
                         VStack(alignment: .leading, spacing: 0) {
                             Text(W.tr("Další · ", "Next · ") + e.title).watchFont(12).foregroundStyle(W.secondary)
                                 .lineLimit(1).minimumScaleFactor(0.7)
-                            Text(GymText.weight(lift.kg ?? 0) + " × \(lift.reps ?? 0)").watchFont(15, .semibold)
+                            Text(GymText.weight(lift.kg ?? 0, machineLb: e.pounds == true) + " × \(lift.reps ?? 0)").watchFont(15, .semibold)
                                 .foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
                             liveLine
                             if let hint = hint {

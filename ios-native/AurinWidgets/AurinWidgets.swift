@@ -428,8 +428,8 @@ struct FoodWaterWidgetView: View {
                 HStack(alignment: .top, spacing: 16) {
                     VStack(alignment: .leading, spacing: 6) {
                         kcal(s)
-                        macro("Bílkoviny", s.protein, s.proteinTarget, Self.protein)
                         macro("Sacharidy", s.carbs, s.carbsTarget, Self.carbs)
+                        macro("Bílkoviny", s.protein, s.proteinTarget, Self.protein)
                         macro("Tuky", s.fat, s.fatTarget, Self.fat)
                     }
                     VStack(alignment: .leading, spacing: 6) {
@@ -471,7 +471,12 @@ struct FoodWaterWidgetView: View {
                 Text(W.water(s.waterMl, s.waterTarget))
                     .font(.caption.weight(.semibold)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
             }
-            bar(s.waterMl, s.waterTarget, W.blue)
+            // Without a goal a full bar would read as "goal reached".
+            if s.waterTarget ?? 0 > 0 {
+                bar(s.waterMl, s.waterTarget, W.blue)
+            } else {
+                Text(L10n.tr("bez cíle")).font(.caption2).foregroundStyle(W.muted)
+            }
         }
     }
 

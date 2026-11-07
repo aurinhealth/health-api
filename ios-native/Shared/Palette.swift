@@ -63,6 +63,8 @@ enum Palette {
         static let health = Color(light: 0xE3E6F3, dark: 0x22253A)
         static let training = Color(light: 0xF3E3C6, dark: 0x3A2A17)
         static let food = Color(light: 0xF2E4D0, dark: 0x352818)
+        /// The coach's temporary chat (Dočasný chat), set apart from a normal one.
+        static let ghost = Color(light: 0xDCD9E6, dark: 0x2A2836)
     }
 }
 
