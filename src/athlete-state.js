@@ -5,6 +5,7 @@ import { validDay } from './training-availability.js';
 import { L, plural } from './lang.js';
 import { localToday } from "./user-time.js";
 import { PASSING_WORDS, checkDays } from './pain-words.js';
+import { knownStation } from './gym-equipment.js';
 import { MEMORY_RULE } from './private/athlete-state.js';
 export { MEMORY_RULE };
 export { ATHLETE_STATUSES } from './training-status.js';
@@ -47,7 +48,7 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
   // A memory added by hand ("memory", with its group) or saved by the coach from
   // the athlete's own words ("saves", marked New in the list for a week).
   if (patch.memory) remember(state, clean(patch.memory), date, { group: patch.group });
-  for (const save of Array.isArray(patch.saves) ? patch.saves : []) remember(state, clean(save?.text), date, { group: save?.group, by: 'coach' });
+  for (const save of Array.isArray(patch.saves) ? patch.saves : []) remember(state, clean(save?.text), date, { group: save?.group, by: 'coach', station: save?.station, until: save?.until });
   if (patch.forget != null) {
     const meta = state.memoryMeta[patch.forget];
     // "No longer true" about a pain or an illness keeps it under Past: the coach
@@ -109,10 +110,14 @@ export const MEMORY_KEEP = 50;
 const PAST_KEEP = 20;
 // New and Updated show for a week after the coach saved or rewrote a memory itself.
 const BADGE_DAYS = 7;
-function remember(state, text, date, { group = null, by = null } = {}) {
+// A machine that does not work is left out until the day the athlete said, two
+// weeks without one; then the coach asks whether it still holds (point 11).
+const BROKEN_DAYS = 14;
+function remember(state, text, date, { group = null, by = null, station = null, until = null } = {}) {
   if (!text || state.memories.includes(text)) return;
   state.memories = [...state.memories, text].slice(-MEMORY_KEEP);
-  state.memoryMeta[text] = { ...memoryMeta(text, date), group: validGroup(group) || groupOf(text), ...(by === 'coach' ? { changed: 'new', changedAt: date } : {}) };
+  const broken = knownStation(station) ? { station, check: validDay(until) && until > date ? until : shiftDate(date, BROKEN_DAYS) } : {};
+  state.memoryMeta[text] = { ...memoryMeta(text, date), group: validGroup(group) || groupOf(text), ...broken, ...(by === 'coach' ? { changed: 'new', changedAt: date } : {}) };
   state.pastMemories = (state.pastMemories || []).filter(p => p.text !== text);
   for (const key of Object.keys(state.memoryMeta)) if (!state.memories.includes(key)) delete state.memoryMeta[key];
 }
@@ -146,6 +151,9 @@ export function statusCheck(state, date = localToday()) {
     reasons: [sick ? L(`Nemoc máš zapnutou ${days} ${days < 5 ? 'dny' : 'dní'}.`, `You have had Sick on for ${days} days.`) : L(`Zranění máš zapnuté ${days} dní.`, `You have had Injured on for ${days} days.`)],
     message: L('Až budeš zase v pořádku, vrátím tě k tréninku, první dny lehčeji.', 'Once you are fine again I will bring you back to training, easier for the first days.') };
 }
+// The stations that do not work now: the gym plan, swaps and the coach leave them out.
+export const brokenStations = (state, date = localToday()) => state?.memoryOff ? [] : [...new Set((state?.memories || [])
+  .map(text => state.memoryMeta?.[text]).filter(m => m?.station && m.check > date).map(m => m.station))];
 // The day each Health memory was told or last confirmed with "Still true",
 // so the coach sees a knee pain from six weeks ago as old (audit 4.6).
 export const healthMemorySince = state => state?.memoryOff ? [] : memoryList(state).filter(m => m.group === 'health')
@@ -167,7 +175,7 @@ export function memorySaves(proposed, memories = []) {
   const known = new Set(memories), saves = [];
   for (const s of Array.isArray(proposed?.save) ? proposed.save : []) {
     const text = clean(s?.text).slice(0, 200);
-    if (text && !known.has(text) && !saves.some(x => x.text === text)) saves.push({ text, group: validGroup(s?.group) || 'training' });
+    if (text && !known.has(text) && !saves.some(x => x.text === text)) saves.push({ text, group: validGroup(s?.group) || 'training', ...(knownStation(s?.station) ? { station: s.station, until: validDay(s?.until) ? s.until : null } : {}) });
   }
   return saves.slice(0, 3);
 }

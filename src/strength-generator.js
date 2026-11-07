@@ -11,7 +11,7 @@ import { normalizeExerciseName } from "./strength-normalization.js";
 import { painAreas } from './pain-words.js';
 import { withoutDisliked } from './exercise-feedback.js';
 import { isIntensity } from "./strength-context.js";
-import { availableAt as availableInGym, hasKnownStations, EXERCISE_STATIONS } from "./gym-equipment.js";
+import { availableAt as availableInGym, hasKnownStations, EXERCISE_STATIONS, stationExercises, stationName } from "./gym-equipment.js";
 // A catalog exercise of any gym the app knows (Kutná Hora or the usual
 // equipment of others); fitsEquipment then keeps what the athlete's gym has.
 const availableAt = hasKnownStations;
@@ -1509,6 +1509,9 @@ export function generateStrengthPlan(context, options = {}) {
   options = { ...options, focus: normalizeGymFocus(options.focus) };
   const pain = painfulExercises(context?.athleteState?.memories);
   if (pain.avoid.size) options = { ...options, excludeExercises: [...(options.excludeExercises || []), ...pain.avoid] };
+  // A machine that does not work, as the coach remembers (point 11).
+  const broken = Array.isArray(context?.athleteState?.brokenStations) ? context.athleteState.brokenStations.filter(stationName) : [];
+  if (broken.length) options = { ...options, excludeExercises: [...(options.excludeExercises || []), ...stationExercises(broken)] };
   // The shared recovery week decides when it is known; four solid gym weeks
   // in a row are the fallback for athletes without Intervals.icu loads.
   const shared = context?.recoveryWeek;
@@ -1720,7 +1723,8 @@ export function generateStrengthPlan(context, options = {}) {
     fitness: L('kondice: hodně opakování a krátké pauzy', 'fitness: many reps and short rests')
   }[goal];
   const goalText = goalLine ? (chosenGoal === 'auto' ? L('Cíl podle tvého sportu – ', 'Goal from your sport – ') : L('Cíl ', 'Goal ')) + goalLine + '. ' : '';
-  const rationale = goalText + (firstSession ? L('První trénink v aplikaci: váhy jsou opatrný odhad a žádná série nejde do selhání; po zapsání skutečných vah se další trénink řídí tvými výkony. ', 'Your first workout in the app: weights are a careful estimate and no set goes to failure; once you log your actual weights, the next workout follows your performance. ') : '') + baseRationale + (pain.parts.length ? L(' Podle toho, co si trenér pamatuje o bolesti (' + pain.parts.join(', ') + '), vynechávám cviky, které ji zatěžují.', ' From what the coach remembers about pain (' + pain.parts.join(', ') + '), I leave out exercises that load it.') : '') + (sportLoad.size?L(' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.', ' Load from other sports adjusts the dose for the muscles involved; it doesn\'t replace their strength training.'):'') + (nearby.length ? L(' Cviky se liší od plánu na ' + nearby.join(' a ') + '.', ' The exercises differ from the plan for ' + nearby.join(' and ') + '.') : '') + (swapped.length ? L(' Po třech trénincích bez posunu nová varianta: ', ' A new variant after three sessions without progress: ') + swapped.join(', ') + '.' : '') + (jump ? L(' Jednou týdně na začátku krátké výskoky (' + jump + '): pružnější šlachy a úspornější běh.', ' Once a week short jumps at the start (' + jump + '): springier tendons and a more economical stride.') : '');
+  const brokenText = broken.length ? L('Mimo provoz: ' + broken.map(stationName).join(', ') + '. ', 'Out of order: ' + broken.map(stationName).join(', ') + '. ') : '';
+  const rationale = goalText + brokenText + (firstSession ? L('První trénink v aplikaci: váhy jsou opatrný odhad a žádná série nejde do selhání; po zapsání skutečných vah se další trénink řídí tvými výkony. ', 'Your first workout in the app: weights are a careful estimate and no set goes to failure; once you log your actual weights, the next workout follows your performance. ') : '') + baseRationale + (pain.parts.length ? L(' Podle toho, co si trenér pamatuje o bolesti (' + pain.parts.join(', ') + '), vynechávám cviky, které ji zatěžují.', ' From what the coach remembers about pain (' + pain.parts.join(', ') + '), I leave out exercises that load it.') : '') + (sportLoad.size?L(' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.', ' Load from other sports adjusts the dose for the muscles involved; it doesn\'t replace their strength training.'):'') + (nearby.length ? L(' Cviky se liší od plánu na ' + nearby.join(' a ') + '.', ' The exercises differ from the plan for ' + nearby.join(' and ') + '.') : '') + (swapped.length ? L(' Po třech trénincích bez posunu nová varianta: ', ' A new variant after three sessions without progress: ') + swapped.join(', ') + '.' : '') + (jump ? L(' Jednou týdně na začátku krátké výskoky (' + jump + '): pružnější šlachy a úspornější běh.', ' Once a week short jumps at the start (' + jump + '): springier tendons and a more economical stride.') : '');
   snapDumbbells(rows, context?.trainingSetup?.dumbbellWeights);
   assignIntensities(rows, { phaseRpe: planPhase?.rpe });
   if(!rows.some(r=>r[0]==='WORK'))throw new Error(L('Pro toto vybavení nebyl nalezen vhodný cvik. Uprav vybavení v průvodci.', 'No suitable exercise was found for this equipment. Adjust your equipment in the setup guide.'));

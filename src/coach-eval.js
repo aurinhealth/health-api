@@ -14,6 +14,7 @@ import { FOCUS_OF, kindOfSystem } from './week-ai.js';
 import { planValues } from './gym-plan-store.js';
 import { gymLoadEstimate } from './gym-catalog.js';
 import { EXERCISES, generateStrengthPlan, plannedSessionFromRows, weeklyGymDays, fitsEquipment } from './strength-generator.js';
+import { BROKEN_WORDS, stationList } from './gym-equipment.js';
 import { buildAdaptiveDecision } from './adaptive-engine.js';
 import { cycleForCoach } from './cycle-model.js';
 import { recoveryTime } from './recovery-time.js';
@@ -51,7 +52,7 @@ const shift = (date, days) => new Date(Date.parse(date + 'T12:00:00Z') + days * 
 // `thresholds`: added to the cyclist's (a swimmer's CSS); `baseWellness`: added
 // to every earlier morning (Apple's wrist temperature, S38); `setup`: the gym
 // equipment (onboarding.js trainingSetup) the app builds gym cards with.
-export function evalAthlete(date, { today = {}, sleepMin = 445, profile: own = { sex: 'male', age: 38, height: 180 }, weight = 76, nutrition = null, breakDays = 0, gym = null, done: doneFor = null, recovery = false, plan: planFor = null, lowDays = 0, focus = { sport: 'cycling' }, thresholds: ownThresholds = null, baseWellness = null, setup = null, memories = null } = {}) {
+export function evalAthlete(date, { today = {}, sleepMin = 445, profile: own = { sex: 'male', age: 38, height: 180 }, weight = 76, nutrition = null, breakDays = 0, gym = null, done: doneFor = null, recovery = false, plan: planFor = null, lowDays = 0, focus = { sport: 'cycling' }, thresholds: ownThresholds = null, baseWellness = null, setup = null, memories = null, broken = null } = {}) {
   // Cycle days by their offset from the situation's day.
   const profile = own?.cycle ? { ...own, cycle: { ...own.cycle, days: own.cycle.days.map(({ offset, ...d }) => ({ ...d, date: shift(date, offset) })) } } : own;
   const wellness = [...Array.from({ length: 60 }, (_, i) => ({ id: shift(date, -60 + i), hrv: 62 + ((i * 7) % 9) - 4, restingHR: 50 + ((i * 5) % 5) - 2, respiration: 14.2 + ((i % 3) - 1) * 0.2, ...baseWellness, ...(i >= 60 - lowDays ? { hrv: 46, restingHR: 56 } : {}) })),
@@ -69,7 +70,7 @@ export function evalAthlete(date, { today = {}, sleepMin = 445, profile: own = {
   const days = Array.from({ length: ahead + 1 - from }, (_, i) => { const d = shift(date, from + i); return { date: d, daily: { training: { planned: plan[d] || [], completed: done[d] || [] } } }; });
   const thresholds = { ftp: 265, source: 'intervals', lthr: 168, maxHr: 188, restHr: 48, powerZones: [{ name: 'Z1', low: 0, high: 145 }, { name: 'Z2', low: 146, high: 199 }, { name: 'Z3', low: 200, high: 238 }, { name: 'Z4', low: 239, high: 278 }, { name: 'Z5', low: 279, high: 318 }], hrZones: [], ...ownThresholds };
   const activities = Object.entries(done).flatMap(([d, list]) => list.map(a => ({ kind: 'ride', name: a.name, tss: a.tss, minutes: a.durationHours * 60, intensity: a.intensity ?? null, end: Date.parse(d + 'T15:00:00Z') })));
-  return { date, daily: { weight: { current: weight }, training: { planned: plan[date] || [], completed: [] }, nutrition }, week: { days }, fitness: { wellness: fitness }, health: { wellness, sleep }, gym: gym ? gym(date) : { history: [] }, thresholds, profile, focus, ...(setup ? { trainingSetup: setup } : {}), athleteState: { status: 'active', ...(memories ? { memories } : {}) }, preferences: { weeklyActivities: 5 },
+  return { date, daily: { weight: { current: weight }, training: { planned: plan[date] || [], completed: [] }, nutrition }, week: { days }, fitness: { wellness: fitness }, health: { wellness, sleep }, gym: gym ? gym(date) : { history: [] }, thresholds, profile, focus, ...(setup ? { trainingSetup: setup } : {}), athleteState: { status: 'active', ...(memories ? { memories } : {}), ...(broken ? { memories: [...(memories || []), ...broken.map(b => b.text)], memoryMeta: Object.fromEntries(broken.map(b => [b.text, { station: b.station, check: b.until }])), brokenStations: broken.map(b => b.station) } : {}) }, preferences: { weeklyActivities: 5 },
     ...(recovery ? { recoveryTime: recoveryTime({ activities, now: Date.parse(date + 'T08:00:00Z') }) } : {}), ...(profile?.cycle ? { cycle: cycleForCoach({ ...profile.cycle, date }) } : {}) };
 }
 
@@ -276,6 +277,7 @@ const ILLNESS = /nemoc|onemoc|nachla[zd]|chřip|viró[sz]|infekc|horeč|marod|za
 const KNEE = 'Bolí mě levé koleno, nechci skákat';
 // S46: "zapamatuju si to", "poznamenám si", "budu to mít na paměti" in a chat nothing is kept of.
 const PROMISES_MEMORY = /zapamatuj\p{L}* si|si (?:to )?zapamatuj\p{L}*|zapamatoval jsem|(?:si )?poznamen(?:ám|al jsem)|budu (?:to |si to )?(?:mít na paměti|pamatovat)|uložil jsem (?:si )?|I(?:'ll| will) remember|I(?:'ve| have) noted/iu;
+const LEG_PRESS = { text: 'Nefunguje Pivot leg press (do 31. 10.)', station: 'pivot_leg_press', until: '2026-10-31' };
 const CLAIMS_FORGOTTEN = /(?:už )?jsem (?:to |ho |si )?(?:smazal|zapomněl|odstranil|vymazal|vyřadil|upravil|aktualizoval)|(?:je |bylo )?(?:smazáno|zapomenuto|odstraněno|vymazáno)|I(?:'ve| have) (?:forgotten|removed|deleted|updated)/iu;
 // "Zeptat se kouče" from yesterday's sweet spot ride (S41): the screen and its activity, as the chat finds them.
 const detailContext = (date, a) => { const day = shift(date, -1), appContext = assistantAppContext({ view: 'workouts', date: day, sport: 'ride', subject: { kind: 'activity', id: 'eval-ride-1', title: 'Sweet spot 3x15' } }, date);
@@ -516,6 +518,15 @@ export const COACH_EVAL_SCENARIOS = [
   { id: 'S58', title: 'Po nemoci: už je mi dobře', message: 'Už je mi dobře, horečka je pryč. Můžu zase trénovat?', athlete: { plan: EASY_RIDE_DAY },
     context: () => ({ athleteState: 'sick', statusNote: '', askIfBetter: true }),
     checks: r => [quality('karta Aktivní', r.kept.some(a => a.type === 'status' && a.status === 'active')), safety('žádný tvrdý trénink hned po nemoci', !kept(r, HARD_KINDS).length)] },
+  // A machine that does not work (point 11): the coach saves it with its station, the gym plan leaves it out.
+  { id: 'S59', title: 'Nefunguje leg press, zítra nohy', message: 'Pivot leg press je rozbitý, prý do konce měsíce. Dej mi zítra posilovnu na nohy na 45 minut.',
+    checks: r => { const day = gymBlock(r, { athlete: { broken: [LEG_PRESS] }, aimed: true })[0], used = (day?.exercises || []).filter(x => /pivot leg press/i.test(x));
+      return [quality('uloží nefunkční stroj s jeho stanicí', (r.memory.save || []).some(m => m.station === 'pivot_leg_press'), JSON.stringify(r.memory.save || [])),
+        quality('do kdy: konec měsíce', (r.memory.save || []).some(m => m.station === 'pivot_leg_press' && /^2026-1[01]-\d\d$/.test(m.until || ''))),
+        quality('plán bez leg pressu', !used.length, used.join(', ')), quality('karta posilovny', r.kept.some(a => a.type === 'workout' && a.sport === 'gym'))]; } },
+  { id: 'S60', title: 'Leg press mimo provoz v paměti, zítra nohy', message: 'Dej mi zítra posilovnu na nohy, mám 45 minut.', athlete: { broken: [LEG_PRESS] },
+    checks: r => { const day = gymBlock(r, { athlete: { broken: [LEG_PRESS] }, aimed: true })[0], used = (day?.exercises || []).filter(x => /pivot leg press/i.test(x));
+      return [quality('plán bez leg pressu', !used.length, used.join(', ')), quality('karta posilovny', r.kept.some(a => a.type === 'workout' && a.sport === 'gym'))]; } },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',
@@ -690,6 +701,8 @@ export function scenarioContext(scenario, date = COACH_EVAL_DATE, now = COACH_EV
   const a = evalAthlete(date, scenario.athlete || {}), conversation = scenario.conversation ? scenario.conversation(date) : [];
   const ctx = coachContext({ ...a, now, checkin: null });
   Object.assign(ctx, { userInitiated: true, athleteState: 'active', preferenceMemory: ['Kolo nejradši venku', 'Posilovna 2× týdně', ...(a.athleteState.memories || [])], conversation, appContext: { view: 'today', date } });
+  // A machine said to be broken brings the station list, as in the chat (point 11).
+  if (BROKEN_WORDS.test(scenario.message)) ctx.gymStations = stationList();
   if (scenario.library) ctx.workoutLibraryRecommendations = typeof scenario.library === 'function' ? scenario.library(a, date) : scenario.library;
   if (a.gym.values) ctx.gymPlan = a.gym;
   // What the chat adds for the situation (a triathlete's split, the plans it can start, the open detail screen).

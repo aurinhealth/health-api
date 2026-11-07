@@ -2,6 +2,7 @@ import {initialImport,recentDashboardImport} from './account-sync.js';
 import { recordOpsEvent, routeName, sendDailyOpsReport, withOpsScope } from "./ops-report.js";
 import { elapsed, serverTiming, slowness, timed } from "./request-timing.js";
 import { trainingSetup } from './onboarding.js';
+import { BROKEN_WORDS, stationList } from './gym-equipment.js';
 import { subscriptionStatus, assertAIAccess, plansUnlocked, assertPlanAccess, paywallOn } from './subscription.js';
 import { claimCoachMessage, recordCoachMessage, releaseCoachMessage } from './coach-allowance.js';
 import { buildNutrients, buildNutrientDetail, nutrientFavorites, saveNutrientFavorites, microTop, FREE_KEYS } from './micronutrients.js';
@@ -2398,7 +2399,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if(reviews.length)coachCtx.completedRideReviews=reviews;
         if(blockHistory)Object.assign(coachCtx,{blockHistory,blockFitness:compactWellness(inputs.fitness.wellness,{date,days:90})||[],historyPeriod:{from:shiftDate(date,-84),to:date,source:'cached activities; missing records remain unknown'}});
       }else focus=await dashboardProfile(env).then(profile=>athleteFocus(profile,date)).catch(()=>null);
-      Object.assign(coachCtx,{userInitiated:true,...(focus?.cannotSwim100m?{cannotSwim100m:true}:{}),athleteState:athleteState.status,statusNote:athleteState.note,statusUntil:athleteState.statusUntil,...(askIfBetter?{askIfBetter:true}:{}),...(athleteState.cancelled?.length?{cancelledSessions:athleteState.cancelled}:{}),preferenceMemory:memory?[...new Set([...usedMemories(athleteState),memory])]:usedMemories(athleteState),...memoryCtx,...(sportChanges?{sportsToSuggestChange:{turnedOff:noSport}}:{}),...(ghost?{ghostChat:true}:{}),...(coachCtx.focus?{}:{focus}),conversation});
+      Object.assign(coachCtx,{userInitiated:true,...(focus?.cannotSwim100m?{cannotSwim100m:true}:{}),athleteState:athleteState.status,statusNote:athleteState.note,statusUntil:athleteState.statusUntil,...(askIfBetter?{askIfBetter:true}:{}),...(BROKEN_WORDS.test(message)?{gymStations:stationList()}:{}),...(athleteState.cancelled?.length?{cancelledSessions:athleteState.cancelled}:{}),preferenceMemory:memory?[...new Set([...usedMemories(athleteState),memory])]:usedMemories(athleteState),...memoryCtx,...(sportChanges?{sportsToSuggestChange:{turnedOff:noSport}}:{}),...(ghost?{ghostChat:true}:{}),...(coachCtx.focus?{}:{focus}),conversation});
       const sport=engineSport(focus,selected?.appContext||appContext,message);
       // The library offer is for the day, length and kind the message asks
       // for (chat-ask.js; Revize doporučování tréninků 2026-10-16, nález 9).
@@ -2415,6 +2416,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(Array.isArray(answer.actions)&&answer.actions.length)onProgress(L('Kontroluji návrhy…', 'Checking the proposals…'));
       coachCtx.userMessage=message;coachCtx.appContext=coachCtx.appContext||appContext;coachCtx.gymPlan=appContext.sport==='gym'?selected?.gymPlan:inputs.gym;
       const actions=validateCoachActions(answer.actions,coachCtx,date,{userInitiated:true}),proposals=[];await ensureCoachInboxTable(env.DB);
+      // What the coach saved from the athlete's words is kept at once and shown
+      // under the answer with Undo. What the answer says no longer holds is only
+      // proposed: the athlete confirms it under the answer (Forget / Update), so
+      // text from the data the coach reads cannot quietly change the memory.
+      // Saved before the previews, so a pain or a broken machine told now shapes them.
+      const saves=keeps&&!noSport?memorySaves(answer.memory,athleteState.memories):[];
+      if(saves.length)await updateAthleteState(env.DB,{saves}).catch(error=>{console.error('Coach memory save failed',error.message);saves.length=0;});
       // A proposed workout is prepared right away, so the chat shows it (profile,
       // exercises) and confirming plans exactly this one.
       // Several gym days in one answer are built as a block: each sees the others.
@@ -2432,12 +2440,6 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const dropped=(Array.isArray(answer.actions)?answer.actions.length:0)-actions.length;
       if(dropped>0)answer.answer=String(answer.answer||'').trimEnd()+L('\n\n'+(dropped===1?'Jeden návrh':'Některé návrhy')+' neprošl'+(dropped===1?'':'y')+' kontrolou aplikace (den, délka, sport nebo stav), proto tu chybí. Napiš, co upravit, a připravím nový.','\n\n'+(dropped===1?'One proposal':'Some proposals')+' didn\'t pass the app\'s checks (day, length, sport or status), so '+(dropped===1?'it is':'they are')+' missing here. Tell me what to change and I\'ll prepare a new one.');
       await saveMemory();
-      // What the coach saved from the athlete's words is kept at once and shown
-      // under the answer with Undo. What the answer says no longer holds is only
-      // proposed: the athlete confirms it under the answer (Forget / Update), so
-      // text from the data the coach reads cannot quietly change the memory.
-      const saves=keeps&&!noSport?memorySaves(answer.memory,athleteState.memories):[];
-      if(saves.length)await updateAthleteState(env.DB,{saves}).catch(error=>{console.error('Coach memory save failed',error.message);saves.length=0;});
       const changes=keeps?memoryChanges(answer.memory,athleteState.memories):{forgotten:[],updated:[]};
       // The chat keeps a one-line summary of the proposals, so later turns can refer to them.
       const note=actionsNote(actions),{chatId,messageId}=await remember(answer.answer+(note?'\n\n'+note:''));
