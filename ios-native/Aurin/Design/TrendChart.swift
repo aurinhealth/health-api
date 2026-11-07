@@ -1,3 +1,4 @@
+import Accessibility
 import Charts
 import SwiftUI
 
@@ -7,15 +8,14 @@ import SwiftUI
 /// picked days ("97 ms · 7-day average · rising", "average of 22 nights" when
 /// fewer have a value), one day only while a finger is on it (chart review 2).
 struct TrendChart: View {
-    /// What one dot is: a night, a day or a measurement (a scale's).
+    /// What one dot is: a night or a day.
     enum Per {
-        case night, day, measurement
+        case night, day
 
         fileprivate var averageOf: String {
             switch self {
             case .night: return "průměr %lld nocí"
             case .day: return "průměr %lld dní"
-            case .measurement: return "průměr %lld měření"
             }
         }
 
@@ -23,7 +23,6 @@ struct TrendChart: View {
             switch self {
             case .night: return "jedna noc"
             case .day: return "jeden den"
-            case .measurement: return "jedno měření"
             }
         }
 
@@ -31,7 +30,6 @@ struct TrendChart: View {
             switch self {
             case .night: return "Dotkni se grafu a uvidíš jednu noc."
             case .day: return "Dotkni se grafu a uvidíš jeden den."
-            case .measurement: return "Dotkni se grafu a uvidíš jedno měření."
             }
         }
     }
@@ -112,10 +110,13 @@ struct TrendChart: View {
         let shown = selected ?? list.last
 
         VStack(alignment: .leading, spacing: 12) {
-            rangePicker
+            RangePicker(ranges: Self.ranges, days: $days)
+            let points = list.map { Point(date: $0.iso, value: $0.value) }
             chart(list, lo: lo, hi: hi, selected: selected, shown: shown)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Self.summary(list.map { Point(date: $0.iso, value: $0.value) }, unit: unit, digits: digits))
+                .accessibilityLabel(Self.summary(points, unit: unit, digits: digits))
+                // Audio Graphs: VoiceOver plays the days as tones (chart review 18).
+                .accessibilityChartDescriptor(TrendAudioGraph(points: points, unit: unit, digits: digits, days: days))
         }
         .onChange(of: days) { picked = nil }
     }
@@ -205,27 +206,6 @@ struct TrendChart: View {
         values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
     }
 
-    /// "7 dní · 30 dní · 90 dní", the chosen one filled.
-    private var rangePicker: some View {
-        HStack(spacing: 8) {
-            Spacer(minLength: 0)
-            ForEach(Self.ranges, id: \.self) { n in
-                let on = n == days
-                Button { days = n } label: {
-                    Text(verbatim: L10n.f("%@ dní", String(n)))
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(on ? Palette.background : Palette.secondary)
-                        .padding(.horizontal, 14)
-                        .frame(height: 30)
-                        .background(on ? Palette.ink : Palette.track, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(on ? .isSelected : [])
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
     private func legend(_ c: Color, _ text: String) -> some View {
         HStack(spacing: 5) {
             RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 14, height: 6)
@@ -242,5 +222,54 @@ struct TrendChart: View {
         let latest = L10n.f("naposledy %@ %@", Fmt.decimal(last, digits: digits), shownUnit)
         let days = L10n.plural("%lld dní", values.count)
         return [days, span, latest].joined(separator: ", ")
+    }
+}
+
+/// "7 dní · 30 dní · 90 dní" over a detail chart, the chosen one filled.
+struct RangePicker: View {
+    let ranges: [Int]
+    @Binding var days: Int
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Spacer(minLength: 0)
+            ForEach(ranges, id: \.self) { n in
+                let on = n == days
+                Button { days = n } label: {
+                    Text(verbatim: L10n.f("%@ dní", String(n)))
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(on ? Palette.background : Palette.secondary)
+                        .padding(.horizontal, 14)
+                        .frame(height: 30)
+                        .background(on ? Palette.ink : Palette.track, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+/// A detail chart's days for VoiceOver's Audio Graphs: a tone for each day,
+/// its date and value read out.
+struct TrendAudioGraph: AXChartDescriptorRepresentable {
+    let points: [Point]
+    let unit: String
+    let digits: Int
+    let days: Int
+
+    func makeChartDescriptor() -> AXChartDescriptor {
+        let values = points.map(\.value)
+        let lo = values.min() ?? 0, hi = values.max() ?? 1
+        let shownUnit = L10n.tr(unit)
+        let x = AXCategoricalDataAxisDescriptor(title: L10n.tr("Den"), categoryOrder: points.map { Fmt.dayMonth($0.date) })
+        let y = AXNumericalDataAxisDescriptor(title: shownUnit, range: lo...(hi > lo ? hi : lo + 1), gridlinePositions: []) {
+            Fmt.decimal($0, digits: digits) + " " + shownUnit
+        }
+        let series = AXDataSeriesDescriptor(name: shownUnit, isContinuous: true,
+                                            dataPoints: points.map { AXDataPoint(x: Fmt.dayMonth($0.date), y: $0.value) })
+        return AXChartDescriptor(title: L10n.f("%@ dní", String(days)), summary: TrendChart.summary(points, unit: unit, digits: digits),
+                                 xAxis: x, yAxis: y, additionalAxes: [], series: [series])
     }
 }

@@ -1069,21 +1069,5 @@
 			<string>average of %lld days</string>
 		</dict>
 	</dict>
-	<key>průměr %lld měření</key>
-	<dict>
-		<key>NSStringLocalizedFormatKey</key>
-		<string>%#@n@</string>
-		<key>n</key>
-		<dict>
-			<key>NSStringFormatSpecTypeKey</key>
-			<string>NSStringPluralRuleType</string>
-			<key>NSStringFormatValueTypeKey</key>
-			<string>lld</string>
-			<key>one</key>
-			<string>average of %lld measurement</string>
-			<key>other</key>
-			<string>average of %lld measurements</string>
-		</dict>
-	</dict>
 </dict>
 </plist>

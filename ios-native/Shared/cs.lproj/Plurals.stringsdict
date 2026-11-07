@@ -1337,25 +1337,5 @@
 			<string>průměr %lld dnů</string>
 		</dict>
 	</dict>
-	<key>průměr %lld měření</key>
-	<dict>
-		<key>NSStringLocalizedFormatKey</key>
-		<string>%#@n@</string>
-		<key>n</key>
-		<dict>
-			<key>NSStringFormatSpecTypeKey</key>
-			<string>NSStringPluralRuleType</string>
-			<key>NSStringFormatValueTypeKey</key>
-			<string>lld</string>
-			<key>few</key>
-			<string>průměr %lld měření</string>
-			<key>many</key>
-			<string>průměr %lld měření</string>
-			<key>one</key>
-			<string>průměr %lld měření</string>
-			<key>other</key>
-			<string>průměr %lld měření</string>
-		</dict>
-	</dict>
 </dict>
 </plist>

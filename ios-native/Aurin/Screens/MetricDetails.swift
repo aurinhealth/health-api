@@ -233,7 +233,7 @@ struct MetricDetailContent: View {
             let since = value.series.first.map { Fmt.dayMonthShort($0.date) } ?? ""
             MetricHeadline(caption: caption, value: Fmt.decimal(convert(value.value)), unit: unit, status: Self.changeStatus(value.change, since: since, convert: convert, good: good == true))
             MetricChart(title: "Po měřeních", color: color) {
-                TrendChart(points: series, color: color, unit: unit, digits: 1, per: .measurement, trend: MetricMath.trend(series, step: 0.3))
+                CompositionChart(points: series, color: color, unit: unit)
             }
         } else {
             MetricEmpty()
@@ -357,5 +357,40 @@ struct MetricRow: View {
             .contentShape(Rectangle())
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Body fat and muscle as the weight's chart: each weigh-in a dot, the trend
+/// through them as a line, 30 or 60 days (what the server sends). A 7-day
+/// average over a few weigh-ins only repeated the dots (chart review 13).
+private struct CompositionChart: View {
+    let points: [Point]
+    let color: Color
+    let unit: String
+    @State private var days = 60
+
+    var body: some View {
+        let from = points.last.map { ISODay.shift($0.date, -days) } ?? ""
+        let shown = points.filter { $0.date > from }
+        let raw = shown.map(\.value)
+        let lo = (raw.min() ?? 0) - 0.5, hi = (raw.max() ?? 1) + 0.5
+        VStack(alignment: .leading, spacing: 10) {
+            RangePicker(ranges: [30, 60], days: $days)
+            TrendDotsChart(raw: raw, trend: WeightDetailContent.smoothed(raw), lo: lo, hi: hi, height: 160, scale: scaleTicks(lo, hi), color: color)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(TrendChart.summary(shown, unit: unit, digits: 1))
+                .accessibilityChartDescriptor(TrendAudioGraph(points: shown, unit: unit, digits: 1, days: days))
+            ChartSpan(dates: shown.map(\.date)).padding(.trailing, scaleWidth)
+            HStack(spacing: 14) {
+                HStack(spacing: 5) {
+                    Circle().fill(color.opacity(0.4)).frame(width: 7, height: 7)
+                    Text("vážení").font(Typo.tiny).foregroundStyle(Palette.muted)
+                }
+                HStack(spacing: 5) {
+                    Capsule().fill(color).frame(width: 14, height: 2.6)
+                    Text("trend").font(Typo.tiny).foregroundStyle(Palette.muted)
+                }
+            }
+        }
     }
 }
