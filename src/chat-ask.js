@@ -7,7 +7,9 @@ import { buildCyclingCoachV2 } from './cycling-coach-v2.js';
 import { FOCUS_OF } from './week-ai.js';
 
 const shift = (date, days) => new Date(Date.parse(date + 'T12:00:00Z') + days * 86400000).toISOString().slice(0, 10);
-const WEEKDAYS = [/neděl|sunday/i, /pondělí|pondeli|monday/i, /úterý|utery|tuesday/i, /střed|stred|wednesday/i, /čtvrt|ctvrt|thursday/i, /pátek|pátk|patek|patk|friday/i, /sobot|saturday/i];
+// Whole words only, so "středně", "prostředí" and "čtvrt hodiny" name no day.
+const day = words => new RegExp('(?<!\\p{L})(?:' + words + ')(?!\\p{L})', 'iu');
+const WEEKDAYS = [day('neděl[ei]|nedel[ei]|sundays?'), day('pondělí|pondeli|pondělk[uye]m?|pondelk[uye]m?|mondays?'), day('úterý|utery|úterk[uye]m?|uterk[uye]m?|tuesdays?'), day('střed[aouyě]|stred[aouye]|wednesdays?'), day('čtvrt(?:ek|k[auy]|kem)|ctvrt(?:ek|k[auy]|kem)|thursdays?'), day('pát(?:ek|k[uy]|kem)|pat(?:ek|k[uy]|kem)|fridays?'), day('sobot[aouyě]|sobotou|saturdays?')];
 const KINDS = [
   ['vo2max', /vo2|vo₂/i],
   ['threshold', /(?<!\p{L})pr[aá]h|threshold|ftp interval/iu],
