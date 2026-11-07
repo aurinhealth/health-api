@@ -50,9 +50,9 @@ enum BackgroundRefresh {
         guard api.hasSession else { return false }
         let outcome = await AppleHealth.shared.run(api: api)
         let synced = outcome.ok
-        await AppleHealthExport.shared.writeForwarded(api: api)
         await CalendarTime.shared.send(api: api)
         await CalendarTime.shared.mirror(api: api)
+        await AppleHealthExport.shared.writeForwarded(api: api)
         guard always || outcome.changed else { return synced }
         guard !Task.isCancelled, await followToday(api: api) else { return false }
         return synced || !AppleHealth.shared.enabled

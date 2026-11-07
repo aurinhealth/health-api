@@ -109,7 +109,9 @@ final class AppleHealthExport {
         guard isAvailable else { throw APIError.message(L10n.tr("Apple Health na tomhle zařízení není.")) }
         let types = Self.shareTypes(next)
         guard !types.isEmpty else { return }
-        try await store.requestAuthorization(toShare: types, read: [])
+        // Other apps' workouts: reading workouts too, so one Apple Health has
+        // already (the Wahoo app's) is seen and not written twice (hasWorkout).
+        try await store.requestAuthorization(toShare: types, read: Self.forwards(next) ? [HKObjectType.workoutType()] : [])
     }
 
     private func allowed(_ type: HKObjectType) -> Bool {
@@ -291,7 +293,11 @@ final class AppleHealthExport {
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = Self.workoutType(item.type)
         if item.type.hasPrefix("Virtual") { configuration.locationType = .indoor }
-        let builder = HKWorkoutBuilder(healthStore: store, configuration: configuration, device: nil)
+        // Health shows where it came from (Wahoo's terms ask for it), as text only.
+        let maker = item.key.hasPrefix("wahoo:") ? "Wahoo Fitness" : "Google"
+        let device = HKDevice(name: nil, manufacturer: maker, model: nil, hardwareVersion: nil, firmwareVersion: nil,
+                              softwareVersion: nil, localIdentifier: nil, udiDeviceIdentifier: nil)
+        let builder = HKWorkoutBuilder(healthStore: store, configuration: configuration, device: device)
         var measured: [HKSample] = []
         if let kcal = item.kcal, kcal > 0, allowed(HKQuantityType(.activeEnergyBurned)) {
             measured.append(HKQuantitySample(type: HKQuantityType(.activeEnergyBurned), quantity: HKQuantity(unit: .kilocalorie(), doubleValue: kcal), start: start, end: end))

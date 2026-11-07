@@ -212,6 +212,15 @@ export async function stopForwarding(db, userId, source) {
   await db.prepare("DELETE FROM sync_sends WHERE user_id = ? AND destination IN ('intervals', 'google', 'apple') AND activity_key LIKE ?").bind(userId, FORWARD_KEY[source] + '%').run().catch(error => { if (!/no such table/i.test(error.message)) throw error; });
 }
 
+// Disconnecting a destination (Google Health, Intervals.icu) ends what other
+// apps sent there: a new connection asks again, and Aurin's record of what
+// went is deleted, as it has no use any more.
+export async function stopForwardingTo(db, userId, destination) {
+  const prefs = await readSyncPrefs(db, userId, destination);
+  if (prefs.forward?.length) await saveSyncPrefs(db, userId, destination, { forward: [] });
+  await db.prepare("DELETE FROM sync_sends WHERE user_id = ? AND destination = ? AND (activity_key LIKE 'wahoo:%' OR activity_key LIKE 'google:%')").bind(userId, destination).run().catch(error => { if (!/no such table/i.test(error.message)) throw error; });
+}
+
 export const healthAllowed = (prefs, type) => prefs?.health === 'all' || (Array.isArray(prefs?.health) && prefs.health.includes(type));
 
 // Wellness updates ({ date: { field: value } }) without the fields the user
@@ -463,6 +472,7 @@ async function pushGoogle(env, row, { fetchImpl, googleToken, pollMs = 1000 }) {
   let response = await write(point);
   // Measured values Google refused: the workout goes without them.
   if (response.status === 400 && point.exercise.metricsSummary) {
+    console.warn('Google Health refused the measured values', (await response.text().catch(() => '')).slice(0, 300));
     delete point.exercise.metricsSummary;
     response = await write(point);
   }

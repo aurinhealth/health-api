@@ -290,7 +290,9 @@ extension AppModel {
         if let google = try? await api.syncOverview().destinations.first(where: { $0.id == "google" }) {
             AppleHealthExport.shared.setGoogle(google)
         }
-        await AppleHealthExport.shared.writeForwarded(api: api)
+        // Its own task: the app's start does not wait for the writes.
+        let api = api
+        Task { await AppleHealthExport.shared.writeForwarded(api: api) }
     }
 
     /// Every tab again, e.g. after a change of language (the server's texts).

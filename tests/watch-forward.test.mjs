@@ -289,3 +289,32 @@ test("the iPhone gets the workouts to write to Apple Health; what Apple Health h
   assert.deepEqual((await saveSyncPrefs(d, 7, "apple", {})).forward, []);
   assert.deepEqual((await saveSyncPrefs(d, 7, "google", {})).forward, []);
 });
+
+test("disconnecting a destination ends what other apps sent there; a new connection asks again", async () => {
+  const { stopForwardingTo } = await import("../src/sync-destinations.js");
+  const d = wahooDb();
+  await saveSyncPrefs(d, 7, "google", { forward: ["wahoo"] }, { now: NOW_W });
+  d.sqlite.prepare("INSERT INTO sync_sends (user_id, activity_key, destination, status) VALUES (7, 'wahoo:512031649', 'google', 'sent'), (7, 'manual:1', 'google', 'sent')").run();
+  await stopForwardingTo(d, 7, "google");
+  assert.deepEqual((await saveSyncPrefs(d, 7, "google", {})).forward, []);
+  assert.deepEqual(d.sqlite.prepare("SELECT activity_key FROM sync_sends WHERE destination = 'google'").all().map(r => r.activity_key), ["manual:1"]);
+});
+
+test("a ride Intervals.icu kept over Wahoo's still goes to Google Health and Apple Health", () => {
+  const copy = { record_role: "duplicate", matched_activity_id: "intervals:i1" };
+  assert.equal(forwardable(copy, ["wahoo"], "google"), true);
+  assert.equal(forwardable(copy, ["wahoo"], "apple"), true);
+  assert.equal(forwardable(copy, ["wahoo"], "intervals"), false);
+});
+
+test("Wahoo's going to Apple Health too is not sent to Google Health (the Google Health app reads Apple Health)", async () => {
+  const d = wahooDb(), posts = [];
+  const fetchImpl = async () => { posts.push(1); return Response.json({ done: true, response: { name: "users/me/dataTypes/exercise/dataPoints/g1" } }); };
+  const env = { DB: d, USER_ID: 7, ...GOOGLE, CONNECTED_PROVIDERS: ["wahoo", "google"] };
+  await saveSyncPrefs(d, 7, "google", { forward: ["wahoo"], backfill: true }, { now: NOW_W });
+  await saveSyncPrefs(d, 7, "apple", { forward: ["wahoo"] }, { now: NOW_W });
+  assert.equal((await forwardToGoogle(env, { now: NOW_W, fetchImpl, googleToken })).reason, "via-apple");
+  assert.equal(posts.length, 0);
+  await saveSyncPrefs(d, 7, "apple", { forward: [] }, { now: NOW_W });
+  assert.deepEqual((await forwardToGoogle(env, { now: NOW_W, fetchImpl, googleToken })).sent, [{ key: "wahoo:512031649", status: "sent" }]);
+});

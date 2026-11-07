@@ -134,7 +134,7 @@ import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman } from "./u
 import { handleWhoopOAuth, disconnectWhoop, syncWhoop } from "./whoop.js";
 import { wahooDetail } from "./wahoo-detail.js";
 import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, wahooRideExpected, readWahooTokens } from "./wahoo.js";
-import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed, stopForwarding } from "./sync-destinations.js";
+import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed, stopForwarding, stopForwardingTo } from "./sync-destinations.js";
 import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, smokeUser, usersWithProviders, usersWithAccount, usersWithPushTokens, usersWithHealthConsent, openSignup } from "./tenancy.js";
 import { userDataEnvironment, prefetchUserData, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
@@ -2652,9 +2652,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(!['google','intervals'].includes(body.provider)) return Response.json({message:L('Neznámé připojení.', 'Unknown connection.')},{status:400});
       // Aurin also gives up its access at Google. The owner's token can be the shared Worker secret, which stays.
       if(body.provider==='google'&&!env.USER_IS_OWNER) await revokeGoogle(env);
-      if(body.provider==='intervals'){await disconnectIntervalsApp(env);await deleteConnectionSecret(env,'intervals_athlete');}
+      if(body.provider==='intervals'){await disconnectIntervalsApp(env);await deleteConnectionSecret(env,'intervals_athlete');await stopForwardingTo(env.DB,env.USER_ID,'intervals').catch(()=>null);}
       await deleteConnectionSecret(env,body.provider);
-      if(body.provider==='google'){await deleteConnectionSecret(env,'google_scopes');await stopForwarding(env.DB,env.USER_ID,'google').catch(()=>null);}
+      if(body.provider==='google'){await deleteConnectionSecret(env,'google_scopes');await stopForwarding(env.DB,env.USER_ID,'google').catch(()=>null);await stopForwardingTo(env.DB,env.USER_ID,'google').catch(()=>null);}
       await clearConnectionHealth(env,body.provider);
       return Response.json({status:'ok',message:L('Připojení je odebrané.', 'The connection has been removed.')},{headers:{'Cache-Control':'no-store'}});
     }

@@ -398,6 +398,8 @@ struct SyncForwardGroup: View {
         switch id {
         case "apple": return "Apple Watch a další aplikace"
         case "wahoo" where to == "intervals": return "Jízdy s výkonem, tepem a trasou"
+        // Going to Apple Health too: the Google Health app reads it there (src/watch-forward.js forwardToGoogle).
+        case "wahoo" where to == "google" && (sync.destination("apple")?.prefs.forward ?? []).contains("wahoo"): return "Jde přes Apple Health"
         case "wahoo" where to == "google": return "Jízdy s časem, vzdáleností a tepem"
         case "wahoo": return "Jízdy s časem, vzdáleností a kaloriemi"
         default: return "Fitbit a Pixel Watch"
@@ -457,7 +459,7 @@ struct ForwardConsentSheet: View {
         switch (source, to) {
         case ("wahoo", "intervals"): return "Aurin zkopíruje každý dokončený trénink z Wahoo do tvého účtu Intervals.icu jako jeho soubor: čas, délku, vzdálenost, trasu, výkon, tep, kadenci a kalorie."
         case ("google", "intervals"): return "Aurin zkopíruje každý dokončený trénink z Google Health do tvého účtu Intervals.icu: typ, název, čas, délku, vzdálenost, tep a kalorie."
-        case ("wahoo", "google"): return "Aurin zkopíruje každý dokončený trénink z Wahoo do tvého účtu Google Health: typ, čas, délku, vzdálenost, tep a kalorie."
+        case ("wahoo", "google"): return "Aurin zkopíruje každý dokončený trénink z Wahoo do tvého účtu Google Health: typ, název, čas, délku, vzdálenost, tep a kalorie."
         case ("wahoo", _): return "Aurin zapíše každý dokončený trénink z Wahoo do Apple Health na tomhle iPhonu: typ, čas, délku, vzdálenost a kalorie."
         default: return "Aurin zapíše každý dokončený trénink z Google Health do Apple Health na tomhle iPhonu: typ, čas, délku, vzdálenost a kalorie."
         }

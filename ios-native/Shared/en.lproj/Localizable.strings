@@ -4030,8 +4030,9 @@
 "Posílá se dvě hodiny po konci tréninku. Když už v Apple Health ve stejném čase nějaký trénink je, třeba z aplikace Wahoo, Aurin ho přeskočí." = "Sent two hours after a workout ends. Skipped if Apple Health already has a workout at that time, for example from the Wahoo app.";
 "Apple Health tu není: aplikace Google Health si ho čte sama. Když už v Google Health ve stejném čase nějaký trénink je, Aurin ho přeskočí." = "Apple Health isn’t here: the Google Health app reads it on its own. Skipped if Google Health already has a workout at that time.";
 "Jízdy s časem, vzdáleností a tepem" = "Rides with time, distance, heart rate";
+"Jde přes Apple Health" = "Goes through Apple Health";
 "Jízdy s časem, vzdáleností a kaloriemi" = "Rides with time, distance, calories";
-"Aurin zkopíruje každý dokončený trénink z Wahoo do tvého účtu Google Health: typ, čas, délku, vzdálenost, tep a kalorie." = "Aurin copies each finished Wahoo workout to your Google Health account: type, time, duration, distance, heart rate and calories.";
+"Aurin zkopíruje každý dokončený trénink z Wahoo do tvého účtu Google Health: typ, název, čas, délku, vzdálenost, tep a kalorie." = "Aurin copies each finished Wahoo workout to your Google Health account: type, name, time, duration, distance, heart rate and calories.";
 "Aurin zapíše každý dokončený trénink z Wahoo do Apple Health na tomhle iPhonu: typ, čas, délku, vzdálenost a kalorie." = "Aurin writes each finished Wahoo workout to Apple Health on this iPhone: type, time, duration, distance and calories.";
 "Aurin zapíše každý dokončený trénink z Google Health do Apple Health na tomhle iPhonu: typ, čas, délku, vzdálenost a kalorie." = "Aurin writes each finished Google Health workout to Apple Health on this iPhone: type, time, duration, distance and calories.";
 "%@, týden %lld" = "%@, week %lld";

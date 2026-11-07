@@ -113,14 +113,16 @@ const TO = {
 
 // Whether the record goes to `to`: not when the destination or Aurin itself
 // has the workout (paired with its record or a 'local:' one), not when it was
-// deleted, and a copy (record_role 'duplicate') only when the app of the
-// record kept instead is off.
+// deleted, and a copy (record_role 'duplicate') only when the record kept
+// instead is not one that goes too: its app is off, or it is a record that
+// never goes there itself (Intervals.icu's, kept over a ride Wahoo also
+// uploaded there, goes nowhere but Intervals.icu).
 export function forwardable(row, on, to = "intervals") {
   const matched = String(row.matched_activity_id || ""), family = matched.split(":")[0];
   if (matched === "deleted" || family === "local" || family === TO[to].family) return false;
   if (row.record_role !== "duplicate") return true;
   const kept = FAMILY_SOURCE[family];
-  return Boolean(kept) && !on.includes(kept);
+  return !kept || !on.includes(kept);
 }
 
 // The destination's preferences and the connected apps switched on for it.
@@ -249,8 +251,12 @@ export async function forwardWatchWorkouts(env, { now = Date.now(), fetchImpl = 
 export async function forwardToGoogle(env, { now = Date.now(), fetchImpl = fetch, googleToken = null, limit = LIMIT } = {}) {
   const connected = env.CONNECTED_PROVIDERS || [];
   if (!connected.includes("google") || !connected.includes("wahoo")) return { status: "skipped" };
-  const { prefs, on } = await switchedOn(env, "google");
-  if (!on.length) return { status: "skipped", reason: "off" };
+  const { prefs, on: chosen } = await switchedOn(env, "google");
+  // Wahoo's going to Apple Health too: the Google Health app reads Apple
+  // Health, so it gets that copy, and one sent here would be a second.
+  const toApple = chosen.length ? (await readSyncPrefs(env.DB, env.USER_ID, "apple")).forward || [] : [];
+  const on = chosen.filter(source => !toApple.includes(source));
+  if (!on.length) return { status: "skipped", reason: chosen.length ? "via-apple" : "off" };
   // Without the permission to write workouts the page asks for it (googleMissingScopes).
   if (!grantedExtras(env).activityWrite) return { status: "skipped", reason: "scope" };
   const { open, there } = await dueWorkouts(env, "google", prefs, on, now);
