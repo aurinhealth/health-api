@@ -2850,6 +2850,9 @@
 "než cíl týdne" = "than the week's target";
 "Zbývá %@ kcal" = "%@ kcal left";
 "zhruba %@ na den" = "about %@ a day";
+"Dnes ještě %@ kcal" = "%@ kcal more today";
+", pak zhruba %@ na den" = ", then about %@ a day";
+"Dnešek má svůj díl, zbytek patří dalším dnům" = "Today is past its share, so the rest is for the days ahead";
 "do dneška %@" = "by today %@";
 "Snězeno %@ z %@ kcal" = "Eaten %@ of %@ kcal";
 "Kardio" = "Cardio";

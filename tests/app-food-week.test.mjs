@@ -66,16 +66,20 @@ test("On Saturday morning the rest is shared by Saturday and Sunday", () => {
   const morning = buildFoodWeek({ today: "2026-10-17", days });
   assert.equal(morning.left, 3500);
   assert.equal(morning.perDay, 1750);
+  assert.equal(morning.todayLeft, 1750);
   // Lunch inside the share: the number per day holds, today has 1 150 more.
-  assert.equal(buildFoodWeek({ today: "2026-10-17", days: days.map((d, i) => i === 5 ? { ...d, kcal: 600 } : d) }).perDay, 1750);
+  const lunch = buildFoodWeek({ today: "2026-10-17", days: days.map((d, i) => i === 5 ? { ...d, kcal: 600 } : d) });
+  assert.deepEqual([lunch.perDay, lunch.todayLeft], [1750, 1150]);
   // Past the share by evening: what is left is Sunday's.
-  assert.equal(buildFoodWeek({ today: "2026-10-17", days: days.map((d, i) => i === 5 ? { ...d, kcal: 2500 } : d) }).perDay, 1000);
+  const evening = buildFoodWeek({ today: "2026-10-17", days: days.map((d, i) => i === 5 ? { ...d, kcal: 2500 } : d) });
+  assert.deepEqual([evening.perDay, evening.todayLeft], [1000, 0]);
 });
 
 test("On Sunday there is no day after today to share the rest", () => {
   const week = buildFoodWeek({ today: "2026-10-18", days: dates.map((d, i) => day(i, 1000, 2000, 0, 2000)) });
   assert.equal(week.left, 7000);
   assert.equal(week.perDay, null);
+  assert.equal(week.todayLeft, null);
 });
 
 test("Without a calorie target there is no week to fill", () => {

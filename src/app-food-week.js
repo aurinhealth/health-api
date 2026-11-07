@@ -73,6 +73,9 @@ export function buildFoodWeek({ today, days }) {
     left: Math.max(0, left),
     over: Math.max(0, -left),
     perDay: left > 0 && share != null ? Math.round(share / 10) * 10 : null,
+    // What today can still eat of its share; 0 once today is past it (the
+    // rest is the days after today's). None on Sunday.
+    todayLeft: left > 0 && share != null ? Math.max(0, Math.round((share - eatenToday) / 10) * 10) : null,
     unlogged: unlogged.length,
     days: list
   };
