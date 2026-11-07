@@ -189,3 +189,17 @@ test("the morning e-mail says where yesterday's barcode scans were found and wha
   assert.match(html, /• 10 skenů/);
   assert.equal(opsReport([], null, "2026-11-05"), null, "no scans, no e-mail");
 });
+
+test("a slow request keeps the day's slowest message, other kinds the last one", async () => {
+  const db = createD1();
+  await recordOpsEvent(db, "slow", "GET /app/api/coach/pick", "4000 ms, 10 dotazů, 5 řádků");
+  await recordOpsEvent(db, "slow", "GET /app/api/coach/pick", "10023 ms, 430 dotazů, 21177 řádků; čekání: AI 4905 ms");
+  await recordOpsEvent(db, "slow", "GET /app/api/coach/pick", "3500 ms, 8 dotazů, 4 řádků");
+  await recordOpsEvent(db, "sync", "whoop", "first");
+  await recordOpsEvent(db, "sync", "whoop", "second");
+  const rows = db.sqlite.prepare("SELECT kind, count, last_message FROM ops_events ORDER BY kind").all().map(r => ({ ...r }));
+  assert.deepEqual(rows, [
+    { kind: "slow", count: 3, last_message: "10023 ms, 430 dotazů, 21177 řádků; čekání: AI 4905 ms" },
+    { kind: "sync", count: 2, last_message: "second" }
+  ]);
+});

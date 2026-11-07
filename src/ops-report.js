@@ -23,12 +23,14 @@ export async function ensureOpsEvents(db) {
   await db.prepare("CREATE TABLE IF NOT EXISTS ops_events (day TEXT NOT NULL,kind TEXT NOT NULL,service TEXT NOT NULL,count INTEGER NOT NULL DEFAULT 0,last_message TEXT,PRIMARY KEY(day,kind,service))").run();
 }
 
-// Never breaks what it watches: a failed write is only logged.
+// Never breaks what it watches: a failed write is only logged. A slow request
+// keeps the day's slowest message ("10023 ms, …": the number it starts with),
+// so the report's "až" is the worst of the day, not the last.
 export async function recordOpsEvent(db, kind, service, message = "", count = 1) {
   if (!db || !count) return;
   try {
     await ensureOpsEvents(db);
-    await db.prepare("INSERT INTO ops_events(day,kind,service,count,last_message) VALUES(?,?,?,?,?) ON CONFLICT(day,kind,service) DO UPDATE SET count=count+excluded.count,last_message=excluded.last_message")
+    await db.prepare("INSERT INTO ops_events(day,kind,service,count,last_message) VALUES(?,?,?,?,?) ON CONFLICT(day,kind,service) DO UPDATE SET count=count+excluded.count,last_message=CASE WHEN excluded.kind='slow' AND CAST(ops_events.last_message AS INTEGER)>CAST(excluded.last_message AS INTEGER) THEN ops_events.last_message ELSE excluded.last_message END")
       .bind(day(), kind, String(service || "-"), count, text(message)).run();
   } catch (error) { original.call(console, "Ops event write failed", error.message); }
 }
@@ -250,7 +252,7 @@ export function barcodeReport(rows) {
 export function opsReport(rows, capacity, date, ai = null, stuckDeletions = [], accounts = null) {
   const of = kind => rows.filter(row => row.kind === kind).sort((a, b) => b.count - a.count);
   const sections = [];
-  const list = items => items.map(row => `- ${label(row.service)}: ${row.count}×${row.last_message ? ` (naposledy: ${row.last_message})` : ""}`).join("\n");
+  const list = items => items.map(row => `- ${label(row.service)}: ${row.count}×${row.last_message ? ` (${row.kind === "slow" ? "nejdéle" : "naposledy"}: ${row.last_message})` : ""}`).join("\n");
   if (of("sync").length) sections.push(`Selhané synchronizace\n${list(of("sync"))}`);
   if (of("broken").length) sections.push(`Rozbitá propojení (uživatel musí znovu připojit)\n${list(of("broken"))}`);
   if (of("server").length) sections.push(`Chyby serveru\n${list(of("server"))}`);
