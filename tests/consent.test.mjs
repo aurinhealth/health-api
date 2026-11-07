@@ -78,6 +78,17 @@ test("AI for a user runs only with their AI consent; the owner's until he turns 
   await assert.rejects(assertAIAccess(owner), e => e.consent === true);
 });
 
+test("with the paywall on, a free AI feature needs only the consent, the rest Pro", async () => {
+  const { env } = setup();
+  const paid = { ...env, AI_PAYWALL_ENABLED: "true" };
+  await saveConsent(env, { health: true });
+  await assert.rejects(assertAIAccess(paid, "technique"), e => e.status === 403 && e.consent === true, "no consent: not even a free feature");
+  await saveConsent(env, { ai: true });
+  await assertAIAccess(paid, "technique");
+  await assert.rejects(assertAIAccess(paid, "assistant"), e => e.status === 402);
+  await assert.rejects(assertAIAccess(paid), e => e.status === 402, "no feature named: Pro");
+});
+
 test("the owner is not asked; he runs the app", async () => {
   const { env } = setup({ owner: true });
   const status = await consentStatus(env);
