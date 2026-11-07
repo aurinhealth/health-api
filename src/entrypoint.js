@@ -64,7 +64,7 @@ import { explainWorkout, athleteSteps, athleteMinutes } from "./workout-explanat
 import { libraryBricks } from "./brick-workouts.js";
 import { aiWorkoutPick } from "./ai-workout-pick.js";
 import { composeWorkout, poorFit, fewMatches, composeKey, libraryKind, COMPOSE_VARIANTS } from "./ai-workout-compose.js";
-import { rankOptions, saunaSigns, dayChoice, recentKinds, pickState, savePick, undoSkip, lessKinds, setLess, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "./coach-pick.js";
+import { rankOptions, saunaSigns, dayChoice, recentKinds, sportReturns, pickState, savePick, undoSkip, lessKinds, setLess, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "./coach-pick.js";
 import { activityKindOf } from "./activity-match.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
@@ -152,7 +152,7 @@ import { coachNudge, swapOffer, hardSession, easierSwap, zoneShiftHours, COACH_P
 import { waterNudge } from "./water-goal.js";
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
 import { cachedPage } from './page-cache.js';
-import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, L } from "./lang.js";
+import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, units, L } from "./lang.js";
 import { appUpdateRequired } from "./app-version.js";
 import { compactOldData } from "./heart-rate-compaction.js";
 import { upkeepHourSummary } from "./hour-summary.js";
@@ -1338,7 +1338,7 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   const weeksLoading=coachWeeks(env,ctx,weeks);
   // Drinks of the day, for the coach's food advice (coach-assistant.js nutritionContext).
   const extras=Promise.all([dashboardProfile(env),internal('/app/api/fluids?date='+date).then(json).catch(()=>null),readinessCheckin(env.DB,date).catch(()=>null),
-    date===localToday()?loadTrainingDoses(env.DB).catch(()=>null):null]);
+    date===localToday()?loadTrainingDoses(env.DB).catch(()=>null):null,sportReturns(env.DB,env.USER_ID,date).catch(()=>null)]);
   // Awaited below; a failure before that is not left unhandled.
   weeksLoading.catch(()=>{});extras.catch(()=>{});
   const [dailyResponse,fitnessResponse,gymResponse,sleepResponse,health]=await Promise.all([
@@ -1347,12 +1347,12 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
     coachSleep(env,ctx,internalAuth,date).then(d=>Response.json(d)),
     googleHealthFor(env,ctx,date).catch(()=>({}))
   ]);
-  const [daily,fitness,gym,sleep,[profile,fluids,checkin,training],weekData]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),extras,weeksLoading]);
+  const [daily,fitness,gym,sleep,[profile,fluids,checkin,training,returns],weekData]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),extras,weeksLoading]);
   applyEnergyBudget(daily,profile,health);
   // Regenerace of today, as Today shows it (recovery-time.js).
   const athleteState=await getAthleteState(env.DB);
   const regeneration=training?withRecoveryTime(buildToday({date,hour:localHour(),health,fitness,sleep,profile:profile||{},checkin}),training,athleteState?.status).recoveryTime??null:null;
-  return {date,daily,fitness,gym,fluids,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:await coachProfile(env,profile),athleteState,cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin,recoveryTime:regeneration,journal:await journalForCoach(env.DB,date).catch(()=>null),upcomingTest:await getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null)};
+  return {date,daily,fitness,gym,fluids,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:await coachProfile(env,profile),athleteState,cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin,recoveryTime:regeneration,returns,journal:await journalForCoach(env.DB,date).catch(()=>null),upcomingTest:await getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null)};
 }
 
 // Everything the coach's note looks at for one day: 5 weeks of activities
@@ -1487,13 +1487,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       let details=await storedDetails(env.DB,env.USER_ID,date,signature).catch(()=>null);
       if(!details){details=await pickDetails(env,ctx,ranked,date,gym);await storeDetails(env.DB,env.USER_ID,date,signature,details).catch(()=>{});}
       // Horko (heat-advice.js) at a ride or run outdoors: the workout's place, else the forecast's advice.
-      const heatFor=(kind,workout)=>{
+      const heatFor=(kind,workout,hard)=>{
         if(!['ride','run'].includes(kind))return null;
         const indoor=workout?.environment?workout.environment==='indoor':environmentFor(date,kind,place.forecast).environment==='indoor';
-        return heatAdvice({sport:kind,weather:place.forecast,indoor})?.text||null;
+        return heatAdvice({sport:kind,weather:place.forecast,intervals:hard!==false,indoor})?.text||null;
       };
       const options=ranked.options.filter(o=>o.best||!less.includes(o.kind)).map(o=>{
-        const d=details[o.kind],heat=heatFor(o.kind,d?.workout);if(!d)return heat?{...o,heat}:o;
+        const d=details[o.kind],heat=heatFor(o.kind,d?.workout,o.hard);if(!d)return heat?{...o,heat}:o;
         const detail=d.minutes?d.minutes+' min'+(o.detail.includes(' · ')?o.detail.slice(o.detail.indexOf(' · ')):''):o.detail;
         return {...o,detail,lines:d.lines,...(d.workout?{workout:d.workout}:{}),...(d.gym?{gym:d.gym}:{}),...(heat?{heat}:{})};
       });
@@ -2783,14 +2783,16 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const requested=url.searchParams.get('date'),date=validTrainingDay(requested)&&requested<=shiftDate(localToday(),14)?requested:localToday();
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
-      const [daily,food,fluids,health,profile]=await Promise.all([
+      // Today's forecast (cached, as on Today) for the Pití card's heat hint.
+      const [daily,food,fluids,health,profile,place]=await Promise.all([
         read('/analysis/daily?date='+date),read('/food/log?date='+date),api('/app/api/fluids?date='+date),
         // A day ahead has no measured movement yet: the Google Health read
         // (91 days of values and a month of steps) would only slow it down.
-        date>localToday()?{}:googleHealthFor(env,ctx,date).catch(()=>({})),dashboardProfile(env).catch(()=>null)
+        date>localToday()?{}:googleHealthFor(env,ctx,date).catch(()=>({})),dashboardProfile(env).catch(()=>null),
+        date===localToday()?todayPlace(env,ctx,date):{forecast:null}
       ]);
       applyEnergyBudget(daily,profile,health);
-      const built=buildFood({date,hour:date===localToday()?localHour():null,daily,food,fluids,slots:profile?.meals});
+      const built=buildFood({date,hour:date===localToday()?localHour():null,daily,food,fluids,slots:profile?.meals,forecast:place.forecast});
       // Up to three nutrients a Pro account pinned under the macros (micronutrients.js).
       const [pro,favorites]=await Promise.all([isPro(env),nutrientFavorites(env.DB,env.USER_ID??env.DB.userId)]);
       if(pro&&favorites.length){const items=buildNutrients({days:[{date,food}],profile,kcalTarget:numOrNull(daily?.nutrition?.calorieTarget),pro}).items;built.nutrients=favorites.map(k=>items.find(i=>i.key===k)).filter(Boolean);}
@@ -2926,7 +2928,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if(url.pathname==='/app/api/share/milestones'&&request.method==='GET'){
     try{
       const today=localToday();
-      const result=await cached(env,ctx,'share-milestones:'+today,async()=>{
+      const result=await cached(env,ctx,'share-milestones:'+today+':'+units(),async()=>{
         const [inputs,record]=await Promise.all([
           milestoneInputs(env,today),
           intervalsRecord(env,intervalsAuthorization(env.INTERVALS_API_KEY),today).catch(()=>null)
@@ -3393,9 +3395,9 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)),w=library?renderForEnvironment(library,link.environment==='indoor'?'indoor':'outdoor'):plannedEventWorkout(event),kind=w.sport==='run'||w.sport==='swim'?w.sport:'ride';
       let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
       w.steps=athleteSteps(structure,kind,w.environment,thresholds);w.duration_minutes=athleteMinutes(w,structure,kind,thresholds);
-      // Horko (heat-advice.js) for today's ride or run outdoors, at its time (?date=&time= from the app).
+      // Horko (heat-advice.js) for today's ride or run outdoors, over its time (?date=&time= from the app) and length.
       const day=url.searchParams.get('date'),time=url.searchParams.get('time');
-      const heat=day===localToday()&&w.environment!=='indoor'?heatAdvice({sport:w.sport,weather:(await todayPlace(env,ctx,day)).forecast,time:/^\d{1,2}:\d{2}/.test(time||'')?time:null})?.text||null:null;
+      const heat=day===localToday()&&w.environment!=='indoor'?heatAdvice({sport:w.sport,weather:(await todayPlace(env,ctx,day)).forecast,time:/^\d{1,2}:\d{2}/.test(time||'')?time:null,minutes:w.duration_minutes,intervals:isHardSession(w,kind)})?.text||null:null;
       return Response.json({status:'ok',source:library?'library':'intervals',workout:w,...(heat?{heat}:{}),athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,runThresholdPace:thresholds.runThresholdPace}},{headers:{'Cache-Control':'no-store'}});
     }
     // The library's day: the coach of the week plan's role and the day's time

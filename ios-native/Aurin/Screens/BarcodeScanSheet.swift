@@ -49,6 +49,9 @@ struct BarcodeScanSheet: View {
     @State private var loggedAny = false
     /// "Navrhnout pro všechny" for a food read from its label (FoodProduct.canSuggestNew).
     @State private var suggestNew = true
+    /// What AI noted on the label it read: unsure values, or energy that
+    /// doesn't match the macros (a kJ figure read as kcal).
+    @State private var labelNote: String?
 
     /// nil until the camera permission is known (the scanner is unavailable
     /// before the first permission prompt, so the app asks first).
@@ -129,7 +132,11 @@ struct BarcodeScanSheet: View {
         }
         .sheet(item: $editing) { product in
             NavigationStack {
-                FoodProductEditor(product: product) { corrected in show(corrected, keepAmount: true) }
+                FoodProductEditor(product: product) { corrected in
+                    // The user checked the values: AI's note on them is settled.
+                    labelNote = nil
+                    show(corrected, keepAmount: true)
+                }
             }
         }
     }
@@ -234,7 +241,7 @@ struct BarcodeScanSheet: View {
                 if let product {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
-                            if product.source == "ai-estimate" { AIEstimateTag() }
+                            if product.isEstimate { AIEstimateTag() }
                             else { Text("✓ Nalezeno").font(Typo.caption).foregroundStyle(Palette.green) }
                             Spacer()
                             Button { edit(product) } label: {
@@ -248,6 +255,10 @@ struct BarcodeScanSheet: View {
                         Text([product.brand, code.map { "EAN " + $0 }].compactMap { $0 }.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                     NutritionCells(product: product, amount: amount)
+                    if let labelNote {
+                        Label(labelNote, systemImage: "sparkles").font(Typo.caption).foregroundStyle(Palette.amber)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     DayLeftLine(day: model.writeDay, kcal: product.kcal(for: amount) ?? 0,
                                 protein: product.grams(product.protein_100g, for: amount) ?? 0,
                                 carbs: product.grams(product.carbs_100g, for: amount) ?? 0)
@@ -255,6 +266,12 @@ struct BarcodeScanSheet: View {
                         PortionWheel(product: product, amount: $amount, kind: Binding(get: { portionKind ?? .base }, set: { portionKind = $0 })).id(product.id + (product.serving_size?.string ?? "") + (product.serving_name ?? ""))
                         servingLine(product)
                     }
+                    // Without energy the food would count as 0 kcal: it is filled in first.
+                    if product.calories_100g == nil {
+                        Text("Doplň energii v Upravit produkt, jinak by se jídlo počítalo jako 0 kcal.").font(Typo.small).foregroundStyle(Palette.amber)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    MissingMacrosLine(missing: product.missingMacros)
                     if product.canSuggestNew && !model.demo {
                         SettingsGroup { SettingsToggle(title: "Navrhnout pro všechny", isOn: $suggestNew) }
                     }
@@ -264,7 +281,7 @@ struct BarcodeScanSheet: View {
                             .font(Typo.bodyStrong).foregroundStyle(Palette.onButton).lineLimit(1).minimumScaleFactor(0.8)
                             .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                     }
-                    .disabled(saving || amount <= 0)
+                    .disabled(saving || amount <= 0 || product.calories_100g == nil)
                     Button { Task { await save(product, next: true) } } label: {
                         Label("Přidat a skenovat další", systemImage: "barcode.viewfinder")
                             .font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
@@ -273,7 +290,7 @@ struct BarcodeScanSheet: View {
                             .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
-                    .disabled(saving || amount <= 0)
+                    .disabled(saving || amount <= 0 || product.calories_100g == nil)
                 }
             case .notFound:
                 Text("Kód \(code ?? "") neznám.").font(Typo.sentence(22)).foregroundStyle(Palette.ink)
@@ -372,6 +389,8 @@ struct BarcodeScanSheet: View {
         askName = false
         product = nil
         error = nil
+        labelNote = nil
+        suggestNew = true
         state = .scanning
     }
 
@@ -435,8 +454,12 @@ struct BarcodeScanSheet: View {
         error = nil
         guard let jpeg = await image.jpegForUpload() else { state = .notFound; return }
         do {
-            var p = try await model.api.readFoodPhoto(jpeg, mode: "label").product
+            let r = try await model.api.readFoodPhoto(jpeg, mode: "label")
+            var p = r.product
             p.barcode = code
+            labelNote = r.note
+            // Values that don't add up aren't offered to everyone unless the user turns it on.
+            if r.warning != nil { suggestNew = false }
             let name = guess.trimmingCharacters(in: .whitespaces)
             let unnamed = p.name == L10n.tr("Jídlo z fotky")
             if name.count >= 2 && unnamed { p.name = name }
@@ -481,7 +504,6 @@ struct BarcodeScanSheet: View {
             if next {
                 loggedAny = true
                 added = L10n.f("Přidáno " + MealSlot.toMeal(target) + ": %@", p.name)
-                suggestNew = true
                 portionKind = nil
                 reset()
             } else {
@@ -637,28 +659,30 @@ final class BarcodeCamera: @unchecked Sendable {
         session.addInput(input)
         session.addOutput(output)
         output.metadataObjectTypes = BarcodeScanner.symbologies.filter(output.availableMetadataObjectTypes.contains)
-        Self.zoomForCodes(device)
+        Self.zoomForCloseUp(device, width: 35 / 0.6)
         return true
     }
 
     /// The main lens of newer iPhones focuses only from 15–20 cm, where a code
-    /// is small; zoom in so a 35 mm wide code fills most of the window a bit
-    /// beyond that (Apple's recipe from AVCamBarcode). The earlier cap of 2.5×
-    /// filled the window only closer than the lens can focus, so the code was
-    /// blurred just as it looked big enough (Petr, 2026-11-03).
-    private static func zoomForCodes(_ device: AVCaptureDevice) {
+    /// is small; zoom in so the window shows `width` millimetres a bit beyond
+    /// that (Apple's recipe from AVCamBarcode): a 35 mm wide code then fills
+    /// most of it. The earlier cap of 2.5× filled the window only closer than
+    /// the lens can focus, so the code was blurred just as it looked big
+    /// enough (Petr, 2026-11-03). The label camera zooms the same way.
+    static func zoomForCloseUp(_ device: AVCaptureDevice, width: Double) {
         guard (try? device.lockForConfiguration()) != nil else { return }
         defer { device.unlockForConfiguration() }
         if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
         if device.isAutoFocusRangeRestrictionSupported { device.autoFocusRangeRestriction = .near }
+        // The lens keeps its zoom from the camera before (the label's or the scanner's).
+        device.videoZoomFactor = 1
         let closest = Double(device.minimumFocusDistance)
         guard closest > 0 else { return }
         // The window's width is the sensor's shorter side (the phone is upright).
         let dims = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
         let wide = Double(device.activeFormat.videoFieldOfView) * .pi / 180
         let short = 2 * atan(tan(wide / 2) * Double(min(dims.width, dims.height)) / Double(max(dims.width, dims.height)))
-        let filled = 35 / 0.6
-        let distance = filled / 2 / tan(short / 2)
+        let distance = width / 2 / tan(short / 2)
         // A fifth beyond the closest focus, where the picture is sharp.
         let sharp = closest * 1.2
         guard distance < sharp else { return }

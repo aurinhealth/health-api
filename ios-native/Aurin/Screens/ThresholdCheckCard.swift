@@ -21,7 +21,7 @@ struct ThresholdCheck: Decodable, Equatable {
         let sport: String
         /// "ftp", "lthr" or "runThresholdPace".
         let metric: String
-        /// "missing", "higher" or "lower".
+        /// "missing", "higher", "lower", "break" (back after 14+ days off) or "old" (8 weeks).
         let reason: String
         let current: Double?
         let estimate: Estimate?
@@ -202,6 +202,9 @@ struct ThresholdCheckCard: View {
     }
 
     private func headline(_ o: ThresholdCheck.Offer) -> String {
+        // An old value, or the first weeks after a break (src/threshold-check.js thresholdOffer).
+        if o.reason == "old" { return L10n.f("%@: poslední hodnota je starší než 8 týdnů. Test ukáže, kde jsi teď.", metricName(o.metric)) }
+        if o.reason == "break" { return L10n.f("%@ po pauze delší než 2 týdny: test ukáže, kde jsi teď.", metricName(o.metric)) }
         guard o.reason != "missing", let current = o.current, let estimate = o.estimate?.value else {
             return L10n.f("%@ zatím chybí.", metricName(o.metric))
         }
@@ -415,7 +418,7 @@ extension ThresholdCheckCard {
             return check.scheduled.first { $0.sport == sport }.map { L10n.f("%@ · %@", $0.name ?? L10n.tr("Test"), Fmt.dayHeading($0.testDate)) } ?? ""
         case .offer(let sport):
             guard let o = check.offers.first(where: { $0.sport == sport }) else { return "" }
-            guard o.reason != "missing", let estimate = o.estimate?.value else { return headline(o) }
+            guard o.reason == "higher" || o.reason == "lower", let estimate = o.estimate?.value else { return headline(o) }
             let format = o.sport == "ride" ? "Podle jízd %@" : o.sport == "run" ? "Podle běhů %@" : o.sport == "swim" ? "Podle plavání %@" : "Podle tréninků %@"
             return L10n.f(format, valueText(o.metric, estimate))
         }

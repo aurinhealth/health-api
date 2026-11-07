@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseIntervalsDescription, parseStepLine, structureFromWorkoutDoc, plannedEventWorkout, structureMinutes } from '../src/planned-detail.js';
 import { stepRows } from '../src/workout-explanation.js';
+import { hrZones as hrZonesFor } from '../src/training-zones.js';
 
 test('Intervals.icu workout text becomes steps and repeat blocks',()=>{
   const s=parseIntervalsDescription('Warmup\n- 15m ramp 50-75%\n\nMain set 3x\n- 12m 88-93% 90rpm\n- 4m 55%\n\nCooldown\n- 10m Z1\n\nDrž kadenci a pij každých 15 minut.');
@@ -40,4 +41,14 @@ test('without FTP or threshold pace each step gets the heart-rate zone of its po
   assert.equal(stepRows([{durationMinutes:20,power:65}],{ftp:250,environment:'indoor',hrZones})[0].steps[0].hrLow,undefined);
   const run=stepRows([{durationMinutes:20,power:97}],{sport:'run',environment:'indoor',hrZones})[0].steps[0];
   assert.deepEqual([run.hrLow,run.hrHigh],[156,165]);
+});
+test('without FTP, Friel heart-rate zones follow what a step trains: sweet spot Z4, threshold Z5a, VO2max Z5b',()=>{
+  // Friel cycling zones for LTHR 165 and max HR 185.
+  const hrZones=hrZonesFor({hrZoneModel:'frielLthr',lthr:165,maxHr:185});
+  const [tempo,sweet,threshold,vo2]=stepRows([84,91,98,112].map(power=>({durationMinutes:4,power})),{environment:'indoor',hrZones}).map(b=>b.steps[0]);
+  assert.deepEqual([tempo.hrLow,tempo.hrHigh],[148,153]);
+  assert.deepEqual([sweet.hrLow,sweet.hrHigh],[154,163]);
+  assert.deepEqual([threshold.hrLow,threshold.hrHigh],[164,168]);
+  // Helgerud's 4×4 at 90–95 % of max HR is 167–176 bpm.
+  assert.deepEqual([vo2.hrLow,vo2.hrHigh],[169,175]);
 });

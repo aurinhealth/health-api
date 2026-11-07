@@ -134,6 +134,8 @@ struct FoodSnapshot: Decodable, Equatable {
         /// All that was drunk, before the hydration factors.
         var drunkMl: Double? = nil
         var drinks: [Drink]? = nil
+        /// Today's ride or run outdoors on a hot day: how much to drink on it (src/heat-advice.js).
+        var heat: String? = nil
     }
 
     struct Drink: Decodable, Equatable, Identifiable {
@@ -287,10 +289,18 @@ struct FoodProduct: Codable, Equatable, Identifiable {
         if let serving_name { out["serving_name"] = .string(serving_name) }
         if let quantity = quantity?.string { out["quantity"] = .string(quantity) }
         for (key, value) in [("calories_100g", calories_100g), ("protein_100g", protein_100g), ("carbs_100g", carbs_100g),
-                             ("sugars_100g", sugars_100g), ("fat_100g", fat_100g), ("fiber_100g", fiber_100g)] {
+                             ("sugars_100g", sugars_100g), ("fat_100g", fat_100g), ("fiber_100g", fiber_100g), ("salt_100g", salt_100g)] {
             if let value { out[key] = .number(value) }
         }
         return out
+    }
+
+    /// Values AI estimated, also once saved as the user's own food: "AI odhad".
+    var isEstimate: Bool { source == "ai-estimate" || origin == "ai-estimate" }
+
+    /// "bílkoviny", "tuky": the macros it has no value for, which count as 0 g (forLogging).
+    var missingMacros: [String] {
+        [(protein_100g, "bílkoviny"), (carbs_100g, "sacharidy"), (fat_100g, "tuky")].filter { $0.0 == nil }.map { L10n.tr($0.1) }
     }
 
     /// From the shared catalog or an AI lookup, so a correction concerns everyone.

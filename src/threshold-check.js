@@ -149,17 +149,42 @@ export function estimateRunPace(sessions, athlete = {}, today) {
   return { value: Math.round(1000 / speed), confidence: confidence(fit), basis: "speed-hr", sessions: fit.n, r: Math.round(fit.r * 100) / 100 };
 }
 
+// ---- a break ----------------------------------------------------------------
+// The day a sport came back after BREAK_DAYS or more without it (the last
+// such day within `window` days), or null. The window's first day counts as
+// the day before it, so there is no session before the window to see.
+// Audit wave 2 (9.2, 7.2, O9): the week after it stays without intensity,
+// then a test is offered. 14 days is an estimate (Coyle 1984: VO2max about
+// 7 % lower after 3 weeks off; TrainerRoad retests after 14 days off).
+export const BREAK_DAYS = 14;
+export function returnAfterBreak(dates, today, { window = 35 } = {}) {
+  const from = shift(today, -window);
+  let back = null, before = from;
+  for (const d of [...new Set(dates || [])].filter(d => d >= from && d <= today).sort()) {
+    if (daysBetween(before, d) >= BREAK_DAYS) back = d;
+    before = d;
+  }
+  return back;
+}
+
 // ---- offers ----------------------------------------------------------------
 // What to offer for one sport: null, or {sport, metric, current, estimate,
-// change, reason: "missing" | "higher" | "lower", testId}. The athlete must
-// train the sport (4+ sessions in 6 weeks). A declined offer, or a value just
-// confirmed, comes back after 4 weeks, or sooner when the estimate moved
-// another 5 %.
-export function thresholdOffer({ sport, sessions, current, estimate, check = null, today }) {
+// change, reason: "missing" | "higher" | "lower" | "break" | "old", testId}.
+// The athlete must train the sport (4+ sessions in 6 weeks). A declined
+// offer, or a value just confirmed, comes back after 4 weeks, or sooner when
+// the estimate moved another 5 %. Audit wave 2 (7.2, O9): a test also comes
+// 7–21 days after the sport came back from a break of 14+ days (`back`,
+// returnAfterBreak), and when the value is 8 weeks old (`since`: the day it
+// was first seen, confirmed or the offer declined). Friel retests every 4–6
+// weeks; 8 weeks is an estimate.
+export const OLD_DAYS = 56;
+export function thresholdOffer({ sport, sessions, current, estimate: found, check = null, today, since = null, back = null }) {
   const recent = (sessions || []).filter(s => s.kind === sport && s.date > shift(today, -42) && s.date <= today);
   if (recent.length < 4) return null;
   if (check && ["scheduled", "measured"].includes(check.status)) return null;
   const metric = sport === "run" ? "runThresholdPace" : sport === "swim" ? "swimCss" : current?.ftp || recent.some(s => s.avgPower > 50) ? "ftp" : "lthr";
+  // The ride estimate is an FTP in watts: a heart-rate-only rider (LTHR) never compares it.
+  const estimate = metric === "lthr" ? null : found;
   const now = finite(current?.[metric]);
   let reason = null, change = null;
   if (!now) reason = "missing";
@@ -171,6 +196,9 @@ export function thresholdOffer({ sport, sessions, current, estimate, check = nul
     change = sport === "run" ? now / estimate.value - 1 : estimate.value / now - 1;
     if (Math.abs(change) >= CHANGE) reason = change > 0 ? "higher" : "lower";
   }
+  const touched = String(check?.updatedAt || "").slice(0, 10);
+  if (!reason && back && daysBetween(back, today) >= 7 && daysBetween(back, today) <= 21 && !(touched && touched >= back)) reason = "break";
+  if (!reason && since && daysBetween(since, today) >= OLD_DAYS) reason = "old";
   if (!reason) return null;
   if (["dismissed", "applied"].includes(check?.status) && daysBetween(String(check.updatedAt || today).slice(0, 10), today) < SNOOZE_DAYS) {
     const before = finite(check.estimate?.value);

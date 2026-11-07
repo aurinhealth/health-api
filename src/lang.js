@@ -30,6 +30,12 @@ export const isImperial = () => units() === 'imperial';
 export function withUnits(value, fn) { return current.run({ ...store(), units: normalizeUnits(value) }, fn); }
 export const KG_PER_LB = 0.45359237, M_PER_MILE = 1609.344;
 export const kgToLb = kg => kg / KG_PER_LB;
+// A run pace in the reader's units: 270 s/km → "4:30 /km" or "7:15 /mi".
+export function paceText(secondsPerKm) {
+  const s = Math.round(Number(secondsPerKm) * (isImperial() ? M_PER_MILE / 1000 : 1));
+  if (!Number.isFinite(s) || s <= 0) return '';
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + (isImperial() ? ' /mi' : ' /km');
+}
 
 // Czech plural: 1 trénink, 2–4 tréninky, 5+ tréninků; English: 1 workout, 2 workouts.
 export function plural(count, cs1, cs2, cs5, en1, en2) {

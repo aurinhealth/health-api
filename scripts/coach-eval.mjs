@@ -5,13 +5,15 @@
 // COACH_EVAL_TOKEN: the workflow's GitHub token (audience aurin-coach-eval).
 // In Actions a fresh one is asked for before every situation: a token lives
 // only minutes and the whole run takes longer (run 19 lost L01–W03 to it).
-// COACH_EVAL_HOST (staging.aurin.health) and COACH_EVAL_SCENARIOS ("S02,S04") are optional.
+// COACH_EVAL_HOST (staging.aurin.health), COACH_EVAL_SCENARIOS ("S02,S04") and
+// COACH_EVAL_REPEAT (1–5 rounds of the same situations, to see whether a reply is stable) are optional.
 import { appendFileSync, writeFileSync } from "node:fs";
 
 const host = process.env.COACH_EVAL_HOST || "staging.aurin.health";
 const { ACTIONS_ID_TOKEN_REQUEST_URL: oidcUrl, ACTIONS_ID_TOKEN_REQUEST_TOKEN: oidcAuth } = process.env;
 if (!process.env.COACH_EVAL_TOKEN && !oidcUrl) { console.error("COACH_EVAL_TOKEN is missing."); process.exit(2); }
 const wanted = String(process.env.COACH_EVAL_SCENARIOS || "").split(/[,\s]+/).filter(Boolean);
+const rounds = Math.max(1, Math.min(5, Math.round(Number(process.env.COACH_EVAL_REPEAT) || 1)));
 
 async function token() {
   if (!oidcUrl || !oidcAuth) return process.env.COACH_EVAL_TOKEN;
@@ -36,11 +38,13 @@ const list = await call({});
 if (list.status !== "ok") { console.error("The test server refused the evaluation:", list.message || list.status); process.exit(2); }
 const scenarios = list.scenarios.filter(s => !wanted.length || wanted.includes(s.id));
 const results = [];
-for (const s of scenarios) {
+const label = r => r.round ? `${r.id} (${r.round}/${rounds})` : r.id;
+for (let round = 1; round <= rounds; round++) for (const s of scenarios) {
   const result = await call({ id: s.id }).catch(error => ({ id: s.id, title: s.title, status: "error", message: error.message }));
+  if (rounds > 1) result.round = round;
   results.push(result);
   const failed = (result.checks || []).filter(c => !c.ok);
-  console.log(result.status === "ok" ? `${s.id} ${result.model} ${Math.round(result.ms / 1000)} s${failed.length ? " · " + failed.map(c => c.name).join("; ") : ""}` : `${s.id} ${result.status}: ${result.message || ""}`);
+  console.log(result.status === "ok" ? `${label(result)} ${result.model} ${Math.round(result.ms / 1000)} s${failed.length ? " · " + failed.map(c => c.name).join("; ") : ""}` : `${label(result)} ${result.status}: ${result.message || ""}`);
 }
 
 const mark = (r, severity) => { const list = (r.checks || []).filter(c => c.severity === severity); return list.length ? `${list.filter(c => c.ok).length}/${list.length}` : "–"; };
@@ -49,13 +53,18 @@ const action = a => [a.type, a.kind, a.minutes ? a.minutes + " min" : "", a.date
 const lines = [
   `# Coach evaluation · ${host}`, "",
   "| | Situace | Úloha | Model | s | Bezpečnost | Kvalita |", "|---|---|---|---|---|---|---|",
-  ...results.map(r => `| ${r.status !== "ok" ? "⚠️" : r.passed ? "✅" : "❌"} ${r.id} | ${r.title} | ${r.task || ""} | ${r.model || ""} | ${r.ms != null ? Math.round(r.ms / 1000) : ""} | ${mark(r, "safety")} | ${mark(r, "quality")} |`), ""
+  ...results.map(r => `| ${r.status !== "ok" ? "⚠️" : r.passed ? "✅" : "❌"} ${label(r)} | ${r.title} | ${r.task || ""} | ${r.model || ""} | ${r.ms != null ? Math.round(r.ms / 1000) : ""} | ${mark(r, "safety")} | ${mark(r, "quality")} |`), ""
 ];
 // Failed quality checks do not fail a situation, so they are listed on their own (Petr, run 39).
-const weak = results.flatMap(r => (r.checks || []).filter(c => !c.ok && c.severity === "quality").map(c => `- ${r.id} · ${c.name}${c.detail ? ` (${c.detail})` : ""}`));
+const weak = results.flatMap(r => (r.checks || []).filter(c => !c.ok && c.severity === "quality").map(c => `- ${label(r)} · ${c.name}${c.detail ? ` (${c.detail})` : ""}`));
 lines.push("## Neprošlé kontroly kvality", "", ...(weak.length ? weak : ["Žádné."]), "");
+// Stable = every check passed in every round (Petr 2026-11-06: a fail that passes on a rerun is still a flaw).
+if (rounds > 1) {
+  const clean = r => r.status === "ok" && (r.checks || []).every(c => c.ok);
+  lines.push(`## Stabilita: všechny kontroly v ${rounds} kolech`, "", ...scenarios.map(s => { const all = results.filter(r => r.id === s.id), ok = all.filter(clean).length; return `- ${ok === all.length ? "✅" : "❌"} ${s.id} ${ok}/${all.length}`; }), "");
+}
 for (const r of results) {
-  lines.push(`## ${r.id} · ${r.title}`, "");
+  lines.push(`## ${label(r)} · ${r.title}`, "");
   if (r.status !== "ok") { lines.push(`⚠️ ${r.status}: ${r.message || ""}`, ""); continue; }
   lines.push(`**Sportovec:** ${r.message}`, "", quote(r.answer), "");
   if ((r.proposed || []).length) lines.push(`**Akce:** navrženo ${r.proposed.map(action).join(", ")} · prošlo ${r.kept.length ? r.kept.map(action).join(", ") : "nic"}`, "");

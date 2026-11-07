@@ -283,7 +283,11 @@ struct PlanRace: Decodable, Equatable {
 }
 
 /// "160 km", "21,1 km": a race's distance.
-func raceDistance(_ km: Double) -> String { Units.distanceText(km, digits: km.rounded() == km ? 0 : 1) }
+func raceDistance(_ km: Double) -> String {
+    // Whole in the shown unit: "10 km", but "6.2 mi" for the same race.
+    let shown = Units.distance(km)
+    return Units.distanceText(km, digits: abs(shown - shown.rounded()) < 0.05 ? 0 : 1)
+}
 
 /// "1:44:30", "47:10": a race time.
 func raceTime(_ seconds: Int) -> String {

@@ -8,9 +8,12 @@ extension APIClient {
 
     /// A new amount (in the entry's own unit; the server rescales kcal and
     /// macros), another meal of the day or another day. Nil keeps the value.
-    func updateFoodEntry(id: Int, amount: Double? = nil, mealType: String? = nil, date: String? = nil) async throws {
+    /// values: kcal, protein_g, carbs_g or fat_g typed by the user; they win
+    /// over the ones the new amount scales.
+    func updateFoodEntry(id: Int, amount: Double? = nil, mealType: String? = nil, date: String? = nil, values: [String: Double] = [:]) async throws {
         var body: JSONObject = ["id": .number(Double(id))]
         if let amount { body["amount_g"] = .number(amount) }
+        for (key, value) in values { body[key] = .number(value) }
         if let mealType { body["mealType"] = .string(mealType) }
         if let date { body["date"] = .string(date) }
         let _: JSONValue = try await send("/app/api/food/entry", method: "PATCH", body: body)

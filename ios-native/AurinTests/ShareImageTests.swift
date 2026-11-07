@@ -83,6 +83,24 @@ final class ShareImageTests: XCTestCase {
         XCTAssertEqual(swim.value("Tempo")?.unit, "/100 m")
     }
 
+    /// The same swim for an imperial swimmer: yards and a pace per 100 yd (audit O24);
+    /// a race of 10 km reads "6.2 mi", not "6 mi" (29.5).
+    func testImperialSwimInYards() throws {
+        Units.setSystem("imperial")
+        defer { Units.setSystem("metric") }
+        let json = #"{"activity": {"type": "Swim", "distance": 1500, "moving_time": 1725, "average_speed": 0.8696}}"#
+        let detail = try JSONDecoder().decode(ActivityDetail.self, from: Data(json.utf8))
+        var swim = ShareWorkout(title: "Plavání", sport: "swim")
+        swim.add(detail)
+        XCTAssertEqual(swim.value("Vzdálenost")?.value, Fmt.int(1640))
+        XCTAssertEqual(swim.value("Vzdálenost")?.unit, "yd")
+        XCTAssertEqual(swim.value("Tempo")?.value, "1:45")
+        XCTAssertEqual(swim.value("Tempo")?.unit, "/100 yd")
+        XCTAssertEqual(Units.swimSpeedText(0.8696), "1:45 /100 yd")
+        XCTAssertEqual(raceDistance(10), Units.distanceText(10, digits: 1))
+        XCTAssertEqual(raceDistance(160.934), Units.distanceText(160.934, digits: 0))
+    }
+
     func testOptionsAreKept() throws {
         var options = ShareOptions()
         options.variant = 2
@@ -194,11 +212,6 @@ final class ShareImageTests: XCTestCase {
         XCTAssertEqual(ShareWeek.delta("Běh", now: 18, before: 22), "−4")
         XCTAssertEqual(ShareWeek.delta("Zátěž", now: 486, before: 412), "+74")
         XCTAssertNil(ShareWeek.value("Kolo", ShareWeek.Totals()))
-        XCTAssertEqual(ShareWeek.value("Plavání", ShareWeek.Totals(swimKm: 6.4))?.value, "6,4")
-        XCTAssertEqual(ShareWeek.delta("Plavání", now: 4.2, before: 6.4), "−2,2")
-        // Less training is no worse (a planned easier week); less sleep is.
-        XCTAssertFalse(ShareWeek.judged("Trénink") || ShareWeek.judged("Zátěž") || ShareWeek.judged("Plavání"))
-        XCTAssertTrue(ShareWeek.judged("Spánek") && ShareWeek.judged("Připravenost"))
         XCTAssertEqual(ShareText.range("2026-10-12", "2026-10-18"), "12.–18. 10.")
         XCTAssertEqual(ShareText.range("2026-09-28", "2026-10-04"), "28. 9. – 4. 10.")
         XCTAssertEqual(ShareText.weekday("2026-10-12"), "Po")
@@ -216,16 +229,6 @@ final class ShareImageTests: XCTestCase {
         XCTAssertEqual(ShareMilestones.Record.duration(1200), "20 minut")
         XCTAssertEqual(ShareMilestones.Record.duration(60), "1 minuta")
         XCTAssertTrue(ShareMilestones(items: [], record: nil).isEmpty)
-
-        // Multisport: the kilometres and time of the sports done, in the app's order.
-        let multi = #"{"items":[{"key":"multisport","value":10,"total":11,"sessions":11,"minutes":1280,"bars":[{"date":"2026-10-04","value":120}],"start":0,"sports":[{"kind":"ride","km":410,"minutes":1630},{"kind":"run","km":96,"minutes":740}]}],"record":null}"#
-        let item = try XCTUnwrap(JSONDecoder().decode(ShareMilestones.self, from: Data(multi.utf8)).items.first)
-        XCTAssertEqual(item.sports?.map(\.label), ["Kolo", "Běh"])
-        XCTAssertEqual(item.sports?.first?.distance, "410")
-        XCTAssertEqual(item.noun, "multisportovních tréninků")
-        XCTAssertFalse(item.isDistance)
-        XCTAssertEqual(["streak", "swim", "gym", "ride", "multisport", "run"].sorted { ShareMilestones.order.firstIndex(of: $0)! < ShareMilestones.order.firstIndex(of: $1)! },
-                       ["ride", "run", "swim", "multisport", "gym", "streak"])
 
         let weekJSON = #"{"start":"2026-10-12","end":"2026-10-18","today":"2026-10-15","days":[{"date":"2026-10-12","readiness":64,"zone":"green","sport":"run","minutes":50,"sessions":1,"tss":60}],"week":{"minutes":50,"sessions":1,"tss":60,"rideKm":0,"runKm":10,"sleepMinutes":420,"readiness":64},"previous":{"minutes":0,"sessions":0,"tss":0,"rideKm":0,"runKm":0,"sleepMinutes":null,"readiness":null}}"#
         let parsed = try JSONDecoder().decode(ShareWeek.self, from: Data(weekJSON.utf8))

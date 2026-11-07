@@ -331,6 +331,9 @@ struct JournalDayEditor: View {
     @State private var day: JournalDay?
     @State private var error: String?
     @State private var valueItem: JournalItem?
+    /// Nemoc ticked for today or yesterday: the day is a rest day (src/morning-checkin.js),
+    /// and the status Nemoc is offered, as the sick check-in did.
+    @State private var offerSick = false
 
     init(date: String, inSheet: Bool, reload: Int = 0) {
         _date = State(initialValue: date)
@@ -367,6 +370,12 @@ struct JournalDayEditor: View {
             }
         }
         .task(id: date + "|" + String(reload)) { await load() }
+        .alert("Přepnout stav na Nemoc?", isPresented: $offerSick) {
+            Button("Přepnout") { Task { try? await model.setAthleteStatus("sick", until: nil, note: nil) } }
+            Button("Teď ne", role: .cancel) {}
+        } message: {
+            Text("Dnes kouč plánuje jen odpočinek. Se stavem Nemoc to platí, dokud se neuzdravíš.")
+        }
         .sheet(item: $valueItem) { item in
             if item.key == "mood" {
                 JournalMoodSheet(item: item, date: date) { body in await save(body) }
@@ -535,7 +544,16 @@ struct JournalDayEditor: View {
         var body: JSONObject = ["date": .string(date), "key": .string(item.key)]
         if let value { body["answer"] = JSONValue.number(Double(value)) } else { body["answer"] = JSONValue.null }
         if value == 1, let extra = item.extra { body["extra"] = JournalStyle.json(extra) }
-        if let failure = await save(body) { error = failure }
+        if let failure = await save(body) { error = failure; return }
+        if item.key == "sick", !model.demo { await sickChanged(on: value == 1) }
+    }
+
+    /// Today and the coach follow a Nemoc of today or yesterday; a ✓ offers the status.
+    private func sickChanged(on: Bool) async {
+        let today = AppModel.localDate(Date())
+        guard date == today || date == AppModel.shift(today, by: -1) else { return }
+        if on, model.athleteStatus?.status != "sick" { offerSick = true }
+        await model.refresh()
     }
 
     private func saveExtra(_ item: JournalItem, _ extra: [String: Double]) async {

@@ -4,7 +4,7 @@
 import { n, outdoorWidth, stepIntensities, swimMinutesAt } from "./workout-model.js";
 import { zoneForPercent, formatPace } from "./training-zones.js";
 import { rideFtpFor } from "./intervals-athlete.js";
-import { L } from "./lang.js";
+import { L, paceText } from "./lang.js";
 
 const SYSTEM_LABELS = () => ({ recovery: "Recovery", endurance: "Endurance", tempo: "Tempo", sweet_spot: "Sweet Spot", threshold: "Threshold", vo2max: "VO₂max", anaerobic: L("Anaerobní kapacita", "Anaerobic capacity"), sprint: "Sprint" });
 
@@ -66,7 +66,7 @@ const EASY = sport => sport === "run" ? L("klus", "jog") : L("lehce", "easy");
 // "91 % FTP (≈ 237 W)" or "99 % prahu (4:37 /km)".
 function targetText(power, { sport, ftp, thresholdPace }) {
   const p = Math.round(n(power, 0));
-  if (sport === "run") return p + L(" % prahu", " % of threshold") + (thresholdPace ? " (" + formatPace(thresholdPace * 100 / p) + " /km)" : "");
+  if (sport === "run") return p + L(" % prahu", " % of threshold") + (thresholdPace ? " (" + paceText(thresholdPace * 100 / p) + ")" : "");
   return p + " % FTP" + (ftp ? " (≈ " + Math.round(ftp * p / 100) + " W)" : "");
 }
 
@@ -239,11 +239,18 @@ function explainSwim(workout, structure, { coach, environment, thresholds, plann
   };
 }
 
+// % FTP against Friel's seven cycling heart-rate zones by what a step trains,
+// not by zone number: Friel Z4 sits under threshold (sweet spot up to 95 %),
+// Z5a is threshold (96–105 %) and Z5b VO2max (106–120 %); Friel, The Cyclist's
+// Training Bible. Matching Coggan Z4 to Friel Z4 put threshold and VO2max
+// steps a zone too low.
+const FRIEL_FROM_FTP = [55, 75, 90, 95, 105, 120];
 function heartRateFor(percent, ranges, hrZones) {
   const zones = (Array.isArray(hrZones) ? hrZones : []).filter(z => z && (z.bpmLow != null || z.bpmHigh != null));
   if (!zones.length || !(percent > 0)) return null;
-  const bounds = Object.values(ranges), index = bounds.findIndex(([, high]) => percent <= high);
-  const z = zones[Math.min(index < 0 ? bounds.length - 1 : index, zones.length - 1)];
+  const tops = ranges === ZONE_RANGE && zones.length === 7 ? FRIEL_FROM_FTP : Object.values(ranges).map(([, high]) => high);
+  const index = tops.findIndex(high => percent <= high);
+  const z = zones[Math.min(index < 0 ? tops.length : index, zones.length - 1)];
   const lowBpm = z.bpmLow ?? (z.bpmHigh != null ? z.bpmHigh - 20 : null), highBpm = z.bpmHigh ?? (z.bpmLow != null ? z.bpmLow + 10 : null);
   return lowBpm > 0 && highBpm > lowBpm ? { hrLow: lowBpm, hrHigh: highBpm } : null;
 }
@@ -279,6 +286,8 @@ export function explainWorkout(workout, { coach = {}, environment = "indoor", th
   const rideZ2 = (thresholds.hrZones || []).find(z => z.zone === 2);
   if (!ftp && ["recovery", "endurance"].includes(system) && rideZ2?.bpmHigh) how.push(L("Tep drž do ", "Keep your heart rate under ") + rideZ2.bpmHigh + " bpm (" + hrReference(thresholds.hrModel, thresholds.lthr) + ").");
   else if (!ftp && ["recovery", "endurance"].includes(system)) how.push(TALK_TEST());
+  // Heart rate needs a minute or two to catch up, so short hard repeats go by feel.
+  else if (!ftp && ["vo2max", "anaerobic"].includes(system) && rideZ2?.bpmHigh) how.push(L("Tep v krátkých úsecích dobíhá pozdě: začni podle pocitu, cílový tep platí až pro konec úseku.", "Heart rate lags in short repeats: start by feel; the target heart rate applies to the end of each repeat."));
   return {
     title: SYSTEM_LABELS()[system] || system,
     why, how,
@@ -314,7 +323,7 @@ function explainRun(workout, structure, { coach, environment, thresholds, planne
   else if (p) why.push(progressLine(p, workout, RUN_LABELS()));
   if (!coach.rationale?.length && !planned) why.push(L("Na tento den nemáš v plánu žádný běh, proto vybírám podle běhů posledních dní a tvé úrovně.", "You have no run planned for this day, so I'm choosing based on your recent runs and your level."));
   const how = [...structureHow(structure, { system, sport: "run", thresholdPace: pace }), ...(RUN_HOW()[system] || RUN_HOW().endurance).slice(0, 2)];
-  if (pace) how.unshift(L("Tempa počítám z tvého prahového tempa ", "I calculate paces from your threshold pace of ") + formatPace(pace) + " /km" + ({ manual: L(" (nastaveno v aplikaci)", " (set in the app)") }[thresholds.runPaceSource] || L(" (z Intervals.icu)", " (from Intervals.icu)")) + ".");
+  if (pace) how.unshift(L("Tempa počítám z tvého prahového tempa ", "I calculate paces from your threshold pace of ") + paceText(pace) + ({ manual: L(" (nastaveno v aplikaci)", " (set in the app)") }[thresholds.runPaceSource] || L(" (z Intervals.icu)", " (from Intervals.icu)")) + ".");
   else how.unshift(L("Prahové tempo neznám – cíle jsou v % prahového tempa. Zadej nebo spočítej ho v Nastavení → FTP a zóny → Běh.", "I don't know your threshold pace – targets are in % of threshold pace. Enter or calculate it in Settings → FTP and zones → Run."));
   const lthr = thresholds.runLthr;
   const hrZ2 = (thresholds.runHrZones || []).find(z => z.zone === 2);

@@ -6,6 +6,7 @@
 // power record from Intervals.icu (the last 30 days against the year before).
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { activityMeters, multisportDays } from "./app-milestones.js";
+import { isImperial, M_PER_MILE } from "./lang.js";
 
 const DAY = 86400000;
 const shift = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * DAY).toISOString().slice(0, 10);
@@ -29,10 +30,14 @@ export function activityClimb(row) {
   return num(p.total_elevation_gain) ?? num(p.elevationGainMeters) ?? 0;
 }
 
+// The steps are the same round numbers in miles for an imperial user ("100 mi",
+// not "62 mi"); the value and everything else stay kilometres.
 function distanceItem(key, list, since) {
   const total = list.reduce((s, a) => s + a.meters, 0) / 1000;
-  const value = reachedStep(KM_STEPS, total);
-  if (!value) return null;
+  const perStep = isImperial() ? M_PER_MILE / 1000 : 1;
+  const step = reachedStep(KM_STEPS, total / perStep);
+  if (!step) return null;
+  const value = round(step * perStep, 3);
   let sum = 0, reachedOn = null;
   for (const a of list) { sum += a.meters / 1000; if (!reachedOn && sum >= value) reachedOn = a.date; }
   return {

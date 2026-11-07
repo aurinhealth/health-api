@@ -26,6 +26,7 @@ struct FoodProductEditor: View {
     @State private var sugar = ""
     @State private var fat = ""
     @State private var fiber = ""
+    @State private var salt = ""
     @State private var suggest = true
     @State private var filled = false
     @State private var saving = false
@@ -63,6 +64,8 @@ struct FoodProductEditor: View {
                     SettingsField(title: "Tuky", text: $fat, unit: "g")
                     SettingsDivider()
                     SettingsField(title: "Vláknina", text: $fiber, unit: "g")
+                    SettingsDivider()
+                    SettingsField(title: "Sůl", text: $salt, unit: "g")
                 }
                 if save == nil && product.canSuggest && !product.canSuggestNew && !product.perPortion {
                     SettingsGroup { SettingsToggle(title: "Navrhnout opravu pro všechny", isOn: $suggest) }
@@ -96,6 +99,7 @@ struct FoodProductEditor: View {
         sugar = product.sugars_100g.map(FoodAmountView.text) ?? ""
         fat = product.fat_100g.map(FoodAmountView.text) ?? ""
         fiber = product.fiber_100g.map(FoodAmountView.text) ?? ""
+        salt = product.salt_100g.map(FoodAmountView.text) ?? ""
     }
 
     /// The product with the corrections; a cleared serving or package stays as it was.
@@ -112,6 +116,7 @@ struct FoodProductEditor: View {
         p.sugars_100g = FoodAmountView.number(sugar)
         p.fat_100g = FoodAmountView.number(fat)
         p.fiber_100g = FoodAmountView.number(fiber)
+        p.salt_100g = FoodAmountView.number(salt)
         return p
     }
 

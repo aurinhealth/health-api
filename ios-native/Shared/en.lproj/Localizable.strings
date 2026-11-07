@@ -1218,6 +1218,13 @@
 "zítra" = "tomorrow";
 "včera" = "yesterday";
 "Doplň energii v kcal, jinak by se jídlo počítalo jako 0 kcal." = "Add the energy in kcal, otherwise the food would count as 0 kcal.";
+/* Food: macros missing from a label or AI, the scanner without energy, typed values (AddFoodSheet, BarcodeScanSheet, FoodEntryEditSheet) */
+"Chybí %@, počítají se jako 0 g." = "Missing %@: counted as 0 g.";
+"Doplň energii v Upravit produkt, jinak by se jídlo počítalo jako 0 kcal." = "Add the energy in Edit product, otherwise the food would count as 0 kcal.";
+"Co necháš prázdné, počítá se jako 0 g." = "Anything left empty counts as 0 g.";
+"Upravit hodnoty" = "Edit values";
+"Hodnoty" = "Values";
+"Za celé zapsané množství." = "For the whole amount logged.";
 "Doba pohybu" = "Moving time";
 "Průměrný tep" = "Average heart rate";
 "Kroky" = "Steps";
@@ -1626,6 +1633,10 @@
 "Přepnout stav na Nemoc?" = "Switch your status to Sick?";
 "Přepnout" = "Switch";
 "Kouč do té doby nebude plánovat trénink." = "The coach won't plan training until then.";
+"Dnes kouč plánuje jen odpočinek. Se stavem Nemoc to platí, dokud se neuzdravíš." = "Today the coach plans only rest. With the status Sick it stays that way until you're well.";
+"Nemoc v Deníku" = "Sick in your Journal";
+"%@: poslední hodnota je starší než 8 týdnů. Test ukáže, kde jsi teď." = "%@: your last value is more than 8 weeks old. A test shows where you are now.";
+"%@ po pauze delší než 2 týdny: test ukáže, kde jsi teď." = "%@ after more than 2 weeks off: a test shows where you are now.";
 
 /* Threshold check and test on Today */
 "%@ zatím chybí." = "%@ isn't set yet.";
@@ -4036,3 +4047,7 @@
 "Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit. Předplatné Aurin Pro se tím nezruší, zrušíš ho v App Store." = "Everything Aurin keeps for you goes and can't be restored. This doesn't cancel Aurin Pro; cancel it in the App Store.";
 "Pak začne Aurin Pro za %@ měsíčně po 12 měsíců. Zrušit ho můžeš v Nastavení → Aurin Pro." = "Then Aurin Pro starts at %@ a month for 12 months. You can cancel it in Settings → Aurin Pro.";
 "Načítám ceny z App Store…" = "Loading prices from the App Store…";
+
+/* Settings → Zones: where the max heart rate comes from when none is typed (ZonesSettingsView.swift heartNote) */
+"Odhad podle věku" = "Estimate from age";
+"Nejvyšší tep z tréninků za 6 měsíců" = "Highest heart rate in 6 months of workouts";

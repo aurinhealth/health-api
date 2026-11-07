@@ -1,4 +1,4 @@
-import { L, plural } from "./lang.js";
+import { L, plural, paceText } from "./lang.js";
 // Race times and race power from the athlete's thresholds: what Rekordy shows
 // as the estimate for a race, what a race plan starts from and the race day's
 // pace or power.
@@ -114,7 +114,7 @@ export function goalCheck({ km, target = null, estimate = null, estimateStart = 
   const badge = onTrack ? L("Podle plánu", "On track") : behind >= 90 ? L(`o ${Math.round(behind / 60)} min pomaleji než cíl`, `${Math.round(behind / 60)} min slower than the goal`) : L(`o ${behind} s pomaleji než cíl`, `${behind} s slower than the goal`);
   const note = onTrack
     ? (estimate > target ? L(`Zbývá stáhnout ${clock(estimate - target)} za ${weeks}, tempem, jakým se zlepšuješ.`, `${clock(estimate - target)} to gain in ${weeks}, at the pace you are improving.`) : L("Na cíl máš už dnešní formou.", "Today's form already reaches the goal.")) + checked
-    : realistic ? L(`${left} ${weeks}. Držet ${clock(Math.round(target / km))} /km by znamenalo běhat každý trénink moc tvrdě. Cíl ${clock(realistic)} sedí na tvou formu a pořád tě potáhne.`, `${weeks} left. Holding ${clock(Math.round(target / km))} /km would mean running every session too hard. A goal of ${clock(realistic)} fits your form and still pushes you.`)
+    : realistic ? L(`${left} ${weeks}. Držet ${paceText(target / km)} by znamenalo běhat každý trénink moc tvrdě. Cíl ${clock(realistic)} sedí na tvou formu a pořád tě potáhne.`, `${weeks} left. Holding ${paceText(target / km)} would mean running every session too hard. A goal of ${clock(realistic)} fits your form and still pushes you.`)
     : L(`${left} ${weeks}. Tempem, jakým se zlepšuješ, vychází závod kolem ${clock(projected)}.`, `${weeks} left. At the pace you are improving the race comes out around ${clock(projected)}.`) + checked;
   return { history, projected, status: onTrack ? "on_track" : "behind", behind: onTrack ? 0 : behind, ...(realistic ? { realistic } : {}), badge, note, paces };
 }
