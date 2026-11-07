@@ -863,7 +863,7 @@ struct ExerciseLibraryView: View {
 /// Search, the muscle chips, "Jen s mým vybavením" and the list of exercises.
 struct ExerciseCatalog: View {
     @Environment(AppModel.self) private var model
-    init(muscle: String? = nil) { _muscle = State(initialValue: muscle) }
+    init(muscle: String? = nil) { _muscle = State(initialValue: muscle.map(BodyFigure.choice)) }
 
     @State private var exercises: [GymCatalogExercise] = []
     @State private var equipment: GymEquipment?
@@ -896,9 +896,8 @@ struct ExerciseCatalog: View {
                     if model.muscles.map({ !$0.tired.isEmpty }) == true {
                         chip("Odpočaté", rested, dot: Palette.green) { rested.toggle() }
                     }
-                    ForEach(BodyFigure.muscles.indices, id: \.self) { i in
-                        let m = BodyFigure.muscles[i]
-                        chip(m.label, muscle == m.id) { muscle = muscle == m.id ? nil : m.id }
+                    ForEach(BodyFigure.choices, id: \.self) { id in
+                        chip(BodyFigure.name(id), muscle == id) { muscle = muscle == id ? nil : id }
                     }
                 }
                 .padding(.vertical, 2)
@@ -953,6 +952,7 @@ struct ExerciseCatalog: View {
     /// Whether the exercise works the muscle: by the server's map, else (an
     /// older server) by the catalog's muscle name (src/gym-catalog.js MUSCLES_CS).
     static func works(_ ex: GymCatalogExercise, _ muscle: String) -> Bool {
+        if muscle == "shoulders" { return BodyFigure.shoulders.contains { works(ex, $0) } }
         if let map = ex.muscles, !map.isEmpty { return (map[muscle] ?? 0) >= 0.5 }
         let names: [String: [String]] = [
             "chest": ["hrudnik"], "upper_back": ["zada"], "lats": ["zada"], "lower_back": ["spodni zada"], "traps": ["trapezy"],

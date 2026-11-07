@@ -27,6 +27,20 @@ final class MuscleTests: XCTestCase {
         XCTAssertNotNil(sample.figureColors["glutes"])
     }
 
+    /// Where muscles are picked, the shoulder's three parts are one Ramena.
+    func testShouldersAreOneChoice() {
+        XCTAssertTrue(BodyFigure.choices.contains("shoulders"))
+        XCTAssertEqual(BodyFigure.choices.count, BodyFigure.muscles.count - 2)
+        for id in BodyFigure.shoulders {
+            XCTAssertFalse(BodyFigure.choices.contains(id), id)
+            XCTAssertEqual(BodyFigure.choice(id), "shoulders")
+        }
+        XCTAssertEqual(BodyFigure.ids("shoulders"), BodyFigure.shoulders)
+        XCTAssertEqual(BodyFigure.ids("chest"), ["chest"])
+        XCTAssertEqual(BodyFigure.choiceCount(["front_delts", "side_delts", "rear_delts", "chest"]), 2)
+        XCTAssertEqual(BodyFigure.name("shoulders"), "Ramena")
+    }
+
     func testRestedFocusLeavesTheTiredOut() {
         let sample = DemoData.muscles
         let focus = sample.restedFocus
