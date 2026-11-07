@@ -4051,3 +4051,13 @@
 /* Settings → Zones: where the max heart rate comes from when none is typed (ZonesSettingsView.swift heartNote) */
 "Odhad podle věku" = "Estimate from age";
 "Nejvyšší tep z tréninků za 6 měsíců" = "Highest heart rate in 6 months of workouts";
+
+/* Chart legends: weekly load, steps today, form forecast, weight, race goal (chart review points 5, 7, 8) */
+"naplánováno" = "planned";
+"kroky zatím" = "steps so far";
+"obvykle do té hodiny" = "usually by this hour";
+"s plánovanými tréninky" = "with planned workouts";
+"vážení" = "weigh-ins";
+"trend" = "trend";
+"rychlejší ↑" = "faster ↑";
+"tvým tempem" = "at your pace";

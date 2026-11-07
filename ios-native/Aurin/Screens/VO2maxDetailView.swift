@@ -58,7 +58,8 @@ struct VO2maxContent: View {
     var body: some View {
         let samples = shown
         let values = samples.map(\.value)
-        let lo = (values.min() ?? vo2.value) - 1, hi = (values.max() ?? vo2.value) + 1
+        let axis = VO2maxLine.axis(values.isEmpty ? [vo2.value] : values)
+        let lo = axis.lo, hi = axis.hi
         let selected = picked.flatMap { date in samples.min { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) } }
 
         VStack(alignment: .leading, spacing: 0) {
@@ -91,9 +92,6 @@ struct VO2maxContent: View {
             Card {
                 Chart {
                     ForEach(samples) { s in
-                        AreaMark(x: .value("Den", s.date), yStart: .value("Min", lo), yEnd: .value("VO2max", s.value))
-                            .foregroundStyle(LinearGradient(colors: [Palette.green.opacity(0.22), Palette.green.opacity(0.02)], startPoint: .top, endPoint: .bottom))
-                            .interpolationMethod(.monotone)
                         LineMark(x: .value("Den", s.date), y: .value("VO2max", s.value))
                             .foregroundStyle(Palette.green)
                             .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))

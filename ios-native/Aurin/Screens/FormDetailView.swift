@@ -43,9 +43,20 @@ struct FormDetailContent: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
                 Card {
-                    HStack(spacing: 18) {
-                        legend("Kondice", form.fitness, Palette.green)
-                        legend("Únava", form.fatigue, Palette.amberBar)
+                    // How the number above comes out: Form +5 = Fitness 42 − Fatigue 37;
+                    // the two lines alone where the sum does not fit on one line.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 8) {
+                            Text(verbatim: L10n.tr("Forma") + " " + Fmt.signed(form.form) + " =").font(Typo.small).foregroundStyle(Palette.muted)
+                            legend("Kondice", form.fitness, Palette.green)
+                            Text(verbatim: "−").font(Typo.small).foregroundStyle(Palette.muted)
+                            legend("Únava", form.fatigue, Palette.amberBar)
+                        }
+                        .lineLimit(1).fixedSize()
+                        HStack(spacing: 18) {
+                            legend("Kondice", form.fitness, Palette.green)
+                            legend("Únava", form.fatigue, Palette.amberBar)
+                        }
                     }
                     FormLines(series: form.series, height: 170, scale: true)
                 }
@@ -69,11 +80,7 @@ struct FormDetailContent: View {
                 header("VO2max", trailing: vo2.change.map { L10n.f("%@ %@ za 4 týdny", $0 >= 0 ? "↑" : "↓", Fmt.decimal(abs($0))) })
                 HStack(alignment: .bottom, spacing: 16) {
                     Text(Fmt.decimal(vo2.value, digits: vo2.value.rounded() == vo2.value ? 0 : 1)).font(Typo.number(56)).foregroundStyle(Palette.ink)
-                    let values = vo2.series.map(\.value)
-                    VStack(spacing: 6) {
-                        LineChart(values: values, color: Palette.green, lo: (values.min() ?? 40) - 1, hi: (values.max() ?? 50) + 1, fill: true, height: 56)
-                        ChartSpan(start: L10n.tr("před půl rokem"))
-                    }
+                    VO2maxLine(values: vo2.series.map(\.value), height: 56)
                 }
                 .padding(.top, 10)
                 Text(verbatim: vo2.caption).font(Typo.small).foregroundStyle(Palette.muted)
@@ -144,18 +151,20 @@ struct LoadLevelScale: View {
     }
 }
 
-/// Weekly load bars: done weeks solid, this week with its plan dashed around it.
+/// Weekly load bars: done weeks solid, this week's load solid inside its plan
+/// dashed around it.
 struct WeeklyLoadChart: View {
     let weeks: [TrainingSnapshot.WeekLoad]
 
     var body: some View {
         let values = weeks.map { max($0.load, $0.planned ?? 0) }
         let top = max(values.max() ?? 1, 1)
+        let planAhead = weeks.last.map { ($0.planned ?? 0) > $0.load } ?? false
         VStack(alignment: .leading, spacing: 10) {
             Text("TSS za týden").font(Typo.caption).foregroundStyle(Palette.muted)
             BarChart(values: values,
                      styles: weeks.indices.map { i in
-                         i == weeks.count - 1 && (weeks[i].planned ?? 0) > weeks[i].load ? BarStyle(fill: Palette.amberBar, dashed: true) : BarStyle(fill: i == weeks.count - 1 ? Palette.amberBar : Palette.amberBar.opacity(0.55))
+                         i == weeks.count - 1 && planAhead ? BarStyle(fill: Palette.amberBar, dashed: true, done: weeks[i].load) : BarStyle(fill: i == weeks.count - 1 ? Palette.amberBar : Palette.amberBar.opacity(0.55))
                      },
                      hi: top,
                      labels: weeks.map { String($0.week) },
@@ -163,6 +172,10 @@ struct WeeklyLoadChart: View {
                      spacing: 8,
                      height: 96,
                      scale: scaleTicks(0, top, count: 3))
+            if planAhead {
+                ChartLegend(items: [.init(color: Palette.amberBar, text: L10n.tr("hotovo"), mark: .bar),
+                                    .init(color: Palette.amberBar.opacity(0.55), text: L10n.tr("naplánováno"), mark: .dashedBar)])
+            }
             if let current = weeks.last {
                 Text(current.planned.flatMap { $0 > current.load ? L10n.f("tento týden %@ z %@", Fmt.int(current.load), Fmt.int($0)) : nil } ?? L10n.f("tento týden %@", Fmt.int(current.load)))
                     .font(Typo.caption).foregroundStyle(Palette.faint)

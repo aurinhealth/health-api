@@ -712,7 +712,7 @@ struct FormWidget: View {
             } chart: { height in
                 VStack(spacing: 6) {
                     FormLines(series: Array(form.series.suffix(size == .large ? 90 : 42)), height: height)
-                    ChartLegend(items: [(Palette.green, L10n.tr("Kondice")), (Palette.amberBar, L10n.tr("Únava"))],
+                    ChartLegend(items: [.init(color: Palette.green, text: L10n.tr("Kondice")), .init(color: Palette.amberBar, text: L10n.tr("Únava"))],
                                 note: L10n.tr(size == .large ? "3 měsíce" : "6 týdnů"))
                 }
             }
@@ -800,15 +800,42 @@ struct VO2maxWidget: View {
                     Text("půl roku").font(Typo.caption).foregroundStyle(Palette.faint)
                 }
             } chart: { height in
-                VStack(spacing: 6) {
-                    LineChart(values: values, color: Palette.green, lo: (values.min() ?? 40) - 1, hi: (values.max() ?? 50) + 1, fill: true, height: height)
-                    ChartSpan(start: L10n.tr("před půl rokem"))
-                }
+                VO2maxLine(values: vo2.series.map(\.value), height: height)
             }
         }
     }
+}
 
-    private var values: [Double] { vo2.series.map(\.value) }
+/// VO2max over half a year: a line only, on a scale at least ±3 ml/kg/min
+/// around it with its values on the right, so a change of 0.5 stays small.
+struct VO2maxLine: View {
+    let values: [Double]
+    var height: CGFloat = 56
+
+    var body: some View {
+        let axis = Self.axis(values)
+        VStack(spacing: 6) {
+            ZStack(alignment: .topLeading) {
+                GeometryReader { geo in
+                    ChartScale(ticks: [axis.lo.rounded(.up), axis.hi.rounded(.down)].map { ScaleTick(value: $0, text: Fmt.int($0)) },
+                               width: geo.size.width - scaleWidth) {
+                        3 + (height - 6) * (1 - scaled($0, axis.lo, axis.hi))
+                    }
+                }
+                LineChart(values: values, color: Palette.green, lo: axis.lo, hi: axis.hi, height: height)
+                    .padding(.trailing, scaleWidth)
+            }
+            .frame(height: height)
+            ChartSpan(start: L10n.tr("před půl rokem"))
+        }
+    }
+
+    /// The values' middle ± half their spread, never less than ±3 ml/kg/min.
+    static func axis(_ values: [Double]) -> (lo: Double, hi: Double) {
+        guard let low = values.min(), let high = values.max() else { return (40, 50) }
+        let middle = (low + high) / 2, half = max(3, (high - low) / 2 + 0.5)
+        return (middle - half, middle + half)
+    }
 }
 
 struct ThisWeekWidget: View {
@@ -831,7 +858,7 @@ struct ThisWeekWidget: View {
                 if loads.count > 1 && values.contains(where: { $0 > 0 }) {
                     BarChart(values: values,
                              styles: loads.indices.map { i in
-                                 i == loads.count - 1 ? BarStyle(fill: Palette.amberBar, dashed: (loads[i].planned ?? 0) > loads[i].load) : BarStyle(fill: Palette.sand)
+                                 i == loads.count - 1 ? BarStyle(fill: Palette.amberBar, dashed: (loads[i].planned ?? 0) > loads[i].load, done: loads[i].load) : BarStyle(fill: Palette.sand)
                              },
                              hi: max(values.max() ?? 1, 1),
                              labels: loads.map { String($0.week) },
