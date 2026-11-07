@@ -8,6 +8,7 @@ import { assignIntensities } from './gym-intensity.js';
 import { L, isImperial, kgToLb } from './lang.js';
 import { estimateStartingLoad, resolveLoad, progressionDecision, priorMuscleSets, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
+import { PAIN_WORDS } from './pain-words.js';
 import { withoutDisliked } from './exercise-feedback.js';
 import { isIntensity } from "./strength-context.js";
 import { availableAt as availableInGym, hasKnownStations, EXERCISE_STATIONS } from "./gym-equipment.js";
@@ -732,7 +733,7 @@ export function validateFocusMuscles(value){
 // the exercises that load that part: the knee squats, lunges and presses, the
 // shoulder overhead and bench presses, the lower back deadlifts and good
 // mornings (Revize 2026-10-16, nález 24). "Nebolí" is no pain.
-const PAIN = /(?<!ne)bol[ií]|bolest|zran|nat[áa]h|podvrt|v[ýy]ron|natekl|hurt|pain|sore|injur|sprain|strain|ache/i;
+const PAIN = PAIN_WORDS;
 const PAIN_AREAS = [
   { part: /kolen|knee/i, exercises: /squat|lunge|leg press|step-up|leg extension/i, label: ['kolena', 'knee'] },
   { part: /ramen|shoulder/i, exercises: /shoulder press|overhead press|military press|push press|arnold|landmine press|bench press|incline press|floor press|chest flat press|chest press|standing dumbbell press|clean (?:&|and) press|cuban press|thruster|^dips$|assisted dip|bench dips/i, label: ['ramene', 'shoulder'] },

@@ -1,5 +1,6 @@
 import { sportAllowed } from './sport-choice.js';
 import { L } from './lang.js';
+import { PAIN_WORDS } from './pain-words.js';
 import { validDay } from './training-availability.js';
 import { trainingStatus, ATHLETE_STATUSES } from './training-status.js';
 import { prepareGymSwap,gymAdjustmentRequest } from './coach-gym-adjustment.js';
@@ -24,7 +25,7 @@ export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:t
 export const ACTION_INSTRUCTIONS=actionInstructions();
 // Words the athlete must have used before the coach may propose Sick or Injured.
 export const SICK_WORDS=/nemoc|horeč|horec|sick|chřip|chrip|nachl|rým|covid|vir[oó]z|viros|teplot|\bill\b|illness|unwell|fever|\bflu\b|\bcold\b|virus|sore throat|temperature/i;
-export const INJURY_WORDS=/zran|bol[eíe]|bolest|injur|natáh|natah|podvrt|výron|vyron|nateklé|natekl|\bpain|\bhurt|sprain|swollen|pulled/i;
+export const INJURY_WORDS=PAIN_WORDS;
 // The multi-week plans the coach can start (training-plans.js), as the coach sees them.
 // A plan whose sports the athlete picks (multisport without a race) starts in the app, not from the coach.
 export const coachPlanTemplates=()=>planTemplates().filter(t=>!t.choose).map(t=>({id:t.id,sport:t.sport,name:t.name,goal:t.goal,weeks:t.weeks.length,daysPerWeek:t.days,level:t.level,...(t.race?{raceKm:t.race.km,...(t.race.options?{raceKmOptions:t.race.options}:{})}:{})}));
