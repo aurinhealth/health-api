@@ -47,8 +47,9 @@ struct SyncPrefs: Codable, Equatable {
     var pushActivities: Bool
     var pullActivities: Bool
     var health: SyncHealth
-    /// Intervals.icu: the apps whose workouts go there too ("wahoo", "google";
-    /// Apple Health's is the health type "workouts"). nil from other destinations.
+    /// Intervals.icu, Google Health and Apple Health: the apps whose workouts go
+    /// there too ("wahoo", "google"; to Intervals.icu Apple Health's is the
+    /// health type "workouts"). nil from Wahoo.
     var forward: [String]? = nil
     /// Sent once, with an app just turned on: its last 14 days go too.
     var backfill: Bool? = nil
@@ -73,7 +74,7 @@ struct SyncDestination: Decodable, Equatable, Identifiable {
     let healthTypes: [String]
     /// Google permissions the chosen settings still need (activityWrite, weightWrite, nutritionWrite).
     var missingScopes: [String]? = nil
-    /// Intervals.icu: the connected apps whose workouts can go there too.
+    /// Intervals.icu, Google Health and Apple Health: the connected apps whose workouts can go there too.
     var forwardSources: [String]? = nil
 }
 
@@ -224,10 +225,38 @@ extension APIClient {
         try await send("/app/api/sync/activity", method: "POST", body: activity.body)
     }
 
+    /// Workouts from other apps due in Apple Health (src/watch-forward.js appleForwardList).
+    func forwardedWorkouts() async throws -> [ForwardedWorkout] {
+        struct Response: Decodable { let workouts: [ForwardedWorkout] }
+        let r: Response = try await get("/app/api/sync/forward/apple")
+        return r.workouts
+    }
+
+    /// One of them written to Apple Health ("sent") or found there already ("same").
+    func forwardedWorkoutDone(key: String, status: String) async throws {
+        struct Response: Decodable { let status: String }
+        let _: Response = try await send("/app/api/sync/forward/apple", method: "POST",
+                                         body: ["key": JSONValue.string(key), "status": .string(status)])
+    }
+
     func retrySend(key: String, destination: String) async throws -> SyncSend {
         struct Response: Decodable { let send: SyncSend }
         let r: Response = try await send("/app/api/sync/retry", method: "POST",
                                          body: ["key": JSONValue.string(key), "destination": .string(destination)])
         return r.send
     }
+}
+
+/// A workout of another app (Wahoo, Google Health) the iPhone writes to Apple Health.
+struct ForwardedWorkout: Decodable, Equatable {
+    let key: String
+    /// An Intervals.icu activity type (Ride, Run, …).
+    let type: String
+    let name: String
+    /// UTC, ISO 8601.
+    let start: String
+    let minutes: Int
+    /// Metres.
+    let distance: Double?
+    let kcal: Double?
 }

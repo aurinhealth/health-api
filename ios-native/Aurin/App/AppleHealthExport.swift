@@ -5,7 +5,8 @@ import Observation
 /// Writing to Apple Health (Zdroje dat → Apple Health → Aurin posílá): done
 /// workouts logged in Aurin as HKWorkout, and the chosen health data the
 /// app itself has: the weight typed in, the day's food (energy and macros)
-/// and water. The "Jak to šlo?" rating of a done workout goes on its workout
+/// and water. Under Tréninky z jiných aplikací also Wahoo's and Google
+/// Health's workouts, which the server lists (writeForwarded). The "Jak to šlo?" rating of a done workout goes on its workout
 /// there as its effort (iOS 18). iOS asks for write permission only for the
 /// types switched on.
 ///
@@ -36,7 +37,11 @@ final class AppleHealthExport {
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
     /// Something is written to Apple Health.
-    var isOn: Bool { prefs.pushActivities || prefs.health.any }
+    var isOn: Bool { prefs.pushActivities || prefs.health.any || forwards(prefs) }
+
+    /// Other apps' workouts are written here (Tréninky z jiných aplikací).
+    static func forwards(_ prefs: SyncPrefs) -> Bool { !(prefs.forward ?? []).isEmpty }
+    private func forwards(_ prefs: SyncPrefs) -> Bool { Self.forwards(prefs) }
 
     private init() {
         if let data = UserDefaults.standard.data(forKey: Self.prefsKey), let saved = try? JSONDecoder().decode(SyncPrefs.self, from: data) {
@@ -84,6 +89,11 @@ final class AppleHealthExport {
         if prefs.pushActivities {
             types.insert(HKObjectType.workoutType())
             if #available(iOS 18.0, *) { types.insert(HKQuantityType(.workoutEffortScore)) }
+        }
+        if forwards(prefs) {
+            types.insert(HKObjectType.workoutType())
+            types.formUnion([HKQuantityType(.activeEnergyBurned), HKQuantityType(.distanceCycling),
+                             HKQuantityType(.distanceWalkingRunning), HKQuantityType(.distanceSwimming)])
         }
         if prefs.health.allows("weight") { types.insert(HKQuantityType(.bodyMass)) }
         if prefs.health.allows("nutrition") {
@@ -230,6 +240,83 @@ final class AppleHealthExport {
             await replaceLegacyWorkout(key, with: workout)
         } catch {
             // The old copy stays; the type is right in the app.
+        }
+    }
+
+    // MARK: Workouts from other apps
+
+    @ObservationIgnored private var forwarding = false
+    private static let forwardedAtKey = "appleHealth.forwardedAt"
+    /// The server's times (toISOString: with milliseconds).
+    private static let serverTime: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    /// Wahoo's and Google Health's workouts the server lists (src/watch-forward.js
+    /// appleForwardList), each written once: one Apple Health has at about that
+    /// time already (the Wahoo app writes there itself, or the watch recorded it)
+    /// stays as it is. At most every ten minutes unless `force`.
+    func writeForwarded(api: APIClient, force: Bool = false) async {
+        guard forwards(prefs), isAvailable, api.hasSession, !forwarding, allowed(HKObjectType.workoutType()) else { return }
+        let defaults = UserDefaults.standard
+        if !force, let at = defaults.object(forKey: Self.forwardedAtKey) as? Date, Date().timeIntervalSince(at) < 600 { return }
+        forwarding = true
+        defer { forwarding = false }
+        guard let list = try? await api.forwardedWorkouts() else { return }
+        defaults.set(Date(), forKey: Self.forwardedAtKey)
+        for item in list {
+            guard let start = Self.serverTime.date(from: item.start), item.minutes > 0 else { continue }
+            let end = start.addingTimeInterval(TimeInterval(item.minutes * 60))
+            let status: String
+            if await hasWorkout(from: start, to: end) {
+                status = "same"
+            } else if await saveForwarded(item, start: start, end: end) {
+                status = "sent"
+            } else {
+                continue
+            }
+            try? await api.forwardedWorkoutDone(key: item.key, status: status)
+        }
+    }
+
+    /// Apple Health has a workout over at least half of this time (any app's, Aurin's too).
+    private func hasWorkout(from start: Date, to end: Date) async -> Bool {
+        let found = await samples(HKObjectType.workoutType(), HKQuery.predicateForSamples(withStart: start, end: end))
+        return found.contains { min($0.endDate, end).timeIntervalSince(max($0.startDate, start)) >= end.timeIntervalSince(start) / 2 }
+    }
+
+    private func saveForwarded(_ item: ForwardedWorkout, start: Date, end: Date) async -> Bool {
+        let configuration = HKWorkoutConfiguration()
+        configuration.activityType = Self.workoutType(item.type)
+        if item.type.hasPrefix("Virtual") { configuration.locationType = .indoor }
+        let builder = HKWorkoutBuilder(healthStore: store, configuration: configuration, device: nil)
+        var measured: [HKSample] = []
+        if let kcal = item.kcal, kcal > 0, allowed(HKQuantityType(.activeEnergyBurned)) {
+            measured.append(HKQuantitySample(type: HKQuantityType(.activeEnergyBurned), quantity: HKQuantity(unit: .kilocalorie(), doubleValue: kcal), start: start, end: end))
+        }
+        if let metres = item.distance, metres > 0, let type = Self.distanceType(configuration.activityType), allowed(type) {
+            measured.append(HKQuantitySample(type: type, quantity: HKQuantity(unit: .meter(), doubleValue: metres), start: start, end: end))
+        }
+        do {
+            try await builder.beginCollection(at: start)
+            if !measured.isEmpty { try await builder.addSamples(measured) }
+            try await builder.addMetadata(metadata("forward:" + item.key))
+            try await builder.endCollection(at: end)
+            return try await builder.finishWorkout() != nil
+        } catch {
+            print("Apple Health forward failed", error.localizedDescription)
+            return false
+        }
+    }
+
+    private static func distanceType(_ activity: HKWorkoutActivityType) -> HKQuantityType? {
+        switch activity {
+        case .cycling: return HKQuantityType(.distanceCycling)
+        case .running, .walking, .hiking: return HKQuantityType(.distanceWalkingRunning)
+        case .swimming: return HKQuantityType(.distanceSwimming)
+        default: return nil
         }
     }
 

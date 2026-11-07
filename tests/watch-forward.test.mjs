@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
-import { forwardWatchWorkouts, watchActivity, forwardable, PER_DAY, kickForward } from "../src/watch-forward.js";
+import { forwardWatchWorkouts, forwardToGoogle, appleForwardList, appleForwardDone, watchActivity, forwardable, PER_DAY, kickForward } from "../src/watch-forward.js";
+import { EXTRA_SCOPES, HEALTH_SCOPES } from "../src/google-scopes.js";
 import { saveSyncPrefs, forwardConsent, stopForwarding } from "../src/sync-destinations.js";
 
 const NOW = Date.parse("2026-10-16T12:00:00Z");
@@ -204,4 +205,87 @@ test("turning a source on starts a pass at most once in ten minutes", async () =
   const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "Bearer t", CONNECTED_PROVIDERS: ["intervals"] };
   assert.equal((await kickForward(env, { fetchImpl: async () => Response.json([]) })).reason, "off");
   assert.equal((await kickForward(env, { fetchImpl: async () => Response.json([]) })).reason, "recent");
+});
+
+test("which records go elsewhere: not what that destination has", () => {
+  // Paired with Intervals.icu's activity: Google Health and Apple Health don't have it.
+  assert.equal(forwardable({ record_role: "primary", matched_activity_id: "intervals:i1" }, ["wahoo"], "google"), true);
+  assert.equal(forwardable({ record_role: "primary", matched_activity_id: "google-wearables:g1" }, ["wahoo"], "google"), false);
+  assert.equal(forwardable({ record_role: "primary", matched_activity_id: "apple-health:apple:W1" }, ["wahoo"], "apple"), false);
+  assert.equal(forwardable({ record_role: "primary", matched_activity_id: "local:manual:3" }, ["wahoo"], "apple"), false);
+  // A copy whose kept record is the destination's own stays.
+  assert.equal(forwardable({ record_role: "duplicate", matched_activity_id: "apple-health:apple:W1" }, ["wahoo"], "apple"), false);
+  assert.equal(forwardable({ record_role: "duplicate", matched_activity_id: "wahoo:wahoo:1" }, ["google"], "apple"), true);
+});
+
+const NOW_W = Date.parse("2026-11-04T20:00:00Z");
+const GOOGLE = { GOOGLE_REFRESH_TOKEN: "r", GOOGLE_SCOPES: [...HEALTH_SCOPES, EXTRA_SCOPES.activityWrite] };
+const googleToken = async () => "token";
+
+test("Wahoo rides go to Google Health once, with what Wahoo measured; not what Google Health has", async () => {
+  const d = wahooDb(), posts = [];
+  const fetchImpl = async (url, init = {}) => {
+    posts.push({ url: String(url), body: JSON.parse(init.body) });
+    return Response.json({ done: true, response: { name: "users/me/dataTypes/exercise/dataPoints/g" + posts.length } });
+  };
+  const env = { DB: d, USER_ID: 7, ...GOOGLE, CONNECTED_PROVIDERS: ["google", "wahoo"] };
+  assert.deepEqual(await forwardToGoogle(env, { now: NOW_W, fetchImpl, googleToken }), { status: "skipped", reason: "off" });
+  await saveSyncPrefs(d, 7, "google", { forward: ["wahoo"], backfill: true }, { now: NOW_W });
+  // Without the permission to write workouts nothing goes (the page asks for it).
+  assert.equal((await forwardToGoogle({ ...env, GOOGLE_SCOPES: HEALTH_SCOPES }, { now: NOW_W, fetchImpl, googleToken })).reason, "scope");
+  assert.deepEqual((await forwardToGoogle(env, { now: NOW_W, fetchImpl, googleToken })).sent, [{ key: "wahoo:512031649", status: "sent" }]);
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].url, "https://health.googleapis.com/v4/users/me/dataTypes/exercise/dataPoints");
+  const ex = posts[0].body.exercise;
+  assert.equal(ex.exerciseType, "BIKING");
+  assert.equal(ex.interval.startTime, "2026-11-02T15:00:00.000Z");
+  assert.deepEqual(ex.metricsSummary, { distanceMillimeters: 30123000, caloriesKcal: 700, averageHeartRateBeatsPerMinute: "138" });
+  assert.deepEqual((await forwardToGoogle(env, { now: NOW_W, fetchImpl, googleToken })).sent, []);
+  assert.equal(posts.length, 1);
+  // A ride whose time Google Health has already (the watch's) is left.
+  d.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, start_time, end_time, payload_json, record_role) VALUES (7, 'wahoo', 'activity', 'wahoo:512031700', '2026-11-03T16:00:00', '2026-11-03T16:00:00', '2026-11-03T17:00:00', ?, 'primary')")
+    .run(JSON.stringify({ name: "Ride", type: "Ride", start_date: "2026-11-03T15:00:00Z", elapsed_time: 3600, wahoo: { workoutId: 512031700 } }));
+  d.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, start_time, end_time, payload_json, record_role) VALUES (7, 'google-wearables', 'exercise', 'google:G9', '2026-11-03T15:02:00Z', '2026-11-03T16:00:00Z', ?, 'primary')")
+    .run(JSON.stringify({ exercise: { exerciseType: "BIKING" } }));
+  assert.deepEqual((await forwardToGoogle(env, { now: NOW_W, fetchImpl, googleToken })).sent, [{ key: "wahoo:512031700", status: "same" }]);
+  assert.equal(posts.length, 1);
+  assert.equal((await forwardToGoogle({ ...env, CONNECTED_PROVIDERS: ["google"] }, { now: NOW_W, fetchImpl, googleToken })).status, "skipped");
+});
+
+test("measured values Google Health refuses: the workout goes without them", async () => {
+  const d = wahooDb(), bodies = [];
+  const fetchImpl = async (url, init = {}) => {
+    const body = JSON.parse(init.body);
+    bodies.push(body);
+    if (body.exercise.metricsSummary) return Response.json({ error: { code: 400 } }, { status: 400 });
+    return Response.json({ done: true, response: { name: "users/me/dataTypes/exercise/dataPoints/g1" } });
+  };
+  const env = { DB: d, USER_ID: 7, ...GOOGLE, CONNECTED_PROVIDERS: ["google", "wahoo"] };
+  await saveSyncPrefs(d, 7, "google", { forward: ["wahoo"], backfill: true }, { now: NOW_W });
+  assert.deepEqual((await forwardToGoogle(env, { now: NOW_W, fetchImpl, googleToken })).sent, [{ key: "wahoo:512031649", status: "sent" }]);
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[1].exercise.metricsSummary, undefined);
+});
+
+test("the iPhone gets the workouts to write to Apple Health; what Apple Health has is left", async () => {
+  const d = wahooDb();
+  const env = { DB: d, USER_ID: 7, CONNECTED_PROVIDERS: ["wahoo", "google"] };
+  assert.deepEqual(await appleForwardList(env, { now: NOW_W }), []);
+  await saveSyncPrefs(d, 7, "apple", { forward: ["wahoo"], backfill: true }, { now: NOW_W });
+  // The watch wrote Monday's ride to Apple Health: it stays as it is.
+  assert.deepEqual(await appleForwardList(env, { now: NOW_W }), []);
+  assert.equal(d.sqlite.prepare("SELECT status FROM sync_sends WHERE activity_key = 'wahoo:512031649' AND destination = 'apple'").get().status, "same");
+  d.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, start_time, end_time, payload_json, record_role) VALUES (7, 'wahoo', 'activity', 'wahoo:512031700', '2026-11-03T16:00:00', '2026-11-03T16:00:00', '2026-11-03T17:00:00', ?, 'primary')")
+    .run(JSON.stringify({ name: "Tempo", type: "Ride", start_date: "2026-11-03T15:00:00Z", elapsed_time: 3600, moving_time: 3500, distance: 30123, calories: 700, wahoo: { workoutId: 512031700 } }));
+  assert.deepEqual(await appleForwardList(env, { now: NOW_W }), [{ key: "wahoo:512031700", type: "Ride", name: "Tempo", start: "2026-11-03T15:00:00.000Z", minutes: 58, distance: 30123, kcal: 700 }]);
+  assert.deepEqual(await appleForwardDone(env, { key: "wahoo:512031700", status: "sent" }), { status: "ok" });
+  assert.deepEqual(await appleForwardList(env, { now: NOW_W }), []);
+  await assert.rejects(appleForwardDone(env, { key: "apple:W1", status: "sent" }), /Invalid workout|Neplatný/);
+  await assert.rejects(appleForwardDone(env, { key: "wahoo:1", status: "pending" }), /Invalid workout|Neplatný/);
+  // Wahoo disconnected: switched off everywhere, Aurin's record of what went deleted.
+  await saveSyncPrefs(d, 7, "google", { forward: ["wahoo"] }, { now: NOW_W });
+  await stopForwarding(d, 7, "wahoo");
+  assert.equal(d.sqlite.prepare("SELECT COUNT(*) AS n FROM sync_sends WHERE activity_key LIKE 'wahoo:%'").get().n, 0);
+  assert.deepEqual((await saveSyncPrefs(d, 7, "apple", {})).forward, []);
+  assert.deepEqual((await saveSyncPrefs(d, 7, "google", {})).forward, []);
 });
