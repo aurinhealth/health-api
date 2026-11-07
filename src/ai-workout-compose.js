@@ -136,8 +136,16 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
     const compose = async extra => {
       const r = await ask(env, { feature: "workout-compose", instructions: withFocus(instructions(sport, { asked: Boolean(asked) }), focus) + extra, input, format: SCHEMA, maxOutputTokens: 2500, model: model || lightModel(env) });
       const data = JSON.parse(r.text);
-      const template = cleanEnduranceTemplate({ sport, name: data.name, blocks: (data.blocks || []).map(b => ({ repeats: b.repeats, steps: (b.steps || []).map(s => ({ label: s.label, seconds: s.seconds, low: s.low, high: s.high })) })) });
-      const structure = enduranceStructure(template);
+      // A draft the editor's own rules refuse (a step under 30 % FTP, run 44
+      // and 45, W01) is a failed check like the others: the second try and
+      // the library still follow, instead of nothing for the athlete.
+      let template, structure;
+      try {
+        template = cleanEnduranceTemplate({ sport, name: data.name, blocks: (data.blocks || []).map(b => ({ repeats: b.repeats, steps: (b.steps || []).map(s => ({ label: s.label, seconds: s.seconds, low: s.low, high: s.high })) })) });
+        structure = enduranceStructure(template);
+      } catch (error) {
+        return { r, template: null, structure: [], reason: "", faults: ["invalid " + String(error?.message || error).slice(0, 120)] };
+      }
       const reason = String(data.reason || "").trim().slice(0, 300);
       return { r, template, structure, reason, faults: [...composeFaults({ structure, sport, type, length, cap, band }), ...(reason ? [] : ["reason"])] };
     };
@@ -147,7 +155,7 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
     // with the reasons; the better draft stays. A second failure falls back
     // to a library workout that meets the brief (runs 25–30, W01 and W02).
     const strict = ({ structure: st, faults: f }) => {
-      if (!band) return f;
+      if (!band || !st.length) return f;
       const d = difficultyFromStructure(type, st, sport);
       return d < band[0] || d > band[1] ? [...f.filter(x => !x.startsWith("difficulty")), `difficulty ${d}`] : f;
     };

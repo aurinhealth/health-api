@@ -557,3 +557,17 @@ test('run 42: "den po dlouhé jízdě" (S15), "hned po ní … běh" as the bric
   // A change on a planned day without a card is still caught.
   assert.ok(failedOn('S32', 'Zítra bych sweet spot zrušil.', s32).includes('každá změna z textu má kartu'));
 });
+
+test('runs 44/45: "nejezdi" and "netrénuj" speak of the cancelled session, a composed ride has no running words', async () => {
+  const silent = 'quality:text zmiňuje každou kartu', rest = [{ type: 'rest', eventId: 'planned:9001', date, sport: 'ride' }];
+  assert.ok(!failed('S04', { answer: 'Ne, dnes VO2 intervaly nejezdi. Dnes netrénuj a nech se vyšetřit lékařem.', kept: rest }).includes(silent));
+  assert.ok(!failed('S04', { answer: 'Dnes netrénuj a nech se vyšetřit lékařem.', kept: rest }).includes(silent));
+  assert.ok(failed('S04', { answer: 'Nech se vyšetřit lékařem.', kept: rest }).includes(silent), 'a card the text never names still fails');
+  const ride = desc => async (env, args) => ({ name: 'VO2max 5×3', duration_minutes: 45, difficulty: 7, target_load: 60, intervals_description: desc, ai: { model: args.model, reason: 'Pět třímin.', warning: '' } });
+  const words = async (id, desc) => (await runComposeScenario({}, scenarioById(id), { compose: ride(desc) })).checks.find(c => /slova jen/.test(c.name));
+  const w01 = await words('W01', 'Main Set 5x\n- 3m 110-118% VO2max intensity=interval\n- 3m 45-55% Meziklus intensity=recovery');
+  assert.equal(w01.ok, false); assert.equal(w01.detail, 'Meziklus');
+  assert.equal((await words('W01', 'Main Set 5x\n- 3m 110-118% VO2max intensity=interval\n- 3m 45-55% Lehce intensity=recovery\n\nCooldown\n- 5m 45-55% Vyjetí intensity=cooldown')).ok, true);
+  assert.equal((await words('W02', 'Warmup\n- 8m 78-85% Pace Rozklus intensity=warmup\n\nMain Set 3x\n- 7m 92-95% Pace Tempo intensity=interval\n- 2m 65-77% Pace Lehký klus intensity=recovery')).ok, true);
+  assert.equal((await words('W02', 'Main Set 3x\n- 7m 92-95% Pace Tempo intensity=interval\n- 2m 65-77% Pace Volné šlapání intensity=recovery')).ok, false);
+});
