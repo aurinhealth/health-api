@@ -636,3 +636,12 @@ test('run 50: "jak teplá je voda" asks, "Den poté" is the day after, "středu 
   }
   assert.equal(scenarioContext(scenarioById('S44'), day).athlete.daily.training.planned[0].type, 'Run');
 });
+
+test('run 51: a date "26. 10." does not end the sentence, "mluvíš" and "pomáhá…, takže" count for S44', () => {
+  const day = COACH_EVAL_DATE, failed = (id, reply) => checkReply(scenarioById(id), { proposed: [], ...reply }, null, day).filter(c => !c.ok).map(c => c.name);
+  const move = (eventId, date) => ({ type: 'move', eventId, date, sport: 'gym' });
+  const s28 = failed('S28', { answer: 'Takhle bych víkend nenechal, při dnešní připravenosti 39 je toho moc. V neděli bych ponechal „Dlouhou jízdu“. „Celé tělo“ bych přesunul ze soboty na pondělí 26. 10. a „Horní polovinu těla“ z neděle na středu 28. 10., aby měla jízda přednost.',
+    kept: [move('planned:9103', '2026-10-26'), move('planned:9105', '2026-10-28')] });
+  assert.ok(!s28.includes('text zmiňuje každou kartu'), s28.join());
+  assert.deepEqual(failed('S44', { answer: 'Pomalý běh v zóně 2 ti pomáhá budovat vytrvalost bez velké únavy, takže můžeš běhat pravidelně. Zóna 2 znamená lehké úsilí, při kterém ještě mluvíš v celých větách.', kept: [] }), []);
+});
