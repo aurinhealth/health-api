@@ -81,4 +81,41 @@ final class GymCoachTests: XCTestCase {
         XCTAssertNil(day.finishedAt)
         XCTAssertNotNil(day.startedAt)
     }
+
+    // MARK: Exercise history (Petr's rear delt pec deck, 2026-11-07)
+
+    private let pecDeck = GymHistory.Exercise(name: "Rear delt pec deck", sessions: [
+        GymHistory.Session(date: "2026-11-07", sets: [GymHistory.Lift(kg: 38, reps: 9, target: nil, rpe: nil), GymHistory.Lift(kg: 38, reps: 9, target: nil, rpe: nil), GymHistory.Lift(kg: 38, reps: 7, target: nil, rpe: nil)]),
+        GymHistory.Session(date: "2026-10-23", sets: Array(repeating: GymHistory.Lift(kg: 31.7, reps: 12, target: nil, rpe: nil), count: 3)),
+        GymHistory.Session(date: "2026-10-17", sets: [GymHistory.Lift(kg: 25, reps: 12, target: nil, rpe: nil), GymHistory.Lift(kg: 25, reps: 8, target: nil, rpe: nil)])
+    ])
+
+    func testHistoryRecords() {
+        let heaviest = GymCoach.heaviestSet(pecDeck)
+        XCTAssertEqual(heaviest?.lift.kg, 38)
+        XCTAssertEqual(heaviest?.lift.reps, 9)
+        XCTAssertEqual(heaviest?.date, "2026-11-07")
+        XCTAssertEqual(GymCoach.oneRepMax(pecDeck)?.kg, 49.5)
+        XCTAssertEqual(GymCoach.bestVolume(pecDeck)?.date, "2026-10-23")
+        XCTAssertEqual(GymCoach.bestVolume(pecDeck)?.kg ?? 0, 1141.2, accuracy: 0.01)
+        // Session day → the record set; the first session sets none.
+        XCTAssertEqual(GymCoach.recordSets(pecDeck), ["2026-11-07": 0, "2026-10-23": 0])
+    }
+
+    /// Over 12 reps counts for no 1RM, as the server's records and Strong.
+    func testOneRepMaxOnlyUpToTwelveReps() {
+        let long = GymHistory.Exercise(name: "x", sessions: [GymHistory.Session(date: "2026-11-01", sets: [lift(30, 20), lift(30, 10)])])
+        XCTAssertEqual(GymCoach.oneRepMax(long)?.kg, 40)
+        XCTAssertEqual(GymSessionMath.e1rm(lift(30, 13)), 0)
+    }
+
+    func testHistoryChangeAgainstThePreviousSession() {
+        let s = pecDeck.sessions
+        XCTAssertEqual(GymCoach.change(s[0], from: s[1]), "+" + GymCoach.shown(38 - 31.7) + " " + Units.weightUnit)
+        XCTAssertNil(GymCoach.change(s[2], from: nil))
+        let a = GymHistory.Session(date: "2026-11-02", sets: [lift(40, 9), lift(40, 8)])
+        let b = GymHistory.Session(date: "2026-10-30", sets: [lift(40, 8), lift(40, 8)])
+        XCTAssertEqual(GymCoach.change(a, from: b), "+1 opakování")
+        XCTAssertNil(GymCoach.change(b, from: b))
+    }
 }

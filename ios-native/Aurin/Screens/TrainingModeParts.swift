@@ -104,8 +104,10 @@ enum GymSessionMath {
         return best
     }
 
+    /// Epley, only from sets up to 12 reps (as the server's records and
+    /// Strong: more reps inflate it).
     static func e1rm(_ lift: GymHistory.Lift) -> Double {
-        guard let kg = lift.kg, kg > 0, let reps = lift.reps, reps > 0 else { return 0 }
+        guard let kg = lift.kg, kg > 0, let reps = lift.reps, reps > 0, reps <= 12 else { return 0 }
         return reps == 1 ? kg : kg * (1 + reps / 30)
     }
 

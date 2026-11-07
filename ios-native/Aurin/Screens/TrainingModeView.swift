@@ -241,7 +241,7 @@ struct TrainingModeView: View {
         }
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { techniqueSheet($0) }
         .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
-            ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name), today: date)
+            ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name), inWorkout: true)
         }
         // Zavřít waits for the sending, at most closeWait.
         .task(id: sendStarted) { await freeCloseLater() }
