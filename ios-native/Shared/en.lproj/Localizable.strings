@@ -2995,6 +2995,10 @@
 "Posílat data do AI funkcí" = "Send data to the AI features";
 "Vybrat fotku" = "Choose photo";
 "Na fotce jsem kód nenašel." = "No barcode found in the photo.";
+"Zadat kód" = "Enter code";
+"Číslo pod kódem" = "Number under the barcode";
+"Poslední číslice nesedí. Zkontroluj číslo pod kódem." = "The last digit doesn't match. Check the number under the barcode.";
+"Kód na obalu má 8, 12 nebo 13 číslic." = "A barcode has 8, 12 or 13 digits.";
 
 /* Splnění plánu (src/plan-compliance.js) */
 "Splnění plánu" = "Plan completion";

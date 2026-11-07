@@ -29,6 +29,7 @@ const P = {
   spark: '<path d="M12 3.5l1.8 5.2 5.2 1.8-5.2 1.8-1.8 5.2-1.8-5.2L5 10.5l5.2-1.8Z" fill="currentColor" stroke="none"/><path d="M19 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7Z" fill="currentColor" stroke="none"/>',
   camera: '<path d="M4 8h3l1.5-2.5h7L17 8h3v11H4Z"/><circle cx="12" cy="13" r="3.5"/>',
   barcode: '<path d="M4 7V5h3M17 5h3v2M20 17v2h-3M7 19H4v-2M8 9v6M11 9v6M13.5 9v6M16 9v6"/>',
+  keyboard: '<rect x="3" y="6.5" width="18" height="11" rx="2"/><path d="M7 10h.01M10 10h.01M13 10h.01M16 10h.01M8 14h8"/>',
   search: '<circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/>',
   heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" fill="currentColor" stroke="none"/>',
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
@@ -430,7 +431,7 @@ const foodTarget = `<div class="dm pad">
 </div>`;
 
 // AddFoodSheet.swift ("Co přidáme?": the meal, the search, six tiles, the foods list), then BarcodeScanSheet.swift:
-// the finder with "Vybrat fotku", the found card with NutritionCells, DayLeftLine (what is left of the sample day's 2,650 kcal
+// the finder with "Vybrat fotku" and "Zadat kód", the found card with NutritionCells, DayLeftLine (what is left of the sample day's 2,650 kcal
 // and 150 g protein after this food), the PortionWheel turned to 1½ servings, "Přidat do oběda" and "Přidat a skenovat další" under it.
 const foodAdd = `<div class="dm pad fa">
 <div class="row sp"><span class="sent h">What are you adding?</span><span class="mut s">Close</span></div>
@@ -441,7 +442,7 @@ const foodAdd = `<div class="dm pad fa">
 ${[['Plain Greek yogurt', 'Hollandia · 140 g', 205], ['Banana', '120 g', 105]].map(([k, d, v]) => `<div class="li"><div><b>${k}</b><span class="mut s">${d}</span></div><span class="num">${v}<small>kcal</small></span></div>`).join('')}
 <div class="scn"${at('900:in')}>
 <div class="row sp"><span class="cb">${ic('x')}</span><span class="sl0">BARCODE</span><span class="cb">${ic('torch')}</span></div>
-<div class="finder"${at('900:in 2900-in')}><div class="cam"><div class="bc"></div><i class="scan"></i><span class="cr tl"></span><span class="cr tr"></span><span class="cr bl"></span><span class="cr br"></span></div><p class="sent aim">Point at the barcode on the package</p><span class="olp pk">${ic('photo')}Choose photo</span></div>
+<div class="finder"${at('900:in 2900-in')}><div class="cam"><div class="bc"></div><i class="scan"></i><span class="cr tl"></span><span class="cr tr"></span><span class="cr bl"></span><span class="cr br"></span></div><p class="sent aim">Point at the barcode on the package</p><div class="pks"><span class="olp pk">${ic('photo')}Choose photo</span><span class="olp pk">${ic('keyboard')}Enter code</span></div></div>
 <div class="res"${at('2900:in')}>
 <div class="row sp"><span class="grn s b">✓ Found</span><span class="olp">${ic('pencil')}Edit product</span></div>
 <div class="sent h3">Plain Greek yogurt</div>
@@ -916,7 +917,7 @@ html:not(.js) .stage1{display:none}
 @keyframes scan{to{top:70%}}
 .cr{position:absolute;width:26px;height:26px;border:3px solid rgba(255,255,255,.9)}.cr.tl{left:20px;top:20px;border-right:0;border-bottom:0;border-radius:14px 0 0 0}.cr.tr{right:20px;top:20px;border-left:0;border-bottom:0;border-radius:0 14px 0 0}.cr.bl{left:20px;bottom:20px;border-right:0;border-top:0;border-radius:0 0 0 14px}.cr.br{right:20px;bottom:20px;border-left:0;border-top:0;border-radius:0 0 14px 0}
 .aim{margin:18px 0 0;font-size:19px;text-align:center;color:color-mix(in srgb,var(--text) 85%,transparent)}
-.finder .pk{display:flex;width:max-content;height:36px;margin:12px auto 0;padding:0 15px;font-size:13px;font-weight:500}
+.finder .pks{display:flex;justify-content:center;gap:8px;margin-top:12px}.finder .pk{display:flex;height:36px;padding:0 13px;font-size:13px;font-weight:500}
 .res{margin-top:14px}.js .res.wait:not(.in){transform:translateY(24px)}
 .olp{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 11px;border-radius:99px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 20%,transparent);font-size:12px;font-weight:600}.olp .di{font-size:12px}
 .sent.h3{font-size:24px;line-height:1.1;margin-top:4px}
