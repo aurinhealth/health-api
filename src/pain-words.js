@@ -38,3 +38,22 @@ export const PAIN_AREAS = [
 export const painAreas = memories => PAIN_AREAS.filter(a => (Array.isArray(memories) ? memories : []).some(m => PAIN_WORDS.test(String(m)) && a.part.test(String(m))));
 // The parts that hold back the intensity of one sport (ride, run, swim).
 export const sorePartsFor = (sport, memories) => painAreas(memories).filter(a => a.sports.includes(sport));
+
+// The athlete says they are ill now, in their own words: "jsem nemocný",
+// "mám horečku", "chytil jsem chřipku", "I have the flu", "I'm sick". Not
+// "nejsem", "byl jsem", "když jsem", "if I'm" or someone else's illness
+// (audit 2026-11-07, point 1: the coach then always offers Nemoc).
+const ILL_PARTS = [
+  '(?<!(?:když|kdyz|kdybych|až|az|byl|byla)\\s)(?<!\\p{L})(?:jsem|cítím\\s+se|citim\\s+se)\\s+(?:(?!byla?\\s)\\p{L}+\\s+)?(?:nemocn|nachla[zd]|marod)',
+  '(?<!(?:když|kdyz|až|az)\\s)(?<!\\p{L})mám\\s+(?:\\p{L}+\\s+)?(?:horečk|horeck|chřipk|chripk|viróz|viroz|covid|teplotu|angín|angin)',
+  '(?<!\\p{L})chytil[a]?\\s+(?:jsem\\s+)?(?:\\p{L}+\\s+)?(?:chřipk|chripk|viróz|viroz|covid|nachlazen)',
+  "(?<!(?:if|when|was|were)\\s)(?<!\\p{L})(?:i'm|im|i\\s+am|i\\s+feel|feeling)\\s+(?:(?:a\\s+bit|a\\s+little|still|kinda|quite|really|so|pretty)\\s+)?(?:sick|ill|unwell|feverish)(?!\\p{L})",
+  "(?<!(?:if|when)\\s)(?<!\\p{L})(?:i\\s+have|i've\\s+got|i\\s+got|i'm\\s+down\\s+with|down\\s+with)\\s+(?:a\\s+|the\\s+)?(?:fever|flu|covid|temperature|cold(?![ -]\\p{L}))(?!\\p{L})"
+];
+const prose = text => String(text || '').replace(/[’`]/g, "'");
+const ILL_NOW = new RegExp(ILL_PARTS.join('|'), 'iu');
+export const illNow = text => ILL_NOW.test(prose(text));
+// A lighter cold said now ("mám rýmu", "bolí mě v krku", "sore throat"): no
+// hard training today, but no Nemoc forced on all sports (point 2).
+const UNWELL = /(?<!(?:nemám|nemam|no|not|without)\s)(?<!\p{L})(?:rým\p{L}*|rym[aeuy](?!\p{L})|sore\s+throat|runny\s+nose|stuffy\s+nose|ucpan\p{L}*\s+nos|(?:bolí|boli)\s+(?:mě|me)\s+v\s+krku|bolest\s+v\s+krku|škrábe\s+(?:mě|me)\s+v\s+krku)/iu;
+export const unwellNow = text => illNow(text) || UNWELL.test(prose(text));
