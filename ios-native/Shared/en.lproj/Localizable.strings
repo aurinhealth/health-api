@@ -4051,3 +4051,13 @@
 /* Settings → Zones: where the max heart rate comes from when none is typed (ZonesSettingsView.swift heartNote) */
 "Odhad podle věku" = "Estimate from age";
 "Nejvyšší tep z tréninků za 6 měsíců" = "Highest heart rate in 6 months of workouts";
+"posledních 60 dní" = "last 60 days";
+"Nejnižší noc" = "Lowest night";
+"7denní průměr" = "7-day average";
+"jedna noc" = "one night";
+"jeden den" = "one day";
+"jedno měření" = "one measurement";
+"Dotkni se grafu a uvidíš jednu noc." = "Touch the chart to see a single night.";
+"Dotkni se grafu a uvidíš jeden den." = "Touch the chart to see a single day.";
+"Dotkni se grafu a uvidíš jedno měření." = "Touch the chart to see a single measurement.";
+"průměr za %@ dní" = "%@-day average";

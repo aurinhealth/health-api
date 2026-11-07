@@ -1297,5 +1297,65 @@
 			<string>%lld položek na fotce</string>
 		</dict>
 	</dict>
+	<key>průměr %lld nocí</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>průměr %lld nocí</string>
+			<key>many</key>
+			<string>průměr %lld nocí</string>
+			<key>one</key>
+			<string>průměr %lld noci</string>
+			<key>other</key>
+			<string>průměr %lld nocí</string>
+		</dict>
+	</dict>
+	<key>průměr %lld dní</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>průměr %lld dnů</string>
+			<key>many</key>
+			<string>průměr %lld dne</string>
+			<key>one</key>
+			<string>průměr %lld dne</string>
+			<key>other</key>
+			<string>průměr %lld dnů</string>
+		</dict>
+	</dict>
+	<key>průměr %lld měření</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>průměr %lld měření</string>
+			<key>many</key>
+			<string>průměr %lld měření</string>
+			<key>one</key>
+			<string>průměr %lld měření</string>
+			<key>other</key>
+			<string>průměr %lld měření</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

@@ -3,8 +3,39 @@ import SwiftUI
 
 /// A value over days: each day a faint dot, the 7-day average as a line, the
 /// usual range as a band, a finger to read any day ("8. října · 64 ms")
-/// and 7 / 30 / 90 days to pick above it.
+/// and 7 / 30 / 90 days to pick above it. Over the chart the average of the
+/// picked days ("97 ms · 7-day average · rising", "average of 22 nights" when
+/// fewer have a value), one day only while a finger is on it (chart review 2).
 struct TrendChart: View {
+    /// What one dot is: a night, a day or a measurement (a scale's).
+    enum Per {
+        case night, day, measurement
+
+        fileprivate var averageOf: String {
+            switch self {
+            case .night: return "průměr %lld nocí"
+            case .day: return "průměr %lld dní"
+            case .measurement: return "průměr %lld měření"
+            }
+        }
+
+        fileprivate var one: String {
+            switch self {
+            case .night: return "jedna noc"
+            case .day: return "jeden den"
+            case .measurement: return "jedno měření"
+            }
+        }
+
+        fileprivate var hint: String {
+            switch self {
+            case .night: return "Dotkni se grafu a uvidíš jednu noc."
+            case .day: return "Dotkni se grafu a uvidíš jeden den."
+            case .measurement: return "Dotkni se grafu a uvidíš jedno měření."
+            }
+        }
+    }
+
     /// Which side of the band is the bad one: its days get an amber dot.
     enum Worse {
         case none, below, above
@@ -18,6 +49,9 @@ struct TrendChart: View {
     var height: CGFloat = 190
     var digits = 0
     var worse: Worse = .none
+    var per: Per = .night
+    /// The trend beside the average ("↑ rising"), "–" or nil without one.
+    var trend: String? = nil
     @State private var picked: Date?
     @State private var days = 30
 
@@ -89,11 +123,13 @@ struct TrendChart: View {
     private func chart(_ list: [Sample], lo: Double, hi: Double, selected: Sample?, shown: Sample?) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(shown.map { Fmt.decimal($0.value, digits: digits) } ?? "–").font(Typo.number(26)).foregroundStyle(Palette.ink)
+                Text(selected.map { Fmt.decimal($0.value, digits: digits) } ?? Self.average(list.map(\.value)).map { Fmt.decimal($0, digits: digits) } ?? "–")
+                    .font(Typo.number(26)).foregroundStyle(Palette.ink)
                 Text(unit).font(Typo.caption).foregroundStyle(Palette.faint)
                 Spacer()
-                Text(shown.map { selected == nil ? L10n.f("naposledy · %@", Fmt.dayMonth($0.iso)) : Fmt.dayMonth($0.iso) } ?? "")
+                Text(verbatim: selected.map { Fmt.dayMonth($0.iso) } ?? periodLabel(count: list.count))
                     .font(Typo.caption).foregroundStyle(Palette.muted)
+                    .lineLimit(1).minimumScaleFactor(0.8)
             }
             Chart {
                 if let band, let first = list.first, let last = list.last {
@@ -139,11 +175,34 @@ struct TrendChart: View {
             }
             .chartXSelection(value: $picked)
             .frame(height: height)
-            HStack(spacing: 14) {
+            // What the line and the dots are, then the band.
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 14) {
+                    HStack(spacing: 5) {
+                        Capsule().fill(color).frame(width: 14, height: 2.6)
+                        Text("7denní průměr").font(Typo.tiny).foregroundStyle(Palette.muted)
+                    }
+                    HStack(spacing: 5) {
+                        Circle().fill(color.opacity(0.4)).frame(width: 7, height: 7)
+                        Text(per.one).font(Typo.tiny).foregroundStyle(Palette.muted)
+                    }
+                }
                 if band != nil { legend(color.opacity(0.25), bandLabel ?? "obvyklé rozmezí") }
-                Spacer()
+                Text(per.hint).font(Typo.tiny).foregroundStyle(Palette.faint)
             }
         }
+    }
+
+    /// "7-day average · rising", or "average of 22 nights · rising" when fewer
+    /// of the picked days have a value.
+    private func periodLabel(count: Int) -> String {
+        guard count > 0 else { return "" }
+        let span = count >= days ? L10n.f("průměr za %@ dní", String(days)) : L10n.plural(per.averageOf, count)
+        return [span, trend == "–" ? nil : trend].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    static func average(_ values: [Double]) -> Double? {
+        values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
     }
 
     /// "7 dní · 30 dní · 90 dní", the chosen one filled.

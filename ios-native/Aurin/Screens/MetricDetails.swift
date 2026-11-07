@@ -51,7 +51,8 @@ struct MetricDetailView: View {
 }
 
 /// The detail of one value, all in the same order: what is measured, the
-/// number with its state, the athlete's usual range, the trend and three cells.
+/// number with its state, the athlete's usual range and the trend with the
+/// period's average (chart review 2: no cells repeating it).
 struct MetricDetailContent: View {
     let metric: HealthMetric
     let health: HealthSnapshot
@@ -78,15 +79,14 @@ struct MetricDetailContent: View {
             MetricHeadline(caption: "Variabilita srdečního tepu v noci", value: Fmt.int(hrv.value ?? hrv.series.last?.value), unit: "ms",
                            status: hrv.value.flatMap { v in hrv.low.flatMap { low in hrv.high.map { MetricStatus.compare(v, low: low, high: $0, worseAbove: false) } } })
             if let value = hrv.value, let low = hrv.low, let high = hrv.high, high > low {
-                DetailRange(value: value, low: low, high: high, label: L10n.f("obvyklé rozmezí %@–%@ ms", Fmt.int(low), Fmt.int(high)))
+                DetailRange(value: value, low: low, high: high, label: L10n.f("obvyklé rozmezí %@–%@ ms", Fmt.int(low), Fmt.int(high)) + " · " + L10n.tr("posledních 60 dní"))
                     .padding(.top, 14)
             }
             MetricChart(title: "HRV po nocích", color: Palette.green) {
                 TrendChart(points: hrv.series, color: Palette.green, unit: "ms",
-                           band: MetricMath.range(hrv.low, hrv.high), bandLabel: MetricMath.usualLabel(hrv.low, hrv.high), worse: .below)
+                           band: MetricMath.range(hrv.low, hrv.high), bandLabel: MetricMath.usualLabel(hrv.low, hrv.high), worse: .below,
+                           trend: MetricMath.trendText(hrv.trend))
             }
-            ThreeCells(cells: [("7 dní", Fmt.int(hrv.week)), ("Průměr (60 dní)", Fmt.int(hrv.baseline)), ("Trend", MetricMath.trendText(hrv.trend))])
-                .padding(.top, 20)
         } else {
             MetricEmpty()
         }
@@ -100,15 +100,14 @@ struct MetricDetailContent: View {
                            status: rhr.value.flatMap { v in rhr.usual.map { MetricStatus.compare(v, low: $0.lowerBound, high: $0.upperBound, worseAbove: true) } })
             if let value = rhr.value, let usual = rhr.usual {
                 DetailRange(value: value, low: usual.lowerBound, high: usual.upperBound,
-                            label: L10n.f("obvyklé rozmezí %@–%@ bpm", Fmt.int(usual.lowerBound), Fmt.int(usual.upperBound)), worseAbove: true)
+                            label: L10n.f("obvyklé rozmezí %@–%@ bpm", Fmt.int(usual.lowerBound), Fmt.int(usual.upperBound)) + " · " + L10n.tr("posledních 60 dní"), worseAbove: true)
                     .padding(.top, 14)
             }
             MetricChart(title: "Klidový tep po dnech", color: Palette.rust) {
                 TrendChart(points: rhr.series, color: Palette.rust, unit: "bpm",
-                           band: rhr.usual, bandLabel: L10n.tr("obvyklé rozmezí"), worse: .above)
+                           band: rhr.usual, bandLabel: L10n.tr("obvyklé rozmezí"), worse: .above, per: .day,
+                           trend: MetricMath.trend(rhr.series, step: 1))
             }
-            ThreeCells(cells: [("7 dní", Fmt.int(MetricMath.week(rhr.series))), ("Průměr (60 dní)", Fmt.int(rhr.baseline)), ("Trend", MetricMath.trend(rhr.series, step: 1))])
-                .padding(.top, 20)
         } else {
             MetricEmpty()
         }
@@ -136,10 +135,8 @@ struct MetricDetailContent: View {
             }
             MetricChart(title: "Dech po nocích", color: Palette.green) {
                 TrendChart(points: r.series, color: Palette.green, unit: "/min", band: r.baseline.map { ($0 - 0.5)...($0 + 0.5) },
-                           bandLabel: L10n.tr("obvyklé rozmezí"), digits: 1)
+                           bandLabel: L10n.tr("obvyklé rozmezí"), digits: 1, trend: MetricMath.trend(r.series, step: 0.3))
             }
-            ThreeCells(cells: [("7 dní", Fmt.decimal(MetricMath.week(r.series))), ("Obvykle", Fmt.decimal(r.baseline)), ("Trend", MetricMath.trend(r.series, step: 0.3))])
-                .padding(.top, 20)
         } else {
             MetricEmpty()
         }
@@ -160,24 +157,22 @@ struct MetricDetailContent: View {
                 MetricHeadline(caption: L10n.tr("Teplota zápěstí v noci") + " · " + L10n.tr("odhad zařízení"), value: Fmt.decimal(Units.temperature(wrist.value)), unit: unit)
             }
             if nights.count > 1 {
-                temperatureChart(nights)
+                temperatureChart(nights, trend: MetricMath.trend(nights, step: change(0.1)))
             } else {
                 MetricChart(title: "Teplota po nocích", color: Palette.amber) {
-                    TrendChart(points: wrist.series.map { Point(date: $0.date, value: Units.temperature($0.value)) }, color: Palette.amber, unit: unit, digits: 1)
+                    TrendChart(points: wrist.series.map { Point(date: $0.date, value: Units.temperature($0.value)) }, color: Palette.amber, unit: unit, digits: 1,
+                               trend: MetricMath.trend(wrist.series, step: change(0.1)))
                 }
             }
-            ThreeCells(cells: [("7 dní", nights.isEmpty ? "–" : Fmt.signed(MetricMath.week(nights) ?? 0, digits: 1)),
-                               ("Teplota", Fmt.decimal(Units.temperature(wrist.value))),
-                               ("Trend", MetricMath.trend(nights.isEmpty ? wrist.series : nights, step: change(0.1)))])
-                .padding(.top, 20)
+            // The measured temperature, shown nowhere else once the headline is the deviation.
+            if wrist.deviation != nil {
+                StatRow(title: "Teplota", value: Fmt.decimal(Units.temperature(wrist.value)), unit: unit)
+                    .padding(.top, 12)
+            }
         } else if let skin = health.skinTemp {
             let nights = skin.series.map { Point(date: $0.date, value: change($0.value)) }
             temperatureTop(deviation: skin.deviation)
-            temperatureChart(nights)
-            ThreeCells(cells: [("7 dní", Fmt.signed(MetricMath.week(nights) ?? 0, digits: 1)),
-                               ("Nocí", String(nights.count)),
-                               ("Trend", MetricMath.trend(nights, step: change(0.1)))])
-                .padding(.top, 20)
+            temperatureChart(nights, trend: MetricMath.trend(nights, step: change(0.1)))
         } else {
             MetricEmpty()
         }
@@ -193,11 +188,11 @@ struct MetricDetailContent: View {
             .padding(.top, 14)
     }
 
-    private func temperatureChart(_ nights: [Point]) -> some View {
+    private func temperatureChart(_ nights: [Point], trend: String) -> some View {
         let half = Units.temperatureChange(0.5)
         return MetricChart(title: "Teplota po nocích", color: Palette.amber) {
             TrendChart(points: nights, color: Palette.amber, unit: Units.temperatureUnit, band: -half...half,
-                       bandLabel: L10n.tr("obvyklé rozmezí"), digits: 1)
+                       bandLabel: L10n.tr("obvyklé rozmezí"), digits: 1, trend: trend)
         }
     }
 
@@ -215,11 +210,12 @@ struct MetricDetailContent: View {
                     .padding(.top, 14)
             }
             MetricChart(title: "Kyslík po nocích", color: Palette.blue) {
-                TrendChart(points: o.series, color: Palette.blue, unit: "%", band: o.high > o.low ? o.low...o.high : nil, bandLabel: L10n.tr("obvyklé rozmezí"), digits: 1)
+                TrendChart(points: o.series, color: Palette.blue, unit: "%", band: o.high > o.low ? o.low...o.high : nil, bandLabel: L10n.tr("obvyklé rozmezí"), digits: 1,
+                           trend: MetricMath.trend(o.series, step: 0.5))
             }
-            ThreeCells(cells: [("7 dní", Fmt.decimal(MetricMath.week(o.series))), ("Nejníž", Fmt.decimal(o.series.map(\.value).min(), digits: digits)),
-                               ("Trend", MetricMath.trend(o.series, step: 0.5))])
-                .padding(.top, 20)
+            // The lowest night, shown nowhere else.
+            StatRow(title: "Nejnižší noc", value: Fmt.decimal(o.series.map(\.value).min(), digits: digits), unit: "%")
+                .padding(.top, 12)
         } else {
             MetricEmpty()
         }
@@ -237,11 +233,8 @@ struct MetricDetailContent: View {
             let since = value.series.first.map { Fmt.dayMonthShort($0.date) } ?? ""
             MetricHeadline(caption: caption, value: Fmt.decimal(convert(value.value)), unit: unit, status: Self.changeStatus(value.change, since: since, convert: convert, good: good == true))
             MetricChart(title: "Po měřeních", color: color) {
-                TrendChart(points: series, color: color, unit: unit, digits: 1)
+                TrendChart(points: series, color: color, unit: unit, digits: 1, per: .measurement, trend: MetricMath.trend(series, step: 0.3))
             }
-            ThreeCells(cells: [("Měření", String(series.count)), (L10n.f("Od %@", since), value.change.map { Fmt.signed(convert($0), digits: 1) } ?? "–"),
-                               ("Trend", MetricMath.trend(series, step: 0.3))])
-                .padding(.top, 20)
         } else {
             MetricEmpty()
         }
@@ -314,12 +307,6 @@ private struct MetricEmpty: View {
 }
 
 enum MetricMath {
-    /// The mean of the last 7 values.
-    static func week(_ points: [Point]) -> Double? {
-        let values = points.suffix(7).map(\.value)
-        return values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
-    }
-
     /// The last 7 values against the 7 before them.
     static func trend(_ points: [Point], step: Double) -> String {
         let last = points.suffix(7).map(\.value), before = points.dropLast(7).suffix(7).map(\.value)
