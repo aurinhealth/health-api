@@ -4074,6 +4074,11 @@
 "Hodnoty se nepodařilo přečíst. Vyfoť celou tabulku i s řádkem „na 100 g“, zblízka a rovně." = "Couldn't read the values. Take the whole table with its “per 100 g” row, up close and straight on.";
 "Energie %@ kcal nesedí s makroživinami (≈ %@ kcal). Zkontroluj přepis proti fotce." = "Energy %@ kcal doesn't match the macros (≈ %@ kcal). Check the values against the photo.";
 
+/* Coach: the temporary chat the coach doesn't remember (Ghost chat). */
+"Dočasný chat" = "Ghost chat";
+"Kouč si tenhle chat nezapamatuje. Klepni a začni ho." = "The coach won't remember this chat. Tap to start one.";
+"Kouč si tenhle chat nezapamatuje" = "The coach won't remember this chat";
+"Dál vidí tvoje data a to, co už ví. Nic odtud se mu neuloží do paměti a Aurin chat smaže, až odejdeš. Potvrzené tréninky a jídlo zůstanou." = "He still sees your data and what he already knows. Nothing here goes into his memory, and Aurin deletes the chat when you leave. Workouts and food you confirm stay.";
 /* Chart legends: weekly load, steps today, form forecast, weight, race goal (chart review points 5, 7, 8) */
 "naplánováno" = "planned";
 "kroky zatím" = "steps so far";
