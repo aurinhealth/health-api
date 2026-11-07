@@ -62,11 +62,12 @@ struct HistoryPage: View {
                         .foregroundStyle(W.amber)
                 }
             }
-            // Against what (watch audit C2): "↑ 21 ms vs first week".
+            // Against what (watch audit C2): "↑ 21 ms vs first week". Grey, not
+            // green or amber: a direction, never a verdict (chart review 11, MDR).
             if !sleep, let change {
-                Text(change.0)
+                Text(change)
                     .watchFont(12, .semibold)
-                    .foregroundStyle(change.1)
+                    .foregroundStyle(W.secondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -158,29 +159,21 @@ struct HistoryPage: View {
     }
 
     /// The span's last week against its first week, said so (HRV, resting HR).
-    private var change: (String, Color)? {
+    private var change: String? {
         guard !sleep, let diff else { return nil }
         let value = diff.rounded()
-        let against = W.tr(" proti 1. týdnu", " vs first week")
-        if abs(value) < 1 { return (W.tr("= jako 1. týden", "= same as first week"), W.muted) }
-        let good = metric.higherIsBetter ? value > 0 : value < 0
-        return ((value > 0 ? "↑ " : "↓ ") + W.number(abs(value)) + " " + metric.unit + against, good ? W.green : W.amber)
+        if abs(value) < 1 { return W.tr("= jako 1. týden", "= same as first week") }
+        return (value > 0 ? "↑ " : "↓ ") + W.number(abs(value)) + " " + metric.unit + W.tr(" proti 1. týdnu", " vs first week")
     }
 
     private var trend: String {
         guard let diff else { return "" }
         let lead = W.tr("Průměry týdnů. ", "Weekly averages. ")
         if abs(diff) < (sleep ? 10 : 1.5) { return lead + W.tr("Drží se stejně.", "Holding steady.") }
-        switch metric {
-        case .restingHR:
-            return lead + (diff < 0 ? W.tr("Klesá, kondice roste.", "Going down: fitness up.")
-                                    : W.tr("Stoupá, hlídej regeneraci.", "Going up: mind recovery."))
-        case .hrv:
-            return lead + (diff > 0 ? W.tr("Stoupá, regenerace dobrá.", "Going up: recovering well.")
-                                    : W.tr("Klesá, hlídej regeneraci.", "Going down: mind recovery."))
-        case .sleep:
-            return lead + (diff > 0 ? W.tr("Spíš víc.", "You sleep more.") : W.tr("Spíš méně.", "You sleep less."))
-        }
+        // Only the direction: a lower resting HR or HRV says nothing sure
+        // about fitness or recovery (chart review 11, MDR).
+        if sleep { return lead + (diff > 0 ? W.tr("Spíš víc.", "You sleep more.") : W.tr("Spíš méně.", "You sleep less.")) }
+        return lead + (diff > 0 ? W.tr("Stoupá.", "Going up.") : W.tr("Klesá.", "Going down."))
     }
 
     private var tiles: [Tiles.Item] {
@@ -238,8 +231,9 @@ struct HistoryPage: View {
         return [d.lowerBound, d.upperBound]
     }
 
-    private func axisLabel(_ date: Date, last: Date) -> String {
-        abs(date.timeIntervalSince(last)) < 3600 ? W.tr("Dnes", "Today") : W.axisDate(date, month: shown == 90)
+    /// "Today" only for today's value; the last label is always a day ("6 Nov").
+    private func axisLabel(_ date: Date, day: Bool = false) -> String {
+        date == W.dayValue(today) ? W.tr("Dnes", "Today") : W.axisDate(date, month: shown == 90 && !day)
     }
 
     private func tickLabel(_ value: Double) -> String {
@@ -297,14 +291,15 @@ struct HistoryPage: View {
                     }
                 }
             }
-            // The dates under the chart, the last one always "Today".
+            // The dates under the chart, the last one its day: "Today" only when
+            // the last value is today's (chart review 10).
             .chartXAxis(.hidden)
             HStack(spacing: 0) {
-                Text(axisLabel(first, last: last))
+                Text(axisLabel(first))
                 Spacer(minLength: 2)
-                Text(axisLabel(middle, last: last))
+                Text(axisLabel(middle))
                 Spacer(minLength: 2)
-                Text(W.tr("Dnes", "Today"))
+                Text(axisLabel(last, day: true))
             }
             .watchFont(12)
             .foregroundStyle(W.muted)

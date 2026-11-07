@@ -626,7 +626,7 @@ const wBtn = (icon, c) => `<span class="aw-ib" style="color:${c}">${ic(icon)}</s
 const watchHome = `<div class="aw-s aw-home" style="--gw:#163A2E">${wTop(wBtn('alarm', WA.ink), '7:12', wBtn('chat', WA.ink))}
 <div class="aw-hero"><span class="aw-n">78</span><span class="aw-side"><span class="aw-k">Readiness</span></span></div>
 <div class="aw-vd" style="color:${WA.green}">Ready for a hard day</div>
-<div class="aw-g">${[['Sleep', WA.indigo, '7:12', '', 28, WA.amber, '89%'], ['Strain', WA.amber, '8.4', '', 14, WA.neutral, 'of 11–14'], ['HRV', WA.green, '64', 'ms', 76, WA.green, 'above']].map(([k, kc, v, u, pos, c, note]) => `<div><span class="aw-k" style="color:${kc}">${k}</span><span class="aw-n aw-v">${v}${u ? `<small>${u}</small>` : ''}</span>${wRange(pos, c)}<b style="color:${c}">${note}</b></div>`).join('')}</div>
+<div class="aw-g">${[['Sleep', WA.indigo, '7:12', '', 28, WA.amber, '89% of need'], ['Strain', WA.amber, '8.4', '', 14, WA.neutral, 'of 11–14'], ['HRV', WA.green, '64', 'ms', 76, WA.green, 'above']].map(([k, kc, v, u, pos, c, note]) => `<div><span class="aw-k" style="color:${kc}">${k}</span><span class="aw-n aw-v">${v}${u ? `<small>${u}</small>` : ''}</span>${wRange(pos, c)}<b style="color:${c}">${note}</b></div>`).join('')}</div>
 <div class="aw-next"><span style="color:${WA.amber}">${ic('gym')}</span>Strength, full body · 45′ at 5:30 PM${ic('chev', 'aw-cv')}</div></div>`;
 const watchGym = `<div class="aw-s" style="--gw:#3A2A17">${wTop(wBtn('pause', WA.ink), '5:41', `<span class="aw-ib">${ic('menu')}</span>`)}
 <div class="aw-ex"><b>Squat</b></div>
