@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync,readdirSync,statSync} from 'node:fs';
 import worker from '../src/entrypoint.js';
-import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME,WEARABLES,WORDMARKS,PRO_PRICE,PRO_CONTENTS} from '../src/site-pages.js';
+import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME,WEARABLES,WATCH_ON_SITE,WORDMARKS,PRO_PRICE,PRO_CONTENTS} from '../src/site-pages.js';
 
 test('the overview keeps what Google verification reads on the homepage',async()=>{
   const html=await overviewPage().text();
@@ -184,7 +184,7 @@ test('the support page follows the app’s Settings and every page has the foote
     assert.doesNotMatch(await page(new Request('https://aurin.health/x?lang='+lang)).text(),/Nastavení → Účet,|Settings → Account(?!;)|Settings → Account you|Nastavení → Propojení|Settings → Connections/);
   for(const page of [overviewPage,privacyPage,termsPage,supportPage]){
     const html=await page().text();
-    for(const href of ['/#a-readiness','/#a-watch','/support#problem','mailto:support@aurin.health','/privacy','/terms'])assert.ok(html.includes('href="'+href+'"'),href);
+    for(const href of ['/#a-readiness','/support#problem','mailto:support@aurin.health','/privacy','/terms'])assert.ok(html.includes('href="'+href+'"'),href);
     assert.match(html,/Aurin is not a medical device\./);
   }
   assert.match(support,/<h2 id="problem">/);
@@ -261,8 +261,14 @@ test('the overview opens the parts the welcome shows with its page, in the app�
   assert.match(html,/<nav class="acts-nav" aria-label="Parts of Aurin">/);
 });
 
-// The watch chapter shows the watch app on the same sample morning as the phones.
+// The watch chapter shows the watch app on the same sample morning as the phones. While the watch app takes a
+// break in the testers' build (WATCH_ON_SITE), the page has no watch part and no link to it.
 test('the Apple Watch chapter shows the watch app on the sample morning',async()=>{
+  if(!WATCH_ON_SITE){
+    const html=await overviewPage().text();
+    assert.doesNotMatch(html,/<section id="(hodinky|a-watch)"|href="\/#a-watch"/);
+    return;
+  }
   const demo=readFileSync(new URL('../ios-native/Aurin/Data/DemoData.swift',import.meta.url),'utf8');
   const today=JSON.parse(demo.match(/json = """\n([\s\S]*?)\n    """/)[1]);
   const html=await overviewPage().text();
@@ -348,7 +354,7 @@ test('the overview stays short: one training step per sport, one gym chapter, th
   assert.ok(gym.lastIndexOf('class="step phone"')>gym.lastIndexOf('class="step'+'"'),'the phone step is last, since it has no piece');
   // The parts in the app's order, Sleep right after Readiness.
   const parts=[...html.matchAll(/<section id="a-([a-z]+)" class="opener"/g)].map(m=>m[1]);
-  assert.deepEqual(parts,['readiness','sleep','training','food','coach','watch']);
+  assert.deepEqual(parts,['readiness','sleep','training','food','coach',...(WATCH_ON_SITE?['watch']:[])]);
   assert.doesNotMatch(section('trenink'),/garmin/i);
 });
 

@@ -26,7 +26,8 @@ flags app pull requests that leave the overview untouched.
   change it with the watch views. CI also shoots the watch app on the sample day (`watch/` in English,
   `watch-cs/` in Czech in the Aurin-screens artifact: the morning, training, food, the gym and its rest,
   the watch face with Aurin's complications, sleep and strain), to check the HTML against and for the
-  App Store.
+  App Store. While the watch app takes a break in the testers' build, `WATCH_ON_SITE` in `src/site-pages.js`
+  is false: the page has no watch part and no menu link to it. Set it back to true when the watch app returns.
 - The hero shows Today; below it one chapter per app area, whose steps take turns on the phone.
 - The muscles show the app's 3D figure, rendered ahead by `scripts/render-muscles-site.mjs` (the licensed
   model never goes on the website). When a screen they show changes, take them again.
