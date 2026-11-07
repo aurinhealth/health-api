@@ -15,7 +15,7 @@ const failed = (id, reply) => checkReply(scenarioById(id), reply, now, date).fil
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
-  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 43 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
+  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
   const zone = id => scenarioContext(scenarioById(id), date, now).ctx.cyclingCoachV2.readiness;
   assert.equal(zone('S01').todayZone, 'green');
   for (const id of ['S02', 'S03', 'S08']) assert.equal(zone(id).status, 'red', id);
@@ -101,7 +101,7 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.equal((await handleCoachEval(post({}), staging, null)).status, 401);
   assert.equal((await handleCoachEval(post({}), staging, { kind: 'system' })).status, 401);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
-  assert.equal(list.scenarios.length, 49);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
+  assert.equal(list.scenarios.length, 51);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
   const run = async (env, s) => ({ id: s.id, status: 'ok', lang: lang() });
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
@@ -491,6 +491,12 @@ test('since run 37: swimming, triathlon, diet, equipment, chest, a strength athl
   assert.ok(!names(await run('S40', 'Plán Půlmaraton končí předběžně 17. ledna. Kdy přesně závod běžíš?', [plan({ planId: 'run-half', raceKm: 21.1 })])).includes('quality:datum závodu podá jako odhad nebo se na něj zeptá'));
   assert.deepEqual(names(await run('S37', 'Dnes posilovna na horní polovinu těla.')), []);
   assert.deepEqual(names(await run('S41', 'Včerejší sweet spot: NP 228 W při RPE 7, povedlo se.')), []);
+  // The level changes only the explanation: plain words for a beginner, numbers for an experienced rider.
+  assert.deepEqual(names(await run('S44', 'Pomalu proto, aby se srdce a svaly naučily vydržet. Poznáš to tak, že u toho zvládneš mluvit.')), []);
+  assert.ok(names(await run('S44', 'Protože VT1 posouvá FatMax, poběž podle RPE 3.')).includes('quality:každou zkratku vysvětlí (VT1, LT1, FatMax, mitochondrie bez vysvětlení ne)'));
+  assert.equal(scenarioContext(scenarioById('S44'), day, at).ctx.experience.run, 'beginner');
+  assert.deepEqual(names(await run('S45', 'Zóna 2 do 190 W (72 % FTP) zvedá aerobní základ, intervaly pak sneseš líp.')), []);
+  assert.ok(names(await run('S45', 'Co je zóna 2? Zóna 2 je pásmo do 190 W.')).includes('quality:bez základů pro začátečníky'));
 });
 
 test('run 38: every main sport gets the coach in both languages, a week split is planning, "střední" is no Wednesday, a plan comes alone, a swim card stays a swim', async () => {

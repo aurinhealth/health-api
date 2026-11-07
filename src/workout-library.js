@@ -84,13 +84,23 @@ export async function getWorkout(db, id) {
 }
 
 export async function getCapabilities(db, sport = "ride") {
+  return (await capabilitiesWithLevel(db, sport)).capabilities;
+}
+// The capabilities and the athlete's own level in the sport from the same
+// reads, for the coach engine's "new to this sport": the level chosen by hand
+// (Profile → Experience), else Auto without the lift from the other sports.
+export async function capabilitiesWithLevel(db, sport = "ride") {
   await ensureTrainingTables(db);
   const rows = await db.prepare("SELECT * FROM training_capabilities WHERE user_id=? AND sport=?").bind(db.userId, sport).all();
   const training=await trainingSetup(db),defaults=defaultCapabilities(sport);
   // Cycling level for rides, running level for runs (Profile → Experience).
   const experience=training.experienceBySport?.[sport==='run'||sport==='swim'?sport:'ride']?.level||training.experience;
   if(experience)for(const value of Object.values(defaults))value.level=experience==='beginner'?1:experience==='experienced'?4:3;
-  return { ...defaults, ...Object.fromEntries((rows.results || []).map(x => [x.system, x])) };
+  const kind = sport === 'run' || sport === 'swim' ? sport : 'ride', chosen = training.experienceBySport?.[kind];
+  const own = chosen?.mode === 'manual' ? chosen.level : training.history?.sportExperienceOwn?.[kind] || chosen?.level || null;
+  // `levels`: every sport's level as Profile shows it, for the coach's way of explaining.
+  const levels = Object.fromEntries(['ride', 'run', 'swim', 'strength'].map(s => [s === 'strength' ? 'gym' : s, training.experienceBySport?.[s]?.level || null]).filter(([, l]) => l));
+  return { capabilities: { ...defaults, ...Object.fromEntries((rows.results || []).map(x => [x.system, x])) }, level: own, levels };
 }
 
 export function parseWorkoutSearchFilters(params) {
@@ -269,6 +279,8 @@ const EASY_BELOW = { ride: 76, run: 89 };
 const MIN_EFFORT = { ride: { tempo: 10, sweet_spot: 8, threshold: 5 }, run: { tempo: 8, threshold: 5 } };
 export function resizeStructure(structure = [], target, { sport = "ride", system = "endurance" } = {}) {
   const run = sport === "run", s = JSON.parse(JSON.stringify(structure)), notes = [];
+  // The main set's repeats when they changed: { from, to } (the name counts them).
+  let mainRepeats = null;
   const easy = b => !b.steps && n(b.power, 0) < EASY_BELOW[run ? "run" : "ride"] && !b.free;
   const aerobic = run ? 82 : 65, wholeEasy = ["recovery", "endurance"].includes(system);
   const fillers = () => s.map((b, i) => i > 0 && i < s.length - 1 && easy(b) ? i : -1).filter(i => i >= 0);
@@ -313,6 +325,7 @@ export function resizeStructure(structure = [], target, { sport = "ride", system
     }
     // Fewer repetitions of the biggest set, never below one.
     let repsFrom = null, repsTo = null;
+    const main = s.filter(b => b.steps && n(b.repeats, 1) > 1).reduce((a, b) => !a || totalMinutes([b]) > totalMinutes([a]) ? b : a, null), mainBefore = main?.repeats;
     while (cut > .5) {
       const blocks = s.filter(b => b.steps && n(b.repeats, 1) > 1);
       if (!blocks.length) break;
@@ -321,7 +334,8 @@ export function resizeStructure(structure = [], target, { sport = "ride", system
       if (per > cut + per / 2 && n(b.repeats, 1) <= 2) break;
       repsFrom ??= b.repeats; b.repeats -= 1; repsTo = b.repeats; cut -= per;
     }
-    if (repsFrom != null) notes.push(L("méně opakování (", "fewer repeats (") + repsFrom + " → " + repsTo + ")");
+    if (main && main.repeats !== mainBefore) mainRepeats = { from: mainBefore, to: main.repeats };
+    if (repsFrom != null) notes.push(L("méně opakování (", "fewer repeats (") + (mainRepeats ? mainRepeats.from + " → " + mainRepeats.to : repsFrom + " → " + repsTo) + ")");
     // One long block, or no repetition left to drop: the efforts themselves get
     // shorter at the same intensity, never below a sensible length for their zone;
     // last, the recoveries inside the sets, to half and at least 2 min.
@@ -349,7 +363,7 @@ export function resizeStructure(structure = [], target, { sport = "ride", system
     // Removing a repetition can overshoot: give the rest back as easy riding.
     if (cut < -.5) s.splice(s.length - 1, 0, step(round1(-cut), aerobic, null, run ? L("volný klus", "easy jog") : L("aerobní dojezd", "aerobic finish")));
   }
-  return { structure: s, notes: [...new Set(notes)] };
+  return { structure: s, notes: [...new Set(notes)], mainRepeats };
 }
 
 // The same workout at another length. A library sibling (same family and
@@ -441,10 +455,13 @@ function resizeOwn(base, target) {
   let structure = [];
   try { structure = JSON.parse(base.structure_json || "[]"); } catch {}
   const resized = resizeStructure(structure, target, { sport, system: base.primary_system });
+  // "VO₂ 40/20 3×12" with one set fewer is "2×12" (coach eval W01).
+  const r = resized.mainRepeats, name = String(base.name).replace(/ · \d+ min$/, "");
+  const counted = r ? name.replace(new RegExp("(^|[^\\d])" + r.from + "×"), "$1" + r.to + "×") : name;
   let tags = [];
   try { tags = JSON.parse(base.tags_json || "[]"); } catch {}
   const built = buildWorkout({
-    id: base.id + "~" + target, sport, name: String(base.name).replace(/ · \d+ min$/, "") + " · " + target + " min",
+    id: base.id + "~" + target, sport, name: counted + " · " + target + " min",
     system: base.primary_system, secondarySystem: base.secondary_system, structure: resized.structure, family: base.family, level: base.level,
     sourceName: base.source_name, sourceKind: base.source_kind, sourceUrl: base.source_url, licenseNote: base.license_note, attribution: base.attribution, citation: base.citation,
     description: base.description, tags: tags.filter(t => !/^\d+min$/.test(t)).concat(target + "min"), cadence: base.cadence, indoorOnly: Boolean(n(base.indoor_only, 0))

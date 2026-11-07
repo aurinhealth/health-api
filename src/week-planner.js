@@ -1,7 +1,7 @@
 import { L, bilingual } from './lang.js';
 import { personalBaseline } from "./recovery-model.js";
 import { normalizeAvailability, ensureWeekOverrides, weekStartOf, validDay } from './training-availability.js';
-import {trainingHistory,starterPlan} from './training-history.js';
+import {trainingHistory,starterPlan,experienceChoices} from './training-history.js';
 import { weekWithCalendar } from './calendar-free.js';
 import { MAX_MINUTES } from './workout-model.js';
 // Weekly planner: which sports the athlete wants on which weekdays, the
@@ -113,8 +113,7 @@ export async function getWeekPlan(db, date = null, { calendar = true } = {}) {
     const setup=await db.prepare('SELECT completed_at,training_json FROM user_setup WHERE user_id=?').bind(db.userId).first().catch(()=>null);
     if(setup?.completed_at){
       let training={};try{training=JSON.parse(setup.training_json||'{}');}catch{}
-      const history=await trainingHistory(db),experience=training.experience&&training.experience!=='auto'?training.experience:history.experience;
-      const automatic=starterPlan(history,experience);
+      const automatic=starterPlan(await trainingHistory(db),experienceChoices(training));
       defaults={...defaults,availability:automatic.availability,availabilityMode:'auto',weeklyActivities:defaults.weeklyActivities??automatic.weeklyActivities,automatic};
     }
   }

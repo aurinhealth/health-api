@@ -78,7 +78,7 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
       const body=await request.json().catch(()=>({})),input={};
       if(body.goal!=null)input.goal=String(body.goal);
       if(body.experience!=null)input.experience=String(body.experience);
-      if(body.experienceBySport&&typeof body.experienceBySport==='object')input.experienceBySport=Object.fromEntries(['strength','ride','run'].filter(k=>body.experienceBySport[k]!=null).map(k=>[k,String(body.experienceBySport[k])]));
+      if(body.experienceBySport&&typeof body.experienceBySport==='object')input.experienceBySport=Object.fromEntries(['strength','ride','run','swim'].filter(k=>body.experienceBySport[k]!=null).map(k=>[k,String(body.experienceBySport[k])]));
       if(typeof body.stretching==='boolean')input.stretching=body.stretching;
       if(typeof body.warmup==='boolean')input.warmup=body.warmup;
       if(typeof body.warmupCardio==='boolean'){input.warmupCardio=body.warmupCardio;if(body.cardio==null)input.cardio=body.warmupCardio?'start':'none';}

@@ -20,6 +20,8 @@
 // APP_STORE_BUNDLE_ID: optional, health.aurin.app unless set.
 import { L } from './lang.js';
 import { packProducts, savePackTransaction, refundPackTransaction } from './coach-packs.js';
+import { isStaging } from './staging.js';
+import { isReviewAccount } from './app-review.js';
 
 // SHA-256 of Apple Root CA - G3 (https://www.apple.com/certificateauthority/).
 export const APPLE_ROOT_CA_G3 = '63343abfb89a6a03ebb57e9b3f5fa7be7c4f5c756f3017b3a8c488c3653e9179';
@@ -184,12 +186,28 @@ async function accountToken(env) {
   return (await env.DB.prepare('SELECT app_account_token FROM subscriptions WHERE user_id=?').bind(env.USER_ID).first())?.app_account_token || token;
 }
 
+// Pro bought and not expired. A Sandbox purchase (TestFlight, sandbox testers)
+// costs nothing, so on the live server it gives Pro only to the owner (testing
+// the paid app) and the App Review account (Apple reviews with Sandbox
+// purchases); on the test server to everyone, like a Sandbox coach pack
+// (coach-packs.js counts). Petr, 7 Nov 2026.
+export function proActive(env, row, now = Date.now()) {
+  if (!(row?.plan === 'ai' && row.valid_until && Date.parse(row.valid_until) > now)) return false;
+  return row.store_environment !== 'Sandbox' || isStaging(env) || env?.USER_IS_OWNER === true || isReviewAccount(env);
+}
+
+// The account's plan row as proActive reads it; null without one.
+export async function subscriptionRow(env) {
+  const db = env.DB, id = env.USER_ID ?? db.userId;
+  return withColumns(db, () => db.prepare('SELECT plan,valid_until,store_environment FROM subscriptions WHERE user_id=?').bind(id).first());
+}
+
 // What the App Store says about the account's purchase, for /app/api/subscription.
 export async function storePurchase(env) {
   if (!env?.DB || !(Number(env.USER_ID) > 0)) return null;
   const row = await withColumns(env.DB, () => env.DB.prepare('SELECT plan,valid_until,product_id,store_environment,auto_renew,original_transaction_id FROM subscriptions WHERE user_id=?').bind(env.USER_ID).first());
   if (!row?.original_transaction_id) return null;
-  const active = row.plan === 'ai' && Boolean(row.valid_until) && Date.parse(row.valid_until) > Date.now();
+  const active = proActive(env, row);
   return { active, productId: row.product_id, expiresAt: row.valid_until, environment: row.store_environment, autoRenew: row.auto_renew == null ? null : row.auto_renew === 1 };
 }
 
@@ -241,14 +259,15 @@ async function claimOriginal(db, userId, tx, fromApple = false) {
 // subscription is there already (claimOriginal keeps the order of each
 // subscription). Another subscription takes the row's place only while it gives Pro,
 // or while the row's own gives none (an expired TestFlight purchase does not
-// push out the App Store one).
+// push out the App Store one). A Sandbox one never pushes out a running App
+// Store one: a paying tester's TestFlight purchase would end their Pro (proActive).
 async function write(db, userId, tx, renewal, type) {
   const { plan, validUntil } = planOf(tx, renewal, type);
   const signedAt = signedAtOf(tx);
   const now = new Date().toISOString();
   const autoRenew = renewal && renewal.autoRenewStatus != null ? (Number(renewal.autoRenewStatus) === 1 ? 1 : 0) : null;
-  await withColumns(db, () => db.prepare("INSERT INTO subscriptions(user_id,plan,valid_until,original_transaction_id,product_id,store_environment,store_signed_at,auto_renew,updated_at,free_trial,offer_type) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,valid_until=excluded.valid_until,original_transaction_id=excluded.original_transaction_id,product_id=excluded.product_id,store_environment=excluded.store_environment,store_signed_at=excluded.store_signed_at,auto_renew=COALESCE(excluded.auto_renew,subscriptions.auto_renew),updated_at=excluded.updated_at,free_trial=excluded.free_trial,offer_type=excluded.offer_type WHERE subscriptions.store_signed_at IS NULL OR (subscriptions.original_transaction_id IS excluded.original_transaction_id AND subscriptions.store_signed_at<=excluded.store_signed_at) OR (subscriptions.original_transaction_id IS NOT excluded.original_transaction_id AND ((excluded.plan='ai' AND excluded.valid_until>?) OR subscriptions.plan<>'ai' OR subscriptions.valid_until IS NULL OR subscriptions.valid_until<=?))")
-    .bind(userId, plan, validUntil, String(tx.originalTransactionId), tx.productId, tx.environment, signedAt, autoRenew, now, Number(tx.offerType) === 1 || tx.offerDiscountType === 'FREE_TRIAL' ? 1 : 0, Number(tx.offerType) > 0 ? Number(tx.offerType) : null, now, now).run());
+  await withColumns(db, () => db.prepare("INSERT INTO subscriptions(user_id,plan,valid_until,original_transaction_id,product_id,store_environment,store_signed_at,auto_renew,updated_at,free_trial,offer_type) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,valid_until=excluded.valid_until,original_transaction_id=excluded.original_transaction_id,product_id=excluded.product_id,store_environment=excluded.store_environment,store_signed_at=excluded.store_signed_at,auto_renew=COALESCE(excluded.auto_renew,subscriptions.auto_renew),updated_at=excluded.updated_at,free_trial=excluded.free_trial,offer_type=excluded.offer_type WHERE subscriptions.store_signed_at IS NULL OR (subscriptions.original_transaction_id IS excluded.original_transaction_id AND subscriptions.store_signed_at<=excluded.store_signed_at) OR (subscriptions.original_transaction_id IS NOT excluded.original_transaction_id AND ((excluded.plan='ai' AND excluded.valid_until>? AND NOT (excluded.store_environment='Sandbox' AND subscriptions.store_environment IS NOT 'Sandbox' AND subscriptions.plan='ai' AND subscriptions.valid_until>?)) OR subscriptions.plan<>'ai' OR subscriptions.valid_until IS NULL OR subscriptions.valid_until<=?))")
+    .bind(userId, plan, validUntil, String(tx.originalTransactionId), tx.productId, tx.environment, signedAt, autoRenew, now, Number(tx.offerType) === 1 || tx.offerDiscountType === 'FREE_TRIAL' ? 1 : 0, Number(tx.offerType) > 0 ? Number(tx.offerType) : null, now, now, now).run());
   return { plan, validUntil };
 }
 
