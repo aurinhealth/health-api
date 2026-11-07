@@ -303,7 +303,10 @@ struct StrainRow: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text(verbatim: title).font(.subheadline.weight(.semibold)).foregroundStyle(planned ? Palette.muted : Palette.ink).lineLimit(1)
                     Spacer()
-                    if let value { Text(verbatim: (planned ? "+" : "") + Fmt.decimal(value)).font(Typo.number(19)).foregroundStyle(planned ? Palette.faint : Palette.ink) }
+                    if let value {
+                        Text(verbatim: (planned ? "+" : "") + Fmt.decimal(value)).font(Typo.number(19)).foregroundStyle(planned ? Palette.faint : Palette.ink)
+                        if !planned { Text(L10n.f("z %@", "21")).font(Typo.caption).foregroundStyle(Palette.faint) }
+                    }
                 }
                 if !meta.isEmpty { Text(verbatim: meta).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1) }
                 if let value {
@@ -312,9 +315,9 @@ struct StrainRow: View {
                             Capsule().fill(Palette.track)
                             if planned {
                                 Capsule().strokeBorder(color, style: StrokeStyle(lineWidth: 1.2, dash: [3, 2]))
-                                    .frame(width: Swift.max(6, geo.size.width * Swift.min(value, 14) / 14))
+                                    .frame(width: Swift.max(6, geo.size.width * Swift.min(value, 21) / 21))
                             } else {
-                                Capsule().fill(color).frame(width: Swift.max(4, geo.size.width * Swift.min(value, 14) / 14))
+                                Capsule().fill(color).frame(width: Swift.max(4, geo.size.width * Swift.min(value, 21) / 21))
                             }
                         }
                     }
