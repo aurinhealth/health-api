@@ -16,6 +16,7 @@ import { manualReadinessFor } from "./morning-checkin.js";
 import { readinessParts } from "./app-health.js";
 import { sessionLoad } from "./training-load.js";
 import { MAX_MINUTES } from "./workout-model.js";
+import { sorePartsFor } from "./pain-words.js";
 
 const n=(v,d=null)=>v===null||v===undefined||v===""?d:Number.isFinite(Number(v))?Number(v):d;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -569,6 +570,11 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     } else if(awaitingNight&&quality()&&!chatAsked){
       kind="endurance";adaptations.push(L("čekám na tvoji noc: tvrdý trénink až po nahrání spánku","waiting for your night: the hard session once your sleep syncs"));
     }
+    // A pain the coach remembers in a part this sport loads (a knee for runs
+    // and rides, a shoulder for swims): no intensity, insisted or not, since
+    // pain blocks hard training (pain-words.js; audit 2026-11-07, point 4).
+    const sore=athleteState?.memoryOff?[]:sorePartsFor(sport,athleteState?.memories);
+    if(sore.length&&quality()){kind="endurance";adaptations.push(L("bolest "+sore.map(a=>a.label[0]).join(" a ")+" z toho, co si kouč pamatuje: bez intenzity","pain in the "+sore.map(a=>a.label[1]).join(" and ")+" the coach remembers: no intensity"));}
     if(quality()&&!insisted){
       const why=novice?W.novice:offBreak?W.off(lastRide):breakWeek?L("první týden po pauze delší než 2 týdny: bez intenzity","first week back after more than 2 weeks off: no intensity"):lastHard!=null&&lastHard<2?W.recent:waitsForRecovery?recoveryWhy(halfDay(recoveryTime.readyAt)):otherRecent?L("tvrdý trénink druhého sportu byl před méně než 48 h","a hard session of the other sport was less than 48 h ago"):hard7>=2||hardAll7>=3?L("dodržen limit kvalitních dnů","quality-day limit respected"):lowerGym.length?W.gym:recoveryWeek&&!plannedInfo?.system?L("regenerační týden: bez intenzity","recovery week: no intensity"):null;
       if(why){kind=recoveryWeek&&!plannedInfo?.system&&!novice&&!offBreak&&requestedMinutes<=75?"recovery":"endurance";adaptations.push(why);}
