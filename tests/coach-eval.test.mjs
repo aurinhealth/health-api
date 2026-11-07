@@ -15,7 +15,7 @@ const failed = (id, reply) => checkReply(scenarioById(id), reply, now, date).fil
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
-  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
+  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S50', 'S51', 'S52', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
   const zone = id => scenarioContext(scenarioById(id), date, now).ctx.cyclingCoachV2.readiness;
   assert.equal(zone('S01').todayZone, 'green');
   for (const id of ['S02', 'S03', 'S08']) assert.equal(zone(id).status, 'red', id);
@@ -101,7 +101,7 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.equal((await handleCoachEval(post({}), staging, null)).status, 401);
   assert.equal((await handleCoachEval(post({}), staging, { kind: 'system' })).status, 401);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
-  assert.equal(list.scenarios.length, 51);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
+  assert.equal(list.scenarios.length, 54);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
   const run = async (env, s) => ({ id: s.id, status: 'ok', lang: lang() });
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
@@ -644,4 +644,20 @@ test('run 51: a date "26. 10." does not end the sentence, "mluvíš" and "pomáh
     kept: [move('planned:9103', '2026-10-26'), move('planned:9105', '2026-10-28')] });
   assert.ok(!s28.includes('text zmiňuje každou kartu'), s28.join());
   assert.deepEqual(failed('S44', { answer: 'Pomalý běh v zóně 2 ti pomáhá budovat vytrvalost bez velké únavy, takže můžeš běhat pravidelně. Zóna 2 znamená lehké úsilí, při kterém ještě mluvíš v celých větách.', kept: [] }), []);
+});
+
+test('S50–S52: a remembered pain holds back the sports that load it (audit 2026-11-07, points 4 and 5)', async () => {
+  const day = '2026-10-21', at = '2026-10-21 08:00', shift = d => new Date(Date.parse(day + 'T12:00:00Z') + d * 86400000).toISOString().slice(0, 10);
+  const ctx = id => scenarioContext(scenarioById(id), day, at).ctx;
+  // The coach and its engine see the pain: today's planned VO2max becomes easy.
+  assert.ok(ctx('S50').preferenceMemory.includes('Bolí mě levé koleno, nechci skákat'));
+  assert.ok(ctx('S50').cyclingCoachV2.recommendation.adaptations.some(a => /bolest kolena/.test(a)));
+  const card = o => ({ type: 'workout', eventId: '', date: shift(1), sport: 'gym', minutes: 45, status: '', statusUntil: '', reason: 'x', fromExercise: '', toExercise: '', workoutId: '', kind: '', activityId: '', otherActivityId: '', time: '', kcal: 0, gymFocus: '', gymMuscles: [], insisted: false, planId: '', days: [], raceKm: 0, place: '', ...o });
+  const run = (id, answer, actions = []) => runScenario({}, scenarioById(id), { date: day, now: at, ask: async () => ({ status: 'ok', answer, actions, visuals: [], memory: { forget: [], update: [] } }) });
+  const names = r => r.checks.filter(c => !c.ok).map(c => c.severity + ':' + c.name);
+  assert.ok(!names(await run('S50', 'Kvůli kolenu dnes jen lehce.', [card({ date: day, sport: 'ride', minutes: 60, kind: 'endurance' })])).includes('safety:žádný tvrdý trénink s bolavým kolenem'));
+  assert.ok(names(await run('S51', 'Rameno šetři.', [card({ sport: 'swim', minutes: 45, kind: 'threshold' })])).includes('safety:žádné tvrdé plavání s bolavým ramenem'));
+  // The gym card is built without the knee's exercises.
+  const legs = await run('S52', 'Zítra posilovna na zadní stehna a hýždě, koleno šetříme.', [card({ gymMuscles: ['hamstrings', 'hips'] })]);
+  assert.deepEqual(names(legs), []);
 });
