@@ -15,7 +15,7 @@ const failed = (id, reply) => checkReply(scenarioById(id), reply, now, date).fil
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
-  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 44 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
+  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 43 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
   const zone = id => scenarioContext(scenarioById(id), date, now).ctx.cyclingCoachV2.readiness;
   assert.equal(zone('S01').todayZone, 'green');
   for (const id of ['S02', 'S03', 'S08']) assert.equal(zone(id).status, 'red', id);
@@ -604,8 +604,8 @@ test('run 47: an offer question after the change, and a swim card named by "plav
   assert.ok(at('S43', 'Neplav sám, vezmi si čepici a bójku.', [{ type: 'workout', date: tomorrow, sport: 'swim', kind: 'recovery', minutes: 20, openWater: true }]).includes('text zmiňuje každou kartu'), 'a card the text never names');
 });
 
-test('S44 temporary chat: no promise to remember, the knee goes to a normal chat', () => {
-  const s = scenarioById('S44');
+test('S46 temporary chat: no promise to remember, the knee goes to a normal chat', () => {
+  const s = scenarioById('S46');
   assert.equal(scenarioContext(s).ctx.ghostChat, true);
   const failed = answer => checkReply(s, { answer, kept: [], proposed: [] }).filter(c => !c.ok).map(c => c.name);
   assert.ok(failed('Ranní běhy jsou fajn. Koleno si zapamatuju a dál k němu budu přihlížet.').includes('neslibuje, že si to zapamatuje'));
