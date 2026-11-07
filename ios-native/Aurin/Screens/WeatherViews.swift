@@ -140,49 +140,41 @@ enum WeatherText {
     }
 }
 
-/// Today's weather: the place with the location arrow and the day's
-/// temperatures, and a few hours of the forecast. The athlete's status, once
-/// its first row, sits beside the readiness (Petr, 2026-11-02).
-struct TodayWeatherCard: View {
+/// Today's weather as a chip under today's workout in the coach's card (Today
+/// audit D5): the place, the day's temperatures and what falls. A tap opens
+/// the forecast; without a place "Přidat počasí" opens the choice of it, which
+/// asks for the location only when the user picks it.
+struct TodayWeatherChip: View {
     let weather: TodaySnapshot.Weather?
     @State private var open = false
 
     var body: some View {
-        Card {
-            Button { open = true } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "location.fill").scaledFont(10, weight: .semibold).foregroundStyle(Palette.blue)
-                    if let weather {
-                        Text(verbatim: (weather.place ?? L10n.tr("Počasí")) + " · " + WeatherText.range(weather))
-                            .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                    } else {
-                        Text("Nastavit polohu pro počasí").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
+        Button { open = true } label: {
+            HStack(spacing: 6) {
+                Image(systemName: weather == nil ? "location.fill" : WeatherText.symbol(weather?.code))
+                    .scaledFont(weather == nil ? 10 : 13, weight: .semibold, cap: .denseCap)
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(Palette.blue)
+                Text(verbatim: text).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Image(systemName: "chevron.right").scaledFont(10, weight: .semibold).foregroundStyle(Palette.faint)
+                    .accessibilityHidden(true)
             }
-            .buttonStyle(.plain)
-            if let hours = weather?.hours, !hours.isEmpty {
-                Button { open = true } label: {
-                    HStack(spacing: 0) {
-                        ForEach(hours, id: \.hour) { h in
-                            VStack(spacing: 5) {
-                                Text(verbatim: String(h.hour)).font(Typo.tiny).foregroundStyle(Palette.faint)
-                                Image(systemName: WeatherText.symbol(h.code)).scaledFont(15, cap: .denseCap).foregroundStyle(Palette.blue)
-                                    .symbolRenderingMode(.hierarchical).frame(height: 18)
-                                Text(verbatim: WeatherText.degrees(h.temp)).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
+            .padding(.horizontal, 11).padding(.vertical, 6)
+            .frame(minHeight: 30)
+            .background(Palette.track, in: Capsule())
+            .contentShape(Capsule())
         }
+        .buttonStyle(.plain)
+        .tapTarget(width: 44, height: 30)
+        .accessibilityIdentifier("today-weather.chip")
         .sheet(isPresented: $open) { WeatherSheet(weather: weather) }
-        .accessibilityElement(children: .contain)
+    }
+
+    /// "Prague · 14° / 6° · rain", or "Přidat počasí" without a place.
+    private var text: String {
+        guard let weather else { return L10n.tr("Přidat počasí") }
+        return [weather.place ?? L10n.tr("Počasí"), WeatherText.range(weather), WeatherText.description(weather.code)].compactMap { $0 }.joined(separator: " · ")
     }
 }
 

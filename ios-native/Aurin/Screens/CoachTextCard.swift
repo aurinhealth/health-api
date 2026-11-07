@@ -55,13 +55,25 @@ struct CoachTextCard: View {
     private var ai: CoachText? { shown && live && (loaded?.isAI ?? false) ? loaded : nil }
     private var text: String? { shown ? ai?.text ?? fallbackText?.nilIfBlank : nil }
     private var advice: String? { !shown ? nil : ai != nil ? ai?.advice?.nilIfBlank : fallbackAdvice?.nilIfBlank }
+    /// Today audit 40, on Today only: without Aurin Pro (the paywall on) the
+    /// rule-based text says where the coach's personal word is; in the last two
+    /// days of a free week that nothing follows, when it ends. Nothing blurred
+    /// or greyed out. A tap opens the plans (Paywall).
+    private var proLine: String? {
+        guard screen == "today", shown, live, !model.demo else { return nil }
+        if loaded?.reason == "pro" { return L10n.tr("Osobní rada kouče je v Aurin Pro") }
+        if loaded?.paywall == true, ai != nil, let end = ProStore.shared.freeWeekEnding() {
+            return L10n.f("Zkušební týden končí %@. Pak je osobní rada kouče v Aurin Pro.", Fmt.dayMonth(AppModel.localDate(end)))
+        }
+        return nil
+    }
     private var chips: [String] { shown && live && !folded ? (loaded?.chips ?? []) : [] }
     private var basis: [CoachText.Basis] { shown && live && !folded ? (loaded?.basis ?? []) : [] }
 
     var body: some View {
         // A stack, not a Group: on an empty Group the task never runs.
         VStack(spacing: 0) {
-            if text != nil || advice != nil || tip != nil {
+            if text != nil || advice != nil || tip != nil || proLine != nil {
                 card
             }
         }
@@ -120,6 +132,23 @@ struct CoachTextCard: View {
             if let tip {
                 Divider().overlay(Palette.hairline)
                 tip
+            }
+
+            if let line = proLine {
+                Divider().overlay(Palette.hairline)
+                Button { Paywall.present(model) } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: "sparkles").scaledFont(12, weight: .semibold).foregroundStyle(Palette.indigo)
+                        Text(verbatim: line).font(Typo.body).foregroundStyle(Palette.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
+                            .accessibilityHidden(true)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("coach-text.pro")
             }
 
             if !basis.isEmpty {

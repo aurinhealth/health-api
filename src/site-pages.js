@@ -934,7 +934,7 @@ ${sun(72)}
 <div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">${day.hrv} ms</div><div class="d up">↑ ${day.hrv - day.hrvBaseline} ms above your average</div></div>
 <div class="glass g2" aria-hidden="true"><div class="k">Sleep</div><div class="v">${day.sleep}</div><div class="d sleep">score ${day.sleepScore}</div></div>
 <div class="glass g3" aria-hidden="true"><div class="k">Coach</div><div style="margin-top:4px">Go all in on strength today.</div></div>
-<div class="device" role="img" aria-label="Aurin on a phone: the Today screen with readiness ${day.readiness} and your status, sleep, strain and HRV, today’s workout and the weather"><div class="bezel"><div class="screen" aria-hidden="true"><div class="scr on">${shot('today', false)}</div></div></div></div>
+<div class="device" role="img" aria-label="Aurin on a phone: the Today screen with readiness ${day.readiness} and your status, sleep, strain and HRV, and the coach with today’s workout and the weather"><div class="bezel"><div class="screen" aria-hidden="true"><div class="scr on">${shot('today', false)}</div></div></div></div>
 </div></div>
 </div>
 </div>

@@ -187,7 +187,7 @@ extension AppModel {
     private func cacheTodaysGym() {
         let date = Self.localDate(Date())
         guard !demo, selectedDate == nil, let today, GymDayCache.load(date: date) == nil,
-              TodayTrainingCard.planned(today).contains(where: { $0.sport == "strength" }) else { return }
+              TodayCoachAction.planned(today).contains(where: { $0.sport == "strength" }) else { return }
         Task { _ = try? await gymDay(date: date) }
     }
 

@@ -292,3 +292,15 @@ test("the night arriving or a new readiness zone is waited for, not left for the
   assert.equal((await screenText(env, { screen: "today", load, ask, later: p => work.push(p), now: start + 11 * 60000 })).text, "Text 2");
   assert.equal(work.length, 0);
 });
+
+test("without Aurin Pro once the paywall is on: the rule-based text marked pro, no AI call (Today audit 40)", async () => {
+  const never = async () => { throw new Error("must not be called"); };
+  const env = { ...owner(), AI_PAYWALL_ENABLED: "owner" };
+  const locked = await screenText(env, { screen: "today", load: async () => today(), ask: never });
+  assert.deepEqual([locked.source, locked.reason, locked.text], ["rules", "pro", "Regenerace je střední."]);
+  // With Pro the AI writes as before.
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS subscriptions (user_id INTEGER PRIMARY KEY,plan TEXT NOT NULL DEFAULT 'free',valid_until TEXT)").run();
+  await env.DB.prepare("INSERT INTO subscriptions (user_id, plan, valid_until) VALUES (1, 'ai', ?)").bind(new Date(Date.now() + 86400000).toISOString()).run();
+  const pro = await screenText(env, { screen: "today", load: async () => today(), ask: reply("Spánek je kratší.", "Jeď lehce.") });
+  assert.equal(pro.source, "ai");
+});

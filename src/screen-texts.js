@@ -9,6 +9,7 @@
 import { L, lang } from "./lang.js";
 import { localToday, localDateTime } from "./user-time.js";
 import { consentStatus } from "./consent.js";
+import { paywallOn, plansUnlocked } from "./subscription.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { loadLevelLabel } from "./workload-ratio.js";
 import { partsForAI } from "./cycle-model.js";
@@ -288,6 +289,9 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
   const consent = await consentStatus(env).catch(() => ({ aiAllowed: false }));
   if (!consent.aiAllowed) return answer("rules", { reason: "consent" });
   if (!env.OPENAI_API_KEY) return answer("rules", { reason: "unavailable" });
+  // Without Aurin Pro once the paywall is on: the rule-based text, marked "pro"
+  // so Today's card says where the personal word is (Today audit 40); the AI is not asked.
+  const locked = paywallOn(env) && !(await plansUnlocked(env));
 
   await ensureTable(env.DB);
   const day = localToday(), language = lang();
@@ -297,6 +301,10 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
   // A text is kept for the day once the AI has been asked MAX_PER_DAY times.
   // Otherwise every opening compares the day's state with the text's, so any
   // change that matters (the fingerprint) gets a new text at once.
+  if (locked) {
+    const info = screenFacts(screen, await load());
+    return answer("rules", { text: info?.fallback?.text || null, advice: info?.fallback?.advice || null, chips: info?.chips || [], basis: info?.basis || [], reason: "pro" });
+  }
   if (cached && Number(row.generations) >= MAX_PER_DAY) return cached;
   // Nothing of the user's changed since the last comparison and data that
   // arrives by itself (Google Health, Intervals.icu) is at most as late as the

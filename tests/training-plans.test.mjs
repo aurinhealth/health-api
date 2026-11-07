@@ -163,6 +163,14 @@ test("a missed key session: the app proposes a day, the athlete's choice moves i
   assert.ok(missed.days.every(d => d >= today));
   // Done that day: nothing to ask.
   assert.equal(missedSession(base, plan, start, today, [firstKey.date]), null);
+  // Today's plan line: the run sessions from today to Sunday, today's only while no run is done today.
+  const { planSessionsLeft } = await import("../src/training-plans.js");
+  const ahead = base.items.filter(x => x.sport === "run" && x.plan?.workoutId && (x.slot || 0) === 0 && x.date >= today);
+  assert.ok(ahead.length > 0);
+  assert.equal(planSessionsLeft(base, plan, today, []), ahead.length);
+  const todays = ahead.filter(x => x.date === today).length;
+  assert.equal(planSessionsLeft(base, plan, today, [today]), ahead.length - todays);
+  assert.equal(planSessionsLeft(null, plan, today, []), null);
   const view = proposalView(missed, plan, today);
   assert.match(view.text, /Včera/);
   // Moved to Saturday: Saturday gets the session, the question is answered.
