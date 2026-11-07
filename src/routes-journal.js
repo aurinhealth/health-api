@@ -46,7 +46,9 @@ function journalItemOnDay(item, entry, auto) {
   const fixed = !entry && auto?.fixed ? (auto.yes ? 1 : 0) : null;
   const amount = entry ? entry.amount : auto?.amount != null ? auto.amount : null;
   const time = entry ? entry.time : auto?.time || null;
-  const answer = entry ? entry.answer : fromData ? (item.type === "yesno" ? (state.yes ? 1 : 0) : (amount ?? 1) > 0 || time || fixed === 1 ? 1 : 0) : null;
+  // A time item is ✓ only from its "late" time on (Pozdní jídlo from 20:00):
+  // a last meal at 19:30 shows its time with ✕, as dayState counts it.
+  const answer = item.type === "time" && state.yes != null ? (state.yes ? 1 : 0) : entry ? entry.answer : fromData ? (item.type === "yesno" ? (state.yes ? 1 : 0) : (amount ?? 1) > 0 || time || fixed === 1 ? 1 : 0) : null;
   const shown = { yes: state.yes, amount, time };
   const mood = item.key === MOOD && fixed == null ? moodText(amount, entry?.extra?.labels) : null;
   const value = mood || (fixed != null ? (fixed ? L("vždy ano", "always yes") : L("vždy ne", "always no")) : valueText(item, shown));

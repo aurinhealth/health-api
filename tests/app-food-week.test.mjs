@@ -18,7 +18,7 @@ test("A week on Thursday: seven everyday intakes plus what training added", () =
   assert.equal(week.byToday, 9850);
   assert.equal(week.left, 8810);
   assert.equal(week.over, 0);
-  assert.equal(week.perDay, 2940, "the three days after today share what is left");
+  assert.equal(week.perDay, 2520, "today (1250 eaten so far) and the three days after share what is left");
   assert.equal(week.days[5].eaten, null);
   assert.equal(week.days[5].ahead, true);
 });
@@ -36,7 +36,7 @@ test("The daily intake is today's for all seven days, the rest is for the days a
   assert.equal(week.target, 13182);
   assert.equal(week.byToday, 6814);
   assert.equal(week.left, 5958);
-  assert.equal(week.perDay, 1490, "5958 over Thursday to Sunday, not 5 days with today");
+  assert.equal(week.perDay, 1490, "today is past its share, so 5958 over Thursday to Sunday");
   // After dinner the rest for the days ahead goes down with it.
   const later = buildFoodWeek({ today, days: days.map((d, i) => i === 2 ? { ...d, kcal: d.kcal + 500 } : d) });
   assert.equal(later.left, 5458);
@@ -59,10 +59,27 @@ test("Eating more than the week allows", () => {
   assert.equal(week.perDay, null);
 });
 
+// Petr 2026-11-07: Saturday morning, 10 500 of 14 000 eaten; the widget said
+// about 3 500 a day (all of it for Sunday) instead of about 1 750.
+test("On Saturday morning the rest is shared by Saturday and Sunday", () => {
+  const days = dates.map((d, i) => day(i, i < 5 ? 2100 : 0, 2000, 0, 2000));
+  const morning = buildFoodWeek({ today: "2026-10-17", days });
+  assert.equal(morning.left, 3500);
+  assert.equal(morning.perDay, 1750);
+  assert.equal(morning.todayLeft, 1750);
+  // Lunch inside the share: the number per day holds, today has 1 150 more.
+  const lunch = buildFoodWeek({ today: "2026-10-17", days: days.map((d, i) => i === 5 ? { ...d, kcal: 600 } : d) });
+  assert.deepEqual([lunch.perDay, lunch.todayLeft], [1750, 1150]);
+  // Past the share by evening: what is left is Sunday's.
+  const evening = buildFoodWeek({ today: "2026-10-17", days: days.map((d, i) => i === 5 ? { ...d, kcal: 2500 } : d) });
+  assert.deepEqual([evening.perDay, evening.todayLeft], [1000, 0]);
+});
+
 test("On Sunday there is no day after today to share the rest", () => {
   const week = buildFoodWeek({ today: "2026-10-18", days: dates.map((d, i) => day(i, 1000, 2000, 0, 2000)) });
   assert.equal(week.left, 7000);
   assert.equal(week.perDay, null);
+  assert.equal(week.todayLeft, null);
 });
 
 test("Without a calorie target there is no week to fill", () => {
@@ -97,7 +114,7 @@ test("A day gone by with nothing logged is left out of what is left", () => {
   assert.equal(forgotten.target, 17500, "the week's target stays the week's");
   assert.equal(forgotten.eaten, 7500);
   assert.equal(forgotten.left, 7500, "Friday to Sunday, without Tuesday's 2500");
-  assert.equal(forgotten.perDay, 3750, "Saturday and Sunday, not 5000 each");
+  assert.equal(forgotten.perDay, 2500, "Friday (nothing eaten yet), Saturday and Sunday, not 5000 each");
   assert.equal(forgotten.byToday, 10000, "Monday, Wednesday, Thursday and Friday");
   // Today with nothing logged yet is not "nezapsáno": the day is still going.
   assert.equal(forgotten.days[4].unlogged, undefined);
