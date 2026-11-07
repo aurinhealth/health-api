@@ -269,6 +269,8 @@ const WARM = { baseWellness: { wristTemp: 35.9 }, today: { wristTemp: 37, hrv: 6
 const ILLNESS = /nemoc|onemoc|nachla[zd]|chřip|viró[sz]|infekc|horeč|marod|začín\p{L}* (?:ti |se )?(?:něco|bra)|illness|getting sick|coming down|infection|fever|\bflu\b/iu;
 // The coach's memory: the knee item the athlete says no longer applies (S39).
 const KNEE = 'Bolí mě levé koleno, nechci skákat';
+// S44: "zapamatuju si to", "poznamenám si", "budu to mít na paměti" in a chat nothing is kept of.
+const PROMISES_MEMORY = /zapamatuj\p{L}* si|si (?:to )?zapamatuj\p{L}*|zapamatoval jsem|(?:si )?poznamen(?:ám|al jsem)|budu (?:to |si to )?(?:mít na paměti|pamatovat)|uložil jsem (?:si )?|I(?:'ll| will) remember|I(?:'ve| have) noted/iu;
 const CLAIMS_FORGOTTEN = /(?:už )?jsem (?:to |ho |si )?(?:smazal|zapomněl|odstranil|vymazal|vyřadil|upravil|aktualizoval)|(?:je |bylo )?(?:smazáno|zapomenuto|odstraněno|vymazáno)|I(?:'ve| have) (?:forgotten|removed|deleted|updated)/iu;
 // "Zeptat se kouče" from yesterday's sweet spot ride (S41): the screen and its activity, as the chat finds them.
 const detailContext = (date, a) => { const day = shift(date, -1), appContext = assistantAppContext({ view: 'workouts', date: day, sport: 'ride', subject: { kind: 'activity', id: 'eval-ride-1', title: 'Sweet spot 3x15' } }, date);
@@ -461,7 +463,12 @@ export const COACH_EVAL_SCENARIOS = [
         quality('karta plavání ve volné vodě na zítřek', card?.openWater === true, card ? (card.openWater ? 'volná voda' : 'bazén') : 'bez karty'), quality('bójka nebo výrazná čepice', says(r, /bójk|čepic|buoy|cap/i)),
         // Run 43: a full hour in a lake of unknown temperature; first ask and swim 15–20 min close to the shore.
         quality('neznámá teplota vody: zeptá se a první plavání nejvýš 20 min', says(r, /teplot|temperat/i) && card?.minutes <= 20, card ? card.minutes + ' min' : '')]; } },
-  // Quick questions about the athlete's own numbers: the app answers them with
+  // Dočasný chat (Petr 2026-11-07): nothing of the chat is kept, so the coach
+  // promises no memory and sends a new injury to a normal chat.
+  { id: 'S44', title: 'Dočasný chat: koleno a ranní běhy', message: 'Mám rád ranní běhy a po dlouhém běhu mě teď bolí levé koleno.', context: () => ({ ghostChat: true }),
+    checks: r => [quality('neslibuje, že si to zapamatuje', !says(r, PROMISES_MEMORY)),
+      quality('u kolena řekne, ať to napíše v běžném chatu', says(r, /běžn\p{L}* (?:chat|konverzac|rozhovor)|normáln\p{L}* (?:chat|konverzac)|obyčejn\p{L}* (?:chat|konverzac)|mimo dočasn/iu)), noUnaskedCard(r)] },
+
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',
     checks: r => [...luna(r), quality('řekne FTP 265 W', says(r, /265\s*W/i))] },
@@ -574,7 +581,7 @@ function commonChecks(r, scenario) {
   const planned = plannedOn(scenario, r.date), czech = /[áčďéěíňóřšťúůýž]/i.test(r.answer);
   return [
     quality('jazyk odpovědi', scenario.lang === 'en' ? !czech : czech),
-    quality('bez názvů polí z dat', !/\b(?:cyclingCoachV2|todayParts|todayZone|preferenceMemory|appContext|workoutLibraryRecommendations|userInitiated|athleteState|recoveryTime|beforeLong)\b/.test(r.answer)),
+    quality('bez názvů polí z dat', !/\b(?:cyclingCoachV2|todayParts|todayZone|preferenceMemory|appContext|workoutLibraryRecommendations|userInitiated|athleteState|recoveryTime|beforeLong|ghostChat)\b/.test(r.answer)),
     quality('bez řádku [Návrhy]', !/\[(?:Návrhy|Proposals):/.test(r.answer)),
     quality('jen latinka', !otherScript(r.answer).length, otherScript(r.answer).join(', ')),
     ...(scenario.lang === 'en' ? [] : [quality('kouč o sobě v mužském rodě', !feminineSelf(r.answer).length, feminineSelf(r.answer).join(', '))]),
