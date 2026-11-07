@@ -102,11 +102,14 @@ async function intervalsGet(env, path) {
 // Same types the old `lower(data_type) LIKE '%heart_rate%'` filter matched
 // (in LIKE "_" is any character, so heart-rate and heart_rate both count).
 const RECOVERY_TYPE = /sleep|hrv|heart.rate|resting/i;
+// Minutes and calories in heart-rate zones match it too but are not recovery:
+// a day has hundreds of zone rows, and reading the newest of them read them all.
+const NOT_RECOVERY = /heart.rate.zone/i;
 // Every query below narrows by (user_id, data_type, sample_time), the index on
 // health_datapoints. A filter on COALESCE(sample_time, start_time) cannot use
 // it and read all ~1M heart-rate rows (tens of seconds), so a time is matched
-// as "sample_time in range, or no sample_time and start_time in range".
-const inRange = (lo, hi) => `((sample_time ${lo} ? AND sample_time ${hi} ?) OR (sample_time IS NULL AND start_time ${lo} ? AND start_time ${hi} ?))`;
+// as "sample_time in range, or no sample_time and start_time in range", each
+// half its own indexed read (an OR of the two read every row of the type).
 export async function d1Recovery(env, startDate, endDate) {
   const from = `${startDate}T00:00:00`, to = `${endDate}T23:59:59`;
   // The user's data types by skipping through the index one type at a time
@@ -114,13 +117,15 @@ export async function d1Recovery(env, startDate, endDate) {
   let types = ((await env.DB.prepare(`WITH RECURSIVE t(data_type) AS (SELECT MIN(data_type) FROM health_datapoints WHERE user_id = ?
       UNION ALL SELECT (SELECT MIN(data_type) FROM health_datapoints WHERE user_id = ? AND data_type > t.data_type) FROM t WHERE t.data_type IS NOT NULL)
     SELECT data_type FROM t WHERE data_type IS NOT NULL`).bind(env.USER_ID, env.USER_ID).all()).results || [])
-    .map(r => r.data_type).filter(t => RECOVERY_TYPE.test(String(t || "")) && t !== HEART_RATE_HOUR_TYPE);
+    .map(r => r.data_type).filter(t => RECOVERY_TYPE.test(String(t || "")) && !NOT_RECOVERY.test(String(t)) && t !== HEART_RATE_HOUR_TYPE);
   // Google heart rate is stored as 5-minute rows; the raw samples left are a
   // workout's own, so the newest of them is not the heart rate of the moment.
   // The 5-minute row is read instead, under the same name.
   if (types.includes(HEART_RATE_BUCKET_TYPE)) types = types.filter(t => t !== "heart-rate" && t !== "heart_rate");
   if (!types.length) return {};
-  const google = "data_type = ? AND source_family LIKE 'google%'";
+  // The Google families by name: a LIKE cannot use the (user_id, source_family,
+  // data_type, start_time) index, and MAX(start_time) then read every row of the type.
+  const google = "data_type = ? AND source_family IN ('google-wearables', 'google-sources')";
   const latest = await env.DB.batch(types.flatMap(type => [
     env.DB.prepare(`SELECT MAX(sample_time) AS t FROM health_datapoints WHERE user_id = ? AND ${google} AND sample_time >= ? AND sample_time <= ?`).bind(env.USER_ID, type, from, to),
     env.DB.prepare(`SELECT MAX(start_time) AS t FROM health_datapoints WHERE user_id = ? AND ${google} AND sample_time IS NULL AND start_time >= ? AND start_time <= ?`).bind(env.USER_ID, type, from, to)
@@ -138,7 +143,8 @@ export async function d1Recovery(env, startDate, endDate) {
     const row = env.DB.prepare(`SELECT data_type, sample_time, start_time, end_time, value_numeric, value_unit, payload_json FROM health_datapoints WHERE user_id = ? AND ${google} AND ${bySample ? "sample_time = ?" : "sample_time IS NULL AND start_time = ?"} LIMIT 1`).bind(env.USER_ID, type, t);
     if (!baseline) return [row];
     const from28 = new Date(Date.parse(String(t).slice(0, 10) + "T12:00:00Z") - 28 * 86400000).toISOString().slice(0, 10) + "T00:00:00", until = String(t).slice(0, 10) + "T00:00:00";
-    return [row, env.DB.prepare(`SELECT AVG(value_numeric) AS v, COUNT(value_numeric) AS c FROM health_datapoints WHERE user_id = ? AND ${google} AND ${inRange(">=", "<")}`).bind(env.USER_ID, type, from28, until, from28, until)];
+    return [row, env.DB.prepare(`SELECT AVG(v) AS v, COUNT(v) AS c FROM (SELECT value_numeric AS v FROM health_datapoints WHERE user_id = ? AND ${google} AND sample_time >= ? AND sample_time < ?
+      UNION ALL SELECT value_numeric FROM health_datapoints WHERE user_id = ? AND ${google} AND sample_time IS NULL AND start_time >= ? AND start_time < ?)`).bind(env.USER_ID, type, from28, until, env.USER_ID, type, from28, until)];
   }));
   const out = {};
   let k = 0;
