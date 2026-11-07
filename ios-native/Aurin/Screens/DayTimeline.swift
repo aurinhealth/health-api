@@ -71,12 +71,10 @@ struct DayTimeline: View {
         case .readiness(let score, let zone):
             RouteLink(route: .readiness) {
                 DayPointRow(color: ReadinessText.pill(zone)?.1 ?? Palette.green, time: nil, first: first, last: last) {
-                    HStack(alignment: .center, spacing: 9) {
-                        Text("Připravenost").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        Text(String(score)).font(Typo.number(22)).foregroundStyle(ReadinessText.pill(zone)?.1 ?? Palette.green)
-                        if let pill = ReadinessText.pill(zone) {
-                            Pill(text: pill.0, foreground: pill.1, background: pill.2)
-                        }
+                    // The whole label when it fits, else the short one ("usual range").
+                    ViewThatFits(in: .horizontal) {
+                        readinessLine(score, zone, short: false)
+                        readinessLine(score, zone, short: true)
                     }
                 }
             }
@@ -120,6 +118,17 @@ struct DayTimeline: View {
                 if let rhr = today.restingHR?.value { DayChip(label: L10n.tr("Tep"), value: Fmt.int(rhr), unit: "bpm") }
             }
             .padding(.top, 4)
+        }
+    }
+
+    /// "Připravenost 78" and the zone's label beside it.
+    private func readinessLine(_ score: Int, _ zone: String?, short: Bool) -> some View {
+        HStack(alignment: .center, spacing: 9) {
+            Text("Připravenost").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+            Text(String(score)).font(Typo.number(22)).foregroundStyle(ReadinessText.pill(zone)?.1 ?? Palette.green)
+            if let pill = ReadinessText.pill(zone, short: short) {
+                Pill(text: pill.0, foreground: pill.1, background: pill.2)
+            }
         }
     }
 
