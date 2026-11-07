@@ -1,6 +1,6 @@
 import { sportAllowed } from './sport-choice.js';
 import { L } from './lang.js';
-import { PAIN_WORDS } from './pain-words.js';
+import { PAIN_WORDS, sorePartsFor, illNow, unwellNow } from './pain-words.js';
 import { validDay } from './training-availability.js';
 import { trainingStatus, ATHLETE_STATUSES } from './training-status.js';
 import { prepareGymSwap,gymAdjustmentRequest } from './coach-gym-adjustment.js';
@@ -150,6 +150,10 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       kept.push({type:'rest',eventId:id,date:e.date,sport:w.sport,reason:L('Nahradí ho navržený trénink.','Replaced by the proposed workout.'),replacedBy:w.date,eventSnapshot:{name:e.name,date:e.date,durationHours:e.durationHours}});
     }
   }
+  // "Jsem nemocný" always brings the Nemoc card, also when the answer left it
+  // out (point 1); the athlete confirms it, as any status card.
+  if(userInitiated&&!trainingStatus(context.athleteState).paused&&illNow(context.userMessage)&&!kept.some(a=>a.type==='status'))
+    kept.push({type:'status',status:'sick',reason:L('Během nemoci běžné tréninky pozastavím, dokud se nebudeš cítit zase dobře.','While you are ill I will pause regular training until you feel well again.')});
   return kept;
   function check(a){
     const reason=String(a.reason||'').trim().slice(0,500);if(!reason)return [];
@@ -226,6 +230,11 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       const kind=a.sport!=='gym'&&!library&&WORKOUT_KINDS.includes(a.kind)?{kind:a.kind}:{};
       const intense=a.sport!=='gym'&&isHardKind(library?library.system:a.kind);
       if(intense&&a.date===today&&holdBackToday(context))return [];
+      // Pain blocks hard training in the sports that load the sore part, a
+      // cold said now today's hard work, insisted or not (pain-words.js;
+      // audit "Kouč jako skutečný trenér" 2026-11-07, point 2).
+      if(intense&&sorePartsFor(a.sport,[context.userMessage,...(context.preferenceMemory||[])]).length)return [];
+      if(intense&&a.date===today&&unwellNow(context.userMessage))return [];
       // The athlete asked for it again in this chat after the coach's concern:
       // their call passes the 48 h and two-in-7 rules (Petr 2026-10-19).
       const insisted=a.insisted===true&&a.sport!=='gym'&&(context.conversation||[]).some(t=>t.role==='user');
@@ -233,7 +242,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       else if(intense){if(hardDayConflict(a.date,hard.filter(h=>!(h.planned&&h.date===a.date)).map(h=>h.date)))return [];hard.push({date:a.date});}
       if(a.sport==='gym'){
         // No gym today on a red morning or with signs of illness, not even shortened (S20).
-        if(a.date===today&&holdBackToday(context))return [];
+        if(a.date===today&&(holdBackToday(context)||unwellNow(context.userMessage)))return [];
         // A day that already has a gym plan gets that plan shortened, never a
         // second one (it could not be saved next to it).
         let planDate=null;try{planDate=context.gymPlan?.values?.length?parseStrengthPlan(context.gymPlan.values).date:null;}catch{}

@@ -1,13 +1,15 @@
 import SwiftUI
 
-/// Today under the key numbers (Petr, 2026-11-02, Today C2): the workouts
+/// The coach's one action on Today, at the bottom of the coach's card under
+/// the three numbers (Today audit 10, mockup approved 2026-11-07): the workouts
 /// planned for today, the gym one with Start, and under them the activity of
-/// the day when it suggests something else (CoachPickCard, Swap / Keep plan).
-/// Without a plan for today the activity of the day stands here in full.
-struct TodayTrainingCard: View {
-    let items: [TodaySnapshot.PlanItem]
-    /// A red morning: the activity of the day speaks even when it is the planned sport.
-    var red = false
+/// the day when it suggests something else (CoachPickCard, Swap / Keep plan);
+/// without a plan for today the activity of the day in full. The code picks
+/// it from the day's plan and verdict, never the AI. Under it today's weather
+/// as a chip (D5), the plan's line with its sessions left this week
+/// (competitor point 9) and Regenerace when hard training must still wait.
+struct TodayCoachAction: View {
+    let today: TodaySnapshot
 
     /// Today's workouts still ahead.
     static func planned(_ today: TodaySnapshot) -> [TodaySnapshot.PlanItem] {
@@ -15,15 +17,42 @@ struct TodayTrainingCard: View {
     }
 
     var body: some View {
-        Card(padding: 14) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+        let planned = Self.planned(today)
+        VStack(alignment: .leading, spacing: 0) {
+            if planned.isEmpty && today.unavailable?.contains("training") == true {
+                // The day's plan could not be read: not "nothing planned".
+                PartUnavailableNote(text: "Trénink se teď nepodařilo načíst")
+            } else if planned.isEmpty {
+                CoachPickCard(inCard: true)
+            } else {
+                ForEach(Array(planned.enumerated()), id: \.element.id) { index, item in
                     if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1).padding(.vertical, 10) }
                     TodayTrainingRow(item: item)
                 }
-                CoachPickCard(planned: items, red: red)
+                CoachPickCard(planned: planned, red: today.readiness.zone == "red")
+            }
+
+            TodayWeatherChip(weather: today.weather).padding(.top, 10)
+
+            if let plan = today.trainingPlan {
+                Label(Self.planLine(plan), systemImage: "flag")
+                    .font(Typo.small).foregroundStyle(Palette.secondary)
+                    .lineLimit(2)
+                    .padding(.top, 12)
+            }
+
+            if RecoveryTipRows.hasTip(today, selectedDate: nil) {
+                Divider().overlay(Palette.hairline).padding(.top, 12)
+                RecoveryTipRows(today: today)
             }
         }
+    }
+
+    /// "Half marathon · week 3/12 · Build · 2 sessions left", or "paused".
+    static func planLine(_ plan: TodaySnapshot.PlanLine) -> String {
+        if plan.paused == true { return [plan.name, L10n.tr("pozastaveno")].joined(separator: " · ") }
+        let left = plan.sessionsLeft.flatMap { $0 > 0 ? L10n.plural("zbývá %lld tréninků", $0) : nil }
+        return ([plan.name, L10n.f("týden %@/%@", String(plan.week), String(plan.weeksCount))] + [plan.phaseLabel, left].compactMap { $0 }).joined(separator: " · ")
     }
 }
 

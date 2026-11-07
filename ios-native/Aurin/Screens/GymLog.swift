@@ -745,15 +745,33 @@ struct ExerciseHistorySheet: View {
         .padding(.top, 18)
         let points: [Double] = exercise.sessions.reversed().compactMap { GymCoach.topKg($0) }
         if points.count >= 2, let lo = points.min(), let hi = points.max() {
-            LineChart(values: points.map { LiftWeight.shownValue($0) }, color: Palette.amberBar,
-                      lo: LiftWeight.shownValue(lo) - 2.5, hi: LiftWeight.shownValue(hi) + 2.5, height: 150)
+            // Chart review 9: what the line is, its lowest and highest set on
+            // the right, and the last workout's day instead of "today".
+            let bottom = LiftWeight.shownValue(lo) - 2.5, top = LiftWeight.shownValue(hi) + 2.5
+            let ticks = Set([lo, hi]).map { ScaleTick(value: LiftWeight.shownValue($0), text: GymCoach.shown($0) + " " + unit) }
+            let last = exercise.sessions.first(where: { GymCoach.topKg($0) != nil })?.date ?? today
+            Text("Nejtěžší série každého tréninku")
+                .font(Typo.caption).foregroundStyle(Palette.muted)
                 .padding(.top, 22)
+            ZStack(alignment: .topLeading) {
+                GeometryReader { geo in
+                    ChartScale(ticks: ticks, width: geo.size.width - scaleWidth) {
+                        3 + (150 - 6) * (1 - scaled($0, bottom, top))
+                    }
+                }
+                LineChart(values: points.map { LiftWeight.shownValue($0) }, color: Palette.amberBar,
+                          lo: bottom, hi: top, height: 150)
+                    .padding(.trailing, scaleWidth)
+            }
+            .frame(height: 150)
+            .padding(.top, 8)
             HStack {
                 Text(Self.month(exercise.sessions.last?.date ?? today))
                 Spacer()
-                Text("dnes")
+                Text(last == today ? "dnes" : Fmt.dayMonthShort(last))
             }
             .font(Typo.caption).foregroundStyle(Palette.muted)
+            .padding(.trailing, scaleWidth)
             .padding(.top, 6)
         }
         VStack(spacing: 0) {

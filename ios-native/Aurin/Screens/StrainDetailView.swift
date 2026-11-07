@@ -393,6 +393,13 @@ struct FitnessChart: View {
                     legend(Palette.amberBar, L10n.tr("Únava") + " " + Fmt.int(form.fatigue))
                     Spacer()
                 }
+                // What the dashed lines after today are.
+                if !forecast.isEmpty {
+                    HStack(spacing: 5) {
+                        DashedLine().stroke(Palette.muted, style: StrokeStyle(lineWidth: 1.6, dash: [4, 3])).frame(width: 14, height: 2)
+                        Text("s plánovanými tréninky").font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                }
                 Chart {
                     if let todayDate, let last = forecast.last?.date, last > todayDate {
                         RectangleMark(xStart: .value("Od", todayDate), xEnd: .value("Do", last))

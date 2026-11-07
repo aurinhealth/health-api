@@ -340,9 +340,12 @@ struct ReadinessHome: View {
         guard let minutes = s.sleep?.minutes, let need = s.sleep?.need, need > 0 else { return g }
         let low = need - 30, high = need + 30
         g.bar = (minutes, low, high)
-        g.note = W.tr("\(W.number(minutes / need * 100)) %", "\(W.number(minutes / need * 100))%")
-        // "4 hours 45 minutes, 53% of need": "4:45" reads as a time, "53%" says not of what.
-        g.said = W.spoken(seconds: minutes * 60) + ", " + (g.note ?? "") + W.tr(" potřeby", " of need")
+        // "53% of need": "53%" alone says not of what (chart review 16). Czech
+        // "potř.": "potřeby" is cut off in the narrow column even on a 46 mm watch.
+        let percent = W.number(minutes / need * 100)
+        g.note = W.tr("\(percent) % potř.", "\(percent)% of need")
+        // "4 hours 45 minutes, 53% of need": "4:45" reads as a time.
+        g.said = W.spoken(seconds: minutes * 60) + ", " + W.tr("\(percent) % potřeby", "\(percent)% of need")
         // As on the watch face: red under three quarters of the need.
         g.color = minutes >= low ? W.green : minutes >= need * 0.75 ? W.amber : W.red
         return g

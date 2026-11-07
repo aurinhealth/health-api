@@ -11,3 +11,49 @@ export const PAIN_WORDS = word(PAIN_PARTS);
 // a pain or an injury, an illness, a pregnancy.
 export const PASSING_WORDS = word([...PAIN_PARTS, 'nemoc', 'nachl', 'chřip', 'chrip',
   'sick', 'ill(?!\\p{L})', 'illness', 'flu(?!\\p{L})', 'a cold(?![ -]\\p{L})', 'těhot', 'tehot', 'pregnan']);
+
+// The body parts a remembered pain can name, the sports whose intensity it
+// holds back (audit 2026-11-07, point 4: a sore knee gets no run or ride
+// intervals, a sore shoulder no hard swim; the other sports go on as usual)
+// and the gym exercises that load it (point 5; strength-generator.js
+// painfulExercises). Pain blocks hard training (Petr's rule), so the athlete's
+// insisting does not lift it; the coach asks after a while whether it still holds.
+export const PAIN_AREAS = [
+  { id: 'knee', part: /kolen|knee/i, sports: ['run', 'ride'], label: ['kolena', 'knee'],
+    exercises: /squat|lunge|leg press|step-up|step-down|leg extension|thruster|jump|pogo/i },
+  { id: 'ankle', part: /kotník|kotnik|achil|lýtk|lytk|chodidl|plosk|nárt|nart|holen|ankle|calf|calves|foot|feet|shin/i, sports: ['run'], label: ['kotníku a lýtka', 'ankle and calf'],
+    exercises: /calf|soleus|tibialis|lunge|step-up|step-down|cossack|jump|pogo/i },
+  { id: 'hip', part: /kyčl|kycl|kyčel|kycel|třísl|trisl|(?<!\p{L})hip(?!\s*thrust)|groin/iu, sports: ['run', 'ride'], label: ['kyčle', 'hip'],
+    exercises: /hip thrust|glute bridge|adduction|abduction|lunge|split squat|sumo|cossack|fire hydrant|clamshell|frog pump/i },
+  { id: 'back', part: /z[aá]d(?:a|ech|ou)(?!\p{L})|bedr|k[řr][íi][žz]|p[áa]te[řr]|plot[ée]nk|(?<!\p{L})back(?!\p{L})|lumbar/iu, sports: ['run'], label: ['zad', 'lower back'],
+    exercises: /deadlift|good morning/i },
+  { id: 'shoulder', part: /ramen|shoulder/i, sports: ['swim'], label: ['ramene', 'shoulder'],
+    exercises: /shoulder press|overhead press|military press|push press|arnold|landmine press|bench press|incline press|floor press|chest flat press|chest press|standing dumbbell press|clean (?:&|and) press|cuban press|thruster|^dips$|assisted dip|bench dips/i },
+  { id: 'arm', part: /zápěst|zapest|(?<!\p{L})lok(?:et|t)|předlok|predlok|wrist|elbow|forearm/iu, sports: [], label: ['zápěstí a lokte', 'wrist and elbow'],
+    exercises: /curl|tricep|pushdown|push down|skull|^dips$|assisted dip|bench dips|push-up|push up|wrist/i },
+  { id: 'neck', part: /(?<!\p{L})kr[kč]|šíj|(?<!\p{L})sij|neck/iu, sports: ['swim'], label: ['krku', 'neck'],
+    exercises: /shrug|upright row|overhead press|military press|push press/i }
+];
+// The parts the remembered pains name ("Bolí mě koleno"); "nebolí" names none.
+export const painAreas = memories => PAIN_AREAS.filter(a => (Array.isArray(memories) ? memories : []).some(m => PAIN_WORDS.test(String(m)) && a.part.test(String(m))));
+// The parts that hold back the intensity of one sport (ride, run, swim).
+export const sorePartsFor = (sport, memories) => painAreas(memories).filter(a => a.sports.includes(sport));
+
+// The athlete says they are ill now, in their own words: "jsem nemocný",
+// "mám horečku", "chytil jsem chřipku", "I have the flu", "I'm sick". Not
+// "nejsem", "byl jsem", "když jsem", "if I'm" or someone else's illness
+// (audit 2026-11-07, point 1: the coach then always offers Nemoc).
+const ILL_PARTS = [
+  '(?<!(?:když|kdyz|kdybych|až|az|byl|byla)\\s)(?<!\\p{L})(?:jsem|cítím\\s+se|citim\\s+se)\\s+(?:(?!byla?\\s)\\p{L}+\\s+)?(?:nemocn|nachla[zd]|marod)',
+  '(?<!(?:když|kdyz|až|az)\\s)(?<!\\p{L})mám\\s+(?:\\p{L}+\\s+)?(?:horečk|horeck|chřipk|chripk|viróz|viroz|covid|teplotu|angín|angin)',
+  '(?<!\\p{L})chytil[a]?\\s+(?:jsem\\s+)?(?:\\p{L}+\\s+)?(?:chřipk|chripk|viróz|viroz|covid|nachlazen)',
+  "(?<!(?:if|when|was|were)\\s)(?<!\\p{L})(?:i'm|im|i\\s+am|i\\s+feel|feeling)\\s+(?:(?:a\\s+bit|a\\s+little|still|kinda|quite|really|so|pretty)\\s+)?(?:sick|ill|unwell|feverish)(?!\\p{L})",
+  "(?<!(?:if|when)\\s)(?<!\\p{L})(?:i\\s+have|i've\\s+got|i\\s+got|i'm\\s+down\\s+with|down\\s+with)\\s+(?:a\\s+|the\\s+)?(?:fever|flu|covid|temperature|cold(?![ -]\\p{L}))(?!\\p{L})"
+];
+const prose = text => String(text || '').replace(/[’`]/g, "'");
+const ILL_NOW = new RegExp(ILL_PARTS.join('|'), 'iu');
+export const illNow = text => ILL_NOW.test(prose(text));
+// A lighter cold said now ("mám rýmu", "bolí mě v krku", "sore throat"): no
+// hard training today, but no Nemoc forced on all sports (point 2).
+const UNWELL = /(?<!(?:nemám|nemam|no|not|without)\s)(?<!\p{L})(?:rým\p{L}*|rym[aeuy](?!\p{L})|sore\s+throat|runny\s+nose|stuffy\s+nose|ucpan\p{L}*\s+nos|(?:bolí|boli)\s+(?:mě|me)\s+v\s+krku|bolest\s+v\s+krku|škrábe\s+(?:mě|me)\s+v\s+krku)/iu;
+export const unwellNow = text => illNow(text) || UNWELL.test(prose(text));

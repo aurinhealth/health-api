@@ -1053,5 +1053,21 @@
 			<string>%lld items found</string>
 		</dict>
 	</dict>
+	<key>zbývá %lld tréninků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld session left</string>
+			<key>other</key>
+			<string>%lld sessions left</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

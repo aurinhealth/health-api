@@ -794,14 +794,6 @@ struct ActivePlanContent: View {
             }
             if let goal = race.target, let now = race.estimate, let history = race.history, !history.isEmpty {
                 GoalLine(history: history, now: now, week: active.week, weeks: active.weeksCount, goal: goal, projected: race.projected ?? now, behind: behind)
-                    .frame(height: 110)
-                HStack {
-                    Text(verbatim: L10n.f("Týden %@", "1")).font(Typo.caption).foregroundStyle(Palette.faint)
-                    Spacer()
-                    Text(verbatim: L10n.f("dnes · týden %@", String(active.week))).font(Typo.caption).foregroundStyle(Palette.faint)
-                    Spacer()
-                    Text("závod").font(Typo.caption).foregroundStyle(Palette.faint)
-                }
             }
             if let badge = race.badge {
                 Text(verbatim: badge).font(Typo.caption.weight(.semibold)).foregroundStyle(behind ? Palette.amber : Palette.green)
@@ -938,8 +930,9 @@ struct ActivePlanContent: View {
 }
 
 /// The race estimate week by week (solid), on to race day at the pace of
-/// improvement (dotted, amber when it misses), against the goal (dashed).
-/// Lower is faster, so faster times sit higher.
+/// improvement (dotted, amber when it misses), against the goal (dashed, its
+/// time in the column on the right). Lower is faster, so faster times sit
+/// higher ("faster ↑"); today's label stands under today.
 struct GoalLine: View {
     let history: [PlanRace.Point]
     let now: Int
@@ -948,31 +941,68 @@ struct GoalLine: View {
     let goal: Int
     let projected: Int
     let behind: Bool
+    var height: CGFloat = 110
 
     var body: some View {
-        GeometryReader { geo in
-            let points = history.filter { $0.week < week } + [PlanRace.Point(week: week, seconds: now)]
-            let all = points.map(\.seconds) + [goal, projected]
-            let fast = Double(all.min() ?? goal), slow = Double(all.max() ?? goal), span = max(30, slow - fast)
-            let x: (Int) -> CGFloat = { w in geo.size.width * CGFloat(w - 1) / CGFloat(max(1, weeks - 1)) }
-            let y: (Int) -> CGFloat = { s in 8 + (geo.size.height - 16) * CGFloat((Double(s) - fast) / span) }
-            ZStack(alignment: .topLeading) {
-                Path { p in p.move(to: CGPoint(x: 0, y: y(goal))); p.addLine(to: CGPoint(x: geo.size.width, y: y(goal))) }
-                    .stroke(Palette.green, style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
-                Path { p in
-                    for (i, pt) in points.enumerated() {
-                        let at = CGPoint(x: x(pt.week), y: y(pt.seconds))
-                        if i == 0 { p.move(to: at) } else { p.addLine(to: at) }
+        VStack(alignment: .leading, spacing: 4) {
+            Text("rychlejší ↑").scaledFont(chartText, cap: .denseCap).foregroundStyle(Palette.faint)
+            GeometryReader { geo in
+                let w = geo.size.width - tagWidth
+                let points = history.filter { $0.week < week } + [PlanRace.Point(week: week, seconds: now)]
+                let all = points.map(\.seconds) + [goal, projected]
+                let fast = Double(all.min() ?? goal), slow = Double(all.max() ?? goal), span = max(30, slow - fast)
+                let x: (Int) -> CGFloat = { wk in w * CGFloat(wk - 1) / CGFloat(max(1, weeks - 1)) }
+                let y: (Int) -> CGFloat = { s in 8 + (geo.size.height - 16) * CGFloat((Double(s) - fast) / span) }
+                ZStack(alignment: .topLeading) {
+                    Rectangle().fill(Palette.hairline).frame(width: 1, height: geo.size.height).offset(x: x(week))
+                    Path { p in p.move(to: CGPoint(x: 0, y: y(goal))); p.addLine(to: CGPoint(x: w, y: y(goal))) }
+                        .stroke(Palette.green, style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
+                    LineTag(name: L10n.tr("cíl"), value: raceTime(goal), color: Palette.green)
+                        .frame(height: 28)
+                        .offset(x: w + 6, y: LineTag.center(y(goal), height: geo.size.height) - 14)
+                    Path { p in
+                        for (i, pt) in points.enumerated() {
+                            let at = CGPoint(x: x(pt.week), y: y(pt.seconds))
+                            if i == 0 { p.move(to: at) } else { p.addLine(to: at) }
+                        }
                     }
+                    .stroke(Palette.ink, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                    Path { p in p.move(to: CGPoint(x: x(week), y: y(now))); p.addLine(to: CGPoint(x: w, y: y(projected))) }
+                        .stroke(behind ? Palette.amberBar : Palette.muted, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [2, 6]))
+                    Circle().fill(Palette.ink).frame(width: 10, height: 10).position(x: x(week), y: y(now))
                 }
-                .stroke(Palette.ink, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-                Path { p in p.move(to: CGPoint(x: x(week), y: y(now))); p.addLine(to: CGPoint(x: geo.size.width, y: y(projected))) }
-                    .stroke(behind ? Palette.amberBar : Palette.muted, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [2, 6]))
-                Circle().fill(Palette.ink).frame(width: 10, height: 10).position(x: x(week), y: y(now))
             }
+            .frame(height: height)
+            weekLabels
+                .padding(.top, 2)
+            ChartLegend(items: [.init(color: Palette.ink, text: L10n.tr("odhad")),
+                                .init(color: behind ? Palette.amberBar : Palette.muted, text: L10n.tr("tvým tempem"), mark: .dashedLine)])
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: L10n.f("Odhad %@, cíl %@", raceTime(now), raceTime(goal))))
+    }
+
+    /// "Week 1" … "today · week 5" under today … "race"; an end's word gives
+    /// way when today's label comes close to it.
+    private var weekLabels: some View {
+        GeometryReader { geo in
+            let w = geo.size.width - tagWidth
+            let at = w * CGFloat(week - 1) / CGFloat(max(1, weeks - 1))
+            ZStack(alignment: .topLeading) {
+                if at > 100 {
+                    Text(verbatim: L10n.f("Týden %@", "1")).frame(width: w, alignment: .leading)
+                }
+                if at < w - 100 {
+                    Text("závod").frame(width: w, alignment: .trailing)
+                }
+                Text(verbatim: L10n.f("dnes · týden %@", String(week))).fixedSize()
+                    .position(x: min(max(at, 50), w - 50), y: 7)
+            }
+            .scaledFont(chartText, cap: .denseCap)
+            .foregroundStyle(Palette.faint)
+            .lineLimit(1)
+        }
+        .frame(height: 14)
     }
 }
 

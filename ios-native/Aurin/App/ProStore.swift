@@ -48,6 +48,8 @@ final class ProStore {
     private(set) var entitled = false
     /// The free week running on this Apple ID: from the purchase to its end.
     private(set) var freeWeek: DateInterval?
+    /// The free week turns into the yearly plan (the renewal is not turned off).
+    private(set) var freeWeekRenews = true
     /// The yearly plan paid monthly: payment 3 of 12, the next one and the end.
     private(set) var payments: Payments?
     struct Payments: Equatable {
@@ -169,8 +171,18 @@ final class ProStore {
         // The renewal turned off before the free week ended: no reminder that it ends.
         if let statuses = try? await products[Self.yearlyID]?.subscription?.status,
            statuses.contains(where: { if case .verified(let info) = $0.renewalInfo { return !info.willAutoRenew } else { return false } }) {
+            freeWeekRenews = false
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.trialReminderID])
+        } else {
+            freeWeekRenews = true
         }
+    }
+
+    /// The free week ends within two days and nothing follows it (the renewal
+    /// is off): when it ends, for Today's coach card (Today audit 40).
+    func freeWeekEnding(now: Date = Date()) -> Date? {
+        guard let week = freeWeek, !freeWeekRenews, week.end > now, week.end.timeIntervalSince(now) <= 2 * 86_400 else { return nil }
+        return week.end
     }
 
     enum Outcome: Equatable {

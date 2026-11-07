@@ -9,6 +9,7 @@
 import { L, lang } from "./lang.js";
 import { localToday, localDateTime } from "./user-time.js";
 import { consentStatus } from "./consent.js";
+import { paywallOn, plansUnlocked } from "./subscription.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { loadLevelLabel } from "./workload-ratio.js";
 import { partsForAI } from "./cycle-model.js";
@@ -288,6 +289,10 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
   const consent = await consentStatus(env).catch(() => ({ aiAllowed: false }));
   if (!consent.aiAllowed) return answer("rules", { reason: "consent" });
   if (!env.OPENAI_API_KEY) return answer("rules", { reason: "unavailable" });
+  // Without Aurin Pro once the paywall is on: no AI text, marked "pro" so
+  // Today's card says where the personal word is (Today audit 40). The app
+  // shows its own rule-based text; nothing else is read and the AI is not asked.
+  if (paywallOn(env) && !(await plansUnlocked(env))) return answer("rules", { reason: "pro" });
 
   await ensureTable(env.DB);
   const day = localToday(), language = lang();

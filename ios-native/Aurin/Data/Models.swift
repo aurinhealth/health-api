@@ -68,6 +68,9 @@ struct TodaySnapshot: Decodable, Equatable {
         let paused: Bool?
         /// What the plan asks now (a missed session, last week, back from a break).
         let proposal: PlanProposal?
+        /// The plan's sessions still ahead this week, every sport the same
+        /// (src/training-plans.js planSessionsLeft); nil when not known.
+        var sessionsLeft: Int? = nil
     }
 
     /// src/training-plans.js proposalView.
