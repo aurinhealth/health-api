@@ -162,6 +162,22 @@
 			<string>%lld days</string>
 		</dict>
 	</dict>
+	<key>%lld konverzací</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld conversation</string>
+			<key>other</key>
+			<string>%lld conversations</string>
+		</dict>
+	</dict>
 	<key>%lld hodin</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
