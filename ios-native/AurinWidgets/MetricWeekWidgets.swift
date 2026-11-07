@@ -86,8 +86,9 @@ extension WidgetMetric {
 
     var color: Color {
         switch self {
-        case .readiness: return W.green
-        case .sleep, .hrv: return W.indigo
+        // HRV green like in the app (Today, HRV detail).
+        case .readiness, .hrv: return W.green
+        case .sleep: return W.indigo
         case .restingHR, .kcalLeft: return W.rust
         case .steps: return W.amber
         case .water: return W.blue
@@ -277,6 +278,9 @@ struct WeekWidgetView: View {
                     }
                 }
                 bars(week).padding(.top, 14)
+                if week.days.contains(where: { $0.minutes > 0 && entry.zones[$0.date] != nil }) {
+                    Text(L10n.tr("barva = tvoje připravenost ten den")).font(.caption2).foregroundStyle(W.muted).padding(.top, 6)
+                }
                 Divider().padding(.top, 12).padding(.bottom, 4)
                 if week.next.isEmpty {
                     Text(L10n.tr("Na zbytek týdne nic naplánovaného.")).font(.caption).foregroundStyle(W.muted)

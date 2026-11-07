@@ -946,6 +946,8 @@
 "aktivita" = "activity";
 "aktivity" = "activities";
 "automaticky" = "automatic";
+"barva = tvoje připravenost ten den" = "colour = your readiness that day";
+"bez cíle" = "no goal set";
 "bez dat" = "no data";
 "bez pauzy" = "no rest";
 "budík %@" = "alarm %@";
