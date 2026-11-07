@@ -4,7 +4,7 @@ import {normalizeProfile,energyBaseline,effectiveProfile} from './energy-profile
 import {readSuggestions} from './profile-suggestions.js';
 import {normalizeAvailability} from './training-availability.js';
 import { localToday } from "./user-time.js";
-import {trainingHistory,starterPlan,EXPERIENCE_LEVELS,EXPERIENCE_SPORTS} from './training-history.js';
+import {trainingHistory,starterPlan,experienceChoices,EXPERIENCE_SPORTS} from './training-history.js';
 import {latestStoredWeight} from './athlete-weight.js';
 export async function ensureOnboarding(db){
   await db.prepare('CREATE TABLE IF NOT EXISTS user_setup (user_id INTEGER PRIMARY KEY,completed_at TEXT,training_json TEXT NOT NULL DEFAULT \'{}\')').run();
@@ -28,11 +28,7 @@ export function mergeExperience(old={},input={}){
   const bySport={...experienceChoices(old),...(input.experience!=null?{strength:input.experience}:{}),...(input.experienceBySport&&typeof input.experienceBySport==='object'?input.experienceBySport:{})};
   return {experienceBySport:bySport,experience:bySport.strength};
 }
-export function experienceChoices(saved={}){
-  const raw=saved.experienceBySport&&typeof saved.experienceBySport==='object'?saved.experienceBySport:{};
-  const pick=v=>EXPERIENCE_LEVELS.includes(v)?v:'auto';
-  return {strength:pick(raw.strength??saved.experience),ride:pick(raw.ride),run:pick(raw.run),swim:pick(raw.swim)};
-}
+export {experienceChoices};
 
 // Places to train: several gyms and a home gym, each with its own stations,
 // name, web page and dumbbells. The active one is mirrored into the flat
@@ -83,7 +79,7 @@ export async function onboardingStatus(env){
   if(!profile.goal)profile.goal='maintain';
   const baseline=energyBaseline(profile,weight?.value_numeric,{activityTracked:tracked});
   const training=await trainingSetup(db);
-  return {status:'ok',completed:Boolean(row?.completed_at),completedAt:row?.completed_at||null,profile,savedProfile,suggestions,weightKg:weight?.value_numeric||null,baseline,training,history,automaticPlan:starterPlan(history,training.experience),activityTracked:tracked,connectedProviders:env.CONNECTED_PROVIDERS||[]};
+  return {status:'ok',completed:Boolean(row?.completed_at),completedAt:row?.completed_at||null,profile,savedProfile,suggestions,weightKg:weight?.value_numeric||null,baseline,training,history,automaticPlan:starterPlan(history,Object.fromEntries(Object.entries(training.experienceBySport).map(([s,e])=>[s,e.mode==='manual'?e.level:'auto']))),activityTracked:tracked,connectedProviders:env.CONNECTED_PROVIDERS||[]};
 }
 export function normalizeTraining(input={}){
   // experienceBySport wins; a lone "experience" (older clients, the setup) is the gym's.

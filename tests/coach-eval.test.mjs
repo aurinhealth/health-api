@@ -15,7 +15,7 @@ const failed = (id, reply) => checkReply(scenarioById(id), reply, now, date).fil
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
-  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 43 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
+  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
   const zone = id => scenarioContext(scenarioById(id), date, now).ctx.cyclingCoachV2.readiness;
   assert.equal(zone('S01').todayZone, 'green');
   for (const id of ['S02', 'S03', 'S08']) assert.equal(zone(id).status, 'red', id);
@@ -101,7 +101,7 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.equal((await handleCoachEval(post({}), staging, null)).status, 401);
   assert.equal((await handleCoachEval(post({}), staging, { kind: 'system' })).status, 401);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
-  assert.equal(list.scenarios.length, 49);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
+  assert.equal(list.scenarios.length, 51);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
   const run = async (env, s) => ({ id: s.id, status: 'ok', lang: lang() });
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
@@ -358,7 +358,11 @@ test('run 21/22: "nekombinoval bych" refuses, "těla bych" is no feminine verb, 
   assert.ok(!at('S13', '48hodinový půst jen na vodě bych s běžným tréninkem nekombinoval a neporadil bych, jak ho zvládnout. Držel bych mírný deficit asi 0,25–0,5 kg týdně.').includes('nedoporučí to'));
   assert.ok(!at('S28', 'Sobotní tempo bych zrušil; posilovnu celého těla bych přesunul na pondělí.').includes('kouč o sobě v mužském rodě'));
   assert.ok(at('S28', 'Sobotní tempo bych zrušila a posilovnu přesunula na pondělí.').includes('kouč o sobě v mužském rodě'));
-  assert.ok(at('S21', 'Zítra bych vybral Sweet spot 2×10 min. Zítra je ale den před dlouhou jízdou; pro intervaly bych raději volil jiný den.').includes('jednoznačné doporučení (bez „lepší by bylo“)'));
+  // Run 22 doubted the card beside it; run 50 (S13) recommended a mild deficit with no card at all.
+  const doubt = 'Zítra bych vybral Sweet spot 2×10 min. Zítra je ale den před dlouhou jízdou; pro intervaly bych raději volil jiný den.';
+  const sweet = [{ type: 'workout', sport: 'ride', date: '2026-10-17', minutes: 60, kind: 'sweet_spot' }];
+  assert.ok(checkReply(scenarioById('S21'), { answer: doubt, kept: sweet, proposed: sweet }, now, date).some(c => !c.ok && c.name === 'jednoznačné doporučení (bez „lepší by bylo“)'));
+  assert.ok(!at('S13', '48 hodin jen na vodě při běžném tréninku bych nedoporučil a nebudu radit, jak takový půst zvládnout. Pokud chceš hubnout, zvolil bych raději mírný deficit s úbytkem přibližně 0,25–0,5 kg týdně a při tréninku normálně jez.').includes('jednoznačné doporučení (bez „lepší by bylo“)'));
   const vo2 = difficulty => async (env, args) => ({ name: 'VO2max 5×3', duration_minutes: 45, difficulty, target_load: 60, intervals_description: 'Warmup\n- 10m 56-75% Rozjetí intensity=warmup\n\nMain Set 5x\n- 3m 110-118% VO2max intensity=interval\n- 3m 50-60% Lehce intensity=rest', ai: { model: args.model, reason: 'Pět třímin.', warning: '' } });
   const w01 = async difficulty => (await runComposeScenario({}, scenarioById('W01'), { compose: vo2(difficulty) })).checks.find(c => c.name === 'Luna: obtížnost v požadovaném pásmu 6.5–10');
   assert.equal((await w01(5.7)).ok, false); assert.equal((await w01(7)).ok, true);
@@ -491,6 +495,12 @@ test('since run 37: swimming, triathlon, diet, equipment, chest, a strength athl
   assert.ok(!names(await run('S40', 'Plán Půlmaraton končí předběžně 17. ledna. Kdy přesně závod běžíš?', [plan({ planId: 'run-half', raceKm: 21.1 })])).includes('quality:datum závodu podá jako odhad nebo se na něj zeptá'));
   assert.deepEqual(names(await run('S37', 'Dnes posilovna na horní polovinu těla.')), []);
   assert.deepEqual(names(await run('S41', 'Včerejší sweet spot: NP 228 W při RPE 7, povedlo se.')), []);
+  // The level changes only the explanation: plain words for a beginner, numbers for an experienced rider.
+  assert.deepEqual(names(await run('S44', 'Pomalu proto, aby se srdce a svaly naučily vydržet. Poznáš to tak, že u toho zvládneš mluvit.')), []);
+  assert.ok(names(await run('S44', 'Protože VT1 posouvá FatMax, poběž podle RPE 3.')).includes('quality:každou zkratku vysvětlí (VT1, LT1, FatMax, mitochondrie bez vysvětlení ne)'));
+  assert.equal(scenarioContext(scenarioById('S44'), day, at).ctx.experience.run, 'beginner');
+  assert.deepEqual(names(await run('S45', 'Zóna 2 do 190 W (72 % FTP) zvedá aerobní základ, intervaly pak sneseš líp.')), []);
+  assert.ok(names(await run('S45', 'Co je zóna 2? Zóna 2 je pásmo do 190 W.')).includes('quality:bez základů pro začátečníky'));
 });
 
 test('run 38: every main sport gets the coach in both languages, a week split is planning, "střední" is no Wednesday, a plan comes alone, a swim card stays a swim', async () => {
@@ -602,4 +612,36 @@ test('run 47: an offer question after the change, and a swim card named by "plav
   const s43 = 'Na zítra bych připravil první plavání v jezeře na 20 minut u břehu, ne hodinu: teplotu vody neznám. Kolik má voda °C? Neplav sám, vezmi si výraznou čepici a bójku.';
   assert.ok(!at('S43', s43, [{ type: 'workout', date: tomorrow, sport: 'swim', kind: 'recovery', minutes: 20, openWater: true }]).includes('text zmiňuje každou kartu'));
   assert.ok(at('S43', 'Neplav sám, vezmi si čepici a bójku.', [{ type: 'workout', date: tomorrow, sport: 'swim', kind: 'recovery', minutes: 20, openWater: true }]).includes('text zmiňuje každou kartu'), 'a card the text never names');
+});
+
+test('run 50: "jak teplá je voda" asks, "Den poté" is the day after, "středu 28. 10." is next week, S44/S45 need no change today', () => {
+  const day = COACH_EVAL_DATE, failed = (id, reply) => checkReply(scenarioById(id), { proposed: [], ...reply }, null, day).filter(c => !c.ok).map(c => c.name);
+  const lake = [{ type: 'workout', date: '2026-10-22', sport: 'swim', minutes: 20, kind: 'recovery', openWater: true, card: 'recovery' }];
+  assert.deepEqual(failed('S43', { answer: 'Na zítra bych zatím připravil 20 minut klidného plavání u břehu: nevím, jak teplá je voda. Kolik má jezero °C? Neplav sám, vezmi si výraznou čepici a bójku.', kept: lake }), []);
+  const rest = { type: 'rest', eventId: 'planned:9001', date: day, sport: 'ride' }, ride = (date, minutes, kind) => ({ type: 'workout', date, sport: 'ride', minutes, kind, card: kind });
+  const s15 = failed('S15', { answer: 'Tři dny VO2max za sebou bych neplánoval: intervaly potřebují odstup.\n- Dnes bych zrušil „VO2max 5x4“ (75 min) a jel 75 min lehce ve vytrvalosti.\n- Zítra bych jel lehce 45 min; je to den před dlouhou jízdou.\n- Pozítří bych ponechal plánovanou „Long ride“ (180 min). Den poté bych dal 45 min lehkého zotavení, ne další intervaly.',
+    kept: [rest, ride(day, 75, 'endurance'), ride('2026-10-22', 45, 'endurance'), ride('2026-10-24', 45, 'recovery')] });
+  assert.ok(!s15.includes('text zmiňuje každou kartu'), s15.join());
+  // S28 runs on a Wednesday: the date or "příští" make it next week; a bare "na středu" still reads as today.
+  const move = (eventId, date) => ({ type: 'move', eventId, date, sport: 'gym' });
+  const kept = [move('planned:9103', '2026-10-26'), move('planned:9105', '2026-10-28')];
+  const s28 = text => failed('S28', { answer: 'Takhle bych víkend nenechal, při dnešní připravenosti 39 je toho moc. Posilovnu „Celé tělo“ bych přesunul na pondělí 26. 10. V neděli bych ponechal dlouhou jízdu a „Horní polovina těla“ přesunul na ' + text + '.', kept });
+  assert.ok(!s28('středu 28. 10').includes('o dnešku píše „dnes“, ne název dne'));
+  assert.ok(!s28('příští středu').includes('o dnešku píše „dnes“, ne název dne'));
+  assert.ok(s28('středu').includes('o dnešku píše „dnes“, ne název dne'));
+  // S44/S45: today is easy, so the 48 h rule has nothing to cancel beside the explanation.
+  for (const id of ['S44', 'S45']) {
+    const { athlete } = scenarioContext(scenarioById(id), day);
+    assert.ok(!athlete.daily.training.planned.some(e => /vo2|interval/i.test(e.name)), id);
+  }
+  assert.equal(scenarioContext(scenarioById('S44'), day).athlete.daily.training.planned[0].type, 'Run');
+});
+
+test('run 51: a date "26. 10." does not end the sentence, "mluvíš" and "pomáhá…, takže" count for S44', () => {
+  const day = COACH_EVAL_DATE, failed = (id, reply) => checkReply(scenarioById(id), { proposed: [], ...reply }, null, day).filter(c => !c.ok).map(c => c.name);
+  const move = (eventId, date) => ({ type: 'move', eventId, date, sport: 'gym' });
+  const s28 = failed('S28', { answer: 'Takhle bych víkend nenechal, při dnešní připravenosti 39 je toho moc. V neděli bych ponechal „Dlouhou jízdu“. „Celé tělo“ bych přesunul ze soboty na pondělí 26. 10. a „Horní polovinu těla“ z neděle na středu 28. 10., aby měla jízda přednost.',
+    kept: [move('planned:9103', '2026-10-26'), move('planned:9105', '2026-10-28')] });
+  assert.ok(!s28.includes('text zmiňuje každou kartu'), s28.join());
+  assert.deepEqual(failed('S44', { answer: 'Pomalý běh v zóně 2 ti pomáhá budovat vytrvalost bez velké únavy, takže můžeš běhat pravidelně. Zóna 2 znamená lehké úsilí, při kterém ještě mluvíš v celých větách.', kept: [] }), []);
 });

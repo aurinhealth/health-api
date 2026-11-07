@@ -885,6 +885,9 @@
 "Zatím nic. Přidej první jídlo dne." = "Nothing yet. Add your first meal of the day.";
 "Zatím tu nic není. Potraviny, které přidáš, se tu objeví příště." = "Nothing here yet. Foods you add will show up here next time.";
 "Zatím žádné konverzace." = "No conversations yet.";
+"Hledat v konverzacích" = "Search conversations";
+"Ty" = "You";
+"Nic jsme nenašli." = "No matches.";
 "Zatím žádné vážení." = "No weigh-ins yet.";
 "Zatím žádné vážení. Klepni a zapiš první." = "No weigh-ins yet. Tap to log your first.";
 "Zavřít" = "Close";
@@ -4050,6 +4053,10 @@
 /* Settings → Zones: where the max heart rate comes from when none is typed (ZonesSettingsView.swift heartNote) */
 "Odhad podle věku" = "Estimate from age";
 "Nejvyšší tep z tréninků za 6 měsíců" = "Highest heart rate in 6 months of workouts";
+/* Etiketa read on the iPhone (Data/LabelReader.swift) */
+"Některé hodnoty se nepodařilo přečíst. Doplň je podle etikety." = "Some values couldn't be read. Fill them in from the label.";
+"Hodnoty se nepodařilo přečíst. Vyfoť celou tabulku i s řádkem „na 100 g“, zblízka a rovně." = "Couldn't read the values. Take the whole table with its “per 100 g” row, up close and straight on.";
+"Energie %@ kcal nesedí s makroživinami (≈ %@ kcal). Zkontroluj přepis proti fotce." = "Energy %@ kcal doesn't match the macros (≈ %@ kcal). Check the values against the photo.";
 
 /* Chart legends: weekly load, steps today, form forecast, weight, race goal (chart review points 5, 7, 8) */
 "naplánováno" = "planned";

@@ -52,7 +52,7 @@ test('changing strength place preserves automatic experience and never completes
  assert.equal((await trainingSetup(b)).equipment,'bodyweight');
 });
 test('starter recommendations are separate from observed averages and optional sport estimates never block calories',()=>{
- const h={experience:'beginner',recentCount:0,recentActiveWeeks:0};assert.equal(starterPlan(h).source,'starter');assert.equal(starterPlan(h,'regular').weeklyMinutes,150);assert.equal(starterPlan(h,'experienced').weeklyMinutes,240);
+ const h={experience:'beginner',recentCount:0,recentActiveWeeks:0};assert.equal(starterPlan(h).source,'starter');assert.equal(starterPlan(h,{run:'regular'}).weeklyMinutes,150);assert.equal(starterPlan(h,{ride:'experienced',run:'regular'}).weeklyMinutes,240);
  const profile={sex:'male',age:30,height:180,activity:'light',goal:'maintain',sportHours:'auto'};
  const baseline=energyBaseline(profile,80,{activityTracked:false});assert.equal(baseline.ready,true);assert.equal(baseline.sportDaily,0);assert.ok(Number.isFinite(baseline.baselineRestTDEE));
 });
@@ -68,4 +68,10 @@ test('onboarding never sets the diet\'s Pro fields (custom macros, own protein, 
  const {a}=db(),env={DB:a,USER_ID:1};
  const r=await completeOnboarding(env,{profile:{dietEating:'vegan',dietStyle:'custom',proteinPerKg:2.6,nutrientTargets:{fe:30}}});
  assert.deepEqual([r.profile.dietEating,r.profile.dietStyle,r.profile.proteinPerKg,r.profile.nutrientTargets],['vegan','balanced',null,{}]);
+});
+test('the starter week follows the main sport, not the gym level',()=>{
+  const h={experience:'beginner',recentCount:0,recentActiveWeeks:0,mainSport:'cycling'};
+  assert.equal(starterPlan(h,{strength:'experienced'}).weeklyMinutes,105,'a cyclist new to the gym');
+  assert.equal(starterPlan(h,{strength:'beginner',ride:'experienced'}).weeklyMinutes,240);
+  assert.equal(starterPlan({...h,experience:'regular'},{ride:'auto'}).weeklyMinutes,150,'Auto: the last 12 weeks');
 });

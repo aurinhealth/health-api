@@ -424,6 +424,12 @@ test("after four solid weeks the fifth is a deload week, then training goes on",
   assert.equal(strengthDeload([...weeks(4), ...session("2026-09-29", 1, "Hlavní tlak; odlehčený týden: stejná váha")], "2026-10-05"), null);
   // One session a week is not a solid week.
   assert.equal(strengthDeload(weeks(4).filter(r => new Date(r.workout_date + "T12:00:00Z").getUTCDay() === 1), "2026-10-05"), null);
+  // By the gym level: an intermediate after five solid weeks, a beginner after twelve.
+  assert.equal(strengthDeload(weeks(4), "2026-10-05", "regular"), null);
+  assert.equal(strengthDeload(weeks(5), "2026-10-05", "regular").weeks, 5);
+  assert.equal(strengthDeload(weeks(5), "2026-10-05", "beginner"), null);
+  assert.match(strengthDeload(weeks(12), "2026-10-05", "beginner").reason, /Dvanáct týdnů|Twelve/);
+  assert.equal(strengthDeload(weeks(4), "2026-10-05", "experienced").weeks, 4);
   const plan = generateStrengthPlan({ date: "2026-10-05", cycling: { recentRideHours: 0, recentRideTss: 0, recentActivities: [], plannedWorkouts: [], nextRide: null }, recovery: {}, strength: { recentCompletedSets: weeks(4) } }, { durationMinutes: 60 });
   assert.match(plan.planName, /odlehčený týden/);
   assert.ok(plan.loadEstimates.every(x => x.sets <= 2));
@@ -597,6 +603,12 @@ test('the main sport decides: a cyclist gets heavy legs and back first, a runner
   const jumped = [{ exercise: 'Squat Jump', workout_date: '2026-10-25', type: 'WORK', reps: 5 }];
   assert.ok(!names(plan('running', '2026-10-28', jumped)).some(ex => ['Box Jump', 'Squat Jump', 'Pogo Hops'].includes(ex)));
   for (const sport of ['cycling', '']) assert.ok(!names(plan(sport, '2026-10-28')).some(ex => ['Box Jump', 'Squat Jump', 'Pogo Hops'].includes(ex)), sport);
+  // A beginner in the gym jumps low only: no box jumps even with a box.
+  const box = { trainingSetup: { equipment: 'custom', stations: ['plyo_box', 'dumbbells', 'adjustable_bench', 'squat_rack', 'barbell'] } };
+  const lowDone = [{ exercise: 'Squat Jump', workout_date: '2026-10-18', type: 'WORK', reps: 5 }, { exercise: 'Pogo Hops', workout_date: '2026-10-19', type: 'WORK', reps: 15 }];
+  const withLevel = experience => names(plan('running', '2026-10-28', lowDone, { trainingSetup: { ...box.trainingSetup, experience } }))[0];
+  assert.equal(withLevel('experienced'), 'Box Jump');
+  assert.ok(['Squat Jump', 'Pogo Hops'].includes(withLevel('beginner')), withLevel('beginner'));
   // Not on a day the legs are spared for a key run.
   const keyRun = { running: { nextRun: { date: '2026-10-29', name: 'Intervaly', type: 'Run', intensity: true, durationMinutes: 60 } } };
   const spared = plan('running', '2026-10-28', [], keyRun);

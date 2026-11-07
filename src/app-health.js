@@ -131,7 +131,10 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const indexNights = pastDays
     .map(({ date: d, r }) => ({ date: d, value: nights.get(d) ? sleepIndexFor(nights.get(d), d === date ? needToday.need : r.need.need) : null }))
     .filter(p => p.value != null);
-  const indexUsual = indexNights.length >= USUAL_NIGHTS ? middleHalf(indexNights.map(p => p.value)) : null;
+  // The range leaves the newest night out: the night being rated is not part
+  // of its own usual (as oxygen's, audit 16.3), from 7 nights before it.
+  const indexBefore = indexNights.slice(0, -1);
+  const indexUsual = indexBefore.length >= USUAL_NIGHTS ? middleHalf(indexBefore.map(p => p.value)) : null;
 
   // Regularity: bedtimes of the last 14 nights (minutes after 18:00 so that
   // 23:30 and 00:30 are an hour apart, not 23).
@@ -149,7 +152,14 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const c = readiness.components || {};
   // HRV and resting heart rate for 90 days: Health's detail charts pick 7, 30
   // or 90 of them.
-  const hrvSeries = series("hrv", 90), rhrSeries = series("restingHR", 90);
+  // HRV from one source only, the one of the newest morning, as its usual
+  // range (recoveryReadiness, hrvStatusLow): WHOOP's RMSSD before a switch and
+  // Apple Watch's SDNN after it are two scales, so a mixed line and average
+  // would mislead. A day of another source counts by its value in hrvBySource.
+  const hrvNewest = readiness.rows.filter(r => r.id <= date && num(r.hrv) > 0).reduce((a, r) => !a || r.id > a.id ? r : a, null);
+  const hrvSource = hrvNewest?.hrvSource || "";
+  const hrvRows = readiness.rows.map(r => ({ id: r.id, hrv: (r.hrvSource || "") === hrvSource ? r.hrv : r.hrvBySource?.[hrvSource] ?? null }));
+  const hrvSeries = series("hrv", 90, 0, hrvRows), rhrSeries = series("restingHR", 90);
   const lastWeek = hrvSeries.filter(p => p.date > shift(date, -7)).map(p => p.value);
   const today = readiness.rows.find(r => r.id === date) || {};
   const respiration = series("respiration", 14, 1);
