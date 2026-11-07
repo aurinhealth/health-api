@@ -730,3 +730,10 @@ test('S61–S62: a lasting wish to train a group more is saved with its groups a
   assert.ok(failed(await run('S61', [], [{ text: 'Chci víc posilovat horní záda', group: 'training', station: '', muscles: [], until: '' }])).includes('uloží přání s partií zad'));
   assert.deepEqual(failed(await run('S62', [card])), []);
 });
+
+test('run 53: a kept Nemoc card is no dropped card, though the app keeps it without a day (S54, S55)', () => {
+  const failed = (proposed, kept) => checkReply(scenarioById('S54'), { answer: 'S horečkou dnes netrénuj, VO2max ruším.', proposed, kept }, null, COACH_EVAL_DATE).filter(c => !c.ok).map(c => c.name);
+  const status = { type: 'status', date: COACH_EVAL_DATE, status: 'sick', reason: 'Horečka.' };
+  assert.ok(!failed([status], [{ type: 'status', status: 'sick', reason: 'Horečka.' }]).includes('text neslibuje kartu, kterou aplikace zahodila'));
+  assert.ok(failed([status], []).includes('text neslibuje kartu, kterou aplikace zahodila'));
+});

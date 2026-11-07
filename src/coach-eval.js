@@ -694,9 +694,10 @@ function otherCards(r) {
 }
 
 // Proposed cards the app's check did not keep (a rest or move by its planned
-// session, a gym swap by its exercise, the rest by type, day and sport).
+// session, a gym swap by its exercise, a status by its status, which the app
+// keeps without a day (run 53: S54, S55), the rest by type, day and sport).
 function droppedCards(r) {
-  const same = (p, k) => p.type === k.type && (['rest', 'move'].includes(p.type) ? p.eventId === k.eventId : p.type === 'gym_swap' ? p.toExercise === k.toExercise : !p.date || p.date === k.date) && (p.type !== 'workout' || p.sport === k.sport);
+  const same = (p, k) => p.type === k.type && (['rest', 'move'].includes(p.type) ? p.eventId === k.eventId : p.type === 'gym_swap' ? p.toExercise === k.toExercise : p.type === 'status' ? p.status === k.status : !p.date || p.date === k.date) && (p.type !== 'workout' || p.sport === k.sport);
   const left = [...r.kept];
   return r.proposed.slice(0, 5).filter(p => { const i = left.findIndex(k => same(p, k)); if (i < 0) return true; left.splice(i, 1); return false; }).map(p => [p.type, p.kind || p.sport, p.date].filter(Boolean).join(' '));
 }
