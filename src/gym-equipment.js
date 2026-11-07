@@ -445,6 +445,14 @@ export function stationLabel(exercise, gym = METAGYM_KUTNA_HORA) {
     return OTHER_STATIONS[id] ? L(OTHER_STATIONS[id].label, OTHER_STATIONS[id].en) : null;
   }).filter(Boolean).join(" + ") || null;
 }
+// A machine that does not work for a while ("leg press nefunguje", audit
+// "Kouč jako skutečný trenér" 2026-11-07, point 11): the words that bring the
+// station list to the coach, the station's name and the exercises it carries.
+export const BROKEN_WORDS = /nefung|nejde|rozbit|porouch|mimo provoz|v opravě|v oprave|odstaven|broken|out of order|not working|doesn'?t work|under repair/iu;
+export const stationName = id => METAGYM_KUTNA_HORA.stations[id] ? L(METAGYM_KUTNA_HORA.stations[id].label, STATION_EN[METAGYM_KUTNA_HORA.stations[id].label] || METAGYM_KUTNA_HORA.stations[id].label)
+  : OTHER_STATIONS[id] ? L(OTHER_STATIONS[id].label, OTHER_STATIONS[id].en) : null;
+export const stationList = () => [...new Set([...Object.keys(METAGYM_KUTNA_HORA.stations), ...Object.keys(OTHER_STATIONS)])].map(id => ({ id, name: stationName(id) }));
+export const stationExercises = ids => Object.keys(EXERCISE_STATIONS).filter(name => EXERCISE_STATIONS[name].some(id => ids.includes(id)));
 // Whether the gym (METAGYM Kutná Hora unless given) has every station of the exercise.
 export function availableAt(exercise, gym = METAGYM_KUTNA_HORA) {
   const stations = EXERCISE_STATIONS[exercise];

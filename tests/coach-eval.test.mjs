@@ -15,7 +15,7 @@ const failed = (id, reply) => checkReply(scenarioById(id), reply, now, date).fil
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
-  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'S50', 'S51', 'S52', 'S53', 'S54', 'S55', 'S56', 'S57', 'S58', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
+  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'S50', 'S51', 'S52', 'S53', 'S54', 'S55', 'S56', 'S57', 'S58', 'S59', 'S60', 'S61', 'S62', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
   const zone = id => scenarioContext(scenarioById(id), date, now).ctx.cyclingCoachV2.readiness;
   assert.equal(zone('S01').todayZone, 'green');
   for (const id of ['S02', 'S03', 'S08']) assert.equal(zone(id).status, 'red', id);
@@ -101,7 +101,7 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.equal((await handleCoachEval(post({}), staging, null)).status, 401);
   assert.equal((await handleCoachEval(post({}), staging, { kind: 'system' })).status, 401);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
-  assert.equal(list.scenarios.length, 61);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
+  assert.equal(list.scenarios.length, 65);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
   const run = async (env, s) => ({ id: s.id, status: 'ok', lang: lang() });
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
@@ -706,4 +706,34 @@ test('S57–S58: Nemoc for days, the coach asks whether the athlete is better (p
   const back = await run('S58', 'Super, vracím tě k tréninku, první dny lehce.', [{ type: 'status', eventId: '', date: '', sport: '', minutes: 0, status: 'active', statusUntil: '', reason: 'Je ti zase dobře.', fromExercise: '', toExercise: '', workoutId: '', kind: '', activityId: '', otherActivityId: '', time: '', kcal: 0, gymFocus: '', gymMuscles: [], insisted: false, planId: '', days: [], raceKm: 0, place: '' }]);
   assert.ok(back.kept.some(a => a.type === 'status' && a.status === 'active'));
   assert.ok(!failed(back).includes('karta Aktivní'), failed(back).join());
+});
+
+test('S59–S60: a machine out of order is saved with its station and left out of the gym plan (point 11)', async () => {
+  const day = '2026-10-21', at = '2026-10-21 08:00', tomorrow = '2026-10-22';
+  assert.ok(scenarioContext(scenarioById('S59'), day, at).ctx.gymStations.some(s => s.id === 'pivot_leg_press'));
+  assert.equal(scenarioContext(scenarioById('S60'), day, at).ctx.gymStations, undefined);
+  assert.deepEqual(scenarioContext(scenarioById('S60'), day, at).ctx.outOfOrder, ['pivot_leg_press']);
+  const card = { type: 'workout', eventId: '', date: tomorrow, sport: 'gym', minutes: 45, status: '', statusUntil: '', reason: 'Nohy.', fromExercise: '', toExercise: '', workoutId: '', kind: '', activityId: '', otherActivityId: '', time: '', kcal: 0, gymFocus: 'lower', gymMuscles: [], insisted: false, planId: '', days: [], raceKm: 0, place: '' };
+  const run = (id, save = []) => runScenario({}, scenarioById(id), { date: day, now: at, ask: async () => ({ status: 'ok', answer: 'Zítra posilovna na nohy bez leg pressu.', actions: [card], visuals: [], memory: { save, forget: [], update: [] } }) });
+  const failed = r => r.checks.filter(c => !c.ok).map(c => c.name);
+  assert.deepEqual(failed(await run('S59', [{ text: 'Nefunguje Pivot leg press (do 31. 10.)', group: 'training', station: 'pivot_leg_press', until: '2026-10-31' }])), []);
+  assert.ok(failed(await run('S59')).includes('uloží nefunkční stroj s jeho stanicí'));
+  assert.deepEqual(failed(await run('S60')), []);
+});
+
+test('S61–S62: a lasting wish to train a group more is saved with its groups and added to the gym plan (point 10)', async () => {
+  const day = '2026-10-21', at = '2026-10-21 08:00', tomorrow = '2026-10-22';
+  const card = { type: 'workout', eventId: '', date: tomorrow, sport: 'gym', minutes: 45, status: '', statusUntil: '', reason: 'Celé tělo.', fromExercise: '', toExercise: '', workoutId: '', kind: '', activityId: '', otherActivityId: '', time: '', kcal: 0, gymFocus: '', gymMuscles: [], insisted: false, planId: '', days: [], raceKm: 0, place: '' };
+  const run = (id, actions, save = []) => runScenario({}, scenarioById(id), { date: day, now: at, ask: async () => ({ status: 'ok', answer: 'Zítra posilovna na celé tělo.', actions, visuals: [], memory: { save, forget: [], update: [] } }) });
+  const failed = r => r.checks.filter(c => !c.ok).map(c => c.name);
+  assert.deepEqual(failed(await run('S61', [], [{ text: 'Chci víc posilovat horní záda', group: 'training', station: '', muscles: ['upper_back', 'rear_delts'], until: '' }])), []);
+  assert.ok(failed(await run('S61', [], [{ text: 'Chci víc posilovat horní záda', group: 'training', station: '', muscles: [], until: '' }])).includes('uloží přání s partií zad'));
+  assert.deepEqual(failed(await run('S62', [card])), []);
+});
+
+test('run 53: a kept Nemoc card is no dropped card, though the app keeps it without a day (S54, S55)', () => {
+  const failed = (proposed, kept) => checkReply(scenarioById('S54'), { answer: 'S horečkou dnes netrénuj, VO2max ruším.', proposed, kept }, null, COACH_EVAL_DATE).filter(c => !c.ok).map(c => c.name);
+  const status = { type: 'status', date: COACH_EVAL_DATE, status: 'sick', reason: 'Horečka.' };
+  assert.ok(!failed([status], [{ type: 'status', status: 'sick', reason: 'Horečka.' }]).includes('text neslibuje kartu, kterou aplikace zahodila'));
+  assert.ok(failed([status], []).includes('text neslibuje kartu, kterou aplikace zahodila'));
 });

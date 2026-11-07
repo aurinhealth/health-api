@@ -3,14 +3,14 @@ import { parseStrengthPlan } from './strength-history.js';
 import { EXERCISES, fitsEquipment, painfulExercises } from './strength-generator.js';
 import { findExerciseAlternatives, resolveLoad } from './strength-intelligence.js';
 import { gymLoadEstimate } from './gym-catalog.js';
-import { availableAt } from './gym-equipment.js';
+import { availableAt, stationExercises } from './gym-equipment.js';
 
 // An exercise the athlete's own equipment allows (/app/api/gym sends it); the
 // default gym's only when it is unknown.
 const fits=(name,gym)=>gym?.equipment?fitsEquipment(name,gym.equipment):availableAt(name);
 
-export function todayGymContext(gym,date,memories=[]){
-  const painful=painfulExercises(memories).avoid;
+export function todayGymContext(gym,date,memories=[],broken=[]){
+  const painful=new Set([...painfulExercises(memories).avoid,...stationExercises(broken)]);
   if(!gym?.values?.length)return null;
   const parsed=parseStrengthPlan(gym.values);
   if(parsed.date!==date)return null;
@@ -21,12 +21,13 @@ export function todayGymContext(gym,date,memories=[]){
 }
 
 // A replacement loading a part the coach remembers as painful is refused (Revize 2026-10-16, nález 24).
-export function prepareGymSwap(gym,fromExercise,toExercise,reason,memories=[]){
+export function prepareGymSwap(gym,fromExercise,toExercise,reason,memories=[],broken=[]){
   const parsed=parseStrengthPlan(gym.values),source=parsed.rows.filter(r=>r.exercise===fromExercise),def=EXERCISES[toExercise];
   if(!source.length||!def||!fits(toExercise,gym)||fromExercise===toExercise)throw new Error(L('Cvik není v aktuálním plánu nebo katalogu.', 'The exercise isn\'t in the current plan or catalog.'));
   if(def.muscle!==EXERCISES[fromExercise]?.muscle)throw new Error(L('Náhrada musí zachovat cílovou partii.', 'The replacement must keep the target muscle group.'));
   if(parsed.rows.some(r=>r.exercise===toExercise))throw new Error(L('Náhradní cvik už v plánu je.', 'The replacement exercise is already in the plan.'));
   if(painfulExercises(memories).avoid.has(toExercise))throw new Error(L('Náhrada zatěžuje partii, která tě podle paměti trenéra bolí.', 'The replacement loads a body part that hurts, as the coach remembers.'));
+  if(stationExercises(broken).includes(toExercise))throw new Error(L('Stroj na tenhle cvik teď podle tebe nefunguje.', 'The machine for this exercise is out of order, as you said.'));
   if(source.some(r=>r.completed||r.actualKg!=null||r.actualReps!=null||r.rpe!=null))throw new Error(L('Rozcvičený nebo rozepsaný cvik nelze nahradit.', 'An exercise that\'s warmed up or partly logged can\'t be replaced.'));
   const work=source.filter(r=>r.type==='WORK');if(!work.length)throw new Error(L('Cvik nemá pracovní série.', 'The exercise has no work sets.'));
   // The generator's estimate: own history, a similar exercise, or the catalogue's start.
