@@ -1078,7 +1078,11 @@ function choosePlan(context, options = {}) {
   const forceUpper = options.forceProtectLegs === true || options.focus === "upper"&&options.focusSource!=='week';
   const forceLower = options.focus === "lower";
   const { liked, disliked } = taste(options), sport = mainSportOf(context), shown = shownBefore(options);
-  const recovery=recoverySignals(context),acuteRecovery=(context?.adaptive?.recovery?.score??100)<55||recovery.sleepMin!=null&&recovery.sleepMin<330;
+  // One short night with normal HRV and resting heart rate makes the session
+  // lighter (recoveryFactor), not a day without legs: that takes a very short
+  // night (under 4.5 h) or a short one with a low readiness too.
+  const recovery=recoverySignals(context),readiness=context?.adaptive?.recovery?.score??100,sleepMin=recovery.sleepMin;
+  const acuteRecovery=readiness<55||sleepMin!=null&&(sleepMin<270||sleepMin<330&&readiness<70);
 
   const candidatesByPattern = {
     horizontalPush: ["DB bench press", "Chest flat press Prime", "Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press", "Barbell incline bench press", "Smith Machine Bench Press", "Cable Bench Chest Fly", "Cable Bench Press", "Cable Chest Press", "Cable Decline Bench Press", "Cable High-to-Low Fly", "Cable Incline Bench Press", "Cable Standing Single Arm Chest Press", "Single-Arm Cable Fly", "Decline Machine Chest Press", "Incline Machine Chest Press", "Dumbbell Chest Fly"],

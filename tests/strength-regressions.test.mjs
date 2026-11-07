@@ -652,7 +652,11 @@ test("last night's sleep from the sleep sessions lowers the gym dose", async () 
   assert.equal(rested.loadFactor, 1);
   const short = generateStrengthPlan(context([night(300), { ...night(90), nap: true, date: "2026-09-23" }]));
   assert.equal(short.loadFactor, 0.94);
-  assert.equal(short.protectedLegs, true);
+  // One short night alone keeps the legs; a very short one or a low readiness too spares them.
+  assert.equal(short.protectedLegs, false);
+  assert.equal(generateStrengthPlan(context([night(240)])).protectedLegs, true);
+  assert.equal(generateStrengthPlan(context([night(300)], 65)).protectedLegs, true);
+  assert.equal(generateStrengthPlan(context([night(450)], 65)).protectedLegs, false);
   // A nap is not the night; the night still waiting changes nothing.
   assert.equal(generateStrengthPlan(context([{ ...night(60), nap: true }])).loadFactor, 1);
   assert.equal(generateStrengthPlan(context([{ ...night(300), date: "2026-09-22", endTime: "2026-09-22T05:00:00Z" }])).loadFactor, 1);
