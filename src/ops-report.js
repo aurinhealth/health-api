@@ -23,15 +23,23 @@ export async function ensureOpsEvents(db) {
   await db.prepare("CREATE TABLE IF NOT EXISTS ops_events (day TEXT NOT NULL,kind TEXT NOT NULL,service TEXT NOT NULL,count INTEGER NOT NULL DEFAULT 0,last_message TEXT,PRIMARY KEY(day,kind,service))").run();
 }
 
-// Never breaks what it watches: a failed write is only logged. A slow request
-// keeps the day's slowest message ("10023 ms, …": the number it starts with),
-// so the report's "až" is the worst of the day, not the last.
+// A slow request keeps the day's slowest message and a slow cron job the one
+// that read the most rows (what flags each, request-timing.js slowness), so the
+// report's "až" is the worst of the day, not the last.
+const slowRank = (message, cron) => Number(String(message || "").match(cron ? /(\d+) řádků/ : /^(\d+) ms/)?.[1]) || 0;
+// Never breaks what it watches: a failed write is only logged.
 export async function recordOpsEvent(db, kind, service, message = "", count = 1) {
   if (!db || !count) return;
   try {
     await ensureOpsEvents(db);
-    await db.prepare("INSERT INTO ops_events(day,kind,service,count,last_message) VALUES(?,?,?,?,?) ON CONFLICT(day,kind,service) DO UPDATE SET count=count+excluded.count,last_message=CASE WHEN excluded.kind='slow' AND CAST(ops_events.last_message AS INTEGER)>CAST(excluded.last_message AS INTEGER) THEN ops_events.last_message ELSE excluded.last_message END")
-      .bind(day(), kind, String(service || "-"), count, text(message)).run();
+    const name = String(service || "-"), cron = name.startsWith("cron ");
+    let kept = text(message);
+    if (kind === "slow") {
+      const before = await db.prepare("SELECT last_message FROM ops_events WHERE day=? AND kind='slow' AND service=?").bind(day(), name).first();
+      if (before && slowRank(before.last_message, cron) > slowRank(kept, cron)) kept = null;
+    }
+    await db.prepare("INSERT INTO ops_events(day,kind,service,count,last_message) VALUES(?,?,?,?,?) ON CONFLICT(day,kind,service) DO UPDATE SET count=count+excluded.count,last_message=COALESCE(excluded.last_message,ops_events.last_message)")
+      .bind(day(), kind, name, count, kept).run();
   } catch (error) { original.call(console, "Ops event write failed", error.message); }
 }
 

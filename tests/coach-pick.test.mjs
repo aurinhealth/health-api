@@ -103,7 +103,7 @@ test("Aktivita dne asks for the ready workouts only when the options change, the
   // The AI's workout after the answer: the rules' first, the AI asked by the request whose claim lands.
   assert.match(route, /pickDetails\(env,ctx,ranked,date,gym,\{ai:!aiKind\}\)/);
   assert.match(route, /if\(await claimDetails\([^)]*\)\.catch\(\(\)=>false\)\)askAi\(details\)/);
-  assert.match(route, /ai\[aiKind\]&&!state\.chosen/);
+  assert.match(route, /if\(state\.chosen\)await finishDetails\(env\.DB,env\.USER_ID,date,signature,rest\)/);
 });
 
 test("the AI's workout is asked once per options and replaces the rules' only while the options stay", async () => {
@@ -121,6 +121,25 @@ test("the AI's workout is asked once per options and replaces the rules' only wh
   assert.deepEqual(await storedDetails(db, 1, date, "B"), provisional);
   await finishDetails(db, 1, date, "B", { ride: { minutes: 70, ai: true } });
   assert.deepEqual(await storedDetails(db, 1, date, "B"), { ride: { minutes: 70, ai: true } });
+  // A finished entry is never taken back for the same options, however old.
+  assert.equal(await claimDetails(db, 1, date, "B", provisional, new Date(now.getTime() + 10 * AI_RETRY_MS)), false);
+  assert.deepEqual(await storedDetails(db, 1, date, "B"), { ride: { minutes: 70, ai: true } });
+});
+
+test("the AI after the answer fits Cloudflare's time, and a try without its workout gets one more", async () => {
+  const { AI_BUDGET_MS } = await import("../src/coach-pick.js");
+  assert.ok(AI_BUDGET_MS <= 25000);
+  const src = (await import("node:fs")).readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const route = src.slice(src.indexOf("if(url.pathname==='/app/api/coach/pick')"), src.indexOf("if(url.pathname==='/app/api/coach/check-in'"));
+  assert.match(route, /\{aiBudgetMs:AI_BUDGET_MS\}/);
+  assert.match(route, /consentStatus\(env\)/);
+  assert.match(route, /got=ai\[aiKind\]\?\.workout\?\.ai/);
+  assert.match(route, /\(aiTries\|\|1\)>=2/);
+  assert.match(route, /aiTries:\(details\.aiTries\|\|1\)\+1/);
+  // The generator's AI calls end within the budget, with a short wait for a slot.
+  assert.match(src, /slotWaitMs:Math\.min\(5000,/);
+  assert.match(src, /aiWorkoutPick\(env,generated,\{[^}]*\.\.\.\(ask\?\{ask\}:\{\}\)\}\)/);
+  assert.match(src, /composeWorkout\(env,\{sport:genSport[^}]*\.\.\.\(ask\?\{ask\}:\{\}\)\}\)/);
 });
 
 test("a choice without a workout goes into the day's plan, and a changed mind takes it out", async () => {

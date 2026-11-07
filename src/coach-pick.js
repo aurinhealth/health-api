@@ -316,9 +316,11 @@ export async function storeDetails(db, userId, date, signature, details) {
 // entry still pending after AI_RETRY_MS (the background work ended early) may
 // be claimed again.
 export const AI_RETRY_MS = 120000;
+// How long the AI may take after the answer: Cloudflare keeps the work going ~30 s.
+export const AI_BUDGET_MS = 22000;
 export async function claimDetails(db, userId, date, signature, details, now = new Date()) {
   await db.prepare(DETAILS_TABLE).run();
-  const result = await db.prepare("INSERT INTO coach_pick_details (user_id, date, signature, details_json, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, date) DO UPDATE SET signature=excluded.signature, details_json=excluded.details_json, updated_at=excluded.updated_at WHERE coach_pick_details.signature!=excluded.signature OR coach_pick_details.updated_at<?")
+  const result = await db.prepare("INSERT INTO coach_pick_details (user_id, date, signature, details_json, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, date) DO UPDATE SET signature=excluded.signature, details_json=excluded.details_json, updated_at=excluded.updated_at WHERE coach_pick_details.signature!=excluded.signature OR (coach_pick_details.updated_at<? AND json_extract(coach_pick_details.details_json, '$.aiPending') IS NOT NULL)")
     .bind(userId, date, signature, JSON.stringify(details), now.toISOString(), new Date(now.getTime() - AI_RETRY_MS).toISOString()).run();
   const claimed = Number(result?.meta?.changes) > 0;
   if (claimed) await db.prepare("DELETE FROM coach_pick_details WHERE user_id=? AND date<?").bind(userId, new Date(Date.parse(date + "T00:00:00Z") - 7 * 86400000).toISOString().slice(0, 10)).run();

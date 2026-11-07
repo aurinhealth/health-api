@@ -195,11 +195,15 @@ test("a slow request keeps the day's slowest message, other kinds the last one",
   await recordOpsEvent(db, "slow", "GET /app/api/coach/pick", "4000 ms, 10 dotazů, 5 řádků");
   await recordOpsEvent(db, "slow", "GET /app/api/coach/pick", "10023 ms, 430 dotazů, 21177 řádků; čekání: AI 4905 ms");
   await recordOpsEvent(db, "slow", "GET /app/api/coach/pick", "3500 ms, 8 dotazů, 4 řádků");
+  // A night job is flagged for its rows: the run that read the most stays.
+  await recordOpsEvent(db, "slow", "cron sync", "900 ms, 5 dotazů, 5000000 řádků");
+  await recordOpsEvent(db, "slow", "cron sync", "8000 ms, 450 dotazů, 20000 řádků");
   await recordOpsEvent(db, "sync", "whoop", "first");
   await recordOpsEvent(db, "sync", "whoop", "second");
-  const rows = db.sqlite.prepare("SELECT kind, count, last_message FROM ops_events ORDER BY kind").all().map(r => ({ ...r }));
+  const rows = db.sqlite.prepare("SELECT kind, count, last_message FROM ops_events ORDER BY kind, service").all().map(r => ({ ...r }));
   assert.deepEqual(rows, [
     { kind: "slow", count: 3, last_message: "10023 ms, 430 dotazů, 21177 řádků; čekání: AI 4905 ms" },
+    { kind: "slow", count: 2, last_message: "900 ms, 5 dotazů, 5000000 řádků" },
     { kind: "sync", count: 2, last_message: "second" }
   ]);
 });
