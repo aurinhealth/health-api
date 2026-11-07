@@ -52,9 +52,14 @@ export function buildFoodWeek({ today, days }) {
   // its own target with it.
   const unlogged = list.filter(d => d.unlogged);
   const left = target - eaten - daily * unlogged.length - sum(unlogged, "exercise");
-  // What is left shared by the days after today; it shrinks with every meal
-  // logged today. On Sunday (and in a week gone by) there is no day after.
+  // What is left shared evenly by today and the days after it: on Saturday
+  // morning 3 500 left is about 1 750 for Saturday and for Sunday, not 3 500
+  // for Sunday alone. Once today has eaten more than that share, the rest is
+  // only the days after today's, and it shrinks with every meal. On Sunday
+  // (and in a week gone by) there is no day after to share it with.
   const daysAfter = list.filter(d => d.date > today).length;
+  const eatenToday = inWeek ? list.find(d => d.date === today)?.eaten ?? 0 : 0;
+  const share = daysAfter > 0 ? Math.min((left + eatenToday) / (daysAfter + 1), left / daysAfter) : null;
   return {
     status: "ok",
     start: list[0].date,
@@ -67,7 +72,7 @@ export function buildFoodWeek({ today, days }) {
     byToday: inWeek ? byToday : null,
     left: Math.max(0, left),
     over: Math.max(0, -left),
-    perDay: left > 0 && daysAfter > 0 ? Math.round(left / daysAfter / 10) * 10 : null,
+    perDay: left > 0 && share != null ? Math.round(share / 10) * 10 : null,
     unlogged: unlogged.length,
     days: list
   };
