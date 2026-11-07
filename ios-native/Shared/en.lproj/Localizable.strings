@@ -64,7 +64,7 @@
 "Bez připojení · uložená data" = "Offline · saved data";
 "Bez vybavení" = "No equipment";
 "Biceps" = "Biceps";
-"Boční ramena" = "Side delts";
+"Boční ramena" = "Side shoulders";
 "Budit mě v iPhonu" = "Wake me on iPhone";
 "Budík" = "Alarm";
 "Budík nemá povolení. Povol ho v Nastavení iPhonu → Aplikace → Aurin." = "Alarms aren't allowed. Allow them in iPhone Settings → Apps → Aurin.";
@@ -504,7 +504,7 @@
 "Předchozí konverzace" = "Previous conversations";
 "Předchozí měsíc" = "Previous month";
 "Předloktí" = "Forearms";
-"Přední ramena" = "Front delts";
+"Přední ramena" = "Front shoulders";
 "Přední stehna" = "Quads";
 "Předvolba" = "Preset";
 "Přeskočit" = "Skip";
@@ -869,7 +869,7 @@
 "Za hodinu: %@" = "In an hour: %@";
 "Zadat ručně" = "Enter manually";
 "Zadej kód z e-mailu" = "Enter the code from the email";
-"Zadní ramena" = "Rear delts";
+"Zadní ramena" = "Rear shoulders";
 "Zadní stehna" = "Hamstrings";
 "Zamítnuto." = "Declined.";
 "Zaměření" = "Focus";
