@@ -64,7 +64,7 @@ import { explainWorkout, athleteSteps, athleteMinutes } from "./workout-explanat
 import { libraryBricks } from "./brick-workouts.js";
 import { aiWorkoutPick } from "./ai-workout-pick.js";
 import { composeWorkout, poorFit, fewMatches, composeKey, libraryKind, COMPOSE_VARIANTS } from "./ai-workout-compose.js";
-import { rankOptions, saunaSigns, dayChoice, recentKinds, sportReturns, pickState, savePick, undoSkip, lessKinds, setLess, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "./coach-pick.js";
+import { rankOptions, saunaSigns, dayChoice, recentKinds, sportReturns, pickState, savePick, undoSkip, lessKinds, setLess, pickSignature, storedDetails, storeDetails, claimDetails, finishDetails, AI_RETRY_MS, workoutLines, gymLines } from "./coach-pick.js";
 import { activityKindOf } from "./activity-match.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
@@ -1485,7 +1485,22 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // that changes nothing asks the AI nothing.
       const signature=pickSignature(ranked);
       let details=await storedDetails(env.DB,env.USER_ID,date,signature).catch(()=>null);
-      if(!details){details=await pickDetails(env,ctx,ranked,date,gym);await storeDetails(env.DB,env.USER_ID,date,signature,details).catch(()=>{});}
+      // The best ride or run's AI workout (~5 s) is written after the answer:
+      // the rules' workout shows at once, marked aiPending, and the AI's takes
+      // its place unless the athlete has chosen meanwhile (coach-pick.js claimDetails).
+      const aiKind=ctx?.waitUntil?ranked.options.find(o=>o.best===true&&(o.kind==='ride'||o.kind==='run'))?.kind||null:null;
+      const askAi=base=>ctx.waitUntil(pickDetails(env,ctx,{...ranked,options:ranked.options.filter(o=>o.kind===aiKind)},date,gym).then(async ai=>{
+        const {aiPending,...rest}=base,state=await pickState(env.DB,env.USER_ID,date);
+        await finishDetails(env.DB,env.USER_ID,date,signature,ai[aiKind]&&!state.chosen?{...rest,[aiKind]:ai[aiKind]}:rest);
+      }).catch(error=>console.error('Activity of the day AI',aiKind,error?.message||error)));
+      if(!details){
+        details=await pickDetails(env,ctx,ranked,date,gym,{ai:!aiKind});
+        if(aiKind){details.aiPending=new Date().toISOString();if(await claimDetails(env.DB,env.USER_ID,date,signature,details).catch(()=>false))askAi(details);}
+        else await storeDetails(env.DB,env.USER_ID,date,signature,details).catch(()=>{});
+      }else if(aiKind&&details.aiPending&&Date.now()-Date.parse(details.aiPending)>AI_RETRY_MS){
+        details={...details,aiPending:new Date().toISOString()};
+        if(await claimDetails(env.DB,env.USER_ID,date,signature,details).catch(()=>false))askAi(details);
+      }
       // Horko (heat-advice.js) at a ride or run outdoors: the workout's place, else the forecast's advice.
       const heatFor=(kind,workout,hard)=>{
         if(!['ride','run'].includes(kind))return null;
@@ -1497,7 +1512,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const detail=d.minutes?d.minutes+' min'+(o.detail.includes(' · ')?o.detail.slice(o.detail.indexOf(' · ')):''):o.detail;
         return {...o,detail,lines:d.lines,...(d.workout?{workout:d.workout}:{}),...(d.gym?{gym:d.gym}:{}),...(heat?{heat}:{})};
       });
-      return Response.json({status:'ok',date,...ranked,options,less,chosen:dayChoice({chosen:state.chosen,planned})},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',date,...ranked,options,less,chosen:dayChoice({chosen:state.chosen,planned}),...(details.aiPending?{aiPending:true}:{})},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
   if(url.pathname==='/app/api/coach/check-in'&&request.method==='GET'){
@@ -3287,14 +3302,14 @@ async function feedbackSince(env,since){
 // The ready ride, run and gym of the day's options (Aktivita dne): the coach's
 // workout as the library's Návrh kouče makes it (the AI picks or writes only
 // the best one's) and the gym proposal; the rest have fixed lines.
-async function pickDetails(env,ctx,ranked,date,gymPlan){
+async function pickDetails(env,ctx,ranked,date,gymPlan,{ai=true}={}){
   const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({}));
   const post=async(path,body)=>{const u=new URL('https://internal'+path),r=await handleDashboardApi(new Request(u,{method:'POST',headers:{Origin:u.origin,'Content-Type':'application/json'},body:JSON.stringify(body)}),env,ctx,u,{signedIn:true});const d=await r.json().catch(()=>null);return r.ok?d:null;};
   const out={};
   await Promise.all(ranked.options.map(async o=>{
     try{
       if(o.kind==='ride'||o.kind==='run'||o.kind==='swim'&&o.action==='library'){
-        const g=await post('/app/api/workouts/generate',{date,sport:o.kind,environment:'auto',ai:o.best===true&&o.kind!=='swim'}),w=g?.status==='ok'?g.workout:null;
+        const g=await post('/app/api/workouts/generate',{date,sport:o.kind,environment:'auto',ai:ai&&o.best===true&&o.kind!=='swim'}),w=g?.status==='ok'?g.workout:null;
         if(!w)return;
         let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
         const steps=athleteSteps(structure,o.kind,w.environment,thresholds);w.duration_minutes=athleteMinutes(w,structure,o.kind,thresholds);

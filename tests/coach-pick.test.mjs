@@ -99,7 +99,28 @@ test("Aktivita dne asks for the ready workouts only when the options change, the
   assert.match(route, /storedDetails\(env\.DB,env\.USER_ID,date,signature\)/);
   assert.match(route, /o\.best\|\|!less\.includes\(o\.kind\)/);
   const helper = src.slice(src.indexOf("async function pickDetails"), src.indexOf("async function workoutPreview"));
-  assert.match(helper, /ai:o\.best===true/);
+  assert.match(helper, /ai:ai&&o\.best===true/);
+  // The AI's workout after the answer: the rules' first, the AI asked by the request whose claim lands.
+  assert.match(route, /pickDetails\(env,ctx,ranked,date,gym,\{ai:!aiKind\}\)/);
+  assert.match(route, /if\(await claimDetails\([^)]*\)\.catch\(\(\)=>false\)\)askAi\(details\)/);
+  assert.match(route, /ai\[aiKind\]&&!state\.chosen/);
+});
+
+test("the AI's workout is asked once per options and replaces the rules' only while the options stay", async () => {
+  const { claimDetails, finishDetails, AI_RETRY_MS } = await import("../src/coach-pick.js");
+  const db = scopedDb(createD1(), 1), date = "2026-10-14", now = new Date("2026-10-14T07:00:00Z");
+  const provisional = { ride: { minutes: 60, rules: true }, aiPending: now.toISOString() };
+  assert.equal(await claimDetails(db, 1, date, "A", provisional, now), true);
+  // A second request at the same moment with the same options: no second AI call.
+  assert.equal(await claimDetails(db, 1, date, "A", provisional, new Date(now.getTime() + 1000)), false);
+  // New options take the entry over at once; still pending long after, it may be claimed again.
+  assert.equal(await claimDetails(db, 1, date, "B", provisional, new Date(now.getTime() + 2000)), true);
+  assert.equal(await claimDetails(db, 1, date, "B", provisional, new Date(now.getTime() + 2000 + AI_RETRY_MS + 1)), true);
+  // The AI's answer for the old options is dropped, for the current ones it is kept.
+  await finishDetails(db, 1, date, "A", { ride: { minutes: 70, ai: true } });
+  assert.deepEqual(await storedDetails(db, 1, date, "B"), provisional);
+  await finishDetails(db, 1, date, "B", { ride: { minutes: 70, ai: true } });
+  assert.deepEqual(await storedDetails(db, 1, date, "B"), { ride: { minutes: 70, ai: true } });
 });
 
 test("a choice without a workout goes into the day's plan, and a changed mind takes it out", async () => {
