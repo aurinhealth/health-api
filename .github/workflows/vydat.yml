@@ -12,6 +12,8 @@ name: Vydat
 #    release; only when "external" is ticked, adds the build to the external
 #    TestFlight group and sends it to Apple's beta review. Otherwise the owner
 #    adds builds to the external groups by hand in App Store Connect.
+#    The build's twin with the Apple Watch app (number.1, ios-testflight.yml)
+#    goes to the owner's group (WATCH_GROUP, default "Close testers").
 # The previous release is the main commit of the newest Vydat run whose
 # production deploy went through.
 #
@@ -198,6 +200,7 @@ jobs:
           BUNDLE_ID: health.aurin.app
           BUILD_NUMBER: ${{ needs.pick.outputs.build }}
           EXTERNAL_GROUP: ${{ vars.EXTERNAL_GROUP }}
+          WATCH_GROUP: ${{ vars.WATCH_GROUP }}
           EXTERNAL: ${{ inputs.external }}
         run: |
           printf '%s\n' "$ASC_KEY_P8" > "$ASC_KEY_PATH"
