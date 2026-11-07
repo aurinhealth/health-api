@@ -1244,7 +1244,7 @@ enum LiftWeight {
         let t = typed.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
         if machineLb, let pounds = Double(t) {
             // To two decimals, so the pounds come back as typed (70 lb → 31.75 kg).
-            return GymDay.kgText(Units.kg(pounds: pounds))
+            return GymDay.kgText(Units.kgFromPounds(pounds))
         }
         guard Units.imperial, let pounds = Double(t) else { return t }
         // Pounds shown to 0.1 lb come back as whole quarter kilos (60 kg →
