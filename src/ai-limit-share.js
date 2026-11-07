@@ -3,7 +3,7 @@
 // the free week (Apple's introductory offer). A paid Production subscription
 // (an offer code's too) gets the whole limits. AI_UNPAID_LIMIT_SHARE
 // (wrangler.jsonc) is the share; unset, every account has the whole limits.
-// The owner has the whole limits of a paying account.
+// The owner's account has the same limits as any other with the same purchase.
 import { ensureStoreColumns } from "./app-store.js";
 import { packMessagesLeft } from "./coach-packs.js";
 
@@ -19,7 +19,7 @@ export const unpaidLimitShare = env => {
 // - "paid": a paid Production Pro, or bought coach messages still left
 //   (coach-packs.js; a Sandbox pack counts only on the test server);
 // - "gift": Pro through an offer code or a promotional offer (the pilot's
-//   discount, a gift) and the owner: whole limits, counted apart;
+//   discount, a gift): whole limits, counted apart;
 // - "trial": the free week (Apple's introductory offer, or a free promotional one);
 // - "testflight": a Sandbox purchase, or no purchase in a TestFlight build
 //   (subscriptions.testflight, app-store.js saveAppInstall): the testers;
@@ -52,7 +52,7 @@ async function subscriptionRow(env) {
 // In the free week (Apple's introductory offer): bought coach messages are not
 // offered then, since the coach chat locks when the week ends unpaid.
 export async function inFreeWeek(env) {
-  if (!env?.DB || !(Number(env.USER_ID) > 0) || env.USER_IS_OWNER === true) return false;
+  if (!env?.DB || !(Number(env.USER_ID) > 0)) return false;
   return groupOfSubscription(await subscriptionRow(env)) === "trial";
 }
 
@@ -60,7 +60,6 @@ export async function inFreeWeek(env) {
 // fixed brake and half limits).
 export function aiGroup(env) {
   if (!env?.DB || !(Number(env.USER_ID) > 0)) return Promise.resolve("system");
-  if (env.USER_IS_OWNER === true) return Promise.resolve("gift");
   if (!groupOnce.has(env)) groupOnce.set(env, (async () => {
     const group = groupOfSubscription(await subscriptionRow(env));
     if (group !== "paid" && group !== "gift" && await packMessagesLeft(env).catch(() => 0) > 0) return "paid";

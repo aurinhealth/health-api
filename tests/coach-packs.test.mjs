@@ -67,6 +67,13 @@ test("a bought pack adds its messages once and stays with the account that bough
   await assert.rejects(buy(user(3), pack()), { status: 409 });
 });
 
+test("the owner's bought messages count live like anyone's", async () => {
+  const { user } = setup({ USER_IS_OWNER: true });
+  const env = user(1);
+  assert.equal((await buy(env, pack())).left, 40);
+  assert.equal(await packMessagesLeft(env), 40);
+});
+
 test("a Sandbox purchase counts only on the test server", async () => {
   const live = setup().user(1);
   const sandbox = await buy(live, pack({ environment: "Sandbox" }));

@@ -40,12 +40,14 @@ test("the free week, a TestFlight (Sandbox) purchase and an expired one stay at 
   }
 });
 
-test("unset share: everyone has the whole limits; the owner has a paying account's, none on the test server", async () => {
+test("unset share: everyone has the whole limits; the owner has any account's, none on the test server", async () => {
   assert.equal(await aiLimitShare(await account({ AI_UNPAID_LIMIT_SHARE: "" })), 1);
   assert.equal(await aiLimitShare(await account({ AI_UNPAID_LIMIT_SHARE: "nonsense" })), 1);
   const owner = await account({ USER_IS_OWNER: true });
-  assert.equal(await aiLimitShare(owner), 1);
-  assert.equal((await coachAllowance(owner)).limit, 30);
+  assert.equal(await aiLimitShare(owner), 0.5, "the owner without a purchase: half, like everyone");
+  assert.equal((await coachAllowance(owner)).limit, 15);
+  assert.equal((await coachAllowance(await account({ plan: "ai", environment: "Sandbox", USER_IS_OWNER: true }))).limit, 15, "a TestFlight purchase: half, like the testers");
+  assert.equal((await coachAllowance(await account({ plan: "ai", USER_IS_OWNER: true }))).limit, 30, "a paid Pro: whole");
   assert.equal(await coachAllowance(await account({ USER_IS_OWNER: true, ENVIRONMENT: "staging" })), null);
 });
 
@@ -61,5 +63,5 @@ test("coach message packs are not offered in the free week: the chat locks when 
   assert.equal(await inFreeWeek(await account({ plan: "ai", trial: 1 })), true);
   assert.equal(await inFreeWeek(await account({ plan: "ai" })), false);
   assert.equal(await inFreeWeek(await account()), false);
-  assert.equal(await inFreeWeek(await account({ plan: "ai", trial: 1, USER_IS_OWNER: true })), false);
+  assert.equal(await inFreeWeek(await account({ plan: "ai", trial: 1, USER_IS_OWNER: true })), true, "the owner too");
 });
