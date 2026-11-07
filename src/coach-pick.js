@@ -9,6 +9,7 @@ import { parsePace } from "./training-zones.js";
 import { isHardKind } from "./session-intensity.js";
 import { activityKindOf, sessionOf } from "./activity-match.js";
 import { addRecovery, ensureRecoveryTable } from "./recovery-plan.js";
+import { returnAfterBreak } from "./threshold-check.js";
 
 const TABLE = "CREATE TABLE IF NOT EXISTS coach_picks (user_id INTEGER NOT NULL, date TEXT NOT NULL, kind TEXT NOT NULL, top TEXT, created_at TEXT NOT NULL, PRIMARY KEY (user_id, date))";
 const KINDS = ["ride", "run", "gym", "swim", "sauna", "rest"];
@@ -39,6 +40,8 @@ const sentence = text => { const t = String(text || "").trim(); return t ? t[0].
 // Nemoc or an injury in the journal, journal-store.js saunaRisks).
 export function rankOptions({ ride, run, swim = null, mainSport = "general", mains = null, allowed = null, sports = [], today = [], declines = [], less = [], planned = [], done = [], athleteStatus = "active", noSauna = false }) {
   if (athleteStatus && athleteStatus !== "active") return pausedOptions(athleteStatus, noSauna);
+  // Nemoc ticked in Deník (cycling-coach-v2.js sickDay): rest, as with the status.
+  if ([ride, run].some(c => c?.recommendation?.decisionRule === "journal_sick")) return pausedOptions("sick", noSauna, true);
   const status = ride?.readiness?.status || run?.readiness?.status || "yellow";
   const names = KIND_NAMES();
   const lowerTired = (ride?.load?.lowerBodyGymSignals48h || 0) > 0;
@@ -126,11 +129,11 @@ export function saunaSigns(readiness) {
 
 // Nemoc, Zranění or Pauza set by the athlete: no training on offer, only rest
 // (the sauna too during a break, never while ill or with noSauna).
-function pausedOptions(athleteStatus, noSauna = false) {
+function pausedOptions(athleteStatus, noSauna = false, journal = false) {
   const rest = athleteStatus === "sick"
     ? { kind: "rest", title: L("Odpočinek", "Rest"), detail: L("Spánek, pití a klid", "Sleep, drinks and quiet"), lines: [[L("Pití", "Drink"), L("2–3 l během dne", "2–3 l through the day")], [L("Spánek", "Sleep"), L("o hodinu déle", "an hour longer")]] }
     : { kind: "rest", title: L("Volno", "Day off"), detail: L("Procházka 30 min a protažení", "A 30 min walk and stretching"), lines: [[L("Procházka", "Walk"), "30 min"], [L("Protažení", "Stretching"), "15 min"]] };
-  const reason = { sick: L("Máš nastavenou Nemoc. Dnes odpočívej, trénink i sauna počkají, až budeš zdravý.", "Your status is Sick. Rest today; training and the sauna wait until you're well."),
+  const reason = journal ? L("V Deníku máš Nemoc. Dnes odpočívej, trénink i sauna počkají, až budeš zdravý.", "You marked Sick in your Journal. Rest today; training and the sauna wait until you're well.") : { sick: L("Máš nastavenou Nemoc. Dnes odpočívej, trénink i sauna počkají, až budeš zdravý.", "Your status is Sick. Rest today; training and the sauna wait until you're well."),
     injured: L("Máš nastavené Zranění. Náhradní trénink navrhnu, až kouči popíšeš svá omezení.", "Your status is Injured. I'll suggest other training once you tell the coach your limitations."),
     on_break: L("Máš nastavenou Pauzu, dnes bez tréninku.", "Your status is Rest, no training today.") }[athleteStatus] || L("Dnes bez tréninku.", "No training today.");
   const options = [{ ...rest, best: true, reason }];
@@ -194,6 +197,22 @@ export async function recentKinds(db, userId, today) {
   const gym = await db.prepare("SELECT COUNT(*) AS n FROM strength_sets WHERE user_id=? AND workout_date>=?").bind(userId, from).first().catch(() => null);
   if (Number(gym?.n) > 0) sports.add("strength");
   return { sports: [...sports], today: [...todayKinds], done };
+}
+
+// The day each of ride, run and swim came back after 14 or more days without
+// it (threshold-check.js returnAfterBreak), for the coach's first week back.
+// One read of 35 days of activities, kept with the coach's inputs.
+export async function sportReturns(db, userId, today) {
+  const from = new Date(Date.parse(today + "T00:00:00Z") - 35 * 86400000).toISOString().slice(0, 10);
+  const rows = (await db.prepare("SELECT start_time, payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND (record_role IS NULL OR record_role!='duplicate')")
+    .bind(userId, from).all().catch(() => ({ results: [] }))).results || [];
+  const dates = { ride: [], run: [], swim: [] };
+  for (const r of rows) {
+    let p = {}; try { p = JSON.parse(r.payload_json || "{}"); } catch { /* no type */ }
+    const kind = activityKindOf(p.type || p.exercise?.exerciseType || p.name), day = String(p.start_date_local || r.start_time || "").slice(0, 10);
+    if (dates[kind] && day) dates[kind].push(day);
+  }
+  return Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, returnAfterBreak(list, today)]));
 }
 
 export async function pickState(db, userId, date) {

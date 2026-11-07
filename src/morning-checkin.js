@@ -22,8 +22,19 @@ export async function getCheckin(db, date) {
 // a tired body, so it must not lower the readiness). Readiness, the coaches
 // and the gym no longer read the stored answers; the table and the endpoint
 // stay for builds that still ask.
-export async function readinessCheckin() {
-  return null;
+// Nemoc ticked in Deník takes its place (audit wave 2, 9.1): ticked today, or
+// yesterday without a ✕ today, the day counts as a sick morning did, so
+// Today, the ride and run coach and the gym say rest. One read of at most two
+// rows on the journal's key.
+export async function readinessCheckin(db, date) {
+  if (!db || !/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) return null;
+  const yesterday = new Date(Date.parse(date + "T12:00:00Z") - 864e5).toISOString().slice(0, 10);
+  let rows = [];
+  try { rows = (await db.prepare("SELECT date,answer FROM journal_entries WHERE user_id=? AND item_key='sick' AND date IN (?,?)").bind(db.userId, yesterday, date).all()).results || []; }
+  catch (error) { if (/no such table/i.test(String(error?.message || error))) return null; throw error; }
+  const answer = day => rows.find(r => r.date === day)?.answer;
+  const today = answer(date);
+  return Number(today) === 1 || (today == null && Number(answer(yesterday)) === 1) ? "sick" : null;
 }
 
 // null clears the day's answer.

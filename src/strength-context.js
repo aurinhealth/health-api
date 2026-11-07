@@ -249,7 +249,7 @@ export async function buildStrengthContext(env, requestedDate = null) {
   } catch { context.sleepSessions = []; }
   const athleteState=await getAthleteState(env.DB);
   // Memories too: a remembered pain leaves out exercises (Revize 2026-10-16, nález 24).
-  context.athleteState={status:athleteState.status,note:athleteState.note,memories:usedMemories(athleteState)};
+  context.athleteState={status:athleteState.status,note:athleteState.note,memories:usedMemories(athleteState),recoveredAt:athleteState.recoveredAt||null};
   context.nutrition = buildNutritionPlan(context, { weightTrend: context.weightTrend });
   const { buildAdaptiveDecision } = await import("./adaptive-engine.js");
   context.adaptive = buildAdaptiveDecision(context, null);
