@@ -64,7 +64,7 @@
 "Bez připojení · uložená data" = "Offline · saved data";
 "Bez vybavení" = "No equipment";
 "Biceps" = "Biceps";
-"Boční ramena" = "Side delts";
+"Boční ramena" = "Side shoulders";
 "Budit mě v iPhonu" = "Wake me on iPhone";
 "Budík" = "Alarm";
 "Budík nemá povolení. Povol ho v Nastavení iPhonu → Aplikace → Aurin." = "Alarms aren't allowed. Allow them in iPhone Settings → Apps → Aurin.";
@@ -504,7 +504,7 @@
 "Předchozí konverzace" = "Previous conversations";
 "Předchozí měsíc" = "Previous month";
 "Předloktí" = "Forearms";
-"Přední ramena" = "Front delts";
+"Přední ramena" = "Front shoulders";
 "Přední stehna" = "Quads";
 "Předvolba" = "Preset";
 "Přeskočit" = "Skip";
@@ -868,7 +868,7 @@
 "Za hodinu: %@" = "In an hour: %@";
 "Zadat ručně" = "Enter manually";
 "Zadej kód z e-mailu" = "Enter the code from the email";
-"Zadní ramena" = "Rear delts";
+"Zadní ramena" = "Rear shoulders";
 "Zadní stehna" = "Hamstrings";
 "Zamítnuto." = "Declined.";
 "Zaměření" = "Focus";
@@ -946,6 +946,8 @@
 "aktivita" = "activity";
 "aktivity" = "activities";
 "automaticky" = "automatic";
+"barva = tvoje připravenost ten den" = "colour = your readiness that day";
+"bez cíle" = "no goal set";
 "bez dat" = "no data";
 "bez pauzy" = "no rest";
 "budík %@" = "alarm %@";
@@ -1572,10 +1574,20 @@
 "v tréninku" = "in workout";
 "Nic se nenašlo." = "Nothing found.";
 "Tenhle cvik zatím nemá žádnou historii. Po prvním tréninku tu uvidíš váhy a vývoj." = "No history for this exercise yet. After the first workout you'll see the weights and progress here.";
-"Nejvíc" = "Best";
-"Odhad 1RM" = "Estimated 1RM";
-"Za 3 měsíce" = "3-month change";
-"Nejtěžší série každého tréninku" = "Heaviest set per workout";
+"Odhad 1RM" = "Est. 1RM";
+"Příště" = "Next time";
+"Minule %@ × %@ a šlo to. Příště zkus %@ %@." = "Last time %@ × %@ and it went well. Next time try %@ %@.";
+"Minule %@ × %@. Příště zůstaň na %@ %@ a dotáhni všechna opakování." = "Last time %@ × %@. Next time stay at %@ %@ and get all the reps.";
+"Minule %@ opakování a šlo to. Příště zkus o jedno víc." = "Last time %@ reps and it went well. Next time try one more.";
+"Minule %@ opakování. Příště je zkus dotáhnout." = "Last time %@ reps. Next time try to get them all.";
+"Nejtěžší série" = "Heaviest set";
+"Nejvyšší objem" = "Best volume";
+"jeden trénink" = "one workout";
+"Nejvíc opakování" = "Most reps";
+"jedna série" = "one set";
+"Nejvíc za trénink" = "Most in a workout";
+"Vývoj" = "Progress";
+"%@ od %@" = "%@ since %@";
 "Dokončit" = "Finish";
 "Probíhá · posilovna" = "In progress · gym";
 "Zatím žádný cvik" = "No exercise yet";
@@ -2853,6 +2865,9 @@
 "než cíl týdne" = "than the week's target";
 "Zbývá %@ kcal" = "%@ kcal left";
 "zhruba %@ na den" = "about %@ a day";
+"Dnes ještě %@ kcal" = "%@ kcal more today";
+", pak zhruba %@ na den" = ", then about %@ a day";
+"Dnešek má svůj díl, zbytek patří dalším dnům" = "Today is past its share, so the rest is for the days ahead";
 "do dneška %@" = "by today %@";
 "Snězeno %@ z %@ kcal" = "Eaten %@ of %@ kcal";
 "Kardio" = "Cardio";
@@ -3938,7 +3953,17 @@
 "Co je na ní špatně: " = "What's wrong with it: ";
 "Ukáže, z čeho se index skládá." = "Shows what makes up the index.";
 "Z čeho se skládá index" = "What makes up the index";
-"Posledních %@ nocí · průměr %@" = "Last %1$@ nights · average %2$@";
+"Index spánku · posledních %@ nocí" = "Sleep index · last %@ nights";
+"průměr %@ / 100" = "average %@ / 100";
+"obvyklé rozmezí %@–%@" = "usual range %1$@–%2$@";
+"poslední noc" = "last night";
+"Změřeno %@ ze %@ nocí" = "%1$@ of %2$@ nights measured";
+"Poslední noc %@" = "Last night %@";
+"Noc na %@: %@" = "Night of %1$@: %2$@";
+"Tvoje obvyklé rozmezí se ukáže po 7 nocích." = "Your usual range shows after 7 nights.";
+"%@, nad tvým obvyklým rozmezím %@–%@." = "%1$@, above your usual range of %2$@–%3$@.";
+"%@, pod tvým obvyklým rozmezím %@–%@." = "%1$@, below your usual range of %2$@–%3$@.";
+"%@, v tvém obvyklém rozmezí %@–%@." = "%1$@, in your usual range of %2$@–%3$@.";
 "obvykle %@–%@" = "usually %1$@–%2$@";
 "Kvalita" = "Quality";
 "Fáze" = "Stages";
@@ -3953,7 +3978,6 @@
 "probuzení %@×" = "woke %@×";
 "%@ min vzhůru" = "%@ min awake";
 "čas v posteli, kdy spíš" = "the share of time in bed spent asleep";
-"Pás je tvoje obvyklé rozmezí, %@ až %@." = "The band is your usual range, %1$@ to %2$@.";
 "Index spánku za posledních %@ nocí, průměr %@." = "Sleep index over the last %1$@ nights, average %2$@.";
 "Měj na ruce nabité hodinky, ať se noc změří." = "Keep your charged watch on so the night gets measured.";
 "Vyměněno dnes" = "Swapped today";
@@ -3997,6 +4021,10 @@
 "obvyklé rozmezí %@–%@ /min" = "usual range %@–%@ /min";
 "obvyklé rozmezí %@–%@ %%" = "usual range %@–%@%%";
 "Odchylka od obvyklé teploty v noci" = "Night temperature against your usual";
+"teplejší ↑ · chladnější ↓" = "warmer ↑ · cooler ↓";
+"pás ±%@ od tvého obvyklého" = "band ±%@ of your usual";
+"teplejší než obvykle" = "warmer than usual";
+"chladnější než obvykle" = "cooler than usual";
 "Obvykle" = "Usual";
 "v obvyklém rozmezí" = "within your usual range";
 "nad obvyklým rozmezím" = "above your usual range";
@@ -4074,6 +4102,11 @@
 "Hodnoty se nepodařilo přečíst. Vyfoť celou tabulku i s řádkem „na 100 g“, zblízka a rovně." = "Couldn't read the values. Take the whole table with its “per 100 g” row, up close and straight on.";
 "Energie %@ kcal nesedí s makroživinami (≈ %@ kcal). Zkontroluj přepis proti fotce." = "Energy %@ kcal doesn't match the macros (≈ %@ kcal). Check the values against the photo.";
 
+/* Coach: the temporary chat the coach doesn't remember (Ghost chat). */
+"Dočasný chat" = "Ghost chat";
+"Kouč si tenhle chat nezapamatuje. Klepni a začni ho." = "The coach won't remember this chat. Tap to start one.";
+"Kouč si tenhle chat nezapamatuje" = "The coach won't remember this chat";
+"Dál vidí tvoje data a to, co už ví. Nic odtud se mu neuloží do paměti a Aurin chat smaže, až odejdeš. Potvrzené tréninky a jídlo zůstanou." = "He still sees your data and what he already knows. Nothing here goes into his memory, and Aurin deletes the chat when you leave. Workouts and food you confirm stay.";
 /* Chart legends: weekly load, steps today, form forecast, weight, race goal (chart review points 5, 7, 8) */
 "naplánováno" = "planned";
 "kroky zatím" = "steps so far";
@@ -4084,3 +4117,20 @@
 "rychlejší ↑" = "faster ↑";
 "tvým tempem" = "at your pace";
 "Intenzivní a maximální minuty se počítají dvakrát · WHO 150 min týdně" = "Vigorous and peak minutes count twice · WHO 150 min a week";
+"posledních 60 dní" = "last 60 days";
+"Nejnižší noc" = "Lowest night";
+"7denní průměr" = "7-day average";
+"jedna noc" = "one night";
+"jeden den" = "one day";
+"Dotkni se grafu a uvidíš jednu noc." = "Touch the chart to see a single night.";
+"Dotkni se grafu a uvidíš jeden den." = "Touch the chart to see a single day.";
+"průměr za %@ dní" = "%@-day average";
+"Přední" = "Front";
+"Boční" = "Side";
+"Zadní" = "Rear";
+"Ramena · celá, nebo jen některé části" = "Shoulders · all parts, or pick some";
+/* Training mode: kg or lb for one exercise (LiftUnits) */
+"Jen pro %@, na telefonu i na hodinkách. Ukládá se v kg." = "Only for %@, on this phone and Apple Watch. Saved in kg.";
+"Kilogramy (kg)" = "Kilograms (kg)";
+"Libry (lb)" = "Pounds (lb)";
+"Jednotka váhy: %@" = "Weight unit: %@";

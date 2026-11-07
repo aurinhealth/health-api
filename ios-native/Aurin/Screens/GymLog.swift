@@ -77,7 +77,7 @@ struct GymDoneDetail: View {
             GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day.exercises.map(\.name))) { name in add(name) }
         }
         .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
-            ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name), today: date)
+            ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name))
         }
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
     }
@@ -636,8 +636,7 @@ struct GymExerciseSearch: View {
                 if model.muscles.map({ !$0.tired.isEmpty }) == true {
                     chip(L10n.tr("Odpočaté"), rested, dot: Palette.green) { rested.toggle() }
                 }
-                ForEach(BodyFigure.muscles.indices, id: \.self) { i in
-                    let id = BodyFigure.muscles[i].id
+                ForEach(BodyFigure.choices, id: \.self) { id in
                     chip(BodyFigure.label(id), muscle == id) { muscle = muscle == id ? nil : id }
                 }
             }
@@ -694,15 +693,32 @@ struct GymExerciseSearch: View {
 
 // MARK: - An exercise's history
 
-/// The best weight, the estimated 1RM, the change over 3 months, the heaviest
-/// set per session as a line, and the past sessions.
+/// What to lift next time, the records, the past sessions set by set and the
+/// progress on their days (Petr 2026-11-07, doc "Historie cviku: návrh").
 struct ExerciseHistorySheet: View {
     @Environment(\.dismiss) private var dismiss
     let name: String
     let exercise: GymHistory.Exercise?
-    let today: String
     /// Rekordy: the star that pins the exercise to the top.
     var pinned: Binding<Bool>? = nil
+    /// Opened in a running workout: its plan is on screen, so no "Next time".
+    var inWorkout = false
+    @State private var metric = Metric.heaviest
+
+    enum Metric: String, CaseIterable {
+        case heaviest, oneRepMax, volume
+
+        var title: String {
+            switch self {
+            case .heaviest: return L10n.tr("Nejtěžší série")
+            case .oneRepMax: return L10n.tr("Odhad 1RM")
+            case .volume: return L10n.tr("Objem")
+            }
+        }
+    }
+
+    /// The sessions the list shows; the chart takes all of the history.
+    static let listed = 12
 
     var body: some View {
         PageScroll {
@@ -736,62 +752,239 @@ struct ExerciseHistorySheet: View {
 
     @ViewBuilder
     private func content(_ exercise: GymHistory.Exercise) -> some View {
-        let unit = Units.weightUnit
-        let change = GymCoach.change(exercise, today: today)
-        HStack(alignment: .top, spacing: 8) {
-            GymStat(label: "Nejvíc", value: GymCoach.best(exercise).map { GymCoach.shown($0) } ?? "–", unit: unit)
-            GymStat(label: "Odhad 1RM", value: GymCoach.oneRepMax(exercise).map { GymCoach.shown($0) } ?? "–", unit: unit)
-            GymStat(label: "Za 3 měsíce", value: change.map { ($0 < 0 ? "−" : "+") + GymCoach.shown(abs($0)) } ?? "–", unit: unit)
-        }
-        .padding(.top, 18)
-        let points: [Double] = exercise.sessions.reversed().compactMap { GymCoach.topKg($0) }
-        if points.count >= 2, let lo = points.min(), let hi = points.max() {
-            // Chart review 9: what the line is, its lowest and highest set on
-            // the right, and the last workout's day instead of "today".
-            let bottom = LiftWeight.shownValue(lo) - 2.5, top = LiftWeight.shownValue(hi) + 2.5
-            let ticks = Set([lo, hi]).map { ScaleTick(value: LiftWeight.shownValue($0), text: GymCoach.shown($0) + " " + unit) }
-            let last = exercise.sessions.first(where: { GymCoach.topKg($0) != nil })?.date ?? today
-            Text("Nejtěžší série každého tréninku")
-                .font(Typo.caption).foregroundStyle(Palette.muted)
-                .padding(.top, 22)
-            ZStack(alignment: .topLeading) {
-                GeometryReader { geo in
-                    ChartScale(ticks: ticks, width: geo.size.width - scaleWidth) {
-                        3 + (150 - 6) * (1 - scaled($0, bottom, top))
+        if !inWorkout { nextTime(exercise) }
+        records(exercise)
+        sessions(exercise)
+        if exercise.sessions.count >= 3 { progress(exercise) }
+    }
+
+    // MARK: Next time
+
+    /// The coach's suggestion as Training mode would make it tomorrow.
+    @ViewBuilder
+    private func nextTime(_ exercise: GymHistory.Exercise) -> some View {
+        let history = GymHistory(exercises: [exercise])
+        let s = GymCoach.suggest(exercise.name, history: history, before: ISODay.shift(APIClient.localToday(), 1), catalog: nil)
+        if let first = s.work.first {
+            VStack(alignment: .leading, spacing: 4) {
+                SectionLabel(text: "Příště")
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    if let kg = first.kg {
+                        NumberText(value: GymCoach.shown(kg), unit: Units.weightUnit, size: 28)
+                        Text(verbatim: "× \(first.reps) · " + L10n.plural("%lld sérií", s.work.count))
+                    } else {
+                        Text(verbatim: L10n.plural("%lld opakování", first.reps) + " · " + L10n.plural("%lld sérií", s.work.count))
                     }
                 }
-                LineChart(values: points.map { LiftWeight.shownValue($0) }, color: Palette.amberBar,
-                          lo: bottom, hi: top, height: 150)
-                    .padding(.trailing, scaleWidth)
+                .font(.body).foregroundStyle(Palette.secondary)
+                Text(verbatim: Self.nextLine(exercise.sessions[0], next: first)).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            .frame(height: 150)
-            .padding(.top, 8)
-            HStack {
-                Text(Self.month(exercise.sessions.last?.date ?? today))
-                Spacer()
-                Text(last == today ? "dnes" : Fmt.dayMonthShort(last))
-            }
-            .font(Typo.caption).foregroundStyle(Palette.muted)
-            .padding(.trailing, scaleWidth)
-            .padding(.top, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .cardSurface(cornerRadius: 18)
+            .padding(.top, 18)
+            .accessibilityElement(children: .combine)
         }
-        VStack(spacing: 0) {
-            ForEach(Array(exercise.sessions.prefix(12))) { (session: GymHistory.Session) in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date)).font(.body).foregroundStyle(Palette.ink)
-                    Text(GymCoach.setsLine(session.sets)).font(Typo.small).foregroundStyle(Palette.muted)
+    }
+
+    /// "Minule 38 × 9, 9, 7. Příště zůstaň na 38 kg a dotáhni všechna opakování.":
+    /// Training mode's line (GymCoach.suggest), for next time instead of today.
+    static func nextLine(_ last: GymHistory.Session, next: GymSuggestion.Planned) -> String {
+        let hit = GymCoach.allHit(last), reps = GymCoach.repsList(last)
+        if let top = GymCoach.topKg(last), let kg = next.kg {
+            return hit
+                ? L10n.f("Minule %@ × %@ a šlo to. Příště zkus %@ %@.", GymCoach.shown(top), reps, GymCoach.shown(kg), Units.weightUnit)
+                : L10n.f("Minule %@ × %@. Příště zůstaň na %@ %@ a dotáhni všechna opakování.", GymCoach.shown(top), reps, GymCoach.shown(kg), Units.weightUnit)
+        }
+        return hit ? L10n.f("Minule %@ opakování a šlo to. Příště zkus o jedno víc.", reps)
+                   : L10n.f("Minule %@ opakování. Příště je zkus dotáhnout.", reps)
+    }
+
+    // MARK: Records
+
+    @ViewBuilder
+    private func records(_ exercise: GymHistory.Exercise) -> some View {
+        let unit = Units.weightUnit
+        HStack(alignment: .top, spacing: 8) {
+            if let heaviest = GymCoach.heaviestSet(exercise), let kg = heaviest.lift.kg {
+                record("Nejtěžší série", GymCoach.shown(kg), unit + " × " + Fmt.int(heaviest.lift.reps ?? 0), Fmt.dayMonthShort(heaviest.date))
+                if let max = GymCoach.oneRepMax(exercise) {
+                    record("Odhad 1RM", GymCoach.shown(max.kg), unit, L10n.tr("odhad") + " · " + Fmt.dayMonthShort(max.date))
+                }
+                if let volume = GymCoach.bestVolume(exercise) {
+                    record("Nejvyšší objem", Fmt.int(LiftWeight.shownValue(volume.kg)), unit, L10n.tr("jeden trénink") + " · " + Fmt.dayMonthShort(volume.date))
+                }
+            } else {
+                // Body weight: reps instead of kilos.
+                if let most = GymCoach.mostReps(exercise) {
+                    record("Nejvíc opakování", String(most.reps), nil, L10n.tr("jedna série") + " · " + Fmt.dayMonthShort(most.date))
+                }
+                if let most = GymCoach.mostSessionReps(exercise) {
+                    record("Nejvíc za trénink", String(most.reps), nil, Fmt.dayMonthShort(most.date))
+                }
+            }
+        }
+        .padding(.top, 22)
+    }
+
+    private func record(_ label: String, _ value: String, _ unit: String?, _ foot: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            GymStat(label: label, value: value, unit: unit)
+            Text(verbatim: foot).font(Typo.tiny).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: Sessions
+
+    private func sessions(_ exercise: GymHistory.Exercise) -> some View {
+        let all = exercise.sessions
+        let prs = GymCoach.recordSets(exercise)
+        let realToday = APIClient.localToday()
+        return VStack(spacing: 0) {
+            ForEach(Array(all.prefix(Self.listed).enumerated()), id: \.element.id) { i, session in
+                let previous = i + 1 < all.count ? all[i + 1] : nil
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(verbatim: session.date == realToday ? L10n.tr("Dnes") : Fmt.weekdayShort(session.date) + " " + Fmt.dayMonthShort(session.date))
+                            .font(.body.weight(.medium)).foregroundStyle(Palette.ink)
+                        Spacer()
+                        if let change = GymCoach.change(session, from: previous) {
+                            Text(verbatim: change).font(Typo.small.weight(.medium)).foregroundStyle(Palette.secondary)
+                        }
+                    }
+                    SetChips(sets: session.sets, record: prs[session.date])
+                    Text(verbatim: meta(session)).font(Typo.caption).foregroundStyle(Palette.muted)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 12)
                 .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                .accessibilityElement(children: .combine)
             }
         }
-        .padding(.top, 18)
+        .padding(.top, 14)
     }
 
-    /// "červenec": the month of the first session in the chart.
-    static func month(_ iso: String) -> String {
-        guard let date = ISODay.date(iso) else { return "" }
-        return DateFormatters.make("LLLL", locale: Fmt.locale, timeZone: TimeZone(identifier: "UTC") ?? .gmt).string(from: date)
+    /// "3 série · 950 kg".
+    private func meta(_ session: GymHistory.Session) -> String {
+        let volume = GymCoach.volume(session)
+        let sets = L10n.plural("%lld sérií", session.sets.count)
+        return volume > 0 ? sets + " · " + Fmt.int(LiftWeight.shownValue(volume)) + " " + Units.weightUnit : sets
+    }
+
+    // MARK: Progress
+
+    @ViewBuilder
+    private func progress(_ exercise: GymHistory.Exercise) -> some View {
+        let unit = Units.weightUnit
+        let points: [(date: String, value: Double)] = exercise.sessions.reversed().compactMap { session in
+            guard let v = value(session) else { return nil }
+            return (session.date, v)
+        }
+        if points.count >= 3, let first = points.first, let last = points.last,
+           let lo = points.map(\.value).min(), let hi = points.map(\.value).max() {
+            let shown = { (v: Double) in LiftWeight.shownValue(v) }
+            let text = { (v: Double) in metric == .volume ? Fmt.int(shown(v)) + " " + unit : GymCoach.shown(v) + " " + unit }
+            let change = last.value - first.value
+            HStack(alignment: .firstTextBaseline) {
+                Text("Vývoj").font(.body.weight(.medium)).foregroundStyle(Palette.ink)
+                Spacer()
+                if abs(change) >= 0.05 {
+                    Text(verbatim: L10n.f("%@ od %@", (change > 0 ? "+" : "−") + text(abs(change)), Fmt.dayMonthShort(first.date)))
+                        .font(Typo.small).foregroundStyle(Palette.muted)
+                }
+            }
+            .padding(.top, 24)
+            Picker("Vývoj", selection: $metric) {
+                ForEach(Metric.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .padding(.top, 10)
+            let pad = max((shown(hi) - shown(lo)) * 0.1, metric == .volume ? 25 : 2.5)
+            DatedLineChart(points: points.map { (ISODay.date($0.date) ?? .distantPast, shown($0.value)) },
+                           lo: shown(lo) - pad, hi: shown(hi) + pad, height: 150,
+                           ticks: Set([lo, hi]).map { ScaleTick(value: shown($0), text: text($0)) })
+                .padding(.top, 14)
+            HStack {
+                Text(verbatim: Fmt.dayMonthShort(first.date))
+                Spacer()
+                Text(verbatim: last.date == APIClient.localToday() ? L10n.tr("dnes") : Fmt.dayMonthShort(last.date))
+            }
+            .font(Typo.caption).foregroundStyle(Palette.muted)
+            .padding(.trailing, scaleWidth)
+            .padding(.top, 6)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    private func value(_ session: GymHistory.Session) -> Double? {
+        switch metric {
+        case .heaviest: return GymCoach.topKg(session)
+        case .oneRepMax: return session.sets.map(GymSessionMath.e1rm).max().flatMap { $0 > 0 ? $0 : nil }
+        case .volume: let v = GymCoach.volume(session); return v > 0 ? v : nil
+        }
+    }
+}
+
+/// A session's sets as tiles: "38 × 9", the record set amber with "PR".
+private struct SetChips: View {
+    let sets: [GymHistory.Lift]
+    let record: Int?
+
+    var body: some View {
+        FlowLayout(spacing: 6) {
+            ForEach(Array(sets.enumerated()), id: \.offset) { i, lift in
+                let pr = i == record
+                HStack(spacing: 4) {
+                    Text(verbatim: Self.text(lift)).font(Typo.small.weight(.medium))
+                    if pr { Text("PR").font(Typo.tiny.weight(.bold)) }
+                }
+                .foregroundStyle(pr ? Palette.amber : Palette.ink)
+                .padding(.horizontal, 9).padding(.vertical, 4)
+                .background(pr ? Palette.amberSoft : Palette.track, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .accessibilityLabel(Self.text(lift) + (pr ? ", " + L10n.tr("Nový rekord") : ""))
+            }
+        }
+    }
+
+    /// "38 × 9", "12" with body weight.
+    static func text(_ lift: GymHistory.Lift) -> String {
+        let reps = Fmt.int(lift.reps ?? 0)
+        guard let kg = lift.kg, kg > 0 else { return reps }
+        return GymCoach.shown(kg) + " × " + reps
+    }
+}
+
+/// A line through one dot per session, each on its own day, the lowest and
+/// highest value on the right (ChartScale).
+private struct DatedLineChart: View {
+    let points: [(date: Date, value: Double)]
+    let lo: Double
+    let hi: Double
+    let height: CGFloat
+    let ticks: [ScaleTick]
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = geo.size.width - scaleWidth
+            let start = points.first?.date ?? .distantPast
+            let span = max((points.last?.date ?? start).timeIntervalSince(start), 1)
+            let y = { (v: Double) -> CGFloat in 5 + (height - 10) * (1 - scaled(v, lo, hi)) }
+            let at: [CGPoint] = points.map { p in
+                let share = CGFloat(p.date.timeIntervalSince(start) / span)
+                return CGPoint(x: 5 + (width - 10) * share, y: y(p.value))
+            }
+            ZStack(alignment: .topLeading) {
+                ChartScale(ticks: ticks, width: width, y: y)
+                Path { p in p.addLines(at) }
+                    .stroke(Palette.amberBar, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                ForEach(at.indices, id: \.self) { i in
+                    Circle().fill(Palette.amber).frame(width: 7, height: 7).position(at[i])
+                }
+            }
+        }
+        .frame(height: height)
+        .accessibilityHidden(true)
     }
 }

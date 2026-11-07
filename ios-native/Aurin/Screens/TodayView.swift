@@ -24,7 +24,11 @@ struct TodayView: View {
                     TodayContent(today: today, openSettings: openSettings, openCoach: openCoach, openShare: { sharing = true })
                         .padding(.bottom, 100)
                 }
-                .refreshable { await model.refresh(announce: true) }
+                .refreshable {
+                    // Pulled down: the coach's cards ask again even when Today is the same.
+                    model.coachAskedAt = .distantPast
+                    await model.refresh(announce: true)
+                }
                 .tabTopBar {
                     DayBar(date: today.date)
                     Spacer(minLength: 0)

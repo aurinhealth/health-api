@@ -691,3 +691,19 @@ test('upright rows are side-delt exercises too, so a shoulder workout can pick t
     assert.equal(exerciseMuscles(name).side_delts, 1, name);
   }
 });
+
+test('the three shoulder parts are one choice: one of five groups, one turn, named Ramena', () => {
+  const delts = ['front_delts', 'side_delts', 'rear_delts'];
+  assert.deepEqual(validateFocusMuscles([...delts, 'chest', 'biceps', 'triceps', 'abs']), [...delts, 'chest', 'biceps', 'triceps', 'abs']);
+  assert.equal(validateFocusMuscles([...delts, 'chest', 'biceps', 'triceps', 'abs', 'quads']), null);
+  assert.equal(validateFocusMuscles(['chest', 'biceps', 'triceps', 'abs', 'quads', 'calves']), null);
+  const context = { date: '2026-09-28', cycling: { recentRideTss: 100, recentRideHours: 2, recentActivities: [], nextRide: null }, recovery: {}, strength: { recentCompletedSets: [] } };
+  const plan = generateStrengthPlan(context, { focusMuscles: ['chest', ...delts], durationMinutes: 60 });
+  const work = [...new Set(plan.rows.filter(row => row[0] === 'WORK').map(row => row[1]))];
+  const of = group => work.filter(name => FOCUS_GROUPS[group].exercises.includes(EXERCISES[name].variantOf ?? name)).length;
+  const shoulders = work.filter(name => delts.some(group => FOCUS_GROUPS[group].exercises.includes(EXERCISES[name].variantOf ?? name))).length;
+  assert.ok(of('chest') >= 2, work.join(', '));
+  assert.ok(Math.abs(shoulders - of('chest')) <= 1, work.join(', '));
+  assert.match(plan.planName, /Ramena|Shoulders/);
+  assert.doesNotMatch(plan.planName, /delt|Boční|Zadní|Přední/);
+});

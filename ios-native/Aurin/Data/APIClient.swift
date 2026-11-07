@@ -123,8 +123,9 @@ final class APIClient: @unchecked Sendable {
 
     /// Asks the coach; yields the answer as it grows and the final result.
     /// `appContext` replaces the screen and day when the coach is asked about a
-    /// detail (CoachSubject.appContext).
-    func askCoach(_ message: String, chatId: Int?, view: String, date: String? = nil, image: String? = nil, appContext: JSONObject? = nil) -> AsyncThrowingStream<AssistantEvent, Error> {
+    /// detail (CoachSubject.appContext). `ghost`: a temporary chat the coach
+    /// doesn't remember (src/assistant-chats.js).
+    func askCoach(_ message: String, chatId: Int?, view: String, date: String? = nil, image: String? = nil, appContext: JSONObject? = nil, ghost: Bool = false) -> AsyncThrowingStream<AssistantEvent, Error> {
         FirstDays.mark(FirstDays.coachKey)
         return AsyncThrowingStream { continuation in
             let task = Task {
@@ -137,6 +138,7 @@ final class APIClient: @unchecked Sendable {
                                             "appContext": .object(appContext ?? ["view": .string(view), "date": .string(date ?? Self.localToday())])]
                     if let chatId { body["chatId"] = .number(Double(chatId)) }
                     if let image { body["image"] = .string(image) }
+                    if ghost { body["ghost"] = .bool(true) }
                     request.httpBody = try JSONEncoder().encode(body)
                     let (bytes, response) = try await session.bytes(for: request)
                     let http = response as? HTTPURLResponse

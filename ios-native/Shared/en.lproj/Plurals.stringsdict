@@ -322,6 +322,22 @@
 			<string>%lld ingredients</string>
 		</dict>
 	</dict>
+	<key>%lld opakování</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld rep</string>
+			<key>other</key>
+			<string>%lld reps</string>
+		</dict>
+	</dict>
 	<key>%lld sérií</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -1067,6 +1083,38 @@
 			<string>%lld session left</string>
 			<key>other</key>
 			<string>%lld sessions left</string>
+		</dict>
+	</dict>
+	<key>průměr %lld nocí</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>average of %lld night</string>
+			<key>other</key>
+			<string>average of %lld nights</string>
+		</dict>
+	</dict>
+	<key>průměr %lld dní</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>average of %lld day</string>
+			<key>other</key>
+			<string>average of %lld days</string>
 		</dict>
 	</dict>
 </dict>

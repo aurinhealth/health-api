@@ -13,6 +13,9 @@ final class FoodWeekTests: XCTestCase {
         // A forgotten day gone by is left out of what is left (audit 13.4).
         let forgotten = try JSONDecoder().decode(FoodWeek.self, from: Data(#"{"start":"2026-10-12","end":"2026-10-18","today":"2026-10-16","target":17500,"base":17500,"exercise":0,"eaten":7500,"left":7500,"perDay":3750,"unlogged":1}"#.utf8))
         XCTAssertEqual(forgotten.unlogged, 1)
+        // Saturday after lunch: 1 150 more today of the 1 750 share.
+        let lunch = try JSONDecoder().decode(FoodWeek.self, from: Data(#"{"today":"2026-10-17","target":14000,"base":14000,"exercise":0,"eaten":11100,"left":2900,"perDay":1750,"todayLeft":1150}"#.utf8))
+        XCTAssertEqual(lunch.todayLeft, 1150)
     }
 
     /// A vitamin no meal has a value for shows "–", not 0, and is never "low" (audit 13.2).

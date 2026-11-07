@@ -221,11 +221,15 @@ final class GymStore: ObservableObject {
     /// day's sheet; out of its reach the watch saves the sheet itself.
     func complete(row: Int, kg: Double, reps: Int) {
         guard var gym else { return }
+        let plan = gym.lift(row: row)?.plannedKg
         gym.update(row: row) { $0.kg = kg; $0.reps = reps; $0.done = true }
-        // The next set of the exercise starts from this one, as on the iPhone.
-        if let next = gym.nextInExercise(after: row), let done = gym.lift(row: row), done.work, next.work {
+        // The next set of the exercise starts from this one, as on the iPhone,
+        // unless its plan is its own (typed in ahead there).
+        if let next = gym.nextInExercise(after: row), let done = gym.lift(row: row), done.work, next.work, next.plannedKg == plan {
             gym.update(row: next.row) { $0.kg = kg; $0.reps = reps }
         }
+        // The drop sets after it follow the weight it was done with (GymDay.followDrops).
+        gym.followDrops(after: row, from: plan, to: kg)
         self.gym = gym
         let done = WatchGym.Done(date: gym.date, row: row, kg: kg, reps: reps)
         editSheet { $0.apply(done, start: GymWorkout.shared.start ?? Date()) }
@@ -239,7 +243,7 @@ final class GymStore: ObservableObject {
     /// letter goes to the iPhone's sheet.
     func rate(row: Int, letter: String, next kg: Double) {
         guard var gym else { return }
-        if let next = gym.nextInExercise(after: row), next.work {
+        if let next = gym.nextInExercise(after: row), next.work, next.plannedKg == gym.lift(row: row)?.plannedKg {
             gym.update(row: next.row) { $0.kg = kg }
         }
         gym.update(row: row) { $0.intensity = letter }

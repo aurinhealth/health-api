@@ -15,7 +15,7 @@ const failed = (id, reply) => checkReply(scenarioById(id), reply, now, date).fil
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
-  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S50', 'S51', 'S52', 'S53', 'S54', 'S55', 'S56', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
+  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'S50', 'S51', 'S52', 'S53', 'S54', 'S55', 'S56', 'S57', 'S58', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
   const zone = id => scenarioContext(scenarioById(id), date, now).ctx.cyclingCoachV2.readiness;
   assert.equal(zone('S01').todayZone, 'green');
   for (const id of ['S02', 'S03', 'S08']) assert.equal(zone(id).status, 'red', id);
@@ -101,7 +101,7 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.equal((await handleCoachEval(post({}), staging, null)).status, 401);
   assert.equal((await handleCoachEval(post({}), staging, { kind: 'system' })).status, 401);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
-  assert.equal(list.scenarios.length, 58);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
+  assert.equal(list.scenarios.length, 61);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
   const run = async (env, s) => ({ id: s.id, status: 'ok', lang: lang() });
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
@@ -614,6 +614,15 @@ test('run 47: an offer question after the change, and a swim card named by "plav
   assert.ok(at('S43', 'Neplav sám, vezmi si čepici a bójku.', [{ type: 'workout', date: tomorrow, sport: 'swim', kind: 'recovery', minutes: 20, openWater: true }]).includes('text zmiňuje každou kartu'), 'a card the text never names');
 });
 
+test('S46 temporary chat: no promise to remember, the knee goes to a normal chat', () => {
+  const s = scenarioById('S46');
+  assert.equal(scenarioContext(s).ctx.ghostChat, true);
+  const failed = answer => checkReply(s, { answer, kept: [], proposed: [] }).filter(c => !c.ok).map(c => c.name);
+  assert.ok(failed('Ranní běhy jsou fajn. Koleno si zapamatuju a dál k němu budu přihlížet.').includes('neslibuje, že si to zapamatuje'));
+  assert.ok(failed('Ranní běhy jsou fajn, koleno šetři.').includes('u kolena řekne, ať to napíše v běžném chatu'));
+  assert.deepEqual(failed('Ranní běhy jsou fajn. Koleno teď šetři a dlouhý běh zkrať. Tenhle chat se neuloží, tak mi to napiš v běžném chatu, ať to mám na paměti i příště.').filter(n => /zapamatuje|běžném/.test(n)), []);
+});
+
 test('run 50: "jak teplá je voda" asks, "Den poté" is the day after, "středu 28. 10." is next week, S44/S45 need no change today', () => {
   const day = COACH_EVAL_DATE, failed = (id, reply) => checkReply(scenarioById(id), { proposed: [], ...reply }, null, day).filter(c => !c.ok).map(c => c.name);
   const lake = [{ type: 'workout', date: '2026-10-22', sport: 'swim', minutes: 20, kind: 'recovery', openWater: true, card: 'recovery' }];
@@ -685,4 +694,16 @@ test('S53–S56: illness and pain told in the chat (audit 2026-11-07, points 1, 
   const well = await run('S56', 'Dnes v klidu podle plánu.');
   assert.deepEqual(failed(well).filter(n => /Nemoc/.test(n)), []);
   assert.ok(!well.kept.some(a => a.type === 'status'));
+});
+
+test('S57–S58: Nemoc for days, the coach asks whether the athlete is better (point 3)', async () => {
+  const day = '2026-10-21', at = '2026-10-21 08:00';
+  assert.equal(scenarioContext(scenarioById('S57'), day, at).ctx.askIfBetter, true);
+  const run = (id, answer, actions = []) => runScenario({}, scenarioById(id), { date: day, now: at, ask: async () => ({ status: 'ok', answer, actions, visuals: [], memory: { save: [], forget: [], update: [] } }) });
+  const failed = r => r.checks.filter(c => !c.ok).map(c => c.name);
+  assert.ok(failed(await run('S57', 'K večeři polévku a rýži.')).includes('zeptá se, jestli už je mu líp'));
+  assert.ok(!failed(await run('S57', 'K večeři polévku a rýži. Je ti už líp?')).includes('zeptá se, jestli už je mu líp'));
+  const back = await run('S58', 'Super, vracím tě k tréninku, první dny lehce.', [{ type: 'status', eventId: '', date: '', sport: '', minutes: 0, status: 'active', statusUntil: '', reason: 'Je ti zase dobře.', fromExercise: '', toExercise: '', workoutId: '', kind: '', activityId: '', otherActivityId: '', time: '', kcal: 0, gymFocus: '', gymMuscles: [], insisted: false, planId: '', days: [], raceKm: 0, place: '' }]);
+  assert.ok(back.kept.some(a => a.type === 'status' && a.status === 'active'));
+  assert.ok(!failed(back).includes('karta Aktivní'), failed(back).join());
 });

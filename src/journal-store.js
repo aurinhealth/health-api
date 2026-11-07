@@ -351,6 +351,16 @@ export async function autoDays(db, from, to) {
       set(n.date, "drink_before_bed", (drinkTimes[n.date] || []).some(t => { const m = minutesOf(t) + (t < "12:00" ? 1440 : 0); return m <= bed && m >= bed - 60; }));
     }
   }
+  // Pozdní jídlo: from 2 h before the usual falling asleep (the median of the
+  // 14 nights before, at least 3), so a night owl's 22:00 dinner is not late
+  // and an early sleeper's 19:30 is; without the nights the catalogue's 20:00.
+  for (const [date, day] of Object.entries(days)) {
+    if (!day.late_meal) continue;
+    const before = starts.filter(o => o.date < date && o.date >= shift(date, -14)).map(o => minutesOf(o.clock)).sort((a, b) => a - b);
+    if (before.length < 3) continue;
+    const m = (before[Math.floor(before.length / 2)] - 120 + 1440) % 1440;
+    day.late_meal.late = String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+  }
   const today = localToday(), buildBase = await storedBuildBase(db, profile, shift(to, 1)).catch(() => null);
   for (const date of logged) {
     if (date < from || date > to) continue;

@@ -40,6 +40,8 @@ extension WatchBridge {
         var gym = WatchGym(day, date: date, restSets: rest.sets, restExercises: rest.exercises)
         gym.partsDone = Self.partsDone(day, date: date)
         Self.addInfo(&gym, day: day, date: date)
+        // A machine in pounds while the app is in kilos (LiftUnits).
+        for e in gym.exercises.indices where LiftUnits.pounds(gym.exercises[e].name) { gym.exercises[e].pounds = true }
         return gym
     }
 

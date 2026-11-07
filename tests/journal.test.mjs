@@ -198,6 +198,17 @@ function dataDb(userId = 5) {
   return { raw, db, fluid, food, activity, userId };
 }
 
+test("a last meal before the late time shows its time with ✕, not ✓", async () => {
+  const { db, food, userId } = dataDb();
+  const d = "2026-10-14";
+  food.run(userId, d, d + "T19:30:00", "Večeře", "{}");
+  const day = await withLang("cs", () => journalDay(db, d, today));
+  const late = day.sections.flatMap(s => s.items).find(i => i.key === "late_meal");
+  assert.deepEqual([late.answer, late.time, late.fromData], [0, "19:30", true]);
+  // The athlete's own 19:30 is the same ✕; 21:15 is ✓.
+  assert.equal(dayState(catalogItem("late_meal"), { answer: 1, time: "19:30" }, null).yes, false);
+});
+
 test("the day's data fills in alcohol, caffeine, the last meal and an evening workout", async () => {
   const { db, fluid, food, activity, userId } = dataDb();
   const d = "2026-10-14";
@@ -277,6 +288,29 @@ test("the nights fill in late to bed, the usual bedtime, a drink before bed and 
   assert.equal(auto[shiftDay(today, -3)].late_bed.yes, false);
   assert.deepEqual([auto[d].late_bed.yes, auto[d].regular_bedtime.yes, auto[d].drink_before_bed.yes, auto[d].nap.yes], [true, false, true, true]);
   assert.equal(auto[shiftDay(today, -2)].regular_bedtime?.yes, true);
+});
+
+test("Pozdní jídlo starts 2 h before the usual falling asleep", async () => {
+  const { raw, db, food, userId } = dataDb(13);
+  const insert = raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,start_time,end_time,payload_json) VALUES(?,?,?,?,?,?)");
+  const night = (date, start, end) => insert.run(userId, "apple-health", "sleep", date + "T" + start + ":00", shiftDay(date, start < "12:00" ? 0 : 1) + "T" + end + ":00", "{}");
+  // A night owl asleep at 0:30: a dinner at 22:00 is not late, 22:40 is.
+  for (let i = 6; i >= 2; i--) night(shiftDay(today, -i + 1), "00:30", "08:00");
+  const d = shiftDay(today, -1);
+  food.run(userId, d, d + "T22:00:00", "Večeře", "{}");
+  food.run(userId, today, today + "T22:40:00", "Toust", "{}");
+  const auto = await autoDays(db, d, today);
+  assert.equal(auto[d].late_meal.late, "22:30");
+  assert.equal(dayState(catalogItem("late_meal"), null, auto[d].late_meal).yes, false);
+  assert.equal(dayState(catalogItem("late_meal"), null, auto[today].late_meal).yes, true);
+  // The athlete's own time uses the same line.
+  assert.equal(dayState(catalogItem("late_meal"), { answer: 1, time: "22:00" }, auto[d].late_meal).yes, false);
+  // Without 3 nights: from 20:00.
+  const { db: fresh, food: freshFood, userId: other } = dataDb(14);
+  freshFood.run(other, d, d + "T20:30:00", "Večeře", "{}");
+  const plain = await autoDays(fresh, d, d);
+  assert.equal(plain[d].late_meal.late, undefined);
+  assert.equal(dayState(catalogItem("late_meal"), null, plain[d].late_meal).yes, true);
 });
 
 test("the morning sheet goes once yesterday is answered, put away, or Deník is off", async () => {

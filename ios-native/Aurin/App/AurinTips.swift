@@ -19,6 +19,12 @@ struct WatchWorkoutTip: Tip {
     var image: Image? { Image(systemName: "applewatch") }
 }
 
+/// The coach's empty new chat, the first time: what the ghost button does.
+struct GhostChatTip: Tip {
+    var title: Text { Text(L10n.tr("Dočasný chat")) }
+    var message: Text? { Text(L10n.tr("Kouč si tenhle chat nezapamatuje. Klepni a začni ho.")) }
+}
+
 enum AurinTips {
     /// Once at launch, before any TipView draws. Not in the demo, whose
     /// screenshots go to the website and the App Store.
