@@ -544,12 +544,12 @@ struct SkinTempWidget: View {
             SizedWidgetBody(size: size, smallChart: 30, mediumChart: 44, smallShowsChart: false) {
                 NumberText(value: Fmt.signed(Units.temperatureChange(skin.deviation), digits: 1), unit: Units.temperatureUnit)
                 // The usual night is within half a degree of the athlete's own average.
-                TileRange(value: skin.deviation, low: -0.5, high: 0.5, edges: TileRange.temperatureEdges, tint: Palette.amber)
+                TileRange(value: skin.deviation, low: -0.5, high: 0.5, text: TileRange.temperatureWord(skin.deviation), edges: TileRange.temperatureEdges, tint: Palette.amber)
             } chart: { height in
                 VStack(spacing: 6) {
-                    BarChart(values: skin.series.map { $0.value + 1 }, styles: skin.series.map { BarStyle(fill: $0.value > 0 ? Palette.amber.opacity(0.6) : Palette.blue.opacity(0.5)) },
-                             lo: 0, hi: 2, target: 1, height: height)
+                    DeviationBars(values: skin.series.map(\.value), band: 0.5, height: height)
                     ChartSpan(dates: skin.series.map(\.date))
+                    if size != .small { DeviationLegend() }
                 }
             }
         }
@@ -573,17 +573,18 @@ struct WristTempWidget: View {
                         NumberText(value: Fmt.signed(Units.temperatureChange(deviation), digits: 1),
                                    unit: size == .small ? Units.temperatureUnit : L10n.f("%@ proti obvyklému", Units.temperatureUnit))
                         // The usual night is within half a degree of the athlete's own average.
-                        TileRange(value: deviation, low: -0.5, high: 0.5, edges: TileRange.temperatureEdges, tint: Palette.amber)
+                        TileRange(value: deviation, low: -0.5, high: 0.5, text: TileRange.temperatureWord(deviation), edges: TileRange.temperatureEdges, tint: Palette.amber)
                     }
                 } else {
                     NumberText(value: Fmt.decimal(Units.temperature(wrist.value), digits: 1), unit: Units.temperatureUnit)
                 }
                 if bars.count > 1 && (size != .small || wrist.deviation == nil) {
-                    BarChart(values: bars.map { max($0.value, 0) },
-                             styles: bars.indices.map { BarStyle(fill: $0 == bars.count - 1 ? Palette.amber : Palette.amber.opacity(0.28)) },
-                             lo: 0, hi: max(bars.map(\.value).max() ?? 0, 0.5),
-                             spacing: size == .small ? 2 : 4,
-                             height: size == .large ? 80 : size == .medium ? 48 : 34)
+                    VStack(spacing: 6) {
+                        // Up and down from the usual: a cooler night shows as well as a warmer one.
+                        DeviationBars(values: bars.map(\.value), band: 0.5, spacing: size == .small ? 2 : 4,
+                                      height: size == .large ? 80 : size == .medium ? 48 : 34)
+                        if size != .small { DeviationLegend() }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

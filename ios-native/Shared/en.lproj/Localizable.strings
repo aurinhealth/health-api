@@ -3997,6 +3997,10 @@
 "obvyklé rozmezí %@–%@ /min" = "usual range %@–%@ /min";
 "obvyklé rozmezí %@–%@ %%" = "usual range %@–%@%%";
 "Odchylka od obvyklé teploty v noci" = "Night temperature against your usual";
+"teplejší ↑ · chladnější ↓" = "warmer ↑ · cooler ↓";
+"pás ±%@ od tvého obvyklého" = "band ±%@ of your usual";
+"teplejší než obvykle" = "warmer than usual";
+"chladnější než obvykle" = "cooler than usual";
 "Obvykle" = "Usual";
 "v obvyklém rozmezí" = "within your usual range";
 "nad obvyklým rozmezím" = "above your usual range";

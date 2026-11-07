@@ -204,6 +204,16 @@ struct TileRange: View {
         (Fmt.signed(Units.temperatureChange(-0.5), digits: 1), Fmt.signed(Units.temperatureChange(0.5), digits: 1))
     }
 
+    /// "↑ warmer than usual", "↓ cooler than usual", nil within the band: a
+    /// temperature tile never says "elevated" (MDR, chart review 4).
+    static func temperatureWord(_ deviation: Double) -> String? {
+        switch RangeBar.side(deviation, -0.5, 0.5) {
+        case 1: return "↑ " + L10n.tr("teplejší než obvykle")
+        case -1: return "↓ " + L10n.tr("chladnější než obvykle")
+        default: return nil
+        }
+    }
+
     var body: some View {
         let color = tint ?? (text == nil ? RangeBar.color(value, low, high, worseAbove: worseAbove) : Palette.blue)
         VStack(alignment: .leading, spacing: 8) {
