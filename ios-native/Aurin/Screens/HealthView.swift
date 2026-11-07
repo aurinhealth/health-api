@@ -439,15 +439,18 @@ struct SleepWidget: View {
                 }
             } chart: { height in
                 if !sleep.week.isEmpty {
+                    // The usual need (age or own goal), the one the week's debt counts
+                    // against, not last night's need with the day's strain (chart review 15).
+                    let need = Double(sleep.tonight.base)
                     BarChart(values: sleep.week.map(\.value),
                              styles: sleep.week.indices.map { i in BarStyle(fill: i == sleep.week.count - 1 ? Palette.indigo : Palette.lilac) },
-                             hi: max(Double(sleep.need) * 1.15, sleep.week.map(\.value).max() ?? 0),
-                             target: Double(sleep.need),
+                             hi: max(need * 1.15, sleep.week.map(\.value).max() ?? 0),
+                             target: need,
                              labels: sleep.week.map { Fmt.weekdayShort($0.date) },
                              highlighted: sleep.week.count - 1,
                              spacing: size == .small ? 3 : 4,
                              height: height,
-                             targetTag: (name: L10n.tr("odhad potřeby"), value: Fmt.hoursMinutes(Double(sleep.need))))
+                             targetTag: (name: L10n.tr("odhad potřeby"), value: Fmt.hoursMinutes(need)))
                 }
             }
         }
@@ -464,20 +467,33 @@ struct SleepDebtWidget: View {
             if size == .small {
                 NumberText(value: Fmt.hoursMinutes(Double(debt.minutes)), unit: "h", spoken: Fmt.hoursMinutesSpoken(Double(debt.minutes)))
                 Text(nights).font(Typo.caption).foregroundStyle(Palette.faint)
-                ProgressLine(fraction: Double(debt.minutes) / 360, color: color)
+                DebtStrip(minutes: debt.minutes)
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     NumberText(value: Fmt.hoursMinutes(Double(debt.minutes)), unit: "h", spoken: Fmt.hoursMinutesSpoken(Double(debt.minutes)))
                     Spacer(minLength: 8)
                     Text(nights).font(Typo.caption).foregroundStyle(Palette.faint)
                 }
-                ProgressLine(fraction: Double(debt.minutes) / 360, color: color, height: 6)
+                DebtStrip(minutes: debt.minutes, height: 6)
             }
         }
     }
 
     private var nights: String { L10n.plural("za %lld nocí", debt.nights) }
-    private var color: Color { debt.minutes > 180 ? Palette.rust : Palette.amberBar }
+}
+
+/// The week's debt on a strip from 0 to 6 h, its ends labelled and in one
+/// colour: no red past 3 h that nothing explains (chart review 15).
+struct DebtStrip: View {
+    let minutes: Int
+    var height: CGFloat = 4
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ProgressLine(fraction: Double(minutes) / 360, color: Palette.amberBar, height: height)
+            ChartSpan(start: "0", end: "6 h")
+        }
+    }
 }
 
 struct OxygenWidget: View {

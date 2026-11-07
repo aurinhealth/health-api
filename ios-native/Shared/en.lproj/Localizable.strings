@@ -3938,7 +3938,17 @@
 "Co je na ní špatně: " = "What's wrong with it: ";
 "Ukáže, z čeho se index skládá." = "Shows what makes up the index.";
 "Z čeho se skládá index" = "What makes up the index";
-"Posledních %@ nocí · průměr %@" = "Last %1$@ nights · average %2$@";
+"Index spánku · posledních %@ nocí" = "Sleep index · last %@ nights";
+"průměr %@ / 100" = "average %@ / 100";
+"obvyklé rozmezí %@–%@" = "usual range %1$@–%2$@";
+"poslední noc" = "last night";
+"Změřeno %@ ze %@ nocí" = "%1$@ of %2$@ nights measured";
+"Poslední noc %@" = "Last night %@";
+"Noc na %@: %@" = "Night of %1$@: %2$@";
+"Tvoje obvyklé rozmezí se ukáže po 7 nocích." = "Your usual range shows after 7 nights.";
+"%@, nad tvým obvyklým rozmezím %@–%@." = "%1$@, above your usual range of %2$@–%3$@.";
+"%@, pod tvým obvyklým rozmezím %@–%@." = "%1$@, below your usual range of %2$@–%3$@.";
+"%@, v tvém obvyklém rozmezí %@–%@." = "%1$@, in your usual range of %2$@–%3$@.";
 "obvykle %@–%@" = "usually %1$@–%2$@";
 "Kvalita" = "Quality";
 "Fáze" = "Stages";
@@ -3953,7 +3963,6 @@
 "probuzení %@×" = "woke %@×";
 "%@ min vzhůru" = "%@ min awake";
 "čas v posteli, kdy spíš" = "the share of time in bed spent asleep";
-"Pás je tvoje obvyklé rozmezí, %@ až %@." = "The band is your usual range, %1$@ to %2$@.";
 "Index spánku za posledních %@ nocí, průměr %@." = "Sleep index over the last %1$@ nights, average %2$@.";
 "Měj na ruce nabité hodinky, ať se noc změří." = "Keep your charged watch on so the night gets measured.";
 "Vyměněno dnes" = "Swapped today";
