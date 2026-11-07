@@ -4051,3 +4051,9 @@
 /* Settings → Zones: where the max heart rate comes from when none is typed (ZonesSettingsView.swift heartNote) */
 "Odhad podle věku" = "Estimate from age";
 "Nejvyšší tep z tréninků za 6 měsíců" = "Highest heart rate in 6 months of workouts";
+
+/* Coach: the temporary chat the coach doesn't remember (Ghost chat). */
+"Dočasný chat" = "Ghost chat";
+"Kouč si tenhle chat nezapamatuje. Klepni a začni ho." = "The coach won't remember this chat. Tap to start one.";
+"Kouč si tenhle chat nezapamatuje" = "The coach won't remember this chat";
+"Dál vidí tvoje data a to, co už ví. Nic odtud se mu neuloží do paměti a Aurin chat smaže, až odejdeš. Potvrzené tréninky a jídlo zůstanou." = "He still sees your data and what he already knows. Nothing here goes into his memory, and Aurin deletes the chat when you leave. Workouts and food you confirm stay.";

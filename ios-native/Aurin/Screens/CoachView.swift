@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import TipKit
 
 /// The AI coach: today's summary and what matters, then a chat. Answers stream
 /// in as they are written; changes the coach proposes wait for "Potvrdit".
@@ -17,6 +18,9 @@ struct CoachView: View {
     var keepChat: (Int) -> Void = { _ in }
     @State private var messages: [Bubble] = []
     @State private var chatId: Int?
+    /// Dočasný chat (Petr 2026-11-07): the coach reads what he knows but keeps
+    /// nothing of it; not listed, and deleted when the athlete leaves it.
+    @State private var ghost = false
     @State private var input = ""
     @State private var sending = false
     /// Proposals whose Potvrdit or Odmítnout is on its way: a second tap does nothing.
@@ -105,6 +109,7 @@ struct CoachView: View {
                     ScrollView {
                         // Lazy: a long chat lays out only the bubbles on screen.
                         LazyVStack(alignment: .leading, spacing: 14) {
+                            if ghost { ghostCard }
                             if messages.isEmpty { welcome }
                             else if let subject = current { CoachSubjectCard(subject: subject) }
                             ForEach(messages) { bubble in
@@ -147,8 +152,8 @@ struct CoachView: View {
                 }
                 inputBar
             }
-            .background { ScreenBackground(glow: Palette.Glow.today) }
-            .navigationTitle("Kouč")
+            .background { ScreenBackground(glow: ghost ? Palette.Glow.ghost : Palette.Glow.today) }
+            .navigationTitle(ghost ? L10n.tr("Dočasný chat") : L10n.tr("Kouč"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -158,6 +163,21 @@ struct CoachView: View {
                     // Not while an answer streams in: it writes into the current conversation.
                     .disabled(sending)
                     .accessibilityLabel("Konverzace")
+                }
+                // On an empty new chat only; once it has a message it stays what it is.
+                if ghost || messages.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            ghost.toggle()
+                            GhostChatTip().invalidate(reason: .actionPerformed)
+                        } label: {
+                            GhostGlyph(filled: ghost).frame(width: 19, height: 21)
+                        }
+                        .disabled(sending || !messages.isEmpty)
+                        .popoverTip(GhostChatTip())
+                        .accessibilityLabel("Dočasný chat")
+                        .accessibilityValue(ghost ? L10n.tr("Zapnuto") : L10n.tr("Vypnuto"))
+                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { dismiss() } label: { Image(systemName: "xmark").scaledFont(14, weight: .semibold) }
@@ -207,6 +227,7 @@ struct CoachView: View {
                 ChatsPanel(current: chatId, close: { withAnimation(.easeOut(duration: 0.25)) { showChats = false } },
                            newChat: { newChat() }, open: { id in
                                aboutSubject = id == chatId && aboutSubject
+                               leaveGhost()
                                Task { await open(id) }
                            }, memory: { showMemory = true })
                 .transition(.move(edge: .leading))
@@ -222,6 +243,37 @@ struct CoachView: View {
             packsOnSale = status?.packsBuyable == true
             if allowance?.usedUp == true { usedUp = true }
         }
+        // Closing the coach leaves a temporary chat too.
+        .onDisappear { leaveGhost() }
+    }
+
+    /// What holds in a temporary chat, above its messages.
+    private var ghostCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 7) {
+                GhostGlyph(filled: false).frame(width: 15, height: 17)
+                Text("Kouč si tenhle chat nezapamatuje").font(Typo.bodyStrong)
+            }
+            Text("Dál vidí tvoje data a to, co už ví. Nic odtud se mu neuloží do paměti a Aurin chat smaže, až odejdeš. Potvrzené tréninky a jídlo zůstanou.")
+                .font(Typo.small).foregroundStyle(Palette.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(Palette.ink)
+        .padding(.horizontal, 16).padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.card.opacity(0.75), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.ink.opacity(0.3), style: StrokeStyle(lineWidth: 1.2, dash: [4, 3])))
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Leaving a temporary chat (another chat, a new one, or closing the coach)
+    /// deletes it; the server removes one the app never left the night after.
+    private func leaveGhost() {
+        guard ghost else { return }
+        ghost = false
+        guard let id = chatId, !model.demo else { return }
+        let api = model.api
+        Task { try? await api.deleteChat(id: id) }
     }
 
     // MARK: Parts
@@ -483,7 +535,7 @@ struct CoachView: View {
         var unshown: String?
         var shownAt = Date.distantPast
         do {
-            for try await event in model.api.askCoach(text, chatId: chatId, view: view, date: date, image: image, appContext: current?.appContext) {
+            for try await event in model.api.askCoach(text, chatId: chatId, view: view, date: date, image: image, appContext: current?.appContext, ghost: ghost) {
                 switch event {
                 case .progress(let p): progress = p
                 case .chat(let chat): savedIn = chat
@@ -516,7 +568,8 @@ struct CoachView: View {
                     if result.sportChanges?.removed?.isEmpty == false { Task { await model.refreshTraining(); await model.reloadToday() } }
                     if let chat = result.chatId {
                         chatId = chat
-                        if aboutSubject { keepChat(chat) }
+                        // A temporary chat is never opened again.
+                        if aboutSubject && !ghost { keepChat(chat) }
                     }
                     if let a = result.coachAllowance {
                         allowance = a
@@ -548,7 +601,7 @@ struct CoachView: View {
                 // The server finishes the answer and saves it in the chat: load it, don't ask (and count) again.
                 messages.removeAll { $0.id == id && $0.text.isEmpty }
                 chatId = savedIn
-                if aboutSubject { keepChat(savedIn) }
+                if aboutSubject && !ghost { keepChat(savedIn) }
                 unfinished = (savedIn, newestStored)
                 self.error = L10n.tr("Spojení se přerušilo. Kouč odpověď dopíše a uloží ji do chatu.")
             } else if !answered {
@@ -788,6 +841,7 @@ struct CoachView: View {
     private var current: CoachSubject? { aboutSubject ? subject : nil }
 
     private func newChat() {
+        leaveGhost()
         messages = []
         chatId = nil
         error = nil
@@ -1442,5 +1496,54 @@ struct CoachDots: View {
     private func opacity(_ t: TimeInterval, _ i: Int) -> Double {
         let phase = (t - Double(i) * 0.18).truncatingRemainder(dividingBy: 1.0)
         return 0.25 + 0.75 * max(0, sin(phase * .pi))
+    }
+}
+
+/// The temporary chat's sign: a small ghost, outlined, or filled while it is on.
+struct GhostGlyph: View {
+    var filled: Bool
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            ZStack {
+                if filled {
+                    GhostShape().fill(Palette.ink)
+                    eyes(w, h).fill(Palette.background)
+                } else {
+                    GhostShape().stroke(Palette.ink, style: StrokeStyle(lineWidth: max(1.5, w * 0.11), lineJoin: .round))
+                    eyes(w, h).fill(Palette.ink)
+                }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func eyes(_ w: CGFloat, _ h: CGFloat) -> Path {
+        let r = w * 0.085
+        var path = Path()
+        for x: CGFloat in [0.35, 0.65] { path.addEllipse(in: CGRect(x: w * x - r, y: h * 0.42 - r, width: r * 2, height: r * 2)) }
+        return path
+    }
+}
+
+/// A rounded head and a wavy hem, in its frame.
+struct GhostShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let w = rect.width, h = rect.height, x = rect.minX, y = rect.minY
+        let inset = w * 0.06, left = x + inset, right = x + w - inset, radius = (right - left) / 2
+        var p = Path()
+        p.move(to: CGPoint(x: left, y: y + h * 0.94))
+        p.addLine(to: CGPoint(x: left, y: y + inset + radius))
+        p.addArc(center: CGPoint(x: left + radius, y: y + inset + radius), radius: radius, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
+        p.addLine(to: CGPoint(x: right, y: y + h * 0.94))
+        // Three waves back along the hem.
+        let step = (right - left) / 3
+        for i in 0..<3 {
+            let from = right - step * CGFloat(i)
+            p.addQuadCurve(to: CGPoint(x: from - step, y: y + h * 0.94), control: CGPoint(x: from - step / 2, y: y + h * 0.80))
+        }
+        p.closeSubpath()
+        return p
     }
 }
