@@ -637,3 +637,32 @@ test('chest: the heaviest press first, then another angle, also by equipment (co
     assert.ok(db.every(name => !/barbell|machine|prime|cable|smith|pec deck/i.test(name)), db.join(', '));
   }
 });
+
+// Google's sleep row has times, not minutes: last night comes from the sleep
+// sessions, as the readiness reads it (slow-requests doc, point 7).
+test("last night's sleep from the sleep sessions lowers the gym dose", async () => {
+  const { generateStrengthPlan } = await import("../src/strength-generator.js");
+  const night = minutes => ({ date: "2026-09-23", endTime: "2026-09-23T05:00:00Z", durationMin: minutes, source: "google-wearables" });
+  const context = (sessions, score = null) => ({
+    date: "2026-09-23", cycling: { recentActivities: [] }, strength: { recentCompletedSets: [] }, sleepSessions: sessions,
+    recovery: { sleep: [{ startTime: "2026-09-22T23:00:00Z", endTime: "2026-09-23T05:00:00Z", value: null }], "respiratory-rate-sleep-summary": [{ sampleTime: "2026-09-23T05:00:00Z", value: 15 }] },
+    adaptive: { recovery: { score } }
+  });
+  const rested = generateStrengthPlan(context([night(450)]));
+  assert.equal(rested.loadFactor, 1);
+  const short = generateStrengthPlan(context([night(300), { ...night(90), nap: true, date: "2026-09-23" }]));
+  assert.equal(short.loadFactor, 0.94);
+  assert.equal(short.protectedLegs, true);
+  // A nap is not the night; the night still waiting changes nothing.
+  assert.equal(generateStrengthPlan(context([{ ...night(60), nap: true }])).loadFactor, 1);
+  assert.equal(generateStrengthPlan(context([{ ...night(300), date: "2026-09-22", endTime: "2026-09-22T05:00:00Z" }])).loadFactor, 1);
+  // A low readiness already counts the night: the bigger cut, not both.
+  assert.equal(generateStrengthPlan(context([night(300)], 60)).loadFactor, 0.94);
+  assert.equal(generateStrengthPlan(context([night(450)], 60)).loadFactor, 0.97);
+});
+
+test("breathing in sleep is not the night's minutes in the legacy recovery", async () => {
+  const { buildAdaptiveDecision } = await import("../src/adaptive-engine.js");
+  const out = buildAdaptiveDecision({ date: "2026-09-23", recovery: { "respiratory-rate-sleep-summary": [{ sampleTime: "2026-09-23T05:00:00Z", value: 15 }], "daily-sleep-temperature-derivations": [{ sampleTime: "2026-09-23", value: 34.1 }] } }, null);
+  assert.equal(out.recovery.sleepMinutes, null);
+});
