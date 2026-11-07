@@ -49,7 +49,32 @@ extension BodyFigure {
         ("calves", "Lýtka")
     ]
 
-    static func label(_ id: String) -> String { muscles.first { $0.id == id }.map { L10n.tr($0.label) } ?? id }
+    static func label(_ id: String) -> String { L10n.tr(name(id)) }
+
+    /// The Czech name, before L10n (Ramena for the whole shoulder).
+    static func name(_ id: String) -> String { id == "shoulders" ? "Ramena" : muscles.first { $0.id == id }?.label ?? id }
+
+    /// The three parts of the shoulder. Where muscles are picked they are one
+    /// choice, Ramena, with the parts below it (Petr 2026-11-07: a beginner
+    /// does not know the front delt from the side one).
+    static let shoulders = ["front_delts", "side_delts", "rear_delts"]
+
+    /// The muscles to pick from: as `muscles`, the shoulder's parts as one "shoulders".
+    static let choices: [String] = muscles.map(\.id).compactMap { $0 == "front_delts" ? "shoulders" : shoulders.contains($0) ? nil : $0 }
+
+    /// The choice a muscle of the figure belongs to.
+    static func choice(_ id: String) -> String { shoulders.contains(id) ? "shoulders" : id }
+
+    /// The muscles of the figure a choice stands for.
+    static func ids(_ choice: String) -> [String] { choice == "shoulders" ? shoulders : [choice] }
+
+    /// How many choices the muscles are: the shoulder's parts count once.
+    static func choiceCount(_ ids: Set<String>) -> Int { Set(ids.map(choice)).count }
+
+    /// "Přední" for the front delts: a part under Ramena.
+    static func partLabel(_ id: String) -> String {
+        L10n.tr(["front_delts": "Přední", "side_delts": "Boční", "rear_delts": "Zadní"][id] ?? id)
+    }
 }
 
 /// An SVG path with absolute M, L, Q, C and Z commands (what the figure uses).

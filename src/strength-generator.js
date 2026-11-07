@@ -707,7 +707,7 @@ const NOTE_EN = {
 "Weighted Pull Ups": "Lats; pull-ups with weight on a belt or a dumbbell between your feet, kg = added weight",
 "Wide-Grip Pull-Up": "Lats; pull-ups with a wide overhand grip, kg = added weight"
 };
-const GROUP_EN = {"chest": "Chest", "upper_back": "Upper back", "lats": "Lats", "front_delts": "Front delts", "side_delts": "Side delts", "rear_delts": "Rear delts", "biceps": "Biceps", "triceps": "Triceps", "abs": "Abs", "obliques": "Obliques", "quads": "Quads", "hamstrings": "Hamstrings", "hips": "Glutes and hips", "calves": "Calves", "forearms": "Forearms", "traps": "Traps", "lower_back": "Lower back"};
+const GROUP_EN = {"chest": "Chest", "upper_back": "Upper back", "lats": "Lats", "front_delts": "Front shoulders", "side_delts": "Side shoulders", "rear_delts": "Rear shoulders", "biceps": "Biceps", "triceps": "Triceps", "abs": "Abs", "obliques": "Obliques", "quads": "Quads", "hamstrings": "Hamstrings", "hips": "Glutes and hips", "calves": "Calves", "forearms": "Forearms", "traps": "Traps", "lower_back": "Lower back"};
 for (const [name, def] of Object.entries(EXERCISES)) { const cs = def.note; Object.defineProperty(def, 'note', { get: () => L(cs, NOTE_EN[name] || cs), enumerable: true }); }
 for (const [id, group] of Object.entries(FOCUS_GROUPS)) { const cs = group.label; Object.defineProperty(group, 'label', { get: () => L(cs, GROUP_EN[id] || cs), enumerable: true }); }
 
@@ -723,10 +723,14 @@ export function normalizeGymFocus(value){
   if(/^(?:full(?: ?body)?|cele telo)$/.test(v))return undefined;
   throw new Error(L('Neznámé zaměření tréninku: '+String(value).slice(0,40)+'. Vyber horní nebo dolní část těla, nebo celé tělo.','Unknown workout focus: '+String(value).slice(0,40)+'. Choose upper body, lower body or full body.'));
 }
+// The shoulder's three parts: the app picks them as one Ramena, so they count
+// once in the five muscle groups and share one turn when the groups fill a session.
+export const SHOULDER_PARTS=['front_delts','side_delts','rear_delts'];
+const groupCount=ids=>new Set(ids.map(id=>SHOULDER_PARTS.includes(id)?'shoulders':id)).size;
 export function validateFocusMuscles(value){
-  if(!Array.isArray(value)||value.length<1||value.length>5)return null;
+  if(!Array.isArray(value)||value.length<1||value.length>7)return null;
   const unique=[...new Set(value.map(String))];
-  return unique.length===value.length&&unique.every(id=>Object.hasOwn(FOCUS_GROUPS,id))?unique:null;
+  return unique.length===value.length&&unique.every(id=>Object.hasOwn(FOCUS_GROUPS,id))&&groupCount(unique)<=5?unique:null;
 }
 
 // Pain or an injury the coach remembers ("koleno bolí při dřepech") leaves out
@@ -1556,9 +1560,18 @@ export function generateStrengthPlan(context, options = {}) {
     // first, then the next ones in turn (95 minutes of glutes, biceps and rear
     // delts is 8 exercises, not 3). The timing check below trims any excess.
     // Legs kept fresh for a key ride get their one best exercise, no more.
-    const ranked = focusMuscles.map(group => chosen.protectedLegs && ['quads', 'hamstrings', 'hips', 'calves'].includes(group) ? rankedExercises(group).slice(0, 1) : group === 'chest' ? chestOrder(rankedExercises(group), name => stalled.has(name) || shown.has(name) || lastExerciseDate.has(name) && daysBetween(lastExerciseDate.get(name), context.date) < 5) : rankedExercises(group)), next = ranked.map(() => 0);
+    const ranked = focusMuscles.map(group => chosen.protectedLegs && ['quads', 'hamstrings', 'hips', 'calves'].includes(group) ? rankedExercises(group).slice(0, 1) : group === 'chest' ? chestOrder(rankedExercises(group), name => stalled.has(name) || shown.has(name) || lastExerciseDate.has(name) && daysBetween(lastExerciseDate.get(name), context.date) < 5) : rankedExercises(group));
+    // Two or three shoulder parts take turns within one list: Ramena next to
+    // chest is one group, not three (Petr 2026-11-07).
+    const parts = focusMuscles.flatMap((group, i) => SHOULDER_PARTS.includes(group) ? [i] : []);
+    if (parts.length > 1) {
+      const lists = parts.map(i => ranked[i]), longest = Math.max(...lists.map(list => list.length));
+      ranked[parts[0]] = Array.from({ length: longest }, (_, k) => lists.map(list => list[k])).flat().filter(Boolean);
+      for (const i of parts.slice(1).reverse()) ranked.splice(i, 1);
+    }
+    const next = ranked.map(() => 0);
     exercises = [];
-    const total = Math.max(focusMuscles.length, maxExercises);
+    const total = Math.max(ranked.length, maxExercises);
     for (let added = true; added && exercises.length < total;) {
       added = false;
       for (let g = 0; g < ranked.length && exercises.length < total; g++) {
@@ -1687,7 +1700,10 @@ export function generateStrengthPlan(context, options = {}) {
     loadEstimates[i].sets = rows.filter(r => r[0] === 'WORK' && r[1] === loadEstimates[i].exercise).length;
     if (!loadEstimates[i].sets) loadEstimates.splice(i, 1);
   }
-  const focusLabels = focusMuscles?.map(id => FOCUS_GROUPS[id].label).join(', ');
+  // All three shoulder parts read as Ramena, the way the app picks them.
+  const wholeShoulder = focusMuscles && SHOULDER_PARTS.every(id => focusMuscles.includes(id));
+  const focusLabels = focusMuscles?.filter(id => !wholeShoulder || !SHOULDER_PARTS.slice(1).includes(id))
+    .map(id => wholeShoulder && id === SHOULDER_PARTS[0] ? L('Ramena', 'Shoulders') : FOCUS_GROUPS[id].label).join(', ');
   const legCaution = explicitLegs && nearRide.protect;
   const cautionText = legCaution ? nearRide.reason + L(' Nohy proto mají nejvýše 3 série a je potřeba u nich držet rezervu 2–3 opakování.', ' So the legs get at most 3 sets and you should keep 2–3 reps in reserve on them.') : '';
   const baseRationale = focusMuscles ? L('Zvolené partie: ', 'Chosen muscle groups: ') + focusLabels + L('. Cviky zohledňují nedávné posilování, regeneraci a cyklistickou zátěž. ', '. The exercises take recent strength work, recovery and cycling load into account. ') + cautionText : chosen.rationale + (cautionText ? ' ' + cautionText : '');

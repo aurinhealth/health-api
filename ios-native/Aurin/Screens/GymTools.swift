@@ -390,19 +390,29 @@ struct GymBuilderView: View {
 
             if focus == "muscles" {
                 Card {
-                    Text(L10n.f("Vybráno %@ z 5", String(muscles.count)))
+                    Text(L10n.f("Vybráno %@ z 5", String(BodyFigure.choiceCount(muscles))))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                     if let figure = MuscleModelStore.shared.figure {
                         // Fixed front and back of the 3D figure; a tap picks the muscle.
                         MuscleFigureFixedPair(figure: figure, colors: MuscleFigureFixedPair.colors(Dictionary(uniqueKeysWithValues: muscles.map { ($0, Palette.green) }))) {
-                            toggle(MuscleFatigue.bodyId($0))
+                            toggle(BodyFigure.choice(MuscleFatigue.bodyId($0)))
                         }
                         .frame(height: 320)
                     } else {
-                        BodyMap(selected: muscles, onTap: toggle, height: 280)
+                        BodyMap(selected: muscles, onTap: { toggle(BodyFigure.choice($0)) }, height: 280)
                     }
-                    ChipFlow(items: BodyFigure.muscles.map { $0.id }, label: BodyFigure.label, isOn: { muscles.contains($0) }, toggle: toggle,
-                             mark: { model.muscles?.tired(body: $0)?.color })
+                    ChipFlow(items: BodyFigure.choices, label: BodyFigure.label, isOn: { !muscles.isDisjoint(with: BodyFigure.ids($0)) }, toggle: toggle,
+                             mark: { BodyFigure.ids($0).compactMap { model.muscles?.tired(body: $0)?.color }.first })
+                    if !muscles.isDisjoint(with: BodyFigure.shoulders) {
+                        // The shoulder's parts, all on: only who knows them picks fewer.
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Ramena · celá, nebo jen některé části").font(Typo.caption).foregroundStyle(Palette.muted)
+                            ChipFlow(items: BodyFigure.shoulders, label: BodyFigure.partLabel, isOn: { muscles.contains($0) },
+                                     toggle: { muscles.formSymmetricDifference([$0]) })
+                        }
+                        .padding(12)
+                        .background(Palette.ink.opacity(0.04), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
                     if model.muscles.map({ !$0.tired.isEmpty }) == true {
                         HStack(spacing: 6) {
                             Circle().fill(Palette.rust).frame(width: 7, height: 7)
@@ -475,8 +485,10 @@ struct GymBuilderView: View {
         }
     }
 
-    private func toggle(_ id: String) {
-        if muscles.contains(id) { muscles.remove(id) } else if muscles.count < 5 { muscles.insert(id) }
+    /// A choice on or off: Ramena turns all three parts of the shoulder.
+    private func toggle(_ choice: String) {
+        let ids = BodyFigure.ids(choice)
+        if !muscles.isDisjoint(with: ids) { muscles.subtract(ids) } else if BodyFigure.choiceCount(muscles) < 5 { muscles.formUnion(ids) }
     }
 
     // MARK: Proposal
