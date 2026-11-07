@@ -349,3 +349,13 @@ test("a Sandbox purchase gives Pro on the live server only to the owner and the 
   assert.equal((await subscriptionStatus(live)).plan, "ai");
   assert.equal((await storePurchase(live)).active, true);
 });
+
+test("a paying tester's TestFlight purchase does not push out the App Store subscription", async () => {
+  const { raw, user } = setup();
+  const env = user(1);
+  const token = await appAccountToken(env);
+  await saveAppTransaction(env, { signedTransaction: jws(transaction({ appAccountToken: token, environment: "Production", offerType: undefined, expiresDate: now + 30 * DAY })) }, { roots });
+  await saveAppTransaction(env, { signedTransaction: jws(transaction({ appAccountToken: token, transactionId: "3000000001", originalTransactionId: "3000000000", signedDate: now + 1000 })) }, { roots });
+  assert.deepEqual([row(raw, 1).store_environment, row(raw, 1).original_transaction_id], ["Production", "2000000000"]);
+  assert.equal((await storePurchase(env)).active, true);
+});

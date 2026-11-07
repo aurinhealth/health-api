@@ -259,14 +259,15 @@ async function claimOriginal(db, userId, tx, fromApple = false) {
 // subscription is there already (claimOriginal keeps the order of each
 // subscription). Another subscription takes the row's place only while it gives Pro,
 // or while the row's own gives none (an expired TestFlight purchase does not
-// push out the App Store one).
+// push out the App Store one). A Sandbox one never pushes out a running App
+// Store one: a paying tester's TestFlight purchase would end their Pro (proActive).
 async function write(db, userId, tx, renewal, type) {
   const { plan, validUntil } = planOf(tx, renewal, type);
   const signedAt = signedAtOf(tx);
   const now = new Date().toISOString();
   const autoRenew = renewal && renewal.autoRenewStatus != null ? (Number(renewal.autoRenewStatus) === 1 ? 1 : 0) : null;
-  await withColumns(db, () => db.prepare("INSERT INTO subscriptions(user_id,plan,valid_until,original_transaction_id,product_id,store_environment,store_signed_at,auto_renew,updated_at,free_trial,offer_type) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,valid_until=excluded.valid_until,original_transaction_id=excluded.original_transaction_id,product_id=excluded.product_id,store_environment=excluded.store_environment,store_signed_at=excluded.store_signed_at,auto_renew=COALESCE(excluded.auto_renew,subscriptions.auto_renew),updated_at=excluded.updated_at,free_trial=excluded.free_trial,offer_type=excluded.offer_type WHERE subscriptions.store_signed_at IS NULL OR (subscriptions.original_transaction_id IS excluded.original_transaction_id AND subscriptions.store_signed_at<=excluded.store_signed_at) OR (subscriptions.original_transaction_id IS NOT excluded.original_transaction_id AND ((excluded.plan='ai' AND excluded.valid_until>?) OR subscriptions.plan<>'ai' OR subscriptions.valid_until IS NULL OR subscriptions.valid_until<=?))")
-    .bind(userId, plan, validUntil, String(tx.originalTransactionId), tx.productId, tx.environment, signedAt, autoRenew, now, Number(tx.offerType) === 1 || tx.offerDiscountType === 'FREE_TRIAL' ? 1 : 0, Number(tx.offerType) > 0 ? Number(tx.offerType) : null, now, now).run());
+  await withColumns(db, () => db.prepare("INSERT INTO subscriptions(user_id,plan,valid_until,original_transaction_id,product_id,store_environment,store_signed_at,auto_renew,updated_at,free_trial,offer_type) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,valid_until=excluded.valid_until,original_transaction_id=excluded.original_transaction_id,product_id=excluded.product_id,store_environment=excluded.store_environment,store_signed_at=excluded.store_signed_at,auto_renew=COALESCE(excluded.auto_renew,subscriptions.auto_renew),updated_at=excluded.updated_at,free_trial=excluded.free_trial,offer_type=excluded.offer_type WHERE subscriptions.store_signed_at IS NULL OR (subscriptions.original_transaction_id IS excluded.original_transaction_id AND subscriptions.store_signed_at<=excluded.store_signed_at) OR (subscriptions.original_transaction_id IS NOT excluded.original_transaction_id AND ((excluded.plan='ai' AND excluded.valid_until>? AND NOT (excluded.store_environment='Sandbox' AND subscriptions.store_environment IS NOT 'Sandbox' AND subscriptions.plan='ai' AND subscriptions.valid_until>?)) OR subscriptions.plan<>'ai' OR subscriptions.valid_until IS NULL OR subscriptions.valid_until<=?))")
+    .bind(userId, plan, validUntil, String(tx.originalTransactionId), tx.productId, tx.environment, signedAt, autoRenew, now, Number(tx.offerType) === 1 || tx.offerDiscountType === 'FREE_TRIAL' ? 1 : 0, Number(tx.offerType) > 0 ? Number(tx.offerType) : null, now, now, now).run());
   return { plan, validUntil };
 }
 
