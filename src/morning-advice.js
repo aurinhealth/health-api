@@ -7,6 +7,7 @@
 // about and the hard session of tomorrow. push.js readinessMessage turns the
 // signals into the title and the body; entrypoint.js morningContext reads them.
 import { L, plural } from "./lang.js";
+import { PAIN_WORDS } from "./pain-words.js";
 
 const shiftDay = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -21,8 +22,8 @@ const TRAINING_MINUTES = 20;
 const LONG_DAY_MINUTES = 150;
 // Intervals.icu's form, where its "high risk" zone begins.
 const LOW_FORM = -25;
-// A pain or injury noted for the coach (athlete-state.js PASSING, without illness and pregnancy).
-const HURT = /bol[ií]|bolest|zran|natáh|natah|podvrt|výron|vyron|nateklé|natekl|hurt|pain|sore|injur|sprain|strain/i;
+// A pain or injury noted for the coach (pain-words.js, without illness and pregnancy).
+const HURT = PAIN_WORDS;
 
 // The days in a row with training up to yesterday, and whether they were all gym.
 export function trainingStreak(activities = [], date) {
