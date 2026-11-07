@@ -786,6 +786,8 @@ struct FormLines: View {
 
 struct VO2maxWidget: View {
     let vo2: TrainingSnapshot.VO2max
+    /// Training's day: the scale ends "today" only when the last estimate is from it.
+    var today: String? = nil
     var size: WidgetSize = .small
 
     var body: some View {
@@ -800,7 +802,7 @@ struct VO2maxWidget: View {
                     Text("půl roku").font(Typo.caption).foregroundStyle(Palette.faint)
                 }
             } chart: { height in
-                VO2maxLine(values: vo2.series.map(\.value), height: height)
+                VO2maxLine(values: vo2.series.map(\.value), last: vo2.series.last?.date, today: today, height: height)
             }
         }
     }
@@ -808,8 +810,11 @@ struct VO2maxWidget: View {
 
 /// VO2max over half a year: a line only, on a scale at least ±3 ml/kg/min
 /// around it with its values on the right, so a change of 0.5 stays small.
+/// The time ends at the last estimate's day ("Oct 28"), "today" only when it is.
 struct VO2maxLine: View {
     let values: [Double]
+    var last: String? = nil
+    var today: String? = nil
     var height: CGFloat = 56
 
     var body: some View {
@@ -826,7 +831,7 @@ struct VO2maxLine: View {
                     .padding(.trailing, scaleWidth)
             }
             .frame(height: height)
-            ChartSpan(start: L10n.tr("před půl rokem"))
+            ChartSpan(start: L10n.tr("před půl rokem"), end: last.flatMap { $0 == today ? nil : Fmt.dayMonthShort($0) } ?? L10n.tr("dnes"))
         }
     }
 
@@ -930,7 +935,8 @@ struct ZonesWidget: View {
                     ZoneWeekBars(weeks: weeks, height: 52)
                 }
                 ZoneLegend(week: week)
-                Text(L10n.f("lehká aktivita %@ · WHO 150 min týdně", Fmt.hoursMinutesLong(week.light)))
+                // Why 62 + 28 makes 118 (chart review point 12).
+                Text("Intenzivní a maximální minuty se počítají dvakrát · WHO 150 min týdně")
                     .font(Typo.tiny).foregroundStyle(Palette.faint)
             } else {
                 // An answer from before the weeks were sent.

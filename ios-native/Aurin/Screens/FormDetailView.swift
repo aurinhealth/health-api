@@ -80,7 +80,7 @@ struct FormDetailContent: View {
                 header("VO2max", trailing: vo2.change.map { L10n.f("%@ %@ za 4 týdny", $0 >= 0 ? "↑" : "↓", Fmt.decimal(abs($0))) })
                 HStack(alignment: .bottom, spacing: 16) {
                     Text(Fmt.decimal(vo2.value, digits: vo2.value.rounded() == vo2.value ? 0 : 1)).font(Typo.number(56)).foregroundStyle(Palette.ink)
-                    VO2maxLine(values: vo2.series.map(\.value), height: 56)
+                    VO2maxLine(values: vo2.series.map(\.value), last: vo2.series.last?.date, today: training.date, height: 56)
                 }
                 .padding(.top, 10)
                 Text(verbatim: vo2.caption).font(Typo.small).foregroundStyle(Palette.muted)

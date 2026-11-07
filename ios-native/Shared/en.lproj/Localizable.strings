@@ -567,7 +567,6 @@
 "Bez zaznamenané aktivity, jen běžný pohyb." = "No recorded activity, just everyday movement.";
 "Aktivní minuty v zónách" = "Active zone minutes";
 "tento týden" = "this week";
-"lehká aktivita %@ · WHO 150 min týdně" = "light activity %@ · WHO 150 min a week";
 "doporučení splněno" = "recommendation met";
 "chybí %@ min" = "%@ min to go";
 "Čas v zónách zatím není k dispozici. Počítá se z celodenního tepu z Google Health nebo Apple Health." = "Time in zones isn't available yet. It's worked out from all-day heart rate in Google Health or Apple Health.";
@@ -4061,3 +4060,4 @@
 "trend" = "trend";
 "rychlejší ↑" = "faster ↑";
 "tvým tempem" = "at your pace";
+"Intenzivní a maximální minuty se počítají dvakrát · WHO 150 min týdně" = "Vigorous and peak minutes count twice · WHO 150 min a week";
