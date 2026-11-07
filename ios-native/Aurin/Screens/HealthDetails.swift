@@ -479,6 +479,10 @@ struct WeightDetailContent: View {
                         TrendDotsChart(raw: raw, trend: smoothed(raw), goal: goal, lo: lo, hi: hi, height: 160,
                                        scale: scaleTicks(lo, hi, extra: goalTick))
                         ChartDates(marks: monthMarks(w.series.map(\.date)), trailing: scaleWidth)
+                        ChartLegend(items: [ChartLegend.Item(color: Palette.amberBar.opacity(0.6), text: L10n.tr("vážení"), mark: .dot),
+                                            ChartLegend.Item(color: Palette.amber, text: L10n.tr("trend"))]
+                                    + (goal == nil ? [] : [ChartLegend.Item(color: Palette.green, text: L10n.tr("cíl"), mark: .dashedLine)]))
+                            .padding(.top, 4)
                     }
                 }
                 .padding(.top, 20)

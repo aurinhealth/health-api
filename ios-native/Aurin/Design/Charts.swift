@@ -6,6 +6,9 @@ import SwiftUI
 struct BarStyle {
     var fill: Color
     var dashed = false
+    /// A dashed bar's part already done, filled from the bottom (this week's
+    /// load inside its plan).
+    var done: Double? = nil
 }
 
 /// Text in and around a chart: the app's smallest size (Typo.tiny), never less.
@@ -100,10 +103,18 @@ struct ChartDates: View {
     }
 }
 
-/// A row of short coloured lines with their names ("— Fitness — Fatigue"),
+/// A row of marks with their names ("— Fitness — Fatigue", "■ done ⬚ planned"),
 /// then an optional note on the right ("6 wk") when the row has room for it.
 struct ChartLegend: View {
-    let items: [(color: Color, text: String)]
+    enum Mark { case line, dashedLine, dot, bar, dashedBar }
+
+    struct Item {
+        let color: Color
+        let text: String
+        var mark: Mark = .line
+    }
+
+    let items: [Item]
     var note: String? = nil
 
     var body: some View {
@@ -119,12 +130,27 @@ struct ChartLegend: View {
         HStack(spacing: 8) {
             ForEach(items.indices, id: \.self) { i in
                 HStack(spacing: 4) {
-                    Capsule().fill(items[i].color).frame(width: 10, height: 2.5)
+                    mark(items[i])
                     Text(verbatim: items[i].text).fixedSize()
                 }
             }
             Spacer(minLength: note == nil ? 0 : 6)
             if let note { Text(verbatim: note).fixedSize() }
+        }
+    }
+
+    @ViewBuilder private func mark(_ item: Item) -> some View {
+        switch item.mark {
+        case .line:
+            Capsule().fill(item.color).frame(width: 10, height: 2.5)
+        case .dashedLine:
+            DashedLine().stroke(item.color, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])).frame(width: 12, height: 2)
+        case .dot:
+            Circle().fill(item.color).frame(width: 5, height: 5)
+        case .bar:
+            RoundedRectangle(cornerRadius: 2).fill(item.color).frame(width: 9, height: 9)
+        case .dashedBar:
+            RoundedRectangle(cornerRadius: 2).strokeBorder(item.color, style: StrokeStyle(lineWidth: 1, dash: [2, 1.5])).frame(width: 9, height: 9)
         }
     }
 }
@@ -196,6 +222,12 @@ struct BarChart: View {
                                 RoundedRectangle(cornerRadius: 2.5)
                                     .strokeBorder(style.fill.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
                                     .frame(height: barHeight)
+                                    .overlay(alignment: .bottom) {
+                                        if let done = style.done, done > 0 {
+                                            RoundedRectangle(cornerRadius: 2.5).fill(style.fill)
+                                                .frame(height: min(barHeight, max(2.5, h * scaled(done, lo, top))))
+                                        }
+                                    }
                             } else {
                                 RoundedRectangle(cornerRadius: 2.5).fill(style.fill).frame(height: barHeight)
                             }

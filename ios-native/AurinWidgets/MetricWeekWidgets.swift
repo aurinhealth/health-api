@@ -299,22 +299,30 @@ struct WeekWidgetView: View {
     }
 
     /// Done training as solid bars in the day's readiness colour, what the
-    /// plan still has as dashed ones; today's letter in a dark dot, or in a
-    /// ring on a tinted Home Screen, where the dot and the letter get one colour.
+    /// plan still has as dashed ones (on a day with both, the done part solid
+    /// inside the dashed whole); today's letter in a dark dot, or in a ring on
+    /// a tinted Home Screen, where the dot and the letter get one colour.
     private func bars(_ week: WidgetWeek) -> some View {
-        let most = max(60, week.days.map { max($0.minutes, $0.planned) }.max() ?? 0)
+        let most = max(60, week.days.map { $0.minutes + $0.planned }.max() ?? 0)
         return HStack(alignment: .bottom, spacing: 8) {
             ForEach(week.days, id: \.date) { day in
                 VStack(spacing: 5) {
-                    if day.minutes > 0 {
-                        RoundedRectangle(cornerRadius: 5).fill(color(day))
-                            .frame(height: max(5, 112 * day.minutes / most))
-                            .widgetAccentable()
-                    } else if day.planned > 0 {
+                    if day.planned > 0 {
                         RoundedRectangle(cornerRadius: 5)
                             .strokeBorder(W.amber.opacity(0.8), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
                             .background(RoundedRectangle(cornerRadius: 5).fill(W.amber.opacity(0.07)))
-                            .frame(height: 112 * day.planned / most)
+                            .frame(height: 112 * (day.minutes + day.planned) / most)
+                            .overlay(alignment: .bottom) {
+                                if day.minutes > 0 {
+                                    RoundedRectangle(cornerRadius: 5).fill(color(day))
+                                        .frame(height: max(5, 112 * day.minutes / most))
+                                        .widgetAccentable()
+                                }
+                            }
+                    } else if day.minutes > 0 {
+                        RoundedRectangle(cornerRadius: 5).fill(color(day))
+                            .frame(height: max(5, 112 * day.minutes / most))
+                            .widgetAccentable()
                     } else {
                         RoundedRectangle(cornerRadius: 3).fill(W.muted.opacity(0.18)).frame(height: 5)
                     }

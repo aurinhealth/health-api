@@ -108,18 +108,27 @@ struct StepsDetailContent: View {
         }
     }
 
+    /// The running total like the tile: past hours filled, the current hour
+    /// highlighted, the hours to come dashed at the usual total by then.
     private func dayChart(_ hourly: [Double]) -> some View {
         let now = steps.hour ?? 23
         var running: Double = 0
         let total: [Double] = hourly.map { v in running += v; return running }
-        let bars: [Bar] = (6...22).map { h in
-            if h <= now {
-                return Bar(id: String(h), label: String(h), value: total[h], color: h == now ? Palette.amberBar : Palette.sand)
-            }
-            let usual = steps.usual.map { $0[h] } ?? total[now]
-            return Bar(id: String(h), label: String(h), value: Swift.max(total[now], usual), color: Palette.amberBar.opacity(0.22))
+        let hours = Array(6...22)
+        let values = hours.map { h in h <= now ? total[h] : Swift.max(total[now], steps.usual.map { $0[h] } ?? total[now]) }
+        let styles = hours.map { h in
+            h < now ? BarStyle(fill: Palette.sand) : h == now ? BarStyle(fill: Palette.amberBar) : BarStyle(fill: Palette.amberBar, dashed: true)
         }
-        return chart(bars, labels: ["6", "10", "14", "18", "22"], height: 170)
+        let top = Swift.max(values.max() ?? 0, steps.goal) * 1.08
+        let goal = ScaleTick(value: steps.goal, text: Fmt.int(steps.goal), color: Palette.muted, line: false, name: L10n.tr("cíl"))
+        return VStack(alignment: .leading, spacing: 10) {
+            BarChart(values: values, styles: styles, hi: top, target: steps.goal,
+                     labels: hours.map { [6, 10, 14, 18, 22].contains($0) ? String($0) : "" },
+                     highlighted: hours.firstIndex(of: now),
+                     spacing: 3, height: 170,
+                     scale: scaleTicks(0, top, count: 4, extra: [goal]))
+            ChartLegend(items: StepsWidget.dayLegend(steps))
+        }
     }
 
     // MARK: Week and 30 days
