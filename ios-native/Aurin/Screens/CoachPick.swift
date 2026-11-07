@@ -498,8 +498,8 @@ struct CoachPickCard: View {
     private func reload() async {
         guard !model.demo else { return }
         if let fresh = try? await model.api.coachPick() { pick = fresh }
-        // The AI's workout comes some seconds after the answer: asked again for it, at most twice.
-        for _ in 0..<2 where pick?.aiPending == true {
+        // The AI's workout comes some seconds after the answer (within ~25 s): asked again for it, at most four times.
+        for _ in 0..<4 where pick?.aiPending == true {
             try? await Task.sleep(for: .seconds(8))
             guard !Task.isCancelled else { return }
             if let fresh = try? await model.api.coachPick() { pick = fresh }

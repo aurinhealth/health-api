@@ -170,9 +170,9 @@ extension AppModel {
     }
 
     /// Today of the shown day from the server, with the waiting writes over it.
-    /// onlyIfChanged (opening the app, pulling down): the coach's cards ask again
-    /// only when the answer differs, or ten minutes on (the forecast, a choice
-    /// made on another device). A write or a setting always asks them again.
+    /// onlyIfChanged (opening the app): the coach's cards ask again only when
+    /// the answer differs, or ten minutes on (the forecast, a choice made on
+    /// another device). Pulling down, a write or a setting always asks them again.
     func loadToday(onlyIfChanged: Bool = false) async throws {
         let settled = todayScreen.settlingIds
         let day = selectedDate
