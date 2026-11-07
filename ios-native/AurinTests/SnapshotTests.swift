@@ -1131,6 +1131,8 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testTrainingPlanScreens() throws {
+        // Many screens in one test; on a busy runner it went over the 5-minute default (410 s).
+        executionTimeAllowance = 600
         func block(_ minutes: Double, _ low: Double, _ high: Double, repeats: Int = 1) -> String {
             #"{"repeats":\#(repeats),"steps":[{"durationSeconds":\#(minutes * 60),"percentLow":\#(low),"percentHigh":\#(high)}]}"#
         }

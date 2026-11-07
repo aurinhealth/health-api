@@ -54,7 +54,7 @@ test('Nemoc or Zranění without an end day: "Je ti už líp?" after 3 or 7 days
   assert.equal(statusCheck({ ...sick, status: 'on_break' }, '2026-10-30'), null);
   assert.equal(statusCheck({ ...sick, status: 'active' }, '2026-10-30'), null);
   const src = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
-  assert.match(src, /askIfBetter=!!statusCheck\(athleteState,date\)&&!conversation\.length&&!otherToday\.length/);
+  assert.match(src, /askIfBetter=!ghost&&!!statusCheck\(athleteState,date\)&&!conversation\.length&&!otherToday\.length/);
 });
 
 test('the coach gets the day a pain was told or last confirmed, and the check comes first on Today (audit 4.6)', async () => {
