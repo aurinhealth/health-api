@@ -133,11 +133,14 @@ enum SystemAlarm {
     }
 
     #if canImport(AlarmKit)
+    /// Every alarm of the app but the watch's backup: also one whose id was
+    /// never saved (a sync that failed halfway), so none rings once turned off.
     @available(iOS 26, *)
     private static func cancelSaved(_ manager: AlarmManager) {
-        for text in UserDefaults.standard.stringArray(forKey: idsKey) ?? [] {
-            if let id = UUID(uuidString: text) { try? manager.cancel(id: id) }
-        }
+        let backup = UserDefaults.standard.string(forKey: backupKey).flatMap(UUID.init(uuidString:))
+        var ids = Set((UserDefaults.standard.stringArray(forKey: idsKey) ?? []).compactMap(UUID.init(uuidString:)))
+        if let alarms = try? manager.alarms { ids.formUnion(alarms.map(\.id)) }
+        for id in ids where id != backup { try? manager.cancel(id: id) }
     }
 
     @available(iOS 26, *)

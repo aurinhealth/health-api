@@ -315,6 +315,18 @@ struct ChatSummary: Decodable, Equatable, Identifiable {
     let messages: Int?
 }
 
+/// One chat found by POST /app/api/assistant/chats/search (src/assistant-chats.js):
+/// its newest message with the word, and a piece of text around it.
+struct ChatSearchResult: Decodable, Equatable, Identifiable {
+    let chatId: Int
+    let title: String?
+    let messageId: Int
+    let role: String
+    let createdAt: String?
+    let snippet: String
+    var id: Int { messageId }
+}
+
 struct ChatMessage: Decodable, Equatable, Identifiable {
     let role: String
     let content: String

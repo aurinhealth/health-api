@@ -232,6 +232,11 @@ function gymBlock(r, { athlete = undefined, aimed = false } = {}) {
 // A pool swimmer (CSS 1:45/100 m): a CSS set yesterday, technique today, a long swim in two days.
 // A regular swimmer (four swims in eight days), so the app's coach does not
 // take them for a beginner and ease the intervals they ask for (run 43, S30).
+const RUNNER = { focus: { sport: 'running', sportLabel: 'Běh' }, thresholds: { runThresholdPace: 300 } };
+// An easy session today and the long one in two days: a question about zone 2 needs no change of the plan.
+const EASY_RUN_DAY = date => ({ [date]: [{ id: 'planned:9501', name: 'Lehký běh 40 min', type: 'Run', durationHours: 0.67, tss: 35 }], [shift(date, 3)]: [{ id: 'planned:9502', name: 'Dlouhý běh', type: 'Run', durationHours: 1.25, tss: 70 }] });
+const RUNS_DONE = date => ({ [shift(date, -2)]: [{ id: 'eval-run-1', name: 'Lehký běh', type: 'Run', durationHours: 0.5, tss: 30 }], [shift(date, -5)]: [{ id: 'eval-run-2', name: 'Lehký běh', type: 'Run', durationHours: 0.5, tss: 30 }] });
+const EASY_RIDE_DAY = date => ({ [date]: [{ id: 'planned:9511', name: 'Endurance 90 min', type: 'Ride', durationHours: 1.5, tss: 60 }], [shift(date, 2)]: [{ id: 'planned:9002', name: 'Long ride', type: 'Ride', durationHours: 3, tss: 170 }] });
 const SWIMMER = { focus: { sport: 'swimming', sportLabel: 'Plavání' }, thresholds: { swimCss: 105, swimZones: swimZones(105), poolLength: 25 },
   done: date => ({ [shift(date, -1)]: [{ id: 'eval-swim-1', name: 'CSS 10×100 m', type: 'Swim', durationHours: 1, tss: 70 }], [shift(date, -3)]: [{ id: 'eval-swim-2', name: 'Vytrvalost 2,5 km', type: 'Swim', durationHours: 1, tss: 55 }],
     [shift(date, -6)]: [{ id: 'eval-swim-3', name: 'Technika 2 km', type: 'Swim', durationHours: 0.75, tss: 35 }], [shift(date, -8)]: [{ id: 'eval-swim-4', name: 'Vytrvalost 2,5 km', type: 'Swim', durationHours: 1, tss: 55 }] }),
@@ -460,7 +465,19 @@ export const COACH_EVAL_SCENARIOS = [
       return [safety('nikdy sám ve volné vodě', says(r, NOT_ALONE)),
         quality('karta plavání ve volné vodě na zítřek', card?.openWater === true, card ? (card.openWater ? 'volná voda' : 'bazén') : 'bez karty'), quality('bójka nebo výrazná čepice', says(r, /bójk|čepic|buoy|cap/i)),
         // Run 43: a full hour in a lake of unknown temperature; first ask and swim 15–20 min close to the shore.
-        quality('neznámá teplota vody: zeptá se a první plavání nejvýš 20 min', says(r, /teplot|temperat/i) && card?.minutes <= 20, card ? card.minutes + ' min' : '')]; } },
+        // Run 50: "jak teplá je voda… Kolik má jezero °C?" asks too.
+        quality('neznámá teplota vody: zeptá se a první plavání nejvýš 20 min', says(r, /teplot|tepl[áéo]|°C|temperat|how warm/i) && card?.minutes <= 20, card ? card.minutes + ' min' : '')]; } },
+  // Profile → Experience changes how the coach explains, never the dose (team review 2026-11-07, point 8).
+  // Run 50: an easy day today, so the 48 h rule does not cancel a VO2max beside the explanation.
+  { id: 'S44', title: 'Začínající běžec: proč zóna 2', message: 'Proč mám běhat tak pomalu, v zóně 2?', athlete: { ...RUNNER, plan: EASY_RUN_DAY, done: RUNS_DONE },
+    context: () => ({ experience: { ride: 'beginner', run: 'beginner', swim: 'beginner', gym: 'beginner' } }),
+    checks: r => [quality('řekne důvod', says(r, /protože|proto|aby |díky|because|so that/i)),
+      quality('každou zkratku vysvětlí (VT1, LT1, FatMax, mitochondrie bez vysvětlení ne)', !says(r, /\b(VT1|LT1|FatMax)\b/i) || says(r, /(VT1|LT1|FatMax)[^.]{0,6}(\(|=|–|-|tedy|neboli|což)/i)),
+      quality('jedna rada k technice nebo úsilí (mluvit, RPE, dech, krok)', says(r, /mluvit|povídat|RPE|dech|krok|kadenc|talk|breath/i)), noUnaskedCard(r)] },
+  { id: 'S45', title: 'Zkušený cyklista: proč zóna 2', message: 'Proč mám jezdit tolik v zóně 2?', athlete: { plan: EASY_RIDE_DAY },
+    context: () => ({ experience: { ride: 'experienced', run: 'regular', swim: 'beginner', gym: 'regular' } }),
+    checks: r => [quality('dá čísla (W, % FTP nebo tep)', says(r, /\d+\s*(W|%|tep|bpm)/i)),
+      quality('bez základů pro začátečníky', !says(r, /co je zóna 2|zóna 2 (?:je|znamená) (?:pásmo|rozsah)|what zone 2 is/i)), noUnaskedCard(r)] },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',
@@ -486,21 +503,27 @@ const luna = (r, { cards = false } = {}) => [quality('odpovídá lehký model (L
 // At the start of a word: "bezprostředním" is no Wednesday (run 19, S12).
 const WEEKDAYS = { cs: [/(?<!\p{L})neděl/iu, /(?<!\p{L})pondě?l/iu, /(?<!\p{L})úter[ýn]/iu, /(?<!\p{L})střed(?![nň])/iu, /(?<!\p{L})čtvrt(?:ek|ku|kem|eční)/iu, /(?<!\p{L})pát(?:ek|ku|kem|eční)/iu, /(?<!\p{L})sobot/iu], en: [/sunday/i, /monday/i, /tuesday/i, /wednesday/i, /thursday/i, /friday/i, /saturday/i] };
 const weekdayOf = date => new Date(date + 'T12:00:00Z').getUTCDay();
+const globalRe = re => new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g');
+// Run 50, S28: "příští středu" or "středu 28. 10." on a Wednesday is next week, not today.
+const laterWeek = (text, i, date) => { if (/(?:příští|next)\s+$/i.test(text.slice(0, i))) return true;
+  // The sentence split may cut "28. 10." after the day.
+  const m = /^\p{L}*,?\s+(\d{1,2})\.(?:\s?(\d{1,2})\.)?/u.exec(text.slice(i)); return !!m && (+m[1] !== +date.slice(8, 10) || (m[2] != null && +m[2] !== +date.slice(5, 7))); };
 // The days in the order the sentence names them.
 function dayRefs(sentence, date, planned = {}) {
   const text = String(sentence), found = [];
   // "před páteční dlouhou jízdou" gives a reason, the sentence is not about Friday (run 19, S07).
   // "po páteční jízdě" is about the day after it (run 28, S15).
-  const add = (re, d) => { for (const m of text.matchAll(new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g'))) if (!/(?:před|po|before|after)\s+$/i.test(text.slice(0, m.index))) found.push([m.index, d]); };
+  const add = (re, d, skip = () => false) => { for (const m of text.matchAll(globalRe(re))) if (!/(?:před|po|before|after)\s+$/i.test(text.slice(0, m.index)) && !skip(m.index)) found.push([m.index, d]); };
   add(/pozítř\p{L}*|day after tomorrow/iu, shift(date, 2));
   // "zítra, pozítří i na den potom": the day after the day after tomorrow (run 41, S15).
-  add(/den potom|the day after that/iu, shift(date, 3));
+  // Run 50, S15: "Den poté bych dal 45 min lehkého zotavení".
+  add(/den po(?:tom|té)(?!\p{L})|the day after that/iu, shift(date, 3));
   // "Den po dlouhé jízdě": the day after the planned long session (run 42, S15).
   const long = Object.keys(planned).sort().find(d => (planned[d] || []).some(e => Number(e.durationHours) >= 2.5 || /long|dlouh/i.test(e.name || '')));
   if (long) add(/den po (?:té |tě )?(?:dlouhé|tříhodinové|delší) (?:jízdě|vyjížďce)|day after the long (?:ride|session)/iu, shift(long, 1));
   add(/(?<!\p{L})dnes|dnešn|today|tonight/iu, date);
   add(/(?<!po)zítř|(?<!po)zítra|(?<!after )tomorrow/i, shift(date, 1));
-  for (let k = 0; k <= 13; k++) { const d = shift(date, k), w = weekdayOf(d); add(WEEKDAYS.cs[w], d); add(WEEKDAYS.en[w], d); }
+  for (let k = 0; k <= 13; k++) { const d = shift(date, k), w = weekdayOf(d), skip = k ? undefined : i => laterWeek(text, i, date); add(WEEKDAYS.cs[w], d, skip); add(WEEKDAYS.en[w], d, skip); }
   return [...new Set(found.sort((a, b) => a[0] - b[0] || a[1].localeCompare(b[1])).map(([, d]) => d))];
 }
 const sentences = text => String(text || '').replace(/\*\*|__/g, '').split(/(?<=[.!?])\s+|\n+/).map(x => x.trim()).filter(Boolean);
@@ -545,7 +568,7 @@ function changeDay(text, date, planned) {
 // its words in a sentence that names no day at all. An alternative ("lehká
 // vytrvalost by byla šetrnější") does not speak of a card.
 function silentCards(r, planned) {
-  const list = sentences(r.answer).filter(x => !SECOND_GUESS.test(x)).map(x => ({ x, days: dayRefs(x, r.date, planned) }));
+  const list = sentences(r.answer).filter(x => !SECOND_GUESS.test(x) && !PREFER.test(x)).map(x => ({ x, days: dayRefs(x, r.date, planned) }));
   return r.kept.filter(a => ['workout', 'rest', 'move'].includes(a.type) && !companion(r, a))
     .filter(a => !list.some(({ x, days }) => cardWords(a).test(x) && (days.some(d => cardDays(a, r, planned).includes(d)) || (!days.length && (a.date || r.date) === r.date))))
     .map(a => [a.type, a.kind || a.sport, a.date].filter(Boolean).join(' '));
@@ -558,14 +581,17 @@ function replacedWithoutRest(actions, planned) {
     .filter(e => eventSport(e) === w.sport && !actions.some(a => ['rest', 'move'].includes(a.type) && a.eventId === e.id)).map(e => w.date + ' ' + e.name));
 }
 // Today's weekday name is fine when the athlete asked for that weekday (next Friday, asked on a Friday).
-const namesToday = (r, scenario) => !WEEKDAYS.cs[weekdayOf(r.date)].test(scenario.message || '') && !WEEKDAYS.en[weekdayOf(r.date)].test(scenario.message || '') && sentences(r.answer).some(x => WEEKDAYS.cs[weekdayOf(r.date)].test(x) || WEEKDAYS.en[weekdayOf(r.date)].test(x));
+const namesToday = (r, scenario) => { const w = weekdayOf(r.date), res = [WEEKDAYS.cs[w], WEEKDAYS.en[w]];
+  return !res.some(re => re.test(scenario.message || '')) && sentences(r.answer).some(x => res.some(re => [...x.matchAll(globalRe(re))].some(m => !laterWeek(x, m.index, r.date)))); };
 // Runs 21 and 23, S09: "Předchozí doporučení VO2max bych tedy změnil", "Opravuji tím své předchozí doporučení".
 const SELF_BLAME = /(?:moje|mé|mý|svoje|své) (?:předchozí|dřívější|původní|první) doporučení|(?:předchozí|dřívější|původní) doporučení[^.]{0,20}?bych (?:tedy )?(?:změnil|upravil|opravil)|opravuji (?:tím )?(?:své |svoje |moje )?(?:předchozí|dřívější|původní)|příliš agresivn|byl jsem příliš|my (?:earlier|previous|first) (?:recommendation|advice)|too aggressive/iu;
 // Run 23, S28: "návrh přesunu připravím v navazující zprávě": every change is a card now, not a later message.
 const LATER_MESSAGE = /(?:v )?(?:navazující|další|příští|následující) zpráv|připravím (?:ti )?(?:návrh|přesun|úpravu)|pošlu (?:ti )?(?:návrh|přesun|úpravu)|(?:jako|v) dalším? krok|vejd(?:ou|e) (?:se )?jen|jen (?:tři|čtyři|pět|\d+) (?:návrh|kart|změn)|(?:počet|limit|sad[ay]) (?:návrh|kart)|(?:sady|této odpovědi) se nevejde|in (?:a|the) (?:next|follow-up|later) message|as a next step|only (?:three|four|five|\d+) (?:proposals|cards|changes)|(?:number|limit) of (?:proposals|cards)/i;
 // Run 20, S21: "vhodnější by bylo přesunout intervaly" right after the card.
 // Run 22, S21: "pro intervaly bych raději volil jiný den" right after the card.
-const SECOND_GUESS = /(?:lepší|šetrnější|rozumnější|vhodnější) (?:volb|alternativ|by byl)|(?:šetrnější|lepší|rozumnější|vhodnější) volbou|(?:lepší|vhodnější|rozumnější) by (?:byl|bylo|byla)|raději bych (?:volil|vybral|zvolil|dal)|bych raději|jinak bych (?:je |ho |to )?(?:zařadil|dal|volil|vybral)|bych (?:je |ho |intervaly )?jinak (?:zařadil|dal|volil|vybral)|bych intervaly zařadil až (?:jiný den|jindy)|better (?:option|choice|alternative)|would be (?:better|more suitable)|would rather/i;
+const SECOND_GUESS = /(?:lepší|šetrnější|rozumnější|vhodnější) (?:volb|alternativ|by byl)|(?:šetrnější|lepší|rozumnější|vhodnější) volbou|(?:lepší|vhodnější|rozumnější) by (?:byl|bylo|byla)|jinak bych (?:je |ho |to )?(?:zařadil|dal|volil|vybral)|bych (?:je |ho |intervaly )?jinak (?:zařadil|dal|volil|vybral)|bych intervaly zařadil až (?:jiný den|jindy)|better (?:option|choice|alternative)|would be (?:better|more suitable)|would rather/i;
+// "bych raději volil jiný den" doubts a card (run 22, S21); with no card, "zvolil bych raději mírný deficit" is the advice itself (run 50, S13).
+const PREFER = /raději bych (?:volil|vybral|zvolil|dal)|bych raději/i;
 // Sleep in minutes ("spal jsi 290 minut", run 20, S16) instead of hours and minutes.
 const SLEEP_MINUTES = /(?:spal\p{L}*|spánk\p{L}*|spánek|sleep\p{L}*|slept)[^.]{0,25}?\b\d{3}\s*min|\b\d{3}\s*min\p{L}*\s+(?:spánku|sleep)/iu;
 
@@ -587,7 +613,7 @@ function commonChecks(r, scenario) {
     safety('v kalendáři nezůstanou dva tréninky stejného sportu v jeden den', !replacedWithoutRest(r.kept, planned).length, replacedWithoutRest(r.kept, planned).join(', ')),
     quality('o dnešku píše „dnes“, ne název dne', !namesToday(r, scenario)),
     quality('bez sebekritiky', !says(r, SELF_BLAME)),
-    quality('jednoznačné doporučení (bez „lepší by bylo“)', !says(r, SECOND_GUESS)),
+    quality('jednoznačné doporučení (bez „lepší by bylo“)', !says(r, SECOND_GUESS) && !(r.kept.some(a => PLAN_CHANGE.includes(a.type)) && says(r, PREFER))),
     quality('spánek v hodinách a minutách', !says(r, SLEEP_MINUTES)),
     quality('neslibuje návrh v další zprávě', !says(r, LATER_MESSAGE))
   ];

@@ -187,6 +187,35 @@ test("Health: HRV and resting heart rate for the detail charts reach 90 days bac
   assert.equal(h.restingHR.series.length, 90);
 });
 
+test("Health: the HRV chart shows the newest morning's source only (chart review 3)", () => {
+  // WHOOP (RMSSD, untagged) for 30 days, then Apple Watch (SDNN) for 10: the
+  // chart and its 7-day average carry Apple's values only.
+  const rows = Array.from({ length: 40 }, (_, i) => {
+    const offset = i - 39, apple = offset > -10;
+    return { id: day(offset), hrv: apple ? 40 : 90, hrvSource: apple ? "apple-health:sdnn" : "", restingHR: 50 };
+  });
+  const h = buildHealth({ ...input, health: { wellness: rows } });
+  assert.equal(h.hrv.series.length, 10);
+  assert.ok(h.hrv.series.every(p => p.value === 40));
+  assert.equal(h.hrv.week, 40);
+  // A day that has the current source's value beside another's counts by it.
+  const both = rows.map(r => (r.id === day(-15) ? { ...r, hrvBySource: { "": 90, "apple-health:sdnn": 42 } } : r));
+  const b = buildHealth({ ...input, health: { wellness: both } });
+  assert.deepEqual(b.hrv.series[0], { date: day(-15), value: 42 });
+});
+
+test("Health: the sleep index's usual range leaves the rated night out (chart review 1)", () => {
+  // 13 nights of 412 minutes and a short last night: its low index is not part of its range.
+  const short = sessions.map(s => (s.date === DATE ? { ...s, durationMin: 200, timeInBedMin: 220, stages: { DEEP: 40, REM: 40, LIGHT: 110, AWAKE: 10 } } : s));
+  const h = buildHealth({ ...input, sleep: { sessions: short } });
+  const last = h.sleep.index.nights.at(-1).value;
+  assert.ok(last < h.sleep.index.low, `last night ${last} below the range ${h.sleep.index.low}`);
+  // Seven nights before the rated one are needed: 7 shown nights are not enough.
+  const seven = buildHealth({ ...input, sleep: { sessions: sessions.slice(-7) } });
+  assert.equal(seven.sleep.index.nights.length, 7);
+  assert.equal(seven.sleep.index.low, null);
+});
+
 // A 7-hour night and an hour's nap against 8 hours: no debt on Today, and the
 // same on Health (it used to count the nights only).
 test("Health and Today count the same sleep debt, naps included", () => {

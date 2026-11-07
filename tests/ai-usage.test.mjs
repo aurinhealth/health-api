@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { grantAiConsent } from "./helpers/consent.mjs";
 import { scopedDb } from "../src/tenancy.js";
@@ -188,9 +188,17 @@ test("the AI limit reaches the user as a message, and every AI call names its fe
   for (const file of ["coach-assistant", "coach-reflection", "coach-review", "exercise-technique", "food-ai", "food-chat", "food-photo", "gym-adjust"]) {
     const source = readFileSync(new URL(`../src/${file}.js`, import.meta.url), "utf8");
     const calls = source.match(/(?:await|return) callOpenAI\(env, \{/g) || [];
-    const named = source.match(/(?:await|return) callOpenAI\(env, \{ ?feature: ?["'][a-z-]+["']/g) || [];
+    const named = source.match(/(?:await|return) callOpenAI\(env, \{ ?feature: ?(?:["'][a-z-]+["']|COACH_CHAT_FEATURE)/g) || [];
     assert.ok(calls.length && calls.length === named.length, file);
   }
+});
+
+test("every AI feature a caller names is in the one table (ai-features.js)", async () => {
+  const { AI_FEATURES } = await import("../src/ai-features.js");
+  const dir = new URL("../src/", import.meta.url);
+  const names = readdirSync(dir).filter(f => f.endsWith(".js")).flatMap(f => [...readFileSync(new URL(f, dir), "utf8").matchAll(/\bfeature: ?["']([a-z-]+)["']/g)].map(m => m[1]));
+  assert.ok(names.length > 10);
+  for (const name of names) assert.ok(Object.hasOwn(AI_FEATURES, name), name);
 });
 
 test("the AI intro is remembered per account", async () => {

@@ -845,7 +845,9 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
     items.sort((a, b) => a.date.localeCompare(b.date) || (a.slot || 0) - (b.slot || 0));
   }
   const own = items.filter(x => x.sport === sport && (x.slot || 0) === 0);
-  const quality = own.filter(x => x.role === "quality" && x.date !== race);
+  // Three run days or fewer keep one key session, so the week still has an easy run.
+  const days = Number(plan.weekDays?.[weekStart]), runDays = Math.min(own.filter(x => x.date !== race).length, days > 0 ? days : 7);
+  const quality = own.filter(x => x.role === "quality" && x.date !== race).slice(0, sport === "run" && runDays <= 3 ? 1 : undefined);
   // A ride plan's long ride (a gran fondo's up to five hours) needs a day even
   // when the week has no long one: the last easy day, at a weekend if it can.
   const easyDays = own.filter(x => x.role !== "quality" && x.role !== "race" && x.date !== race && !(race && daysBetween(x.date, race) <= 1));
@@ -890,7 +892,6 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
   });
   let kept = out.filter(x => !(x.sport === sport && (x.slot || 0) === 0 && dropped.has(x.date)));
   // Time for fewer days this week: the easy sessions go first, then the long one; key sessions stay.
-  const days = Number(plan.weekDays?.[weekStart]);
   if (days > 0) {
     const mine = kept.filter(x => x.sport === sport && (x.slot || 0) === 0 && x.plan), rank = x => ({ recovery: 0, easy: 1, long: 2 })[x.plan.kind] ?? 9;
     const drop = new Set([...mine].sort((a, b) => rank(a) - rank(b) || b.date.localeCompare(a.date)).filter(x => rank(x) < 9).slice(0, Math.max(0, mine.length - days)));

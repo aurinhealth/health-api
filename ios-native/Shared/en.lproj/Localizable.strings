@@ -886,6 +886,9 @@
 "Zatím nic. Přidej první jídlo dne." = "Nothing yet. Add your first meal of the day.";
 "Zatím tu nic není. Potraviny, které přidáš, se tu objeví příště." = "Nothing here yet. Foods you add will show up here next time.";
 "Zatím žádné konverzace." = "No conversations yet.";
+"Hledat v konverzacích" = "Search conversations";
+"Ty" = "You";
+"Nic jsme nenašli." = "No matches.";
 "Zatím žádné vážení." = "No weigh-ins yet.";
 "Zatím žádné vážení. Klepni a zapiš první." = "No weigh-ins yet. Tap to log your first.";
 "Zavřít" = "Close";
@@ -4057,3 +4060,8 @@
 /* Today: the coach's card without Aurin Pro (CoachTextCard.swift proLine, Today audit 40) */
 "Osobní rada kouče je v Aurin Pro" = "Personal coach advice is in Aurin Pro";
 "Zkušební týden končí %@. Pak je osobní rada kouče v Aurin Pro." = "Your free week ends %@. After that, personal coach advice is in Aurin Pro.";
+
+/* Etiketa read on the iPhone (Data/LabelReader.swift) */
+"Některé hodnoty se nepodařilo přečíst. Doplň je podle etikety." = "Some values couldn't be read. Fill them in from the label.";
+"Hodnoty se nepodařilo přečíst. Vyfoť celou tabulku i s řádkem „na 100 g“, zblízka a rovně." = "Couldn't read the values. Take the whole table with its “per 100 g” row, up close and straight on.";
+"Energie %@ kcal nesedí s makroživinami (≈ %@ kcal). Zkontroluj přepis proti fotce." = "Energy %@ kcal doesn't match the macros (≈ %@ kcal). Check the values against the photo.";

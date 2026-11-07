@@ -438,11 +438,25 @@ function roundToStep(value, step, min = 0, max = null) {
   return Math.round(rounded * 100) / 100;
 }
 
-export function resolveLoad(exercise, value) {
+// step: the exercise's own step when its history shows one (stackStep).
+export function resolveLoad(exercise, value, step = null) {
   exercise = normalizeExerciseName(exercise);
   const meta = EXERCISE_INTELLIGENCE[exercise];
   const rule = loadRule(meta);
-  return roundToStep(value, rule.step, rule.min, rule.max);
+  return roundToStep(value, step || rule.step, rule.min, rule.max);
+}
+
+// A machine or cable stack has its own steps: a lat pulldown may go in 5 kg
+// where a cable goes in 2.5 kg. Once the athlete logged a whole 5 kg instead
+// of a planned load in between (50 kg for a planned 47.5) and the last three
+// sessions are all in whole 5 kg, the exercise steps by 5 kg; a load in
+// between logged again brings back the usual step (Petr 2026-11-07).
+const STACK_UNITS = new Set([LOAD_UNITS.MACHINE_TOTAL_KG, LOAD_UNITS.MACHINE_PER_SIDE_KG, LOAD_UNITS.CABLE_STACK_KG]);
+const whole5 = kg => kg > 0 && Math.abs(kg / 5 - Math.round(kg / 5)) < 1e-9;
+function stackStep(meta, rule, sessions, dates) {
+  if (!STACK_UNITS.has(meta?.loadUnit) || rule.step >= 5) return rule.step;
+  const skipped = dates.some(d => sessions.get(d).some(s => s.planned > 0 && !whole5(s.planned) && whole5(s.kg)));
+  return skipped && dates.slice(0, 3).every(d => sessions.get(d).every(s => whole5(s.kg))) ? 5 : rule.step;
 }
 
 function normalizeRpe(value) {
@@ -515,11 +529,11 @@ export function progressionDecision(rows, exercise, targetReps, loadFactor = 1, 
     if (kg == null || reps == null || !date) continue;
     // A set the plan sent to failure is stored as RPE 10; that is the plan,
     // not a sign the load was too heavy, so its RPE doesn't decide the step.
-    (sessions.get(date) || sessions.set(date, []).get(date)).push({ kg, reps, set: n(r.set_no), rpe: strengthSetOptions(r).toFailure ? null : normalizeRpe(r.rpe) });
+    (sessions.get(date) || sessions.set(date, []).get(date)).push({ kg, reps, planned: n(r.planned_kg), set: n(r.set_no), rpe: strengthSetOptions(r).toFailure ? null : normalizeRpe(r.rpe) });
   }
   const dates = [...sessions.keys()].sort((a, b) => b.localeCompare(a));
   if (!dates.length) return null;
-  const range = parseRepRange(targetReps), meta = EXERCISE_INTELLIGENCE[normalizeExerciseName(exercise)], rule = loadRule(meta), step = rule.step;
+  const range = parseRepRange(targetReps), meta = EXERCISE_INTELLIGENCE[normalizeExerciseName(exercise)], rule = loadRule(meta), step = stackStep(meta, rule, sessions, dates);
   // The working load is the heaviest one that reached the bottom of the range,
   // its sets in the order they were done.
   const topSets = list => {
@@ -558,12 +572,12 @@ export function progressionDecision(rows, exercise, targetReps, loadFactor = 1, 
   // An assisted machine works the other way: progress takes counterweight
   // off, a step back (or a return after a break) adds a step of it.
   if (meta?.loadUnit === LOAD_UNITS.ASSISTANCE_KG) kg = decision === "increase" ? Math.max(rule.min, topKg - step) : decision === "decrease" || decision === "return" ? topKg + step : topKg;
-  kg = resolveLoad(exercise, kg);
+  kg = resolveLoad(exercise, kg, step);
   // Stagnation: the same load for the last three sessions at a similar place
   // in the workout without more reps; a hold for fatigue is no stagnation.
   const previous = similar.slice(0, 2).map(d => sessions.get(d));
   const stalled = decision === "hold" && !fatigueHold && previous.length === 2 && previous.every(p => Math.max(...p.map(s => s.kg)) === topKg && Math.min(...p.filter(s => s.kg === topKg).map(s => s.reps)) >= minReps);
-  return { kg, decision, stalled, topKg, minReps, maxRpe, sets: atTop.length, date: dates[0], sessions: dates.length, range, fatigue, fatigueHold: decision === "hold" && fatigueHold, similarDate: similar[0] || null };
+  return { kg, decision, step, stalled, topKg, minReps, maxRpe, sets: atTop.length, date: dates[0], sessions: dates.length, range, fatigue, fatigueHold: decision === "hold" && fatigueHold, similarDate: similar[0] || null };
 }
 
 // Fatigue carried into an exercise on each day it was done: the work sets for
@@ -600,7 +614,7 @@ function estimateFromOwnHistory(own, exercise, targetReps, loadFactor, today = n
     referenceExercise: exercise, referenceKg: result.topKg,
     referenceReps: result.minReps, referenceRpe: result.maxRpe,
     referenceDate: result.date, performanceCount: Math.min(result.sessions, 5),
-    progression: result.decision, stalled: result.stalled, referenceSets: result.sets,
+    progression: result.decision, step: result.step, stalled: result.stalled, referenceSets: result.sets,
     fatigueHold: result.fatigueHold, priorSets: result.fatigue,
     deltaPct: result.topKg ? Math.round((result.kg / result.topKg - 1) * 1000) / 10 : 0
   };
