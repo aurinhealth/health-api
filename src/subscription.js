@@ -1,6 +1,6 @@
 import { L } from './lang.js';
 import { consentStatus } from './consent.js';
-import { storeConfigured } from './app-store.js';
+import { storeConfigured, proActive, subscriptionRow } from './app-store.js';
 import { FREE_PLANS } from './training-plans.js';
 // Aurin Pro can be bought in the app (app-store.js); AI still needs it only once
 // AI_PAYWALL_ENABLED is on. Until then (the pilot) everyone has AI.
@@ -45,9 +45,7 @@ export async function subscriptionStatus(env) {
   // Until Pro can be bought, everyone has Pro (testers see it unlocked, Pro icons included).
   let plan=enforced?'free':'ai';
   if(enforced && env.DB){
-    await env.DB.prepare('CREATE TABLE IF NOT EXISTS subscriptions (user_id INTEGER PRIMARY KEY,plan TEXT NOT NULL DEFAULT \'free\',valid_until TEXT)').run();
-    const row=await env.DB.prepare('SELECT plan,valid_until FROM subscriptions WHERE user_id=?').bind(env.USER_ID ?? env.DB.userId).first();
-    if(row?.plan==='ai' && row.valid_until && Date.parse(row.valid_until)>Date.now())plan='ai';
+    if(proActive(env,await subscriptionRow(env)))plan='ai';
   }
   // AI sends the user's data to OpenAI, so it needs the user's AI consent
   // (consent.js); the owner has it until he turns it off. Fail-closed: any env
@@ -63,8 +61,7 @@ export async function subscriptionStatus(env) {
 export async function plansUnlocked(env){
   if(!paywallOn(env))return true;
   if(!env.DB)return false;
-  const row=await env.DB.prepare('SELECT plan,valid_until FROM subscriptions WHERE user_id=?').bind(env.USER_ID ?? env.DB.userId).first().catch(()=>null);
-  return row?.plan==='ai'&&Boolean(row.valid_until)&&Date.parse(row.valid_until)>Date.now();
+  return proActive(env,await subscriptionRow(env).catch(()=>null));
 }
 export async function assertPlanAccess(env,template){
   if(FREE_PLANS.has(template.id)||await plansUnlocked(env))return;
