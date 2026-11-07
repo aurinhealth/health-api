@@ -458,7 +458,7 @@ struct TrainingModeView: View {
             nextExercise(day).padding(.top, 14)
             addExerciseButton.padding(.top, 10)
         }
-        .onChange(of: set?.row) { _, _ in prefill(set, in: exercise) }
+        .onChange(of: set?.fieldKey(in: exercise.name)) { _, _ in prefill(set, in: exercise) }
         .onAppear { prefill(set, in: exercise) }
         // A swipe sideways goes to the next or the previous exercise.
         .contentShape(Rectangle())

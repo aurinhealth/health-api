@@ -56,6 +56,10 @@ struct WatchGym: Codable, Equatable, Sendable {
         var last: Last? = nil
         /// Not a warm-up nor a drop set.
         var work: Bool { !warmup && !drop }
+        /// Which set the crown's weight and reps are for: the row alone is not
+        /// enough, a set removed or a drop set added moves the rows after it
+        /// (GymSet.fieldKey on the iPhone).
+        func fieldKey(in exercise: String) -> String { "\(exercise)|\(row)|\(number)|\(side ?? "")|\(drop)" }
     }
 
     /// A set from the history: its weight (nil with body weight) and reps.
