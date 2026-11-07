@@ -71,13 +71,13 @@ export function dayState(item, entry, auto) {
     if (Number(entry.answer) === 0) return { yes: false, level: item.type === "amount" ? 0 : null };
     if (item.type === "amount") { const a = num(entry.amount); return { yes: a == null || a > 0, level: a }; }
     if (item.type === "scale") { const a = num(entry.amount); return a == null ? { yes: null, level: null } : { yes: a >= 4, level: a }; }
-    if (item.type === "time") { const t = timeLevel(entry.time); return { yes: t == null || !item.late || t >= timeLevel(item.late), level: t }; }
+    if (item.type === "time") { const t = timeLevel(entry.time), late = auto?.late || item.late; return { yes: t == null || !late || t >= timeLevel(late), level: t }; }
     return { yes: true, level: null };
   }
   if (!auto) return { yes: null, level: null };
   if (auto.fixed) return { yes: !!auto.yes, level: item.type === "amount" ? num(auto.amount) : null };
   if (item.type === "amount") { const a = num(auto.amount); return a == null ? { yes: null, level: null } : { yes: a > 0, level: a }; }
-  if (item.type === "time") { const t = timeLevel(auto.time); return t == null ? { yes: null, level: null } : { yes: !item.late || t >= timeLevel(item.late), level: t }; }
+  if (item.type === "time") { const t = timeLevel(auto.time), late = auto.late || item.late; return t == null ? { yes: null, level: null } : { yes: !late || t >= timeLevel(late), level: t }; }
   return auto.yes == null ? { yes: null, level: null } : { yes: !!auto.yes, level: null };
 }
 
