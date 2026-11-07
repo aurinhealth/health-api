@@ -205,9 +205,9 @@ struct WeatherSheet: View {
 }
 
 /// The weather's detail (Petr, 2026-10-26, mockup G): the temperature now, the
-/// hours from now, and the week with where a ride and a run belong each day
-/// (the coach's rule, src/adaptive-week.js environmentFor); a day opens with
-/// its hours and the reason. Without Apple Weather's week only today's advice shows.
+/// next 24 hours (past midnight, the new day marked; Petr 2026-11-07), and
+/// the week with where a ride and a run belong each day (the coach's rule,
+/// src/adaptive-week.js environmentFor); a day opens with all its hours and the reason. Without Apple Weather's week only today's advice shows.
 struct WeatherDetails: View {
     let weather: TodaySnapshot.Weather
     var close: () -> Void = {}
@@ -224,7 +224,7 @@ struct WeatherDetails: View {
 
             if !hours.isEmpty {
                 Card(padding: 14) {
-                    Text("Dnes po hodinách").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted)
+                    Text("Po hodinách").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted)
                     WeatherHourStrip(hours: hours, nowFirst: weather.next != nil)
                 }
             }
@@ -258,7 +258,7 @@ struct WeatherDetails: View {
         }
     }
 
-    /// Today's hours from the one running now (the server's); without the detail, the card's few hours.
+    /// The next 24 hours from the one running now (the server's); without the detail, the card's few hours.
     private var hours: [TodaySnapshot.Weather.Hour] { weather.next ?? weather.hours ?? [] }
 
     private var look: SkyLook { SkyLook(code: weather.now?.code ?? weather.code, daylight: weather.now?.daylight) }
@@ -396,6 +396,7 @@ struct PlacePin: Shape {
 }
 
 /// A row of hours to swipe: the hour, its symbol, temperature and chance of rain.
+/// The first hour of a new day shows the day ("Sun") instead of 0.
 struct WeatherHourStrip: View {
     let hours: [TodaySnapshot.Weather.Hour]
     /// The first hour is the one running now ("Teď").
@@ -404,10 +405,13 @@ struct WeatherHourStrip: View {
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 2) {
-                ForEach(Array(hours.enumerated()), id: \.element.hour) { index, h in
+                // By place: past midnight (or on the autumn clock change) an hour comes twice.
+                ForEach(Array(hours.enumerated()), id: \.offset) { index, h in
                     let now = nowFirst && index == 0
+                    let newDay = index > 0 && h.date != nil && h.date != hours[index - 1].date
                     VStack(spacing: 4) {
-                        Text(verbatim: now ? L10n.tr("Teď") : String(h.hour)).font(Typo.tiny).foregroundStyle(now ? Palette.blue : Palette.faint)
+                        Text(verbatim: now ? L10n.tr("Teď") : newDay ? WeatherText.weekday(h.date ?? "") : String(h.hour))
+                            .font(newDay ? Typo.tiny.weight(.semibold) : Typo.tiny).foregroundStyle(now ? Palette.blue : newDay ? Palette.ink : Palette.faint)
                         Image(systemName: WeatherText.symbol(h.code)).scaledFont(15, cap: .denseCap)
                             .symbolRenderingMode(.multicolor).frame(height: 18)
                         Text(verbatim: WeatherText.degrees(h.temp)).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)

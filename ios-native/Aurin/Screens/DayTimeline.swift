@@ -71,12 +71,11 @@ struct DayTimeline: View {
         case .readiness(let score, let zone):
             RouteLink(route: .readiness) {
                 DayPointRow(color: ReadinessText.pill(zone)?.1 ?? Palette.green, time: nil, first: first, last: last) {
-                    HStack(alignment: .center, spacing: 9) {
+                    // No "v obvyklém rozmezí" label here: Readiness at the top of Today
+                    // already says it, and next to the name it didn't fit (Petr, 2026-11-07).
+                    HStack(alignment: .firstTextBaseline, spacing: 9) {
                         Text("Připravenost").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         Text(String(score)).font(Typo.number(22)).foregroundStyle(ReadinessText.pill(zone)?.1 ?? Palette.green)
-                        if let pill = ReadinessText.pill(zone) {
-                            Pill(text: pill.0, foreground: pill.1, background: pill.2)
-                        }
                     }
                 }
             }

@@ -5,7 +5,7 @@ import Vision
 
 /// The barcode scanner: the camera in a window on the
 /// app's background, a light for the dark, or a photo of the code from
-/// Photos; the food comes from your foods or
+/// Photos, or the digits typed by hand; the food comes from your foods or
 /// the catalog, else an AI lookup by the code; then the amount on a wheel and
 /// "Přidat".
 struct BarcodeScanSheet: View {
@@ -33,6 +33,11 @@ struct BarcodeScanSheet: View {
     @State private var torch = false
     /// A photo of a code, picked from Photos instead of the camera.
     @State private var photo: PhotosPickerItem?
+    /// "Zadat kód": the digits under the code typed by hand, for a code the
+    /// camera can't read (creased, wet, a bad light) or a phone without one.
+    @State private var typing = false
+    @State private var typed = ""
+    @FocusState private var typedFocused: Bool
     /// "Vyfotit etiketu" for a code nobody knows: the values read from the
     /// label are saved with the code, so the next scan finds them.
     @State private var labelOpen = false
@@ -71,7 +76,7 @@ struct BarcodeScanSheet: View {
                 Spacer()
                 Text("ČÁROVÝ KÓD").font(.caption.weight(.medium)).tracking(1.9).foregroundStyle(Palette.muted)
                 Spacer()
-                if scannerReady && Self.hasTorch && (state == .scanning || state == .searching) {
+                if scannerReady && Self.hasTorch && !typing && (state == .scanning || state == .searching) {
                     circle(torch ? "flashlight.on.fill" : "flashlight.off.fill", label: torch ? "Zhasnout světlo" : "Rozsvítit světlo", on: torch) {
                         torch.toggle()
                     }
@@ -153,51 +158,146 @@ struct BarcodeScanSheet: View {
     }
 
     /// The camera only in this window, with its corners; the text under it.
+    /// While a code is typed the window goes, so the keyboard covers nothing.
     @ViewBuilder
     private var finder: some View {
         VStack(spacing: 22) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Color(light: 0x1D2020, dark: 0x151718))
-                if cameraAllowed == nil {
-                    ProgressView().tint(.white)
-                } else if scannerReady {
-                    BarcodeScanner(paused: state != .scanning) { scanned in
-                        guard state == .scanning else { return }
-                        code = scanned
-                        error = nil
-                        added = nil
-                        state = .searching
-                        Task { await find(scanned) }
-                    }
-                } else {
-                    VStack(spacing: 12) {
-                        Text(BarcodeScanner.device != nil ? "Skener potřebuje kameru. Povol Aurinu přístup ke kameře v Nastavení iPhonu." : "Tento iPhone skener čárových kódů nepodporuje.")
-                            .font(Typo.sentence(18)).foregroundStyle(Color.white.opacity(0.85)).multilineTextAlignment(.center)
-                        if cameraAllowed == false, let url = URL(string: UIApplication.openSettingsURLString) {
-                            Link("Otevřít Nastavení", destination: url).font(Typo.bodyStrong).foregroundStyle(.white)
-                        }
-                    }
-                    .padding(24)
-                }
-                FinderCorners().stroke(Color.white.opacity(0.9), style: StrokeStyle(lineWidth: 3, lineCap: .round)).padding(10)
-                    .allowsHitTesting(false)
-            }
-            .frame(maxWidth: 320).frame(height: 230)
-            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            if !typing { camera }
             if state == .scanning {
                 VStack(spacing: 14) {
-                    Text("Namiř na kód na obalu").font(Typo.sentence(20)).foregroundStyle(Palette.ink.opacity(0.85))
-                    PhotosPicker(selection: $photo, matching: .images) {
-                        Label("Vybrat fotku", systemImage: "photo").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
-                            .padding(.horizontal, 18).frame(height: 44)
-                            .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+                    if typing {
+                        typedField
+                    } else {
+                        Text("Namiř na kód na obalu").font(Typo.sentence(20)).foregroundStyle(Palette.ink.opacity(0.85))
+                        HStack(spacing: 10) {
+                            PhotosPicker(selection: $photo, matching: .images) {
+                                Label("Vybrat fotku", systemImage: "photo").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                                    .lineLimit(1).minimumScaleFactor(0.8)
+                                    .padding(.horizontal, 18).frame(height: 44)
+                                    .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+                            }
+                            .buttonStyle(.plain)
+                            Button {
+                                error = nil
+                                torch = false
+                                typing = true
+                            } label: {
+                                Label("Zadat kód", systemImage: "keyboard").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                                    .lineLimit(1).minimumScaleFactor(0.8)
+                                    .padding(.horizontal, 18).frame(height: 44)
+                                    .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+                                    .contentShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .buttonStyle(.plain)
                     if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).multilineTextAlignment(.center) }
                 }
             }
         }
         .padding(.horizontal, 12)
+    }
+
+    @ViewBuilder
+    private var camera: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Color(light: 0x1D2020, dark: 0x151718))
+            if cameraAllowed == nil {
+                ProgressView().tint(.white)
+            } else if scannerReady {
+                BarcodeScanner(paused: state != .scanning) { scanned in
+                    guard state == .scanning else { return }
+                    code = scanned
+                    error = nil
+                    added = nil
+                    state = .searching
+                    Task { await find(scanned) }
+                }
+            } else {
+                VStack(spacing: 12) {
+                    Text(BarcodeScanner.device != nil ? "Skener potřebuje kameru. Povol Aurinu přístup ke kameře v Nastavení iPhonu." : "Tento iPhone skener čárových kódů nepodporuje.")
+                        .font(Typo.sentence(18)).foregroundStyle(Color.white.opacity(0.85)).multilineTextAlignment(.center)
+                    if cameraAllowed == false, let url = URL(string: UIApplication.openSettingsURLString) {
+                        Link("Otevřít Nastavení", destination: url).font(Typo.bodyStrong).foregroundStyle(.white)
+                    }
+                }
+                .padding(24)
+            }
+            FinderCorners().stroke(Color.white.opacity(0.9), style: StrokeStyle(lineWidth: 3, lineCap: .round)).padding(10)
+                .allowsHitTesting(false)
+        }
+        .frame(maxWidth: 320).frame(height: 230)
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+    }
+
+    /// The digits under the code and "Hledat".
+    private var typedField: some View {
+        VStack(spacing: 10) {
+            TextField("Číslo pod kódem", text: $typed)
+                .keyboardType(.numberPad)
+                .font(.body.monospacedDigit()).multilineTextAlignment(.center)
+                .focused($typedFocused)
+                .onAppear { typedFocused = true }
+                .padding(.horizontal, 16).frame(height: 46)
+                .background(Palette.ink.opacity(0.06), in: Capsule())
+                .onChange(of: typed) {
+                    let digits = String(typed.filter { $0.isASCII && $0.isNumber }.prefix(14))
+                    if digits != typed { typed = digits }
+                    error = nil
+                }
+            HStack(spacing: 10) {
+                Button {
+                    typing = false
+                    typed = ""
+                    error = nil
+                } label: {
+                    Text("Zrušit").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 18).frame(height: 44)
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                Button { findTyped() } label: {
+                    Text("Hledat").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
+                        .frame(maxWidth: .infinity).frame(height: 44).background(Palette.button, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(typed.count < 8)
+                .opacity(typed.count < 8 ? 0.5 : 1)
+            }
+        }
+        .frame(maxWidth: 320)
+    }
+
+    private func findTyped() {
+        guard let found = Self.typedCode(typed) else {
+            error = L10n.tr([8, 12, 13].contains(typed.count) ? "Poslední číslice nesedí. Zkontroluj číslo pod kódem." : "Kód na obalu má 8, 12 nebo 13 číslic.")
+            return
+        }
+        typedFocused = false
+        typing = false
+        typed = ""
+        code = found
+        error = nil
+        added = nil
+        state = .searching
+        Task { await find(found) }
+    }
+
+    /// Typed digits as the camera reads them: EAN-13, EAN-8 or UPC-E as they
+    /// are, a 12-digit UPC-A with the leading 0 the camera adds. nil for
+    /// another length, or when the last digit of a 12/13-digit code doesn't
+    /// match the others: a typo would look up a different food. An 8-digit
+    /// code isn't checked, since EAN-8 and UPC-E count their check digit
+    /// differently.
+    nonisolated static func typedCode(_ text: String) -> String? {
+        guard text.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
+        if text.count == 8 { return text }
+        let code = text.count == 12 ? "0" + text : text
+        guard code.count == 13 else { return nil }
+        let digits = code.compactMap(\.wholeNumberValue)
+        let sum = digits.prefix(12).enumerated().reduce(0) { $0 + $1.element * ($1.offset.isMultiple(of: 2) ? 1 : 3) }
+        return (10 - sum % 10) % 10 == digits[12] ? code : nil
     }
 
     private func askCamera() async {
@@ -391,6 +491,8 @@ struct BarcodeScanSheet: View {
         error = nil
         labelNote = nil
         suggestNew = true
+        typing = false
+        typed = ""
         state = .scanning
     }
 

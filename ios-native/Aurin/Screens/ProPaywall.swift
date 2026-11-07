@@ -394,14 +394,18 @@ struct PaywallView: View {
         }
     }
 
-    /// The carousel's clock: like `clock`, but with Reduce Motion it still ticks
-    /// twice a second, so the phones move on as a fade without any sliding.
+    /// The carousel's clock: like `clock`, but frame by frame at the screen's rate,
+    /// and with Reduce Motion it still ticks twice a second, so the phones move on
+    /// as a fade without any sliding.
     @ViewBuilder
     private func carouselClock<V: View>(@ViewBuilder _ content: @escaping (Double) -> V) -> some View {
-        if reduceMotion, frozenTime == nil {
+        if let frozenTime {
+            content(frozenTime)
+        } else if reduceMotion {
             TimelineView(.periodic(from: .now, by: 0.5)) { context in content(context.date.timeIntervalSince(started)) }
         } else {
-            clock(content)
+            // At the screen's own rate, so the sliding phones stay smooth.
+            TimelineView(.animation) { context in content(context.date.timeIntervalSince(started)) }
         }
     }
 
@@ -534,24 +538,22 @@ struct NightSky: View {
 enum ProScreen: CaseIterable {
     case coach, plan, training, food, readiness, sleep
 
+    var content: some View { ProScreenPage(screen: self) }
+
+    /// The screen's page without its background, as tall as it is in the app.
     @ViewBuilder
-    var content: some View {
-        ZStack(alignment: .top) {
-            ScreenBackground(glow: glow)
-            switch self {
-            case .coach: ProCoachSample().padding(.top, 54)
-            case .plan: ProPlanSample().padding(.horizontal, 24).padding(.top, 70)
-            case .training: TrainingContent(training: DemoData.training).padding(.top, 54)
-            case .food: FoodContent(food: DemoData.food).padding(.top, 54)
-            case .readiness: ReadinessDetailContent(health: DemoData.health).padding(.horizontal, 24).padding(.top, 70)
-            case .sleep: SleepDetailContent(health: DemoData.health, detail: DemoData.night).padding(.horizontal, 24).padding(.top, 70)
-            }
+    fileprivate var page: some View {
+        switch self {
+        case .coach: ProCoachSample().padding(.top, 54)
+        case .plan: ProPlanSample().padding(.horizontal, 24).padding(.top, 70)
+        case .training: TrainingContent(training: DemoData.training).padding(.top, 54)
+        case .food: FoodContent(food: DemoData.food).padding(.top, 54)
+        case .readiness: ReadinessDetailContent(health: DemoData.health).padding(.horizontal, 24).padding(.top, 70)
+        case .sleep: SleepDetailContent(health: DemoData.health, detail: DemoData.night).padding(.horizontal, 24).padding(.top, 70)
         }
-        .frame(width: 390, height: 844, alignment: .top)
-        .clipped()
     }
 
-    private var glow: Color {
+    fileprivate var glow: Color {
         switch self {
         case .coach: return Palette.Glow.today
         case .plan, .training: return Palette.Glow.training
@@ -595,6 +597,26 @@ enum ProScreen: CaseIterable {
     }
 }
 
+/// A phone's screen: the page at its full height, as in the app's scroll view,
+/// scrolled down by `scroll` (0 the top, 1 its end) under a still background.
+struct ProScreenPage: View {
+    let screen: ProScreen
+    var scroll: Double = 0
+    @State private var height: CGFloat = 844
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            ScreenBackground(glow: screen.glow)
+            screen.page
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+                .offset(y: -max(0, height - 844) * scroll)
+        }
+        .frame(width: 390, height: 844, alignment: .top)
+        .clipped()
+    }
+}
+
 /// The coach mid-conversation on the sample day: two of the questions the demo
 /// answers (DemoData.coachAnswer), in the chat's own bubbles.
 struct ProCoachSample: View {
@@ -626,45 +648,101 @@ struct ProPlanSample: View {
     }
 }
 
-/// The offer's phones: the middle one large, its neighbours dimmed beside
-/// it; they move on by themselves every 2.5 s and can be swiped. A swipe
-/// shows the next phone and the carousel moves on from there.
+/// The offer's phones as a short video (Petr, 7 Nov 2026): a belt with the
+/// front phone large and its neighbours dimmed beside it. The front screen
+/// scrolls down, then the belt slides on to the next phone, every 2.5 s. The
+/// phones follow a finger and settle on the nearest one; the carousel counts on
+/// from there. With Reduce Motion nothing moves by itself: the phones change as
+/// a fade, and only a finger moves the belt.
 struct ScreenCarousel: View {
     let time: Double
     static let screens: [ProScreen] = ProScreen.allCases
     static let interval = 2.5
-    /// The phone shown at `shownAt`; the carousel counts on from it.
+    /// The end of each interval, when the belt slides on.
+    static let slide = 0.6
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The phone in front at `shownAt`; the carousel counts on from it.
     @State private var start = 0
     @State private var shownAt: Double = 0
+    /// How far from `start` the belt was when the finger let go, in phones; it settles from there.
+    @State private var settleFrom: Double = 0
+    @State private var drag: Drag?
+    @GestureState private var touching = false
+
+    /// A finger on the belt: where the belt was when it came down, and how far it has moved.
+    private struct Drag {
+        var base: Double
+        var held: Int
+        var scroll: Double
+        var at: Double
+        var spacing: CGFloat
+        var width: CGFloat = 0
+        var predicted: CGFloat = 0
+    }
+
+    private struct Belt {
+        /// In phones, fractional while the belt slides.
+        var position: Double
+        /// The phone whose screen scrolls, and how far.
+        var held: Int
+        var scroll: Double
+    }
+
+    private static var count: Int { screens.count }
+    private static func wrap(_ i: Int) -> Int { (i % count + count) % count }
+    /// From the belt's position to phone `i`, the short way round.
+    private static func distance(_ i: Int, _ position: Double) -> Double {
+        let n = Double(count)
+        var d = (Double(i) - position).truncatingRemainder(dividingBy: n)
+        if d < -n / 2 { d += n } else if d >= n / 2 { d -= n }
+        return d
+    }
+
+    private var belt: Belt {
+        if touching, let drag {
+            // The scrolled screen goes back to its top as the finger takes the belt.
+            let back = drag.scroll * (1 - PaywallIntro.ease((time - drag.at) / Self.slide))
+            return Belt(position: drag.base - Double(drag.width / drag.spacing), held: drag.held, scroll: reduceMotion ? 0 : back)
+        }
+        let elapsed = max(0, time - shownAt)
+        let step = Int(elapsed / Self.interval)
+        if reduceMotion { return Belt(position: Double(start + step), held: start + step, scroll: 0) }
+        let phase = elapsed - Double(step) * Self.interval
+        let hold = Self.interval - Self.slide
+        let advance = PaywallIntro.ease((phase - hold) / Self.slide)
+        let settle = settleFrom * (1 - PaywallIntro.ease(elapsed / Self.slide))
+        // Down while the phone is in front, back up as it slides away.
+        let scroll = phase < hold ? PaywallIntro.ease(phase / hold) : 1 - advance
+        return Belt(position: Double(start + step) + advance + settle, held: start + step, scroll: scroll)
+    }
 
     var body: some View {
-        let index = (start + Int(max(0, time - shownAt) / Self.interval)) % Self.screens.count
+        let belt = self.belt
+        let index = Self.wrap(Int(belt.position.rounded()))
         let screen = Self.screens[index]
         VStack(spacing: 10) {
             GeometryReader { geo in
                 let height = max(160, geo.size.height)
-                ZStack {
-                    ForEach([-1, 1], id: \.self) { side in
-                        let other = Self.screens[(index + side + Self.screens.count) % Self.screens.count]
-                        PhoneMockup(height: height * 0.78) { other.content }
-                            .opacity(0.35)
-                            .offset(x: CGFloat(side) * height * 0.48)
-                    }
-                    PhoneMockup(height: height) { screen.content }
-                        .id(index)
-                        .transition(.opacity)
+                let spacing = height * 0.48
+                Group {
+                    if reduceMotion, !touching { fade(index, height: height, spacing: spacing) } else { phones(belt, height: height, spacing: spacing) }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .animation(.easeInOut(duration: 0.5), value: index)
+                // The phones themselves take no touches (PhoneMockup), so the swipe needs its own area.
+                .contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 10)
+                    .updating($touching) { _, touching, _ in touching = true }
+                    .onChanged { value in
+                        if drag == nil {
+                            let now = self.belt
+                            drag = Drag(base: now.position, held: now.held, scroll: now.scroll, at: time, spacing: spacing)
+                        }
+                        drag?.width = value.translation.width
+                        drag?.predicted = value.predictedEndTranslation.width
+                    })
             }
             .padding(.top, 10)
-            // The phones themselves take no touches (PhoneMockup), so the swipe needs its own area.
-            .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 20).onEnded { value in
-                let step = value.translation.width < 0 ? 1 : -1
-                start = (index + step + Self.screens.count) % Self.screens.count
-                shownAt = time
-            })
+            .onChange(of: touching) { _, touching in if !touching { release() } }
             VStack(spacing: 3) {
                 Text(verbatim: screen.title).font(Typo.sentence(19)).foregroundStyle(Night.ink)
                 Text(verbatim: screen.subtitle).font(Typo.small).foregroundStyle(Night.muted)
@@ -679,6 +757,53 @@ struct ScreenCarousel: View {
             .padding(.bottom, 12)
             .accessibilityHidden(true)
         }
+    }
+
+    /// Every phone on the belt, placed by its distance from the front.
+    private func phones(_ belt: Belt, height: CGFloat, spacing: CGFloat) -> some View {
+        ZStack {
+            ForEach(Self.screens.indices, id: \.self) { i in
+                let d = Self.distance(i, belt.position)
+                let near = min(abs(d), 1)
+                PhoneMockup(height: height) {
+                    ProScreenPage(screen: Self.screens[i], scroll: Self.wrap(belt.held) == i ? belt.scroll : 0)
+                }
+                .scaleEffect(1 - 0.22 * near)
+                .opacity(abs(d) <= 1 ? 1 - 0.65 * near : 0.35 * max(0, 2 - abs(d)))
+                .offset(x: CGFloat(d) * spacing)
+                .zIndex(-abs(d))
+            }
+        }
+    }
+
+    /// With Reduce Motion: the front phone fades into the next, its neighbours change with it.
+    private func fade(_ index: Int, height: CGFloat, spacing: CGFloat) -> some View {
+        ZStack {
+            ForEach([-1, 1], id: \.self) { side in
+                PhoneMockup(height: height * 0.78) { Self.screens[Self.wrap(index + side)].content }
+                    .opacity(0.35)
+                    .offset(x: CGFloat(side) * spacing)
+            }
+            PhoneMockup(height: height) { Self.screens[index].content }
+                .id(index)
+                .transition(.opacity)
+        }
+        .animation(.easeInOut(duration: 0.5), value: index)
+    }
+
+    /// The finger let go: the belt settles on the nearest phone, or on the next
+    /// one after a flick, and the carousel counts on from there.
+    private func release() {
+        guard let drag else { return }
+        self.drag = nil
+        let position = drag.base - Double(drag.width / drag.spacing)
+        var target = position.rounded()
+        if target == drag.base.rounded(), abs(drag.predicted) > drag.spacing * 0.3 {
+            target += drag.predicted < 0 ? 1 : -1
+        }
+        start = Self.wrap(Int(target))
+        settleFrom = reduceMotion ? 0 : position - target
+        shownAt = time
     }
 }
 

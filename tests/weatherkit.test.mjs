@@ -84,11 +84,15 @@ test('the detail: now, the hours from now and seven days with their hours', () =
   const now = Date.UTC(2026, 9, 26, 13, 20); // 14:20 in Prague
   const detail = dailyDetail({ currentWeather: { temperature: 12.6, conditionCode: 'PartlyCloudy', windSpeed: 17.6, windDirection: 315.4, daylight: true }, forecastDaily: { days }, forecastHourly: { hours } }, '2026-10-26', now);
   assert.deepEqual(detail.now, { temp: 13, code: 2, wind: 18, windDirection: 315, daylight: true });
+  // The next 24 hours go on past midnight, each with its date.
+  assert.equal(detail.next.length, 24);
   assert.equal(detail.next[0].hour, 14);
-  assert.equal(detail.next.at(-1).hour, 23);
-  assert.deepEqual(detail.next[0], { hour: 14, temp: 11, code: 3, rainProb: 25 });
+  assert.deepEqual(detail.next[0], { hour: 14, temp: 11, code: 3, rainProb: 25, date: '2026-10-26' });
+  assert.deepEqual(detail.next[10], { hour: 0, temp: 10, code: 3, rainProb: 25, date: '2026-10-27' });
+  assert.equal(detail.next.at(-1).hour, 13);
   assert.deepEqual(detail.week.map(d => d.date), ['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01']);
-  assert.deepEqual(detail.week[1].hours.map(h => h.hour), Array.from({ length: 17 }, (_, i) => i + 6));
+  // A day keeps all its hours.
+  assert.deepEqual(detail.week[1].hours.map(h => h.hour), Array.from({ length: 24 }, (_, i) => i));
 }));
 
 test('the reason names what decided the day', () => {
