@@ -1,7 +1,8 @@
 import { sportAllowed } from './sport-choice.js';
 import { L } from './lang.js';
+import { PAIN_WORDS, sorePartsFor, illNow, unwellNow } from './pain-words.js';
 import { validDay } from './training-availability.js';
-import { trainingStatus } from './training-status.js';
+import { trainingStatus, ATHLETE_STATUSES } from './training-status.js';
 import { prepareGymSwap,gymAdjustmentRequest } from './coach-gym-adjustment.js';
 import { kcalTargets } from './activity-edits.js';
 import { isHardSession, isHardKind } from './session-intensity.js';
@@ -20,11 +21,11 @@ export const WORKOUT_KINDS=['recovery','endurance','long','tempo','sweet_spot','
 // The muscle groups a gym card can be built around (strength-generator.js
 // FOCUS_GROUPS, the same ids; a test keeps them equal).
 export const GYM_MUSCLES=['chest','upper_back','lats','front_delts','side_delts','rear_delts','biceps','triceps','abs','obliques','quads','hamstrings','hips','calves','forearms','traps','lower_back'];
-export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','visuals','actions','memory'],properties:{answer:{type:'string'},memory:{type:'object',additionalProperties:false,required:['save','forget','update'],properties:{save:{type:'array',items:{type:'object',additionalProperties:false,required:['text','group'],properties:{text:{type:'string'},group:{type:'string',enum:['goals','training','health','life']}}}},forget:{type:'array',items:{type:'string'}},update:{type:'array',items:{type:'object',additionalProperties:false,required:['from','to'],properties:{from:{type:'string'},to:{type:'string'}}}}}},visuals:{type:'array',items:{type:'string',enum:COACH_VISUALS}},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','statusUntil','reason','fromExercise','toExercise','workoutId','kind','place','activityId','otherActivityId','time','kcal','gymFocus','gymMuscles','insisted','planId','days','raceKm'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap','week_sport','activity_kcal','activity_delete','activity_merge','activity_time','plan']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','swim','']},minutes:{type:'integer'},status:{type:'string',enum:['active','sick','injured','on_break','']},statusUntil:{type:'string'},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'},workoutId:{type:'string'},kind:{type:'string',enum:['',...WORKOUT_KINDS]},place:{type:'string',enum:['','pool','open_water']},gymFocus:{type:'string',enum:['','upper','lower']},gymMuscles:{type:'array',items:{type:'string',enum:GYM_MUSCLES}},insisted:{type:'boolean'},activityId:{type:'string'},otherActivityId:{type:'string'},time:{type:'string'},kcal:{type:'integer'},planId:{type:'string'},days:{type:'array',items:{type:'integer'}},raceKm:{type:'number'}}}}}}};
+export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','visuals','actions','memory'],properties:{answer:{type:'string'},memory:{type:'object',additionalProperties:false,required:['save','forget','update'],properties:{save:{type:'array',items:{type:'object',additionalProperties:false,required:['text','group'],properties:{text:{type:'string'},group:{type:'string',enum:['goals','training','health','life']}}}},forget:{type:'array',items:{type:'string'}},update:{type:'array',items:{type:'object',additionalProperties:false,required:['from','to'],properties:{from:{type:'string'},to:{type:'string'}}}}}},visuals:{type:'array',items:{type:'string',enum:COACH_VISUALS}},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','statusUntil','reason','fromExercise','toExercise','workoutId','kind','place','activityId','otherActivityId','time','kcal','gymFocus','gymMuscles','insisted','planId','days','raceKm'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap','week_sport','activity_kcal','activity_delete','activity_merge','activity_time','plan']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','swim','']},minutes:{type:'integer'},status:{type:'string',enum:[...Object.keys(ATHLETE_STATUSES),'']},statusUntil:{type:'string'},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'},workoutId:{type:'string'},kind:{type:'string',enum:['',...WORKOUT_KINDS]},place:{type:'string',enum:['','pool','open_water']},gymFocus:{type:'string',enum:['','upper','lower']},gymMuscles:{type:'array',items:{type:'string',enum:GYM_MUSCLES}},insisted:{type:'boolean'},activityId:{type:'string'},otherActivityId:{type:'string'},time:{type:'string'},kcal:{type:'integer'},planId:{type:'string'},days:{type:'array',items:{type:'integer'}},raceKm:{type:'number'}}}}}}};
 export const ACTION_INSTRUCTIONS=actionInstructions();
 // Words the athlete must have used before the coach may propose Sick or Injured.
 export const SICK_WORDS=/nemoc|horeč|horec|sick|chřip|chrip|nachl|rým|covid|vir[oó]z|viros|teplot|\bill\b|illness|unwell|fever|\bflu\b|\bcold\b|virus|sore throat|temperature/i;
-export const INJURY_WORDS=/zran|bol[eíe]|bolest|injur|natáh|natah|podvrt|výron|vyron|nateklé|natekl|\bpain|\bhurt|sprain|swollen|pulled/i;
+export const INJURY_WORDS=PAIN_WORDS;
 // The multi-week plans the coach can start (training-plans.js), as the coach sees them.
 // A plan whose sports the athlete picks (multisport without a race) starts in the app, not from the coach.
 export const coachPlanTemplates=()=>planTemplates().filter(t=>!t.choose).map(t=>({id:t.id,sport:t.sport,name:t.name,goal:t.goal,weeks:t.weeks.length,daysPerWeek:t.days,level:t.level,...(t.race?{raceKm:t.race.km,...(t.race.options?{raceKmOptions:t.race.options}:{})}:{})}));
@@ -149,6 +150,10 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       kept.push({type:'rest',eventId:id,date:e.date,sport:w.sport,reason:L('Nahradí ho navržený trénink.','Replaced by the proposed workout.'),replacedBy:w.date,eventSnapshot:{name:e.name,date:e.date,durationHours:e.durationHours}});
     }
   }
+  // "Jsem nemocný" always brings the Nemoc card, also when the answer left it
+  // out (point 1); the athlete confirms it, as any status card.
+  if(userInitiated&&!trainingStatus(context.athleteState).paused&&illNow(context.userMessage)&&!kept.some(a=>a.type==='status'))
+    kept.push({type:'status',status:'sick',reason:L('Během nemoci běžné tréninky pozastavím, dokud se nebudeš cítit zase dobře.','While you are ill I will pause regular training until you feel well again.')});
   return kept;
   function check(a){
     const reason=String(a.reason||'').trim().slice(0,500);if(!reason)return [];
@@ -192,7 +197,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
     if(a.type==='week_sport'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)&&allowed(a.sport)){
       return [{type:'week_sport',date:a.date,sport:a.sport,reason}];
     }
-    if(a.type==='status'&&['active','sick','injured','on_break'].includes(a.status)){
+    if(a.type==='status'&&Object.hasOwn(ATHLETE_STATUSES,a.status)){
       const words=[context.userMessage,...(context.conversation||[]).filter(t=>t.role==='user').map(t=>t.content)].join(' ');
       if(a.status==='sick'&&!SICK_WORDS.test(words))return [];
       if(a.status==='injured'&&!INJURY_WORDS.test(words))return [];
@@ -225,6 +230,11 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       const kind=a.sport!=='gym'&&!library&&WORKOUT_KINDS.includes(a.kind)?{kind:a.kind}:{};
       const intense=a.sport!=='gym'&&isHardKind(library?library.system:a.kind);
       if(intense&&a.date===today&&holdBackToday(context))return [];
+      // Pain blocks hard training in the sports that load the sore part, a
+      // cold said now today's hard work, insisted or not (pain-words.js;
+      // audit "Kouč jako skutečný trenér" 2026-11-07, point 2).
+      if(intense&&sorePartsFor(a.sport,[context.userMessage,...(context.preferenceMemory||[])]).length)return [];
+      if(intense&&a.date===today&&unwellNow(context.userMessage))return [];
       // The athlete asked for it again in this chat after the coach's concern:
       // their call passes the 48 h and two-in-7 rules (Petr 2026-10-19).
       const insisted=a.insisted===true&&a.sport!=='gym'&&(context.conversation||[]).some(t=>t.role==='user');
@@ -232,7 +242,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       else if(intense){if(hardDayConflict(a.date,hard.filter(h=>!(h.planned&&h.date===a.date)).map(h=>h.date)))return [];hard.push({date:a.date});}
       if(a.sport==='gym'){
         // No gym today on a red morning or with signs of illness, not even shortened (S20).
-        if(a.date===today&&holdBackToday(context))return [];
+        if(a.date===today&&(holdBackToday(context)||unwellNow(context.userMessage)))return [];
         // A day that already has a gym plan gets that plan shortened, never a
         // second one (it could not be saved next to it).
         let planDate=null;try{planDate=context.gymPlan?.values?.length?parseStrengthPlan(context.gymPlan.values).date:null;}catch{}

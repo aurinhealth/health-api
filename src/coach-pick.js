@@ -310,6 +310,28 @@ export async function storeDetails(db, userId, date, signature, details) {
   await db.prepare("DELETE FROM coach_pick_details WHERE user_id=? AND date<?").bind(userId, new Date(Date.parse(date + "T00:00:00Z") - 7 * 86400000).toISOString().slice(0, 10)).run();
 }
 
+// The best ride or run's AI workout is written after the answer (entrypoint.js
+// coach/pick): the rules' workouts are stored first with aiPending, and only
+// the request whose write lands asks the AI, so two at once ask it once. An
+// entry still pending after AI_RETRY_MS (the background work ended early) may
+// be claimed again.
+export const AI_RETRY_MS = 120000;
+// How long the AI may take after the answer: Cloudflare keeps the work going ~30 s.
+export const AI_BUDGET_MS = 22000;
+export async function claimDetails(db, userId, date, signature, details, now = new Date()) {
+  await db.prepare(DETAILS_TABLE).run();
+  const result = await db.prepare("INSERT INTO coach_pick_details (user_id, date, signature, details_json, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, date) DO UPDATE SET signature=excluded.signature, details_json=excluded.details_json, updated_at=excluded.updated_at WHERE coach_pick_details.signature!=excluded.signature OR (coach_pick_details.updated_at<? AND json_extract(coach_pick_details.details_json, '$.aiPending') IS NOT NULL)")
+    .bind(userId, date, signature, JSON.stringify(details), now.toISOString(), new Date(now.getTime() - AI_RETRY_MS).toISOString()).run();
+  const claimed = Number(result?.meta?.changes) > 0;
+  if (claimed) await db.prepare("DELETE FROM coach_pick_details WHERE user_id=? AND date<?").bind(userId, new Date(Date.parse(date + "T00:00:00Z") - 7 * 86400000).toISOString().slice(0, 10)).run();
+  return claimed;
+}
+// The AI's workouts in place of the provisional ones, while the options are still the same.
+export async function finishDetails(db, userId, date, signature, details) {
+  await db.prepare("UPDATE coach_pick_details SET details_json=?, updated_at=? WHERE user_id=? AND date=? AND signature=?")
+    .bind(JSON.stringify(details), new Date().toISOString(), userId, date, signature).run();
+}
+
 // The table rows of a ride or run: each section's length and target.
 export function workoutLines(steps = [], sport = "ride") {
   if (sport === "swim") return swimLines(steps);

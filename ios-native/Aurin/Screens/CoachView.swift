@@ -45,6 +45,8 @@ struct CoachView: View {
     /// False once another conversation is opened from the panel: it is not about `subject`.
     @State private var aboutSubject = true
     @State private var showMemory = false
+    /// The message a search result opened the chat at: scrolled to and ringed for a moment.
+    @State private var found: UUID?
     /// This week's messages to the coach (src/coach-allowance.js); nil for the owner.
     @State private var allowance: CoachAllowance?
     /// Used up and this conversation can't go on: the card and a dimmed field.
@@ -118,7 +120,8 @@ struct CoachView: View {
                                            adjust: { action, chip, date in Task { await adjust(action, chip: chip, date: date, in: bubble.id) } },
                                            logFood: { items, meal in Task { await logFood(items, meal: meal, in: bubble.id) } },
                                            openPlan: openPlan,
-                                           more: (bubble.note && packsOnSale) ? { morePacks = true } : nil)
+                                           more: (bubble.note && packsOnSale) ? { morePacks = true } : nil,
+                                           found: bubble.id == found)
                                     .id(bubble.id)
                             }
                             // Questions the app already has, under the last answer; gone once typing starts.
@@ -142,7 +145,9 @@ struct CoachView: View {
                         .padding(20)
                     }
                     .scrollDismissesKeyboard(.interactively)
-                    .onChange(of: messages) { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
+                    .onChange(of: messages) {
+                        if let found { proxy.scrollTo(found, anchor: .center) } else { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
+                    }
                     .onChange(of: sending) { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
                 }
                 inputBar
@@ -205,9 +210,9 @@ struct CoachView: View {
         .overlay {
             if showChats {
                 ChatsPanel(current: chatId, close: { withAnimation(.easeOut(duration: 0.25)) { showChats = false } },
-                           newChat: { newChat() }, open: { id in
+                           newChat: { newChat() }, open: { id, message in
                                aboutSubject = id == chatId && aboutSubject
-                               Task { await open(id) }
+                               Task { await open(id, at: message) }
                            }, memory: { showMemory = true })
                 .transition(.move(edge: .leading))
             }
@@ -809,10 +814,19 @@ struct CoachView: View {
         return (text, false)
     }
 
-    private func open(_ id: Int) async {
+    private func open(_ id: Int, at message: Int? = nil) async {
         do {
             unfinished = nil
-            show(try await model.api.chat(id: id))
+            let chat = try await model.api.chat(id: id)
+            // The bubbles follow the chat's messages one to one (show), so the found one is at its index.
+            let index = message.flatMap { m in chat.messages.firstIndex { $0.serverId == m } }
+            found = nil
+            show(chat)
+            guard let index, messages.indices.contains(index) else { return }
+            let bubble = messages[index].id
+            found = bubble
+            try? await Task.sleep(for: .seconds(2.5))
+            if found == bubble { withAnimation(.easeOut(duration: 0.4)) { found = nil } }
         } catch {
             self.error = error.localizedDescription
         }
@@ -858,12 +872,23 @@ struct BubbleView: View {
     var openPlan: () -> Void = {}
     /// On the line about the week's messages: "Získat další" opens the packs.
     var more: (() -> Void)? = nil
+    /// The message a chat search opened: ringed for a moment.
+    var found = false
     /// The messages are long text: they follow the iPhone's text size past the
     /// screens' cap, the cards around them stay capped (audit 20.b1).
     @Environment(\.fullTypeSize) private var fullTypeSize
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private var messageTypeSize: DynamicTypeSize { max(fullTypeSize ?? typeSize, typeSize) }
+
+    @ViewBuilder private var foundRing: some View {
+        if found {
+            RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.amberBar, lineWidth: 2.5)
+                .padding(-3)
+                .transition(.opacity)
+                .allowsHitTesting(false)
+        }
+    }
 
     var body: some View {
         VStack(alignment: bubble.mine ? .trailing : .leading, spacing: 8) {
@@ -896,6 +921,7 @@ struct BubbleView: View {
                         .foregroundStyle(Palette.onButton)
                         .padding(.horizontal, 14).padding(.vertical, 10)
                         .background(Palette.button, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay { foundRing }
                         .textSelection(.enabled)
                 } else {
                     CoachMarkdown(text: bubble.text)
@@ -903,6 +929,7 @@ struct BubbleView: View {
                         .dynamicTypeSize(messageTypeSize)
                         .padding(.horizontal, 16).padding(.vertical, 14)
                         .cardSurface(cornerRadius: 18)
+                        .overlay { foundRing }
                         .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .contextMenu { AnswerActions.menu(text: bubble.text, rating: bubble.rating, rate: rate) }
                 }
@@ -1228,17 +1255,24 @@ struct WorkoutPreviewBlock: View {
 }
 
 /// ☰ in the coach: every conversation by the day it was last written in,
-/// a new one on top and what the coach remembers at the bottom.
+/// a new one on top and what the coach remembers at the bottom. A word in the
+/// search field lists the chats it was written in instead.
 struct ChatsPanel: View {
     @Environment(AppModel.self) private var model
     /// The conversation on screen, marked in the list.
     var current: Int?
     var close: () -> Void
     var newChat: () -> Void
-    var open: (Int) -> Void
+    /// The chat, and with a search result the message to show.
+    var open: (Int, Int?) -> Void
     var memory: () -> Void
     @State private var chats: [ChatSummary] = []
     @State private var loading = true
+    @State private var query = ""
+    /// nil while nothing is searched (fewer than 2 letters) or the search is on its way.
+    @State private var results: [ChatSearchResult]?
+
+    private var searchText: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
         GeometryReader { geo in
@@ -1250,6 +1284,7 @@ struct ChatsPanel: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Konverzace").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .padding(.horizontal, 18).padding(.top, 18)
+                    if !chats.isEmpty || !query.isEmpty { searchField }
                     Button { newChat(); close() } label: {
                         Label("Nová konverzace", systemImage: "square.and.pencil")
                             .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
@@ -1260,24 +1295,29 @@ struct ChatsPanel: View {
                     .buttonStyle(.plain)
                     .padding(.horizontal, 12).padding(.top, 14)
                     List {
-                        ForEach(Self.days(chats)) { group in
-                            Section {
-                                ForEach(group.chats) { chat in row(chat) }
-                                    .onDelete { offsets in
-                                        let ids = offsets.map { group.chats[$0].id }
-                                        chats.removeAll { ids.contains($0.id) }
-                                        Task { for id in ids { try? await model.api.deleteChat(id: id) } }
-                                    }
-                            } header: {
-                                SectionLabel(text: Self.title(group.day))
+                        if searchText.count >= 2 {
+                            found
+                        } else {
+                            ForEach(Self.days(chats)) { group in
+                                Section {
+                                    ForEach(group.chats) { chat in row(chat) }
+                                        .onDelete { offsets in
+                                            let ids = offsets.map { group.chats[$0].id }
+                                            chats.removeAll { ids.contains($0.id) }
+                                            Task { for id in ids { try? await model.api.deleteChat(id: id) } }
+                                        }
+                                } header: {
+                                    SectionLabel(text: Self.title(group.day))
+                                }
                             }
-                        }
-                        if !loading && chats.isEmpty {
-                            Text("Zatím žádné konverzace.").font(Typo.small).foregroundStyle(Palette.muted)
-                                .listRowBackground(Color.clear)
+                            if !loading && chats.isEmpty {
+                                Text("Zatím žádné konverzace.").font(Typo.small).foregroundStyle(Palette.muted)
+                                    .listRowBackground(Color.clear)
+                            }
                         }
                     }
                     .listStyle(.plain)
+                    .scrollDismissesKeyboard(.immediately)
                     .scrollContentBackground(.hidden)
                     Divider().overlay(Palette.ink.opacity(0.08))
                     Button { close(); memory() } label: {
@@ -1299,10 +1339,86 @@ struct ChatsPanel: View {
             guard !model.demo else { return }
             chats = (try? await model.api.chats()) ?? []
         }
+        // Searched once the typing stops for a moment, so not every letter reads the chats.
+        .task(id: searchText) {
+            results = nil
+            let text = searchText
+            guard text.count >= 2, !model.demo else { return }
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled, let found = try? await model.api.searchChats(text), !Task.isCancelled else { return }
+            results = found
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
+            TextField("Hledat v konverzacích", text: $query)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+            if !query.isEmpty {
+                Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Palette.faint) }
+                    .accessibilityLabel("Smazat hledání")
+            }
+        }
+        .font(Typo.body)
+        .padding(.horizontal, 12).frame(height: 40)
+        .background(Palette.ink.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal, 12).padding(.top, 14)
+    }
+
+    /// The chats with the word: the title, the day and the sentence it is in.
+    @ViewBuilder private var found: some View {
+        if let results {
+            Section {
+                ForEach(results) { result in
+                    Button { open(result.chatId, result.messageId); close() } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                Text(result.title ?? L10n.tr("Konverzace")).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                                Spacer(minLength: 0)
+                                if let date = Self.date(result.createdAt) {
+                                    Text(Self.title(AppModel.localDate(date))).font(Typo.caption).foregroundStyle(Palette.muted)
+                                }
+                            }
+                            (Text(L10n.tr(result.role == "user" ? "Ty" : "Kouč") + ": ").foregroundColor(Palette.muted)
+                                + Text(Self.marked(result.snippet, searchText)).foregroundColor(Palette.secondary))
+                                .font(Typo.small).lineLimit(2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(Color.clear)
+                }
+                if results.isEmpty {
+                    Text("Nic jsme nenašli.").font(Typo.small).foregroundStyle(Palette.muted)
+                        .listRowBackground(Color.clear)
+                }
+            } header: {
+                if !results.isEmpty { SectionLabel(text: L10n.plural("%lld konverzací", results.count)) }
+            }
+        } else {
+            ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
+        }
+    }
+
+    /// The searched word marked wherever it is in the text, whatever its case and accents.
+    static func marked(_ text: String, _ word: String) -> AttributedString {
+        var out = AttributedString(text)
+        guard !word.isEmpty else { return out }
+        var from = text.startIndex
+        while let range = text.range(of: word, options: [.caseInsensitive, .diacriticInsensitive], range: from..<text.endIndex) {
+            if let marked = Range(range, in: out) {
+                // The SwiftUI keys by name: UIKit has attributes of the same names.
+                out[marked][AttributeScopes.SwiftUIAttributes.BackgroundColorAttribute.self] = Palette.amberSoft
+                out[marked][AttributeScopes.SwiftUIAttributes.ForegroundColorAttribute.self] = Palette.ink
+            }
+            from = range.upperBound
+        }
+        return out
     }
 
     private func row(_ chat: ChatSummary) -> some View {
-        Button { open(chat.id); close() } label: {
+        Button { open(chat.id, nil); close() } label: {
             HStack(spacing: 10) {
                 Text(chat.title ?? L10n.tr("Konverzace")).font(Typo.body).foregroundStyle(Palette.ink).lineLimit(1)
                 Spacer(minLength: 0)

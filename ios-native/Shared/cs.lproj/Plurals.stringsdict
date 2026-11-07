@@ -202,6 +202,26 @@
 			<string>%lld dní</string>
 		</dict>
 	</dict>
+	<key>%lld konverzací</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld konverzace</string>
+			<key>many</key>
+			<string>%lld konverzací</string>
+			<key>one</key>
+			<string>%lld konverzace</string>
+			<key>other</key>
+			<string>%lld konverzací</string>
+		</dict>
+	</dict>
 	<key>%lld hodin</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -1295,6 +1315,26 @@
 			<string>%lld položka na fotce</string>
 			<key>other</key>
 			<string>%lld položek na fotce</string>
+		</dict>
+	</dict>
+	<key>zbývá %lld tréninků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>zbývají %lld tréninky</string>
+			<key>many</key>
+			<string>zbývá %lld tréninků</string>
+			<key>one</key>
+			<string>zbývá %lld trénink</string>
+			<key>other</key>
+			<string>zbývá %lld tréninků</string>
 		</dict>
 	</dict>
 </dict>

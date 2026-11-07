@@ -1,6 +1,6 @@
 // Synchronizace routes of the dashboard API (sync-destinations.js).
 import { syncLocalWorkout } from "./local-workouts.js";
-import { kickForward } from "./watch-forward.js";
+import { kickForward, appleForwardList, appleForwardDone } from "./watch-forward.js";
 import { googleToken } from "./index.js";
 import { syncOverview, DESTINATIONS, saveSyncPrefs, googleMissingScopes, sendActivity, activitySends, retrySend } from "./sync-destinations.js";
 import { L } from "./lang.js";
@@ -24,9 +24,19 @@ export async function handleSyncApi(request,env,ctx,url,session,internalAuth){
       const prefs=await saveSyncPrefs(env.DB,env.USER_ID,destination,await request.json().catch(()=>({})));
       // An app's workouts just turned on for Intervals.icu (with the last two
       // weeks, maybe): the first ones go now, not at the next five-minute run.
-      if(destination==='intervals'&&prefs.started?.length)ctx?.waitUntil?.(kickForward(env).catch(error=>console.error('Workout forward failed',error.message)));
+      if((destination==='intervals'||destination==='google')&&prefs.started?.length)ctx?.waitUntil?.(kickForward(env,{to:destination,googleToken}).catch(error=>console.error('Workout forward failed',error.message)));
       return Response.json({status:'ok',destination,prefs,...(destination==='google'&&env.GOOGLE_REFRESH_TOKEN?{missingScopes:googleMissingScopes(env,prefs)}:{})},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:error.status||400});}
+  }
+  // Workouts from other apps the iPhone writes to Apple Health (watch-forward.js).
+  if(url.pathname==='/app/api/sync/forward/apple'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    return Response.json({status:'ok',workouts:await appleForwardList(env)},{headers:{'Cache-Control':'no-store'}});
+  }
+  if(url.pathname==='/app/api/sync/forward/apple'&&request.method==='POST'){
+    if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{return Response.json(await appleForwardDone(env,await request.json().catch(()=>({}))),{headers:{'Cache-Control':'no-store'}});}
+    catch(error){return Response.json({message:error.message},{status:error.status||400});}
   }
   if(url.pathname==='/app/api/sync/activity'&&request.method==='POST'){
     if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});

@@ -156,7 +156,7 @@ struct IntegrationDetailView: View {
             reads
 
             if let sync { SyncSendGroup(id: current.id, sync: sync, store: store) }
-            if let sync, current.id == "intervals" { SyncForwardGroup(sync: sync) }
+            if let sync, ["intervals", "google", "apple"].contains(current.id) { SyncForwardGroup(to: current.id, sync: sync) }
 
             if current.id != "apple" {
                 SettingsGroup {

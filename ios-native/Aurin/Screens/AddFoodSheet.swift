@@ -351,8 +351,15 @@ struct AddFoodSheet: View {
         guard !model.demo else { return }
         readingPhoto = true
         defer { readingPhoto = false }
-        guard let jpeg = await image.jpegForUpload() else { return }
         do {
+            // A label is read on the iPhone first (free); AI only for what it missed.
+            if mode == "label" {
+                let r = try await LabelReader.read(image, api: model.api)
+                path.append(.photo(r.product, r.note))
+                message = nil
+                return
+            }
+            guard let jpeg = await image.jpegForUpload() else { return }
             let r = try await model.api.readFoodPhoto(jpeg, mode: mode)
             if r.items.count >= 2 {
                 path.append(.items(PhotoMeal(photo: image, items: r.items.map(ownFood))))

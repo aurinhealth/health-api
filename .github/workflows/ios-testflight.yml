@@ -20,6 +20,11 @@ name: iOS TestFlight
 # (.github/scripts/testflight_notes.py), or the text typed in when the
 # workflow is run by hand. A separate Linux job sets it, because App Store
 # Connect can take over 20 minutes to list a new build.
+#
+# Two builds from one archive (Petr 2026-11-07): build N (the run number)
+# without the Apple Watch app, for the testers, and N.1 with it, for the
+# owner's Close testers (vydat.yml puts each in its group). The app hides its
+# Apple Watch settings when the watch app is not in it (WatchBridge.inBuild).
 
 on:
   workflow_dispatch:
@@ -49,7 +54,7 @@ jobs:
   testflight:
     # The same image as ios-native.yml: Xcode 27 is only there.
     runs-on: xcode-27
-    timeout-minutes: 40
+    timeout-minutes: 50
     environment: ${{ github.event_name == 'pull_request' && 'testflight-pr' || 'testflight' }}
     # One upload at a time; the notes job below doesn't hold the next one up.
     concurrency:
@@ -128,25 +133,39 @@ jobs:
       # Archived without a certificate; the entitlements (App Group) go in
       # with an ad-hoc signature, and the export below signs it for real.
       # The build number is this workflow's run number, so every upload is
-      # higher than the last.
+      # higher than the last: N.1 with the Apple Watch app, and a copy with
+      # the Watch folder taken out as N (lower, so the owner's TestFlight
+      # offers N.1 when both reach him).
       - name: Archive
         id: archive
         if: steps.secrets.outputs.ready == 'true'
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          BUILD: ${{ github.run_number }}
         run: |
           xcodebuild -project Aurin.xcodeproj -scheme Aurin -configuration Release \
             -destination 'generic/platform=iOS' -archivePath build/Aurin.xcarchive \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CURRENT_PROJECT_VERSION="$BUILD.1" \
             CODE_SIGNING_ALLOWED=NO archive
-          app=build/Aurin.xcarchive/Products/Applications/Aurin.app
-          codesign --force --sign - --entitlements AurinWidgets/AurinWidgets.entitlements "$app/PlugIns/AurinWidgets.appex"
-          codesign --force --sign - "$app/PlugIns/AurinNotifications.appex"
-          codesign --force --sign - "$app/PlugIns/AurinMorning.appex"
-          codesign --force --sign - --entitlements AurinWatchWidgets/AurinWatchWidgets.entitlements "$app/Watch/AurinWatch.app/PlugIns/AurinWatchWidgets.appex"
-          codesign --force --sign - --entitlements AurinWatch/AurinWatch.entitlements "$app/Watch/AurinWatch.app"
-          codesign --force --sign - --entitlements Aurin/Aurin.entitlements "$app"
-          echo "version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Info.plist")" >> "$GITHUB_OUTPUT"
+          ditto build/Aurin.xcarchive build/AurinNoWatch.xcarchive
+          plain=build/AurinNoWatch.xcarchive/Products/Applications/Aurin.app
+          rm -rf "$plain/Watch"
+          for plist in "$plain/Info.plist" "$plain"/PlugIns/*.appex/Info.plist; do
+            /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$plist"
+          done
+          /usr/libexec/PlistBuddy -c "Set :ApplicationProperties:CFBundleVersion $BUILD" build/AurinNoWatch.xcarchive/Info.plist
+          for archive in build/Aurin.xcarchive build/AurinNoWatch.xcarchive; do
+            app="$archive/Products/Applications/Aurin.app"
+            codesign --force --sign - --entitlements AurinWidgets/AurinWidgets.entitlements "$app/PlugIns/AurinWidgets.appex"
+            codesign --force --sign - "$app/PlugIns/AurinNotifications.appex"
+            codesign --force --sign - "$app/PlugIns/AurinMorning.appex"
+            if [ -d "$app/Watch" ]; then
+              codesign --force --sign - --entitlements AurinWatchWidgets/AurinWatchWidgets.entitlements "$app/Watch/AurinWatch.app/PlugIns/AurinWatchWidgets.appex"
+              codesign --force --sign - --entitlements AurinWatch/AurinWatch.entitlements "$app/Watch/AurinWatch.app"
+            fi
+            codesign --force --sign - --entitlements Aurin/Aurin.entitlements "$app"
+          done
+          echo "version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$plain/Info.plist")" >> "$GITHUB_OUTPUT"
 
       # The Apple Watch app's ID needs HealthKit for its gym workout; the
       # export below makes its profile but adds no capability to an ID it
@@ -161,7 +180,8 @@ jobs:
         run: python3 .github/scripts/asc_capability.py health.aurin.app.watchkitapp HEALTHKIT
 
       # Cloud-managed Apple Distribution certificate, App Store profiles
-      # created on the fly, and the upload straight to App Store Connect.
+      # created on the fly, and the upload straight to App Store Connect:
+      # first N without the watch, then N.1 with it.
       - name: Sign and upload to TestFlight
         id: upload
         if: steps.secrets.outputs.ready == 'true'
@@ -184,13 +204,15 @@ jobs:
           </dict>
           </plist>
           EOF
-          xcodebuild -exportArchive -archivePath build/Aurin.xcarchive \
-            -exportOptionsPlist build/ExportOptions.plist -exportPath build/export \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
-          echo "Uploaded build ${{ github.run_number }}; it shows in TestFlight once Apple finishes processing it." >> "$GITHUB_STEP_SUMMARY"
+          for archive in AurinNoWatch Aurin; do
+            xcodebuild -exportArchive -archivePath "build/$archive.xcarchive" \
+              -exportOptionsPlist build/ExportOptions.plist -exportPath "build/export-$archive" \
+              -allowProvisioningUpdates \
+              -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+              -authenticationKeyID "$ASC_KEY_ID" \
+              -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          done
+          echo "Uploaded build ${{ github.run_number }} (without the Apple Watch app) and ${{ github.run_number }}.1 (with it); they show in TestFlight once Apple finishes processing them." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove the API key
         if: always()
@@ -243,11 +265,14 @@ jobs:
           ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
           BUNDLE_ID: health.aurin.app
           MARKETING_VERSION: ${{ needs.testflight.outputs.version }}
-          BUILD_NUMBER: ${{ github.run_number }}
+          BUILD: ${{ github.run_number }}
         run: |
           printf '%s\n' "$ASC_KEY_P8" > "$ASC_KEY_PATH"
           chmod 600 "$ASC_KEY_PATH"
-          python3 .github/scripts/testflight_notes.py upload build/WhatToTest.txt
+          # Both builds: N without the watch, N.1 with it.
+          for number in "$BUILD" "$BUILD.1"; do
+            BUILD_NUMBER="$number" python3 .github/scripts/testflight_notes.py upload build/WhatToTest.txt
+          done
 
       - name: Remove the API key
         if: always()

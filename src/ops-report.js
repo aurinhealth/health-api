@@ -5,6 +5,7 @@
 // deletions that keep failing, and the accounts and AI against what Pro brings
 // in, with proposals for the limits (accountsReport), every morning.
 import { AsyncLocalStorage } from "node:async_hooks";
+import { featureName } from "./ai-features.js";
 import { emailConfigured, sendEmail } from "./email-sender.js";
 import { accountCapacity, openReserveShards, reserveCapacity, RESERVE_OPEN_BELOW, RESERVE_SHARD_USERS } from "./tenancy.js";
 import { aiMonthlyLimitUsd, ensureAiUsage } from "./ai-usage.js";
@@ -23,13 +24,23 @@ export async function ensureOpsEvents(db) {
   await db.prepare("CREATE TABLE IF NOT EXISTS ops_events (day TEXT NOT NULL,kind TEXT NOT NULL,service TEXT NOT NULL,count INTEGER NOT NULL DEFAULT 0,last_message TEXT,PRIMARY KEY(day,kind,service))").run();
 }
 
+// A slow request keeps the day's slowest message and a slow cron job the one
+// that read the most rows (what flags each, request-timing.js slowness), so the
+// report's "až" is the worst of the day, not the last.
+const slowRank = (message, cron) => Number(String(message || "").match(cron ? /(\d+) řádků/ : /^(\d+) ms/)?.[1]) || 0;
 // Never breaks what it watches: a failed write is only logged.
 export async function recordOpsEvent(db, kind, service, message = "", count = 1) {
   if (!db || !count) return;
   try {
     await ensureOpsEvents(db);
-    await db.prepare("INSERT INTO ops_events(day,kind,service,count,last_message) VALUES(?,?,?,?,?) ON CONFLICT(day,kind,service) DO UPDATE SET count=count+excluded.count,last_message=excluded.last_message")
-      .bind(day(), kind, String(service || "-"), count, text(message)).run();
+    const name = String(service || "-"), cron = name.startsWith("cron ");
+    let kept = text(message);
+    if (kind === "slow") {
+      const before = await db.prepare("SELECT last_message FROM ops_events WHERE day=? AND kind='slow' AND service=?").bind(day(), name).first();
+      if (before && slowRank(before.last_message, cron) > slowRank(kept, cron)) kept = null;
+    }
+    await db.prepare("INSERT INTO ops_events(day,kind,service,count,last_message) VALUES(?,?,?,?,?) ON CONFLICT(day,kind,service) DO UPDATE SET count=count+excluded.count,last_message=COALESCE(excluded.last_message,ops_events.last_message)")
+      .bind(day(), kind, name, count, kept).run();
   } catch (error) { original.call(console, "Ops event write failed", error.message); }
 }
 
@@ -68,13 +79,6 @@ const SERVICE_NAMES = {
 };
 const label = service => SERVICE_NAMES[service] || service;
 
-const FEATURE_NAMES = {
-  assistant: "chat s koučem", "screen-text": "věty kouče na obrazovkách", reflection: "poznámka po tréninku", "week-revision": "revize týdne",
-  "week-plan": "plán týdne", "day-review": "revize dne", "workout-pick": "výběr tréninku dne", "workout-compose": "sestavení tréninku dne",
-  "workout-describe": "popis vlastního tréninku", "session-change": "úprava tréninku slovy", "gym-adjust": "úprava posilovny slovy",
-  "gym-equipment": "vybavení posilovny", technique: "technika cviku", "food-photo": "jídlo z fotky", "food-lookup": "dohledání potraviny",
-  "food-sentence": "jídlo větou", barcode: "čárový kód"
-};
 const usd = value => `${(Number(value) || 0).toFixed(2)} $`;
 
 // rows: one per user and feature for yesterday ({who, feature, calls, cost,
@@ -87,7 +91,7 @@ const usd = value => `${(Number(value) || 0).toFixed(2)} $`;
 export function callPrices(calls = []) {
   const by = new Map();
   for (const c of calls) {
-    const key = c.group + " · " + (FEATURE_NAMES[c.feature] || c.feature || "jiné");
+    const key = c.group + " · " + (c.feature ? featureName(c.feature) : "jiné");
     if (!by.has(key)) by.set(key, []);
     by.get(key).push(Number(c.cost) || 0);
   }
@@ -108,7 +112,7 @@ export function aiSummary(rows, month, limit, calls = []) {
   }
   const list = [...users.values()].sort((a, b) => b.cost - a.cost);
   for (const u of list) u.features = u.features.sort((a, b) => (Number(b.cost) || 0) - (Number(a.cost) || 0) || (Number(b.calls) || 0) - (Number(a.calls) || 0)).slice(0, 3)
-    .map(f => ({ name: FEATURE_NAMES[f.feature] || f.feature || "jiné", calls: Number(f.calls) || 0 }));
+    .map(f => ({ name: f.feature ? featureName(f.feature) : "jiné", calls: Number(f.calls) || 0 }));
   const sum = key => rows.reduce((acc, row) => acc + (Number(row[key]) || 0), 0), input = sum("input");
   const months = month.map(m => ({ who: m.who ?? m.email, cost: Number(m.cost) || 0, owner: Boolean(m.owner), share: limit ? Math.round((Number(m.cost) || 0) / limit * 100) : null }));
   // By name only the owner and accounts past half the cap; the rest as one sum.
@@ -250,7 +254,7 @@ export function barcodeReport(rows) {
 export function opsReport(rows, capacity, date, ai = null, stuckDeletions = [], accounts = null) {
   const of = kind => rows.filter(row => row.kind === kind).sort((a, b) => b.count - a.count);
   const sections = [];
-  const list = items => items.map(row => `- ${label(row.service)}: ${row.count}×${row.last_message ? ` (naposledy: ${row.last_message})` : ""}`).join("\n");
+  const list = items => items.map(row => `- ${label(row.service)}: ${row.count}×${row.last_message ? ` (${row.kind === "slow" ? "nejdéle" : "naposledy"}: ${row.last_message})` : ""}`).join("\n");
   if (of("sync").length) sections.push(`Selhané synchronizace\n${list(of("sync"))}`);
   if (of("broken").length) sections.push(`Rozbitá propojení (uživatel musí znovu připojit)\n${list(of("broken"))}`);
   if (of("server").length) sections.push(`Chyby serveru\n${list(of("server"))}`);

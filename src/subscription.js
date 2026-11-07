@@ -1,7 +1,8 @@
 import { L } from './lang.js';
 import { consentStatus } from './consent.js';
-import { storeConfigured } from './app-store.js';
+import { storeConfigured, proActive, subscriptionRow } from './app-store.js';
 import { FREE_PLANS } from './training-plans.js';
+import { isFreeFeature } from './ai-features.js';
 // Aurin Pro can be bought in the app (app-store.js); AI still needs it only once
 // AI_PAYWALL_ENABLED is on. Until then (the pilot) everyone has AI.
 // AI_PAYWALL_ENABLED (Worker var): 'true' turns the paid split on for everyone;
@@ -22,7 +23,7 @@ export const SUBSCRIPTION_FEATURES = [
   {name:'AI hodnocení dne, týdne a odcvičeného tréninku', ai:true},
   {name:'Rozpoznání jídla a etikety z fotky pomocí AI', ai:true},
   {name:'AI zápis jídla vlastními slovy a webové dohledání potravin', ai:true},
-  {name:'AI doplnění chybějící techniky cviku mimo katalog', ai:true},
+  {name:'AI doplnění chybějící techniky cviku mimo katalog', ai:false},
   {name:'Vitamíny, minerály, vlastní makra a nutriční cíle', ai:true}
 ];
 const FEATURES_EN = {"Vitamíny, minerály, vlastní makra a nutriční cíle": "Vitamins, minerals, custom macros and nutrient targets", "Profil, kalorické cíle a přehledy": "Profile, calorie goals and overviews", "Ruční zápis jídla, váhy a tréninků": "Manual logging of food, weight and workouts", "Moje potraviny, moje jídla a hledání v katalogu": "My foods, my meals and catalog search", "Základní generování a plánování tréninků": "Basic workout generation and planning", "Propojení a synchronizace služeb": "Connecting and syncing services", "AI trenér a úpravy plánů vlastními slovy": "AI coach and plan changes in your own words", "AI hodnocení dne, týdne a odcvičeného tréninku": "AI review of the day, the week and a completed workout", "Rozpoznání jídla a etikety z fotky pomocí AI": "AI recognition of meals and labels from a photo", "AI zápis jídla vlastními slovy a webové dohledání potravin": "AI food logging in your own words and web lookup of foods", "AI doplnění chybějící techniky cviku mimo katalog": "AI technique cards for exercises outside the catalog"};
@@ -45,9 +46,7 @@ export async function subscriptionStatus(env) {
   // Until Pro can be bought, everyone has Pro (testers see it unlocked, Pro icons included).
   let plan=enforced?'free':'ai';
   if(enforced && env.DB){
-    await env.DB.prepare('CREATE TABLE IF NOT EXISTS subscriptions (user_id INTEGER PRIMARY KEY,plan TEXT NOT NULL DEFAULT \'free\',valid_until TEXT)').run();
-    const row=await env.DB.prepare('SELECT plan,valid_until FROM subscriptions WHERE user_id=?').bind(env.USER_ID ?? env.DB.userId).first();
-    if(row?.plan==='ai' && row.valid_until && Date.parse(row.valid_until)>Date.now())plan='ai';
+    if(proActive(env,await subscriptionRow(env)))plan='ai';
   }
   // AI sends the user's data to OpenAI, so it needs the user's AI consent
   // (consent.js); the owner has it until he turns it off. Fail-closed: any env
@@ -63,16 +62,16 @@ export async function subscriptionStatus(env) {
 export async function plansUnlocked(env){
   if(!paywallOn(env))return true;
   if(!env.DB)return false;
-  const row=await env.DB.prepare('SELECT plan,valid_until FROM subscriptions WHERE user_id=?').bind(env.USER_ID ?? env.DB.userId).first().catch(()=>null);
-  return row?.plan==='ai'&&Boolean(row.valid_until)&&Date.parse(row.valid_until)>Date.now();
+  return proActive(env,await subscriptionRow(env).catch(()=>null));
 }
 export async function assertPlanAccess(env,template){
   if(FREE_PLANS.has(template.id)||await plansUnlocked(env))return;
   const error=new Error(L('Tento plán je součástí Aurin Pro.', 'This plan is part of Aurin Pro.'));error.status=402;throw error;
 }
-export async function assertAIAccess(env){
+// A free feature (ai-features.js) needs only the consent, not Pro.
+export async function assertAIAccess(env,feature=null){
   const status=await subscriptionStatus(env);
-  if(status.aiAccess)return;
+  if(status.aiAccess||(status.aiConsent&&isFreeFeature(feature)))return;
   if(!status.aiConsent){const error=new Error(L('AI funkce potřebují tvůj souhlas. Zapneš je v Nastavení → Soukromí a data.', 'AI features need your consent. Turn them on in Settings → Privacy & data.'));error.status=403;error.ai=true;error.consent=true;throw error;}
   const error=new Error(L('Tato AI funkce je součástí Aurin Pro. Najdeš ho v Nastavení → Aurin Pro.', 'This AI feature is part of Aurin Pro. See Settings → Aurin Pro.'));error.status=402;error.ai=true;error.limit=true;throw error;
 }

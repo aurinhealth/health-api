@@ -16,7 +16,9 @@ extension WatchSnapshot.Alarm {
 
     func wake(on morning: Date) -> String? {
         let calendar = Calendar.current
-        if let evening, let wake, let day = Self.day(evening),
+        // Tonight's wake time only when chosen for that morning: without one it is
+        // the time the night is planned to end, not an alarm (both alarms off).
+        if wakeOnce == true, let evening, let wake, let day = Self.day(evening),
            let after = calendar.date(byAdding: .day, value: 1, to: day), calendar.isDate(after, inSameDayAs: morning) {
             return wake
         }
