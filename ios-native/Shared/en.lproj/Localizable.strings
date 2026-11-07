@@ -4093,3 +4093,11 @@
 "rychlejší ↑" = "faster ↑";
 "tvým tempem" = "at your pace";
 "Intenzivní a maximální minuty se počítají dvakrát · WHO 150 min týdně" = "Vigorous and peak minutes count twice · WHO 150 min a week";
+"posledních 60 dní" = "last 60 days";
+"Nejnižší noc" = "Lowest night";
+"7denní průměr" = "7-day average";
+"jedna noc" = "one night";
+"jeden den" = "one day";
+"Dotkni se grafu a uvidíš jednu noc." = "Touch the chart to see a single night.";
+"Dotkni se grafu a uvidíš jeden den." = "Touch the chart to see a single day.";
+"průměr za %@ dní" = "%@-day average";

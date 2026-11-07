@@ -341,6 +341,8 @@ struct TrendDotsChart: View {
     var hi: Double
     var height: CGFloat = 64
     var scale: [ScaleTick] = []
+    /// The line's colour (weight's amber unless given), its dots a faint shade of it.
+    var color: Color? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -353,11 +355,11 @@ struct TrendDotsChart: View {
                     ChartScale(ticks: scale, width: width, y: y)
                 }
                 ForEach(raw.indices, id: \.self) { i in
-                    Circle().fill(Palette.amberBar.opacity(0.4)).frame(width: 4, height: 4)
+                    Circle().fill((color ?? Palette.amberBar).opacity(0.4)).frame(width: 4, height: 4)
                         .position(x: x(i, raw.count), y: y(raw[i]))
                 }
                 Path { p in p.addLines(trend.indices.map { CGPoint(x: x($0, trend.count), y: y(trend[$0])) }) }
-                    .stroke(Palette.amber, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+                    .stroke(color ?? Palette.amber, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
                 if let goal {
                     DashedLine()
                         .stroke(Palette.green, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))

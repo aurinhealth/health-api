@@ -476,7 +476,7 @@ struct WeightDetailContent: View {
                     let lo = (all.min() ?? 70) - 0.5, hi = (all.max() ?? 90) + 0.5
                     let goalTick = goal.map { [ScaleTick(value: $0, text: Fmt.int($0), color: Palette.green, line: false, name: L10n.tr("cíl"))] } ?? []
                     VStack(spacing: 6) {
-                        TrendDotsChart(raw: raw, trend: smoothed(raw), goal: goal, lo: lo, hi: hi, height: 160,
+                        TrendDotsChart(raw: raw, trend: Self.smoothed(raw), goal: goal, lo: lo, hi: hi, height: 160,
                                        scale: scaleTicks(lo, hi, extra: goalTick))
                         ChartDates(marks: monthMarks(w.series.map(\.date)), trailing: scaleWidth)
                         ChartLegend(items: [ChartLegend.Item(color: Palette.amberBar.opacity(0.6), text: L10n.tr("vážení"), mark: .dot),
@@ -514,7 +514,8 @@ struct WeightDetailContent: View {
         }
     }
 
-    private func smoothed(_ values: [Double]) -> [Double] {
+    /// The trend through the weigh-ins (also body fat and muscle): each one moves it a quarter of the way.
+    static func smoothed(_ values: [Double]) -> [Double] {
         var out: [Double] = []
         for v in values { out.append(out.last.map { $0 + 0.25 * (v - $0) } ?? v) }
         return out
