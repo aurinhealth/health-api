@@ -54,7 +54,7 @@ test("Doporučení trenéra builds the ride and run like the library's proposal 
   const route = src.slice(src.indexOf("if(url.pathname==='/app/api/coach/pick')"), src.indexOf("if(url.pathname==='/app/api/coach/check-in'"));
   assert.match(route, /defaultDayCoach\(env,\{\.\.\.inputs,athleteState:athlete\},date,'ride',week\)/);
   const helper = src.slice(src.indexOf("async function defaultDayCoach"), src.indexOf("// The athlete's ratings since a day"));
-  for (const part of [/targetFor\(targets,date,sport\)/, /roleFor\(prefs,date,sport/, /trainingBudget\(prefs,date/, /getCapabilities\(env\.DB,sport\)/]) assert.match(helper, part);
+  for (const part of [/targetFor\(targets,date,sport\)/, /roleFor\(prefs,date,sport/, /trainingBudget\(prefs,date/, /capabilitiesWithLevel\(env\.DB,sport\)/]) assert.match(helper, part);
 });
 
 test("after a ride the activity says what was done, then recommends stretching", () => {

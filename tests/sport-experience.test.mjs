@@ -43,6 +43,14 @@ test('another sport raises a level by one step at most',()=>{
   assert.deepEqual(cyclist,{strength:'regular',ride:'experienced',run:'regular',swim:'beginner'});
   assert.equal(sportExperience({activities:sessions('ride',monthsFrom(2026,1,5))}).strength,'regular');
 });
+test("each sport's own level, without the lift from the other sports, for the coach engine",async()=>{
+  const {experienceFromWeeks}=await import('../src/training-history.js');
+  const {summarizeWeeks}=await import('../src/training-history.js');
+  const weeks=summarizeWeeks({activities:sessions('ride',monthsFrom(2024,10,25))});
+  assert.equal(experienceFromWeeks(weeks).run,'regular');
+  assert.equal(experienceFromWeeks(weeks,{crossOver:false}).run,'beginner');
+  assert.equal(experienceFromWeeks(weeks,{crossOver:false}).ride,'experienced');
+});
 test('settings: per-sport auto/manual, the old single experience is the gym manual level',async()=>{
   const raw=createD1();raw.sqlite.exec(schema);const db=scopedDb(raw,1);
   await db.prepare('CREATE TABLE IF NOT EXISTS user_setup (user_id INTEGER PRIMARY KEY,completed_at TEXT,training_json TEXT NOT NULL DEFAULT \'{}\')').run();

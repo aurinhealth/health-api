@@ -274,7 +274,7 @@ export function engineForAI(engine,{cycleShared=false}={}){
   return out;
 }
 
-export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null,focus=null,profile=null,checkin=null,upcomingTest=null,recoveryTime=null,today=null,returns=null}={}){
+export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},experience=null,sport="ride",athleteState=null,focus=null,profile=null,checkin=null,upcomingTest=null,recoveryTime=null,today=null,returns=null}={}){
   const policy=trainingStatus(athleteState);
   sport=sport==="run"||sport==="swim"?sport:"ride";
   const W=L(WORDS_CS,WORDS_EN)[sport],isSport=sport==="run"?isRun:sport==="swim"?isSwim:isRide,hardOf=sport==="run"?isHardRun:sport==="swim"?isHardSwim:isHard,run=sport==="run",swim=sport==="swim",short=run||swim;
@@ -378,8 +378,14 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   // this sport. Intervals, long sessions and the load-based recovery week wait
   // until the base is there.
   // Fitness from riding or running does not make a swimmer: swimming is a
-  // skill, so a swimmer is new until they have swum regularly.
-  const novice=swim?completedAll.length<4:ctl!=null?ctl<15:completedAll.length<4;
+  // skill, so a swimmer is new until they have swum regularly, and a swimmer
+  // set to Beginner (Profile → Experience) until they raise the level.
+  // A runner too: CTL counts every sport, but tendons and bones come only from
+  // running, so a fit cyclist who has hardly run (running level Beginner by hand,
+  // or by Auto without the lift from other sports) is new to running.
+  // `experience`: capabilitiesWithLevel (workout-library.js); none = as before.
+  const beginner=experience==="beginner";
+  const novice=swim?completedAll.length<4||beginner:run&&beginner?true:ctl!=null?ctl<15:completedAll.length<4;
 
   const plannedToday=planned.find(a=>isoDate(a.date)===targetDate)||daily?.training?.planned?.find(isSport)||null;
   const plannedInfo=plannedToday?classifyPlannedWorkout(plannedToday,sport):null;

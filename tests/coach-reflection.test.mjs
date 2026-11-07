@@ -124,7 +124,7 @@ test("RPE feedback starts the coach's note in the background", () => {
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   assert.match(entry, /if\(reflect\)ctx\.waitUntil\(createReflection\(/);
   assert.match(entry, /url\.pathname==='\/app\/api\/coach\/reflections'/);
-  assert.match(entry, /coachContext\(\{\.\.\.inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,athleteFeedback,coachNotes,athleteState,/);
+  assert.match(entry, /coachContext\(\{\.\.\.inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,experience,athleteFeedback,coachNotes,athleteState,/);
 });
 
 test("the note after a workout sees HRV and resting HR from the watch, the readiness and the gym sets", async () => {

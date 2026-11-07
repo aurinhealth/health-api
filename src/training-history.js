@@ -59,7 +59,7 @@ export function summarizeWeeks({activities=[],strengthSets=[]}={},mondays=null){
 // It counts months with training (>=4 sessions of that sport; a week belongs to
 // the month of its Thursday), never how recent they are, so a pause for illness
 // or injury does not lower the level.
-export function experienceFromWeeks(weeks=[],{weightKg=null,ftp=null,runThresholdPace=null}={}){
+export function experienceFromWeeks(weeks=[],{weightKg=null,ftp=null,runThresholdPace=null,crossOver=true}={}){
   const rank=l=>EXPERIENCE_LEVELS.indexOf(l),max=(a,b)=>rank(a)>=rank(b)?a:b;
   const monthOf=w=>shiftDate(w.week,3).slice(0,7);
   const activeMonths=key=>{const per={};for(const w of weeks)per[monthOf(w)]=(per[monthOf(w)]||0)+(Number(w[key])||0);return Object.values(per).filter(n=>n>=4).length;};
@@ -81,7 +81,7 @@ export function experienceFromWeeks(weeks=[],{weightKg=null,ftp=null,runThreshol
   const km={};for(const w of weeks)km[monthOf(w)]=(km[monthOf(w)]||0)+(Number(w.run_km)||0);
   if(Object.values(km).some(v=>v>30*52/12))run=max(run,'regular');
   const own={strength,ride,run},out={};
-  for(const sport of Object.keys(own)){const other=Math.max(...Object.keys(own).filter(s=>s!==sport).map(s=>rank(own[s])));out[sport]=EXPERIENCE_LEVELS[Math.max(rank(own[sport]),Math.min(other,rank(own[sport])+1))];}
+  for(const sport of Object.keys(own)){const other=Math.max(...Object.keys(own).filter(s=>s!==sport).map(s=>rank(own[s])));out[sport]=crossOver?EXPERIENCE_LEVELS[Math.max(rank(own[sport]),Math.min(other,rank(own[sport])+1))]:own[sport];}
   // Swimming is technique: fitness from the other sports doesn't make a swimmer.
   out.swim=byMonths(activeMonths('swim_n'));
   return out;
@@ -182,6 +182,9 @@ export async function trainingHistory(db,userId=db.userId,{now=Date.now()}={}){
   const activities=from&&from<=daysBack(84)?[...read.filter(a=>a.date>=daysBack(84)),...await readActivities(db,userId,mondayOfDate(end),end)]:await readActivities(db,userId,daysBack(84),end);
   const weight=await latestStoredWeight(db,userId).catch(()=>null);
   const sportExperienceLevels=experienceFromWeeks(weeks,{weightKg:weight?.value_numeric});
+  // Each sport's own level, without the lift from the other sports: the coach
+  // engine's "new to this sport" (a fit cyclist who has hardly run is new to running).
+  const sportExperienceOwn=experienceFromWeeks(weeks,{weightKg:weight?.value_numeric,crossOver:false});
   const training=activities.filter(a=>SPORT_KINDS.includes(a.kind));
   const recent=training.filter(a=>a.date>=daysBack(28));
   const {mainSport,regularSports,supportSports:support,yearCount}=mainSportFromWeeks(weeks,training.filter(a=>a.date>=daysBack(56)));
@@ -193,7 +196,7 @@ export async function trainingHistory(db,userId=db.userId,{now=Date.now()}={}){
   const sports=yearFromWeeks(weeks,mondayOfDate(daysBack(364)));
   // The pool of the last pool swim (25 or 50 m, 25 yd): the default until one is chosen by hand.
   const poolLength=[...activities].reverse().find(a=>a.kind==='swim'&&POOL_LENGTHS.some(m=>Math.abs(m-a.poolLength)<.1))?.poolLength??[...weeks].reverse().find(w=>w.pool>0)?.pool??null;
-  return {mainSport,supportSports:support,regularSports,experience,sportExperience:sportExperienceLevels,sports,poolLength,weeklyMinutes,weeklyHours:Math.round(weeklyMinutes/60*10)/10,automaticSportAvailable:recent.length>0,activeWeeks,activityCount:training.length,yearCount,recentCount:recent.length,recentActiveWeeks:new Set(recent.map(a=>mondayOfDate(a.date))).size,weekdayMinutes,periods:{sportDays:364,experienceDays:84,sportExperienceDays:EXPERIENCE_DAYS,volumeDays:28}};
+  return {mainSport,supportSports:support,regularSports,experience,sportExperience:sportExperienceLevels,sportExperienceOwn,sports,poolLength,weeklyMinutes,weeklyHours:Math.round(weeklyMinutes/60*10)/10,automaticSportAvailable:recent.length>0,activeWeeks,activityCount:training.length,yearCount,recentCount:recent.length,recentActiveWeeks:new Set(recent.map(a=>mondayOfDate(a.date))).size,weekdayMinutes,periods:{sportDays:364,experienceDays:84,sportExperienceDays:EXPERIENCE_DAYS,volumeDays:28}};
 }
 export function starterPlan(history,experience=history.experience){
   // These are app templates, not published averages of free time. An inactive
