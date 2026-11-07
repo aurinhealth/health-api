@@ -443,26 +443,83 @@ enum GymCoach {
 
     // MARK: Exercise history
 
-    /// Epley: kg × (1 + reps / 30), the best set of the history.
-    static func oneRepMax(_ exercise: GymHistory.Exercise) -> Double? {
-        let values: [Double] = exercise.sessions.flatMap { $0.sets }.compactMap { lift in
-            guard let kg = lift.kg, kg > 0, let reps = lift.reps, reps > 0 else { return nil }
-            return reps == 1 ? kg : kg * (1 + reps / 30)
+    /// The work of a session: kg × reps of its sets.
+    static func volume(_ session: GymHistory.Session) -> Double {
+        session.sets.reduce(0) { $0 + ($1.kg ?? 0) * ($1.reps ?? 0) }
+    }
+
+    static func reps(_ session: GymHistory.Session) -> Int {
+        session.sets.reduce(0) { $0 + Int($1.reps ?? 0) }
+    }
+
+    /// The heaviest set (the most reps at that weight) and the day it was
+    /// first done.
+    static func heaviestSet(_ exercise: GymHistory.Exercise) -> (lift: GymHistory.Lift, date: String)? {
+        var best: (lift: GymHistory.Lift, date: String)?
+        for session in exercise.sessions.reversed() {
+            for lift in session.sets {
+                guard let kg = lift.kg, kg > 0 else { continue }
+                let top = best?.lift.kg ?? 0
+                if kg > top || (kg == top && (lift.reps ?? 0) > (best?.lift.reps ?? 0)) { best = (lift, session.date) }
+            }
         }
-        guard let best = values.max() else { return nil }
-        return (best * 2).rounded() / 2
+        return best
     }
 
-    static func best(_ exercise: GymHistory.Exercise) -> Double? {
-        exercise.sessions.compactMap(topKg).max()
+    /// The best estimated 1RM (GymSessionMath.e1rm, sets up to 12 reps) to
+    /// half a kilo, and the day it was first reached.
+    static func oneRepMax(_ exercise: GymHistory.Exercise) -> (kg: Double, date: String)? {
+        firstBest(exercise) { $0.sets.map(GymSessionMath.e1rm).max() ?? 0 }.map { ((($0.value * 2).rounded()) / 2, $0.date) }
     }
 
-    /// The heaviest set now against the first session of the last 3 months.
-    static func change(_ exercise: GymHistory.Exercise, today: String) -> Double? {
-        let since = ISODay.shift(today, -91)
-        let recent = exercise.sessions.filter { $0.date >= since }
-        guard recent.count >= 2, let now = recent.first.flatMap(topKg), let then = recent.last.flatMap(topKg) else { return nil }
-        return now - then
+    /// The most work in one session (kg × reps).
+    static func bestVolume(_ exercise: GymHistory.Exercise) -> (kg: Double, date: String)? {
+        firstBest(exercise, volume).map { ($0.value, $0.date) }
+    }
+
+    /// Body weight exercises: the most reps in one set.
+    static func mostReps(_ exercise: GymHistory.Exercise) -> (reps: Int, date: String)? {
+        firstBest(exercise) { $0.sets.compactMap(\.reps).max() ?? 0 }.map { (Int($0.value), $0.date) }
+    }
+
+    /// Body weight exercises: the most reps in one session.
+    static func mostSessionReps(_ exercise: GymHistory.Exercise) -> (reps: Int, date: String)? {
+        firstBest(exercise) { Double(reps($0)) }.map { (Int($0.value), $0.date) }
+    }
+
+    private static func firstBest(_ exercise: GymHistory.Exercise, _ value: (GymHistory.Session) -> Double) -> (value: Double, date: String)? {
+        var best: (value: Double, date: String)?
+        for session in exercise.sessions.reversed() {
+            let v = value(session)
+            if v > 0, v > (best?.value ?? 0) + 0.01 { best = (v, session.date) }
+        }
+        return best
+    }
+
+    /// Session day → the set that beat every earlier session's estimated 1RM
+    /// ("PR"). The first session sets no record.
+    static func recordSets(_ exercise: GymHistory.Exercise) -> [String: Int] {
+        var out: [String: Int] = [:]
+        var before = 0.0
+        for (n, session) in exercise.sessions.reversed().enumerated() {
+            let values = session.sets.map(GymSessionMath.e1rm)
+            guard let top = values.max(), let i = values.firstIndex(of: top) else { continue }
+            if n > 0, before > 0, top > before + 0.01 { out[session.date] = i }
+            before = max(before, top)
+        }
+        return out
+    }
+
+    /// Against the session before: the heaviest set's weight ("+6,3 kg"), at
+    /// the same weight the reps ("+2 op."); nil when nothing changed.
+    static func change(_ session: GymHistory.Session, from previous: GymHistory.Session?) -> String? {
+        guard let previous else { return nil }
+        if let now = topKg(session), let then = topKg(previous), abs(now - then) >= 0.05 {
+            return (now > then ? "+" : "−") + shown(abs(now - then)) + " " + Units.weightUnit
+        }
+        let diff = reps(session) - reps(previous)
+        guard diff != 0 else { return nil }
+        return (diff > 0 ? "+" : "−") + L10n.plural("%lld opakování", abs(diff))
     }
 
     /// Clock of a workout: "1:02" h, or "52" min under an hour.

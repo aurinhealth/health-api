@@ -75,7 +75,7 @@ struct InsightsView: View {
             history = await lifts ?? GymHistory.empty
         }
         .sheet(item: $opened) { lift in
-            ExerciseHistorySheet(name: Fmt.capitalized(lift.exercise), exercise: history.exercise(lift.exercise), today: today,
+            ExerciseHistorySheet(name: Fmt.capitalized(lift.exercise), exercise: history.exercise(lift.exercise),
                                  pinned: Binding(get: { pinned.contains(lift.exercise) }, set: { _ in togglePin(lift.exercise) }))
         }
     }

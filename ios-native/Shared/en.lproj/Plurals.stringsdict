@@ -322,6 +322,22 @@
 			<string>%lld ingredients</string>
 		</dict>
 	</dict>
+	<key>%lld opakování</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld rep</string>
+			<key>other</key>
+			<string>%lld reps</string>
+		</dict>
+	</dict>
 	<key>%lld sérií</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

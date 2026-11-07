@@ -65,7 +65,7 @@ struct WatchGym: Codable, Equatable, Sendable {
 
         /// The estimated one-rep max, as on the iPhone (GymSessionMath.e1rm).
         var e1rm: Double {
-            guard let kg, kg > 0, reps > 0 else { return 0 }
+            guard let kg, kg > 0, reps > 0, reps <= 12 else { return 0 }
             return reps == 1 ? kg : kg * (1 + Double(reps) / 30)
         }
     }
