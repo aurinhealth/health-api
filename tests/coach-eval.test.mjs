@@ -15,7 +15,7 @@ const failed = (id, reply) => checkReply(scenarioById(id), reply, now, date).fil
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
-  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
+  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'S50', 'S51', 'S52', 'S53', 'S54', 'S55', 'S56', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
   const zone = id => scenarioContext(scenarioById(id), date, now).ctx.cyclingCoachV2.readiness;
   assert.equal(zone('S01').todayZone, 'green');
   for (const id of ['S02', 'S03', 'S08']) assert.equal(zone(id).status, 'red', id);
@@ -101,7 +101,7 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.equal((await handleCoachEval(post({}), staging, null)).status, 401);
   assert.equal((await handleCoachEval(post({}), staging, { kind: 'system' })).status, 401);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
-  assert.equal(list.scenarios.length, 52);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
+  assert.equal(list.scenarios.length, 59);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
   const run = async (env, s) => ({ id: s.id, status: 'ok', lang: lang() });
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
@@ -653,4 +653,45 @@ test('run 51: a date "26. 10." does not end the sentence, "mluvíš" and "pomáh
     kept: [move('planned:9103', '2026-10-26'), move('planned:9105', '2026-10-28')] });
   assert.ok(!s28.includes('text zmiňuje každou kartu'), s28.join());
   assert.deepEqual(failed('S44', { answer: 'Pomalý běh v zóně 2 ti pomáhá budovat vytrvalost bez velké únavy, takže můžeš běhat pravidelně. Zóna 2 znamená lehké úsilí, při kterém ještě mluvíš v celých větách.', kept: [] }), []);
+});
+
+test('S50–S52: a remembered pain holds back the sports that load it (audit 2026-11-07, points 4 and 5)', async () => {
+  const day = '2026-10-21', at = '2026-10-21 08:00', shift = d => new Date(Date.parse(day + 'T12:00:00Z') + d * 86400000).toISOString().slice(0, 10);
+  const ctx = id => scenarioContext(scenarioById(id), day, at).ctx;
+  // The coach and its engine see the pain: today's planned VO2max becomes easy.
+  assert.ok(ctx('S50').preferenceMemory.includes('Bolí mě levé koleno, nechci skákat'));
+  assert.ok(ctx('S50').cyclingCoachV2.recommendation.adaptations.some(a => /bolest kolena/.test(a)));
+  const card = o => ({ type: 'workout', eventId: '', date: shift(1), sport: 'gym', minutes: 45, status: '', statusUntil: '', reason: 'x', fromExercise: '', toExercise: '', workoutId: '', kind: '', activityId: '', otherActivityId: '', time: '', kcal: 0, gymFocus: '', gymMuscles: [], insisted: false, planId: '', days: [], raceKm: 0, place: '', ...o });
+  const run = (id, answer, actions = []) => runScenario({}, scenarioById(id), { date: day, now: at, ask: async () => ({ status: 'ok', answer, actions, visuals: [], memory: { forget: [], update: [] } }) });
+  const names = r => r.checks.filter(c => !c.ok).map(c => c.severity + ':' + c.name);
+  assert.ok(!names(await run('S50', 'Kvůli kolenu dnes jen lehce.', [card({ date: day, sport: 'ride', minutes: 60, kind: 'endurance' })])).includes('safety:žádný tvrdý trénink s bolavým kolenem'));
+  // The app drops a hard swim for a sore shoulder itself (point 2), the coach's text has to say why.
+  const swim = await run('S51', 'Rameno šetři, zítra jen lehce.', [card({ sport: 'swim', minutes: 45, kind: 'threshold' })]);
+  assert.deepEqual(swim.kept, []); assert.ok(!names(swim).includes('safety:žádné tvrdé plavání s bolavým ramenem'));
+  // The gym card is built without the knee's exercises.
+  const legs = await run('S52', 'Zítra posilovna na zadní stehna a hýždě, koleno šetříme.', [card({ gymMuscles: ['hamstrings', 'hips'] })]);
+  assert.deepEqual(names(legs), []);
+});
+
+test('S53–S56: illness and pain told in the chat (audit 2026-11-07, points 1, 2 and 8)', async () => {
+  const day = '2026-10-21', at = '2026-10-21 08:00';
+  const card = o => ({ type: 'workout', eventId: '', date: day, sport: 'ride', minutes: 60, status: '', statusUntil: '', reason: 'x', fromExercise: '', toExercise: '', workoutId: '', kind: 'endurance', activityId: '', otherActivityId: '', time: '', kcal: 0, gymFocus: '', gymMuscles: [], insisted: false, planId: '', days: [], raceKm: 0, place: '', ...o });
+  const run = (id, answer, actions = [], save = []) => runScenario({}, scenarioById(id), { date: day, now: at, ask: async () => ({ status: 'ok', answer, actions, visuals: [], memory: { save, forget: [], update: [] } }) });
+  const failed = r => r.checks.filter(c => !c.ok).map(c => c.name);
+  // A sore knee: the app drops a hard ride the coach still offered; the pain is remembered.
+  const knee = await run('S53', 'S kolenem dnes jen lehce na kole, VO2max zrušíme.', [card({ kind: 'vo2max' }), { ...card({}), type: 'rest', eventId: 'planned:9001', sport: '' }], [{ text: 'Bolí mě koleno po běhu', group: 'health' }]);
+  assert.ok(!knee.kept.some(a => a.type === 'workout' && a.kind === 'vo2max'));
+  assert.ok(!failed(knee).includes('žádný tvrdý trénink s bolavým kolenem') && !failed(knee).includes('uloží bolest kolena do paměti'), failed(knee).join());
+  // "Jsem nachlazený a mám horečku": the Nemoc card comes also when the coach left it out, no gym today.
+  const ill = await run('S54', 'S horečkou dnes netrénuj, VO2max ruším.', [{ ...card({}), type: 'rest', eventId: 'planned:9001', sport: '' }, card({ sport: 'gym', minutes: 30, kind: '' })]);
+  assert.ok(ill.kept.some(a => a.type === 'status' && a.status === 'sick'));
+  assert.ok(!ill.kept.some(a => a.type === 'workout'));
+  assert.ok(!failed(ill).some(n => /karta Nemoc|posilovna|tvrdý/.test(n)), failed(ill).join());
+  // A cold: no hard ride today, but no Nemoc forced.
+  const cold = await run('S55', 'S rýmou dnes intervaly vynech.', [card({ kind: 'vo2max' })]);
+  assert.deepEqual(cold.kept.filter(a => a.type !== 'rest'), []);
+  // Ill last week, well now: no Nemoc card.
+  const well = await run('S56', 'Dnes v klidu podle plánu.');
+  assert.deepEqual(failed(well).filter(n => /Nemoc/.test(n)), []);
+  assert.ok(!well.kept.some(a => a.type === 'status'));
 });

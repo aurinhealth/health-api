@@ -8,7 +8,7 @@ import { assignIntensities } from './gym-intensity.js';
 import { L, isImperial, kgToLb } from './lang.js';
 import { estimateStartingLoad, resolveLoad, progressionDecision, priorMuscleSets, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
-import { PAIN_WORDS } from './pain-words.js';
+import { painAreas } from './pain-words.js';
 import { withoutDisliked } from './exercise-feedback.js';
 import { isIntensity } from "./strength-context.js";
 import { availableAt as availableInGym, hasKnownStations, EXERCISE_STATIONS } from "./gym-equipment.js";
@@ -730,17 +730,10 @@ export function validateFocusMuscles(value){
 }
 
 // Pain or an injury the coach remembers ("koleno bolí při dřepech") leaves out
-// the exercises that load that part: the knee squats, lunges and presses, the
-// shoulder overhead and bench presses, the lower back deadlifts and good
-// mornings (Revize 2026-10-16, nález 24). "Nebolí" is no pain.
-const PAIN = PAIN_WORDS;
-const PAIN_AREAS = [
-  { part: /kolen|knee/i, exercises: /squat|lunge|leg press|step-up|leg extension/i, label: ['kolena', 'knee'] },
-  { part: /ramen|shoulder/i, exercises: /shoulder press|overhead press|military press|push press|arnold|landmine press|bench press|incline press|floor press|chest flat press|chest press|standing dumbbell press|clean (?:&|and) press|cuban press|thruster|^dips$|assisted dip|bench dips/i, label: ['ramene', 'shoulder'] },
-  { part: /z[aá]d(?:a|ech|ou)(?!\p{L})|bedr|k[řr][íi][žz]|p[áa]te[řr]|plot[ée]nk|(?<!\p{L})back(?!\p{L})|lumbar/iu, exercises: /deadlift|good morning/i, label: ['zad', 'lower back'] }
-];
+// the exercises that load that part (Revize 2026-10-16, nález 24; the parts
+// and their exercises in pain-words.js PAIN_AREAS). "Nebolí" is no pain.
 export function painfulExercises(memories) {
-  const areas = PAIN_AREAS.filter(a => (Array.isArray(memories) ? memories : []).some(m => PAIN.test(String(m)) && a.part.test(String(m))));
+  const areas = painAreas(memories);
   return { parts: areas.map(a => L(a.label[0], a.label[1])), avoid: new Set(Object.keys(EXERCISES).filter(name => areas.some(a => a.exercises.test(name)))) };
 }
 
@@ -1520,10 +1513,14 @@ export function generateStrengthPlan(context, options = {}) {
   // A deload week holds the loads (no increase, no set to failure).
   const chosen = choosePlan(context, options), factor = deload ? Math.min(recoveryFactor(context), 0.89) : recoveryFactor(context), history = context?.strength?.recentCompletedSets || [], historyMap = recentExerciseMap(history);
   const firstSession = !history.length;
-  const focusMuscles = options.focusMuscles == null ? null : validateFocusMuscles(options.focusMuscles);
+  let focusMuscles = options.focusMuscles == null ? null : validateFocusMuscles(options.focusMuscles);
   const planPhase = !focusMuscles && options.planPhase?.exercises?.length ? options.planPhase : null;
   if (options.focusMuscles != null && !focusMuscles) throw new Error(L('Vyber 1 až 5 známých partií.', 'Choose 1 to 5 known muscle groups.'));
   const excluded = new Set((options.excludeExercises || []).map(normalizeExerciseName));
+  // A chosen group that only a sore part's exercises train (quads with a sore
+  // knee) is left out while other chosen groups remain (audit 2026-11-07, point 5).
+  const spared = group => FOCUS_GROUPS[group].exercises.some(name => pain.avoid.has(name)) && !FOCUS_GROUPS[group].exercises.some(name => EXERCISES[name] && !PLYOMETRICS.includes(name) && !excluded.has(name));
+  if (focusMuscles?.some(spared) && !focusMuscles.every(spared)) focusMuscles = focusMuscles.filter(group => !spared(group));
   const { liked, disliked } = taste(options), mainSport = mainSportOf(context), shown = shownBefore(options);
   const selection = selectionHistory(context);
   const weeklyExposure = recentMuscleExposure(selection, context.date);
@@ -1538,7 +1535,7 @@ export function generateStrengthPlan(context, options = {}) {
   const rankedExercises = group => {
     // Jumps come only as a runner's weekly jumps, never as a group's strength work.
     const candidates = withoutDisliked(FOCUS_GROUPS[group].exercises.filter(name => EXERCISES[name] && !PLYOMETRICS.includes(name) && availableAt(name) && fitsEquipment(name,context.trainingSetup) && !excluded.has(name)), disliked);
-    if (!candidates.length) throw new Error(L('Pro partii ' + FOCUS_GROUPS[group].label + ' není dostupný cvik.', 'No exercise is available for ' + FOCUS_GROUPS[group].label + '.'));
+    if (!candidates.length) throw new Error(spared(group) ? L('Partii ' + FOCUS_GROUPS[group].label + ' teď vynechám kvůli bolesti ' + pain.parts.join(', ') + ', kterou si kouč pamatuje. Vyber jinou partii.', 'I\'ll leave out ' + FOCUS_GROUPS[group].label + ' for now because of the ' + pain.parts.join(', ') + ' pain the coach remembers. Choose another muscle group.') : L('Pro partii ' + FOCUS_GROUPS[group].label + ' není dostupný cvik.', 'No exercise is available for ' + FOCUS_GROUPS[group].label + '.'));
     const score = (name, withStall = true) => {
       const def = EXERCISES[name], last = lastExerciseDate.get(name);
       const recent = last && daysBetween(last, context.date) < 5 ? 2 : 0;

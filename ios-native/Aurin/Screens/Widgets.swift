@@ -85,7 +85,10 @@ struct StepsWidget: View {
                     .lineLimit(1).minimumScaleFactor(0.8)
             } chart: { height in
                 if let hourly = steps.hourly, hourly.count == 24 {
-                    dayChart(hourly, height: height)
+                    VStack(spacing: 6) {
+                        dayChart(hourly, height: height)
+                        if size != .small { ChartLegend(items: Self.dayLegend(steps)) }
+                    }
                 } else {
                     weekChart(height: height)
                 }
@@ -110,6 +113,16 @@ struct StepsWidget: View {
                         spacing: size == .small ? 1.5 : 2.5,
                         height: height,
                         targetTag: goalTag)
+    }
+
+    /// What the day chart's bars are: the steps so far, and the dashed ones
+    /// the usual total by each hour still to come.
+    static func dayLegend(_ steps: TodaySnapshot.Steps) -> [ChartLegend.Item] {
+        var items: [ChartLegend.Item] = [.init(color: Palette.sand, text: L10n.tr("kroky zatím"), mark: .bar)]
+        if steps.usual?.count == 24, (steps.hour ?? 23) < 22 {
+            items.append(.init(color: Palette.amberBar.opacity(0.55), text: L10n.tr("obvykle do té hodiny"), mark: .dashedBar))
+        }
+        return items
     }
 
     private func weekChart(height: CGFloat) -> some View {

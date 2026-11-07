@@ -21,7 +21,12 @@ struct RecoveryTipRows: View {
     @State private var error: String?
 
     static func hasTip(_ today: TodaySnapshot, selectedDate: String?) -> Bool {
-        selectedDate == nil && (today.recoveryTime != nil || !(today.recovery?.items.isEmpty ?? true))
+        selectedDate == nil && (shownTime(today) != nil || !(today.recovery?.items.isEmpty ?? true))
+    }
+
+    /// Regenerace's row, unless hard training is fine already (RecoveryTime.readyNow).
+    static func shownTime(_ today: TodaySnapshot) -> RecoveryTime? {
+        today.recoveryTime.flatMap { RecoveryTime.readyNow($0, zone: today.readiness.zone) ? nil : $0 }
     }
 
     var body: some View {
@@ -29,7 +34,7 @@ struct RecoveryTipRows: View {
             let items = today.recovery?.items ?? []
             VStack(alignment: .leading, spacing: 0) {
                 // Regenerace first: when hard training is fine again.
-                if let time = today.recoveryTime {
+                if let time = Self.shownTime(today) {
                     NavigationLink(value: AppRoute.recoveryTime) { RecoveryTimeRow(time: time, today: today.date, zone: today.readiness.zone) }
                         .buttonStyle(.plain)
                     if !items.isEmpty { Divider().overlay(Palette.hairline) }
@@ -465,6 +470,12 @@ extension RecoveryTime {
     /// A yellow or red morning: hard training waits for a greener one,
     /// whatever the sessions left (Today audit 15).
     static func waitsForGreener(_ zone: String?) -> Bool { zone == "yellow" || zone == "red" }
+
+    /// Hard training is fine already on a green morning: Today's verdict says
+    /// it, so the coach's card leaves the row out (Today audit 10).
+    static func readyNow(_ time: RecoveryTime, zone: String?, now: Date = Date()) -> Bool {
+        !waitsForGreener(zone) && (time.ready.map { $0 <= now } ?? true)
+    }
 
     /// "tvrdý trénink zítra odpoledne" / "hard training tomorrow afternoon".
     /// On a yellow or red morning the time still counts, and a greener

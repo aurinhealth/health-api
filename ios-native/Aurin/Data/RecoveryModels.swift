@@ -167,6 +167,11 @@ struct CoachText: Decodable, Equatable {
     let basis: [Basis]?
     /// When the AI wrote it, "07:12".
     let time: String?
+    /// Why the rule-based text: "pro" without Aurin Pro once the paywall is on
+    /// (Today shows where the personal word is), "consent", "fallback", …
+    var reason: String? = nil
+    /// The paywall is on for this account (src/subscription.js paywallOn).
+    var paywall: Bool? = nil
 
     struct Basis: Decodable, Equatable, Hashable {
         let label: String
