@@ -157,7 +157,7 @@ struct SleepDetailContent: View {
                         Text(Fmt.hoursMinutes(Double(debt.minutes))).font(Typo.number(28)).foregroundStyle(Palette.amber)
                             .accessibilityLabel(Fmt.hoursMinutesSpoken(Double(debt.minutes)))
                     }
-                    ProgressLine(fraction: Double(debt.minutes) / 360, color: Palette.amberBar)
+                    DebtStrip(minutes: debt.minutes)
                 }
             }
             .padding(.top, 14)
