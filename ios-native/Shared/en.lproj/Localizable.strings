@@ -4051,3 +4051,7 @@
 /* Settings → Zones: where the max heart rate comes from when none is typed (ZonesSettingsView.swift heartNote) */
 "Odhad podle věku" = "Estimate from age";
 "Nejvyšší tep z tréninků za 6 měsíců" = "Highest heart rate in 6 months of workouts";
+"teplejší ↑ · chladnější ↓" = "warmer ↑ · cooler ↓";
+"pás ±%@ od tvého obvyklého" = "band ±%@ of your usual";
+"teplejší než obvykle" = "warmer than usual";
+"chladnější než obvykle" = "cooler than usual";

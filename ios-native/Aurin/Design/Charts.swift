@@ -344,6 +344,60 @@ struct TrendDotsChart: View {
     }
 }
 
+/// Nights against the usual as bars up and down from a zero line, in one
+/// colour, the usual band (±`band`) shaded with dashed edges and the last
+/// night in full colour. A warmer and a cooler night look the same: no colour
+/// says better or worse (MDR, chart review 4).
+struct DeviationBars: View {
+    let values: [Double]
+    let band: Double
+    var color: Color = Palette.amber
+    var spacing: CGFloat = 4
+    var height: CGFloat = 48
+
+    var body: some View {
+        let top = max(values.map(abs).max() ?? 0, band) * 1.15
+        GeometryReader { geo in
+            let mid = geo.size.height / 2
+            let y: (Double) -> CGFloat = { mid - CGFloat($0 / top) * mid }
+            ZStack(alignment: .topLeading) {
+                Rectangle().fill(color.opacity(0.12)).frame(height: y(-band) - y(band)).offset(y: y(band))
+                ForEach([band, -band], id: \.self) { edge in
+                    DashedLine().stroke(color.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                        .frame(height: 1).offset(y: y(edge))
+                }
+                Rectangle().fill(Palette.hairline).frame(height: 1).offset(y: mid)
+                HStack(alignment: .top, spacing: spacing) {
+                    ForEach(values.indices, id: \.self) { i in
+                        let bar = max(2, abs(y(values[i]) - mid))
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(i == values.count - 1 ? color : color.opacity(0.45))
+                            .frame(height: bar)
+                            .offset(y: values[i] >= 0 ? mid - bar : mid)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    }
+                }
+            }
+        }
+        .frame(height: height)
+        .accessibilityHidden(true)
+    }
+}
+
+/// "warmer ↑ · cooler ↓" and "band ±0.5 °C of your usual" under a temperature tile's bars.
+struct DeviationLegend: View {
+    var body: some View {
+        HStack {
+            Text("teplejší ↑ · chladnější ↓")
+            Spacer(minLength: 6)
+            Text(verbatim: L10n.f("pás ±%@ od tvého obvyklého", Fmt.decimal(Units.temperatureChange(0.5)) + " " + Units.temperatureUnit))
+        }
+        .scaledFont(chartText, cap: .denseCap)
+        .foregroundStyle(Palette.faint)
+        .lineLimit(1).minimumScaleFactor(0.8)
+    }
+}
+
 struct DashedLine: Shape {
     func path(in rect: CGRect) -> Path {
         Path { p in
