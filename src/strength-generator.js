@@ -1270,11 +1270,11 @@ function choosePlan(context, options = {}) {
   };
 }
 // Three ramp-up sets before the first main lift; later main lifts need one.
-function warmupRows(exercise, workKg = null, first = true) {
+function warmupRows(exercise, workKg = null, first = true, step = null) {
   const def = EXERCISES[exercise]; if (!def?.warmup) return [];
   const reference = workKg ?? def.baseKg; if (reference == null) return [];
   const rawKg = Math.max(2, reference * 0.4), rawKg2 = Math.max(2, reference * 0.65), rawKg3 = Math.max(2, reference * 0.8);
-  const kg = resolveLoad(exercise, rawKg), kg2 = resolveLoad(exercise, rawKg2), kg3 = resolveLoad(exercise, rawKg3);
+  const kg = resolveLoad(exercise, rawKg, step), kg2 = resolveLoad(exercise, rawKg2, step), kg3 = resolveLoad(exercise, rawKg3, step);
   const execution = def.unilateral ? "UNILATERAL" : DEFAULT_EXECUTION, fmt = x => String(x).replace(".", ",");
   if (!first) return [["WARMUP", exercise, "1", fmt(kg2), "5", "", "", "", "FALSE", "[WARMUP]", "🎥 Video", "", execution]];
   return [["WARMUP", exercise, "1", fmt(kg), "8", "", "", "", "FALSE", "[WARMUP]", "🎥 Video", "", execution], ["WARMUP", exercise, "2", fmt(kg2), "5", "", "", "", "FALSE", "[WARMUP]", "", "", execution], ["WARMUP", exercise, "3", fmt(kg3), "3", "", "", "", "FALSE", "[WARMUP]", "", "", execution]];
@@ -1454,7 +1454,7 @@ export function templateStrengthPlan(context, template, options = {}) {
     const work = workRows(exercise, historyMap, factor, false, new Map(), 1, 10, sex, context.date, firstSession, reps, 'auto', '', context?.trainingSetup?.dumbbellWeights);
     const first = work.rows[0];
     const own = Array.from({ length: sets }, (_, i) => { const r = first.slice(); r[2] = String(i + 1); r[4] = CORE_PATTERNS.has(EXERCISES[exercise].pattern) ? first[4] : reps; r[10] = i === 0 ? first[10] : ""; return r; });
-    const warmup = warmupRows(exercise, work.kg, !warmedUp);
+    const warmup = warmupRows(exercise, work.kg, !warmedUp, work.estimate?.step);
     if (warmup.length) warmedUp = true;
     rows.push(...warmup, ...own);
     loadEstimates.push({ exercise, sets, ...work.estimate });
@@ -1643,7 +1643,7 @@ export function generateStrengthPlan(context, options = {}) {
       const cap = earlier.kg == null ? null : chosen.lighterDay ? earlier.kg * 0.9 : earlier.kg;
       for (const row of work.rows) {
         const kg = Number(String(row[3]).replace(",", "."));
-        if (cap != null && row[3] !== "" && Number.isFinite(kg) && kg > cap) row[3] = kgText(resolveLoad(exercise, cap));
+        if (cap != null && row[3] !== "" && Number.isFinite(kg) && kg > cap) row[3] = kgText(resolveLoad(exercise, cap, work.estimate?.step));
         if (earlier.reps) row[4] = earlier.reps;
       }
       if (cap != null && work.kg != null) work.kg = Math.min(work.kg, cap);
@@ -1654,7 +1654,7 @@ export function generateStrengthPlan(context, options = {}) {
     if(deload)for(const row of work.rows)row[9]=row[9].replace(/ – (?:cíl: o opakování víc|goal: one more rep)/,'')+(deload.illness?L('; po nemoci: stejná váha, 3 opakování v rezervě','; after being ill: same weight, 3 reps in reserve'):L('; odlehčený týden: stejná váha, 3 opakování v rezervě','; deload week: same weight, 3 reps in reserve'));
     if(moderated)for(const row of work.rows)row[9]+=explicitLegs?L('; blízko je náročný trénink: nech si 2–3 opakování v rezervě (RPE 7)','; a hard session is coming up: keep 2–3 reps in reserve (RPE 7)'):L('; nohy po vytrvalostním tréninku: nech si 2–3 opakování v rezervě (RPE 7)','; legs after endurance training: keep 2–3 reps in reserve (RPE 7)');
     if(stallSwaps[exercise])for(const row of work.rows)row[9]+=L('; místo '+stallSwaps[exercise]+': 3 tréninky bez posunu, nový podnět (k původnímu cviku se vrátíme)','; instead of '+stallSwaps[exercise]+': 3 sessions without progress, a new stimulus (we\'ll return to the original exercise)');
-    const warmup = warmupRows(exercise, work.kg, !warmedUp);
+    const warmup = warmupRows(exercise, work.kg, !warmedUp, work.estimate?.step);
     if (warmup.length) warmedUp = true;
     rows.push(...warmup, ...work.rows);
     loadEstimates.push({ exercise, sets: work.sets, reducedDose, moderated, ...work.estimate });
