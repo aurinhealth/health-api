@@ -505,6 +505,8 @@ function dayRefs(sentence, date, planned = {}) {
 }
 const sentences = text => String(text || '').replace(/\*\*|__/g, '').split(/(?<=[.!?])\s+|\n+/).map(x => x.trim()).filter(Boolean);
 const CHANGE = /vynech|přesu|posu[nň]|zruš|odpočív|odpočin|nahrad|místo|zkrát|odlož|odpad|volno|\bskip|\bmove|cancel|instead|\brest\b|shorten|postpone/i;
+// A question that offers the change of the sentence before it ("Chceš to upravit?", "Want me to adjust it?").
+const OFFER = /^(?:chceš|mám(?: ti)?|want me|shall i|should i)\s[^?]*\?\s*$/i;
 const CONDITIONAL = /^\s*[-•*]?\s*(?:pokud|když|jestli|kdyby|kdybys|if|when|should)\b|chceš|want me|mám ti|shall i/i;
 // A change only under a condition in a later clause ("…; při nedostatku času ji vynech", runs 27 and 28, S24 and S15) is advice, not a change.
 const unconditional = x => String(x).split(/[;:]\s*/).filter(part => !/^(?:při|pokud|když|jestli|kdyby|v případě|if|when|should)\b/i.test(part)).join('; ');
@@ -516,7 +518,8 @@ const KIND_WORDS = { recovery: /regenera|lehk|lehc|volně|klidn|recovery|easy/i,
 // Run 44, S04: "dnes VO2 intervaly nejezdi", "Dnes netrénuj" cancel today's session too.
 const cardWords = a => ['rest', 'move'].includes(a.type) ? /vynech|zruš|odpad|místo|odpoč|volno|nahrad|nejel|nejezd|nejeď|neběž|neběhej|netrénuj|přesu|posu|odlož|skip|cancel|instead|rest|drop|move|shift|postpone|push|don't (?:ride|run|train)/i
   : a.sport === 'gym' ? /posilov|gym|horní|dolní|nohy|celé tělo|upper|lower|legs|strength/i
-  : new RegExp([a.workoutName && String(a.workoutName).split(/\s+/)[0].replace(/[^\p{L}\p{N}]/gu, ''), KIND_WORDS[a.kind || a.card]?.source, 'jízd|jet|jeď|běh|ride|run'].filter(Boolean).join('|'), 'i');
+  // Run 47, S30 and S43: "hodinové plavání", "první plavání v jezeře" name a swim card.
+  : new RegExp([a.workoutName && String(a.workoutName).split(/\s+/)[0].replace(/[^\p{L}\p{N}]/gu, ''), KIND_WORDS[a.kind || a.card]?.source, a.sport === 'swim' ? 'plav|swim|bazén|jezer|pool|lake' : 'jízd|jet|jeď|běh|ride|run'].filter(Boolean).join('|'), 'i');
 // The card's day and the day of the planned session it changes.
 const cardDays = (a, r, planned) => [a.date || r.date, a.eventSnapshot?.date, ...Object.entries(planned).filter(([, list]) => a.eventId && list.some(e => e.id === a.eventId)).map(([d]) => d)].filter(Boolean);
 // A rest that only clears the day for a new workout of the same sport is spoken of with that workout.
@@ -526,7 +529,9 @@ const companion = (r, a) => a.type === 'rest' && (a.replacedBy || r.kept.some(w 
 // offers changes (noUnaskedCard and the situations' own checks judge that).
 function promisedWithoutCard(r, planned) {
   if (!r.kept.some(a => PLAN_CHANGE.includes(a.type))) return [];
-  return sentences(r.answer).filter(x => !CONDITIONAL.test(x) && CHANGE.test(changing(unconditional(x)))).flatMap(x => changeDay(changing(unconditional(x)), r.date, planned)
+  // Run 47, S35: "…doporučil bych místo něj lehkou jízdu. Chceš upravit i tu?" offers the change, as the prompt's example does.
+  const list = sentences(r.answer), offered = i => OFFER.test(list[i + 1] || '');
+  return list.filter((x, i) => !CONDITIONAL.test(x) && !offered(i) && CHANGE.test(changing(unconditional(x)))).flatMap(x => changeDay(changing(unconditional(x)), r.date, planned)
     .filter(d => (planned[d] || []).length && !r.kept.some(a => cardDays(a, r, planned).includes(d))).map(d => d + ': ' + x.slice(0, 60)));
 }
 // The day a change is about: the day of the last clause before its change word that names
