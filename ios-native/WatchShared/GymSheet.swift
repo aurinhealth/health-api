@@ -85,8 +85,12 @@ struct GymDay: Decodable, Equatable {
     /// Records a set as the web does (dashboard-client.js saveGymSet). The
     /// letter: the one given, else from the RPE given, else the plan's; its
     /// RPE goes to the RPE column when none was given.
-    mutating func complete(row: Int, kg: String, reps: String, rpe: String, intensity: String? = nil) {
+    /// The drop sets after it follow the weight it was done with (followDrops),
+    /// but for those whose weight was typed in ahead (keepDrops).
+    mutating func complete(row: Int, kg: String, reps: String, rpe: String, intensity: String? = nil, keepDrops: Set<Int> = []) {
         guard row < values.count else { return }
+        let was = Self.isDone(cell(values[row], 8)) ? cell(values[row], 5) : cell(values[row], 3)
+        followDrops(after: row, from: was, to: kg, keep: keepDrops)
         let letter = GymIntensity.letter(intensity) ?? (rpe.isEmpty ? GymIntensity.letter(cell(values[row], 14)) : GymIntensity.from(rpe: rpe))
         let effort = rpe.isEmpty ? (letter.flatMap(GymIntensity.rpe) ?? "") : rpe
         set(row: row, column: 5, kg)
@@ -133,8 +137,26 @@ struct GymDay: Decodable, Equatable {
         values.remove(at: row)
     }
 
-    mutating func undo(row: Int) {
+    mutating func undo(row: Int, keepDrops: Set<Int> = []) {
+        guard row < values.count else { return }
+        if Self.isDone(cell(values[row], 8)) { followDrops(after: row, from: cell(values[row], 5), to: cell(values[row], 3), keep: keepDrops) }
         set(row: row, column: 8, "FALSE")
+    }
+
+    /// A set done heavier or lighter than before (its plan, or as first
+    /// ticked): the drop sets straight after it, not done yet, take the same
+    /// share (35 kg done at 31.75 takes the 27.5 kg drop to 25), to 0.5 kg.
+    /// Those in `keep` (typed in ahead) stay as they are.
+    mutating func followDrops(after row: Int, from old: String?, to new: String?, keep: Set<Int> = []) {
+        guard row < values.count, let name = cell(values[row], 1),
+              let old = old.flatMap(Self.number), old > 0, let new = new.flatMap(Self.number), new > 0, abs(new - old) >= 0.01 else { return }
+        var at = row + 1
+        while at < values.count, cell(values[at], 1) == name, (cell(values[at], 0) ?? "").uppercased() == "DROP" {
+            if !Self.isDone(cell(values[at], 8)), !keep.contains(at), let kg = cell(values[at], 3).flatMap(Self.number), kg > 0 {
+                set(row: at, column: 3, Self.kgText((kg * new / old * 2).rounded() / 2))
+            }
+            at += 1
+        }
     }
 
     /// Swaps an exercise for another in the sets not done yet.
@@ -610,7 +632,8 @@ extension WatchGym {
                               reps: GymDay.firstNumber(set.reps) ?? GymDay.firstNumber(set.plannedReps),
                               plannedReps: set.plannedReps, done: set.done,
                               rest: set.warmup ? 60 : set.rest(setting: restSets),
-                              intensity: GymIntensity.letter(set.intensity))
+                              intensity: GymIntensity.letter(set.intensity),
+                              plannedKg: set.plannedKg.flatMap(GymDay.number))
             }
             let shown = ExerciseName.shown(exercise.name)
             let letter = (exercise.superset ?? "").trimmingCharacters(in: .whitespaces).uppercased()

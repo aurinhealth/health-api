@@ -33,6 +33,8 @@ struct WatchGym: Codable, Equatable, Sendable {
         var note: String? = nil
         /// The best set before today by the estimated one-rep max: a set past it is a record.
         var record: Last? = nil
+        /// In pounds while the app is in kilos: a machine in lb (LiftUnits on the iPhone).
+        var pounds: Bool? = nil
         var title: String { shown ?? name }
     }
 
@@ -54,6 +56,9 @@ struct WatchGym: Codable, Equatable, Sendable {
         var intensity: String? = nil
         /// The same set last time (Training mode's "Minule 97,5 × 6").
         var last: Last? = nil
+        /// The sheet's plan for it: a set whose plan differs from the one
+        /// before (typed in ahead on the iPhone) keeps its own weight.
+        var plannedKg: Double? = nil
         /// Not a warm-up nor a drop set.
         var work: Bool { !warmup && !drop }
         /// Which set the crown's weight and reps are for: the row alone is not

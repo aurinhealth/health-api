@@ -4129,3 +4129,8 @@
 "Boční" = "Side";
 "Zadní" = "Rear";
 "Ramena · celá, nebo jen některé části" = "Shoulders · all parts, or pick some";
+/* Training mode: kg or lb for one exercise (LiftUnits) */
+"Jen pro %@, na telefonu i na hodinkách. Ukládá se v kg." = "Only for %@, on this phone and Apple Watch. Saved in kg.";
+"Kilogramy (kg)" = "Kilograms (kg)";
+"Libry (lb)" = "Pounds (lb)";
+"Jednotka váhy: %@" = "Weight unit: %@";
