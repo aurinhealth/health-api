@@ -40,7 +40,12 @@ final class SyncSettingsStore {
             // Apple Health's switches live on the iPhone too (writing works without signal).
             if let apple = destination("apple") {
                 if apple.prefs != AppleHealthExport.shared.prefs && AppleHealthExport.shared.prefs != .off {
-                    replace("apple", prefs: AppleHealthExport.shared.prefs)
+                    // Other apps' workouts follow the server: disconnecting Wahoo
+                    // or Google there turned them off (a new yes is needed).
+                    var local = AppleHealthExport.shared.prefs
+                    local.forward = apple.prefs.forward
+                    AppleHealthExport.shared.setPrefs(local)
+                    replace("apple", prefs: local)
                 } else {
                     AppleHealthExport.shared.setPrefs(apple.prefs)
                 }
@@ -64,7 +69,9 @@ final class SyncSettingsStore {
                 replace(id, prefs: before)
                 return
             }
-            AppleHealthExport.shared.setPrefs(prefs)
+            var local = prefs
+            local.backfill = nil
+            AppleHealthExport.shared.setPrefs(local)
         }
         guard !demo else { return }
         working = id
@@ -77,6 +84,10 @@ final class SyncSettingsStore {
             }
             message = nil
             remember()
+            // An app's workouts just turned on for Apple Health: the first ones now.
+            if id == "apple", AppleHealthExport.forwards(saved.prefs) {
+                Task { await AppleHealthExport.shared.writeForwarded(api: api, force: true) }
+            }
         } catch {
             // Apple Health keeps its switches on the iPhone anyway.
             if id != "apple" { replace(id, prefs: before) }
@@ -326,37 +337,41 @@ struct GoogleWriteSheet: View {
 
 // MARK: - Intervals.icu: workouts from other apps
 
-/// "Tréninky z jiných aplikací" on Intervals.icu's page: a switch for each
-/// connected app whose workouts Aurin can pass on (src/watch-forward.js).
-/// Apple Health's is its health type "workouts"; Wahoo's and Google's ask
-/// first (their API terms want the user's yes) and can bring the last 14 days.
+/// "Tréninky z jiných aplikací" on Intervals.icu's, Google Health's and Apple
+/// Health's page: a switch for each connected app whose workouts Aurin can
+/// pass on there (src/watch-forward.js). To Intervals.icu Apple Health's is its
+/// health type "workouts"; Wahoo's and Google's ask first (their API terms want
+/// the user's yes) and can bring the last 14 days.
 struct SyncForwardGroup: View {
+    /// intervals, google or apple.
+    let to: String
     let sync: SyncSettingsStore
     @State private var asking: String?
 
-    private var destination: SyncDestination? { sync.destination("intervals") }
+    private var destination: SyncDestination? { sync.destination(to) }
     private var sources: [String] {
-        guard let destination, destination.connected == true else { return [] }
-        let others = (destination.forwardSources ?? []).filter { ["wahoo", "google"].contains($0) }
-        return (AppleHealth.shared.isAvailable && destination.healthTypes.contains("workouts") ? ["apple"] : []) + others
+        guard let destination else { return [] }
+        if to == "apple" { guard AppleHealthExport.shared.isAvailable else { return [] } } else if destination.connected != true { return [] }
+        let others = (destination.forwardSources ?? []).filter { ["wahoo", "google"].contains($0) && $0 != to }
+        return (to == "intervals" && AppleHealth.shared.isAvailable && destination.healthTypes.contains("workouts") ? ["apple"] : []) + others
     }
 
     var body: some View {
         if let destination, !sources.isEmpty {
-            SettingsGroup(title: L10n.tr("Tréninky z jiných aplikací"), footer: L10n.tr("Posílá se dvě hodiny po konci tréninku a jen když ho Intervals.icu ještě nemá. Aplikaci, která do Intervals.icu posílá sama, nech vypnutou.")) {
+            SettingsGroup(title: L10n.tr("Tréninky z jiných aplikací"), footer: L10n.tr(footer)) {
                 ForEach(Array(sources.enumerated()), id: \.element) { index, id in
                     if index > 0 { SettingsDivider() }
                     HStack(spacing: 14) {
                         IntegrationIcon(id: id, size: 30)
-                        SettingsToggle(title: Self.name(id), subtitle: L10n.tr(Self.subtitle(id)), isOn: binding(id, destination))
+                        SettingsToggle(title: Self.name(id), subtitle: L10n.tr(subtitle(id)), isOn: binding(id, destination))
                             .padding(.leading, -16)
                     }
                     .padding(.leading, 16)
                 }
             }
-            .disabled(sync.working == "intervals" || sync.demo)
+            .disabled(sync.working == to || sync.demo)
             .sheet(item: Binding(get: { asking.map(SourceID.init) }, set: { asking = $0?.id })) { source in
-                ForwardConsentSheet(source: source.id) { backfill in
+                ForwardConsentSheet(source: source.id, to: to) { backfill in
                     asking = nil
                     save(source.id, on: true, backfill: backfill)
                 }
@@ -370,10 +385,23 @@ struct SyncForwardGroup: View {
         id == "apple" ? L10n.tr("Apple Health") : SyncApp.name(id)
     }
 
-    static func subtitle(_ id: String) -> String {
+    private var footer: String {
+        switch to {
+        case "apple": return "Posílá se dvě hodiny po konci tréninku. Když už v Apple Health ve stejném čase nějaký trénink je, třeba z aplikace Wahoo, Aurin ho přeskočí."
+        case "google": return "Apple Health tu není: aplikace Google Health si ho čte sama. Když už v Google Health ve stejném čase nějaký trénink je, Aurin ho přeskočí."
+        default: return "Posílá se dvě hodiny po konci tréninku a jen když ho Intervals.icu ještě nemá. Aplikaci, která do Intervals.icu posílá sama, nech vypnutou."
+        }
+    }
+
+    /// What goes there of each app (ForwardConsentSheet lists it in full).
+    private func subtitle(_ id: String) -> String {
         switch id {
         case "apple": return "Apple Watch a další aplikace"
-        case "wahoo": return "Jízdy s výkonem, tepem a trasou"
+        case "wahoo" where to == "intervals": return "Jízdy s výkonem, tepem a trasou"
+        // Going to Apple Health too: the Google Health app reads it there (src/watch-forward.js forwardToGoogle).
+        case "wahoo" where to == "google" && (sync.destination("apple")?.prefs.forward ?? []).contains("wahoo"): return "Jde přes Apple Health"
+        case "wahoo" where to == "google": return "Jízdy s časem, vzdáleností a tepem"
+        case "wahoo": return "Jízdy s časem, vzdáleností a kaloriemi"
         default: return "Fitbit a Pixel Watch"
         }
     }
@@ -391,7 +419,7 @@ struct SyncForwardGroup: View {
     }
 
     private func save(_ id: String, on: Bool, backfill: Bool) {
-        guard var prefs = sync.destination("intervals")?.prefs else { return }
+        guard var prefs = sync.destination(to)?.prefs else { return }
         if id == "apple" {
             var chosen: [String]
             switch prefs.health {
@@ -408,14 +436,15 @@ struct SyncForwardGroup: View {
             prefs.forward = list
             prefs.backfill = on && backfill ? true : nil
         }
-        Task { [prefs] in await sync.save("intervals", prefs) }
+        Task { [prefs] in await sync.save(to, prefs) }
     }
 }
 
-/// The yes before an app's workouts go to Intervals.icu, with the last 14 days if wanted.
+/// The yes before an app's workouts go to another, with the last 14 days if wanted.
 struct ForwardConsentSheet: View {
     @Environment(\.dismiss) private var dismiss
     let source: String
+    let to: String
     let go: (Bool) -> Void
     /// Off at first: a ticked box is no consent (GDPR, Planet49).
     @State private var backfill = false
@@ -425,22 +454,32 @@ struct ForwardConsentSheet: View {
             .map { $0.formatted(Date.FormatStyle().weekday(.abbreviated).month(.abbreviated).day().locale(L10n.locale)) } ?? ""
     }
 
+    /// Exactly what goes (the privacy policy says the same).
+    private var what: String {
+        switch (source, to) {
+        case ("wahoo", "intervals"): return "Aurin zkopíruje každý dokončený trénink z Wahoo do tvého účtu Intervals.icu jako jeho soubor: čas, délku, vzdálenost, trasu, výkon, tep, kadenci a kalorie."
+        case ("google", "intervals"): return "Aurin zkopíruje každý dokončený trénink z Google Health do tvého účtu Intervals.icu: typ, název, čas, délku, vzdálenost, tep a kalorie."
+        case ("wahoo", "google"): return "Aurin zkopíruje každý dokončený trénink z Wahoo do tvého účtu Google Health: typ, název, čas, délku, vzdálenost, tep a kalorie."
+        case ("wahoo", _): return "Aurin zapíše každý dokončený trénink z Wahoo do Apple Health na tomhle iPhonu: typ, čas, délku, vzdálenost a kalorie."
+        default: return "Aurin zapíše každý dokončený trénink z Google Health do Apple Health na tomhle iPhonu: typ, čas, délku, vzdálenost a kalorie."
+        }
+    }
+
     var body: some View {
+        let target = SyncForwardGroup.name(to)
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 IntegrationIcon(id: source, size: 40)
                 Image(systemName: "arrow.right").scaledFont(15, weight: .semibold).foregroundStyle(Palette.faint)
-                IntegrationIcon(id: "intervals", size: 40)
+                IntegrationIcon(id: to, size: 40)
             }
             .padding(.top, 8)
-            Text(verbatim: L10n.f("Posílat tréninky z %@ do Intervals.icu?", SyncForwardGroup.name(source)))
+            Text(verbatim: L10n.f("Posílat tréninky z %@ do %@?", SyncForwardGroup.name(source), target))
                 .font(Typo.sentence(24, relativeTo: .title)).foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(verbatim: L10n.tr(source == "wahoo"
-                 ? "Aurin zkopíruje každý dokončený trénink z Wahoo do tvého účtu Intervals.icu jako jeho soubor: čas, délku, vzdálenost, trasu, výkon, tep, kadenci a kalorie."
-                 : "Aurin zkopíruje každý dokončený trénink z Google Health do tvého účtu Intervals.icu: typ, název, čas, délku, vzdálenost, tep a kalorie."))
+            Text(verbatim: L10n.tr(what))
                 .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-            Text("Vypnout to můžeš kdykoli. Co už v Intervals.icu je, tam zůstane.")
+            Text(verbatim: L10n.f("Vypnout to můžeš kdykoli. Co už v %@ je, tam zůstane.", target))
                 .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             Button { backfill.toggle() } label: {
                 HStack(spacing: 12) {
@@ -456,7 +495,7 @@ struct ForwardConsentSheet: View {
                 .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .buttonStyle(.plain)
-            PrimaryButton(title: L10n.tr("Poslat do Intervals.icu")) { go(backfill) }
+            PrimaryButton(title: L10n.f("Poslat do %@", target)) { go(backfill) }
             Button("Teď ne") { dismiss() }.font(.subheadline.weight(.medium)).foregroundStyle(Palette.muted)
                 .frame(maxWidth: .infinity)
         }

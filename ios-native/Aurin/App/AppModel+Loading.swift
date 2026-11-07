@@ -283,11 +283,16 @@ extension AppModel {
     }
 
     /// What the server writes to Google Health, so Apple Health does not
-    /// carry the same food, weight or workout there a second time.
+    /// carry the same food, weight or workout there a second time. Then other
+    /// apps' workouts due in Apple Health (Tréninky z jiných aplikací).
     func loadGoogleSync() async {
         guard !demo, phase == .signedIn else { return }
-        guard let google = try? await api.syncOverview().destinations.first(where: { $0.id == "google" }) else { return }
-        AppleHealthExport.shared.setGoogle(google)
+        if let google = try? await api.syncOverview().destinations.first(where: { $0.id == "google" }) {
+            AppleHealthExport.shared.setGoogle(google)
+        }
+        // Its own task: the app's start does not wait for the writes.
+        let api = api
+        Task { await AppleHealthExport.shared.writeForwarded(api: api) }
     }
 
     /// Every tab again, e.g. after a change of language (the server's texts).

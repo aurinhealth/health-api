@@ -43,7 +43,7 @@ import { getTrainingProfile } from './training-profile.js';
 import { loadProfiles, refreshSuggestions } from './profile-suggestions.js';
 import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
-import {forwardWatchWorkouts} from './watch-forward.js';
+import {forwardWatchWorkouts, forwardToGoogle} from './watch-forward.js';
 import {askCoach,coachContext,lightModel,assistantTask,engineSport,compactWellness,callOpenAI} from './coach-assistant.js';
 import { consentStatus } from './consent.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
@@ -135,7 +135,7 @@ import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman } from "./u
 import { handleWhoopOAuth, disconnectWhoop, syncWhoop } from "./whoop.js";
 import { wahooDetail } from "./wahoo-detail.js";
 import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, wahooRideExpected, readWahooTokens } from "./wahoo.js";
-import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed, stopForwarding } from "./sync-destinations.js";
+import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed, stopForwarding, stopForwardingTo } from "./sync-destinations.js";
 import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, smokeUser, usersWithProviders, usersWithAccount, usersWithPushTokens, usersWithHealthConsent, openSignup } from "./tenancy.js";
 import { userDataEnvironment, prefetchUserData, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
@@ -344,7 +344,11 @@ const USER_JOBS = [
   { name: "google-food", providers: ["google"], due: every5, run: async scoped => { await backfillFoodGoogle(scoped.DB); await processFoodGoogle(scoped, { token: googleToken }); } },
   { name: "intervals-exports", providers: ["intervals"], due: every5, run: scoped => retryWorkoutExports(scoped) },
   // Done activities whose send to Google Health or Intervals.icu did not go through (sync-destinations.js).
-  { name: "sync-sends", providers: ["google", "intervals"], due: every5, run: scoped => retrySyncSends(scoped, { googleToken }) },
+  // Then Wahoo's workouts to Google Health (watch-forward.js), when switched on there.
+  { name: "sync-sends", providers: ["google", "intervals"], due: every5, run: async scoped => {
+    await retrySyncSends(scoped, { googleToken });
+    await forwardToGoogle(scoped, { googleToken }).catch(error => console.error("Workout forward to Google failed", error.message));
+  } },
   // Every hour at :20: the ring's last three days from Ultrahuman (the night lands in the morning).
   { name: "ultrahuman", providers: ["ultrahuman"], due: (cron, now) => minute(cron, now, m => m === 20), run: async scoped => { const r = await syncUltrahuman(scoped, { days: 3 }); if (r.saved) await bumpCacheVersion(scoped.DB); } },
   // Wahoo: plans not sent yet every five minutes; done workouts come by the webhook, and every
@@ -2684,9 +2688,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(!['google','intervals'].includes(body.provider)) return Response.json({message:L('Neznámé připojení.', 'Unknown connection.')},{status:400});
       // Aurin also gives up its access at Google. The owner's token can be the shared Worker secret, which stays.
       if(body.provider==='google'&&!env.USER_IS_OWNER) await revokeGoogle(env);
-      if(body.provider==='intervals'){await disconnectIntervalsApp(env);await deleteConnectionSecret(env,'intervals_athlete');}
+      if(body.provider==='intervals'){await disconnectIntervalsApp(env);await deleteConnectionSecret(env,'intervals_athlete');await stopForwardingTo(env.DB,env.USER_ID,'intervals').catch(()=>null);}
       await deleteConnectionSecret(env,body.provider);
-      if(body.provider==='google'){await deleteConnectionSecret(env,'google_scopes');await stopForwarding(env.DB,env.USER_ID,'google').catch(()=>null);}
+      if(body.provider==='google'){await deleteConnectionSecret(env,'google_scopes');await stopForwarding(env.DB,env.USER_ID,'google').catch(()=>null);await stopForwardingTo(env.DB,env.USER_ID,'google').catch(()=>null);}
       await clearConnectionHealth(env,body.provider);
       return Response.json({status:'ok',message:L('Připojení je odebrané.', 'The connection has been removed.')},{headers:{'Cache-Control':'no-store'}});
     }
