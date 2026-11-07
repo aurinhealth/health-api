@@ -371,6 +371,14 @@ final class SnapshotTests: XCTestCase {
                 .init(id: "child", name: "Dětská pozice", seconds: 45, sides: false)
             ]), date: "2026-10-14").padding(20)
         }
+        // Exercise history (doc "Historie cviku: návrh"): Next time, records, sessions, chart.
+        let historyDay = APIClient.localToday()
+        let pecDeck = GymHistory.Exercise(name: "Rear delt pec deck", sessions: [
+            GymHistory.Session(date: historyDay, sets: [GymHistory.Lift(kg: 38, reps: 9, target: 9, rpe: nil), GymHistory.Lift(kg: 38, reps: 9, target: 9, rpe: nil), GymHistory.Lift(kg: 38, reps: 7, target: 9, rpe: nil)]),
+            GymHistory.Session(date: ISODay.shift(historyDay, -15), sets: Array(repeating: GymHistory.Lift(kg: 31.7, reps: 12, target: nil, rpe: nil), count: 3)),
+            GymHistory.Session(date: ISODay.shift(historyDay, -21), sets: [GymHistory.Lift(kg: 25, reps: 12, target: nil, rpe: nil), GymHistory.Lift(kg: 25, reps: 8, target: nil, rpe: nil)])
+        ])
+        try render("gym-history", height: 1250) { ExerciseHistorySheet(name: "Rear delt pec deck", exercise: pecDeck) }
         try render("gym-time", height: 200) { GymTimeCard(minutes: 60, warmup: 6, stretching: 5).padding(20) }
         let why = "Cíl podle tvého sportu – síla a svaly: těžší hlavní cviky. Na tvoje přání šetřím nohy a trénink soustředím na horní část těla; cviky vybírám podle čerstvosti a nedávné svalové zátěže. Cviky se liší od plánu na čt 29. 10. Časový plán: přibližně 74 z 75 minut včetně rozcvičení, pauz, nastavování strojů a rezervy."
         try render("gym-why", height: 360) { GymWhyCard(reasons: GymWhy.reasons(why)).padding(20) }
