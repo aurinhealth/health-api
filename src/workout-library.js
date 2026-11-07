@@ -84,13 +84,23 @@ export async function getWorkout(db, id) {
 }
 
 export async function getCapabilities(db, sport = "ride") {
+  return (await capabilitiesWithLevel(db, sport)).capabilities;
+}
+// The capabilities and the athlete's own level in the sport from the same
+// reads, for the coach engine's "new to this sport": the level chosen by hand
+// (Profile → Experience), else Auto without the lift from the other sports.
+export async function capabilitiesWithLevel(db, sport = "ride") {
   await ensureTrainingTables(db);
   const rows = await db.prepare("SELECT * FROM training_capabilities WHERE user_id=? AND sport=?").bind(db.userId, sport).all();
   const training=await trainingSetup(db),defaults=defaultCapabilities(sport);
   // Cycling level for rides, running level for runs (Profile → Experience).
   const experience=training.experienceBySport?.[sport==='run'||sport==='swim'?sport:'ride']?.level||training.experience;
   if(experience)for(const value of Object.values(defaults))value.level=experience==='beginner'?1:experience==='experienced'?4:3;
-  return { ...defaults, ...Object.fromEntries((rows.results || []).map(x => [x.system, x])) };
+  const kind = sport === 'run' || sport === 'swim' ? sport : 'ride', chosen = training.experienceBySport?.[kind];
+  const own = chosen?.mode === 'manual' ? chosen.level : training.history?.sportExperienceOwn?.[kind] || chosen?.level || null;
+  // `levels`: every sport's level as Profile shows it, for the coach's way of explaining.
+  const levels = Object.fromEntries(['ride', 'run', 'swim', 'strength'].map(s => [s === 'strength' ? 'gym' : s, training.experienceBySport?.[s]?.level || null]).filter(([, l]) => l));
+  return { capabilities: { ...defaults, ...Object.fromEntries((rows.results || []).map(x => [x.system, x])) }, level: own, levels };
 }
 
 export function parseWorkoutSearchFilters(params) {

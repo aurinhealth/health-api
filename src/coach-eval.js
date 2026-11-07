@@ -232,6 +232,7 @@ function gymBlock(r, { athlete = undefined, aimed = false } = {}) {
 // A pool swimmer (CSS 1:45/100 m): a CSS set yesterday, technique today, a long swim in two days.
 // A regular swimmer (four swims in eight days), so the app's coach does not
 // take them for a beginner and ease the intervals they ask for (run 43, S30).
+const RUNNER = { focus: { sport: 'running', sportLabel: 'Běh' }, thresholds: { runThresholdPace: 300 } };
 const SWIMMER = { focus: { sport: 'swimming', sportLabel: 'Plavání' }, thresholds: { swimCss: 105, swimZones: swimZones(105), poolLength: 25 },
   done: date => ({ [shift(date, -1)]: [{ id: 'eval-swim-1', name: 'CSS 10×100 m', type: 'Swim', durationHours: 1, tss: 70 }], [shift(date, -3)]: [{ id: 'eval-swim-2', name: 'Vytrvalost 2,5 km', type: 'Swim', durationHours: 1, tss: 55 }],
     [shift(date, -6)]: [{ id: 'eval-swim-3', name: 'Technika 2 km', type: 'Swim', durationHours: 0.75, tss: 35 }], [shift(date, -8)]: [{ id: 'eval-swim-4', name: 'Vytrvalost 2,5 km', type: 'Swim', durationHours: 1, tss: 55 }] }),
@@ -461,6 +462,16 @@ export const COACH_EVAL_SCENARIOS = [
         quality('karta plavání ve volné vodě na zítřek', card?.openWater === true, card ? (card.openWater ? 'volná voda' : 'bazén') : 'bez karty'), quality('bójka nebo výrazná čepice', says(r, /bójk|čepic|buoy|cap/i)),
         // Run 43: a full hour in a lake of unknown temperature; first ask and swim 15–20 min close to the shore.
         quality('neznámá teplota vody: zeptá se a první plavání nejvýš 20 min', says(r, /teplot|temperat/i) && card?.minutes <= 20, card ? card.minutes + ' min' : '')]; } },
+  // Profile → Experience changes how the coach explains, never the dose (team review 2026-11-07, point 8).
+  { id: 'S44', title: 'Začínající běžec: proč zóna 2', message: 'Proč mám běhat tak pomalu, v zóně 2?', athlete: RUNNER,
+    context: () => ({ experience: { ride: 'beginner', run: 'beginner', swim: 'beginner', gym: 'beginner' } }),
+    checks: r => [quality('řekne důvod', says(r, /protože|proto|aby |díky|because|so that/i)),
+      quality('každou zkratku vysvětlí (VT1, LT1, FatMax, mitochondrie bez vysvětlení ne)', !says(r, /\b(VT1|LT1|FatMax)\b/i) || says(r, /(VT1|LT1|FatMax)[^.]{0,6}(\(|=|–|-|tedy|neboli|což)/i)),
+      quality('jedna rada k technice nebo úsilí (mluvit, RPE, dech, krok)', says(r, /mluvit|povídat|RPE|dech|krok|kadenc|talk|breath/i)), noUnaskedCard(r)] },
+  { id: 'S45', title: 'Zkušený cyklista: proč zóna 2', message: 'Proč mám jezdit tolik v zóně 2?',
+    context: () => ({ experience: { ride: 'experienced', run: 'regular', swim: 'beginner', gym: 'regular' } }),
+    checks: r => [quality('dá čísla (W, % FTP nebo tep)', says(r, /\d+\s*(W|%|tep|bpm)/i)),
+      quality('bez základů pro začátečníky', !says(r, /co je zóna 2|zóna 2 (?:je|znamená) (?:pásmo|rozsah)|what zone 2 is/i)), noUnaskedCard(r)] },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',

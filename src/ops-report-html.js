@@ -79,7 +79,7 @@ export function opsReportHtml({ date, rows = [], room = null, stuck = null, acco
     const shown = slow.slice(0, SLOW_SHOWN), rest = slow.slice(SLOW_SHOWN);
     // "Čekal na" only once the requests say it (request-timing.js waitSummary).
     const waits = shown.some(row => row.waited);
-    const head = cell("Co", { pad: "4px 0" }) + cell("Kolikrát", { align: "right", pad: "4px 0" }) + cell("Naposledy", { align: "right", pad: "4px 0 4px 12px" }) + (waits ? cell("Čekal na", { align: "right", pad: "4px 0 4px 12px" }) : "");
+    const head = cell("Co", { pad: "4px 0" }) + cell("Kolikrát", { align: "right", pad: "4px 0" }) + cell("Nejdéle", { align: "right", pad: "4px 0 4px 12px" }) + (waits ? cell("Čekal na", { align: "right", pad: "4px 0 4px 12px" }) : "");
     const body = shown.map(row => rowHtml([
       cell(`${DOT[row.light]} ${escape(routeLabel(row.service))}<br><span style="font-size:12px;color:#a1a1aa">${escape(row.service)}${row.rows ? ` · ${row.rows.toLocaleString("cs-CZ")} řádků` : ""}</span>`),
       cell(`${row.count}×`, { align: "right", nowrap: true }), cell(seconds(row.ms), { align: "right", nowrap: true, pad: "7px 0 7px 12px" }), ...(waits ? [cell(escape(row.waited || "–"), { align: "right", pad: "7px 0 7px 12px" })] : [])

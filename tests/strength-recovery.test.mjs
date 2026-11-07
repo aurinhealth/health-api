@@ -8,12 +8,12 @@ test("recovery reads only the latest value per type, even with minute-level hear
   await db.prepare("CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, source_family TEXT NOT NULL, data_type TEXT NOT NULL, external_id TEXT, sample_time TEXT, start_time TEXT, end_time TEXT, value_numeric REAL, value_unit TEXT, payload_json TEXT)").run();
   const rows = [];
   // A week of minute-level heart rate: ~10 000 rows.
-  for (let i = 0; i < 10080; i++) { const t = new Date(Date.UTC(2026, 8, 24) + i * 60000).toISOString().slice(0, 19); rows.push([1, "google-health", "heart_rate", t, null, 60 + (i % 40), "bpm", JSON.stringify({ i })]); }
-  rows.push([1, "google-health", "sleep_duration_minutes", null, "2026-09-30T22:30:00", 455, "min", "{}"]);
-  rows.push([1, "google-health", "sleep_duration_minutes", null, "2026-09-29T22:30:00", 380, "min", "{}"]);
-  rows.push([1, "google-health", "hrv", "2026-10-01T06:00:00", null, 88, "ms", "{}"]);
-  rows.push([2, "google-health", "hrv", "2026-10-01T07:00:00", null, 40, "ms", "{}"]); // another user
-  rows.push([1, "google-health", "steps", "2026-10-01T08:00:00", null, 5000, "count", "{}"]); // not a recovery type
+  for (let i = 0; i < 10080; i++) { const t = new Date(Date.UTC(2026, 8, 24) + i * 60000).toISOString().slice(0, 19); rows.push([1, "google-wearables", "heart_rate", t, null, 60 + (i % 40), "bpm", JSON.stringify({ i })]); }
+  rows.push([1, "google-wearables", "sleep_duration_minutes", null, "2026-09-30T22:30:00", 455, "min", "{}"]);
+  rows.push([1, "google-wearables", "sleep_duration_minutes", null, "2026-09-29T22:30:00", 380, "min", "{}"]);
+  rows.push([1, "google-wearables", "hrv", "2026-10-01T06:00:00", null, 88, "ms", "{}"]);
+  rows.push([2, "google-wearables", "hrv", "2026-10-01T07:00:00", null, 40, "ms", "{}"]); // another user
+  rows.push([1, "google-wearables", "steps", "2026-10-01T08:00:00", null, 5000, "count", "{}"]); // not a recovery type
   for (const r of rows) await db.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, sample_time, start_time, value_numeric, value_unit, payload_json) VALUES (?,?,?,?,?,?,?,?)").bind(...r).run();
   const started = performance.now();
   const out = await d1Recovery({ DB: db, USER_ID: 1 }, "2026-09-24", "2026-10-02");
@@ -53,4 +53,29 @@ test("recovery reads the 5-minute heart rate, not a workout's own newest sample"
   const out = await d1Recovery({ DB: db, USER_ID: 1 }, "2026-09-25", "2026-10-02");
   assert.deepEqual(Object.keys(out), ["heart-rate"]);
   assert.equal(out["heart-rate"][0].value, 58);
+});
+
+test("recovery skips heart-rate zone minutes and reads Google rows through the source index", async () => {
+  const db = createD1();
+  await db.prepare("CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, source_family TEXT NOT NULL, data_type TEXT NOT NULL, external_id TEXT, sample_time TEXT, start_time TEXT, end_time TEXT, value_numeric REAL, value_unit TEXT, payload_json TEXT)").run();
+  // The production indexes (staging/schema.sql).
+  await db.prepare("CREATE INDEX idx_health_datapoints_user_0 ON health_datapoints(user_id, data_type, sample_time DESC)").run();
+  await db.prepare("CREATE INDEX idx_health_datapoints_user_1 ON health_datapoints(user_id, source_family, data_type, start_time)").run();
+  const add = (type, sample, start, value) => db.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, sample_time, start_time, value_numeric, payload_json) VALUES (1,'google-wearables',?,?,?,?,'{}')").bind(type, sample, start, value).run();
+  for (let i = 0; i < 500; i++) await add("time-in-heart-rate-zone", null, new Date(Date.UTC(2026, 8, 26) + i * 600000).toISOString().slice(0, 19), 3);
+  await add("daily-heart-rate-zones", null, "2026-10-01T00:00:00", 1);
+  await add("daily-resting-heart-rate", null, "2026-10-01T00:00:00", 52);
+  const asked = [];
+  const prepare = db.prepare;
+  db.prepare = sql => { const s = prepare(sql), bind = s.bind; s.bind = (...values) => { asked.push({ sql, values }); return bind(...values); }; return s; };
+  const out = await d1Recovery({ DB: db, USER_ID: 1 }, "2026-09-25", "2026-10-02");
+  assert.deepEqual(Object.keys(out), ["daily-resting-heart-rate"]);
+  assert.equal(out["daily-resting-heart-rate"][0].value, 52);
+  assert.ok(!asked.some(q => q.values.some(v => /zone/.test(String(v)))), "no zone type is read");
+  // Every Google read seeks by its time through an index, not through every row of the type.
+  for (const q of asked.filter(q => q.sql.includes("source_family"))) {
+    const searches = db.sqlite.prepare("EXPLAIN QUERY PLAN " + q.sql).all(...q.values).map(r => r.detail).filter(d => /health_datapoints/.test(d));
+    assert.ok(searches.length);
+    for (const d of searches) assert.match(d, /^SEARCH .*INDEX idx_health_datapoints_user_\d \([^)]*(sample_time|start_time)[=<>]/, d);
+  }
 });
