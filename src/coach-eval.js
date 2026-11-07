@@ -469,11 +469,12 @@ export const COACH_EVAL_SCENARIOS = [
         quality('neznámá teplota vody: zeptá se a první plavání nejvýš 20 min', says(r, /teplot|tepl[áéo]|°C|temperat|how warm/i) && card?.minutes <= 20, card ? card.minutes + ' min' : '')]; } },
   // Profile → Experience changes how the coach explains, never the dose (team review 2026-11-07, point 8).
   // Run 50: an easy day today, so the 48 h rule does not cancel a VO2max beside the explanation.
+  // Run 51: "mluvíš v celých větách" and "pomáhá…, takže" count.
   { id: 'S44', title: 'Začínající běžec: proč zóna 2', message: 'Proč mám běhat tak pomalu, v zóně 2?', athlete: { ...RUNNER, plan: EASY_RUN_DAY, done: RUNS_DONE },
     context: () => ({ experience: { ride: 'beginner', run: 'beginner', swim: 'beginner', gym: 'beginner' } }),
-    checks: r => [quality('řekne důvod', says(r, /protože|proto|aby |díky|because|so that/i)),
+    checks: r => [quality('řekne důvod', says(r, /protože|proto|aby |díky|takže|pomáh|because|so that|helps/i)),
       quality('každou zkratku vysvětlí (VT1, LT1, FatMax, mitochondrie bez vysvětlení ne)', !says(r, /\b(VT1|LT1|FatMax)\b/i) || says(r, /(VT1|LT1|FatMax)[^.]{0,6}(\(|=|–|-|tedy|neboli|což)/i)),
-      quality('jedna rada k technice nebo úsilí (mluvit, RPE, dech, krok)', says(r, /mluvit|povídat|RPE|dech|krok|kadenc|talk|breath/i)), noUnaskedCard(r)] },
+      quality('jedna rada k technice nebo úsilí (mluvit, RPE, dech, krok)', says(r, /mluv|povíd|RPE|dech|krok|kadenc|talk|breath/i)), noUnaskedCard(r)] },
   { id: 'S45', title: 'Zkušený cyklista: proč zóna 2', message: 'Proč mám jezdit tolik v zóně 2?', athlete: { plan: EASY_RIDE_DAY },
     context: () => ({ experience: { ride: 'experienced', run: 'regular', swim: 'beginner', gym: 'regular' } }),
     checks: r => [quality('dá čísla (W, % FTP nebo tep)', says(r, /\d+\s*(W|%|tep|bpm)/i)),
@@ -526,7 +527,8 @@ function dayRefs(sentence, date, planned = {}) {
   for (let k = 0; k <= 13; k++) { const d = shift(date, k), w = weekdayOf(d), skip = k ? undefined : i => laterWeek(text, i, date); add(WEEKDAYS.cs[w], d, skip); add(WEEKDAYS.en[w], d, skip); }
   return [...new Set(found.sort((a, b) => a[0] - b[0] || a[1].localeCompare(b[1])).map(([, d]) => d))];
 }
-const sentences = text => String(text || '').replace(/\*\*|__/g, '').split(/(?<=[.!?])\s+|\n+/).map(x => x.trim()).filter(Boolean);
+// Run 51, S28: "na pondělí 26. 10. a … na středu 28. 10., aby…" stays one sentence (a date is no sentence end).
+const sentences = text => String(text || '').replace(/\*\*|__/g, '').split(/(?<=[.!?])\s+(?![\d\p{Ll}])|(?<=[^\d][.!?])\s+|\n+/u).map(x => x.trim()).filter(Boolean);
 const CHANGE = /vynech|přesu|posu[nň]|zruš|odpočív|odpočin|nahrad|místo|zkrát|odlož|odpad|volno|\bskip|\bmove|cancel|instead|\brest\b|shorten|postpone/i;
 // A question that offers the change of the sentence before it ("Chceš to upravit?", "Want me to adjust it?").
 const OFFER = /^(?:chceš|mám(?: ti)?|want me|shall i|should i)\s[^?]*\?\s*$/i;
