@@ -1380,8 +1380,13 @@ function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volum
 // Strength deload: after four solid weeks in a row (two or more sessions each
 // and none much lighter than the others) the fifth week is lighter, so the
 // strength built can show. The week after a deload has a light week among the
-// last four, so the next deload comes four weeks later.
-export function strengthDeload(history, date) {
+// last four, so the next deload comes four weeks later. By the gym level
+// (Profile → Experience): an intermediate after five weeks, a beginner after
+// twelve (in practice none while they learn: the sets read reach about that
+// far); stalls, illness and the shared recovery week still lighten a week.
+const DELOAD_WEEKS = { beginner: 12, regular: 5, experienced: 4 };
+export function strengthDeload(history, date, experience = "") {
+  const n = DELOAD_WEEKS[experience] || 4;
   const DAY = 86400000, monday = d => { const t = Date.parse(dateKey(d) + "T12:00:00Z"); return new Date(t - ((new Date(t).getUTCDay() + 6) % 7) * DAY).toISOString().slice(0, 10); };
   if (!dateKey(date)) return null;
   const thisWeek = monday(date), weeks = new Map();
@@ -1390,12 +1395,13 @@ export function strengthDeload(history, date) {
     const w = monday(r.workout_date); if (w >= thisWeek) continue;
     const e = weeks.get(w) || { sets: 0, days: new Set(), marked: false }; e.sets++; e.days.add(dateKey(r.workout_date)); if (/odlehčen|deload/i.test(String(r.note || ""))) e.marked = true; weeks.set(w, e);
   }
-  const last = [1, 2, 3, 4].map(k => weeks.get(new Date(Date.parse(thisWeek + "T12:00:00Z") - k * 7 * DAY).toISOString().slice(0, 10)));
+  const last = Array.from({ length: n }, (_, i) => i + 1).map(k => weeks.get(new Date(Date.parse(thisWeek + "T12:00:00Z") - k * 7 * DAY).toISOString().slice(0, 10)));
   if (last.some(w => !w || w.days.size < 2)) return null;
   // A lighter week among them (a deload, marked or with clearly fewer sets per session) resets the count.
-  const perDay = last.map(w => w.sets / w.days.size), median = [...perDay].sort((a, b) => a - b).slice(1, 3).reduce((a, b) => a + b, 0) / 2;
+  const perDay = last.map(w => w.sets / w.days.size), sorted = [...perDay].sort((a, b) => a - b), median = (sorted[Math.floor((n - 1) / 2)] + sorted[Math.ceil((n - 1) / 2)]) / 2;
   if (last.some(w => w.marked) || perDay.some(v => v < median * 0.85)) return null;
-  return { weeks: 4, reason: L("Čtyři týdny po sobě s plným tréninkem: tento týden je odlehčený (méně sérií, stejná váha, RPE do 7), aby se síla mohla projevit.", "Four full training weeks in a row: this is a deload week (fewer sets, same weight, RPE up to 7) so the strength you've built can show.") };
+  const cs = { 4: "Čtyři týdny", 5: "Pět týdnů", 12: "Dvanáct týdnů" }[n], en = { 4: "Four", 5: "Five", 12: "Twelve" }[n];
+  return { weeks: n, reason: L(cs + " po sobě s plným tréninkem: tento týden je odlehčený (méně sérií, stejná váha, RPE do 7), aby se síla mohla projevit.", en + " full training weeks in a row: this is a deload week (fewer sets, same weight, RPE up to 7) so the strength you've built can show.") };
 }
 // Dumbbell exercises ask for a dumbbell the athlete has: the nearest of their
 // weights (kg per hand), the lighter one when two are as near.
@@ -1497,7 +1503,7 @@ export function generateStrengthPlan(context, options = {}) {
   // in a row are the fallback for athletes without Intervals.icu loads.
   const shared = context?.recoveryWeek;
   // The first gym session after Nemoc holds the loads like a deload, with a set less (afterIllness).
-  const deload = options.noDeload ? null : afterIllness(context) || (shared?.recovery ? { shared: true, reason: L("Regenerační týden pro celý trénink (" + (shared.reason === "three_weeks" ? "po třech týdnech nad udržovací zátěží" : shared.reason === "hrv_trend" ? "HRV za poslední týden pod tvým běžným pásmem" : "po náročném týdnu") + "): posilovna je odlehčená – méně sérií, váha se drží, RPE do 7.", "Recovery week for all training (" + (shared.reason === "three_weeks" ? "after three weeks above maintenance load" : shared.reason === "hrv_trend" ? "HRV over the last week below your usual range" : "after a hard week") + "): the gym is lighter – fewer sets, weights held, RPE up to 7.") } : shared?.known ? null : strengthDeload(context?.strength?.recentCompletedSets, context.date));
+  const deload = options.noDeload ? null : afterIllness(context) || (shared?.recovery ? { shared: true, reason: L("Regenerační týden pro celý trénink (" + (shared.reason === "three_weeks" ? "po třech týdnech nad udržovací zátěží" : shared.reason === "hrv_trend" ? "HRV za poslední týden pod tvým běžným pásmem" : "po náročném týdnu") + "): posilovna je odlehčená – méně sérií, váha se drží, RPE do 7.", "Recovery week for all training (" + (shared.reason === "three_weeks" ? "after three weeks above maintenance load" : shared.reason === "hrv_trend" ? "HRV over the last week below your usual range" : "after a hard week") + "): the gym is lighter – fewer sets, weights held, RPE up to 7.") } : shared?.known ? null : strengthDeload(context?.strength?.recentCompletedSets, context.date, context.trainingSetup?.experience));
   // A deload week holds the loads (no increase, no set to failure).
   const chosen = choosePlan(context, options), factor = deload ? Math.min(recoveryFactor(context), 0.89) : recoveryFactor(context), history = context?.strength?.recentCompletedSets || [], historyMap = recentExerciseMap(history);
   const firstSession = !history.length;
@@ -1578,7 +1584,8 @@ export function generateStrengthPlan(context, options = {}) {
   const recoveryScore = context?.adaptive?.recovery?.score;
   const jumpDay = PLYO_SPORTS.has(mainSport) && !focusMuscles && !planPhase && !deload && !chosen.protectedLegs && !chosen.lighterDay && !(recoveryScore < 55)
     && lastJump >= PLYO_EVERY_DAYS && exercises.some(ex => LEG_MUSCLES.has(EXERCISES[ex]?.muscle));
-  const jump = jumpDay ? PLYOMETRICS.filter(fits).sort((a, b) => since(b) - since(a))[0] : null;
+  // A beginner in the gym jumps low only (pogo hops, squat jumps), no box jumps yet.
+  const jump = jumpDay ? PLYOMETRICS.filter(name => fits(name) && !(context.trainingSetup?.experience === "beginner" && name === "Box Jump")).sort((a, b) => since(b) - since(a))[0] : null;
   if (jump) { if (exercises.length >= maxExercises) exercises.pop(); exercises.unshift(jump); }
 
   const rows = [], loadEstimates = [];
