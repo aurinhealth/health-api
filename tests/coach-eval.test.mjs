@@ -588,3 +588,18 @@ test('runs 44/45: "nejezdi" and "netrénuj" speak of the cancelled session, a co
   assert.equal((await words('W02', 'Warmup\n- 8m 78-85% Pace Rozklus intensity=warmup\n\nMain Set 3x\n- 7m 92-95% Pace Tempo intensity=interval\n- 2m 65-77% Pace Lehký klus intensity=recovery')).ok, true);
   assert.equal((await words('W02', 'Main Set 3x\n- 7m 92-95% Pace Tempo intensity=interval\n- 2m 65-77% Pace Volné šlapání intensity=recovery')).ok, false);
 });
+
+test('run 47: an offer question after the change, and a swim card named by "plavání"', () => {
+  const at = (id, answer, kept) => checkReply(scenarioById(id), { answer, kept, proposed: [] }, COACH_EVAL_DATE + ' 08:00', COACH_EVAL_DATE).filter(c => !c.ok).map(c => c.name);
+  const tomorrow = '2026-10-22', gym = [{ type: 'workout', date: tomorrow, sport: 'gym', minutes: 45 }];
+  const s35 = 'Na zítra bych dal 45 minut posilovny na celé tělo s jednoručkami a lavicí. Dnešní plánovaný VO2max je méně než 48 hodin po včerejším sweet spotu; doporučil bych místo něj lehkou jízdu. Chceš upravit i tu?';
+  assert.ok(!at('S35', s35, gym).includes('každá změna z textu má kartu'), 'offered with a question');
+  // S18 round 1: "řešit zvlášť" offers nothing.
+  const s18 = 'Zítra bych dal 45 minut posilovny jen na nohy. Dnešní VO2max je navíc méně než 48 hodin po úterním sweet spotu; jeho přesun bych doporučil řešit zvlášť.';
+  assert.ok(at('S18', s18, gym).includes('každá změna z textu má kartu'));
+  const s30 = 'Zítra bych dal hodinové plavání s kratšími úseky na CSS. Po včerejších 10×100 m na CSS udržíš kvalitu záběru.';
+  assert.ok(!at('S30', s30, [{ type: 'workout', date: tomorrow, sport: 'swim', kind: 'threshold', minutes: 60 }]).includes('text zmiňuje každou kartu'));
+  const s43 = 'Na zítra bych připravil první plavání v jezeře na 20 minut u břehu, ne hodinu: teplotu vody neznám. Kolik má voda °C? Neplav sám, vezmi si výraznou čepici a bójku.';
+  assert.ok(!at('S43', s43, [{ type: 'workout', date: tomorrow, sport: 'swim', kind: 'recovery', minutes: 20, openWater: true }]).includes('text zmiňuje každou kartu'));
+  assert.ok(at('S43', 'Neplav sám, vezmi si čepici a bójku.', [{ type: 'workout', date: tomorrow, sport: 'swim', kind: 'recovery', minutes: 20, openWater: true }]).includes('text zmiňuje každou kartu'), 'a card the text never names');
+});
