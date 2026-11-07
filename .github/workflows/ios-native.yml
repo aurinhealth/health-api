@@ -48,8 +48,9 @@ jobs:
     runs-on: xcode-27
     # On main the run also builds for iPhone and uploads it after the App Store
     # preview and the iPhone Duo screenshots: 81 to 97 minutes (cancelled at 60
-    # and then 90 min before; the open Duo shots add 1 to 2), so 110.
-    timeout-minutes: 110
+    # and then 90 min before; the open Duo shots add 1 to 2), so 110, plus room
+    # for a second warm-up and a test that ran out of time run once more.
+    timeout-minutes: 125
     defaults:
       run:
         working-directory: ios-native
@@ -146,8 +147,34 @@ jobs:
             # On iOS 27 every purchase in the first test process after the simulator
             # boots waits on a "Sign in to Apple Account" alert; one short test takes
             # that process (ProStoreTests.warmUp), the real run gets the next one.
-            run test-without-building -only-testing:AurinTests/ProStoreTests/testTrialReminderOnDayFive || true
+            # Only a process that made the warm-up purchase takes the alert: on
+            # 6 Nov the first one crashed before it connected ("Test crashed with
+            # signal term before establishing connection"), so the real run met the
+            # alert and testMonthlyHasNoFreeWeek hung. Up to three tries.
+            for try in 1 2 3; do
+              start=$(wc -l < "$RUNNER_TEMP/build.log")
+              run test-without-building -only-testing:AurinTests/ProStoreTests/testTrialReminderOnDayFive || true
+              tail -n +"$((start + 1))" "$RUNNER_TEMP/build.log" > "$RUNNER_TEMP/warm-up.log"
+              grep -q "ProStoreTests warm-up purchase after" "$RUNNER_TEMP/warm-up.log" && break
+              echo "::warning::The warm-up test process made no purchase (try $try)"
+            done
+            start=$(wc -l < "$RUNNER_TEMP/build.log")
             run test-without-building || status=$?
+            # A test that only ran out of time (the simulator stopped drawing for
+            # 8 minutes in SnapshotTests.testProSettings on 6 Nov; it passes in 8 s)
+            # runs once more in a new process. A test that failed an assertion, or
+            # hangs again, still fails the run.
+            if [ "$status" != 0 ]; then
+              tail -n +"$((start + 1))" "$RUNNER_TEMP/build.log" > "$RUNNER_TEMP/tests.log"
+              failing=$(sed -n '/^Failing tests:/,/^$/p' "$RUNNER_TEMP/tests.log" | grep -oE '[A-Za-z0-9_]+\.test[A-Za-z0-9_]*' | sort -u || true)
+              hung=$(grep -oE "Test Case '-\[[A-Za-z0-9_]+\.[A-Za-z0-9_]+ test[A-Za-z0-9_]*\]' exceeded execution time allowance" "$RUNNER_TEMP/tests.log" \
+                | sed -E "s/^Test Case '-\[[A-Za-z0-9_]+\.([A-Za-z0-9_]+) ([A-Za-z0-9_]+)\].*/\1.\2/" | sort -u || true)
+              if [ -n "$failing" ] && [ -z "$(comm -23 <(echo "$failing") <(echo "$hung"))" ]; then
+                echo "::warning::Ran out of time, run once more: $(echo $failing)"
+                status=0
+                run test-without-building $(for t in $failing; do echo "-only-testing:AurinTests/${t%%.*}/${t#*.}"; done) || status=$?
+              fi
+            fi
           fi
           kill "$shots" || true
           exit $status
