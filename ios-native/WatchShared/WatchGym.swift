@@ -33,6 +33,8 @@ struct WatchGym: Codable, Equatable, Sendable {
         var note: String? = nil
         /// The best set before today by the estimated one-rep max: a set past it is a record.
         var record: Last? = nil
+        /// In pounds while the app is in kilos: a machine in lb (LiftUnits on the iPhone).
+        var pounds: Bool? = nil
         var title: String { shown ?? name }
     }
 

@@ -4058,3 +4058,8 @@
 "Některé hodnoty se nepodařilo přečíst. Doplň je podle etikety." = "Some values couldn't be read. Fill them in from the label.";
 "Hodnoty se nepodařilo přečíst. Vyfoť celou tabulku i s řádkem „na 100 g“, zblízka a rovně." = "Couldn't read the values. Take the whole table with its “per 100 g” row, up close and straight on.";
 "Energie %@ kcal nesedí s makroživinami (≈ %@ kcal). Zkontroluj přepis proti fotce." = "Energy %@ kcal doesn't match the macros (≈ %@ kcal). Check the values against the photo.";
+/* Training mode: kg or lb for one exercise (LiftUnits) */
+"Jen pro %@, na telefonu i na hodinkách. Ukládá se v kg." = "Only for %@, on this phone and Apple Watch. Saved in kg.";
+"Kilogramy (kg)" = "Kilograms (kg)";
+"Libry (lb)" = "Pounds (lb)";
+"Jednotka váhy: %@" = "Weight unit: %@";

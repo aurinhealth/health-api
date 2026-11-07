@@ -233,8 +233,8 @@ enum GymCoach {
     static func kgText(_ kg: Double) -> String { GymDay.kgText(kg) }
 
     /// kg as shown in the chosen unit: "82,5".
-    static func shown(_ kg: Double) -> String {
-        LiftWeight.shown(kgText(kg)) ?? kgText(kg)
+    static func shown(_ kg: Double, machineLb: Bool = false) -> String {
+        LiftWeight.shown(kgText(kg), machineLb: machineLb) ?? kgText(kg)
     }
 
     static func firstNumber(_ text: String?) -> Int? { GymDay.firstNumber(text) }

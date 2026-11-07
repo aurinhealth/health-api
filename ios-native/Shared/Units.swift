@@ -27,6 +27,9 @@ enum Units {
     static func kg(_ shown: Double) -> Double { imperial ? shown / poundsPerKg : shown }
     /// The −/+ step for a barbell or dumbbell: 2.5 kg or 5 lb.
     static var weightStep: Double { imperial ? 5 : 2.5 }
+    /// Pounds whatever the setting (a machine in pounds, LiftUnits).
+    static func pounds(_ kg: Double) -> Double { kg * poundsPerKg }
+    static func kg(pounds: Double) -> Double { pounds / poundsPerKg }
 
     // MARK: Distance and pace
 

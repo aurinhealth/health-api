@@ -96,7 +96,8 @@ enum GymLiveActivity {
     /// "80 kg" and "8" of "80 kg × 8".
     static func loadParts(_ set: GymSet, in exercise: GymExercise) -> (weight: String?, reps: String?) {
         let carry = GymSessionMath.carried(set, in: exercise)
-        let weight = LiftWeight.shown(carry?.kg ?? set.plannedKg ?? set.kg).map { $0 + " " + Units.weightUnit }
+        let pounds = LiftUnits.pounds(exercise.name)
+        let weight = LiftWeight.shown(carry?.kg ?? set.plannedKg ?? set.kg, machineLb: pounds).map { $0 + " " + LiftWeight.unit(machineLb: pounds) }
         return (weight, (carry?.reps ?? set.plannedReps ?? set.reps)?.nilIfBlank)
     }
 

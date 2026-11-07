@@ -105,13 +105,13 @@ enum GymSessionMath {
         guard set.work, let last else { return nil }
         let work = exercise.sets.filter(\.work)
         guard let position = work.firstIndex(where: { $0.row == set.row }), last.sets.indices.contains(position) else { return nil }
-        return lift(last.sets[position])
+        return lift(last.sets[position], machineLb: LiftUnits.pounds(exercise.name))
     }
 
-    static func lift(_ lift: GymHistory.Lift) -> String? {
+    static func lift(_ lift: GymHistory.Lift, machineLb: Bool = false) -> String? {
         guard let reps = lift.reps else { return nil }
         guard let kg = lift.kg, kg > 0 else { return L10n.f("%@ op.", Fmt.int(reps)) }
-        return GymCoach.shown(kg) + " × " + Fmt.int(reps)
+        return GymCoach.shown(kg, machineLb: machineLb) + " × " + Fmt.int(reps)
     }
 
     /// The best set before today by the estimated one-rep max.
@@ -155,7 +155,8 @@ enum GymSessionMath {
         guard let last, let top = now.compactMap(\.kg).max(), let before = GymCoach.topKg(last) else { return nil }
         if abs(top - before) > 0.01 {
             let sign: String = top > before ? "+" : "−"
-            let text: String = sign + GymCoach.shown(abs(top - before)) + " " + Units.weightUnit
+            let lb = LiftUnits.pounds(exercise.name)
+            let text: String = sign + GymCoach.shown(abs(top - before), machineLb: lb) + " " + LiftWeight.unit(machineLb: lb)
             return (text, top > before)
         }
         let repsNow = now.filter { $0.kg == top }.compactMap(\.reps).max() ?? 0
@@ -196,19 +197,52 @@ struct GymSetTableHeader: View {
     @ScaledMetric(relativeTo: .subheadline) private var labelWidth: CGFloat = 26
     @ScaledMetric(relativeTo: .largeTitle) private var kgWidth: CGFloat = 64
     @ScaledMetric(relativeTo: .largeTitle) private var repsWidth: CGFloat = 52
+    /// The exercise's name and whether it is in pounds (LiftUnits): the unit
+    /// then opens a menu to switch it. Nil: the app's unit, no menu.
+    var exercise: String? = nil
+    var pounds = false
+    var onPounds: (Bool) -> Void = { _ in }
 
     var body: some View {
         HStack(spacing: 8) {
             // One line: "SETS" and "SÉRIE" are a little wider than the set numbers below.
             Text("Série").lineLimit(1).fixedSize().frame(width: labelWidth, alignment: .leading)
             Text("Minule").frame(maxWidth: .infinity, alignment: .leading)
-            Text(Units.weightUnit).frame(width: kgWidth)
+            unit.frame(width: kgWidth)
             Text("Opak.").lineLimit(1).fixedSize().frame(width: repsWidth)
             Color.clear.frame(width: 40, height: 1)
             Color.clear.frame(width: 34, height: 1)
         }
         .font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(Palette.faint)
         .padding(.horizontal, 10).padding(.bottom, 4)
+    }
+
+    @ViewBuilder
+    private var unit: some View {
+        let text = LiftWeight.unit(machineLb: pounds)
+        if let exercise, !Units.imperial {
+            Menu {
+                Section(L10n.f("Jen pro %@, na telefonu i na hodinkách. Ukládá se v kg.", exercise)) {
+                    Button { onPounds(false) } label: {
+                        if pounds { Text("Kilogramy (kg)") } else { Label("Kilogramy (kg)", systemImage: "checkmark") }
+                    }
+                    Button { onPounds(true) } label: {
+                        if pounds { Label("Libry (lb)", systemImage: "checkmark") } else { Text("Libry (lb)") }
+                    }
+                }
+            } label: {
+                HStack(spacing: 3) {
+                    Text(verbatim: text)
+                    Image(systemName: "chevron.down").scaledFont(8, weight: .bold, cap: .denseCap)
+                }
+                .foregroundStyle(pounds ? Palette.amber : Palette.faint)
+                .frame(minWidth: 44, minHeight: 28)
+                .contentShape(Rectangle())
+            }
+            .accessibilityLabel(L10n.f("Jednotka váhy: %@", text))
+        } else {
+            Text(verbatim: text)
+        }
     }
 }
 
@@ -682,6 +716,8 @@ struct RestSetsList: View {
     var keep: Set<Int> = []
     /// Sets to come typed in ahead (GymSessionMath.carried).
     var ahead = GymSessionMath.Typed()
+    /// A machine in pounds while the app is in kilos (LiftUnits).
+    var pounds = false
     var onWeight: ((String) -> Void)? = nil
     @State private var typed = ""
     @FocusState private var focused: Bool
@@ -692,14 +728,14 @@ struct RestSetsList: View {
             HStack(spacing: 8) {
                 Text("Série").frame(width: 40, alignment: .leading)
                 Text("Minule").frame(maxWidth: .infinity, alignment: .leading)
-                Text(Units.weightUnit).frame(width: 64)
+                Text(verbatim: LiftWeight.unit(machineLb: pounds)).frame(width: 64)
                 Text("Opak.").frame(width: 52)
             }
             .font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(Palette.faint)
             .padding(.top, 12).padding(.bottom, 4)
             ForEach(exercise.sets) { s in
                 let carry = s.done ? nil : GymSessionMath.carried(s, in: exercise, keep: keep, typed: ahead)
-                let kg: String = LiftWeight.shown(s.done ? s.kg : carry?.kg ?? s.plannedKg) ?? "–"
+                let kg: String = LiftWeight.shown(s.done ? s.kg : carry?.kg ?? s.plannedKg, machineLb: pounds) ?? "–"
                 let reps: String = (s.done ? s.reps : carry?.reps ?? s.plannedReps)?.nilIfBlank ?? "–"
                 Rectangle().fill(Palette.hairline).frame(height: 1)
                 HStack(spacing: 8) {

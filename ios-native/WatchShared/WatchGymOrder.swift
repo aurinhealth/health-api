@@ -9,6 +9,13 @@ extension WatchGym {
         exercises.lazy.flatMap(\.lifts).first { $0.row == row }
     }
 
+    /// The set's exercise is on a machine in pounds while the app is in kilos
+    /// (LiftUnits on the iPhone; the iPhone sends none with imperial units).
+    func machineLb(row: Int?) -> Bool {
+        guard let row else { return false }
+        return exercises.first { $0.lifts.contains { $0.row == row } }?.pounds == true
+    }
+
     /// A set done off its plan: the drop sets straight after it, not done
     /// yet, take the same share, to 0.5 kg (as GymDay.followDrops in the sheet).
     mutating func followDrops(after row: Int, from old: Double?, to new: Double) {

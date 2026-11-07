@@ -1210,14 +1210,28 @@ struct StepsProfile: View {
 
 /// Lifted weight between the gym sheet (kg as text, "62,5" or "62.5") and
 /// what is shown and typed in (kg, or lb with imperial units).
+/// machineLb: an exercise in pounds while the app is in kilos (LiftUnits):
+/// the pounds typed in show back as typed, the plan's kilos to the nearest
+/// 5 lb, a weight stack's usual step.
 enum LiftWeight {
     /// The sheet's kg text in the chosen unit: "62.5" kg (62,5 in Czech), "137.8" in lb.
-    static func shown(_ kgText: String?) -> String? {
+    static func shown(_ kgText: String?, machineLb: Bool = false) -> String? {
         guard let kgText else { return nil }
         // The sheet keeps "62,5" or "62.5": shown with the app language's decimal mark.
         guard let kg = number(kgText) else { return kgText }
-        return text(shownValue(kg))
+        return text(machineLb ? machinePounds(kg) : shownValue(kg))
     }
+
+    /// kg in the pounds of a machine: 31.75 typed as 70 lb is 70 again, the
+    /// plan's 35 kg (77.2 lb) is 75.
+    static func machinePounds(_ kg: Double) -> Double {
+        let pounds = Units.pounds(kg)
+        let half = (pounds * 2).rounded() / 2
+        return abs(pounds - half) < 0.05 ? half : (pounds / 5).rounded() * 5
+    }
+
+    /// "kg", or "lb" for the whole app or this machine.
+    static func unit(machineLb: Bool = false) -> String { machineLb ? "lb" : Units.weightUnit }
 
     /// kg → the chosen unit, to one decimal (dumbbells, steppers).
     static func shownValue(_ kg: Double) -> Double {
@@ -1226,8 +1240,12 @@ enum LiftWeight {
 
     /// What was typed (in the chosen unit) as kg text for the sheet, with a
     /// decimal period as the sets were always recorded.
-    static func kgText(_ typed: String) -> String {
+    static func kgText(_ typed: String, machineLb: Bool = false) -> String {
         let t = typed.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+        if machineLb, let pounds = Double(t) {
+            // To two decimals, so the pounds come back as typed (70 lb → 31.75 kg).
+            return GymDay.kgText(Units.kg(pounds: pounds))
+        }
         guard Units.imperial, let pounds = Double(t) else { return t }
         // Pounds shown to 0.1 lb come back as whole quarter kilos (60 kg →
         // 132.3 lb → 60 kg), anything else to two decimals.
@@ -1244,6 +1262,27 @@ enum LiftWeight {
     /// In the phone region's decimal mark, never grouped ("1250", typed back in a field).
     private static func text(_ value: Double) -> String {
         value.formatted(.number.precision(.fractionLength(0...2)).grouping(.never).locale(Fmt.locale))
+    }
+}
+
+/// Pounds for one exercise while the app is in kilos: a machine in pounds in
+/// a gym in kilos, chosen in Training mode's set table and kept on the phone
+/// (the watch gets it with the day's plan). The sheet keeps kilos.
+enum LiftUnits {
+    static let key = "liftUnitsPounds"
+
+    /// The exercises in pounds.
+    static var all: Set<String> {
+        guard !Units.imperial else { return [] }
+        return Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+    }
+
+    static func pounds(_ exercise: String) -> Bool { all.contains(exercise) }
+
+    static func set(_ exercise: String, pounds: Bool) {
+        var names = Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+        if pounds { names.insert(exercise) } else { names.remove(exercise) }
+        UserDefaults.standard.set(names.sorted(), forKey: key)
     }
 }
 
