@@ -13,7 +13,7 @@
 // A Sandbox purchase (TestFlight, sandbox testers) adds messages only on the
 // test server; on the live one it is recorded but counts for nothing.
 import { L } from './lang.js';
-import { isStaging } from './staging.js';
+import { isStaging, ownerUnlimited } from './staging.js';
 
 export const PACKS = { messages40: 40, messages100: 100 };
 export const packMessages = (productId, bundle) => {
@@ -24,7 +24,7 @@ export const packProducts = bundle => Object.keys(PACKS).map(name => bundle + '.
 
 const refuse = (message, status = 400) => Object.assign(new Error(message), { status });
 const central = env => env.RAW_DB || env.DB;
-const tracked = env => Boolean(env?.DB && Number(env.USER_ID) > 0) && env.USER_IS_OWNER !== true;
+const tracked = env => Boolean(env?.DB && Number(env.USER_ID) > 0) && !ownerUnlimited(env);
 // Whether a purchase from this App Store environment adds messages here.
 export const counts = (env, environment) => environment === 'Production' || isStaging(env);
 

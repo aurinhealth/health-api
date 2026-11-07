@@ -49,6 +49,25 @@ final class WatchSnapshotTests: XCTestCase {
         XCTAssertNil(s.sleep?.deep)
     }
 
+    /// Both alarms off: tonight's planned wake time is not an alarm, so the
+    /// watch and the iPhone's backup for it ring nothing; a wake time chosen
+    /// for that morning only still rings.
+    func testNoAlarmWhenBothOff() throws {
+        let evening = try XCTUnwrap(WatchSnapshot.Alarm.day("2026-11-06"))
+        let now = evening.addingTimeInterval(8 * 3600)
+        var alarm = WatchSnapshot.Alarm(work: nil, weekend: nil, evening: "2026-11-06", wake: "9:01", wakeOnce: false)
+        XCTAssertNil(alarm.nextWake(after: now))
+        alarm.wakeOnce = nil
+        XCTAssertNil(alarm.nextWake(after: now))
+        alarm.wakeOnce = true
+        let morning = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 1, to: evening))
+        XCTAssertEqual(alarm.nextWake(after: now), WatchSnapshot.Alarm.at("9:01", on: morning))
+        // The weekend alarm on: Saturday rings at its time.
+        alarm.wakeOnce = false
+        alarm.weekend = "08:30"
+        XCTAssertEqual(alarm.nextWake(after: now), WatchSnapshot.Alarm.at("08:30", on: morning))
+    }
+
     /// Strain against the target, one rule for the watch app and its
     /// complications: under it is neutral until 18:00, then off.
     func testStrainStanding() throws {

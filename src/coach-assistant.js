@@ -14,7 +14,8 @@ import { rideFtpFor } from './intervals-athlete.js';
 import { activityKindOf } from './activity-match.js';
 import { isHardSession } from './session-intensity.js';
 import { aiLanguageNote, L, lang } from './lang.js';
-import { assertAiAllowance, claimAiSlot, estimateAiCostUsd, keepAiReservation, recordAiUsage } from './ai-usage.js';
+import { assertAiAllowance, claimAiSlot, estimateAiCostUsd, keepAiReservation, recordAiUsage, DEFAULT_MODEL } from './ai-usage.js';
+import { AI_FEATURES, COACH_CHAT_FEATURE, isFoodFeature } from './ai-features.js';
 import { trendFacts } from './trend-facts.js';
 import { localDateTime, halfDay } from './user-time.js';
 import { sleepNeedFor, weekSleepDebt } from './recovery-model.js';
@@ -188,13 +189,14 @@ export function gymDay(focus,{appContext=null,message='',daily=null}={}){
 }
 // Legs worked hard in the last 48 hours: lower-body gym sets, or a hard or
 // long run or ride (90 min run, 150 min ride).
+const LONG_MINUTES={run:90,ride:150};
 function legsTired(engine,week,date){
   if(Number(engine?.load?.lowerBodyGymSignals48h)>0)return true;
   if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date||'')))return false;
   const from=shiftDay(date,-2);
   return (week?.days||[]).filter(d=>d.date>=from&&d.date<=date).flatMap(d=>d.daily?.training?.completed||[]).some(a=>{
     const kind=activityKindOf(a?.type||a?.name);if(kind!=='run'&&kind!=='ride')return false;
-    return isHardSession(a,kind)||Number(a.durationHours)*60>=(kind==='run'?90:150);
+    return isHardSession(a,kind)||Number(a.durationHours)*60>=LONG_MINUTES[kind];
   });
 }
 // The engine's day turned into a gym day by readiness: red is mobility and
@@ -262,7 +264,7 @@ export function recoveryForCoach(r) {
   };
 }
 
-export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,appContext=null,message='',dayMinutes=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[],recoveryTime=null,journal=null,returns=null}) {
+export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, experience=null, experienceLevels=null, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,appContext=null,message='',dayMinutes=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[],recoveryTime=null,journal=null,returns=null}) {
   const strengthSince=shiftDay(date,-14);
   const strengthSets=(gym?.history||[]).filter(r=>r.workout_date>=strengthSince&&r.workout_date<=date&&/^(WORK|DROP)$/.test(String(r.type||'WORK').toUpperCase())).sort((a,b)=>String(b.workout_date).localeCompare(String(a.workout_date))).slice(0,120);
   const days = week?.days?.map(row => ({
@@ -273,12 +275,13 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
   }));
   // The day before a long ride, long run or race planned for the next day:
   // hard training there is said and another day offered (běh 10, S21).
-  const longOrRace = x => /long|dlouh|závod|race/i.test(String(x?.name || "")) || Number(x?.durationHours) >= (/run/i.test(String(x?.type || "")) ? 1.5 : 2.5);
-  days?.forEach((d, i) => { const next = days[i + 1]?.planned?.find(longOrRace); if (next) d.beforeLong = next.name || (/run/i.test(String(next.type || "")) ? "long run" : "long ride"); });
+  const isRun = x => activityKindOf(x?.type || x?.name) === "run";
+  const longOrRace = x => /long|dlouh|závod|race/i.test(String(x?.name || "")) || Number(x?.durationHours) * 60 >= LONG_MINUTES[isRun(x) ? "run" : "ride"];
+  days?.forEach((d, i) => { const next = days[i + 1]?.planned?.find(longOrRace); if (next) d.beforeLong = next.name || (isRun(next) ? "long run" : "long ride"); });
   const engine = buildCyclingCoachV2({
     date, daily, week, fitness, health, gym,
     preferences:{cadence:"85–95 rpm",...preferences},
-    availabilityMinutes, goal:goal||focusGoal(focus), manualReadiness, capabilities,athleteState,sport:sport||engineSport(focus),focus,profile,checkin,upcomingTest,recoveryTime,returns
+    availabilityMinutes, goal:goal||focusGoal(focus), manualReadiness, capabilities,experience,athleteState,sport:sport||engineSport(focus),focus,profile,checkin,upcomingTest,recoveryTime,returns
   });
   // One place for every caller (chat, week planning, coach evaluation): a
   // strength athlete's day is a gym day unless a ride, run or swim is asked or planned.
@@ -316,7 +319,11 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     strengthProgress:strengthProgress(gym?.history,date),
     todayGym:todayGymContext(gym,date,athleteState?.memoryOff?[]:athleteState?.memories),
     strengthCoverage:strengthCoverage({date,strength:{recentCompletedSets:strengthSets}},EXERCISES),
-    capabilities,
+    // Profile → Experience per sport: how much the coach explains (never the dose).
+    ...(experienceLevels&&Object.keys(experienceLevels).length?{experience:experienceLevels}:{}),
+    // The engine's sport's capability per energy system: level and confidence
+    // only (the engine itself reads the full rows above).
+    capabilities:Object.fromEntries(Object.entries(capabilities||{}).filter(([,c])=>c&&typeof c==='object').map(([system,c])=>[system,{level:Math.round(Number(c.level)*10)/10,confidence:Math.round(Number(c.confidence)*100)/100}])),
     // The athlete's own words after workouts and the coach's notes on them.
     athleteFeedback,
     // "Sedělo ti sestavení?": good, ok or bad per session, with the athlete's words.
@@ -334,7 +341,7 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
 // cost many tokens (OPENAI_REASONING_EFFORT can raise it). All are server
 // variables and can be changed without a code change.
 export const lightModel = env => env.OPENAI_LIGHT_MODEL || 'gpt-6-luna';
-export const complexModel = env => env.OPENAI_MODEL || 'gpt-6-sol';
+export const complexModel = env => env.OPENAI_MODEL || DEFAULT_MODEL;
 export const complexEffort = env => ['minimal','low','medium','high'].includes(env.OPENAI_REASONING_EFFORT) ? env.OPENAI_REASONING_EFFORT : 'low';
 
 // Task routing. 'simple' (light model, almost no context) is only for short
@@ -402,7 +409,7 @@ export function assistantTask(message,appContext=null,history=[]) {
 // Appended to every AI request after the language note (A6). Food features get
 // the nutrition line; everything else the full one. The readiness zone is the
 // app's own deterministic model and the AI never argues it away.
-const FOOD_FEATURES=['food-sentence','food-lookup','food-photo'];
+const FOOD_FEATURES=Object.keys(AI_FEATURES).filter(isFoodFeature);
 // How long one answer may take (A8b): the light tasks a minute, a plan three,
 // a block four.
 export const TASK_TIMEOUTS={simple:60000,quick:60000,adjustment:120000,planning:180000,block:240000};
@@ -413,12 +420,12 @@ export function aiFailureText(status){return 'AI '+status+': '+(status===429?L('
 // slotWaitMs: how long to wait for a free AI slot (claimAiSlot); a text that can
 // fall back to its own words waits briefly instead of the full 90 s.
 export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null, reasoningEffort = 'low',onText=null,feature=null,timeoutMs=null,slotWaitMs=undefined }) {
-  await assertAIAccess(env);
+  await assertAIAccess(env,feature);
   if (!env.OPENAI_API_KEY) throw new Error(L('AI teď není dostupná.', 'AI isn\'t available right now.'));
   // Refused at once when the limit is already spent, then checked again with
   // the slot held: the calls running beside this one count at their reservation.
   await assertAiAllowance(env,feature);
-  const reserveUsd=estimateAiCostUsd(model||env.OPENAI_MODEL||'gpt-6-sol',{instructions,input,maxOutputTokens,tools});
+  const reserveUsd=estimateAiCostUsd(model||complexModel(env),{instructions,input,maxOutputTokens,tools});
   const release=await claimAiSlot(env,{feature,reserveUsd,...(slotWaitMs!=null?{waitMs:slotWaitMs}:{})});
   let hold=null;
   try{
@@ -461,7 +468,7 @@ const retryWait=(ms,signal)=>new Promise((resolve,reject)=>{
 });
 
 async function openAIResponse(env, { instructions, input, maxOutputTokens, tools, format, model, reasoningEffort, onText, feature, timeoutMs, slotId, hold }) {
-  const chosenModel=model || env.OPENAI_MODEL || 'gpt-6-sol';
+  const chosenModel=model || complexModel(env);
   // Sent but broken off with no usage: the call counts at its reservation.
   const broken=async error=>{await keepAiReservation(env,slotId,{feature,model:chosenModel,hold});throw error;};
   const response = await fetchOpenAI(env, {
@@ -531,7 +538,7 @@ export async function askCoach(env, message, context, {model = null, focus = nul
   const brief=concise||task==='adjustment';
   let streamed='',lastAnswer='';
   const onText=onAnswer?delta=>{streamed+=delta;const answer=actions?partialCoachAnswer(streamed):streamed;if(answer!==lastAnswer){lastAnswer=answer;onAnswer(answer);}}:null;
-  const r = await callOpenAI(env, {feature:'assistant',instructions:withFocus(coachInstructionsFor(focus), focus)+(actions?'\n\n'+actionInstructions():'')+(brief?L('\nTento požadavek vyřiď stručně: answer nejvýše 90 slov, důvod každé akce jedna věta. Neopisuj celý kalendář.','\nHandle this request briefly: answer at most 90 words, one sentence of reason per action. Do not recite the whole calendar.'):''), input, model:chosen, reasoningEffort:light ? 'low' : complexEffort(env), maxOutputTokens:TASK_LIMITS[task]||TASK_LIMITS.planning,timeoutMs:TASK_TIMEOUTS[task]||TASK_TIMEOUTS.planning,format:actions?COACH_ACTION_FORMAT:null,onText});
+  const r = await callOpenAI(env, {feature:COACH_CHAT_FEATURE,instructions:withFocus(coachInstructionsFor(focus), focus)+(actions?'\n\n'+actionInstructions():'')+(brief?L('\nTento požadavek vyřiď stručně: answer nejvýše 90 slov, důvod každé akce jedna věta. Neopisuj celý kalendář.','\nHandle this request briefly: answer at most 90 words, one sentence of reason per action. Do not recite the whole calendar.'):''), input, model:chosen, reasoningEffort:light ? 'low' : complexEffort(env), maxOutputTokens:TASK_LIMITS[task]||TASK_LIMITS.planning,timeoutMs:TASK_TIMEOUTS[task]||TASK_TIMEOUTS.planning,format:actions?COACH_ACTION_FORMAT:null,onText});
   const reply=coachAnswerText(r.text,{actions,incomplete:r.incomplete});
   return {status:'ok', answer:reply.answer,visuals:reply.visuals,actions:reply.actions,memory:reply.memory,incomplete:Boolean(r.incomplete), model:r.model || chosen, usage:r.usage, ms:Date.now() - started, coachEngine:context?.cyclingCoachV2?.version||null};
 }

@@ -4051,6 +4051,10 @@
 /* Settings → Zones: where the max heart rate comes from when none is typed (ZonesSettingsView.swift heartNote) */
 "Odhad podle věku" = "Estimate from age";
 "Nejvyšší tep z tréninků za 6 měsíců" = "Highest heart rate in 6 months of workouts";
+/* Etiketa read on the iPhone (Data/LabelReader.swift) */
+"Některé hodnoty se nepodařilo přečíst. Doplň je podle etikety." = "Some values couldn't be read. Fill them in from the label.";
+"Hodnoty se nepodařilo přečíst. Vyfoť celou tabulku i s řádkem „na 100 g“, zblízka a rovně." = "Couldn't read the values. Take the whole table with its “per 100 g” row, up close and straight on.";
+"Energie %@ kcal nesedí s makroživinami (≈ %@ kcal). Zkontroluj přepis proti fotce." = "Energy %@ kcal doesn't match the macros (≈ %@ kcal). Check the values against the photo.";
 
 /* Coach: the temporary chat the coach doesn't remember (Ghost chat). */
 "Dočasný chat" = "Ghost chat";

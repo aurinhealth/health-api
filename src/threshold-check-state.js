@@ -71,23 +71,24 @@ export async function thresholdCheckState(env,ctx,today){
   const active=await activePlan(env.DB,today).catch(()=>null);
   const live=active&&!active.pauseFrom?active:null;
   const weekOf=monday=>{const pw=live?planWeek(live,monday):null;return {pw,options:weekRoleOptions(env,ctx,live,pw).catch(()=>({}))};};
-  // The week plan's next 10 days for the recommended test day.
-  const plans=new Map(),weeks=new Map();
+  // The week plan's next 10 days for the recommended test day, and with a plan
+  // this week and the next: each week's plan read once, the weeks side by side
+  // (a week's plan is the same from any of its days).
+  const dates=Array.from({length:10},(_,k)=>shiftDate(today,k+1));
+  const mondays=[...new Set([...dates.map(mondayOfDate),...(live?[mondayOfDate(today),shiftDate(mondayOfDate(today),7)]:[])])];
+  const plans=new Map(await Promise.all(mondays.map(async monday=>[monday,await getWeekPlan(env.DB,monday).catch(()=>null)])));
+  const weeks=new Map(mondays.map(monday=>[monday,weekOf(monday)]));
   const days=[];
-  for(let k=1;k<=10;k++){
-    const date=shiftDate(today,k),monday=mondayOfDate(date);
-    if(!plans.has(monday))plans.set(monday,await getWeekPlan(env.DB,date).catch(()=>null));
-    if(!weeks.has(monday))weeks.set(monday,weekOf(monday));
-    const prefs=plans.get(monday),weekday=(new Date(date+'T12:00:00Z').getUTCDay()+6)%7;
+  for(const date of dates){
+    const monday=mondayOfDate(date),prefs=plans.get(monday),weekday=(new Date(date+'T12:00:00Z').getUTCDay()+6)%7;
     days.push({date,prefs,options:await weeks.get(monday).options,sports:prefs?.days?.[weekday]||[],minutes:prefs?availabilityOn(prefs,date).minutes:null});
   }
   // A plan with tests (ride FTP: the first and the last week) schedules each
   // on its week's first quality day, so the coach eases the days before it.
   for(const monday of live?[mondayOfDate(today),shiftDate(mondayOfDate(today),7)]:[]){
-    if(!weeks.has(monday))weeks.set(monday,weekOf(monday));
     const {pw,options}=weeks.get(monday);
     if(!pw?.spec.q[0]?.test)continue;
-    const prefs=await getWeekPlan(env.DB,monday).catch(()=>null),roles=prefs?planWeekRoles(prefs.days,{...await options,...roleTime(prefs,monday)}):[];
+    const prefs=plans.get(monday),roles=prefs?planWeekRoles(prefs.days,{...await options,...roleTime(prefs,monday)}):[];
     const i=roles.findIndex(d=>d.items.some(x=>x.sport===active.sport&&x.role==='quality'));
     const testDate=i>=0?shiftDate(monday,i):null,c=checks[active.sport];
     if(!testDate||testDate<=today||testDate>shiftDate(today,10))continue;

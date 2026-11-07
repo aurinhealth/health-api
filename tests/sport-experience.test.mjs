@@ -7,7 +7,7 @@ import {sportExperience,epley1rm} from '../src/training-history.js';
 import {trainingSetup,updateTrainingSetup} from '../src/onboarding.js';
 const schema=readFileSync(new URL('../staging/schema.sql',import.meta.url),'utf8');
 // Sessions of one sport: n per month for the given months (YYYY-MM).
-const sessions=(kind,months,n=4,extra={})=>months.flatMap(m=>Array.from({length:n},(_,i)=>({kind,date:`${m}-${String(i*7+5).padStart(2,'0')}`,minutes:60,...extra})));
+const sessions=(kind,months,n=4,extra={})=>months.flatMap(m=>Array.from({length:n},(_,i)=>({kind,date:`${m}-${String(n<=4?i*7+5:4+Math.floor(i*21/(n-1))).padStart(2,'0')}`,minutes:60,...extra})));
 const monthsFrom=(year,month,count)=>Array.from({length:count},(_,i)=>{const d=new Date(Date.UTC(year,month-1+i,1));return d.toISOString().slice(0,7);});
 test('no data is a beginner in every sport',()=>{
   assert.deepEqual(sportExperience(),{strength:'beginner',ride:'beginner',run:'beginner',swim:'beginner'});
@@ -21,6 +21,13 @@ test('months with training set the level; a long pause does not lower it',()=>{
   // Fewer than 4 sessions a month do not count as an active month.
   assert.equal(sportExperience({activities:sessions('ride',monthsFrom(2025,1,10),3)}).ride,'beginner');
   assert.equal(sportExperience({activities:sessions('ride',monthsFrom(2025,1,10))}).ride,'regular');
+});
+test('ride, run and swim: advanced after 12 months with about three sessions a week',()=>{
+  // Two years of riding once a week: regular (the weeks span 24 months, "more than 24" was never reached).
+  assert.equal(sportExperience({activities:sessions('ride',monthsFrom(2024,11,24))}).ride,'regular');
+  assert.equal(sportExperience({activities:sessions('run',monthsFrom(2025,10,12),12)}).run,'experienced');
+  assert.equal(sportExperience({activities:sessions('run',monthsFrom(2025,11,11),12)}).run,'regular');
+  assert.equal(sportExperience({activities:sessions('swim',monthsFrom(2025,10,12),12)}).swim,'experienced');
 });
 test('estimated 1RM against body weight raises the gym level',()=>{
   assert.equal(Math.round(epley1rm(100,5)),117);
@@ -38,10 +45,18 @@ test('FTP in W/kg, threshold pace and running volume',()=>{
   assert.equal(sportExperience({activities:sessions('run',['2026-09'],4,{thresholdSpeed:1000/270})}).run,'experienced');
 });
 test('another sport raises a level by one step at most',()=>{
-  const cyclist=sportExperience({activities:sessions('ride',monthsFrom(2024,10,25))});
+  const cyclist=sportExperience({activities:sessions('ride',monthsFrom(2025,10,12),12)});
   // Swimming is technique: riding does not raise it.
   assert.deepEqual(cyclist,{strength:'regular',ride:'experienced',run:'regular',swim:'beginner'});
   assert.equal(sportExperience({activities:sessions('ride',monthsFrom(2026,1,5))}).strength,'regular');
+});
+test("each sport's own level, without the lift from the other sports, for the coach engine",async()=>{
+  const {experienceFromWeeks}=await import('../src/training-history.js');
+  const {summarizeWeeks}=await import('../src/training-history.js');
+  const weeks=summarizeWeeks({activities:sessions('ride',monthsFrom(2024,10,25),12)});
+  assert.equal(experienceFromWeeks(weeks).run,'regular');
+  assert.equal(experienceFromWeeks(weeks,{crossOver:false}).run,'beginner');
+  assert.equal(experienceFromWeeks(weeks,{crossOver:false}).ride,'experienced');
 });
 test('settings: per-sport auto/manual, the old single experience is the gym manual level',async()=>{
   const raw=createD1();raw.sqlite.exec(schema);const db=scopedDb(raw,1);
