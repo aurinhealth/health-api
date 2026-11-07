@@ -1590,7 +1590,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const dates=Array.from({length:7},(_,i)=>shiftDate(start,i)),weekDays=inputs.week.days.filter(d=>dates.includes(d.date));
       const usedByDate={},existingSports={},existingSessions=[];
       for(const d of weekDays){const list=sessionsOn(d);if(!list.length)continue;usedByDate[d.date]=list.reduce((n,a)=>n+(Number(a.durationHours)||0)*60,0);existingSports[d.date]=list.map(sportOf);existingSessions.push({date:d.date,sessions:list.map(a=>({sport:sportOf(a),name:a.name||null,minutes:Math.round((Number(a.durationHours)||0)*60)||null,done:(d.daily?.training?.completed||[]).includes(a)}))});}
-      const coach=coachContext({...inputs,profile:inputs.profile,focus:inputs.focus,...await capabilitiesWithLevel(env.DB,engineSport(inputs.focus)).then(c=>({capabilities:c.capabilities,experience:c.level})).catch(()=>({capabilities:{}})),athleteFeedback:await feedbackSince(env,shiftDate(today,-28)),workoutRatings:await recentWorkoutRatings(env.DB,{since:shiftDate(today,-28),limit:12}),
+      const coach=coachContext({...inputs,profile:inputs.profile,focus:inputs.focus,...await capabilitiesWithLevel(env.DB,engineSport(inputs.focus)).then(c=>({capabilities:c.capabilities,experience:c.level,experienceLevels:c.levels})).catch(()=>({capabilities:{}})),athleteFeedback:await feedbackSince(env,shiftDate(today,-28)),workoutRatings:await recentWorkoutRatings(env.DB,{since:shiftDate(today,-28),limit:12}),
         thresholds:await cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>null),now:localNow()});
       const readiness={score:coach.cyclingCoachV2?.readiness?.score??null,zone:coach.cyclingCoachV2?.readiness?.status||null,tsb:coach.cyclingCoachV2?.readiness?.tsb??null};
       delete coach.methodology;delete coach.cyclingCoachV2;
@@ -2336,13 +2336,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const thisWeek=mondayOfDate(date),mondays=[...new Set(selected.week.days.filter(d=>d.date>=date).map(d=>mondayOfDate(d.date)))];
         // The capabilities of the sport the coach works on (a runner's run rows, not the ride's).
         const chatSport=engineSport(focus,selected.appContext,message);
-        const [planList,{capabilities,level:experience}]=await Promise.all([Promise.all(mondays.map(async w=>[w,w===thisWeek?prefs:await getWeekPlan(env.DB,w).catch(()=>null)])),capabilitiesWithLevel(env.DB,chatSport)]);
+        const [planList,{capabilities,level:experience,levels:experienceLevels}]=await Promise.all([Promise.all(mondays.map(async w=>[w,w===thisWeek?prefs:await getWeekPlan(env.DB,w).catch(()=>null)])),capabilitiesWithLevel(env.DB,chatSport)]);
         const plans=new Map(planList);
         const safety=actionSafetyContext(selected.week.days,date,day=>plans.get(mondayOfDate(day)));
         // The forecast for the open week too, when it is not this one.
         const openWeekWeather=task!=='adjustment'&&selected.appContext.weekStart!==thisWeek?await weekWeather(prefs.location,selected.appContext.weekStart,env).catch(()=>({})):{};
         const coachNotes=notes.map(r=>({date:r.date,text:r.text}));
-        coachCtx=coachContext({...inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,experience,athleteFeedback,coachNotes,athleteState,workoutRatings:await recentWorkoutRatings(env.DB,{since:shiftDate(date,-28),limit:12}),thresholds,profile:inputs.profile,focus,sport:chatSport,appContext:selected.appContext,message,dayMinutes:availabilityOn(prefs,date).minutes??null,now:localNow(),availabilityByDate:safety.availabilityByDate});
+        coachCtx=coachContext({...inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,experience,experienceLevels,athleteFeedback,coachNotes,athleteState,workoutRatings:await recentWorkoutRatings(env.DB,{since:shiftDate(date,-28),limit:12}),thresholds,profile:inputs.profile,focus,sport:chatSport,appContext:selected.appContext,message,dayMinutes:availabilityOn(prefs,date).minutes??null,now:localNow(),availabilityByDate:safety.availabilityByDate});
         Object.assign(coachCtx,{availability:prefs.availability,weeklyActivities:prefs.weeklyActivities,weather:{...(prefs.weather||{}),...openWeekWeather},coachProposals:earlierProposals},safety);
         // A triathlete's week split and why, so the coach can explain it ("why three swims?").
         if(focus?.sport==='triathlon')coachCtx.triathlonSplit=splitFacts(triathlonSplit({...await triathlonHistory(env).catch(()=>({})),sessions:prefs.weeklyActivities??6,minutes:(prefs.availability||[]).reduce((n,d)=>n+(Number(d?.minutes)||0),0)||null,daysToRace:focus.event?.daysLeft??null}));

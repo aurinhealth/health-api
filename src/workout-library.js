@@ -98,7 +98,9 @@ export async function capabilitiesWithLevel(db, sport = "ride") {
   if(experience)for(const value of Object.values(defaults))value.level=experience==='beginner'?1:experience==='experienced'?4:3;
   const kind = sport === 'run' || sport === 'swim' ? sport : 'ride', chosen = training.experienceBySport?.[kind];
   const own = chosen?.mode === 'manual' ? chosen.level : training.history?.sportExperienceOwn?.[kind] || chosen?.level || null;
-  return { capabilities: { ...defaults, ...Object.fromEntries((rows.results || []).map(x => [x.system, x])) }, level: own };
+  // `levels`: every sport's level as Profile shows it, for the coach's way of explaining.
+  const levels = Object.fromEntries(['ride', 'run', 'swim', 'strength'].map(s => [s === 'strength' ? 'gym' : s, training.experienceBySport?.[s]?.level || null]).filter(([, l]) => l));
+  return { capabilities: { ...defaults, ...Object.fromEntries((rows.results || []).map(x => [x.system, x])) }, level: own, levels };
 }
 
 export function parseWorkoutSearchFilters(params) {
