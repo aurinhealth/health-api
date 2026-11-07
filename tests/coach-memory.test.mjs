@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getAthleteState, updateAthleteState, memoryList, memoryCheck, memoryChanges, healthMemorySince } from '../src/athlete-state.js';
+import { getAthleteState, updateAthleteState, memoryList, memoryCheck, memoryChanges, healthMemorySince, statusCheck } from '../src/athlete-state.js';
+import { checkDays } from '../src/pain-words.js';
 import { readFileSync } from 'node:fs';
 import { coachAnswerText } from '../src/coach-assistant.js';
 import { COACH_ACTION_FORMAT } from '../src/coach-actions.js';
@@ -9,23 +10,51 @@ import { createD1 } from './helpers/d1.mjs';
 
 const date = '2026-10-14';
 
-test('a pain is checked after two weeks, a taste is not', async () => {
+test('a pain is checked after a week, a taste is not (audit 2026-11-07, point 6)', async () => {
   const db = scopedDb(createD1(), 1);
   await updateAthleteState(db, { memory: 'Nechci běhat, bolí mě koleno' }, { date });
   await updateAthleteState(db, { memory: 'Mám rád dlouhé jízdy o víkendu' }, { date });
   const state = await getAthleteState(db, { date });
-  assert.deepEqual(memoryList(state).map(m => m.check), ['2026-10-28', null]);
-  assert.equal(memoryCheck(state, '2026-10-27'), null);
-  const due = memoryCheck(state, '2026-10-28');
+  assert.deepEqual(memoryList(state).map(m => m.check), ['2026-10-21', null]);
+  assert.equal(memoryCheck(state, '2026-10-20'), null);
+  const due = memoryCheck(state, '2026-10-21');
   assert.equal(due.kind, 'memory_check');
   assert.equal(due.memory, 'Nechci běhat, bolí mě koleno');
   // "Still true" asks again in two weeks; "no longer" forgets it.
-  const kept = await updateAthleteState(db, { keep: due.memory }, { date: '2026-10-28' });
-  assert.equal(memoryCheck(kept, '2026-10-28'), null);
-  assert.equal(memoryList(kept)[0].check, '2026-11-11');
-  const gone = await updateAthleteState(db, { forget: due.memory }, { date: '2026-10-28' });
+  const kept = await updateAthleteState(db, { keep: due.memory }, { date: '2026-10-21' });
+  assert.equal(memoryCheck(kept, '2026-10-21'), null);
+  assert.equal(memoryList(kept)[0].check, '2026-11-04');
+  const gone = await updateAthleteState(db, { forget: due.memory }, { date: '2026-10-21' });
   assert.deepEqual(gone.memories, ['Mám rád dlouhé jízdy o víkendu']);
   assert.equal(gone.memoryMeta['Nechci běhat, bolí mě koleno'], undefined);
+});
+
+test('an illness is checked after 3 days, a pain after 7, a pregnancy after 90; "still true" waits two weeks at least', async () => {
+  assert.deepEqual(['Jsem nachlazený', 'Bolí mě rameno', 'Jsem těhotná', 'I have the flu', 'Mám rád kolo'].map(checkDays), [3, 7, 90, 3, null]);
+  const db = scopedDb(createD1(), 1);
+  await updateAthleteState(db, { memory: 'Jsem těhotná' }, { date });
+  await updateAthleteState(db, { memory: 'Mám chřipku' }, { date });
+  const state = await getAthleteState(db, { date });
+  assert.deepEqual(memoryList(state).map(m => m.check), ['2027-01-12', '2026-10-17']);
+  const kept = await updateAthleteState(db, { keep: 'Mám chřipku' }, { date: '2026-10-17' });
+  assert.equal(memoryList(kept)[1].check, '2026-10-31');
+});
+
+test('Nemoc or Zranění without an end day: "Je ti už líp?" after 3 or 7 days, every 3 or 7 days until answered (point 3)', () => {
+  const sick = { status: 'sick', statusUntil: null, changedAt: date + 'T08:00:00.000Z', dismissed: [] };
+  assert.equal(statusCheck(sick, '2026-10-16'), null);
+  const due = statusCheck(sick, '2026-10-17');
+  assert.equal(due.kind, 'status_check'); assert.equal(due.headline, 'Je ti už líp?'); assert.deepEqual(due.reasons, ['Nemoc máš zapnutou 3 dny.']);
+  // "Ještě ne" dismisses this round only; the next comes three days later.
+  assert.equal(statusCheck({ ...sick, dismissed: [due.id] }, '2026-10-19'), null);
+  assert.ok(statusCheck({ ...sick, dismissed: [due.id] }, '2026-10-20'));
+  assert.equal(statusCheck({ ...sick, statusUntil: '2026-10-30' }, '2026-10-20'), null);
+  assert.equal(statusCheck({ ...sick, status: 'injured' }, '2026-10-20'), null);
+  assert.equal(statusCheck({ ...sick, status: 'injured' }, '2026-10-21').headline, 'Jak je na tom zranění?');
+  assert.equal(statusCheck({ ...sick, status: 'on_break' }, '2026-10-30'), null);
+  assert.equal(statusCheck({ ...sick, status: 'active' }, '2026-10-30'), null);
+  const src = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
+  assert.match(src, /askIfBetter=!!statusCheck\(athleteState,date\)&&!conversation\.length&&!otherToday\.length/);
 });
 
 test('the coach gets the day a pain was told or last confirmed, and the check comes first on Today (audit 4.6)', async () => {
@@ -37,7 +66,7 @@ test('the coach gets the day a pain was told or last confirmed, and the check co
   assert.deepEqual(healthMemorySince(kept), [{ text: 'Bolí mě koleno', since: '2026-10-28' }]);
   assert.deepEqual(healthMemorySince({ ...kept, memoryOff: true }), []);
   const src = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
-  assert.match(src, /const advice=\(swap&&state\.nudge\.date!==date\?swap:null\)\|\|memoryCheck\(state,date\)\|\|easier/);
+  assert.match(src, /const advice=\(swap&&state\.nudge\.date!==date\?swap:null\)\|\|statusCheck\(state,date\)\|\|memoryCheck\(state,date\)\|\|easier/);
   assert.match(src, /healthMemorySince:healthSince/);
 });
 

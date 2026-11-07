@@ -9,8 +9,14 @@ const PAIN_PARTS = ['bol(?:í|i(?!\\p{L})|el|et|est|av)', 'zran', 'nat[áa]h', '
 export const PAIN_WORDS = word(PAIN_PARTS);
 // What passes on its own (the coach asks after a while whether it still holds):
 // a pain or an injury, an illness, a pregnancy.
-export const PASSING_WORDS = word([...PAIN_PARTS, 'nemoc', 'nachl', 'chřip', 'chrip',
-  'sick', 'ill(?!\\p{L})', 'illness', 'flu(?!\\p{L})', 'a cold(?![ -]\\p{L})', 'těhot', 'tehot', 'pregnan']);
+const ILLNESS_PARTS = ['nemoc', 'nachl', 'chřip', 'chrip', 'sick', 'ill(?!\\p{L})', 'illness', 'flu(?!\\p{L})', 'a cold(?![ -]\\p{L})'];
+const PREGNANCY_PARTS = ['těhot', 'tehot', 'pregnan'];
+export const PASSING_WORDS = word([...PAIN_PARTS, ...ILLNESS_PARTS, ...PREGNANCY_PARTS]);
+// After how many days the coach asks whether such a memory still holds
+// (athlete-state.js memoryCheck; audit 2026-11-07, point 6): an illness
+// passes in days, a pain in a week or so, a pregnancy lasts months.
+const ILLNESS_WORDS = word(ILLNESS_PARTS), PREGNANCY_WORDS = word(PREGNANCY_PARTS);
+export const checkDays = text => !PASSING_WORDS.test(text) ? null : PREGNANCY_WORDS.test(text) ? 90 : ILLNESS_WORDS.test(text) ? 3 : 7;
 
 // The body parts a remembered pain can name, the sports whose intensity it
 // holds back (audit 2026-11-07, point 4: a sore knee gets no run or ride
