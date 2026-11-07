@@ -83,6 +83,18 @@ test("a planned Intervals run is classified from its % Pace steps", () => {
   assert.equal(classifyPlannedWorkout({ name: "Lehký", type: "Run", description: "- 45m Z2 Pace" }, "run").system, "endurance");
 });
 
+test("a runner at Beginner (by hand, or a fit cyclist who has hardly run) is new to running", () => {
+  // CTL 50 from riding does not make a runner: the planned threshold run waits.
+  const plan = { name: "Prahové úseky", type: "Run", description: "- 12m 78% Pace\n\n4x\n- 8m 99% Pace\n- 2m 72% Pace\n\n- 8m 76% Pace" };
+  const health = { sleep: [{ type: "sleep", durationMin: 480, endTime: "2026-09-30T06:30:00" }] };
+  const coach = experience => buildCyclingCoachV2({ date: "2026-09-30", week: week([["2026-09-30", [plan]]]), fitness: wellness, health, sport: "run", experience });
+  assert.equal(coach("beginner").recommendation.session.kind, "endurance");
+  assert.equal(coach("regular").recommendation.session.kind, "threshold");
+  assert.equal(coach(null).recommendation.session.kind, "threshold", "no level: as before");
+  // A cyclist's CTL never flagged them; the ride keeps its own rule.
+  assert.equal(buildCyclingCoachV2({ date: "2026-09-30", week: week([]), fitness: wellness, health, experience: "beginner" }).sport, "ride");
+});
+
 test("generate a run: follows the plan, shows paces and a treadmill Intervals event", async () => {
   const plan = { name: "Prahové úseky", type: "Run", description: "- 12m 78% Pace\n\n4x\n- 8m 99% Pace\n- 2m 72% Pace\n\n- 8m 76% Pace" };
   const health = { sleep: [{ type: "sleep", durationMin: 480, endTime: "2026-09-30T06:30:00" }] };

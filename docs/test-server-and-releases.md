@@ -19,7 +19,11 @@ Services it needs from outside (OpenAI, push, Google) are Worker secrets set by 
 
 ## The app
 
-One TestFlight build serves both groups. The app talks to the live server unless an internal tester
+Every upload is two TestFlight builds from one archive (`ios-testflight.yml`): build N without the
+Apple Watch app for the testers, and N.1 with it for the owner's group (`WATCH_GROUP` repository
+variable, default "Close testers"). Without the watch app the iPhone app hides its Apple Watch
+settings (`WatchBridge.inBuild`). The App Store gets one build, so the watch decision comes before
+it. The app talks to the live server unless an internal tester
 switches it in Nastavení → Testování → Server (`ios-native/Aurin/Data/ServerChoice.swift`). The row
 shows for the owner and the e-mails in the live Worker's secret `INTERNAL_TESTERS` (comma separated),
 and for everyone on the test server (`internalTester` in `/app/api/me`, `src/staging.js`). Each server
@@ -43,7 +47,8 @@ server. `vydat.yml`, run by hand:
    when "external" is ticked at dispatch it also adds the build to the external group
    (`EXTERNAL_GROUP` repository variable when there is more than one) and submits it to Apple's
    beta review; otherwise the owner adds builds to the external groups by hand in App Store
-   Connect (TestFlight → the group → Builds → +).
+   Connect (TestFlight → the group → Builds → +): build N for the testers. Build N.1, the same app
+   with the Apple Watch app, always goes to `WATCH_GROUP` with the same notes.
 
 A server-only fix goes live with `deploy-worker.yml`, target production, without a release.
 

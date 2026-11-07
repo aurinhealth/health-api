@@ -45,7 +45,7 @@ test("a cron job that reads a million rows lands in the morning report", async (
   assert.equal(rows[0].kind, "slow");
   assert.equal(rows[0].service, "cron sync");
   assert.match(rows[0].last_message, /1000005 řádků/);
-  assert.match(opsReport(rows, null, "2026-10-29").text, /Pomalé požadavky a úlohy[^\n]*\n- cron sync: 1× \(naposledy: \d+ ms, 1 dotazů, 1000005 řádků\)/);
+  assert.match(opsReport(rows, null, "2026-10-29").text, /Pomalé požadavky a úlohy[^\n]*\n- cron sync: 1× \(nejdéle: \d+ ms, 1 dotazů, 1000005 řádků\)/);
 });
 
 test("every answer of the Worker carries Server-Timing", () => {

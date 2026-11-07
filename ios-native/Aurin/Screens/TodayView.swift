@@ -61,6 +61,8 @@ struct TodayContent: View {
 
     /// "Upravit přehled": the cards below wiggle and can be moved, removed and added.
     @State private var editing = false
+    /// Nastavení → Kouč na obrazovkách: the coach's card on Dnes.
+    @AppStorage(CoachTextPlaces.shownKey("today")) private var coachShown = true
     /// A neighbouring day drawn beside this one during a swipe (DayPager.swift).
     @Environment(\.dayPage) private var page
     private var selectedDate: String? { page.map(\.selectedDate) ?? model.selectedDate }
@@ -146,9 +148,10 @@ struct TodayContent: View {
         }
     }
 
-    /// The key numbers, today's workout (the activity of the day), weather and the coach.
-    /// In a wide window they head the right column, the numbers and the workout's Start
-    /// seen without scrolling (Petr, 2026-11-03).
+    /// The key numbers, then the coach with today's workout (the activity of
+    /// the day) and the weather, then what the coach asks. In a wide window they
+    /// head the right column, the numbers and the workout's Start seen without
+    /// scrolling (Petr, 2026-11-03).
     @ViewBuilder private var dayNumbers: some View {
         KeyNumbers(today: today)
             .padding(.top, wide ? 0 : 28)
@@ -159,31 +162,22 @@ struct TodayContent: View {
         }
 
         if selectedDate == nil {
-            // Today's workout with Start, and the activity of the day when it
-            // suggests something else; without a plan the activity of the day
-            // in full (CoachPick.swift, Petr 2026-11-02).
-            let planned = TodayTrainingCard.planned(today)
-            if planned.isEmpty && today.unavailable?.contains("training") == true {
-                // The day's plan could not be read: not "nothing planned".
-                PartUnavailableNote(text: "Trénink se teď nepodařilo načíst")
+            // The coach right under the numbers (Today audit 10): the sentence
+            // and its one action, today's workout with Start (or the activity of
+            // the day) with the weather chip, the plan's line and Regenerace
+            // (TodayTraining.swift). With the coach off on Dnes the action stands alone.
+            if coachShown {
+                CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation,
+                              tip: AnyView(TodayCoachAction(today: today)))
+                    .padding(.top, 12)
+            } else {
+                TodayCoachAction(today: today)
+                    .padding(18)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .cardSurface(cornerRadius: 22)
                     .padding(.top, 12)
-            } else if planned.isEmpty {
-                CoachPickCard(top: 12)
-            } else {
-                TodayTrainingCard(items: planned, red: today.readiness.zone == "red").padding(.top, 12)
             }
 
-            // Today's weather at the week plan's place (or the offer to set it).
-            TodayWeatherCard(weather: today.weather).padding(.top, 12)
-        }
-
-        if selectedDate == nil {
-            if let plan = today.trainingPlan {
-                Label(([plan.name, plan.paused == true ? L10n.tr("pozastaveno") : L10n.f("týden %@/%@", String(plan.week), String(plan.weeksCount))] + (plan.paused == true ? [] : plan.phaseLabel.map { [$0] } ?? [])).joined(separator: " · "), systemImage: "flag")
-                    .font(Typo.small).foregroundStyle(Palette.secondary)
-                    .padding(.top, 24)
-            }
             if today.trainingPlan?.paused == true {
                 PlanPausedCard().padding(.top, 10)
             }
@@ -191,14 +185,7 @@ struct TodayContent: View {
             // workout, week check, threshold, the plan's proposal). It keeps its
             // gap only while it shows (an empty one left a hole).
             CoachThingsCard(proposal: today.trainingPlan?.paused == true ? nil : today.trainingPlan?.proposal,
-                            openCoach: openCoach, top: today.trainingPlan == nil ? 24 : 10)
-        }
-
-        // An earlier day shows only its data: the coach speaks about today.
-        if selectedDate == nil {
-            CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation,
-                          tip: RecoveryTipRows.hasTip(today, selectedDate: selectedDate) ? AnyView(RecoveryTipRows(today: today)) : nil)
-                .padding(.top, 32)
+                            openCoach: openCoach, top: 12)
         }
     }
 }

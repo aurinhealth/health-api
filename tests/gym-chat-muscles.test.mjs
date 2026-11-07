@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateCoachActions, gymMusclesOf, requestedMuscles, GYM_MUSCLES, COACH_ACTION_FORMAT } from '../src/coach-actions.js';
+import { validateCoachActions, gymMusclesOf, requestedMuscles, GYM_MUSCLES, WORKOUT_KINDS, COACH_ACTION_FORMAT } from '../src/coach-actions.js';
+import { KINDS } from '../src/week-ai.js';
+import { MEMORY_GROUPS, ATHLETE_STATUSES } from '../src/athlete-state.js';
 import { FOCUS_GROUPS, EXERCISES, generateStrengthPlan } from '../src/strength-generator.js';
 
 // Petr 2026-11-01: "75 minut v posilovně, určitě cviky na prsa" gave a card
@@ -14,6 +16,15 @@ test('the coach card offers the same muscle groups as the strength generator', (
   const item = COACH_ACTION_FORMAT.schema.properties.actions.items;
   assert.ok(item.required.includes('gymMuscles'));
   assert.deepEqual(item.properties.gymMuscles.items.enum, GYM_MUSCLES);
+});
+
+// Audit Zamotaná místa 2026-11-07, bod 7: the coach reply's lists are the app's own.
+test('the coach reply offers the same kinds, memory groups and statuses as the app', () => {
+  const { properties } = COACH_ACTION_FORMAT.schema, action = properties.actions.items.properties;
+  assert.deepEqual(WORKOUT_KINDS, KINDS.filter(kind => kind !== 'gym'));
+  assert.deepEqual(action.kind.enum, ['', ...WORKOUT_KINDS]);
+  assert.deepEqual(properties.memory.properties.save.items.properties.group.enum, MEMORY_GROUPS);
+  assert.deepEqual(action.status.enum.filter(Boolean).sort(), Object.keys(ATHLETE_STATUSES).sort());
 });
 
 test('muscle groups named as a wish are found, complaints and plain days are not', () => {

@@ -8,6 +8,7 @@ import { assignIntensities } from './gym-intensity.js';
 import { L, isImperial, kgToLb } from './lang.js';
 import { estimateStartingLoad, resolveLoad, progressionDecision, priorMuscleSets, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
+import { painAreas } from './pain-words.js';
 import { withoutDisliked } from './exercise-feedback.js';
 import { isIntensity } from "./strength-context.js";
 import { availableAt as availableInGym, hasKnownStations, EXERCISE_STATIONS } from "./gym-equipment.js";
@@ -364,7 +365,7 @@ export const FOCUS_GROUPS = {
   upper_back: {label:'Horní záda', exercises:['Low row','Standing rowing machine','One-arm DB row','Single-arm cable row','Wide-grip low row','Barbell row','T-bar row','Chest-supported row','TRX row','Inverted Row','Smith Machine Bent-Over Row','Cable Row Bar Standing Row','Cable Supinating Row','Machine Underhand Row','Hammer Strength Iso-Lateral Row','Seal Row','Kettlebell Gorilla Row','Kettlebell Renegade Rows','Band Row','Barbell Landmine Row','Meadows Row']},
   lats: {label:'Široký sval zádový', exercises:['Lat pulldown','Cable pullover','Close-grip lat pulldown','Pull-up','Assisted pull-up','Chin-up','Straight-Arm Lat Pulldown','Neutral-Grip Lat Pulldown','Single-Arm Lat Pulldown','Wide-Grip Lat Pulldown','Hammer Strength High Row','Machine Lat Pullover','Dumbbell Pullover','Barbell Pullover','Band Kneeling Pulldown']},
   front_delts: {label:'Přední ramena', exercises:['DB shoulder press','Shoulder press Prime','DB Arnold press','Barbell overhead press','Landmine press','Smith Machine Overhead Press','Cable Front Raise','Cable Overhead Press','Dumbbell Front Raise','Dumbbell Push Press','Dumbbell Single Arm Clean And Press','Kettlebell Clean & Press (Double)','Two-Arm Kettlebell Military Press','Band Overhead Press']},
-  side_delts: {label:'Boční ramena', exercises:['Standing multi flight','Cable lateral raise','DB lateral raise','Leaning Cable Lateral Raise','Band Lateral Raise']},
+  side_delts: {label:'Boční ramena', exercises:['Standing multi flight','Cable lateral raise','DB lateral raise','Leaning Cable Lateral Raise','Band Lateral Raise','Cable upright row','Dumbbell Upright Row','Barbell Upright Row']},
   rear_delts: {label:'Zadní ramena', exercises:['Rear delt pec deck','Cable rear delt fly','Face pull','DB rear delt fly','Band pull-apart','Cable External Rotation','Cable Single Arm Rear Delt Row','Cuban Press','Barbell Rear Delt Row','Prone Y-T Raises']},
   biceps: {label:'Biceps', exercises:['Cable curl','DB curl','Hammer curl','DB incline curl','Cable rope hammer curl','EZ bar curl','Preacher curl','Machine Preacher Curl','Bayesian Curl','Dumbbell Concentration Curl','Zottman Curl','Barbell Curl','Spider Curl','Band Curl']},
   triceps: {label:'Triceps', exercises:['Cable triceps extension','Cable overhead triceps extension','Cable triceps kickback','DB overhead triceps extension','EZ bar skull crusher','Dips','Assisted dip','Smith Machine Close Grip Bench Press','Cable Bar Pushdown','Cable Overhead Straight Bar Extensions','Cross-Body Cable Tricep Extension','Reverse-Grip Tricep Pushdown','Single-Arm Overhead Cable Extension','Machine Tricep Extension','Close-Grip Push-Up off a Dumbbell','Bench Dips','Diamond Push Ups','Barbell Close Grip Bench Press']},
@@ -729,17 +730,10 @@ export function validateFocusMuscles(value){
 }
 
 // Pain or an injury the coach remembers ("koleno bolí při dřepech") leaves out
-// the exercises that load that part: the knee squats, lunges and presses, the
-// shoulder overhead and bench presses, the lower back deadlifts and good
-// mornings (Revize 2026-10-16, nález 24). "Nebolí" is no pain.
-const PAIN = /(?<!ne)bol[ií]|bolest|zran|nat[áa]h|podvrt|v[ýy]ron|natekl|hurt|pain|sore|injur|sprain|strain|ache/i;
-const PAIN_AREAS = [
-  { part: /kolen|knee/i, exercises: /squat|lunge|leg press|step-up|leg extension/i, label: ['kolena', 'knee'] },
-  { part: /ramen|shoulder/i, exercises: /shoulder press|overhead press|military press|push press|arnold|landmine press|bench press|incline press|floor press|chest flat press|chest press|standing dumbbell press|clean (?:&|and) press|cuban press|thruster|^dips$|assisted dip|bench dips/i, label: ['ramene', 'shoulder'] },
-  { part: /z[aá]d(?:a|ech|ou)(?!\p{L})|bedr|k[řr][íi][žz]|p[áa]te[řr]|plot[ée]nk|(?<!\p{L})back(?!\p{L})|lumbar/iu, exercises: /deadlift|good morning/i, label: ['zad', 'lower back'] }
-];
+// the exercises that load that part (Revize 2026-10-16, nález 24; the parts
+// and their exercises in pain-words.js PAIN_AREAS). "Nebolí" is no pain.
 export function painfulExercises(memories) {
-  const areas = PAIN_AREAS.filter(a => (Array.isArray(memories) ? memories : []).some(m => PAIN.test(String(m)) && a.part.test(String(m))));
+  const areas = painAreas(memories);
   return { parts: areas.map(a => L(a.label[0], a.label[1])), avoid: new Set(Object.keys(EXERCISES).filter(name => areas.some(a => a.exercises.test(name)))) };
 }
 
@@ -1270,11 +1264,11 @@ function choosePlan(context, options = {}) {
   };
 }
 // Three ramp-up sets before the first main lift; later main lifts need one.
-function warmupRows(exercise, workKg = null, first = true) {
+function warmupRows(exercise, workKg = null, first = true, step = null) {
   const def = EXERCISES[exercise]; if (!def?.warmup) return [];
   const reference = workKg ?? def.baseKg; if (reference == null) return [];
   const rawKg = Math.max(2, reference * 0.4), rawKg2 = Math.max(2, reference * 0.65), rawKg3 = Math.max(2, reference * 0.8);
-  const kg = resolveLoad(exercise, rawKg), kg2 = resolveLoad(exercise, rawKg2), kg3 = resolveLoad(exercise, rawKg3);
+  const kg = resolveLoad(exercise, rawKg, step), kg2 = resolveLoad(exercise, rawKg2, step), kg3 = resolveLoad(exercise, rawKg3, step);
   const execution = def.unilateral ? "UNILATERAL" : DEFAULT_EXECUTION, fmt = x => String(x).replace(".", ",");
   if (!first) return [["WARMUP", exercise, "1", fmt(kg2), "5", "", "", "", "FALSE", "[WARMUP]", "🎥 Video", "", execution]];
   return [["WARMUP", exercise, "1", fmt(kg), "8", "", "", "", "FALSE", "[WARMUP]", "🎥 Video", "", execution], ["WARMUP", exercise, "2", fmt(kg2), "5", "", "", "", "FALSE", "[WARMUP]", "", "", execution], ["WARMUP", exercise, "3", fmt(kg3), "3", "", "", "", "FALSE", "[WARMUP]", "", "", execution]];
@@ -1392,8 +1386,13 @@ function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volum
 // Strength deload: after four solid weeks in a row (two or more sessions each
 // and none much lighter than the others) the fifth week is lighter, so the
 // strength built can show. The week after a deload has a light week among the
-// last four, so the next deload comes four weeks later.
-export function strengthDeload(history, date) {
+// last four, so the next deload comes four weeks later. By the gym level
+// (Profile → Experience): an intermediate after five weeks, a beginner after
+// twelve (in practice none while they learn: the sets read reach about that
+// far); stalls, illness and the shared recovery week still lighten a week.
+const DELOAD_WEEKS = { beginner: 12, regular: 5, experienced: 4 };
+export function strengthDeload(history, date, experience = "") {
+  const n = DELOAD_WEEKS[experience] || 4;
   const DAY = 86400000, monday = d => { const t = Date.parse(dateKey(d) + "T12:00:00Z"); return new Date(t - ((new Date(t).getUTCDay() + 6) % 7) * DAY).toISOString().slice(0, 10); };
   if (!dateKey(date)) return null;
   const thisWeek = monday(date), weeks = new Map();
@@ -1402,12 +1401,13 @@ export function strengthDeload(history, date) {
     const w = monday(r.workout_date); if (w >= thisWeek) continue;
     const e = weeks.get(w) || { sets: 0, days: new Set(), marked: false }; e.sets++; e.days.add(dateKey(r.workout_date)); if (/odlehčen|deload/i.test(String(r.note || ""))) e.marked = true; weeks.set(w, e);
   }
-  const last = [1, 2, 3, 4].map(k => weeks.get(new Date(Date.parse(thisWeek + "T12:00:00Z") - k * 7 * DAY).toISOString().slice(0, 10)));
+  const last = Array.from({ length: n }, (_, i) => i + 1).map(k => weeks.get(new Date(Date.parse(thisWeek + "T12:00:00Z") - k * 7 * DAY).toISOString().slice(0, 10)));
   if (last.some(w => !w || w.days.size < 2)) return null;
   // A lighter week among them (a deload, marked or with clearly fewer sets per session) resets the count.
-  const perDay = last.map(w => w.sets / w.days.size), median = [...perDay].sort((a, b) => a - b).slice(1, 3).reduce((a, b) => a + b, 0) / 2;
+  const perDay = last.map(w => w.sets / w.days.size), sorted = [...perDay].sort((a, b) => a - b), median = (sorted[Math.floor((n - 1) / 2)] + sorted[Math.ceil((n - 1) / 2)]) / 2;
   if (last.some(w => w.marked) || perDay.some(v => v < median * 0.85)) return null;
-  return { weeks: 4, reason: L("Čtyři týdny po sobě s plným tréninkem: tento týden je odlehčený (méně sérií, stejná váha, RPE do 7), aby se síla mohla projevit.", "Four full training weeks in a row: this is a deload week (fewer sets, same weight, RPE up to 7) so the strength you've built can show.") };
+  const cs = { 4: "Čtyři týdny", 5: "Pět týdnů", 12: "Dvanáct týdnů" }[n], en = { 4: "Four", 5: "Five", 12: "Twelve" }[n];
+  return { weeks: n, reason: L(cs + " po sobě s plným tréninkem: tento týden je odlehčený (méně sérií, stejná váha, RPE do 7), aby se síla mohla projevit.", en + " full training weeks in a row: this is a deload week (fewer sets, same weight, RPE up to 7) so the strength you've built can show.") };
 }
 // Dumbbell exercises ask for a dumbbell the athlete has: the nearest of their
 // weights (kg per hand), the lighter one when two are as near.
@@ -1448,7 +1448,7 @@ export function templateStrengthPlan(context, template, options = {}) {
     const work = workRows(exercise, historyMap, factor, false, new Map(), 1, 10, sex, context.date, firstSession, reps, 'auto', '', context?.trainingSetup?.dumbbellWeights);
     const first = work.rows[0];
     const own = Array.from({ length: sets }, (_, i) => { const r = first.slice(); r[2] = String(i + 1); r[4] = CORE_PATTERNS.has(EXERCISES[exercise].pattern) ? first[4] : reps; r[10] = i === 0 ? first[10] : ""; return r; });
-    const warmup = warmupRows(exercise, work.kg, !warmedUp);
+    const warmup = warmupRows(exercise, work.kg, !warmedUp, work.estimate?.step);
     if (warmup.length) warmedUp = true;
     rows.push(...warmup, ...own);
     loadEstimates.push({ exercise, sets, ...work.estimate });
@@ -1509,14 +1509,18 @@ export function generateStrengthPlan(context, options = {}) {
   // in a row are the fallback for athletes without Intervals.icu loads.
   const shared = context?.recoveryWeek;
   // The first gym session after Nemoc holds the loads like a deload, with a set less (afterIllness).
-  const deload = options.noDeload ? null : afterIllness(context) || (shared?.recovery ? { shared: true, reason: L("Regenerační týden pro celý trénink (" + (shared.reason === "three_weeks" ? "po třech týdnech nad udržovací zátěží" : shared.reason === "hrv_trend" ? "HRV za poslední týden pod tvým běžným pásmem" : "po náročném týdnu") + "): posilovna je odlehčená – méně sérií, váha se drží, RPE do 7.", "Recovery week for all training (" + (shared.reason === "three_weeks" ? "after three weeks above maintenance load" : shared.reason === "hrv_trend" ? "HRV over the last week below your usual range" : "after a hard week") + "): the gym is lighter – fewer sets, weights held, RPE up to 7.") } : shared?.known ? null : strengthDeload(context?.strength?.recentCompletedSets, context.date));
+  const deload = options.noDeload ? null : afterIllness(context) || (shared?.recovery ? { shared: true, reason: L("Regenerační týden pro celý trénink (" + (shared.reason === "three_weeks" ? "po třech týdnech nad udržovací zátěží" : shared.reason === "hrv_trend" ? "HRV za poslední týden pod tvým běžným pásmem" : "po náročném týdnu") + "): posilovna je odlehčená – méně sérií, váha se drží, RPE do 7.", "Recovery week for all training (" + (shared.reason === "three_weeks" ? "after three weeks above maintenance load" : shared.reason === "hrv_trend" ? "HRV over the last week below your usual range" : "after a hard week") + "): the gym is lighter – fewer sets, weights held, RPE up to 7.") } : shared?.known ? null : strengthDeload(context?.strength?.recentCompletedSets, context.date, context.trainingSetup?.experience));
   // A deload week holds the loads (no increase, no set to failure).
   const chosen = choosePlan(context, options), factor = deload ? Math.min(recoveryFactor(context), 0.89) : recoveryFactor(context), history = context?.strength?.recentCompletedSets || [], historyMap = recentExerciseMap(history);
   const firstSession = !history.length;
-  const focusMuscles = options.focusMuscles == null ? null : validateFocusMuscles(options.focusMuscles);
+  let focusMuscles = options.focusMuscles == null ? null : validateFocusMuscles(options.focusMuscles);
   const planPhase = !focusMuscles && options.planPhase?.exercises?.length ? options.planPhase : null;
   if (options.focusMuscles != null && !focusMuscles) throw new Error(L('Vyber 1 až 5 známých partií.', 'Choose 1 to 5 known muscle groups.'));
   const excluded = new Set((options.excludeExercises || []).map(normalizeExerciseName));
+  // A chosen group that only a sore part's exercises train (quads with a sore
+  // knee) is left out while other chosen groups remain (audit 2026-11-07, point 5).
+  const spared = group => FOCUS_GROUPS[group].exercises.some(name => pain.avoid.has(name)) && !FOCUS_GROUPS[group].exercises.some(name => EXERCISES[name] && !PLYOMETRICS.includes(name) && !excluded.has(name));
+  if (focusMuscles?.some(spared) && !focusMuscles.every(spared)) focusMuscles = focusMuscles.filter(group => !spared(group));
   const { liked, disliked } = taste(options), mainSport = mainSportOf(context), shown = shownBefore(options);
   const selection = selectionHistory(context);
   const weeklyExposure = recentMuscleExposure(selection, context.date);
@@ -1531,7 +1535,7 @@ export function generateStrengthPlan(context, options = {}) {
   const rankedExercises = group => {
     // Jumps come only as a runner's weekly jumps, never as a group's strength work.
     const candidates = withoutDisliked(FOCUS_GROUPS[group].exercises.filter(name => EXERCISES[name] && !PLYOMETRICS.includes(name) && availableAt(name) && fitsEquipment(name,context.trainingSetup) && !excluded.has(name)), disliked);
-    if (!candidates.length) throw new Error(L('Pro partii ' + FOCUS_GROUPS[group].label + ' není dostupný cvik.', 'No exercise is available for ' + FOCUS_GROUPS[group].label + '.'));
+    if (!candidates.length) throw new Error(spared(group) ? L('Partii ' + FOCUS_GROUPS[group].label + ' teď vynechám kvůli bolesti ' + pain.parts.join(', ') + ', kterou si kouč pamatuje. Vyber jinou partii.', 'I\'ll leave out ' + FOCUS_GROUPS[group].label + ' for now because of the ' + pain.parts.join(', ') + ' pain the coach remembers. Choose another muscle group.') : L('Pro partii ' + FOCUS_GROUPS[group].label + ' není dostupný cvik.', 'No exercise is available for ' + FOCUS_GROUPS[group].label + '.'));
     const score = (name, withStall = true) => {
       const def = EXERCISES[name], last = lastExerciseDate.get(name);
       const recent = last && daysBetween(last, context.date) < 5 ? 2 : 0;
@@ -1590,7 +1594,8 @@ export function generateStrengthPlan(context, options = {}) {
   const recoveryScore = context?.adaptive?.recovery?.score;
   const jumpDay = PLYO_SPORTS.has(mainSport) && !focusMuscles && !planPhase && !deload && !chosen.protectedLegs && !chosen.lighterDay && !(recoveryScore < 55)
     && lastJump >= PLYO_EVERY_DAYS && exercises.some(ex => LEG_MUSCLES.has(EXERCISES[ex]?.muscle));
-  const jump = jumpDay ? PLYOMETRICS.filter(fits).sort((a, b) => since(b) - since(a))[0] : null;
+  // A beginner in the gym jumps low only (pogo hops, squat jumps), no box jumps yet.
+  const jump = jumpDay ? PLYOMETRICS.filter(name => fits(name) && !(context.trainingSetup?.experience === "beginner" && name === "Box Jump")).sort((a, b) => since(b) - since(a))[0] : null;
   if (jump) { if (exercises.length >= maxExercises) exercises.pop(); exercises.unshift(jump); }
 
   const rows = [], loadEstimates = [];
@@ -1636,7 +1641,7 @@ export function generateStrengthPlan(context, options = {}) {
       const cap = earlier.kg == null ? null : chosen.lighterDay ? earlier.kg * 0.9 : earlier.kg;
       for (const row of work.rows) {
         const kg = Number(String(row[3]).replace(",", "."));
-        if (cap != null && row[3] !== "" && Number.isFinite(kg) && kg > cap) row[3] = kgText(resolveLoad(exercise, cap));
+        if (cap != null && row[3] !== "" && Number.isFinite(kg) && kg > cap) row[3] = kgText(resolveLoad(exercise, cap, work.estimate?.step));
         if (earlier.reps) row[4] = earlier.reps;
       }
       if (cap != null && work.kg != null) work.kg = Math.min(work.kg, cap);
@@ -1647,7 +1652,7 @@ export function generateStrengthPlan(context, options = {}) {
     if(deload)for(const row of work.rows)row[9]=row[9].replace(/ – (?:cíl: o opakování víc|goal: one more rep)/,'')+(deload.illness?L('; po nemoci: stejná váha, 3 opakování v rezervě','; after being ill: same weight, 3 reps in reserve'):L('; odlehčený týden: stejná váha, 3 opakování v rezervě','; deload week: same weight, 3 reps in reserve'));
     if(moderated)for(const row of work.rows)row[9]+=explicitLegs?L('; blízko je náročný trénink: nech si 2–3 opakování v rezervě (RPE 7)','; a hard session is coming up: keep 2–3 reps in reserve (RPE 7)'):L('; nohy po vytrvalostním tréninku: nech si 2–3 opakování v rezervě (RPE 7)','; legs after endurance training: keep 2–3 reps in reserve (RPE 7)');
     if(stallSwaps[exercise])for(const row of work.rows)row[9]+=L('; místo '+stallSwaps[exercise]+': 3 tréninky bez posunu, nový podnět (k původnímu cviku se vrátíme)','; instead of '+stallSwaps[exercise]+': 3 sessions without progress, a new stimulus (we\'ll return to the original exercise)');
-    const warmup = warmupRows(exercise, work.kg, !warmedUp);
+    const warmup = warmupRows(exercise, work.kg, !warmedUp, work.estimate?.step);
     if (warmup.length) warmedUp = true;
     rows.push(...warmup, ...work.rows);
     loadEstimates.push({ exercise, sets: work.sets, reducedDose, moderated, ...work.estimate });

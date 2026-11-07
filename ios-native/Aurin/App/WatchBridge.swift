@@ -72,7 +72,9 @@ final class WatchBridge: NSObject {
 
     private var watchReady: Bool {
         guard let session, session.activationState == .activated else { return false }
-        return session.isPaired && session.isWatchAppInstalled
+        // Step by step: Xcode 27.1's optimiser crashed on a one-line && getter (#760).
+        guard Self.inBuild, session.isPaired else { return false }
+        return session.isWatchAppInstalled
     }
 
     /// The 90 days of resting HR and HRV live in Health only: loaded once an
@@ -228,8 +230,14 @@ final class WatchBridge: NSObject {
     /// Settings → Apple Watch: paired, the app installed, in reach now.
     var watchState: (paired: Bool, installed: Bool, reachable: Bool) {
         guard let session, session.activationState == .activated else { return (false, false, false) }
-        return (session.isPaired, session.isWatchAppInstalled, session.isReachable)
+        let installed = Self.inBuild ? session.isWatchAppInstalled : false
+        return (session.isPaired, installed, session.isReachable)
     }
+
+    /// The build carries the Apple Watch app. The testers' TestFlight build
+    /// leaves it out (ios-testflight.yml), and then no Apple Watch setting shows.
+    static let inBuild = FileManager.default.fileExists(
+        atPath: Bundle.main.bundleURL.appendingPathComponent("Watch/AurinWatch.app").path)
 
     /// What the watch app last said about itself (AurinWatch/WatchReport.swift),
     /// for "Nahlásit problém"; nil before a watch app that sends it.

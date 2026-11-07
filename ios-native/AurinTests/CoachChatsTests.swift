@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Aurin
 
 /// ☰ in the coach: the conversations by the phone's day they were last written in.
@@ -54,5 +55,19 @@ import XCTest
         let start = CoachAnswerReport.startText(String(repeating: "Dlouhá odpověď. ", count: 400))
         XCTAssertLessThan(start.count, 4000)
         XCTAssertTrue(start.hasPrefix("Odpověď kouče, kterou hlásím:"))
+    }
+
+    /// A chat search result decodes, and the word is marked in its text whatever its case and accents.
+    func testSearchResultDecodesAndMarksTheWord() throws {
+        let json = #"{"chatId":4,"title":"Swap squats","updatedAt":"2026-11-02 17:55:00","messageId":41,"role":"user","createdAt":"2026-11-02 17:50:00","snippet":"My Knee hurts, the knee again"}"#
+        let result = try JSONDecoder().decode(ChatSearchResult.self, from: Data(json.utf8))
+        XCTAssertEqual(result.id, 41)
+        XCTAssertEqual(result.chatId, 4)
+        let marked = ChatsPanel.marked(result.snippet, "knee")
+        let runs = marked.runs.filter { $0[AttributeScopes.SwiftUIAttributes.BackgroundColorAttribute.self] != nil }.map { String(marked[$0.range].characters) }
+        XCTAssertEqual(runs, ["Knee", "knee"])
+        let czech = ChatsPanel.marked("Únava po noci", "unava")
+        XCTAssertEqual(czech.runs.filter { $0[AttributeScopes.SwiftUIAttributes.BackgroundColorAttribute.self] != nil }.map { String(czech[$0.range].characters) }, ["Únava"])
+        XCTAssertEqual(String(ChatsPanel.marked("text", "").characters), "text")
     }
 }

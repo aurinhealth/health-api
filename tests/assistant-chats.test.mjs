@@ -99,3 +99,34 @@ test('a streamed answer names its chat first; the chat is listed once the answer
   await dropEmptyChat(other,opened.id);
   assert.deepEqual((await raw.prepare('SELECT id FROM assistant_chats WHERE user_id=1').all()).results.map(r=>r.id),[opened.id]);
 });
+
+test('search finds a word only in the athlete\'s own chats, newest message per chat',async()=>{
+  const {searchChats,searchSnippet}=await import('../src/assistant-chats.js');
+  const raw=createD1(),db=scopedDb(raw,1),other=scopedDb(raw,2);
+  const knee=await appendChatTurn(db,null,'Squats hurt my left knee again, what instead?','Skip the back squat today and do step-downs.');
+  await appendChatTurn(db,knee,'And the KNEE tomorrow?','Ride easy, the knee likes it.');
+  const tired=await appendChatTurn(db,null,'Proč mám takovou únavu?','Únava je po třech krátkých nocích normální.');
+  await appendChatTurn(db,null,'Co k večeři?','Rýži s kuřetem.');
+  await appendChatTurn(other,null,'My knee is fine','Good.');
+  const found=await searchChats(db,'  Knee ');
+  assert.deepEqual(found.map(r=>r.chatId),[knee]);
+  assert.equal(found[0].role,'assistant');
+  assert.equal(found[0].snippet,'Ride easy, the knee likes it.');
+  assert.equal(found[0].title,'Squats hurt my left knee again, what instead?');
+  // Upper and lower case of Czech letters too; one result per chat.
+  assert.deepEqual((await searchChats(db,'únava')).map(r=>[r.chatId,r.role]),[[tired,'assistant']]);
+  assert.deepEqual((await searchChats(db,'ÚNAVU')).map(r=>r.chatId),[tired]);
+  // Too short, LIKE marks taken literally, another user's words not found.
+  assert.deepEqual(await searchChats(db,'k'),[]);
+  assert.deepEqual(await searchChats(db,'%'),[]);
+  assert.deepEqual(await searchChats(db,'_n'),[]);
+  assert.deepEqual(await searchChats(other,'squats'),[]);
+  // A deleted chat is not found.
+  await deleteChat(db,knee);
+  assert.deepEqual(await searchChats(db,'knee'),[]);
+  // The piece of text: around the word, cut on spaces, without the app's notes.
+  const long='Word '.repeat(30)+'here is the target word, and then '+'more text '.repeat(30)+'[Návrhy: plan]';
+  const s=searchSnippet(long,'target');
+  assert.ok(s.startsWith('…')&&s.endsWith('…')&&s.includes('target')&&s.length<170,s);
+  assert.equal(searchSnippet('[Fotka] **Protein** after gym','protein'),'Protein after gym');
+});

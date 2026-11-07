@@ -26,7 +26,7 @@ function recorder(reply) {
 test("without a choice the plan and activities keep going; health data to Intervals.icu waits for a yes", async () => {
   const d = db({ migrate: false });
   assert.deepEqual(await readSyncPrefs(d, 7, "intervals"), { pushPlanned: true, pushActivities: true, pullActivities: true, health: [], forward: [], stored: false });
-  assert.deepEqual(await readSyncPrefs(d, 7, "apple"), { pushPlanned: false, pushActivities: false, pullActivities: false, health: [], stored: false });
+  assert.deepEqual(await readSyncPrefs(d, 7, "apple"), { pushPlanned: false, pushActivities: false, pullActivities: false, health: [], forward: [], stored: false });
   // Writing workouts to Google needs a permission nobody has yet: off until chosen.
   assert.equal((await readSyncPrefs(d, 7, "google")).pushActivities, false);
 });
@@ -79,8 +79,14 @@ test("workouts from other apps: off at first, each turned on with its own start,
   assert.deepEqual((await readSyncPrefs(d, 7, "intervals")).health, ["hrv"]);
   await saveSyncPrefs(d, 7, "intervals", { forward: [] });
   assert.deepEqual(await forwardSince(d, 7), {});
-  // Other destinations have no such list.
-  assert.equal((await saveSyncPrefs(d, 7, "google", { forward: ["wahoo"] })).forward, undefined);
+  // Google Health takes Wahoo's (not Apple Health's: its app reads Apple Health), Apple Health Wahoo's and Google's, Wahoo none.
+  assert.deepEqual((await saveSyncPrefs(d, 7, "google", { forward: ["wahoo", "apple", "google"] }, { now: NOW })).forward, ["wahoo"]);
+  assert.deepEqual(await forwardSince(d, 7, "google"), { wahoo: new Date(NOW).toISOString() });
+  assert.deepEqual((await readSyncPrefs(d, 7, "google")).health, "all");
+  assert.deepEqual((await saveSyncPrefs(d, 7, "apple", { forward: ["google", "wahoo"] })).forward, ["wahoo", "google"]);
+  assert.equal((await saveSyncPrefs(d, 7, "wahoo", { forward: ["google"] })).forward, undefined);
+  // Each destination keeps its own: Intervals.icu's is still off.
+  assert.deepEqual(await forwardSince(d, 7), {});
 });
 
 test("the overview offers only connected apps' workouts for Intervals.icu", async () => {
@@ -89,6 +95,11 @@ test("the overview offers only connected apps' workouts for Intervals.icu", asyn
   const intervals = (await syncOverview(env)).destinations.find(x => x.id === "intervals");
   assert.deepEqual(intervals.forwardSources, ["wahoo"]);
   assert.deepEqual(intervals.prefs.forward, []);
+  // Apple Health and Google Health get the same group with their own apps.
+  const all = (await syncOverview({ ...env, GOOGLE_REFRESH_TOKEN: "r" })).destinations;
+  assert.deepEqual(all.find(x => x.id === "apple").forwardSources, ["wahoo", "google"]);
+  assert.deepEqual(all.find(x => x.id === "google").forwardSources, ["wahoo"]);
+  assert.equal(all.find(x => x.id === "wahoo").forwardSources, undefined);
 });
 
 test("the wellness push sends only the chosen health data", () => {
