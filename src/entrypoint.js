@@ -66,7 +66,7 @@ import { aiWorkoutPick } from "./ai-workout-pick.js";
 import { composeWorkout, poorFit, fewMatches, composeKey, libraryKind, COMPOSE_VARIANTS } from "./ai-workout-compose.js";
 import { rankOptions, saunaSigns, dayChoice, recentKinds, sportReturns, pickState, savePick, undoSkip, lessKinds, setLess, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "./coach-pick.js";
 import { activityKindOf } from "./activity-match.js";
-import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, scheduledLink, stepRows } from "./workout-library.js";
+import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, capabilitiesWithLevel, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
 import { grantedExtras } from "./google-scopes.js";
@@ -1590,7 +1590,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const dates=Array.from({length:7},(_,i)=>shiftDate(start,i)),weekDays=inputs.week.days.filter(d=>dates.includes(d.date));
       const usedByDate={},existingSports={},existingSessions=[];
       for(const d of weekDays){const list=sessionsOn(d);if(!list.length)continue;usedByDate[d.date]=list.reduce((n,a)=>n+(Number(a.durationHours)||0)*60,0);existingSports[d.date]=list.map(sportOf);existingSessions.push({date:d.date,sessions:list.map(a=>({sport:sportOf(a),name:a.name||null,minutes:Math.round((Number(a.durationHours)||0)*60)||null,done:(d.daily?.training?.completed||[]).includes(a)}))});}
-      const coach=coachContext({...inputs,profile:inputs.profile,focus:inputs.focus,capabilities:await getCapabilities(env.DB).catch(()=>({})),athleteFeedback:await feedbackSince(env,shiftDate(today,-28)),workoutRatings:await recentWorkoutRatings(env.DB,{since:shiftDate(today,-28),limit:12}),
+      const coach=coachContext({...inputs,profile:inputs.profile,focus:inputs.focus,...await capabilitiesWithLevel(env.DB,engineSport(inputs.focus)).then(c=>({capabilities:c.capabilities,experience:c.level})).catch(()=>({capabilities:{}})),athleteFeedback:await feedbackSince(env,shiftDate(today,-28)),workoutRatings:await recentWorkoutRatings(env.DB,{since:shiftDate(today,-28),limit:12}),
         thresholds:await cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>null),now:localNow()});
       const readiness={score:coach.cyclingCoachV2?.readiness?.score??null,zone:coach.cyclingCoachV2?.readiness?.status||null,tsb:coach.cyclingCoachV2?.readiness?.tsb??null};
       delete coach.methodology;delete coach.cyclingCoachV2;
@@ -2321,8 +2321,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       onProgress(L('Kouč čte tvoje data…', 'The coach is reading your data…'));
       if(task!=='simple'){
         ctx.waitUntil(reconcileWorkoutLibraryCompletions(env,ctx,internalAuth).catch(error=>console.error('Assistant reconciliation failed',error.message)));
-        const [loaded,capabilities,athleteFeedback,notes,prefs,blockHistory,thresholds,earlierProposals]=await Promise.all([
-          loadCoachInputs(env,ctx,internalAuth,date,{performance:true}),getCapabilities(env.DB),recentWorkoutFeedback(env.DB,shiftDate(date,-28)),listReflections(env.DB,{limit:5}).catch(()=>[]),
+        const [loaded,athleteFeedback,notes,prefs,blockHistory,thresholds,earlierProposals]=await Promise.all([
+          loadCoachInputs(env,ctx,internalAuth,date,{performance:true}),recentWorkoutFeedback(env.DB,shiftDate(date,-28)),listReflections(env.DB,{limit:5}).catch(()=>[]),
           getWeekPlan(env.DB,date).then(async prefs=>({...prefs,weather:task==='adjustment'?null:await weekWeather(prefs.location,mondayOfDate(date),env)})),
           task==='block'?planningHistory(env,date,84):null,
           cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>null),
@@ -2334,12 +2334,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         inputs=loaded;focus=loaded.focus;Object.assign(preferences,prefs);
         // Each day's time budget comes from its own week's plan.
         const thisWeek=mondayOfDate(date),mondays=[...new Set(selected.week.days.filter(d=>d.date>=date).map(d=>mondayOfDate(d.date)))];
-        const plans=new Map(await Promise.all(mondays.map(async w=>[w,w===thisWeek?prefs:await getWeekPlan(env.DB,w).catch(()=>null)])));
+        // The capabilities of the sport the coach works on (a runner's run rows, not the ride's).
+        const chatSport=engineSport(focus,selected.appContext,message);
+        const [planList,{capabilities,level:experience}]=await Promise.all([Promise.all(mondays.map(async w=>[w,w===thisWeek?prefs:await getWeekPlan(env.DB,w).catch(()=>null)])),capabilitiesWithLevel(env.DB,chatSport)]);
+        const plans=new Map(planList);
         const safety=actionSafetyContext(selected.week.days,date,day=>plans.get(mondayOfDate(day)));
         // The forecast for the open week too, when it is not this one.
         const openWeekWeather=task!=='adjustment'&&selected.appContext.weekStart!==thisWeek?await weekWeather(prefs.location,selected.appContext.weekStart,env).catch(()=>({})):{};
         const coachNotes=notes.map(r=>({date:r.date,text:r.text}));
-        coachCtx=coachContext({...inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,athleteFeedback,coachNotes,athleteState,workoutRatings:await recentWorkoutRatings(env.DB,{since:shiftDate(date,-28),limit:12}),thresholds,profile:inputs.profile,focus,sport:engineSport(focus,selected.appContext,message),appContext:selected.appContext,message,dayMinutes:availabilityOn(prefs,date).minutes??null,now:localNow(),availabilityByDate:safety.availabilityByDate});
+        coachCtx=coachContext({...inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,experience,athleteFeedback,coachNotes,athleteState,workoutRatings:await recentWorkoutRatings(env.DB,{since:shiftDate(date,-28),limit:12}),thresholds,profile:inputs.profile,focus,sport:chatSport,appContext:selected.appContext,message,dayMinutes:availabilityOn(prefs,date).minutes??null,now:localNow(),availabilityByDate:safety.availabilityByDate});
         Object.assign(coachCtx,{availability:prefs.availability,weeklyActivities:prefs.weeklyActivities,weather:{...(prefs.weather||{}),...openWeekWeather},coachProposals:earlierProposals},safety);
         // A triathlete's week split and why, so the coach can explain it ("why three swims?").
         if(focus?.sport==='triathlon')coachCtx.triathlonSplit=splitFacts(triathlonSplit({...await triathlonHistory(env).catch(()=>({})),sessions:prefs.weeklyActivities??6,minutes:(prefs.availability||[]).reduce((n,d)=>n+(Number(d?.minutes)||0),0)||null,daysToRace:focus.event?.daysLeft??null}));
@@ -3275,7 +3278,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
 async function defaultDayCoach(env,inputs,date,sport,{prefs,plan,targets}){
   const chip=prefs?targetFor(targets,date,sport):null,planned=chip?.plan||null;
   const focus=(planned?({quality:systemOf(sport,planned.family),test:'threshold',long:'long_endurance',easy:'endurance',recovery:'recovery'})[planned.kind]:null)||roleFor(prefs,date,sport,plan?.roles)?.focus||null;
-  return buildCyclingCoachV2({...inputs,availabilityMinutes:trainingBudget(prefs,date,chip?.minutes||null),capabilities:await getCapabilities(env.DB,sport),sport,goal:focus?{focus}:null});
+  return buildCyclingCoachV2({...inputs,availabilityMinutes:trainingBudget(prefs,date,chip?.minutes||null),...await capabilitiesWithLevel(env.DB,sport).then(c=>({capabilities:c.capabilities,experience:c.level})),sport,goal:focus?{focus}:null});
 }
 // The athlete's ratings since a day: library workouts (workout_feedback) and
 // the "Jak to šlo?" of any other session (coach_reflections).
@@ -3502,7 +3505,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       // passes the load rules like a chat card asked for again; red and illness
       // still hold (Petr 2026-10-27: "chci intervaly" gave the same ride).
       const goalOf=focus=>body.phase||focus?{...(body.phase?{phase:String(body.phase)}:{}),...(focus?{focus}:{}),...(focus&&focus===askedFocus?{asked:true,...(body.fromCoach===true||body.insisted===true?{chat:true,...(body.insisted===true?{insisted:true}:{})}:{})}:{})}:null;
-      const coachInputs={...await loadCoachInputs(env,ctx,internalAuth,date),athleteState:await getAthleteState(env.DB).catch(()=>null),availabilityMinutes,capabilities:await getCapabilities(env.DB,genSport),sport:genSport};
+      const coachInputs={...await loadCoachInputs(env,ctx,internalAuth,date),athleteState:await getAthleteState(env.DB).catch(()=>null),availabilityMinutes,...await capabilitiesWithLevel(env.DB,genSport).then(c=>({capabilities:c.capabilities,experience:c.level})),sport:genSport};
       let coach=buildCyclingCoachV2({...coachInputs,goal:goalOf(roleFocus)});
       // A hard kind asked for on a red morning gives way to the coach's own choice.
       if(askedFocus&&!['recovery','endurance','long_endurance'].includes(askedFocus)&&coach.readiness?.status==='red')coach=buildCyclingCoachV2({...coachInputs,goal:goalOf(planFocus||weekRole?.focus)});
@@ -3523,7 +3526,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       let planWorkout=null;
       if(keeps){
         const minutes=resizeTo??sessionMinutes??(Number(chip?.minutes)||null);
-        const id=planned.kind==='race'||planned.kind==='test'?planned.workoutId:planWorkoutId(genSport,planned,minutes||chip?.minutes||60,planned.kind==='quality'?levelShift((await getCapabilities(env.DB,genSport))[systemOf(genSport,planned.family)]):0,thresholds?.swimCss);
+        const id=planned.kind==='race'||planned.kind==='test'?planned.workoutId:planWorkoutId(genSport,planned,minutes||chip?.minutes||60,planned.kind==='quality'?levelShift(coachInputs.capabilities[systemOf(genSport,planned.family)]):0,thresholds?.swimCss);
         const base=id?await getWorkout(env.DB,String(id).replace(/~\d+$/,'')):null;
         if(base)planWorkout={id:base.id,minutes:planned.kind==='race'||planned.kind==='test'?base.duration_minutes:(minutes||base.duration_minutes)};
       }
