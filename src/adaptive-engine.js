@@ -3,12 +3,14 @@ import { trainingStatus } from './training-status.js';
 import { readinessFor } from './readiness.js';
 const n=(v,d=0)=>Number.isFinite(Number(v))?Number(v):d;
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+// Breathing and skin temperature in sleep are not the sleep's minutes.
+const NOT_MINUTES=/respiratory|temperature/;
 function latestRecovery(recovery,keyMatchers){
   let best=null;
   for(const [key,value] of Object.entries(recovery||{})){
     // Google Health types use hyphens ("daily-heart-rate-variability").
     const k=String(key).toLowerCase().replace(/-/g,"_");
-    if(!keyMatchers.some(m=>k.includes(m))) continue;
+    if(!keyMatchers.some(m=>k.includes(m))||keyMatchers.includes("sleep")&&NOT_MINUTES.test(k)) continue;
     const arr=Array.isArray(value)?value:[];
     for(const row of arr){
       const t=String(row.sampleTime||row.startTime||"");

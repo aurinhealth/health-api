@@ -16,6 +16,7 @@ import { availableAt as availableInGym, hasKnownStations, EXERCISE_STATIONS } fr
 const availableAt = hasKnownStations;
 import { sportMuscleLoad, strengthCoverage } from './strength-balance.js';
 import { trainingStatus } from './training-status.js';
+import { primaryNights, shortNight } from './readiness.js';
 import { configureStrengthCoaching, estimateStrengthTiming } from './strength-timing.js';
 import { cardioFor, planRoutines, routinesFor, routineSize } from './stretching.js';
 
@@ -760,8 +761,12 @@ function recentExerciseMap(history) {
   return map;
 }
 function completedWorkoutDates(history) { return [...new Set((history || []).map(x => dateKey(x.workout_date)).filter(Boolean))].sort((a, b) => b.localeCompare(a)); }
+// Last night's sleep is the main night of the day from the sleep sessions
+// (Google, Apple, WHOOP, Ultrahuman, Intervals.icu; naps left out), the night
+// the readiness reads (readiness.js). The raw recovery rows do not carry it:
+// Google's 'sleep' row has no minutes, only times.
 function recoverySignals(context) {
-  const recovery = context?.recovery || {};
+  const recovery = context?.recovery || {}, sessions = context?.sleepSessions;
   let hrv = null, restingHr = null, sleepMin = null;
   for (const [key, value] of Object.entries(recovery)) {
     const k = key.toLowerCase(), arr = Array.isArray(value) ? value : [];
@@ -772,6 +777,7 @@ function recoverySignals(context) {
     else if (k.includes("resting") && k.includes("heart")) restingHr = v;
     else if (k.includes("sleep") && (k.includes("duration") || k.includes("minute"))) sleepMin = v;
   }
+  if (Array.isArray(sessions) && sessions.length) sleepMin = num((primaryNights(sessions).get(dateKey(context.date)) || shortNight(sessions, dateKey(context.date)))?.durationMin);
   return { hrv, restingHr, sleepMin };
 }
 // Days from the context date to a ride (negative: in the past). Rides without
@@ -808,9 +814,11 @@ function recoveryFactor(context) {
   const upcoming = Array.isArray(context?.cycling?.plannedWorkouts) ? context.cycling.plannedWorkouts.filter(x => within(x, context.date, 0, 2)).slice(0, 3) : [];
   if (upcoming.filter(isIntensity).length >= 2) factor *= 0.96;
   if (upcoming.filter(longRide).length >= 2) factor *= 0.97;
-  if (signals.sleepMin != null) { if (signals.sleepMin < 330) factor *= 0.94; else if (signals.sleepMin < 390) factor *= 0.98; }
+  // The readiness already counts the night (a quarter of it), so a short
+  // night and a low readiness take the bigger of the two cuts, not both.
+  const sleepCut = signals.sleepMin == null ? 1 : signals.sleepMin < 330 ? 0.94 : signals.sleepMin < 390 ? 0.98 : 1;
   const readiness = context?.adaptive?.recovery?.score;
-  if (readiness != null && readiness < 70) factor *= 0.97;
+  factor *= Math.min(sleepCut, readiness != null && readiness < 70 ? 0.97 : 1);
   return clamp(factor, 0.82, 1);
 }
 // Legs get a reduced dose only when a key ride is close (today or tomorrow,
@@ -1070,7 +1078,11 @@ function choosePlan(context, options = {}) {
   const forceUpper = options.forceProtectLegs === true || options.focus === "upper"&&options.focusSource!=='week';
   const forceLower = options.focus === "lower";
   const { liked, disliked } = taste(options), sport = mainSportOf(context), shown = shownBefore(options);
-  const recovery=recoverySignals(context),acuteRecovery=(context?.adaptive?.recovery?.score??100)<55||recovery.sleepMin!=null&&recovery.sleepMin<330;
+  // One short night with normal HRV and resting heart rate makes the session
+  // lighter (recoveryFactor), not a day without legs: that takes a very short
+  // night (under 4.5 h) or a short one with a low readiness too.
+  const recovery=recoverySignals(context),readiness=context?.adaptive?.recovery?.score??100,sleepMin=recovery.sleepMin;
+  const acuteRecovery=readiness<55||sleepMin!=null&&(sleepMin<270||sleepMin<330&&readiness<70);
 
   const candidatesByPattern = {
     horizontalPush: ["DB bench press", "Chest flat press Prime", "Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press", "Barbell incline bench press", "Smith Machine Bench Press", "Cable Bench Chest Fly", "Cable Bench Press", "Cable Chest Press", "Cable Decline Bench Press", "Cable High-to-Low Fly", "Cable Incline Bench Press", "Cable Standing Single Arm Chest Press", "Single-Arm Cable Fly", "Decline Machine Chest Press", "Incline Machine Chest Press", "Dumbbell Chest Fly"],
