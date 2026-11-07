@@ -79,7 +79,7 @@ import { saveCalendarFree, clearCalendarFree } from './calendar-free.js';
 import { getCheckin, readinessCheckin, saveCheckin } from './morning-checkin.js';
 import { getChecks, upcomingTest } from './threshold-check.js';
 import { saveSportChoice, sportExclusion, suggestedSports } from './sport-choice.js';
-import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories, healthMemorySince } from './athlete-state.js';
+import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories, healthMemorySince, statusCheck } from './athlete-state.js';
 import { recentNotes, earlierToday, chatSummary, coachNoteDays, queueDayNote, summarizeChatStart, forgetNote, usersWithNotesDue, runCoachNotes } from './coach-notes.js';
 import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, planSessionsLeft, proposalView, phaseLabel, planWeek, planWorkoutId, planChanges, planRedMorning, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
@@ -1557,7 +1557,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const swap=swapOffer(state,date);
       // "Is this still true?" about a pain or an illness comes right after the push's swap, so an
       // old knee pain does not wait behind every other card (audit 4.6).
-      const advice=(swap&&state.nudge.date!==date?swap:null)||memoryCheck(state,date)||easier||swap||(verdict==='hard'?null:proactiveAdvice({...inputs,state,readiness}));
+      const advice=(swap&&state.nudge.date!==date?swap:null)||statusCheck(state,date)||memoryCheck(state,date)||easier||swap||(verdict==='hard'?null:proactiveAdvice({...inputs,state,readiness}));
       return Response.json({status:'ok',state,advice},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
@@ -2341,6 +2341,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       remembers?earlierToday(env.DB,body.chatId,{today:date}).catch(()=>[]):[]
     ]);
     const healthSince=healthMemorySince(athleteState);
+    // Nemoc or Zranění for days without an end: the coach asks once a day, in the day's first chat (point 3).
+    // Not in a ghost chat: the answer there would not be kept, so the next chat would ask again.
+    const askIfBetter=!ghost&&!!statusCheck(athleteState,date)&&!conversation.length&&!otherToday.length;
     const memoryCtx={...(olderPart?{chatSoFar:olderPart.text}:{}),...(recentChats.length?{recentChats}:{}),...(otherToday.length?{earlierToday:otherToday}:{}),...(remembers&&athleteState.pastMemories?.length?{pastMemory:athleteState.pastMemories.map(p=>p.text)}:{}),...(healthSince.length?{healthMemorySince:healthSince}:{})};
     // A photo needs the full context: a plan on it becomes workout cards.
     const asked=assistantTask(message,body.appContext?appContext:null,conversation),task=image&&['simple','quick','adjustment'].includes(asked)?'planning':asked,started=Date.now();
@@ -2395,7 +2398,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if(reviews.length)coachCtx.completedRideReviews=reviews;
         if(blockHistory)Object.assign(coachCtx,{blockHistory,blockFitness:compactWellness(inputs.fitness.wellness,{date,days:90})||[],historyPeriod:{from:shiftDate(date,-84),to:date,source:'cached activities; missing records remain unknown'}});
       }else focus=await dashboardProfile(env).then(profile=>athleteFocus(profile,date)).catch(()=>null);
-      Object.assign(coachCtx,{userInitiated:true,...(focus?.cannotSwim100m?{cannotSwim100m:true}:{}),athleteState:athleteState.status,statusNote:athleteState.note,statusUntil:athleteState.statusUntil,...(athleteState.cancelled?.length?{cancelledSessions:athleteState.cancelled}:{}),preferenceMemory:memory?[...new Set([...usedMemories(athleteState),memory])]:usedMemories(athleteState),...memoryCtx,...(sportChanges?{sportsToSuggestChange:{turnedOff:noSport}}:{}),...(ghost?{ghostChat:true}:{}),...(coachCtx.focus?{}:{focus}),conversation});
+      Object.assign(coachCtx,{userInitiated:true,...(focus?.cannotSwim100m?{cannotSwim100m:true}:{}),athleteState:athleteState.status,statusNote:athleteState.note,statusUntil:athleteState.statusUntil,...(askIfBetter?{askIfBetter:true}:{}),...(athleteState.cancelled?.length?{cancelledSessions:athleteState.cancelled}:{}),preferenceMemory:memory?[...new Set([...usedMemories(athleteState),memory])]:usedMemories(athleteState),...memoryCtx,...(sportChanges?{sportsToSuggestChange:{turnedOff:noSport}}:{}),...(ghost?{ghostChat:true}:{}),...(coachCtx.focus?{}:{focus}),conversation});
       const sport=engineSport(focus,selected?.appContext||appContext,message);
       // The library offer is for the day, length and kind the message asks
       // for (chat-ask.js; Revize doporučování tréninků 2026-10-16, nález 9).

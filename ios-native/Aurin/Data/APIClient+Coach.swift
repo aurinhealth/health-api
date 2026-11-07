@@ -12,6 +12,7 @@ struct CoachCheckIn: Decodable {
         let reasons: [String]?
         let message: String?
         /// "memory_check": a passing memory ("bolí mě koleno") to confirm or forget;
+        /// "status_check": Nemoc or Zranění for days without an end day, back to Active or not yet;
         /// "easier_day": several night values outside the usual range (src/night-check.js).
         var kind: String? = nil
         var memory: String? = nil
