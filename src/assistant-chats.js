@@ -2,6 +2,9 @@
 // reads the last CONTEXT_MESSAGES of the chat it answers in, and what came
 // before them and in other chats through the notes of coach-notes.js.
 // Chats stay until the athlete deletes them (or the account), as at WHOOP, Oura and Bevel.
+// A ghost chat ("Dočasný chat", Petr 2026-11-07, like Bevel's Ghost Mode) is
+// the exception: the coach reads what he knows but keeps nothing of it, it is
+// not listed, and it goes when the athlete leaves it (or the night after).
 import { L } from './lang.js';
 import { localToday } from './user-time.js';
 import { shiftDate } from './dashboard-shared.js';
@@ -12,9 +15,14 @@ import { ensureCoachNotes, ensureNoteQueue } from './coach-notes.js';
 export const CONTEXT_MESSAGES = 60;
 const CONTEXT_CHARS = 60000, MAX_CONTENT = 16000;
 
+const withGhost = new WeakSet();
 export async function ensureAssistantChats(db) {
-  await db.prepare('CREATE TABLE IF NOT EXISTS assistant_chats (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, title TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)').run();
+  await db.prepare('CREATE TABLE IF NOT EXISTS assistant_chats (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, title TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, ghost INTEGER NOT NULL DEFAULT 0)').run();
   await db.prepare('CREATE TABLE IF NOT EXISTS assistant_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER NOT NULL, user_id INTEGER NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)').run();
+  if (!withGhost.has(db)) {
+    await db.prepare('ALTER TABLE assistant_chats ADD COLUMN ghost INTEGER NOT NULL DEFAULT 0').run().catch(() => { /* already there */ });
+    withGhost.add(db);
+  }
 }
 
 export function chatTitle(message) {
@@ -26,7 +34,7 @@ const validId = id => Number.isInteger(Number(id)) && Number(id) > 0;
 
 export async function ownedChat(db, id) {
   if (!validId(id)) return null;
-  return db.prepare('SELECT id,title,created_at,updated_at FROM assistant_chats WHERE user_id=? AND id=?').bind(db.userId, Number(id)).first();
+  return db.prepare('SELECT id,title,created_at,updated_at,ghost FROM assistant_chats WHERE user_id=? AND id=?').bind(db.userId, Number(id)).first();
 }
 
 // The last messages of the chat as context for the coach ([] for a new chat),
@@ -44,17 +52,24 @@ export async function chatContext(db, chatId, { withIds = false } = {}) {
 }
 
 // Store one question and its answer; a missing or foreign chat becomes a new one.
-export async function appendChatTurn(db, chatId, message, answer) {
-  return (await appendChatTurnIds(db, chatId, message, answer)).chatId;
+export async function appendChatTurn(db, chatId, message, answer, options) {
+  return (await appendChatTurnIds(db, chatId, message, answer, options)).chatId;
 }
+
+// A ghost message names no chat (a new ghost chat) or a ghost chat of the user.
+// A ghost chat that is gone (left while the answer was written) is never made
+// again, so its answer is not kept anywhere.
+const ghostChatGone = (chat, chatId) => chat ? !chat.ghost : validId(chatId);
+const newChat = (db, message, ghost) => db.prepare('INSERT INTO assistant_chats(user_id,title,ghost) VALUES(?,?,?)').bind(db.userId, chatTitle(message), ghost ? 1 : 0).run();
 
 // The same, with the id of the stored answer: the copy and thumbs under it
 // point to it (saveAnswerFeedback), and the coach's proposals too.
-export async function appendChatTurnIds(db, chatId, message, answer) {
+export async function appendChatTurnIds(db, chatId, message, answer, { ghost = false } = {}) {
   await ensureAssistantChats(db);
   let chat = await ownedChat(db, chatId);
+  if (ghost && ghostChatGone(chat, chatId)) return { chatId: null, messageId: null };
   if (!chat) {
-    const created = await db.prepare('INSERT INTO assistant_chats(user_id,title) VALUES(?,?)').bind(db.userId, chatTitle(message)).run();
+    const created = await newChat(db, message, ghost);
     chat = { id: created.meta?.last_row_id };
   }
   const insert = (role, content) => db.prepare('INSERT INTO assistant_messages(chat_id,user_id,role,content) VALUES(?,?,?,?)').bind(chat.id, db.userId, role, String(content || '').slice(0, MAX_CONTENT));
@@ -66,11 +81,12 @@ export async function appendChatTurnIds(db, chatId, message, answer) {
 // A streamed answer names its chat before the model runs (entrypoint.js), so
 // a phone that loses the connection can load the answer once it is saved: the
 // chat it goes on, or a new one with the question's title and no messages yet.
-export async function openChatForAnswer(db, chatId, message) {
+export async function openChatForAnswer(db, chatId, message, { ghost = false } = {}) {
   await ensureAssistantChats(db);
   const chat = await ownedChat(db, chatId);
+  if (ghost && ghostChatGone(chat, chatId)) return null;
   if (chat) return { id: chat.id, created: false };
-  const created = await db.prepare('INSERT INTO assistant_chats(user_id,title) VALUES(?,?)').bind(db.userId, chatTitle(message)).run();
+  const created = await newChat(db, message, ghost);
   const id = Number(created.meta?.last_row_id) || null;
   return id ? { id, created: true } : null;
 }
@@ -81,10 +97,10 @@ export async function dropEmptyChat(db, chatId) {
   await db.prepare('DELETE FROM assistant_chats WHERE user_id=? AND id=? AND NOT EXISTS (SELECT 1 FROM assistant_messages WHERE user_id=? AND chat_id=?)').bind(db.userId, Number(chatId), db.userId, Number(chatId)).run();
 }
 
-// A chat whose first answer is still being written is not listed yet.
+// A chat whose first answer is still being written is not listed yet, a ghost chat never.
 export async function listChats(db, limit = 50) {
   await ensureAssistantChats(db);
-  const rows = (await db.prepare('SELECT c.id,c.title,c.updated_at,(SELECT COUNT(*) FROM assistant_messages m WHERE m.chat_id=c.id AND m.user_id=c.user_id) AS messages FROM assistant_chats c WHERE c.user_id=? AND EXISTS (SELECT 1 FROM assistant_messages m WHERE m.chat_id=c.id AND m.user_id=c.user_id) ORDER BY c.updated_at DESC, c.id DESC LIMIT ?').bind(db.userId, limit).all()).results || [];
+  const rows = (await db.prepare('SELECT c.id,c.title,c.updated_at,(SELECT COUNT(*) FROM assistant_messages m WHERE m.chat_id=c.id AND m.user_id=c.user_id) AS messages FROM assistant_chats c WHERE c.user_id=? AND c.ghost=0 AND EXISTS (SELECT 1 FROM assistant_messages m WHERE m.chat_id=c.id AND m.user_id=c.user_id) ORDER BY c.updated_at DESC, c.id DESC LIMIT ?').bind(db.userId, limit).all()).results || [];
   return rows.map(r => ({ id: r.id, title: r.title, updatedAt: r.updated_at, messages: Number(r.messages) || 0 }));
 }
 
@@ -159,9 +175,34 @@ export async function deleteChat(db, id) {
   if (chat) await db.prepare('DELETE FROM assistant_feedback WHERE user_id=? AND chat_id=?').bind(db.userId, Number(id)).run()
     .catch(error => { if (!/no such table/i.test(String(error?.message || error))) console.error('Answer ratings not cleared', error.message); });
   // The coach forgets the chat: its summary goes, and the notes of the days it
-  // ran are written again from the chats that remain (coach-notes.js).
-  if (chat) await forgetChatNotes(db, chat).catch(error => console.error('Chat notes not cleared', error.message));
+  // ran are written again from the chats that remain (coach-notes.js). A ghost
+  // chat was in no note; its proposals go instead (they carry the question).
+  if (chat?.ghost) await forgetGhostProposals(db, chat).catch(error => console.error('Ghost proposals not cleared', error.message));
+  else if (chat) await forgetChatNotes(db, chat).catch(error => console.error('Chat notes not cleared', error.message));
   return true;
+}
+// Open and rejected proposals of a ghost chat go; a confirmed one is a plan
+// now and keeps no question.
+async function forgetGhostProposals(db, chat) {
+  const ids = [db.userId, chat.created_at, Number(chat.id)];
+  await db.batch([
+    db.prepare("DELETE FROM coach_inbox WHERE user_id=? AND created_at>=? AND json_extract(draft_json,'$.ghost')=1 AND json_extract(draft_json,'$.chatId')=? AND status<>'confirmed'").bind(...ids),
+    db.prepare("UPDATE coach_inbox SET message='' WHERE user_id=? AND created_at>=? AND json_extract(draft_json,'$.ghost')=1 AND json_extract(draft_json,'$.chatId')=? AND status='confirmed'").bind(...ids)
+  ]).catch(error => { if (!/no such table/i.test(String(error?.message || error))) throw error; });
+}
+
+// Ghost chats left without the app saying so (killed, offline): gone once no
+// message came for GHOST_IDLE_MINUTES. Run by the night's coach-notes job, at
+// least half an hour after the day's midnight (coach-notes.js dueAfter), so a
+// ghost chat of that day is idle by then; one going on past midnight queued
+// the next day and goes the night after.
+const GHOST_IDLE_MINUTES = 30;
+export async function dropIdleGhostChats(db, now = Date.now()) {
+  await ensureAssistantChats(db);
+  const before = new Date(now - GHOST_IDLE_MINUTES * 60000).toISOString().slice(0, 19).replace('T', ' ');
+  const rows = (await db.prepare('SELECT id FROM assistant_chats WHERE user_id=? AND ghost=1 AND updated_at<=? LIMIT 50').bind(db.userId, before).all()).results || [];
+  for (const { id } of rows) await deleteChat(db, id);
+  return rows.length;
 }
 async function forgetChatNotes(db, chat) {
   await ensureCoachNotes(db);

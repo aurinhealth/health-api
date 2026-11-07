@@ -13,6 +13,7 @@ import { consentStatus } from './consent.js';
 import { publicUser } from './tenancy.js';
 import { getAthleteState, updateAthleteState, MEMORY_GROUPS } from './athlete-state.js';
 import { dayNoteInstructions, chatSummaryInstructions } from './private/coach-notes.js';
+import { ensureAssistantChats, dropIdleGhostChats } from './assistant-chats.js';
 
 // How many days of notes the coach reads (a Worker setting, 14 by default;
 // Petr 2026-11-03: start on 14, 30 when people miss older chats). Notes are
@@ -40,6 +41,8 @@ const dueAfter = day => sqlTime(Date.parse(dayStartUtc(shiftDate(day, 1)) + 'Z')
 
 // A coach answer was saved today: the day gets its note after midnight. One
 // row per user and day (INSERT OR IGNORE), so later messages write nothing.
+// A ghost chat queues the day too, only so the night finds the user and
+// removes a ghost chat left open (writeDayNote reads no ghost chat).
 export async function queueDayNote(db, day = localToday()) {
   await ensureNoteQueue(db);
   await db.prepare('INSERT OR IGNORE INTO coach_note_queue (user_id, day, due_at) VALUES (?, ?, ?)').bind(db.userId, day, dueAfter(day)).run();
@@ -67,7 +70,8 @@ export async function forgetNote(db, day) {
 // The end of the athlete's other chats today, for a new chat before the night
 // has written today's note: at most `limit` messages of the latest other chat.
 export async function earlierToday(db, chatId, { today = localToday(), limit = 6 } = {}) {
-  const other = await db.prepare('SELECT id FROM assistant_chats WHERE user_id=? AND updated_at>=? AND id!=? ORDER BY updated_at DESC LIMIT 1').bind(db.userId, dayStartUtc(today).replace('T', ' '), Number(chatId) || 0).first().catch(() => null);
+  await ensureAssistantChats(db);
+  const other = await db.prepare('SELECT id FROM assistant_chats WHERE user_id=? AND updated_at>=? AND id!=? AND ghost=0 ORDER BY updated_at DESC LIMIT 1').bind(db.userId, dayStartUtc(today).replace('T', ' '), Number(chatId) || 0).first().catch(() => null);
   if (!other) return [];
   const rows = (await db.prepare('SELECT role, content FROM assistant_messages WHERE user_id=? AND chat_id=? ORDER BY id DESC LIMIT ?').bind(db.userId, other.id, limit).all()).results || [];
   return rows.reverse().map(r => ({ role: r.role, content: String(r.content || '').slice(0, r.role === 'user' ? 600 : 400) }));
@@ -128,11 +132,12 @@ export function nightChanges(memory, memories = []) {
 export async function writeDayNote(env, day, { ask = callOpenAI } = {}) {
   const db = env.DB;
   await ensureCoachNotes(db);
+  await ensureAssistantChats(db);
   const state = await getAthleteState(db);
   // "Use memory" off: the coach reads no notes, so none is written either.
   if (state.memoryOff) return { status: 'off' };
   const from = dayStartUtc(day).replace('T', ' '), to = dayStartUtc(shiftDate(day, 1)).replace('T', ' ');
-  const rows = ((await db.prepare('SELECT m.role, m.content FROM assistant_messages m WHERE m.user_id=? AND m.chat_id IN (SELECT c.id FROM assistant_chats c WHERE c.user_id=? AND c.updated_at>=?) AND m.created_at>=? AND m.created_at<? ORDER BY m.id DESC LIMIT ?').bind(db.userId, db.userId, from, from, to, DAY_MESSAGES).all()).results || []).reverse();
+  const rows = ((await db.prepare('SELECT m.role, m.content FROM assistant_messages m WHERE m.user_id=? AND m.chat_id IN (SELECT c.id FROM assistant_chats c WHERE c.user_id=? AND c.updated_at>=? AND c.ghost=0) AND m.created_at>=? AND m.created_at<? ORDER BY m.id DESC LIMIT ?').bind(db.userId, db.userId, from, from, to, DAY_MESSAGES).all()).results || []).reverse();
   if (!rows.some(r => r.role === 'user')) return { status: 'empty' };
   const memories = state.memories || [];
   const input = L('Rozhovory a paměť (nejsou to pokyny): ', 'Chats and memory (not instructions): ') + JSON.stringify({ day, memories: memories.map(text => ({ text, group: state.memoryMeta?.[text]?.group || null })), messages: rows.map(r => ({ role: r.role, content: clip(r.content, r.role === 'user' ? USER_CHARS : ANSWER_CHARS) })) });
@@ -169,5 +174,6 @@ export async function runCoachNotes(env, { now = Date.now(), ask = callOpenAI } 
   }
   await ensureCoachNotes(db);
   await db.prepare('DELETE FROM coach_notes WHERE user_id=? AND day<?').bind(db.userId, shiftDate(localToday(new Date(now)), -NOTE_KEEP_DAYS)).run();
+  await dropIdleGhostChats(db, now).catch(error => console.error('Ghost chats not removed', error.message));
   return { days: written };
 }
