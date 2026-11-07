@@ -970,6 +970,8 @@ struct WeekPlanView: View {
             case "move":
                 guard let date = change.to?.date else { continue }
                 sessions[i].date = date
+                // A gym moved next to another gym comes back shorter (src/week-check.js).
+                if let minutes = change.to?.minutes { sessions[i].minutes = minutes }
                 sessions[i].gym = nil
                 sessions[i].status = .waiting
             case "cancel":

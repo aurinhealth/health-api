@@ -82,3 +82,14 @@ test("every library workout shortens to 30, 45 and 60 min within 2 min indoors a
   }
   assert.deepEqual(misses, []);
 });
+
+test("fewer sets of the main set: the name counts them too (coach eval W01)", () => {
+  // VO₂ 40/20 3×12 at 45 min keeps two of the three sets.
+  const w = resizeWorkout(byId("pfd-vo2-40-20-3x12-90"), 45);
+  assert.match(w.resize_notes.join(), /méně opakování \(3 → 2\)/);
+  assert.equal(w.name, "VO₂ 40/20 2×12 · 45 min");
+  // Only the count of the main set changes: 2×5×3 with three of five is 2×3×3.
+  assert.equal(resizeWorkout(byId("public-join-increasing-threshold"), 45).name, "Public reference · 2×3×3 Threshold · 45 min");
+  // A name without the count, or an opener with fewer repeats, stays as it is.
+  assert.equal(resizeWorkout(byId("pfd-vo2-40-20-2x8-90"), 45).name, "VO₂ 40/20 2×8 · 45 min");
+});

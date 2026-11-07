@@ -94,7 +94,8 @@ import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
 import { loadMuscleFatigue, loadTrainingDoses, muscleFatigue } from "./muscle-fatigue.js";
 import { loadMuscleDetail } from "./muscle-detail.js";
 import { withRecoveryTime } from "./recovery-time.js";
-import { readGymPlan, ensureGymPlans } from "./gym-plan-store.js";
+import { readGymPlan, ensureGymPlans, saveGymPlan } from "./gym-plan-store.js";
+import { trimGymPlan } from "./gym-trim.js";
 import { listRecovery, addRecovery, updateRecovery, recoveryRoutine, describeRecovery } from "./recovery-plan.js";
 import { checkWeek, checkSummary, checkChips, checkSignature, strainOf, kindOfPlanned, readWeekCheck, saveWeekCheck, decideWeekCheck, shownWeekCheck } from './week-check.js';
 import { screenText, SCREENS, markScreenTextsStale } from "./screen-texts.js";
@@ -1726,7 +1727,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         for(const c of stored.changes||[]){
           try{
             if(c.date<today){changes.push({...c,applied:false});continue;}
-            if(c.type==='move')await movePlannedEvent(env,{eventId:c.id,date:c.to.date});
+            if(c.type==='move'){
+              await movePlannedEvent(env,{eventId:c.id,date:c.to.date});
+              // A gym moved next to another gym is lighter: its stored plan shortened (gym-trim.js).
+              if(c.sport==='gym'&&c.to.minutes){const plan=await readGymPlan(env.DB,c.to.date),trimmed=plan.stored?trimGymPlan(plan.values,c.to.minutes):null;if(trimmed)await saveGymPlan(env.DB,c.to.date,trimmed.values);}
+            }
             else if(c.type==='cancel')await deletePlannedEvent(env,{eventId:c.id});
             else if(c.type==='recovery'){await deletePlannedEvent(env,{eventId:c.id});await addRecovery(env.DB,{date:c.date,kind:'stretch'});}
             else if(c.type==='ease'){if(!c.to?.workoutId||!(await replacePlannedSession(env,{eventId:c.id,date:c.date,environment:c.environment||'outdoor',to:c.to}))){changes.push({...c,applied:false});continue;}}

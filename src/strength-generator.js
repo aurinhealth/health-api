@@ -1454,6 +1454,21 @@ export function templateStrengthPlan(context, template, options = {}) {
   return { date: context.date, planName: String(template.name || L('Trénink', 'Workout')).slice(0, 80), deload: null, rationale, timing, focusMuscles: [], loadFactor: factor, protectedLegs: false, recentCompletedSets: history.length, loadEstimates, rows, template: true, ...routines };
 }
 
+// Chest (coach eval run 43, S36): the heaviest press not done in the last
+// days, not stalled and not shown before first (else the best ranked), then another angle
+// (incline, fly, decline) before a second flat press, and no angle twice in a
+// row while another is left.
+const chestAngle = name => /fly|pec deck/i.test(name) ? 'fly' : /incline/i.test(name) ? 'incline' : /decline/i.test(name) ? 'decline' : 'flat';
+function chestOrder(ranked, skip) {
+  const pool = ranked.filter(name => chestAngle(name) !== 'fly' && !skip(name));
+  const out = [pool.length ? pool.reduce((a, b) => EXERCISES[b].fatigue > EXERCISES[a].fatigue ? b : a) : ranked[0]];
+  for (let rest = ranked.filter(name => name !== out[0]); rest.length;) {
+    const next = rest.find(name => !out.some(x => chestAngle(x) === chestAngle(name))) || rest.find(name => chestAngle(name) !== chestAngle(out.at(-1))) || rest[0];
+    out.push(next); rest = rest.filter(name => name !== next);
+  }
+  return out;
+}
+
 // The first gym session within two weeks of Nemoc ending (athlete-state.js
 // recoveredAt): the loads hold and there is a set less, as in a deload
 // (audit wave 2, 9.3; Elliott 2020, a graded return).
@@ -1525,7 +1540,7 @@ export function generateStrengthPlan(context, options = {}) {
     // first, then the next ones in turn (95 minutes of glutes, biceps and rear
     // delts is 8 exercises, not 3). The timing check below trims any excess.
     // Legs kept fresh for a key ride get their one best exercise, no more.
-    const ranked = focusMuscles.map(group => chosen.protectedLegs && ['quads', 'hamstrings', 'hips', 'calves'].includes(group) ? rankedExercises(group).slice(0, 1) : rankedExercises(group)), next = ranked.map(() => 0);
+    const ranked = focusMuscles.map(group => chosen.protectedLegs && ['quads', 'hamstrings', 'hips', 'calves'].includes(group) ? rankedExercises(group).slice(0, 1) : group === 'chest' ? chestOrder(rankedExercises(group), name => stalled.has(name) || shown.has(name) || lastExerciseDate.has(name) && daysBetween(lastExerciseDate.get(name), context.date) < 5) : rankedExercises(group)), next = ranked.map(() => 0);
     exercises = [];
     const total = Math.max(focusMuscles.length, maxExercises);
     for (let added = true; added && exercises.length < total;) {
