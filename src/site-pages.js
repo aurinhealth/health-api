@@ -782,7 +782,7 @@ export function overviewPage(request) {
   const SHOT_ALT = {
     today: 'Aurin’s Today screen: readiness 78, sleep 7:12, strain 8.4 and HRV 64 ms',
     'readiness-parts': 'Aurin’s readiness: what sleep, resting heart rate and HRV each add to or take from the score',
-    'journal-impact': 'Aurin’s journal: what a sauna, a late meal or alcohol does to your mornings',
+    'journal-impact': 'Aurin’s journal: how a sauna, a late meal or alcohol go with your mornings',
     training: 'Aurin’s training week: an activity planned for every day',
     builder: 'Aurin’s workout builder: the day, the length and the focus of a gym workout',
     'gym-day': 'A gym workout in Aurin: warm-up, exercises, cardio and stretching in order',
@@ -809,7 +809,7 @@ export function overviewPage(request) {
     ['pripravenost', '', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own usual range.', 'green', 'glow-today', [
       ['readiness-parts', 'readyOne', 330, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own usual range. One line under the number says what to do today, and the morning notification says the same, weighing the days before and tomorrow’s workout, and keeps the numbers off your lock screen.', 7000],
       ['html:strain', 'strainMade', 200, 'Know when to push.', 'Every workout and every step adds up. Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000],
-      ['journal-impact', 'journalOne', 330, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000],
+      ['journal-impact', 'journalOne', 330, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see how each goes with your mornings.', 7000],
       ['html:cycle', 'cycleOne', 300, 'Readiness that knows your cycle.', 'Turn on cycle tracking and, in the days before your period, your resting heart rate and temperature are weighed against your own days in that phase. A usual rise costs no points.', 7000]]],
     ['spanek', '', 'Every night, in detail.', 'From any watch or ring you wear.', 'indigo', 'glow-health', [
       ['sleep', 'sleepOne', 330, 'See how you slept.', 'Deep, REM and light sleep against your usual, what makes up the sleep index, and how last night sits among your last 14.'],
