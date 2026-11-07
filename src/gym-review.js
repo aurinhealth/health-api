@@ -51,7 +51,7 @@ export function buildGymReview({ values = null, history = [], date, wellness = [
     // The same history as the plan's next load: the exercise and its variants.
     const family = new Set(historyFamily(name)), own = before.filter(r => family.has(normalizeExerciseName(r.exercise)));
     const range = repRange(rows[0].plannedReps);
-    const rows4progression = [...own, ...finished.map((s, i) => ({ workout_date: date, set_no: i + 1, actual_kg: s.kg, actual_reps: s.reps, rpe: s.rpe, toFailure: s.toFailure }))];
+    const rows4progression = [...own, ...finished.map((s, i) => ({ workout_date: date, set_no: i + 1, planned_kg: s.plannedKg, actual_kg: s.kg, actual_reps: s.reps, rpe: s.rpe, toFailure: s.toFailure }))];
     const prior = priorMuscleSets(day, name);
     const decision = finished.length ? progressionDecision(rows4progression, name, rows[0].plannedReps, 1, date, prior) : null;
     // Against the last session at a similar place in the workout: an exercise
