@@ -264,7 +264,7 @@ struct TrendAudioGraph: AXChartDescriptorRepresentable {
         let lo = values.min() ?? 0, hi = values.max() ?? 1
         let shownUnit = L10n.tr(unit)
         let x = AXCategoricalDataAxisDescriptor(title: L10n.tr("Den"), categoryOrder: points.map { Fmt.dayMonth($0.date) })
-        let y = AXNumericalDataAxisDescriptor(title: shownUnit, range: lo...(hi > lo ? hi : lo + 1), gridlinePositions: []) {
+        let y = AXNumericDataAxisDescriptor(title: shownUnit, range: lo...(hi > lo ? hi : lo + 1), gridlinePositions: []) {
             Fmt.decimal($0, digits: digits) + " " + shownUnit
         }
         let series = AXDataSeriesDescriptor(name: shownUnit, isContinuous: true,
