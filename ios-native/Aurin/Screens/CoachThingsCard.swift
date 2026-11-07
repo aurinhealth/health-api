@@ -15,6 +15,9 @@ final class CoachThings {
     var revision: WeekRevision?
     var check: WeekCheck?
     var threshold: ThresholdCheck?
+    /// The check-in, the review and the week check still on their way: the
+    /// threshold check, the least urgent, asks after them.
+    var asking = 3
 
     /// How long an answered thing shows its confirmation ("Upraveno i v
     /// kalendáři") before it goes and the next one moves up.
@@ -77,25 +80,38 @@ struct CoachThingsCard: View {
                 .padding(.top, top)
             }
         }
-        // Each asks the server on its own, so a slow one does not hold the others.
+        // Each asks the server on its own, so a slow one does not hold the others,
+        // once Today has come: they all read one database and would queue behind it.
         .task {
             guard !model.demo else { return }
+            await model.afterTodayLoads()
             things.advice = try? await model.api.coachCheckIn()
+            things.asking -= 1
         }
         .task {
             guard !model.demo else { return }
+            await model.afterTodayLoads()
             // One decided earlier showed its confirmation then; only an open one comes back.
             let revision = try? await model.api.weekRevision()
             things.revision = revision?.status == "applied" ? nil : revision
+            things.asking -= 1
         }
         .task {
             guard !model.demo else { return }
+            await model.afterTodayLoads()
             let check = try? await model.api.weekCheck()
             things.check = check?.status == "applied" ? nil : check
+            things.asking -= 1
         }
         .task {
             guard !model.demo else { return }
             if let kept = ThresholdCheckMemory.kept, Date().timeIntervalSince(kept.at) < 15 * 60 { things.threshold = kept.check; return }
+            await model.afterTodayLoads()
+            // After the other three, but not more than 10 s after them.
+            for _ in 0..<40 where things.asking > 0 {
+                try? await Task.sleep(for: .milliseconds(250))
+                guard !Task.isCancelled else { return }
+            }
             let fresh = try? await model.api.thresholdCheck()
             things.threshold = fresh
             if fresh != nil { ThresholdCheckMemory.kept = (fresh, Date()) }
