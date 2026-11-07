@@ -54,6 +54,9 @@ struct WatchGym: Codable, Equatable, Sendable {
         var intensity: String? = nil
         /// The same set last time (Training mode's "Minule 97,5 × 6").
         var last: Last? = nil
+        /// The sheet's plan for it: a set whose plan differs from the one
+        /// before (typed in ahead on the iPhone) keeps its own weight.
+        var plannedKg: Double? = nil
         /// Not a warm-up nor a drop set.
         var work: Bool { !warmup && !drop }
     }

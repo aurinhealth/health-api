@@ -17,10 +17,28 @@ enum GymSessionMath {
     /// keep their own plan. When that set went off the plan (adjustment) the
     /// next one takes the new weight and the plan's reps, unless the athlete
     /// kept the weight (keep: the rows of the sets whose change was declined).
-    static func carried(_ set: GymSet, in exercise: GymExercise, keep: Set<Int> = []) -> (kg: String?, reps: String?)? {
+    /// A set with its own plan keeps it: a weight or reps typed in ahead
+    /// (typed), or a plan that differs from the set before's.
+    static func carried(_ set: GymSet, in exercise: GymExercise, keep: Set<Int> = [], typed: Typed = Typed()) -> (kg: String?, reps: String?)? {
         guard let before = previous(set, in: exercise) else { return nil }
-        if !keep.contains(before.row), let change = adjustment(set, after: before) { return (change.kg, nil) }
-        return (before.kg?.nilIfBlank, before.reps?.nilIfBlank)
+        let sameKg = !typed.kg.contains(set.row) && set.plannedKg.flatMap(LiftWeight.number) == before.plannedKg.flatMap(LiftWeight.number)
+        let sameReps = !typed.reps.contains(set.row)
+            && repRange(set.plannedReps).map { [$0.lo, $0.hi] } == repRange(before.plannedReps).map { [$0.lo, $0.hi] }
+        guard sameKg || sameReps else { return nil }
+        if sameKg, !keep.contains(before.row), let change = adjustment(set, after: before) { return (change.kg, nil) }
+        return (sameKg ? before.kg?.nilIfBlank : nil, sameReps ? before.reps?.nilIfBlank : nil)
+    }
+
+    /// The rows of the sets to come whose weight or reps were typed in ahead.
+    struct Typed: Equatable {
+        var kg: Set<Int> = []
+        var reps: Set<Int> = []
+
+        /// Rows moved by a set added or taken out (nil: the row is gone).
+        mutating func move(_ to: (Int) -> Int?) {
+            kg = Set(kg.compactMap(to))
+            reps = Set(reps.compactMap(to))
+        }
     }
 
     /// The work set done just before this one, on the same side by sides.
@@ -217,7 +235,8 @@ struct GymSetRow: View {
     var planned = false
     /// The letter tapped: its sheet. Nil shows no letter column.
     var onIntensity: (() -> Void)? = nil
-    /// A ticked set's weight and reps changed afterwards (shown kg, reps).
+    /// A ticked set's weight and reps changed afterwards, or a set to come's
+    /// typed in ahead (shown kg, reps).
     var onEdit: ((String, String) -> Void)? = nil
     /// A barbell's weight: tapping it loads plates (PlateLoaderSheet) instead of typing.
     var onKgTap: (() -> Void)? = nil
@@ -291,16 +310,22 @@ struct GymSetRow: View {
 
     @ViewBuilder
     private func field(_ value: String, _ binding: Binding<String>?, keyboard: UIKeyboardType, edit: Binding<String>, field: Field, hint: String? = nil) -> some View {
-        if state == .done, onEdit != nil {
-            // A ticked set stays editable: tap the number to fix it.
+        if state != .current, onEdit != nil {
+            // A ticked set stays editable: tap the number to fix it. A set to
+            // come too, in a faint frame: its weight or reps typed in ahead.
             TextField("–", text: edit)
                 .keyboardType(keyboard)
                 .multilineTextAlignment(.center)
                 .font(Typo.number(22))
-                .foregroundStyle(Palette.ink)
+                .foregroundStyle(state == .next && focus != field ? Palette.faint : Palette.ink)
                 .focused($focus, equals: field)
                 .frame(width: kgWidth, height: fieldHeight)
                 .background(focus == field ? Palette.card : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay {
+                    if state == .next, focus != field {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Palette.hairline, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    }
+                }
         } else if field == .kg, state == .current, let onKgTap {
             Button(action: onKgTap) {
                 Text(binding?.wrappedValue.nilIfBlank ?? (value.isEmpty ? "–" : value))
@@ -655,6 +680,8 @@ struct RestSetsList: View {
     let last: GymHistory.Session?
     /// Done sets whose change to the next weight was declined.
     var keep: Set<Int> = []
+    /// Sets to come typed in ahead (GymSessionMath.carried).
+    var ahead = GymSessionMath.Typed()
     var onWeight: ((String) -> Void)? = nil
     @State private var typed = ""
     @FocusState private var focused: Bool
@@ -671,7 +698,7 @@ struct RestSetsList: View {
             .font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(Palette.faint)
             .padding(.top, 12).padding(.bottom, 4)
             ForEach(exercise.sets) { s in
-                let carry = s.done ? nil : GymSessionMath.carried(s, in: exercise, keep: keep)
+                let carry = s.done ? nil : GymSessionMath.carried(s, in: exercise, keep: keep, typed: ahead)
                 let kg: String = LiftWeight.shown(s.done ? s.kg : carry?.kg ?? s.plannedKg) ?? "–"
                 let reps: String = (s.done ? s.reps : carry?.reps ?? s.plannedReps)?.nilIfBlank ?? "–"
                 Rectangle().fill(Palette.hairline).frame(height: 1)

@@ -9,6 +9,20 @@ extension WatchGym {
         exercises.lazy.flatMap(\.lifts).first { $0.row == row }
     }
 
+    /// A set done off its plan: the drop sets straight after it, not done
+    /// yet, take the same share, to 0.5 kg (as GymDay.followDrops in the sheet).
+    mutating func followDrops(after row: Int, from old: Double?, to new: Double) {
+        guard let old, old > 0, new > 0, abs(new - old) >= 0.01,
+              let e = exercises.firstIndex(where: { $0.lifts.contains { $0.row == row } }),
+              let l = exercises[e].lifts.firstIndex(where: { $0.row == row }) else { return }
+        for i in exercises[e].lifts.indices.dropFirst(l + 1) {
+            guard exercises[e].lifts[i].drop else { break }
+            if !exercises[e].lifts[i].done, let kg = exercises[e].lifts[i].kg, kg > 0 {
+                exercises[e].lifts[i].kg = (kg * new / old * 2).rounded() / 2
+            }
+        }
+    }
+
     mutating func update(row: Int, _ change: (inout Lift) -> Void) {
         for e in exercises.indices {
             if let l = exercises[e].lifts.firstIndex(where: { $0.row == row }) {

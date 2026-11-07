@@ -535,7 +535,8 @@ extension GymDay {
     }
 
     /// A set's weight and reps changed after it was done.
-    mutating func edit(row: Int, kg: String, reps: String) {
+    mutating func edit(row: Int, kg: String, reps: String, keepDrops: Set<Int> = []) {
+        if row < values.count, values[row].count > 5 { followDrops(after: row, from: values[row][5].string, to: kg, keep: keepDrops) }
         set(row: row, column: 5, kg)
         set(row: row, column: 6, reps)
     }
