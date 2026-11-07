@@ -548,7 +548,7 @@ document.querySelectorAll('.opener').forEach(function(a){var c=a.querySelector('
 // The pill at the bottom: shown from the first part to the end of the last one, its dot on the part whose
 // opener has risen past the lowest fifth of the window (the watch part is short, so a half would skip it).
 // On a phone the pill steps aside while reading downwards and comes back on the way up.
-var an=document.querySelector('.acts-nav');if(an){var acts=[].slice.call(document.querySelectorAll('.opener')),endEl=document.getElementById('hodinky'),dots=[].slice.call(an.querySelectorAll('a')),title=an.querySelector('.an-t'),ticking=false,lastY=scrollY,down=false,narrow=matchMedia('(max-width:560px)');
+var an=document.querySelector('.acts-nav');if(an){var acts=[].slice.call(document.querySelectorAll('.opener')),endEl=document.getElementById('hodinky')||document.getElementById('kouc'),dots=[].slice.call(an.querySelectorAll('a')),title=an.querySelector('.an-t'),ticking=false,lastY=scrollY,down=false,narrow=matchMedia('(max-width:560px)');
  function where(){ticking=false;var mid=innerHeight*.5,i=-1,y=scrollY;if(Math.abs(y-lastY)>8){down=y>lastY;lastY=y;}acts.forEach(function(a,k){if(a.getBoundingClientRect().top<innerHeight*.8)i=k;});
   var shown=i>=0&&endEl.getBoundingClientRect().bottom>mid&&!(narrow.matches&&down)&&!covers();an.classList.toggle('on',shown);if(i<0)i=0;
   an.style.setProperty('--i',i);title.textContent=dots[i].getAttribute('aria-label');dots.forEach(function(d,k){d.classList.toggle('done',k<=i);});}
@@ -684,14 +684,14 @@ ${headScript}
 <a class="skip" href="#main">Skip to content</a>
 <header class="site-head"><nav class="pill-nav" aria-label="Main">
 <a class="logo" href="/">${mark(30)}<span translate="no">Aurin</span></a>
-<div class="links"><a href="/#a-readiness">Readiness</a><a href="/#a-sleep">Sleep</a><a href="/#a-training">Training</a><a href="/#a-food">Nutrition</a><a href="/#a-coach">Coach</a><a href="/#a-watch">Watch</a></div>
+<div class="links"><a href="/#a-readiness">Readiness</a><a href="/#a-sleep">Sleep</a><a href="/#a-training">Training</a><a href="/#a-food">Nutrition</a><a href="/#a-coach">Coach</a>${WATCH_ON_SITE ? '<a href="/#a-watch">Watch</a>' : ''}</div>
 <a class="nav-cta" href="/#join">Get early access</a>
 </nav></header>
 ${body}
 <footer class="site-foot"><div class="wrap">
 <div class="top">
 <div class="brand">${mark(40)}<p>Train for how you feel today.</p></div>
-<nav aria-label="Aurin"><h3 translate="no">Aurin</h3><ul><li><a href="/#a-readiness">Readiness</a></li><li><a href="/#a-sleep">Sleep</a></li><li><a href="/#a-training">Training</a></li><li><a href="/#a-food">Nutrition</a></li><li><a href="/#a-coach">Coach</a></li><li><a href="/#a-watch">Apple Watch</a></li></ul></nav>
+<nav aria-label="Aurin"><h3 translate="no">Aurin</h3><ul><li><a href="/#a-readiness">Readiness</a></li><li><a href="/#a-sleep">Sleep</a></li><li><a href="/#a-training">Training</a></li><li><a href="/#a-food">Nutrition</a></li><li><a href="/#a-coach">Coach</a></li>${WATCH_ON_SITE ? '<li><a href="/#a-watch">Apple Watch</a></li>' : ''}</ul></nav>
 <nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li><li><a href="https://x.com/aurin_health" rel="me noopener">Aurin on X</a></li></ul></nav>
 <nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/cs/privacy" hreflang="cs">Soukromí</a> · <a href="/cs/terms" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
@@ -744,6 +744,9 @@ export const GOOGLE_DISCLOSURE_ON_HOME = false;
 // The watches and rings the "Works with" row under the form names: Apple Watch through Apple Health, Fitbit and
 // Pixel Watch through Google Health, the Ultrahuman Ring and WHOOP directly. Aurin does not support Garmin.
 export const WEARABLES = ['Apple Watch', 'Fitbit', 'Pixel Watch', 'WHOOP', 'Ultrahuman'];
+// The Apple Watch app takes a break in the testers' build (#915), so its part and the menu links stay off until
+// it is back. Workouts sent to the Apple Watch and the watch as a source of data stay.
+export const WATCH_ON_SITE = false;
 // Aurin Pro's US prices in App Store Connect (Petr, 2026-11-02); the App Store shows each country its own.
 export const PRO_PRICE = {month: '$6.99', year: '$59.99'};
 // What the year saves against 12 months paid monthly, in whole percent rounded down, as the app's plans show it
@@ -869,7 +872,7 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
     ['training', 'Training', 'Workouts built around your fatigue, muscles and equipment.', 'glow-training', ['trenink', 'posilovna', 'svaly']],
     ['food', 'Nutrition', 'Snap your plate or scan a barcode. AI fills in the values.', 'glow-food', ['vyziva']],
     ['coach', 'Coach', 'Ask anything. It knows your sleep, training and food.', 'glow-coach', ['kouc']],
-    ['watch', 'Apple Watch', 'Your morning, your sets and your water, without taking out your phone. Comes with the iPhone app, on any Apple Watch with watchOS 10 or later.', 'glow-today', ['hodinky']]];
+    ['watch', 'Apple Watch', 'Your morning, your sets and your water, without taking out your phone. Comes with the iPhone app, on any Apple Watch with watchOS 10 or later.', 'glow-today', ['hodinky']]].filter(([id]) => WATCH_ON_SITE || id !== 'watch');
   const act = ([id, title, line, glow]) => `<section id="a-${id}" class="opener" style="--glow:var(--${glow})"><div class="wrap ac">
 <div class="head reveal"><h2 class="big">${title}</h2><p class="sub">${line}</p></div>
 <div class="cards" aria-hidden="true">${ACTS[id]}</div>
