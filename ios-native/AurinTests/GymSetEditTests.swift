@@ -59,6 +59,31 @@ final class GymSetEditTests: XCTestCase {
         XCTAssertEqual(warms.map(\.plannedKg), ["8", "8", "13", "13", "16", "16"])
     }
 
+    /// The last open set of one exercise swiped away: the next exercise's
+    /// first set takes its row, and the fields must still fill again (7.5 kg
+    /// of the lateral raise stayed in the pec deck's 35 kg set).
+    func testTheSetAtHandChangesWhenARowMovesUp() throws {
+        var d = day([row("WORK", "Lateral raise", "1", "7,5", done: true), row("WORK", "Lateral raise", "2", "7,5"),
+                     row("WORK", "Rear delt pec deck", "1", "35"), row("WORK", "Rear delt pec deck", "2", "35")])
+        let before = d.exercises[0].sets[1]
+        d.deleteSet(row: before.row)
+        let after = try XCTUnwrap(d.exercises[1].sets.first)
+        XCTAssertEqual(after.row, before.row, "the row moved up")
+        XCTAssertNotEqual(after.fieldKey(in: d.exercises[1].name), before.fieldKey(in: "Lateral raise"))
+        XCTAssertEqual(after.plannedKg, "35")
+    }
+
+    /// D on the set just done: the new drop set sits on the row of the set at hand.
+    func testADropSetAddedIsANewSetAtHand() throws {
+        var d = day([row("WORK", "Curl", "1", "14", done: true), row("WORK", "Curl", "2", "14")])
+        let before = d.exercises[0].sets[1]
+        let drop = try XCTUnwrap(d.addDrop(after: d.exercises[0].sets[0].row))
+        XCTAssertEqual(drop, before.row)
+        let now = try XCTUnwrap(d.exercises[0].sets.first { !$0.done })
+        XCTAssertTrue(now.drop)
+        XCTAssertNotEqual(now.fieldKey(in: "Curl"), before.fieldKey(in: "Curl"))
+    }
+
     func testDeletingTheSetSwipedNotTheFirst() {
         var d = day([row("WORK", "Bench", "1", "50", done: true), row("WORK", "Bench", "2", "55", done: true), row("WORK", "Bench", "3", "60")])
         d.deleteSet(row: d.exercises[0].sets[1].row)

@@ -16,6 +16,8 @@ struct GymSessionView: View {
     @State private var kg: Double = 0
     @State private var reps: Double = 8
     @State private var row: Int?
+    /// The set the crown's numbers were loaded for (Lift.fieldKey).
+    @State private var loaded: String?
     @State private var restEnd: Date?
     @State private var restTotal: Double = 90
     @State private var now = Date()
@@ -324,8 +326,8 @@ struct GymSessionView: View {
         .ignoresSafeArea(.container, edges: .bottom)
         // The crown starts on the weight, also when the tiles come back after a rest.
         .defaultFocus($crown, true)
-        .onAppear { load(lift) }
-        .onChange(of: lift.row) { _, _ in load(lift) }
+        .onAppear { load(lift, of: ex.name) }
+        .onChange(of: lift.fieldKey(in: ex.name)) { _, _ in load(lift, of: ex.name) }
         // The weight and reps the same on the iPhone at once, both ways.
         .onChange(of: kg) { _, _ in sendDraft(gym) }
         .onChange(of: reps) { _, _ in sendDraft(gym) }
@@ -662,8 +664,9 @@ struct GymSessionView: View {
         store.sendDraft(WatchGym.Draft(date: gym.date, row: row, kg: W.kg(kg), reps: Int(reps)))
     }
 
-    private func load(_ lift: WatchGym.Lift) {
-        guard row != lift.row else { return }
+    private func load(_ lift: WatchGym.Lift, of exercise: String) {
+        guard loaded != lift.fieldKey(in: exercise) else { return }
+        loaded = lift.fieldKey(in: exercise)
         row = lift.row
         kg = W.weight(lift.kg ?? 0)
         reps = Double(lift.reps ?? 8)
