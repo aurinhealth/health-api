@@ -261,12 +261,15 @@ enum ReadinessText {
 
     /// The label by the readiness number only describes the body (Today audit
     /// D1, FDA 2026: "usual range", never "normal"); its colour stays the zone's.
-    /// What to do today is the verdict's line (`verdict`).
-    static func pill(_ zone: String?) -> (String, Color, Color)? {
+    /// What to do today is the verdict's line (`verdict`). `short` is for a
+    /// narrow row (the Day timeline) where the whole label does not fit.
+    static func pill(_ zone: String?, short: Bool = false) -> (String, Color, Color)? {
+        let usual = L10n.tr(short ? "obvyklé rozmezí" : "v obvyklém rozmezí")
+        let below = L10n.tr(short ? "pod obvyklým" : "pod obvyklým rozmezím")
         switch zone {
-        case "green": return (L10n.tr("v obvyklém rozmezí"), Palette.green, Palette.greenSoft)
-        case "yellow": return (L10n.tr("pod obvyklým rozmezím"), Palette.amber, Palette.amberSoft)
-        case "red": return (L10n.tr("pod obvyklým rozmezím"), Palette.rust, Palette.rust.opacity(0.14))
+        case "green": return (usual, Palette.green, Palette.greenSoft)
+        case "yellow": return (below, Palette.amber, Palette.amberSoft)
+        case "red": return (below, Palette.rust, Palette.rust.opacity(0.14))
         default: return nil
         }
     }
