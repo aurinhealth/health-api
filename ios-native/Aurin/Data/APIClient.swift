@@ -524,17 +524,19 @@ final class APIClient: @unchecked Sendable {
     /// "portion" (a plate of food or a portion, the whole portion).
     /// The product name and brand on the front of a package; nil when AI can't read them.
     func readPackageFront(_ jpeg: Data) async throws -> (name: String, brand: String?)? {
-        struct Response: Decodable { let status: String?; let name: String?; let brand: String? }
+        struct Response: Decodable { let status: String?; let kind: String?; let name: String?; let brand: String? }
         let body: JSONObject = ["image": .string("data:image/jpeg;base64," + jpeg.base64EncodedString()), "mode": .string("front")]
         let r: Response = try await send("/app/api/food/photo", method: "POST", body: body, timeout: 120)
         guard r.status == "ok", let name = r.name?.trimmingCharacters(in: .whitespaces), !name.isEmpty else { return nil }
         return (name, r.brand?.trimmingCharacters(in: .whitespaces).nilIfBlank)
     }
 
-    func readFoodPhoto(_ jpeg: Data, mode: String) async throws -> (product: FoodProduct, note: String?, items: [PhotoItem]) {
+    /// warning: the energy doesn't match the macros (src/food-photo.js
+    /// nutritionConsistency), also part of note.
+    func readFoodPhoto(_ jpeg: Data, mode: String) async throws -> (product: FoodProduct, note: String?, warning: String?, items: [PhotoItem]) {
         struct Values: Decodable { let calories_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, sugars_100g, salt_100g: Double? }
         struct Item: Decodable { let name: String; let grams: Double; let calories_100g, protein_100g, carbs_100g, fat_100g: Double? }
-        struct Response: Decodable { let status: String?; let name: String?; let basis: String?; let values: Values?; let servingSize: String?; let note: String?; let warning: String?; let message: String?; let items: [Item]? }
+        struct Response: Decodable { let status: String?; let kind: String?; let name: String?; let basis: String?; let values: Values?; let servingSize: String?; let note: String?; let warning: String?; let message: String?; let items: [Item]? }
         let body: JSONObject = ["image": .string("data:image/jpeg;base64," + jpeg.base64EncodedString()), "mode": .string(mode)]
         let r: Response = try await send("/app/api/food/photo", method: "POST", body: body, timeout: 180)
         guard r.status == "ok", let v = r.values else { throw APIError.message(r.message ?? L10n.tr("Na fotce se hodnoty nepodařilo přečíst.")) }
@@ -542,7 +544,9 @@ final class APIClient: @unchecked Sendable {
                                   carbs_100g: v.carbs_100g, fat_100g: v.fat_100g,
                                   nutrition_basis: r.basis == "portion" ? "portion" : r.basis == "100ml" ? "ml" : "g",
                                   serving_size: r.servingSize.flatMap { $0.isEmpty ? nil : JSONValue.string($0) },
-                                  source: mode == "portion" ? "photo" : "package_label")
+                                  // A photographed dish is AI's estimate ("AI odhad"); a label or a
+                                  // screenshot of a portion is read, not estimated.
+                                  source: r.kind == "meal_photo" ? "ai-estimate" : mode == "portion" ? "photo" : "package_label")
         product.fiber_100g = v.fiber_100g
         product.sugars_100g = v.sugars_100g
         product.salt_100g = v.salt_100g
@@ -551,7 +555,7 @@ final class APIClient: @unchecked Sendable {
             PhotoItem(product: FoodProduct(name: i.name, calories_100g: i.calories_100g, protein_100g: i.protein_100g, carbs_100g: i.carbs_100g,
                                            fat_100g: i.fat_100g, source: "ai-estimate"), amount: i.grams)
         }
-        return (product, [r.note, r.warning].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " ").nilIfBlank, items)
+        return (product, [r.note, r.warning].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " ").nilIfBlank, r.warning?.nilIfBlank, items)
     }
 
     func logFood(_ request: FoodLogRequest) async throws {

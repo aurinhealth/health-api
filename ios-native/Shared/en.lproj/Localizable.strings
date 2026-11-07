@@ -1218,6 +1218,13 @@
 "zítra" = "tomorrow";
 "včera" = "yesterday";
 "Doplň energii v kcal, jinak by se jídlo počítalo jako 0 kcal." = "Add the energy in kcal, otherwise the food would count as 0 kcal.";
+/* Food: macros missing from a label or AI, the scanner without energy, typed values (AddFoodSheet, BarcodeScanSheet, FoodEntryEditSheet) */
+"Chybí %@, počítají se jako 0 g." = "Missing %@: counted as 0 g.";
+"Doplň energii v Upravit produkt, jinak by se jídlo počítalo jako 0 kcal." = "Add the energy in Edit product, otherwise the food would count as 0 kcal.";
+"Co necháš prázdné, počítá se jako 0 g." = "Anything left empty counts as 0 g.";
+"Upravit hodnoty" = "Edit values";
+"Hodnoty" = "Values";
+"Za celé zapsané množství." = "For the whole amount logged.";
 "Doba pohybu" = "Moving time";
 "Průměrný tep" = "Average heart rate";
 "Kroky" = "Steps";

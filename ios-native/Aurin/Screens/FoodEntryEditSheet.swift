@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Jídlo → a food of the diary: its amount (the server rescales the energy
-/// and macros), the meal of the day and the day, a copy to another day, or
+/// and macros), its values ("Upravit hodnoty", when a catalogue had them
+/// wrong), the meal of the day and the day, a copy to another day, or
 /// deleting it (/app/api/food/entry, src/food-entry-management.js). Food
 /// from another app (Yazio…) keeps its values: only its meal and day change,
 /// in Aurin alone.
@@ -19,6 +20,9 @@ struct FoodEntryEditSheet: View {
     @State private var working = false
     @State private var confirmDelete = false
     @State private var error: String?
+    /// "Upravit hodnoty" open, and what was typed there by key (kcal, protein_g…).
+    @State private var editValues = false
+    @State private var typed: [String: String] = [:]
 
     /// 150 and "g" from "150 g", the amount as the server shows it; none for
     /// another app's food, whose amount changes in that app.
@@ -40,16 +44,51 @@ struct FoodEntryEditSheet: View {
     }
 
     /// The energy for the typed amount, as the server will count it.
-    private var previewKcal: Double? {
-        guard let kcal = entry.kcal else { return nil }
-        guard let logged, logged.value > 0, let typed = typedAmount else { return kcal }
-        return kcal * typed / logged.value
+    private var previewKcal: Double? { scaled("kcal") }
+
+    static let valueFields: [(key: String, title: String, unit: String)] = [
+        ("kcal", "Energie", "kcal"), ("protein_g", "Bílkoviny", "g"), ("carbs_g", "Sacharidy", "g"), ("fat_g", "Tuky", "g")
+    ]
+
+    private func original(_ key: String) -> Double? {
+        switch key {
+        case "kcal": entry.kcal
+        case "protein_g": entry.protein
+        case "carbs_g": entry.carbs
+        default: entry.fat
+        }
+    }
+
+    /// The entry's own value for the typed amount, as the server rescales it.
+    private func rescaled(_ key: String) -> Double? {
+        guard let value = original(key) else { return nil }
+        guard let logged, logged.value > 0, let now = typedAmount else { return value }
+        return value * now / logged.value
+    }
+
+    /// A value as it will be saved: the one typed for it, else the rescaled one.
+    private func scaled(_ key: String) -> Double? { editedValues[key] ?? rescaled(key) }
+
+    /// The values typed in that differ from the entry's own (for the new amount).
+    private var editedValues: [String: Double] {
+        typed.reduce(into: [:]) { out, item in
+            guard let value = FoodAmountView.number(item.value), value >= 0 else { return }
+            if let own = rescaled(item.key), abs(own - value) < 0.05 { return }
+            out[item.key] = Self.rounded(value)
+        }
+    }
+
+    /// A value field left empty or not a number.
+    private var valuesInvalid: Bool { typed.values.contains { (FoodAmountView.number($0) ?? -1) < 0 } }
+
+    private func valueText(_ key: String) -> Binding<String> {
+        Binding(get: { typed[key] ?? scaled(key).map(Self.text) ?? "" }, set: { typed[key] = $0 })
     }
 
     /// As far ahead as the Food screen goes, so a meal moved or copied into
     /// the coming days can be found there again.
     private var lastDay: Date { Calendar.current.date(byAdding: .day, value: AppModel.foodDaysAhead, to: Date()) ?? Date() }
-    private var changed: Bool { amountChanged || meal != entry.meal || AppModel.localDate(day) != date }
+    private var changed: Bool { amountChanged || meal != entry.meal || AppModel.localDate(day) != date || !editedValues.isEmpty }
 
     var body: some View {
         NavigationStack {
@@ -65,8 +104,10 @@ struct FoodEntryEditSheet: View {
                         SettingsField(title: "Množství", text: $amountText, unit: shownUnit)
                         SettingsDivider()
                     }
-                    SettingsRow(title: "Energie", value: Fmt.int(previewKcal) + " kcal", chevron: false)
-                    SettingsDivider()
+                    if !editValues {
+                        SettingsRow(title: "Energie", value: Fmt.int(previewKcal) + " kcal", chevron: false)
+                        SettingsDivider()
+                    }
                     Picker(selection: $meal) {
                         ForEach(MealSlot.all) { slot in Text(slot.label).tag(slot.id) }
                     } label: {
@@ -80,11 +121,26 @@ struct FoodEntryEditSheet: View {
                         .padding(.horizontal, 16).frame(minHeight: 50)
                 }
 
+                // Wrong values from a catalogue are fixed here, without logging the food again.
+                if entry.app == nil && entry.id >= 0 {
+                    if editValues {
+                        SettingsGroup(title: "Hodnoty", footer: L10n.tr("Za celé zapsané množství.")) {
+                            ForEach(Array(Self.valueFields.enumerated()), id: \.element.key) { index, field in
+                                if index > 0 { SettingsDivider() }
+                                SettingsField(title: field.title, text: valueText(field.key), unit: field.unit)
+                            }
+                        }
+                    } else {
+                        SecondaryButton(title: "Upravit hodnoty", systemImage: "slider.horizontal.3") { editValues = true }
+                            .disabled(working)
+                    }
+                }
+
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
                 // A meal still waiting for signal (negative id) can only be deleted.
                 if entry.id >= 0 {
                 PrimaryButton(title: working ? "Ukládám…" : "Uložit", busy: working) { Task { await save() } }
-                    .disabled(working || !changed || (logged != nil && typedAmount == nil))
+                    .disabled(working || !changed || (logged != nil && typedAmount == nil) || valuesInvalid)
 
                 if copying {
                     SettingsGroup {
@@ -142,7 +198,7 @@ struct FoodEntryEditSheet: View {
         let newDay = AppModel.localDate(day)
         await run {
             try await model.api.updateFoodEntry(id: entry.id, amount: amountChanged ? typedAmount.map(Self.rounded) : nil,
-                                                mealType: meal != entry.meal ? meal : nil, date: newDay != date ? newDay : nil)
+                                                mealType: meal != entry.meal ? meal : nil, date: newDay != date ? newDay : nil, values: editedValues)
         }
     }
 

@@ -81,6 +81,7 @@ struct PhotoItemsView: View {
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                 }
                 DayLeftLine(day: model.writeDay, kcal: total(\.calories_100g), protein: total(\.protein_100g), carbs: total(\.carbs_100g))
+                MissingMacrosLine(missing: missingMacros)
                 Label("Množství jsou odhad z fotky. Omáčky a olej jsou nejméně přesné.", systemImage: "sparkles")
                     .font(Typo.caption).foregroundStyle(Palette.amber).fixedSize(horizontal: false, vertical: true)
                 MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 }))
@@ -157,6 +158,12 @@ struct PhotoItemsView: View {
 
     private func remove(_ id: UUID) {
         withAnimation(.snappy) { items.removeAll { $0.id == id } }
+    }
+
+    /// The macros some food on the plate has no value for, each named once.
+    private var missingMacros: [String] {
+        var seen = Set<String>()
+        return items.flatMap(\.product.missingMacros).filter { seen.insert($0).inserted }
     }
 
     private func total(_ key: KeyPath<FoodProduct, Double?>) -> Double {
