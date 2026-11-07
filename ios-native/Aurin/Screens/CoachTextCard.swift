@@ -198,6 +198,7 @@ struct CoachTextCard: View {
 
     private func load() async {
         guard live, shown, !model.demo else { return }
+        if screen == "today" { await model.afterTodayLoads() }
         let key = memoryKey
         if let kept = CoachTextMemory.values[key] {
             loaded = kept.text

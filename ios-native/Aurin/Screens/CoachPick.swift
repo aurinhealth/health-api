@@ -46,6 +46,8 @@ struct CoachPick: Decodable, Equatable {
     var less: [String]? = nil
     /// What the athlete took today ("skip" after Odmítnout).
     var chosen: String?
+    /// The best ride or run's AI workout is still being written (src/coach-pick.js claimDetails).
+    var aiPending: Bool? = nil
 
     var best: Option? { options.first { $0.best == true } ?? options.first }
     var others: [Option] { options.filter { $0.id != best?.id } }
@@ -283,7 +285,10 @@ struct CoachPickCard: View {
         }
         // Again whenever Today comes from the server (a new workout, a sync, pull
         // to refresh); a meal or drink shown before it is sent does not ask.
-        .task(id: model.todayRevision) { await reload() }
+        .task(id: model.todayRevision) {
+            await model.afterTodayLoads()
+            await reload()
+        }
         // "Vrátit" stays for a moment only.
         .task(id: declined) {
             guard declined else { return }
@@ -493,6 +498,12 @@ struct CoachPickCard: View {
     private func reload() async {
         guard !model.demo else { return }
         if let fresh = try? await model.api.coachPick() { pick = fresh }
+        // The AI's workout comes some seconds after the answer: asked again for it, at most twice.
+        for _ in 0..<2 where pick?.aiPending == true {
+            try? await Task.sleep(for: .seconds(8))
+            guard !Task.isCancelled else { return }
+            if let fresh = try? await model.api.coachPick() { pick = fresh }
+        }
     }
 }
 
