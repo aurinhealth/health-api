@@ -123,3 +123,14 @@ test('after workout feedback without AI access the rule-based note is still writ
   const entry = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
   assert.match(entry, /const reflect=validDate\(scheduledDate\),aiAllowed=Boolean\(env\.OPENAI_API_KEY\)&&\(await subscriptionStatus\(env\)\.catch\(\(\)=>\(\{aiAccess:false\}\)\)\)\.aiAccess;\s*const ruleEnv=\{\.\.\.env\};if\(!aiAllowed\)delete ruleEnv\.OPENAI_API_KEY;\s*if\(reflect\)ctx\.waitUntil\(createReflection\(ruleEnv,/);
 });
+test('the coach sees the capabilities of the sport it works on, level and confidence only',async()=>{
+  const row={sport:'run',system:'threshold',level:4.26,confidence:.537,attempts:6,successes:5,last_workout_id:'run-cruise-3',last_rpe:7,updated_at:'2026-10-01 08:00:00'};
+  const context=coachContext({date:'2026-09-28',daily:{},week:{days:[]},fitness:{},health:{sleep:[]},gym:{history:[]},capabilities:{threshold:row}});
+  assert.deepEqual(context.capabilities,{threshold:{level:4.3,confidence:.54}});
+  // Chat, week planning, Today and Plan read the engine's sport, not the ride by default.
+  const {readFileSync}=await import('node:fs');
+  const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
+  assert.doesNotMatch(entry,/getCapabilities\(env\.DB\)/);
+  assert.match(entry,/capabilitiesWithLevel\(env\.DB,chatSport\)/);
+  assert.match(entry,/capabilitiesWithLevel\(env\.DB,engineSport\(inputs\.focus\)\)/);
+});

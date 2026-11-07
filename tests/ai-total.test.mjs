@@ -26,7 +26,7 @@ test("the costs of all users add up in the central day total", async () => {
   });
 });
 
-test("past the day's brake AI waits for everyone but the owner", async () => {
+test("past the day's brake AI waits for everyone, the owner too", async () => {
   const db = grantAiConsent(grantAiConsent(createD1(), 7, 8), 9, 8);
   await withOpenAI(async calls => {
     const limits = { AI_TOTAL_DAILY_LIMIT_USD: "1" };
@@ -34,8 +34,8 @@ test("past the day's brake AI waits for everyone but the owner", async () => {
     await callOpenAI(envFor(db, 9, limits), { feature: "food-lookup", instructions: "x", input: "y" });
     await assert.rejects(callOpenAI(envFor(db, 7, limits), { feature: "food-lookup", instructions: "x", input: "y" }), error => error.limit === true && error.status === 429);
     assert.equal(calls(), 2);
-    await callOpenAI(envFor(db, 9, { ...limits, USER_IS_OWNER: true }), { feature: "food-lookup", instructions: "x", input: "y" });
-    assert.equal(calls(), 3);
+    await assert.rejects(callOpenAI(envFor(db, 9, { ...limits, USER_IS_OWNER: true }), { feature: "food-lookup", instructions: "x", input: "y" }), error => error.limit === true && error.status === 429);
+    assert.equal(calls(), 2);
   });
 });
 

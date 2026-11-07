@@ -80,6 +80,30 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-15", now: thursday.addingTimeInterval(60)), "už teď")
     }
 
+    /// Today audit 10 and competitor point 9: the plan's line in the coach's
+    /// card counts the sessions left this week; Regenerace leaves the card once
+    /// hard training is fine on a green morning, and stays while it must wait.
+    func testTodayCoachActionLines() {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        let plan = TodaySnapshot.PlanLine(name: "Half marathon", week: 3, weeksCount: 12, phaseLabel: "Build", paused: nil, proposal: nil, sessionsLeft: 2)
+        XCTAssertEqual(TodayCoachAction.planLine(plan), "Half marathon · week 3/12 · Build · 2 sessions left")
+        let done = TodaySnapshot.PlanLine(name: "Half marathon", week: 3, weeksCount: 12, phaseLabel: nil, paused: nil, proposal: nil, sessionsLeft: 0)
+        XCTAssertEqual(TodayCoachAction.planLine(done), "Half marathon · week 3/12")
+        let paused = TodaySnapshot.PlanLine(name: "Half marathon", week: 3, weeksCount: 12, phaseLabel: "Build", paused: true, proposal: nil, sessionsLeft: 2)
+        XCTAssertEqual(TodayCoachAction.planLine(paused), "Half marathon · paused")
+
+        let now = Date()
+        let past = RecoveryTime(readyAt: ISO8601DateFormatter().string(from: now.addingTimeInterval(-3600)), from: "2026-10-07T17:00:00Z", lightAt: nil, hours: 0, progress: 1, causes: [])
+        let ahead = RecoveryTime(readyAt: ISO8601DateFormatter().string(from: now.addingTimeInterval(20 * 3600)), from: "2026-10-07T17:00:00Z", lightAt: nil, hours: 20, progress: 0.4, causes: [])
+        XCTAssertTrue(RecoveryTime.readyNow(past, zone: "green", now: now))
+        XCTAssertFalse(RecoveryTime.readyNow(past, zone: "yellow", now: now))
+        XCTAssertFalse(RecoveryTime.readyNow(ahead, zone: "green", now: now))
+    }
+
     /// Dnes → Den: the night, readiness, done workout and its strain, steps,
     /// "teď", then the plan with bedtime last; no "teď" on another day.
     func testDayTimelineOrder() {

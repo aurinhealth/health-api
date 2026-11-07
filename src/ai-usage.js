@@ -6,9 +6,9 @@
 // (default 5 USD a month), set high as an emergency brake. AI_DAILY_LIMIT_USD
 // guards the AI around the coach (food, plans, reviews) against abuse (a script,
 // a loop); the coach chat is not in it, its messages get their own allowance.
-// 0 in either turns AI off for everyone but the owner. The owner has a paying
-// account's limits on the live server and none on the test server, where the
-// coach evaluation runs as the owner (the day's brake caps it there). The App Review
+// 0 in either turns AI off for everyone. The owner has the same limits as any
+// account on the live server and none on the test server, where the coach
+// evaluation runs as the owner (the day's brake caps it there). The App Review
 // account (APP_REVIEW_EMAIL) never gets more than REVIEW_AI_MONTHLY_LIMIT_USD.
 // The messages name no amount: the user is told when it resets, not what it costs.
 // Days and months are the account's own (limitToday, user-time.js), not the
@@ -20,6 +20,7 @@ import { aiLimitShare } from "./ai-limit-share.js";
 import { addAiSpend } from "./ai-total.js";
 import { ownerUnlimited } from "./staging.js";
 import { packMessagesLeft } from "./coach-packs.js";
+import { COACH_CHAT_FEATURE } from "./ai-features.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
@@ -30,6 +31,9 @@ const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Nu
 // models (usage.input_tokens_details.cache_write_tokens, not part of
 // cached_tokens): CACHE_WRITE_FACTOR times the input price for the default
 // 30-minute cache (no prompt_cache_options is set).
+// The model of the coach and every complex task (complexModel, coach-assistant.js),
+// and the price an unknown model is counted at.
+export const DEFAULT_MODEL = "gpt-6-sol";
 export const MODEL_PRICES = { "gpt-6-luna": [0.10, 0.01, 0.50], "gpt-6-sol": [2, 0.20, 10], "gpt-6.1-sol": [2, 0.10, 10], "gpt-6-astra": [10, 1, 50] };
 export const CACHE_WRITE_FACTOR = 1.25;
 // Each web search the model runs is billed on top of the tokens (10 USD per 1,000 calls).
@@ -74,7 +78,7 @@ export async function ensureAiUsage(db) {
 }
 
 // The coach chat, which the daily guard does not cover.
-export const COACH_CHAT_FEATURE = "assistant";
+export { COACH_CHAT_FEATURE };
 // What a new account took over from a deleted one of the same person
 // (ai-limit-memory.js): rows of this model; the rest of the month's spending
 // sits on the 1st under CARRIED_MONTH_FEATURE, which the daily guard leaves out.
@@ -213,7 +217,7 @@ export function estimateAiCostUsd(model, { instructions = "", input = "", maxOut
   walk(instructions); walk(input);
   const usage = { input_tokens: Math.ceil(chars / 3) + images * IMAGE_TOKENS, output_tokens: Math.max(0, n(maxOutputTokens) || 0) };
   const searches = Array.isArray(tools) && tools.some(tool => String(tool?.type || "").startsWith("web_search")) ? RESERVED_WEB_SEARCHES : 0;
-  return usageCost(model, usage, searches) ?? usageCost("gpt-6-sol", usage, searches) ?? 0;
+  return usageCost(model, usage, searches) ?? usageCost(DEFAULT_MODEL, usage, searches) ?? 0;
 }
 
 function limitError(message) {
@@ -243,7 +247,7 @@ export async function recordAiUsage(env, { feature = null, model = null, usage =
   try {
     await ensureAiUsage(env.DB);
     // An unknown model counts at the default model's price, so it cannot slip past the limit.
-    const cost = usageCost(model, usage, webSearches) ?? usageCost("gpt-6-sol", usage, webSearches) ?? 0;
+    const cost = usageCost(model, usage, webSearches) ?? usageCost(DEFAULT_MODEL, usage, webSearches) ?? 0;
     const values = [feature, model, n(usage.input_tokens) || 0, n(usage.output_tokens) || 0, cost, cachedTokens(usage), cacheWriteTokens(usage)];
     // All users' total of the day (ai-total.js), the owner's included.
     await addAiSpend(env, cost, hold);

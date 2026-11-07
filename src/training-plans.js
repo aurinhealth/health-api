@@ -845,7 +845,9 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
     items.sort((a, b) => a.date.localeCompare(b.date) || (a.slot || 0) - (b.slot || 0));
   }
   const own = items.filter(x => x.sport === sport && (x.slot || 0) === 0);
-  const quality = own.filter(x => x.role === "quality" && x.date !== race);
+  // Three run days or fewer keep one key session, so the week still has an easy run.
+  const days = Number(plan.weekDays?.[weekStart]), runDays = Math.min(own.filter(x => x.date !== race).length, days > 0 ? days : 7);
+  const quality = own.filter(x => x.role === "quality" && x.date !== race).slice(0, sport === "run" && runDays <= 3 ? 1 : undefined);
   // A ride plan's long ride (a gran fondo's up to five hours) needs a day even
   // when the week has no long one: the last easy day, at a weekend if it can.
   const easyDays = own.filter(x => x.role !== "quality" && x.role !== "race" && x.date !== race && !(race && daysBetween(x.date, race) <= 1));
@@ -890,7 +892,6 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
   });
   let kept = out.filter(x => !(x.sport === sport && (x.slot || 0) === 0 && dropped.has(x.date)));
   // Time for fewer days this week: the easy sessions go first, then the long one; key sessions stay.
-  const days = Number(plan.weekDays?.[weekStart]);
   if (days > 0) {
     const mine = kept.filter(x => x.sport === sport && (x.slot || 0) === 0 && x.plan), rank = x => ({ recovery: 0, easy: 1, long: 2 })[x.plan.kind] ?? 9;
     const drop = new Set([...mine].sort((a, b) => rank(a) - rank(b) || b.date.localeCompare(a.date)).filter(x => rank(x) < 9).slice(0, Math.max(0, mine.length - days)));
@@ -1054,6 +1055,17 @@ export function planChanges(items = [], original = [], plan, weekStart) {
     }
     return change ? { ...x, plan: { ...x.plan, change } } : x;
   });
+}
+
+// The plan's sessions still ahead this week (Today's plan line, "2 sessions
+// left"): today's and later days' sessions of the plan's sports, today's only
+// while no session of its sport is done today. Every sport counts the same.
+// `targets` are applyPlan's for this week.
+export function planSessionsLeft(targets, plan, today, doneDates = []) {
+  if (!targets?.items || !plan) return null;
+  const sports = planSports(plan), tri = getTemplate(plan.templateId)?.sport === "triathlon", doneToday = doneDates.includes(today);
+  return targets.items.filter(x => x.plan?.workoutId && sports.includes(x.sport) && (tri || (x.slot || 0) === 0)
+    && (x.date > today || (x.date === today && !doneToday))).length;
 }
 
 const KEY_KINDS = ["quality", "test", "long"];

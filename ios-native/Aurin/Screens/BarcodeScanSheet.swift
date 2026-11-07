@@ -452,9 +452,8 @@ struct BarcodeScanSheet: View {
         guard let code, !model.demo else { return }
         state = .searching
         error = nil
-        guard let jpeg = await image.jpegForUpload() else { state = .notFound; return }
         do {
-            let r = try await model.api.readFoodPhoto(jpeg, mode: "label")
+            let r = try await LabelReader.read(image, api: model.api)
             var p = r.product
             p.barcode = code
             labelNote = r.note
@@ -464,8 +463,13 @@ struct BarcodeScanSheet: View {
             let unnamed = p.name == L10n.tr("Jídlo z fotky")
             if name.count >= 2 && unnamed { p.name = name }
             show(p)
-            // A label rarely says what the food is called: the front of the package next.
-            if unnamed && name.count < 2 { frontOf = p }
+            // A label rarely says what the food is called: the front of the package
+            // next, read by AI; without AI the name is typed.
+            if unnamed && name.count < 2 {
+                var ai = r.aiAccess
+                if ai == nil { ai = (try? await model.api.subscription())?.aiAccess }
+                if ai == true { frontOf = p } else { editing = p }
+            }
         } catch {
             self.error = error.localizedDescription
             state = .notFound

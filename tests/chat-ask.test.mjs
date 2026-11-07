@@ -4,6 +4,14 @@ import { askedSession } from '../src/chat-ask.js';
 import { assistantTask } from '../src/coach-assistant.js';
 
 // Revize doporučování tréninků 2026-10-16, nález 9 and 16.
+// Audit Zamotaná místa 2026-11-07, bod 4: days are whole words only.
+test('words that only contain a day name no day', () => {
+  const today = '2026-10-17'; // Saturday
+  for (const m of ['středně těžký trénink na hodinu', 'čtvrt hodiny lehce', 'jiné prostředí, třeba venku', 'pátka u stolu']) assert.equal(askedSession(m, today).date, null, m);
+  const days = { 've středu': '2026-10-21', 've středě': '2026-10-21', 've čtvrtek': '2026-10-22', 'do čtvrtka': '2026-10-22', 'v pátek': '2026-10-23', 'do pátku': '2026-10-23', 'v neděli': '2026-10-18', 'v pondělí': '2026-10-19', 'v úterý': '2026-10-20', 'on Thursday': '2026-10-22' };
+  for (const [m, date] of Object.entries(days)) assert.equal(askedSession(m, today).date, date, m);
+});
+
 test('the day, length and kind a chat message asks for', () => {
   const today = '2026-10-17'; // Saturday
   assert.deepEqual(askedSession('45 min intervalů zítra', today), { date: '2026-10-18', minutes: 45, kind: null });
