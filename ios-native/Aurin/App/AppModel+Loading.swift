@@ -98,10 +98,10 @@ extension AppModel {
             sync = nil
         }
         do {
-            try await loadToday()
+            try await loadToday(onlyIfChanged: true)
             // The day is on screen: the arrows and swipes work again.
             loading = false
-            if let sync, await sync.value.changed { changed = true; try? await loadToday() }
+            if let sync, await sync.value.changed { changed = true; try? await loadToday(onlyIfChanged: true) }
             // New nights or workouts reach the Health snapshot too: the sleep
             // detail opened from Today shows it.
             if changed {
@@ -160,8 +160,20 @@ extension AppModel {
         }
     }
 
+    /// Returns once Today is not loading (at most 15 s): the coach's cards ask
+    /// after it, not alongside, so their requests do not queue in the database with it.
+    func afterTodayLoads() async {
+        for _ in 0..<60 where loading {
+            try? await Task.sleep(for: .milliseconds(250))
+            if Task.isCancelled { return }
+        }
+    }
+
     /// Today of the shown day from the server, with the waiting writes over it.
-    func loadToday() async throws {
+    /// onlyIfChanged (opening the app): the coach's cards ask again only when
+    /// the answer differs, or ten minutes on (the forecast, a choice made on
+    /// another device). Pulling down, a write or a setting always asks them again.
+    func loadToday(onlyIfChanged: Bool = false) async throws {
         let settled = todayScreen.settlingIds
         let day = selectedDate
         let account = scope
@@ -171,10 +183,14 @@ extension AppModel {
         // Another day was chosen meanwhile: its own load shows it.
         guard selectedDate == day else { return }
         // The same answer again (back in the app, pulled down): Today is not drawn anew.
+        let same = todayScreen.base == data
         todayScreen.show(snapshot, data: data, settled: settled)
         fetched[.today] = (Date(), shownDay)
-        dataRevision += 1
-        todayRevision += 1
+        if !(onlyIfChanged && same && Date().timeIntervalSince(coachAskedAt) < 600) {
+            dataRevision += 1
+            todayRevision += 1
+            coachAskedAt = Date()
+        }
         applyOutbox()
         errorMessage = nil
         _ = noteConnection(nil)
