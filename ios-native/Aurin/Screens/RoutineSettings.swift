@@ -192,11 +192,11 @@ struct HeartRateSensorView: View {
     @State private var watchSettings = WatchBridge.settings
     @Environment(\.openURL) private var openURL
 
-    /// Only with a paired watch: Aurin on it measures in Režim tréninku, or
-    /// Nainstalovat opens the Watch app where it is added.
+    /// Only with a paired watch and a build with the watch app: Aurin on it
+    /// measures in Režim tréninku, or Nainstalovat opens the Watch app where it is added.
     @ViewBuilder private var watchGroup: some View {
         let state = WatchBridge.shared.watchState
-        if state.paired {
+        if WatchBridge.inBuild, state.paired {
             if state.installed {
                 SettingsGroup(title: "Apple Watch", footer: L10n.tr("Režim tréninku otevře posilovnu na hodinkách. Hodinky posílají tep každých 5 sekund a do Zdraví uloží jeden trénink.")) {
                     SettingsRow(icon: SettingsIcon(systemImage: "applewatch", color: Palette.ink), title: "Apple Watch",

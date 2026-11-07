@@ -130,7 +130,7 @@ struct SettingsMenu: View {
                 NavigationLink { NotificationsSettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "bell", color: Palette.amber), title: "Oznámení")
                 }
-                if WatchBridge.shared.watchState.paired {
+                if WatchBridge.inBuild, WatchBridge.shared.watchState.paired {
                     SettingsDivider()
                     NavigationLink { WatchSettingsView() } label: {
                         SettingsRow(icon: SettingsIcon(systemImage: "applewatch", color: Palette.ink), title: "Apple Watch")
