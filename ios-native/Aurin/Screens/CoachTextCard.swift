@@ -1,3 +1,4 @@
+import StoreKit
 import SwiftUI
 
 // The coach's sentence on Today, Training and Food (GET /app/api/coach-text,
@@ -39,6 +40,8 @@ struct CoachTextCard: View {
 
     @State private var loaded: CoachText?
     @State private var showWhy = false
+    /// The free week's line: the App Store's page of the subscription.
+    @State private var manageSubscription = false
     @AppStorage private var shown: Bool
     @AppStorage private var folded: Bool
 
@@ -58,10 +61,12 @@ struct CoachTextCard: View {
     /// Today audit 40, on Today only: without Aurin Pro (the paywall on) the
     /// rule-based text says where the coach's personal word is; in the last two
     /// days of a free week that nothing follows, when it ends. Nothing blurred
-    /// or greyed out. A tap opens the plans (Paywall).
+    /// or greyed out. A tap opens the plans (Paywall), in the free week the
+    /// App Store's own subscription page (it is bought already). Not once this
+    /// Apple ID has Pro, before the server heard of the purchase.
     private var proLine: String? {
         guard screen == "today", shown, live, !model.demo else { return nil }
-        if loaded?.reason == "pro" { return L10n.tr("Osobní rada kouče je v Aurin Pro") }
+        if loaded?.reason == "pro", !ProStore.shared.entitled { return L10n.tr("Osobní rada kouče je v Aurin Pro") }
         if loaded?.paywall == true, ai != nil, let end = ProStore.shared.freeWeekEnding() {
             return L10n.f("Zkušební týden končí %@. Pak je osobní rada kouče v Aurin Pro.", Fmt.dayMonth(AppModel.localDate(end)))
         }
@@ -136,7 +141,7 @@ struct CoachTextCard: View {
 
             if let line = proLine {
                 Divider().overlay(Palette.hairline)
-                Button { Paywall.present(model) } label: {
+                Button { if loaded?.reason == "pro" { Paywall.present(model) } else { manageSubscription = true } } label: {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Image(systemName: "sparkles").scaledFont(12, weight: .semibold).foregroundStyle(Palette.indigo)
                         Text(verbatim: line).font(Typo.body).foregroundStyle(Palette.ink)
@@ -149,6 +154,7 @@ struct CoachTextCard: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("coach-text.pro")
+                .manageSubscriptionsSheet(isPresented: $manageSubscription)
             }
 
             if !basis.isEmpty {
