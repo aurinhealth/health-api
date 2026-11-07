@@ -30,6 +30,9 @@ final class PluralTests: XCTestCase {
         XCTAssertEqual(L10n.plural("%lld věcí dnes", 1), "1 věc dnes")
         XCTAssertEqual(L10n.plural("%lld věcí dnes", 3), "3 věci dnes")
         XCTAssertEqual(L10n.plural("%lld věcí dnes", 5), "5 věcí dnes")
+        XCTAssertEqual(L10n.plural("zbývá %lld tréninků", 1), "zbývá 1 trénink")
+        XCTAssertEqual(L10n.plural("zbývá %lld tréninků", 2), "zbývají 2 tréninky")
+        XCTAssertEqual(L10n.plural("zbývá %lld tréninků", 5), "zbývá 5 tréninků")
     }
 
     /// What VoiceOver says for a sleep shown as "7:12" (audit 20.c1).
@@ -59,6 +62,8 @@ final class PluralTests: XCTestCase {
         XCTAssertEqual(L10n.plural("%lld/%lld sérií · %lld cviků", 2, 1, 1), "2/1 set · 1 exercise")
         XCTAssertEqual(L10n.plural("%@ %% za %lld týdnů", "+5", 4), "+5% in 4 weeks")
         XCTAssertEqual(L10n.plural("%@ bodů připravenosti", "+1", 1), "+1 readiness point")
+        XCTAssertEqual(L10n.plural("zbývá %lld tréninků", 1), "1 session left")
+        XCTAssertEqual(L10n.plural("zbývá %lld tréninků", 2), "2 sessions left")
     }
 
     /// Both languages have every key, each count with a plural rule and its one and other forms.

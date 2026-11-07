@@ -194,7 +194,7 @@ private struct PickDetails: View {
 /// coach learns from, with "Vrátit" for a moment.
 struct CoachPickCard: View {
     @Environment(AppModel.self) private var model
-    /// Today's planned workouts (TodayTrainingCard, Petr 2026-11-02): with any,
+    /// Today's planned workouts (TodayCoachAction, Petr 2026-11-02): with any,
     /// the card is a short suggestion under them, and nothing when the pick
     /// only confirms the plan.
     var planned: [TodaySnapshot.PlanItem] = []
@@ -202,6 +202,8 @@ struct CoachPickCard: View {
     var red = false
     /// The gap above the full card, only while it shows (an empty one left a hole).
     var top: CGFloat = 0
+    /// Inside the coach's card on Today (Today audit 10): the full pick without its own card.
+    var inCard = false
     @State private var pick: CoachPick? = CoachPick.stored
     @State private var busy = false
     @State private var error: String?
@@ -255,8 +257,8 @@ struct CoachPickCard: View {
                         expanded(best, pick)
                     }
                 }
-                .padding(18).frame(maxWidth: .infinity, alignment: .leading)
-                .cardSurface(cornerRadius: 24)
+                .padding(inCard ? 0 : 18).frame(maxWidth: .infinity, alignment: .leading)
+                .modifier(PickSurface(on: !inCard))
                 .padding(.top, top)
                 .transition(.opacity)
             }
@@ -643,5 +645,14 @@ enum CoachPickActions {
         await model.refresh()
         await model.refreshTraining()
         return true
+    }
+}
+
+/// The full pick's own card, left out inside the coach's card.
+private struct PickSurface: ViewModifier {
+    let on: Bool
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if on { content.cardSurface(cornerRadius: 24) } else { content }
     }
 }

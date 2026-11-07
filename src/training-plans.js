@@ -1057,6 +1057,17 @@ export function planChanges(items = [], original = [], plan, weekStart) {
   });
 }
 
+// The plan's sessions still ahead this week (Today's plan line, "2 sessions
+// left"): today's and later days' sessions of the plan's sports, today's only
+// while no session of its sport is done today. Every sport counts the same.
+// `targets` are applyPlan's for this week.
+export function planSessionsLeft(targets, plan, today, doneDates = []) {
+  if (!targets?.items || !plan) return null;
+  const sports = planSports(plan), tri = getTemplate(plan.templateId)?.sport === "triathlon", doneToday = doneDates.includes(today);
+  return targets.items.filter(x => x.plan?.workoutId && sports.includes(x.sport) && (tri || (x.slot || 0) === 0)
+    && (x.date > today || (x.date === today && !doneToday))).length;
+}
+
 const KEY_KINDS = ["quality", "test", "long"];
 // A key session of this week (intervals, a test, the long one) on a past day
 // with no session of the sport, not yet decided on: the latest one, with the
