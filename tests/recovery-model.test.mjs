@@ -127,6 +127,32 @@ test('bedtimePlan wakes at the usual time of that kind of morning and adds the t
   assert.equal(bedtimePlan({ date: '2026-10-08', need: 480, nights: odd, wake: { workday: 362 } }).wake, 362);
 });
 
+test('the usual wake time is kept once worked out: only the bedtime follows the nights', () => {
+  const nights = [];
+  for (let i = 0; i < 14; i++) {
+    const date = new Date(Date.parse('2026-10-08T12:00:00Z') - i * 864e5).toISOString().slice(0, 10), day = new Date(date + 'T12:00:00Z').getUTCDay();
+    nights.push({ date, wakeMin: [0, 6].includes(day) ? 480 : 362, durationMin: 450, timeInBedMin: 500 });
+  }
+  // First time: 6:02 mornings plan 6:00 and ask to keep it for work days.
+  const first = bedtimePlan({ date: '2026-10-08', need: 480, nights });
+  assert.equal(first.wake, 360);
+  assert.deepEqual(first.pin, { kind: 'workday', wake: 360 });
+  // Kept: later mornings at 6:20 leave the wake time at 6:00, the bedtime follows the need.
+  const later = nights.map(n => ({ ...n, wakeMin: n.wakeMin === 362 ? 380 : n.wakeMin }));
+  const kept = bedtimePlan({ date: '2026-10-08', need: 510, nights: later, usual: { workday: 360 } });
+  assert.equal(kept.wake, 360);
+  assert.equal(kept.pin, null);
+  assert.equal(kept.wakeSource, 'usual', 'a kept time is not an alarm');
+  assert.equal(kept.bed, ((360 - kept.inBed) % 1440 + 1440) % 1440);
+  // The weekend has its own: a Friday evening is planned from weekend mornings and asks to keep that.
+  assert.deepEqual(bedtimePlan({ date: '2026-10-09', need: 480, nights, usual: { workday: 360 } }).pin, { kind: 'weekend', wake: 480 });
+  // A set alarm wins over the kept time; without nights the kept time still plans.
+  assert.equal(bedtimePlan({ date: '2026-10-08', need: 480, nights, usual: { workday: 360 }, wake: { workday: 390 } }).wake, 390);
+  assert.equal(bedtimePlan({ date: '2026-10-08', need: 480, nights: [], usual: { workday: 360 } }).wake, 360);
+  // Fewer than three mornings of that kind: nothing is kept yet (a weekend from work days would stick).
+  assert.equal(bedtimePlan({ date: '2026-10-08', need: 480, nights: nights.slice(0, 2) }).pin, null);
+});
+
 test("an own sleep goal replaces the age baseline and a set alarm plans bedtime without nights", () => {
   assert.equal(sleepNeedMinutes({ age: 40, goal: 450 }), 450);
   assert.equal(sleepNeedMinutes({ age: 40, goal: 450, strain: 18 }), 480, "a hard day still adds 30 min");

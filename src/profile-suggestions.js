@@ -185,10 +185,23 @@ export async function refreshSuggestions(env, { googleToken, fetchImpl = fetch, 
 // The profile the calculations use: saved values plus suggestions.
 // What the user typed themselves (saved) and that with the calibrated values in the gaps (effective).
 export async function loadProfiles(db, userId) {
-  const rows = (await db.prepare("SELECT id, profile_json FROM dashboard_profile WHERE user_id = ? AND id IN (1, 2)").bind(userId).all().catch(() => ({ results: [] }))).results || [];
+  const rows = (await db.prepare("SELECT id, profile_json FROM dashboard_profile WHERE user_id = ? AND id IN (1, 2, 3)").bind(userId).all().catch(() => ({ results: [] }))).results || [];
   const parsed = id => { try { return JSON.parse(rows.find(r => Number(r.id) === id)?.profile_json || "null"); } catch { return null; } };
-  const saved = parsed(1), suggested = parsed(2);
-  return { saved, suggested, effective: saved || suggested ? effectiveProfile(saved, suggested) : null };
+  const saved = parsed(1), suggested = parsed(2), wakeUsual = parsed(3);
+  const effective = saved || suggested ? effectiveProfile(saved, suggested) : null;
+  return { saved, suggested, effective: effective && wakeUsual ? { ...effective, wakeUsual } : effective };
+}
+
+// Row 3: the usual wake time per kind of morning ({ workday: "06:00" }), kept
+// once worked out from the nights (recovery-model.js bedtimePlan `pin`), so
+// with no alarm set the wake time never moves by itself; only the bedtime
+// follows the nights. The app's profile saves (row 1) leave it alone.
+export async function pinUsualWake(db, userId, kept, pin) {
+  if (!pin || !["workday", "weekend"].includes(pin.kind) || !(pin.wake >= 0 && pin.wake < 1440) || kept?.[pin.kind]) return false;
+  const clock = String(Math.floor(pin.wake / 60)).padStart(2, "0") + ":" + String(pin.wake % 60).padStart(2, "0");
+  await db.prepare("INSERT INTO dashboard_profile (user_id, id, profile_json) VALUES (?, 3, ?) ON CONFLICT(user_id, id) DO UPDATE SET profile_json = excluded.profile_json")
+    .bind(userId, JSON.stringify({ ...(kept || {}), [pin.kind]: clock })).run();
+  return true;
 }
 
 export async function loadEffectiveProfile(db, userId) {

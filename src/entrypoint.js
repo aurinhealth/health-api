@@ -41,7 +41,7 @@ import {withoutProDiet} from './diet.js';
 import {athleteFocus,mainKindsOf,SPORT_KINDS} from './athlete-focus.js';
 import { splitFacts, triathlonSplit } from './triathlon-split.js';
 import { getTrainingProfile } from './training-profile.js';
-import { loadProfiles, refreshSuggestions } from './profile-suggestions.js';
+import { loadProfiles, refreshSuggestions, pinUsualWake } from './profile-suggestions.js';
 import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
 import {forwardWatchWorkouts, forwardToGoogle} from './watch-forward.js';
@@ -758,6 +758,14 @@ async function milestoneInputs(env,today){
   return {rows,since,gymDays:Object.keys(gym).filter(d=>gym[d].logged>0)};
 }
 
+// The usual wake time Today or Health worked out for tonight is kept from
+// today on (profile-suggestions.js pinUsualWake); the reply leaves it out.
+function keepUsualWake(env,ctx,date,profile,tonight){
+  const pin=tonight?.wakePin;
+  if(!pin)return;
+  delete tonight.wakePin;
+  if(date===localToday())ctx.waitUntil(pinUsualWake(env.DB,env.USER_ID,profile?.wakeUsual,pin).catch(()=>false));
+}
 // Today's readiness exactly as /app/api/today computes it (buildToday), from
 // only the inputs it needs. fresh skips the short-lived cache: right after an
 // Apple Health upload the cached copies are older than the night just sent.
@@ -2830,8 +2838,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const morning=isToday?await Promise.all([getAthleteState(env.DB).catch(()=>null),morningContext(env,{date,health,fitness,sleep,profile,doses:training,tomorrowDaily:tomorrow}).catch(()=>({tomorrow:[],context:null}))])
         .then(([state,m])=>({...m,athleteState:state?.status||null,context:m.context?{...m.context,memories:usedMemories(state)}:null})).catch(()=>null):null;
       applyEnergyBudget(daily,profile,health);
-      return Response.json(withRecoveryTime(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,dataSources:dataSources(status),location:place.location,forecast:place.forecast,gym:gym[date]||null,checkin,trainingPlan,
-        recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess,risks},unavailable:todayUnavailable(failed),morning}),training,morning?.athleteState),{headers:{'Cache-Control':'no-store'}});
+      const body=withRecoveryTime(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,dataSources:dataSources(status),location:place.location,forecast:place.forecast,gym:gym[date]||null,checkin,trainingPlan,
+        recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess,risks},unavailable:todayUnavailable(failed),morning}),training,morning?.athleteState);
+      keepUsualWake(env,ctx,date,profile,body.tonight);
+      return Response.json(body,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 
@@ -2926,7 +2936,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         env.DB.prepare("SELECT sample_time,value_numeric FROM health_datapoints WHERE user_id=? AND data_type='lean-body-mass' AND record_role='primary' AND sample_time>=? ORDER BY sample_time LIMIT 400").bind(env.USER_ID,shiftDate(date,-60)).all().then(r=>r.results||[]).catch(()=>[])
       ]);
       if(date===localToday()&&profile)ctx.waitUntil(lockReadiness(env.DB,{date,health,fitness,sleep,profile}).catch(()=>false));
-      return Response.json(buildHealth({date,hour:date===localToday()?localHour():null,health,fitness,sleep,weight,profile:profile||{},checkin,muscle}),{headers:{'Cache-Control':'no-store'}});
+      const body=buildHealth({date,hour:date===localToday()?localHour():null,health,fitness,sleep,weight,profile:profile||{},checkin,muscle});
+      keepUsualWake(env,ctx,date,profile,body.sleep?.tonight);
+      return Response.json(body,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 

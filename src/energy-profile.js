@@ -83,6 +83,8 @@ export function sleepSettings(profile = {}) {
   return {
     goal: goal >= 360 && goal <= 600 ? goal : null,
     wake: { workday: minutes(profile.wakeTime), weekend: minutes(profile.wakeTimeWeekend) },
+    // The usual wake times kept once worked out (profile-suggestions.js pinUsualWake).
+    usual: { workday: minutes(profile.wakeUsual?.workday), weekend: minutes(profile.wakeUsual?.weekend) },
     tonight: once ? { date: once.date, minutes: once.minutes, wake: minutes(once.wake) } : null
   };
 }
