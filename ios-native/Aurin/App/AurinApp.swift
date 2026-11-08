@@ -39,8 +39,8 @@ struct AurinApp: App {
                     }
                     // Read before any sign-in, so the offer waits for the next start.
                     _ = PasskeyOfferLater.due
-                    // The alarm from an older version gets Snooze (SystemAlarm.swift).
-                    await SystemAlarm.upgrade()
+                    // No leftover alarm; the one from an older version is set again (SystemAlarm.swift).
+                    await SystemAlarm.upgrade(api: model.demo ? nil : model.api)
                 }
                 // Aurin Pro: renewals and codes redeemed in the App Store reach the server (ProStore.swift).
                 .task { ProStore.shared.start(api: model.demo ? nil : model.api) }

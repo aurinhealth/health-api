@@ -87,13 +87,28 @@ enum SystemAlarm {
         #endif
     }
 
-    /// Alarms set by an older version have no Snooze: they are set again once, at the
-    /// same times (the app's start, AurinApp). Nothing goes to the server.
-    static func upgrade() async {
-        let key = "systemAlarmVersion", version = 2
-        guard UserDefaults.standard.integer(forKey: key) < version else { return }
-        await reschedule()
-        UserDefaults.standard.set(version, forKey: key)
+    /// The app's start (AurinApp). With "Wake me on iPhone" off no alarm of the
+    /// app rings but the watch's backup. Once per version the alarms are also set
+    /// again from the profile: an older one had no Snooze (2), and one kept an
+    /// alarm after both were turned off until the next save (3, #922).
+    @MainActor static func upgrade(api: APIClient?) async {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: "systemAlarm") else {
+            cancel()
+            // A build without the watch app has no watch's alarm to back up.
+            if !WatchBridge.inBuild, backupTime != nil { await backup(at: nil) }
+            return
+        }
+        let key = "systemAlarmVersion", version = 3
+        guard defaults.integer(forKey: key) < version else { return }
+        // No profile (offline, signed out): the next start tries again.
+        guard let api, api.hasSession, let profile = try? await api.profile() else { return }
+        let wake = { (name: String) in profile[name]?.string.flatMap { $0.isEmpty ? nil : $0 } }
+        let work = wake("wakeTime"), weekend = wake("wakeTimeWeekend")
+        if work == nil && weekend == nil { cancel() } else { _ = await sync(work: work, weekend: weekend) }
+        // The iPhone rings itself, so there is no watch's alarm to back up.
+        if !defaults.bool(forKey: "systemAlarmOnWatch") { await backup(at: nil) }
+        defaults.set(version, forKey: key)
     }
 
     /// Snooze on or off, or its length changed (Nastavení → Spánek): the alarms

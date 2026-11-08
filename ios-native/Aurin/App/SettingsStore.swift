@@ -54,6 +54,21 @@ final class SettingsStore {
         }
     }
 
+    /// Only the profile, for a page that needs nothing else (Spánek): the whole
+    /// load waits for data sources, sync and the owner's rows too.
+    func loadProfile() async {
+        guard !demo else { return }
+        do {
+            let response = try await api.profileWithSuggestions()
+            profile = response.profile ?? [:]
+            suggestions = response.suggestions ?? [:]
+            profileLoaded = true
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func load() async {
         guard !demo else { return }
         async let profile = api.profileWithSuggestions()

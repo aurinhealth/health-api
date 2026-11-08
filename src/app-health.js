@@ -118,6 +118,7 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const plan = bedtimePlan({
     date: sleepDay,
     wake: choice.wake,
+    usual: sleepSet.usual,
     need: choice.need,
     nights: [...nights.values()].map(n => ({ date: nightDate(n), wakeMin: minutesOf(n.endTime), durationMin: num(n.durationMin), timeInBedMin: num(n.timeInBedMin) }))
   });
@@ -237,7 +238,9 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
       tonight: { need: tonight.need, base: sleepNeedMinutes({ age, goal: sleepSet.goal }), strain: tonight.base - sleepNeedMinutes({ age, goal: sleepSet.goal }), goalSet: sleepSet.goal != null, wakeSet: plan?.wakeSource === "setting", hrv: tonight.hrv, debt: tonight.debt, naps: tonight.naps, bedtime: plan ? clock(plan.bed) : null, wake: plan ? clock(plan.wake) : null,
         // The planned night (Spánek): its evening, the sleep it plans (the need or
         // the user's own length), the time in bed and the user's choices.
-        date: sleepDay, sleep: choice.need, inBed: plan ? plan.inBed : null, chosen: choice.chosen, wakeOnce: choice.wakeOnce },
+        date: sleepDay, sleep: choice.need, inBed: plan ? plan.inBed : null, chosen: choice.chosen, wakeOnce: choice.wakeOnce,
+        // The usual wake time to keep from now on (the route saves it and leaves it out).
+        ...(plan?.pin ? { wakePin: plan.pin } : {}) },
       debt: debt ? { minutes: debt.minutes, nights: debt.nights } : null,
       regularity: beds.length >= 3 ? { bedtime: clock(bedAvg + 18 * 60), spread: Math.round(bedSd), nights: beds.map(b => ({ date: b.date, value: b.value })) } : null
     },
