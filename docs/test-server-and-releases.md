@@ -22,7 +22,8 @@ Services it needs from outside (OpenAI, push, Google) are Worker secrets set by 
 Every upload is two TestFlight builds from one archive (`ios-testflight.yml`): build N without the
 Apple Watch app for the testers, and N.1 with it for the owner's group (`WATCH_GROUP` repository
 variable, default "Close testers"). Without the watch app the iPhone app hides its Apple Watch
-settings (`WatchBridge.inBuild`). The App Store gets one build, so the watch decision comes before
+settings (`WatchBridge.inBuild`, from the `AurinNoWatchApp` key the workflow puts in build N's
+Info.plist; an installed app never has its `Watch` folder, the watch app goes to the watch on its own). The App Store gets one build, so the watch decision comes before
 it. The app talks to the live server unless an internal tester
 switches it in Nastavení → Testování → Server (`ios-native/Aurin/Data/ServerChoice.swift`). The row
 shows for the owner and the e-mails in the live Worker's secret `INTERNAL_TESTERS` (comma separated),
