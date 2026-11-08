@@ -164,7 +164,11 @@ export function ownerEmail(env) {
 // Handlers make sure their tables exist (CREATE … IF NOT EXISTS) on every
 // request. Each is a write that D1 runs on the primary, one at a time, so once a
 // statement has succeeded on this database in this isolate it is not sent again.
-const IDEMPOTENT_SCHEMA = /^\s*CREATE\s+(UNIQUE\s+)?(TABLE|INDEX)\s+IF\s+NOT\s+EXISTS\b/i;
+// The same for ALTER TABLE … ADD COLUMN, which handlers try on every request
+// for a column added later: once it has run, or failed because the column is
+// already there, it is not sent again (2026-11-08: four failing writes on every
+// coach card and Today, each of which also emptied the request's read memo).
+const IDEMPOTENT_SCHEMA = /^\s*(CREATE\s+(UNIQUE\s+)?(TABLE|INDEX)\s+IF\s+NOT\s+EXISTS|ALTER\s+TABLE\s+[a-z_][a-z_0-9]*\s+ADD\s+(COLUMN\s+)?[a-z_])/i;
 const schemaDoneByDb = new WeakMap();
 const REAL = Symbol("statement");
 function schemaStatement(statement, sql, schemaDone) {
@@ -173,7 +177,12 @@ function schemaStatement(statement, sql, schemaDone) {
     bind: (...values) => schemaStatement(statement.bind(...values), sql, schemaDone),
     async run() {
       if (schemaDone.has(sql)) return { success: true, results: [], meta: { changes: 0 } };
-      const result = await statement.run();
+      let result;
+      try { result = await statement.run(); }
+      catch (error) {
+        if (/duplicate column/i.test(String(error?.message || error))) schemaDone.add(sql);
+        throw error;
+      }
       schemaDone.add(sql);
       return result;
     },
@@ -212,35 +221,55 @@ export function retryingDb(db) {
 // three weeks read the profile and the latest weight for every day (about 190
 // of a coach card's 420 queries were repeats). With `memo`, an identical read
 // of these tables (same SQL, same values) gets the first answer again, within
-// this request only. Any other statement through this database (a write, a
-// batch) forgets them all, so a request still sees its own writes. Tables that
-// other users' requests or the sync jobs change while a request waits for them
-// (sync status, connection secrets, AI slots) are never kept.
-const MEMO_TABLES = new Set(["health_datapoints", "food_logs", "dashboard_profile", "strength_sets", "gym_plans", "gym_plan_cancellations", "readiness_locks", "cycle_settings", "athlete_state", "user_setup"]);
+// this request only. A write through this database forgets the kept reads of
+// the table it writes, so a request still sees its own writes; a write whose
+// table is not clear (WITH … INSERT, exec) forgets them all. Reads in a batch
+// forget nothing. Tables that other users' requests or the sync jobs change
+// while a request waits for them (sync status, connection secrets, AI slots)
+// are never kept; the plan tables only the user's own requests write.
+const MEMO_TABLES = new Set(["health_datapoints", "food_logs", "dashboard_profile", "strength_sets", "gym_plans", "gym_plan_cancellations", "readiness_locks", "cycle_settings", "athlete_state", "user_setup",
+  "training_weeks", "training_plans", "week_plan_preferences", "week_plan_overrides", "training_capabilities", "training_profile"]);
 const KNOWN_TABLES = new Set([...Object.keys(PERSONAL_TABLES), ...MEMO_TABLES]);
-export function memoizableSql(sql) {
-  if (!readOnlySql(sql)) return false;
+// The tables a read may be kept for, or null when it may not be kept.
+function memoTables(sql) {
+  if (!readOnlySql(sql)) return null;
   const code = String(sql).replace(/'(?:''|[^'])*'|--[^\n]*|\/\*[\s\S]*?\*\//g, " ").toLowerCase();
   const from = [...code.matchAll(/\b(?:from|join)\s+([a-z_][a-z_0-9]*)/g)].map(m => m[1]);
   const tables = (code.match(/[a-z_][a-z_0-9]*/g) || []).filter(w => KNOWN_TABLES.has(w));
-  return from.length > 0 && from.every(t => MEMO_TABLES.has(t)) && tables.every(t => MEMO_TABLES.has(t));
+  return from.length > 0 && from.every(t => MEMO_TABLES.has(t)) && tables.every(t => MEMO_TABLES.has(t)) ? [...new Set([...from, ...tables])] : null;
+}
+export function memoizableSql(sql) {
+  return memoTables(sql) !== null;
+}
+// The one table a write changes (INSERT/REPLACE INTO t, UPDATE t, DELETE FROM t),
+// or null when that is not clear. No trigger or foreign key of the user's
+// tables writes another table.
+export function writtenTable(sql) {
+  const match = String(sql).match(/^\s*(?:INSERT(?:\s+OR\s+[a-z]+)?\s+INTO|REPLACE\s+INTO|UPDATE(?:\s+OR\s+[a-z]+)?|DELETE\s+FROM)\s+([a-z_][a-z_0-9]*)/i);
+  return match ? match[1].toLowerCase() : null;
+}
+function forgetWritten(memo, sql) {
+  if (readOnlySql(sql) || IDEMPOTENT_SCHEMA.test(sql)) return;
+  const table = writtenTable(sql);
+  if (!table) { memo.clear(); return; }
+  for (const [key, entry] of memo) if (entry.tables.includes(table)) memo.delete(key);
 }
 const plainValue = v => v === null || ["string", "number", "boolean"].includes(typeof v);
 function memoStatement(statement, sql, memo, values = []) {
-  const keep = memoizableSql(sql) && values.every(plainValue);
+  const tables = values.every(plainValue) ? memoTables(sql) : null;
   const forget = async (kind, args) => {
-    memo.clear();
-    try { return await statement[kind](...args); } finally { memo.clear(); }
+    forgetWritten(memo, sql);
+    try { return await statement[kind](...args); } finally { forgetWritten(memo, sql); }
   };
   const read = (kind, args) => {
-    // CREATE … IF NOT EXISTS changes no rows (handlers run it on every request).
-    if (!keep) return readOnlySql(sql) || IDEMPOTENT_SCHEMA.test(sql) ? statement[kind](...args) : forget(kind, args);
+    // CREATE … IF NOT EXISTS and ADD COLUMN change no rows (handlers run them on every request).
+    if (!tables) return readOnlySql(sql) || IDEMPOTENT_SCHEMA.test(sql) ? statement[kind](...args) : forget(kind, args);
     const key = JSON.stringify([kind, sql, values, args]);
-    let pending = memo.get(key);
+    let pending = memo.get(key)?.pending;
     if (!pending) {
       pending = statement[kind](...args);
-      memo.set(key, pending);
-      pending.catch(() => { if (memo.get(key) === pending) memo.delete(key); });
+      memo.set(key, { pending, tables });
+      pending.catch(() => { if (memo.get(key)?.pending === pending) memo.delete(key); });
     }
     // A copy each time: callers change the rows they get.
     return pending.then(value => structuredClone(value));
@@ -314,8 +343,9 @@ export function scopedDb(db, userId, { memo = false } = {}) {
     },
     async batch(statements) {
       for (const s of statements) if (s?.[GUARDED]) noteUnboundUser(s[GUARDED].sql, s[GUARDED].values, id);
-      reads?.clear();
-      try { return await withD1Retry(() => db.batch(statements.map(s => s?.[REAL] || s)), { read: false }); } finally { reads?.clear(); }
+      const forget = () => { if (reads) for (const s of statements) { if (s?.[GUARDED]) forgetWritten(reads, s[GUARDED].sql); else reads.clear(); } };
+      forget();
+      try { return await withD1Retry(() => db.batch(statements.map(s => s?.[REAL] || s)), { read: false }); } finally { forget(); }
     },
     exec(query) { check(query); reads?.clear(); return db.exec(query); },
     dump() { throw new Error("dump is not available on a user-scoped database"); }

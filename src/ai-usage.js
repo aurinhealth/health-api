@@ -177,7 +177,7 @@ async function monthLimitMessage(env) {
 // the parallel limit waits in line for a free slot (five food photos in a row,
 // the coach's texts beside them) and is refused only after AI_SLOT_WAIT_MS.
 // The returned release function carries the row's id.
-export const AI_PARALLEL_CALLS = 3;
+export const AI_PARALLEL_CALLS = 5;
 export const AI_SLOT_WAIT_MS = 90000;
 const AI_PENDING_MINUTES = 5;
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
