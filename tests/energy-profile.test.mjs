@@ -67,7 +67,8 @@ test("sleep settings: a goal of 6–10 h and alarm clock times", () => {
   assert.equal(p.wakeTime, "06:30");
   assert.equal(p.wakeTimeWeekend, "", "an impossible time is dropped");
   assert.equal(normalizeProfile({ sleepGoal: 200 }).sleepGoal, null);
-  assert.deepEqual(sleepSettings(p), { goal: 450, wake: { workday: 390, weekend: null }, tonight: null });
+  assert.deepEqual(sleepSettings(p), { goal: 450, wake: { workday: 390, weekend: null }, usual: { workday: null, weekend: null }, tonight: null });
+  assert.deepEqual(sleepSettings({ wakeUsual: { workday: "06:00" } }).usual, { workday: 360, weekend: null }, "the kept usual wake time");
 });
 
 test("sleep settings: tonight's own length and wake time", () => {

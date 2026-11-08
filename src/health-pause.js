@@ -54,8 +54,8 @@ export async function healthPaused(db, userId) {
 async function cleanSettings(db, userId) {
   const id = Number(userId);
   const steps = [
-    // Row 2 is worked out from the data (profile-suggestions.js).
-    db.prepare('DELETE FROM dashboard_profile WHERE user_id = ? AND id = 2').bind(id),
+    // Rows 2 and 3 are worked out from the data (profile-suggestions.js).
+    db.prepare('DELETE FROM dashboard_profile WHERE user_id = ? AND id IN (2, 3)').bind(id),
     // Body measurements in the profile (row 1, energy-profile.js); the rest of
     // it is settings (goals, meals, diet, sleep goal).
     db.prepare("UPDATE dashboard_profile SET profile_json = json_remove(profile_json, '$.height', '$.hrmax', '$.rhr', '$.targetWeight') WHERE user_id = ? AND id = 1 AND json_valid(profile_json)").bind(id),

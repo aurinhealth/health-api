@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
-import { activityFromSteps, averageDailySteps, googleHeightCm, refreshSuggestions, loadEffectiveProfile, averageRestingHeartRate, observedMaxHeartRate, activityMaxHeartRate, calibratedMaxHeartRate } from "../src/profile-suggestions.js";
+import { activityFromSteps, averageDailySteps, googleHeightCm, refreshSuggestions, loadEffectiveProfile, pinUsualWake, averageRestingHeartRate, observedMaxHeartRate, activityMaxHeartRate, calibratedMaxHeartRate } from "../src/profile-suggestions.js";
 import { effectiveProfile } from "../src/energy-profile.js";
 import legacy from "../src/index.js";
 
@@ -123,4 +123,17 @@ test("without Google the resting heart rate comes from the Intervals.icu wellnes
   assert.equal(s.birthDate, "1986-01-01");
   // Two easy rides at 150: the age estimate (40 years: 180) until a harder session.
   assert.deepEqual([s.hrmax, s.sources.hrmax], [180, "age-estimate"]);
+});
+
+test("the usual wake time is kept in row 3 once per kind of morning, apart from the app's profile", async () => {
+  const d = db();
+  d.sqlite.prepare("INSERT INTO dashboard_profile VALUES (7, 1, ?)").run(JSON.stringify({ sex: "male", age: 40 }));
+  assert.equal(await pinUsualWake(d, 7, null, { kind: "workday", wake: 360 }), true);
+  let profile = await loadEffectiveProfile(d, 7);
+  assert.deepEqual(profile.wakeUsual, { workday: "06:00" });
+  assert.equal(await pinUsualWake(d, 7, profile.wakeUsual, { kind: "workday", wake: 365 }), false, "kept, not moved");
+  assert.equal(await pinUsualWake(d, 7, profile.wakeUsual, { kind: "weekend", wake: 510 }), true);
+  profile = await loadEffectiveProfile(d, 7);
+  assert.deepEqual(profile.wakeUsual, { workday: "06:00", weekend: "08:30" });
+  assert.equal(profile.sex, "male");
 });

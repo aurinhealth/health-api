@@ -257,6 +257,9 @@ extension AppModel {
         scope = AccountScope()
         dropRefresh()
         AccountCaches.forget()
+        pendingFoods = []
+        pendingPhotos = [:]
+        foodReady = nil
         // Files the account left in tmp: its data export and replies to the coach.
         APIClient.removeExports()
         CoachReplyUpload.sweep()

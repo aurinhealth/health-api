@@ -29,7 +29,7 @@ test("day view, week view and coaches all apply the same energy budget", () => {
   const source = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   // Day view, each day of the week view, the coach inputs, the app's Today and Food and Týdenní kalorie.
   assert.equal(source.match(/applyEnergyBudget\(/g).length, 6);
-  assert.match(source, /applyEnergyBudget\(daily,profile,health\);\n\s*return Response\.json\((withRecoveryTime\()?buildToday/);
+  assert.match(source, /applyEnergyBudget\(daily,profile,health\);\n\s*(return Response\.json\(|const body=)(withRecoveryTime\()?buildToday/);
   assert.match(source, /applyEnergyBudget\(daily,profile,health\);\n\s*const built=buildFood/);
   assert.match(source, /daily: applyEnergyBudget\(daily, profile,/);
   assert.match(source, /applyEnergyBudget\(daily,profile,date===today\?healthToday:.*\n\s*const \{kcal,target,trainingBonus,everyday,meals\}=buildFood/);

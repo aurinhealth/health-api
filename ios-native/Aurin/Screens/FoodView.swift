@@ -107,6 +107,8 @@ struct FoodContent: View {
     @Environment(\.tabActions) private var actions
     @State private var editing = false
     @State private var showingParts = false
+    /// "Přidat" on a food that AI found after "Co přidáme?" closed.
+    @State private var adding: PendingFood?
     @Environment(\.wideLayout) private var wide
 
     var body: some View {
@@ -212,13 +214,17 @@ struct FoodContent: View {
             VStack(spacing: 0) {
                 ForEach(Array(food.meals.enumerated()), id: \.element.id) { index, meal in
                     MealRow(meal: meal, add: { add(meal.type) })
+                    pendingRows(pending.filter { $0.meal == meal.type })
                     if index < food.meals.count - 1 { Rectangle().fill(Palette.hairline).frame(height: 1) }
                 }
+                // A meal the day has no row for.
+                pendingRows(pending.filter { item in !food.meals.contains { $0.type == item.meal } })
                 if food.meals.isEmpty {
                     Text("Zatím nic. Přidej první jídlo dne.").font(Typo.small).foregroundStyle(Palette.muted).padding(.vertical, 14)
                 }
             }
             .padding(.top, 6)
+            .sheet(item: $adding) { item in AddFoodSheet(meal: item.meal, pending: item) }
 
             VStack(spacing: 28) {
                 Button { add(MealSlot.now(slots: food.mealSlots)) } label: {
@@ -546,6 +552,88 @@ struct DrinkLine: View {
 /// One meal of the day: "Snídaně 120 / 430 kcal" and under it the carbs,
 /// protein and fat against the meal's targets, each in its colour. A tap opens
 /// the meal with every food's values.
+extension FoodContent {
+    /// The AI lookups and meal photos of this day still waiting to be added.
+    private var pending: [PendingFood] { model.pendingFoods.filter { $0.day == food.date } }
+
+    private func pendingRows(_ items: [PendingFood]) -> some View {
+        ForEach(items) { item in
+            PendingFoodRow(item: item, add: { adding = item }, discard: { model.removePendingFood(item.id) })
+                .padding(.bottom, 12)
+        }
+    }
+}
+
+/// A food AI is looking up, or found, after "Co přidáme?" closed: under its
+/// meal until "Přidat" (the amount screen, nothing is added on its own) or ✕.
+struct PendingFoodRow: View {
+    let item: PendingFood
+    var add: () -> Void = {}
+    var discard: () -> Void = {}
+
+    var body: some View {
+        HStack(spacing: 10) {
+            switch item.state {
+            case .looking:
+                CoachDots(size: 6, spacing: 4)
+                Text(item.query.map { L10n.f("Dohledávám „%@“…", $0) } ?? L10n.tr("AI čte fotku…"))
+                    .font(Typo.small).foregroundStyle(Palette.secondary)
+                Spacer(minLength: 0)
+            case .found:
+                Image(systemName: "sparkles").scaledFont(14, weight: .semibold).foregroundStyle(Palette.indigo)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                    Text(detail).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                }
+                Spacer(minLength: 6)
+                Button(action: add) {
+                    Text("Přidat").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.onButton)
+                        .padding(.horizontal, 14).frame(height: 32)
+                        .background(Palette.button, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                closeButton
+            case .missing:
+                Image(systemName: "exclamationmark.circle").scaledFont(14, weight: .semibold).foregroundStyle(Palette.rust)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                    Text(item.message ?? "").font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(2)
+                }
+                Spacer(minLength: 6)
+                closeButton
+            }
+        }
+        .padding(.horizontal, 12).frame(minHeight: 52)
+        .background(Palette.indigo.opacity(0.05), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Palette.indigo.opacity(0.4), style: StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
+        }
+    }
+
+    private var closeButton: some View {
+        Button(action: discard) {
+            Image(systemName: "xmark").scaledFont(13, weight: .semibold).foregroundStyle(Palette.muted)
+                .frame(width: 32, height: 32).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Zahodit")
+    }
+
+    /// "265 kcal · 100 g · dohledáno AI", or a photo's foods and their kcal.
+    private var detail: String {
+        if !item.items.isEmpty {
+            let kcal = item.items.compactMap { $0.product.kcal(for: $0.amount) }.reduce(0, +)
+            return L10n.plural("%lld položek na fotce", item.items.count) + " · " + Fmt.int(kcal) + " kcal"
+        }
+        guard let product = item.product else { return "" }
+        let kcal = product.kcal(for: product.defaultAmount).map { Fmt.int($0) + " kcal" }
+        let amount = product.perPortion ? L10n.tr("1 porce") : Fmt.int(product.defaultAmount) + " " + product.unit
+        let source = item.query == nil ? L10n.tr("z fotky") : L10n.tr("dohledáno AI")
+        return [kcal, amount, source].compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
 struct MealRow: View {
     let meal: FoodSnapshot.Meal
     var add: () -> Void = {}

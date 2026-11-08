@@ -249,6 +249,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
   const plan = bedtimePlan({
     date: sleepDay,
     wake: choice.wake,
+    usual: sleepSet.usual,
     need: tonightNeed,
     nights: [...nights.values()].map(n => ({ date: nightDate(n), wakeMin: minutesOf(n.endTime), durationMin: num(n.durationMin), timeInBedMin: num(n.timeInBedMin) }))
   });
@@ -476,7 +477,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     // source: the device of the latest night up to today (source_family, e.g.
     // apple-health): the bedtime reminder asks for a charged watch only when
     // Apple Watch measures sleep (Reminders.swift).
-    tonight: plan ? { bedtime: clock(plan.bed), wake: clock(plan.wake), need: tonightNeed, wakeSet: plan.wakeSource === "setting", source: latestNightSource(nights, date) } : null,
+    tonight: plan ? { bedtime: clock(plan.bed), wake: clock(plan.wake), need: tonightNeed, wakeSet: plan.wakeSource === "setting", source: latestNightSource(nights, date), ...(plan.pin ? { wakePin: plan.pin } : {}) } : null,
     steps: { today: num(todayRow.steps), goal: STEP_GOAL, week: last(7, "steps"), month: last(30, "steps"), hourly: byHour[date] ? byHour[date].map(v => Math.round(v)) : null, usual, hour, activeKcal: activeKcal(num(todayRow.activeCalories), watchExtra), activeKcalExcluded: watchExtra || null, activeMinutes: activeMinutes(google, date) },
     weight: weights.length ? { latest: weights.at(-1).value, goal: num(profile.targetWeight), series: weights } : null,
     weather: todayWeather(location, forecast, date)
