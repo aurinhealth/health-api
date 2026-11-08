@@ -182,6 +182,18 @@ struct RootView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
                 }
+                // An AI lookup that ended after "Co přidáme?" closed: a tap shows it in Jídlo (AppModel+PendingFood.swift).
+                if let ready = model.foodReady {
+                    ThanksToast(text: ready.text, symbol: ready.found ? "checkmark" : "exclamationmark.circle", tint: ready.found ? Palette.green : Palette.rust) {
+                        model.foodReady = nil
+                        model.tab = .food
+                        model.paths[.food] = []
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, toastInset)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(1)
+                }
                 // A deletion with its "Vrátit" (AppModel.deleteLater).
                 if let toast = model.undoToast {
                     PlanToastView(toast: toast) {
@@ -281,6 +293,12 @@ struct RootView: View {
                 try? await Task.sleep(for: .seconds(4))
                 if model.thanks == shown { model.thanks = nil }
             }
+            .task(id: model.foodReady?.id) {
+                guard let shown = model.foodReady?.id else { return }
+                try? await Task.sleep(for: .seconds(4))
+                if model.foodReady?.id == shown { model.foodReady = nil }
+            }
+            .animation(.snappy, value: model.foodReady?.id)
             .animation(.snappy, value: model.syncReport?.id)
             .animation(.snappy, value: model.undoToast?.id)
             .animation(.snappy, value: barHidden)
@@ -532,12 +550,14 @@ struct SyncPill: View {
 /// A short thank-you at the bottom, gone after a few seconds or a tap.
 struct ThanksToast: View {
     let text: String
+    var symbol = "checkmark"
+    var tint = Palette.green
     let dismiss: () -> Void
 
     var body: some View {
         Button(action: dismiss) {
             HStack(spacing: 10) {
-                Image(systemName: "checkmark").scaledFont(15, weight: .semibold).foregroundStyle(Palette.green)
+                Image(systemName: symbol).scaledFont(15, weight: .semibold).foregroundStyle(tint)
                 Text(verbatim: text).font(Typo.bodyStrong).foregroundStyle(Palette.ink).multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
             }
