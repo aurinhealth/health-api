@@ -175,6 +175,12 @@ final class AppModel {
     /// "Uloženo. Díky, po kontrole ho najdou i ostatní." after a food read from
     /// its label was suggested for everyone (suggestNewFood).
     var thanks: String?
+    /// AI lookups and meal photos from "Co přidáme?" that go on after it
+    /// closes; each waits under its meal in Jídlo (AppModel+PendingFood.swift).
+    var pendingFoods: [PendingFood] = PendingFood.saved()
+    @ObservationIgnored var pendingPhotos: [UUID: UIImage] = [:]
+    /// "„Rohlík“ dohledáno · čeká v Jídle" for a few seconds, the sheet closed (RootView).
+    var foodReady: FoodReady?
 
     /// "Navrhnout pro všechny": the food stays the user's own; the owner gets it
     /// to approve into the common catalogue (Nastavení → Návrhy oprav → Nové).

@@ -4138,3 +4138,10 @@
 "Kilogramy (kg)" = "Kilograms (kg)";
 "Libry (lb)" = "Pounds (lb)";
 "Jednotka váhy: %@" = "Weight unit: %@";
+
+/* AI lookups that go on after "Co přidáme?" closes (AppModel+PendingFood.swift). */
+"Dohledávám „%@“…" = "Looking up “%@”…";
+"„%@“ dohledáno · čeká v Jídle" = "“%@” found · waiting in Food";
+"„%@“ se nepodařilo dohledat" = "Couldn't find “%@”";
+"z fotky" = "from a photo";
+"Zahodit" = "Discard";

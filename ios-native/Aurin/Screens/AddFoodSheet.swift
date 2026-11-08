@@ -26,21 +26,34 @@ struct AddFoodSheet: View {
     @State private var tab = "foods"
     @AppStorage("foodListOrder") private var order = "recent"
     @State private var searching = false
-    @State private var lookingUp = false
+    /// The AI lookup or photo read this sheet waits for; it goes on in Jídlo
+    /// when the sheet closes (AppModel+PendingFood.swift).
+    @State private var current: UUID?
+    /// Everything this sheet started, and the one whose food it shows.
+    @State private var startedHere: [UUID] = []
+    @State private var shown: UUID?
     @State private var message: String?
     @State private var path: [FoodRoute] = []
     @State private var scanning = false
     @State private var photoMode: String?
-    @State private var readingPhoto = false
     /// Choosing a food for a meal photo's list (PhotoItemsView "Přidat
     /// položku"): only the search and the lists; the food comes back here.
     var pick: ((FoodProduct, Double) -> Void)? = nil
+    /// "Přidat" on a food waiting in Jídlo: straight to its amount (or the photo's list).
+    var pending: PendingFood? = nil
 
-    init(meal: String, start: FoodStart? = nil, pick: ((FoodProduct, Double) -> Void)? = nil) {
+    init(meal: String, start: FoodStart? = nil, pick: ((FoodProduct, Double) -> Void)? = nil, pending: PendingFood? = nil) {
         _meal = State(initialValue: meal)
         self.start = start
         self.pick = pick
+        self.pending = pending
     }
+
+    private var working: PendingFood? {
+        current.flatMap { id in model.pendingFoods.first { $0.id == id && $0.state == .looking } }
+    }
+    private var lookingUp: Bool { working.map { $0.query != nil } ?? false }
+    private var readingPhoto: Bool { working.map { $0.query == nil } ?? false }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -71,7 +84,7 @@ struct AddFoodSheet: View {
                         tile("Z galerie", "photo.on.rectangle") { galleryOpen = true }
                         tile("Etiketa", "doc.text.viewfinder") { photoMode = "label" }
                         tile("Ručně", "pencil") { path.append(.manual) }
-                        tile("Dohledat AI", "sparkles") { Task { await lookUp() } }
+                        tile("Dohledat AI", "sparkles") { lookUp() }
                             .disabled(query.trimmingCharacters(in: .whitespaces).count < 2 || lookingUp || model.demo)
                     }
                     .padding(.top, 18) }
@@ -100,7 +113,7 @@ struct AddFoodSheet: View {
                                     .buttonStyle(.plain)
                             }
                             if query.trimmingCharacters(in: .whitespaces).count >= 2 && !searching {
-                                Button { Task { await lookUp() } } label: {
+                                Button { lookUp() } label: {
                                     HStack {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text("Není tu, co hledáš?").font(Typo.sentence(15))
@@ -127,9 +140,9 @@ struct AddFoodSheet: View {
             .navBarVisibility(.hidden)
             .navigationDestination(for: FoodRoute.self) { route in
                 switch route {
-                case .amount(let product): FoodAmountView(product: product, meal: meal, pick: pick, done: { dismiss() })
-                case .photo(let product, let note): FoodAmountView(product: product, meal: meal, note: note, editing: true, done: { dismiss() })
-                case .items(let photoMeal): PhotoItemsView(meal: photoMeal, mealType: meal, done: { dismiss() })
+                case .amount(let product): FoodAmountView(product: product, meal: meal, pick: pick, done: finish)
+                case .photo(let product, let note): FoodAmountView(product: product, meal: meal, note: note, editing: true, done: finish)
+                case .items(let photoMeal): PhotoItemsView(meal: photoMeal, mealType: meal, done: finish)
                 case .manual: ManualFoodView(meal: meal, name: query, done: { dismiss() })
                 case .recipe: RecipeEditorView(saved: { Task { await loadRecent() }; path.removeLast() })
                 }
@@ -140,12 +153,28 @@ struct AddFoodSheet: View {
         .task(id: query) { await search() }
         .task { await loadRecent() }
         .onAppear(perform: begin)
+        .onChange(of: model.pendingFoods.first { $0.id == current }?.state) { _, state in
+            guard let state, state != .looking, let item = model.pendingFoods.first(where: { $0.id == current }) else { return }
+            current = nil
+            if item.state == .missing {
+                message = item.message
+                model.removePendingFood(item.id)
+            } else {
+                message = nil
+                show(item)
+            }
+        }
+        // Closed: what is still looked up, or found and not added, waits in
+        // Jídlo; choosing for a meal photo's list keeps nothing.
+        .onDisappear {
+            if pick != nil { startedHere.forEach(model.removePendingFood) } else { model.unwatchPendingFoods(startedHere) }
+        }
         .photosPicker(isPresented: $galleryOpen, selection: $galleryItem, matching: .images)
         .onChange(of: galleryItem) { _, item in
             guard let item else { return }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
-                    await read(image, mode: "portion")
+                    read(image, mode: "portion")
                 }
                 galleryItem = nil
             }
@@ -155,12 +184,12 @@ struct AddFoodSheet: View {
             if mode.name == "label" {
                 LabelCameraSheet { image in
                     photoMode = nil
-                    Task { await read(image, mode: mode.name) }
+                    read(image, mode: mode.name)
                 }
             } else {
                 CameraPicker { image in
                     photoMode = nil
-                    if let image { Task { await read(image, mode: mode.name) } }
+                    if let image { read(image, mode: mode.name) }
                 }
                 .ignoresSafeArea()
             }
@@ -168,6 +197,11 @@ struct AddFoodSheet: View {
     }
 
     private func begin() {
+        if let pending, !started {
+            started = true
+            show(pending)
+            return
+        }
         guard !started, let start else { return }
         started = true
         switch start {
@@ -347,35 +381,26 @@ struct AddFoodSheet: View {
     }
 
     /// A photo of a meal or a nutrition label, read by AI on the server.
-    private func read(_ image: UIImage, mode: String) async {
+    private func read(_ image: UIImage, mode: String) {
         guard !model.demo else { return }
-        readingPhoto = true
-        defer { readingPhoto = false }
-        do {
+        let api = model.api, own = saved
+        run(query: nil, photo: image) {
             // A label is read on the iPhone first (free); AI only for what it missed.
             if mode == "label" {
-                let r = try await LabelReader.read(image, api: model.api)
-                path.append(.photo(r.product, r.note))
-                message = nil
-                return
+                let r = try await LabelReader.read(image, api: api)
+                return .product(r.product, note: r.note)
             }
-            guard let jpeg = await image.jpegForUpload() else { return }
-            let r = try await model.api.readFoodPhoto(jpeg, mode: mode)
-            if r.items.count >= 2 {
-                path.append(.items(PhotoMeal(photo: image, items: r.items.map(ownFood))))
-            } else {
-                path.append(.photo(r.product, r.note))
-            }
-            message = nil
-        } catch {
-            message = error.localizedDescription
+            guard let jpeg = await image.jpegForUpload() else { return .missing(L10n.tr("Na fotce se hodnoty nepodařilo přečíst.")) }
+            let r = try await api.readFoodPhoto(jpeg, mode: mode)
+            if r.items.count >= 2 { return .items(r.items.map { Self.ownFood($0, saved: own) }) }
+            return .product(r.product, note: r.note)
         }
     }
 
     /// A food from the photo that is one of the user's own (every word of the
     /// AI's name starts a word of it) takes the own food's values: nothing is
     /// looked up on the web.
-    private func ownFood(_ item: PhotoItem) -> PhotoItem {
+    private static func ownFood(_ item: PhotoItem, saved: [FoodProduct]) -> PhotoItem {
         let wanted = Self.fold(item.product.name).split(whereSeparator: { !$0.isLetter && !$0.isNumber })
         guard !wanted.isEmpty, let own = saved.first(where: { product in
             guard !product.perPortion, product.calories_100g != nil else { return false }
@@ -385,19 +410,38 @@ struct AddFoodSheet: View {
         return PhotoItem(product: own, amount: item.amount, mine: true)
     }
 
-    private func lookUp() async {
-        lookingUp = true
-        defer { lookingUp = false }
-        do {
-            if let product = try await model.api.lookupFood(name: query) {
-                path.append(.amount(product))
-                message = nil
-            } else {
-                message = "AI ji nedokázala dohledat ani odhadnout. Zadej ji ručně."
-            }
-        } catch {
-            message = error.localizedDescription
+    private func lookUp() {
+        let name = query, api = model.api
+        run(query: name) {
+            if let product = try await api.lookupFood(name: name) { return .product(product, note: nil) }
+            return .missing(L10n.tr("AI ji nedokázala dohledat ani odhadnout. Zadej ji ručně."))
         }
+    }
+
+    /// The work goes on in AppModel, so closing the sheet keeps it (AppModel+PendingFood.swift).
+    private func run(query: String?, photo: UIImage? = nil, work: @escaping @MainActor @Sendable () async throws -> PendingFood.Result) {
+        message = nil
+        // An earlier one still going waits in Jídlo.
+        if let current { model.unwatchPendingFoods([current]) }
+        let id = model.startPendingFood(meal: meal, query: query, photo: photo, work: work)
+        current = id
+        startedHere.append(id)
+    }
+
+    /// The food found (or the photo's list), to add.
+    private func show(_ item: PendingFood) {
+        shown = item.id
+        if item.items.count >= 2 {
+            path.append(.items(model.pendingPhotoMeal(item)))
+        } else if let product = item.product {
+            path.append(item.query == nil ? .photo(product, item.note) : .amount(product))
+        }
+    }
+
+    /// Added: the food no longer waits in Jídlo.
+    private func finish() {
+        if let shown { model.removePendingFood(shown) }
+        dismiss()
     }
 }
 
