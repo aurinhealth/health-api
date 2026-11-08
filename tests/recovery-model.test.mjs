@@ -120,6 +120,11 @@ test('bedtimePlan wakes at the usual time of that kind of morning and adds the t
   const capped = bedtimePlan({ date: '2026-10-08', need: 540, nights: restless });
   assert.equal(capped.inBed, 600);
   assert.equal(capped.bed, 1230); // 20:30, not 19:15
+  // The usual wake time to 5 minutes: 6:01 and 6:02 mornings plan 6:00, not a minute that moves each night.
+  const odd = nights.map((n, i) => ({ ...n, wakeMin: 361 + (i % 2) }));
+  assert.equal(bedtimePlan({ date: '2026-10-08', need: 480, nights: odd }).wake, 360);
+  // A set alarm keeps its own minute.
+  assert.equal(bedtimePlan({ date: '2026-10-08', need: 480, nights: odd, wake: { workday: 362 } }).wake, 362);
 });
 
 test("an own sleep goal replaces the age baseline and a set alarm plans bedtime without nights", () => {

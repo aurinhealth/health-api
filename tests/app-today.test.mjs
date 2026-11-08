@@ -82,7 +82,7 @@ test("Today's plan lists workouts and tonight's bedtime in time order", () => {
   assert.equal(t.plan[0].detail, "45 min · 45 TSS");
   assert.equal(t.plan[0].done, false);
   assert.match(t.plan[1].time, /^\d{2}:\d{2}$/);
-  assert.equal(t.tonight.wake, "07:02", "the usual wake time");
+  assert.equal(t.tonight.wake, "07:00", "the usual wake time (07:02) to 5 minutes");
   assert.equal(t.tonight.bedtime, t.plan[1].time);
   assert.equal(t.plan[1].end, t.tonight.wake, "the night ahead ends at the planned wake time");
 });
@@ -213,7 +213,7 @@ test("Before tonight's sleep has synced, Today stays empty and the coming night 
   assert.equal(t.sleep, null);
   assert.equal(t.hrv, null);
   // The coming night is the one that ends this morning.
-  assert.equal(t.tonight.wake, "07:02");
+  assert.equal(t.tonight.wake, "07:00", "07:02 to 5 minutes");
   // The day before is still there with ?date=.
   const before = buildToday({ ...early, date: day(-1), hour: null });
   assert.ok(before.readiness.score > 0);

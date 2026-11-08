@@ -25,7 +25,7 @@ struct SleepSettingsView: View {
         .task {
             guard given == nil, store == nil else { return }
             let s = SettingsStore(api: model.api, demo: model.demo)
-            await s.load()
+            await s.loadProfile()
             store = s
         }
     }

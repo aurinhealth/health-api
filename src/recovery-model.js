@@ -170,7 +170,9 @@ export function bedtimePlan(input) {
   if (!recent.length && chosen == null) return null;
   const median = xs => { const v = [...xs].sort((a, b) => a - b), m = Math.floor(v.length / 2); return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
   const alike = recent.filter(n => weekend(n.date) === [0, 6].includes(morning)), wakeNights = alike.length >= 3 ? alike : recent;
-  const wake = chosen != null ? Math.round(chosen) : Math.round(median(wakeNights.map(n => Number(n.wakeMin))));
+  // The usual wake time to 5 minutes, as the bedtime: to the minute it moved
+  // with each new night (6:01, 6:02, ...) although nothing really changed.
+  const wake = chosen != null ? Math.round(chosen) : (Math.round(median(wakeNights.map(n => Number(n.wakeMin))) / 5) * 5) % 1440;
   const ratios = recent.filter(n => Number(n.timeInBedMin) >= Number(n.durationMin)).map(n => Number(n.durationMin) / Number(n.timeInBedMin));
   const efficiency = ratios.length ? Math.max(0.8, Math.min(0.97, median(ratios))) : 0.9;
   // At most an hour more in bed than the night's need (audit 2026-11-06,
