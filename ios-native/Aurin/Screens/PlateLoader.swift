@@ -1,43 +1,13 @@
 import SwiftUI
 
-/// The plates on each side of a bar for a weight, and back. Weights here are
-/// in the chosen unit (kg, or lb with imperial units), as the loader shows them.
-enum PlateLoad {
-    static let kgSizes: [Double] = [25, 20, 15, 10, 5, 2.5, 1.25]
-    static let lbSizes: [Double] = [45, 35, 25, 10, 5, 2.5]
+/// The plate loader's own parts (the rest in WatchShared/PlateLoad.swift).
+extension PlateLoad {
     /// The plates there are in the chosen unit.
     static var sizes: [Double] { Units.imperial ? lbSizes : kgSizes }
-    /// More would not fit on the sleeve.
-    static let maxPerSide = 10
-
-    /// Plates per side, heaviest first, for a total weight on a bar: the
-    /// heaviest that fit, so a weight the plates can't make exactly loads
-    /// what comes nearest below it.
-    static func plates(for total: Double, bar: Double, sizes: [Double] = kgSizes) -> [Double] {
-        guard total > bar else { return [] }
-        var side = (total - bar) / 2
-        var out: [Double] = []
-        for plate in sizes where side >= plate - 0.001 {
-            while side >= plate - 0.001, out.count < maxPerSide { out.append(plate); side -= plate }
-        }
-        return out
-    }
-
-    static func total(_ plates: [Double], bar: Double) -> Double {
-        bar + 2 * plates.reduce(0, +)
-    }
-
-    /// A plate added: kept heaviest first, as they go on the bar.
-    static func adding(_ plate: Double, to plates: [Double]) -> [Double] {
-        guard plates.count < maxPerSide else { return plates }
-        return (plates + [plate]).sorted(by: >)
-    }
 
     /// "25 + 5" per side when the plates make the weight exactly (the chip under the sets).
     static func perSide(_ total: Double, bar: Double, sizes: [Double] = kgSizes) -> String? {
-        let out = plates(for: total, bar: bar, sizes: sizes)
-        guard !out.isEmpty, abs(self.total(out, bar: bar) - total) < 0.01 else { return nil }
-        return out.map(text).joined(separator: " + ")
+        exact(total, bar: bar, sizes: sizes)?.map(text).joined(separator: " + ")
     }
 
     /// A weight already in the chosen unit, in the app's decimal mark: "2,5", "45".
@@ -97,6 +67,10 @@ enum PlateBar: Hashable {
         default: return name + " " + PlateLoad.text(weight) + " " + Units.weightUnit
         }
     }
+
+    /// The usual bars of the catalog's lifts, as Training mode last loaded it:
+    /// the watch's rest shows the plates with them (WatchGymBridge).
+    @MainActor static var known: [String: PlateBar] = [:]
 
     /// The bar an exercise is done with, from its stations; nil when no plates go on it.
     static func usual(_ stations: [String]) -> PlateBar? {

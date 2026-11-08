@@ -298,6 +298,11 @@ struct TrainingModeView: View {
         .sheet(item: Binding(get: { noteFor.map { Named(name: $0) } }, set: { noteFor = $0?.name })) { item in
             ExerciseNoteSheet(exercise: item.name)
         }
+        .onChange(of: catalog) { _, list in
+            // The bars of the lifts with plates, for the watch's rest too.
+            for e in list { if let bar = PlateBar.usual(e.stations ?? []) { PlateBar.known[e.name] = bar } }
+            if let day, !model.demo { WatchBridge.shared.gymSaved(day, date: date) }
+        }
         .sheet(item: $loadingBar) { target in
             PlateLoaderSheet(title: target.title, exercise: target.exercise, startKg: target.kg, usual: target.usual) { total in loaded(total, on: target) }
         }
@@ -557,9 +562,7 @@ struct TrainingModeView: View {
         // By sides the number shows on the L row only.
         let letter = s.done ? s.intensity ?? GymIntensity.from(rpe: s.rpe) : carriedLetter(s, in: exercise) ?? s.intensity
         var plateTap: (() -> Void)? = nil
-        if let usual = usualBar(exercise) {
-            let target = PlateTarget(id: s.row, exercise: exercise.name, title: s.warmup ? exercise.name : L10n.f("%@ · série %@", exercise.name, s.number),
-                                     kg: LiftWeight.number(LiftWeight.kgText(kg.isEmpty ? shownKg : kg)), usual: usual)
+        if let target = plateTarget(s, in: exercise, shown: kg.isEmpty ? shownKg : kg) {
             plateTap = { loadingBar = target }
         }
         // A done set fixed afterwards, a set to come typed in ahead.
@@ -599,7 +602,7 @@ struct TrainingModeView: View {
                 .disabled(saving)
                 .accessibilityLabel(L10n.tr("Každá strana zvlášť"))
             }
-            if let plates = platesText(exercise) {
+            if let plates = platesText(exercise, kg) {
                 Text(plates).font(Typo.caption).foregroundStyle(Palette.secondary)
                     .padding(.horizontal, 10).frame(height: 30).overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
             }
@@ -616,19 +619,33 @@ struct TrainingModeView: View {
         return PlateBar.usual(catalog.first { $0.name == exercise.name }?.stations ?? [])
     }
 
+    /// A set's weight loaded as plates (a weight as shown); nil when no plates go on it.
+    private func plateTarget(_ set: GymSet, in exercise: GymExercise, shown: String) -> PlateTarget? {
+        guard let usual = usualBar(exercise) else { return nil }
+        return PlateTarget(id: set.row, exercise: exercise.name, title: set.warmup ? exercise.name : L10n.f("%@ · série %@", exercise.name, set.number),
+                           kg: LiftWeight.number(LiftWeight.kgText(shown)), usual: usual)
+    }
+
     /// The bar loaded: the set at hand takes the weight, and so do the work
-    /// sets still to do (a warm-up keeps it to itself).
+    /// sets still to do (a warm-up keeps it to itself). In the rest the set
+    /// waits: its weight is typed in ahead, as under Teď.
     private func loaded(_ total: Double, on target: PlateTarget) {
         let text = GymCoach.kgText(total)
-        kg = LiftWeight.shown(text) ?? text
+        let shown = LiftWeight.shown(text) ?? text
         guard let exercise = day?.exercises.first(where: { $0.name == target.exercise }),
-              exercise.sets.first(where: { $0.row == target.id })?.work == true else { return }
+              let set = exercise.sets.first(where: { $0.row == target.id }) else { return }
+        if restEnd != nil, !set.done {
+            Task { await typeAhead(set, kg: shown, reps: "", shown: (kg: restKg(set, in: exercise), reps: "")) }
+            return
+        }
+        kg = shown
+        guard set.work else { return }
         Task { await setWeight(text, of: exercise) }
     }
 
-    /// "Kotouče: 20 + 10 na stranu" for a lift done with plates.
-    private func platesText(_ exercise: GymExercise) -> String? {
-        guard let usual = usualBar(exercise), let shown = LiftWeight.number(kg) else { return nil }
+    /// "Kotouče: 20 + 10 na stranu" for a lift done with plates, at a weight as shown.
+    private func platesText(_ exercise: GymExercise, _ weight: String) -> String? {
+        guard let usual = usualBar(exercise), let shown = LiftWeight.number(weight) else { return nil }
         let bar = PlateBar.saved(exercise.name) ?? usual
         guard shown > bar.weight, let plates = PlateLoad.perSide(shown, bar: bar.weight, sizes: PlateLoad.sizes) else { return nil }
         return L10n.f("Kotouče: %@ na stranu", plates)
@@ -691,7 +708,7 @@ struct TrainingModeView: View {
                                     if let letter = ExerciseOrder.letter(next.superset) { GymTag.superset(letter) }
                                 }
                                 Text(next.name)
-                                    .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                                    .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2)
                                 Text(nextLoad(next)).font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(1)
                                 ExerciseNoteLine(note: notes.note(next.name), compact: true).padding(.top, 2)
                             }
@@ -781,23 +798,41 @@ struct TrainingModeView: View {
             if let restStart { LiveHeartRecovery(live: live, since: restStart) }
             if let set {
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text("Teď").font(Typo.caption).foregroundStyle(Palette.muted)
-                        if let letter = ExerciseOrder.letter(exercise.superset) { GymTag.superset(letter) }
-                    }
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(nowLine(exercise, set))
-                            .font(.body.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
+                    // The whole name, wrapped (Petr: "Smith Machine…" told him nothing); the weight under it.
+                    HStack(alignment: .top, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 8) {
+                                Text("Teď").font(Typo.caption).foregroundStyle(Palette.muted)
+                                if let letter = ExerciseOrder.letter(exercise.superset) { GymTag.superset(letter) }
+                            }
+                            Text(nowLine(exercise, set))
+                                .font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                         Spacer(minLength: 6)
-                        Text(plannedLine(set, in: exercise))
-                            .font(Typo.number(22)).foregroundStyle(Palette.ink).lineLimit(1)
                         HStack(spacing: 0) {
                             SmallInfoButton { technique = exercise.name }
                             foldButton("now")
                         }
                     }
+                    // A lift with plates: the bar for the set to come, loaded while resting.
+                    let plates = plateTarget(set, in: exercise, shown: restKg(set, in: exercise))
+                    let weight = Text(plannedLine(set, in: exercise)).font(Typo.number(22)).foregroundStyle(Palette.ink).lineLimit(1)
+                    if let plates {
+                        Button { loadingBar = plates } label: { weight }.buttonStyle(.plain)
+                    } else {
+                        weight
+                    }
                     if let previous = GymSessionMath.lastTime(set, in: exercise, last: last) {
                         Text(L10n.f("Minule %@", previous)).font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                    if let plates, let text = platesText(exercise, restKg(set, in: exercise)) {
+                        Button { loadingBar = plates } label: {
+                            Text(text).font(Typo.caption).foregroundStyle(Palette.secondary)
+                                .padding(.horizontal, 10).frame(height: 30).overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 6)
                     }
                     if let change = adjusted(set, in: exercise) {
                         AdjustmentNote(text: change.text, keep: change.keep) { keep(change.from, in: exercise) }.padding(.top, 6)
@@ -1142,6 +1177,12 @@ struct TrainingModeView: View {
         let pounds = lb(exercise.name)
         let weight: String = LiftWeight.shown(carry?.kg ?? set.plannedKg, machineLb: pounds).map { $0 + " " + LiftWeight.unit(machineLb: pounds) + " × " } ?? ""
         return weight + Fmt.range(carry?.reps ?? set.plannedReps ?? "")
+    }
+
+    /// The weight of plannedLine, as shown ("80"); "" with none.
+    private func restKg(_ set: GymSet, in exercise: GymExercise) -> String {
+        let carry = GymSessionMath.carried(set, in: exercise, keep: kept, typed: typed)
+        return LiftWeight.shown(carry?.kg ?? set.plannedKg, machineLb: lb(exercise.name)) ?? ""
     }
 
     // MARK: The end
