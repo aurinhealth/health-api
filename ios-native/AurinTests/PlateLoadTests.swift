@@ -51,6 +51,23 @@ final class PlateLoadTests: XCTestCase {
         XCTAssertEqual(PlateLoad.perSide(225, bar: 45, sizes: PlateLoad.lbSizes), "45 + 45")
     }
 
+    /// The watch's rest line (GymText.plates) and the chip in the iPhone's rest: Smith 15 kg at 60 kg.
+    func testExactPlatesForTheRest() {
+        XCTAssertEqual(PlateLoad.exact(60, bar: 15), [20, 2.5])
+        XCTAssertEqual(PlateLoad.exact(100, bar: 0), [25, 25])
+        XCTAssertNil(PlateLoad.exact(61, bar: 15))
+        XCTAssertNil(PlateLoad.exact(15, bar: 15))
+    }
+
+    /// The bar reaches the watch with the plan; an older iPhone sends none.
+    func testWatchExerciseCarriesTheBar() throws {
+        let exercise = WatchGym.Exercise(name: "Smith squat", shown: nil, lifts: [], bar: 15)
+        let back = try JSONDecoder().decode(WatchGym.Exercise.self, from: JSONEncoder().encode(exercise))
+        XCTAssertEqual(back.bar, 15)
+        let old = try JSONDecoder().decode(WatchGym.Exercise.self, from: Data(#"{"name":"Smith squat","lifts":[]}"#.utf8))
+        XCTAssertNil(old.bar)
+    }
+
     func testTheUsualBarComesFromTheStations() {
         XCTAssertEqual(PlateBar.usual(["ez_bar"]), .ez)
         XCTAssertEqual(PlateBar.usual(["preacher_bench", "ez_bar"]), .ez)

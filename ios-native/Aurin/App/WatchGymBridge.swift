@@ -42,6 +42,11 @@ extension WatchBridge {
         Self.addInfo(&gym, day: day, date: date)
         // A machine in pounds while the app is in kilos (LiftUnits).
         for e in gym.exercises.indices where LiftUnits.pounds(gym.exercises[e].name) { gym.exercises[e].pounds = true }
+        // The bar as Training mode loads it; a machine in pounds has no plates there either.
+        for e in gym.exercises.indices where gym.exercises[e].pounds != true {
+            let name = gym.exercises[e].name
+            if let usual = PlateBar.known[name] { gym.exercises[e].bar = (PlateBar.saved(name) ?? usual).weight }
+        }
         return gym
     }
 

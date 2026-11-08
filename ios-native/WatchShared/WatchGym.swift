@@ -35,6 +35,9 @@ struct WatchGym: Codable, Equatable, Sendable {
         var record: Last? = nil
         /// In pounds while the app is in kilos: a machine in lb (LiftUnits on the iPhone).
         var pounds: Bool? = nil
+        /// The bar its plates go on, in the chosen unit (20 kg, 45 lb; 0 a
+        /// plate-loaded machine), for the rest's "20 + 2,5 / side"; nil when none go on.
+        var bar: Double? = nil
         var title: String { shown ?? name }
     }
 
