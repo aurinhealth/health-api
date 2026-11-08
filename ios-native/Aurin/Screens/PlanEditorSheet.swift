@@ -320,6 +320,7 @@ struct ExercisePicker: View {
     @Environment(\.dismiss) private var dismiss
     let catalog: [GymCatalogExercise]
     let used: Set<String>
+    var title = "Přidat cvik"
     let pick: (GymCatalogExercise) -> Void
     @State private var query = ""
     @State private var muscle: String?
@@ -376,7 +377,7 @@ struct ExercisePicker: View {
                 }
             }
             .searchable(text: $query, prompt: "Hledat cvik nebo stroj")
-            .navigationTitle("Přidat cvik")
+            .navigationTitle(L10n.tr(title))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Zavřít") { dismiss() } } }
             .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in

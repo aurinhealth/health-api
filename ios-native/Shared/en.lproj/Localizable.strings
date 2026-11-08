@@ -4145,3 +4145,5 @@
 "„%@“ se nepodařilo dohledat" = "Couldn't find “%@”";
 "z fotky" = "from a photo";
 "Zahodit" = "Discard";
+
+"Zatím neuloženo · z %@" = "Not saved yet · from %@";

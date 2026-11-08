@@ -251,6 +251,12 @@ struct GymBuilderView: View {
     @State private var lengthPicked = false
     /// "Změnit zadání" on the quick path: the full form from then on.
     @State private var showForm = false
+    /// The kept proposal was looked for once (GymKeptProposal).
+    @State private var keptChecked = false
+    /// When the proposal shown again was made: "Zatím neuloženo · z 9:42".
+    @State private var keptAt: Date?
+    /// "Vybrat jiný cvik" from Nahradit: any exercise of the catalog in its place.
+    @State private var replacingAny: String?
 
     private var isoDay: String { AppModel.localDate(day) }
 
@@ -303,6 +309,11 @@ struct GymBuilderView: View {
                 focusPreset = true
                 focus = preset
             }
+            // The proposal left without saving (an accidental back arrow) comes back with its edits.
+            if template == nil, proposal == nil, !keptChecked, !model.demo {
+                keptChecked = true
+                restoreKept()
+            }
             // From Svaly the choice is already made: build it straight away.
             if quick, proposal == nil, !showForm, busy == nil {
                 if model.demo { showForm = true } else if needsPlace { askPlace = true } else { await preview() }
@@ -312,9 +323,21 @@ struct GymBuilderView: View {
             if !model.demo, catalog.isEmpty { catalog = (try? await model.api.gymExercises()) ?? [] }
         }
         .task { await MuscleModelStore.shared.load(api: model.demo ? nil : model.api) }
+        .onChange(of: proposal) { _, p in keep(p) }
         .sheet(item: Binding(get: { replacing.map { Named(name: $0) } }, set: { replacing = $0?.name })) { item in
             AlternativesSheet(date: isoDay, exercise: item.name, inPlan: proposal?.exercises.map(\.name) ?? [], footnote: nil,
-                              choose: { _ in }, chooseAlternative: { alt in replace(item.name, with: alt) })
+                              choose: { _ in }, chooseAlternative: { alt in replace(item.name, with: alt) },
+                              chooseOther: {
+                                  // After this sheet is gone: one sheet at a time.
+                                  Task { try? await Task.sleep(for: .milliseconds(450)); replacingAny = item.name }
+                              })
+        }
+        // "Vybrat jiný cvik": any exercise of the catalog takes the sets of the one replaced.
+        .sheet(item: Binding(get: { replacingAny.map { Named(name: $0) } }, set: { replacingAny = $0?.name })) { item in
+            ExercisePicker(catalog: catalog.filter { $0.fits ?? EquipmentView.fits($0, equipment) },
+                           used: Set(proposal?.exercises.map(\.name) ?? []), title: "Vybrat jiný cvik") { ex in
+                replace(item.name, with: GymAlternative(name: ex.name, muscle: nil, sets: nil, reps: nil, note: nil, station: nil))
+            }
         }
         .sheet(isPresented: $adding) {
             ExercisePicker(catalog: catalog.filter { $0.fits ?? EquipmentView.fits($0, equipment) },
@@ -531,6 +554,11 @@ struct GymBuilderView: View {
         VStack(alignment: .leading, spacing: 0) {
             if template == nil && !saved {
                 setupChips.padding(.top, 14)
+                if let keptAt {
+                    Label(L10n.f("Zatím neuloženo · z %@", keptAt.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: Fmt.locale))),
+                          systemImage: "clock")
+                        .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 10)
+                }
             } else {
                 Text(Fmt.capitalized(Fmt.relativeDay(isoDay, today: AppModel.localDate(Date()))) + " · \(minutes) min")
                     .font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 6)
@@ -770,6 +798,33 @@ struct GymBuilderView: View {
         }
     }
 
+    // MARK: The proposal kept on the phone
+
+    /// Shows the kept proposal again with its setup, when it is still for a day to come.
+    private func restoreKept() {
+        guard let kept = GymKeptProposal.load() else { return }
+        let today = AppModel.localDate(Date())
+        if kept.day < today { GymKeptProposal.clear(); return }
+        guard kept.fits(today: today, focus: quick ? focus : nil), let d = Self.isoFormatter.date(from: kept.day) else { return }
+        day = d
+        minutes = kept.minutes
+        focus = kept.focus
+        focusPreset = true
+        muscles = Set(kept.muscles)
+        shown = kept.shown
+        lengthPicked = kept.lengthPicked
+        keptAt = kept.at
+        proposal = kept.proposal
+    }
+
+    /// Every new or edited proposal replaces the kept one; the one shown again stays as it was.
+    private func keep(_ p: GymProposal?) {
+        guard template == nil, !saved, !model.demo, let p, GymKeptProposal.load()?.proposal != p else { return }
+        keptAt = nil
+        GymKeptProposal(proposal: p, day: isoDay, minutes: minutes, focus: focus, muscles: muscles.sorted(), shown: shown,
+                        lengthPicked: lengthPicked, at: Date()).save()
+    }
+
     /// The rested muscles the Odpočaté focus asks for (MuscleFatigue.restedFocus).
     private var restedIds: [String] { model.muscles?.restedFocus ?? [] }
 
@@ -839,7 +894,7 @@ struct GymBuilderView: View {
         await run("confirm") {
             try await model.api.confirmGym(draftId: id, rows: p.rows)
             saved = true
-            if template == nil { GymLength.remember(minutes) }
+            if template == nil { GymLength.remember(minutes); GymKeptProposal.clear() }
             async let training: Void = model.refreshTraining()
             await model.refresh()
             await training
@@ -1310,6 +1365,37 @@ private struct SetupChip: View {
         .padding(.horizontal, 14).frame(height: 34)
         .background(Palette.track, in: Capsule())
         .contentShape(Capsule())
+    }
+}
+
+/// The last proposal not saved to the plan yet, with its edits and its setup,
+/// kept on the phone: an accidental back arrow loses nothing, and opening
+/// Sestavit trénink again shows it. Gone once saved or when its day is over.
+struct GymKeptProposal: Codable, Equatable {
+    var proposal: GymProposal
+    var day: String
+    var minutes: Int
+    var focus: String
+    var muscles: [String]
+    var shown: [String]
+    var lengthPicked: Bool
+    var at: Date
+
+    static let key = "gym.lastProposal"
+
+    static func load(_ defaults: UserDefaults = .standard) -> GymKeptProposal? {
+        defaults.data(forKey: key).flatMap { try? JSONDecoder().decode(GymKeptProposal.self, from: $0) }
+    }
+
+    func save(_ defaults: UserDefaults = .standard) {
+        if let data = try? JSONEncoder().encode(self) { defaults.set(data, forKey: Self.key) }
+    }
+
+    static func clear(_ defaults: UserDefaults = .standard) { defaults.removeObject(forKey: key) }
+
+    /// Still for a day to come; from Svaly or Odpočaté (a focus asked for) only with that focus.
+    func fits(today: String, focus asked: String?) -> Bool {
+        day >= today && (asked == nil || asked == focus)
     }
 }
 

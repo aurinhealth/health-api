@@ -116,7 +116,7 @@ struct GymCatalogExercise: Decodable, Equatable, Identifiable, Hashable {
 
 /// A proposed plan: rows as the gym sheet has them (Typ, Cvik, Série, Plán kg,
 /// Plán reps, …), not saved until it is confirmed.
-struct GymProposal: Equatable {
+struct GymProposal: Codable, Equatable {
     var draftId: Int?
     var planName: String
     var rationale: String?
