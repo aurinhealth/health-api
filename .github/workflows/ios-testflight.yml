@@ -150,6 +150,9 @@ jobs:
           ditto build/Aurin.xcarchive build/AurinNoWatch.xcarchive
           plain=build/AurinNoWatch.xcarchive/Products/Applications/Aurin.app
           rm -rf "$plain/Watch"
+          # The iPhone app can't tell by its Watch folder: TestFlight leaves it out
+          # of every install (the watch app goes to the watch on its own).
+          /usr/libexec/PlistBuddy -c "Add :AurinNoWatchApp bool true" "$plain/Info.plist"
           for plist in "$plain/Info.plist" "$plain"/PlugIns/*.appex/Info.plist; do
             /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$plist"
           done

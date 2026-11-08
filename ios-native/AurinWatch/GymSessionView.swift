@@ -783,6 +783,11 @@ struct GymSessionView: View {
                                 .lineLimit(1).minimumScaleFactor(0.7)
                             Text(GymText.weight(lift.kg ?? 0, machineLb: e.pounds == true) + " × \(lift.reps ?? 0)").watchFont(15, .semibold)
                                 .foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
+                            // The plates to put on while resting, as the iPhone's loader has them.
+                            if let bar = e.bar, e.pounds != true, let kg = lift.kg, let plates = GymText.plates(kg, bar: bar) {
+                                Text(plates).watchFont(12, .semibold).foregroundStyle(W.amber)
+                                    .lineLimit(1).minimumScaleFactor(0.7)
+                            }
                             liveLine
                             if let hint = hint {
                                 Text(hint.text).watchFont(12, .semibold).foregroundStyle(hint.color)

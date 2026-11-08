@@ -42,6 +42,11 @@ extension WatchBridge {
         Self.addInfo(&gym, day: day, date: date)
         // A machine in pounds while the app is in kilos (LiftUnits).
         for e in gym.exercises.indices where LiftUnits.pounds(gym.exercises[e].name) { gym.exercises[e].pounds = true }
+        // The bar as Training mode loads it; a machine in pounds has no plates there either.
+        for e in gym.exercises.indices where gym.exercises[e].pounds != true {
+            let name = gym.exercises[e].name
+            if let usual = PlateBar.known[name] { gym.exercises[e].bar = (PlateBar.saved(name) ?? usual).weight }
+        }
         return gym
     }
 
@@ -109,13 +114,20 @@ extension WatchBridge {
         }
     }
 
-    /// The day's plan. Today's copy on the phone answers at once (the server
-    /// takes seconds); the server's copy follows to the watch when it differs.
-    /// Without a copy, from the server, else nothing.
+    /// The day's plan: the server's, or today's copy on the phone at once while
+    /// it can be newer (the server's copy follows to the watch when it differs);
+    /// offline the copy kept here, else nothing.
     func loadGym(date: String) async -> WatchGym? {
         // Not waited for: the plan answers at once and goes again with them.
         Task { await loadExerciseInfo(date: date) }
-        if date == AppModel.localDate(Date()), let saved = AppModel.live?.writes.waitingGym(date: date) ?? gymDays[date] ?? GymDayCache.load(date: date) {
+        // Today the copy here answers at once only while it can be newer than the
+        // server's: sets still waiting to be sent, or a workout under way here.
+        // Otherwise the server's comes first, as for other days: a plan changed
+        // there (Sestavit trénink, the coach) never reached the copy here, and the
+        // watch showed the old one under today's name (Petr 2026-11-08).
+        let today = date == AppModel.localDate(Date())
+        let waiting = AppModel.live?.writes.waitingGym(date: date)
+        if today, let saved = waiting ?? (LiveWorkout.shared.running ? gymDays[date] ?? GymDayCache.load(date: date) : nil) {
             gymDays[date] = saved
             Task { @MainActor in await refreshGym(date: date, shown: saved) }
             return watchGym(saved, date: date)

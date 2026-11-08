@@ -596,7 +596,7 @@ struct NextSession: View {
             ForEach(Array(lines.prefix(5).enumerated()), id: \.offset) { _, line in
                 Rectangle().fill(Palette.hairline).frame(height: 1)
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(verbatim: line.name).font(Typo.body).foregroundStyle(Palette.ink).lineLimit(1)
+                    Text(verbatim: line.name).font(Typo.body).foregroundStyle(Palette.ink).lineLimit(2)
                     Spacer(minLength: 8)
                     Group {
                         if Self.left(line) == 0 {

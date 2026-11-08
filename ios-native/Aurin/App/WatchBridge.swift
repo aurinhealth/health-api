@@ -235,9 +235,13 @@ final class WatchBridge: NSObject {
     }
 
     /// The build carries the Apple Watch app. The testers' TestFlight build
-    /// leaves it out (ios-testflight.yml), and then no Apple Watch setting shows.
-    static let inBuild = FileManager.default.fileExists(
-        atPath: Bundle.main.bundleURL.appendingPathComponent("Watch/AurinWatch.app").path)
+    /// leaves it out (ios-testflight.yml) and says so in its Info.plist
+    /// (AurinNoWatchApp), and then no Apple Watch setting shows. Not the
+    /// bundle's Watch folder: TestFlight and the App Store install the watch
+    /// app on the watch on its own and leave that folder out on the iPhone, so
+    /// build 544.1 with the watch app hid Settings → Apple Watch and sent the
+    /// watch no Today and no gym plan (Petr 2026-11-08).
+    static let inBuild = Bundle.main.object(forInfoDictionaryKey: "AurinNoWatchApp") as? Bool != true
 
     /// What the watch app last said about itself (AurinWatch/WatchReport.swift),
     /// for "Nahlásit problém"; nil before a watch app that sends it.

@@ -767,6 +767,14 @@ enum GymText {
         W.number(value, digits: value.rounded() == value ? 0 : 1)
     }
 
+    /// "20 + 2,5 / stranu": the plates per side on a bar (in the chosen unit,
+    /// WatchGym.Exercise.bar), only when they make the weight exactly.
+    static func plates(_ kg: Double, bar: Double) -> String? {
+        guard let side = PlateLoad.exact(W.weight(kg), bar: bar, sizes: W.imperial ? PlateLoad.lbSizes : PlateLoad.kgSizes) else { return nil }
+        let text = side.map { W.number($0, digits: $0.rounded() == $0 ? 0 : ($0 * 2).rounded() == $0 * 2 ? 1 : 2) }
+        return text.joined(separator: " + ") + W.tr(" / stranu", " / side")
+    }
+
     /// "77,5 kg" or "171 lb", by Settings → Units on the iPhone, or "75 lb"
     /// on a machine in pounds while the app is in kilos.
     static func weight(_ kg: Double, machineLb: Bool = false) -> String {
