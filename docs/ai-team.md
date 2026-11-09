@@ -3,27 +3,27 @@
 Claude Code works on Aurin as a product team. The main conversation is the **Product Manager**; the
 roles are sub agents defined in `.claude/agents/`:
 
-| Role | Agent | Can run commands |
-|---|---|---|
-| Research Analyst | `research-analyst` | no (web research only) |
-| Sport & Health Scientist | `health-scientist` | no |
-| AI Coach Engineer | `ai-coach-engineer` | read-only commands |
-| iOS & watchOS Designer | `ios-designer` | no |
-| Data & Integrations Engineer | `data-engineer` | read-only commands |
-| Security (red team) | `security-red-team` | yes, staging.aurin.health or local only |
-| Privacy, Compliance & Legal | `privacy-compliance` | no |
-| Tester (QA) | `qa-tester` | yes, tests, local and staging only |
-| Performance & Cost Engineer | `performance-cost` | yes, tests, local and timing on staging |
-| Monetization & Unit Economics Analyst | `monetization-analyst` | read-only commands |
-| Critic | `critic` | no |
-| Marketing | `marketing` | read-only commands, public web |
-| Cycling Coach | `cycling-coach` | no |
-| Running Coach | `running-coach` | no |
-| Swimming Coach | `swimming-coach` | no |
-| Triathlon & Duathlon Coach | `triathlon-coach` | no |
-| Strength Coach | `strength-coach` | no |
-| Sports Nutritionist | `sports-nutritionist` | no |
-| Physiotherapist | `physiotherapist` | no |
+| Role | Agent | Can run commands | Model |
+|---|---|---|---|
+| Research Analyst | `research-analyst` | no (web research only) | Sonnet 5.5 |
+| Sport & Health Scientist | `health-scientist` | no | Opus 5.5 |
+| AI Coach Engineer | `ai-coach-engineer` | read-only commands | Opus 5.5 |
+| iOS & watchOS Designer | `ios-designer` | no | Opus 5.5 |
+| Data & Integrations Engineer | `data-engineer` | read-only commands | Opus 5.5 |
+| Security (red team) | `security-red-team` | yes, staging.aurin.health or local only | Opus 5.5; Fable 5.2 (high) for risky changes |
+| Privacy, Compliance & Legal | `privacy-compliance` | no | Opus 5.5 |
+| Tester (QA) | `qa-tester` | yes, tests, local and staging only | Sonnet 5.5 |
+| Performance & Cost Engineer | `performance-cost` | yes, tests, local and timing on staging | Opus 5.5 |
+| Monetization & Unit Economics Analyst | `monetization-analyst` | read-only commands | Opus 5.5 |
+| Critic | `critic` | no | Opus 5.5 |
+| Marketing | `marketing` | read-only commands, public web | Sonnet 5.5 |
+| Cycling Coach | `cycling-coach` | no | Sonnet 5.5 |
+| Running Coach | `running-coach` | no | Sonnet 5.5 |
+| Swimming Coach | `swimming-coach` | no | Sonnet 5.5 |
+| Triathlon & Duathlon Coach | `triathlon-coach` | no | Sonnet 5.5 |
+| Strength Coach | `strength-coach` | no | Sonnet 5.5 |
+| Sports Nutritionist | `sports-nutritionist` | no | Sonnet 5.5 |
+| Physiotherapist | `physiotherapist` | no | Sonnet 5.5 |
 
 ## Rules
 - Every role is read-only: no role edits files, commits or pushes. Changes are made only after the
@@ -37,6 +37,40 @@ roles are sub agents defined in `.claude/agents/`:
   `production` environment. The rule binds sessions opened in this repository; a session that
   loads no project settings (for example a cloud project with more than one repository) is held by
   the owner's "mergni" and "vydej" alone.
+
+## Models
+Most work stays on Opus 5.5. Fable 5.2 is only for checks where a mistake costs money or user data;
+roles that mostly read and summarise run on Sonnet 5.5. The owner approved this on 2026-11-09.
+- The table above gives each role's model. In a cloud thread the roles in `.claude/agents/` are not
+  loaded as sub agent types, so the thread starts each role as a general sub agent told to read its
+  file, and passes the model from the table (`fable`, `opus`, `sonnet`, `haiku`) when it starts it.
+  The `model` and `effort` lines in the role files cover local sessions.
+- Risky changes are payments, subscriptions, accounts, sign-in, deleting user data and D1 migrations.
+  For them `security-red-team` and the independent review below run on Fable 5.2 at effort high: the
+  PM passes `fable` and `high` when it starts them, in local sessions too (that overrides the role file).
+- A bug that two fixes did not solve, or the hunt for the cause of an outage: the investigation goes
+  to a Fable 5.2 sub agent at effort high.
+- Mechanical lookups (where something is used, a CI log, checking links): Haiku 5.5 at effort low.
+- Prices per million tokens, input / output: Fable 5.2 $8 / $40, Opus 5.5 $4 / $20, Sonnet 5.5
+  $2 / $10, Haiku 5.5 $0.10 / $0.50. A whole thread runs on Fable only when the owner asks for it.
+
+## Independent review before "mergni"
+Every pull request gets one review by a sub agent that did not build it, before the owner is asked
+for "mergni". A hotfix the owner lets a thread merge on green CI gets it before that merge.
+- It gets only the owner's request or the approved point and the diff, not the thread's reasoning.
+- It reports only problems that change behaviour: a wrong result, a crash, lost or leaked data, a
+  security hole, a missed part of the request. Each with file and line. No style.
+- Model: Opus 5.5; Fable 5.2 at effort high for risky changes (see Models).
+- The thread fixes each finding or answers why not, and writes the result under "Nezávislá
+  kontrola" in the pull request.
+
+## How the PM briefs a role
+A role does not see the thread's history, so every brief carries what it needs, in this order:
+1. **Goal:** the outcome and why it matters for the owner's request.
+2. **Scope:** what it reads (files, pages, the staging server) and what it must not touch.
+3. **Context:** the stack, the decisions already made and the research brief.
+4. **Done when:** the check that proves the answer (a test run, a source, a reproduced request).
+5. **Report:** the common findings format, short, with sources.
 
 ## Who checks what
 - Every pull request that changes the server or how data loads: `performance-cost` writes the
