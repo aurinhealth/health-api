@@ -69,17 +69,6 @@ final class GymWorkout: NSObject, ObservableObject {
         // Without leave to save workouts the session doesn't run: said on the set screen.
         // (A denied heart rate can't be told apart from none yet; the session still tries.)
         noHealth = store.authorizationStatus(for: HKObjectType.workoutType()) != .sharingAuthorized
-        // A workout an earlier run of the app left going (an update, a relaunch
-        // without recovery) still holds Apple Health, which runs one at a time:
-        // the new one then counted no heart rate and no calories (Petr 2026-11-09).
-        let left: HKWorkoutSession? = await withCheckedContinuation { continuation in
-            store.recoverActiveWorkoutSession { session, _ in continuation.resume(returning: session) }
-        }
-        if let left {
-            left.end()
-            // Ended before the new one starts (at most 2 s).
-            for _ in 0..<20 where left.state != .ended { try? await Task.sleep(for: .milliseconds(100)) }
-        }
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .traditionalStrengthTraining
         configuration.locationType = .indoor
