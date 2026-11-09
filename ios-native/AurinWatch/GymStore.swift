@@ -610,6 +610,19 @@ final class GymStore: ObservableObject {
         openedFromPhone = true
     }
 
+    /// A workout still running from an earlier day with no set for 30 min ends
+    /// at its last set, without telling the iPhone (it closed that day long
+    /// ago). The app coming up and the Training page check, so a workout the
+    /// idle watch missed can't hold an old gym as today's for days.
+    func endLeftover() async {
+        let workout = GymWorkout.shared
+        guard workout.running, let gym, gym.date != WatchStore.localDate(Date()) else { return }
+        let last = workout.idleEnd ?? workout.lastWork ?? workout.start ?? .distantPast
+        guard Date().timeIntervalSince(last) >= GymWorkout.endAfter else { return }
+        await endWithoutScreen(at: last, tellPhone: false)
+        openedFromPhone = false
+    }
+
     /// Ends the workout with its screen closed (the cover's ✕ leaves it
     /// running), as GymSessionView.end does: idle for 30 min, finished in
     /// Training mode on the iPhone, or left from an earlier day. Saved when
