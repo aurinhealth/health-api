@@ -593,7 +593,8 @@ struct GymSessionView: View {
             clock.foregroundStyle(W.ink)
             HStack(spacing: 2) {
                 Image(systemName: "heart.fill").watchFont(12)
-                Text(workout.heartRate.map { W.number($0) } ?? "–")
+                // As the Heart tile says it: a bare dash here told nothing (Petr 2026-11-09).
+                Text(workout.heartRate.map { W.number($0) } ?? (workout.noHealth ? W.tr("Povol ve Zdraví", "Allow in Health") : "–"))
             }
             .foregroundStyle(W.pink)
             .accessibilityElement(children: .combine)
