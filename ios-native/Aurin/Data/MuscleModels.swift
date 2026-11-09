@@ -86,16 +86,29 @@ struct MuscleFatigue: Decodable {
     /// The muscles that are not rested yet, the most tired first.
     var tired: [Muscle] { (muscles ?? []).filter { $0.state != "rested" } }
 
-    /// "Odpočaté" in Sestavit trénink: up to five rested muscles of the figure
-    /// (the server's limit), the body parts trained longest ago first, within
-    /// them the big muscles first. Empty when nothing is rested.
+    /// "Odpočaté" in Sestavit trénink: up to five muscles of the figure rested
+    /// today (the server's limit), the body parts trained longest ago first,
+    /// within them the big muscles first. At least one big muscle, so small
+    /// ones alone are no workout (75 minutes of forearms, Petr 2026-11-09):
+    /// empty when no big muscle is rested, and the builder picks as usual.
     var restedFocus: [String] {
         let order = ["chest", "upper_back", "lats", "quads", "hamstrings", "hips", "front_delts", "side_delts", "rear_delts",
                      "biceps", "triceps", "calves", "abs", "lower_back", "traps", "obliques", "forearms"]
+        let big: Set<String> = ["chest", "upper_back", "lats", "quads", "hamstrings", "hips"]
         func since(_ id: String) -> Int { groups?.first { $0.id == Self.groupId(body: id) }?.daysSince ?? 99 }
-        let rested = order.enumerated().filter { tired(body: $0.element) == nil }
-        return Array(rested.sorted { since($0.element) != since($1.element) ? since($0.element) > since($1.element) : $0.offset < $1.offset }
-            .map(\.element).prefix(5))
+        let rested = order.enumerated().filter { ready(body: $0.element) }
+            .sorted { since($0.element) != since($1.element) ? since($0.element) > since($1.element) : $0.offset < $1.offset }
+            .map(\.element)
+        guard let firstBig = rested.first(where: { big.contains($0) }) else { return [] }
+        let picked = Array(rested.prefix(5))
+        return picked.contains(where: { big.contains($0) }) ? picked : Array(rested.prefix(4)) + [firstBig]
+    }
+
+    /// Rested today: every muscle of it rested, or rested later today, as the
+    /// rings count it (src/muscle-fatigue.js readyBy).
+    func ready(body id: String) -> Bool {
+        Self.fatigueIds(body: id).compactMap { muscle($0) }
+            .allSatisfy { $0.state == "rested" || ($0.state == "recovering" && ($0.readyDate.map { $0 <= date } ?? false)) }
     }
 
     /// The body part (src/muscle-fatigue.js GROUPS) of a muscle of the figure.

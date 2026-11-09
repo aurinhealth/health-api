@@ -48,10 +48,30 @@ final class MuscleTests: XCTestCase {
         XCTAssertLessThanOrEqual(focus.count, 5, "the server takes 1 to 5 muscles")
         XCTAssertEqual(Set(focus).count, focus.count)
         for id in focus {
-            XCTAssertNil(sample.tired(body: id), id)
+            // Rested, or rested later today as the rings count it (the sample's chest and back).
+            XCTAssertTrue(sample.ready(body: id), id)
             XCTAssertTrue(BodyFigure.muscles.contains { $0.id == id }, id)
         }
         XCTAssertFalse(focus.contains("hips"), "the glutes are tired in the sample")
+    }
+
+    func testRestedFocusNeedsABigMuscle() throws {
+        let others: [String] = ["back", "shoulders", "rear_delts", "side_delts", "biceps", "triceps", "quads", "hamstrings",
+                                "glutes", "adductors", "abductors", "calves", "core", "lower_back", "traps"]
+        // Every muscle tired except the forearms (rested) and the chest as given.
+        func fatigue(chest: String, chestReady: String) throws -> MuscleFatigue {
+            var rows: [String] = others.map { id in "{\"id\":\"\(id)\",\"label\":\"\(id)\",\"state\":\"fatigued\",\"readyDate\":\"2026-11-11\"}" }
+            rows.append("{\"id\":\"chest\",\"label\":\"chest\",\"state\":\"\(chest)\",\"readyDate\":\"\(chestReady)\"}")
+            rows.append("{\"id\":\"forearms\",\"label\":\"forearms\",\"state\":\"rested\",\"readyDate\":null}")
+            let json: String = "{\"date\":\"2026-11-09\",\"muscles\":[" + rows.joined(separator: ",") + "]}"
+            return try JSONDecoder().decode(MuscleFatigue.self, from: Data(json.utf8))
+        }
+        // Only the forearms rested: no workout of them alone.
+        XCTAssertEqual(try fatigue(chest: "fatigued", chestReady: "2026-11-11").restedFocus, [])
+        // The chest rested later today counts, as on the rings.
+        XCTAssertEqual(Set(try fatigue(chest: "recovering", chestReady: "2026-11-09").restedFocus), ["chest", "forearms"])
+        // Recovering until tomorrow does not.
+        XCTAssertEqual(try fatigue(chest: "recovering", chestReady: "2026-11-10").restedFocus, [])
     }
 
     func testFigurePathsStayInTheFigure() {

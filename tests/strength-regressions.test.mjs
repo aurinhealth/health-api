@@ -41,7 +41,40 @@ test('front, side and rear shoulders map to distinct exercises', () => {
   const plan=generateStrengthPlan(context,{focusMuscles:['front_delts','side_delts','rear_delts']});
   const exercises=[...new Set(plan.rows.filter(row=>row[0]==='WORK').map(row=>row[1]))];
   assert.ok(exercises.length>=3);
-  for(const group of ['front_delts','side_delts','rear_delts'])assert.ok(exercises.some(name=>FOCUS_GROUPS[group].exercises.includes(name)));
+  for(const group of ['front_delts','side_delts','rear_delts'])assert.ok(exercises.some(name=>FOCUS_GROUPS[group].exercises.includes(EXERCISES[name].variantOf??name)),group);
+});
+
+test('one chosen group fills at most three different movements and ten sets, and says the session is shorter', () => {
+  const context={date:'2026-11-09',cycling:{recentRideTss:100,recentRideHours:2,recentActivities:[],nextRide:null},recovery:{},strength:{recentCompletedSets:[]},trainingSetup:{goal:'strength_muscle'}};
+  for(const group of ['forearms','biceps','chest','calves']){
+    const plan=generateStrengthPlan(context,{focusMuscles:[group],durationMinutes:75});
+    const work=plan.rows.filter(row=>row[0]==='WORK'), names=[...new Set(work.map(row=>row[1]))];
+    assert.ok(names.length<=3,group+' '+names);
+    assert.ok(work.length<=10,group+' '+work.length);
+    assert.ok(plan.timing.estimatedMinutes<75*.75,group+' '+plan.timing.estimatedMinutes);
+    assert.match(plan.rationale,/přidej další partii/,group);
+  }
+  // A small group: two exercises and six sets; forearms take one overhand
+  // exercise (reverse wrist curl or a reverse curl), not four of them.
+  for(const group of ['forearms','biceps','calves']){
+    const work=generateStrengthPlan(context,{focusMuscles:[group],durationMinutes:75}).rows.filter(row=>row[0]==='WORK');
+    assert.ok(new Set(work.map(row=>row[1])).size<=2&&work.length<=6,group+' '+work.length);
+  }
+  const forearms=generateStrengthPlan(context,{focusMuscles:['forearms'],durationMinutes:75});
+  const patterns=[...new Set(forearms.rows.filter(row=>row[0]==='WORK').map(row=>row[1]))].map(name=>EXERCISES[name].pattern);
+  assert.ok(patterns.filter(p=>p==='wrist_extension'||p==='reverse_curl').length<=1,String(patterns));
+  // Three groups still fill the hour and a quarter.
+  const three=generateStrengthPlan(context,{focusMuscles:['chest','upper_back','triceps'],durationMinutes:75});
+  assert.ok(three.timing.estimatedMinutes>=75*.75,String(three.timing.estimatedMinutes));
+  assert.doesNotMatch(three.rationale,/přidej další partii/);
+});
+
+test('a Wrist Roller keeps its roll-ups whatever the gym goal', () => {
+  const context={date:'2026-11-09',cycling:{recentRideTss:100,recentRideHours:2,recentActivities:[],nextRide:null},recovery:{},strength:{recentCompletedSets:[]},trainingSetup:{goal:'strength_muscle'}};
+  const plan=generateStrengthPlan(context,{focusMuscles:['forearms'],durationMinutes:45,excludeExercises:['DB wrist curl','Cable Wrist Curl']});
+  const rows=plan.rows.filter(row=>row[0]==='WORK'&&row[1]==='Wrist Roller');
+  assert.ok(rows.length);
+  for(const row of rows)assert.equal(row[4],'3–5');
 });
 
 test('a long focused session gets several exercises per group, only from those groups', () => {

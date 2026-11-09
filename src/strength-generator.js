@@ -308,7 +308,7 @@ const EXERCISES = {
   "Band Hip Abduction": { pattern: "abduction", muscle: "abductors", unilateral: false, sets: 3, reps: "12–20", baseKg: null, warmup: false, note: "Boční hýždě; s minigumou nad koleny nebo u kotníků odtahuješ nohy od sebe, kg = bez kg, odpor podle síly gumy", fatigue: 0.25 },
   "Banded Clamshell": { pattern: "abduction", muscle: "abductors", unilateral: true, sets: 2, reps: "12–20", baseKg: null, warmup: false, note: "Boční hýždě; vleže na boku s minigumou nad koleny otevíráš horní koleno, kg = bez kg, odpor podle síly gumy", fatigue: 0.2, variantOf: "Band Hip Abduction" },
   "Plate Front Raise": { pattern: "lateral_raise", muscle: "shoulders", unilateral: false, sets: 3, reps: "10–15", baseKg: 10, warmup: false, note: "Přední ramena; předpažování s kotoučem drženým oběma rukama, kg = kotouč", fatigue: 0.35, variantOf: "Dumbbell Front Raise" },
-  "Wrist Roller": { pattern: "wrist_flexion", muscle: "forearms", unilateral: false, sets: 2, reps: "3–5", baseKg: 5, warmup: false, note: "Předloktí; navíjíš kotouč na provázku na tyčku a zase ho odvíjíš, opakování = navinutí, kg = kotouč", fatigue: 0.25 },
+  "Wrist Roller": { pattern: "wrist_flexion", muscle: "forearms", unilateral: false, sets: 2, reps: "3–5", ownReps: true, baseKg: 5, warmup: false, note: "Předloktí; navíjíš kotouč na provázku na tyčku a zase ho odvíjíš, opakování = navinutí, kg = kotouč", fatigue: 0.25 },
   "Plate Forward Lunge": { pattern: "lunge", muscle: "glutes", unilateral: true, sets: 3, reps: "8–12", baseKg: 10, warmup: false, note: "Hýždě a stehna; výpad vpřed s kotoučem drženým u hrudníku, kg = kotouč", fatigue: 0.6, variantOf: "Forward Lunge" },
   "EZ Bar Reverse Preacher Curl": { pattern: "reverse_curl", muscle: "forearms", unilateral: false, sets: 3, reps: "10–12", baseKg: 15, warmup: false, note: "Předloktí a brachialis; zdvih EZ osy nadhmatem na Scottově lavici, kg = kotouče + osa", fatigue: 0.3 },
   "Barbell Landmine Row": { pattern: "pull", muscle: "back", unilateral: false, sets: 3, reps: "8–12", baseKg: 20, warmup: true, note: "Záda; přítah konce osy v landminu oběma rukama v předklonu, kg = kotouče na konci osy", fatigue: 0.85 },
@@ -363,6 +363,14 @@ const EXERCISES = {
 // The groups' names in English, and the leg groups a key ride keeps fresh.
 const FOCUS_GROUP_EN = { chest: 'chest', upper_back: 'upper back', lats: 'lats', front_delts: 'front delts', side_delts: 'side delts', rear_delts: 'rear delts', biceps: 'biceps', triceps: 'triceps', abs: 'abs', obliques: 'obliques', quads: 'quads', hamstrings: 'hamstrings', hips: 'glutes and hips', calves: 'calves', forearms: 'forearms', traps: 'traps', lower_back: 'lower back' };
 const LEG_GROUPS = ['quads', 'hamstrings', 'hips', 'calves'];
+// One chosen group in a targeted session: at most this many exercises and work
+// sets. A small muscle gets indirect work from the big lifts and grip, so less.
+const FOCUS_BIG = { exercises: 3, sets: 10 }, FOCUS_SMALL = { exercises: 2, sets: 6 };
+const SMALL_FOCUS_GROUPS = new Set(['forearms', 'calves', 'biceps', 'triceps', 'side_delts', 'rear_delts', 'traps', 'abs', 'obliques']);
+const focusCap = group => SMALL_FOCUS_GROUPS.has(group) ? FOCUS_SMALL : FOCUS_BIG;
+// Overhand forearm work (reverse wrist curl, reverse curls) counts as one
+// movement, so a forearm session takes one of them, not three.
+const focusPattern = name => ({ wrist_extension: 'overhand', reverse_curl: 'overhand' })[EXERCISES[name].pattern] || EXERCISES[name].pattern;
 export const FOCUS_GROUPS = {
   chest: {label:'Hrudník', exercises:['DB bench press','Chest flat press Prime','Barbell bench press','DB incline press','Pec deck','Cable fly','Low-to-high cable fly','Smith machine incline press','Barbell incline bench press','Smith Machine Bench Press','Cable Bench Chest Fly','Cable Bench Press','Cable Chest Press','Cable Decline Bench Press','Cable High-to-Low Fly','Cable Incline Bench Press','Cable Standing Single Arm Chest Press','Single-Arm Cable Fly','Decline Machine Chest Press','Incline Machine Chest Press','Dumbbell Chest Fly']},
   upper_back: {label:'Horní záda', exercises:['Low row','Standing rowing machine','One-arm DB row','Single-arm cable row','Wide-grip low row','Barbell row','T-bar row','Chest-supported row','TRX row','Inverted Row','Smith Machine Bent-Over Row','Cable Row Bar Standing Row','Cable Supinating Row','Machine Underhand Row','Hammer Strength Iso-Lateral Row','Seal Row','Kettlebell Gorilla Row','Kettlebell Renegade Rows','Band Row','Barbell Landmine Row','Meadows Row']},
@@ -1341,7 +1349,8 @@ export function recommendedGoal(mainSport, experience) {
   return experience === 'beginner' && goal === 'strength_muscle' ? 'muscle' : goal;
 }
 export function goalReps(def, goal, experience) {
-  if (!def || !goal || goal === 'auto' || CORE_PATTERNS.has(def.pattern) || !def.baseKg) return def?.reps;
+  // ownReps: a repetition that is not a lift (a Wrist Roller roll-up) keeps its own range.
+  if (!def || !goal || goal === 'auto' || CORE_PATTERNS.has(def.pattern) || def.ownReps || !def.baseKg) return def?.reps;
   const main = def.warmup === true, heavy = def.fatigue >= .7, beginner = experience === 'beginner';
   if (goal === 'strength') return main ? (beginner ? '6–8' : '3–6') : heavy ? '6–8' : def.reps;
   if (goal === 'strength_muscle') return main ? (beginner ? '6–8' : '5–8') : heavy ? '6–10' : '8–12';
@@ -1371,7 +1380,7 @@ function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volum
   // The catalogue's loads are an experienced athlete's: anyone else starts an
   // exercise new to them lighter, as on the first session.
   const def = EXERCISES[exercise], fallbackKg = def.baseKg == null ? null : def.baseKg * startingLoadScale(def.muscle, sex) * (firstSession ? FIRST_SESSION_LOAD : CATALOGUE_SCALE[experience] ?? CATALOGUE_SCALE.regular);
-  const reps = planReps && !CORE_PATTERNS.has(def.pattern) ? planReps : goalReps(def, goal, experience);
+  const reps = planReps && !CORE_PATTERNS.has(def.pattern) && !def.ownReps ? planReps : goalReps(def, goal, experience);
   // Legs spared for a key session keep their rep range and their progression
   // (heavy, fewer sets: Rønnestad 2010, Schumann 2022), with no extra set, so
   // never more than the 2 sets the caller allows (audit 2026-11-06, 6.2,
@@ -1568,6 +1577,15 @@ export function generateStrengthPlan(context, options = {}) {
     // delts is 8 exercises, not 3). The timing check below trims any excess.
     // Legs kept fresh for a key ride get their one best exercise, no more.
     const ranked = focusMuscles.map(group => chosen.protectedLegs && ['quads', 'hamstrings', 'hips', 'calves'].includes(group) ? rankedExercises(group).slice(0, 1) : group === 'chest' ? chestOrder(rankedExercises(group), name => stalled.has(name) || shown.has(name) || lastExerciseDate.has(name) && daysBetween(lastExerciseDate.get(name), context.date) < 5) : rankedExercises(group));
+    // A chosen group gives at most three exercises (below), a different
+    // movement first where it has one (wrist curl, reverse wrist curl, reverse
+    // curl): 75 minutes of forearms were all six of them, four reverse curls
+    // among them (Petr 2026-11-09). The session is shorter instead.
+    for (let g = 0; g < ranked.length; g++) {
+      const seen = new Set(), first = [], rest = [];
+      for (const name of ranked[g]) { const pattern = focusPattern(name); (seen.has(pattern) ? rest : first).push(name); seen.add(pattern); }
+      ranked[g] = [...first, ...rest];
+    }
     // Two or three shoulder parts take turns within one list: Ramena next to
     // chest is one group, not three (Petr 2026-11-07).
     const parts = focusMuscles.flatMap((group, i) => SHOULDER_PARTS.includes(group) ? [i] : []);
@@ -1576,6 +1594,9 @@ export function generateStrengthPlan(context, options = {}) {
       ranked[parts[0]] = Array.from({ length: longest }, (_, k) => lists.map(list => list[k])).flat().filter(Boolean);
       for (const i of parts.slice(1).reverse()) ranked.splice(i, 1);
     }
+    // The merged shoulder parts count as one big group.
+    const listGroups = focusMuscles.filter((group, i) => !parts.slice(1).includes(i));
+    for (let g = 0; g < ranked.length; g++) ranked[g] = ranked[g].slice(0, parts.length > 1 && g === parts[0] ? FOCUS_BIG.exercises : focusCap(listGroups[g]).exercises);
     const next = ranked.map(() => 0);
     exercises = [];
     const total = Math.max(ranked.length, maxExercises);
@@ -1701,6 +1722,27 @@ export function generateStrengthPlan(context, options = {}) {
   const routineOptions = { date: context.date, sport: context.profile?.mainSport || context.trainingSetup?.history?.mainSport || '' };
   const routinesNow = () => { const all = routinesFor(rows, muscleOf, context.trainingSetup || {}, requestedMinutes, routineOptions); warmup = withWarmup ? all.warmup : null; stretching = withStretching ? all.stretching : null; };
   routinesNow();
+  // About ten work sets per chosen group (six for a small one): more in one
+  // session adds little to the gain (~11 fractional sets, Remmert et al. 2025,
+  // SportRxiv 537, preprint). A set goes from the group's exercise with the
+  // most sets, the later one on a tie.
+  if (focusMuscles) {
+    const groupOf = name => { const base = EXERCISES[name]?.variantOf ?? name; const g = focusMuscles.find(id => FOCUS_GROUPS[id].exercises.includes(base) || FOCUS_GROUPS[id].exercises.includes(name)); return SHOULDER_PARTS.includes(g) ? 'shoulders' : g; };
+    const count = name => rows.filter(r => r[0] === 'WORK' && r[1] === name).length;
+    for (let trimmed = true; trimmed;) {
+      trimmed = false;
+      const names = [...new Set(rows.filter(r => r[0] === 'WORK').map(r => r[1]))];
+      for (const group of new Set(names.map(groupOf))) {
+        const own = names.filter(name => groupOf(name) === group);
+        if (own.reduce((sum, name) => sum + count(name), 0) <= (group === 'shoulders' ? FOCUS_BIG : focusCap(group)).sets) continue;
+        const most = own.slice().reverse().sort((a, b) => count(b) - count(a))[0];
+        if (count(most) < 2) continue;
+        rows.splice(rows.findLastIndex(r => r[0] === 'WORK' && r[1] === most), 1);
+        trimmed = true;
+      }
+      if (trimmed) { configure(); routinesNow(); }
+    }
+  }
   const measure = () => estimateStrengthTiming(rows, EXERCISES, requestedMinutes);
   let timing = measure();
   while (timing.totalSeconds > requestedMinutes * 60) {
@@ -1724,7 +1766,9 @@ export function generateStrengthPlan(context, options = {}) {
     .map(id => wholeShoulder && id === SHOULDER_PARTS[0] ? L('Ramena', 'Shoulders') : FOCUS_GROUPS[id].label).join(', ');
   const legCaution = explicitLegs && nearRide.protect;
   const cautionText = legCaution ? nearRide.reason + L(' Nohy proto mají nejvýše 3 série a je potřeba u nich držet rezervu 2–3 opakování.', ' So the legs get at most 3 sets and you should keep 2–3 reps in reserve on them.') : '';
-  const baseRationale = focusMuscles ? L('Zvolené partie: ', 'Chosen muscle groups: ') + focusLabels + L('. Cviky zohledňují nedávné posilování, regeneraci a cyklistickou zátěž. ', '. The exercises take recent strength work, recovery and cycling load into account. ') + cautionText : chosen.rationale + (cautionText ? ' ' + cautionText : '');
+  // Chosen groups that fill well under the time say so, instead of stacking more of the same.
+  const shortText = focusMuscles && timing.estimatedMinutes < requestedMinutes * .75 ? L('Zvolené partie vyplní asi ' + timing.estimatedMinutes + ' min; na delší trénink přidej další partii. ', 'The chosen muscle groups fill about ' + timing.estimatedMinutes + ' min; add another muscle group for a longer workout. ') : '';
+  const baseRationale = focusMuscles ? L('Zvolené partie: ', 'Chosen muscle groups: ') + focusLabels + L('. Cviky zohledňují nedávné posilování, regeneraci a cyklistickou zátěž. ', '. The exercises take recent strength work, recovery and cycling load into account. ') + shortText + cautionText : chosen.rationale + (cautionText ? ' ' + cautionText : '');
   const fmtDay = d => new Date(d + 'T12:00:00Z').toLocaleDateString(L('cs-CZ', 'en-GB'), { weekday: 'short', day: 'numeric', month: L('numeric', 'short'), timeZone: 'UTC' });
   const nearby = (chosen.plannedSessions || []).map(x => fmtDay(x.date).replace(/\.$/, ''));
   const swapped = Object.entries(stallSwaps).filter(([ex]) => rows.some(r => r[1] === ex)).map(([ex, old]) => old + ' → ' + ex);

@@ -909,6 +909,11 @@ struct ExerciseCatalog: View {
             if rested, model.muscles?.restedFocus.isEmpty == false {
                 PrimaryButton(title: L10n.tr("Sestavit z odpočatých"), systemImage: "sparkles") { model.push(.gymRested) }
                     .padding(.top, 12)
+            } else if rested, model.muscles != nil {
+                // No big muscle rested: say why there is no workout of them (Petr 2026-11-09).
+                Text("Velké svaly se ještě zotavují. Zkus krátký trénink středu těla nebo volno.")
+                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 12)
             }
 
             PillToggle(title: "Jen s mým vybavením", subtitle: EquipmentView.summary(equipment), isOn: $mine)
@@ -944,7 +949,7 @@ struct ExerciseCatalog: View {
             guard words.allSatisfy({ text.contains($0) }) else { return false }
             if let muscle, !Self.works(ex, muscle) { return false }
             if mine, !EquipmentView.fits(ex, equipment) { return false }
-            if rested, tired(ex) != nil { return false }
+            if rested, !Self.ready(ex, model.muscles) { return false }
             return true
         }
     }
@@ -984,7 +989,14 @@ struct ExerciseCatalog: View {
     /// The tired muscle behind the exercise's main muscle, nil when it is rested.
     private func tired(_ ex: GymCatalogExercise) -> MuscleFatigue.Muscle? { Self.tired(ex, model.muscles) }
 
-    /// The exercise's main muscle when it is not rested yet (Odpočaté leaves it out).
+    /// Odpočaté keeps the exercise: its main muscle is rested today, as the
+    /// rings and Sestavit z odpočatých count it (MuscleFatigue.ready).
+    static func ready(_ ex: GymCatalogExercise, _ data: MuscleFatigue?) -> Bool {
+        guard let data, let main = (ex.muscles ?? [:]).max(by: { $0.value < $1.value }), main.value >= 0.5 else { return true }
+        return data.ready(body: main.key)
+    }
+
+    /// The exercise's main muscle when it is not rested yet (its mark in the list).
     static func tired(_ ex: GymCatalogExercise, _ data: MuscleFatigue?) -> MuscleFatigue.Muscle? {
         guard let data, let main = (ex.muscles ?? [:]).max(by: { $0.value < $1.value }), main.value >= 0.5 else { return nil }
         return data.tired(body: main.key)
