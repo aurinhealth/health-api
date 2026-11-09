@@ -32,7 +32,6 @@ const RESEND_SECONDS = 60;
 const MAX_ATTEMPTS = 5;
 const MAX_SENDS_PER_DAY = 10;
 const MAX_FAILED_PER_DAY = 20;
-const MAX_REVIEW_FAILURES = 20;
 const DEFAULT_CODES_PER_DAY = 500;
 const RESERVED_SHARE = 0.2;
 // One caller's share of the day's codes; a mobile operator's shared address (many people behind
@@ -51,7 +50,6 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EXPIRED = () => L("Kód už neplatí. Nech si poslat nový.", "That code has expired. Send a new one.");
 const TOO_MANY = () => L("Příliš mnoho pokusů o přihlášení. Zkus to za chvíli.", "Too many sign-in attempts. Try again in a moment.");
 const LOCKED_TODAY = () => L("Na tenhle e-mail bylo zadáno příliš mnoho špatných kódů. Zkus to zítra.", "Too many wrong codes were entered for this email. Try again tomorrow.");
-const REVIEW_LOCKED = () => L("Na tenhle e-mail bylo zadáno příliš mnoho špatných kódů.", "Too many wrong codes were entered for this email.");
 const today = now => new Date(now).toISOString().slice(0, 10);
 
 const MAX_KNOWN_TRIES_PER_DAY = 20;
@@ -112,7 +110,8 @@ function codeHash(env, email, code, purpose = "email-code") {
 // of a random one, so Apple's reviewer can sign in without the inbox, but only until the end of
 // the APP_REVIEW_UNTIL day (UTC); without that date it gets a random code like anyone (app-review.js).
 // The usual limits still apply: the code works only after "send code", for 10 minutes and 5 tries,
-// and as the code stays the same, wrong tries also add up over its whole life (MAX_REVIEW_FAILURES).
+// and MAX_FAILED_PER_DAY wrong tries lock the address until midnight (UTC) like any other; the owner
+// then gets an e-mail, since the reviewer cannot sign in that day and someone may be guessing the code.
 // Never for the owner (here) or an admin (fixedReviewCode): their sign-in stays on random codes.
 export function reviewCode(env, email, now = Date.now()) {
   const address = normalizeEmail(env?.APP_REVIEW_EMAIL), code = String(env?.APP_REVIEW_CODE || "").trim();
@@ -248,37 +247,29 @@ async function useCode(db, env, email, input, purpose, known = null) {
   const row = await db.prepare(`UPDATE email_login_codes SET attempts = attempts + 1,
       fail_count = CASE WHEN fail_day IS ? THEN fail_count + 1 ELSE 1 END, fail_day = ?
     WHERE email = ? AND code_hash IS NOT NULL AND expires_at > ? AND attempts < ? AND (fail_day IS NOT ? OR fail_count < ?)
-    RETURNING code_hash, attempts`).bind(day, day, email, now, MAX_ATTEMPTS, day, known ? Number.MAX_SAFE_INTEGER : MAX_FAILED_PER_DAY).first();
+    RETURNING code_hash, attempts, fail_count`).bind(day, day, email, now, MAX_ATTEMPTS, day, known ? Number.MAX_SAFE_INTEGER : MAX_FAILED_PER_DAY).first();
   if (!row) {
     if (known) return json({ message: EXPIRED() }, 400);
     const locked = await db.prepare("SELECT email FROM email_login_codes WHERE email = ? AND fail_day = ? AND fail_count >= ?").bind(email, day, MAX_FAILED_PER_DAY).first();
     return locked ? json({ message: LOCKED_TODAY() }, 429) : json({ message: EXPIRED() }, 400);
   }
-  // The fixed App Review code: tries add up over its whole life, whichever code was sent last.
-  const review = purpose === "email-code" ? await reviewTriesKey(db, env, email, time) : null;
-  if (review && !(await claimReviewTry(db, review, now))) return json({ message: REVIEW_LOCKED() }, 429);
   if (!timingSafeEqualString(row.code_hash, await codeHash(env, email, code, purpose))) {
+    if (Number(row.fail_count) === MAX_FAILED_PER_DAY && purpose === "email-code" && await fixedReviewCode(db, env, email, time)) await reviewLockedNotice(env, day);
     return json({ message: row.attempts >= MAX_ATTEMPTS ? EXPIRED() : L("Kód nesedí. Zkontroluj ho, nebo si nech poslat nový.", "That code is wrong. Check it or send a new one.") }, 400);
   }
   // Used up, so the same code never signs in twice.
   const used = await db.prepare("UPDATE email_login_codes SET code_hash = NULL, fail_count = MAX(fail_count - 1, 0) WHERE email = ? AND code_hash = ? RETURNING email").bind(email, row.code_hash).first();
   if (!used) return json({ message: EXPIRED() }, 400);
-  if (review) await db.prepare("UPDATE review_code_failures SET failed = MAX(failed - 1, 0) WHERE key = ?").bind(review).run();
   return null;
 }
 
-// While the fixed review code applies to this address: the key its wrong tries are counted under,
-// a keyed hash of the address and the code, so a new APP_REVIEW_CODE starts from nothing.
-async function reviewTriesKey(db, env, email, now) {
-  const code = await fixedReviewCode(db, env, email, now);
-  return code ? "review:" + (await signText("review-code:" + email + ":" + code, sessionSecret(env))).slice(0, 32) : null;
-}
-
-async function claimReviewTry(db, key, now) {
-  const claimed = await db.prepare(`INSERT INTO review_code_failures(key, failed, updated_at) VALUES(?, 1, ?)
-    ON CONFLICT(key) DO UPDATE SET failed = failed + 1, updated_at = excluded.updated_at WHERE review_code_failures.failed < ?`)
-    .bind(key, now, MAX_REVIEW_FAILURES).run();
-  return Number(claimed.meta?.changes) > 0;
+// The wrong try that locked the App Review address for the day: the owner hears of it.
+async function reviewLockedNotice(env, day) {
+  const to = String(env.OWNER_EMAIL || "").trim();
+  if (!to || !emailConfigured(env)) { console.warn("App Review address locked for the day", day); return; }
+  await sendEmail(env, { to, subject: "Aurin: účet pro App Review je dnes zamčený", text: `Na e-mail účtu pro App Review dnes (${day}, UTC) někdo zadal ${MAX_FAILED_PER_DAY} špatných kódů, takže se na něj do půlnoci UTC nejde přihlásit kódem. Zítra se zámek sám uvolní.\n\n`
+    + "Jestli to nebyl recenzent Applu ani ty, někdo kód hádá: změň tajemství APP_REVIEW_CODE a nový kód dej do poznámek pro App Review v App Store Connect." })
+    .catch(error => console.error("App Review lock notice failed", error?.code || error?.message));
 }
 
 const CHANGE_REFUSED = {
