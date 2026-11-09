@@ -241,10 +241,12 @@ final class LiveWorkout: NSObject {
         return WatchBridge.settings.openOnWatch && state.paired && state.installed
     }
 
-    /// The watch's first reading (WatchGym.Live) within 30 s, else this
-    /// iPhone records the workout itself.
+    /// The watch's first reading (WatchGym.Live) within 10 s, else this
+    /// iPhone records the workout itself, with the AirPods' heart rate. 30 s
+    /// left the start without a beat (Petr 2026-11-09); a watch that answers
+    /// later still takes over (watch(_:), GymWorkout.lost on the watch).
     private func sessionUnlessWatch(at begun: Date) async {
-        for _ in 0..<30 {
+        for _ in 0..<10 {
             try? await Task.sleep(for: .seconds(1))
             guard start == begun, !onWatch else { return }
         }
