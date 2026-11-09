@@ -29,7 +29,9 @@ async function call(body) {
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(6 * 60 * 1000)
   });
-  const json = await response.json().catch(() => ({ status: "error", message: `HTTP ${response.status}` }));
+  // A page that is not JSON (Cloudflare's own error, e.g. "error code: 1102") keeps its first words (run 56).
+  const text = await response.text();
+  let json; try { json = JSON.parse(text); } catch { json = { status: "error", message: `HTTP ${response.status} ${text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 120)}`.trim() }; }
   if (!response.ok && json.status !== "error") json.status = "error";
   return json;
 }
@@ -41,6 +43,8 @@ const results = [];
 const label = r => r.round ? `${r.id} (${r.round}/${rounds})` : r.id;
 for (let round = 1; round <= rounds; round++) for (const s of scenarios) {
   const result = await call({ id: s.id }).catch(error => ({ id: s.id, title: s.title, status: "error", message: error.message }));
+  // An error page knows no situation: keep its id, so the summary names it (run 56 printed "undefined").
+  result.id ??= s.id; result.title ??= s.title;
   if (rounds > 1) result.round = round;
   results.push(result);
   const failed = (result.checks || []).filter(c => !c.ok);

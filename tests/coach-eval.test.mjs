@@ -737,3 +737,9 @@ test('run 53: a kept Nemoc card is no dropped card, though the app keeps it with
   assert.ok(!failed([status], [{ type: 'status', status: 'sick', reason: 'Horečka.' }]).includes('text neslibuje kartu, kterou aplikace zahodila'));
   assert.ok(failed([status], []).includes('text neslibuje kartu, kterou aplikace zahodila'));
 });
+
+test('run 56: "buduje vytrvalost" is a reason for S44; "nejde o známku nemoci" still names an illness for S38', () => {
+  const failed = (id, answer) => checkReply(scenarioById(id), { proposed: [], kept: [], answer }, null, COACH_EVAL_DATE).filter(c => !c.ok).map(c => c.name);
+  assert.ok(!failed('S44', 'Zóna 2 je lehké tempo, při kterém můžeš mluvit v celých větách. Dnešní „Lehký běh 40 min“ tak buduje vytrvalost bez velké únavy nohou.').includes('řekne důvod'));
+  assert.ok(failed('S38', 'Teplota zápěstí byla ve spánku o 1,1 °C nad tvým normálem. Nejde o známku nemoci, ale dnes bych zůstal bez intenzity.').includes('teplotu nenazve nemocí ani jejím začátkem (MDR)'));
+});
