@@ -149,16 +149,16 @@ enum WatchDemo {
                                 plannedReps: planned, done: false, rest: rest) }
         }
         var squat = [L(row: 7, number: "1", warmup: true, drop: false, kg: 40, reps: 8, plannedReps: "8", done: true, rest: 60)]
-        squat += sets(8, 4, 80, 8, "6-8", rest: 150)
+        squat += sets(8, 4, 80, 3, "3", rest: 150)
         squat[1].done = true
         squat[1].intensity = "M"
         return WatchGym(
             date: day(0), title: tr("Celé tělo", "Full body"), minutes: 45, restExercises: 120,
             exercises: [
                 WatchGym.Exercise(name: "Dřep", shown: tr("Dřep", "Squat"), lifts: squat),
-                WatchGym.Exercise(name: "Tlak na lavici", shown: tr("Tlak na lavici", "Bench press"), lifts: sets(12, 3, 62.5, 8, "8", rest: 90)),
-                WatchGym.Exercise(name: "Přítahy", shown: tr("Přítahy", "Rows"), lifts: sets(15, 3, 50, 10, "10", rest: 90)),
-                WatchGym.Exercise(name: "Rumunský mrtvý tah", shown: tr("Rumunský mrtvý tah", "Romanian deadlift"), lifts: sets(18, 3, 70, 8, "8", rest: 120)),
-                WatchGym.Exercise(name: "Výpady", shown: tr("Výpady", "Lunges"), lifts: sets(21, 3, 16, 10, "10", rest: 90))])
+                WatchGym.Exercise(name: "Tlak na lavici", shown: tr("Tlak na lavici", "Bench press"), lifts: sets(12, 4, 62.5, 6, "6", rest: 90)),
+                WatchGym.Exercise(name: "Přítahy", shown: tr("Přítahy", "Rows"), lifts: sets(16, 4, 50, 8, "8", rest: 90)),
+                WatchGym.Exercise(name: "Tlaky s jednoručkami nad hlavu", shown: tr("Tlaky s jednoručkami nad hlavu", "DB shoulder press"), lifts: sets(20, 3, 16, 10, "10", rest: 75)),
+                WatchGym.Exercise(name: "Pallof press", shown: "Pallof press", lifts: sets(23, 3, 10, 10, "10", rest: 60))])
     }
 }

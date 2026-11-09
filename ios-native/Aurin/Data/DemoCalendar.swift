@@ -9,12 +9,12 @@ extension DemoData {
     static func calendar(around today: String, english: Bool = L10n.isEnglish) -> [CalendarDay] {
         // Per weekday (Monday first): what a usual week holds.
         let week: [[(String, String, Double, Double?, Double)]] = [
-            [("strength", "Posilovna · horní tělo", 55, nil, 320)],
+            [("strength", "Posilovna · dolní tělo", 60, nil, 360)],
             [("ride", "Sweet spot 3×12", 75, 38.5, 820), ("walk", "Chůze", 30, 2.6, 140)],
-            [("run", "Lehký běh", 45, 8.1, 560)],
-            [("strength", "Posilovna · dolní tělo", 60, nil, 360), ("walk", "Chůze", 25, 2.1, 110)],
-            [],
-            [("ride", "Dlouhá jízda", 180, 92, 2100)],
+            [("run", "Běh 14 km", 72, 14, 980)],
+            [("strength", "Posilovna · celé tělo", 45, nil, 300), ("walk", "Chůze", 25, 2.1, 110)],
+            [("ride", "Lehká jízda Z2", 72, 30, 700)],
+            [("run", "Dlouhý běh", 96, 17.5, 1350)],
             [("walk", "Procházka", 70, 5.8, 290)]
         ]
         return ISODay.range(ISODay.shift(today, -42), ISODay.shift(today, 14)).map { (date: String) -> CalendarDay in
