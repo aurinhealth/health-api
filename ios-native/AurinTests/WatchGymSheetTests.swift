@@ -28,6 +28,19 @@ final class WatchGymSheetTests: XCTestCase {
         XCTAssertEqual(decoded, gym)
     }
 
+    /// Mezi cviky "Podle cviku" (−1): the watch rests before an exercise as
+    /// long as the plan gives it, as the iPhone does, instead of no rest at all.
+    func testTheRestBeforeAnExerciseFollowsThePlanWithPodleCviku() {
+        var sheet = day()
+        for set in sheet.exercises[0].sets { sheet.set(row: set.row, column: 9, "[Pauza 150 s]") }
+        for set in sheet.exercises[1].sets { sheet.set(row: set.row, column: 9, "[Pauza 90 s]") }
+        let byExercise = WatchGym(sheet, date: "2026-11-01", restSets: -1, restExercises: -1)
+        XCTAssertEqual(byExercise.restBefore(0), 150)
+        XCTAssertEqual(byExercise.restBefore(1), 90)
+        XCTAssertEqual(WatchGym(day(), date: "2026-11-01", restSets: -1, restExercises: -1).restBefore(1), 120)
+        XCTAssertEqual(WatchGym(sheet, date: "2026-11-01", restSets: -1, restExercises: 60).restBefore(1), 60)
+    }
+
     func testASetDoneOnTheWatchIsWrittenAsOnTheIPhone() throws {
         var watch = day()
         var phone = day()
