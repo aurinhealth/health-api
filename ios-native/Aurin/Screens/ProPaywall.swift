@@ -255,7 +255,7 @@ struct PaywallView: View {
             topBar(back: !notNow)
             Text("Tvůj týden zdarma").font(Typo.sentence(36, relativeTo: .largeTitle)).foregroundStyle(Night.ink)
                 .multilineTextAlignment(.center)
-            Text(verbatim: L10n.f("Celé Aurin Pro zdarma do %@.", Self.weekday(Self.firstPayment(from: today))))
+            Text(verbatim: L10n.f("Celé Aurin Pro zdarma do %@", Self.dayMonth(Self.firstPayment(from: today))))
                 .font(Typo.sentence(16)).foregroundStyle(Night.muted).padding(.top, 4)
             WeekCalendar(today: today).padding(.horizontal, 20).padding(.top, 20)
             Text("VYZKOUŠEJ TENTO TÝDEN").scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Night.faint)
@@ -811,7 +811,10 @@ struct ScreenCarousel: View {
 struct ScreenBelt: View {
     let time: Double
     static let screens: [ProScreen] = ProScreen.allCases
-    private static let width: CGFloat = 92
+    private static let phoneHeight: CGFloat = 199
+    /// PhoneMockup's width at that height (a 7 pt bezel around the 390 × 844 screen), so
+    /// the label under a phone has its width and the belt's loop is as long as the phones.
+    private static let width: CGFloat = (phoneHeight - 14) / 844 * 390 + 14
 
     var body: some View {
         let step = Self.width + 14
@@ -821,9 +824,11 @@ struct ScreenBelt: View {
             ForEach(0..<(Self.screens.count * 2), id: \.self) { i in
                 let screen = Self.screens[i % Self.screens.count]
                 VStack(spacing: 6) {
-                    PhoneMockup(height: Self.width * 844 / 390) { screen.content }
+                    PhoneMockup(height: Self.phoneHeight) { screen.content }
                     Text(verbatim: screen.label).font(.caption2).foregroundStyle(Night.muted)
+                        .lineLimit(1).minimumScaleFactor(0.8)
                 }
+                .frame(width: Self.width)
             }
         }
         .offset(x: -shift)
@@ -1116,7 +1121,7 @@ struct WeekCalendar: View {
                 Spacer()
                 Text("Připomínka").foregroundStyle(Night.amber)
                 Spacer()
-                Text(verbatim: PaywallView.weekday(PaywallView.firstPayment(from: today, calendar: calendar))).foregroundStyle(Night.lavender)
+                Text(verbatim: PaywallView.dayMonth(PaywallView.firstPayment(from: today, calendar: calendar))).foregroundStyle(Night.lavender)
             }
             .font(.caption.weight(.medium)).padding(.horizontal, 6)
         }
@@ -1124,6 +1129,6 @@ struct WeekCalendar: View {
         .background(Night.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Night.line))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.f("Dnes zdarma, připomínka za 4 dny, první platba %@.", PaywallView.weekday(PaywallView.firstPayment(from: today, calendar: calendar))))
+        .accessibilityLabel(L10n.f("Dnes zdarma, připomínka za 4 dny, první platba %@.", PaywallView.dayMonth(PaywallView.firstPayment(from: today, calendar: calendar))))
     }
 }
