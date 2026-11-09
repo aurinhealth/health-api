@@ -261,6 +261,37 @@ async function claimOriginal(db, userId, tx, fromApple = false) {
   return [0, Number(userId)].includes(Number(holder?.user_id)) ? 'stale' : 'taken';
 }
 
+// Before an account is deleted (account-data.js), its purchases are settled in
+// one step, so that none of its rows is left for one of Apple's notifications to
+// find while the rest of its data is still being deleted. A subscription that no
+// longer gives Pro (refunded, run out) stays under account 0 with its newest
+// signed time, so its records from before give nothing to a new account. The
+// running one goes with the account, and the person's new account may restore
+// it (saveAppTransaction); a refund that comes later finds no account and is
+// remembered like any other (handleAppStoreNotification). An account that never
+// met the store has nothing to settle.
+export async function keepEndedPurchases(db, userId, now = Date.now()) {
+  try {
+    await db.batch([
+      db.prepare("UPDATE store_originals SET user_id=0 WHERE user_id=? AND original_transaction_id NOT IN (SELECT original_transaction_id FROM subscriptions WHERE user_id=? AND plan='ai' AND valid_until>? AND original_transaction_id IS NOT NULL)").bind(userId, userId, new Date(now).toISOString()),
+      // Bounded like every delete of an account's data (account-data.js); an account has a few of these rows.
+      db.prepare('DELETE FROM store_originals WHERE rowid IN (SELECT rowid FROM store_originals WHERE user_id = ? LIMIT ?)').bind(userId, 100),
+      db.prepare('DELETE FROM subscriptions WHERE rowid IN (SELECT rowid FROM subscriptions WHERE user_id = ? LIMIT ?)').bind(userId, 1)
+    ]);
+  } catch (error) {
+    if (!/no such (column|table)/i.test(String(error?.message || error))) throw error;
+  }
+}
+
+// The cron's cleanup: a purchase kept under account 0 is forgotten KEPT_DAYS
+// after its newest record, when every older record of it has run out (a period
+// is a year at most; Aurin extends no renewal dates), so it would give no Pro anyway.
+const KEPT_DAYS = 400;
+export async function forgetEndedPurchases(db, now = Date.now()) {
+  try { return Number((await db.prepare('DELETE FROM store_originals WHERE user_id=? AND signed_at<?').bind(0, now - KEPT_DAYS * 864e5).run())?.meta?.changes) || 0; }
+  catch (error) { if (/no such table/i.test(String(error?.message))) return 0; throw error; }
+}
+
 // Writes the transaction to the row of userId, unless a newer one of the same
 // subscription is there already (claimOriginal keeps the order of each
 // subscription). Another subscription takes the row's place only while it gives Pro,
@@ -283,7 +314,12 @@ export async function saveAppTransaction(env, body, options = {}) {
   const tx = await verifyAppStoreJws(body?.signedTransaction, options);
   checkTransaction(env, tx);
   const mine = await appAccountToken(env);
-  if (tx.appAccountToken && String(tx.appAccountToken).toLowerCase() !== mine.toLowerCase()) throw refuse(L('Tento nákup patří jinému účtu Aurin.', 'This purchase belongs to another Aurin account.'), 409);
+  const theirs = String(tx.appAccountToken || '').toLowerCase();
+  // Bought under another account: refused while that account exists. Once it is
+  // deleted (its row and token are gone), the person's new account may restore the
+  // purchase: the first one to send it keeps it (claimOriginal), unless the
+  // purchase had ended or was refunded by then (keepEndedPurchases); a pack stays spent.
+  if (theirs && theirs !== mine.toLowerCase() && await (env.RAW_DB || env.DB).prepare('SELECT 1 FROM subscriptions WHERE app_account_token=?').bind(theirs).first()) throw refuse(L('Tento nákup patří jinému účtu Aurin.', 'This purchase belongs to another Aurin account.'), 409);
   if (isPack(env, tx)) return savePackTransaction(env, tx);
   // An offer code redeemed outside the app has no token: the first account to send it keeps it.
   const claim = await claimOriginal(env.RAW_DB || env.DB, env.USER_ID, tx);

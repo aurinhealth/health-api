@@ -10,6 +10,7 @@ import { revokeUltrahuman } from "./ultrahuman.js";
 import { revokeWahoo } from "./wahoo.js";
 import { revokeIntervals } from "./intervals-oauth.js";
 import { rememberAiLimits } from "./ai-limit-memory.js";
+import { keepEndedPurchases } from "./app-store.js";
 
 // Sign-in keys of the connected services are never exported.
 const SECRET_TABLES = new Set(["connection_credentials"]);
@@ -147,6 +148,10 @@ export async function deleteAccount(env, user, { fetchImpl = fetch, budgetMs = R
   // What the AI limits counted stays, under hashes of the sign-in, so a new
   // account of the same person does not start them over (ai-limit-memory.js).
   await rememberAiLimits(env, user);
+  // The account's purchases are settled before it goes: one that had ended or
+  // was refunded stays known without the account, so its old record gives no Pro
+  // to a new one; the running one can be restored by a new account (app-store.js).
+  await keepEndedPurchases(env.DB, env.USER_ID);
   // The account row goes first, together with the note that its data is to be
   // removed: the session no longer signs anyone in, signing in again needs a
   // new invitation (and gets a new id), and the cron finishes the data if this

@@ -16,7 +16,10 @@ How Aurin Pro is bought and how the server learns about it. The code is in
    intermediate and the leaf, each signature, the bundle ID and the product, then sets
    `subscriptions.plan='ai'` and `valid_until` = `expiresDate` (or `'free'` after a refund
    or revocation). A transaction carrying another account's token, or one another account
-   sent first, is refused with 409. `store_originals` holds one row per original transaction
+   sent first, is refused with 409. Once the token's account is deleted, the person's new
+   account may restore a subscription that still runs; one that had ended or was refunded by
+   then stays in `store_originals` under account 0 (`keepEndedPurchases`), so its old record
+   gives nothing, and the cron forgets it after 400 days. `store_originals` holds one row per original transaction
    (the account and the newest `signedDate`), claimed in one statement, so two accounts
    sending it at once cannot both get it.
 3. Apple sends App Store Server Notifications V2 to `POST /webhooks/app-store`
