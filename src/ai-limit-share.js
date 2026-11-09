@@ -56,8 +56,8 @@ export async function inFreeWeek(env) {
   return groupOfSubscription(await subscriptionRow(env)) === "trial";
 }
 
-// The request's group, once per request. A failed read counts as "new" (the
-// fixed brake and half limits).
+// The request's group, once per request. A failed read counts as "new" (its
+// brake and half limits).
 export function aiGroup(env) {
   if (!env?.DB || !(Number(env.USER_ID) > 0)) return Promise.resolve("system");
   if (!groupOnce.has(env)) groupOnce.set(env, (async () => {

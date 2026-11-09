@@ -58,14 +58,34 @@ test("a full group stops the accounts that spent past their share; the others go
   });
 });
 
-test("a fixed brake (new accounts, the server) still stops the whole group", async () => {
+test("a fixed brake still stops the whole group", async () => {
   const db = grantAiConsent(createD1(), 7, 8);
   await withOpenAI(async calls => {
     const limits = { AI_GROUP_BRAKES: { new: { usd: 1 } } };
     await ask(envFor(db, 7, limits));
     await ask(envFor(db, 7, limits));
-    await assert.rejects(ask(envFor(db, 8, limits)), error => error.status === 429, "new accounts cost nothing to make: no share for them");
+    await assert.rejects(ask(envFor(db, 8, limits)), error => error.status === 429, "a fixed brake has no share");
     assert.equal(calls(), 2);
+  });
+});
+
+test("new accounts made to use up the brake do not stop the AI of the others who joined this week", async () => {
+  // Accounts made today, no purchase: the "new" group. They are not counted, so
+  // the brake stays at its least (1 USD here), each account's share 0.25 USD.
+  const db = grantAiConsent(createD1(), ...ids);
+  db.sqlite.exec("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, email TEXT, disabled INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)");
+  for (const id of ids) db.sqlite.prepare("INSERT INTO users (id, email) VALUES (?, ?)").run(id, `u${id}@example.com`);
+  const NEW = { AI_GROUP_BRAKES: { new: { perAccount: 0.25, min: 1 } } };
+  await withOpenAI(async calls => {
+    await ask(envFor(db, 100, NEW));
+    await ask(envFor(db, 101, NEW));
+    assert.equal(groupSpent(db, "new"), 1.4);
+    await assert.rejects(ask(envFor(db, 100, NEW)), error => error.status === 429, "an account past its share waits");
+    await ask(envFor(db, 102, NEW));
+    assert.equal(calls(), 3, "an account that spent nothing today still gets its answer");
+    // Past twice the brake (2 USD) the group waits, every account in it.
+    await assert.rejects(ask(envFor(db, 103, NEW)), error => error.status === 429);
+    assert.equal(calls(), 3);
   });
 });
 
