@@ -243,16 +243,19 @@ const signedAtOf = tx => Number(tx.signedDate) || Date.now();
 // get it, and an older record never undoes a newer one, even when the account's
 // row held another subscription in between (refunded, another purchase, then
 // the old record again). Apple's own notifications (fromApple) move the mark
-// whichever account holds it.
+// whichever account holds it. Account 0 holds a subscription Apple refunded
+// before any account sent it (handleAppStoreNotification): the record from
+// before the refund is then an older one, and a newer one (bought again) gives
+// the subscription to the account that sends it.
 // 'ok': the newest record so far, write it; 'stale': an older one; 'taken': another account's.
 async function claimOriginal(db, userId, tx, fromApple = false) {
   const original = String(tx.originalTransactionId);
-  const result = await withColumns(db, () => db.prepare('INSERT INTO store_originals(original_transaction_id,user_id,signed_at) VALUES(?,?,?) ON CONFLICT(original_transaction_id) DO UPDATE SET signed_at=excluded.signed_at WHERE (? OR store_originals.user_id=excluded.user_id) AND store_originals.signed_at<=excluded.signed_at')
+  const result = await withColumns(db, () => db.prepare('INSERT INTO store_originals(original_transaction_id,user_id,signed_at) VALUES(?,?,?) ON CONFLICT(original_transaction_id) DO UPDATE SET user_id=CASE WHEN store_originals.user_id=0 THEN excluded.user_id ELSE store_originals.user_id END,signed_at=excluded.signed_at WHERE (? OR store_originals.user_id IN (0,excluded.user_id)) AND store_originals.signed_at<=excluded.signed_at')
     .bind(original, userId, signedAtOf(tx), fromApple ? 1 : 0).run());
   if (result.meta.changes) return 'ok';
   if (fromApple) return 'stale';
   const holder = await db.prepare('SELECT user_id FROM store_originals WHERE original_transaction_id=?').bind(original).first();
-  return Number(holder?.user_id) === Number(userId) ? 'stale' : 'taken';
+  return [0, Number(userId)].includes(Number(holder?.user_id)) ? 'stale' : 'taken';
 }
 
 // Writes the transaction to the row of userId, unless a newer one of the same
@@ -324,8 +327,12 @@ export async function handleAppStoreNotification(request, env, options = {}) {
     const rows = byToken ? [byToken] : (await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM subscriptions WHERE original_transaction_id=?').bind(original).all())).results || [];
     // The holder, also when its row holds another subscription by now.
     const held = byToken || await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM store_originals WHERE original_transaction_id=?').bind(original).first()) || rows[0];
-    if (!held) return Response.json({ status: 'ok', unknown: true });
-    const holder = Number(held.user_id);
+    const holder = Number(held?.user_id) || 0;
+    if (!holder) {
+      // No account has sent this purchase (yet). Its refund is remembered, so the record from before it gives nothing later.
+      if (tx.revocationDate) await claimOriginal(env.DB, 0, tx, true);
+      return Response.json({ status: 'ok', unknown: true });
+    }
     if (await claimOriginal(env.DB, holder, tx, true) === 'stale') return Response.json({ status: 'ok', stale: true });
     // Pro goes to the holder only; its end also reaches a copy made before claimOriginal.
     const { plan } = planOf(tx, renewal, note.notificationType);

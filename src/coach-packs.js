@@ -73,6 +73,11 @@ export async function savePackTransaction(env, tx) {
   const id = String(tx.transactionId || '');
   if (!messages || !id) throw refuse(L('Neplatný doklad o nákupu.', 'Invalid purchase record.'));
   const db = central(env);
+  // The record of a refunded pack (the app sends what StoreKit holds): nothing to add, and what it gave goes.
+  if (tx.revocationDate) {
+    await refundPackTransaction(db, tx);
+    return { status: 'ok', messages, added: false, refunded: true, left: await packMessagesLeft(env) };
+  }
   const mine = () => db.prepare('SELECT counted FROM coach_pack_purchases WHERE transaction_id = ? AND user_id = ?').bind(id, env.USER_ID).first();
   const hash = await sha256(id);
   const seen = await withTables(db, () => db.prepare('SELECT 1 AS seen FROM coach_pack_seen WHERE transaction_hash = ?').bind(hash).first());
@@ -96,10 +101,18 @@ export async function savePackTransaction(env, tx) {
   return { status: 'ok', messages, added: counted === 1, left: await packMessagesLeft(env) };
 }
 
-// Apple refunded or revoked a pack: its messages stop counting (those already used stay used).
+// Apple refunded or revoked a pack: its messages stop counting (those already
+// used stay used). Its mark is written also when no account has sent the pack
+// yet, so the record from before the refund adds nothing later.
 export async function refundPackTransaction(db, tx) {
+  const id = String(tx.transactionId || '');
+  if (!id) return false;
   const at = new Date(Number(tx.revocationDate) || Date.now()).toISOString();
-  const result = await withTables(db, () => db.prepare('UPDATE coach_pack_purchases SET refunded_at = ? WHERE transaction_id = ? AND refunded_at IS NULL').bind(at, String(tx.transactionId || '')).run());
+  const hash = await sha256(id);
+  const [result] = await withTables(db, () => db.batch([
+    db.prepare('UPDATE coach_pack_purchases SET refunded_at = ? WHERE transaction_id = ? AND refunded_at IS NULL').bind(at, id),
+    db.prepare('INSERT INTO coach_pack_seen(transaction_hash) VALUES(?) ON CONFLICT(transaction_hash) DO NOTHING').bind(hash)
+  ]));
   return Boolean(result?.meta?.changes);
 }
 

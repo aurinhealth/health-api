@@ -318,6 +318,25 @@ test("a refund finds a subscription without a token after the account's row move
   assert.equal(row(raw, 1).original_transaction_id, "3000000000");
 });
 
+test("a subscription refunded before any account sent it gives nothing through its old record", async () => {
+  const { raw, user } = setup();
+  const env = user(1);
+  const yearly = (extra = {}) => transaction({ environment: "Production", expiresDate: now + 365 * DAY, ...extra });
+  // Bought without the account's token, so Apple's refund finds no account.
+  const answer = await notify(notification("REFUND", yearly({ revocationDate: now + 500, signedDate: now + 1000 })), { DB: raw });
+  assert.deepEqual([answer.status, (await answer.json()).unknown], [200, true]);
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM subscriptions WHERE user_id=0").get().n, 0, "no row of no account");
+  assert.equal((await saveAppTransaction(env, { signedTransaction: jws(yearly()) }, { roots })).stale, true);
+  assert.equal((await storePurchase(env)), null);
+  // Apple's later notifications of it still find no account and write none.
+  assert.equal((await (await notify(notification("SUBSCRIBED", yearly({ signedDate: now + 2000 })), { DB: raw })).json()).unknown, true);
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM subscriptions WHERE user_id=0").get().n, 0);
+  // Bought again (a newer record): the account that sends it has Pro, and keeps it against another account.
+  assert.equal((await saveAppTransaction(env, { signedTransaction: jws(yearly({ signedDate: now + 3000 })) }, { roots })).plan, "ai");
+  assert.equal((await storePurchase(env)).active, true);
+  await assert.rejects(saveAppTransaction(user(2), { signedTransaction: jws(yearly({ signedDate: now + 4000 })) }, { roots }), { status: 409 });
+});
+
 test("an ended TestFlight purchase does not push out the App Store one", async () => {
   const { raw, user } = setup();
   const env = user(1);

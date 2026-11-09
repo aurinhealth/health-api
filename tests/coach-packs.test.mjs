@@ -107,6 +107,36 @@ test("Apple's refund takes the pack's messages away, the used ones stay used", a
   assert.equal((await packPurchases(env)).find(p => p.messages === 40).refunded, true);
 });
 
+const refund = (raw, tx) => handleAppStoreNotification(new Request("https://aurin.health/webhooks/app-store", { method: "POST", body: JSON.stringify({ signedPayload: jws({
+  notificationType: "REFUND", notificationUUID: crypto.randomUUID(), version: "2.0", signedDate: now + 1000,
+  data: { bundleId: "health.aurin.app", environment: "Production", appAppleId: 6740000000, signedTransactionInfo: jws(tx) }
+}) }) }), { DB: raw }, { roots });
+
+test("a pack Apple refunded before the app sent it adds no messages afterwards", async () => {
+  const { raw, user } = setup();
+  const env = user(1);
+  const token = await appAccountToken(env);
+  assert.equal((await refund(raw, pack({ appAccountToken: token, revocationDate: now + 1000, signedDate: now + 1000 }))).status, 200);
+  // The record from before the refund, which the app (or anyone holding it) sends later.
+  await assert.rejects(buy(env, pack()), { status: 409 });
+  assert.equal(await packMessagesLeft(env), 0);
+  assert.deepEqual(await packPurchases(env), []);
+});
+
+test("a pack record that itself says refunded adds no messages and takes away the ones it gave", async () => {
+  const { user } = setup();
+  const env = user(1);
+  const revoked = { revocationDate: now + 1000, signedDate: now + 2000 };
+  const unknown = await buy(env, pack(revoked));
+  assert.deepEqual([unknown.status, unknown.added, unknown.refunded, unknown.left], ["ok", false, true, 0], "answered, so the app closes the purchase");
+  await assert.rejects(buy(env, pack()), { status: 409 }, "the record from before the refund gives nothing either");
+  // A pack the account already has.
+  await buy(env, pack({ transactionId: "3000000002", originalTransactionId: "3000000002" }));
+  assert.equal(await packMessagesLeft(env), 40);
+  const known = await buy(env, pack({ transactionId: "3000000002", originalTransactionId: "3000000002", ...revoked }));
+  assert.deepEqual([known.added, known.refunded, known.left], [false, true, 0]);
+});
+
 test("the coach takes bought messages after the week's and the conversation's extra ones", async () => {
   const { user } = setup({ COACH_WEEKLY_MESSAGES: "2" });
   const env = user(1);
