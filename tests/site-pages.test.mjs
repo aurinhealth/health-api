@@ -401,8 +401,8 @@ test('the launch terms drop only the testing sentences and keep the change rules
   for(const re of testing.cs){assert.match(cs,re);assert.doesNotMatch(csPro,re);}
   assert.match(enPro,/<p>Aurin Pro adds Aurin Intelligence/);
   assert.match(csPro,/<p>Aurin Pro přidává funkce Aurin Intelligence/);
-  assert.match(enPro,/Last updated: 15 December 2026/);
-  assert.match(csPro,/Poslední změna: 15. prosince 2026/);
+  assert.match(enPro,/Last updated: 10 November 2026/);
+  assert.match(csPro,/Poslední změna: 10. listopadu 2026/);
   for(const t of [en,enPro]){
     assert.match(t,/only for a good reason/);
     assert.match(t,/at least 30 days ahead by e-mail and in the app\. You can then end the subscription without any fee, including the remaining payments/);
