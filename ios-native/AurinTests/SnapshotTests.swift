@@ -244,7 +244,7 @@ final class SnapshotTests: XCTestCase {
         let body = day.saveBody
         guard case .array(let rows) = body["values"], case .array(let full) = body["fullValues"] else { return XCTFail("body") }
         XCTAssertEqual(full.count, rows.count + 7)
-        XCTAssertEqual(rows.count, 17)
+        XCTAssertEqual(rows.count, 19, "warm-up + 4 squat, 4 bench, 4 rows, 3 DB shoulder press, 3 Pallof")
     }
 
     func testTrainingSessionsDecode() {
