@@ -102,6 +102,9 @@ struct TrainingModeView: View {
     @State private var activePart: GymDayPart?
     /// Its cardio starts at once (tapped), not when it came on after the last set.
     @State private var partAutoStart = true
+    /// The part or the exercises on hand came on after the one before and wait
+    /// for their own Start ("Na řadě"); only Začít trénink or a tap starts one at once.
+    @State private var waiting = false
     /// Each part's and exercise's time, calories and heart rate, for the summary.
     @State private var partStats: [String: LiveWorkout.PartStats] = [:]
     @Environment(\.scenePhase) private var scenePhase
@@ -130,7 +133,11 @@ struct TrainingModeView: View {
                             if live.running {
                                 LiveWorkoutStrip(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 14)
                             }
-                            partRunner(part, routine, day)
+                            if waiting, part.kind != .cardio {
+                                readyCard(.part(part), day, parts)
+                            } else {
+                                partRunner(part, routine, day)
+                            }
                             partsList(day, parts)
                             Text(verbatim: L10n.tr("Ťukni na část a přepneš na ni."))
                                 .font(Typo.caption).foregroundStyle(Palette.muted)
@@ -154,6 +161,9 @@ struct TrainingModeView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .padding(.top, 16)
+                            } else if waiting {
+                                readyCard(.exercise(index), day, parts)
+                                partsList(day, parts)
                             } else if let restEnd {
                                 rest(day, exercise, until: restEnd)
                             } else {
@@ -887,8 +897,13 @@ struct TrainingModeView: View {
     /// What is in front, for each part's and exercise's own time (only while the workout runs).
     private var focusKey: String? {
         guard started, !finishedSession, let day else { return nil }
+        // Waiting for its Start: the time goes to no part meanwhile.
+        if waiting { return Self.waitKey }
         return activePart?.rawValue ?? current(day)?.name
     }
+
+    /// The time between a part's end and the next one's Start (LiveWorkout.segments): no row shows it.
+    static let waitKey = "_waiting"
 
     /// A part whose every move (or its cardio) is ticked today.
     private func partDone(_ part: GymDayPart, _ day: GymDay) -> Bool {
@@ -931,9 +946,11 @@ struct TrainingModeView: View {
         }
     }
 
-    /// Turns to a part or an exercise; `auto`: its cardio starts at once.
+    /// Turns to a part or an exercise; `auto`: it starts at once (tapped),
+    /// else it waits for its Start (it came on after the one before).
     private func go(_ step: Step?, auto: Bool) {
         restEnd = nil
+        waiting = !auto && step != nil
         switch step {
         case .part(let part)?:
             partAutoStart = auto
@@ -974,7 +991,8 @@ struct TrainingModeView: View {
                 let focused = live.focused
                 CardioTimerView(item: item, date: date, onDone: { tick(part, id: item.id) },
                                 inline: CardioTimerView.Inline(since: focused?.key == part.rawValue ? focused?.start : nil,
-                                                               autoStart: partAutoStart, next: stepName(then, day), close: close))
+                                                               autoStart: partAutoStart, next: stepName(then, day), close: close,
+                                                               started: { waiting = false }))
             } else {
                 StretchTimerView(stretching: routine, kind: part.kind, onItemDone: { tick(part, id: $0) }, onClose: close)
             }
@@ -1051,7 +1069,8 @@ struct TrainingModeView: View {
                             Button {
                                 if started { go(row.step, auto: true) } else { startWhole(day, from: row.step) }
                             } label: {
-                                partRow(row, now: row.key == now, seconds: started ? live.seconds(of: row.key, at: context.date) : 0)
+                                partRow(row, now: row.key == now, waits: waiting && row.key == now,
+                                        seconds: started ? live.seconds(of: row.key, at: context.date) : 0)
                                     // Off stays readable: only the row fades, the switch keeps its colours.
                                     .opacity(on ? 1 : 0.55)
                             }
@@ -1073,7 +1092,7 @@ struct TrainingModeView: View {
         .padding(.top, 14)
     }
 
-    private func partRow(_ row: PartRow, now: Bool, seconds: Int) -> some View {
+    private func partRow(_ row: PartRow, now: Bool, waits: Bool = false, seconds: Int) -> some View {
         HStack(spacing: 12) {
             Image(systemName: row.symbol).scaledFont(15, cap: .denseCap).foregroundStyle(row.color)
                 .frame(width: 34, height: 34).background(row.color.opacity(0.12), in: Circle())
@@ -1083,10 +1102,14 @@ struct TrainingModeView: View {
                 Text(verbatim: row.detail).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
             }
             Spacer(minLength: 8)
-            if seconds > 0 {
+            if waits {
+                Text(verbatim: L10n.tr("nezačato")).font(Typo.small).foregroundStyle(Palette.muted)
+            } else if seconds > 0 {
                 Text(verbatim: Self.clock(seconds)).font(Typo.small).monospacedDigit().foregroundStyle(now ? Palette.ink : Palette.muted)
             }
-            if now {
+            if waits {
+                EmptyView()
+            } else if now {
                 Circle().fill(Palette.rust).frame(width: 8, height: 8).accessibilityHidden(true)
             } else if row.done {
                 Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
@@ -1095,6 +1118,50 @@ struct TrainingModeView: View {
         .frame(minHeight: 52)
         .contentShape(Rectangle())
         .accessibilityAddTraits(row.done ? .isSelected : [])
+    }
+
+    /// "Na řadě": the warm-up, stretching or the exercises came on after the
+    /// part before and wait for their Start; the warm-up and stretching can be
+    /// skipped (the cardio waits in its own screen, CardioTimerView).
+    private func readyCard(_ target: Step, _ day: GymDay, _ parts: GymDayParts) -> some View {
+        let part: GymDayPart? = { if case .part(let part) = target { return part }; return nil }()
+        let symbol = part?.kind.symbol ?? "dumbbell"
+        let color = part?.kind.color ?? Palette.secondary
+        let label = L10n.tr("Na řadě") + " · " + L10n.tr(part?.kind.title ?? "Posilovna")
+        let name = part.map { L10n.tr($0.kind.title) } ?? current(day)?.name ?? L10n.tr("Posilovna")
+        let left: [GymExercise] = day.exercises.filter { $0.sets.contains { !$0.done } }
+        let setsLeft: Int = left.reduce(0) { $0 + $1.workCount - $1.doneCount }
+        let gymLine: String = L10n.plural("%lld cviků", left.count) + " · " + L10n.plural("%lld sérií", setsLeft)
+        let detail: String = part.map { parts.subtitle($0, day: day) } ?? gymLine
+        let start: String = part?.kind == .stretching ? "Spustit protažení" : part?.kind == .warmup ? "Spustit rozcvičku" : "Spustit posilku"
+        return VStack(spacing: 14) {
+            HStack(spacing: 12) {
+                Image(systemName: symbol).scaledFont(19, cap: .denseCap).foregroundStyle(color)
+                    .frame(width: 44, height: 44).background(color.opacity(0.14), in: Circle())
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: label).font(Typo.caption).foregroundStyle(color).textCase(.uppercase)
+                    Text(verbatim: name).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2)
+                    Text(verbatim: detail).font(Typo.small).foregroundStyle(Palette.muted).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .accessibilityElement(children: .combine)
+            PrimaryButton(title: L10n.tr(start), systemImage: "play.fill") {
+                waiting = false
+                live.worked()
+            }
+            if let part {
+                Button { go(step(after: part, day), auto: false) } label: {
+                    Text(verbatim: L10n.tr("Přeskočit sekci")).font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                        .frame(maxWidth: .infinity).frame(minHeight: 44)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(16)
+        .cardSurface(cornerRadius: 22)
+        .padding(.top, 14)
     }
 
     /// "Další: Protažení": what comes after the last exercise; a tap starts it here.
@@ -1800,6 +1867,8 @@ struct TrainingModeView: View {
     /// The day from the watch (a set done there, a change from its menu): the
     /// exercise on the screen follows the watch once it has no set left.
     private func takeFromWatch(_ fresh: GymDay) {
+        // A set from the watch: the exercises waiting for Spustit posilku have begun.
+        if activePart == nil, Self.setsDone(fresh) > (day.map(Self.setsDone) ?? 0) { waiting = false }
         day = fresh
         watchTook = true
         if !finishedSession { followOpen() }
@@ -1952,7 +2021,7 @@ struct TrainingModeView: View {
     private func keepMinimized(_ day: GymDay) {
         model.minimizedGym = MinimizedGym(date: date, title: title(day), day: day, index: index, restStart: restStart,
                                           restEnd: restEnd, restTotal: restTotal, next: current(day)?.name, startTapped: startTapped,
-                                          part: activePart)
+                                          part: activePart, waiting: waiting)
     }
 
     /// Back from the bar: the same exercise and rest, then the lock-screen
@@ -1968,7 +2037,9 @@ struct TrainingModeView: View {
         restTotal = gym.restTotal
         restStart = gym.restStart
         restEnd = gym.restEnd.flatMap { $0 > Date() ? $0 : nil }
-        partAutoStart = true
+        // A part that waited for its Start still waits.
+        waiting = gym.waiting
+        partAutoStart = !gym.waiting
         activePart = gym.part
         for action in gym.pending { activityAction(action) }
     }
