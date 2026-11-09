@@ -10,6 +10,8 @@ import { lang } from './lang.js';
 export const WORLD_FOODS_FORMAT = 1;
 export const NODE_LIMIT = 1500;
 const RESULTS = 12;
+// A word in fewer foods than this is not offered as a typo fix (vocab/<x>.json).
+export const TYPO_MIN_FOODS = 20;
 const TTL_MS = 10 * 60 * 1000;
 
 const SOURCE_NAMES = {
@@ -117,6 +119,72 @@ async function nodeFor(bucket, version, word) {
   }
 }
 
+// Optimal string alignment distance, or max + 1 once it is over max.
+function distance(a, b, max) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev2 = [], prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    let low = i;
+    for (let j = 1; j <= b.length; j++) {
+      let d = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d = Math.min(d, prev2[j - 2] + 1);
+      row.push(d);
+      if (d < low) low = d;
+    }
+    if (low > max) return max + 1;
+    prev2 = prev; prev = row;
+  }
+  return prev[b.length];
+}
+const within = (short, long) => { let i = 0; for (const ch of long) if (ch === short[i]) i++; return i === short.length; };
+// Letters one word has more of than the other: never more than their distance.
+const letters = w => { const h = new Int8Array(36); for (let i = 0; i < w.length; i++) h[w.charCodeAt(i) - (w.charCodeAt(i) >= 97 ? 97 : 22)]++; return h; };
+function bagOver(h, w, max) {
+  const g = h.slice();
+  let more = 0;
+  for (let i = 0; i < w.length; i++) if (--g[w.charCodeAt(i) - (w.charCodeAt(i) >= 97 ? 97 : 22)] < 0 && ++more > max) return true;
+  let less = 0;
+  for (const n of g) if (n > 0 && (less += n) > max) return true;
+  return false;
+}
+
+// "cofee" -> "coffee": a word of 4+ letters that 20 times more foods spell one
+// or two letters differently (missing, extra, swapped or wrong). The foods of
+// longer words it starts count for it, so a word still being typed stays; a
+// word of a Czech name is never changed. vocab: vocab/<first letter>.json.
+const vocabLists = new WeakMap();
+function listed(vocab) {
+  if (!vocabLists.has(vocab)) {
+    const sorted = Object.entries(vocab).map(([w, v]) => [w, Array.isArray(v) ? v[0] : v]).sort((a, b) => a[0] < b[0] ? -1 : 1);
+    const byLength = [];
+    for (const e of sorted) (byLength[e[0].length] ||= []).push(e);
+    vocabLists.set(vocab, { sorted, byLength });
+  }
+  return vocabLists.get(vocab);
+}
+export function correctWord(word, vocab) {
+  if (!vocab || word.length < 4 || /\d/.test(word)) return word;
+  const own = vocab[word];
+  if (Array.isArray(own)) return word;
+  const { sorted, byLength } = listed(vocab);
+  // A word not listed is in fewer than TYPO_MIN_FOODS foods.
+  let started = own ?? TYPO_MIN_FOODS - 1, lo = 0, hi = sorted.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (sorted[mid][0] <= word) lo = mid + 1; else hi = mid; }
+  for (let i = lo; i < sorted.length && sorted[i][0].startsWith(word); i++) started += sorted[i][1];
+  const need = 20 * started, h = letters(word);
+  let best = null;
+  for (let len = word.length - 2; len <= word.length + 2; len++) for (const [w, n] of byLength[len] || []) {
+    if (n < need || w === word || w.startsWith(word) || bagOver(h, w, 2)) continue;
+    const d = distance(word, w, 2);
+    if (d > 2) continue;
+    // A letter left out is the usual slip: "cofe" is coffee before cafe.
+    const score = n * (d === 1 ? 4 : 1) * (within(word, w) ? 4 : 1);
+    if (!best || score > best.score) best = { w, score };
+  }
+  return best ? best.w : word;
+}
+
 export async function searchWorldFoods(env, { name = '', barcode = '', language = lang() } = {}) {
   const bucket = env.FOOD_CATALOG_R2;
   if (!bucket) return [];
@@ -131,7 +199,16 @@ export async function searchWorldFoods(env, { name = '', barcode = '', language 
     return rows.filter(r => barcodeKey(r.b) === code).slice(0, RESULTS).map(r => toProduct(r, language));
   }
   if (barcode) return [];
-  const query = [...new Set(words(name))];
+  const typed = [...new Set(words(name))];
+  const query = await Promise.all(typed.map(async w => w.length < 4 ? w : correctWord(w, await json(bucket, `${version}/vocab/${w[0]}.json`))));
+  let start = fold(name).trim();
+  typed.forEach((w, i) => { if (query[i] !== w) start = start.replace(new RegExp(`\\b${w}\\b`), query[i]); });
+  const found = await namesFound(bucket, version, query, start, language);
+  // A fixed word that finds nothing: the words as typed.
+  return found.length || query.every((w, i) => w === typed[i]) ? found : namesFound(bucket, version, typed, fold(name).trim(), language);
+}
+
+async function namesFound(bucket, version, query, start, language) {
   // The longest word narrows the most; a catalogue word needs 3 letters.
   const longest = query.reduce((a, b) => b.length > a.length ? b : a, '');
   if (longest.length < 3) return [];
@@ -139,7 +216,6 @@ export async function searchWorldFoods(env, { name = '', barcode = '', language 
   if (!node) return [];
   const [pack, offset, length] = node;
   const rows = await gzipLines(bucket, `${version}/names-${pack}.pack`, offset, length);
-  const start = fold(name).trim();
   const hits = [];
   for (const r of rows) {
     const ws = r.t.split(' ');

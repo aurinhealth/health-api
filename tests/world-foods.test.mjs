@@ -4,9 +4,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { build } from '../scripts/build-world-foods.mjs';
+import { build, implausible } from '../scripts/build-world-foods.mjs';
 import { plan } from '../scripts/upload-world-foods.mjs';
-import { searchWorldFoods, barcodeKey, words, NODE_LIMIT, WORLD_FOODS_FORMAT } from '../src/world-foods.js';
+import { searchWorldFoods, barcodeKey, words, correctWord, NODE_LIMIT, WORLD_FOODS_FORMAT } from '../src/world-foods.js';
 
 // A small release in the kCalori schema (only the columns the build reads).
 function release(dir) {
@@ -131,8 +131,40 @@ test('codes and words fold like the release', () => {
 test('typing more of the same word reads the catalogue node once', async () => {
   const env = { FOOD_CATALOG_R2: bucketFrom(fixture.dir, 'test1') };
   await searchWorldFoods(env, { name: 'jog', language: 'cs' });
+  // From 4 letters on, the typo words of "j" are read once too.
+  await searchWorldFoods(env, { name: 'jogu', language: 'cs' });
   const after = env.FOOD_CATALOG_R2.reads;
   const [p] = await searchWorldFoods(env, { name: 'jogurt', language: 'cs' });
   assert.equal(p.name, 'Bílý jogurt');
   assert.equal(env.FOOD_CATALOG_R2.reads, after);
+});
+
+test('a misspelt word is searched as the word many more foods use; a word being typed or a Czech word stays', async () => {
+  const vocab = { coffee: 30000, cofee: 100, cafe: 5000, coffe: 40, cokolada: [800, 1], kava: [600, 1] };
+  assert.equal(correctWord('cofee', vocab), 'coffee');
+  // A letter left out wins over a changed one.
+  assert.equal(correctWord('cofe', vocab), 'coffee');
+  // "coff" starts coffee: still being typed.
+  assert.equal(correctWord('coff', vocab), 'coff');
+  assert.equal(correctWord('kava', { ...vocab, java: 90000 }), 'kava');
+  // Not 20 times more foods: left as typed.
+  assert.equal(correctWord('cofee', { coffee: 1500, cofee: 100 }), 'cofee');
+  assert.equal(correctWord('tea', vocab), 'tea');
+  assert.equal(correctWord('cofee', null), 'cofee');
+  // In the built catalogue: 900 Chocapic foods against none.
+  const [hit] = await searchWorldFoods(fixture.env, { name: 'chocapik', language: 'cs' });
+  assert.match(hit.name, /^Chocapic /);
+  const vocabC = JSON.parse(readFileSync(join(fixture.dir, 'test1', 'vocab', 'c.json'), 'utf8'));
+  assert.deepEqual(vocabC.cokolada, [1, 1]);
+  assert.equal(vocabC.chocapic, (NODE_LIMIT + 300) / 2);
+});
+
+test('a product whose energy does not fit its macros goes last, unless it is a food table or alcohol', () => {
+  const snickers = { source_id: 'off', default_name: 'Snickers', protein: 8.6, carbs: 60.5, fat: 22.5 };
+  assert.equal(implausible({ ...snickers, kcal: 481 }), false);
+  // 2013 is its energy in kJ.
+  assert.equal(implausible({ ...snickers, kcal: 2013 }), true);
+  assert.equal(implausible({ ...snickers, kcal: 2013, source_id: 'fineli' }), false);
+  assert.equal(implausible({ source_id: 'off', default_name: 'Pivo světlé', kcal: 43, protein: 0.5, carbs: 3.6, fat: 0 }), false);
+  assert.equal(implausible({ source_id: 'off', default_name: 'Cofee', kcal: 2, protein: 0.1, carbs: 0, fat: 0 }), false);
 });
