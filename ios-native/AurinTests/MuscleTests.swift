@@ -72,6 +72,10 @@ final class MuscleTests: XCTestCase {
         XCTAssertEqual(Set(try fatigue(chest: "recovering", chestReady: "2026-11-09").restedFocus), ["chest", "forearms"])
         // Recovering until tomorrow does not.
         XCTAssertEqual(try fatigue(chest: "recovering", chestReady: "2026-11-10").restedFocus, [])
+        // No big muscle rested: the short session takes the smaller rested ones.
+        XCTAssertEqual(try fatigue(chest: "fatigued", chestReady: "2026-11-11").shortFocus, ["forearms"])
+        // With a big muscle rested there is no short session, Rested builds it.
+        XCTAssertEqual(try fatigue(chest: "recovering", chestReady: "2026-11-09").shortFocus, [])
     }
 
     func testFigurePathsStayInTheFigure() {

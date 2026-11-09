@@ -92,16 +92,34 @@ struct MuscleFatigue: Decodable {
     /// ones alone are no workout (75 minutes of forearms, Petr 2026-11-09):
     /// empty when no big muscle is rested, and the builder picks as usual.
     var restedFocus: [String] {
-        let order = ["chest", "upper_back", "lats", "quads", "hamstrings", "hips", "front_delts", "side_delts", "rear_delts",
-                     "biceps", "triceps", "calves", "abs", "lower_back", "traps", "obliques", "forearms"]
         let big: Set<String> = ["chest", "upper_back", "lats", "quads", "hamstrings", "hips"]
-        func since(_ id: String) -> Int { groups?.first { $0.id == Self.groupId(body: id) }?.daysSince ?? 99 }
-        let rested = order.enumerated().filter { ready(body: $0.element) }
-            .sorted { since($0.element) != since($1.element) ? since($0.element) > since($1.element) : $0.offset < $1.offset }
-            .map(\.element)
+        let rested = readyMuscles
         guard let firstBig = rested.first(where: { big.contains($0) }) else { return [] }
         let picked = Array(rested.prefix(5))
         return picked.contains(where: { big.contains($0) }) ? picked : Array(rested.prefix(4)) + [firstBig]
+    }
+
+    /// "Sestavit krátký trénink" when no big muscle is rested (Petr 2026-11-09):
+    /// up to five smaller muscles rested today, core first; empty when Rested
+    /// has a big muscle or nothing at all is rested.
+    var shortFocus: [String] {
+        guard restedFocus.isEmpty else { return [] }
+        let core: Set<String> = ["abs", "obliques"]
+        let ready = readyMuscles
+        let first = ready.filter { core.contains($0) }
+        let rest = ready.filter { !core.contains($0) }
+        return Array((first + rest).prefix(5))
+    }
+
+    /// The muscles of the figure rested today, the body parts trained longest
+    /// ago first, within them the big muscles first.
+    private var readyMuscles: [String] {
+        let order = ["chest", "upper_back", "lats", "quads", "hamstrings", "hips", "front_delts", "side_delts", "rear_delts",
+                     "biceps", "triceps", "calves", "abs", "lower_back", "traps", "obliques", "forearms"]
+        func since(_ id: String) -> Int { groups?.first { $0.id == Self.groupId(body: id) }?.daysSince ?? 99 }
+        return order.enumerated().filter { ready(body: $0.element) }
+            .sorted { since($0.element) != since($1.element) ? since($0.element) > since($1.element) : $0.offset < $1.offset }
+            .map(\.element)
     }
 
     /// Rested today: every muscle of it rested, or rested later today, as the

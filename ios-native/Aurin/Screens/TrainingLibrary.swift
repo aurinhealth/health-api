@@ -914,6 +914,11 @@ struct ExerciseCatalog: View {
                 Text("Velké svaly se ještě zotavují. Zkus krátký trénink středu těla nebo volno.")
                     .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 12)
+                // Something to do anyway: 30 minutes of the smaller muscles rested today.
+                if model.muscles?.shortFocus.isEmpty == false {
+                    PrimaryButton(title: L10n.tr("Sestavit krátký trénink"), systemImage: "sparkles") { model.push(.gymShort) }
+                        .padding(.top, 8)
+                }
             }
 
             PillToggle(title: "Jen s mým vybavením", subtitle: EquipmentView.summary(equipment), isOn: $mine)
