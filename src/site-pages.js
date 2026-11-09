@@ -1275,10 +1275,10 @@ ${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení sv
 // Terms of Use, in English and Czech; both versions say the same and neither one prevails.
 // `pro` is the launch version, shown once Aurin Pro is needed for what it includes
 // (AI_PAYWALL_ENABLED=true, subscription.js paywallOn): it drops the "free / in testing"
-// sentences and takes effect on TERMS_LAUNCH. Testers get 30 days' notice of it (the terms
-// promise that), so the paywall is never turned on for everyone before TERMS_LAUNCH.
+// sentences and takes effect on TERMS_LAUNCH, the App Store launch. Aurin has no external
+// testers to give the 30 days' notice to, so the paywall goes on for everyone at launch.
 const TERMS_UPDATED = {cs: '6. listopadu 2026', en: '6 November 2026'};
-const TERMS_LAUNCH = {cs: '15. prosince 2026', en: '15 December 2026'};
+const TERMS_LAUNCH = {cs: '10. listopadu 2026', en: '10 November 2026'};
 const APPLE_EULA = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 const APPLE_REFUND = 'https://reportaproblem.apple.com';
 
