@@ -546,7 +546,7 @@ struct GymExerciseSearch: View {
         let matches: (String) -> Bool = { name in
             let entry = catalog.first { $0.name == name }
             if let muscle, !(entry.map { ExerciseCatalog.works($0, muscle) } ?? false) { return false }
-            if rested, let entry, ExerciseCatalog.tired(entry, model.muscles) != nil { return false }
+            if rested, let entry, !ExerciseCatalog.ready(entry, model.muscles) { return false }
             let folded = ExerciseCatalog.fold([name, entry?.muscle ?? "", entry?.station ?? ""].joined(separator: " "))
             return words.allSatisfy { folded.contains($0) }
         }

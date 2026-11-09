@@ -54,10 +54,15 @@ test('one chosen group fills at most three different movements and ten sets, and
     assert.ok(plan.timing.estimatedMinutes<75*.75,group+' '+plan.timing.estimatedMinutes);
     assert.match(plan.rationale,/přidej další partii/,group);
   }
-  // Forearms: a wrist curl, a reverse wrist curl and a reverse curl, not four reverse curls.
+  // A small group: two exercises and six sets; forearms take one overhand
+  // exercise (reverse wrist curl or a reverse curl), not four of them.
+  for(const group of ['forearms','biceps','calves']){
+    const work=generateStrengthPlan(context,{focusMuscles:[group],durationMinutes:75}).rows.filter(row=>row[0]==='WORK');
+    assert.ok(new Set(work.map(row=>row[1])).size<=2&&work.length<=6,group+' '+work.length);
+  }
   const forearms=generateStrengthPlan(context,{focusMuscles:['forearms'],durationMinutes:75});
   const patterns=[...new Set(forearms.rows.filter(row=>row[0]==='WORK').map(row=>row[1]))].map(name=>EXERCISES[name].pattern);
-  assert.equal(new Set(patterns).size,patterns.length,String(patterns));
+  assert.ok(patterns.filter(p=>p==='wrist_extension'||p==='reverse_curl').length<=1,String(patterns));
   // Three groups still fill the hour and a quarter.
   const three=generateStrengthPlan(context,{focusMuscles:['chest','upper_back','triceps'],durationMinutes:75});
   assert.ok(three.timing.estimatedMinutes>=75*.75,String(three.timing.estimatedMinutes));

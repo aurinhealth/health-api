@@ -363,8 +363,14 @@ const EXERCISES = {
 // The groups' names in English, and the leg groups a key ride keeps fresh.
 const FOCUS_GROUP_EN = { chest: 'chest', upper_back: 'upper back', lats: 'lats', front_delts: 'front delts', side_delts: 'side delts', rear_delts: 'rear delts', biceps: 'biceps', triceps: 'triceps', abs: 'abs', obliques: 'obliques', quads: 'quads', hamstrings: 'hamstrings', hips: 'glutes and hips', calves: 'calves', forearms: 'forearms', traps: 'traps', lower_back: 'lower back' };
 const LEG_GROUPS = ['quads', 'hamstrings', 'hips', 'calves'];
-// One chosen group in a targeted session: at most this many exercises and work sets.
-const FOCUS_GROUP_EXERCISES = 3, FOCUS_GROUP_SETS = 10;
+// One chosen group in a targeted session: at most this many exercises and work
+// sets. A small muscle gets indirect work from the big lifts and grip, so less.
+const FOCUS_BIG = { exercises: 3, sets: 10 }, FOCUS_SMALL = { exercises: 2, sets: 6 };
+const SMALL_FOCUS_GROUPS = new Set(['forearms', 'calves', 'biceps', 'triceps', 'side_delts', 'rear_delts', 'traps', 'abs', 'obliques']);
+const focusCap = group => SMALL_FOCUS_GROUPS.has(group) ? FOCUS_SMALL : FOCUS_BIG;
+// Overhand forearm work (reverse wrist curl, reverse curls) counts as one
+// movement, so a forearm session takes one of them, not three.
+const focusPattern = name => ({ wrist_extension: 'overhand', reverse_curl: 'overhand' })[EXERCISES[name].pattern] || EXERCISES[name].pattern;
 export const FOCUS_GROUPS = {
   chest: {label:'Hrudník', exercises:['DB bench press','Chest flat press Prime','Barbell bench press','DB incline press','Pec deck','Cable fly','Low-to-high cable fly','Smith machine incline press','Barbell incline bench press','Smith Machine Bench Press','Cable Bench Chest Fly','Cable Bench Press','Cable Chest Press','Cable Decline Bench Press','Cable High-to-Low Fly','Cable Incline Bench Press','Cable Standing Single Arm Chest Press','Single-Arm Cable Fly','Decline Machine Chest Press','Incline Machine Chest Press','Dumbbell Chest Fly']},
   upper_back: {label:'Horní záda', exercises:['Low row','Standing rowing machine','One-arm DB row','Single-arm cable row','Wide-grip low row','Barbell row','T-bar row','Chest-supported row','TRX row','Inverted Row','Smith Machine Bent-Over Row','Cable Row Bar Standing Row','Cable Supinating Row','Machine Underhand Row','Hammer Strength Iso-Lateral Row','Seal Row','Kettlebell Gorilla Row','Kettlebell Renegade Rows','Band Row','Barbell Landmine Row','Meadows Row']},
@@ -1577,7 +1583,7 @@ export function generateStrengthPlan(context, options = {}) {
     // among them (Petr 2026-11-09). The session is shorter instead.
     for (let g = 0; g < ranked.length; g++) {
       const seen = new Set(), first = [], rest = [];
-      for (const name of ranked[g]) { const pattern = EXERCISES[name].pattern; (seen.has(pattern) ? rest : first).push(name); seen.add(pattern); }
+      for (const name of ranked[g]) { const pattern = focusPattern(name); (seen.has(pattern) ? rest : first).push(name); seen.add(pattern); }
       ranked[g] = [...first, ...rest];
     }
     // Two or three shoulder parts take turns within one list: Ramena next to
@@ -1588,7 +1594,9 @@ export function generateStrengthPlan(context, options = {}) {
       ranked[parts[0]] = Array.from({ length: longest }, (_, k) => lists.map(list => list[k])).flat().filter(Boolean);
       for (const i of parts.slice(1).reverse()) ranked.splice(i, 1);
     }
-    for (let g = 0; g < ranked.length; g++) ranked[g] = ranked[g].slice(0, FOCUS_GROUP_EXERCISES);
+    // The merged shoulder parts count as one big group.
+    const listGroups = focusMuscles.filter((group, i) => !parts.slice(1).includes(i));
+    for (let g = 0; g < ranked.length; g++) ranked[g] = ranked[g].slice(0, parts.length > 1 && g === parts[0] ? FOCUS_BIG.exercises : focusCap(listGroups[g]).exercises);
     const next = ranked.map(() => 0);
     exercises = [];
     const total = Math.max(ranked.length, maxExercises);
@@ -1714,9 +1722,10 @@ export function generateStrengthPlan(context, options = {}) {
   const routineOptions = { date: context.date, sport: context.profile?.mainSport || context.trainingSetup?.history?.mainSport || '' };
   const routinesNow = () => { const all = routinesFor(rows, muscleOf, context.trainingSetup || {}, requestedMinutes, routineOptions); warmup = withWarmup ? all.warmup : null; stretching = withStretching ? all.stretching : null; };
   routinesNow();
-  // About ten work sets per chosen group: more in one session adds little to
-  // the gain (~11 sets, Pelland et al., SportRxiv). A set goes from the
-  // group's exercise with the most sets, the later one on a tie.
+  // About ten work sets per chosen group (six for a small one): more in one
+  // session adds little to the gain (~11 fractional sets, Remmert et al. 2025,
+  // SportRxiv 537, preprint). A set goes from the group's exercise with the
+  // most sets, the later one on a tie.
   if (focusMuscles) {
     const groupOf = name => { const base = EXERCISES[name]?.variantOf ?? name; const g = focusMuscles.find(id => FOCUS_GROUPS[id].exercises.includes(base) || FOCUS_GROUPS[id].exercises.includes(name)); return SHOULDER_PARTS.includes(g) ? 'shoulders' : g; };
     const count = name => rows.filter(r => r[0] === 'WORK' && r[1] === name).length;
@@ -1725,7 +1734,7 @@ export function generateStrengthPlan(context, options = {}) {
       const names = [...new Set(rows.filter(r => r[0] === 'WORK').map(r => r[1]))];
       for (const group of new Set(names.map(groupOf))) {
         const own = names.filter(name => groupOf(name) === group);
-        if (own.reduce((sum, name) => sum + count(name), 0) <= FOCUS_GROUP_SETS) continue;
+        if (own.reduce((sum, name) => sum + count(name), 0) <= (group === 'shoulders' ? FOCUS_BIG : focusCap(group)).sets) continue;
         const most = own.slice().reverse().sort((a, b) => count(b) - count(a))[0];
         if (count(most) < 2) continue;
         rows.splice(rows.findLastIndex(r => r[0] === 'WORK' && r[1] === most), 1);
