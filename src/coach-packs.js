@@ -11,9 +11,12 @@
 // - coach_pack_seen: SHA-256 of every transaction id ever counted, kept after the
 //   account is deleted, so the same purchase cannot fill a new account again.
 // A Sandbox purchase (TestFlight, sandbox testers) adds messages only on the
-// test server; on the live one it is recorded but counts for nothing.
+// test server and, on the live one, to the App Review account (Apple reviews with
+// Sandbox purchases, like Pro in app-store.js proActive); for anyone else on the
+// live server it is recorded but counts for nothing.
 import { L } from './lang.js';
 import { isStaging, ownerUnlimited } from './staging.js';
+import { isReviewAccount } from './app-review.js';
 
 export const PACKS = { messages40: 40, messages100: 100 };
 export const packMessages = (productId, bundle) => {
@@ -26,7 +29,7 @@ const refuse = (message, status = 400) => Object.assign(new Error(message), { st
 const central = env => env.RAW_DB || env.DB;
 const tracked = env => Boolean(env?.DB && Number(env.USER_ID) > 0) && !ownerUnlimited(env);
 // Whether a purchase from this App Store environment adds messages here.
-export const counts = (env, environment) => environment === 'Production' || isStaging(env);
+export const counts = (env, environment) => environment === 'Production' || isStaging(env) || isReviewAccount(env);
 
 export async function ensureCoachPacks(db) {
   await db.batch([

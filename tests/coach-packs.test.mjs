@@ -83,6 +83,13 @@ test("a Sandbox purchase counts only on the test server", async () => {
   assert.equal((await buy(staging, pack({ environment: "Sandbox", productId: "health.aurin.app.coach.messages100" }))).left, 100);
 });
 
+test("App Review's Sandbox purchase on the live server adds the messages to the review account only", async () => {
+  const review = setup({ APP_REVIEW_EMAIL: "review@aurin.health", USER_EMAIL: "Review@aurin.health" }).user(1);
+  assert.equal((await buy(review, pack({ environment: "Sandbox" }))).left, 40);
+  const other = setup({ APP_REVIEW_EMAIL: "review@aurin.health", USER_EMAIL: "someone@example.com" }).user(1);
+  assert.equal((await buy(other, pack({ environment: "Sandbox", transactionId: "3000000009", originalTransactionId: "3000000009" }))).left, 0);
+});
+
 test("Apple's refund takes the pack's messages away, the used ones stay used", async () => {
   const { raw, user } = setup();
   const env = user(1);
