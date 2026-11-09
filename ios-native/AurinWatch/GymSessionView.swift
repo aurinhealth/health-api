@@ -279,8 +279,9 @@ struct GymSessionView: View {
         guard workout.start != nil, !summary else { return nil }
         // Up next, waiting for its Start: the time goes to no part meanwhile.
         if let part = shownPart {
-            let waits = part.isCardio ? run.started == nil : !run.begun
-            return waits && run.part == part ? Self.waitKey : part.rawValue
+            let waits: Bool = part.isCardio ? run.started == nil : !run.begun
+            if waits, run.part == part { return Self.waitKey }
+            return part.rawValue
         }
         if gymWaits, store.gym?.allDone != true { return Self.waitKey }
         guard let gym = store.gym, let lift = currentLift(in: gym),
@@ -296,7 +297,10 @@ struct GymSessionView: View {
     /// Nothing done or skipped yet: the workout begins with the part on the screen.
     private var nothingDoneYet: Bool {
         guard let gym = store.gym, let day = store.sheetDay, let parts = store.dayParts else { return true }
-        return !gym.exercises.contains { $0.lifts.contains(where: \.done) } && !parts.visible(day).contains { store.partFinished($0) }
+        // Step by step, not one && line: Xcode 27.1's optimiser crashed on such a Bool getter (#760).
+        if gym.exercises.contains(where: { $0.lifts.contains(where: \.done) }) { return false }
+        if parts.visible(day).contains(where: { store.partFinished($0) }) { return false }
+        return true
     }
 
     /// "Up next · Gym": the exercises came on after the part before and wait for Start gym.
