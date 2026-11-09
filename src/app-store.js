@@ -168,8 +168,10 @@ export async function ensureStoreColumns(db) {
     db.prepare('CREATE TABLE IF NOT EXISTS store_originals (original_transaction_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, signed_at INTEGER NOT NULL)'),
     db.prepare('INSERT OR IGNORE INTO store_originals(original_transaction_id,user_id,signed_at) SELECT original_transaction_id,user_id,COALESCE(store_signed_at,0) FROM subscriptions WHERE original_transaction_id IS NOT NULL')
   ]);
+  // revoked_at: the newest refund Apple signed for the subscription (claimOriginal).
+  await db.prepare('ALTER TABLE store_originals ADD COLUMN revoked_at INTEGER').run().catch(() => { /* already there */ });
 }
-async function withColumns(db, work) {
+export async function withColumns(db, work) {
   try { return await work(); } catch (error) {
     if (!/no such (column|table)|has no column/i.test(String(error?.message || error))) throw error;
     await ensureStoreColumns(db);
@@ -249,38 +251,38 @@ const signedAtOf = tx => Number(tx.signedDate) || Date.now();
 // whichever account holds it. Account 0 holds a subscription Apple refunded
 // before any account sent it (handleAppStoreNotification): the record from
 // before the refund is then an older one, and a newer one (bought again) gives
-// the subscription to the account that sends it.
+// the subscription to the account that sends it. revoked_at keeps the signed
+// time of the newest refund, which signed_at loses when the subscription is
+// bought again (keepEndedPurchases needs it).
 // 'ok': the newest record so far, write it; 'stale': an older one; 'taken': another account's.
 async function claimOriginal(db, userId, tx, fromApple = false) {
   const original = String(tx.originalTransactionId);
-  const result = await withColumns(db, () => db.prepare('INSERT INTO store_originals(original_transaction_id,user_id,signed_at) VALUES(?,?,?) ON CONFLICT(original_transaction_id) DO UPDATE SET user_id=CASE WHEN store_originals.user_id=0 THEN excluded.user_id ELSE store_originals.user_id END,signed_at=excluded.signed_at WHERE (? OR store_originals.user_id IN (0,excluded.user_id)) AND store_originals.signed_at<=excluded.signed_at')
-    .bind(original, userId, signedAtOf(tx), fromApple ? 1 : 0).run());
+  const result = await withColumns(db, () => db.prepare('INSERT INTO store_originals(original_transaction_id,user_id,signed_at,revoked_at) VALUES(?,?,?,?) ON CONFLICT(original_transaction_id) DO UPDATE SET user_id=CASE WHEN store_originals.user_id=0 THEN excluded.user_id ELSE store_originals.user_id END,signed_at=excluded.signed_at,revoked_at=COALESCE(excluded.revoked_at,store_originals.revoked_at) WHERE (? OR store_originals.user_id IN (0,excluded.user_id)) AND store_originals.signed_at<=excluded.signed_at')
+    .bind(original, userId, signedAtOf(tx), tx.revocationDate ? signedAtOf(tx) : null, fromApple ? 1 : 0).run());
   if (result.meta.changes) return 'ok';
   if (fromApple) return 'stale';
   const holder = await db.prepare('SELECT user_id FROM store_originals WHERE original_transaction_id=?').bind(original).first();
   return [0, Number(userId)].includes(Number(holder?.user_id)) ? 'stale' : 'taken';
 }
 
-// Before an account is deleted (account-data.js), its purchases are settled in
-// one step, so that none of its rows is left for one of Apple's notifications to
-// find while the rest of its data is still being deleted. A subscription that no
-// longer gives Pro (refunded, run out) stays under account 0 with its newest
-// signed time, so its records from before give nothing to a new account. The
-// running one goes with the account, and the person's new account may restore
-// it (saveAppTransaction); a refund that comes later finds no account and is
-// remembered like any other (handleAppStoreNotification). An account that never
-// met the store has nothing to settle.
-export async function keepEndedPurchases(db, userId, now = Date.now()) {
-  try {
-    await db.batch([
-      db.prepare("UPDATE store_originals SET user_id=0 WHERE user_id=? AND original_transaction_id NOT IN (SELECT original_transaction_id FROM subscriptions WHERE user_id=? AND plan='ai' AND valid_until>? AND original_transaction_id IS NOT NULL)").bind(userId, userId, new Date(now).toISOString()),
-      // Bounded like every delete of an account's data (account-data.js); an account has a few of these rows.
-      db.prepare('DELETE FROM store_originals WHERE rowid IN (SELECT rowid FROM store_originals WHERE user_id = ? LIMIT ?)').bind(userId, 100),
-      db.prepare('DELETE FROM subscriptions WHERE rowid IN (SELECT rowid FROM subscriptions WHERE user_id = ? LIMIT ?)').bind(userId, 1)
-    ]);
-  } catch (error) {
-    if (!/no such (column|table)/i.test(String(error?.message || error))) throw error;
-  }
+// The statements that settle an account's purchases, run in the batch that
+// deletes the account (account-data.js): all or nothing, and none of its rows is
+// left for one of Apple's notifications to find while the rest of its data is
+// still being deleted. A subscription that no longer gives Pro (refunded, run
+// out) stays under account 0 with its newest signed time, so its records from
+// before give nothing to a new account. The running one goes with the account,
+// and the person's new account may restore it (saveAppTransaction); if it was
+// refunded once and bought again, it stays under account 0 from that refund on,
+// so only the records from before the refund give nothing. A refund that comes
+// later finds no account and is remembered like any other (handleAppStoreNotification).
+export function keepEndedPurchases(db, userId, now = Date.now()) {
+  return [
+    db.prepare("UPDATE store_originals SET user_id=0 WHERE user_id=? AND original_transaction_id NOT IN (SELECT original_transaction_id FROM subscriptions WHERE user_id=? AND plan='ai' AND valid_until>? AND original_transaction_id IS NOT NULL)").bind(userId, userId, new Date(now).toISOString()),
+    db.prepare('UPDATE store_originals SET user_id=0,signed_at=revoked_at WHERE user_id=? AND revoked_at IS NOT NULL').bind(userId),
+    // Bounded like every delete of an account's data (account-data.js); an account has a few of these rows.
+    db.prepare('DELETE FROM store_originals WHERE rowid IN (SELECT rowid FROM store_originals WHERE user_id = ? LIMIT ?)').bind(userId, 100),
+    db.prepare('DELETE FROM subscriptions WHERE rowid IN (SELECT rowid FROM subscriptions WHERE user_id = ? LIMIT ?)').bind(userId, 1)
+  ];
 }
 
 // The cron's cleanup: a purchase kept under account 0 is forgotten KEPT_DAYS
@@ -380,8 +382,10 @@ export async function handleAppStoreNotification(request, env, options = {}) {
     let holder = Number(held?.user_id) || 0;
     // No account has sent this purchase (yet). Its refund is remembered, so the
     // record from before it gives nothing later; an account that sent it in the
-    // same moment is read back and loses Pro below.
-    if (!holder && tx.revocationDate) {
+    // same moment is read back and loses Pro below. A refund of a period that
+    // has run out is left: its record gives no Pro anyway, and remembering it
+    // would make the paid period's record, signed before it, an older one.
+    if (!holder && tx.revocationDate && Number(tx.expiresDate) > Date.now()) {
       await claimOriginal(env.DB, 0, tx, true);
       holder = Number((await env.DB.prepare('SELECT user_id FROM store_originals WHERE original_transaction_id=?').bind(original).first())?.user_id) || 0;
     }

@@ -18,9 +18,12 @@ How Aurin Pro is bought and how the server learns about it. The code is in
    or revocation). A transaction carrying another account's token, or one another account
    sent first, is refused with 409. Once the token's account is deleted, the person's new
    account may restore a subscription that still runs; one that had ended or was refunded by
-   then stays in `store_originals` under account 0 (`keepEndedPurchases`), so its old record
-   gives nothing, and the cron forgets it after 400 days. `store_originals` holds one row per original transaction
-   (the account and the newest `signedDate`), claimed in one statement, so two accounts
+   then stays in `store_originals` under account 0 (`keepEndedPurchases`, in the batch that
+   deletes the account), so its old record gives nothing, and the cron forgets it after 400
+   days. A running one that was refunded once and bought again stays there from that refund
+   on (`revoked_at`), so only its records from before the refund give nothing.
+   `store_originals` holds one row per original transaction (the account, the newest
+   `signedDate` and the newest refund's), claimed in one statement, so two accounts
    sending it at once cannot both get it.
 3. Apple sends App Store Server Notifications V2 to `POST /webhooks/app-store`
    (renewals, failed renewals with the grace period, expiry, refunds, revocation). The row is
@@ -30,6 +33,8 @@ How Aurin Pro is bought and how the server learns about it. The code is in
    purchase and then its record from before the refund). A refund of a subscription no account
    has sent yet (bought without the token) is kept in `store_originals` under account 0, so its
    record from before the refund gives nothing; a newer record goes to the account that sends it.
+   A refund of a period that has already run out is not kept there: its record gives no Pro,
+   and the paid period's record must stay the newest.
 4. While `AI_PAYWALL_ENABLED` is off (the pilot) everyone keeps AI and nothing is on sale
    (`checkoutAvailable` stays false). `owner` turns the paid split on for the owner's account
    only, to try the offer, the locked plans and a TestFlight purchase; `true` turns it on for

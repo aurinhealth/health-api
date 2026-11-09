@@ -217,6 +217,51 @@ test("Apple's later notification does not give a kept purchase back to the accou
   assert.equal((await saveAppTransaction(user(2), { signedTransaction: bought }, { roots })).stale, true);
 });
 
+test("a refund stays known when the subscription is bought again and its account deleted while it runs", async () => {
+  const { raw, user, remove } = accounts(1, 2);
+  const token = await appAccountToken(user(1));
+  const first = jws(yearly({ appAccountToken: token }));
+  await saveAppTransaction(user(1), { signedTransaction: first }, { roots });
+  await notify(notification("REFUND", yearly({ appAccountToken: token, revocationDate: now + 500, signedDate: now + 1000 })), { DB: raw });
+  // Subscribed again (the same subscription at Apple); the account goes while that month runs.
+  const again = jws(yearly({ appAccountToken: token, transactionId: "2000000002", expiresDate: now + 30 * DAY, signedDate: now + 2000 }));
+  await saveAppTransaction(user(1), { signedTransaction: again }, { roots });
+  await remove(1);
+  // The record from before the refund gives nothing to a new account; the running month is restored.
+  assert.equal((await saveAppTransaction(user(2), { signedTransaction: first }, { roots })).stale, true);
+  assert.equal(await storePurchase(user(2)), null);
+  assert.equal((await saveAppTransaction(user(2), { signedTransaction: again }, { roots })).plan, "ai");
+  assert.equal((await storePurchase(user(2))).active, true);
+});
+
+test("a refund no account saw stays known after the account that bought again is deleted", async () => {
+  const { raw, user, remove } = accounts(1, 2);
+  await notify(notification("REFUND", yearly({ revocationDate: now + 500, signedDate: now + 1000 })), { DB: raw });
+  await saveAppTransaction(user(1), { signedTransaction: jws(yearly({ transactionId: "2000000002", signedDate: now + 2000 })) }, { roots });
+  await remove(1);
+  assert.equal((await saveAppTransaction(user(2), { signedTransaction: jws(yearly()) }, { roots })).stale, true);
+  assert.equal(await storePurchase(user(2)), null);
+});
+
+test("a deletion that fails leaves the account its purchase", async () => {
+  const { raw, user, remove } = accounts(1);
+  await saveAppTransaction(user(1), { signedTransaction: jws(yearly({ appAccountToken: await appAccountToken(user(1)) })) }, { roots });
+  raw.sqlite.exec("CREATE TRIGGER stop BEFORE DELETE ON users BEGIN SELECT RAISE(ABORT, 'stopped'); END");
+  await assert.rejects(remove(1));
+  assert.equal((await storePurchase(user(1)))?.active, true);
+  assert.equal(raw.sqlite.prepare("SELECT user_id FROM store_originals").get()?.user_id, 1);
+});
+
+test("store_originals from before revoked_at gets the column when a purchase or a deletion needs it", async () => {
+  const old = "CREATE TABLE store_originals (original_transaction_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, signed_at INTEGER NOT NULL)";
+  const deleted = accounts(1);
+  deleted.raw.sqlite.exec(old);
+  assert.equal((await deleted.remove(1)).pending, false);
+  const bought = setup();
+  bought.raw.sqlite.exec(old);
+  assert.equal((await saveAppTransaction(bought.user(1), { signedTransaction: jws(transaction()) }, { roots })).plan, "ai");
+});
+
 test("a purchase kept without an account is forgotten once its old records have run out", async () => {
   const { raw, user } = setup();
   assert.equal(await forgetEndedPurchases(raw), 0, "no table yet");
@@ -464,6 +509,15 @@ test("a subscription refunded before any account sent it gives nothing through i
   assert.equal((await saveAppTransaction(env, { signedTransaction: jws(yearly({ signedDate: now + 3000 })) }, { roots })).plan, "ai");
   assert.equal((await storePurchase(env)).active, true);
   await assert.rejects(saveAppTransaction(user(2), { signedTransaction: jws(yearly({ signedDate: now + 4000 })) }, { roots }), { status: 409 });
+});
+
+test("a refund of a period that has run out does not block the running subscription no account holds", async () => {
+  const { raw, user } = setup();
+  const answer = await notify(notification("REFUND", yearly({ transactionId: "1999999999", purchaseDate: now - 60 * DAY, expiresDate: now - 30 * DAY, revocationDate: now + 500, signedDate: now + 1000 })), { DB: raw });
+  assert.equal((await answer.json()).unknown, true);
+  // The paid period's record was signed before that refund.
+  assert.equal((await saveAppTransaction(user(1), { signedTransaction: jws(yearly()) }, { roots })).plan, "ai");
+  assert.equal((await storePurchase(user(1))).active, true);
 });
 
 test("a refund that crosses the app's first send of the purchase still ends its Pro", async () => {
