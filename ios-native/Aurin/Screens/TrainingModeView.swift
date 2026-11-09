@@ -899,7 +899,11 @@ struct TrainingModeView: View {
         guard started, !finishedSession, let day else { return nil }
         // Waiting for its Start: the time goes to no part meanwhile.
         if waiting { return Self.waitKey }
-        return activePart?.rawValue ?? current(day)?.name
+        if let part = activePart { return part.rawValue }
+        // The rest before an exercise not begun yet (after the last set of the one
+        // before): its own time starts when the rest ends, not with the rest.
+        if restEnd != nil, let exercise = current(day), !exercise.sets.contains(where: \.done) { return Self.waitKey }
+        return current(day)?.name
     }
 
     /// The time between a part's end and the next one's Start (LiveWorkout.segments): no row shows it.

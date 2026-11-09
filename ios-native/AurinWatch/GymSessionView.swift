@@ -285,6 +285,8 @@ struct GymSessionView: View {
         if gymWaits, store.gym?.allDone != true { return Self.waitKey }
         guard let gym = store.gym, let lift = currentLift(in: gym),
               let e = gym.exercises.first(where: { $0.lifts.contains { $0.row == lift.row } }) else { return nil }
+        // The rest before an exercise not begun yet: its own time starts when the rest ends.
+        if restEnd != nil, !e.lifts.contains(where: \.done) { return Self.waitKey }
         return GymWorkout.exerciseKey(e)
     }
 
