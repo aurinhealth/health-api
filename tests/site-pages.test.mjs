@@ -100,10 +100,12 @@ test('the site is English whatever the browser says; privacy and terms also have
   assert.equal(overviewPage(new Request('https://aurin.health/',{headers:{'accept-language':'cs'}})).headers.get('content-language'),'en');
 });
 
-test('the overview speaks English and offers the waitlist',async()=>{
+test('the overview speaks English and sends people to the App Store, black badge on light and white in dark',async()=>{
   const en=await overviewPage().text();
-  assert.match(en,/Get early access/);
-  assert.match(en,/<form class="wl" action="\/waitlist"/);
+  assert.match(en,/Get the app/);
+  assert.equal((en.match(/<a class="badge" href="https:\/\/apps\.apple\.com\/app\/id6827125354"><picture><source srcset="\/site\/badges\/app-store-white\.svg" media="\(prefers-color-scheme:dark\)"><img src="\/site\/badges\/app-store-black\.svg" alt="Download on the App Store"/g)||[]).length,2);
+  assert.doesNotMatch(en,/early access|TestFlight|<form class="wl"|while we test|during testing/);
+  assert.match(en,/Not in the EU yet, coming soon\./);
   assert.match(en,/Train for how you feel today/);
   assert.doesNotMatch(en,/href="\/app"/);
   assert.match(await privacyPage().text(),/Google user data is used only to provide/);
@@ -372,7 +374,7 @@ test('the price block follows the app’s Free and Pro list and says the US pric
   const price=html.match(/<section id="cena"[\s\S]*?<\/section>/)[0];
   for(const x of [...free,...pro.flatMap(([t,i])=>[t,...i])])assert.ok(price.includes(x),x);
   assert.ok(price.includes(PRO_PRICE.month)&&price.includes(PRO_PRICE.year));
-  assert.equal((price.match(/Free while we test/g)||[]).length,1);
+  assert.equal((price.match(/Free to start\./g)||[]).length,1);
   assert.match(price,/href="#join"/);
   const faq=html.match(/<summary>What does it cost\?<\/summary><p>([^<]*)/)[1];
   assert.ok(faq.includes(PRO_PRICE.month+' a month')&&faq.includes(PRO_PRICE.year+' a year'),'the FAQ says the same prices');
