@@ -106,6 +106,9 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
   assert.equal((await handleCoachEval(post({ id: 'S99' }), staging, { kind: 'coach-eval' }, { run })).status, 404);
+  // A failed situation keeps its message: a 502 would reach the workflow as Cloudflare's "Bad gateway" page (run 57).
+  const failed = await handleCoachEval(post({ id: 'S38' }), staging, { kind: 'coach-eval' }, { run: async () => { throw new Error('AI je dnes přetížená.'); } });
+  assert.equal(failed.status, 200);assert.deepEqual(await failed.json(), { id: 'S38', title: scenarioById('S38').title, status: 'error', message: 'AI je dnes přetížená.' });
   // The token is checked against the evaluation's own audience and workflow.
   let options = null;
   assert.deepEqual(await coachEvalPrincipal(post({}), staging, async (request, fetchImpl, o) => { options = o; return {}; }), { kind: 'coach-eval' });
