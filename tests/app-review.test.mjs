@@ -131,7 +131,7 @@ test("the review account's AI budget is a small fixed monthly cap", async () => 
   try {
     const db = grantAiConsent(createD1(), 7), env = { DB: scopedDb(db, 7), USER_ID: 7, OPENAI_API_KEY: "k", ...review };
     await aiAllowance(env);
-    db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, 0.5)").run(localToday());
+    db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, ?)").run(localToday(), REVIEW_AI_MONTHLY_LIMIT_USD);
     await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => error.limit === true && /zase k dispozici od/.test(error.message));
     assert.equal(calls, 0);
   } finally { globalThis.fetch = realFetch; }
