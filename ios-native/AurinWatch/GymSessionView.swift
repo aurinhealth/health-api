@@ -14,6 +14,10 @@ struct GymSessionView: View {
 
     @State private var exercise = 0
     @State private var kg: Double = 0
+    /// The weight and reps the screen itself put in (a new set, the iPhone's
+    /// draft): not sent back to the iPhone. Sent, they wrote the watch's older
+    /// plan over a weight just changed on the iPhone (Petr 2026-11-09).
+    @State private var putIn: [Double]?
     @State private var reps: Double = 8
     @State private var row: Int?
     /// The set the crown's numbers were loaded for (Lift.fieldKey).
@@ -336,6 +340,7 @@ struct GymSessionView: View {
             let shown = GymText.shown(draft.kg, machineLb: gym.machineLb(row: row))
             if abs(shown - kg) >= 0.05 { kg = shown }
             if Double(draft.reps) != reps { reps = Double(draft.reps) }
+            putIn = [kg, reps]
         }
     }
 
@@ -662,7 +667,8 @@ struct GymSessionView: View {
 
     /// The set at hand as it is now, to the iPhone; not what came from it.
     private func sendDraft(_ gym: WatchGym) {
-        guard let row else { return }
+        guard let row, putIn != [kg, reps] else { return }
+        putIn = nil
         store.sendDraft(WatchGym.Draft(date: gym.date, row: row, kg: GymText.kgOf(kg, machineLb: gym.machineLb(row: row)), reps: Int(reps)))
     }
 
@@ -672,6 +678,13 @@ struct GymSessionView: View {
         row = lift.row
         kg = GymText.shown(lift.kg ?? 0, machineLb: gym.machineLb(row: lift.row))
         reps = Double(lift.reps ?? 8)
+        // What the iPhone already has in its fields for this set, when it came
+        // before the watch moved on to it (the iPhone sends it as it moves on).
+        if let draft = store.phoneDraft, draft.date == gym.date, draft.row == lift.row {
+            kg = GymText.shown(draft.kg, machineLb: gym.machineLb(row: lift.row))
+            reps = Double(draft.reps)
+        }
+        putIn = [kg, reps]
         // Each new set starts on the weight.
         selected = .kg
         focusCrown()
