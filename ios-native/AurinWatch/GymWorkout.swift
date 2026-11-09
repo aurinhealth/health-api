@@ -136,9 +136,14 @@ final class GymWorkout: NSObject, ObservableObject {
                 if idle >= Self.endAfter {
                     self.askStill = false
                     self.idleEnd = last
-                    // The gym screen ends it when open; closed, nothing else would.
-                    if !GymStore.shared.screenOpen {
-                        Task { await GymStore.shared.endWithoutScreen(at: last) }
+                    // The gym screen ends it when open; closed, or open and it
+                    // hasn't within a minute, this does. A workout from 6 Nov
+                    // still ran on 9 Nov and kept its gym on Training as today's
+                    // (Petr 2026-11-09).
+                    Task { @MainActor in
+                        if GymStore.shared.screenOpen { try? await Task.sleep(for: .seconds(60)) }
+                        guard self.running, self.idleEnd == last else { return }
+                        await GymStore.shared.endWithoutScreen(at: last)
                     }
                     return
                 }
