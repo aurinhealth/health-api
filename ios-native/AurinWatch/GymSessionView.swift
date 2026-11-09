@@ -526,7 +526,7 @@ struct GymSessionView: View {
             switch next.turn {
             case .partner?: text += W.tr(" · pak ", " · then ") + gym.exercises[next.exercise].title
             case .round?: text += W.tr(" · pak pauza \(lift.rest) s", " · rest \(lift.rest) s after")
-            case nil: text += W.tr(" · pak pauza \(gym.restExercises) s", " · rest \(gym.restExercises) s after")
+            case nil: text += W.tr(" · pak pauza \(gym.restBefore(next.exercise)) s", " · rest \(gym.restBefore(next.exercise)) s after")
             }
         }
         return text
@@ -788,7 +788,7 @@ struct GymSessionView: View {
         // A superset: its partner straight on, the set's rest after each round (as on the iPhone).
         case .partner?: seconds = 0
         case .round?: seconds = lift.rest
-        case nil: seconds = next.newExercise ? gym.restExercises : (next.lift.drop || otherSide ? 0 : lift.rest)
+        case nil: seconds = next.newExercise ? gym.restBefore(next.exercise) : (next.lift.drop || otherSide ? 0 : lift.rest)
         }
         if seconds > 0 {
             restTotal = Double(seconds)
