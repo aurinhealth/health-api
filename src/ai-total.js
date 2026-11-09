@@ -18,7 +18,7 @@
 // its other running calls included), so a few
 // accounts using their whole allowance never stop the AI of the rest; at
 // GROUP_HARD_STOP times the brake the whole group waits. A fixed brake has no
-// share (the server): there it stops the whole group.
+// share (accounts made in bulk, the server): there it stops the whole group.
 // The App Review account is never stopped by its group (its own budget is small).
 // Each call holds what it can cost at most (estimateAiCostUsd) in the day and
 // in its group before it runs, so calls running at once see each other; its
@@ -65,8 +65,8 @@ export function groupBrakes(env) {
 }
 
 // Accounts by group now: the subscriptions with Pro, and the accounts without a
-// purchase older than NEW_ACCOUNT_DAYS ("free"; the new ones are not counted, so
-// their brake stays at its least). Throws when a read fails.
+// purchase older than NEW_ACCOUNT_DAYS ("free"; the new ones get a fixed brake,
+// so they are not counted). Throws when a read fails.
 async function accountsByGroup(db, now = Date.now()) {
   try { return await countAccounts(db, now); } catch (error) {
     if (!/no such (column|table)|has no column/i.test(String(error?.message || error))) throw error;

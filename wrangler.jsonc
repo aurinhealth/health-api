@@ -115,9 +115,7 @@
     // Each group of accounts has its own daily brake, so one never stops another's AI
     // (src/ai-total.js): per account in the group (paying ones 0.5 USD, the free week
     // half, TestFlight 75 % up to 20, accounts without a purchase older than a week half,
-    // up to 15; accounts made in the last week are not counted, so theirs stays at its
-    // least, 5) or fixed for the server. New accounts have a share too, so a few accounts
-    // made to use up the brake never stop the AI of everyone who joined this week.
+    // up to 15) or fixed where accounts cost nothing to make (new accounts, the server).
     // A full group stops only its accounts past perAccount today; the rest go on up to
     // twice the brake. A fixed brake stops the whole group.
     // The owner hears once a day when a group passes half of its brake.
@@ -127,7 +125,7 @@
       "trial": { "perAccount": 0.25, "min": 5 },
       "testflight": { "perAccount": 0.375, "min": 5, "max": 20 },
       "free": { "perAccount": 0.25, "min": 5, "max": 15 },
-      "new": { "perAccount": 0.25, "min": 5 },
+      "new": { "usd": 5 },
       "system": { "usd": 5 }
     },
     // The weekly allowance of messages to the coach (src/coach-allowance.js): per week,
