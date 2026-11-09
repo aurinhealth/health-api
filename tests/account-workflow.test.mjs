@@ -89,3 +89,10 @@ test('two initial providers start independently and status stays running while G
  await a.prepare("INSERT INTO sync_status(user_id,sync_name,status) VALUES(1,'google','running')").run();assert.equal((await dashboardSyncStatus(a)).status,'running');
  await a.prepare("UPDATE sync_status SET status='completed' WHERE user_id=1 AND sync_name='google'").run();assert.equal((await dashboardSyncStatus(a)).status,'done');
 });
+test('a logged food keeps the amount logged last, in its own unit, also after an edit',async()=>{
+ const {a}=setup();await savePersonalFood(a,food,{used:true,last:150});assert.equal((await listPersonalFoods(a))[0].last_amount,150);
+ const bar={...food,name:'Test tyčinka',nutrition_basis:'portion',serving_size:'40 g',calories_100g:200};await savePersonalFood(a,bar,{used:true,last:2});
+ const saved=(await listPersonalFoods(a)).find(f=>f.name==='Test tyčinka');assert.equal(saved.nutrition_basis,'g');assert.equal(saved.last_amount,80);
+ await savePersonalFood(a,{...saved,name:'Tyčinka'});assert.equal((await listPersonalFoods(a)).find(f=>f.id===saved.id).last_amount,80);
+ await savePersonalFood(a,food,{used:true,last:-5});assert.equal((await listPersonalFoods(a)).find(f=>f.name===food.name).last_amount,undefined);
+});
