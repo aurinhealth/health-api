@@ -655,6 +655,8 @@ struct MinimizedGym {
     var pending: [GymActivityAction] = []
     /// The warm-up, cardio or stretching that was on the screen.
     var part: GymDayPart? = nil
+    /// It waited for its Start ("Na řadě").
+    var waiting = false
 }
 
 /// The bar over the tab bar while the workout is hidden: its time, the rest

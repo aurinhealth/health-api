@@ -4148,3 +4148,11 @@
 "Zahodit" = "Discard";
 
 "Zatím neuloženo · z %@" = "Not saved yet · from %@";
+
+/* Each part of the workout waits for its own Start (Režim tréninku). */
+"Na řadě" = "Up next";
+"nezačato" = "not started";
+"Přeskočit sekci" = "Skip section";
+"Spustit rozcvičku" = "Start warm-up";
+"Spustit protažení" = "Start stretching";
+"Spustit posilku" = "Start gym";

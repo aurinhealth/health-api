@@ -15,11 +15,15 @@ final class GymPartRun: ObservableObject {
     /// Cardio: the minutes chosen (0 = no limit), when it started and its end with a set time.
     @Published var minutes = 0
     @Published var started: Date?
+    /// Warm-up or stretching: its Start tapped, or the workout began with it.
+    /// Until then it waits ("Up next"); the cardio waits for its own Start.
+    @Published var begun = false
     /// When the pause began, to move the clocks on by its length.
     private var pausedAt: Date?
 
-    func open(_ part: GymDayPart, minutes: Int) {
+    func open(_ part: GymDayPart, minutes: Int, begun: Bool = false) {
         self.part = part
+        self.begun = begun
         hold = 0
         holdEnd = nil
         doneMoves = []
@@ -30,6 +34,7 @@ final class GymPartRun: ObservableObject {
 
     func close() {
         part = nil
+        begun = false
         holdEnd = nil
         started = nil
     }
@@ -72,7 +77,8 @@ struct GymHold: Equatable {
 
 /// Mockups "rozcvička, kardio, protažení" and "kardio bez času": the cardio
 /// with its stopwatch (no limit) or a set time, the warm-up and the stretching
-/// move by move with a countdown each; Next / Skip all, Done / Skip.
+/// move by move with a countdown each; Next / Skip section, Done / Skip section.
+/// A part after the first waits for its Start ("Up next").
 struct GymPartView: View {
     @ObservedObject var run: GymPartRun
     @ObservedObject private var store = GymStore.shared
@@ -95,7 +101,7 @@ struct GymPartView: View {
             if part.isCardio {
                 cardio
             } else if let routine = parts.moves(part, day: day), !routine.items.isEmpty {
-                moves(routine)
+                if run.begun { moves(routine) } else { ready(routine) }
             } else {
                 // Nothing to do (an empty own routine): on to the next part.
                 Color.clear.onAppear { finish(done: false) }
@@ -114,8 +120,8 @@ struct GymPartView: View {
             } else if let routine = parts.moves(part, day: day) {
                 if let end = run.holdEnd {
                     if date >= end { next(in: routine) }
-                } else {
-                    // The countdown of the part's first hold starts with the part.
+                } else if run.begun {
+                    // The countdown of the part's first hold starts with the part's Start.
                     let holds = GymHold.all(routine)
                     if holds.indices.contains(run.hold) {
                         run.holdEnd = date.addingTimeInterval(TimeInterval(max(1, holds[run.hold].item.seconds)))
@@ -179,7 +185,7 @@ struct GymPartView: View {
                         workout.worked()
                         WKInterfaceDevice.current().play(.start)
                     }
-                    Button(W.tr("Přeskočit", "Skip")) { finish(done: false) }
+                    Button(W.tr("Přeskočit sekci", "Skip section")) { finish(done: false) }
                         .watchFont(13, .semibold)
                         .buttonStyle(.bordered)
                 }
@@ -250,9 +256,32 @@ struct GymPartView: View {
                          text: "\(max(0, Int(left.rounded(.up))))", caption: W.tr("s zbývá", "s left"))
                     VStack(spacing: 5) {
                         primary(W.tr("Další", "Next")) { next(in: routine) }
-                        secondary(W.tr("Přeskočit vše", "Skip all")) { finish(done: false) }
+                        secondary(W.tr("Přeskočit sekci", "Skip section")) { finish(done: false) }
                     }
                 }
+                liveCells
+            }
+        }
+    }
+
+    /// "Up next": the warm-up or stretching came on after the part before and
+    /// waits for its Start; Skip section goes on without it.
+    private func ready(_ routine: GymStretching) -> some View {
+        let name = part == .warmup ? W.tr("Rozcvička", "Warm-up") : W.tr("Protažení", "Stretching")
+        let count = routine.items.count
+        let line = W.tr("\(count) \(count == 1 ? "cvik" : (2...4).contains(count) ? "cviky" : "cviků")", "\(count) \(count == 1 ? "move" : "moves")")
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 5) {
+                header(W.tr("NA ŘADĚ", "UP NEXT") + " · " + name.uppercased(), name, color: W.green)
+                Text(line).watchFont(12).foregroundStyle(W.secondary)
+                primary(W.tr("Start", "Start")) {
+                    run.begun = true
+                    now = Date()
+                    workout.worked()
+                    WKInterfaceDevice.current().play(.start)
+                }
+                .padding(.top, 4)
+                secondary(W.tr("Přeskočit sekci", "Skip section")) { finish(done: false) }
                 liveCells
             }
         }
@@ -335,7 +364,38 @@ struct GymPartView: View {
     }
 
     /// The workout's time and the heart rate, as under a set.
-    private var liveCells: some View {
+    private var liveCells: some View { GymLiveCells() }
+
+    /// The cardio machine's name (ids of src/stretching.js CARDIO_MACHINES).
+    static func machine(_ id: String) -> String {
+        switch id {
+        case "treadmill": return W.tr("Běžecký pás", "Treadmill")
+        case "rowing_ergometer": return W.tr("Veslo", "Rowing machine")
+        case "elliptical": return W.tr("Eliptický trenažér", "Elliptical")
+        case "stairmaster": return W.tr("Schody", "Stair climber")
+        case "air_bike": return "Air bike"
+        case "ski_erg": return "SkiErg"
+        case "jump_rope": return W.tr("Švihadlo", "Jump rope")
+        default: return W.tr("Rotoped", "Exercise bike")
+        }
+    }
+
+    /// The part's name in the list: "Warm-up", "Cardio", "Stretching".
+    static func name(_ part: GymDayPart) -> String {
+        switch part {
+        case .warmup: return W.tr("Rozcvička", "Warm-up")
+        case .stretching: return W.tr("Protažení", "Stretching")
+        case .exercises: return W.tr("Cviky", "Exercises")
+        case .cardioStart, .cardioEnd: return W.tr("Kardio", "Cardio")
+        }
+    }
+}
+
+/// The workout's time and the heart rate, as under a set (a part, Up next).
+struct GymLiveCells: View {
+    @ObservedObject private var workout = GymWorkout.shared
+
+    var body: some View {
         HStack(spacing: 5) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(W.tr("Čas", "Time")).watchFont(12).foregroundStyle(W.secondary)
@@ -364,30 +424,6 @@ struct GymPartView: View {
             .padding(.horizontal, 7).padding(.vertical, 3)
             .background(W.tile, in: RoundedRectangle(cornerRadius: 10))
             .accessibilityElement(children: .combine)
-        }
-    }
-
-    /// The cardio machine's name (ids of src/stretching.js CARDIO_MACHINES).
-    static func machine(_ id: String) -> String {
-        switch id {
-        case "treadmill": return W.tr("Běžecký pás", "Treadmill")
-        case "rowing_ergometer": return W.tr("Veslo", "Rowing machine")
-        case "elliptical": return W.tr("Eliptický trenažér", "Elliptical")
-        case "stairmaster": return W.tr("Schody", "Stair climber")
-        case "air_bike": return "Air bike"
-        case "ski_erg": return "SkiErg"
-        case "jump_rope": return W.tr("Švihadlo", "Jump rope")
-        default: return W.tr("Rotoped", "Exercise bike")
-        }
-    }
-
-    /// The part's name in the list: "Warm-up", "Cardio", "Stretching".
-    static func name(_ part: GymDayPart) -> String {
-        switch part {
-        case .warmup: return W.tr("Rozcvička", "Warm-up")
-        case .stretching: return W.tr("Protažení", "Stretching")
-        case .exercises: return W.tr("Cviky", "Exercises")
-        case .cardioStart, .cardioEnd: return W.tr("Kardio", "Cardio")
         }
     }
 }
