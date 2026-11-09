@@ -24,7 +24,9 @@ How Aurin Pro is bought and how the server learns about it. The code is in
    found by the token, or by the original transaction id for a code redeemed outside the app.
    An older record never overwrites a newer one (`store_signed_at`, and per subscription
    `store_originals.signed_at`, so a refunded subscription cannot come back by sending another
-   purchase and then its record from before the refund).
+   purchase and then its record from before the refund). A refund of a subscription no account
+   has sent yet (bought without the token) is kept in `store_originals` under account 0, so its
+   record from before the refund gives nothing; a newer record goes to the account that sends it.
 4. While `AI_PAYWALL_ENABLED` is off (the pilot) everyone keeps AI and nothing is on sale
    (`checkoutAvailable` stays false). `owner` turns the paid split on for the owner's account
    only, to try the offer, the locked plans and a TestFlight purchase; `true` turns it on for
@@ -39,7 +41,8 @@ transaction id in `coach_pack_seen`, which outlives a deleted account, so one pu
 fills two accounts. The coach takes a bought message only after the week's messages and the
 running conversation's 2 extra ones (`coach-allowance.js`, kind `pack`); `coach_pack_balance.used`
 counts them in one conditional statement. Apple's REFUND notification sets `refunded_at` and the
-pack stops counting. A Sandbox purchase (TestFlight) is recorded but adds messages only on the
+pack stops counting; for a pack no account has sent yet it leaves the mark in `coach_pack_seen`,
+and a record that itself carries a revocation adds nothing. A Sandbox purchase (TestFlight) is recorded but adds messages only on the
 test server. Packs cannot be restored: they belong to the account, not the Apple ID.
 `GET /app/api/coach-packs` gives the messages left and the purchases for the app's history.
 

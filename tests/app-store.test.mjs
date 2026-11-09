@@ -11,6 +11,7 @@ import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { APPLE_ROOT_CA_G3, verifyAppStoreJws, saveAppTransaction, saveAppInstall, handleAppStoreNotification, appAccountToken, storePurchase } from "../src/app-store.js";
 import { subscriptionStatus, plansUnlocked } from "../src/subscription.js";
+import { aiGroup } from "../src/ai-limit-share.js";
 import { handleAccountApi } from "../src/routes-account.js";
 
 const fixture = name => readFileSync(new URL(`./fixtures/app-store/${name}`, import.meta.url), "utf8");
@@ -269,6 +270,33 @@ test("a TestFlight build (Apple's AppTransaction says Sandbox) puts the account 
   assert.equal((await post({ Origin: "https://aurin.health" }, { signedIn: false })).status, 401);
 });
 
+const install = (id, extra = {}) => ({ signedAppTransaction: jws({ bundleId: "health.aurin.app", receiptType: "Sandbox", ...(id ? { appTransactionId: id } : {}), signedDate: now, ...extra }) });
+const people = (raw, ...rows) => {
+  raw.sqlite.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, created_at TEXT)");
+  for (const [id, created] of rows) raw.sqlite.prepare("INSERT INTO users(id, created_at) VALUES(?, COALESCE(?, datetime('now')))").run(id, created);
+};
+
+test("one TestFlight install marks one account", async () => {
+  const { raw, user } = setup();
+  people(raw, [1, "2026-01-01 00:00:00"], [2, "2026-01-01 00:00:00"]);
+  assert.equal((await saveAppInstall(user(1), install("7"), { roots })).testflight, true);
+  // The same install (one Apple Account's download of the app) sent by another account.
+  assert.deepEqual(await saveAppInstall(user(2), install("7"), { roots }), { status: "ok", testflight: false });
+  assert.deepEqual([await aiGroup(user(1)), await aiGroup(user(2))], ["testflight", "free"]);
+  assert.equal((await saveAppInstall(user(1), install("7"), { roots })).testflight, true, "its own account sends it at every sign-in");
+  assert.equal((await saveAppInstall(user(2), install("8"), { roots })).testflight, true, "another install is another tester");
+  assert.match(row(raw, 2).install_hash, /^[0-9a-f]{64}$/, "kept as a hash");
+  // The first account is deleted: its install marks the next account that sends it.
+  raw.sqlite.exec("DELETE FROM subscriptions WHERE user_id=1");
+  assert.equal((await saveAppInstall(user(2), install("7"), { roots })).testflight, true);
+  // The App Store build keeps no hash.
+  await saveAppInstall(user(2), install("7", { receiptType: "Production" }), { roots });
+  assert.deepEqual([row(raw, 2).testflight, row(raw, 2).install_hash], [0, null]);
+  // A record without Apple's id has nothing to hold it by: marked as before.
+  assert.equal((await saveAppInstall(user(2), install(null), { roots })).testflight, true);
+  assert.equal(row(raw, 2).install_hash, null);
+});
+
 test("a refunded subscription does not come back through another purchase and its old record", async () => {
   const { raw, user } = setup();
   const env = user(1);
@@ -335,6 +363,23 @@ test("a subscription refunded before any account sent it gives nothing through i
   assert.equal((await saveAppTransaction(env, { signedTransaction: jws(yearly({ signedDate: now + 3000 })) }, { roots })).plan, "ai");
   assert.equal((await storePurchase(env)).active, true);
   await assert.rejects(saveAppTransaction(user(2), { signedTransaction: jws(yearly({ signedDate: now + 4000 })) }, { roots }), { status: 409 });
+});
+
+test("a refund that crosses the app's first send of the purchase still ends its Pro", async () => {
+  const { raw, user } = setup();
+  const env = user(1);
+  const yearly = (extra = {}) => transaction({ environment: "Production", expiresDate: now + 365 * DAY, ...extra });
+  // The app's record lands after the notification looked for the holder and before it wrote the refund's mark.
+  let crossed = false;
+  const db = { ...raw, prepare(sql) {
+    const statement = raw.prepare(sql);
+    if (crossed || !/INSERT INTO store_originals/.test(sql)) return statement;
+    crossed = true;
+    return { bind: (...values) => ({ run: async () => { await saveAppTransaction(env, { signedTransaction: jws(yearly()) }, { roots }); return statement.bind(...values).run(); } }) };
+  } };
+  const answer = await notify(notification("REFUND", yearly({ revocationDate: now + 500, signedDate: now + 1000 })), { DB: db });
+  assert.equal((await answer.json()).plan, "free");
+  assert.equal((await storePurchase(env)).active, false);
 });
 
 test("an ended TestFlight purchase does not push out the App Store one", async () => {

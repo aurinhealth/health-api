@@ -137,6 +137,20 @@ test("a pack record that itself says refunded adds no messages and takes away th
   assert.deepEqual([known.added, known.refunded, known.left], [false, true, 0]);
 });
 
+test("a refund that crosses the app's send of the pack leaves no messages", async () => {
+  const { raw, user } = setup();
+  const token = await appAccountToken(user(1));
+  assert.equal(await packMessagesLeft(user(1)), 0);
+  // Apple's refund lands after the send looked for the pack's mark and before it wrote the purchase.
+  let crossed = false;
+  const central = { ...raw, batch: async statements => {
+    if (!crossed) { crossed = true; await refund(raw, pack({ appAccountToken: token, revocationDate: now + 1000, signedDate: now + 1000 })); }
+    return raw.batch(statements);
+  } };
+  await assert.rejects(buy({ ...user(1), RAW_DB: central }, pack()), { status: 409 });
+  assert.equal(await packMessagesLeft(user(1)), 0);
+});
+
 test("the coach takes bought messages after the week's and the conversation's extra ones", async () => {
   const { user } = setup({ COACH_WEEKLY_MESSAGES: "2" });
   const env = user(1);

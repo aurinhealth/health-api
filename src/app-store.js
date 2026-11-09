@@ -152,7 +152,9 @@ export async function verifyAppStoreJws(jws, { roots = [APPLE_ROOT_CA_G3] } = {}
 // the pilot's discount or a gift), whose AI spending is counted apart.
 // testflight: 1 while the app the account last used is a TestFlight build
 // (Apple's signed AppTransaction says Sandbox), its AI counted with TestFlight's.
-const COLUMNS = ['app_account_token TEXT', 'original_transaction_id TEXT', 'product_id TEXT', 'store_environment TEXT', 'store_signed_at INTEGER', 'auto_renew INTEGER', 'updated_at TEXT', 'free_trial INTEGER', 'offer_type INTEGER', 'testflight INTEGER'];
+// install_hash: SHA-256 of that build's appTransactionId (one Apple Account's
+// download of the app), so one TestFlight install marks one account (saveAppInstall).
+const COLUMNS = ['app_account_token TEXT', 'original_transaction_id TEXT', 'product_id TEXT', 'store_environment TEXT', 'store_signed_at INTEGER', 'auto_renew INTEGER', 'updated_at TEXT', 'free_trial INTEGER', 'offer_type INTEGER', 'testflight INTEGER', 'install_hash TEXT'];
 // The columns are added the first time a statement misses them, so a request
 // costs no schema statements once they are there.
 export async function ensureStoreColumns(db) {
@@ -160,6 +162,7 @@ export async function ensureStoreColumns(db) {
   for (const column of COLUMNS) await db.prepare('ALTER TABLE subscriptions ADD COLUMN ' + column).run().catch(() => { /* already there */ });
   await db.prepare('CREATE INDEX IF NOT EXISTS subscriptions_app_account_token ON subscriptions(app_account_token)').run();
   await db.prepare('CREATE INDEX IF NOT EXISTS subscriptions_original_transaction ON subscriptions(original_transaction_id)').run();
+  await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_install_hash ON subscriptions(install_hash)').run();
   // claimOriginal's table, filled from the rows already there in the same step.
   await db.batch([
     db.prepare('CREATE TABLE IF NOT EXISTS store_originals (original_transaction_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, signed_at INTEGER NOT NULL)'),
@@ -295,12 +298,23 @@ export async function saveAppTransaction(env, body, options = {}) {
 // TestFlight (receiptType Sandbox) or the App Store (Production). A TestFlight
 // tester without a test purchase is then counted with TestFlight, not with the
 // accounts without a purchase. Written only when it changes.
+// One TestFlight install marks one account: every account signed in on it
+// sends the same appTransactionId, whose hash is unique among the rows, so
+// accounts made in bulk cannot all join the testers with one record. A record
+// without the id has nothing to hold it by and marks as before.
 export async function saveAppInstall(env, body, options = {}) {
   const app = await verifyAppStoreJws(body?.signedAppTransaction, options);
   if (app.bundleId !== bundleId(env)) throw refuse(L('Doklad patří jiné aplikaci.', 'The record belongs to another app.'));
   if (!ENVIRONMENTS.has(app.receiptType)) throw refuse(L('Doklad z neznámého prostředí.', 'Record from an unknown environment.'));
-  const testflight = app.receiptType === 'Sandbox' ? 1 : 0;
-  await withColumns(env.DB, () => env.DB.prepare("INSERT INTO subscriptions(user_id,plan,testflight) VALUES(?,'free',?) ON CONFLICT(user_id) DO UPDATE SET testflight=excluded.testflight WHERE subscriptions.testflight IS NOT excluded.testflight").bind(env.USER_ID, testflight).run());
+  let testflight = app.receiptType === 'Sandbox' ? 1 : 0;
+  const hash = testflight && app.appTransactionId ? hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(app.appTransactionId)))) : null;
+  const save = (flag, install) => withColumns(env.DB, () => env.DB.prepare("INSERT INTO subscriptions(user_id,plan,testflight,install_hash) VALUES(?,'free',?,?) ON CONFLICT(user_id) DO UPDATE SET testflight=excluded.testflight,install_hash=excluded.install_hash WHERE subscriptions.testflight IS NOT excluded.testflight OR subscriptions.install_hash IS NOT excluded.install_hash").bind(env.USER_ID, flag, install).run());
+  try { await save(testflight, hash); } catch (error) {
+    // Another account holds this install.
+    if (!/UNIQUE constraint/i.test(String(error?.message || error))) throw error;
+    testflight = 0;
+    await save(0, null);
+  }
   return { status: 'ok', testflight: testflight === 1 };
 }
 
@@ -327,12 +341,15 @@ export async function handleAppStoreNotification(request, env, options = {}) {
     const rows = byToken ? [byToken] : (await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM subscriptions WHERE original_transaction_id=?').bind(original).all())).results || [];
     // The holder, also when its row holds another subscription by now.
     const held = byToken || await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM store_originals WHERE original_transaction_id=?').bind(original).first()) || rows[0];
-    const holder = Number(held?.user_id) || 0;
-    if (!holder) {
-      // No account has sent this purchase (yet). Its refund is remembered, so the record from before it gives nothing later.
-      if (tx.revocationDate) await claimOriginal(env.DB, 0, tx, true);
-      return Response.json({ status: 'ok', unknown: true });
+    let holder = Number(held?.user_id) || 0;
+    // No account has sent this purchase (yet). Its refund is remembered, so the
+    // record from before it gives nothing later; an account that sent it in the
+    // same moment is read back and loses Pro below.
+    if (!holder && tx.revocationDate) {
+      await claimOriginal(env.DB, 0, tx, true);
+      holder = Number((await env.DB.prepare('SELECT user_id FROM store_originals WHERE original_transaction_id=?').bind(original).first())?.user_id) || 0;
     }
+    if (!holder) return Response.json({ status: 'ok', unknown: true });
     if (await claimOriginal(env.DB, holder, tx, true) === 'stale') return Response.json({ status: 'ok', stale: true });
     // Pro goes to the holder only; its end also reaches a copy made before claimOriginal.
     const { plan } = planOf(tx, renewal, note.notificationType);
