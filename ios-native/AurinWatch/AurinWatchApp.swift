@@ -17,6 +17,7 @@ struct AurinWatchApp: App {
                 .task { store.start() }
                 .onChange(of: phase) { _, now in
                     if now == .active {
+                        Task { await GymStore.shared.endLeftover() }
                         store.ask()
                         WatchAlarm.shared.schedule()
                     }
