@@ -46,7 +46,8 @@ roles that mostly read and summarise run on Sonnet 5.5. The owner approved this 
   file, and passes the model from the table (`fable`, `opus`, `sonnet`, `haiku`) when it starts it.
   The `model` and `effort` lines in the role files cover local sessions.
 - Risky changes are payments, subscriptions, accounts, sign-in, deleting user data and D1 migrations.
-  For them `security-red-team` and the independent review below run on Fable 5.2 at effort high.
+  For them `security-red-team` and the independent review below run on Fable 5.2 at effort high: the
+  PM passes `fable` and `high` when it starts them, in local sessions too (that overrides the role file).
 - A bug that two fixes did not solve, or the hunt for the cause of an outage: the investigation goes
   to a Fable 5.2 sub agent at effort high.
 - Mechanical lookups (where something is used, a CI log, checking links): Haiku 5.5 at effort low.
@@ -55,7 +56,7 @@ roles that mostly read and summarise run on Sonnet 5.5. The owner approved this 
 
 ## Independent review before "mergni"
 Every pull request gets one review by a sub agent that did not build it, before the owner is asked
-for "mergni" (a hotfix: before the thread merges it itself).
+for "mergni". A hotfix the owner lets a thread merge on green CI gets it before that merge.
 - It gets only the owner's request or the approved point and the diff, not the thread's reasoning.
 - It reports only problems that change behaviour: a wrong result, a crash, lost or leaked data, a
   security hole, a missed part of the request. Each with file and line. No style.
