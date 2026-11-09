@@ -167,6 +167,8 @@ struct CardioTimerView: View {
         var next: String?
         /// Stopped or skipped: the workout goes on with what follows.
         var close: () -> Void
+        /// Its time started: the cardio no longer waits for its start.
+        var started: () -> Void = {}
     }
 
     private var isStart: Bool { item.id == "cardio-start" }
@@ -217,6 +219,14 @@ struct CardioTimerView: View {
                 }
                 PrimaryButton(title: stopTitle, systemImage: "stop.fill") { stop(at: Date()) }
                     .accessibilityHint(Text("Uloží délku a konec kardia"))
+                if inline != nil {
+                    // Started by mistake (Začít trénink began with it): on without saving its time.
+                    Button { onDone(); leave() } label: {
+                        Text(verbatim: L10n.tr("Přeskočit sekci")).font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                            .frame(maxWidth: .infinity).frame(minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                }
             } else {
                 Spacer()
                 Text(verbatim: GymCardio.length(minutes)).font(Typo.sentence(54, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
@@ -226,7 +236,7 @@ struct CardioTimerView: View {
                     .frame(maxWidth: .infinity)
                 Spacer()
                 PrimaryButton(title: L10n.tr("Spustit kardio"), systemImage: "play.fill") { start() }
-                SecondaryButton(title: "Přeskočit") { onDone(); leave() }
+                SecondaryButton(title: inline == nil ? "Přeskočit" : "Přeskočit sekci") { onDone(); leave() }
             }
         }
         .padding(inline == nil ? 20 : 16)
@@ -290,6 +300,7 @@ struct CardioTimerView: View {
     }
 
     private func start() {
+        inline?.started()
         started = Date()
         added = 0
         GymSignals.play(.start)

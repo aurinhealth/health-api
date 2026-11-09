@@ -69,25 +69,30 @@ final class GymWorkout: NSObject, ObservableObject {
         // Without leave to save workouts the session doesn't run: said on the set screen.
         // (A denied heart rate can't be told apart from none yet; the session still tries.)
         noHealth = store.authorizationStatus(for: HKObjectType.workoutType()) != .sharingAuthorized
+        let now = Date()
+        start = now
+        if await !startSession(at: now) { noHealth = true }
+    }
+
+    /// The HealthKit workout from `date`: false when it can't be made.
+    private func startSession(at date: Date) async -> Bool {
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .traditionalStrengthTraining
         configuration.locationType = .indoor
-        guard let session = try? HKWorkoutSession(healthStore: store, configuration: configuration) else {
-            noHealth = true
-            start = Date()
-            return
-        }
+        guard let session = try? HKWorkoutSession(healthStore: store, configuration: configuration) else { return false }
         let builder = session.associatedWorkoutBuilder()
         builder.dataSource = HKLiveWorkoutDataSource(healthStore: store, workoutConfiguration: configuration)
         builder.delegate = self
         session.delegate = self
         self.session = session
         self.builder = builder
-        let now = Date()
-        start = now
-        session.startActivity(with: now)
-        try? await builder.beginCollection(at: now)
+        session.startActivity(with: date)
+        try? await builder.beginCollection(at: date)
+        return true
     }
+
+    /// Started again once after the system ended the first try (lost).
+    private var retried = false
 
     /// The app was relaunched during a workout (a crash, the system): the
     /// running session is taken back, with its start, heart rate and calories,
@@ -277,6 +282,7 @@ final class GymWorkout: NSObject, ObservableObject {
         pausedAt = nil
         pausedTotal = 0
         noHealth = false
+        retried = false
         announced = false
         idleWatch?.cancel()
         idleWatch = nil
@@ -385,10 +391,25 @@ final class GymWorkout: NSObject, ObservableObject {
     /// gym goes on with its clock, the next workout starts from here.
     fileprivate func lost(_ ended: ObjectIdentifier, failed: Bool = false) {
         guard let session, ObjectIdentifier(session) == ended else { return }
-        if failed { noHealth = true }
         let builder = self.builder
         self.session = nil
         self.builder = nil
+        // Ended in its first minute: the iPhone's own workout (iOS 26, Training
+        // mode started there first) still ran, and the system kept that one. The
+        // iPhone ends its own on this one's first word, so this one starts once
+        // more from the gym's start. Else neither counted the heart rate, from
+        // the watch or AirPods, nor the calories (Petr 2026-11-09).
+        if !retried, let start, Date().timeIntervalSince(start) < 60 {
+            retried = true
+            builder?.discardWorkout()
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(3))
+                guard self.session == nil, self.start == start else { return }
+                if await self.startSession(at: start) { self.announceUntilHeard() } else { self.noHealth = true }
+            }
+            return
+        }
+        if failed { noHealth = true }
         Task {
             try? await builder?.endCollection(at: Date())
             _ = try? await builder?.finishWorkout()
