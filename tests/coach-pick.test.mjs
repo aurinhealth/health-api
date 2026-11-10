@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { rankOptions, eveningPhase, saunaSigns, dayChoice, doneSentence, setLess, lessKinds, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "../src/coach-pick.js";
+import { rankOptions, lateOptions, pickEvening, markEvening, savePick, eveningPhase, saunaSigns, dayChoice, doneSentence, setLess, lessKinds, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "../src/coach-pick.js";
 import { createD1 } from "./helpers/d1.mjs";
 import { withLang } from "../src/lang.js";
 import { scopedDb } from "../src/tenancy.js";
@@ -257,7 +257,8 @@ test("late evening: the hour against tonight's bedtime (Petr 2026-11-10, 23:49)"
 });
 
 test("late evening the activity of the day is winding down, past bedtime bed, never an evening walk", () => {
-  const after = evening => rankOptions({ ride: coach("green"), run: coach("green"), mainSport: "cycling", sports: ["ride"], today: ["ride"], done: [{ kind: "ride", minutes: 45, tss: 32 }], evening });
+  const input = { ride: coach("green"), run: coach("green"), mainSport: "cycling", sports: ["ride"], today: ["ride"], done: [{ kind: "ride", minutes: 45, tss: 32 }] };
+  const after = evening => lateOptions(rankOptions(input), evening, input);
   const day = after(null).options[0];
   assert.match(day.detail, /procházka/, "earlier the stretching and the evening walk stay");
   const wind = after("wind-down");
@@ -272,17 +273,37 @@ test("late evening the activity of the day is winding down, past bedtime bed, ne
   assert.equal(bed.options.filter(o => o.best).length, 1);
   assert.equal(bed.options[0].action, "accept");
   // Not trained yet: the ride the coach chose gives way too, and its AI workout is not asked for.
-  const fresh = rankOptions({ ride: coach("green"), run: coach("green"), mainSport: "cycling", sports: ["ride"], evening: "bed" });
+  const fresh = lateOptions(rankOptions({ ride: coach("green"), run: coach("green"), mainSport: "cycling", sports: ["ride"] }), "bed");
   assert.equal(fresh.options[0].kind, "rest");
   assert.ok(fresh.options.some(o => o.kind === "ride" && !o.best), "the ride stays under Další možnosti");
   // A sick day keeps its own rest.
-  const sick = rankOptions({ ride: coach("green"), run: coach("green"), athleteStatus: "sick", evening: "bed" });
+  const sick = lateOptions(rankOptions({ ride: coach("green"), run: coach("green"), athleteStatus: "sick" }), "bed");
   assert.equal(sick.options[0].title, "Odpočinek");
 });
 
 test("the pick route gives the hour and Today's bedtime only in the evening", async () => {
   const src = (await import("node:fs")).readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   const route = src.slice(src.indexOf("if(url.pathname==='/app/api/coach/pick')"), src.indexOf("if(url.pathname==='/app/api/coach/check-in'"));
-  assert.match(route, /hour>=18\|\|hour<4\?/);
-  assert.match(route, /evening:eveningPhase\(clock,bedtime\)/);
+  assert.match(route, /hour>=17\|\|hour<4\?/);
+  assert.match(route, /ranked=lateOptions\(day,evening,/);
+  assert.match(route, /signature=pickSignature\(day\)/, "the late card keeps the day's ready workouts");
+  assert.match(route, /evening=await pickEvening\(env\.DB,env\.USER_ID,date\)/);
+});
+
+test("taking the late card puts no walk into the day's plan and teaches the coach nothing", async () => {
+  const db = scopedDb(createD1(), 1);
+  const date = "2026-11-10";
+  await storeDetails(db, 1, date, "sig", {});
+  assert.equal(await pickEvening(db, 1, date), null);
+  await markEvening(db, 1, date, "wind-down");
+  assert.equal(await pickEvening(db, 1, date), "wind-down");
+  assert.deepEqual(await storedDetails(db, 1, date, "sig"), { evening: "wind-down" });
+  await savePick(db, 1, { date, kind: "rest", top: "rest", evening: "wind-down" });
+  const kinds = async () => (await db.prepare("SELECT kind FROM recovery_sessions WHERE user_id=? AND date=?").bind(1, date).all()).results.map(r => r.kind).sort();
+  assert.deepEqual(await kinds(), ["stretch"]);
+  assert.equal((await db.prepare("SELECT top FROM coach_picks WHERE user_id=? AND date=?").bind(1, date).first()).top, null);
+  await savePick(db, 1, { date: "2026-11-11", kind: "rest", top: "rest", evening: "bed" });
+  assert.deepEqual((await db.prepare("SELECT kind FROM recovery_sessions WHERE user_id=? AND date=?").bind(1, "2026-11-11").all()).results, []);
+  await savePick(db, 1, { date: "2026-11-12", kind: "rest", top: "ride" });
+  assert.deepEqual((await db.prepare("SELECT kind FROM recovery_sessions WHERE user_id=? AND date=?").bind(1, "2026-11-12").all()).results.map(r => r.kind).sort(), ["stretch", "walk"], "earlier in the day the walk stays");
 });

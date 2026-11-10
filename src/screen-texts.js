@@ -7,7 +7,7 @@
 // consent, the AI subscription or a key the screen keeps its rule-based text
 // (coach-engine.js morningSummary, app-food.js sentence) and the answer says so.
 import { L, lang } from "./lang.js";
-import { localToday, localDateTime } from "./user-time.js";
+import { localToday, localDateTime, localHour } from "./user-time.js";
 import { consentStatus } from "./consent.js";
 import { paywallOn, plansUnlocked } from "./subscription.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
@@ -307,10 +307,12 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
   const row = await env.DB.prepare("SELECT * FROM ai_screen_texts WHERE user_id=? AND day=? AND screen=? AND lang=?").bind(userId, day, screen, language).first();
   const kept = parseBasis(row?.basis_json);
   const cached = row?.text ? answer("ai", { text: row.text, advice: row.advice, chips: kept.chips, basis: kept.basis, createdAt: sqlTime(row.created_at) }) : null;
-  // A text is kept for the day once the AI has been asked MAX_PER_DAY times.
-  // Otherwise every opening compares the day's state with the text's, so any
-  // change that matters (the fingerprint) gets a new text at once.
-  if (cached && Number(row.generations) >= MAX_PER_DAY) return cached;
+  // A text is kept for the day once the AI has been asked MAX_PER_DAY times,
+  // except for the evening's late phases (lateOf). Otherwise every opening
+  // compares the day's state with the text's, so any change that matters (the
+  // fingerprint) gets a new text at once.
+  const capped = Boolean(cached) && Number(row.generations) >= MAX_PER_DAY;
+  if (capped && (screen !== "today" || !EVENING_HOURS(localHour(new Date(now))))) return cached;
   // Nothing of the user's changed since the last comparison and data that
   // arrives by itself (Google Health, Intervals.icu) is at most as late as the
   // coach's caches: the screen's data is not loaded again (RES-37).
@@ -322,6 +324,9 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
   const info = screenFacts(screen, data);
   if (!info) return cached || answer("rules", { reason: "no-data" });
   const fallback = () => answer("rules", { text: info.fallback?.text || null, advice: info.fallback?.advice || null, chips: info.chips, basis: info.basis, reason: "fallback" });
+  // A text kept from earlier in the day: late in the evening its advice to walk or train gives way (lateAdvice).
+  const keptLate = cached && info.facts?.evening ? { ...cached, advice: lateAdvice(info.facts, cached.advice) } : cached;
+  if (capped && lateOf(row.fingerprint) === lateOf(info.fingerprint)) return keptLate;
   // After the user's own change (markScreenTextsStale) a different state gets
   // a new text at once; background data (a sync, the watch) changes it often,
   // so for it at most one new text in GAP_MINUTES.
@@ -331,10 +336,10 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
     await env.DB.prepare("UPDATE ai_screen_texts SET fingerprint=?, basis_json=json_set(COALESCE(basis_json,'{}'),'$.version',?,'$.checked',?) WHERE user_id=? AND day=? AND screen=? AND lang=? AND fingerprint=?").bind(info.fingerprint, version, now, ...key, row.fingerprint).run().catch(() => {});
     return cached;
   }
-  if (cached && !stale && now - Date.parse(sqlTime(row.created_at)) < GAP_MINUTES * 60000) return cached;
-  if (!info.ready) return cached || fallback();
+  if (cached && !stale && now - Date.parse(sqlTime(row.created_at)) < GAP_MINUTES * 60000) return keptLate;
+  if (!info.ready) return keptLate || fallback();
   const failedAt = sqlTime(row?.failed_at);
-  if (failedAt && now - Date.parse(failedAt) < RETRY_MINUTES * 60000) return cached || fallback();
+  if (failedAt && now - Date.parse(failedAt) < RETRY_MINUTES * 60000) return keptLate || fallback();
   // Data that came by itself (a sync, the watch): the last text shows at once
   // and the new one is written after the answer, for the next opening. Not
   // after the user's own change, not when the night arrived or the readiness
@@ -372,12 +377,12 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
       // background once the claim is let go).
       if (error?.busy) {
         if (background) await env.DB.prepare("UPDATE ai_screen_texts SET basis_json=json_remove(basis_json,'$.writing') WHERE user_id=? AND day=? AND screen=? AND lang=?").bind(...key).run().catch(() => {});
-        return cached || fallback();
+        return keptLate || fallback();
       }
-      if (error?.message !== "empty" && error?.message !== "pushes") console.error("Screen text AI failed", error?.message || error);
+      if (!["empty", "pushes", "late"].includes(error?.message)) console.error("Screen text AI failed", error?.message || error);
       await env.DB.prepare(`INSERT INTO ai_screen_texts (user_id, day, screen, lang, failed_at) VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(user_id, day, screen, lang) DO UPDATE SET failed_at=excluded.failed_at`).bind(userId, day, screen, language, new Date(now).toISOString()).run().catch(() => {});
-      return cached || fallback();
+      return keptLate || fallback();
     }
   }
 }
@@ -395,21 +400,31 @@ export function checkedText(facts, answer, fallbackAdvice = null) {
   const text = String(parsed?.text || "").trim().slice(0, 400);
   let advice = String(parsed?.advice || "").trim().slice(0, 160);
   if (pushes(facts, text)) throw new Error("pushes");
+  if (aimsPastBedtime(facts, text)) throw new Error("late");
   if (pushes(facts, advice)) advice = fallbackAdvice || L("Dnes volno nebo jen lehký pohyb.", "Rest today or just easy movement.");
   advice = lateAdvice(facts, advice);
   if (!text) throw new Error("empty");
   return { text, advice };
 }
 
-// Late in the evening: no walk or training in the advice; past bedtime it says bed.
-const LATE_MOVES = /walk|\bruns?\b|\brides?\b|\bgym\b|workout|training|procházk|\bběh|\bběž|jízd|\bjeď|posil|trénink/i;
-const BED_WORDS = /\bbed\b|sleep|postel|spát|spánek|\bspi\b|lehni|ulož/i;
+// Late in the evening: no walk or training in the advice; past bedtime it
+// says bed, with no food tip and no bedtime that has already passed.
+const LATE_MOVES = /walk|\bruns?\b|\bjog|\brides?\b|\bswim|\bgym\b|workout|training|yoga|procházk|projdi|\bběh|\bběž|jízd|\bjeď|odjeď|plav|posil|trénink|jóg/i;
+const BED_WORDS = /\bbed\b|sleep|postel|spát|spánek|\bspi\b|lehni/i;
+const FOOD_WORDS = /protein|carb|\beat\b|snack|meal|food|bílkovin|sacharid|\bjez|\bsněz|jídl|svač/i;
+// Past bedtime a sentence that names the bedtime without saying it has passed aims at it.
+const PASSED = /passed|past|over|gone|missed|pryč|prošl|minul|uplynul|už bylo|zmeškal/i;
+const aimsPastBedtime = (facts, s) => facts?.evening === "bed" && Boolean(facts.bedtimeTonight) && String(s).includes(facts.bedtimeTonight) && !PASSED.test(s);
 export function lateAdvice(facts, advice) {
   const late = facts?.evening;
   if (!late || !advice) return advice;
-  if (!LATE_MOVES.test(advice) && (late !== "bed" || BED_WORDS.test(advice))) return advice;
+  if (!LATE_MOVES.test(advice) && (late !== "bed" || (BED_WORDS.test(advice) && !FOOD_WORDS.test(advice) && !aimsPastBedtime(facts, advice)))) return advice;
   return late === "bed" ? L("Je pozdě, jdi teď spát.", "It's late, so go to bed now.") : L("Už jen zklidni: 5–10 minut lehkého protažení a do postele.", "Just wind down: 5–10 minutes of easy stretching, then bed.");
 }
+
+// The late phase in Today's fingerprint (todayFacts, the third part when there), and the hours it can start in.
+const lateOf = fingerprint => String(fingerprint || "").split(":").find((p, i) => i === 2 && /^late-/.test(p)) || "";
+const EVENING_HOURS = hour => hour >= 17 || hour < 4;
 
 // Today's headline in its fingerprint (todayFacts: whether the night is in,
 // the readiness zone, how late in the evening): a change there is not left for the next opening.

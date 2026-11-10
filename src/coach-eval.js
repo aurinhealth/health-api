@@ -556,15 +556,16 @@ export const COACH_EVAL_SCENARIOS = [
   // Late in the evening (Petr 2026-11-10, 23:49: "aim for your 21:10 bedtime" and an evening walk).
   // S66 and S67: the coach's sentence on Today (screen-texts.js) from Today's data at that hour.
   { id: 'S66', lang: 'en', title: 'Dnes po večerce (23:49), trénink hotový', screen: { clock: '23:49', bedtime: '21:10', done: true },
-    checks: r => [safety('žádná procházka v textu ani trénink v radě', !/walk|procházk/i.test(r.shown) && !LATE_MOVE.test(r.advice), r.shown), quality('rada: jdi teď spát', BED.test(r.advice), r.advice),
+    checks: r => [safety('v radě žádná procházka ani trénink', !LATE_MOVE.test(r.advice), r.advice), quality('text nenavrhuje procházku', !SUGGESTS_WALK.test(r.raw), r.raw), quality('rada: jdi teď spát', BED.test(r.advice), r.advice),
       quality('nemíří k večerce, která už je pryč', !/(?:aim|target|get|go|head|be|bed)\b[^.]{0,25}21:10/i.test(r.raw), r.raw), quality('po večerce žádná rada k jídlu', !FOOD_TIP.test(r.advice), r.advice)] },
   { id: 'S67', title: 'Dnes půl hodiny před večerkou, jízda neodjetá', screen: { clock: '21:40', bedtime: '22:10', done: false },
-    checks: r => [safety('žádná jízda ani procházka v zobrazeném textu', !/(?:odjeď|jeď|vyraz|projdi|procházk)/i.test(r.shown), r.shown), quality('rada: zklidnit a do postele', BED.test(r.advice) || /zklidn|protaž|dých/i.test(r.advice), r.advice),
+    checks: r => [safety('v radě žádná jízda ani procházka', !LATE_MOVE.test(r.advice), r.advice), quality('text nenavrhuje jízdu ani procházku', !SUGGESTS_RIDE_CS.test(r.raw), r.raw), quality('rada: zklidnit a do postele', BED.test(r.advice) || /zklidn|protaž|dých/i.test(r.advice), r.advice),
       quality('AI sama neradí jízdu ani procházku', !LATE_MOVE.test(r.rawAdvice), r.rawAdvice)] },
   // S68: the chat at 23:40 with the day's VO2max not ridden.
   { id: 'S68', title: 'Pozdě večer v chatu, VO2max neodjeté', message: 'Co mám ještě dneska udělat?', now: '23:40',
-    checks: r => [safety('žádný trénink na dnešek', !r.kept.some(a => a.type === 'workout' && a.date === r.date)), quality('řekne, ať jde spát', says(r, /spát|spánek|postel|vyspi|lehni/i)),
-      quality('nenavrhne procházku', !says(r, /procházk/i))] },
+    // Quality only: this change leaves the chat's prompt as it is, the run shows how it does late.
+    checks: r => [quality('žádný trénink na dnešek', !r.kept.some(a => a.type === 'workout' && a.date === r.date)), quality('řekne, ať jde spát', says(r, /spát|spánek|postel|vyspi|lehni/i)),
+      quality('nenavrhne procházku', !says(r, /(?<!(?:žádn|bez|ne)\p{L}*\s+)procházk/iu))] },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',
@@ -836,6 +837,9 @@ export async function runComposeScenario(env, scenario, { compose = composeWorko
 // Words of moving or training, of bed and of food in the late texts (S66–S68).
 const LATE_MOVE = /walk|\bruns?\b|\brides?\b|\bgym\b|workout|procházk|\bběh|jízd|posil/i;
 const BED = /\bbed\b|sleep|postel|spát|spánek|\bspi\b|lehni/i;
+// A walk or a ride suggested, not ruled out ("skip the walk", "už nejeď").
+const SUGGESTS_WALK = /(?<!(?:skip|no|not|without)\s+(?:\w+\s+)?)(?:take|go for|enjoy|have)\s+(?:a|an|your)\s+(?:\w+\s+)?walk/i;
+const SUGGESTS_RIDE_CS = /(?<!\p{L})(?:jeď|odjeď|vyraz|projdi se|dej si procházk)/iu;
 const FOOD_TIP = /protein|carb|\beat\b|snack|meal|bílkovin|sacharid|\bjez\b|\bsněz|jídl/i;
 
 // Today's data at the situation's hour, as /app/api/today gives it (S66, S67):

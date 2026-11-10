@@ -6,7 +6,7 @@ import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { withLang } from "../src/lang.js";
-import { screenText, screenFacts, lateAdvice, MAX_PER_DAY, SLOT_WAIT_MS, BACKGROUND_SLOT_WAIT_MS, markScreenTextsStale } from "../src/screen-texts.js";
+import { screenText, screenFacts, lateAdvice, checkedText, MAX_PER_DAY, SLOT_WAIT_MS, BACKGROUND_SLOT_WAIT_MS, markScreenTextsStale } from "../src/screen-texts.js";
 import { bumpCacheVersion } from "../src/api-cache.js";
 
 const today = (extra = {}) => ({
@@ -338,4 +338,35 @@ test("late advice: a walk or training gives way, bed and winding down stay", () 
   assert.equal(lateAdvice({ evening: "bed" }, "Go to bed now."), "Go to bed now.");
   assert.equal(withLang("en", () => lateAdvice({ evening: "bed" }, "Aim for protein and carbs.")), "It's late, so go to bed now.");
   assert.equal(lateAdvice({ evening: "bed" }, "Jdi spát, procházka počká na zítra."), "Je pozdě, jdi teď spát.");
+  // Found in review: a bedtime already gone as the target, food, a swim or a short walk before bed.
+  const bed = { evening: "bed", bedtimeTonight: "21:10" };
+  for (const advice of ["Get to sleep by 21:10.", "Jdi spát ve 21:10.", "A protein snack before sleep.", "Projdi se 10 minut a pak do postele.", "Zaplavej si.", "A short swim, then bed."]) assert.equal(lateAdvice(bed, advice), "Je pozdě, jdi teď spát.", advice);
+  assert.equal(lateAdvice(bed, "Your 21:10 bedtime has passed, go to bed now."), "Your 21:10 bedtime has passed, go to bed now.");
+  // The text itself never aims at a bedtime that has passed: it is not shown.
+  assert.throws(() => checkedText(bed, JSON.stringify({ text: "Skip extra training and aim for your 21:10 bedtime.", advice: "Go to bed now." })), /late/);
+  assert.equal(checkedText(bed, JSON.stringify({ text: "Your 21:10 bedtime is gone.", advice: "Go to bed now." })).text, "Your 21:10 bedtime is gone.");
+});
+
+test("late evening: a day of many texts still gets the late one, and a kept text loses its walk", async () => {
+  const env = owner();
+  const date = new Date().toISOString().slice(0, 10), start = Date.parse(date + "T18:30:00Z");
+  let asked = 0, fail = false, clock = "18:00";
+  const ask = async () => { if (fail) throw new Error("down"); asked++; return { text: JSON.stringify({ text: "Text " + asked, advice: "Take an evening walk." }) }; };
+  const load = async () => today({ clock });
+  await screenText(env, { screen: "today", load, ask, now: start });
+  await env.DB.prepare("UPDATE ai_screen_texts SET generations=? WHERE user_id=?").bind(MAX_PER_DAY, 1).run();
+  clock = "23:49";
+  const late = await screenText(env, { screen: "today", load, ask, now: start + 11 * 60000 });
+  assert.equal(late.text, "Text 2", "the late phase is written past the day's cap");
+  assert.equal(late.advice, "Je pozdě, jdi teď spát.");
+  await screenText(env, { screen: "today", load, ask, now: start + 40 * 60000 });
+  assert.equal(asked, 2, "once per phase");
+  // A failed write keeps the earlier text, without its walk.
+  const env2 = owner();
+  clock = "18:00"; fail = false;
+  await screenText(env2, { screen: "today", load, ask, now: start });
+  clock = "23:49"; fail = true;
+  const kept = await screenText(env2, { screen: "today", load, ask, now: start + 11 * 60000 });
+  assert.equal(kept.text, "Text 3");
+  assert.equal(kept.advice, "Je pozdě, jdi teď spát.");
 });
