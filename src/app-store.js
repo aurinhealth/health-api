@@ -191,7 +191,17 @@ async function accountToken(env) {
 // the paid app) and the App Review account (Apple reviews with Sandbox
 // purchases); on the test server to everyone, like a Sandbox coach pack
 // (coach-packs.js counts). Petr, 7 Nov 2026.
+// PRO_TESTER_EMAILS (Worker secret, comma-separated) lists the TestFlight
+// testers who have Pro without a purchase once the paywall is on; the App
+// Review account never, so the reviewer still meets the paywall. Petr, 10 Nov 2026.
+export function proTester(env) {
+  const email = String(env?.USER_EMAIL || '').trim().toLowerCase();
+  if (!email || isReviewAccount(env)) return false;
+  return String(env?.PRO_TESTER_EMAILS || '').split(',').some(listed => listed.trim().toLowerCase() === email);
+}
+
 export function proActive(env, row, now = Date.now()) {
+  if (proTester(env)) return true;
   if (!(row?.plan === 'ai' && row.valid_until && Date.parse(row.valid_until) > now)) return false;
   return row.store_environment !== 'Sandbox' || isStaging(env) || env?.USER_IS_OWNER === true || isReviewAccount(env);
 }

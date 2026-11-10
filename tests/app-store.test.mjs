@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { createHash, createPrivateKey, sign, X509Certificate } from "node:crypto";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { APPLE_ROOT_CA_G3, verifyAppStoreJws, saveAppTransaction, saveAppInstall, handleAppStoreNotification, appAccountToken, storePurchase } from "../src/app-store.js";
+import { APPLE_ROOT_CA_G3, verifyAppStoreJws, saveAppTransaction, saveAppInstall, handleAppStoreNotification, appAccountToken, storePurchase, proTester } from "../src/app-store.js";
 import { subscriptionStatus, plansUnlocked } from "../src/subscription.js";
 import { handleAccountApi } from "../src/routes-account.js";
 
@@ -344,6 +344,12 @@ test("a Sandbox purchase gives Pro on the live server only to the owner and the 
   assert.equal((await subscriptionStatus({ ...live, USER_IS_OWNER: true })).plan, "ai", "the owner tests the paid app");
   assert.equal((await subscriptionStatus({ ...live, APP_REVIEW_EMAIL: "review@aurin.health", USER_EMAIL: "Review@aurin.health" })).plan, "ai", "App Review buys in Sandbox");
   assert.equal(await plansUnlocked({ ...live, ENVIRONMENT: "staging" }), true);
+  // A tester listed in PRO_TESTER_EMAILS has Pro without any purchase; the App Review account never.
+  const listed = { ...live, PRO_TESTER_EMAILS: "a@x.cz, Tester@Aurin.health", USER_EMAIL: "tester@aurin.health" };
+  assert.deepEqual([(await subscriptionStatus(listed)).plan, await plansUnlocked(listed)], ["ai", true], "a listed tester has Pro");
+  assert.equal((await subscriptionStatus({ ...listed, USER_EMAIL: "other@aurin.health" })).plan, "free", "an unlisted account does not");
+  assert.equal((await subscriptionStatus({ ...listed, APP_REVIEW_EMAIL: "tester@aurin.health" })).plan, "ai", "the review account's own Sandbox purchase still counts");
+  assert.equal(proTester({ ...listed, APP_REVIEW_EMAIL: "tester@aurin.health" }), false, "the review account is never a Pro tester");
   // A Production purchase is Pro for everyone.
   raw.sqlite.prepare("UPDATE subscriptions SET store_environment='Production' WHERE user_id=1").run();
   assert.equal((await subscriptionStatus(live)).plan, "ai");
