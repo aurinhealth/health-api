@@ -347,6 +347,8 @@ test("a Sandbox purchase gives Pro on the live server only to the owner and the 
   // A tester listed in PRO_TESTER_EMAILS has Pro without any purchase; the App Review account never.
   const listed = { ...live, PRO_TESTER_EMAILS: "a@x.cz, Tester@Aurin.health", USER_EMAIL: "tester@aurin.health" };
   assert.deepEqual([(await subscriptionStatus(listed)).plan, await plansUnlocked(listed)], ["ai", true], "a listed tester has Pro");
+  assert.equal((await storePurchase(listed)).active, false, "Settings still shows the tester's Sandbox purchase as not active");
+  assert.equal(proTester({ ...listed, PRO_TESTER_EMAILS: "a@x.cz\ntester@aurin.health" }), true, "one address per line works too");
   assert.equal((await subscriptionStatus({ ...listed, USER_EMAIL: "other@aurin.health" })).plan, "free", "an unlisted account does not");
   assert.equal((await subscriptionStatus({ ...listed, APP_REVIEW_EMAIL: "tester@aurin.health" })).plan, "ai", "the review account's own Sandbox purchase still counts");
   assert.equal(proTester({ ...listed, APP_REVIEW_EMAIL: "tester@aurin.health" }), false, "the review account is never a Pro tester");
