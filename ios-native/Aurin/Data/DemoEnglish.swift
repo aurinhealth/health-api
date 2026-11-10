@@ -44,14 +44,16 @@ extension DemoData {
         "Podle dostupné předpovědi.": "Based on the available forecast.",
         // Training
         "Silový trénink, celé tělo": "Strength, full body",
-        "Proč dnes: vysoká připravenost a odpočatá horní polovina těla. Nohy jen středně, ráno byl běh.":
-            "Why today: high readiness and a rested upper body. Legs only moderate after this morning's run.",
+        "Proč dnes: vysoká připravenost a odpočatá horní polovina těla. Nohy jen lehký dřep po ranním běhu, ať jsou v sobotu čerstvé na dlouhý běh.":
+            "Why today: high readiness and a rested upper body. Legs get only light squats after this morning's run, to stay fresh for Saturday's long run.",
         "Dřep": "Squat",
         "Tlak na lavici": "Bench press",
         "Přítahy": "Rows",
         "Přítahy v předklonu": "Bent-over rows",
         "Rumunský mrtvý tah": "Romanian deadlift",
         "Výpady": "Lunges",
+        "Tlaky s jednoručkami nad hlavu": "DB shoulder press",
+        "Ramena": "Shoulders",
         "Přední stehna": "Quads",
         "Hrudník": "Chest",
         "Záda": "Back",
@@ -70,6 +72,8 @@ extension DemoData {
         "vyšší intenzita než plán": "harder than planned",
         "Posilovna · horní tělo": "Gym · upper body",
         "Posilovna · dolní tělo": "Gym · lower body",
+        "Posilovna · celé tělo": "Gym · full body",
+        "Běh 14 km": "Run 14 km",
         "Lehký běh": "Easy run",
         "Dlouhá jízda": "Long ride",
         "Chůze": "Walk",
@@ -77,8 +81,8 @@ extension DemoData {
         // Gym
         "Celé tělo": "Full body",
         "Celé tělo  •  08. 10. 2026": "Full body  •  Oct 8, 2026",
-        "Ráno běh, v sobotu delší běh: dřep jen ve střední zátěži.":
-            "A run this morning and a long run on Saturday: squats at a moderate load only.",
+        "Ráno běh, v sobotu dlouhý běh: dřep jen lehce, 4×3.":
+            "Run this morning, long run on Saturday: squats light only, 4×3.",
         // Food
         "Tréninkový den: o 350 kcal víc. Zbývá 1270 kcal, odpolední svačina kolem 360 kcal.":
             "Training day: 350 kcal more. 1,270 kcal left, an afternoon snack of about 360 kcal.",

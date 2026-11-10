@@ -184,3 +184,16 @@ export function pausedRefusal(method, pathname) {
   if (pathname === '/app/api/connections' && method === 'DELETE') return null;
   return Response.json({ status: 'health_paused', message: L('Zdravotní data máš pozastavená. Zapni je v aplikaci.', 'Your health data is paused. Turn it back on in the app.') }, { status: 403, headers: { 'Cache-Control': 'no-store' } });
 }
+
+// An account that never gave the consent to health data (consent.js): the
+// server takes no health data from it (GDPR art. 9(2)(a)). Reading stays
+// open, so the setup can ask for the consent; writes and connecting a service
+// answer health_consent_required, which the app keeps for after the consent
+// (APIClient.swift) instead of dropping.
+export function consentRefusal(method, pathname) {
+  if (method === 'GET' || method === 'HEAD') { if (!CONNECTING.test(pathname)) return null; }
+  else if (!pathname.startsWith('/app/api/') && !CONNECTING.test(pathname)) return null;
+  if (OPEN_WHILE_PAUSED.some(open => open.test(pathname))) return null;
+  if (pathname === '/app/api/connections' && method === 'DELETE') return null;
+  return Response.json({ status: 'health_consent_required', message: L('Nejdřív potvrď souhlas se zpracováním údajů o zdraví.', 'First confirm your consent to processing health data.') }, { status: 403, headers: { 'Cache-Control': 'no-store' } });
+}

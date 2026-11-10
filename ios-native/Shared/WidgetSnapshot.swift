@@ -174,10 +174,10 @@ struct WidgetWeek: Codable, Equatable {
     }
 
     static let sample = WidgetWeek(
-        days: [("2026-10-05", 60, 0), ("2026-10-06", 45, 0), ("2026-10-07", 90, 0), ("2026-10-08", 0, 75), ("2026-10-09", 75, 0), ("2026-10-10", 0, 60), ("2026-10-11", 0, 120)]
+        days: [("2026-10-05", 60, 0), ("2026-10-06", 75, 0), ("2026-10-07", 72, 0), ("2026-10-08", 42, 45), ("2026-10-09", 0, 72), ("2026-10-10", 0, 96), ("2026-10-11", 0, 0)]
             .map { Day(date: $0.0, minutes: Double($0.1), planned: Double($0.2)) },
-        minutes: 390, done: 5, planned: 6,
-        next: [Session(title: "Sweet spot 2×15", sport: "ride", date: "2026-10-08", time: "17:30"),
-               Session(title: "Horní část těla", sport: "strength", date: "2026-10-10", time: nil),
-               Session(title: "Dlouhý běh", sport: "run", date: "2026-10-11", time: nil)])
+        minutes: 249, done: 3, planned: 6,
+        next: [Session(title: "Silový trénink, celé tělo", sport: "strength", date: "2026-10-08", time: "17:30"),
+               Session(title: "Lehká jízda Z2", sport: "ride", date: "2026-10-09", time: nil),
+               Session(title: "Dlouhý běh", sport: "run", date: "2026-10-10", time: nil)])
 }

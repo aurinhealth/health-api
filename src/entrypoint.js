@@ -130,7 +130,7 @@ import { withPlainErrors } from "./error-text.js";
 import { handleIntervalsOAuth, disconnectIntervalsApp } from "./intervals-oauth.js";
 import { scheduleIntervalsCatchUp, runIntervalsCatchUp } from "./intervals-catchup.js";
 import { handleIntervalsWebhook } from "./intervals-webhook.js";
-import { handleAppStoreNotification } from "./app-store.js";
+import { handleAppStoreNotification, forgetEndedPurchases } from "./app-store.js";
 import { intervalsChanged, intervalsReads } from "./intervals-reads.js";
 import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman } from "./ultrahuman.js";
 import { handleWhoopOAuth, disconnectWhoop, syncWhoop } from "./whoop.js";
@@ -171,7 +171,7 @@ import { heatAdvice } from "./heat-advice.js";
 import { ownFitness, watchOnlyFitness, fitnessDays } from "./own-fitness.js";
 import { handleStrengthAutomation, handleAdminApi } from "./routes-admin.js";
 import { handleAccountApi } from "./routes-account.js";
-import { pausedRefusal, finishHealthPauses } from "./health-pause.js";
+import { pausedRefusal, consentRefusal, finishHealthPauses } from "./health-pause.js";
 import { firstImport } from "./first-imports.js";
 import { handleSyncApi } from "./routes-sync.js";
 import { handleGymToolsApi, handleGymPlanApi } from "./routes-gym.js";
@@ -484,6 +484,8 @@ const worker = {
     }
     // Remembered AI limits of deleted accounts whose week and month are over (ai-limit-memory.js).
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 5) await forgetExpiredAiLimits(env.DB).catch(error => console.error("AI limit memory cleanup failed", error.message));
+    // Ended purchases of deleted accounts whose old records have run out (app-store.js, privacy policy).
+    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 5) await forgetEndedPurchases(env.DB).catch(error => console.error("Ended purchase cleanup failed", error.message));
     // Waitlist addresses a year after they joined, and all of them once Aurin is out (testflight-waitlist.js, privacy policy).
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 7) await forgetOldWaitlist(env.DB, { released: paywallOn(env) }).catch(error => console.error("Waitlist cleanup failed", error.message));
     // Request limits nobody has used for two days (ip-rate-limit.js).
@@ -603,6 +605,8 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (ownerOnly) return ownerOnly;
     // Health data paused (health-pause.js): only the account, consent, Pro and settings answer.
     if (signedIn && user.healthPaused && !user.isOwner) { const paused = pausedRefusal(request.method, url.pathname); if (paused) return paused; }
+    // No consent to health data yet: no health data comes in (health-pause.js consentRefusal).
+    if (signedIn && user.healthConsent === false && !user.healthPaused && !user.isOwner) { const refused = consentRefusal(request.method, url.pathname); if (refused) return refused; }
     if(signedIn&&needsAIAccess(request.method,url.pathname)){
       try{await assertAIAccess(env);}catch(error){return error.consent?Response.json({status:'ai_consent_required',message:error.message},{status:403}):Response.json({status:'subscription_required',message:error.message},{status:402});}
     }

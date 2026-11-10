@@ -182,11 +182,16 @@ struct FoodProduct: Codable, Equatable, Identifiable {
     /// hasn't settled yet; reported_by_me when this user did.
     var reported: Bool?
     var reported_by_me: Bool?
+    /// The amount last logged of an own food, in its unit (src/personal-foods.js):
+    /// offered first, and what "+" in Poslední/Časté adds.
+    var last_amount: Double?
+    /// Who the values come from, as the row shows it ("USDA" for a basic food, src/staples.js).
+    var source_name: String?
 
     enum CodingKeys: String, CodingKey {
         case name, brand, calories_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, sugars_100g, salt_100g
         case nutrition_basis, serving_size, quantity, barcode, source, source_url, micros_100g, catalog_key, serving_name, origin
-        case reported, reported_by_me
+        case reported, reported_by_me, last_amount, source_name
     }
 
     init(name: String, brand: String? = nil, calories_100g: Double? = nil, protein_100g: Double? = nil, carbs_100g: Double? = nil,
@@ -228,6 +233,8 @@ struct FoodProduct: Codable, Equatable, Identifiable {
         origin = value(.origin)?.string
         reported = try? c.decodeIfPresent(Bool.self, forKey: .reported)
         reported_by_me = try? c.decodeIfPresent(Bool.self, forKey: .reported_by_me)
+        last_amount = value(.last_amount)?.number.flatMap { $0 > 0 ? $0 : nil }
+        source_name = value(.source_name)?.string?.nilIfBlank
     }
 
     var id: String { (barcode ?? "") + "|" + name + "|" + (brand ?? "") + "|" + (source ?? "") }
@@ -235,8 +242,9 @@ struct FoodProduct: Codable, Equatable, Identifiable {
     var perPortion: Bool { nutrition_basis == "portion" }
     var unit: String { perPortion ? "portion" : nutrition_basis == "ml" ? "ml" : "g" }
 
-    /// The amount offered first: a serving, else the package, else 100.
+    /// The amount offered first: the one last logged, else a serving, else the package, else 100.
     var defaultAmount: Double {
+        if let last_amount { return last_amount }
         if perPortion { return 1 }
         if let s = usableServing { return s }
         if let q = Self.leadingNumber(quantity), q > 0, q <= 500 { return q }
@@ -294,6 +302,9 @@ struct FoodProduct: Codable, Equatable, Identifiable {
         }
         return out
     }
+
+    /// A basic food from a food composition table (src/staples.js): listed first, with a check mark.
+    var isTableFood: Bool { source == "table" }
 
     /// Values AI estimated, also once saved as the user's own food: "AI odhad".
     var isEstimate: Bool { source == "ai-estimate" || origin == "ai-estimate" }

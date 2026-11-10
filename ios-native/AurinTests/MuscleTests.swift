@@ -48,7 +48,7 @@ final class MuscleTests: XCTestCase {
         XCTAssertLessThanOrEqual(focus.count, 5, "the server takes 1 to 5 muscles")
         XCTAssertEqual(Set(focus).count, focus.count)
         for id in focus {
-            // Rested, or rested later today as the rings count it (the sample's chest and back).
+            // Rested, or rested later today as the rings count it.
             XCTAssertTrue(sample.ready(body: id), id)
             XCTAssertTrue(BodyFigure.muscles.contains { $0.id == id }, id)
         }

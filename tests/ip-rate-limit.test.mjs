@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
-import { allowRequest, allowClient, forgetStaleRequestLimits, clientKey, callerNetwork, CLIENT_LIMITS } from "../src/ip-rate-limit.js";
+import { allowRequest, allowClient, forgetStaleRequestLimits, clientKey, callerNetwork, callerSite, CLIENT_LIMITS } from "../src/ip-rate-limit.js";
 
 const MIGRATION = readFileSync(new URL("../migrations/0020_request_limits.sql", import.meta.url), "utf8");
 const T0 = Date.parse("2026-10-07T08:00:00Z");
@@ -83,6 +83,11 @@ test("an IPv6 caller is its /64, written one way; IPv4 and IPv4-mapped addresses
   assert.equal(callerNetwork(" 203.0.113.5 "), "203.0.113.5");
   assert.equal(callerNetwork(""), "none");
   assert.equal(callerNetwork("2001:db8::1::2"), "2001:db8::1::2", "not an address: kept as it came");
+  assert.equal(callerSite("2001:db8:1:2::5"), "2001:db8:1::/48");
+  assert.equal(callerSite("2001:db8:1:ffff:aaaa::1"), "2001:db8:1::/48");
+  assert.equal(callerSite("2001:db8::"), "2001:db8:0::/48");
+  assert.equal(callerSite("::ffff:203.0.113.5"), "203.0.113.5");
+  assert.equal(callerSite("203.0.113.5"), "203.0.113.5");
   assert.equal(await clientKey(from("2001:db8:1:2::5"), "s"), await clientKey(from("2001:db8:1:2:ffff:ffff:ffff:ffff"), "s"));
   assert.notEqual(await clientKey(from("2001:db8:1:2::5"), "s"), await clientKey(from("2001:db8:1:3::5"), "s"));
   assert.equal(await clientKey(from("::ffff:203.0.113.5"), "s"), await clientKey(from("203.0.113.5"), "s"));

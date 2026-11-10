@@ -316,9 +316,18 @@ extension AppModel {
     /// `refreshAfter: false` when several are logged at once and sent after the last.
     func logFood(product: FoodProduct, amount: Double, meal: String, day: String? = nil, refreshAfter: Bool = true) async -> String? {
         guard !demo else { return nil }
+        loggedFood(product: product, amount: amount, meal: meal, day: day, send: refreshAfter)
+        return nil
+    }
+
+    /// logFood that gives the id the meal shows under until the server's;
+    /// deleteFood takes it ("Vrátit" after "+" in Co přidáme?).
+    @discardableResult
+    func loggedFood(product: FoodProduct, amount: Double, meal: String, day: String? = nil, send: Bool = true) -> Int {
         let date = day ?? writeDay
+        let id = Outbox.localId()
         let request = FoodLogRequest(date: date, product: product.forLogging, quantity: amount, unit: product.unit, mealType: meal)
-        let overlay = OutboxOverlay(kind: .food, date: date, id: Outbox.localId(), name: product.name, meal: meal,
+        let overlay = OutboxOverlay(kind: .food, date: date, id: id, name: product.name, meal: meal,
                                     kcal: product.kcal(for: amount), protein: product.grams(product.protein_100g, for: amount),
                                     carbs: product.grams(product.carbs_100g, for: amount), fat: product.grams(product.fat_100g, for: amount),
                                     time: date == Self.localDate(Date()) ? Outbox.clock() : nil)
@@ -327,8 +336,8 @@ extension AppModel {
         if date == Self.localDate(Date()) { extra["time"] = .string(Outbox.clock()) }
         let item = OutboxItem(path: "/app/api/food/log", method: "POST", body: OutboxItem.json(request, adding: extra),
                               label: product.name, overlay: overlay)
-        write(item, send: refreshAfter)
-        return nil
+        write(item, send: send)
+        return id
     }
 
     /// true when it was deleted (or waits for signal).

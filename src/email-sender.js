@@ -106,6 +106,24 @@ const CHANGED_TEXT = {
   }
 };
 
+const EMAIL_TAKEN_TEXT = {
+  cs: {
+    subject: "Tahle adresa už má účet Aurin",
+    body: ["Někdo v Aurinu požádal o změnu e-mailu svého účtu na tuhle adresu. Ta už ale patří jinému účtu Aurin, takže se nic nezměnilo.", "Pokud o změnu žádáš ty, přihlas se do Aurinu rovnou touhle adresou. Jinak e-mail ignoruj."]
+  },
+  en: {
+    subject: "This address already has an Aurin account",
+    body: ["Someone asked in Aurin to change their account's email to this address. It already belongs to another Aurin account, so nothing changed.", "If it was you, sign in to Aurin with this address instead. Otherwise, ignore this email."]
+  }
+};
+
+// Goes to an address an e-mail change asked for that another account already uses, instead of a
+// code: the app is told the same as for any address, so it cannot learn which ones have an account.
+export function emailTakenEmail(lang) {
+  const t = EMAIL_TAKEN_TEXT[lang === "en" ? "en" : "cs"];
+  return { subject: t.subject, text: t.body.join("\n\n") + "\n", html: htmlEmail(lang === "en" ? "en" : "cs", t.body) };
+}
+
 // Goes to the old address, so a change nobody asked for does not go unnoticed.
 export function emailChangedEmail(lang, address, date = new Date(), zone = timeZone()) {
   const en = lang === "en";

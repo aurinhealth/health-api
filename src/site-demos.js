@@ -430,16 +430,16 @@ const foodTarget = `<div class="dm pad">
 <div class="coach"><div class="ch4">${ic('spark')}Coach</div><p class="sent">Training day: 350 kcal more. 1,270 kcal left, an afternoon snack of about 360 kcal.</p></div>
 </div>`;
 
-// AddFoodSheet.swift ("Co přidáme?": the meal, the search, six tiles, the foods list), then BarcodeScanSheet.swift:
+// AddFoodSheet.swift ("Co přidáme?": the meal, the search, one row of four tiles, Poslední/Časté/Recepty, the foods with "+"), then BarcodeScanSheet.swift:
 // the finder with "Vybrat fotku" and "Zadat kód", the found card with NutritionCells, DayLeftLine (what is left of the sample day's 2,650 kcal
 // and 150 g protein after this food), the PortionWheel turned to 1½ servings, "Přidat do oběda" and "Přidat a skenovat další" under it.
 const foodAdd = `<div class="dm pad fa">
 <div class="row sp"><span class="sent h">What are you adding?</span><span class="mut s">Close</span></div>
 <span class="meal">Lunch${ic('updown')}</span>
 <div class="srch">${ic('search')}<span class="mut">Search foods</span></div>
-<div class="tiles6">${[['barcode', 'Scan'], ['camera', 'Photo'], ['photo', 'From library'], ['label', 'Label'], ['pencil', 'Manual'], ['spark', 'AI lookup']].map(([i, t], k) => `<span${k ? '' : at('500:press 900-press')}>${ic(i)}${t}</span>`).join('')}</div>
-<div class="seg2"><span class="on">Foods</span><span>Recipes</span></div>
-${[['Plain Greek yogurt', 'Hollandia · 140 g', 205], ['Banana', '120 g', 105]].map(([k, d, v]) => `<div class="li"><div><b>${k}</b><span class="mut s">${d}</span></div><span class="num">${v}<small>kcal</small></span></div>`).join('')}
+<div class="tiles4">${[['barcode', 'Scan'], ['camera', 'Photo'], ['label', 'Label'], ['pencil', 'Manual']].map(([i, t], k) => `<span${k ? '' : at('500:press 900-press')}>${ic(i)}${t}</span>`).join('')}</div>
+<div class="fch"><span class="on">Recent</span><span>Frequent</span><span>Recipes</span></div>
+${[['Plain Greek yogurt', 'Hollandia · 140 g', 205], ['Banana', '120 g', 105], ['Oat flakes', 'Emco · 60 g', 225], ['Chicken breast', '150 g', 165], ['Basmati rice', '80 g', 280]].map(([k, d, v]) => `<div class="li"><div><b>${k}</b><span class="mut s">${d}</span></div><span class="row"><span class="num">${v}<small>kcal</small></span><span class="fplus">${ic('plus')}</span></span></div>`).join('')}
 <div class="scn"${at('900:in')}>
 <div class="row sp"><span class="cb">${ic('x')}</span><span class="sl0">BARCODE</span><span class="cb">${ic('torch')}</span></div>
 <div class="finder"${at('900:in 2900-in')}><div class="cam"><div class="bc"></div><i class="scan"></i><span class="cr tl"></span><span class="cr tr"></span><span class="cr bl"></span><span class="cr br"></span></div><p class="sent aim">Point at the barcode on the package</p><div class="pks"><span class="olp pk">${ic('photo')}Choose photo</span><span class="olp pk">${ic('keyboard')}Enter code</span></div></div>
@@ -664,7 +664,7 @@ ${[['run', '5 km', '24 min', WA.red], ['bike', '20 km', '33 min', WA.amber], ['r
 <div class="aw-go">${ic('play')}Open in Workout</div></div></div>`;
 
 export const WATCH = [
-  ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness with what the day calls for, sleep, strain and HRV, as on Today, and what’s next today in one line. Wrist down, the numbers hide.', watchHome],
+  ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness with what the day calls for, sleep, strain and HRV, as on Today, and what’s next today in one line. Wrist down, they stay, dimmed.', watchHome],
   ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown, and the rest counts down and taps you when it’s time. Leave the iPhone in your locker: the watch keeps your sets, even without signal, and hands them over later. Nothing planned? With your iPhone nearby, build one for your rested muscles from the watch.', watchGym],
   ['glow-training', 'Race day, one tap.', 'A duathlon, aquabike, aquathlon or triathlon from your plan shows as one card, its legs in race order, and starts as one multisport workout: the watch times each leg and each change. Tap it for each leg’s target.', watchRace],
   ['glow-health', 'Water in one tap.', 'What’s left to eat today, the macros, and +250 ml for a glass of water. Your iPhone gets it at once.', watchFood],
@@ -903,10 +903,11 @@ html:not(.js) .stage1{display:none}
 .fa{position:relative;min-height:584px;overflow:hidden}
 .meal{display:inline-flex;align-items:center;gap:4px;margin-top:6px;padding:4px 10px;border-radius:99px;background:color-mix(in srgb,var(--text) 6%,transparent);font-size:13px;font-weight:600}.meal .di{font-size:10px}
 .srch{display:flex;align-items:center;gap:10px;height:44px;margin-top:12px;border-bottom:1px solid color-mix(in srgb,var(--text) 25%,transparent);font-size:17px}.srch .di{font-size:18px;color:var(--muted)}
-.tiles6{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
-.tiles6 span{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:62px;border-radius:16px;background:var(--bg);font-size:12.5px;font-weight:500;transition:transform .2s,background .2s}.tiles6 .di{font-size:19px}
-.tiles6 span.press{transform:scale(.93);background:var(--track)}.js .tiles6 span[data-at]{opacity:1!important;transform:none!important}
-.seg2{display:grid;grid-template-columns:1fr 1fr;margin-top:16px;padding:2px;border-radius:9px;background:var(--track);font-size:13px;font-weight:500}.seg2 span{padding:5px 0;border-radius:7px;text-align:center}.seg2 .on{background:var(--panel);box-shadow:0 1px 3px rgba(0,0,0,.08);font-weight:600}
+.tiles4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:16px}
+.tiles4 span{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;height:56px;border-radius:16px;background:var(--bg);font-size:11.5px;font-weight:500;transition:transform .2s,background .2s}.tiles4 .di{font-size:18px}
+.tiles4 span.press{transform:scale(.93);background:var(--track)}.js .tiles4 span[data-at]{opacity:1!important;transform:none!important}
+.fch{display:flex;gap:8px;margin:16px 0 4px}.fch span{padding:6px 13px;border-radius:99px;background:var(--bg);font-size:12.5px;font-weight:500}.fch .on{background:var(--text);color:var(--panel)}
+.fplus{display:grid;place-items:center;width:28px;height:28px;margin-left:10px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--green);color:var(--green);font-size:13px}
 .fa .li{padding:7px 0}.fa .li b{display:block;font-size:14px}.fa .li .num{font-size:18px}
 .scn{position:absolute;inset:0;padding:16px 18px 18px;background:var(--panel);transition:opacity .4s}.js .scn.wait:not(.in){transform:none}
 .sl0{font-size:11px;font-weight:500;letter-spacing:.16em;color:var(--muted)}.fa .cb{width:32px;height:32px;font-size:14px}
