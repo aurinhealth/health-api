@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { grantAiConsent } from "./helpers/consent.mjs";
-import { scopedDb, mayCreateAccount, createAccount, signInEmailUser, SignupLimited, NEW_ACCOUNT_LIMITS, ensureTenancy, _resetTenancyForTest } from "../src/tenancy.js";
+import { scopedDb, mayCreateAccount, createAccount, signInEmailUser, SignupLimited, NEW_ACCOUNT_LIMITS, SITE_ACCOUNT_LIMITS, ensureTenancy, _resetTenancyForTest } from "../src/tenancy.js";
 import { handleEmailLogin } from "../src/email-login.js";
 import { callOpenAI } from "../src/coach-assistant.js";
 import { groupBrakeUsd, aiSpendingReport } from "../src/ai-total.js";
@@ -254,9 +254,13 @@ test("one network opens a few new accounts a day; invited addresses, the owner a
   assert.equal(await mayCreateAccount(db, open, "invited@example.com", { request: from("203.0.113.5") }), true);
   assert.equal(await mayCreateAccount(db, open, "owner@example.com", { request: from("203.0.113.5") }), true);
   assert.equal(await mayCreateAccount(db, open, "other@example.com", { request: from("198.51.100.7") }), true);
-  // Every address of one IPv6 /48 is the same site, whichever /64 of it asks.
-  for (let i = 1; i <= NEW_ACCOUNT_LIMITS.hour; i++) await mayCreateAccount(db, open, `v${i}@example.com`, { request: from(`2001:db8:1:${i}::${i}`) });
-  await assert.rejects(mayCreateAccount(db, open, "v9@example.com", { request: from("2001:db8:1:ffff::99") }), SignupLimited);
+  // Every address of one IPv6 /64 is the same caller.
+  for (let i = 1; i <= NEW_ACCOUNT_LIMITS.hour; i++) await mayCreateAccount(db, open, `v${i}@example.com`, { request: from(`2001:db8:1:2::${i}`) });
+  await assert.rejects(mayCreateAccount(db, open, "v9@example.com", { request: from("2001:db8:1:2::99") }), SignupLimited);
+  // The /64s of one /48 share the site's looser cap, so stepping through them stops there.
+  let made = 0;
+  for (let i = 0; i < SITE_ACCOUNT_LIMITS.hour + 5; i++) made += await mayCreateAccount(db, open, `s${i}@example.com`, { request: from(`2001:db8:1:${(i + 10).toString(16)}::1`) }).then(() => 1, error => { assert.ok(error instanceof SignupLimited); return 0; });
+  assert.equal(made, SITE_ACCOUNT_LIMITS.hour - NEW_ACCOUNT_LIMITS.hour, "the /48's hour, the first /64's three included");
   assert.equal(await mayCreateAccount(db, open, "w@example.com", { request: from("2001:db8:2:1::1") }), true, "another /48");
 });
 
