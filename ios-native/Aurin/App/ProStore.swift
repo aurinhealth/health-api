@@ -137,8 +137,7 @@ final class ProStore {
     }
 
     func load() async {
-        // The tests keep the prices and the free week they were given.
-        guard !Self.hostsUnitTests, products.isEmpty else { return }
+        guard products.isEmpty else { return }
         do {
             let found = try await Product.products(for: Self.ids + Self.packIDs)
             products = Dictionary(found.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })

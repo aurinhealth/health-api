@@ -217,7 +217,8 @@ struct PaywallView: View {
             Button("OK", role: .cancel) { close() }
         } message: { Text(thanks ?? "") }
         .task {
-            await store.load()
+            // The snapshot tests (a fixed moment) keep the prices and the free week they were given.
+            if frozenTime == nil { await store.load() }
             if store.commitment == nil, plan == .yearMonthly { plan = .yearOnce }
         }
         .task(id: step) {
