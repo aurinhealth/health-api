@@ -27,7 +27,7 @@ const signedPercent = pct => (pct < 0 ? "−" : "+") + Math.abs(pct) + " %";
 export const metricTitle = metric => ({ readiness: L("Připravenost", "Readiness"), hrv: "HRV", sleep: L("Spánek", "Sleep"), rhr: L("Klidový tep", "Resting HR"), deep: L("Hluboký spánek", "Deep sleep") })[metric] || metric;
 const journalMetricWord = metric => ({ readiness: L("připravenost", "readiness"), hrv: "HRV", sleep: L("spánek", "sleep"), rhr: L("klidový tep", "resting heart rate") })[metric] || metric;
 
-// The text of an answer: "2 · do 21:40", "180 mg · do 15:10", "300 mg", "21:15".
+// The text of an answer: "2, do 21:40", "180 mg, do 15:10", "300 mg", "21:15".
 export function valueText(item, s) {
   if (!s || s.yes == null) return null;
   if (item.type === "yesno") return null;
@@ -36,7 +36,7 @@ export function valueText(item, s) {
   const amount = s.amount ?? 0;
   const unit = typeof item.unit === "string" ? item.unit : "";
   const head = num(amount, 1) + (unit ? " " + unit : "");
-  return s.time && amount > 0 ? head + " · " + L("do ", "last ") + s.time : head;
+  return s.time && amount > 0 ? head + ", " + L("do ", "last ") + s.time : head;
 }
 
 // One item on a day: its own answer, else the day's data, else "Vždy ne / ano".

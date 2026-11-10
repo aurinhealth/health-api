@@ -442,10 +442,10 @@ export async function publicSharePage(request, db, url, env = {}) {
   const from = share.from_name ? t(share.from_name + " ti posílá trénink", share.from_name + " sent you a workout") : t("Sdílený trénink", "Shared workout");
   const minutes = endurance ? Math.round(totalMinutes(enduranceStructure(template))) : template.minutes;
   const length = minutes ? (minutes >= 60 ? Math.floor(minutes / 60) + " h" + (minutes % 60 ? " " + (minutes % 60) + " min" : "") : minutes + " min") : null;
-  const meta = [sport, length, endurance ? null : exercises.length + " " + t(exercises.length === 1 ? "cvik" : exercises.length < 5 ? "cviky" : "cviků", exercises.length === 1 ? "exercise" : "exercises")].filter(Boolean).join(" · ");
+  const meta = [sport, length, endurance ? null : exercises.length + " " + t(exercises.length === 1 ? "cvik" : exercises.length < 5 ? "cviky" : "cviků", exercises.length === 1 ? "exercise" : "exercises")].filter(Boolean).join(", ");
   const muscles = endurance ? [] : mainMuscles(template, en);
   const list = endurance ? sectionList(template) : exercises.map(e => `<li><span>${escapeHtml(e.name)}</span><span class="sr">${escapeHtml(e.sets + " × " + e.reps)}</span></li>`).join("");
-  const description = from + " · " + meta;
+  const description = from + ", " + meta;
   const og = share.has_image ? new URL("/t/" + share.id + "/og.png", url.origin).toString() : null;
   // The App Store banner and the way there when the app is not installed;
   // APP_STORE_ID is the app's Apple ID in App Store Connect.
@@ -483,14 +483,14 @@ const zoneClass = p => p < 56 ? 1 : p < 76 ? 2 : p < 88 ? 3 : p < 106 ? 4 : 5;
 
 function sectionList(template) {
   return blockLines(template).map(b => {
-    const steps = b.steps.map(st => `${escapeHtml(st.length)} · ${escapeHtml(st.target)}`).join(" / ");
+    const steps = b.steps.map(st => `${escapeHtml(st.length)}, ${escapeHtml(st.target)}`).join(" / ");
     const title = (b.repeats > 1 ? b.repeats + "× " : "") + b.steps.map(st => st.label).join(" / ");
     return `<li class="sec"><i class="z${zoneClass(Math.max(...b.steps.map(st => st.percent)))}"></i><span><b>${escapeHtml(title)}</b><span class="sr">${steps}</span></span></li>`;
   }).join("");
 }
 
 function page({ en, title, description = "", head = "", body }) {
-  return `<!doctype html><html lang="${en ? "en" : "cs"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escapeHtml(title)} · Aurin</title><meta name="description" content="${escapeHtml(description)}">${head}<style>
+  return `<!doctype html><html lang="${en ? "en" : "cs"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}">${head}<style>
 :root{--bg:#F3EFE8;--card:#FBFAF7;--ink:#1B1A17;--muted:#6D6A63;--line:rgba(27,26,23,.09);--button:#15140F;--onbutton:#fff;--avatar:#1F6B52;--c0:#A35A12;--c1:#1F6B52;--c2:#4F46C8;--c3:#1D6FA3;--z1:#9C978D;--z2:#1D6FA3;--z3:#1F6B52;--z4:#C4782A;--z5:#B4532F}
 @media (prefers-color-scheme:dark){:root{--bg:#0A0B0C;--card:#1C1E1F;--ink:#ECEAE6;--muted:#9AA39F;--line:rgba(236,234,230,.08);--button:#F4F2EE;--onbutton:#0A0B0C;--avatar:#2E9E78;--c0:#F2B46B;--c1:#8FE6C4;--c2:#A5A1FF;--c3:#7CC3F0;--z1:#5C6266;--z2:#7CC3F0;--z3:#8FE6C4;--z4:#F0B36E;--z5:#F0907A}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}

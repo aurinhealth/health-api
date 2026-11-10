@@ -19,7 +19,7 @@ function scenario() {
   activities.push(ride(0, 180, "09:30"));
   const wellness = Array.from({ length: 28 }, (_, i) => ({ id: day(i), ctl: 70, atl: 90, tsb: -20, hrv: 80, restingHR: 48 }));
   const sleep = Array.from({ length: 15 }, (_, i) => ({ date: day(i), durationMin: 450 }));
-  return { date: DATE, feedback: { rpe: 7, notes: "těžké nohy" }, workout: { system: "endurance", sport: "ride", name: "Endurance · 240 min" }, activities, wellness, sleep, recentFeedback: [] };
+  return { date: DATE, feedback: { rpe: 7, notes: "těžké nohy" }, workout: { system: "endurance", sport: "ride", name: "Endurance, 240 min" }, activities, wellness, sleep, recentFeedback: [] };
 }
 
 test("Z2 ride with heavy legs: RPE, the unusual walk before it and long-term low form", () => {

@@ -25,15 +25,15 @@ export const ROLE_LABELS = bilingual({
   quality: "Kvalita (intervaly)",
   endurance: "Vytrvalost",
   recovery: "Lehce / regenerace",
-  gym_upper: "Posilovna · s rezervou",
-  gym_full: "Posilovna · celé tělo"
+  gym_upper: "Posilovna s rezervou",
+  gym_full: "Posilovna na celé tělo"
 }, {
   long: "Long workout",
   quality: "Quality (intervals)",
   endurance: "Endurance",
   recovery: "Easy / recovery",
-  gym_upper: "Gym · with reserve",
-  gym_full: "Gym · full body"
+  gym_upper: "Gym, with reserve",
+  gym_full: "Full-body gym"
 });
 // What the coach should do with the role (the coach keeps its readiness guardrails).
 export const ROLE_FOCUS = { long: "long_endurance", endurance: "endurance", recovery: "recovery", quality: null };

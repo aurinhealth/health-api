@@ -150,8 +150,8 @@ function trainingFacts(d) {
     facts.strainToday != null && { label: L("Námaha dnes", "Strain today"), value: decimal(facts.strainToday) + (facts.strainTarget != null ? L(", cíl ", ", target ") + decimal(facts.strainTarget) : "") },
     week.planned != null && { label: L("Týden", "Week"), value: (week.done ?? 0) + "/" + week.planned + L(" tréninků, ", " workouts, ") + (week.doneLoad ?? 0) + "/" + (week.plannedLoad ?? 0) + " TSS" },
     form && { label: L("Forma", "Form"), value: signed(form.form) + (form.label ? " (" + form.label + ")" : "") },
-    done.length > 0 && { label: L("Poslední trénink", "Last workout"), value: done.at(-1).title + (num(done.at(-1).tss) ? " · " + Math.round(num(done.at(-1).tss)) + " TSS" : "") },
-    next && { label: L("Další trénink", "Next workout"), value: String(next.title || "") + (next.date ? " · " + next.date : "") },
+    done.length > 0 && { label: L("Poslední trénink", "Last workout"), value: done.at(-1).title + (num(done.at(-1).tss) ? ", " + Math.round(num(done.at(-1).tss)) + " TSS" : "") },
+    next && { label: L("Další trénink", "Next workout"), value: String(next.title || "") + (next.date ? ", " + next.date : "") },
     facts.event && { label: L("Závod", "Event"), value: (facts.event.name || "") + (facts.event.daysLeft != null ? L(" za ", " in ") + facts.event.daysLeft + L(" dní", " days") : "") },
     loadLevelLabel(d.acwr?.level) && { label: L("Posledních 7 dní vs. obvyklých 28", "Last 7 days vs your usual 28"), value: loadLevelLabel(d.acwr.level) },
     num(d.monotony?.value) != null && { label: L("Monotónnost", "Monotony"), value: decimal(d.monotony.value, 2) + (num(d.monotony.strain) != null ? ", strain " + Math.round(num(d.monotony.strain)) : "") }

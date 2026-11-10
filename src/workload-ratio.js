@@ -21,7 +21,7 @@
 // audit D4, 2026-11-05): no ratio number, no bands, no "sweet spot" and no
 // "risk", since the ratio predicts no injuries (Impellizzeri 2021,
 // docs/methodology.md):
-//   < 0.7 well below · 0.7–0.9 below · 0.9–1.15 usual · 1.15–1.5 above · > 1.5 well above
+//   < 0.7 well below, 0.7–0.9 below, 0.9–1.15 usual, 1.15–1.5 above, > 1.5 well above
 //
 // Monotony (Foster 1998) is the mean daily load of the last 7 days over its
 // standard deviation (population SD of the 7 days); null with fewer than 7

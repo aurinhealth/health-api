@@ -1539,7 +1539,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       };
       const options=ranked.options.filter(o=>o.best||!less.includes(o.kind)).map(o=>{
         const d=details[o.kind],heat=heatFor(o.kind,d?.workout,o.hard);if(!d)return heat?{...o,heat}:o;
-        const detail=d.minutes?d.minutes+' min'+(o.detail.includes(' · ')?o.detail.slice(o.detail.indexOf(' · ')):''):o.detail;
+        const detail=d.minutes?d.minutes+' min'+(o.detail.includes(', ')?o.detail.slice(o.detail.indexOf(', ')):''):o.detail;
         return {...o,detail,lines:d.lines,...(d.workout?{workout:d.workout}:{}),...(d.gym?{gym:d.gym}:{}),...(heat?{heat}:{})};
       });
       return Response.json({status:'ok',date,...ranked,options,less,chosen:dayChoice({chosen:state.chosen,planned}),...(details.aiPending?{aiPending:true}:{})},{headers:{'Cache-Control':'no-store'}});
@@ -3621,7 +3621,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       }
       const planInfo=planned&&plan.pw?{name:plan.pw.template.name,week:plan.pw.week,weeks:plan.pw.weeks,phase:plan.pw.spec.phase,kind:planned.kind,followed:Boolean(planWorkout)}:null;
       if(planInfo&&generated.explanation?.why){
-        const head=planInfo.name+L(' · týden ',' · week ')+planInfo.week+'/'+planInfo.weeks;
+        const head=planInfo.name+L(', týden ',', week ')+planInfo.week+'/'+planInfo.weeks;
         generated.explanation.why=[planWorkout?head+(planned.kind==='quality'?L(': klíčový trénink týdne.',': the key session of the week.'):planned.kind==='test'?L(': test na začátku a na konci plánu.',': the test at the start and end of the plan.'):planned.kind==='race'?L(': závod.',': race day.'):'.'):head+L(': klíčový trénink dnes nahrazuje lehčí, podle tvé připravenosti.',': today the key session gives way to an easier one, from your readiness.'),...generated.explanation.why];
       }
       // The library workout that gave way, so the chat can say the card differs.

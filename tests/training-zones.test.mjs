@@ -163,7 +163,7 @@ test("Zones say where each threshold comes from and how old it is", async () => 
   assert.deepEqual(saved.set, { ftp: { on: "2026-05-08", by: "manual" }, lthr: { on: "2026-10-30", by: "test-ride-lthr30" }, swimCss: { on: "2026-11-05", by: "manual" } });
   const fetchImpl = async () => Response.json({ sportSettings: [{ types: ["Run"], threshold_pace: 4 }] });
   const t = await athleteThresholds({ DB: db, USER_ID: 9, INTERVALS_API_KEY: "k" }, fetchImpl);
-  assert.deepEqual(thresholdNotes(t, "2026-11-06"), { ftp: "Zadáno ručně · před 6 měsíci", lthr: "Test 30 min · před 7 dny", swimCss: "Zadáno ručně · včera", runThresholdPace: "Z Intervals.icu" });
+  assert.deepEqual(thresholdNotes(t, "2026-11-06"), { ftp: "Zadáno ručně, před 6 měsíci", lthr: "Test 30 min, před 7 dny", swimCss: "Zadáno ručně, včera", runThresholdPace: "Z Intervals.icu" });
   // Max heart rate from age is an estimate.
   assert.deepEqual(thresholdNotes({ maxHr: 186, sources: { maxHr: "age-estimate" } }, "2026-11-06"), { maxHr: "Odhad podle věku" });
   assert.deepEqual(thresholdNotes({ ftp: 250, sources: { ftp: "latest-ride" } }), { ftp: "Odhad z poslední jízdy" });

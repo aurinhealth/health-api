@@ -212,12 +212,12 @@ export const MOOD_LABELS = [["calm", "Klid", "Calm"], ["content", "Spokojenost",
   ["anxious", "Úzkost", "Anxious"], ["irritated", "Podráždění", "Irritated"], ["sad", "Smutek", "Sad"], ["overwhelmed", "Zahlcení", "Overwhelmed"]];
 export const MOOD_LABEL_MASK = (1 << MOOD_LABELS.length) - 1;
 
-// "Příjemná · Klid, Radost": the mood's word and its labels.
+// "Příjemná: Klid, Radost": the mood's word and its labels.
 export function moodText(amount, labels) {
   const n = Math.round(Number(amount));
   if (!(n >= 1 && n <= 5)) return null;
   const words = MOOD_LABELS.filter((_, i) => (Number(labels) || 0) & (1 << i)).map(l => L(l[1], l[2]));
-  return L(MOOD_WORDS[n - 1][0], MOOD_WORDS[n - 1][1]) + (words.length ? " · " + words.join(", ") : "");
+  return L(MOOD_WORDS[n - 1][0], MOOD_WORDS[n - 1][1]) + (words.length ? ": " + words.join(", ") : "");
 }
 
 // Items the impact screen never ranks: illness takes days out of every other

@@ -297,7 +297,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
   // so a gym session or a watch workout outside the plan shows here too.
   // The watch's calories above the estimate the user chose to count (Plán dne → Kalorie k ověření).
   const watchExtra = deviceEnergyExtra(training.completed);
-  const detailOf = s => [num(s.minutes) ? Math.round(num(s.minutes)) + " min" : null, num(s.tss) ? Math.round(num(s.tss)) + " TSS" : null].filter(Boolean).join(" · ") || null;
+  const detailOf = s => [num(s.minutes) ? Math.round(num(s.minutes)) + " min" : null, num(s.tss) ? Math.round(num(s.tss)) + " TSS" : null].filter(Boolean).join(", ") || null;
 
   // Recovery (recovery-today.js): the suggestions after a training day, only
   // for today; the stretching and sauna saved for the day join the plan.
@@ -323,7 +323,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     recoveryId: r.id ?? null,
     time: r.done ? clockOf(r.doneAt) : null,
     title: r.kind === "stretch" && stretchName ? stretchName : r.title,
-    detail: r.minutes + " min" + (r.kind !== "stretch" ? "" : " · " + r.items.length + " " + L("cviků", "moves")) + (r.done ? L(" · hotovo", " · done") : ""),
+    detail: r.minutes + " min" + (r.kind !== "stretch" ? "" : ", " + r.items.length + " " + L("cviků", "moves")) + (r.done ? L(", hotovo", ", done") : ""),
     done: r.done,
     status: r.done ? "done" : "planned"
   }));
@@ -435,7 +435,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     } : null,
     // The day's naps for Dnes → Den: each sleep that began today after the night.
     naps: napsOn(sessions, date, night),
-    strain: { score: strainNow, training: strainParts.training, movement: strainParts.movement, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: hasPlan && !daySession.length, noPlan: !hasPlan && !daySession.length, usual: usualDay ?? (noWearable ? 8 : null), recover }), rest: hasPlan && !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || (hasPlan || daySession.length ? null : usualDay != null ? L("bez plánu · ne nad obvyklý objem", "no plan · not above your usual volume") : L("bez plánu", "no plan")) } },
+    strain: { score: strainNow, training: strainParts.training, movement: strainParts.movement, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: hasPlan && !daySession.length, noPlan: !hasPlan && !daySession.length, usual: usualDay ?? (noWearable ? 8 : null), recover }), rest: hasPlan && !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || (hasPlan || daySession.length ? null : usualDay != null ? L("bez plánu, ne nad obvyklý objem", "no plan, not above your usual volume") : L("bez plánu", "no plan")) } },
     // metric: "rmssd" or "sdnn" when the source said how it measures (Apple Health), else null.
     // Today's HRV shows even before its source has the 14 days a baseline needs.
     hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") }

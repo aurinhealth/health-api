@@ -767,15 +767,15 @@ export async function runComposeScenario(env, scenario, { compose = composeWorko
     const t = Date.now(), w = await compose(env, { sport: c.sport, kind: c.kind, minutes: c.minutes, coach, today: { score: c.score, zone: c.zone }, asked, model, save: false, diagnose: true }).catch(() => null);
     return { label, model, ms: Date.now() - t, workout: w, rejected: w?.rejected || null };
   }));
-  const band = c.minDifficulty != null ? ` · obtížnost ${c.minDifficulty}–${c.maxDifficulty}` : '';
+  const band = c.minDifficulty != null ? `, obtížnost ${c.minDifficulty}–${c.maxDifficulty}` : '';
   const describe = ({ label, model, ms, workout: w, rejected }) => {
-    if (rejected) return `### ${label} (${model}) · ${Math.round(ms / 1000)} s\nNesložil nic, co by prošlo kontrolami: ${rejected}.`;
+    if (rejected) return `### ${label} (${model}), ${Math.round(ms / 1000)} s\nNesložil nic, co by prošlo kontrolami: ${rejected}.`;
     if (!w) return `### ${label} (${model})\nNesložil nic, co by prošlo kontrolami (délka, typ, těžké minuty, obtížnost).`;
-    if (w.ai?.fallback) return [`### ${label} (${w.ai.model || model}) · ${Math.round(ms / 1000)} s · z knihovny (oba návrhy neprošly: ${w.ai.tried})`, `**${w.name}** · ${w.duration_minutes} min · obtížnost ${w.difficulty}`, '```', String(w.intervals_description || '').trim(), '```'].join('\n');
+    if (w.ai?.fallback) return [`### ${label} (${w.ai.model || model}), ${Math.round(ms / 1000)} s, z knihovny (oba návrhy neprošly: ${w.ai.tried})`, `**${w.name}**, ${w.duration_minutes} min, obtížnost ${w.difficulty}`, '```', String(w.intervals_description || '').trim(), '```'].join('\n');
     const load = workoutLoadCheck(w, c.sport), u = w.ai?.usage;
     const cost = u ? usageCost(w.ai.model || model, u) : null;
-    return [`### ${label} (${w.ai?.model || model}) · ${Math.round(ms / 1000)} s${cost != null ? ` · ${(cost * 25).toFixed(2)} Kč` : ''}`,
-      `**${w.name}** · ${w.duration_minutes} min · těžké ${load.hard} min · obtížnost ${w.difficulty} · ${Math.round(w.target_load || 0)} TSS`,
+    return [`### ${label} (${w.ai?.model || model}), ${Math.round(ms / 1000)} s${cost != null ? `, ${(cost * 25).toFixed(2)} Kč` : ''}`,
+      `**${w.name}**, ${w.duration_minutes} min, těžké ${load.hard} min, obtížnost ${w.difficulty}, ${Math.round(w.target_load || 0)} TSS`,
       w.ai?.reason || '', w.ai?.warning ? `⚠️ ${w.ai.warning}` : '', '```', String(w.intervals_description || '').trim(), '```'].filter(Boolean).join('\n');
   };
   for (const r of runs) if (r.rejected) r.workout = null;
@@ -799,7 +799,7 @@ export async function runComposeScenario(env, scenario, { compose = composeWorko
     checks.push(...runs.filter(r => r.workout).map(({ label, workout: w }) => quality(`${label}: na horší den vytrvalost nejvýš ${limit} %`, top(w) <= limit, top(w) + ' %')));
   }
   return { id: scenario.id, title: scenario.title, status: 'ok', lang: lang(), task: 'compose',
-    message: `Knihovna · ${c.sport === 'run' ? 'běh' : 'kolo'} · ${COMPOSE_KINDS[c.kind] || c.kind} · ${c.minutes} min${band} · připravenost ${c.score} (${c.zone})`,
+    message: `Knihovna, ${c.sport === 'run' ? 'běh' : 'kolo'}, ${COMPOSE_KINDS[c.kind] || c.kind}, ${c.minutes} min${band}, připravenost ${c.score} (${c.zone})`,
     model: runs.map(r => r.workout?.ai?.model || r.model).join(', '), ms: Date.now() - started,
     answer: runs.map(describe).join('\n\n'), proposed: [], kept: [], checks, passed: true };
 }

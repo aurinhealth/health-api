@@ -107,7 +107,7 @@ export function foodDraftSummary(draft) {
   if (!draft.items.length) return L("Ve zprávě jsem nenašel žádné jídlo k zápisu.", "I didn't find any food to log in the message.");
   const found = draft.items.filter(i => i.totals), missing = draft.items.filter(i => !i.totals);
   const kcal = Math.round(found.reduce((s, i) => s + (i.totals.kcal || 0), 0));
-  return L("Připravil jsem zápis: ", "I've prepared an entry: ") + draft.items.map(i => i.name + " " + i.grams + " " + i.basis).join(", ") + (found.length ? L(` · celkem asi ${kcal} kcal.`, ` · about ${kcal} kcal.`) : ".")
+  return L("Připravil jsem zápis: ", "I've prepared an entry: ") + draft.items.map(i => i.name + " " + i.grams + " " + i.basis).join(", ") + (found.length ? L(`, celkem asi ${kcal} kcal.`, `, about ${kcal} kcal.`) : ".")
     + (missing.length ? L(" U „", " I didn't find values for “") + missing.map(i => i.name).join(L("“, „", "”, “")) + L("“ jsem hodnoty nenašel; zadej je ve Výživě z etikety.", "”; enter them in Nutrition from the label.") : "")
     + L(" Zkontroluj množství a potvrď.", " Check the amounts and confirm.");
 }

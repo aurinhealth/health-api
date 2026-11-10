@@ -133,7 +133,7 @@ test("two efforts in a row without a recovery are rejected", async () => {
   assert.ok(await composeWorkout(env, { ...green, ask: answer(whole) }), "the same efforts in one repeat pass");
 });
 
-// Coach evaluation runs 35, 38 and 41: "VO2max 5×4 · 45 min" with 7 min of warm-up.
+// Coach evaluation runs 35, 38 and 41: "VO2max 5×4, 45 min" with 7 min of warm-up.
 test("a hard workout needs 10 easy minutes before its first effort; an easier one does not", async () => {
   const env = owner(), green = { ...day, kind: "vo2max", coach: { readiness: { status: "green" } } };
   const short = [block(420, 50, 75), { repeats: 5, steps: [{ label: "vo2", seconds: 240, low: 112, high: 118 }, { label: "lehce", seconds: 120, low: 45, high: 55 }] }, block(480, 45, 55)];
