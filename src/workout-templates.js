@@ -33,8 +33,8 @@ export const SPORTS = ["gym", ...ENDURANCE_SPORTS];
 const MAX_EXERCISES = 30;
 const MAX_SAVED = 300;
 const MAX_SHARES_PER_DAY = 20;
-// The preview image is the PNG the app draws (1200 × 630), base64. Anything
-// else is dropped, so a link can't carry other pictures or files.
+// The preview image is the PNG the app draws (1200 × 630), base64; any other
+// format or size is dropped (previewPng).
 const MAX_IMAGE_CHARS = 700_000;
 const PREVIEW_WIDTH = 1200, PREVIEW_HEIGHT = 630;
 const ID = /^[A-Za-z0-9]{10}$/;
@@ -407,16 +407,17 @@ async function readShare(db, id) {
 }
 
 // A PNG of the preview size and nothing after its end: the signature, the
-// IHDR chunk with 1200 × 630, the IEND chunk last.
+// IHDR chunk with 1200 × 630, the IEND chunk last. Only the start and the end
+// are decoded, so the check costs no CPU. It checks the format, not the
+// picture: what a picture shows is left to the page's report link.
 export function previewPng(base64) {
-  if (typeof base64 !== "string" || base64.length > MAX_IMAGE_CHARS || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) return false;
-  let bytes;
-  try { bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0)); } catch { return false; }
-  if (bytes.length < 45) return false;
-  const view = new DataView(bytes.buffer), ascii = (at, n) => String.fromCharCode(...bytes.subarray(at, at + n));
-  const signature = [137, 80, 78, 71, 13, 10, 26, 10].every((b, i) => bytes[i] === b);
-  return signature && ascii(12, 4) === "IHDR" && view.getUint32(16) === PREVIEW_WIDTH && view.getUint32(20) === PREVIEW_HEIGHT
-    && view.getUint32(bytes.length - 12) === 0 && ascii(bytes.length - 8, 4) === "IEND";
+  if (typeof base64 !== "string" || base64.length < 60 || base64.length > MAX_IMAGE_CHARS || base64.length % 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) return false;
+  const decode = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  const head = decode(base64.slice(0, 32)), tail = decode(base64.slice(-24)).slice(-12);
+  const view = new DataView(head.buffer), ascii = (bytes, at) => String.fromCharCode(...bytes.subarray(at, at + 4));
+  const signature = [137, 80, 78, 71, 13, 10, 26, 10].every((b, i) => head[i] === b);
+  return signature && ascii(head, 12) === "IHDR" && view.getUint32(16) === PREVIEW_WIDTH && view.getUint32(20) === PREVIEW_HEIGHT
+    && new DataView(tail.buffer).getUint32(0) === 0 && ascii(tail, 4) === "IEND";
 }
 
 // Links are on aurin.health whichever host the app talks to, so they never change.
