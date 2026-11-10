@@ -22,12 +22,15 @@ export async function savePersonalFood(db,input,{used=false,last=null}={}){
   await ensure(db);
   const existing=input.id?await db.prepare('SELECT product_json FROM personal_foods WHERE user_id=? AND food_key=?').bind(db.userId,String(input.id)).first():null;
   if(input.id&&!existing)throw new Error(L('Potravina nebyla nalezena.', 'The food was not found.'));
+  // Saved again without its id (the scanner's editor): the same row keeps its last amount.
+  const same=!input.id&&!lastAmount&&p?.name?await db.prepare('SELECT product_json FROM personal_foods WHERE user_id=? AND food_key=?').bind(db.userId,foodKey(p.name)+'|'+foodKey(p.brand)).first():null;
   // Values the AI looked up or estimated keep that origin when the food is
   // edited later. A catalogue food the user corrected ('edited') is marked too.
   const before=(()=>{try{return JSON.parse(existing?.product_json||'{}');}catch{return {};}})();
   const origin=['ai','ai-estimate'].includes(input.source)?input.source:['ai','ai-estimate','edited'].includes(input.origin)?input.origin:before.origin||null;
   // An edit keeps the amount last logged.
-  if(!lastAmount&&Number(before.last_amount)>0)lastAmount=Number(before.last_amount);
+  const kept=existing?before:(()=>{try{return JSON.parse(same?.product_json||'{}');}catch{return {};}})();
+  if(!lastAmount&&Number(kept.last_amount)>0)lastAmount=Number(kept.last_amount);
   if(!p?.name||p.name.length>180||!['g','ml','portion'].includes(p.nutrition_basis)||['calories_100g','protein_100g','carbs_100g','fat_100g'].some(k=>p[k]==null||p[k]<0||p[k]>(k==='calories_100g'?(portion?10000:1000):(portion?1000:100))))throw new Error(L('Doplň název, jednotku a platné nutriční hodnoty.', 'Fill in the name, the unit and valid nutrition values.'));
   await ensure(db);const product={...p,quantity:String(input.quantity||'').slice(0,100),source:'personal',confidence:'user',...(origin?{origin}:{}),...(lastAmount?{last_amount:Math.round(lastAmount*10)/10}:{})};
   await db.prepare('INSERT INTO personal_foods(user_id,food_key,product_json,use_count) VALUES(?,?,?,?) ON CONFLICT(user_id,food_key) DO UPDATE SET product_json=excluded.product_json,updated_at=CURRENT_TIMESTAMP,use_count=personal_foods.use_count+excluded.use_count').bind(db.userId,input.id?String(input.id):foodKey(product.name)+'|'+foodKey(product.brand),JSON.stringify(product),used?1:0).run();

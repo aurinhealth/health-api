@@ -124,6 +124,8 @@ export function buildRows(rows, sourceList, out, { log = console.log, version = 
     const rec = toRecord(row), bad = implausible(row), rank = bad ? 4 : row.rank ?? rankOf(row), key = barcodeKey(row.barcode);
     const ws = indexWords(row);
     for (const w of words(row.cs)) addCs.run(w);
+    // A Czech-market product's name and brand words (Hamé, Madeta) are never "fixed" either.
+    if (row.cz) for (const w of [...words(row.default_name), ...words(row.brand)]) addCs.run(w);
     if (bad) counts.implausible++;
     rec.t = ws.join(" "); rec.r = rank;
     addRec.run(row.id, key, rank, JSON.stringify(rec));
