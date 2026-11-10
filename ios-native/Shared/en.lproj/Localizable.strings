@@ -3045,6 +3045,8 @@
 "Fotoaparát potřebuje přístup. Povol ho Aurinu v Nastavení iPhonu, nebo vyber fotku." = "The camera needs access. Allow it for Aurin in iPhone Settings, or choose a photo.";
 "Vyber fotku etikety z Fotek." = "Choose a photo of the label from Photos.";
 "Vyfotit etiketu" = "Take photo of label";
+"Vyfotit přední stranu" = "Take photo of front";
+"Potom přední stranu obalu: název a značka se doplní samy." = "Next, the front of the pack: the name and brand fill in automatically.";
 "Fotku se nepodařilo pořídit. Zkus to znovu." = "Couldn't take the photo. Try again.";
 
 "Odebrat z plánu" = "Remove from plan";
