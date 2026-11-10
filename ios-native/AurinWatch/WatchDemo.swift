@@ -74,24 +74,25 @@ enum WatchDemo {
                                        bedtime: "22:10", inBed: 545, sleep: 510))
     }
 
-    /// The sample week around today: done before it, planned after it, in
-    /// all four sports (only the days of this week show on the watch).
+    /// The sample week around today: done before it, planned after it (only
+    /// the days of this week show on the watch).
     private static var week: [WatchSnapshot.Session] {
         typealias S = WatchSnapshot.Session
+        // The same week as the phone's sample calendar (DemoCalendar), yesterday first.
         let before: [(String, String, String, Int)] = [
-            ("Intervaly 4×8", "Intervals 4×8", "ride", 72),
-            ("Plavání 2 km", "Swim 2 km", "swim", 45),
-            ("Běh", "Run", "run", 54),
-            ("Kolo", "Ride", "ride", 60),
-            ("Posilovna · horní tělo", "Gym · upper body", "strength", 50),
-            ("Lehký běh", "Easy run", "run", 40)]
+            ("Běh 14 km", "Run 14 km", "run", 72),
+            ("Sweet spot 3×12", "Sweet spot 3×12", "ride", 75),
+            ("Posilovna · dolní tělo", "Gym · lower body", "strength", 60),
+            ("Procházka", "Walk", "walk", 70),
+            ("Dlouhý běh", "Long run", "run", 96),
+            ("Lehká jízda Z2", "Easy ride Z2", "ride", 72)]
         let after: [(String, String, String, Int)] = [
             ("Lehká jízda Z2", "Easy ride Z2", "ride", 72),
             ("Dlouhý běh", "Long run", "run", 96),
-            ("Plavání, technika", "Swim technique", "swim", 45),
-            ("Regenerace", "Recovery", "ride", 30),
-            ("Posilovna · dolní tělo", "Gym · lower body", "strength", 50),
-            ("Dlouhá jízda", "Long ride", "ride", 150)]
+            ("Procházka", "Walk", "walk", 70),
+            ("Posilovna · dolní tělo", "Gym · lower body", "strength", 60),
+            ("Sweet spot 3×12", "Sweet spot 3×12", "ride", 75),
+            ("Běh 14 km", "Run 14 km", "run", 72)]
         var sessions = before.enumerated().reversed().map {
             S(date: day(-$0.offset - 1), time: nil, title: tr($0.element.0, $0.element.1), sport: $0.element.2, minutes: $0.element.3, done: true)
         }
@@ -101,7 +102,8 @@ enum WatchDemo {
             sessions.append(S(date: day(0), time: "07:30", title: tr("Ranní běh", "Morning run"), sport: "run", minutes: 42, done: true))
             sessions.append(S(date: day(0), time: "17:30", title: tr("Silový trénink, celé tělo", "Strength, full body"), sport: "strength", minutes: 45, done: false))
         }
-        sessions += after.enumerated().map {
+        // A walk is never planned (DemoCalendar drops planned walks).
+        sessions += after.enumerated().filter { $0.element.2 != "walk" }.map {
             S(date: day($0.offset + 1), time: nil, title: tr($0.element.0, $0.element.1), sport: $0.element.2, minutes: $0.element.3, done: false)
         }
         return sessions
