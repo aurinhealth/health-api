@@ -189,7 +189,13 @@ export function correctWord(word, vocab) {
 // Basic foods from the food tables come first (staples.js), then the catalogue
 // without them.
 export async function searchWorldFoods(env, { name = '', barcode = '', language = lang() } = {}) {
-  const found = await catalogueFoods(env, { name, barcode, language });
+  // The basic foods need no R2: a failed catalogue read still lists them.
+  const found = await catalogueFoods(env, { name, barcode, language }).catch(error => {
+    if (barcode) throw error;
+    console.error('world catalogue', error?.message);
+    const typed = [...new Set(words(name))];
+    return { foods: [], query: typed, typed };
+  });
   if (barcode) return found.foods;
   const basic = searchStaples(found.query, name, language);
   const staples = basic.length ? basic : searchStaples(found.typed, name, language);

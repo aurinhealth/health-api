@@ -34,12 +34,13 @@ for (const line of readFileSync(new URL("./staples.txt", import.meta.url), "utf8
     if (!p) { problems.push(`no portion "${portion}": ${cs}`); continue; }
     size = p.gramWeight / (p.amount || 1) / (ml ? density : 1);
   }
-  const per100 = v => v == null ? undefined : round(v * density);
+  // One decimal, as the app shows them: an unchanged staple is not logged as a correction.
+  const per100 = v => v == null ? undefined : round(v * density, 1);
   const sodium = amount("307");
   const r = { k: `usda_sr_legacy:${food.fdcId}`, cs, en };
   if (ml) r.u = "ml";
   Object.assign(r, { e: per100(amount("208")) ?? 0, p: per100(amount("203")) ?? 0, c: per100(amount("205")) ?? 0, f: per100(amount("204")) ?? 0 });
-  const su = per100(amount("269")), fi = per100(amount("291")), sa = sodium == null ? undefined : round(sodium * density * 2.5 / 1000);
+  const su = per100(amount("269")), fi = per100(amount("291")), sa = sodium == null ? undefined : round(sodium * density * 2.5 / 1000, 1);
   if (su != null) r.su = su; if (fi != null) r.fi = fi; if (sa != null) r.sa = sa;
   if (size) r.s = [Math.round(size), pcs, pen];
   out.push(r);

@@ -10,7 +10,9 @@ import { lang } from './lang.js';
 export const STAPLES_SHOWN = 4;
 const fold = s => String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const words = s => fold(s).match(/[a-z0-9]+/g) || [];
-const indexed = STAPLES.map((r, at) => ({ r, at, cs: words(r.cs), en: words(r.en) }));
+// The words that name the food itself: not the oil of "tuna in oil".
+const main = ws => ws.filter((w, i) => !/^(in|with|v|ve|s|se)$/.test(ws[i - 1]));
+const indexed = STAPLES.map((r, at) => { const cs = words(r.cs), en = words(r.en); return { r, at, cs, en, main: { cs: main(cs), en: main(en) } }; });
 
 export function stapleProduct(r, language = lang()) {
   const unit = r.u === 'ml' ? 'ml' : 'g', [size, cs, en] = r.s || [];
@@ -27,9 +29,11 @@ export function stapleProduct(r, language = lang()) {
 
 // query: the search words (typos already fixed, world-foods.js), each the start
 // of a word of the Czech or the English name. The name in the user's language
-// that starts with the query comes first, then one with the query's whole
-// words, then the list's own order (the
-// usual food before its variants: coffee before decaf).
+// that starts with the query comes first, then one the query's whole words name
+// ("oil": olive oil before tuna in oil), then one with them anywhere, then the
+// list's own order (the usual food before its variants: coffee before decaf).
+// Word starts count only when no name has the whole words: "sýr" is cheese,
+// never "syrová" (raw).
 export function searchStaples(query, typed, language = lang()) {
   const qs = query.map(fold).filter(Boolean);
   if (!qs.some(q => q.length >= 3)) return [];
@@ -38,9 +42,10 @@ export function searchStaples(query, typed, language = lang()) {
   for (const s of indexed) {
     const fits = ws => qs.every(q => ws.some(w => w.startsWith(q)));
     if (!fits(s[own]) && !fits(s[own === 'en' ? 'cs' : 'en'])) continue;
-    const name = fold(s.r[own]), whole = qs.every(q => s[own].includes(q));
-    // "sýr" is cheese before "syrová" (raw), "olej" oil before tuna "v oleji".
-    hits.push({ s, score: (name.startsWith(start) ? 0 : whole ? 1 : fits(s[own]) ? 2 : 3) * 10000 + s.at });
+    const whole = ws => qs.every(q => ws.includes(q));
+    const tier = fold(s.r[own]).startsWith(start) ? 0 : whole(s.main[own]) ? 1 : whole(s[own]) ? 2 : fits(s[own]) ? 3 : 4;
+    hits.push({ s, tier, score: tier * 10000 + s.at });
   }
-  return hits.sort((a, b) => a.score - b.score).slice(0, STAPLES_SHOWN).map(h => stapleProduct(h.s.r, language));
+  const named = hits.some(h => h.tier <= 2);
+  return hits.filter(h => !named || h.tier <= 2).sort((a, b) => a.score - b.score).slice(0, STAPLES_SHOWN).map(h => stapleProduct(h.s.r, language));
 }

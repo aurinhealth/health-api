@@ -10,7 +10,7 @@ Voda | Water | Beverages, water, tap, drinking | =250 | sklenice | glass | ml
 Pomerančový džus | Orange juice | Orange juice, raw | cup | sklenice | glass | ml
 Jablečný džus | Apple juice | Apple juice, canned or bottled, unsweetened, without added ascorbic acid | cup | sklenice | glass | ml
 Kola | Cola | Beverages, carbonated, cola, regular | can | plechovka | can | ml
-Pivo, světlé | Beer | Alcoholic beverage, beer, regular, all | =500 | půllitr | pint | ml
+Pivo, světlé | Beer | Alcoholic beverage, beer, regular, all | =500 | půllitr | large glass | ml
 Víno, červené | Wine, red | Alcoholic beverage, wine, table, red | =150 | sklenka | glass | ml
 Víno, bílé | Wine, white | Alcoholic beverage, wine, table, white | =150 | sklenka | glass | ml
 Mléko, plnotučné | Milk, whole | Milk, whole, 3.25% milkfat, with added vitamin D | cup | hrnek | cup | ml
@@ -55,7 +55,7 @@ Knäckebrot, žitný | Crispbread, rye | Crackers, rye, wafers, plain | cracker 
 Ovesné vločky | Oats | Cereals, oats, regular and quick, not fortified, dry | cup | hrnek | cup |
 Ovesná kaše, na vodě | Porridge, made with water | Cereals, oats, regular and quick and instant, unenriched, cooked with water | cup | miska | bowl |
 Granola | Granola | Cereals ready-to-eat, granola, homemade | cup | hrnek | cup |
-Kukuřičné lupínky | Corn flakes | Cereals ready-to-eat, RALSTON Corn Flakes | cup | miska | bowl |
+Kukuřičné lupínky | Corn flakes | Cereals ready-to-eat, RALSTON Corn Flakes | cup | hrnek | cup |
 Rýže, bílá, syrová | Rice, white, raw | Rice, white, long-grain, regular, raw, enriched | | | |
 Rýže, bílá, vařená | Rice, white, cooked | Rice, white, long-grain, regular, enriched, cooked | cup | hrnek | cup |
 Rýže, natural, syrová | Rice, brown, raw | Rice, brown, long-grain, raw | | | |
@@ -228,7 +228,7 @@ Cukr | Sugar | Sugars, granulated | tsp | lžička | tsp |
 Javorový sirup | Maple syrup | Syrups, maple | tbsp | lžíce | tbsp |
 Džem | Jam | Jams and preserves | tbsp | lžíce | tbsp |
 Nutella | Chocolate spread | Chocolate-flavored hazelnut spread | =15 | lžíce | tbsp |
-Hořká čokoláda | Dark chocolate | Chocolate, dark, 70-85% cacao solids | oz | 28 g | 28 g |
+Hořká čokoláda | Dark chocolate | Chocolate, dark, 70-85% cacao solids | oz | porce | serving |
 Mléčná čokoláda | Milk chocolate | Candies, milk chocolate | =100 | tabulka | bar |
 Kakao | Cocoa powder | Cocoa, dry powder, unsweetened | tbsp | lžíce | tbsp |
 Zmrzlina, vanilková | Ice cream, vanilla | Ice creams, vanilla | =60 | kopeček | scoop |

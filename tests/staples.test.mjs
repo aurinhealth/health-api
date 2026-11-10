@@ -38,6 +38,8 @@ test('Czech and English words find it, without diacritics, the own language firs
   assert.deepEqual(searchStaples(['ban'], 'ban', 'cs').map(p => p.name), ['Banán']);
   assert.ok(searchStaples(['ryze', 'var'], 'ryze var', 'cs').every(p => /vařená/.test(p.name)));
   assert.ok(searchStaples(['mle'], 'mle', 'cs').length <= STAPLES_SHOWN);
+  assert.deepEqual(searchStaples(['syr'], 'syr', 'cs').map(p => p.name).filter(n => /syrová/.test(n)), []);
+  assert.equal(searchStaples(['oil'], 'oil', 'en')[0].name, 'Olive oil');
   assert.deepEqual(searchStaples(['jo'], 'jo', 'cs'), []);
   assert.deepEqual(searchStaples(['xyzzy'], 'xyzzy', 'cs'), []);
 });
@@ -47,4 +49,6 @@ test('search lists the basic foods first, also without the catalogue, and never 
   assert.equal(first.name, 'Banán');
   assert.equal(first.serving_name, 'kus');
   assert.deepEqual(await searchWorldFoods({}, { barcode: '8594001234567' }), []);
+  const broken = { FOOD_CATALOG_R2: { get: async () => { throw new Error('R2 down'); } } };
+  assert.equal((await searchWorldFoods(broken, { name: 'banán', language: 'cs' }))[0].name, 'Banán');
 });
