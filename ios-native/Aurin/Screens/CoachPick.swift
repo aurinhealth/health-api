@@ -247,7 +247,7 @@ struct CoachPickCard: View {
                             HStack(spacing: 12) {
                                 PickIcon(option: best, size: 32)
                                 Text(verbatim: best.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
-                                if let length = best.subtitle?.replacingOccurrences(of: ", ", with: ", ").components(separatedBy: ", ").first {
+                                if let length = best.subtitle?.replacingOccurrences(of: " · ", with: ", ").components(separatedBy: ", ").first {
                                     Text(verbatim: length).font(Typo.small).foregroundStyle(Palette.muted).lineLimit(1)
                                 }
                                 Spacer(minLength: 0)

@@ -2551,7 +2551,7 @@
 "Den na odpočinek" = "Rest day";
 "Všechny partie se ještě zotavují" = "Every body part is still recovering";
 "připravená" = "ready";
-"Únava svalů, odpočaté na %" = "Muscle fatigue, % rested";
+"Odpočinutí svalů (%)" = "Muscle recovery (%)";
 "Trénink: %@" = "Workout: %@";
 "odpočaté na %@ %%" = "%@%% rested";
 "Postava se svaly" = "Muscle figure";

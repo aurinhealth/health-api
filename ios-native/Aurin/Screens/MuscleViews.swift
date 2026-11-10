@@ -232,7 +232,7 @@ struct MusclesWidget: View {
     // M with the rings.
     private func mediumRings(_ data: MuscleFatigue) -> some View {
         Card {
-            WidgetHeader(title: L10n.tr("Únava svalů, odpočaté na %"), color: Palette.amberBar)
+            WidgetHeader(title: L10n.tr("Odpočinutí svalů (%)"), color: Palette.amberBar)
             MuscleRingsRow(data: data)
         }
     }

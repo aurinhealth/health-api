@@ -193,7 +193,7 @@ struct GymActivityCard: View {
                 GymActivityStats(context: context).layoutPriority(1)
                 Spacer(minLength: 4)
                 // "2 ze 5 cviků" of "Posilovna, 2 ze 5 cviků".
-                Text(s.header.replacingOccurrences(of: ", ", with: ", ").components(separatedBy: ", ").last ?? s.header).font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.muted).lineLimit(1)
+                Text(s.header.replacingOccurrences(of: " · ", with: ", ").components(separatedBy: ", ").last ?? s.header).font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.muted).lineLimit(1)
             }
             HStack(alignment: .bottom, spacing: 10) {
                 if resting, let start = s.restStart, let end = s.restEnd {
