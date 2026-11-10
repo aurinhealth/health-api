@@ -20,7 +20,7 @@
 // (EMAIL_CHANGE_CODES_PER_DAY, 100), so they never take from the codes for signing in, and one
 // account asks for at most 2 a minute, 5 an hour and 10 a day, one caller for 5, 20 and 30.
 import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie, knownDevice, knownDeviceCookie, heldKnownDevice, keepOnlyPushToken } from "./dashboard-auth.js";
-import { allowClient, allowRequest, callerNetwork } from "./ip-rate-limit.js";
+import { allowClient, allowRequest, callerSite } from "./ip-rate-limit.js";
 import { normalizeEmail, plainEmail, emailCodeAccess, signInEmailUser, changeUserEmail, SignupLimited } from "./tenancy.js";
 import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail, stepUpCodeEmail } from "./email-sender.js";
 import { siteLang } from "./site-pages.js";
@@ -85,12 +85,9 @@ export async function handleEmailLogin(request, env, pathname, ctx) {
   return verifyCode(env, email, body?.code, await knownDevice(request, env, email), request);
 }
 
-// The caller for its share of the day's codes: an IPv4 address, or a whole IPv6 /48, as one site
-// (a tunnel broker hands out a /48 for free, which would be 65,536 /64 callers). Keyed hash, so no address is stored.
+// The caller for its share of the day's codes: its site (callerSite). Keyed hash, so no address is stored.
 async function networkKey(request, secret) {
-  const network = callerNetwork(request.headers.get("CF-Connecting-IP"));
-  const site = network.endsWith("::/64") ? network.split(":").slice(0, 3).join(":") + "::/48" : network;
-  return (await signText("email-share:" + site, String(secret || ""))).slice(0, 32);
+  return (await signText("email-share:" + callerSite(request.headers.get("CF-Connecting-IP")), String(secret || ""))).slice(0, 32);
 }
 
 function randomCode() {
