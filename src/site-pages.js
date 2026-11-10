@@ -953,7 +953,7 @@ ${ACT_LIST.map(a => act(a) + '\n' + a[4].map(id => id === 'svaly' ? muscles : ch
 ${actNav}
 
 <section id="soukromi" class="privacy"><div class="wrap">
-<div class="promise reveal">${LOCK}<h2 class="big">Your data works only for you.</h2><p class="sub">We never sell it or use it for ads. Aurin reads only what you allow, and you can delete all of it in Settings at any time.</p>
+<div class="promise reveal">${LOCK}<h2 class="big">Your data is yours alone.</h2><p class="sub">We never sell your data or use it for ads. Aurin reads only what you allow, and you can delete all of it in Settings at any time.</p>
 <a class="more" href="/privacy">Read the privacy policy <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a></div>
 ${GOOGLE_DISCLOSURE_ON_HOME ? googleDisclosure() : ''}
 </div></section>

@@ -14,7 +14,8 @@ struct SportsChoice: Equatable {
     init(kinds: [String] = [], mains: [String] = []) {
         let ticked = Self.ordered(kinds)
         self.kinds = ticked
-        self.mains = Self.ordered(mains).filter { ticked.contains($0) }
+        // A single sport is the main one: there is no Main chip to turn it on.
+        self.mains = ticked.count == 1 ? ticked : Self.ordered(mains).filter { ticked.contains($0) }
     }
 
     /// From the saved profile; a profile from before this list starts from its one main sport.

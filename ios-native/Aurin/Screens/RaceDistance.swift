@@ -59,14 +59,26 @@ struct RaceDistance: Equatable {
 struct RaceDistanceRows: View {
     @Binding var distance: RaceDistance
     @State private var typed = ""
+    /// "Jiná vzdálenost" picked: its rows stay while the typed length passes a
+    /// common race on the way (5 on the way to 50).
+    @State private var own = false
 
     private var options: [(String, String)] {
         [("", L10n.tr("nevybráno"))] + RaceDistance.presets.map { ($0.id, L10n.tr($0.label)) } + [("own", L10n.tr("Jiná vzdálenost"))]
     }
 
     var body: some View {
-        SettingsPicker(title: "Vzdálenost", selection: Binding(get: { distance.choice }, set: { distance.choose($0); typed = shown }), options: options)
-        if distance.choice == "own" {
+        SettingsPicker(title: "Vzdálenost", selection: Binding(get: { own ? "own" : distance.choice }, set: { id in
+            own = id == "own"
+            distance.choose(id)
+            typed = shown
+        }), options: options)
+        .onAppear { own = distance.choice == "own" }
+        // A saved distance that arrives later, or one cleared (the race deleted, Skip).
+        .onChange(of: distance.choice) { _, choice in
+            if choice == "own" { own = true } else if choice.isEmpty { own = false }
+        }
+        if own {
             SettingsDivider()
             SettingsPicker(title: "Sport", selection: $distance.sport, options: RaceDistance.sports.map { ($0.0, L10n.tr($0.1)) })
             SettingsDivider()

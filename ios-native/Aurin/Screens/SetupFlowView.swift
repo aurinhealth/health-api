@@ -149,7 +149,7 @@ struct SetupFlowView: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
         }
-        .task { Units.defaultFromRegion(); await load() }
+        .task { await load() }
         .task(id: syncRun) { if syncRun > 0 { await followSync() } }
         .task(id: index) {
             if page == .about { await readAppleProfile() }
@@ -478,6 +478,8 @@ struct SetupFlowView: View {
             .opacity(birthYear.isEmpty ? 0.5 : 1)
             // A tap keeps the year in the middle, so nobody has to spin away and back.
             .simultaneousGesture(TapGesture().onEnded { if birthYear.isEmpty { birthYear = String(Self.currentYear - 30) } })
+            // VoiceOver's double tap does not reach the gesture.
+            .accessibilityAction(named: Text("Potvrdit")) { if birthYear.isEmpty { birthYear = String(Self.currentYear - 30) } }
             if birthYear.isEmpty {
                 Text("Posuň kolečko na svůj rok, nebo ho klepnutím potvrď.")
                     .font(Typo.small).foregroundStyle(Palette.muted)
@@ -668,8 +670,10 @@ struct SetupFlowView: View {
         // takes no health data from an account without it (health_consent_required).
         let consentNeeded = await consent ?? true
         consentFirst = consentNeeded
+        if let s { consentOnly = consentNeeded && s.completed == true }
+        // Units by the phone's region, only in a first setup and before the height is shown in them.
+        if !consentOnly { Units.defaultFromRegion() }
         if let s {
-            consentOnly = consentNeeded && s.completed == true
             let p = s.savedProfile ?? [:]
             if let v = p["sex"]?.string { sex = v }
             if let v = p["age"]?.number { birthYear = String(Self.currentYear - Int(v)) }

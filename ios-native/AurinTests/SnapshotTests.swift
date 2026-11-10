@@ -541,6 +541,7 @@ final class SnapshotTests: XCTestCase {
         var single = SportsChoice(kinds: ["ride", "run"], mains: ["ride"])
         single.toggle("ride")
         XCTAssertEqual(single.mains, ["run"], "the one sport left is the main one (no Main chip then)")
+        XCTAssertEqual(SportsChoice(kinds: ["swim"], mains: []).mains, ["swim"], "a saved single sport without a main gets it back")
         choice.toggle("ride")
         choice.toggleMain("ride")
         XCTAssertEqual(SportsChoice(profile: choice.applied(to: [:])), choice)
