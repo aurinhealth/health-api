@@ -120,7 +120,7 @@ export function recoveryToday({ today = [], yesterday = [], tomorrow = null, gym
   const options = [{
     kind: "stretch",
     title: stretchTitle(sport),
-    detail: [described.minutes + " min", routineAreas(routine.items).join(", ")].filter(Boolean).join(" · "),
+    detail: [described.minutes + " min", routineAreas(routine.items).join(", ")].filter(Boolean).join(", "),
     done: done("stretch"),
     sport,
     focus,

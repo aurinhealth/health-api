@@ -156,16 +156,16 @@ struct FoodPage: View {
         }
     }
 
-    /// "0.5 / 1.0 l", while Undo can take the last drink back "+250 ml · Undo", and the bar.
+    /// "0.5 / 1.0 l", while Undo can take the last drink back "+250 ml, Undo", and the bar.
     private func waterInfo(_ food: WatchSnapshot.Food, undo: String?) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(store.drink.flatMap(\.name).map { $0 + " · " + W.water(food.water ?? 0) } ?? waterLine(food))
+            Text(store.drink.flatMap(\.name).map { $0 + ", " + W.water(food.water ?? 0) } ?? waterLine(food))
                 .watchFont(12, .medium).monospacedDigit()
                 .foregroundStyle(W.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             if let undo {
-                (Text(undo + " · ").foregroundColor(W.secondary) + Text(W.tr("Zpět", "Undo")).foregroundColor(W.ink))
+                (Text(undo + ". ").foregroundColor(W.secondary) + Text(W.tr("Zpět", "Undo")).foregroundColor(W.ink))
                     .watchFont(12, .semibold)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)

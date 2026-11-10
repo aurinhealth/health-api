@@ -4,7 +4,7 @@
 // Fitbit and Pixel Watch detect lifting on their own and often stop after a
 // few minutes: a 75-minute session arrived from Google Health as one
 // "Strength training" of 14 minutes and 24 kcal. The gym plan itself carries
-// no length, so a day whose watch pieces were deleted read "0 min · 0 kcal".
+// no length, so a day whose watch pieces were deleted read "0 min, 0 kcal".
 //
 // While sets are being logged (each save of the day's gym), the day gets one
 // activity in Aurin (source 'local', external_id aurin-gym:<date>): from the

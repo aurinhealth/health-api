@@ -191,12 +191,34 @@ async function accountToken(env) {
   return (await env.DB.prepare('SELECT app_account_token FROM subscriptions WHERE user_id=?').bind(env.USER_ID).first())?.app_account_token || token;
 }
 
-// Pro bought and not expired. A Sandbox purchase (TestFlight, sandbox testers)
-// costs nothing, so on the live server it gives Pro only to the owner (testing
-// the paid app) and the App Review account (Apple reviews with Sandbox
-// purchases); on the test server to everyone, like a Sandbox coach pack
-// (coach-packs.js counts). Petr, 7 Nov 2026.
+// PRO_TESTER_EMAILS (Worker secret, separated by commas or spaces) lists the TestFlight
+// testers who have Pro without a purchase once the paywall is on; the App
+// Review account never, so the reviewer still meets the paywall. Petr, 10 Nov 2026.
+export function proTester(env) {
+  const email = String(env?.USER_EMAIL || '').trim().toLowerCase();
+  if (!email || isReviewAccount(env)) return false;
+  return String(env?.PRO_TESTER_EMAILS || '').split(/[,\s]+/).some(listed => listed.toLowerCase() === email);
+}
+
+// PRO_TESTFLIGHT=true (Worker secret) gives Pro to every account last seen on a
+// TestFlight build, also the anonymous testers of the public link; their AI group
+// stays "testflight". A record without appTransactionId (sent before #984 or iOS < 18.4)
+// counts too, or today's testers would wait for a new build. App Review uses the same Sandbox: the review account is left
+// out, a reviewer's own new account is not (Review Notes ask for the review account;
+// switch it off if Apple says the paywall is missing). Petr, 10 Nov 2026.
+const testflightPro = (env, row) => env?.PRO_TESTFLIGHT === 'true' && Number(row?.testflight) === 1 && !isReviewAccount(env);
+
+// Pro: a listed tester, a TestFlight account with PRO_TESTFLIGHT, or a purchase that counts.
 export function proActive(env, row, now = Date.now()) {
+  return proTester(env) || testflightPro(env, row) || purchaseActive(env, row, now);
+}
+
+// Pro bought and not expired; alone, it is what Settings shows (storePurchase).
+// A Sandbox purchase (TestFlight, sandbox testers) costs nothing, so on the live
+// server it gives Pro only to the owner (testing the paid app) and the App Review
+// account (Apple reviews with Sandbox purchases); on the test server to everyone,
+// like a Sandbox coach pack (coach-packs.js counts). Petr, 7 Nov 2026.
+function purchaseActive(env, row, now = Date.now()) {
   if (!(row?.plan === 'ai' && row.valid_until && Date.parse(row.valid_until) > now)) return false;
   return row.store_environment !== 'Sandbox' || isStaging(env) || env?.USER_IS_OWNER === true || isReviewAccount(env);
 }
@@ -204,7 +226,7 @@ export function proActive(env, row, now = Date.now()) {
 // The account's plan row as proActive reads it; null without one.
 export async function subscriptionRow(env) {
   const db = env.DB, id = env.USER_ID ?? db.userId;
-  return withColumns(db, () => db.prepare('SELECT plan,valid_until,store_environment FROM subscriptions WHERE user_id=?').bind(id).first());
+  return withColumns(db, () => db.prepare('SELECT plan,valid_until,store_environment,testflight FROM subscriptions WHERE user_id=?').bind(id).first());
 }
 
 // What the App Store says about the account's purchase, for /app/api/subscription.
@@ -212,7 +234,7 @@ export async function storePurchase(env) {
   if (!env?.DB || !(Number(env.USER_ID) > 0)) return null;
   const row = await withColumns(env.DB, () => env.DB.prepare('SELECT plan,valid_until,product_id,store_environment,auto_renew,original_transaction_id FROM subscriptions WHERE user_id=?').bind(env.USER_ID).first());
   if (!row?.original_transaction_id) return null;
-  const active = proActive(env, row);
+  const active = purchaseActive(env, row);
   return { active, productId: row.product_id, expiresAt: row.valid_until, environment: row.store_environment, autoRenew: row.auto_renew == null ? null : row.auto_renew === 1 };
 }
 

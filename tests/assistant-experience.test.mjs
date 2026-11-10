@@ -69,7 +69,7 @@ test('a short exercise adjustment uses Sol with low reasoning and the current pl
 test('council hides empty nutrition and boilerplate, and follows the athlete sport',()=>{
   assert.deepEqual(buildCoachCouncil({date,daily:{training:{},nutrition:{calorieTarget:2400,foodLog:{totals:{kcal:0}}}}}).coaches,[]);
   const r=buildCoachCouncil({date,focus:{sportLabel:'běh'},gym,daily:{training:{planned:[{name:'Gym',type:'WeightTraining'}]}}});
-  assert.equal(r.coaches[0].title,'Silový trenér · běh');assert.match(r.coaches[0].actions[0],/DB Arnold press/);assert.equal(r.coaches[0].evidence,undefined);
+  assert.equal(r.coaches[0].title,'Silový trenér (běh)');assert.match(r.coaches[0].actions[0],/DB Arnold press/);assert.equal(r.coaches[0].evidence,undefined);
 });
 test('morning summary combines fresh sleep, yesterday load and current form without inventing missing data',()=>{
   const r=buildCoachCouncil({date,sleepSessions:[{date,durationMin:330}],fitness:{tsb:-28},yesterday:{training:{completed:[{name:'Ride',durationHours:3,tss:180}]}}});
@@ -97,13 +97,13 @@ test('morning summary counts a workout already done today instead of saying noth
   const daily={training:{planned:[],completed:[{id:'apple-health:1',type:'WeightTraining',durationHours:1.1,calories:463}]}};
   const r=withLang('en',()=>buildCoachCouncil({date,sleepSessions:[{date,durationMin:319}],fitness:{tsb:22},daily}));
   const s=r.morningSummary;
-  assert.doesNotMatch(s.text,/Nothing planned/);assert.match(s.text,/Done today: Gym · 1 h 6 min\./);
+  assert.doesNotMatch(s.text,/Nothing planned/);assert.match(s.text,/Done today: Gym, 1 h 6 min\./);
   assert.equal(s.headline,'Time to recover');assert.match(s.recommendation,/^Today's training \(Gym\) is done\. After a short night/);assert.doesNotMatch(s.recommendation,/walk/);
   // The refuel line names the workout in words, not its type.
-  assert.match(r.priorities.join(' '),/After Gym · 463 kcal/);assert.doesNotMatch(r.priorities.join(' '),/WeightTraining/);
+  assert.match(r.priorities.join(' '),/After Gym, 463 kcal/);assert.doesNotMatch(r.priorities.join(' '),/WeightTraining/);
   // A gym plan done with the watch is not still planned; a ride left for later still is.
   const both=buildCoachCouncil({date,sleepSessions:[{date,durationMin:470}],fitness:{tsb:-5},daily:{training:{planned:[{id:3,name:'Full body',type:'WeightTraining'},{id:4,name:'Endurance',type:'Ride'}],completed:[{id:'g',type:'WeightTraining',durationHours:1}]}}}).morningSummary;
-  assert.match(both.text,/Dnes hotovo: Posilovna · 1 h\. Ještě v plánu: Endurance\./);
+  assert.match(both.text,/Dnes hotovo: Posilovna, 1 h\. Ještě v plánu: Endurance\./);
   // A gym session logged in the app without a watch workout counts too.
   const finished={values:planValues({date,rows:[make('DB Arnold press',true),make('Low row',true)]}),history:[]};
   const app=buildCoachCouncil({date,sleepSessions:[{date,durationMin:470}],fitness:{tsb:-5},gym:finished}).morningSummary;

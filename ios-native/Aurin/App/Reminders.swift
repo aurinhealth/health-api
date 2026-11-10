@@ -271,7 +271,7 @@ enum Reminders {
     }
 
     /// Outside the "aurin." prefix, so planning the day keeps it.
-    private static let restId = "aurin-rest"
+    static let restId = "aurin-rest"
     @MainActor private static var restCall = 0
 
     static func cancelAll() {

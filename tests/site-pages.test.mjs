@@ -92,7 +92,7 @@ test('the site is English whatever the browser says; privacy and terms also have
   for(const page of [overviewPage,privacyPage,termsPage,supportPage]){
     const html=await page().text();
     assert.doesNotMatch(html,/data-lang-choice|lang-switch/,'no language switch');
-    assert.match(html,/<li lang="cs">Česky: <a href="\/cs\/privacy" hreflang="cs">Soukromí<\/a> · <a href="\/cs\/terms" hreflang="cs">Podmínky<\/a><\/li>/);
+    assert.match(html,/<li lang="cs">Česky: <a href="\/cs\/privacy" hreflang="cs">Soukromí<\/a>, <a href="\/cs\/terms" hreflang="cs">Podmínky<\/a><\/li>/);
   }
   assert.match(await privacyPage().text(),/<a href="\/cs\/privacy" lang="cs" hreflang="cs">Česká verze<\/a>/);
   assert.match(await termsPage(new Request('https://aurin.health/cs/terms')).text(),/<a href="\/terms" lang="en" hreflang="en">English version<\/a>/);

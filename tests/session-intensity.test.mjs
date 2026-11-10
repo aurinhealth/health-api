@@ -23,7 +23,7 @@ test("hard: tempo, sweet spot, threshold, VO2max, anaerobic and sprint; easy: en
 test("names: the same words in both sports, tempo included", () => {
   for (const sport of ["ride", "run"]) {
     for (const name of ["Tempo 2×20", "Tempový běh 20 min", "Sweet Spot 3×12", "Threshold 4×8", "Prahové úseky", "VO₂max 5×4", "Norský 4×4", "Anaerobní 6×1 min", "Sprinty 6×10 s", "Tabata", "Závod", "Race day", "Ramp test", "Billat 30-30"]) assert.ok(isHardSession(name, sport), sport + ": " + name);
-    for (const name of ["Endurance · 90 min", "Lehký běh", "Recovery · 30 min", "Regenerační běh", "Morning Ride", "Dlouhá jízda", "Endurance 3x20 Z2", ""]) assert.ok(!isHardSession(name, sport), sport + ": " + name);
+    for (const name of ["Endurance, 90 min", "Lehký běh", "Recovery, 30 min", "Regenerační běh", "Morning Ride", "Dlouhá jízda", "Endurance 3x20 Z2", ""]) assert.ok(!isHardSession(name, sport), sport + ": " + name);
   }
   assert.equal(intensityClass("Tempo"), "moderate");
   assert.equal(intensityClass("Sprinty do kopce 6×10 s", "run"), "high");
@@ -35,8 +35,8 @@ test("names: the same words in both sports, tempo included", () => {
 test("shapes: library workouts, week sessions, planned events and done activities", () => {
   // A library workout: its system decides, whatever the name says.
   assert.ok(isHardSession({ id: "tempo-2x20", name: "Tempo 2×20", primary_system: "tempo" }));
-  assert.ok(isHardSession({ name: "MTB race repeats · 45", primary_system: "anaerobic" }));
-  assert.ok(!isHardSession({ name: "Endurance se silovými úseky · 60 min", primary_system: "endurance" }));
+  assert.ok(isHardSession({ name: "MTB race repeats, 45", primary_system: "anaerobic" }));
+  assert.ok(!isHardSession({ name: "Endurance se silovými úseky, 60 min", primary_system: "endurance" }));
   assert.equal(intensityClass({ primary_system: "sprint" }), "high");
   // A week plan's session and the coach's session kind.
   assert.ok(isHardSession({ date: "2026-10-06", sport: "ride", minutes: 60, kind: "tempo" }));

@@ -57,6 +57,10 @@ final class APIClient: @unchecked Sendable {
     /// another device; AppModel shows the paused screen and stops Apple Health.
     var onHealthPaused: (@Sendable () -> Void)?
 
+    /// 403 health_consent_required (src/health-pause.js consentRefusal): the account
+    /// has not given the consent to health data; AppModel asks for it again.
+    var onHealthConsentRequired: (@Sendable () -> Void)?
+
     /// A client made without an address follows Nastavení → Testování → Server,
     /// also when it is switched while the client lives (AppDelegate's, Apple Health's).
     private let fixedBaseURL: URL?
@@ -498,7 +502,7 @@ final class APIClient: @unchecked Sendable {
     }
 
     /// Foods saved before: the newest first, or the most often logged.
-    func personalFoods(frequent: Bool = false, limit: Int = 100) async throws -> [FoodProduct] {
+    func personalFoods(frequent: Bool = false, limit: Int = 50) async throws -> [FoodProduct] {
         struct Response: Decodable { let products: [FoodProduct]? }
         let response: Response = try await get("/app/api/food/personal?limit=\(limit)" + (frequent ? "&sort=frequent" : ""))
         return response.products ?? []
@@ -759,7 +763,8 @@ final class APIClient: @unchecked Sendable {
 
     /// Sends a write that may have waited for signal (Outbox). A missing
     /// connection throws the URLError; an answer other than 2xx throws
-    /// OutboxRefusal (.rejected for 4xx, never accepted; .retry for 5xx; .outdated for 426).
+    /// OutboxRefusal (.rejected for 4xx, never accepted; .retry for 5xx; .outdated for 426
+    /// and for 403 health_consent_required, which waits for the consent).
     /// The server's answer (the new entry's id, for a meal or drink).
     @discardableResult
     func sendQueued(_ item: OutboxItem) async throws -> Data {
@@ -779,6 +784,11 @@ final class APIClient: @unchecked Sendable {
                 throw OutboxRefusal.outdated(message)
             }
             if json?["status"] as? String == "health_paused" { onHealthPaused?() }
+            // No health consent yet: the write waits for it instead of being dropped.
+            if json?["status"] as? String == "health_consent_required" {
+                onHealthConsentRequired?()
+                throw OutboxRefusal.outdated(message)
+            }
             // A timeout or too many requests at the server: later, as with a server error.
             if (400..<500).contains(http.statusCode), ![408, 429].contains(http.statusCode) { throw OutboxRefusal.rejected(message) }
             throw OutboxRefusal.retry(message)
@@ -889,6 +899,7 @@ final class APIClient: @unchecked Sendable {
                 throw APIError.updateRequired(message ?? L10n.tr("Tahle verze Aurinu už není podporovaná. Nainstaluj novější verzi."))
             }
             if json?["status"] as? String == "health_paused" { onHealthPaused?() }
+            if json?["status"] as? String == "health_consent_required" { onHealthConsentRequired?() }
             if json?["status"] as? String == "ai_consent_required" {
                 throw APIError.aiConsentRequired(message ?? L10n.tr("AI funkce potřebují tvůj souhlas."))
             }

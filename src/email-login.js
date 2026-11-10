@@ -20,12 +20,12 @@
 // (EMAIL_CHANGE_CODES_PER_DAY, 100), so they never take from the codes for signing in, and one
 // account asks for at most 2 a minute, 5 an hour and 10 a day, one caller for 5, 20 and 30.
 import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie, knownDevice, knownDeviceCookie, heldKnownDevice, keepOnlyPushToken } from "./dashboard-auth.js";
-import { allowClient, allowRequest, callerNetwork } from "./ip-rate-limit.js";
-import { normalizeEmail, plainEmail, emailCodeAccess, signInEmailUser, changeUserEmail, SignupLimited } from "./tenancy.js";
-import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail, stepUpCodeEmail } from "./email-sender.js";
+import { allowClient, allowRequest, releaseRequest, callerSite } from "./ip-rate-limit.js";
+import { normalizeEmail, plainEmail, emailCodeAccess, signInEmailUser, changeUserEmail, SignupLimited, ownerEmail } from "./tenancy.js";
+import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail, emailTakenEmail, stepUpCodeEmail, ownerNoticeEmail } from "./email-sender.js";
 import { siteLang } from "./site-pages.js";
 import { reviewCodeActive } from "./app-review.js";
-import { L } from "./lang.js";
+import { L, storedLanguage } from "./lang.js";
 
 const CODE_SECONDS = 10 * 60;
 const RESEND_SECONDS = 60;
@@ -85,12 +85,9 @@ export async function handleEmailLogin(request, env, pathname, ctx) {
   return verifyCode(env, email, body?.code, await knownDevice(request, env, email), request);
 }
 
-// The caller for its share of the day's codes: an IPv4 address, or a whole IPv6 /48, as one site
-// (a tunnel broker hands out a /48 for free, which would be 65,536 /64 callers). Keyed hash, so no address is stored.
+// The caller for its share of the day's codes: its site (callerSite). Keyed hash, so no address is stored.
 async function networkKey(request, secret) {
-  const network = callerNetwork(request.headers.get("CF-Connecting-IP"));
-  const site = network.endsWith("::/64") ? network.split(":").slice(0, 3).join(":") + "::/48" : network;
-  return (await signText("email-share:" + site, String(secret || ""))).slice(0, 32);
+  return (await signText("email-share:" + callerSite(request.headers.get("CF-Connecting-IP")), String(secret || ""))).slice(0, 32);
 }
 
 function randomCode() {
@@ -148,6 +145,7 @@ export async function sendCode(env, email, lang = "cs", { now = Date.now(), code
 // codes are used up), "locked" (too many wrong codes today) or "budget" (all codes of the day).
 async function claimAndSend(db, env, email, code, purpose, message, now, { open = false, change = false, stepUp = false, known = null, network = null, review = false, to = email } = {}) {
   const seconds = Math.floor(now / 1000), day = today(now);
+  let shared = false;
   // The address's own limits are checked first, so a code it would not get spends no budget.
   const current = await db.prepare("SELECT sent_at, day, day_count, fail_day, fail_count FROM email_login_codes WHERE email=?").bind(email).first();
   if (current && current.sent_at > seconds - RESEND_SECONDS) return "resend";
@@ -170,6 +168,7 @@ async function claimAndSend(db, env, email, code, purpose, message, now, { open 
     if (network && !(await allowRequest(db, "email-codes:network:" + network, { day: networkCodesPerDay(env) }, now))) { console.warn("Sign-in codes of the day for one caller are used up"); return "budget"; }
     if (open && !(await allowRequest(db, "email-codes:open:day", { day: openCodesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day for new addresses is used up"); return "budget"; }
     if (!(await allowRequest(db, "email-codes:day", { day: codesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day is used up"); return "budget"; }
+    shared = true;
   }
   // Claimed before sending, so two quick requests never send two codes or pass the daily limit; the
   // code it replaces is read in the same transaction, to put it back if the e-mail does not go out.
@@ -186,7 +185,7 @@ async function claimAndSend(db, env, email, code, purpose, message, now, { open 
   if (!(Number(claimed.meta?.changes) > 0)) return "resend";
   await db.prepare("DELETE FROM email_login_codes WHERE sent_at < ?").bind(seconds - STALE_SECONDS).run().catch(() => {});
   try {
-    await sendEmail(env, { to, ...message });
+    if (message) await sendEmail(env, { to, ...message });
   } catch (error) {
     // Nobody got the new code: the one before it works again, and tries on either still count.
     const previous = before.results?.[0];
@@ -194,7 +193,30 @@ async function claimAndSend(db, env, email, code, purpose, message, now, { open 
       .bind(previous?.code_hash ?? null, Number(previous?.expires_at) || 0, Number(previous?.attempts) || 0, email, hash).run().catch(() => {});
     throw error;
   }
+  // After the code went out, so the owner's notice never holds it up.
+  if (shared) await warnAtHalf(db, env, open ? "open" : "day", open ? openCodesPerDay(env) : codesPerDay(env), now);
   return "sent";
+}
+
+// Half of a day's sign-in codes gone (all, or those for new addresses): the owner hears of it
+// once that day, while sign-up still works, as bots asking for codes would use it up (security
+// review 2026-11-09, F3). Never stops the code it follows.
+async function warnAtHalf(db, env, budget, limit, now) {
+  try {
+    const row = await db.prepare("SELECT day, day_count FROM request_limits WHERE key = ?").bind(budget === "open" ? "email-codes:open:day" : "email-codes:day").first();
+    const used = row?.day === today(now) ? Number(row.day_count) || 0 : 0;
+    const to = ownerEmail(env);
+    if (used * 2 < limit || !to || !(await allowRequest(db, "email-codes:warned", { day: 1 }, now))) return;
+    const which = budget === "open" ? "pro nové adresy" : "pro přihlášení";
+    console.warn(`Half of the day's sign-in codes (${budget}) are used: ${used} of ${limit}`);
+    // A notice that did not go out gives its slot back, so the next code tries again.
+    await sendEmail(env, { to, ...ownerNoticeEmail(`Aurin: dnes je pryč polovina kódů ${which}`, [
+      `Dnes (UTC) odešlo ${used} z ${limit} kódů ${which}. Když dojdou, registrace e-mailem do půlnoci UTC nepůjde (Apple a Google fungují dál).`,
+      "Když to není nárůst skutečných uživatelů, můžou to být boti: v Cloudflare se podívej do Security → Events na /auth/email/start. Rozpočet zvedneš proměnnou EMAIL_CODES_PER_DAY ve Workeru."
+    ]) }).catch(async error => { await releaseRequest(db, "email-codes:warned", now); throw error; });
+  } catch (error) {
+    console.error("Half-budget warning failed", error?.code || error?.message);
+  }
 }
 
 // What the user reads when a code did not go out (claimAndSend's reason).
@@ -294,7 +316,10 @@ export async function handleEmailChange(request, env, url, session, ctx, stepUp 
   if (!emailConfigured(env)) return json({ message: L("Posílání e-mailů není zapnuté.", "Sending emails isn't turned on.") }, 404);
   if (request.headers.get("Origin") !== new URL(request.url).origin) return json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, 403);
   const db = env.RAW_DB || env.DB, user = session.user, body = await request.json().catch(() => ({}));
-  const email = normalizeEmail(body?.email), purpose = "email-change:" + user.id;
+  // The code lives in the account's own row, not the address's (as step-up codes do), and is bound to
+  // the address: a free and a taken address then answer alike at every step, and asking to move here
+  // never touches another account's sign-in code.
+  const email = normalizeEmail(body?.email), row = "email-change:" + user.id, purpose = row + ":" + email;
   if (email.length > 254 || !EMAIL_PATTERN.test(email) || !plainEmail(body?.email)) return emailChangeRefusal("invalid");
   if (url.pathname === "/app/api/account/email/start") {
     if (email === normalizeEmail(user.email)) return emailChangeRefusal("same");
@@ -306,14 +331,24 @@ export async function handleEmailChange(request, env, url, session, ctx, stepUp 
     if (!(await allowRequest(db, "email-change:user:" + user.id, CHANGE_USER_LIMITS, time)) || !(await allowClient(db, request, sessionSecret(env), "email-change", time, CHANGE_CLIENT_LIMITS))) {
       return json({ message: L("Příliš mnoho žádostí o změnu e-mailu. Zkus to později.", "Too many email change requests. Try again later.") }, 429);
     }
-    if (await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first()) return emailChangeRefusal("taken");
     const code = randomCode(), lang = requestLanguage(request);
-    const sent = await claimAndSend(db, env, email, code, purpose, emailChangeCodeEmail(lang, code), time, { change: true });
-    if (sent === "resend") return json({ message: L("Kód na tuhle adresu jsme poslali před chvílí. Další můžeš chtít za minutu.", "We sent a code to this address a moment ago. You can ask for another in a minute.") }, 429);
+    // Another account has the address (security review 2026-11-09, F5): the same claim, answers and
+    // timing as for any address (the mail goes out after the answer), but instead of the code it gets a
+    // notice in its own account's language, at most one a day. Any address gets at most
+    // MAX_SENDS_PER_DAY mails a day from changes, whichever accounts ask. Keyed hashes, so no address is stored.
+    const sent = await claimAndSend(db, env, row, code, purpose, null, time, { change: true, to: email });
     if (sent !== "sent") return codeRefusal(sent);
+    const keyOf = async name => name + ":" + (await signText(name + ":" + email, sessionSecret(env))).slice(0, 32);
+    const mail = (async () => {
+      if (!(await allowRequest(db, await keyOf("email-change-to"), { day: MAX_SENDS_PER_DAY }, time))) return;
+      const holder = await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first();
+      if (holder && !(await allowRequest(db, await keyOf("email-taken"), { day: 1 }, time))) return;
+      await sendEmail(env, { to: email, ...(holder ? emailTakenEmail(await storedLanguage(db, holder.id)) : emailChangeCodeEmail(lang, code)) });
+    })().catch(error => console.error("E-mail change mail failed", error?.code || error?.message));
+    if (ctx?.waitUntil) ctx.waitUntil(mail); else await mail;
     return json({ status: "ok" });
   }
-  const refused = await useCode(db, env, email, body?.code, purpose);
+  const refused = await useCode(db, env, row, body?.code, purpose);
   if (refused) return refused;
   const known = await heldKnownDevice(request, env, db, user.id);
   const changed = await changeUserEmail(db, env, user.id, email);

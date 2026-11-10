@@ -37,6 +37,14 @@ export function callerNetwork(value) {
   return groups.slice(0, 4).map(group => group.toString(16)).join(":") + "::/64";
 }
 
+// One site: an IPv4 address, or a whole IPv6 /48 (a tunnel broker hands out a
+// /48 for free, which would be 65,536 /64 callers). For limits one person
+// could otherwise step around: new accounts, the share of the day's codes.
+export function callerSite(value) {
+  const network = callerNetwork(value);
+  return network.endsWith("::/64") ? network.split(":").slice(0, 3).join(":") + "::/48" : network;
+}
+
 // The eight 16-bit groups of an IPv6 address, or null when it is none.
 function ipv6Groups(ip) {
   let text = ip;
@@ -100,3 +108,10 @@ export async function allowClient(db, request, secret, scope, now = Date.now(), 
   return allowRequest(db, scope + ":" + await clientKey(request, secret), limits, now);
 }
 export const releaseClient = async (db, request, secret, scope, now = Date.now()) => releaseRequest(db, scope + ":" + await clientKey(request, secret), now);
+
+// The same per site (callerSite), under a keyed hash of it.
+const siteKey = async (request, secret) => "site:" + (await signText("site:" + callerSite(request.headers.get("CF-Connecting-IP")), String(secret || ""))).slice(0, 32);
+export async function allowSite(db, request, secret, scope, now = Date.now(), limits = CLIENT_LIMITS) {
+  return allowRequest(db, scope + ":" + await siteKey(request, secret), limits, now);
+}
+export const releaseSite = async (db, request, secret, scope, now = Date.now()) => releaseRequest(db, scope + ":" + await siteKey(request, secret), now);

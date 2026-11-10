@@ -18,7 +18,7 @@ export function plainText(text) {
     .replace(/\[(?:Návrhy|Proposals): [^\]]*\]/g, '')
     .replace(/\*\*|__|`/g, '')
     .replace(/^\s{0,3}#{1,6}\s+/gm, '')
-    .replace(/^\s*[-*•]\s+/gm, '· ')
+    .replace(/^\s*[-*•]\s+/gm, '• ')
     .replace(/\n{2,}/g, '\n')
     .trim();
 }

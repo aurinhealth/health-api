@@ -7,12 +7,14 @@ import { ensureTenancy, inviteUser, signInEmailUser, signInGoogleUser, findUser,
 import { resolvePrincipal, sessionMatchesUser } from "../src/dashboard-auth.js";
 
 const ORIGIN = "https://aurin.health";
+// The owner's notice at half the day's codes (email-login.js warnAtHalf) is kept apart from the codes.
+const halfWarnings = [];
 const MIGRATION = ["0014_passkeys_email_codes.sql", "0027_email_code_limits.sql"].map(name => readFileSync(new URL("../migrations/" + name, import.meta.url), "utf8")).join("\n");
 
 async function setup(extra = {}) {
   _resetTenancyForTest();
   const sent = [];
-  const env = { SESSION_SECRET: "test-secret-key", OWNER_EMAIL: "owner@example.com", DB: createD1(), EMAIL: { send: async message => { sent.push(message); return { messageId: "m" + sent.length }; } }, EMAIL_FROM: "noreply@aurin.health", ...extra };
+  const env = { SESSION_SECRET: "test-secret-key", OWNER_EMAIL: "owner@example.com", DB: createD1(), EMAIL: { send: async message => { (/polovina kódů/.test(message.subject) ? halfWarnings : sent).push(message); return { messageId: "m" + sent.length }; } }, EMAIL_FROM: "noreply@aurin.health", ...extra };
   await ensureTenancy(env.DB, env);
   env.DB.sqlite.exec(MIGRATION);
   env.RAW_DB = env.DB;
@@ -77,17 +79,16 @@ async function at(time, work) {
   try { return await work(); } finally { Date.now = real; }
 }
 
-test("one account asks for at most two e-mail change codes a minute and five an hour, whatever the address", async () => {
+test("one account gets at most one e-mail change code a minute and asks at most five times an hour, whatever the address", async () => {
   const { env, sent } = await setup();
   const user = await member(env);
   const t0 = Date.parse("2026-10-07T08:00:00Z"), start = (email, time, ip = "203.0.113.5") => at(time, () => change(env, user, "/app/api/account/email/start", { email }, ORIGIN, ip));
   assert.equal((await start("a1@example.com", t0)).status, 200);
-  assert.equal((await start("a2@example.com", t0)).status, 200);
-  assert.equal((await start("a3@example.com", t0, "198.51.100.7")).status, 429, "the third in a minute, even from another network");
+  assert.equal((await start("a2@example.com", t0, "198.51.100.7")).status, 429, "the second in a minute, to another address and from another network");
   const later = [];
-  for (let i = 4; i <= 7; i++) later.push((await start("a" + i + "@example.com", t0 + (i - 2) * 60_000)).status);
-  assert.deepEqual(later, [200, 200, 200, 429], "the sixth in an hour");
-  assert.equal(sent.length, 5);
+  for (let i = 2; i <= 6; i++) later.push((await start("a" + i + "@example.com", t0 + (i - 1) * 61_000)).status);
+  assert.deepEqual(later, [200, 200, 200, 429, 429], "the sixth ask in an hour (the refused one counts)");
+  assert.equal(sent.length, 4);
 });
 
 test("codes to move an account have their own day's budget and never take the sign-in codes", async () => {
@@ -128,12 +129,46 @@ test("a code for one account cannot move another account", async () => {
   assert.equal((await findUser(env.DB, bob.id, env)).email, "bob@example.com");
 });
 
-test("the change is refused for a taken, the same or the owner's address, and from another site", async () => {
-  const { env } = await setup();
+test("an address another account uses answers as any other; it gets a notice once a day instead of a code", async () => {
+  const { env, sent } = await setup();
   const user = await member(env);
   await member(env, "other@example.com");
+  const before = sent.length;
+  const taken = await change(env, user, "/app/api/account/email/start", { email: "Other@Example.com" });
+  assert.equal(taken.status, 200);
+  assert.deepEqual(await taken.json(), { status: "ok" });
+  assert.equal(sent.length, before + 1);
+  assert.equal(sent.at(-1).to, "other@example.com");
+  assert.match(sent.at(-1).subject, /už má účet Aurin/);
+  assert.doesNotMatch(sent.at(-1).text, /\b\d{6}\b/, "no code");
+  assert.equal(env.DB.sqlite.prepare("SELECT COUNT(*) AS n FROM email_login_codes WHERE email = 'other@example.com'").get().n, 0, "the other account's sign-in code is left alone");
+  const again = await at(Date.now() + 61_000, () => change(env, user, "/app/api/account/email/start", { email: "other@example.com" }));
+  assert.equal(again.status, 200);
+  assert.equal(sent.length, before + 1, "one notice a day");
+  assert.equal(env.DB.sqlite.prepare("SELECT day_count FROM request_limits WHERE key = 'email-codes:change:day'").get().day_count, 2, "each ask claims the change codes' budget, as for any address");
+  // A code exists but was never sent, so verifying answers as a wrong code to any address does.
+  const wrong = await change(env, user, "/app/api/account/email/verify", { email: "other@example.com", code: "123456" });
+  assert.equal(wrong.status, 400);
+  assert.match((await wrong.json()).message, /nesedí/);
+  assert.equal((await findUser(env.DB, user.id, env)).email, "friend@example.com");
+  assert.equal(JSON.stringify(env.DB.sqlite.prepare("SELECT key FROM request_limits").all()).includes("other@example.com"), false, "no address stored");
+});
+
+test("an ask refused within the minute does not use up the taken address's notice", async () => {
+  const { env, sent } = await setup();
+  const user = await member(env);
+  await member(env, "other@example.com");
+  const t0 = Date.parse("2026-10-07T08:00:00Z"), ask = (email, time) => at(time, () => change(env, user, "/app/api/account/email/start", { email }));
+  assert.equal((await ask("free@example.com", t0)).status, 200);
+  assert.equal((await ask("other@example.com", t0 + 1000)).status, 429, "as for any address within the minute");
+  assert.equal((await ask("other@example.com", t0 + 61_000)).status, 200);
+  assert.match(sent.at(-1).subject, /už má účet Aurin/);
+});
+
+test("the change is refused for the same or the owner's address, and from another site", async () => {
+  const { env } = await setup();
+  const user = await member(env);
   const owner = await signInEmailUser(env.DB, env, "owner@example.com");
-  assert.equal((await change(env, user, "/app/api/account/email/start", { email: "other@example.com" })).status, 409);
   assert.equal((await change(env, user, "/app/api/account/email/start", { email: "friend@example.com" })).status, 400);
   assert.equal((await change(env, user, "/app/api/account/email/start", { email: "owner@example.com" })).status, 400);
   assert.equal((await change(env, owner, "/app/api/account/email/start", { email: "boss@example.com" })).status, 400);

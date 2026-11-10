@@ -113,10 +113,8 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
    Google Health or directly), as plain names, Bevel-like. Brand logos need their makers' written OK. */
 .xw{margin-top:34px}
 .xw .xe{display:block;font-size:var(--fs-12);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
-.xw ul{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-wrap:wrap;align-items:center;row-gap:6px}
+.xw ul{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px 1.4em}
 .xw li{font-size:var(--fs-17);font-weight:600;letter-spacing:-.01em;line-height:1.3;color:var(--text);white-space:nowrap}
-/* A dot after each name: where the row breaks on a narrow phone, a line ends with it and names never run together. */
-.xw li:not(:last-child)::after{content:"·";margin:0 .55em;font-weight:400;color:var(--muted)}
 /* A wordmark stands about as tall as the names' capitals, on their line. */
 .xw .wm{display:inline-flex;align-items:center;height:1.3em}.xw .wm picture{display:contents}
 .xw .wm img{display:block;width:auto;height:.74em}.xw .wm.ultrahuman img{height:.6em}
@@ -576,15 +574,15 @@ document.querySelectorAll('form.wl').forEach(function(f){var input=f.querySelect
   else if(navigator.clipboard)navigator.clipboard.writeText(link).then(function(){said.textContent='Link copied: '+link;});});});
 })();</script>
 <script>(function(){
-// Muscles: frame k of 72 is the figure turned k·5°; ids.png holds, per frame, which muscle each pixel is
+// Muscles: frame k of 72 is the figure turned k × 5°; ids.png holds, per frame, which muscle each pixel is
 // (a quarter of the size, the index in NAMES). The frames load when the figure comes near.
 var fig=document.querySelector('.fig');if(!fig)return;
 var N=72,IW=160,IH=250,base=fig.dataset.base,rm=matchMedia('(prefers-reduced-motion: reduce)'),still=rm.matches;if(rm.addEventListener)rm.addEventListener('change',function(e){still=e.matches;});
 var NAMES=['quads','hamstrings','glutes','calves','adductors','abductors','chest','back','lower_back','traps','shoulders','side_delts','rear_delts','biceps','triceps','forearms','core','other','bone'];
 var LABEL={quads:'Quads',hamstrings:'Hamstrings',glutes:'Glutes',calves:'Calves',adductors:'Adductors',abductors:'Abductors',chest:'Chest',back:'Back',lower_back:'Lower back',traps:'Traps',shoulders:'Shoulders',side_delts:'Side delts',rear_delts:'Rear delts',biceps:'Biceps',triceps:'Triceps',forearms:'Forearms',core:'Core'};
 var TIRED='var(--rust)',RECOVERING='var(--amber)',RESTED=['rested','var(--green)'];
-var STATE={glutes:['26 % rested · in 2 days',TIRED],hamstrings:['35 % rested · in 2 days',TIRED],quads:['37 % rested · ≈ in 2 days',TIRED],
- calves:['47 % rested · ≈ tomorrow',TIRED],chest:['61 % rested · today',RECOVERING],back:['61 % rested · today',RECOVERING]};
+var STATE={glutes:['26 % rested, in 2 days',TIRED],hamstrings:['35 % rested, in 2 days',TIRED],quads:['37 % rested, ≈ in 2 days',TIRED],
+ calves:['47 % rested, ≈ tomorrow',TIRED],chest:['61 % rested, today',RECOVERING],back:['61 % rested, today',RECOVERING]};
 var cv=fig.querySelector('canvas'),cx=cv.getContext('2d',{willReadFrequently:true}),bub=fig.querySelector('.bubble'),hint=document.querySelector('.muscles .hint'),card=document.querySelector('.muscle-card');
 var frames=[],ids=null,cur=0,vel=0,sel=null,spin=!still,drag=null,shown=-1,running=false;
 function load(){if(frames.length)return;
@@ -638,7 +636,7 @@ addEventListener('keydown',function(e){if(!card.classList.contains('on'))return;
 
 // The share image (link previews on X, Facebook, LinkedIn, Slack, iMessage). The networks keep an image
 // for days by its URL, so ?v= goes up whenever og-en.jpg is rendered again (a JPEG: a tenth of the PNG's size).
-const SHARE_IMAGE = '/site/og-en.jpg?v=12';
+const SHARE_IMAGE = '/site/og-en.jpg?v=13';
 const SHARE_IMAGE_ALT = 'Aurin: A coach that knows how you slept. The Today screen with readiness 78.';
 
 function sitePage({title, description, lang, origin, path, body, czech=false, index=true, jsonLd=null, status=200}) {
@@ -693,7 +691,7 @@ ${body}
 <div class="brand">${mark(40)}<p>Train for how you feel today.</p></div>
 <nav aria-label="Aurin"><h3 translate="no">Aurin</h3><ul><li><a href="/#a-readiness">Readiness</a></li><li><a href="/#a-sleep">Sleep</a></li><li><a href="/#a-training">Training</a></li><li><a href="/#a-food">Nutrition</a></li><li><a href="/#a-coach">Coach</a></li>${WATCH_ON_SITE ? '<li><a href="/#a-watch">Apple Watch</a></li>' : ''}</ul></nav>
 <nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li><li><a href="https://x.com/aurin_health" rel="me noopener">Aurin on X</a></li></ul></nav>
-<nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/cs/privacy" hreflang="cs">Soukromí</a> · <a href="/cs/terms" hreflang="cs">Podmínky</a></li></ul></nav>
+<nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/cs/privacy" hreflang="cs">Soukromí</a>, <a href="/cs/terms" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
 <div class="base"><span>© 2026 Aurin</span><span>Aurin is not a medical device.</span></div>
 </div></footer>
@@ -886,7 +884,7 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
 <div class="key" aria-hidden="true"><span style="--c:var(--rust)"><i></i>Tired</span><span style="--c:var(--amber-bar)"><i></i>Recovering</span><span style="--c:color-mix(in srgb,var(--text) 22%,var(--bg))"><i></i>Rested</span></div>
 <div class="mpick" role="group" aria-label="Open a muscle"></div>
 </div>
-<div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><p class="hint">Drag to turn · tap a muscle</p><button type="button" class="bubble"><span class="txt"><span class="vh">Muscle: </span><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+<div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><p class="hint">Drag to turn, tap a muscle</p><button type="button" class="bubble"><span class="txt"><span class="vh">Muscle: </span><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
 </div></section>
 <div class="muscle-card" role="dialog" aria-modal="true" aria-labelledby="mc-name"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3 id="mc-name"></h3><p class="state"></p></div></div>`;
 
@@ -923,14 +921,14 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
     {'@type': 'WebSite', url: origin, name: 'Aurin', inLanguage: 'en', publisher: {'@id': `${origin}/#org`}}]};
 
   return sitePage({lang, origin, path: '/', jsonLd,
-    title: 'Aurin · train for how you feel today',
+    title: 'Aurin: train for how you feel today',
     description,
     body: `<main id="main" tabindex="-1">
 <div class="hero">
 <div class="wrap grid">
 <div class="copy">
 ${sun(72)}
-<span class="kicker"><i></i>For iPhone · early access</span>
+<span class="kicker"><i></i>Early access for iPhone</span>
 <h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w${i >= SLANT ? ' it' : ''}" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
 <p class="lede">Aurin reads your sleep, HRV and workouts from the watch or ring you wear, and every morning turns them into one number, one plan and one coach.</p>
 <div class="cta">${store('top')}<p class="note">Free early access on iPhone through TestFlight.</p></div>
@@ -994,7 +992,7 @@ ${store('end')}
 export function notFoundPage(request) {
   const {lang, origin} = pageLang(request);
   return sitePage({lang, origin, path: request ? new URL(request.url).pathname : '/', index: false, status: 404,
-    title: 'Page not found · Aurin', description: 'This page doesn’t exist on aurin.health.',
+    title: 'Aurin: page not found', description: 'This page doesn’t exist on aurin.health.',
     body: `<main id="main" tabindex="-1">
 <section class="final"><div class="wrap" id="join">
 ${sun(104)}
@@ -1010,7 +1008,7 @@ function doc(request, path, title, html) {
   const other = !czech ? '' : lang === 'cs'
     ? `<p class="muted"><a href="${path}" lang="en" hreflang="en">English version</a></p>`
     : `<p class="muted"><a href="/cs${path}" lang="cs" hreflang="cs">Česká verze</a></p>`;
-  return sitePage({lang, origin, path, czech, title: `${pick(title)} · Aurin`, description: lang === 'cs' ? `${title.cs} pro Aurin (aurin.health).` : `${title.en} for Aurin (aurin.health).`,
+  return sitePage({lang, origin, path, czech, title: `Aurin: ${pick(title)}`, description: lang === 'cs' ? `${title.cs} pro Aurin (aurin.health).` : `${title.en} for Aurin (aurin.health).`,
     body: `<main id="main" tabindex="-1" class="wrap doc"><h1>${pick(title)}</h1>${other}${pick(html)}</main>`});
 }
 

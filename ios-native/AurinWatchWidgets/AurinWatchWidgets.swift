@@ -178,19 +178,6 @@ struct SmallValue {
     /// The day's goal in the same units as `fraction` (sleep: the need ± half
     /// an hour; strain: today's band), marked on the Day complication's steps.
     var goal: ClosedRange<Double>? = nil
-
-    /// Always On (wrist down): the ring empty and the number "––" (Today audit 17).
-    func hidden(_ name: String) -> SmallValue {
-        var v = self
-        v.fraction = 0
-        v.color = C.stale
-        v.text = "––"
-        v.line = name + " ––"
-        v.until = nil
-        v.arrow = nil
-        v.goal = nil
-        return v
-    }
 }
 
 enum Small {
@@ -250,16 +237,6 @@ enum Small {
         }
     }
 
-    /// The morning's and health numbers, hidden in Always On (Today audit 17);
-    /// the workout, the alarm, food and drinks stay. Aurin through the day and
-    /// the alarm hide while they show readiness or the night.
-    static func shown(_ m: SmallMetric, _ v: SmallValue, dimmed: Bool) -> SmallValue {
-        guard dimmed else { return v }
-        if [.readiness, .sleep, .strain, .hrv, .restingHR].contains(m) { return v.hidden(name(m)) }
-        if v.symbol == symbol(.readiness) { return v.hidden(name(m == .alarm ? .sleep : .readiness)) }
-        return v
-    }
-
     static func value(_ m: SmallMetric, _ s: WatchSnapshot?, at now: Date) -> SmallValue {
         let today = s.flatMap { $0.date == Days.key(now) ? $0 : nil }
         let empty = SmallValue(fraction: 0, color: C.stale, word: word(m), text: "–", line: name(m) + " –", symbol: symbol(m))
@@ -270,7 +247,7 @@ enum Small {
             case .aurin, .readiness:
                 guard let r = s.readiness else { return empty }
                 return SmallValue(fraction: Double(r) / 100, color: C.stale, word: Days.weekday(s.date).uppercased(), text: "\(r)",
-                                  line: name(.readiness) + " \(r) · " + Days.weekday(s.date), symbol: symbol(m))
+                                  line: name(.readiness) + " \(r), " + Days.weekday(s.date), symbol: symbol(m))
             case .sleep:
                 return SmallValue(fraction: 0, color: C.stale, word: tr("ČEKÁM", "WAITING"), text: "···",
                                   line: tr("Spánek: čekám na noc", "Sleep: waiting for last night"), symbol: symbol(m))
@@ -464,16 +441,13 @@ enum Small {
 
 struct SmallView: View {
     let metric: SmallMetric
-    let given: SmallValue
+    let value: SmallValue
     @Environment(\.widgetFamily) private var family
-    @Environment(\.isLuminanceReduced) private var dimmed
 
     init(metric: SmallMetric, value: SmallValue) {
         self.metric = metric
-        self.given = value
+        self.value = value
     }
-
-    private var value: SmallValue { Small.shown(metric, given, dimmed: dimmed) }
 
     var body: some View {
         // One sentence for VoiceOver ("Readiness 72"), not the ring's pieces (watch audit G1).
@@ -637,11 +611,10 @@ enum WideComplication {
 struct WideView: View {
     let kind: WideKind
     let entry: DayEntry
-    /// Always On: readiness, sleep, strain and HRV hide (Today audit 17).
-    @Environment(\.isLuminanceReduced) private var dimmed
-
+    // Always On (wrist down) keeps the numbers: the watch's own Always On
+    // settings hide a complication's data, a locked watch hides it (privacySensitive).
     private func shown(_ m: SmallMetric) -> SmallValue {
-        Small.shown(m, Small.value(m, entry.snapshot, at: entry.date), dimmed: dimmed)
+        Small.value(m, entry.snapshot, at: entry.date)
     }
 
     private var today: WatchSnapshot? {
@@ -692,7 +665,7 @@ struct WideView: View {
             VStack(alignment: .leading, spacing: 1) {
                 if let today {
                     // The app's word for the zone (high, moderate, low), as on Today.
-                    head(tr("DNES", "TODAY") + (dimmed ? "" : today.zone.map { " · " + zoneWord($0) } ?? ""), dimmed ? C.muted : C.zone(today.zone))
+                    head(tr("DNES", "TODAY") + (today.zone.map { ", " + zoneWord($0) } ?? ""), C.zone(today.zone))
                     if let next {
                         Text(next.name)
                             .font(.system(size: 13, weight: .semibold)).lineLimit(2).minimumScaleFactor(0.8)
@@ -737,10 +710,10 @@ struct WideView: View {
         return Text(date, style: .relative)
     }
 
-    /// "17:30 · in 1 hr, 23 min" while it is still to come.
+    /// "17:30, in 1 hr, 23 min" while it is still to come.
     @ViewBuilder private func startLine(_ s: WatchSnapshot.Session, on key: String) -> some View {
         if let start = Days.at(s.time, on: key), start > entry.date {
-            (Text((s.time ?? "") + " · " + tr("za ", "in ")) + until(start))
+            (Text((s.time ?? "") + ", " + tr("za ", "in ")) + until(start))
                 .font(.system(size: 11)).foregroundStyle(C.muted).lineLimit(1)
         } else {
             Text(Days.join([s.time, s.minutes.map(Days.minutes)]))
@@ -755,10 +728,10 @@ struct WideView: View {
             readinessRing(r)
             VStack(alignment: .leading, spacing: 1) {
                 if let today {
-                    head(dimmed ? tr("RÁNO", "MORNING") : tr("RÁNO · ", "MORNING · ") + (today.zone.map(zoneWord) ?? ""), dimmed ? C.muted : C.zone(today.zone))
-                    Text(dimmed ? tr("Spánek ––", "Sleep ––") : today.sleep?.minutes.map { tr("Spánek ", "Slept ") + Days.hm($0) } ?? tr("Spánek –", "Sleep –"))
+                    head(tr("RÁNO: ", "MORNING: ") + (today.zone.map(zoneWord) ?? ""), C.zone(today.zone))
+                    Text(today.sleep?.minutes.map { tr("Spánek ", "Slept ") + Days.hm($0) } ?? tr("Spánek –", "Sleep –"))
                         .font(.system(size: 14, weight: .semibold)).lineLimit(1)
-                    if !dimmed, !today.awaitingNight, let hrv = today.hrv?.value {
+                    if !today.awaitingNight, let hrv = today.hrv?.value {
                         Text(hrvLine(hrv, today.hrv))
                         .font(.system(size: 11)).foregroundStyle(C.muted).lineLimit(1)
                     }
@@ -788,16 +761,16 @@ struct WideView: View {
         return text
     }
 
-    /// "HRV 64 · in your usual range".
+    /// "HRV 64, in your usual range".
     private func hrvLine(_ hrv: Double, _ metric: WatchSnapshot.Metric?) -> String {
         var text = "HRV " + Days.int(hrv)
         guard let low = metric?.low, let high = metric?.high else { return text }
         if hrv < low {
-            text += " · " + tr("pod obvyklým rozmezím", "below your usual range")
+            text += ", " + tr("pod obvyklým rozmezím", "below your usual range")
         } else if hrv > high {
-            text += " · " + tr("nad obvyklým rozmezím", "above your usual range")
+            text += ", " + tr("nad obvyklým rozmezím", "above your usual range")
         } else {
-            text += " · " + tr("v obvyklém rozmezí", "in your usual range")
+            text += ", " + tr("v obvyklém rozmezí", "in your usual range")
         }
         return text
     }
@@ -851,10 +824,10 @@ struct WideView: View {
                     Text(last.name + tr(" hotovo", " done")).lineLimit(1)
                 }
                 .font(.system(size: 12, weight: .semibold)).foregroundStyle(C.green).widgetAccentable()
-                let added = dimmed ? nil : today?.strain.training
+                let added = today?.strain.training
                 Text(Days.join([last.minutes.map(Days.minutes), added.map(addedStrain)]))
                     .font(.system(size: 15, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
-                if !dimmed, let score = today?.strain.score {
+                if let score = today?.strain.score {
                     Text(dayStrain(score))
                     .font(.system(size: 11)).foregroundStyle(C.muted)
                 }
@@ -1324,9 +1297,9 @@ enum Days {
 
     static func minutes(_ m: Int) -> String { "\(m) min" }
 
-    /// The parts there are, joined with " · ".
+    /// The parts there are, joined with ", ".
     static func join(_ parts: [String?]) -> String {
-        parts.compactMap { $0 }.joined(separator: " · ")
+        parts.compactMap { $0 }.joined(separator: ", ")
     }
 
     private static func number(_ digits: Int, grouping: Bool) -> NumberFormatter {

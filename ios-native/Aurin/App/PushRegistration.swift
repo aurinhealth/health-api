@@ -25,6 +25,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                 if let model = AppModel.live, model.phase == .signedIn { model.notePaused(true) } else { AppleHealth.shared.pauseForHealthData() }
             }
         }
+        // No health consent yet (403 health_consent_required): Apple Health sends the
+        // same days again later; the app asks for the consent (checkSetup).
+        client.onHealthConsentRequired = {
+            Task { @MainActor in
+                if let model = AppModel.live, model.phase == .signedIn, !model.needsSetup { await model.checkSetup() }
+            }
+        }
         Task { @MainActor in await PushRegistration.refresh(api: client) }
         // Syncing without the app being opened (BackgroundRefresh.swift); not
         // with the sample data of "-demo".
@@ -69,7 +76,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     }
 
     /// In the app the pill reminder and the server's pushes show as a banner;
-    /// the other reminders stay quiet as before.
+    /// the other reminders stay quiet but go to Notification Center: with no
+    /// options iOS dropped them without a trace, so a weigh-in that came while
+    /// the app was open was never seen. The rest timer's end stays out: the
+    /// workout screen says it.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                             withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         let content = notification.request.content
@@ -80,7 +90,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             // The server's pushes (the morning readiness, the coach), also while the
             // app is open: opening the app uploads the night, which sends the morning
             // push at once, and with no options iOS dropped it without a trace.
-            options = notification.request.trigger is UNPushNotificationTrigger || content.userInfo["coach"] != nil ? [.banner, .list] : []
+            options = notification.request.trigger is UNPushNotificationTrigger || content.userInfo["coach"] != nil ? [.banner, .list]
+                : notification.request.identifier == Reminders.restId ? [] : [.list]
         }
         DispatchQueue.main.async { completionHandler(options) }
     }
