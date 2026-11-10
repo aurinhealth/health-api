@@ -14,7 +14,7 @@ builds the app; none of it runs inside the app (the in-app AI coach is one model
 | Kouč | Strength Coach | `strength-coach` | no | Sonnet 5.5 |
 | Kouč | Triathlon & Duathlon Coach | `triathlon-coach` | no | Sonnet 5.5 |
 | Kouč | Sports Nutritionist | `sports-nutritionist` | no | Sonnet 5.5 |
-| Kouč | Physiotherapist | `physiotherapist` | no | Sonnet 5.5 |
+| Kouč | Physiotherapist | `physiotherapist` | no | Opus 5.5 |
 | Marketing (team) | **Marketing, lead** | `marketing` | read-only commands, public web | Sonnet 5.5 |
 | Produkt a vývoj (led by the PM): Design | iOS & watchOS Designer, owner | `ios-designer` | no | Opus 5.5 |
 | Produkt a vývoj: Design | Visual & Web Designer | `visual-designer` | no; creates mockups in Figma | Opus 5.5 |
@@ -112,8 +112,14 @@ roles that mostly read and summarise run on Sonnet 5.5. The owner approved this 
 - Risky changes are payments, subscriptions, accounts, sign-in, deleting user data and D1 migrations.
   For them `security-red-team` and the independent review below run on Fable 5.2 at effort high: the
   PM passes `fable` and `high` when it starts them, in local sessions too (that overrides the role file).
-- A bug that two fixes did not solve, or the hunt for the cause of an outage: the investigation goes
-  to a Fable 5.2 sub agent at effort high.
+- The security result in the pull request names the model that really answered. Claude Code may re-run
+  a request its safety filter flags as cybersecurity on an older model (Opus 4.8) and the transcript
+  shows it; if that happened, the PM says so and does not call it a Fable 5.2 check.
+- A bug that two fixes did not solve goes up in steps: first a test, build or request that shows the
+  bug, then Opus 5.5 at effort high, then a Fable 5.2 sub agent at effort medium, raised to high only
+  if that fails too. The hunt for the cause of an outage goes straight to Fable 5.2 at effort high.
+- `physiotherapist` runs on Opus 5.5, not Sonnet 5.5: a missed red flag for pain or injury is hard to
+  spot later.
 - Mechanical lookups (where something is used, a CI log, checking links): Haiku 5.5 at effort low.
 - Prices per million tokens, input / output: Fable 5.2 $8 / $40, Opus 5.5 $4 / $20, Sonnet 5.5
   $2 / $10, Haiku 5.5 $0.10 / $0.50. A whole thread runs on Fable only when the owner asks for it.

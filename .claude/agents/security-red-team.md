@@ -34,7 +34,7 @@ You never talk to the owner directly.
 - Dependencies and CI: `.github/workflows/` (secrets, pull_request_target, environments).
 
 ## Answer format (for the PM)
-A short summary, then findings, each:
+First line: `Model:` the model you run on. Then a short summary, then findings, each:
 
 ```
 ### SEC-<n>: <title>
