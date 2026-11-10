@@ -25,7 +25,8 @@ function db() {
   return raw;
 }
 const user = id => ({ id, email: 'user' + id + '@example.test', role: 'user', isOwner: false });
-function addUser(core, id) { core.sqlite.prepare("INSERT INTO users(id,email,role) VALUES(?,?,'user')").run(id, user(id).email); }
+// A user who gave the health consent (consent.js), as every app user has.
+function addUser(core, id) { core.sqlite.prepare("INSERT INTO users(id,email,role) VALUES(?,?,'user')").run(id, user(id).email); core.sqlite.prepare("INSERT OR IGNORE INTO user_consents(user_id,kind,version,granted_at) VALUES(?,'health','2026-11-06','2026-11-06T08:00:00Z')").run(id); }
 function setup(count = 2, cap = 10) {
   const core = db(); addUser(core, 1); addUser(core, 2);
   core.sqlite.exec(read('migrations/0017_user_data_shards.sql'));

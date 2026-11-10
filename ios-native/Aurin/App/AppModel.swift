@@ -272,6 +272,10 @@ final class AppModel {
         api.onHealthPaused = { [weak self] in
             Task { @MainActor in if let self, !self.demo, self.phase == .signedIn { self.notePaused(true) } }
         }
+        // The server took no health data (no consent yet): checkSetup asks for it.
+        api.onHealthConsentRequired = { [weak self] in
+            Task { @MainActor in if let self, !self.demo, self.phase == .signedIn, !self.needsSetup { await self.checkSetup() } }
+        }
         if !demo {
             connectWrites()
             Self.live = self
