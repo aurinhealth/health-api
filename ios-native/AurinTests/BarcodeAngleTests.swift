@@ -47,7 +47,7 @@ final class BarcodeAngleTests: XCTestCase {
         context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
         let modules = Self.ean13Modules(code)
-        let module: CGFloat = 4, barHeight: CGFloat = 220
+        let module: CGFloat = 6, barHeight: CGFloat = 220
         context.translateBy(x: CGFloat(width) / 2, y: CGFloat(height) / 2)
         context.rotate(by: degrees * .pi / 180)
         context.translateBy(x: -CGFloat(modules.count) * module / 2, y: -barHeight / 2)

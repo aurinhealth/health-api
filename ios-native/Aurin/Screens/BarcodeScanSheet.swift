@@ -45,6 +45,8 @@ struct BarcodeScanSheet: View {
     /// and the brand of this food: a label rarely names the food, and never
     /// its brand (Petr, 2026-11-10).
     @State private var frontOf: FoodProduct?
+    /// The front was photographed, not skipped.
+    @State private var frontTaken = false
     /// Whether the user has AI, asked once a code is unknown: only with AI is
     /// the front read, and the card says so before the label.
     @State private var aiAccess: Bool?
@@ -133,8 +135,12 @@ struct BarcodeScanSheet: View {
                 Task { await readLabel(image) }
             }
         }
-        .fullScreenCover(item: $frontOf) { product in
+        // Skipped (or closed) with no name yet: the editor for it, once the cover is gone.
+        .fullScreenCover(item: $frontOf, onDismiss: {
+            if !frontTaken, let product, product.name == L10n.tr("Jídlo z fotky") { editing = product }
+        }) { product in
             LabelCameraSheet(front: true) { image in
+                frontTaken = true
                 frontOf = nil
                 Task { await readFront(image, of: product) }
             }
@@ -544,7 +550,7 @@ struct BarcodeScanSheet: View {
             let request = VNDetectBarcodesRequest()
             request.symbologies = BarcodeScanner.visionSymbologies
             try? VNImageRequestHandler(data: data).perform([request])
-            return request.results?.compactMap(\.payloadStringValue).first { !$0.isEmpty }
+            return request.results?.compactMap(\.payloadStringValue).first { !$0.isEmpty }.map(VisionBarcodeReader.likeTheCamera)
         }.value
     }
 
@@ -588,7 +594,10 @@ struct BarcodeScanSheet: View {
                 // The values a moment on the card, and the label's camera fully
                 // closed: a cover opened while another closes does not show.
                 try? await Task.sleep(for: .milliseconds(700))
-                if state == .found && code == p.barcode { frontOf = p }
+                if state == .found && self.code == p.barcode && editing == nil && !saving {
+                    frontTaken = false
+                    frontOf = p
+                }
             } else if unnamed && name.count < 2 { editing = p }
         } catch {
             self.error = error.localizedDescription
@@ -603,7 +612,8 @@ struct BarcodeScanSheet: View {
         state = .searching
         error = nil
         if let jpeg = await image.jpegForUpload(), let front = try? await model.api.readPackageFront(jpeg) {
-            p.name = front.name
+            // A name the user typed stays; the front adds the brand.
+            if guess.trimmingCharacters(in: .whitespaces).count < 2 { p.name = front.name }
             p.brand = front.brand ?? p.brand
             show(p, keepAmount: true)
         } else {
@@ -707,7 +717,10 @@ struct BarcodeScanner: UIViewRepresentable {
     final class Coordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate {
         var onCode: (String) -> Void
         var paused = false {
-            didSet { if paused != oldValue { candidate = nil } }
+            didSet {
+                if paused != oldValue { candidate = nil }
+                camera.pauseVision(paused)
+            }
         }
         let camera = BarcodeCamera()
         /// The code read last: a code counts once two reads in a row give
@@ -753,6 +766,9 @@ final class BarcodeCamera: @unchecked Sendable {
     func setDelegate(_ delegate: AVCaptureMetadataOutputObjectsDelegate) {
         output.setMetadataObjectsDelegate(delegate, queue: .main)
     }
+
+    /// Vision rests while the sheet looks a code up or reads a photo.
+    func pauseVision(_ paused: Bool) { vision.paused = paused }
 
     /// A code Vision read, on the main thread.
     func onVisionCode(_ found: @escaping @MainActor @Sendable (String) -> Void) {
@@ -844,6 +860,11 @@ final class VisionBarcodeReader: NSObject, AVCaptureVideoDataOutputSampleBufferD
     private let lock = NSLock()
     /// The window in the frame, in Vision's terms (origin bottom left).
     private var region = CGRect(x: 0, y: 0, width: 1, height: 1)
+    private var resting = false
+    var paused: Bool {
+        get { lock.withLock { resting } }
+        set { lock.withLock { resting = newValue } }
+    }
     /// Only on `queue`.
     private var last = Date.distantPast
 
@@ -855,7 +876,7 @@ final class VisionBarcodeReader: NSObject, AVCaptureVideoDataOutputSampleBufferD
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         let now = Date()
-        guard now.timeIntervalSince(last) >= 0.1, let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        guard !paused, now.timeIntervalSince(last) >= 0.1, let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         last = now
         if let code = Self.code(in: pixels, region: lock.withLock { region }) { onCode?(code) }
     }
@@ -866,15 +887,18 @@ final class VisionBarcodeReader: NSObject, AVCaptureVideoDataOutputSampleBufferD
         CGRect(x: rect.minX, y: 1 - rect.maxY, width: rect.width, height: rect.height)
     }
 
-    /// The code in the frame's region, whichever way it lies; UPC-A as
-    /// AVFoundation reports it, EAN-13 with a leading 0 (TN2325).
+    /// The code in the frame's region, whichever way it lies.
     static func code(in pixels: CVPixelBuffer, region: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1)) -> String? {
         let request = VNDetectBarcodesRequest()
         request.symbologies = BarcodeScanner.visionSymbologies
         request.regionOfInterest = region
         try? VNImageRequestHandler(cvPixelBuffer: pixels, orientation: .up).perform([request])
-        guard let code = request.results?.compactMap(\.payloadStringValue).first(where: { !$0.isEmpty }) else { return nil }
-        return code.count == 12 ? "0" + code : code
+        return request.results?.compactMap(\.payloadStringValue).first { !$0.isEmpty }.map(likeTheCamera)
+    }
+
+    /// UPC-A as AVFoundation reports it: EAN-13 with a leading 0 (TN2325).
+    static func likeTheCamera(_ code: String) -> String {
+        code.count == 12 ? "0" + code : code
     }
 }
 
