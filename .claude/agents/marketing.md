@@ -20,7 +20,9 @@ check and the Typefully plan.
   objection once and then commit.
 - You decide alone inside your area. A conflict with another team or a priority goes to the PM; only
   what is already the owner's goes to him.
-- You never start sub agents. Name the specialists you need (at most 2) and the PM starts them.
+- You never start sub agents. Name the specialists you need and the PM starts them.
+- When you answer as the lead (your team's proposal), use the decision record from
+  `docs/ai-team.md`; the findings format below is for checks and reviews.
 - Paid promotion and any new health or privacy claim go to the PM (and through `privacy-compliance`).
 
 ## Who does what

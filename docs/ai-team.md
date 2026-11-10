@@ -29,8 +29,8 @@ builds the app; none of it runs inside the app (the in-app AI coach is one model
 | Kontrola: Finance | Finance Controller, owner | `finance-controller` | read-only commands | Sonnet 5.5 |
 | Kontrola: Finance | Monetization & Unit Economics Analyst | `monetization-analyst` | read-only commands | Opus 5.5 |
 | Kontrola: Finance | Performance & Cost Engineer | `performance-cost` | yes, tests, local and timing on staging | Opus 5.5 |
-| Independent | Research Analyst | `research-analyst` | no (web research only) | Sonnet 5.5 |
-| Independent | Critic | `critic` | no | Opus 5.5 |
+| Kontrola: independent | Research Analyst | `research-analyst` | no (web research only) | Sonnet 5.5 |
+| Kontrola: independent | Critic | `critic` | no | Opus 5.5 |
 
 ## Rules
 - Every role is read-only: no role edits files, commits or pushes. Changes are made only after the
@@ -58,18 +58,19 @@ The owner approved this structure on 2026-11-10.
 - **Produkt a vývoj** is led by the PM itself; its Design and Data departments have an owner each.
 - **Kontrola** checks the others and sits under no team, so a check is never overruled by the
   person whose work it checks. Its departments (Věda, Bezpečnost a právo, Testování, Finance) have
-  an owner each. `research-analyst`, `critic` and the independent review of a pull request stay
-  outside every team.
-- An **owner** answers for its department and holds its stop right; it adds no extra call and no
-  manager layer. A lead is added only where at least three roles work in one area and can disagree.
+  an owner each. `research-analyst`, `critic` and the independent review of a pull request are in
+  Kontrola too, outside every department.
+- An **owner** answers for its department; it adds no extra call and no manager layer. A stop right
+  belongs to the role that reproduced the finding, not only to the owner. Leads exist only where the
+  owner approved one (Kouč, Marketing, Věda); a new lead needs his yes.
 - New roles are added where an expert is really missing, never to make a department look like a
   team. A role costs nothing until a task calls it.
 
 ## How a lead decides
 - **One recommendation.** No "it depends". Options only when the choice belongs to the owner
   (money, what users see, MDR wording, a step that cannot be undone).
-- **Decides alone inside its area**: which specialists the task needs (at most 2, started by the
-  PM), how their advice becomes the proposal, the wording within the rules. It goes to the PM only for
+- **Decides alone inside its area**: which specialists the task needs (usually 2 at most; a week plan
+  across sports takes the coach of each sport it touches plus `triathlon-coach`; the PM starts them), how their advice becomes the proposal, the wording within the rules. It goes to the PM only for
   a conflict with another team or a priority, and to the owner only for what is already his: the
   "ano" to build, "mergni", "vydej", prices and the pick of mockups.
 - **Objection once, then commit.** A specialist may object once; the lead decides and the team goes
@@ -77,7 +78,7 @@ The owner approved this structure on 2026-11-10.
 - **Stop rights (not a veto over the owner).** A reproduced finding of Kontrola (a security hole, a
   failing test, a breach of MDR or GDPR, a user who costs more than they pay) and a failed coach eval
   or unsafe training reported by the Kouč lead cannot be overruled by the PM or a lead; the PM takes
-  it to the owner.
+  it to the owner. `critic`'s objections are not such findings: the critic keeps no veto.
 - **Decision record**, the lead's answer to the PM:
 
 ```
@@ -160,8 +161,8 @@ A role does not see the thread's history, so every brief carries what it needs, 
 - App Store screenshots and previews, the website aurin.health, pictures and videos for social media,
   Figma mockups: `visual-designer`. Screens of the app and the watch stay with `ios-designer`.
 - Usage numbers after the App Store release (retention, trial to Pro, which features are used, where
-  users drop off): `data-analyst`, from aggregate numbers only; `privacy-compliance` approves its
-  queries first.
+  users drop off): `data-analyst`, from aggregate numbers only (the morning report, or an aggregate
+  query that `privacy-compliance` checked and the owner approved; the PM runs it, read-only).
 - The monthly overview of income and costs, invoice and payment checks, AI spend against the limits
   and the papers for the accountant: `finance-controller`. Tax decisions stay with the accountant.
 - Every team run: `critic` reviews the proposals before the owner's document.
@@ -191,7 +192,8 @@ and they are not always right.
 3. Research: `research-analyst` writes an evidence brief for every point (competitors, studies,
    guidelines, rules, news), with sources and the strength of the evidence.
 4. Round 1: each team the task touches gets the brief. A lead names the specialists it needs (at most
-   2; the PM starts them), then returns one decision record per point. A small task in one team: the
+   2, more for a week plan across sports; the PM starts them), then returns one decision record per
+   point. A small task in one team: the
    lead answers alone. Roles outside a team return findings in the common format (severity, where,
    evidence, proposal, effort, confidence).
 5. Round 2, leads' meeting, only when the task touches two or more teams: each lead sees the other

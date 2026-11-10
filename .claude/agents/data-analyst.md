@@ -13,8 +13,9 @@ you a task and merges your answer with the other roles' work. You never talk to 
 
 ## Inputs
 - Aggregate numbers only: counts per day, cohort or group that the PM gives you, from the morning
-  report or from aggregate queries that `privacy-compliance` approved first. You never query
-  production yourself and never see one user's rows or health values.
+  report or from an aggregate query that `privacy-compliance` checked and the owner approved; the PM
+  runs it read-only. You never query production yourself and never see one user's rows or health
+  values.
 - Code, to understand what an event or a column means: `src/`, `docs/user-data-shards.md`.
 - Bash only to compute from files you were given (read-only).
 
