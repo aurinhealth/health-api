@@ -103,7 +103,7 @@ export async function forgetCached(env, key, { store = globalThis.caches?.defaul
 // computing leaves a mark in the data center's cache, and the others wait for
 // its answer there instead of reading the database again.
 const SHARED = /^coach-(inputs|performance):/;
-const MARK_TTL_SECONDS = 30, MARK_SETTLE_MS = 40, SHARED_POLL_MS = 250, SHARED_WAIT_MS = 20000;
+const MARK_TTL_SECONDS = 30, MARK_SETTLE_MS = 40, SHARED_POLL_MS = 250, SHARED_WAIT_MS = 15000;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const markUrl = url => url + "?computing";
 async function markText(store, url) {
@@ -158,16 +158,18 @@ export async function cached(env, ctx, key, compute, { ttl = CACHE_TTL_SECONDS, 
   })();
   computing.set(url, pending);
   // The mark goes once the answer is kept, so a waiting copy finds one or the other;
-  // after a failure at once, and the waiting copies compute it themselves.
+  // after a failure at once, and the waiting copies compute it themselves. For a
+  // shared entry this runs on after the answer (waitUntil): an app that gives up
+  // waiting does not leave the other copies waiting for a mark nobody takes away.
   const unmark = () => turn.owner ? Promise.resolve(store.delete?.(markUrl(url))).catch(() => {}) : Promise.resolve();
+  const finish = pending.then(value => failedValue(value) || turn.borrowed ? unmark()
+    : store.put(url, new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json", "Cache-Control": "max-age=" + ttl } })).catch(() => {}).then(unmark), unmark);
+  if (shared) ctx?.waitUntil?.(finish);
   let value;
-  try { value = await pending; } catch (error) { await unmark(); throw error; } finally { computing.delete(url); }
+  try { value = await pending; } catch (error) { await finish; throw error; } finally { computing.delete(url); }
   // A failed read (an error answer, the {} callers fall back to, or an answer
   // marked degraded: part of it failed) is not kept: the next request asks
   // again instead of showing nothing for 10 minutes.
-  if (failedValue(value)) { await unmark(); return value; }
-  if (turn.borrowed) return value;
-  const put = store.put(url, new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json", "Cache-Control": "max-age=" + ttl } })).catch(() => {}).then(unmark);
-  if (ctx?.waitUntil) ctx.waitUntil(put); else await put;
+  if (failedValue(value) || !ctx?.waitUntil) await finish; else ctx.waitUntil(finish);
   return value;
 }

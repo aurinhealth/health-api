@@ -55,7 +55,8 @@ test("Doporučení trenéra builds the ride and run like the library's proposal 
   const base = src.slice(src.indexOf("async function pickBase"), src.indexOf("function loadCoachInputs("));
   assert.match(base, /defaultDayCoach\(env,\{\.\.\.inputs,athleteState:athlete\},date,'ride',week\)/);
   const route = src.slice(src.indexOf("if(url.pathname==='/app/api/coach/pick')"), src.indexOf("if(url.pathname==='/app/api/coach/check-in'"));
-  assert.match(route, /cached\(env,ctx,'pick-base:'\+date,\(\)=>pickBase\(env,ctx,internalAuth,date\)\)/);
+  // The athlete's state (a memory from the chat changes no data version) is part of the key.
+  assert.match(route, /cached\(env,ctx,'pick-base:'\+date\+':'\+textHash\(JSON\.stringify\(athlete\?\?null\)\),\(\)=>pickBase\(env,ctx,internalAuth,date,athlete\)\)/);
   const helper = src.slice(src.indexOf("async function defaultDayCoach"), src.indexOf("// The athlete's ratings since a day"));
   for (const part of [/targetFor\(targets,date,sport\)/, /roleFor\(prefs,date,sport/, /trainingBudget\(prefs,date/, /capabilitiesWithLevel\(env\.DB,sport\)/]) assert.match(helper, part);
 });

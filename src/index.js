@@ -966,7 +966,8 @@ async function saveGooglePointsBatch(env, family, type, points, { raw = false } 
   if(changed)await afterGoogleSync(env, type, points, {since:oldest});
   // A changed row on a closed day (a late upload, the nightly look back): the
   // days kept in the cache (api-cache.js closedDay) are read again.
-  if(changed&&oldest&&closedDay(/T\d{2}$/.test(oldest)?localDate(oldest+':00:00Z'):oldest,localToday()))await bumpCacheVersion(env.DB);
+  // A workout of any day too: the day's activity marks it done (entrypoint.js pickBase), as after an Apple Health one.
+  if(changed&&(['exercise','activity'].includes(type)||oldest&&closedDay(/T\d{2}$/.test(oldest)?localDate(oldest+':00:00Z'):oldest,localToday())))await bumpCacheVersion(env.DB);
   return points.length;
 }
 // Google heart rate arrives as a sample every few seconds (~36k a day). Written

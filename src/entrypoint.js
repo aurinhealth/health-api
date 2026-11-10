@@ -212,6 +212,8 @@ function rememberScreen(userId, path, json) {
   recentScreens.set(userId + "|" + path, { at: Date.now(), json });
 }
 const SCREEN_SECONDS = 30;
+// Writes that keep the data version and still change what a screen shows (a sync).
+const SCREEN_SYNCS = /^\/app\/api\/(health\/apple|sync\/activity)$/;
 function recentScreen(userId, path) {
   const hit = recentScreens.get(userId + "|" + path);
   return hit && Date.now() - hit.at < SCREEN_SECONDS * 1000 ? hit.json : null;
@@ -679,8 +681,8 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
       // Any change by the user lets the coach's texts answer it at once (screen-texts.js).
       const planChange = request.method !== "GET" && !CACHE_NEUTRAL.test(url.pathname) && !unchanged;
       if (request.method !== "GET" && !unchanged) forgetScreens(user.id);
-      // A write that keeps the data version (a sync) drops the screens kept for other copies of the server too.
-      if (request.method !== "GET" && !unchanged && !planChange) ctx?.waitUntil?.(Promise.all([...SCREEN_PATHS].map(path => forgetCached(env, "screen:" + path))).catch(() => {}));
+      // A sync that keeps the data version drops the screens kept for other copies of the server too.
+      if (request.method !== "GET" && !unchanged && SCREEN_SYNCS.test(url.pathname)) ctx?.waitUntil?.(Promise.all([...SCREEN_PATHS].map(path => forgetCached(env, "screen:" + path))).catch(() => {}));
       // A change by the user makes the cached coach inputs outdated; a meal or a drink only what shows food (api-cache.js).
       if (planChange) await bumpCacheVersion(env.DB, { food: FOOD_WRITE.test(url.pathname) });
       // A changed plan makes the coach's text of the day outdated (screen-texts.js).
@@ -1285,8 +1287,9 @@ async function coachTextExtras(env,ctx,internalAuth,screen){
 // (and a swim for a swimmer), the week's targets, what was done and declined,
 // ranked (coach-pick.js rankOptions). A part that failed marks it degraded, so
 // it is not kept (api-cache.js) and the next request reads again.
-async function pickBase(env,ctx,internalAuth,date){
-  let degraded=false;const soft=fallback=>()=>{degraded=true;return fallback;};
+async function pickBase(env,ctx,internalAuth,date,athleteRead){
+  let degraded=athleteRead===undefined;const soft=fallback=>()=>{degraded=true;return fallback;};
+  const athlete=athleteRead??null;
   // Everything that does not need the coach's inputs starts with them: the
   // week's targets once its preferences are read, the athlete, the recent
   // picks, the gym plan and the day's place (one wait instead of five).
@@ -1295,8 +1298,9 @@ async function pickBase(env,ctx,internalAuth,date){
   const around=Promise.all([loadProfiles(env.DB,env.USER_ID).catch(soft({})),recentKinds(env.DB,env.USER_ID,date),pickState(env.DB,env.USER_ID,date),readGymPlan(env.DB,date).catch(soft(null)),lessKinds(env.DB,env.USER_ID).catch(soft([])),todayPlace(env,ctx,date)]);
   around.catch(()=>{});
   const risking=saunaRisks(env.DB,date).catch(soft({}));
-  const [inputs,week,athlete]=await Promise.all([loadCoachInputs(env,ctx,internalAuth,date),weekLoading,getAthleteState(env.DB).catch(soft(null))]);
+  const [inputs,week]=await Promise.all([loadCoachInputs(env,ctx,internalAuth,date),weekLoading]);
   const [[ride,run],[profiles,recent,state,gym,less,place]]=await Promise.all([Promise.all([defaultDayCoach(env,{...inputs,athleteState:athlete},date,'ride',week),defaultDayCoach(env,{...inputs,athleteState:athlete},date,'run',week)]),around]);
+  if(recent.failed)degraded=true;
   // The swim coach only for a swimmer: swimming as the main sport or a swim
   // in the last 60 days (one small capabilities read more, nobody else pays it).
   const eff=profiles?.effective||{},allowed=Array.isArray(eff.sports)?eff.sports:null,mains=mainKindsOf(eff);
@@ -1310,6 +1314,8 @@ async function pickBase(env,ctx,internalAuth,date){
   const ranked=rankOptions({ride,run,swim,mainSport:eff.mainSport||'general',mains,allowed,sports:recent.sports,today:recent.today,declines:state.declines,less,planned,done:recent.done,athleteStatus:athlete?.status||'active',noSauna});
   return {ranked,planned,less,chosen:state.chosen,gym,forecast:place.forecast??null,...(degraded?{degraded:true}:{})};
 }
+// A short fingerprint of a text for a cache key (FNV-1a).
+function textHash(text){let h=0x811c9dc5;for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,0x01000193);}return (h>>>0).toString(36);}
 function loadCoachInputs(env,ctx,internalAuth,date,{performance=false}={}){
   const inputs=cached(env,ctx,'coach-inputs:'+date,()=>loadCoachInputsFresh(env,ctx,internalAuth,date));
   if(!performance)return inputs;
@@ -1519,7 +1525,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // (a sync, a choice, Odmítnout, Doporučovat méně) makes them outdated. The
       // app asks again after Today, a choice and while the AI writes the workout
       // (aiPending, up to four times); those now read the stored workouts only.
-      const base=await cached(env,ctx,'pick-base:'+date,()=>pickBase(env,ctx,internalAuth,date));
+      // The athlete's state is read each time and is part of the key: a memory the
+      // coach keeps from the chat (a sore knee) changes no data version.
+      const athlete=await getAthleteState(env.DB).catch(()=>undefined);
+      const base=await cached(env,ctx,'pick-base:'+date+':'+textHash(JSON.stringify(athlete??null)),()=>pickBase(env,ctx,internalAuth,date,athlete));
       const {ranked,planned,less,gym,forecast}=base,state={chosen:base.chosen};
       // The ready workouts stay while the options do (pickSignature), so a sync
       // that changes nothing asks the AI nothing.
