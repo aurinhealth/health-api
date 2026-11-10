@@ -38,10 +38,10 @@ import {buildFood} from './app-food.js';
 import {buildFoodWeek} from './app-food-week.js';
 import {normalizeProfile,effectiveProfile} from './energy-profile.js';
 import {withoutProDiet} from './diet.js';
-import {athleteFocus,mainKindsOf,SPORT_KINDS} from './athlete-focus.js';
+import {athleteFocus,mainKindsOf,SPORT_KINDS,normalizeFocus} from './athlete-focus.js';
 import { splitFacts, triathlonSplit } from './triathlon-split.js';
 import { getTrainingProfile } from './training-profile.js';
-import { loadProfiles, refreshSuggestions, pinUsualWake } from './profile-suggestions.js';
+import { loadProfiles, refreshSuggestions, pinUsualWake, loadEffectiveProfile } from './profile-suggestions.js';
 import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
 import {forwardWatchWorkouts, forwardToGoogle} from './watch-forward.js';
@@ -2034,7 +2034,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(request.method==='POST'&&start)prefs=await getWeekPlan(env.DB,start);
       const monday=start?mondayOfDate(start):mondayOfDate(localToday());
       const targets=await computeWeekTargets(env,ctx,monday,prefs).catch(error=>({status:'error',message:error.message,items:[]}));
-      const historyEstimate=activityHistoryEstimate(await planningHistory(env,localToday(),21),localToday(),athleteFocus(await dashboardProfile(env).catch(()=>null),localToday()).weeklyHours);
+      // The stated weekly hours (the profile) only while the history gives no estimate.
+      const recent=await planningHistory(env,localToday(),21);let historyEstimate=activityHistoryEstimate(recent,localToday());
+      if(historyEstimate.status!=='ready')historyEstimate=activityHistoryEstimate(recent,localToday(),normalizeFocus(await loadEffectiveProfile(env.DB,env.USER_ID).catch(()=>null)||{}).weeklyHours);
       return Response.json({status:'ok',prefs,roles:planWeekRoles(prefs.days,{...(await planForWeek(env,ctx,monday)).roles,...roleTime(prefs,monday)}),start:monday,targets,historyEstimate,sports:await suggestedSports(env.DB,env.USER_ID)},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
