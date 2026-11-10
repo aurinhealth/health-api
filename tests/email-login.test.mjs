@@ -186,6 +186,42 @@ test("App Review: the review address gets the fixed code, which still needs send
   assert.notEqual(codeIn(sent[1]), "246810");
 });
 
+test("App Review: wrong codes lock the fixed code for the day only, and the owner hears of the lock", async () => {
+  const { env, sent } = await setup({ APP_REVIEW_EMAIL: "review@example.com", APP_REVIEW_CODE: "246810", APP_REVIEW_UNTIL: "2999-12-31" });
+  await inviteUser(env.DB, "review@example.com", 1);
+  const t0 = Date.parse("2026-10-07T08:00:00Z");
+  let caller = 0;
+  const guess = (code, time) => at(time, () => verify(env, "review@example.com", code, { ip: "198.51.100." + (++caller) }));
+  const alerts = () => sent.filter(message => message.to === "owner@example.com");
+  // Twenty wrong tries, over five sendings of the code.
+  for (let round = 0; round < 5; round++) {
+    const time = t0 + round * 61_000;
+    await at(time, () => start(env, "review@example.com", { ip: "203.0.113." + round }));
+    for (let i = 0; i < 4; i++) {
+      assert.equal(alerts().length, 0);
+      assert.equal((await guess("000000", time + 1000)).status, 400);
+    }
+  }
+  assert.equal(alerts().length, 1, "the try that locked the address");
+  assert.match(alerts()[0].subject, /App Review/);
+  assert.doesNotMatch(alerts()[0].text, /246810/);
+  assert.equal((await guess("246810", t0 + 5 * 61_000)).status, 429, "locked for the day");
+  assert.equal(alerts().length, 1);
+  // The next day the reviewer signs in again.
+  const tomorrow = Date.parse("2026-10-08T00:01:00Z");
+  await at(tomorrow, () => start(env, "review@example.com"));
+  assert.equal((await guess("246810", tomorrow + 1000)).status, 200);
+  // Another address locked the same way is nothing the owner hears of.
+  await inviteUser(env.DB, "friend@example.com", 1);
+  for (let round = 0; round < 5; round++) {
+    const time = tomorrow + round * 61_000;
+    await at(time, () => start(env, "friend@example.com", { ip: "203.0.113." + (10 + round) }));
+    const wrong = codeIn(sent.at(-1)) === "000000" ? "111111" : "000000";
+    for (let i = 0; i < 4; i++) await at(time + 1000, () => verify(env, "friend@example.com", wrong, { ip: "198.51.100." + (++caller) }));
+  }
+  assert.equal(alerts().length, 1);
+});
+
 test("OPEN_SIGNUP: any address gets a code and an account", async () => {
   const { env, sent } = await setup({ OPEN_SIGNUP: "true" });
   await start(env, "stranger@example.com");

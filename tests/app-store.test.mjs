@@ -9,8 +9,10 @@ import { readFileSync } from "node:fs";
 import { createHash, createPrivateKey, sign, X509Certificate } from "node:crypto";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { APPLE_ROOT_CA_G3, verifyAppStoreJws, saveAppTransaction, saveAppInstall, handleAppStoreNotification, appAccountToken, storePurchase } from "../src/app-store.js";
+import { APPLE_ROOT_CA_G3, verifyAppStoreJws, saveAppTransaction, saveAppInstall, handleAppStoreNotification, appAccountToken, storePurchase, forgetEndedPurchases } from "../src/app-store.js";
 import { subscriptionStatus, plansUnlocked } from "../src/subscription.js";
+import { aiGroup } from "../src/ai-limit-share.js";
+import { deleteAccount, finishAccountDeletions } from "../src/account-data.js";
 import { handleAccountApi } from "../src/routes-account.js";
 
 const fixture = name => readFileSync(new URL(`./fixtures/app-store/${name}`, import.meta.url), "utf8");
@@ -125,6 +127,151 @@ test("a purchase of another account, app or plan is refused", async () => {
   await assert.rejects(saveAppTransaction(first, { signedTransaction: jws(transaction({ productId: "health.aurin.app.coins" })) }, { roots }), { status: 400 });
   await assert.rejects(saveAppTransaction(first, { signedTransaction: jws(transaction({ environment: "Xcode" })) }, { roots }), { status: 400 });
   await assert.rejects(saveAppTransaction(first, { signedTransaction: "" }, { roots }), { status: 400 });
+});
+
+// The whole schema, for deleting an account for real (account-data.test.mjs).
+function accounts(...ids) {
+  const raw = createD1();
+  raw.sqlite.exec("CREATE TABLE IF NOT EXISTS d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TEXT)");
+  for (const file of ["staging/schema.sql", "migrations/0011_account_deletions.sql", "migrations/0021_session_epoch.sql", "migrations/0026_account_deletion_retries.sql"]) raw.sqlite.exec(readFileSync(new URL("../" + file, import.meta.url), "utf8"));
+  for (const id of ids) raw.sqlite.prepare("INSERT INTO users (id, email) VALUES (?, ?)").run(id, `u${id}@example.com`);
+  const user = id => ({ DB: scopedDb(raw, id), RAW_DB: raw, USER_ID: id });
+  const remove = (id, options = {}) => deleteAccount(user(id), { id, email: `u${id}@example.com`, isOwner: false }, { fetchImpl: async () => new Response(""), ...options });
+  // A deletion the request has no time to finish: the account is gone, its data waits for the cron.
+  const startRemoving = async id => {
+    const sample = raw.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, value_numeric, payload_json) VALUES (?, 'google', 'heart-rate', ?, '2026-10-01T07:00:00Z', 60, '{}')");
+    for (let i = 0; i < 3; i++) sample.run(id, "hr-" + i);
+    assert.equal((await remove(id, { chunkRows: 1, budgetMs: -1 })).pending, true);
+  };
+  const finishRemoving = async () => { while (await finishAccountDeletions(raw)); };
+  return { raw, user, remove, startRemoving, finishRemoving };
+}
+const yearly = (extra = {}) => transaction({ environment: "Production", expiresDate: now + 365 * DAY, ...extra });
+
+test("a purchase of a deleted account goes to the new account that sends it, once", async () => {
+  const { raw, user, remove } = accounts(1, 2, 3);
+  const token = await appAccountToken(user(1));
+  const bought = jws(yearly({ appAccountToken: token }));
+  await saveAppTransaction(user(1), { signedTransaction: bought }, { roots });
+  // While the account exists, its purchase is nobody else's.
+  await assert.rejects(saveAppTransaction(user(2), { signedTransaction: bought }, { roots }), { status: 409 });
+  assert.equal((await remove(1)).pending, false);
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM store_originals").get().n, 0, "a running subscription leaves nothing behind");
+  // The same person's new account restores it (Apple keeps the old account's token in the record).
+  assert.equal((await saveAppTransaction(user(2), { signedTransaction: bought }, { roots })).plan, "ai");
+  assert.equal((await storePurchase(user(2))).active, true);
+  await assert.rejects(saveAppTransaction(user(3), { signedTransaction: jws(yearly({ appAccountToken: token, signedDate: now + 1000 })) }, { roots }), { status: 409 });
+  // Apple's notifications, still with the old token, reach the new account: a refund ends its Pro.
+  await notify(notification("REFUND", yearly({ appAccountToken: token, revocationDate: now + 1500, signedDate: now + 2000 })), { DB: raw });
+  assert.equal((await storePurchase(user(2))).active, false);
+});
+
+test("a refunded subscription does not come back on a new account after its account is deleted", async () => {
+  const { raw, user, remove } = accounts(1, 2);
+  const token = await appAccountToken(user(1));
+  const bought = jws(yearly({ appAccountToken: token }));
+  await saveAppTransaction(user(1), { signedTransaction: bought }, { roots });
+  await notify(notification("REFUND", yearly({ appAccountToken: token, revocationDate: now + 500, signedDate: now + 1000 })), { DB: raw });
+  await remove(1);
+  assert.deepEqual({ ...raw.sqlite.prepare("SELECT user_id, signed_at FROM store_originals").get() }, { user_id: 0, signed_at: now + 1000 }, "kept without the account");
+  assert.equal((await saveAppTransaction(user(2), { signedTransaction: bought }, { roots })).stale, true);
+  assert.equal(await storePurchase(user(2)), null);
+  // Bought again: the newer record gives Pro to the account that sends it.
+  assert.equal((await saveAppTransaction(user(2), { signedTransaction: jws(yearly({ appAccountToken: token, signedDate: now + 3000 })) }, { roots })).plan, "ai");
+});
+
+test("a subscription refunded after its account was deleted gives nothing through its old record", async () => {
+  const { raw, user, remove } = accounts(1, 2);
+  const token = await appAccountToken(user(1));
+  const bought = jws(yearly({ appAccountToken: token }));
+  await saveAppTransaction(user(1), { signedTransaction: bought }, { roots });
+  await remove(1);
+  await notify(notification("REFUND", yearly({ appAccountToken: token, revocationDate: now + 500, signedDate: now + 1000 })), { DB: raw });
+  assert.equal((await saveAppTransaction(user(2), { signedTransaction: bought }, { roots })).stale, true);
+  assert.equal(await storePurchase(user(2)), null);
+});
+
+test("a refund that arrives while the account's data is still being deleted is remembered", async () => {
+  const { raw, user, startRemoving, finishRemoving } = accounts(1, 2);
+  const token = await appAccountToken(user(1));
+  const bought = jws(yearly({ appAccountToken: token }));
+  await saveAppTransaction(user(1), { signedTransaction: bought }, { roots });
+  await startRemoving(1);
+  await notify(notification("REFUND", yearly({ appAccountToken: token, revocationDate: now + 500, signedDate: now + 1000 })), { DB: raw });
+  await finishRemoving();
+  assert.equal((await saveAppTransaction(user(2), { signedTransaction: bought }, { roots })).stale, true);
+  assert.equal(await storePurchase(user(2)), null);
+});
+
+test("Apple's later notification does not give a kept purchase back to the account being deleted", async () => {
+  const { raw, user, startRemoving, finishRemoving } = accounts(1, 2);
+  const token = await appAccountToken(user(1));
+  const bought = jws(yearly({ appAccountToken: token }));
+  await saveAppTransaction(user(1), { signedTransaction: bought }, { roots });
+  const refund = () => notify(notification("REFUND", yearly({ appAccountToken: token, revocationDate: now + 500, signedDate: now + 1000 })), { DB: raw });
+  await refund();
+  await startRemoving(1);
+  await refund();
+  await finishRemoving();
+  assert.equal(raw.sqlite.prepare("SELECT user_id FROM store_originals").get()?.user_id, 0);
+  assert.equal((await saveAppTransaction(user(2), { signedTransaction: bought }, { roots })).stale, true);
+});
+
+test("a refund stays known when the subscription is bought again and its account deleted while it runs", async () => {
+  const { raw, user, remove } = accounts(1, 2);
+  const token = await appAccountToken(user(1));
+  const first = jws(yearly({ appAccountToken: token }));
+  await saveAppTransaction(user(1), { signedTransaction: first }, { roots });
+  await notify(notification("REFUND", yearly({ appAccountToken: token, revocationDate: now + 500, signedDate: now + 1000 })), { DB: raw });
+  // Subscribed again (the same subscription at Apple); the account goes while that month runs.
+  const again = jws(yearly({ appAccountToken: token, transactionId: "2000000002", expiresDate: now + 30 * DAY, signedDate: now + 2000 }));
+  await saveAppTransaction(user(1), { signedTransaction: again }, { roots });
+  await remove(1);
+  // The record from before the refund gives nothing to a new account; the running month is restored.
+  assert.equal((await saveAppTransaction(user(2), { signedTransaction: first }, { roots })).stale, true);
+  assert.equal(await storePurchase(user(2)), null);
+  assert.equal((await saveAppTransaction(user(2), { signedTransaction: again }, { roots })).plan, "ai");
+  assert.equal((await storePurchase(user(2))).active, true);
+});
+
+test("a refund no account saw stays known after the account that bought again is deleted", async () => {
+  const { raw, user, remove } = accounts(1, 2);
+  await notify(notification("REFUND", yearly({ revocationDate: now + 500, signedDate: now + 1000 })), { DB: raw });
+  await saveAppTransaction(user(1), { signedTransaction: jws(yearly({ transactionId: "2000000002", signedDate: now + 2000 })) }, { roots });
+  await remove(1);
+  assert.equal((await saveAppTransaction(user(2), { signedTransaction: jws(yearly()) }, { roots })).stale, true);
+  assert.equal(await storePurchase(user(2)), null);
+});
+
+test("a deletion that fails leaves the account its purchase", async () => {
+  const { raw, user, remove } = accounts(1);
+  await saveAppTransaction(user(1), { signedTransaction: jws(yearly({ appAccountToken: await appAccountToken(user(1)) })) }, { roots });
+  raw.sqlite.exec("CREATE TRIGGER stop BEFORE DELETE ON users BEGIN SELECT RAISE(ABORT, 'stopped'); END");
+  await assert.rejects(remove(1));
+  assert.equal((await storePurchase(user(1)))?.active, true);
+  assert.equal(raw.sqlite.prepare("SELECT user_id FROM store_originals").get()?.user_id, 1);
+});
+
+test("store_originals from before revoked_at gets the column when a purchase or a deletion needs it", async () => {
+  const old = "CREATE TABLE store_originals (original_transaction_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, signed_at INTEGER NOT NULL)";
+  const deleted = accounts(1);
+  deleted.raw.sqlite.exec(old);
+  assert.equal((await deleted.remove(1)).pending, false);
+  const bought = setup();
+  bought.raw.sqlite.exec(old);
+  assert.equal((await saveAppTransaction(bought.user(1), { signedTransaction: jws(transaction()) }, { roots })).plan, "ai");
+});
+
+test("a purchase kept without an account is forgotten once its old records have run out", async () => {
+  const { raw, user } = setup();
+  assert.equal(await forgetEndedPurchases(raw), 0, "no table yet");
+  await saveAppTransaction(user(1), { signedTransaction: jws(transaction()) }, { roots });
+  const add = raw.sqlite.prepare("INSERT INTO store_originals(original_transaction_id,user_id,signed_at) VALUES(?,?,?)");
+  add.run("old", 0, now - 401 * DAY);
+  add.run("recent", 0, now - 399 * DAY);
+  add.run("held", 2, now - 401 * DAY);
+  assert.equal(await forgetEndedPurchases(raw, now), 1);
+  assert.deepEqual(raw.sqlite.prepare("SELECT original_transaction_id AS id FROM store_originals ORDER BY id").all().map(r => r.id), ["2000000000", "held", "recent"]);
 });
 
 test("an older transaction does not undo a newer one", async () => {
@@ -269,6 +416,33 @@ test("a TestFlight build (Apple's AppTransaction says Sandbox) puts the account 
   assert.equal((await post({ Origin: "https://aurin.health" }, { signedIn: false })).status, 401);
 });
 
+const install = (id, extra = {}) => ({ signedAppTransaction: jws({ bundleId: "health.aurin.app", receiptType: "Sandbox", ...(id ? { appTransactionId: id } : {}), signedDate: now, ...extra }) });
+const people = (raw, ...rows) => {
+  raw.sqlite.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, created_at TEXT)");
+  for (const [id, created] of rows) raw.sqlite.prepare("INSERT INTO users(id, created_at) VALUES(?, COALESCE(?, datetime('now')))").run(id, created);
+};
+
+test("one TestFlight install marks one account", async () => {
+  const { raw, user } = setup();
+  people(raw, [1, "2026-01-01 00:00:00"], [2, "2026-01-01 00:00:00"]);
+  assert.equal((await saveAppInstall(user(1), install("7"), { roots })).testflight, true);
+  // The same install (one Apple Account's download of the app) sent by another account.
+  assert.deepEqual(await saveAppInstall(user(2), install("7"), { roots }), { status: "ok", testflight: false });
+  assert.deepEqual([await aiGroup(user(1)), await aiGroup(user(2))], ["testflight", "free"]);
+  assert.equal((await saveAppInstall(user(1), install("7"), { roots })).testflight, true, "its own account sends it at every sign-in");
+  assert.equal((await saveAppInstall(user(2), install("8"), { roots })).testflight, true, "another install is another tester");
+  assert.match(row(raw, 2).install_hash, /^[0-9a-f]{64}$/, "kept as a hash");
+  // The first account is deleted: its install marks the next account that sends it.
+  raw.sqlite.exec("DELETE FROM subscriptions WHERE user_id=1");
+  assert.equal((await saveAppInstall(user(2), install("7"), { roots })).testflight, true);
+  // The App Store build keeps no hash.
+  await saveAppInstall(user(2), install("7", { receiptType: "Production" }), { roots });
+  assert.deepEqual([row(raw, 2).testflight, row(raw, 2).install_hash], [0, null]);
+  // A record without Apple's id has nothing to hold it by: marked as before.
+  assert.equal((await saveAppInstall(user(2), install(null), { roots })).testflight, true);
+  assert.equal(row(raw, 2).install_hash, null);
+});
+
 test("a refunded subscription does not come back through another purchase and its old record", async () => {
   const { raw, user } = setup();
   const env = user(1);
@@ -316,6 +490,51 @@ test("a refund finds a subscription without a token after the account's row move
   await notify(notification("REFUND", transaction({ environment: "Production", expiresDate: now + 365 * DAY, revocationDate: now + 1500, signedDate: now + 2000 })), { DB: raw });
   assert.equal((await saveAppTransaction(env, { signedTransaction: old }, { roots })).stale, true);
   assert.equal(row(raw, 1).original_transaction_id, "3000000000");
+});
+
+test("a subscription refunded before any account sent it gives nothing through its old record", async () => {
+  const { raw, user } = setup();
+  const env = user(1);
+  const yearly = (extra = {}) => transaction({ environment: "Production", expiresDate: now + 365 * DAY, ...extra });
+  // Bought without the account's token, so Apple's refund finds no account.
+  const answer = await notify(notification("REFUND", yearly({ revocationDate: now + 500, signedDate: now + 1000 })), { DB: raw });
+  assert.deepEqual([answer.status, (await answer.json()).unknown], [200, true]);
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM subscriptions WHERE user_id=0").get().n, 0, "no row of no account");
+  assert.equal((await saveAppTransaction(env, { signedTransaction: jws(yearly()) }, { roots })).stale, true);
+  assert.equal((await storePurchase(env)), null);
+  // Apple's later notifications of it still find no account and write none.
+  assert.equal((await (await notify(notification("SUBSCRIBED", yearly({ signedDate: now + 2000 })), { DB: raw })).json()).unknown, true);
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM subscriptions WHERE user_id=0").get().n, 0);
+  // Bought again (a newer record): the account that sends it has Pro, and keeps it against another account.
+  assert.equal((await saveAppTransaction(env, { signedTransaction: jws(yearly({ signedDate: now + 3000 })) }, { roots })).plan, "ai");
+  assert.equal((await storePurchase(env)).active, true);
+  await assert.rejects(saveAppTransaction(user(2), { signedTransaction: jws(yearly({ signedDate: now + 4000 })) }, { roots }), { status: 409 });
+});
+
+test("a refund of a period that has run out does not block the running subscription no account holds", async () => {
+  const { raw, user } = setup();
+  const answer = await notify(notification("REFUND", yearly({ transactionId: "1999999999", purchaseDate: now - 60 * DAY, expiresDate: now - 30 * DAY, revocationDate: now + 500, signedDate: now + 1000 })), { DB: raw });
+  assert.equal((await answer.json()).unknown, true);
+  // The paid period's record was signed before that refund.
+  assert.equal((await saveAppTransaction(user(1), { signedTransaction: jws(yearly()) }, { roots })).plan, "ai");
+  assert.equal((await storePurchase(user(1))).active, true);
+});
+
+test("a refund that crosses the app's first send of the purchase still ends its Pro", async () => {
+  const { raw, user } = setup();
+  const env = user(1);
+  const yearly = (extra = {}) => transaction({ environment: "Production", expiresDate: now + 365 * DAY, ...extra });
+  // The app's record lands after the notification looked for the holder and before it wrote the refund's mark.
+  let crossed = false;
+  const db = { ...raw, prepare(sql) {
+    const statement = raw.prepare(sql);
+    if (crossed || !/INSERT INTO store_originals/.test(sql)) return statement;
+    crossed = true;
+    return { bind: (...values) => ({ run: async () => { await saveAppTransaction(env, { signedTransaction: jws(yearly()) }, { roots }); return statement.bind(...values).run(); } }) };
+  } };
+  const answer = await notify(notification("REFUND", yearly({ revocationDate: now + 500, signedDate: now + 1000 })), { DB: db });
+  assert.equal((await answer.json()).plan, "free");
+  assert.equal((await storePurchase(env)).active, false);
 });
 
 test("an ended TestFlight purchase does not push out the App Store one", async () => {
