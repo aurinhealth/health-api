@@ -268,8 +268,9 @@ struct PaywallView: View {
                 Text("VYZKOUŠEJ TENTO TÝDEN").scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Night.faint)
                     .padding(.top, 22).padding(.bottom, 10)
             }
-            clock { time in ScreenBelt(time: time) }
-                .padding(.top, allowAI == nil ? 0 : 18)
+            // Smaller phones beside the AI note, so the whole page fits a 6.1" phone's safe area (759 pt).
+            clock { time in ScreenBelt(time: time, phoneHeight: allowAI == nil ? 199 : 120) }
+                .padding(.top, allowAI == nil ? 0 : 16)
                 .frame(maxHeight: .infinity, alignment: .top)
             if allowAI != nil { aiNote.padding(.horizontal, 20).padding(.bottom, 10) }
             Text(verbatim: L10n.f("Od %@ %@", Self.dayMonth(Self.firstPayment(from: today)), chosen.afterTrial)
@@ -841,26 +842,27 @@ struct ScreenCarousel: View {
 /// The free week's belt: small phones of the app sliding by, round and round.
 struct ScreenBelt: View {
     let time: Double
+    var phoneHeight: CGFloat = 199
     /// What Pro adds; readiness and sleep are in Aurin for everyone.
     static let screens: [ProScreen] = AllProPlans.included
-    private static let phoneHeight: CGFloat = 199
     /// PhoneMockup's width at that height (a 7 pt bezel around the 390 × 844 screen), so
     /// the label under a phone has its width and the belt's loop is as long as the phones.
-    private static let width: CGFloat = (phoneHeight - 14) / 844 * 390 + 14
+    private var width: CGFloat { (phoneHeight - 14) / 844 * 390 + 14 }
 
     var body: some View {
-        let step = Self.width + 14
+        let step = width + 14
         let span = step * CGFloat(Self.screens.count)
         let shift = (CGFloat(time) * 36).truncatingRemainder(dividingBy: span)
         HStack(alignment: .top, spacing: 14) {
-            ForEach(0..<(Self.screens.count * 2), id: \.self) { i in
+            // Three rounds, so even the small phones fill the screen while one round slides out.
+            ForEach(0..<(Self.screens.count * 3), id: \.self) { i in
                 let screen = Self.screens[i % Self.screens.count]
                 VStack(spacing: 6) {
-                    PhoneMockup(height: Self.phoneHeight) { screen.content }
+                    PhoneMockup(height: phoneHeight) { screen.content }
                     Text(verbatim: screen.label).font(.caption2).foregroundStyle(Night.muted)
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
-                .frame(width: Self.width)
+                .frame(width: width)
             }
         }
         .offset(x: -shift)
