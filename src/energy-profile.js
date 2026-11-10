@@ -2,7 +2,7 @@
 // weight (Mifflin-St Jeor) times everyday activity, the weekly goal, and a
 // sport estimate for users whose training is not tracked by a connected source.
 import { bilingual } from "./lang.js";
-import { normalizeFocus, sportFromText, mainKindsOf } from "./athlete-focus.js";
+import { normalizeFocus, sportFromText, mainKindsOf, mainSportOfKinds } from "./athlete-focus.js";
 import { localToday } from "./user-time.js";
 import { normalizeDiet } from "./diet.js";
 
@@ -259,10 +259,17 @@ export function effectiveProfile(saved, suggested) {
   if (Array.isArray(history?.regularSports) && history.regularSports.length) profile.regularSports = history.regularSports.slice(0, 4);
   // A race that is over no longer decides (athleteFocus drops it too).
   const raceAhead = !profile.eventDate || profile.eventDate >= localToday();
-  if (profile.mainSport === "auto") profile.mainSport = (raceAhead ? sportFromText(profile.eventName) : null) ?? sportFromText(profile.sportGoal)
+  const raceSport = { run: "running", ride: "cycling", swim: "swimming", tri: "triathlon" }[normalizeFocus(profile).eventSport];
+  if (profile.mainSport === "auto") profile.mainSport = (raceAhead ? raceSport ?? sportFromText(profile.eventName) : null) ?? sportFromText(profile.sportGoal)
     ?? (history?.recentCount || history?.yearCount ? suggested.mainSport ?? history.mainSport : "general");
   // "auto" never lands on a sport the athlete turned off (Sports to suggest).
   if (saved?.mainSport === "auto" && Array.isArray(profile.sports) && !mainKindsOf({ mainSport: profile.mainSport }).every(k => profile.sports.includes(k))) profile.mainSport = "general";
+  // Sports ticked but none of them main, and a race ahead: the race's sport
+  // (its distance, else its name) is the main one when the athlete ticked it.
+  if ((profile.eventName || profile.eventDate) && raceAhead && Array.isArray(profile.mainSports) && !profile.mainSports.length && Array.isArray(profile.sports)) {
+    const kinds = mainKindsOf({ mainSport: raceSport ?? sportFromText(profile.eventName) });
+    if (kinds.length && kinds.every(k => profile.sports.includes(k))) Object.assign(profile, { mainSports: kinds, mainSport: mainSportOfKinds(kinds) });
+  }
   const hours = Number(history?.weeklyHours);
   if ((profile.weeklyHours == null || profile.weeklyHours === "") && hours >= 1) profile.weeklyHours = Math.round(hours * 2) / 2;
   profile.mainSport = normalizeFocus(profile).mainSport;
