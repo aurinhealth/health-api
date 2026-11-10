@@ -91,11 +91,11 @@ enum DemoData {
         let answers = [
             "Jak se mi povedl dnešní běh?": "Ranní běh: 8,2 km za 42 minut, tempo 5:07/km. Den po 14 km to nebylo úplně lehké a nohy se ještě zotavují, tak dnes dřep jen lehce, 4×3. K odpolední svačině si dej sacharidy.",
             "Co mám dát zítra?": "Zítra jen lehká jízda v Z2, ať máš v sobotu čerstvé nohy na dlouhý běh.",
-            "Proč mám 78 po pouhých 7 hodinách spánku?": "HRV 64 je nad tvým obvyklým rozmezím 55–61 a klidový tep 48 pod obvyklou hodnotou, takže je tělo dobře zotavené. Spánku ale chybělo 53 minut.",
+            "Proč mám 78 po pouhých 7 hodinách spánku?": "HRV 64 je nad tvým obvyklým rozmezím 55–61 a klidový tep je nižší než obvykle. Tělo je dobře zotavené, jen spánku bylo o 53 minut méně.",
             "Co sníst před posilovnou?": "Kolem 16:00 svačinu se sacharidy, asi 360 kcal, třeba toast s medem a jogurt. Po posilovně večeři se 40 g bílkovin. Zbývá ti 1 270 kcal.",
             "Co sníst před večerním tréninkem?": "Kolem 16:00 svačinu se sacharidy, asi 360 kcal, třeba toast s medem a jogurt. Po posilovně večeři se 40 g bílkovin. Zbývá ti 1 270 kcal.",
-            "Jak to dnes v noci dohnat?": "Do postele ve 22:10, budík v 7:15. Posilovnu máš hotovou v 18:15 a večeře v 19:00 ti nechá tři hodiny do spánku.",
-            "A co si dát k večeři?": "Asi 900 kcal se 45 g bílkovin a sacharidy na doplnění po posilovně, třeba losos s bramborami a zeleninou.",
+            "Jak to dnes v noci dohnat?": "Do postele ve 22:10, budík v 7:15. Posilovna končí v 18:15, takže večeře v 19:00 ti nechá tři hodiny do spánku.",
+            "A co si dát k večeři?": "Asi 900 kcal se 45 g bílkovin a k tomu sacharidy na doplnění po posilovně, třeba losos s bramborami.",
             "Co sníst po tréninku?": "Do hodiny po tréninku si dej bílkoviny se sacharidy, třeba řecký jogurt s ovocem a müsli nebo kuře s rýží. Do dnešního cíle ti zbývá 1 270 kcal, tak se klidně pořádně najez.",
             "Jak mám dnes trénovat?": "Připravenost je 78, takže dnes můžeš jít naplno. Nohy se po pondělí a včerejším běhu ještě zotavují, tak dřep jen lehce, 4×3 s 80 kg. Sílu dej do horní části těla: tlak na lavici a přítahy, pak ramena a střed těla. Sobotní dlouhý běh chce čerstvé nohy."]
         let key = answers.keys.first { L10n.tr($0) == question } ?? ""
