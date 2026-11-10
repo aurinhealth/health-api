@@ -3802,6 +3802,9 @@
 "klidový tep" = "resting HR";
 "zátěž" = "strain";
 "Začít 7denní zkoušku zdarma" = "Start 7-day free trial";
+"Povolit AI a začít týden zdarma" = "Allow AI and start free week";
+"Kouč potřebuje zapnutou AI" = "The coach needs AI turned on";
+"Pošle potřebné údaje, včetně zdravotních, společnosti OpenAI v USA. Vypneš to v Nastavení → Soukromí a data." = "It sends the data it needs, including health data, to OpenAI in the USA. You can turn it off in Settings → Privacy & data.";
 "VYZKOUŠEJ 7 DNÍ ZDARMA" = "TRY 7 DAYS FREE";
 "12MĚSÍČNÍ TARIF · VYZKOUŠEJ 7 DNÍ ZDARMA" = "12-MONTH PLAN · TRY 7 DAYS FREE";
 "V PRO JE" = "INCLUDED IN PRO";
