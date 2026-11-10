@@ -1,15 +1,16 @@
 import SwiftUI
 import UserNotifications
 
-/// After the first sign-in: the consent to health data with the separate one
-/// to the AI features ("Tvoje data o zdraví"), where the data comes from
-/// ("Odkud brát data": Apple Health, Google Health, the Ultrahuman Ring, WHOOP,
-/// Intervals.icu, Wahoo), who you are ("O tobě": sex, year of birth, height and
-/// weight, filled in from Apple Health or the server's suggestions), the main
-/// sport, the goal and the time for training on each day (SetupFocusPages,
-/// each can be skipped) and what the notifications bring, before iOS asks
-/// once. Everything else (the day, sleep, food) lives in Settings. An account
-/// set up earlier that still owes the consent sees only the consent page.
+/// After the first sign-in: the consent to health data with the separate one to
+/// the AI features ("Tvoje data o zdraví"), where the data comes from ("Připoj
+/// svoje data": Apple Health first, then WHOOP, the Ultrahuman Ring, Google
+/// Health and Intervals.icu; Wahoo in Settings), who you are ("O tobě": sex,
+/// year of birth, height and weight, filled in from Apple Health or the
+/// server's suggestions), the main sport, the goal and the time for training on
+/// each day (SetupFocusPages, each can be skipped) and what the notifications
+/// bring, before iOS asks once. Everything else (the day, sleep, food) lives in
+/// Settings. An account set up earlier that still owes the consent sees only
+/// the consent page.
 struct SetupFlowView: View {
     @Environment(AppModel.self) private var model
     @State private var index = 0
@@ -126,16 +127,17 @@ struct SetupFlowView: View {
                         .font(Typo.small.weight(.medium)).foregroundStyle(Palette.amber)
                         .padding(.bottom, 10)
                 }
-                PrimaryButton(title: buttonTitle, busy: saving || appleWorking || proOffer) { Task { await next() } }
-                    .disabled(saving || appleWorking || proOffer || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree)
-                              || (page == .sport && focus.sports.kinds.isEmpty) || (page == .goal && focus.goal.isEmpty))
-                if page == .sources {
-                    // "Teď ne" skips connecting, not "O tobě": without age, height and
+                if appleOffered {
+                    // Skips connecting, not "O tobě": without age, height and
                     // weight nothing (calories, strain, recovery) can be worked out.
-                    Button("Teď ne") { withAnimation { index += 1 } }
-                        .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
-                        .frame(maxWidth: .infinity).frame(height: 44)
-                        .disabled(!ready)
+                    Button("Pokračovat") { withAnimation { index += 1 } }
+                        .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(height: 50)
+                        .disabled(!ready || appleWorking)
+                } else {
+                    PrimaryButton(title: buttonTitle, busy: saving || appleWorking || proOffer) { Task { await next() } }
+                        .disabled(saving || appleWorking || proOffer || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree)
+                                  || (page == .sport && focus.sports.kinds.isEmpty) || (page == .goal && focus.goal.isEmpty))
                 }
                 if page == .notifications {
                     Button("Později") { Task { await done(notifications: false) } }
@@ -187,12 +189,13 @@ struct SetupFlowView: View {
 
     // MARK: - Consent (accounts set up before the consent, after a version bump)
 
-    // The same points as the web's consent (consentDataList in dashboard-client.js).
+    // What the health consent covers (CONSENT_VERSION in src/consent.js). The AI
+    // has its own card below (AI_CONSENT_VERSION), so the optional consent names
+    // OpenAI right at its box (release 1.0.1 point 1, App Review 5.1.2(i)).
     private static let consentPoints: [(String, String)] = [
         ("Co", "Tep, variabilita tepu (HRV), spánek, dech, okysličení krve, teplota ve spánku, kroky, váha a tělesný tuk, jídlo a pití, tréninky a jak ti šly a co si zapíšeš do deníku."),
         ("Odkud", "Ze služeb, které připojíš (třeba Apple Health, Google Health, WHOOP, prsten Ultrahuman, Intervals.icu nebo Wahoo), a z toho, co zadáš sám."),
         ("K čemu", "Jen k přehledům, výpočtům a plánům v Aurinu. Data neprodáváme a nepoužíváme k reklamě."),
-        ("AI", "Když použiješ AI funkci (kouč, rozpoznání jídla z fotky, hodnocení tréninku a týdne), každý den kvůli krátkému shrnutí kouče na Dnes, Tréninku a Jídle a v noci po dni s chatem kvůli paměti kouče, pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI v USA. Cyklus jen po zapnutí „Kouč ví o cyklu“, citlivé položky deníku jen po zapnutí „Kouč vidí citlivé položky“."),
         ("Odvolání", "Pozastavením zdravotních dat, nebo smazáním účtu v Nastavení → Soukromí a data, kde si předtím můžeš stáhnout všechna svoje data.")
     ]
 
@@ -209,45 +212,48 @@ struct SetupFlowView: View {
         }
         checkbox("Souhlasím, aby Aurin zpracovával moje údaje o zdraví, jak je popsáno výše.", note: nil, isOn: $agree)
             .padding(.top, 4)
-        checkbox("Posílat data do AI funkcí",
-                 note: "Nepovinné. Potřebuje je kouč, jeho paměť a denní shrnutí a rozpoznání jídla. Jde to vypnout v Nastavení.",
-                 isOn: $agreeAI)
+        Card {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 5) {
+                    Text("Tvůj AI kouč").foregroundStyle(Palette.ink)
+                    Text(verbatim: "·").foregroundStyle(Palette.muted)
+                    Text("nepovinné").foregroundStyle(Palette.muted)
+                }
+                .font(Typo.bodyStrong)
+                Text("Kouč, jeho denní shrnutí na Dnes, Tréninku a Jídle, jeho paměť po dni s chatem, rozpoznání jídla z fotky a hodnocení tréninku a týdne posílají potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI (USA). Ta je nepoužívá k trénování svých modelů. Cyklus a citlivé položky deníku jen po jejich zapnutí.")
+                    .font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            checkbox("Posílat data, která AI funkce potřebují, společnosti OpenAI (USA)",
+                     note: "Jde to kdykoli vypnout v Nastavení.",
+                     isOn: $agreeAI)
+        }
         Link("Zásady ochrany soukromí", destination: L10n.legalURL("privacy")).font(Typo.small)
     }
 
-    // MARK: - Odkud brát data
+    // MARK: - Připoj svoje data
 
     @ViewBuilder
     private var sourcesPage: some View {
-        title("Odkud brát data")
+        title("Připoj svoje data")
         if ready { sourceGroups } else { ProgressView().frame(maxWidth: .infinity).padding(.top, 40) }
     }
 
+    /// Apple Health on top as the one main step (release 1.0.1 point 3), the
+    /// other sources under it, so WHOOP and Ultrahuman stay in view.
     @ViewBuilder
     private var sourceGroups: some View {
-        SectionLabel(text: "Zdravotní data").padding(.top, 6)
+        if health.isAvailable { appleCard }
+        SectionLabel(text: health.isAvailable ? "Další zdroje" : "Zdroje").padding(.top, 6)
         SettingsGroup {
-            if health.isAvailable {
-                appleRow
-                SettingsDivider()
-            }
-            if let google = provider("google") { sourceRow(google) }
-            ForEach(listed(["ultrahuman", "whoop"]), id: \.id) { p in
-                SettingsDivider()
+            ForEach(Array(otherSources.enumerated()), id: \.element.id) { i, p in
+                if i > 0 { SettingsDivider() }
                 sourceRow(p)
             }
         }
-        // What an iPhone alone cannot measure (audit 14.6).
-        Text("HRV, tep a spánek měří hodinky nebo prsten. Bez nich uvidíš kroky, trénink a jídlo.")
-            .font(Typo.caption).foregroundStyle(Palette.muted)
-            .fixedSize(horizontal: false, vertical: true)
-        SectionLabel(text: "Tréninkové aplikace").padding(.top, 10)
-        SettingsGroup {
-            if let intervals = provider("intervals") { sourceRow(intervals) }
-            ForEach(listed(["wahoo"]), id: \.id) { p in
-                SettingsDivider()
-                sourceRow(p)
-            }
+        if !listed(["wahoo"]).isEmpty {
+            Text("Wahoo připojíš v Nastavení → Zdroje dat.")
+                .font(Typo.caption).foregroundStyle(Palette.muted)
+                .fixedSize(horizontal: false, vertical: true)
         }
         if let line = syncLine {
             HStack(spacing: 8) {
@@ -263,34 +269,44 @@ struct SetupFlowView: View {
         }
     }
 
-    /// Apple Health: "Připojit" like the other rows, with a line on what it
-    /// reads; the tap asks iOS for the permissions (the health categories plus
-    /// the profile, AppleHealthProfile).
-    private var appleRow: some View {
-        HStack(spacing: 12) {
-            IntegrationIcon(id: "apple", size: 30)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Apple Health").font(.body).foregroundStyle(Palette.ink)
-                if !health.enabled {
-                    Text("Čte spánek, tep, HRV, tréninky, váhu a jídlo. Bez zeptání nic nezapisuje.")
-                        .font(Typo.caption).foregroundStyle(Palette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
+    /// The other sources in the mockup's order; WHOOP and Ultrahuman only when
+    /// the server offers them, Wahoo only in Settings.
+    private var otherSources: [ConnectionsResponse.Provider] {
+        ["whoop", "ultrahuman", "google", "intervals"].compactMap(provider)
+    }
+
+    /// Apple Health with what it reads and its own button; the tap asks iOS
+    /// for the permissions (the health categories plus the profile,
+    /// AppleHealthProfile).
+    private var appleCard: some View {
+        Card {
+            HStack(spacing: 12) {
+                IntegrationIcon(id: "apple", size: 30)
+                Text("Apple Health").font(.headline).foregroundStyle(Palette.ink)
+                Spacer(minLength: 8)
+                if health.enabled {
+                    Label("připojeno", systemImage: "checkmark").font(Typo.small).foregroundStyle(Palette.green)
                 }
             }
-            Spacer(minLength: 8)
-            if appleWorking {
-                ProgressView()
-            } else if health.enabled {
-                Label("připojeno", systemImage: "checkmark").font(Typo.small).foregroundStyle(Palette.green)
-            } else {
-                Button { Task { await connectApple() } } label: { connectLabel }
-                    .buttonStyle(.plain)
+            Text("Hodinky už posílají spánek, tep a tréninky do Apple Health. Aurin je čte, aby ti naplánoval den. Bez zeptání nic nezapisuje.")
+                .font(Typo.small).foregroundStyle(Palette.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 6) {
+                ForEach(["Spánek", "Tep a HRV", "Tréninky"], id: \.self) {
+                    Pill(text: $0, foreground: Palette.secondary, background: Palette.background)
+                }
+            }
+            if !health.enabled {
+                PrimaryButton(title: "Připojit Apple Health", busy: appleWorking) { Task { await connectApple() } }
+                    .disabled(appleWorking)
+                    .padding(.top, 2)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(minHeight: 56)
     }
+
+    /// Apple Health still waits for its button on its card: that is the main
+    /// step, so "Pokračovat" under the page is a quiet text button.
+    private var appleOffered: Bool { page == .sources && health.isAvailable && !health.enabled }
 
     private func sourceRow(_ provider: ConnectionsResponse.Provider) -> some View {
         HStack(spacing: 12) {
@@ -308,10 +324,12 @@ struct SetupFlowView: View {
         .frame(minHeight: 56)
     }
 
+    /// Outlined: the one filled button on the page is Apple Health's.
     private var connectLabel: some View {
-        Text("Připojit").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+        Text("Připojit").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
             .padding(.horizontal, 14).frame(height: 34)
-            .background(Palette.button, in: Capsule())
+            .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+            .contentShape(Capsule())
     }
 
     private func checkbox(_ title: LocalizedStringKey, note: LocalizedStringKey?, isOn: Binding<Bool>) -> some View {
@@ -621,7 +639,9 @@ struct SetupFlowView: View {
         async let consent = try? api.healthConsentNeeded()
         async let connections = try? api.connections()
         let s = await status
-        let consentNeeded = await consent ?? false
+        // Unknown (the server did not answer): the consent page first, as the server
+        // takes no health data from an account without it (health_consent_required).
+        let consentNeeded = await consent ?? true
         consentFirst = consentNeeded
         if let s {
             consentOnly = consentNeeded && s.completed == true

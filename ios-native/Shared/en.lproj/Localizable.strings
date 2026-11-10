@@ -244,7 +244,6 @@
 "Kdy jít spát?" = "When to go to bed?";
 "Kdy mám čas" = "When I have time";
 "Kdykoli" = "Anytime";
-"Když použiješ AI funkci (kouč, rozpoznání jídla z fotky, hodnocení tréninku a týdne), každý den kvůli krátkému shrnutí kouče na Dnes, Tréninku a Jídle a v noci po dni s chatem kvůli paměti kouče, pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI v USA. Cyklus jen po zapnutí „Kouč ví o cyklu“, citlivé položky deníku jen po zapnutí „Kouč vidí citlivé položky“." = "When you use an AI feature (the coach, food recognition from photos, workout and week reviews), every day for the coach's short summary on Today, Training and Food, and at night after a day you chatted, for the coach's memory, Aurin sends the data it needs, including health data and the photos you send, to OpenAI in the USA. Your cycle only if you turn on “Coach knows my cycle”, sensitive journal items only if you turn on “The coach sees sensitive items”.";
 "Klidový tep" = "Resting heart rate";
 "Klidový tep po dnech" = "Resting heart rate by day";
 "Knihovna" = "Library";
@@ -999,6 +998,7 @@
 "jiný" = "another";
 "jízda" = "ride";
 "katalog" = "catalog";
+"z tabulky složení potravin" = "from a food composition table";
 "kolem 10:00" = "around 10 AM";
 "kolem 12:00" = "around noon";
 "kolem 16:00" = "around 4 PM";
@@ -1715,7 +1715,13 @@
 "Přístupový klíč se nepodařilo vytvořit." = "The passkey couldn't be created.";
 "Tenhle přístupový klíč patří k účtu, který už neexistuje. Přihlas se jinak, iPhone ho přestane nabízet." = "This passkey belongs to an account that no longer exists. Sign in another way; your iPhone will stop offering it.";
 "Odkud brát data" = "Where to take data from";
-"Tréninkové aplikace" = "Training apps";
+"Připoj svoje data" = "Connect your data";
+"Hodinky už posílají spánek, tep a tréninky do Apple Health. Aurin je čte, aby ti naplánoval den. Bez zeptání nic nezapisuje." = "Your watch already sends sleep, heart rate and workouts to Apple Health. Aurin reads them to plan your day. It writes nothing without asking.";
+"Tep a HRV" = "Heart rate & HRV";
+"Připojit Apple Health" = "Connect Apple Health";
+"Další zdroje" = "Other sources";
+"Zdroje" = "Sources";
+"Wahoo připojíš v Nastavení → Zdroje dat." = "Connect Wahoo in Settings → Data sources.";
 "Zásady" = "Policy";
 "Z Apple Health jsme vzali:" = "Taken from Apple Health:";
 "Z Google Health jsme vzali:" = "Taken from Google Health:";
@@ -2959,6 +2965,9 @@
 "pevná" = "fixed";
 "Stojí do %@" = "Stopped until %@";
 "Den začíná znovu v %@" = "Day resets at %@";
+"%@ · %@ denně" = "%@ · %@ a day";
+"Na pojistce %lld×" = "Hit daily brake %lld×";
+"Měsíc ve dnech UTC jako pojistky" = "Month in UTC days, like the brakes";
 "Platící" = "Paying";
 "Pilot, dárky a ty" = "Pilot, gifts and you";
 "Bez nákupu" = "No purchase";
@@ -2994,7 +3003,7 @@
 "Lehčí trénink" = "Easier session";
 "Upraveno i v kalendáři." = "Changed in the calendar too.";
 "Upraveno. Tréninky níže jsou podle kontroly." = "Done. The sessions below follow the check.";
-"Posílat data do AI funkcí" = "Send data to the AI features";
+"Posílat data, která AI funkce potřebují, společnosti OpenAI (USA)" = "Send the data AI features need to OpenAI (USA)";
 "Vybrat fotku" = "Choose photo";
 "Na fotce jsem kód nenašel." = "No barcode found in the photo.";
 "Zadat kód" = "Enter code";
@@ -3385,8 +3394,9 @@
 "Přidat se na čekací listinu" = "Join the waitlist";
 "Zaškrtni první políčko, ať můžeš pokračovat." = "Tick the first box to continue.";
 "Později" = "Later";
-"Nepovinné. Potřebuje je kouč, jeho paměť a denní shrnutí a rozpoznání jídla. Jde to vypnout v Nastavení." = "Optional. The coach, its memory and daily summary, and food recognition need it. You can turn it off in Settings.";
-"Čte spánek, tep, HRV, tréninky, váhu a jídlo. Bez zeptání nic nezapisuje." = "Reads sleep, heart rate, HRV, workouts, weight and food. Writes nothing without asking.";
+"Tvůj AI kouč" = "Your AI coach";
+"Kouč, jeho denní shrnutí na Dnes, Tréninku a Jídle, jeho paměť po dni s chatem, rozpoznání jídla z fotky a hodnocení tréninku a týdne posílají potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI (USA). Ta je nepoužívá k trénování svých modelů. Cyklus a citlivé položky deníku jen po jejich zapnutí." = "The coach, its daily summary on Today, Training and Food, its memory after a chat day, food recognition from a photo and workout and week reviews send the data they need, incl. health data and photos you send, to OpenAI (USA). OpenAI does not use it to train its models. Cycle and sensitive journal items only after you turn them on.";
+"Jde to kdykoli vypnout v Nastavení." = "You can turn it off any time in Settings.";
 "Aurin potřebuje věk, výšku a váhu, aby spočítal kalorie, námahu a zotavení. Pohlaví mění výpočet kalorií a tepových zón." = "Aurin needs your age, height and weight to work out calories, strain and recovery. Sex changes how calories and heart rate zones are worked out.";
 "Zadej výšku mezi %@ a %@." = "Enter a height between %@ and %@.";
 "Zadej váhu mezi %@ a %@." = "Enter a weight between %@ and %@.";
@@ -3412,7 +3422,6 @@
 "měří hodinky" = "needs a watch";
 "Připravenost počítají hodinky nebo prsten. Bez nich ti radím podle tréninku a zátěže." = "Readiness comes from a watch or ring. Without one, I base my advice on your training and load.";
 "Bez hodinek nebo prstenu spánek neměřím." = "Without a watch or ring, I can’t measure your sleep.";
-"HRV, tep a spánek měří hodinky nebo prsten. Bez nich uvidíš kroky, trénink a jídlo." = "A watch or ring measures HRV, heart rate and sleep. Without one, you’ll see steps, training and food.";
 "Kouč, když je potřeba změnit plán, a kdy jít spát." = "The coach when your plan needs to change, and when to go to bed.";
 "Včera byl těžký trénink. Dnešní intervaly jsem posunul na čtvrtek." = "Yesterday was a hard session. I moved today’s intervals to Thursday.";
 "od %@ do %@ %@" = "from %@ to %@ %@";
