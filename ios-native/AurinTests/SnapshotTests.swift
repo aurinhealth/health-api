@@ -993,6 +993,9 @@ final class SnapshotTests: XCTestCase {
         try render("paywall-free-week", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true)) }
         // The end of the first setup (point 7): no way back, "Teď ne" under the button.
         try render("paywall-setup-end", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true), notNow: true) }
+        // The same with the AI features left off in the setup (1.0.1 point 2): the note and "Povolit AI a začít týden zdarma",
+        // at the safe-area height of a 6.1" iPhone (852 − 59 − 34), so the image shows the page fits.
+        try render("paywall-setup-end-ai", height: 759) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true), notNow: true, allowAI: {}) }
         // "View more plans" (variant 8c): where the year can be paid monthly (CZ) and where it can't (US).
         let czech = ProOffer.plans(yearly: "1 490 Kč", monthly: "199 Kč", perMonth: "124 Kč",
                                    commitment: ProStore.Commitment(monthly: "149 Kč", total: "1 788 Kč"), trial: true)

@@ -35,6 +35,8 @@ struct SetupFlowView: View {
     @State private var askNotifications = false
     /// The free week shown at the end (SetupProOffer).
     @State private var proOffer = false
+    /// The account left the AI features off: the free week allows them with its button.
+    @State private var proNeedsAI = false
     // Data sources
     @State private var appleWorking = false
     @State private var appleRead = false
@@ -154,7 +156,8 @@ struct SetupFlowView: View {
         .sheet(item: $connecting) { target in ServiceConnectSheet(target: target) { await loadProviders(); syncRun += 1 } }
         // The free week, once, after the last page (SetupProOffer); Today when it closes.
         .fullScreenCover(isPresented: $proOffer, onDismiss: { Task { await model.finishSetup() } }) {
-            PaywallView(close: { proOffer = false }, step: 2, notNow: true)
+            PaywallView(close: { proOffer = false }, step: 2, notNow: true,
+                        allowAI: proNeedsAI ? { [api = model.api] in try await api.allowAI() } : nil)
         }
         .interactiveDismissDisabled()
     }
@@ -799,7 +802,12 @@ struct SetupFlowView: View {
         if notifications { _ = await Reminders.requestPermission() }
         await PushRegistration.refresh(api: model.api)
         FirstDays.start()
-        if await SetupProOffer.due(model) { proOffer = true } else { await model.finishSetup() }
+        if let needsAI = await SetupProOffer.due(model) {
+            proNeedsAI = needsAI
+            proOffer = true
+        } else {
+            await model.finishSetup()
+        }
     }
 
     // MARK: - Oznámení
@@ -853,8 +861,9 @@ struct SetupSteps: View {
 /// Point 7 of the competitor comparison (Petr, 4 Nov 2026): at the end of the
 /// first setup the free week of Aurin Pro (PaywallView's own page) shows once,
 /// only when Pro is on sale (not in the pilot, where everyone has it), the
-/// account allowed the AI features (the coach needs them), has no Pro and this
-/// Apple ID can still have the free week. "Teď ne" or the cross go to Today.
+/// account has no Pro and this Apple ID can still have the free week. With the
+/// AI features left off it shows too, and its button allows them (release
+/// 1.0.1 point 2, Petr 10 Nov 2026). "Teď ne" or the cross go to Today.
 @MainActor
 enum SetupProOffer {
     static let shownKey = "aurin.setupProOfferShown"
@@ -864,26 +873,27 @@ enum SetupProOffer {
     static var shownAt: Date? { UserDefaults.standard.object(forKey: shownKey) as? Date }
 
     /// One GET /app/api/subscription after the last page, waited for at most
-    /// 3 s so a weak signal never holds the way to Today; true marks it shown.
-    static func due(_ model: AppModel) async -> Bool {
-        guard !model.demo, shownAt == nil else { return false }
+    /// 3 s so a weak signal never holds the way to Today. Nil when it is not
+    /// shown, else whether the AI features are still off; a value marks it shown.
+    static func due(_ model: AppModel) async -> Bool? {
+        guard !model.demo, shownAt == nil else { return nil }
         let api = model.api
-        let due = await withTaskGroup(of: Bool.self) { group in
+        let due = await withTaskGroup(of: Bool?.self) { group in
             group.addTask { await check(api) }
-            group.addTask { try? await Task.sleep(for: .seconds(3)); return false }
-            let first = await group.next() ?? false
+            group.addTask { try? await Task.sleep(for: .seconds(3)); return nil }
+            let first = await group.next() ?? nil
             group.cancelAll()
             return first
         }
-        if due { UserDefaults.standard.set(Date(), forKey: shownKey) }
+        if due != nil { UserDefaults.standard.set(Date(), forKey: shownKey) }
         return due
     }
 
-    private static func check(_ api: APIClient) async -> Bool {
-        guard let status = try? await api.subscription(), !status.pilot, status.aiConsent == true, !status.purchased else { return false }
+    private static func check(_ api: APIClient) async -> Bool? {
+        guard let status = try? await api.subscription(), !status.pilot, !status.purchased else { return nil }
         let store = ProStore.shared
         await store.load()
-        return store.trialEligible && !store.entitled
+        return store.trialEligible && !store.entitled ? status.aiConsent != true : nil
     }
 }
 

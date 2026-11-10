@@ -147,6 +147,9 @@ struct PaywallView: View {
     /// Opened on the free week at the end of the setup (SetupProOffer): no way
     /// back to the plans, and "Teď ne" across the whole width under the button.
     let notNow: Bool
+    /// The account has not allowed the AI features yet (the setup's free week):
+    /// the free week says the coach needs them and its button allows them too.
+    let allowAI: (() async throws -> Void)?
     @State private var demo = AppModel(demo: true)
     /// 0 the opening, 1 the offer, 2 the free week.
     @State private var step: Int
@@ -158,11 +161,13 @@ struct PaywallView: View {
     @State private var started = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(close: @escaping () -> Void, frozenTime: Double? = nil, step: Int = 0, store: ProStore = .shared, notNow: Bool = false) {
+    init(close: @escaping () -> Void, frozenTime: Double? = nil, step: Int = 0, store: ProStore = .shared, notNow: Bool = false,
+         allowAI: (() async throws -> Void)? = nil) {
         self.close = close
         self.frozenTime = frozenTime
         self.store = store
         self.notNow = notNow
+        self.allowAI = allowAI
         _step = State(initialValue: step)
     }
 
@@ -258,15 +263,36 @@ struct PaywallView: View {
             Text(verbatim: L10n.f("Celé Aurin Pro zdarma do %@", Self.dayMonth(Self.firstPayment(from: today))))
                 .font(Typo.sentence(16)).foregroundStyle(Night.muted).padding(.top, 4)
             WeekCalendar(today: today).padding(.horizontal, 20).padding(.top, 20)
-            Text("VYZKOUŠEJ TENTO TÝDEN").scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Night.faint)
-                .padding(.top, 22).padding(.bottom, 10)
-            clock { time in ScreenBelt(time: time) }
+            // With the AI note the belt's heading gives way, so the price line still fits on a 6.1" phone.
+            if allowAI == nil {
+                Text("VYZKOUŠEJ TENTO TÝDEN").scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Night.faint)
+                    .padding(.top, 22).padding(.bottom, 10)
+            }
+            // Smaller phones beside the AI note, so the whole page fits a 6.1" phone's safe area (759 pt).
+            clock { time in ScreenBelt(time: time, phoneHeight: allowAI == nil ? 199 : 120) }
+                .padding(.top, allowAI == nil ? 0 : 16)
                 .frame(maxHeight: .infinity, alignment: .top)
+            if allowAI != nil { aiNote.padding(.horizontal, 20).padding(.bottom, 10) }
             Text(verbatim: L10n.f("Od %@ %@", Self.dayMonth(Self.firstPayment(from: today)), chosen.afterTrial)
                  + (chosen.kind == .yearMonthly ? " · " + L10n.tr("12 měsíců") : ""))
                 .font(Typo.small).foregroundStyle(Night.muted).padding(.bottom, 12)
             bottom(more: false)
         }
+    }
+
+    /// What allowing the AI features sends where, in the words of the setup's AI
+    /// point (AI_CONSENT_VERSION in src/consent.js), shortened.
+    private var aiNote: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Aurin Pro potřebuje AI").font(.footnote.weight(.semibold)).foregroundStyle(Night.amber)
+            Text("Kouč, jídlo z fotky a hodnocení pošlou potřebné údaje, včetně zdravotních a fotek, které pošleš, společnosti OpenAI v USA, a to i každý den kvůli shrnutí kouče a v noci kvůli jeho paměti. Vypneš to kdykoli v Nastavení → Soukromí a data.")
+                .font(.caption).foregroundStyle(Night.muted).fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(Night.amber.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Night.amber.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+        .accessibilityElement(children: .combine)
     }
 
     private var today: Date {
@@ -348,7 +374,8 @@ struct PaywallView: View {
     }
 
     private var cta: String {
-        L10n.tr(withTrial ? "Začít 7denní zkoušku zdarma" : "Předplatit")
+        if step == 2, allowAI != nil { return L10n.tr("Povolit AI a začít týden zdarma") }
+        return L10n.tr(withTrial ? "Začít 7denní zkoušku zdarma" : "Předplatit")
     }
 
     private func next() {
@@ -366,7 +393,12 @@ struct PaywallView: View {
             do {
                 switch try await store.purchase(offer.product, monthly: offer.kind == .yearMonthly) {
                 case .purchased(let trial):
-                    thanks = L10n.tr(trial ? "Týden zdarma začal. Kouč, jídlo z fotky a hodnocení jsou odemčené." : "Aurin Pro je aktivní. Díky!")
+                    // The button said so; should it fail, the thanks says where to turn AI on.
+                    if let allowAI, (try? await allowAI()) == nil {
+                        thanks = L10n.tr("Týden zdarma začal. AI se nepodařilo zapnout, zapneš ji v Nastavení → Soukromí a data.")
+                    } else {
+                        thanks = L10n.tr(trial ? "Týden zdarma začal. Kouč, jídlo z fotky a hodnocení jsou odemčené." : "Aurin Pro je aktivní. Díky!")
+                    }
                 case .pending:
                     notice = L10n.tr("Nákup čeká na schválení. Až ho App Store potvrdí, Aurin Pro se odemkne sám.")
                 case .cancelled:
@@ -810,25 +842,27 @@ struct ScreenCarousel: View {
 /// The free week's belt: small phones of the app sliding by, round and round.
 struct ScreenBelt: View {
     let time: Double
-    static let screens: [ProScreen] = ProScreen.allCases
-    private static let phoneHeight: CGFloat = 199
+    var phoneHeight: CGFloat = 199
+    /// What Pro adds; readiness and sleep are in Aurin for everyone.
+    static let screens: [ProScreen] = AllProPlans.included
     /// PhoneMockup's width at that height (a 7 pt bezel around the 390 × 844 screen), so
     /// the label under a phone has its width and the belt's loop is as long as the phones.
-    private static let width: CGFloat = (phoneHeight - 14) / 844 * 390 + 14
+    private var width: CGFloat { (phoneHeight - 14) / 844 * 390 + 14 }
 
     var body: some View {
-        let step = Self.width + 14
+        let step = width + 14
         let span = step * CGFloat(Self.screens.count)
         let shift = (CGFloat(time) * 36).truncatingRemainder(dividingBy: span)
         HStack(alignment: .top, spacing: 14) {
-            ForEach(0..<(Self.screens.count * 2), id: \.self) { i in
+            // Three rounds, so even the small phones fill the screen while one round slides out.
+            ForEach(0..<(Self.screens.count * 3), id: \.self) { i in
                 let screen = Self.screens[i % Self.screens.count]
                 VStack(spacing: 6) {
-                    PhoneMockup(height: Self.phoneHeight) { screen.content }
+                    PhoneMockup(height: phoneHeight) { screen.content }
                     Text(verbatim: screen.label).font(.caption2).foregroundStyle(Night.muted)
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
-                .frame(width: Self.width)
+                .frame(width: width)
             }
         }
         .offset(x: -shift)

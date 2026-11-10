@@ -3810,6 +3810,10 @@
 "klidový tep" = "resting HR";
 "zátěž" = "strain";
 "Začít 7denní zkoušku zdarma" = "Start 7-day free trial";
+"Povolit AI a začít týden zdarma" = "Allow AI and start free week";
+"Aurin Pro potřebuje AI" = "Aurin Pro needs AI";
+"Týden zdarma začal. AI se nepodařilo zapnout, zapneš ji v Nastavení → Soukromí a data." = "Your free week has started. AI could not be turned on; turn it on in Settings → Privacy & data.";
+"Kouč, jídlo z fotky a hodnocení pošlou potřebné údaje, včetně zdravotních a fotek, které pošleš, společnosti OpenAI v USA, a to i každý den kvůli shrnutí kouče a v noci kvůli jeho paměti. Vypneš to kdykoli v Nastavení → Soukromí a data." = "The coach, food from a photo and ratings send the data they need, including health data and photos you send, to OpenAI in the USA, also daily for the coach's summary and at night for its memory. Turn it off anytime in Settings → Privacy & data.";
 "VYZKOUŠEJ 7 DNÍ ZDARMA" = "TRY 7 DAYS FREE";
 "12MĚSÍČNÍ TARIF · VYZKOUŠEJ 7 DNÍ ZDARMA" = "12-MONTH PLAN · TRY 7 DAYS FREE";
 "V PRO JE" = "INCLUDED IN PRO";
