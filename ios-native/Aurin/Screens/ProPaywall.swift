@@ -255,37 +255,58 @@ struct PaywallView: View {
 
     // MARK: - The free week
 
+    /// Title, calendar and samples scroll; the price, the buttons and Apple's
+    /// terms stay pinned at the bottom, so the terms are by the button at any
+    /// text size (guideline 3.1.2, onboarding review points 4 and 16).
     private var freeWeek: some View {
         VStack(spacing: 0) {
             topBar(back: !notNow)
-            Text("Tvůj týden zdarma").font(Typo.sentence(36, relativeTo: .largeTitle)).foregroundStyle(Night.ink)
-                .multilineTextAlignment(.center)
-            Text(verbatim: L10n.f("Celé Aurin Pro zdarma do %@", Self.dayMonth(Self.firstPayment(from: today))))
-                .font(Typo.sentence(16)).foregroundStyle(Night.muted).padding(.top, 4)
-            WeekCalendar(today: today).padding(.horizontal, 20).padding(.top, 20)
-            // With the AI note the belt's heading gives way, so the price line still fits on a 6.1" phone.
-            if allowAI == nil {
-                Text("VYZKOUŠEJ TENTO TÝDEN").scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Night.faint)
-                    .padding(.top, 22).padding(.bottom, 10)
+            ScrollView {
+                VStack(spacing: 0) {
+                    Text("Tvůj týden zdarma").font(Typo.sentence(36, relativeTo: .largeTitle)).foregroundStyle(Night.ink)
+                        .multilineTextAlignment(.center)
+                    Text(verbatim: L10n.f("Celé Aurin Pro zdarma do %@", Self.dayMonth(Self.firstPayment(from: today))))
+                        .font(Typo.sentence(16)).foregroundStyle(Night.muted).multilineTextAlignment(.center).padding(.top, 4)
+                    WeekCalendar(today: today).padding(.horizontal, 20).padding(.top, 20)
+                    // With the AI note pinned below, the belt's heading gives way.
+                    if allowAI == nil {
+                        Text("VYZKOUŠEJ TENTO TÝDEN").scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Night.faint)
+                            .padding(.top, 22).padding(.bottom, 10)
+                    }
+                    clock { time in ScreenBelt(time: time, phoneHeight: allowAI == nil ? 199 : 150) }
+                        .padding(.top, allowAI == nil ? 0 : 16).padding(.bottom, 8)
+                }
+                .padding(.top, 2)
             }
-            // Smaller phones beside the AI note, so the whole page fits a 6.1" phone's safe area (759 pt).
-            clock { time in ScreenBelt(time: time, phoneHeight: allowAI == nil ? 199 : 120) }
-                .padding(.top, allowAI == nil ? 0 : 16)
-                .frame(maxHeight: .infinity, alignment: .top)
-            if allowAI != nil { aiNote.padding(.horizontal, 20).padding(.bottom, 10) }
-            Text(verbatim: L10n.f("Od %@ %@", Self.dayMonth(Self.firstPayment(from: today)), chosen.afterTrial)
-                 + (chosen.kind == .yearMonthly ? ", " + L10n.tr("12 měsíců") : ""))
-                .font(Typo.small).foregroundStyle(Night.muted).padding(.bottom, 12)
+            .scrollBounceBehavior(.basedOnSize)
+            // The AI note is what the button allows, so it stays by the button too.
+            if allowAI != nil { aiNote.padding(.horizontal, 20).padding(.top, 10) }
+            price.padding(.horizontal, 20).padding(.top, 12)
             bottom(more: false)
         }
     }
 
-    /// What allowing the AI features sends where, in the words of the setup's AI
-    /// point (AI_CONSENT_VERSION in src/consent.js), shortened.
+    /// What is charged and when, the largest price on the page (3.1.2):
+    /// "$59.99 a year", then "after 7 days free, first charge Nov 5".
+    private var price: some View {
+        VStack(spacing: 2) {
+            Text(verbatim: chosen.afterTrial + (chosen.kind == .yearMonthly ? ", " + L10n.tr("12 měsíců") : ""))
+                .scaledFont(22, weight: .semibold).foregroundStyle(Night.ink)
+            Text(verbatim: L10n.f("po 7 dnech zdarma, první platba %@", Self.dayMonth(Self.firstPayment(from: today))))
+                .font(Typo.small).foregroundStyle(Night.muted)
+        }
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// What allowing the AI features sends where: the setup's AI point
+    /// (AI_CONSENT_VERSION in src/consent.js) in two lines, still naming
+    /// OpenAI (USA), health data and photos (guideline 5.1.2(i)).
     private var aiNote: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text("Aurin Pro potřebuje AI").font(.footnote.weight(.semibold)).foregroundStyle(Night.amber)
-            Text("Kouč, jídlo z fotky a hodnocení pošlou potřebné údaje, včetně zdravotních a fotek, které pošleš, společnosti OpenAI v USA, a to i každý den kvůli shrnutí kouče a v noci kvůli jeho paměti. Vypneš to kdykoli v Nastavení → Soukromí a data.")
+            Text("AI funkce posílají potřebné údaje, včetně zdravotních a fotek, které pošleš, společnosti OpenAI (USA). Vypneš to kdykoli v Nastavení → Soukromí a data.")
                 .font(.caption).foregroundStyle(Night.muted).fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

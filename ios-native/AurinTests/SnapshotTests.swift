@@ -1014,12 +1014,19 @@ final class SnapshotTests: XCTestCase {
         }
         try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore()) }
         try render("paywall-plans-trial", height: 844) { PaywallView(close: {}, frozenTime: 5.5, step: 1, store: ProStore(trialEligible: true)) }
-        try render("paywall-free-week", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true)) }
+        // The free week's top is a ScrollView, which ImageRenderer cannot draw, so these come from a window.
+        try render("paywall-free-week", height: 844, window: true) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true)) }
         // The end of the first setup (point 7): no way back, "Teď ne" under the button.
-        try render("paywall-setup-end", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true), notNow: true) }
+        try render("paywall-setup-end", height: 844, window: true) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true), notNow: true) }
         // The same with the AI features left off in the setup (1.0.1 point 2): the note and "Povolit AI a začít týden zdarma",
         // at the safe-area height of a 6.1" iPhone (852 − 59 − 34), so the image shows the page fits.
-        try render("paywall-setup-end-ai", height: 759) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true), notNow: true, allowAI: {}) }
+        try render("paywall-setup-end-ai", height: 759, window: true) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true), notNow: true, allowAI: {}) }
+        // Large text (onboarding review point 16): the top scrolls, the price, both buttons and the terms stay at the bottom.
+        for (name, size) in [("xxl", DynamicTypeSize.xxLarge), ("ax1", .accessibility1)] {
+            try render("paywall-setup-end-ai-\(name)", height: 759, typeSize: size, window: true) {
+                PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true), notNow: true, allowAI: {})
+            }
+        }
         // "View more plans" (variant 8c): where the year can be paid monthly (CZ) and where it can't (US).
         let czech = ProOffer.plans(yearly: "1 490 Kč", monthly: "199 Kč", perMonth: "124 Kč",
                                    commitment: ProStore.Commitment(monthly: "149 Kč", total: "1 788 Kč"), trial: true)
