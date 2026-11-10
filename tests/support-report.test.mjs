@@ -32,6 +32,14 @@ test("a report is stored with its screenshot and diagnostics and e-mailed to sup
   assert.match(sent[0].text, /"offline": false/);
 });
 
+test("a line break in the screen name never reaches the e-mail's headers", async () => {
+  const { env, sent } = setup();
+  const response = await handleSupportReport(post({ message: "Nejde to", diagnostics: { screens: ["Today\r\nBcc: someone@example.com"] } }), env, { signedIn: true, origin: "https://x.test" });
+  assert.equal(response.status, 200);
+  assert.doesNotMatch(sent[0].subject, /[\r\n]/);
+  assert.match(sent[0].subject, /\(Today Bcc: someone@example\.com\)$/);
+});
+
 test("without e-mail set up the report is still kept", async () => {
   const { raw, env } = setup({ EMAIL: undefined });
   assert.deepEqual(await saveSupportReport(env, { message: "Chyba" }), { id: 1, emailed: false });

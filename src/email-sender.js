@@ -13,8 +13,10 @@ export function emailConfigured(env) {
   return Boolean(env?.EMAIL && typeof env.EMAIL.send === "function" && emailSender(env));
 }
 
+// The subject is a mail header: a line break in it (a screen name from a problem report's
+// diagnostics) would start a header of the sender's choosing (penetration test 2026-11-10).
 export async function sendEmail(env, { to, subject, text, html }) {
-  const result = await env.EMAIL.send({ from: { email: emailSender(env), name: "Aurin" }, to, subject, text, html });
+  const result = await env.EMAIL.send({ from: { email: emailSender(env), name: "Aurin" }, to, subject: String(subject ?? "").replace(/[\x00-\x1f\x7f]+/g, " "), text, html });
   return result?.messageId || null;
 }
 
