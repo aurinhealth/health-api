@@ -120,7 +120,7 @@ struct TrainingPage: View {
             Text(rest ? W.tr("Den volna", "Rest day") : W.tr("Posilovna není v plánu", "No gym planned"))
                 .watchFont(15, .semibold).foregroundStyle(W.ink)
             if let last = settings.lastGym {
-                Text(W.tr("Minule: ", "Last: ") + W.dayName(last) + (settings.lastGymExercises.map { " · " + Self.exercises($0) } ?? ""))
+                Text(W.tr("Minule: ", "Last: ") + W.dayName(last) + (settings.lastGymExercises.map { ", " + Self.exercises($0) } ?? ""))
                     .watchFont(12).foregroundStyle(W.secondary)
             }
             if rest {
@@ -248,7 +248,7 @@ struct TrainingPage: View {
                 Image(systemName: "checkmark").foregroundStyle(W.green)
             }
             ForEach(Array(done.dropFirst().enumerated()), id: \.offset) { _, other in
-                Text(Self.name(other) + (other.minutes.map { " · \($0) min" } ?? ""))
+                Text(Self.name(other) + (other.minutes.map { ", \($0) min" } ?? ""))
                     .watchFont(12).foregroundStyle(W.secondary).padding(.top, 2)
             }
         } else if day == today, let s = watch.snapshot, s.date != today {
@@ -540,12 +540,12 @@ struct TrainingPage: View {
         return out
     }
 
-    /// "dnes · 17:30", "sobota · 9:00"; the length too unless the card shows it apart.
+    /// "dnes, 17:30", "sobota, 9:00"; the length too unless the card shows it apart.
     private func subtitle(_ s: WatchSnapshot.Session, day: String, length: Bool = true) -> String {
         let name = day == today ? W.tr("Dnes", "Today") : day == tomorrow ? W.tr("Zítra", "Tomorrow") : W.dayName(day).capitalized
         // A brick's second leg starts when the first ends, not at a time of its own.
-        let when = afterText(s).map { " · " + $0.lowercased() } ?? s.time.map { " · " + W.clockText($0) } ?? ""
-        return name + when + (length ? s.minutes.map { " · \($0) min" } ?? "" : "")
+        let when = afterText(s).map { ", " + $0.lowercased() } ?? s.time.map { ", " + W.clockText($0) } ?? ""
+        return name + when + (length ? s.minutes.map { ", \($0) min" } ?? "" : "")
     }
 
     static func name(_ s: WatchSnapshot.Session) -> String { s.name }
@@ -811,7 +811,7 @@ enum GymText {
         return Self.kg(shown(kg, machineLb: machineLb)) + " × \(set.reps)"
     }
 
-    /// Under the exercise's name: "Minule 97,5 × 6 · cíl: těžká" (Training
+    /// Under the exercise's name: "Minule 97,5 × 6, cíl: těžká" (Training
     /// mode's "Minule" and the set's planned letter); nil with neither.
     /// "Last time 97.5 × 6"; the aim is the letter's pill beside the set (watch audit B5).
     static func info(_ lift: WatchGym.Lift, machineLb: Bool = false) -> String? {
