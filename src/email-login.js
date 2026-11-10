@@ -206,7 +206,7 @@ async function warnAtHalf(db, env, budget, limit, now) {
   try {
     const row = await db.prepare("SELECT day, day_count FROM request_limits WHERE key = ?").bind(budget === "open" ? "email-codes:open:day" : "email-codes:day").first();
     const used = row?.day === today(now) ? Number(row.day_count) || 0 : 0;
-    if (used * 2 < limit || !(await allowRequest(db, "email-codes:warned:" + budget, { day: 1 }, now))) return;
+    if (used * 2 < limit || !(await allowRequest(db, "email-codes:warned", { day: 1 }, now))) return;
     const to = ownerEmail(env);
     if (!to) return;
     const which = budget === "open" ? "pro nové adresy" : "pro přihlášení";
