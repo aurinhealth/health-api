@@ -305,7 +305,7 @@ struct StrainHero: View {
         if isToday { return L10n.tr("Námaha dnes") }
         if AppModel.shift(training.date, by: -1) == date { return L10n.tr("Námaha včera") }
         if AppModel.shift(training.date, by: 1) == date { return L10n.tr("Námaha zítra") }
-        return L10n.f("Námaha · %@", Fmt.dayShort(date, today: training.date))
+        return L10n.f("Námaha %@", Fmt.dayShort(date, today: training.date))
     }
 
     /// Today's from the training answer; a past day of the week as its bar, an
@@ -599,7 +599,7 @@ struct NextSession: View {
     }
 
     private var meta: String {
-        [session.minutes.map { Fmt.duration($0) }, strainText].compactMap { $0 }.joined(separator: " · ")
+        [session.minutes.map { Fmt.duration($0) }, strainText].compactMap { $0 }.joined(separator: ", ")
     }
 
     /// Today: where the workout takes the day's strain ("námaha dnes ~13,4"), as
@@ -612,20 +612,20 @@ struct NextSession: View {
     }
 
     /// Two strains on one day: the loads add up on the saturating 0–21 curve
-    /// (strainScore in src/recovery-model.js), 21 · (1 − e^(−load / 225)).
+    /// (strainScore in src/recovery-model.js), 21, (1 − e^(−load / 225)).
     static func dayStrain(_ a: Double, adding b: Double) -> Double {
         let left = (1 - min(a, 20.9) / 21) * (1 - min(b, 20.9) / 21)
         return ((21 * (1 - left)) * 10).rounded() / 10
     }
 
     /// A gym plan as rows (Petr, 2026-10-30): exercises, sets and the main muscles in one
-    /// line, then each exercise with sets × reps · weight; five, the rest in the gym day.
+    /// line, then each exercise with sets × reps, weight; five, the rest in the gym day.
     private func exerciseList(_ lines: [TrainingSnapshot.Session.Line]) -> some View {
         // What is still left: sets ticked off in the gym day leave the count.
         let sets = lines.reduce(0) { $0 + Self.left($1) }
         let summary = [L10n.plural("%lld cviků", lines.count), L10n.plural("%lld sérií", sets)] + (session.muscles ?? []).prefix(3)
         return VStack(alignment: .leading, spacing: 0) {
-            Text(verbatim: summary.joined(separator: " · ")).font(Typo.small).foregroundStyle(Palette.muted)
+            Text(verbatim: summary.joined(separator: ", ")).font(Typo.small).foregroundStyle(Palette.muted)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.bottom, 6)
             ForEach(Array(lines.prefix(5).enumerated()), id: \.offset) { _, line in
@@ -655,9 +655,9 @@ struct NextSession: View {
         }
     }
 
-    /// "8–10 · 16 kg": the heaviest planned set's reps and weight.
+    /// "8–10, 16 kg": the heaviest planned set's reps and weight.
     static func amount(_ line: TrainingSnapshot.Session.Line) -> String {
-        [line.reps, line.kg.map(EquipmentView.kg)].compactMap { $0 }.joined(separator: " · ")
+        [line.reps, line.kg.map(EquipmentView.kg)].compactMap { $0 }.joined(separator: ", ")
     }
 
     /// The exercise's work sets not yet ticked off.
@@ -665,9 +665,9 @@ struct NextSession: View {
 
     private var detail: String? {
         if !session.exercises.isEmpty {
-            let shown = session.exercises.prefix(3).joined(separator: " · ")
+            let shown = session.exercises.prefix(3).joined(separator: ", ")
             let rest = session.exercises.count - 3
-            return rest > 0 ? shown + " · " + L10n.plural("a %lld dalších", rest) : shown
+            return rest > 0 ? shown + ", " + L10n.plural("a %lld dalších", rest) : shown
         }
         return session.description
     }
@@ -681,7 +681,7 @@ struct EventCard: View {
     var body: some View {
         Card {
             HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: L10n.tr("Závod") + (event.date.map { " · " + Fmt.dayMonth($0) } ?? ""))
+                SectionLabel(text: L10n.tr("Závod") + (event.date.map { ", " + Fmt.dayMonth($0) } ?? ""))
                 Spacer()
             }
             HStack(alignment: .lastTextBaseline) {
@@ -721,7 +721,7 @@ struct EventCard: View {
     private func caption(_ phase: TrainingSnapshot.Phase) -> String {
         switch phase.state {
         case "done": return L10n.tr("hotovo")
-        case "now": return phase.week.map { w in L10n.f("teď · týden %@/%@", String(w), String(phase.weeks ?? w)) } ?? L10n.tr("teď")
+        case "now": return phase.week.map { w in L10n.f("teď, týden %@/%@", String(w), String(phase.weeks ?? w)) } ?? L10n.tr("teď")
         default: return phase.from.map { L10n.f("od %@", Fmt.dayMonth($0)) } ?? ""
         }
     }
@@ -731,7 +731,7 @@ struct EventCard: View {
 
 struct FormWidget: View {
     let form: TrainingSnapshot.Form
-    /// "Posledních 7 dní vs. obvyklých 28: Nad obvyklou · jednotvárný týden", only when worth a line.
+    /// "Posledních 7 dní vs. obvyklých 28: Nad obvyklou, jednotvárný týden", only when worth a line.
     var loadNote: String? = nil
     var size: WidgetSize = .small
 
@@ -774,7 +774,7 @@ extension FormWidget {
         if monotony?.high == true {
             parts.append(parts.isEmpty ? L10n.tr("Jednotvárný týden") : L10n.tr("jednotvárný týden"))
         }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 }
 
@@ -971,11 +971,11 @@ struct ZonesWidget: View {
                 }
                 ZoneLegend(week: week)
                 // Why 62 + 28 makes 118 (chart review point 12).
-                Text("Intenzivní a maximální minuty se počítají dvakrát · WHO 150 min týdně")
+                Text("Intenzivní a maximální minuty se počítají dvakrát. WHO doporučuje 150 min týdně.")
                     .font(Typo.tiny).foregroundStyle(Palette.faint)
             } else {
                 // An answer from before the weeks were sent.
-                WidgetHeader(title: "Čas v tepových zónách", color: Palette.rust, trailing: L10n.tr("4 týdny") + " · " + Fmt.hoursMinutesLong(zones.minutes))
+                WidgetHeader(title: "Čas v tepových zónách", color: Palette.rust, trailing: L10n.tr("4 týdny") + ", " + Fmt.hoursMinutesLong(zones.minutes))
                 ZoneBar(parts: parts)
             }
         }

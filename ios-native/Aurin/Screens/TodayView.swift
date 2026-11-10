@@ -218,7 +218,7 @@ extension View {
     }
 }
 
-/// "Apple Health · data ze včera 21:10 · obnovit" under the day when Apple
+/// "Apple Health, data ze včera 21:10, obnovit" under the day when Apple
 /// Health last reached the server more than 3 hours ago (its source named,
 /// Today audit 20), and the same for Google Health, Intervals.icu, Ultrahuman
 /// or WHOOP not reached for over 12 hours, when Settings → Zdroje dat turns
@@ -244,7 +244,7 @@ struct DataAgePill: View {
 
     private func lines(now: Date) -> [String] {
         var out: [String] = []
-        if health.enabled, let last = health.lastSync, let text = Self.text(last: last, now: now) { out.append("Apple Health · " + text) }
+        if health.enabled, let last = health.lastSync, let text = Self.text(last: last, now: now) { out.append("Apple Health, " + text) }
         return out + Self.stale(model.today?.dataSources ?? [], now: now)
     }
 
@@ -252,7 +252,8 @@ struct DataAgePill: View {
         Button { Task { await model.refresh() } } label: {
             HStack(spacing: 6) {
                 Image(systemName: "clock").scaledFont(11, weight: .semibold)
-                Text(verbatim: line + L10n.tr(" · obnovit"))
+                Text(verbatim: line)
+                Text("obnovit").fontWeight(.bold).padding(.leading, 4)
             }
             .font(.footnote.weight(.medium))
             .foregroundStyle(Palette.amber)
@@ -267,12 +268,12 @@ struct DataAgePill: View {
         .disabled(model.loading || health.syncing)
     }
 
-    /// "Google Health · data ze včera 21:10" for each server source not reached
+    /// "Google Health, data ze včera 21:10" for each server source not reached
     /// for over 12 hours (IntegrationCard.stale, as in Settings).
     static func stale(_ sources: [DataSource], now: Date) -> [String] {
         sources.compactMap { source in
             guard let last = source.lastSuccessAt.flatMap(SourceActions.date), IntegrationCard.stale(last, now: now) else { return nil }
-            return (source.name ?? source.provider) + " · " + age(last: last, now: now)
+            return (source.name ?? source.provider) + ", " + age(last: last, now: now)
         }
     }
 
@@ -541,7 +542,7 @@ enum DayNavigator {
 }
 
 /// The day in the pinned glass bar of Dnes, Zdraví and Jídlo once their
-/// header has scrolled away: "‹ Dnes · st 14. 10. ›", and an earlier (or
+/// header has scrolled away: "‹ Dnes, st 14. 10. ›", and an earlier (or
 /// later) day tinted, with "Dnes" next to it.
 struct DayBar: View {
     @Environment(AppModel.self) private var model
@@ -829,7 +830,7 @@ struct MorningCheckinCard: View {
     }
 }
 
-/// Sleep · Strain · HRV under the readiness number, each on a range bar:
+/// Sleep, Strain, HRV under the readiness number, each on a range bar:
 /// sleep against the night's need, the strain against today's goal, the HRV
 /// against the athlete's usual range (without a watch or ring, the steps
 /// against their goal).

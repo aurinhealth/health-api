@@ -216,8 +216,7 @@ struct SetupFlowView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
                     Text("Tvůj AI kouč").foregroundStyle(Palette.ink)
-                    Text(verbatim: "·").foregroundStyle(Palette.muted)
-                    Text("nepovinné").foregroundStyle(Palette.muted)
+                    Text("(nepovinné)").foregroundStyle(Palette.muted)
                 }
                 .font(Typo.bodyStrong)
                 Text("Kouč, jeho denní shrnutí na Dnes, Tréninku a Jídle, jeho paměť po dni s chatem, rozpoznání jídla z fotky a hodnocení tréninku a týdne posílají potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI (USA). Ta je nepoužívá k trénování svých modelů. Cyklus a citlivé položky deníku jen po jejich zapnutí.")
@@ -846,7 +845,7 @@ struct SetupFlowView: View {
             .fixedSize(horizontal: false, vertical: true)
         VStack(spacing: 10) {
             if wearable {
-                NotificationPreview(title: L10n.tr("Připravenost 78 · Dobrý den na tvrdý trénink"), text: L10n.tr("Dobrá noc, třetí den v řadě. Dnes naplno do posilovny."), time: "7:02")
+                NotificationPreview(title: L10n.tr("Připravenost 78, dobrý den na tvrdý trénink"), text: L10n.tr("Dobrá noc, třetí den v řadě. Dnes naplno do posilovny."), time: "7:02")
                 NotificationPreview(title: L10n.tr("Kouč"), text: L10n.tr("HRV je dva dny dole. Dnešní intervaly jsem posunul na čtvrtek."), time: "12:40")
             } else {
                 NotificationPreview(title: L10n.tr("Kouč"), text: L10n.tr("Včera byl těžký trénink. Dnešní intervaly jsem posunul na čtvrtek."), time: "12:40")

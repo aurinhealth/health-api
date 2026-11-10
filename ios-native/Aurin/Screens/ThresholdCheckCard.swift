@@ -162,7 +162,7 @@ struct ThresholdCheckCard: View {
     @ViewBuilder private func offer(_ o: ThresholdCheck.Offer) -> some View {
         let chosen = day[o.sport] ?? o.recommended
         VStack(alignment: .leading, spacing: 12) {
-            WidgetHeader(title: sportTitle(o.sport) + " · " + metricName(o.metric), color: Palette.amberBar)
+            WidgetHeader(title: sportTitle(o.sport) + ", " + metricName(o.metric), color: Palette.amberBar)
             Text(headline(o)).font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
             Text(L10n.f("Ověř to testem: %@ (%@).", o.testName, Fmt.duration(o.testMinutes ?? 60)))
                 .font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
@@ -216,8 +216,8 @@ struct ThresholdCheckCard: View {
 
     private func planned(_ p: ThresholdCheck.Planned) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            WidgetHeader(title: sportTitle(p.sport) + " · " + L10n.tr("Test"), color: Palette.amberBar)
-            Text(L10n.f("%@ · %@", p.name ?? L10n.tr("Test"), Fmt.dayHeading(p.testDate)))
+            WidgetHeader(title: sportTitle(p.sport) + ", " + L10n.tr("Test"), color: Palette.amberBar)
+            Text(L10n.f("%@, %@", p.name ?? L10n.tr("Test"), Fmt.dayHeading(p.testDate)))
                 .font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
             SecondaryButton(title: "Zrušit test") {
                 Task { await act(["action": .string("cancel"), "sport": .string(p.sport)], estimate: nil) }
@@ -231,7 +231,7 @@ struct ThresholdCheckCard: View {
         let lines = resultLines(r, current: current)
         if !lines.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                WidgetHeader(title: sportTitle(r.sport) + " · " + L10n.tr("Výsledek testu"), color: Palette.green)
+                WidgetHeader(title: sportTitle(r.sport) + ", " + L10n.tr("Výsledek testu"), color: Palette.green)
                 ForEach(lines, id: \.self) { line in
                     Text(line).font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                 }
@@ -294,7 +294,7 @@ struct ThresholdCheckCard: View {
 
     private func manual(_ m: ThresholdCheck.Manual) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            WidgetHeader(title: sportTitle(m.sport) + " · " + L10n.tr("Výsledek testu"), color: Palette.amberBar)
+            WidgetHeader(title: sportTitle(m.sport) + ", " + L10n.tr("Výsledek testu"), color: Palette.amberBar)
             Text(L10n.f("Jak dopadl test %@?", Fmt.dayHeading(m.testDate))).font(Typo.sentence(20)).foregroundStyle(Palette.ink)
             ForEach(fields(m.testId), id: \.key) { (field: Field) in
                 TextField(L10n.tr(field.label), text: Binding(get: { typed[m.sport + field.key] ?? "" }, set: { typed[m.sport + field.key] = $0 }))
@@ -415,7 +415,7 @@ extension ThresholdCheckCard {
         case .manual(let sport):
             return check.manual.first { $0.sport == sport }.map { L10n.f("Jak dopadl test %@?", Fmt.dayHeading($0.testDate)) } ?? ""
         case .planned(let sport):
-            return check.scheduled.first { $0.sport == sport }.map { L10n.f("%@ · %@", $0.name ?? L10n.tr("Test"), Fmt.dayHeading($0.testDate)) } ?? ""
+            return check.scheduled.first { $0.sport == sport }.map { L10n.f("%@, %@", $0.name ?? L10n.tr("Test"), Fmt.dayHeading($0.testDate)) } ?? ""
         case .offer(let sport):
             guard let o = check.offers.first(where: { $0.sport == sport }) else { return "" }
             guard o.reason == "higher" || o.reason == "lower", let estimate = o.estimate?.value else { return headline(o) }

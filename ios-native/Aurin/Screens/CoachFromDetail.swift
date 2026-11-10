@@ -11,9 +11,9 @@ struct CoachSubject: Equatable {
     /// The line above the title on the card.
     var label = "Ptáš se na"
     var id: String? = nil
-    /// The title on the card ("Kolo · tempo").
+    /// The title on the card ("Kolo, tempo").
     let title: String
-    /// The line under it ("Út 13. 10. · 1:12 · 34,6 km · 74 TSS").
+    /// The line under it ("Út 13. 10., 1:12, 34,6 km, 74 TSS").
     var line: String? = nil
     /// A health value: hrv, restingHR, sleep… (HealthMetric).
     var metric: String? = nil
@@ -71,7 +71,7 @@ struct CoachSubject: Equatable {
     }
 
     private static func line(_ parts: [String?]) -> String {
-        parts.compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        parts.compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
     }
 
     /// Trénink → a done activity.
@@ -114,7 +114,7 @@ struct CoachSubject: Equatable {
     @MainActor static func workout(_ day: GymDay, exercise: GymExercise, resting: Bool, restSeconds: Int, date: String) -> CoachSubject {
         let done: Int = day.exercises.reduce(0) { $0 + $1.doneCount }
         let total: Int = day.exercises.reduce(0) { $0 + $1.workCount }
-        let title = (day.planName?.nilIfBlank ?? L10n.tr("Posilovna")) + " · " + L10n.f("%@ z %@ sérií", String(done), String(total))
+        let title = (day.planName?.nilIfBlank ?? L10n.tr("Posilovna")) + ", " + L10n.f("%@ z %@ sérií", String(done), String(total))
         let set = exercise.sets.first { !$0.done }
         let setNumber = set.flatMap { $0.work ? Int($0.number) : nil }
         let setLine = setNumber.map { L10n.f("série %@ z %@", String($0), String(exercise.workCount)) }
@@ -127,10 +127,10 @@ struct CoachSubject: Equatable {
             line = Self.line([exercise.name, setLine.map(Fmt.capitalized), set.map { GymLiveActivity.load($0, in: exercise) }])
             questions = ["Jak na tenhle cvik správně?", "Bolí mě při něm, co místo něj?", "Čím nahradit tenhle cvik?"]
         case "rest":
-            line = L10n.tr("Pauza") + " · " + L10n.f("další: %@", Self.line([exercise.name, setLine]))
+            line = L10n.tr("Pauza") + ", " + L10n.f("další: %@", Self.line([exercise.name, setLine]))
             questions = ["Stačí mi tahle pauza?", "Mám v další sérii přidat?", "Bolí mě při něm, co místo něj?"]
         default:
-            line = L10n.tr("Pauza") + " · " + L10n.f("další: %@", Self.line([exercise.name, set.map { GymLiveActivity.load($0, in: exercise) }]))
+            line = L10n.tr("Pauza") + ", " + L10n.f("další: %@", Self.line([exercise.name, set.map { GymLiveActivity.load($0, in: exercise) }]))
             questions = [L10n.f("Kolik mám dát na %@?", exercise.name), L10n.f("Můžu dnes %@ vynechat?", exercise.name),
                          previous.map { L10n.f("Byla váha u %@ správná?", $0) } ?? "Jak se mi zatím trénink daří?"]
         }

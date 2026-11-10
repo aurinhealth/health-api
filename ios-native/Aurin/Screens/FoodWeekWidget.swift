@@ -90,7 +90,7 @@ struct FoodWeekWidget: View {
         }
         var left = Text(L10n.f("Zbývá %@ kcal", Fmt.int(week.left ?? 0))).foregroundColor(Palette.ink)
         if let perDay = week.perDay {
-            left = left + Text(verbatim: " · " + L10n.f("zhruba %@ na den", Fmt.int(perDay)))
+            left = left + Text(verbatim: ", " + L10n.f("zhruba %@ na den", Fmt.int(perDay)))
             // Today's part of it: "1 150 kcal more today", or past it the rest is the days ahead's.
             if let today = week.todayLeft {
                 left = left + Text(verbatim: "\n") + (today > 0

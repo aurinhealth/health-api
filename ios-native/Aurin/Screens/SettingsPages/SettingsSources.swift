@@ -96,7 +96,7 @@ struct SourcesSettingsView: View {
                     SettingsDivider()
                     SettingsRow(icon: SettingsIcon(systemImage: "exclamationmark.circle.fill", color: Palette.rust), title: "Poslední synchronizace s chybou", chevron: false)
                     ForEach(failures) { failure in
-                        let detail = [failure.message, failure.at.map(SourceActions.when)].compactMap { $0 }.joined(separator: " · ")
+                        let detail = [failure.message, failure.at.map(SourceActions.when)].compactMap { $0 }.joined(separator: ", ")
                         SettingsRow(title: failure.name, subtitle: detail.isEmpty ? nil : detail, chevron: false)
                     }
                 }

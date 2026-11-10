@@ -102,20 +102,20 @@ struct GoalsSettingsView: View {
     enum OwnGoal: String, Identifiable { case kcal, water; var id: String { rawValue } }
     @State private var editing: OwnGoal?
 
-    /// "Auto · 2 450 kcal" or "Vlastní · 2 200 kcal".
+    /// "Auto, 2 450 kcal" or "Vlastní, 2 200 kcal".
     private var kcalValue: String {
         let own = store.profile["kcalGoal"]?.number
         let value = own ?? model.today?.nutrition.target
-        return L10n.tr(own != nil ? "Vlastní" : "Auto") + (value.map { " · " + Fmt.int($0) + " kcal" } ?? "")
+        return L10n.tr(own != nil ? "Vlastní" : "Auto") + (value.map { ", " + Fmt.int($0) + " kcal" } ?? "")
     }
 
-    /// "Auto · 3,2 l", "Vlastní · 2,0 l" or "Postupně · 2,25 l".
+    /// "Auto, 3,2 l", "Vlastní, 2,0 l" or "Postupně, 2,25 l".
     private var waterValue: String {
         let water = model.today?.nutrition.water
         let mode = store.profile["waterMode"]?.string ?? ""
         let word = mode == "custom" ? "Vlastní" : mode == "build" ? "Postupně" : "Auto"
         let ml = mode == "build" ? water?.build?.baseMl ?? store.profile["waterStart"]?.number : mode == "custom" ? store.profile["waterGoal"]?.number : water?.target
-        return L10n.tr(word) + (ml.map { " · " + waterText($0) } ?? "")
+        return L10n.tr(word) + (ml.map { ", " + waterText($0) } ?? "")
     }
 
     /// "7:30 h", or "automaticky" while the goal follows age and the day.
@@ -149,20 +149,20 @@ struct GoalsSettingsView: View {
         }
     }
 
-    /// "automaticky · Aktivní": the usual day Aurin reads from the steps.
+    /// "automaticky, Aktivní": the usual day Aurin reads from the steps.
     private var activityOptions: [(String, String)] {
         let guess = store.suggestions["activity"]?.string.flatMap { id in Self.activities.first { $0.0 == id }?.1 }
         return [("", Self.auto(guess.map { L10n.tr($0) }))] + Self.activities
     }
 
-    /// "automaticky · ≈ 4,5 h": the weekly sport of the last four weeks.
+    /// "automaticky, ≈ 4,5 h": the weekly sport of the last four weeks.
     private var sportHourOptions: [(String, String)] {
         let hours = history["weeklyHours"]?.number
         return Self.sportHourChoices.map { $0.0 == "auto" ? ("auto", Self.auto(hours.map { "≈ " + Fmt.decimal($0, digits: $0 < 10 ? 1 : 0) + " h" })) : $0 }
     }
 
     private static func auto(_ value: String?) -> String {
-        value.map { L10n.tr("automaticky") + " · " + $0 } ?? L10n.tr("automaticky")
+        value.map { L10n.tr("automaticky") + ", " + $0 } ?? L10n.tr("automaticky")
     }
 
     /// A value typed in the chosen unit, sent in metric (rounded to 1/scale).
@@ -189,13 +189,13 @@ struct GoalsSettingsView: View {
         return kinds.isEmpty ? L10n.tr("žádný") : kinds.map(SportsChoice.name).joined(separator: ", ")
     }
 
-    /// A triathlete's week (src/triathlon-split.js): "2× · 3 h" per sport, ride, run, swim.
+    /// A triathlete's week (src/triathlon-split.js): "2×, 3 h" per sport, ride, run, swim.
     private var split: [(sport: LibrarySport, value: String)] {
         guard case .object(let s)? = store.suggestions["triathlonSplit"], case .object(let sessions)? = s["sessions"] else { return [] }
         let minutes: JSONObject = { if case .object(let m)? = s["minutes"] { return m }; return [:] }()
         return ["ride", "run", "swim"].compactMap { id in
             guard let sport = LibrarySport.find(id), let count = sessions[id]?.number, count > 0 else { return nil }
-            return (sport, "\(Int(count))×" + (minutes[id]?.number.map { " · " + Fmt.duration(Int($0)) } ?? ""))
+            return (sport, "\(Int(count))×" + (minutes[id]?.number.map { ", " + Fmt.duration(Int($0)) } ?? ""))
         }
     }
 

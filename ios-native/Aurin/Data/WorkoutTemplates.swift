@@ -147,7 +147,7 @@ struct WorkoutTemplate: Codable, Hashable {
         if isEndurance { return Fmt.duration(minutes ?? Int(enduranceMinutes().rounded())) }
         var parts = [L10n.plural("%lld cviků", exercises.count)]
         if let minutes { parts.append(Fmt.duration(minutes)) }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 }
 

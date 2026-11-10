@@ -12,7 +12,7 @@ enum AurinSpotlight {
             let attributes = CSSearchableItemAttributeSet(contentType: .content)
             attributes.title = session.title
             attributes.contentDescription = [sport(session.sport), Fmt.capitalized(Fmt.weekdayShort(session.date)) + " " + Fmt.dayMonth(session.date),
-                                             session.time.map { ClockText.format($0) }].compactMap { $0 }.joined(separator: " · ")
+                                             session.time.map { ClockText.format($0) }].compactMap { $0 }.joined(separator: ", ")
             attributes.keywords = [L10n.tr("trénink"), sport(session.sport)].compactMap { $0 }
             let item = CSSearchableItem(uniqueIdentifier: session.id, domainIdentifier: domain, attributeSet: attributes)
             // Gone from search once the day is over.

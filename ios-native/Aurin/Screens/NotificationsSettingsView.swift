@@ -103,7 +103,7 @@ enum ReminderDays {
     }
 }
 
-/// A row of the list: the big time and "Name · detail".
+/// A row of the list: the big time and "Name, detail".
 private struct ReminderLine: Identifiable {
     let kind: ReminderKind
     let time: String
@@ -266,7 +266,7 @@ struct NotificationsSettingsView: View {
                 parts.append(L10n.f("a %@", on.dropFirst().map { Reminders.clock($0.time) }.joined(separator: ", ")))
             }
             if limited || on.count == 1 { parts.append(summary) }
-            return ReminderLine(kind: kind, time: Reminders.clock(first.time), detail: parts.joined(separator: " · "), order: first.time)
+            return ReminderLine(kind: kind, time: Reminders.clock(first.time), detail: parts.joined(separator: ", "), order: first.time)
         case .workout:
             // An hour before a session with a time of its own, the others at the chosen time.
             return ReminderLine(kind: kind, time: L10n.tr("1 h předem"), detail: limited ? summary : L10n.f("bez času v %@", Reminders.clock(workoutTime)), order: workoutTime)
@@ -383,7 +383,7 @@ private struct ReminderDayOverview: View {
     }
 }
 
-/// "22:10 / Do postele · podle spánku" and the switch; dimmed when off.
+/// "22:10 / Do postele, podle spánku" and the switch; dimmed when off.
 private struct ReminderListRow: View {
     let line: ReminderLine
     @Binding var isOn: Bool
@@ -419,7 +419,7 @@ private struct ReminderListRow: View {
 
     private var subtitle: String {
         let name = L10n.tr(line.kind.name)
-        return line.detail.isEmpty ? name : name + " · " + line.detail
+        return line.detail.isEmpty ? name : name + ", " + line.detail
     }
 }
 

@@ -112,11 +112,11 @@ struct DietSettingsView: View {
         }
     }
 
-    /// "Auto · 2,0 g/kg" or one's own "2,2 g/kg".
+    /// "Auto, 2,0 g/kg" or one's own "2,2 g/kg".
     private var proteinValue: String {
         if let own = diet.proteinPerKg { return DietChoice.perKg(own) }
         guard let auto = model.food?.diet?.proteinPerKg else { return "Auto" }
-        return "Auto · " + DietChoice.perKg(auto)
+        return "Auto, " + DietChoice.perKg(auto)
     }
 
     private func eatingChip(_ id: String, _ title: String) -> some View {
@@ -149,14 +149,14 @@ struct DietSettingsView: View {
     }
 }
 
-/// "Dnes s touto stravou · 2 450 kcal" and the three targets it makes.
+/// "Dnes s touto stravou, 2 450 kcal" and the three targets it makes.
 struct DietTodayCells: View {
     let macros: FoodSnapshot.Macros
     let kcal: Double?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(kcal.map { L10n.f("Dnes s touto stravou · %@ kcal", Fmt.int($0)) } ?? L10n.tr("Dnes s touto stravou"))
+            Text(kcal.map { L10n.f("Dnes s touto stravou: %@ kcal", Fmt.int($0)) } ?? L10n.tr("Dnes s touto stravou"))
                 .font(.caption.weight(.medium)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted)
                 .padding(.horizontal, 4)
             HStack(spacing: 0) {
@@ -374,14 +374,14 @@ struct DietProteinSheet: View {
         .onAppear { own = diet.proteinPerKg ?? food?.diet?.proteinPerKg ?? 2.0 }
     }
 
-    /// "2,0 g/kg · podle cíle a sportu".
+    /// "2,0 g/kg, podle cíle a sportu".
     private var autoHint: String {
         guard let auto = food?.diet?.proteinAuto == true ? food?.diet?.proteinPerKg : nil else { return L10n.tr("Podle cíle a sportu") }
-        return DietChoice.perKg(auto) + " · " + L10n.tr("podle cíle a sportu")
+        return DietChoice.perKg(auto) + ", " + L10n.tr("podle cíle a sportu")
     }
 }
 
-/// "2,2 g/kg · 174 g denně" over a slider from 1,2 to 3,0.
+/// "2,2 g/kg, 174 g denně" over a slider from 1,2 to 3,0.
 private struct DietProteinSlider: View {
     @Binding var value: Double
     let kg: Double?
@@ -470,9 +470,9 @@ struct DietCustomSheet: View {
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
-    /// "Sacharidy · zbytek · 244 g".
+    /// "Sacharidy, zbytek, 244 g".
     private func rest(_ title: String, _ grams: Double?) -> some View {
-        SettingsRow(title: title, value: grams.map { L10n.f("zbytek · %@ g", Fmt.int($0)) } ?? L10n.tr("zbytek"), chevron: false)
+        SettingsRow(title: title, value: grams.map { L10n.f("zbytek, %@ g", Fmt.int($0)) } ?? L10n.tr("zbytek"), chevron: false)
             .cardSurface(cornerRadius: 22)
     }
 }

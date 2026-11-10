@@ -28,20 +28,20 @@ enum EnduranceZones {
         return s % 60 == 0 ? Fmt.duration(s / 60) : "\(s / 60):" + String(format: "%02d", s % 60) + " min"
     }
 
-    /// "88–93 % · 229–242 W" or "78–88 % · 5:40–6:10 /km".
+    /// "88–93 %, 229–242 W" or "78–88 %, 5:40–6:10 /km".
     static func target(_ sport: String, _ step: EnduranceStep, _ athlete: AthleteThresholds) -> String {
         if step.isRest { return L10n.tr("u stěny") }
         let percent = step.low == step.high ? "\(step.low)" + Fmt.percentSign : "\(step.low)–\(step.high)" + Fmt.percentSign
         if sport == "swim" {
             guard let css = athlete.swimCss else { return percent + " CSS" }
-            return percent + " · " + ZonesSettingsView.pace(css * 100 / Double(step.high)) + "–" + ZonesSettingsView.pace(css * 100 / Double(step.low)) + " /100 m"
+            return percent + ", " + ZonesSettingsView.pace(css * 100 / Double(step.high)) + "–" + ZonesSettingsView.pace(css * 100 / Double(step.low)) + " /100 m"
         }
         if sport == "run", let pace = athlete.runThresholdPace {
-            return percent + " · " + ZonesSettingsView.pace(Units.pace(pace * 100 / Double(step.high))) + "–" + ZonesSettingsView.pace(Units.pace(pace * 100 / Double(step.low))) + " " + Units.paceUnit
+            return percent + ", " + ZonesSettingsView.pace(Units.pace(pace * 100 / Double(step.high))) + "–" + ZonesSettingsView.pace(Units.pace(pace * 100 / Double(step.low))) + " " + Units.paceUnit
         }
         if sport != "run", let ftp = athlete.ftp {
             let lo = Int((ftp * Double(step.low) / 100).rounded()), hi = Int((ftp * Double(step.high) / 100).rounded())
-            return percent + " · " + (lo == hi ? "\(lo) W" : "\(lo)–\(hi) W")
+            return percent + ", " + (lo == hi ? "\(lo) W" : "\(lo)–\(hi) W")
         }
         return percent + (sport == "run" ? L10n.tr(" tempa") : " FTP")
     }
@@ -196,7 +196,7 @@ struct EnduranceEditorSheet: View {
                 RoundedRectangle(cornerRadius: 2).fill(step.isRest ? Palette.faint : WorkoutProfile.color(WorkoutProfile.shown(Double(step.low + step.high) / 2, sport: sport))).frame(width: 4, height: 34)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(step.label.isEmpty ? EnduranceZones.name(sport, step) : step.label).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
-                    Text([EnduranceZones.length(step), EnduranceZones.name(sport, step), EnduranceZones.target(sport, step, athlete)].joined(separator: " · "))
+                    Text([EnduranceZones.length(step), EnduranceZones.name(sport, step), EnduranceZones.target(sport, step, athlete)].joined(separator: ", "))
                         .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
                 }
                 Spacer(minLength: 4)
@@ -395,7 +395,7 @@ struct StepEditorSheet: View {
         .presentationDetents([.large])
     }
 
-    /// "88 % · 229 W" or "88 % · 5:40 /km".
+    /// "88 %, 229 W" or "88 %, 5:40 /km".
     private func row(_ title: String, _ percent: Int) -> some View {
         HStack {
             Text(L10n.tr(title))
@@ -405,9 +405,9 @@ struct StepEditorSheet: View {
     }
 
     private func value(_ percent: Int) -> String {
-        if sport == "swim" { return athlete.swimCss.map { "\(percent) % · " + Units.swimPaceText($0 * 100 / Double(percent)) } ?? "\(percent) % CSS" }
-        if sport == "run", let pace = athlete.runThresholdPace { return "\(percent) % · " + Units.paceText(pace * 100 / Double(percent)) }
-        if sport != "run", let ftp = athlete.ftp { return "\(percent) % · \(Int((ftp * Double(percent) / 100).rounded())) W" }
+        if sport == "swim" { return athlete.swimCss.map { "\(percent) %, " + Units.swimPaceText($0 * 100 / Double(percent)) } ?? "\(percent) % CSS" }
+        if sport == "run", let pace = athlete.runThresholdPace { return "\(percent) %, " + Units.paceText(pace * 100 / Double(percent)) }
+        if sport != "run", let ftp = athlete.ftp { return "\(percent) %, \(Int((ftp * Double(percent) / 100).rounded())) W" }
         return "\(percent)" + Fmt.percentSign
     }
 }
@@ -433,7 +433,7 @@ struct SavedEnduranceSheet: View {
                     Spacer()
                     Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
                 }
-                Text(([workout.fromName.map { L10n.f("Od: %@", $0) }, (LibrarySport.find(workout.sport)?.label).map(L10n.tr), workout.minutes.map(Fmt.duration)].compactMap { $0 }).joined(separator: " · "))
+                Text(([workout.fromName.map { L10n.f("Od: %@", $0) }, (LibrarySport.find(workout.sport)?.label).map(L10n.tr), workout.minutes.map(Fmt.duration)].compactMap { $0 }).joined(separator: ", "))
                     .font(Typo.small).foregroundStyle(Palette.muted)
                 if let blocks = workout.steps, !blocks.isEmpty {
                     Card { WorkoutProfile(blocks: blocks, sport: workout.sport) }

@@ -372,7 +372,7 @@ struct MonthGrid: View {
         }
     }
 
-    /// "12 aktivit · 14 h 20 min · 9 800 kcal" for the month.
+    /// "12 aktivit, 14 h 20 min, 9 800 kcal" for the month.
     private var total: String {
         let list = ISODay.range(month, ISODay.monthEnd(month)).compactMap { days[$0] }
         let count = list.reduce(0) { $0 + $1.count }
@@ -384,9 +384,9 @@ struct MonthGrid: View {
         if mode == .compliance {
             let values = list.flatMap(\.activities).filter { $0.status == "done" }.compactMap(\.compliance)
             guard !values.isEmpty else { return head }
-            return head + " · " + L10n.f("%@ %% plánu", String(Int((Double(values.reduce(0, +)) / Double(values.count)).rounded())))
+            return head + ", " + L10n.f("%@ %% plánu", String(Int((Double(values.reduce(0, +)) / Double(values.count)).rounded())))
         }
-        return head + " · " + Fmt.hoursMinutesLong(minutes) + " · " + Fmt.int(kcal) + " kcal"
+        return head + ", " + Fmt.hoursMinutesLong(minutes) + ", " + Fmt.int(kcal) + " kcal"
     }
 }
 
@@ -413,7 +413,7 @@ struct CalendarDayList: View {
                 // The day's total only once there is something to add up: with
                 // one activity it repeated the row's own numbers.
                 if let day, day.count > 1 {
-                    Text(Fmt.hoursMinutesLong(day.minutes) + " · " + Fmt.int(dayKcal(day)) + " kcal").font(Typo.caption).foregroundStyle(Palette.muted)
+                    Text(Fmt.hoursMinutesLong(day.minutes) + ", " + Fmt.int(dayKcal(day)) + " kcal").font(Typo.caption).foregroundStyle(Palette.muted)
                 }
             }
             .padding(.bottom, 4)
@@ -540,7 +540,7 @@ struct CalendarActivityRow: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// "Kolo · 1 h 30 min · 42,3 km", "V plánu · 45 min" or "Nesplněno · 1 h".
+    /// "Kolo, 1 h 30 min, 42,3 km", "V plánu, 45 min" or "Nesplněno, 1 h".
     static func detail(_ a: CalendarActivity) -> String {
         let head: String
         switch a.status {
@@ -552,7 +552,7 @@ struct CalendarActivityRow: View {
         if let t = a.time { parts.append(ClockText.format(t)) }
         if let m = a.minutes, m > 0 { parts.append(Fmt.duration(Int(m.rounded()))) }
         if let km = a.km, km > 0 { parts.append(Units.distanceText(km)) }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -628,12 +628,12 @@ struct WatchActivityDetail: View {
         .activityUnpairing(session: activity.session, asking: $unpairing) { dismiss() }
     }
 
-    /// "Chůze · st 8. 10. · 10:00–11:10".
+    /// "Chůze, st 8. 10., 10:00–11:10".
     private var when: String {
         let s = activity.summary
         let time = [s?.start ?? activity.time, s?.end].compactMap { $0 }.map { ClockText.format($0) }.joined(separator: "–")
         return [Fmt.capitalized(L10n.tr(SportStyle.name(activity.sport))), Fmt.weekdayShort(activity.date) + " " + Fmt.dayMonth(activity.date), time.isEmpty ? nil : time]
-            .compactMap { $0 }.joined(separator: " · ")
+            .compactMap { $0 }.joined(separator: ", ")
     }
 
     private var rows: [(String, String, String?)] {

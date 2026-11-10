@@ -99,7 +99,7 @@ extension AppModel {
         // The sheet is closed: a few seconds' note, unless Jídlo is in sight.
         if !item.watched && (tab != .food || !(paths[.food] ?? []).isEmpty) {
             let found = item.state == .found
-            foodReady = FoodReady(text: found ? L10n.f("„%@“ dohledáno · čeká v Jídle", item.title)
+            foodReady = FoodReady(text: found ? L10n.f("„%@“ dohledáno, čeká v Jídle", item.title)
                                               : L10n.f("„%@“ se nepodařilo dohledat", item.title),
                                   found: found)
         }

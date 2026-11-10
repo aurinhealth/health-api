@@ -1,7 +1,7 @@
 import UIKit
 @preconcurrency import UserNotifications
 
-// The morning readiness push ("Připravenost 72 · dnes klidně intervaly"),
+// The morning readiness push ("Připravenost 72, dnes klidně intervaly"),
 // sent by the server (src/push.js) once a day after the night's data arrives,
 // and the coach's own message (src/coach-push.js), at most one a day, some with
 // "Vyměnit" and "Nechat". The phone hands the server its APNs device token
@@ -405,7 +405,7 @@ enum CoachPush {
                 guard nudge?.status == "swapped" else { return }
                 content.title = L10n.tr("Vyměněno")
                 content.body = PushRegistration.hideValuesOn ? L10n.tr("Změna je v plánu.")
-                    : [nudge?.to?.name, nudge?.to?.minutes.map { L10n.f("%@ min", String($0)) }].compactMap { $0 }.joined(separator: " · ")
+                    : [nudge?.to?.name, nudge?.to?.minutes.map { L10n.f("%@ min", String($0)) }].compactMap { $0 }.joined(separator: ", ")
             } catch {
                 content.title = L10n.tr("Trénink zůstal, jak byl")
                 content.body = error.localizedDescription

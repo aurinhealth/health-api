@@ -539,7 +539,7 @@ struct DrinksCard: View {
     }
 }
 
-/// "Káva 08:05 · 200 ml → 180".
+/// "Káva 08:05, 200 ml → 180".
 struct DrinkLine: View {
     let drink: FoodSnapshot.Drink
 
@@ -632,17 +632,17 @@ struct PendingFoodRow: View {
         .accessibilityLabel("Zahodit")
     }
 
-    /// "265 kcal · 100 g · dohledáno AI", or a photo's foods and their kcal.
+    /// "265 kcal, 100 g, dohledáno AI", or a photo's foods and their kcal.
     private var detail: String {
         if !item.items.isEmpty {
             let kcal = item.items.compactMap { $0.product.kcal(for: $0.amount) }.reduce(0, +)
-            return L10n.plural("%lld položek na fotce", item.items.count) + " · " + Fmt.int(kcal) + " kcal"
+            return L10n.plural("%lld položek na fotce", item.items.count) + ", " + Fmt.int(kcal) + " kcal"
         }
         guard let product = item.product else { return "" }
         let kcal = product.kcal(for: product.defaultAmount).map { Fmt.int($0) + " kcal" }
         let amount = product.perPortion ? L10n.tr("1 porce") : Fmt.int(product.defaultAmount) + " " + product.unit
         let source = item.query == nil ? L10n.tr("z fotky") : L10n.tr("dohledáno AI")
-        return [kcal, amount, source].compactMap { $0 }.joined(separator: " · ")
+        return [kcal, amount, source].compactMap { $0 }.joined(separator: ", ")
     }
 }
 

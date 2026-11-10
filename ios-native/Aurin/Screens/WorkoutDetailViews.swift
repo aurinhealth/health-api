@@ -61,7 +61,7 @@ struct WeekSessionsList: View {
                             if !candidates.isEmpty {
                                 Menu {
                                     ForEach(candidates) { activity in
-                                        Button(activity.title + (activity.time.map { " · " + ClockText.format($0) } ?? "")) {
+                                        Button(activity.title + (activity.time.map { ", " + ClockText.format($0) } ?? "")) {
                                             Task { await pair(plannedId: session.id, activityId: activity.id, date: session.date) }
                                         }
                                     }
@@ -254,7 +254,7 @@ struct SessionRow: View {
                                           : Fmt.capitalized(Fmt.relativeDay(session.date, today: today))]
         if let t = session.time { parts.append(ClockText.format(t)) }
         if let m = session.minutes { parts.append(Fmt.duration(m)) }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -328,7 +328,7 @@ struct ActivityDetailView: View {
         DetailScreen(glow: Palette.Glow.training, title: detail?.activity.name ?? session.title) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { " · " + ClockText.format($0) } ?? ""))
+                    SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { ", " + ClockText.format($0) } ?? ""))
                     Spacer()
                     if session.status == "done" {
                         CoachPill(subject: .activity(model.liveSession(session))).padding(.trailing, 4)
@@ -875,7 +875,7 @@ struct PlannedWorkoutView: View {
         DetailScreen(glow: Palette.Glow.training, title: session.title) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    SectionLabel(text: Fmt.capitalized(Fmt.relativeDay(session.date, today: AppModel.localDate(Date()))) + (shownTime.map { " · " + ClockText.format($0) } ?? ""))
+                    SectionLabel(text: Fmt.capitalized(Fmt.relativeDay(session.date, today: AppModel.localDate(Date()))) + (shownTime.map { ", " + ClockText.format($0) } ?? ""))
                     Spacer()
                     if session.status != "done" { CoachPill(subject: .planned(session)) }
                 }
@@ -1108,13 +1108,13 @@ struct PlannedTimeSheet: View {
     }
 }
 
-/// "3× · 12 min 88–94 %" for one block of a structured workout.
+/// "3×, 12 min 88–94 %" for one block of a structured workout.
 struct StepBlockRow: View {
     let block: PlannedWorkout.Block
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text((block.repeats ?? 1) > 1 ? "\(block.repeats!)×" : "·").font(Typo.number(18)).foregroundStyle(Palette.amber).frame(width: 30, alignment: .leading)
+            Text((block.repeats ?? 1) > 1 ? "\(block.repeats!)×" : "").font(Typo.number(18)).foregroundStyle(Palette.amber).frame(width: 30, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(Array((block.steps ?? []).enumerated()), id: \.offset) { _, step in
                     Text(describe(step)).font(Typo.small).foregroundStyle(Palette.secondary)
@@ -1127,21 +1127,21 @@ struct StepBlockRow: View {
     private func describe(_ s: PlannedWorkout.Step) -> String {
         var parts: [String] = []
         if s.rest == true {
-            return [L10n.f("%@ pauza", Fmt.int(s.durationSeconds) + " s"), s.note].compactMap { $0 }.joined(separator: " · ")
+            return [L10n.f("%@ pauza", Fmt.int(s.durationSeconds) + " s"), s.note].compactMap { $0 }.joined(separator: ", ")
         }
         // A swim: metres, the pace per 100 m.
         if let m = s.meters {
             parts.append(Fmt.int(m) + " m")
             if let slow = s.paceSlow, let fast = s.paceFast { parts.append(ZonesSettingsView.pace(fast) + "–" + ZonesSettingsView.pace(slow) + " /100 m") }
             if let note = s.note { parts.append(note) }
-            return parts.joined(separator: " · ")
+            return parts.joined(separator: ", ")
         }
         if let d = s.durationSeconds { parts.append(d >= 60 ? Fmt.duration(Int(d / 60)) : Fmt.int(d) + " s") }
         if let lo = s.wattsLow, let hi = s.wattsHigh { parts.append(Fmt.int(lo) + "–" + Fmt.int(hi) + " W") }
         else if let lo = s.percentLow, let hi = s.percentHigh { parts.append(Fmt.int(lo) + "–" + Fmt.int(hi) + Fmt.percentSign) }
         if let slow = s.paceSlow, let fast = s.paceFast { parts.append(ZonesSettingsView.pace(Units.pace(fast)) + "–" + ZonesSettingsView.pace(Units.pace(slow)) + " " + Units.paceUnit) }
         if let note = s.note { parts.append(note) }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -1494,7 +1494,7 @@ struct ManualWorkoutSheet: View {
         let style = Date.FormatStyle(date: .omitted, time: .shortened).locale(Fmt.locale)
         let f = ISO8601DateFormatter()
         guard let a = watch.start.flatMap({ f.date(from: $0) }), let b = watch.end.flatMap({ f.date(from: $0) }) else { return watch.name ?? "" }
-        return [watch.name, a.formatted(style) + "–" + b.formatted(style)].compactMap { $0 }.joined(separator: " · ")
+        return [watch.name, a.formatted(style) + "–" + b.formatted(style)].compactMap { $0 }.joined(separator: ", ")
     }
 
     @ViewBuilder private var heartCard: some View {
