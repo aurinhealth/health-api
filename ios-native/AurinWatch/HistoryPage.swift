@@ -103,7 +103,7 @@ struct HistoryPage: View {
 
     private var header: String {
         let unit = sleep ? W.tr("nocí", "nights") : W.tr("dní", "days")
-        return (metric.name + " · \(shown) " + unit).uppercased()
+        return (metric.name + ", \(shown) " + unit).uppercased()
     }
 
     private var picker: some View {

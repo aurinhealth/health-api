@@ -143,14 +143,14 @@ struct RaceDetail: View {
         .containerBackground(W.glow(W.Glow.strain), for: .navigation)
     }
 
-    /// "dnes · 9:00".
+    /// "dnes, 9:00".
     private var when: String {
-        W.relativeDay(race.first.date) + (race.first.time.map { " · " + W.clockText($0) } ?? "")
+        W.relativeDay(race.first.date) + (race.first.time.map { ", " + W.clockText($0) } ?? "")
     }
 
     private func row(_ leg: WatchSnapshot.Session) -> some View {
         let plan = leg.eventId.flatMap { plans.plans[$0] }
-        let detail = [RaceDay.distance(leg), leg.minutes.map(RaceDay.length)].compactMap { $0 }.joined(separator: " · ")
+        let detail = [RaceDay.distance(leg), leg.minutes.map(RaceDay.length)].compactMap { $0 }.joined(separator: ", ")
         return HStack(spacing: 7) {
             Image(systemName: W.sportSymbol(leg.sport)).watchFont(13).foregroundStyle(RaceDay.color(leg.sport)).frame(width: 18)
             VStack(alignment: .leading, spacing: 0) {
