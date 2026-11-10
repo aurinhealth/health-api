@@ -20,7 +20,7 @@ import { saveSourcePriority } from "./source-priority.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, backfillConnectionAccounts } from "./connection-secrets.js";
 import { withIntervalsSleep, intervalsWellness } from './intervals-sleep.js';
 import { dayVerdict } from './day-verdict.js';
-import { cached, cachedOnly, forgetCached, bumpCacheVersion, FOOD_WRITE, UNCHANGED_HEADER, closedDay, CLOSED_DAY_TTL_SECONDS } from './api-cache.js';
+import { cached, cachedOnly, keepCached, forgetCached, bumpCacheVersion, FOOD_WRITE, UNCHANGED_HEADER, closedDay, CLOSED_DAY_TTL_SECONDS } from './api-cache.js';
 import { manualPairs } from './manual-pairs.js';
 import { activityDetail, rideIntervals } from './activity-detail.js';
 import { watchDetail, withWatch } from './watch-detail.js';
@@ -202,16 +202,19 @@ const isPro=env=>subscriptionStatus(env).then(s=>s.plan==='ai').catch(()=>false)
 // Requests that read or preview only and so keep the cache.
 // The screen data the app just loaded, per user and path, for 30 s: the
 // coach's text asks right after and compares the same state instead of
-// building it again. Any write by the user drops it.
+// building it again (Today: some 120 database reads). Kept in this copy of the
+// server and, for the other copies, in the data center's cache under the data
+// version (api-cache.js). Any write by the user drops it.
 const SCREEN_PATHS = new Set(["/app/api/today", "/app/api/training", "/app/api/food-today"]);
 const recentScreens = new Map();
 function rememberScreen(userId, path, json) {
   if (recentScreens.size > 500) recentScreens.clear();
   recentScreens.set(userId + "|" + path, { at: Date.now(), json });
 }
+const SCREEN_SECONDS = 30;
 function recentScreen(userId, path) {
   const hit = recentScreens.get(userId + "|" + path);
-  return hit && Date.now() - hit.at < 30000 ? hit.json : null;
+  return hit && Date.now() - hit.at < SCREEN_SECONDS * 1000 ? hit.json : null;
 }
 function forgetScreens(userId) {
   for (const key of recentScreens.keys()) if (key.startsWith(userId + "|")) recentScreens.delete(key);
@@ -676,13 +679,16 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
       // Any change by the user lets the coach's texts answer it at once (screen-texts.js).
       const planChange = request.method !== "GET" && !CACHE_NEUTRAL.test(url.pathname) && !unchanged;
       if (request.method !== "GET" && !unchanged) forgetScreens(user.id);
+      // A write that keeps the data version (a sync) drops the screens kept for other copies of the server too.
+      if (request.method !== "GET" && !unchanged && !planChange) ctx?.waitUntil?.(Promise.all([...SCREEN_PATHS].map(path => forgetCached(env, "screen:" + path))).catch(() => {}));
       // A change by the user makes the cached coach inputs outdated; a meal or a drink only what shows food (api-cache.js).
       if (planChange) await bumpCacheVersion(env.DB, { food: FOOD_WRITE.test(url.pathname) });
       // A changed plan makes the coach's text of the day outdated (screen-texts.js).
       if (planChange && response.ok) await markScreenTextsStale(env).catch(() => {});
       // Today's screen data, kept a moment for the coach's text that follows it.
       if (request.method === "GET" && response.ok && SCREEN_PATHS.has(url.pathname) && !url.searchParams.get("date")) {
-        response.clone().json().then(json => rememberScreen(user.id, url.pathname, json)).catch(() => {});
+        // Also in the data center's cache: the coach's text often runs in another copy of the server.
+        ctx?.waitUntil?.(response.clone().json().then(json => { rememberScreen(user.id, url.pathname, json); return keepCached(env, "screen:" + url.pathname, json, SCREEN_SECONDS); }).catch(() => {}));
       }
       // A session in use gets a fresh 30-day cookie once a day (dashboard-auth.js).
       return slidingSession(request, response, sessionSecret(rawEnv));
@@ -1275,6 +1281,35 @@ async function coachTextExtras(env,ctx,internalAuth,screen){
 // coach's chat and the AI week plan read them; Today's coach cards (pick,
 // revision, check-in, week check) never did, yet each waited for those
 // Intervals.icu reads one after another (2026-11-02: up to 4 waits in a row).
+// Aktivita dne without its workouts: the coach of the day for a ride and a run
+// (and a swim for a swimmer), the week's targets, what was done and declined,
+// ranked (coach-pick.js rankOptions). A part that failed marks it degraded, so
+// it is not kept (api-cache.js) and the next request reads again.
+async function pickBase(env,ctx,internalAuth,date){
+  let degraded=false;const soft=fallback=>()=>{degraded=true;return fallback;};
+  // Everything that does not need the coach's inputs starts with them: the
+  // week's targets once its preferences are read, the athlete, the recent
+  // picks, the gym plan and the day's place (one wait instead of five).
+  const weekLoading=Promise.all([getWeekPlan(env.DB,date).catch(soft(null)),planForWeek(env,ctx,mondayOfDate(date)).catch(soft(null))])
+    .then(async([prefs,plan])=>({prefs,plan,targets:prefs?await computeWeekTargets(env,ctx,mondayOfDate(date),prefs).catch(soft(null)):null}));
+  const around=Promise.all([loadProfiles(env.DB,env.USER_ID).catch(soft({})),recentKinds(env.DB,env.USER_ID,date),pickState(env.DB,env.USER_ID,date),readGymPlan(env.DB,date).catch(soft(null)),lessKinds(env.DB,env.USER_ID).catch(soft([])),todayPlace(env,ctx,date)]);
+  around.catch(()=>{});
+  const risking=saunaRisks(env.DB,date).catch(soft({}));
+  const [inputs,week,athlete]=await Promise.all([loadCoachInputs(env,ctx,internalAuth,date),weekLoading,getAthleteState(env.DB).catch(soft(null))]);
+  const [[ride,run],[profiles,recent,state,gym,less,place]]=await Promise.all([Promise.all([defaultDayCoach(env,{...inputs,athleteState:athlete},date,'ride',week),defaultDayCoach(env,{...inputs,athleteState:athlete},date,'run',week)]),around]);
+  // The swim coach only for a swimmer: swimming as the main sport or a swim
+  // in the last 60 days (one small capabilities read more, nobody else pays it).
+  const eff=profiles?.effective||{},allowed=Array.isArray(eff.sports)?eff.sports:null,mains=mainKindsOf(eff);
+  const swims=(['swimming','triathlon'].includes(eff.mainSport)||mains.includes('swim')||(recent.sports||[]).includes('swim'))&&(!allowed||allowed.includes('swim'));
+  const swim=swims?await defaultDayCoach(env,{...inputs,athleteState:athlete},date,'swim',week).catch(soft(null)):null;
+  const planned=[...(swim?.constraints?.plannedToday&&activityKindOf(swim.constraints.plannedToday.type||swim.constraints.plannedToday.name)==='swim'?['swim']:[]),...(ride.constraints?.plannedToday&&activityKindOf(ride.constraints.plannedToday.type||ride.constraints.plannedToday.name)==='ride'?['ride']:[]),...(run.constraints?.plannedToday&&activityKindOf(run.constraints.plannedToday.type||run.constraints.plannedToday.name)==='run'?['run']:[]),...((gym?.values||[]).length>7?['gym']:[])];
+  // Nemoc, Zranění or Pauza leaves only rest; a warning sign of the night,
+  // alcohol, Nemoc or an injury in the journal drops the sauna (coach-pick.js saunaSigns).
+  const risks=await risking;
+  const noSauna=saunaSigns(readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile}))||!!risks.alcohol||!!risks.injury||!!risks.sick;
+  const ranked=rankOptions({ride,run,swim,mainSport:eff.mainSport||'general',mains,allowed,sports:recent.sports,today:recent.today,declines:state.declines,less,planned,done:recent.done,athleteStatus:athlete?.status||'active',noSauna});
+  return {ranked,planned,less,chosen:state.chosen,gym,forecast:place.forecast??null,...(degraded?{degraded:true}:{})};
+}
 function loadCoachInputs(env,ctx,internalAuth,date,{performance=false}={}){
   const inputs=cached(env,ctx,'coach-inputs:'+date,()=>loadCoachInputsFresh(env,ctx,internalAuth,date));
   if(!performance)return inputs;
@@ -1479,27 +1514,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       try{return Response.json(await undoSkip(env.DB,env.USER_ID,date));}catch(error){return Response.json({message:error.message},{status:400})}
     }
     try{
-      // Everything that does not need the coach's inputs starts with them: the
-      // week's targets once its preferences are read, the athlete, the recent
-      // picks, the gym plan and the day's place (one wait instead of five).
-      const weekLoading=Promise.all([getWeekPlan(env.DB,date).catch(()=>null),planForWeek(env,ctx,mondayOfDate(date)).catch(()=>null)])
-        .then(async([prefs,plan])=>({prefs,plan,targets:prefs?await computeWeekTargets(env,ctx,mondayOfDate(date),prefs).catch(()=>null):null}));
-      const around=Promise.all([loadProfiles(env.DB,env.USER_ID).catch(()=>({})),recentKinds(env.DB,env.USER_ID,date),pickState(env.DB,env.USER_ID,date),readGymPlan(env.DB,date).catch(()=>null),lessKinds(env.DB,env.USER_ID).catch(()=>[]),todayPlace(env,ctx,date)]);
-      around.catch(()=>{});
-      const risking=saunaRisks(env.DB,date).catch(()=>({}));
-      const [inputs,week,athlete]=await Promise.all([loadCoachInputs(env,ctx,internalAuth,date),weekLoading,getAthleteState(env.DB).catch(()=>null)]);
-      const [[ride,run],[profiles,recent,state,gym,less,place]]=await Promise.all([Promise.all([defaultDayCoach(env,{...inputs,athleteState:athlete},date,'ride',week),defaultDayCoach(env,{...inputs,athleteState:athlete},date,'run',week)]),around]);
-      // The swim coach only for a swimmer: swimming as the main sport or a swim
-      // in the last 60 days (one small capabilities read more, nobody else pays it).
-      const eff=profiles?.effective||{},allowed=Array.isArray(eff.sports)?eff.sports:null,mains=mainKindsOf(eff);
-      const swims=(['swimming','triathlon'].includes(eff.mainSport)||mains.includes('swim')||(recent.sports||[]).includes('swim'))&&(!allowed||allowed.includes('swim'));
-      const swim=swims?await defaultDayCoach(env,{...inputs,athleteState:athlete},date,'swim',week).catch(()=>null):null;
-      const planned=[...(swim?.constraints?.plannedToday&&activityKindOf(swim.constraints.plannedToday.type||swim.constraints.plannedToday.name)==='swim'?['swim']:[]),...(ride.constraints?.plannedToday&&activityKindOf(ride.constraints.plannedToday.type||ride.constraints.plannedToday.name)==='ride'?['ride']:[]),...(run.constraints?.plannedToday&&activityKindOf(run.constraints.plannedToday.type||run.constraints.plannedToday.name)==='run'?['run']:[]),...((gym?.values||[]).length>7?['gym']:[])];
-      // Nemoc, Zranění or Pauza leaves only rest; a warning sign of the night,
-      // alcohol, Nemoc or an injury in the journal drops the sauna (coach-pick.js saunaSigns).
-      const risks=await risking;
-      const noSauna=saunaSigns(readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile}))||!!risks.alcohol||!!risks.injury||!!risks.sick;
-      const ranked=rankOptions({ride,run,swim,mainSport:eff.mainSport||'general',mains,allowed,sports:recent.sports,today:recent.today,declines:state.declines,less,planned,done:recent.done,athleteStatus:athlete?.status||'active',noSauna});
+      // The ranked options, kept under the data version like the coach's inputs
+      // (api-cache.js): the same data gives the same options, and every change
+      // (a sync, a choice, Odmítnout, Doporučovat méně) makes them outdated. The
+      // app asks again after Today, a choice and while the AI writes the workout
+      // (aiPending, up to four times); those now read the stored workouts only.
+      const base=await cached(env,ctx,'pick-base:'+date,()=>pickBase(env,ctx,internalAuth,date));
+      const {ranked,planned,less,gym,forecast}=base,state={chosen:base.chosen};
       // The ready workouts stay while the options do (pickSignature), so a sync
       // that changes nothing asks the AI nothing.
       const signature=pickSignature(ranked);
@@ -1530,8 +1551,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // Horko (heat-advice.js) at a ride or run outdoors: the workout's place, else the forecast's advice.
       const heatFor=(kind,workout,hard)=>{
         if(!['ride','run'].includes(kind))return null;
-        const indoor=workout?.environment?workout.environment==='indoor':environmentFor(date,kind,place.forecast).environment==='indoor';
-        return heatAdvice({sport:kind,weather:place.forecast,intervals:hard!==false,indoor})?.text||null;
+        const indoor=workout?.environment?workout.environment==='indoor':environmentFor(date,kind,forecast).environment==='indoor';
+        return heatAdvice({sport:kind,weather:forecast,intervals:hard!==false,indoor})?.text||null;
       };
       const options=ranked.options.filter(o=>o.best||!less.includes(o.kind)).map(o=>{
         const d=details[o.kind],heat=heatFor(o.kind,d?.workout,o.hard);if(!d)return heat?{...o,heat}:o;
@@ -2777,7 +2798,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const screen=String(url.searchParams.get('screen')||'');
     if(!SCREENS.includes(screen))return Response.json({message:L('Neznámá obrazovka.', 'Unknown screen.')},{status:400});
     const path={today:'/app/api/today',training:'/app/api/training',food:'/app/api/food-today'}[screen];
-    const kept=session.user?.id!=null?recentScreen(session.user.id,path):null;
+    const kept=session.user?.id!=null?recentScreen(session.user.id,path)||await cachedOnly(env,'screen:'+path).catch(()=>null):null;
     const screenData=()=>kept?Promise.resolve(kept):handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():null).catch(()=>null);
     // The screen's data plus what only the coach reads (long-term facts, Training's readiness).
     const load=()=>Promise.all([screenData(),coachTextExtras(env,ctx,internalAuth,screen).catch(()=>({}))]).then(([data,extra])=>data?{...data,...extra}:data);
