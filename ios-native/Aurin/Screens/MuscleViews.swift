@@ -399,9 +399,9 @@ struct MusclesView: View {
 
     private func reason(_ data: MuscleFatigue) -> String? {
         guard let r = data.recommend else { return nil }
-        guard let days = r.daysSince else { return L10n.f("%@ jsou tento měsíc ještě bez tréninku.", r.label) }
+        guard let days = r.daysSince else { return L10n.f("%@ jsou tento měsíc ještě bez tréninku.", L10n.tr(r.label)) }
         guard days >= 3 else { return nil }
-        return L10n.f("%@ naposledy před %@ dny.", r.label, String(days))
+        return L10n.f("%@ naposledy před %@ dny.", L10n.tr(r.label), String(days))
     }
 
     private func tiredRow(_ muscle: MuscleFatigue.Muscle, today: String) -> some View {
