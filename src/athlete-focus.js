@@ -114,8 +114,8 @@ export function normalizeFocus(p = {}) {
     eventName: text(p.eventName, 120),
     eventDate: /^\d{4}-\d{2}-\d{2}$/.test(String(p.eventDate || "")) && Number.isFinite(Date.parse(p.eventDate + "T12:00:00Z")) ? p.eventDate : "",
     weeklyHours: Number.isFinite(hours) && hours >= 1 && hours <= 40 ? Math.round(hours * 2) / 2 : null,
-    // The race's sport and distance; a distance no race has (a 500 km run) is dropped.
-    ...(Object.hasOwn(RACES, p.eventSport) && Number(p.eventKm) >= RACE_MIN_KM[p.eventSport] && raceClass(p.eventSport, Number(p.eventKm)) ? { eventSport: p.eventSport, eventKm: Math.round(Number(p.eventKm) * 10) / 10 } : {}),
+    // The race's sport and distance, only with a race; a distance no race has (a 500 km run) is dropped.
+    ...((p.eventName || p.eventDate) && Object.hasOwn(RACES, p.eventSport) && Number(p.eventKm) >= RACE_MIN_KM[p.eventSport] && raceClass(p.eventSport, Number(p.eventKm)) ? { eventSport: p.eventSport, eventKm: Math.round(Number(p.eventKm) * 10) / 10 } : {}),
     // "Uplaveš 100 m bez zastavení?" (Focus sheet): false holds the swims to the pool and short lengths.
     ...(typeof p.swims100 === "boolean" ? { swims100: p.swims100 } : {})
   };

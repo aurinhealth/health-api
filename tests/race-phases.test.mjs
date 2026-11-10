@@ -28,9 +28,9 @@ test("the race's distance picks its build weeks and taper days", () => {
 });
 
 test("a distance no race has is not saved", () => {
-  assert.deepEqual(normalizeFocus({ eventSport: "run", eventKm: 21.12 }).eventKm, 21.1);
+  assert.deepEqual(normalizeFocus({ eventName: "Půlmaraton", eventSport: "run", eventKm: 21.12 }).eventKm, 21.1);
   for (const p of [{ eventSport: "run", eventKm: 500 }, { eventSport: "swim", eventKm: 0.2 }, { eventSport: "row", eventKm: 10 }, { eventSport: "run" }, { eventKm: 10 }])
-    assert.equal(normalizeFocus(p).eventSport, undefined, JSON.stringify(p));
+    assert.equal(normalizeFocus({ eventName: "Závod", ...p }).eventSport, undefined, JSON.stringify(p));
 });
 
 test("without a distance the phases stay 11 weeks of build and the final week taper", () => {
@@ -77,6 +77,8 @@ test("a race picks the main sport only when none is main and the athlete does it
   const tri = { ...base, sports: ["ride", "run", "swim"], eventName: "Můj závod", eventSport: "tri", eventKm: 51.5 };
   assert.equal(effectiveProfile(tri, {}).mainSport, "triathlon");
   assert.equal(effectiveProfile({ ...tri, sports: ["ride", "run"] }, {}).mainSport, "general", "swimming is not ticked");
+  // "auto" reads the race's distance before its name.
+  assert.equal(effectiveProfile({ mainSport: "auto", eventName: "Můj závod", eventDate: "2099-04-01", eventSport: "ride", eventKm: 120 }, {}).mainSport, "cycling");
 });
 
 test("the stated weekly hours shape the first week, discounted and capped", () => {

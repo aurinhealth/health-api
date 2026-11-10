@@ -259,14 +259,15 @@ export function effectiveProfile(saved, suggested) {
   if (Array.isArray(history?.regularSports) && history.regularSports.length) profile.regularSports = history.regularSports.slice(0, 4);
   // A race that is over no longer decides (athleteFocus drops it too).
   const raceAhead = !profile.eventDate || profile.eventDate >= localToday();
-  if (profile.mainSport === "auto") profile.mainSport = (raceAhead ? sportFromText(profile.eventName) : null) ?? sportFromText(profile.sportGoal)
+  const raceSport = { run: "running", ride: "cycling", swim: "swimming", tri: "triathlon" }[normalizeFocus(profile).eventSport];
+  if (profile.mainSport === "auto") profile.mainSport = (raceAhead ? raceSport ?? sportFromText(profile.eventName) : null) ?? sportFromText(profile.sportGoal)
     ?? (history?.recentCount || history?.yearCount ? suggested.mainSport ?? history.mainSport : "general");
   // "auto" never lands on a sport the athlete turned off (Sports to suggest).
   if (saved?.mainSport === "auto" && Array.isArray(profile.sports) && !mainKindsOf({ mainSport: profile.mainSport }).every(k => profile.sports.includes(k))) profile.mainSport = "general";
   // Sports ticked but none of them main, and a race ahead: the race's sport
   // (its distance, else its name) is the main one when the athlete ticked it.
   if ((profile.eventName || profile.eventDate) && raceAhead && Array.isArray(profile.mainSports) && !profile.mainSports.length && Array.isArray(profile.sports)) {
-    const race = normalizeFocus(profile).eventSport, kinds = race ? (race === "tri" ? ["ride", "run", "swim"] : [race]) : mainKindsOf({ mainSport: sportFromText(profile.eventName) });
+    const kinds = mainKindsOf({ mainSport: raceSport ?? sportFromText(profile.eventName) });
     if (kinds.length && kinds.every(k => profile.sports.includes(k))) Object.assign(profile, { mainSports: kinds, mainSport: mainSportOfKinds(kinds) });
   }
   const hours = Number(history?.weeklyHours);
