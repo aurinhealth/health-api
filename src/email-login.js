@@ -22,7 +22,7 @@
 import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie, knownDevice, knownDeviceCookie, heldKnownDevice, keepOnlyPushToken } from "./dashboard-auth.js";
 import { allowClient, allowRequest, callerNetwork } from "./ip-rate-limit.js";
 import { normalizeEmail, plainEmail, emailCodeAccess, signInEmailUser, changeUserEmail, SignupLimited } from "./tenancy.js";
-import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail, stepUpCodeEmail } from "./email-sender.js";
+import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail, emailTakenEmail, stepUpCodeEmail } from "./email-sender.js";
 import { siteLang } from "./site-pages.js";
 import { reviewCodeActive } from "./app-review.js";
 import { L } from "./lang.js";
@@ -315,8 +315,14 @@ export async function handleEmailChange(request, env, url, session, ctx, stepUp 
     if (!(await allowRequest(db, "email-change:user:" + user.id, CHANGE_USER_LIMITS, time)) || !(await allowClient(db, request, sessionSecret(env), "email-change", time, CHANGE_CLIENT_LIMITS))) {
       return json({ message: L("Příliš mnoho žádostí o změnu e-mailu. Zkus to později.", "Too many email change requests. Try again later.") }, 429);
     }
-    if (await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first()) return emailChangeRefusal("taken");
     const code = randomCode(), lang = requestLanguage(request);
+    // Another account has the address: the same answer as a sent code (security review 2026-11-09, F5),
+    // and the address gets a notice instead, at most one a day (keyed hash, so no address is stored).
+    if (await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first()) {
+      const key = "email-taken:" + (await signText("email-taken:" + email, sessionSecret(env))).slice(0, 32);
+      if (await allowRequest(db, key, { day: 1 }, time)) await sendEmail(env, { to: email, ...emailTakenEmail(lang) }).catch(error => console.error("E-mail taken notice failed", error?.code || error?.message));
+      return json({ status: "ok" });
+    }
     const sent = await claimAndSend(db, env, email, code, purpose, emailChangeCodeEmail(lang, code), time, { change: true });
     if (sent === "resend") return json({ message: L("Kód na tuhle adresu jsme poslali před chvílí. Další můžeš chtít za minutu.", "We sent a code to this address a moment ago. You can ask for another in a minute.") }, 429);
     if (sent !== "sent") return codeRefusal(sent);

@@ -128,12 +128,31 @@ test("a code for one account cannot move another account", async () => {
   assert.equal((await findUser(env.DB, bob.id, env)).email, "bob@example.com");
 });
 
-test("the change is refused for a taken, the same or the owner's address, and from another site", async () => {
-  const { env } = await setup();
+test("an address another account uses answers as any other; it gets a notice once a day instead of a code", async () => {
+  const { env, sent } = await setup();
   const user = await member(env);
   await member(env, "other@example.com");
+  const before = sent.length;
+  const taken = await change(env, user, "/app/api/account/email/start", { email: "Other@Example.com" });
+  assert.equal(taken.status, 200);
+  assert.deepEqual(await taken.json(), { status: "ok" });
+  assert.equal(sent.length, before + 1);
+  assert.equal(sent.at(-1).to, "other@example.com");
+  assert.match(sent.at(-1).subject, /už má účet Aurin/);
+  assert.doesNotMatch(sent.at(-1).text, /\b\d{6}\b/, "no code");
+  assert.equal(env.DB.sqlite.prepare("SELECT COUNT(*) AS n FROM email_login_codes WHERE email = 'other@example.com'").get().n, 0, "the other account's sign-in code is left alone");
+  assert.equal((await change(env, user, "/app/api/account/email/start", { email: "other@example.com" })).status, 200);
+  assert.equal(sent.length, before + 1, "one notice a day");
+  // No code exists for it, so no guess moves the account there.
+  assert.equal((await change(env, user, "/app/api/account/email/verify", { email: "other@example.com", code: "123456" })).status >= 400, true);
+  assert.equal((await findUser(env.DB, user.id, env)).email, "friend@example.com");
+  assert.equal(JSON.stringify(env.DB.sqlite.prepare("SELECT key FROM request_limits").all()).includes("other@example.com"), false, "no address stored");
+});
+
+test("the change is refused for the same or the owner's address, and from another site", async () => {
+  const { env } = await setup();
+  const user = await member(env);
   const owner = await signInEmailUser(env.DB, env, "owner@example.com");
-  assert.equal((await change(env, user, "/app/api/account/email/start", { email: "other@example.com" })).status, 409);
   assert.equal((await change(env, user, "/app/api/account/email/start", { email: "friend@example.com" })).status, 400);
   assert.equal((await change(env, user, "/app/api/account/email/start", { email: "owner@example.com" })).status, 400);
   assert.equal((await change(env, owner, "/app/api/account/email/start", { email: "boss@example.com" })).status, 400);
