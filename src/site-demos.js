@@ -106,7 +106,7 @@ const NIGHT = [['l', 0, 12], ['d', 12, 40], ['l', 40, 62], ['r', 62, 74], ['a', 
   ['l', 130, 158], ['r', 158, 178], ['l', 178, 210], ['d', 210, 228], ['l', 228, 262], ['r', 262, 284], ['a', 284, 290],
   ['l', 290, 330], ['d', 330, 337], ['l', 337, 370], ['r', 370, 400], ['a', 400, 405], ['l', 405, 436], ['r', 436, 446], ['a', 446, 449]];
 const sleepNight = `<div class="dm pad">
-<div class="sl">Sleep · Wednesday night</div>
+<div class="sl">Wednesday night sleep</div>
 <div class="row base"><span class="num big"${n(400, 432, 150, 1300, 'hmc')}>7:12</span><span class="pill ind"${at('1300')}>index 82</span></div>
 <div class="hg" aria-hidden="true"><div class="hgl"><span>Awake</span><span>REM</span><span>Light</span><span>Deep</span></div><div class="hgt">${NIGHT.map(([t, s, e], i) => `<i class="${t}" style="left:${(s / 449 * 100).toFixed(2)}%;width:${Math.max(0.5, (e - s) / 449 * 100).toFixed(2)}%"${at(String(300 + i * 60))}></i>`).join('')}</div></div>
 <div class="hgx" aria-hidden="true"><span>11:33 PM</span><span>7:02 AM</span></div>
@@ -116,7 +116,7 @@ const sleepNight = `<div class="dm pad">
 // "Why 8 h 30 min": the need for tonight built up row by row.
 const sleepNeed = `<div class="dm pad">
 <div class="sl">Need and debt</div>
-<div class="nd"><div class="row sp base"><b class="nt">Need for tonight · estimate</b><span class="num md"${n(480, 510, 600, 2600, 'hmc')}>8:30</span></div>
+<div class="nd"><div class="row sp base"><b class="nt">Need for tonight (estimate)</b><span class="num md"${n(480, 510, 600, 2600, 'hmc')}>8:30</span></div>
 <div class="nr"${at('100')}><span>Baseline for your age</span><span class="mono">8:00</span></div>
 <div class="nr"${at('900')}><span>Today’s strain</span><span class="mono">+ 0:15</span></div>
 <div class="nr"${at('1700')}><span>Paying back debt</span><span class="mono">+ 0:30</span></div>
@@ -181,25 +181,25 @@ const gauge = (size, start) => {
 };
 const strainScreen = `<div class="app glow-training">${STATUS}
 <div class="nav c"><span class="cb">${ic('chev', 'flip')}</span><span class="pill grn">${ic('spark')}Coach</span></div>
-<div class="sl">Training · today</div>
+<div class="sl">Today’s training</div>
 <div class="sent title">Strain</div>
-<div class="gwrap">${gauge(190, 300)}<div class="gc"><span class="num g"${n(0, 8.4, 300, 1600, '1')}>8.4</span><span class="mut s">target 11–14 · of 21</span></div><div class="gl"><span>0</span><span>21</span></div></div>
+<div class="gwrap">${gauge(190, 300)}<div class="gc"><span class="num g"${n(0, 8.4, 300, 1600, '1')}>8.4</span><span class="mut s">target 11–14 of 21</span></div><div class="gl"><span>0</span><span>21</span></div></div>
 <div class="center"><span class="pill amb"${at('1700')}>moderate</span></div>
 <div class="card split"><i class="sb2"><b class="w" style="--w:${5.1 / 21 * 100}%"${at('500')}></b><b class="m" style="--w:${3.3 / 21 * 100}%"${at('1200')}></b><b class="p" style="--w:${5.0 / 21 * 100}%"${at('2000')}></b></i>
 <div class="leg"><b>5.1</b> workout <b>3.3</b> movement <b>+5.0</b> in plan</div></div>
 <div class="sl pad2">Today’s target</div>
 <div class="card rows"><div class="li"><span>Readiness</span><span>78</span></div><div class="li"><span>Sleep debt</span><span>4 h 51 min</span></div><div class="li"><span>Plan</span><span>Strength, full body</span></div></div>
 <div class="sl pad2">What it’s made of</div>
-<div class="card made"><div class="mi"><span class="sq amb">${ic('run')}</span><div><b>Morning run</b><span class="mut s">7:30 AM · 42 min · 48 TSS</span></div><span class="num">5.1</span></div><div class="mi"><span class="sq sand">${ic('steps')}</span><div><b>Movement through the day</b><span class="mut s">6,420 steps</span></div><span class="num">3.3</span></div></div>
+<div class="card made"><div class="mi"><span class="sq amb">${ic('run')}</span><div><b>Morning run</b><span class="mut s">7:30 AM, 42 min, 48 TSS</span></div><span class="num">5.1</span></div><div class="mi"><span class="sq sand">${ic('steps')}</span><div><b>Movement through the day</b><span class="mut s">6,420 steps</span></div><span class="num">3.3</span></div></div>
 </div>`;
 
 // Beside the phone: what adds up to today's strain, and where it should land.
 const strainMade = `<div class="dm pad">
 <div class="row sp"><div class="sl">What it’s made of</div><span class="mut s">target 11–14</span></div>
 <div class="tgt"><i><b class="band"></b><b class="fill"${at('400:a 1700:b 3000:c')}></b></i><span class="num" data-n="0,5.1,400,900,1;5.1,8.4,1700,900,1;8.4,13.4,3000,900,1">13.4</span></div>
-<div class="mi"${at('400')}><span class="sq amb">${ic('run')}</span><div><b>Morning run</b><span class="mut s">7:30 AM · 42 min · 48 TSS</span></div><span class="num">5.1</span></div>
+<div class="mi"${at('400')}><span class="sq amb">${ic('run')}</span><div><b>Morning run</b><span class="mut s">7:30 AM, 42 min, 48 TSS</span></div><span class="num">5.1</span></div>
 <div class="mi"${at('1700')}><span class="sq sand">${ic('steps')}</span><div><b>Movement through the day</b><span class="mut s"><span${n(0, 6420, 1700, 1100, 'i')}>6,420</span> steps</span></div><span class="num">3.3</span></div>
-<div class="mi plan"${at('3000')}><span class="sq dash">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">5:30 PM · in plan</span></div><span class="num faint">+5.0</span></div>
+<div class="mi plan"${at('3000')}><span class="sq dash">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">5:30 PM, in plan</span></div><span class="num faint">+5.0</span></div>
 <p class="note"${at('4000')}>Lands inside today’s target.</p>
 </div>`;
 
@@ -213,13 +213,13 @@ const MONTH = [['', '', '', 1, 2, 3, 4], [5, 6, 7, 8, 9, 10, 11], [12, 13, 14, 1
 const monthState = d => d === '' ? '' : d > 8 ? (d % 7 === 2 ? '' : 'up') : d === 4 ? 'off' : d === 7 ? 'off' : d % 11 === 0 ? '' : d === 3 || d === 8 ? 'ok' : (d % 7 === 5 ? 'out' : 'ok');
 const monthSport = d => ['gym', 'bike', 'run', 'gym', 'bike', 'bike', 'run'][d % 7];
 const week = `<div class="dm pad wk">
-<div class="sl">Training · Week 41</div>
+<div class="sl">Week 41</div>
 <div class="strip">${dayC('Mo', 5, 'run', 'ok')}${dayC('Tu', 6, 'bike', 'ok')}${dayC('We', 7, 'bike', 'off')}<div class="dc sel"><span class="wd today">Th</span><span class="ci up"${at('1400:done')}>${ic('gym')}</span><span class="num dn">8</span></div>${dayC('Fr', 9, 'bike', 'up')}${dayC('Sa', 10, 'run', 'up')}</div>
 <div class="handle"${at('4300:pull 5200-pull')}><i></i><span data-tx="0|Full month;4800|Less">Full month</span></div>
-<div class="month"${at('4800:open')}><div class="mh"><b>October</b><span class="mut s">12 activities · 14 h 20 min</span></div><div class="mg">${['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => `<span class="mw">${d}</span>`).join('')}${MONTH.flat().map((d, i) => `<span class="md${d === 8 ? ' sel' : ''}" style="--i:${i}"><span>${d}</span>${monthState(d) ? `<span class="ci ${monthState(d)}">${ic(monthSport(d))}</span>` : ''}</span>`).join('')}</div></div>
-<div class="day"><div class="row sp"><b>Today</b><span class="mut s">1 h 27 min · 840 kcal</span></div>
-<div class="ar"><span class="ci ok">${ic('run')}</span><div><b>Morning run</b><span class="src">${logo('apple')}Apple Health</span><span class="mut s">Run · 7:30 AM · 42 min · 8.2 km</span>${pct(98)}</div><span class="num">520<small>kcal</small></span></div>
-<div class="ar"><span class="ci up"${at('1400:done')}>${ic('gym')}</span><div><b>Strength, full body</b><span class="src"${at('2200')}>${AURIN}Aurin, Apple Watch</span><span class="mut s" data-tx="0|Planned · 5:30 PM · 45 min;1400|Strength · 5:30 PM · 47 min">Planned · 5:30 PM · 45 min</span>${pct(94, at('2200'))}</div><span class="num"${at('2200')}>320<small>kcal</small></span></div>
+<div class="month"${at('4800:open')}><div class="mh"><b>October</b><span class="mut s">12 activities, 14 h 20 min</span></div><div class="mg">${['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => `<span class="mw">${d}</span>`).join('')}${MONTH.flat().map((d, i) => `<span class="md${d === 8 ? ' sel' : ''}" style="--i:${i}"><span>${d}</span>${monthState(d) ? `<span class="ci ${monthState(d)}">${ic(monthSport(d))}</span>` : ''}</span>`).join('')}</div></div>
+<div class="day"><div class="row sp"><b>Today</b><span class="mut s">1 h 27 min, 840 kcal</span></div>
+<div class="ar"><span class="ci ok">${ic('run')}</span><div><b>Morning run</b><span class="src">${logo('apple')}Apple Health</span><span class="mut s">Run, 7:30 AM, 42 min, 8.2 km</span>${pct(98)}</div><span class="num">520<small>kcal</small></span></div>
+<div class="ar"><span class="ci up"${at('1400:done')}>${ic('gym')}</span><div><b>Strength, full body</b><span class="src"${at('2200')}>${AURIN}Aurin, Apple Watch</span><span class="mut s" data-tx="0|Planned, 5:30 PM, 45 min;1400|Strength, 5:30 PM, 47 min">Planned, 5:30 PM, 45 min</span>${pct(94, at('2200'))}</div><span class="num"${at('2200')}>320<small>kcal</small></span></div>
 </div></div>`;
 
 // ---- A plan for each sport (EnduranceWorkouts.swift, WorkoutProfile.swift, PlannedSendSheet.swift) ----
@@ -252,37 +252,37 @@ ${rows.map(([name, sub, done], i) => `<div class="li"><div><b>${name}</b><span c
 ${files ? `<div class="sl">Export to</div><div class="row gap">${files.map(f => `<span class="fchip">${f}</span>`).join('')}</div>` : ''}
 </div>`;
 const PLANS = {
-  ride: {icon: 'bike', day: 'Saturday · 8:00 AM', title: 'Long ride', goal: 'Gran fondo · 6 weeks to go',
+  ride: {icon: 'bike', day: 'Saturday 8:00 AM', title: 'Long ride', goal: 'Gran fondo in 6 weeks',
     stats: [['Time', '3 h 30'], ['Load', '176 TSS'], ['Calories', '2,240']],
     blocks: [[15, 55], [40, 70], [20, 85], [10, 60], [40, 70], [20, 85], [10, 60], [45, 70], [10, 50]],
-    steps: [['Warm-up', '15 min · 55 % FTP'], ['Endurance', '3 × 40 min · 70 % FTP'], ['Tempo', '2 × 20 min · 85 % FTP'], ['Cool-down', '10 min · 50 % FTP']]},
-  run: {icon: 'run', day: 'Sunday · 9:00 AM', title: 'Long run', goal: 'Marathon · 10 weeks to go',
+    steps: [['Warm-up', '15 min, 55 % FTP'], ['Endurance', '3 × 40 min, 70 % FTP'], ['Tempo', '2 × 20 min, 85 % FTP'], ['Cool-down', '10 min, 50 % FTP']]},
+  run: {icon: 'run', day: 'Sunday 9:00 AM', title: 'Long run', goal: 'Marathon in 10 weeks',
     stats: [['Time', '1 h 50'], ['Distance', '20 km'], ['Load', '114 TSS']],
     blocks: [[10, 65], [70, 78], [20, 88], [10, 65]],
-    steps: [['Warm-up', '10 min · easy'], ['Steady', '70 min · 78 % threshold'], ['Marathon pace', '20 min · 88 % threshold'], ['Cool-down', '10 min · easy']]},
-  swim: {icon: 'swim', day: 'Tuesday · 6:30 AM', title: 'CSS intervals', goal: 'Faster swim · CSS 1:45 /100 m', swim: true,
+    steps: [['Warm-up', '10 min, easy'], ['Steady', '70 min, 78 % threshold'], ['Marathon pace', '20 min, 88 % threshold'], ['Cool-down', '10 min, easy']]},
+  swim: {icon: 'swim', day: 'Tuesday 6:30 AM', title: 'CSS intervals', goal: 'Faster swim, CSS 1:45 /100 m', swim: true,
     stats: [['Distance', '1,500 m'], ['Time', '32 min'], ['Pool', '25 m']],
     blocks: [[8, 80], ...Array.from({length: 8}, () => [[1.75, 100], [.25, 0]]).flat(), [6, 80]],
-    steps: [['Warm-up', '400 m · easy'], ['Main set', '8 × 100 m at CSS · 15 s rest'], ['Cool-down', '300 m · easy']]},
-  brick: {icon: 'bike', day: 'Saturday · 8:00 AM', title: 'Brick', goal: 'Olympic triathlon · 8 weeks to go',
+    steps: [['Warm-up', '400 m, easy'], ['Main set', '8 × 100 m at CSS, 15 s rest'], ['Cool-down', '300 m, easy']]},
+  brick: {icon: 'bike', day: 'Saturday 8:00 AM', title: 'Brick', goal: 'Olympic triathlon in 8 weeks',
     stats: [['Time', '1 h 35'], ['Load', '98 TSS'], ['Legs', '2']],
     blocks: [[10, 55], [55, 80], [10, 60], [20, 86, 1]],
-    legs: '<span>Ride · 1 h 15</span><span>Run · 20 min</span>',
-    steps: [['Ride', '1 h 15 · 55 min at 80 % FTP'], ['Run straight after', '20 min · 86 % threshold']]}};
+    legs: '<span>Ride 1 h 15</span><span>Run 20 min</span>',
+    steps: [['Ride', '1 h 15, 55 min at 80 % FTP'], ['Run straight after', '20 min, 86 % threshold']]}};
 const plan = Object.fromEntries(Object.entries(PLANS).map(([k, v]) => [k, planScreen(v)]));
 const sendRide = sendCard([['Wahoo', 'Planned workouts', 1], ['Intervals.icu', 'In your calendar', 1], ['Apple Watch', 'Workout app']], ['.zwo', '.fit']);
 const sendRun = sendCard([['Apple Watch', 'Workout app'], ['Intervals.icu', 'In your calendar', 1], ['Wahoo', 'Planned workouts', 1]], ['.zwo', '.fit']);
-const sendSwim = sendCard([['Apple Watch', 'Pool · 25 m'], ['Intervals.icu', 'In your calendar', 1]], ['.fit']);
-const sendBrick = sendCard([['Apple Watch · multisport', 'Ride + run as one workout']]);
+const sendSwim = sendCard([['Apple Watch', '25 m pool'], ['Intervals.icu', 'In your calendar', 1]], ['.fit']);
+const sendBrick = sendCard([['Apple Watch multisport', 'Ride + run as one workout']]);
 
 // ---- Gym (GymTools.swift GymBuilderView, GymDayParts.swift GymPartsCard) ----
 const seg = (opts, from, to, t) => `<div class="seg">${opts.map((o, i) => `<span${i === from ? ' class="on"' : ''}${i === from && to !== from ? at(`${t}-on`) : ''}${i === to && to !== from ? at(`${t}:on`) : ''}>${o}</span>`).join('')}</div>`;
-const EX = [['Bench press', 'Chest · Triceps', '3 × 8–10 · 62.5 kg', 'A'], ['Bent-over rows', 'Back · Biceps', '3 × 10 · 50 kg', 'A'], ['Overhead press', 'Shoulders · Triceps', '3 × 8 · 37.5 kg'], ['Lat pulldown', 'Back · Biceps', '3 × 10–12 · 55 kg'], ['Biceps curls', 'Biceps', '2 × 12 · 12 kg']];
+const EX = [['Bench press', 'Chest, triceps', '3 × 8–10, 62.5 kg', 'A'], ['Bent-over rows', 'Back, biceps', '3 × 10, 50 kg', 'A'], ['Overhead press', 'Shoulders, triceps', '3 × 8, 37.5 kg'], ['Lat pulldown', 'Back, biceps', '3 × 10–12, 55 kg'], ['Biceps curls', 'Biceps', '2 × 12, 12 kg']];
 const builder = `<div class="dm pad bld">
 <div class="stage1"${at('3900:gone')}>
 <div class="sl">When and how long</div>${seg(['30', '45', '60', '75', '90', '120'], 2, 2, 0)}
 <div class="sl">Focus</div>${seg(['Full body', 'Upper', 'Legs', 'Muscles'], 0, 1, 900)}
-<div class="eq"><span class="ib ind">${ic('gym')}</span><div><b>Equipment</b><span class="mut s">Gym · 14 machines</span></div>${ic('chev')}</div>
+<div class="eq"><span class="ib ind">${ic('gym')}</span><div><b>Equipment</b><span class="mut s">Gym, 14 machines</span></div>${ic('chev')}</div>
 <div class="btn"${at('2000:press 2300-press 2300:busy')}><span class="sp1"></span>${ic('spark')}<span data-tx="0|Suggest a workout;2300|Building…">Suggest a workout</span></div>
 </div>
 <div class="stage2"${at('3900:in')}>
@@ -297,13 +297,13 @@ const part = (id, icon, color, title, sub, toggle) => `<div class="pt ${id}"><sp
 const gymParts = `<div class="dm pad">
 <div class="row sp"><b class="sent md2">58 min in total</b><span class="mut s">13 min extra</span></div>
 <div class="tbar"><i class="w" style="flex:5"></i><i class="l" style="flex:45"></i><i class="sx" style="flex:8"></i></div>
-<div class="tl s mut">Warm-up 5 · Lifting 45 · Stretching 8 min</div>
+<div class="tl s mut">Warm-up 5, lifting 45, stretching 8 min</div>
 <div class="row sp"><span class="sl">Today’s workout</span><span class="s gro" data-tx="0|Reorder;2600|Done;4600|Reorder">Reorder</span></div>
 <div class="gparts"${at('2600:reo 3500:swap 4600-reo')}>
-${part('p1', 'run', 'amb', 'Warm-up', 'Automatic · 5 min', true)}
-${part('p2', 'bike', 'rust', 'Cardio', 'Exercise bike · No limit', 'flip')}
-${part('p3', 'gym', 'amb2', 'Exercises', '5 exercises · 45 min', null)}
-${part('p4', 'flex', 'ind', 'Stretching', 'Automatic · 8 min', true)}
+${part('p1', 'run', 'amb', 'Warm-up', 'Automatic, 5 min', true)}
+${part('p2', 'bike', 'rust', 'Cardio', 'Exercise bike, no limit', 'flip')}
+${part('p3', 'gym', 'amb2', 'Exercises', '5 exercises, 45 min', null)}
+${part('p4', 'flex', 'ind', 'Stretching', 'Automatic, 8 min', true)}
 </div>
 </div>`;
 
@@ -356,23 +356,23 @@ const sleepOne = `<div class="dm pad one">
 <div class="one-pt ind"${at('1500')}>19% deep sleep, usually 15–20%</div>
 </div>`;
 const needOne = `<div class="dm pad one">
-<div class="row sp base"><b>Need for tonight · estimate</b><span class="mut">baseline 8:00</span></div>
+<div class="row sp base"><b>Need for tonight (estimate)</b><span class="mut">baseline 8:00</span></div>
 <div class="row base one-v"><span class="num big"${n(480, 510, 400, 1600, 'hmc')}>8:30</span><span class="mut">h</span></div>
-<div class="mut">+0:15 today’s strain · −0:15 nap</div>
+<div class="mut">+0:15 today’s strain, −0:15 nap</div>
 <div class="one-pt amb"${at('1800')}>+0:30 for sleep debt</div>
 </div>`;
 const foodOne = `<div class="dm pad one">
 <div class="row sp base"><b>Today’s target</b><span class="mut">training day</span></div>
 <div class="row base one-v"><span class="num big"${n(2300, 2650, 400, 1300, 'i')}>2,650</span><span class="mut">kcal</span></div>
-<div class="mut">1,380 eaten · 1,270 left</div>
-<div class="tparts"${at('1500')}><i class="tbar"><b style="flex:2300;background:var(--brown)"></b><b style="flex:200;background:var(--green)"></b><b style="flex:150;background:repeating-linear-gradient(135deg,var(--amber) 0 3px,transparent 3px 6px)"></b></i><span class="mut s">Base 2,300 · <span class="grn">+200 done</span> · <span class="amb">+150 planned</span></span></div>
+<div class="mut">1,380 eaten, 1,270 left</div>
+<div class="tparts"${at('1500')}><i class="tbar"><b style="flex:2300;background:var(--brown)"></b><b style="flex:200;background:var(--green)"></b><b style="flex:150;background:repeating-linear-gradient(135deg,var(--amber) 0 3px,transparent 3px 6px)"></b></i><span class="mut s">Base 2,300, <span class="grn">+200 done</span>, <span class="amb">+150 planned</span></span></div>
 </div>`;
 
 // Readiness in the luteal phase (recovery-model.js lutealOffset): the normal for resting heart rate moves up by the
 // athlete's own luteal rise. The sample day is day 21, so its "usual range 50–54 bpm" above is already this phase's
 // usual range; on other days it is 48–52.
 const cycleOne = `<div class="dm pad one">
-<span class="pill pnk">Day 21 · Luteal · estimate</span>
+<span class="pill pnk">Day 21, luteal phase (estimate)</span>
 <b class="cy-k">Usual resting heart rate</b>
 <div class="row base one-v"><span class="num big" data-tx="0|48–52;1300|50–54">50–54</span><span class="mut">bpm</span></div>
 <div class="mut">48–52 bpm on other days</div>
@@ -395,12 +395,12 @@ const tmRest = `<div class="dm pad tm rest">
 <div class="ring"><svg viewBox="0 0 200 200" aria-hidden="true"><circle cx="100" cy="100" r="84" class="rt"/><circle cx="100" cy="100" r="84" class="ra" stroke-dasharray="${RING.toFixed(1)}" data-ring="90,82,0,8000,90;97,92,8200,5000,105" style="stroke-dashoffset:0"/></svg>
 <div class="rc"><span class="mut s">Rest</span><span class="num rtm"${n(90, 82, 0, 8000, 'ms')}${n(97, 92, 8200, 5000, 'ms')}>1:30</span><span class="mut s" data-tx="0|of 1:30;8000|of 1:45">of 1:30</span></div></div>
 <div class="row gap c3"><span class="pb2">−15 s</span><span class="pb2"${at('7700:press 8000-press')}>+15 s</span><span class="pb2">Skip</span></div>
-<div class="nowc"><span class="mut s">Now</span><div class="row sp"><b>Squat · set 3</b><span class="num md">80 kg × 8</span></div><span class="mut s">Last time 77.5 × 8</span></div>
+<div class="nowc"><span class="mut s">Now</span><div class="row sp"><b>Squat, set 3</b><span class="num md">80 kg × 8</span></div><span class="mut s">Last time 77.5 × 8</span></div>
 </div>`;
 
 // The finish screen (TrainingModeView.swift summary): what you did, a record, the changes, a swap kept for next time, sent to Apple Health and Intervals.icu, then Close (the muscles have their own chapter next).
 const doneScreen = `<div class="app glow-training">${STATUS}
-<div class="nav"><span class="cb">${ic('x')}</span><div class="nt"><b>Full body</b><span class="mut s">3 exercises · 9/9 sets</span></div></div>
+<div class="nav"><span class="cb">${ic('x')}</span><div class="nt"><b>Full body</b><span class="mut s">3 exercises, 9/9 sets</span></div></div>
 <div class="center col"><div class="sl">Workout done</div><div class="sent title2">Full body</div></div>
 <div class="grid3">${[['Time', '47 min', 0, 47, 'min'], ['Calories', '412 kcal', 0, 412, 'kcal'], ['Avg HR', '128 bpm', 0, 128, 'bpm'], ['Sets', '9', 0, 9, ''], ['Volume', '4.2 t', 0, 4.2, 't', '+0.6 t'], ['Max HR', '164 bpm', 0, 164, 'bpm']]
     .map(([k, v, f, t, u, d], i) => `<div><span class="mut s">${k}</span><span class="num tv"><span${n(f, t, 300 + i * 120, 1100, u === 't' ? '1' : 'i')}>${String(t)}</span>${u ? ' ' + u : ''}</span>${d ? `<span class="grn s"${at('1600')}>${d}</span>` : ''}</div>`).join('')}</div>
@@ -439,22 +439,22 @@ const foodAdd = `<div class="dm pad fa">
 <div class="srch">${ic('search')}<span class="mut">Search foods</span></div>
 <div class="tiles4">${[['barcode', 'Scan'], ['camera', 'Photo'], ['label', 'Label'], ['pencil', 'Manual']].map(([i, t], k) => `<span${k ? '' : at('500:press 900-press')}>${ic(i)}${t}</span>`).join('')}</div>
 <div class="fch"><span class="on">Recent</span><span>Frequent</span><span>Recipes</span></div>
-${[['Plain Greek yogurt', 'Hollandia · 140 g', 205], ['Banana', '120 g', 105], ['Oat flakes', 'Emco · 60 g', 225], ['Chicken breast', '150 g', 165], ['Basmati rice', '80 g', 280]].map(([k, d, v]) => `<div class="li"><div><b>${k}</b><span class="mut s">${d}</span></div><span class="row"><span class="num">${v}<small>kcal</small></span><span class="fplus">${ic('plus')}</span></span></div>`).join('')}
+${[['Plain Greek yogurt', 'Hollandia, 140 g', 205], ['Banana', '120 g', 105], ['Oat flakes', 'Emco, 60 g', 225], ['Chicken breast', '150 g', 165], ['Basmati rice', '80 g', 280]].map(([k, d, v]) => `<div class="li"><div><b>${k}</b><span class="mut s">${d}</span></div><span class="row"><span class="num">${v}<small>kcal</small></span><span class="fplus">${ic('plus')}</span></span></div>`).join('')}
 <div class="scn"${at('900:in')}>
 <div class="row sp"><span class="cb">${ic('x')}</span><span class="sl0">BARCODE</span><span class="cb">${ic('torch')}</span></div>
 <div class="finder"${at('900:in 2900-in')}><div class="cam"><div class="bc"></div><i class="scan"></i><span class="cr tl"></span><span class="cr tr"></span><span class="cr bl"></span><span class="cr br"></span></div><p class="sent aim">Point at the barcode on the package</p><div class="pks"><span class="olp pk">${ic('photo')}Choose photo</span><span class="olp pk">${ic('keyboard')}Enter code</span></div></div>
 <div class="res"${at('2900:in')}>
 <div class="row sp"><span class="grn s b">✓ Found</span><span class="olp">${ic('pencil')}Edit product</span></div>
 <div class="sent h3">Plain Greek yogurt</div>
-<div class="mut s">Hollandia · EAN 8594001234567</div>
+<div class="mut s">Hollandia, EAN 8594001234567</div>
 <div class="nc">${[['kcal', 205, 307], ['protein', 13, 19.5], ['carbs', 6, 9], ['fat', 14, 21]].map(([k, a, b]) => `<div><span class="num md"${n(a, b, 4500, 700, 'i')}>${Math.round(b)}</span><span class="mut s">${k === 'kcal' ? 'kcal' : k + ' g'}</span></div>`).join('')}</div>
-<div class="dl"><div class="row sp"><span>After adding, left today</span><span><b><span data-n="1065,963,4500,700,i">963</span> kcal</b> · <span data-n="53,47,4500,700,i">47</span> g of protein</span></div>
-<i class="dlb"><b class="g"${at('4500:on')}></b><b class="e"></b></i><div class="mut s">1,380 of 2,650 kcal eaten · this food <span data-n="205,307,4500,700,i">307</span> kcal</div></div>
+<div class="dl"><div class="row sp"><span>After adding, left today</span><span><b><span data-n="1065,963,4500,700,i">963</span> kcal</b>, <span data-n="53,47,4500,700,i">47</span> g of protein</span></div>
+<i class="dlb"><b class="g"${at('4500:on')}></b><b class="e"></b></i><div class="mut s">1,380 of 2,650 kcal eaten, this food <span data-n="205,307,4500,700,i">307</span> kcal</div></div>
 <div class="wf"><b data-tx="0|1;4500|1½">1½</b><i></i><span>serving (140 g)</span>${ic('chevd')}</div>
 <div class="wheel"><div class="col w"><ul>${['0', '1', '2'].map(x => `<li>${x}</li>`).join('')}</ul></div><div class="col p"><ul${at('4500:on')}>${['', '–', '¼', '⅓', '½', '⅔'].map(x => `<li>${x}</li>`).join('')}</ul></div><div class="col u"><ul>${['g', 'serving (140 g)', ''].map(x => `<li>${x}</li>`).join('')}</ul></div></div>
-<div class="mut s">1 serving = 140 g · 205 kcal</div>
+<div class="mut s">1 serving = 140 g, 205 kcal</div>
 <span class="meal">Lunch${ic('updown')}</span>
-<div class="btn dark"${at('5800:press 6100-press 6100:ok')}><span data-tx="0|Add to lunch · 1 serving;4500|Add to lunch · 1½ serving;6100|✓ Added to lunch">Add to lunch · 1½ serving</span></div>
+<div class="btn dark"${at('5800:press 6100-press 6100:ok')}><span data-tx="0|Add 1 serving to lunch;4500|Add 1½ servings to lunch;6100|✓ Added to lunch">Add 1½ servings to lunch</span></div>
 <div class="btn ol">${ic('barcode')}Add and scan next</div>
 </div></div></div>`;
 
@@ -498,10 +498,10 @@ ${coachWait(1300, 3200)}
 ${answeredIn(4300, 3)}
 <div class="c1"${at('3200')}><span data-type="3200,900">Here’s a full-body session for 5:30 PM:</span></div>
 <div class="act"${at('4400')}>
-<div class="al">${ic('wand')}Schedule · Thu, Oct 8</div>
+<div class="al">${ic('wand')}Schedule for Thu, Oct 8</div>
 <div class="sent an">Strength, full body</div>
-${[['Squat', '3×8 · 80 kg'], ['Bench press', '3×8 · 62.5 kg'], ['Rows', '3×10 · 50 kg'], ['Romanian deadlift', '3×8 · 70 kg']].map(([a, b]) => `<div class="ar2"><span>${a}</span><span>${b}</span></div>`).join('')}
-<span class="mut s">+1 more · 1 h</span>
+${[['Squat', '3×8, 80 kg'], ['Bench press', '3×8, 62.5 kg'], ['Rows', '3×10, 50 kg'], ['Romanian deadlift', '3×8, 70 kg']].map(([a, b]) => `<div class="ar2"><span>${a}</span><span>${b}</span></div>`).join('')}
+<span class="mut s">+1 more, 1 h</span>
 <div class="ab"${at('6600:gone')}><span class="ok"${at('6200:press 6600-press')}>Confirm</span><span class="no">No</span><i class="br"></i>${['Shorter', 'Longer', 'Easier', 'Harder'].map(x => `<span class="q">${x}</span>`).join('')}<i class="br"></i><span class="q">Another day</span></div>
 <div class="conf"${at('6600')}>${ic('check')}Proposal confirmed.</div>
 </div>
@@ -534,11 +534,11 @@ ${memoryGroups.map(([g, items]) => `<div class="mg">${g}</div><div class="ml">${
 
 // Beside the phone: the confirmed workout lands in the week.
 const coachWeek = `<div class="dm pad wk"${at('6900')}>
-<div class="sl">Training · Week 41</div>
+<div class="sl">Week 41</div>
 <div class="strip">${dayC('Mo', 5, 'run', 'ok')}${dayC('Tu', 6, 'bike', 'ok')}${dayC('We', 7, 'bike', 'off')}<div class="dc sel"><span class="wd today">Th</span><span class="ci empty"${at('7600:up')}><span class="rest">–</span>${ic('gym')}</span><span class="num dn">8</span></div>${dayC('Fr', 9, 'bike', 'up')}${dayC('Sa', 10, 'run', 'up')}</div>
-<div class="day"><div class="row sp"><b>Today</b><span class="mut s" data-tx="0|42 min · 520 kcal;8000|1 h 42 min · 520 kcal">42 min · 520 kcal</span></div>
-<div class="ar"><span class="ci ok">${ic('run')}</span><div><b>Morning run</b><span class="mut s">Run · 7:30 AM · 42 min · 8.2 km</span>${pct(98)}</div><span class="num">520<small>kcal</small></span></div>
-<div class="ar new"${at('8000')}><span class="ci up">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">Planned · 5:30 PM · 60 min</span></div>${ic('chev')}</div>
+<div class="day"><div class="row sp"><b>Today</b><span class="mut s" data-tx="0|42 min, 520 kcal;8000|1 h 42 min, 520 kcal">42 min, 520 kcal</span></div>
+<div class="ar"><span class="ci ok">${ic('run')}</span><div><b>Morning run</b><span class="mut s">Run, 7:30 AM, 42 min, 8.2 km</span>${pct(98)}</div><span class="num">520<small>kcal</small></span></div>
+<div class="ar new"${at('8000')}><span class="ci up">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">Planned, 5:30 PM, 60 min</span></div>${ic('chev')}</div>
 </div></div>`;
 
 // The cycle calendar (CycleViews.swift CycleCalendarView) in October of the sample day: the period began on 18 September,
@@ -614,7 +614,7 @@ const actCoach = `<div class="dm wc coach2">
 <div class="w-q"${rise(100)}>Bad night. Legs today?</div>
 ${coachWait(100, 1600)}
 <div class="wcard w-a"${at('1600')}><p class="sent">${typed.map(([x, start, len], i) => `<span${i === 1 ? ' class="grn w-it"' : ''} data-type="${start},${len}">${x}</span>`).join('')}</p></div>
-<div class="wcard row w-wo"${at(String(typed[2][1] + typed[2][2] + 200))}><span class="ib amb">${ic('lift')}</span><div><b>Legs, lighter</b><span class="mut s">40 min · 4 exercises</span></div><span class="w-add">Add</span></div>
+<div class="wcard row w-wo"${at(String(typed[2][1] + typed[2][2] + 200))}><span class="ib amb">${ic('lift')}</span><div><b>Legs, lighter</b><span class="mut s">40 min, 4 exercises</span></div><span class="w-add">Add</span></div>
 </div>`;
 // ---- Apple Watch (AurinWatch/: ReadinessHome.swift, GymSessionView.swift, FoodPage.swift, the watch face's
 // complications in AurinWatchWidgets) on the sample day. The watch is dark only (WatchStyle.swift: W). ----
@@ -628,7 +628,7 @@ const watchHome = `<div class="aw-s aw-home" style="--gw:#163A2E">${wTop(wBtn('a
 <div class="aw-hero"><span class="aw-n">78</span><span class="aw-side"><span class="aw-k">Readiness</span></span></div>
 <div class="aw-vd" style="color:${WA.green}">Ready for a hard day</div>
 <div class="aw-g">${[['Sleep', WA.indigo, '7:12', '', 28, WA.amber, '89% of need'], ['Strain', WA.amber, '8.4', '', 14, WA.neutral, 'of 11–14'], ['HRV', WA.green, '64', 'ms', 76, WA.green, 'above']].map(([k, kc, v, u, pos, c, note]) => `<div><span class="aw-k" style="color:${kc}">${k}</span><span class="aw-n aw-v">${v}${u ? `<small>${u}</small>` : ''}</span>${wRange(pos, c)}<b style="color:${c}">${note}</b></div>`).join('')}</div>
-<div class="aw-next"><span style="color:${WA.amber}">${ic('gym')}</span>Strength, full body · 45′ at 5:30 PM${ic('chev', 'aw-cv')}</div></div>`;
+<div class="aw-next"><span style="color:${WA.amber}">${ic('gym')}</span>Strength, full body, 45′ at 5:30 PM${ic('chev', 'aw-cv')}</div></div>`;
 const watchGym = `<div class="aw-s" style="--gw:#3A2A17">${wTop(wBtn('pause', WA.ink), '5:41', `<span class="aw-ib">${ic('menu')}</span>`)}
 <div class="aw-ex"><b>Squat</b></div>
 <div class="aw-inf">Last time 77.5 × 8</div>
@@ -659,7 +659,7 @@ const watchFace = `<div class="aw-s aw-face"><div class="aw-frow">${wArc(.35, WA
 // Race day (TrainingPage.raceCard, RaceDay.swift): a training plan's duathlon as one card, its legs in race
 // order with their distance and time, and one start for the whole race.
 const watchRace = `<div class="aw-s" style="--gw:#3A2A17">${wTop('<b class="aw-tt">Training</b>', '', '<b class="aw-time">8:31</b>')}
-<div class="aw-race"><div class="aw-rh"><b>Today · 9:00</b><span>1 h 20</span></div><b class="aw-rn"><span style="color:${WA.amber}">${ic('flag')}</span>Duathlon</b>
+<div class="aw-race"><div class="aw-rh"><b>Today 9:00</b><span>1 h 20</span></div><b class="aw-rn"><span style="color:${WA.amber}">${ic('flag')}</span>Duathlon</b>
 ${[['run', '5 km', '24 min', WA.red], ['bike', '20 km', '33 min', WA.amber], ['run', '2.5 km', '13 min', WA.red]].map(([icon, d, t, c]) => `<div class="aw-leg"><span style="color:${c}">${ic(icon)}</span>${d}<i>${t}</i></div>`).join('')}
 <div class="aw-go">${ic('play')}Open in Workout</div></div></div>`;
 
@@ -826,7 +826,7 @@ html:not(.js) .tgt .fill{width:${(16.7 / 21 * 100).toFixed(1)}%}
 .btn.busy .sp1{display:block}.btn.busy>.di{display:none}.btn.press.js{transform:scale(.96)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .bld{display:grid;min-height:420px}
-/* Day · length · focus on the proposal (GymTools.swift SetupChip): each opens a menu and builds it again. */
+/* Day, length, focus on the proposal (GymTools.swift SetupChip): each opens a menu and builds it again. */
 .sch{display:flex;gap:6px;margin-top:6px}.sch span{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:99px;background:var(--track);font-size:12px;font-weight:500}.sch i{width:5px;height:5px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-1px) rotate(45deg)}
 /* Both stages share one cell, so the box is as tall as the longer one: the workout with its Save button. */
 .stage1,.stage2{grid-area:1/1}
@@ -997,7 +997,7 @@ html:not(.js) .stage1{display:none}
 .wc .w-sm{display:flex;flex-direction:column;gap:2px}.wc .num.w-v{font-size:36px;line-height:1.1}.wc .num.w-v small{font-size:13px}
 .w-s2{font-size:14px}.w-nt2{font-size:12.5px;font-weight:500}.amb2{color:var(--amber-bar)}
 .js .wc .pop.wait:not(.in){transform:scale(.6)}
-/* Training mode's sets: SETS · LAST TIME · KG · REPS, the rating oval and the tick square; the set at hand outlined. */
+/* Training mode's sets: SETS, LAST TIME, KG, REPS, the rating oval and the tick square; the set at hand outlined. */
 .wc .w-gym{padding:14px 10px 12px}.w-gh{padding:0 8px 8px;align-items:baseline}.w-gh b{font-family:Newsreader,"New York",Georgia,serif;font-size:24px;font-weight:400}
 .w-row{position:relative;display:grid;grid-template-columns:34px minmax(0,1fr) 56px 44px 34px 28px;align-items:center;gap:6px;height:44px;padding:0 8px;border-radius:12px;box-shadow:inset 0 0 0 1.5px transparent;transition:background .35s,box-shadow .35s}
 .w-row.w-th{height:20px;font-size:10px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);opacity:.8}.w-th span:nth-child(3),.w-th span:nth-child(4){text-align:center}

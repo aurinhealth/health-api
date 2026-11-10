@@ -51,13 +51,13 @@ palette changes, change `design-system.js` and this file together.
 | `--rust` | #B4532F | Tired muscles, warnings (shapes and bars) |
 | `--rust-ink` | #A3482A | Small rust text inside data, such as form errors (5.2:1 on paper) |
 | `--red` (add) | #C2362B | Form errors only (from `Palette.red`) |
-| `--protein` `--carbs` `--fat` | #2F7FD8 · #D98A06 · #7C5CE0 | Macros, only next to food data |
-| `--logo-load` `--logo-recovery` | #F2B46B · #3FA383 | The Aurin mark, nothing else |
+| `--protein` `--carbs` `--fat` | #2F7FD8, #D98A06, #7C5CE0 | Macros, only next to food data |
+| `--logo-load` `--logo-recovery` | #F2B46B, #3FA383 | The Aurin mark, nothing else |
 | `--sun` | #E09A55 | The rings and glow around the mark, the scanning beam, the progress pill's dot (`AurinMark.amber`) |
-| `--glow-sunrise` `--glow-coach` | #F7DFC2 · #E6E1F3 | The hero and final tint; the coach's part (`WelcomeGlow`) |
-| `--metal` `--plate-25` `--plate-5` | #BDB7AC · #C98A7C · #AEB2B9 | The plate loader's bar and plates, with their `-line` outlines |
-| `--sand` `--brown` | #E6D3B5 · #8A6D3B | The privacy lock's shackle (`WelcomeLock`), nothing else |
-| `--glow-today` `-health` `-training` `-food` | #DCEBE2 · #E3E6F3 · #F3E3C6 · #F2E4D0 | The soft glow behind each section's phone |
+| `--glow-sunrise` `--glow-coach` | #F7DFC2, #E6E1F3 | The hero and final tint; the coach's part (`WelcomeGlow`) |
+| `--metal` `--plate-25` `--plate-5` | #BDB7AC, #C98A7C, #AEB2B9 | The plate loader's bar and plates, with their `-line` outlines |
+| `--sand` `--brown` | #E6D3B5, #8A6D3B | The privacy lock's shackle (`WelcomeLock`), nothing else |
+| `--glow-today` `-health` `-training` `-food` | #DCEBE2, #E3E6F3, #F3E3C6, #F2E4D0 | The soft glow behind each section's phone |
 
 Each section sets two variables, `--tone` (the bar under its active step) and `--glow` (the tint behind the phone):
 readiness, training and the coach are green on `glow-today`; each part's opening is tinted with its welcome page's glow (readiness `glow-today`, training `glow-training`, nutrition `glow-food`, sleep `glow-health`, coach `glow-coach`); sleep is indigo on `glow-health`; strain and the
@@ -169,7 +169,7 @@ wide (60-70 characters). Headlines are one short sentence that ends with a full 
   has scrolled away (one waitlist button on screen at a time: it hides while the hero's or the end's field or the
   mid-page call is in view). Under 960px the links go; under 560px the logo
   and a smaller pill stay, so the page's one action is always a tap away.
-- **Kicker:** a small glassy pill above the hero headline with a green dot ("For iPhone · now in TestFlight"). The
+- **Kicker:** a small glassy pill above the hero headline with a green dot ("Early access for iPhone"). The
   site never sells the app as free: it is in testing, and the price after the release is not set.
 - **Sun:** the mark with a soft `--sun` glow and three rings that keep spreading and fading (4 s), the mark
   bobbing 6px; still rings with reduced motion.
@@ -229,6 +229,9 @@ Still light in dark mode: the share image and the overview images for Reddit and
 Plain, second person, short sentences, no hype words ("revolutionary", "unlock", "supercharge"). Say what the
 app does today and nothing it doesn't. Prices and availability exactly as in the app. Quotes and ratings only
 when they are real.
+
+No "·" middle-dot separators anywhere: app, web, images, video or posts. Put items apart with layout (spacing,
+line breaks, separate labels), or write a comma or plain words when it reads as a sentence.
 
 ## App: readiness words
 
