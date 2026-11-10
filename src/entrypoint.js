@@ -130,7 +130,7 @@ import { withPlainErrors } from "./error-text.js";
 import { handleIntervalsOAuth, disconnectIntervalsApp } from "./intervals-oauth.js";
 import { scheduleIntervalsCatchUp, runIntervalsCatchUp } from "./intervals-catchup.js";
 import { handleIntervalsWebhook } from "./intervals-webhook.js";
-import { handleAppStoreNotification } from "./app-store.js";
+import { handleAppStoreNotification, forgetEndedPurchases } from "./app-store.js";
 import { intervalsChanged, intervalsReads } from "./intervals-reads.js";
 import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman } from "./ultrahuman.js";
 import { handleWhoopOAuth, disconnectWhoop, syncWhoop } from "./whoop.js";
@@ -484,6 +484,8 @@ const worker = {
     }
     // Remembered AI limits of deleted accounts whose week and month are over (ai-limit-memory.js).
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 5) await forgetExpiredAiLimits(env.DB).catch(error => console.error("AI limit memory cleanup failed", error.message));
+    // Ended purchases of deleted accounts whose old records have run out (app-store.js, privacy policy).
+    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 5) await forgetEndedPurchases(env.DB).catch(error => console.error("Ended purchase cleanup failed", error.message));
     // Waitlist addresses a year after they joined, and all of them once Aurin is out (testflight-waitlist.js, privacy policy).
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 7) await forgetOldWaitlist(env.DB, { released: paywallOn(env) }).catch(error => console.error("Waitlist cleanup failed", error.message));
     // Request limits nobody has used for two days (ip-rate-limit.js).

@@ -152,7 +152,9 @@ export async function verifyAppStoreJws(jws, { roots = [APPLE_ROOT_CA_G3] } = {}
 // the pilot's discount or a gift), whose AI spending is counted apart.
 // testflight: 1 while the app the account last used is a TestFlight build
 // (Apple's signed AppTransaction says Sandbox), its AI counted with TestFlight's.
-const COLUMNS = ['app_account_token TEXT', 'original_transaction_id TEXT', 'product_id TEXT', 'store_environment TEXT', 'store_signed_at INTEGER', 'auto_renew INTEGER', 'updated_at TEXT', 'free_trial INTEGER', 'offer_type INTEGER', 'testflight INTEGER'];
+// install_hash: SHA-256 of that build's appTransactionId (one Apple Account's
+// download of the app), so one TestFlight install marks one account (saveAppInstall).
+const COLUMNS = ['app_account_token TEXT', 'original_transaction_id TEXT', 'product_id TEXT', 'store_environment TEXT', 'store_signed_at INTEGER', 'auto_renew INTEGER', 'updated_at TEXT', 'free_trial INTEGER', 'offer_type INTEGER', 'testflight INTEGER', 'install_hash TEXT'];
 // The columns are added the first time a statement misses them, so a request
 // costs no schema statements once they are there.
 export async function ensureStoreColumns(db) {
@@ -160,13 +162,16 @@ export async function ensureStoreColumns(db) {
   for (const column of COLUMNS) await db.prepare('ALTER TABLE subscriptions ADD COLUMN ' + column).run().catch(() => { /* already there */ });
   await db.prepare('CREATE INDEX IF NOT EXISTS subscriptions_app_account_token ON subscriptions(app_account_token)').run();
   await db.prepare('CREATE INDEX IF NOT EXISTS subscriptions_original_transaction ON subscriptions(original_transaction_id)').run();
+  await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_install_hash ON subscriptions(install_hash)').run();
   // claimOriginal's table, filled from the rows already there in the same step.
   await db.batch([
     db.prepare('CREATE TABLE IF NOT EXISTS store_originals (original_transaction_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, signed_at INTEGER NOT NULL)'),
     db.prepare('INSERT OR IGNORE INTO store_originals(original_transaction_id,user_id,signed_at) SELECT original_transaction_id,user_id,COALESCE(store_signed_at,0) FROM subscriptions WHERE original_transaction_id IS NOT NULL')
   ]);
+  // revoked_at: the newest refund Apple signed for the subscription (claimOriginal).
+  await db.prepare('ALTER TABLE store_originals ADD COLUMN revoked_at INTEGER').run().catch(() => { /* already there */ });
 }
-async function withColumns(db, work) {
+export async function withColumns(db, work) {
   try { return await work(); } catch (error) {
     if (!/no such (column|table)|has no column/i.test(String(error?.message || error))) throw error;
     await ensureStoreColumns(db);
@@ -257,16 +262,50 @@ const signedAtOf = tx => Number(tx.signedDate) || Date.now();
 // get it, and an older record never undoes a newer one, even when the account's
 // row held another subscription in between (refunded, another purchase, then
 // the old record again). Apple's own notifications (fromApple) move the mark
-// whichever account holds it.
+// whichever account holds it. Account 0 holds a subscription Apple refunded
+// before any account sent it (handleAppStoreNotification): the record from
+// before the refund is then an older one, and a newer one (bought again) gives
+// the subscription to the account that sends it. revoked_at keeps the signed
+// time of the newest refund, which signed_at loses when the subscription is
+// bought again (keepEndedPurchases needs it).
 // 'ok': the newest record so far, write it; 'stale': an older one; 'taken': another account's.
 async function claimOriginal(db, userId, tx, fromApple = false) {
   const original = String(tx.originalTransactionId);
-  const result = await withColumns(db, () => db.prepare('INSERT INTO store_originals(original_transaction_id,user_id,signed_at) VALUES(?,?,?) ON CONFLICT(original_transaction_id) DO UPDATE SET signed_at=excluded.signed_at WHERE (? OR store_originals.user_id=excluded.user_id) AND store_originals.signed_at<=excluded.signed_at')
-    .bind(original, userId, signedAtOf(tx), fromApple ? 1 : 0).run());
+  const result = await withColumns(db, () => db.prepare('INSERT INTO store_originals(original_transaction_id,user_id,signed_at,revoked_at) VALUES(?,?,?,?) ON CONFLICT(original_transaction_id) DO UPDATE SET user_id=CASE WHEN store_originals.user_id=0 THEN excluded.user_id ELSE store_originals.user_id END,signed_at=excluded.signed_at,revoked_at=COALESCE(excluded.revoked_at,store_originals.revoked_at) WHERE (? OR store_originals.user_id IN (0,excluded.user_id)) AND store_originals.signed_at<=excluded.signed_at')
+    .bind(original, userId, signedAtOf(tx), tx.revocationDate ? signedAtOf(tx) : null, fromApple ? 1 : 0).run());
   if (result.meta.changes) return 'ok';
   if (fromApple) return 'stale';
   const holder = await db.prepare('SELECT user_id FROM store_originals WHERE original_transaction_id=?').bind(original).first();
-  return Number(holder?.user_id) === Number(userId) ? 'stale' : 'taken';
+  return [0, Number(userId)].includes(Number(holder?.user_id)) ? 'stale' : 'taken';
+}
+
+// The statements that settle an account's purchases, run in the batch that
+// deletes the account (account-data.js): all or nothing, and none of its rows is
+// left for one of Apple's notifications to find while the rest of its data is
+// still being deleted. A subscription that no longer gives Pro (refunded, run
+// out) stays under account 0 with its newest signed time, so its records from
+// before give nothing to a new account. The running one goes with the account,
+// and the person's new account may restore it (saveAppTransaction); if it was
+// refunded once and bought again, it stays under account 0 from that refund on,
+// so only the records from before the refund give nothing. A refund that comes
+// later finds no account and is remembered like any other (handleAppStoreNotification).
+export function keepEndedPurchases(db, userId, now = Date.now()) {
+  return [
+    db.prepare("UPDATE store_originals SET user_id=0 WHERE user_id=? AND original_transaction_id NOT IN (SELECT original_transaction_id FROM subscriptions WHERE user_id=? AND plan='ai' AND valid_until>? AND original_transaction_id IS NOT NULL)").bind(userId, userId, new Date(now).toISOString()),
+    db.prepare('UPDATE store_originals SET user_id=0,signed_at=revoked_at WHERE user_id=? AND revoked_at IS NOT NULL').bind(userId),
+    // Bounded like every delete of an account's data (account-data.js); an account has a few of these rows.
+    db.prepare('DELETE FROM store_originals WHERE rowid IN (SELECT rowid FROM store_originals WHERE user_id = ? LIMIT ?)').bind(userId, 100),
+    db.prepare('DELETE FROM subscriptions WHERE rowid IN (SELECT rowid FROM subscriptions WHERE user_id = ? LIMIT ?)').bind(userId, 1)
+  ];
+}
+
+// The cron's cleanup: a purchase kept under account 0 is forgotten KEPT_DAYS
+// after its newest record, when every older record of it has run out (a period
+// is a year at most; Aurin extends no renewal dates), so it would give no Pro anyway.
+const KEPT_DAYS = 400;
+export async function forgetEndedPurchases(db, now = Date.now()) {
+  try { return Number((await db.prepare('DELETE FROM store_originals WHERE user_id=? AND signed_at<?').bind(0, now - KEPT_DAYS * 864e5).run())?.meta?.changes) || 0; }
+  catch (error) { if (/no such table/i.test(String(error?.message))) return 0; throw error; }
 }
 
 // Writes the transaction to the row of userId, unless a newer one of the same
@@ -291,7 +330,12 @@ export async function saveAppTransaction(env, body, options = {}) {
   const tx = await verifyAppStoreJws(body?.signedTransaction, options);
   checkTransaction(env, tx);
   const mine = await appAccountToken(env);
-  if (tx.appAccountToken && String(tx.appAccountToken).toLowerCase() !== mine.toLowerCase()) throw refuse(L('Tento nákup patří jinému účtu Aurin.', 'This purchase belongs to another Aurin account.'), 409);
+  const theirs = String(tx.appAccountToken || '').toLowerCase();
+  // Bought under another account: refused while that account exists. Once it is
+  // deleted (its row and token are gone), the person's new account may restore the
+  // purchase: the first one to send it keeps it (claimOriginal), unless the
+  // purchase had ended or was refunded by then (keepEndedPurchases); a pack stays spent.
+  if (theirs && theirs !== mine.toLowerCase() && await (env.RAW_DB || env.DB).prepare('SELECT 1 FROM subscriptions WHERE app_account_token=?').bind(theirs).first()) throw refuse(L('Tento nákup patří jinému účtu Aurin.', 'This purchase belongs to another Aurin account.'), 409);
   if (isPack(env, tx)) return savePackTransaction(env, tx);
   // An offer code redeemed outside the app has no token: the first account to send it keeps it.
   const claim = await claimOriginal(env.RAW_DB || env.DB, env.USER_ID, tx);
@@ -306,12 +350,23 @@ export async function saveAppTransaction(env, body, options = {}) {
 // TestFlight (receiptType Sandbox) or the App Store (Production). A TestFlight
 // tester without a test purchase is then counted with TestFlight, not with the
 // accounts without a purchase. Written only when it changes.
+// One TestFlight install marks one account: every account signed in on it
+// sends the same appTransactionId, whose hash is unique among the rows, so
+// accounts made in bulk cannot all join the testers with one record. A record
+// without the id has nothing to hold it by and marks as before.
 export async function saveAppInstall(env, body, options = {}) {
   const app = await verifyAppStoreJws(body?.signedAppTransaction, options);
   if (app.bundleId !== bundleId(env)) throw refuse(L('Doklad patří jiné aplikaci.', 'The record belongs to another app.'));
   if (!ENVIRONMENTS.has(app.receiptType)) throw refuse(L('Doklad z neznámého prostředí.', 'Record from an unknown environment.'));
-  const testflight = app.receiptType === 'Sandbox' ? 1 : 0;
-  await withColumns(env.DB, () => env.DB.prepare("INSERT INTO subscriptions(user_id,plan,testflight) VALUES(?,'free',?) ON CONFLICT(user_id) DO UPDATE SET testflight=excluded.testflight WHERE subscriptions.testflight IS NOT excluded.testflight").bind(env.USER_ID, testflight).run());
+  let testflight = app.receiptType === 'Sandbox' ? 1 : 0;
+  const hash = testflight && app.appTransactionId ? hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(app.appTransactionId)))) : null;
+  const save = (flag, install) => withColumns(env.DB, () => env.DB.prepare("INSERT INTO subscriptions(user_id,plan,testflight,install_hash) VALUES(?,'free',?,?) ON CONFLICT(user_id) DO UPDATE SET testflight=excluded.testflight,install_hash=excluded.install_hash WHERE subscriptions.testflight IS NOT excluded.testflight OR subscriptions.install_hash IS NOT excluded.install_hash").bind(env.USER_ID, flag, install).run());
+  try { await save(testflight, hash); } catch (error) {
+    // Another account holds this install.
+    if (!/UNIQUE constraint/i.test(String(error?.message || error))) throw error;
+    testflight = 0;
+    await save(0, null);
+  }
   return { status: 'ok', testflight: testflight === 1 };
 }
 
@@ -338,8 +393,17 @@ export async function handleAppStoreNotification(request, env, options = {}) {
     const rows = byToken ? [byToken] : (await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM subscriptions WHERE original_transaction_id=?').bind(original).all())).results || [];
     // The holder, also when its row holds another subscription by now.
     const held = byToken || await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM store_originals WHERE original_transaction_id=?').bind(original).first()) || rows[0];
-    if (!held) return Response.json({ status: 'ok', unknown: true });
-    const holder = Number(held.user_id);
+    let holder = Number(held?.user_id) || 0;
+    // No account has sent this purchase (yet). Its refund is remembered, so the
+    // record from before it gives nothing later; an account that sent it in the
+    // same moment is read back and loses Pro below. A refund of a period that
+    // has run out is left: its record gives no Pro anyway, and remembering it
+    // would make the paid period's record, signed before it, an older one.
+    if (!holder && tx.revocationDate && Number(tx.expiresDate) > Date.now()) {
+      await claimOriginal(env.DB, 0, tx, true);
+      holder = Number((await env.DB.prepare('SELECT user_id FROM store_originals WHERE original_transaction_id=?').bind(original).first())?.user_id) || 0;
+    }
+    if (!holder) return Response.json({ status: 'ok', unknown: true });
     if (await claimOriginal(env.DB, holder, tx, true) === 'stale') return Response.json({ status: 'ok', stale: true });
     // Pro goes to the holder only; its end also reaches a copy made before claimOriginal.
     const { plan } = planOf(tx, renewal, note.notificationType);
