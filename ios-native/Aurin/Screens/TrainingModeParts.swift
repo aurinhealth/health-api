@@ -699,12 +699,12 @@ struct MinimizedGymBar: View {
         return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
     }
 
-    /// "Pauza 0:40 · další Dřep", or the exercise.
+    /// "Pauza 0:40, další Dřep", or the exercise.
     private func line(at now: Date) -> String? {
         if let end = gym.restEnd, end > now {
             let s = Int(end.timeIntervalSince(now).rounded(.up))
             let rest = L10n.f("Pauza %@", String(format: "%d:%02d", s / 60, s % 60))
-            return gym.next.map { rest + " · " + L10n.f("další %@", $0) } ?? rest
+            return gym.next.map { rest + ", " + L10n.f("další %@", $0) } ?? rest
         }
         return gym.next
     }
@@ -888,7 +888,7 @@ struct ExerciseNoteSheet: View {
             }
             .padding(20)
             .background(Palette.background)
-            .navigationTitle(L10n.f("Poznámka · %@", exercise))
+            .navigationTitle(L10n.f("Poznámka: %@", exercise))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }

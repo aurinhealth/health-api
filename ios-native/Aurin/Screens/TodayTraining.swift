@@ -48,15 +48,15 @@ struct TodayCoachAction: View {
         }
     }
 
-    /// "Half marathon · week 3/12 · Build · 2 sessions left", or "paused".
+    /// "Half marathon, week 3/12, Build, 2 sessions left", or "paused".
     static func planLine(_ plan: TodaySnapshot.PlanLine) -> String {
-        if plan.paused == true { return [plan.name, L10n.tr("pozastaveno")].joined(separator: " · ") }
+        if plan.paused == true { return [plan.name, L10n.tr("pozastaveno")].joined(separator: ", ") }
         let left = plan.sessionsLeft.flatMap { $0 > 0 ? L10n.plural("zbývá %lld tréninků", $0) : nil }
-        return ([plan.name, L10n.f("týden %@/%@", String(plan.week), String(plan.weeksCount))] + [plan.phaseLabel, left].compactMap { $0 }).joined(separator: " · ")
+        return ([plan.name, L10n.f("týden %@/%@", String(plan.week), String(plan.weeksCount))] + [plan.phaseLabel, left].compactMap { $0 }).joined(separator: ", ")
     }
 }
 
-/// One planned workout: "Today · 5:30 PM · 45 min", its name, and Start for
+/// One planned workout: "Today, 5:30 PM, 45 min", its name, and Start for
 /// the gym (Training mode). A tap elsewhere opens it as the day's timeline does.
 struct TodayTrainingRow: View {
     let item: TodaySnapshot.PlanItem
@@ -113,10 +113,10 @@ struct TodayTrainingRow: View {
         .contentShape(Rectangle())
     }
 
-    /// "Today · 5:30 PM · 45 min": the time and length only when known.
+    /// "Today, 5:30 PM, 45 min": the time and length only when known.
     private var meta: String {
         let time = (item.session?.time ?? item.time).map { ClockText.format($0) }
         let length = (item.session?.minutes).map { Fmt.duration($0) }
-        return [L10n.tr("Dnes"), time, length].compactMap { $0 }.joined(separator: " · ")
+        return [L10n.tr("Dnes"), time, length].compactMap { $0 }.joined(separator: ", ")
     }
 }

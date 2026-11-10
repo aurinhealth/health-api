@@ -226,7 +226,7 @@ struct TileRange: View {
     }
 }
 
-/// A detail's range bar under its big number: "níž · obvyklé rozmezí 52–68 ms · výš".
+/// A detail's range bar under its big number: "níž, obvyklé rozmezí 52–68 ms, výš".
 struct DetailRange: View {
     let value: Double
     let low: Double
@@ -268,6 +268,25 @@ struct CircleButton: View {
         }
         .foregroundStyle(Palette.ink)
         .accessibilityLabel(L10n.tr(label))
+    }
+}
+
+/// The one back arrow of the sign-in, the first-run setup and the Pro offer
+/// (onboarding review point 30): a 40 pt filled circle; on the dark Pro offer
+/// only its colours change.
+struct BackButton: View {
+    var tint = Palette.ink
+    var fill = Palette.card.opacity(0.7)
+    var action: () -> Void = {}
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "chevron.left").scaledFont(17, weight: .semibold, cap: .denseCap).foregroundStyle(tint)
+                .frame(width: 40, height: 40).background(fill, in: Circle())
+                .tapTarget(width: 40, height: 40)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.tr("Zpět"))
     }
 }
 

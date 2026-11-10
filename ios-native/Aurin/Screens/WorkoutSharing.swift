@@ -98,7 +98,7 @@ final class WorkoutLinkItem: NSObject, UIActivityItemSource {
     }
 }
 
-/// The link preview, style C: who sends it, the name in serif, sport · length ·
+/// The link preview, style C: who sends it, the name in serif, sport, length,
 /// exercises and the muscle groups it trains. Fixed colours, since the picture
 /// is drawn once for whoever sees it.
 struct SharePreviewCard: View {
@@ -118,12 +118,12 @@ struct SharePreviewCard: View {
 
     private var line: String {
         if template.isEndurance {
-            return [L10n.tr(template.sport == "run" ? "Běh" : "Kolo"), template.summary].joined(separator: " · ")
+            return [L10n.tr(template.sport == "run" ? "Běh" : "Kolo"), template.summary].joined(separator: ", ")
         }
         var parts = [L10n.tr("Posilovna")]
         if let minutes = template.minutes { parts.append(Fmt.duration(minutes)) }
         parts.append(L10n.plural("%lld cviků", template.exercises.count))
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 
     var body: some View {

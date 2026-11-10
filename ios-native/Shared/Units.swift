@@ -10,6 +10,14 @@ enum Units {
             ?? UserDefaults.standard.string(forKey: key)) == "imperial"
     }
 
+    /// Until the athlete picks, the phone's region decides (onboarding review
+    /// point 3): imperial in the US, metric elsewhere. Called once at the start
+    /// of the first-run setup, so an existing choice is never changed.
+    static func defaultFromRegion() {
+        guard (UserDefaults(suiteName: WidgetSnapshot.group)?.string(forKey: key) ?? UserDefaults.standard.string(forKey: key)) == nil else { return }
+        setSystem(Locale.current.measurementSystem == .us ? "imperial" : "metric")
+    }
+
     static func setSystem(_ value: String) {
         UserDefaults.standard.set(value, forKey: key)
         UserDefaults(suiteName: WidgetSnapshot.group)?.set(value, forKey: key)

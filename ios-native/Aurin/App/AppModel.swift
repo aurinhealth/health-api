@@ -179,7 +179,7 @@ final class AppModel {
     /// closes; each waits under its meal in Jídlo (AppModel+PendingFood.swift).
     var pendingFoods: [PendingFood] = PendingFood.saved()
     @ObservationIgnored var pendingPhotos: [UUID: UIImage] = [:]
-    /// "„Rohlík“ dohledáno · čeká v Jídle" for a few seconds, the sheet closed (RootView).
+    /// "„Rohlík“ dohledáno, čeká v Jídle" for a few seconds, the sheet closed (RootView).
     var foodReady: FoodReady?
 
     /// "Navrhnout pro všechny": the food stays the user's own; the owner gets it

@@ -20,7 +20,7 @@ struct ProPageState: Equatable {
     /// "Obnoví se 5. listopadu 2027", "Platí do …".
     var renewal: String?
     var freeWeek: DateInterval?
-    /// "Čt 5. 11. · 149 Kč": the first payment after the free week.
+    /// "Čt 5. 11., 149 Kč": the first payment after the free week.
     var firstPayment: String?
     var payments: ProStore.Payments?
     var allowance: CoachAllowance?
@@ -84,7 +84,7 @@ struct ProPage: View {
 
     private var badge: String? {
         if state.hasPro { return L10n.tr(state.freeWeek == nil ? "Aktivní" : "Týden zdarma") }
-        if state.pilot { return L10n.tr("Pilot · vše zdarma") }
+        if state.pilot { return L10n.tr("Pilot, vše zdarma") }
         return nil
     }
 
@@ -248,7 +248,7 @@ struct PaymentDots: View {
                 Text(verbatim: Self.month(first)).foregroundStyle(Night.muted)
                 Spacer()
                 if let next = payments.next {
-                    Text(verbatim: L10n.f("Další · %@", PaywallView.dayMonth(next))).foregroundStyle(Night.lavender)
+                    Text(verbatim: L10n.f("Další platba %@", PaywallView.dayMonth(next))).foregroundStyle(Night.lavender)
                 }
                 Spacer()
                 Text(verbatim: Self.month(last)).foregroundStyle(Night.muted)
@@ -259,7 +259,7 @@ struct PaymentDots: View {
         .background(Night.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Night.line))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.f("Platba %lld z %lld", number, total) + (payments.next.map { ", " + L10n.f("Další · %@", PaywallView.dayMonth($0)) } ?? ""))
+        .accessibilityLabel(L10n.f("Platba %lld z %lld", number, total) + (payments.next.map { ", " + L10n.f("Další platba %@", PaywallView.dayMonth($0)) } ?? ""))
     }
 
     /// "Nov 2026" / "lis 2026".
@@ -289,7 +289,7 @@ struct ExtraMessagesCard: View {
             Text("ZPRÁVY KOUČOVI NAVÍC").scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Night.faint)
             if extra > 0 {
                 (Text(verbatim: "\(extra) ").font(Typo.number(36)).foregroundColor(Night.ink)
-                 + Text("zbývá · nepropadnou").font(.subheadline).foregroundColor(Night.muted))
+                 + Text("zbývá, nepropadnou").font(.subheadline).foregroundColor(Night.muted))
             } else {
                 Text("Zatím žádné").font(Typo.sentence(28)).foregroundStyle(Night.ink)
             }
@@ -431,12 +431,12 @@ struct CoachPacksPage: View {
     }()
     nonisolated(unsafe) private static let plainISO = ISO8601DateFormatter()
 
-    /// "12. 10. 2026", "· Testovací nákup", "· Peníze vráceny".
+    /// "12. 10. 2026", ", Testovací nákup", ", Peníze vráceny".
     static func when(_ purchase: CoachPacks.Purchase) -> String {
         let date = (iso.date(from: purchase.purchasedAt) ?? plainISO.date(from: purchase.purchasedAt))
             .map { $0.formatted(.dateTime.day().month(.abbreviated).year().locale(L10n.locale)) } ?? String(purchase.purchasedAt.prefix(10))
-        if purchase.refunded { return date + " · " + L10n.tr("Peníze vráceny") }
-        if !purchase.counted { return date + " · " + L10n.tr("Testovací nákup") }
+        if purchase.refunded { return date + ", " + L10n.tr("Peníze vráceny") }
+        if !purchase.counted { return date + ", " + L10n.tr("Testovací nákup") }
         return date
     }
 }

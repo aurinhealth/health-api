@@ -256,7 +256,7 @@ struct GymBuilderView: View {
     @State private var showForm = false
     /// The kept proposal was looked for once (GymKeptProposal).
     @State private var keptChecked = false
-    /// When the proposal shown again was made: "Zatím neuloženo · z 9:42".
+    /// When the proposal shown again was made: "Zatím neuloženo, z 9:42".
     @State private var keptAt: Date?
     /// "Vybrat jiný cvik" from Nahradit: any exercise of the catalog in its place.
     @State private var replacingAny: String?
@@ -282,7 +282,7 @@ struct GymBuilderView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: "Sestavit trénink") {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: template == nil ? "Posilovna · sestavit trénink" : "Posilovna · naplánovat trénink").padding(.top, 24)
+                SectionLabel(text: template == nil ? "Sestavit trénink do posilovny" : "Naplánovat trénink do posilovny").padding(.top, 24)
                 Text(proposal?.planName ?? template?.template.name ?? L10n.tr("Jaký trénink chceš?"))
                     .font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
@@ -433,7 +433,7 @@ struct GymBuilderView: View {
                     if !muscles.isDisjoint(with: BodyFigure.shoulders) {
                         // The shoulder's parts, all on: only who knows them picks fewer.
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Ramena · celá, nebo jen některé části").font(Typo.caption).foregroundStyle(Palette.muted)
+                            Text("Ramena: celá, nebo jen některé části").font(Typo.caption).foregroundStyle(Palette.muted)
                             ChipFlow(items: BodyFigure.shoulders, label: BodyFigure.partLabel, isOn: { muscles.contains($0) },
                                      toggle: { muscles.formSymmetricDifference([$0]) })
                         }
@@ -520,7 +520,7 @@ struct GymBuilderView: View {
 
     // MARK: Proposal
 
-    /// Day · length · focus on the proposal: a new choice builds it again.
+    /// Day, length, focus on the proposal: a new choice builds it again.
     private var setupChips: some View {
         let today = AppModel.localDate(earliest)
         let days = (0..<7).compactMap { Calendar.current.date(byAdding: .day, value: $0, to: earliest) }
@@ -559,12 +559,12 @@ struct GymBuilderView: View {
             if template == nil && !saved {
                 setupChips.padding(.top, 14)
                 if let keptAt {
-                    Label(L10n.f("Zatím neuloženo · z %@", keptAt.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: Fmt.locale))),
+                    Label(L10n.f("Zatím neuloženo, z %@", keptAt.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: Fmt.locale))),
                           systemImage: "clock")
                         .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 10)
                 }
             } else {
-                Text(Fmt.capitalized(Fmt.relativeDay(isoDay, today: AppModel.localDate(Date()))) + " · \(minutes) min")
+                Text(Fmt.capitalized(Fmt.relativeDay(isoDay, today: AppModel.localDate(Date()))) + ", \(minutes) min")
                     .font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 6)
             }
             Card {
@@ -726,12 +726,12 @@ struct GymBuilderView: View {
         }
     }
 
-    /// "3 × 8–10 · 60 kg" in steps: Xcode 26.6 times out on it as one expression.
+    /// "3 × 8–10, 60 kg" in steps: Xcode 26.6 times out on it as one expression.
     private func setsLine(_ sets: Int, _ reps: String, _ kg: String) -> String {
         let line: String = "\(sets) × " + Fmt.range(reps)
         if kg.isEmpty { return line }
         let weight: String = LiftWeight.shown(kg) ?? kg
-        return line + " · " + weight + " " + Units.weightUnit
+        return line + ", " + weight + " " + Units.weightUnit
     }
 
     // MARK: Editing the proposal by hand
@@ -786,7 +786,7 @@ struct GymBuilderView: View {
     }
 
     private func muscleLine(_ map: [String: Double]?) -> String {
-        (map ?? [:]).filter { $0.value >= 0.5 }.sorted { $0.value > $1.value }.map { BodyFigure.label($0.key) }.joined(separator: " · ")
+        (map ?? [:]).filter { $0.value >= 0.5 }.sorted { $0.value > $1.value }.map { BodyFigure.label($0.key) }.joined(separator: ", ")
     }
 
     // MARK: Server
@@ -957,7 +957,7 @@ struct EquipmentView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: "Kde cvičíš?") {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: "Posilovna · vybavení").padding(.top, 24)
+                SectionLabel(text: "Vybavení posilovny").padding(.top, 24)
                 Text("Kde cvičíš?").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
 
                 VStack(spacing: 10) {
@@ -1196,10 +1196,10 @@ struct EquipmentView: View {
         (pounds / 2.2046226218 * 100).rounded() / 100
     }
 
-    /// "Posilovna · 14 strojů" for the builder and the library.
+    /// "Posilovna, 14 strojů" for the builder and the library.
     static func summary(_ e: GymEquipment?) -> String {
         guard let e else { return L10n.tr("posilovna") }
-        let count = " · " + L10n.plural("%lld věcí", e.selected.count)
+        let count = ", " + L10n.plural("%lld věcí", e.selected.count)
         switch e.equipment {
         case "custom": return (e.gymName.nilIfBlank ?? L10n.tr("Posilovna")) + count
         case "home": return L10n.tr("Domácí posilovna") + count

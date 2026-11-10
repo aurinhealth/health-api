@@ -24,8 +24,18 @@ enum WelcomePage: Int, CaseIterable, Identifiable {
         switch self {
         case .opening: return ""
         case .readiness: return "Každé ráno víš, kolik tělo dnes zvládne."
-        case .training: return "Tréninky podle únavy, svalů a vybavení, které máš."
+        case .training: return "Plán na kolo, běh, plavání i posilovnu. Podle toho, jak ses vyspal."
         case .coach: return "Zeptej se na cokoli. Zná tvůj spánek, trénink i jídlo."
+        }
+    }
+
+    /// What VoiceOver reads for the sample cards (onboarding review point 20).
+    var sample: String {
+        switch self {
+        case .opening: return ""
+        case .readiness: return "Ukázka: připravenost 78, spánek 7:12, HRV 64 ms nad obvyklým."
+        case .training: return "Ukázka: dřep, série 3, 80 kg × 8, kotouče na ose a série podle svalů."
+        case .coach: return "Ukázka: dotaz „Špatná noc. Dneska nohy?“ a odpověď kouče s tréninkem nohou lehčeji."
         }
     }
 
@@ -85,6 +95,7 @@ struct WelcomePageView: View {
                     Spacer(minLength: 18)
                     visual(play)
                         .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(L10n.tr(page.sample))
                     Spacer(minLength: 8)
                 }
                 .padding(.top, 12)
@@ -218,8 +229,8 @@ private struct WelcomeReadiness: View {
                         .font(Typo.number(96)).monospacedDigit().foregroundStyle(Palette.ink)
                         .frame(width: 108, alignment: .leading)
                         .animation(.easeOut(duration: 1.3).delay(0.2), value: play.shown)
-                    (Text("Dobrá noc, třetí den. ")
-                     + Text("Dnes klidně naplno do síly.").font(Typo.sentenceItalic(17)).foregroundColor(Palette.green))
+                    (Text("Tři dobré noci v řadě. ")
+                     + Text("Dnes můžeš naplno do síly.").font(Typo.sentenceItalic(17)).foregroundColor(Palette.green))
                         .font(Typo.sentence(17)).foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.bottom, 12)
@@ -272,7 +283,7 @@ private struct WelcomeTraining: View {
                     .frame(width: 106, height: 106)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Teď").font(Typo.small).foregroundStyle(Palette.muted)
-                    Text(verbatim: L10n.tr("Dřep") + " · " + L10n.f("série %@", "3")).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                    Text(verbatim: L10n.tr("Dřep") + ", " + L10n.f("série %@", "3")).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
                     Text(verbatim: "80 kg × 8").font(Typo.number(30)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
                     HStack(spacing: 6) {
                         chip("−15 s")
@@ -302,7 +313,7 @@ private struct WelcomeTraining: View {
                     MuscleFigurePair(colors: play.shown ? ["quads": Palette.rust, "chest": Palette.amberBar] : [:], spacing: 2)
                         .frame(height: 92)
                         .animation(.easeInOut(duration: 0.8).delay(1.0), value: play.shown)
-                    Text(verbatim: L10n.tr("Stehna") + " · " + L10n.tr("Hrudník"))
+                    Text(verbatim: L10n.tr("Stehna") + ", " + L10n.tr("Hrudník"))
                         .font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
                 }
                 .welcomeCard(padding: 12)
@@ -442,7 +453,7 @@ private struct WelcomeCoach: View {
                 .frame(width: 40, height: 40).background(Palette.amberSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text("Nohy, lehčeji").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
-                Text(verbatim: "40 min · " + L10n.f("%@ cviky", "4")).font(Typo.caption).foregroundStyle(Palette.muted)
+                Text(verbatim: "40 min, " + L10n.f("%@ cviky", "4")).font(Typo.caption).foregroundStyle(Palette.muted)
             }
             Spacer(minLength: 0)
             Text("Přidat").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)

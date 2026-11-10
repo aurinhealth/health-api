@@ -561,7 +561,7 @@ const each = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, merge
 const rise = ms => at(String(ms));
 const actReadiness = `<div class="dm wc">
 <div class="wcard"${rise(0)}><div class="row sp"><span class="mut">Readiness</span><span class="pill grn pop"${at('1200')}>within your usual range</span></div>
-<div class="row w-wr"><span class="num"${n(0, 78, 200, 1300, 'i')}>78</span><p class="sent"${at('1400')}>Good night, third day in a row. <em class="grn">Go all in on strength today.</em></p></div></div>
+<div class="row w-wr"><span class="num"${n(0, 78, 200, 1300, 'i')}>78</span><p class="sent"${at('1400')}>Three good nights in a row. <em class="grn">Go all in on strength today.</em></p></div></div>
 <div class="w-two"><div class="wcard w-sm"${rise(250)}><span class="mut w-s2">Sleep</span><span class="num w-v">7:12</span>${range(16, 'amber-bar', 700)}<span class="w-nt2 amb2">89% of need</span></div>
 <div class="wcard w-sm"${rise(400)}><span class="mut w-s2">HRV</span><span class="num w-v">64<small>ms</small></span>${range(83, 'green', 700)}<span class="w-nt2 grn">↑ above usual</span></div></div>
 </div>`;

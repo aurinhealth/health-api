@@ -812,7 +812,7 @@ extension LiveWorkout: HKLiveWorkoutBuilderDelegate {
     nonisolated func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {}
 }
 
-/// "Čas · Kalorie · Tep · Objem" on top of Režim tréninku, and under it the
+/// "Čas, Kalorie, Tep, Objem" on top of Režim tréninku, and under it the
 /// heart rate zone the beat is in.
 struct LiveWorkoutStrip: View {
     let live: LiveWorkout

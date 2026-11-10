@@ -52,7 +52,7 @@ struct TrainingSnapshot: Decodable, Equatable {
         let tss: Double?
         let strain: Double?
         let exercises: [String]
-        /// A gym plan's exercises with sets × reps · weight, and the muscles it works most (older servers: nil).
+        /// A gym plan's exercises with sets × reps, weight, and the muscles it works most (older servers: nil).
         let lines: [Line]?
         let muscles: [String]?
         let description: String?

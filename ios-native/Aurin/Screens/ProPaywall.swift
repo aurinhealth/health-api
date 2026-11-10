@@ -75,7 +75,7 @@ struct ProOffer: Identifiable, Equatable {
         var plans: [ProOffer] = []
         if let c = commitment {
             plans.append(ProOffer(kind: .yearMonthly, title: L10n.tr("Ročně, placeno měsíčně"), price: c.monthly, unit: L10n.tr("/měs."),
-                                  note: L10n.f("12 plateb · %@", c.total), trial: trial, total: c.total,
+                                  note: L10n.f("12 plateb, celkem %@", c.total), trial: trial, total: c.total,
                                   save: saving(amount(c.monthly), months: 1, against: month)))
         }
         plans.append(ProOffer(kind: .yearOnce, title: L10n.tr("Ročně, placeno najednou"), price: yearly, unit: L10n.tr("/rok"),
@@ -160,6 +160,7 @@ struct PaywallView: View {
     @State private var thanks: String?
     @State private var started = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     init(close: @escaping () -> Void, frozenTime: Double? = nil, step: Int = 0, store: ProStore = .shared, notNow: Bool = false,
          allowAI: (() async throws -> Void)? = nil) {
@@ -195,6 +196,8 @@ struct PaywallView: View {
             }
         }
         .environment(\.colorScheme, .dark)
+        // Both ways in (Paywall.present and the setup's cover) stop at the screens' cap.
+        .dynamicTypeSize(...DynamicTypeSize.screenCap)
         .environment(demo)
         .sheet(isPresented: $allPlans) {
             AllProPlans(offers: offers, selected: $plan, buying: store.purchasing || !chosen.priced, start: { allPlans = false; next() },
@@ -214,7 +217,8 @@ struct PaywallView: View {
             Button("OK", role: .cancel) { close() }
         } message: { Text(thanks ?? "") }
         .task {
-            await store.load()
+            // The snapshot tests (a fixed moment) keep the prices and the free week they were given.
+            if frozenTime == nil { await store.load() }
             if store.commitment == nil, plan == .yearMonthly { plan = .yearOnce }
         }
         .task(id: step) {
@@ -239,7 +243,7 @@ struct PaywallView: View {
             carouselClock { time in ScreenCarousel(time: time) }
                 .frame(maxHeight: .infinity)
             if withTrial {
-                Text(verbatim: L10n.tr(chosen.kind == .monthly ? "VYZKOUŠEJ 7 DNÍ ZDARMA" : "12MĚSÍČNÍ TARIF · VYZKOUŠEJ 7 DNÍ ZDARMA"))
+                Text(verbatim: L10n.tr(chosen.kind == .monthly ? "VYZKOUŠEJ 7 DNÍ ZDARMA" : "12MĚSÍČNÍ TARIF, VYZKOUŠEJ 7 DNÍ ZDARMA"))
                     .scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Night.faint)
                     .padding(.bottom, 8)
             }
@@ -255,37 +259,70 @@ struct PaywallView: View {
 
     // MARK: - The free week
 
+    /// Title, calendar and samples scroll; the price, the buttons and Apple's
+    /// terms stay pinned at the bottom, so the terms are by the button
+    /// (guideline 3.1.2, onboarding review points 4 and 16). With the AI note
+    /// at accessibility text sizes the pinned part would leave the top no room,
+    /// so there the whole page scrolls, in the same order.
     private var freeWeek: some View {
-        VStack(spacing: 0) {
+        let pinned = !(typeSize.isAccessibilitySize && allowAI != nil)
+        return VStack(spacing: 0) {
             topBar(back: !notNow)
-            Text("Tvůj týden zdarma").font(Typo.sentence(36, relativeTo: .largeTitle)).foregroundStyle(Night.ink)
-                .multilineTextAlignment(.center)
-            Text(verbatim: L10n.f("Celé Aurin Pro zdarma do %@", Self.dayMonth(Self.firstPayment(from: today))))
-                .font(Typo.sentence(16)).foregroundStyle(Night.muted).padding(.top, 4)
-            WeekCalendar(today: today).padding(.horizontal, 20).padding(.top, 20)
-            // With the AI note the belt's heading gives way, so the price line still fits on a 6.1" phone.
-            if allowAI == nil {
-                Text("VYZKOUŠEJ TENTO TÝDEN").scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Night.faint)
-                    .padding(.top, 22).padding(.bottom, 10)
+            ScrollView {
+                VStack(spacing: 0) {
+                    Text("Tvůj týden zdarma").font(Typo.sentence(36, relativeTo: .largeTitle)).foregroundStyle(Night.ink)
+                        .multilineTextAlignment(.center)
+                    Text(verbatim: L10n.f("Celé Aurin Pro zdarma do %@", Self.dayMonth(Self.firstPayment(from: today))))
+                        .font(Typo.sentence(16)).foregroundStyle(Night.muted).multilineTextAlignment(.center).padding(.top, 4)
+                    WeekCalendar(today: today).padding(.horizontal, 20).padding(.top, 20)
+                    // With the AI note by the button, the belt's heading gives way.
+                    if allowAI == nil {
+                        Text("VYZKOUŠEJ TENTO TÝDEN").scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Night.faint)
+                            .padding(.top, 22).padding(.bottom, 10)
+                    }
+                    clock { time in ScreenBelt(time: time, phoneHeight: allowAI == nil ? 199 : 150) }
+                        .padding(.top, allowAI == nil ? 0 : 16).padding(.bottom, 8)
+                    if !pinned { freeWeekBottom }
+                }
+                .padding(.top, 2)
             }
-            // Smaller phones beside the AI note, so the whole page fits a 6.1" phone's safe area (759 pt).
-            clock { time in ScreenBelt(time: time, phoneHeight: allowAI == nil ? 199 : 120) }
-                .padding(.top, allowAI == nil ? 0 : 16)
-                .frame(maxHeight: .infinity, alignment: .top)
-            if allowAI != nil { aiNote.padding(.horizontal, 20).padding(.bottom, 10) }
-            Text(verbatim: L10n.f("Od %@ %@", Self.dayMonth(Self.firstPayment(from: today)), chosen.afterTrial)
-                 + (chosen.kind == .yearMonthly ? " · " + L10n.tr("12 měsíců") : ""))
-                .font(Typo.small).foregroundStyle(Night.muted).padding(.bottom, 12)
+            .scrollBounceBehavior(.basedOnSize)
+            if pinned { freeWeekBottom }
+        }
+    }
+
+    /// The AI note (it is what the button allows), the price, the buttons and the terms.
+    private var freeWeekBottom: some View {
+        VStack(spacing: 0) {
+            if allowAI != nil { aiNote.padding(.horizontal, 20).padding(.top, 10) }
+            price.padding(.horizontal, 20).padding(.top, 12)
             bottom(more: false)
         }
     }
 
-    /// What allowing the AI features sends where, in the words of the setup's AI
-    /// point (AI_CONSENT_VERSION in src/consent.js), shortened.
+    /// What is charged and when, the largest price on the page (3.1.2):
+    /// "$59.99 a year", then "after 7 days free, first charge Nov 5".
+    private var price: some View {
+        VStack(spacing: 2) {
+            Text(verbatim: chosen.afterTrial + (chosen.kind == .yearMonthly ? ", " + L10n.tr("12 měsíců") : ""))
+                .scaledFont(22, weight: .semibold).foregroundStyle(Night.ink)
+            if withTrial {
+                Text(verbatim: L10n.f("po 7 dnech zdarma, první platba %@", Self.dayMonth(Self.firstPayment(from: today))))
+                    .font(Typo.small).foregroundStyle(Night.muted)
+            }
+        }
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// What allowing the AI features sends where: the setup's AI point
+    /// (AI_CONSENT_VERSION in src/consent.js) shortened, still naming OpenAI
+    /// (USA), health data, photos and the daily sending (guideline 5.1.2(i)).
     private var aiNote: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text("Aurin Pro potřebuje AI").font(.footnote.weight(.semibold)).foregroundStyle(Night.amber)
-            Text("Kouč, jídlo z fotky a hodnocení pošlou potřebné údaje, včetně zdravotních a fotek, které pošleš, společnosti OpenAI v USA, a to i každý den kvůli shrnutí kouče a v noci kvůli jeho paměti. Vypneš to kdykoli v Nastavení → Soukromí a data.")
+            Text("AI funkce posílají potřebné údaje, včetně zdravotních a fotek, které pošleš, společnosti OpenAI (USA), i automaticky každý den. Vypneš to kdykoli v Nastavení → Soukromí a data.")
                 .font(.caption).foregroundStyle(Night.muted).fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -307,7 +344,7 @@ struct PaywallView: View {
     private func topBar(back: Bool) -> some View {
         HStack {
             if back {
-                roundButton("chevron.left", label: L10n.tr("Zpět")) { go(1) }
+                BackButton(tint: Night.ink, fill: Night.card) { go(1) }
             }
             Spacer()
             roundButton("xmark", label: L10n.tr("Zavřít"), action: close)
@@ -319,6 +356,7 @@ struct PaywallView: View {
         Button(action: action) {
             Image(systemName: symbol).scaledFont(14, weight: .semibold, cap: .denseCap).foregroundStyle(Night.ink)
                 .frame(width: 36, height: 36).background(Night.card, in: Circle())
+                .tapTarget(width: 36, height: 36)
         }
         .accessibilityLabel(label)
     }
@@ -362,11 +400,9 @@ struct PaywallView: View {
     private var finePrint: some View {
         VStack(spacing: 3) {
             Text(verbatim: chosen.terms(trialDays: withTrial)).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 6) {
+            HStack(spacing: 16) {
                 Link(destination: L10n.legalURL("terms")) { Text("Podmínky").underline() }
-                Text(verbatim: "·")
                 Link(destination: L10n.legalURL("privacy")) { Text("Soukromí").underline() }
-                Text(verbatim: "·")
                 Button(action: restore) { Text("Obnovit").underline() }.buttonStyle(.plain)
             }
         }
@@ -988,9 +1024,8 @@ struct AllProPlans: View {
                         .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 12)
                 }
-                HStack(spacing: 6) {
+                HStack(spacing: 16) {
                     Link(destination: L10n.legalURL("terms")) { Text("Podmínky").underline() }
-                    Text(verbatim: "·")
                     Link(destination: L10n.legalURL("privacy")) { Text("Soukromí").underline() }
                 }
                 .font(.caption2).foregroundStyle(Night.faint).padding(.top, 3).padding(.bottom, 16)
@@ -1027,13 +1062,13 @@ struct AllProPlans: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// "Měsíčně · zrušíš kterýkoli měsíc  199 Kč/měs.": a small row, selectable like a card.
+    /// "Měsíčně, zrušíš kterýkoli měsíc  199 Kč/měs.": a small row, selectable like a card.
     private func monthlyRow(_ o: ProOffer) -> some View {
         let on = selected == o.kind
         return Button { selected = o.kind } label: {
             HStack(spacing: 8) {
                 (Text(verbatim: o.title).font(.subheadline.weight(.medium))
-                 + Text(verbatim: " · " + L10n.tr("zrušíš kterýkoli měsíc")).font(.subheadline).foregroundStyle(on ? Night.violet.opacity(0.75) : Night.muted))
+                 + Text(verbatim: ", " + L10n.tr("zrušíš kterýkoli měsíc")).font(.subheadline).foregroundStyle(on ? Night.violet.opacity(0.75) : Night.muted))
                 Spacer(minLength: 4)
                 (Text(verbatim: o.price).font(Typo.number(18)) + Text(verbatim: o.unit).font(.caption2))
                     .lineLimit(1).fixedSize()

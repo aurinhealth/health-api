@@ -868,7 +868,7 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
   const ACT_LIST = [
     ['readiness', 'Readiness', 'Know every morning how much your body can take today.', 'glow-today', ['pripravenost']],
     ['sleep', 'Sleep', 'A bedtime from your alarm and the sleep you need tonight.', 'glow-health', ['spanek']],
-    ['training', 'Training', 'Workouts built around your fatigue, muscles and equipment.', 'glow-training', ['trenink', 'posilovna', 'svaly']],
+    ['training', 'Training', 'A plan for rides, runs, swims and gym. Based on how you slept.', 'glow-training', ['trenink', 'posilovna', 'svaly']],
     ['food', 'Nutrition', 'Snap your plate or scan a barcode. AI fills in the values.', 'glow-food', ['vyziva']],
     ['coach', 'Coach', 'Ask anything. It knows your sleep, training and food.', 'glow-coach', ['kouc']],
     ['watch', 'Apple Watch', 'Your morning, your sets and your water, without taking out your phone. Comes with the iPhone app, on any Apple Watch with watchOS 10 or later.', 'glow-today', ['hodinky']]].filter(([id]) => WATCH_ON_SITE || id !== 'watch');
@@ -953,7 +953,7 @@ ${ACT_LIST.map(a => act(a) + '\n' + a[4].map(id => id === 'svaly' ? muscles : ch
 ${actNav}
 
 <section id="soukromi" class="privacy"><div class="wrap">
-<div class="promise reveal">${LOCK}<h2 class="big">Your data works only for you.</h2><p class="sub">We never sell it or use it for ads. Aurin reads only what you allow, and you can delete all of it in Settings at any time.</p>
+<div class="promise reveal">${LOCK}<h2 class="big">Your data is yours alone.</h2><p class="sub">We never sell your data or use it for ads. Aurin reads only what you allow, and you can delete all of it in Settings at any time.</p>
 <a class="more" href="/privacy">Read the privacy policy <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a></div>
 ${GOOGLE_DISCLOSURE_ON_HOME ? googleDisclosure() : ''}
 </div></section>

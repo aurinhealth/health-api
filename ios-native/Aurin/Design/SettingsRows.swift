@@ -173,7 +173,7 @@ struct SettingsReorder: ViewModifier {
     }
 }
 
-/// A row with a text field on the right, e.g. "Výška · 182 cm".
+/// A row with a text field on the right, e.g. "Výška, 182 cm".
 struct SettingsField: View {
     let title: String
     @Binding var text: String

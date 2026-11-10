@@ -14,10 +14,10 @@ enum GymCardioLog {
         var seconds: Int
         var end: Date
 
-        /// "7 min · 18:07".
+        /// "7 min, 18:07".
         var summary: String {
             let minutes = max(1, Int((Double(seconds) / 60).rounded()))
-            return "\(minutes) min · " + end.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(L10n.locale))
+            return "\(minutes) min, " + end.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(L10n.locale))
         }
     }
 
@@ -163,7 +163,7 @@ struct CardioTimerView: View {
         var since: Date?
         /// Runs at once: tapped, not come on after the last set.
         var autoStart: Bool
-        /// What follows: "Hotovo · další: Dřep" on its stop.
+        /// What follows: "Hotovo, další: Dřep" on its stop.
         var next: String?
         /// Stopped or skipped: the workout goes on with what follows.
         var close: () -> Void
@@ -189,7 +189,7 @@ struct CardioTimerView: View {
                 }
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: L10n.tr("Kardio") + " · " + L10n.tr(isStart ? "Začátek" : "Konec"))
+                Text(verbatim: L10n.tr("Kardio") + ", " + L10n.tr(isStart ? "Začátek" : "Konec"))
                     .font(.caption.weight(.semibold)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.amber)
                 Text(verbatim: item.name).font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
             }
@@ -198,7 +198,7 @@ struct CardioTimerView: View {
                 VStack(spacing: 10) {
                     Image(systemName: "checkmark.circle.fill").scaledFont(64).foregroundStyle(Palette.green)
                     Text(GymRoutineKind.cardio.doneTitle).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
-                    Text(verbatim: item.name + " · " + stopped.summary).font(.subheadline).foregroundStyle(Palette.muted)
+                    Text(verbatim: item.name + ", " + stopped.summary).font(.subheadline).foregroundStyle(Palette.muted)
                 }
                 .frame(maxWidth: .infinity)
                 Spacer()
@@ -256,17 +256,17 @@ struct CardioTimerView: View {
         }
     }
 
-    /// Zastavit, or in Režim tréninku "Hotovo · další: Dřep".
+    /// Zastavit, or in Režim tréninku "Hotovo, další: Dřep".
     private var stopTitle: String {
         guard let inline else { return L10n.tr("Zastavit") }
-        return inline.next.map { L10n.f("Hotovo · další: %@", $0) } ?? L10n.tr("Hotovo")
+        return inline.next.map { L10n.f("Hotovo, další: %@", $0) } ?? L10n.tr("Hotovo")
     }
 
-    /// "běží · 124 bpm" while the time runs.
+    /// "běží, 124 bpm" while the time runs.
     private var status: String {
         var parts = [L10n.tr(minutes > 0 ? "zbývá" : "běží")]
         if let bpm = LiveWorkout.shared.heartRate { parts.append("\(Int(bpm.rounded())) bpm") }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 
     /// Seconds left of a set time (0 without one).

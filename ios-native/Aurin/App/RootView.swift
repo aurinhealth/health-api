@@ -493,8 +493,8 @@ struct OfflineBanner: View {
     var waiting = 0
 
     private var text: String {
-        let parts = [offline ? L10n.tr("Bez připojení · uložená data") : nil, waiting > 0 ? Self.waitingText(waiting) : nil]
-        return parts.compactMap { $0 }.joined(separator: " · ")
+        let parts = [offline ? L10n.tr("Bez připojení, uložená data") : nil, waiting > 0 ? Self.waitingText(waiting) : nil]
+        return parts.compactMap { $0 }.joined(separator: ", ")
     }
 
     static func waitingText(_ n: Int) -> String {
@@ -530,7 +530,7 @@ struct SyncPill: View {
                     Text("Synchronizováno")
                 case .failed:
                     Image(systemName: "exclamationmark.circle")
-                    Text("Nepodařilo se · Zkusit znovu")
+                    Text("Nepodařilo se. Zkusit znovu")
                 }
             }
             .font(.footnote.weight(.semibold))

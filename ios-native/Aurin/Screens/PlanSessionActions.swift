@@ -355,7 +355,7 @@ struct MovePlannedSheet: View {
 
     private var subtitle: String {
         let parts: [String?] = [session.title, session.minutes.map { Fmt.duration($0) }]
-        return parts.compactMap { $0 }.joined(separator: " · ")
+        return parts.compactMap { $0 }.joined(separator: ", ")
     }
 
     /// What the new day already holds, from the week's list.
