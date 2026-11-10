@@ -741,9 +741,10 @@ const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 // The Limited Use statements stay in the privacy policy either way.
 // The text stays word for word (tests/site-pages.test.mjs).
 export const GOOGLE_DISCLOSURE_ON_HOME = false;
-// The watches and rings the "Works with" row under the form names: Apple Watch through Apple Health, Fitbit and
-// Pixel Watch through Google Health, the Ultrahuman Ring and WHOOP directly. Aurin does not support Garmin.
-export const WEARABLES = ['Apple Watch', 'Fitbit', 'Pixel Watch', 'WHOOP', 'Ultrahuman'];
+// The watches and rings the "Works with" row under the form names: Apple Watch through Apple Health, Fitbit
+// through Google Health, the Ultrahuman Ring and WHOOP directly. Aurin does not support Garmin. Pixel Watch stays
+// off: it pairs only with an Android phone, and Aurin is iPhone only (Petr 2026-11-10).
+export const WEARABLES = ['Apple Watch', 'Fitbit', 'WHOOP', 'Ultrahuman'];
 // The Apple Watch app takes a break in the testers' build (#915), so its part and the menu links stay off until
 // it is back. Workouts sent to the Apple Watch and the watch as a source of data stay.
 export const WATCH_ON_SITE = false;
@@ -890,8 +891,8 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
 <div class="muscle-card" role="dialog" aria-modal="true" aria-labelledby="mc-name"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3 id="mc-name"></h3><p class="state"></p></div></div>`;
 
   const faq = [
-    ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit or Pixel Watch. The Ultrahuman Ring, WHOOP and Wahoo connect directly. With only an iPhone you still get steps, training, food and the coach; readiness, HRV and sleep need a watch or ring.'],
-    ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
+    ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch or Fitbit. The Ultrahuman Ring, WHOOP and Wahoo connect directly. With only an iPhone you still get steps, training, food and the coach; readiness, HRV and sleep need a watch or ring.'],
+    ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit works with it too.'],
     ['What does it cost?', `Nothing during testing. After the release, Aurin Intelligence (the coach, food from a photo, words or the web, and the reviews), every training plan beyond the free starter plan in each sport, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: ${PRO_PRICE.year} a year with the first week free (${PRO_SAVE}% less than monthly) or ${PRO_PRICE.month} a month, shown in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.`],
     ['Does Aurin know my cycle?', 'If you turn on cycle tracking in Settings → Cycle, yes. Your readiness then weighs your resting heart rate and temperature in the days before your period against your own days in that phase, and, if you allow it, the coach knows it too.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from, and under Health data see for each type where Aurin reads it from and sends it to, with a switch for each.'],
