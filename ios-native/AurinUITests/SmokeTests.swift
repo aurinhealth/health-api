@@ -300,11 +300,11 @@ final class SmokeTests: XCTestCase {
             pause(3)
             if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Jak mám dnes trénovat")).firstMatch) {
                 pause(8)
+                shot("kouc-odpoved")
                 for (i, question) in ["Proč mám 78 po pouhých 7 hodinách spánku?", "Co sníst před posilovnou?", "Budou nohy v sobotu připravené?"].enumerated() where ask(question, send: "Odeslat") {
                     pause(8)
                     shot("kouc-odpoved-\(i + 2)")
                 }
-                shot("kouc-odpoved")
             }
         }
     }
