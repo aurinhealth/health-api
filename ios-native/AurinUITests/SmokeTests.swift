@@ -41,7 +41,6 @@ final class SmokeTests: XCTestCase {
         skip.tap()
         XCTAssertTrue(email.waitForExistence(timeout: 5), "the sign-in did not appear")
         pause(1)
-        // Its label also holds the "G" drawn as text.
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Pokračovat přes Google")).firstMatch.exists)
         shot("prihlaseni")
         email.tap()

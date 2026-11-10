@@ -149,7 +149,10 @@ struct LoginView: View {
                 Task { await model.signIn() }
             } label: {
                 HStack(spacing: 10) {
-                    if model.signingInWith == .google { ProgressView().tint(Palette.ink) } else { Text(verbatim: "G").scaledFont(17, weight: .bold) }
+                    // Google's own "G" from its sign-in branding kit, unchanged (release 1.0.1 point 10).
+                    if model.signingInWith == .google { ProgressView().tint(Palette.ink) } else {
+                        Image("GoogleG").resizable().interpolation(.high).scaledToFit().frame(width: 20, height: 20).accessibilityHidden(true)
+                    }
                     Text("Pokračovat přes Google")
                 }
                 .modifier(SignInButtonLook())
