@@ -1,6 +1,6 @@
 import Foundation
 
-// What AI costs today (src/ai-total.js aiSpendingReport), for the owner in
+// What AI costs today and this month (src/ai-total.js aiSpendingReport), for the owner in
 // Nastavení → Správa → Útraty AI: each group of accounts against its own daily
 // brake. Days are UTC days, like the brakes.
 
@@ -11,6 +11,10 @@ struct AISpending: Decodable {
     /// When the day (and every brake) starts again: the next UTC midnight.
     let resetsAt: String?
     let groups: [Group]
+    /// Days of the month so far (UTC), today included; nil from an older server.
+    let monthDays: Int?
+    /// Each group's month so far; nil from an older server.
+    let monthGroups: [MonthGroup]?
 
     struct Group: Decodable, Identifiable, Equatable {
         /// paid, gift, trial, testflight, free, new or system.
@@ -20,6 +24,14 @@ struct AISpending: Decodable {
         let brake: Double?
         /// Accounts the brake grows with; nil for a fixed brake.
         let accounts: Int?
+        var id: String { group }
+    }
+
+    struct MonthGroup: Decodable, Identifiable, Equatable {
+        let group: String
+        let spent: Double
+        /// Days this month the group reached its brake.
+        let braked: Int
         var id: String { group }
     }
 }
