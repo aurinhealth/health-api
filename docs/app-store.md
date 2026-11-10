@@ -63,6 +63,7 @@ the simulator) are signed by Xcode, never verify, and stay on the phone.
 | --- | --- | --- |
 | `APP_STORE_APP_ID` | secret or var | The app's Apple ID (App Store Connect → App Information → Apple ID, a number). Once set, `/app/api/subscription` reports `checkoutAvailable: true` to every account the paywall is on for and production notifications must name this app. |
 | `AI_PAYWALL_ENABLED` | var | Empty: the pilot (everyone has AI and every plan, nothing on sale). `owner`: the paid split for the owner's account only. `true`: for everyone. |
+| `PRO_TESTER_EMAILS` | secret | E-mails of TestFlight testers (commas or spaces between them) who have Pro without a purchase once the paywall is on; never the App Review account. Their AI limits stay those of their group. |
 | `APP_STORE_BUNDLE_ID` | var, optional | `health.aurin.app` unless set. The products are `<bundle>.pro.monthly` and `<bundle>.pro.yearly`. |
 
 No private key is needed: verification uses Apple's public certificate chain only.
