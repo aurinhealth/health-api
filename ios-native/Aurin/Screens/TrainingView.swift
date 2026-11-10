@@ -274,7 +274,7 @@ struct StrainHero: View {
             } else {
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
                     Text(score.map { Fmt.decimal($0) } ?? "–")
-                        .font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5)
+                        .font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5)
                         .foregroundStyle(isAhead ? Palette.faint : Palette.ink)
                     if let note {
                         Pill(text: note, foreground: Palette.amber, background: Palette.amberSoft)
