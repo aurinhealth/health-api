@@ -470,11 +470,11 @@ enum StartButtonSpot {
     static let barSide: CGFloat = 20
     static let barBottom: CGFloat = 8
 
-    /// The line the card's button hands over at, `gap` under it: with the
-    /// compact bar where the floating button's bottom is, so the swap does not jump.
+    /// The line the card's button hands over at, `gap` under it: the top of
+    /// the bar, so the card's button never shows under the bar or its circles.
     static func floor(bottom: CGFloat, compact: Bool) -> CGFloat {
         guard bottom > 0 else { return 0 }
-        return bottom - (compact ? barBottom - gap : barZone)
+        return bottom - (compact ? barBottom + circle : barZone)
     }
 }
 
