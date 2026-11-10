@@ -42,32 +42,8 @@ p{margin:0}
 .pill-nav .links a{padding:7px 12px;border-radius:var(--r-pill);color:var(--muted);text-decoration:none;font-size:var(--fs-14);font-weight:500}
 .pill-nav .links a:hover{color:var(--text);background:var(--track)}
 
-/* The waitlist: the app is not in the App Store yet; an e-mail field with its button (store()). */
+/* The App Store badge (store()). */
 .wl{display:inline-flex;flex-direction:column;align-items:center;max-width:100%}
-.wl .done{display:none}
-.wl .field{display:flex;align-items:center;gap:6px;height:56px;width:420px;max-width:100%;padding:0 6px 0 22px;border-radius:var(--r-pill);background:var(--panel);box-shadow:0 0 0 1px var(--line),var(--shadow-float)}
-.wl input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:var(--fs-17);color:var(--text)}
-.wl .field:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:3px}
-.wl .go{flex:none;display:flex;align-items:center;justify-content:center;gap:6px;height:44px;padding:0 16px 0 18px;border:0;border-radius:var(--r-pill);background:var(--button);color:var(--on-button);font:inherit;font-size:var(--fs-14);font-weight:600;white-space:nowrap;cursor:pointer}
-.wl .go svg,.wl .done svg{fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
-.wl .go svg{width:16px;height:16px;stroke:var(--on-button)}
-/* On the smallest phones the button drops its arrow so the address keeps room. */
-/* Up to 375px (iPhone SE and mini) the address gets the whole width and the button goes under it. */
-@media (max-width:375px){.wl .field{flex-wrap:wrap;height:auto;padding:6px;border-radius:var(--r-22)}.wl input{flex:1 1 100%;height:46px;padding:0 12px}.wl .go{flex:1 1 100%}}
-.wl .done{align-items:center;gap:10px;height:56px;padding:0 26px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--green) 13%,var(--panel));color:var(--green);font-size:var(--fs-17);font-weight:600}
-.wl .done svg{width:20px;height:20px;stroke:currentColor}
-.wl .err{margin-top:10px;font-size:var(--fs-14);color:var(--rust-ink)}.wl .err:empty{display:none}
-/* The link to install comes from Apple with "TestFlight" as its sender, not from Aurin, so say so where people look for it.
-   The line about TestFlight under the form has said its part by then. */
-.hero .cta:has(.wl.sent) .note{display:none}
-.wl .tf{display:none;max-width:420px;margin-top:12px;font:var(--fs-14)/1.45 var(--sans);color:var(--sec);text-align:center}.wl.sent .tf{display:block}
-.wl.sent .field{display:none}.wl.sent .done{display:inline-flex}
-/* After joining: pass Aurin on (the phone's own sharing, or the link copied). Nothing about it is stored. */
-.wl .share{display:none;align-items:center;gap:8px;margin-top:12px;padding:8px 14px;border:0;border-radius:var(--r-pill);background:transparent;font:inherit;font-size:var(--fs-14);font-weight:600;color:var(--sec);cursor:pointer}
-.wl .share{box-shadow:inset 0 0 0 1px var(--line)}.wl .share:hover{background:var(--panel)}.wl .share svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
-.wl.sent .share{display:inline-flex}
-/* Cloudflare's "Verify you are human", only when Cloudflare asks for it. */
-.wl .ts{display:flex;justify-content:center}.wl .ts iframe{margin-top:12px}.wl.sent .ts{display:none}
 
 /* Grain over the whole page: printed paper rather than a flat screen. */
 .site body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.05;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
@@ -81,7 +57,7 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .up{color:var(--green)}.sleep{color:var(--indigo)}.warm{color:var(--amber)}
 .nav-cta{display:inline-flex;align-items:center;height:36px;padding:0 16px;border-radius:var(--r-pill);background:var(--button);color:var(--on-button);font-size:var(--fs-14);font-weight:600;text-decoration:none;white-space:nowrap}
 .nav-cta:hover{opacity:.9}
-/* One waitlist button at a time: the nav's pill shows while no other way to join is on screen (always there without JS). */
+/* One App Store button at a time: the nav's pill shows while no other way to get the app is on screen (always there without JS). */
 .js .site-head:not(.away) .nav-cta{display:none}
 
 /* The sun: the logo rising behind soft rings that keep spreading, over the sunrise tint (the welcome's first page). */
@@ -107,7 +83,7 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .hero h1 .it{font-style:italic;color:var(--green)}
 .lede{max-width:500px;margin-top:26px;font-size:var(--fs-20);color:var(--sec)}
 .hero .cta{margin-top:36px}
-.hero .wl{align-items:flex-start}.hero .wl .tf{text-align:left}
+.hero .wl{align-items:flex-start}
 .hero .note{margin-top:16px;font-size:var(--fs-14);color:var(--muted)}
 /* Works with, right under the form on the first screen: the watches and rings Aurin reads (through Apple Health,
    Google Health or directly), as plain names, Bevel-like. Brand logos need their makers' written OK. */
@@ -313,13 +289,14 @@ main:focus{outline:none}
 .faq details[open] summary::after{transform:translateY(5px) rotate(-135deg)}
 .faq details p{padding:0 2px 22px;color:var(--sec);max-width:640px}
 
-/* The end: the mark, the name and the waitlist once more. */
+/* The end: the mark, the name and the App Store once more. */
 .final{position:relative;padding:180px 0 170px;text-align:center;overflow:clip}
 .final .wrap{position:relative;z-index:1}
 .final .sun{margin:0 auto 10px}
 .final h2,.final h1{font-size:clamp(var(--fs-44),6vw,var(--fs-64));max-width:760px;margin:0 auto}
 .final .sub{margin:18px auto 0;text-align:center}
 .final .wl{margin-top:32px}
+.wl .badge{display:block}.wl .badge img{display:block;height:52px;width:auto}
 
 /* Footer: the mark and the line from the hero, then three short groups, then who runs Aurin. */
 .site-foot{border-top:1px solid var(--line);padding:56px 0 36px;color:var(--muted);font-size:var(--fs-14)}
@@ -402,7 +379,7 @@ main:focus{outline:none}
   /* The mark is already in the nav: on a tablet and a phone the hero starts with the words. */
   .hero .sun{display:none}
   .lede{margin-left:auto;margin-right:auto}
-  .hero .wl{align-items:center}.hero .wl .tf{text-align:center}
+  .hero .wl{align-items:center}
   .xw ul{justify-content:center}
   .stage{margin-top:48px}
   .morning{padding-top:32px}
@@ -434,11 +411,11 @@ main:focus{outline:none}
   .nav-cta{height:36px;padding:0 14px}
   .hero{padding-top:110px}
   .lede,.sub{font-size:var(--fs-17)}
-  /* On a phone the waitlist comes right under the line, on the first screen, and the app after it, as on a tablet. */
+  /* On a phone the App Store badge comes right under the line, on the first screen, and the app after it, as on a tablet. */
   /* Left-aligned on a phone: four centred lines read badly. */
   .hero .grid{gap:0;text-align:left}.hero .copy{display:contents}.hero .kicker{justify-self:start}.hero .lede{margin-left:0}
   .hero .cta{order:1;margin-top:28px}.hero .stage{order:2;margin-top:40px}
-  .hero .wl{align-items:flex-start}.hero .wl .tf{text-align:left}
+  .hero .wl{align-items:flex-start}
   .hero .xw{order:1;margin-top:26px}.xw ul{justify-content:flex-start}
   .rig{width:322px;height:672px;--hz:.8}
   .rig .device{left:0}
@@ -482,24 +459,12 @@ const mark = width => `<svg class="mark" viewBox="6 10 88 80" width="${width}" h
 const sun = size => `<div class="sun" aria-hidden="true" style="--s:${size}px"><i class="halo"></i><i class="rg"></i><i class="rg"></i><i class="rg"></i>${mark(size)}</div>`;
 // The welcome's lock (WelcomeLock in WelcomePages.swift): a soft paper lock with the logo whose shackle clicks shut.
 const LOCK = `<div class="lock" aria-hidden="true"><i class="halo"></i><svg class="shackle" viewBox="0 0 62 58"><defs><linearGradient id="lk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--sand)"/><stop offset="1" stop-color="color-mix(in srgb,var(--brown) 60%,transparent)"/></linearGradient></defs><path d="M5.5 58V31a25.5 25.5 0 0 1 51 0v27" fill="none" stroke="url(#lk)" stroke-width="11" stroke-linecap="round"/></svg><span class="body">${mark(46)}</span></div>`;
-// The waitlist: an e-mail field with a "Get early access" button; the address waits for the owner, who
-// invites people into TestFlight from the app (src/testflight-waitlist.js).
-const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
-const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
-const SHARE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
-// Cloudflare Turnstile's widget "Aurin web" (aurin.health and staging.aurin.health); the site key is public.
-const TURNSTILE_SITE_KEY = '0x4AAAAAAFmRgmk4ncclmfIi';
-const TURNSTILE = 'https://challenges.cloudflare.com';
 // Cloudflare Web Analytics: Cloudflare puts its beacon into the page (counts visits, no cookies).
 const WEB_ANALYTICS = 'https://static.cloudflareinsights.com';
-const turnstileScript = `<script src="${TURNSTILE}/turnstile/v0/api.js?render=explicit&onload=aurinTurnstile" async defer></script>`;
-const store = id => `<form class="wl" action="/waitlist" method="post" novalidate>
-<span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" spellcheck="false" required><button type="submit" class="go">Get early access${ARROW}</button></span>
-<span class="ts" data-key="${TURNSTILE_SITE_KEY}"></span>
-<span class="done" role="status">${CHECK}<span>You’re on the list</span></span><p class="tf">Apple’s TestFlight will email you a link to install Aurin. If it doesn’t arrive, check your spam.</p>
-<button type="button" class="share">${SHARE}<span>Know someone who trains? Share Aurin</span></button>
-<span class="err" role="alert"></span>
-</form>`;
+// The App Store badge (Apple's artwork, unchanged): black on the light site, white in dark mode.
+export const APP_STORE_URL = 'https://apps.apple.com/app/id6827125354';
+const BADGE = '<img src="/site/badges/app-store-black.svg" alt="Download on the App Store" width="156" height="52">';
+const store = () => `<div class="wl"><a class="badge" href="${APP_STORE_URL}">${DARK_SITE ? `<picture><source srcset="/site/badges/app-store-white.svg" media="(prefers-color-scheme:dark)">${BADGE}</picture>` : BADGE}</a></div>`;
 
 // The page's motion: content fades up as it scrolls in and each chapter's steps take turns on its phone.
 // Without JS everything is simply shown; with reduced motion nothing moves
@@ -555,25 +520,6 @@ var an=document.querySelector('.acts-nav');if(an){var acts=[].slice.call(documen
  // The pill steps aside while a live demo card passes under it, so it never hides the demo's last rows.
  function covers(){var w=an.offsetWidth/2+16,cx=innerWidth/2,top=innerHeight-an.offsetHeight-34;return [].some.call(document.querySelectorAll('.part.on'),function(p){var r=p.getBoundingClientRect();return r.bottom>top&&r.top<innerHeight&&r.left<cx+w&&r.right>cx-w;});}
  addEventListener('scroll',function(){if(!ticking){ticking=true;requestAnimationFrame(where);}},{passive:true});setInterval(where,700);where();}
-window.aurinTurnstile=function(){dispatchEvent(new Event('aurin:turnstile'));};
-// Cloudflare Turnstile checks that a person sends the form (src/testflight-waitlist.js): unseen for most,
-// a "Verify you are human" box under the field when Cloudflare isn't sure. It starts on the first touch
-// of the form; a send waits for its token, and each token goes with one send only.
-document.querySelectorAll('form.wl').forEach(function(f){var input=f.querySelector('input'),err=f.querySelector('.err'),ts=f.querySelector('.ts'),busy=false,wid=null,token='',waiting=false,touched=false;
- function human(){touched=true;if(wid!==null||!window.turnstile)return;wid=turnstile.render(ts,{sitekey:ts.dataset.key,action:'waitlist',appearance:'interaction-only',
-  callback:function(t){token=t;if(waiting){waiting=false;send();}},'expired-callback':function(){token='';},'error-callback':function(){token='';if(waiting){waiting=false;busy=false;err.textContent='We couldn\\'t check that you\\'re human. Try again.';}}});}
- f.addEventListener('focusin',human);addEventListener('aurin:turnstile',function(){if(touched)human();});
- function send(){var t=token;token='';
-  fetch('/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:input.value.trim(),token:t})})
-  .then(function(r){return r.json().catch(function(){return {};}).then(function(b){if(!r.ok)throw new Error(b.message||'Something went wrong. Try again.');f.classList.add('sent');})})
-  .catch(function(x){err.textContent=x.message;}).then(function(){busy=false;if(wid!==null&&!f.classList.contains('sent'))turnstile.reset(wid);});}
- f.addEventListener('submit',function(e){e.preventDefault();if(busy)return;var email=input.value.trim();err.textContent='';
-  if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)){err.textContent='Enter a valid email.';input.focus();return;}
-  busy=true;human();if(token||wid===null)send();else waiting=true;});
- var sh=f.querySelector('.share'),said=sh.querySelector('span');
- sh.addEventListener('click',function(){var link=location.origin+'/';
-  if(navigator.share)navigator.share({title:'Aurin',text:'Aurin reads your sleep, HRV and workouts and tells you how hard to train today. Free to test on iPhone:',url:link}).catch(function(){});
-  else if(navigator.clipboard)navigator.clipboard.writeText(link).then(function(){said.textContent='Link copied: '+link;});});});
 })();</script>
 <script>(function(){
 // Muscles: frame k of 72 is the figure turned k·5°; ids.png holds, per frame, which muscle each pixel is
@@ -685,7 +631,7 @@ ${headScript}
 <header class="site-head"><nav class="pill-nav" aria-label="Main">
 <a class="logo" href="/">${mark(30)}<span translate="no">Aurin</span></a>
 <div class="links"><a href="/#a-readiness">Readiness</a><a href="/#a-sleep">Sleep</a><a href="/#a-training">Training</a><a href="/#a-food">Nutrition</a><a href="/#a-coach">Coach</a>${WATCH_ON_SITE ? '<a href="/#a-watch">Watch</a>' : ''}</div>
-<a class="nav-cta" href="/#join">Get early access</a>
+<a class="nav-cta" href="/#join">Get the app</a>
 </nav></header>
 ${body}
 <footer class="site-foot"><div class="wrap">
@@ -699,9 +645,8 @@ ${body}
 </div></footer>
 ${demoScript}
 ${siteScript}
-${turnstileScript}
 </body></html>`;
-  return new Response(html, {status, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate', 'Content-Security-Policy':scriptPolicy(headScript + demoScript + siteScript, [TURNSTILE, WEB_ANALYTICS])}});
+  return new Response(html, {status, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate', 'Content-Security-Policy':scriptPolicy(headScript + demoScript + siteScript, [WEB_ANALYTICS])}});
 }
 
 // Pages take the request (to pick the host, and /cs/ on the pages that have Czech) or nothing
@@ -892,7 +837,7 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
   const faq = [
     ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit or Pixel Watch. The Ultrahuman Ring, WHOOP and Wahoo connect directly. With only an iPhone you still get steps, training, food and the coach; readiness, HRV and sleep need a watch or ring.'],
     ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
-    ['What does it cost?', `Nothing during testing. After the release, Aurin Intelligence (the coach, food from a photo, words or the web, and the reviews), every training plan beyond the free starter plan in each sport, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: ${PRO_PRICE.year} a year with the first week free (${PRO_SAVE}% less than monthly) or ${PRO_PRICE.month} a month, shown in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.`],
+    ['What does it cost?', `Aurin is free to download. Aurin Intelligence (the coach, food from a photo, words or the web, and the reviews), every training plan beyond the free starter plan in each sport, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: ${PRO_PRICE.year} a year with the first week free (${PRO_SAVE}% less than monthly) or ${PRO_PRICE.month} a month, shown in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling.`],
     ['Does Aurin know my cycle?', 'If you turn on cycle tracking in Settings → Cycle, yes. Your readiness then weighs your resting heart rate and temperature in the days before your period against your own days in that phase, and, if you allow it, the coach knows it too.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from, and under Health data see for each type where Aurin reads it from and sends it to, with a switch for each.'],
     ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo, and each day the data of Today, Training and Food for the coach’s short summary there. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
@@ -913,7 +858,7 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
   const jsonLd = {'@context': 'https://schema.org', '@graph': [
     {'@type': 'SoftwareApplication', name: 'Aurin', url: origin, description, applicationCategory: 'HealthApplication',
      operatingSystem: 'iOS', image: `${origin}${SHARE_IMAGE}`, screenshot: `${origin}/site/app/today.webp`,
-     offers: {'@type': 'Offer', price: '0', priceCurrency: 'USD', availability: 'https://schema.org/PreOrder', description: 'Free test version in TestFlight'},
+     offers: {'@type': 'Offer', price: '0', priceCurrency: 'USD', availability: 'https://schema.org/InStock', description: 'Free on the App Store'},
      publisher: {'@id': `${origin}/#org`}},
     {'@type': 'Organization', '@id': `${origin}/#org`, name: 'Aurin', url: origin, logo: `${origin}/logo.svg`,
      email: CONTACT_EMAIL, sameAs: ['https://x.com/aurin_health']},
@@ -927,10 +872,10 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
 <div class="wrap grid">
 <div class="copy">
 ${sun(72)}
-<span class="kicker"><i></i>For iPhone · early access</span>
+<span class="kicker"><i></i>For iPhone</span>
 <h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w${i >= SLANT ? ' it' : ''}" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
 <p class="lede">Aurin reads your sleep, HRV and workouts from the watch or ring you wear, and every morning turns them into one number, one plan and one coach.</p>
-<div class="cta">${store('top')}<p class="note">Free early access on iPhone through TestFlight.</p></div>
+<div class="cta">${store()}<p class="note">Free on iPhone. Not in the EU yet, coming soon.</p></div>
 <div class="xw"><span class="xe" id="xw-t">Works with what you already wear</span><ul aria-labelledby="xw-t">${WEARABLES.map(wearable).join('')}</ul></div>
 </div>
 <div class="stage"><div class="rig">
@@ -958,15 +903,15 @@ ${GOOGLE_DISCLOSURE_ON_HOME ? googleDisclosure() : ''}
 </div></section>
 
 <section id="cena" class="price"><div class="wrap">
-<div class="head reveal"><div class="eyebrow">Price</div><h2 class="big">Free while we test.</h2></div>
+<div class="head reveal"><div class="eyebrow">Price</div><h2 class="big">Free to start.</h2></div>
 <div class="plans">
-<div class="plan reveal"><div class="pk">Aurin</div><h3>Free</h3><p class="pl">Now and after the release.</p>
+<div class="plan reveal"><div class="pk">Aurin</div><h3>Free</h3><p class="pl">Always.</p>
 <ul>${PRO_CONTENTS.free.map(x => `<li>${x}</li>`).join('')}</ul></div>
-<div class="plan pro reveal"><div class="pk">Aurin Pro</div><h3>${PRO_PRICE.year}<small> a year</small> <span class="save">Save ${PRO_SAVE}%</span></h3><p class="pl">with the first week free, or ${PRO_PRICE.month} a month, cancel any month. Once Aurin is in the App Store.</p>
+<div class="plan pro reveal"><div class="pk">Aurin Pro</div><h3>${PRO_PRICE.year}<small> a year</small> <span class="save">Save ${PRO_SAVE}%</span></h3><p class="pl">with the first week free, or ${PRO_PRICE.month} a month, cancel any month.</p>
 <ul>${PRO_CONTENTS.pro.map(([t, items]) => `<li>${t}${items.length ? `<ul>${items.map(x => `<li>${x}</li>`).join('')}</ul>` : ''}</li>`).join('')}</ul>
 <p class="pn">Prices vary by country. The App Store shows yours before you buy.</p></div>
 </div>
-<a class="nav-cta go-join" href="#join">Get early access</a>
+<a class="nav-cta go-join" href="#join">Get the app</a>
 </div></section>
 
 <section id="faq"><div class="wrap faq">
@@ -979,14 +924,14 @@ ${faq}
 <section class="final"><div class="wrap reveal" id="join">
 ${sun(104)}
 <h2>Train for how you feel today.</h2>
-<p class="sub">Leave your email and we’ll invite you to try Aurin on your iPhone.</p>
-${store('end')}
+<p class="sub">Free on iPhone. Not in the EU yet, coming soon.</p>
+${store()}
 </div></section>
 </main>`
   });
 }
 
-// Any other address a browser opens: a page in the site's look with the way home and the waitlist,
+// Any other address a browser opens: a page in the site's look with the way home and the App Store,
 // instead of the API's sign-in error (entrypoint.js).
 export function notFoundPage(request) {
   const {lang, origin} = pageLang(request);
@@ -996,8 +941,8 @@ export function notFoundPage(request) {
 <section class="final"><div class="wrap" id="join">
 ${sun(104)}
 <h1>This page doesn’t exist.</h1>
-<p class="sub">The link may be old or mistyped. <a href="/">Go to the home page</a>, or leave your email and we’ll invite you to try Aurin on your iPhone.</p>
-${store('lost')}
+<p class="sub">The link may be old or mistyped. <a href="/">Go to the home page</a>, or get Aurin on your iPhone.</p>
+${store()}
 </div></section>
 </main>`});
 }
