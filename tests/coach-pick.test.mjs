@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { rankOptions, saunaSigns, dayChoice, doneSentence, setLess, lessKinds, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "../src/coach-pick.js";
+import { rankOptions, eveningPhase, saunaSigns, dayChoice, doneSentence, setLess, lessKinds, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "../src/coach-pick.js";
 import { createD1 } from "./helpers/d1.mjs";
+import { withLang } from "../src/lang.js";
 import { scopedDb } from "../src/tenancy.js";
 
 const coach = (status, kind = "tempo", minutes = 65, lower = 0, reasons = []) => ({ readiness: { status, score: 70, reasons }, recommendation: { session: { kind, durationMinutes: minutes } }, load: { lowerBodyGymSignals48h: lower } });
@@ -240,4 +241,48 @@ test("a new general-fitness account gets the gym or a run, never a ride", () => 
   assert.ok(["gym", "run"].includes(r.options[0].kind), r.options[0].kind);
   const cyclist = rankOptions({ ride: coach("yellow", "endurance"), run: coach("yellow", "endurance"), mainSport: "cycling", sports: [] });
   assert.equal(cyclist.options[0].kind, "ride");
+});
+
+test("late evening: the hour against tonight's bedtime (Petr 2026-11-10, 23:49)", () => {
+  assert.equal(eveningPhase("19:00", "21:10"), null);
+  assert.equal(eveningPhase("20:15", "21:10"), "wind-down");
+  assert.equal(eveningPhase("23:49", "21:10"), "bed");
+  assert.equal(eveningPhase("01:30", "21:10"), "bed", "the middle of the night");
+  assert.equal(eveningPhase("23:49", "00:30"), "wind-down", "a bedtime after midnight");
+  assert.equal(eveningPhase("00:10", "00:30"), "wind-down");
+  assert.equal(eveningPhase("06:30", "21:10"), null, "the morning");
+  assert.equal(eveningPhase("22:30", null), "wind-down", "without a bedtime 23:00");
+  assert.equal(eveningPhase("23:10", null), "bed");
+  assert.equal(eveningPhase("23:50", "15:00"), null, "a day sleeper is left alone");
+});
+
+test("late evening the activity of the day is winding down, past bedtime bed, never an evening walk", () => {
+  const after = evening => rankOptions({ ride: coach("green"), run: coach("green"), mainSport: "cycling", sports: ["ride"], today: ["ride"], done: [{ kind: "ride", minutes: 45, tss: 32 }], evening });
+  const day = after(null).options[0];
+  assert.match(day.detail, /procházka/, "earlier the stretching and the evening walk stay");
+  const wind = after("wind-down");
+  assert.equal(wind.options[0].kind, "rest");
+  assert.equal(wind.options[0].title, "Zklidnění");
+  assert.doesNotMatch(JSON.stringify(wind.options[0]), /procházk/);
+  assert.match(wind.options[0].reason, /^Dnes máš za sebou kolo, 45 min, 32 TSS\. Je pozdě večer/);
+  const bed = withLang("en", () => after("bed"));
+  assert.equal(bed.options[0].title, "Sleep");
+  assert.equal(bed.options[0].detail, "Go to bed now");
+  assert.match(bed.options[0].reason, /It's late, so go to bed now\.$/);
+  assert.equal(bed.options.filter(o => o.best).length, 1);
+  assert.equal(bed.options[0].action, "accept");
+  // Not trained yet: the ride the coach chose gives way too, and its AI workout is not asked for.
+  const fresh = rankOptions({ ride: coach("green"), run: coach("green"), mainSport: "cycling", sports: ["ride"], evening: "bed" });
+  assert.equal(fresh.options[0].kind, "rest");
+  assert.ok(fresh.options.some(o => o.kind === "ride" && !o.best), "the ride stays under Další možnosti");
+  // A sick day keeps its own rest.
+  const sick = rankOptions({ ride: coach("green"), run: coach("green"), athleteStatus: "sick", evening: "bed" });
+  assert.equal(sick.options[0].title, "Odpočinek");
+});
+
+test("the pick route gives the hour and Today's bedtime only in the evening", async () => {
+  const src = (await import("node:fs")).readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const route = src.slice(src.indexOf("if(url.pathname==='/app/api/coach/pick')"), src.indexOf("if(url.pathname==='/app/api/coach/check-in'"));
+  assert.match(route, /hour>=18\|\|hour<4\?/);
+  assert.match(route, /evening:eveningPhase\(clock,bedtime\)/);
 });

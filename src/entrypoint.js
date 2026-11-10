@@ -66,7 +66,7 @@ import { explainWorkout, athleteSteps, athleteMinutes } from "./workout-explanat
 import { libraryBricks } from "./brick-workouts.js";
 import { aiWorkoutPick } from "./ai-workout-pick.js";
 import { composeWorkout, poorFit, fewMatches, composeKey, libraryKind, COMPOSE_VARIANTS } from "./ai-workout-compose.js";
-import { rankOptions, saunaSigns, dayChoice, recentKinds, sportReturns, pickState, savePick, undoSkip, lessKinds, setLess, pickSignature, storedDetails, storeDetails, claimDetails, finishDetails, AI_RETRY_MS, AI_BUDGET_MS, workoutLines, gymLines } from "./coach-pick.js";
+import { rankOptions, eveningPhase, saunaSigns, dayChoice, recentKinds, sportReturns, pickState, savePick, undoSkip, lessKinds, setLess, pickSignature, storedDetails, storeDetails, claimDetails, finishDetails, AI_RETRY_MS, AI_BUDGET_MS, workoutLines, gymLines } from "./coach-pick.js";
 import { activityKindOf } from "./activity-match.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, capabilitiesWithLevel, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
@@ -1503,7 +1503,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // alcohol, Nemoc or an injury in the journal drops the sauna (coach-pick.js saunaSigns).
       const risks=await risking;
       const noSauna=saunaSigns(readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile}))||!!risks.alcohol||!!risks.injury||!!risks.sick;
-      const ranked=rankOptions({ride,run,swim,mainSport:eff.mainSport||'general',mains,allowed,sports:recent.sports,today:recent.today,declines:state.declines,less,planned,done:recent.done,athleteStatus:athlete?.status||'active',noSauna});
+      // Late in the evening only winding down, past tonight's bedtime (as Today shows it) only bed.
+      // Today is built for its bedtime only from 18:00 to 4:00.
+      const clock=localNow().slice(11,16),hour=Number(clock.slice(0,2));
+      const bedtime=hour>=18||hour<4?(()=>{try{return buildToday({date,hour,daily:inputs.daily,health:inputs.health,fitness:inputs.fitness,sleep:{sessions:inputs.health?.sleep||[]},profile:eff,checkin:inputs.checkin}).tonight?.bedtime||null;}catch{return null;}})():null;
+      const ranked=rankOptions({ride,run,swim,mainSport:eff.mainSport||'general',mains,allowed,sports:recent.sports,today:recent.today,declines:state.declines,less,planned,done:recent.done,athleteStatus:athlete?.status||'active',noSauna,evening:eveningPhase(clock,bedtime)});
       // The ready workouts stay while the options do (pickSignature), so a sync
       // that changes nothing asks the AI nothing.
       const signature=pickSignature(ranked);
@@ -2786,7 +2790,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const kept=session.user?.id!=null?recentScreen(session.user.id,path):null;
     const screenData=()=>kept?Promise.resolve(kept):handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():null).catch(()=>null);
     // The screen's data plus what only the coach reads (long-term facts, Training's readiness).
-    const load=()=>Promise.all([screenData(),coachTextExtras(env,ctx,internalAuth,screen).catch(()=>({}))]).then(([data,extra])=>data?{...data,...extra}:data);
+    // Today's text knows the local time, so late in the evening it says to wind down or go to bed (screen-texts.js todayFacts).
+    const load=()=>Promise.all([screenData(),coachTextExtras(env,ctx,internalAuth,screen).catch(()=>({}))]).then(([data,extra])=>data?{...data,...extra,...(screen==='today'?{clock:localNow().slice(11,16)}:{})}:data);
     try{return Response.json({...await screenText(env,{screen,load,later:work=>ctx.waitUntil(work)}),paywall:paywallOn(env)},{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({status:'error',message:error.message},{status:500});}
   }

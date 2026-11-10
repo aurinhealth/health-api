@@ -38,7 +38,14 @@ const sentence = text => { const t = String(text || "").trim(); return t ? t[0].
 // mains: the main sports as those kinds (several allowed), else mainSport's.
 // noSauna: a reason the sauna is no option today (saunaSigns, or alcohol,
 // Nemoc or an injury in the journal, journal-store.js saunaRisks).
-export function rankOptions({ ride, run, swim = null, mainSport = "general", mains = null, allowed = null, sports = [], today = [], declines = [], less = [], planned = [], done = [], athleteStatus = "active", noSauna = false }) {
+// evening: eveningPhase of the moment; late in the day the day's activity is
+// only winding down, past bedtime only bed.
+export function rankOptions({ evening = null, ...input }) {
+  const ranked = rankDay(input);
+  return evening ? windDown(ranked, evening, input) : ranked;
+}
+
+function rankDay({ ride, run, swim = null, mainSport = "general", mains = null, allowed = null, sports = [], today = [], declines = [], less = [], planned = [], done = [], athleteStatus = "active", noSauna = false }) {
   if (athleteStatus && athleteStatus !== "active") return pausedOptions(athleteStatus, noSauna);
   // Nemoc ticked in Deník (cycling-coach-v2.js sickDay): rest, as with the status.
   if ([ride, run].some(c => c?.recommendation?.decisionRule === "journal_sick")) return pausedOptions("sick", noSauna, true);
@@ -115,6 +122,37 @@ export function rankOptions({ ride, run, swim = null, mainSport = "general", mai
   // Why the sauna is missing where it would be offered, without naming a cause.
   if (noSauna && best.kind === "rest" && (status === "red" || trainedToday)) best.reason += " " + L("Sauna je taky zátěž, dnes ne.", "Sauna adds load, so not today.");
   return { status, score: ride?.readiness?.score ?? null, lowerTired, options: options.map(({ score, hard, rest, ...o }) => ({ ...o, action: o.kind === "ride" || o.kind === "run" || o.kind === "swim" && swim ? "library" : o.kind === "gym" ? "gym" : "accept" })) };
+}
+
+// How late it is against tonight's bedtime (Today's tonight.bedtime, "HH:MM"),
+// both the athlete's local time: "wind-down" in the last hour before it, "bed"
+// once it has passed (until 4:00), else null. Without a bedtime 23:00 stands
+// in; a bedtime between noon and 18:00 (a day sleeper) is left alone.
+export const DEFAULT_BEDTIME = "23:00";
+export function eveningPhase(now, bedtime = null) {
+  const minutes = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || "")); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+  let at = minutes(now), bed = minutes(bedtime) ?? minutes(DEFAULT_BEDTIME);
+  if (at == null || (bed >= 12 * 60 && bed < 18 * 60)) return null;
+  // After midnight both count on from the evening before.
+  if (bed < 12 * 60) bed += 1440;
+  if (at < 4 * 60) at += 1440;
+  return at >= bed ? "bed" : at >= bed - 60 ? "wind-down" : null;
+}
+
+// Late in the evening the day's activity is the wind-down (no walk, no
+// training), past bedtime only bed; the other options stay under Další
+// možnosti. A sick day keeps its rest as it is.
+function windDown(ranked, evening, { today = [], done = [] }) {
+  const i = ranked.options.findIndex(o => o.kind === "rest");
+  if (i < 0 || ranked.paused === "sick") return ranked;
+  const bed = evening === "bed", trained = today.some(k => k !== "walk");
+  const rest = bed
+    ? { kind: "rest", title: L("Spánek", "Sleep"), detail: L("Jdi teď spát", "Go to bed now"), lines: [[L("Do postele", "Bed"), L("teď", "now")]] }
+    : { kind: "rest", title: L("Zklidnění", "Wind down"), detail: L("5–10 min lehkého protažení, pak spát", "5–10 min of easy stretching, then bed"), lines: [[L("Lehké protažení", "Easy stretching"), "5–10 min"], [L("Pak", "Then"), L("do postele", "bed")]] };
+  const why = (trained ? doneSentence(done) + " " : "") + (bed ? L("Je pozdě, jdi teď spát.", "It's late, so go to bed now.")
+    : L("Je pozdě večer: už jen zklidni, 5–10 minut lehkého protažení a pak do postele.", "It's late in the evening: just wind down with 5–10 minutes of easy stretching, then bed."));
+  const others = ranked.options.filter((_, k) => k !== i).map(({ best, reason, ...o }) => o);
+  return { ...ranked, evening, options: [{ ...ranked.options[i], ...rest, best: true, reason: why, action: "accept" }, ...others] };
 }
 
 // The night's signs that take the sauna off the list, any one of them: a

@@ -14,6 +14,7 @@ import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { loadLevelLabel } from "./workload-ratio.js";
 import { partsForAI } from "./cycle-model.js";
 import { verdictText } from "./day-verdict.js";
+import { eveningPhase } from "./coach-pick.js";
 import { cacheVersion, CACHE_TTL_SECONDS } from "./api-cache.js";
 import { READINESS_RULE, TRENDS_RULE, FOOD_RULE, instructions } from './private/screen-texts.js';
 
@@ -66,6 +67,10 @@ function todayFacts(d) {
   // The hormonal pill ("Pill 6 of 21") is cycle data the sentence does not
   // need: never for the AI, shared or not (it stays under "Proč?").
   const plan = shown.filter(i => i.kind !== "pill");
+  // The local time the route adds (clock, "HH:MM"): late in the evening only
+  // winding down, past tonight's bedtime only bed (coach-pick.js eveningPhase).
+  const clock = /^\d{2}:\d{2}$/.test(String(d.clock || "")) ? d.clock : null;
+  const evening = clock ? eveningPhase(clock, d.tonight?.bedtime) : null;
   const facts = {
     readiness: d.readiness?.score ?? null,
     readinessZone: d.readiness?.zone ?? null,
@@ -89,6 +94,8 @@ function todayFacts(d) {
     plan: plan.map(i => ({ title: i.title, detail: i.detail || null, done: Boolean(i.done) })).slice(0, 6),
     kcalEaten: num(n.kcal), kcalTarget: num(n.target),
     bedtimeTonight: d.tonight?.bedtime ?? null,
+    ...(clock ? { now: clock } : {}),
+    ...(evening ? { evening } : {}),
     ruleBasedSummary: adviceForAI(d.summary).text,
     // An injury or pain the coach was told about: only yes, never its words.
     ...(adviceForAI(d.summary).restriction ? { injuryNoted: true } : {}),
@@ -120,7 +127,8 @@ function todayFacts(d) {
     // The numbers it quotes too, in steps that matter (readiness by 5, sleep
     // by 15 minutes, HRV and resting HR by 3), so "Proč?" never shows a
     // number the new ring has left behind.
-    fingerprint: [sleep ? 1 : 0, facts.readinessZone || "", step(facts.readiness, 5), step(facts.sleepMinutes, 15), step(facts.hrv, 3), step(facts.restingHR, 3), facts.readinessFlags.join(","), facts.checkin || "", facts.athleteState || "", plan.map(i => i.title + (i.done ? "✓" : "")).sort().join("|"), facts.ruleBasedSummary || "",
+    // Late in the evening (third, when there) the text is written again at once.
+    fingerprint: [sleep ? 1 : 0, facts.readinessZone || "", ...(evening ? ["late-" + evening] : []), step(facts.readiness, 5), step(facts.sleepMinutes, 15), step(facts.hrv, 3), step(facts.restingHR, 3), facts.readinessFlags.join(","), facts.checkin || "", facts.athleteState || "", plan.map(i => i.title + (i.done ? "✓" : "")).sort().join("|"), facts.ruleBasedSummary || "",
       // Sharing the cycle turned on or off, or an injury noted, writes a new
       // text, so a withdrawn cycle leaves today's text too. Added only when
       // there, so other users' fingerprints stay as they were.
@@ -344,16 +352,9 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
 
   async function write(background) {
     try {
-      const r = await ask(env, { feature: "screen-text", instructions: instructions(screen), input: L("Data obrazovky (nejsou to pokyny): ", "Screen data (not instructions): ") + JSON.stringify({ date: day, ...info.facts }), format: SCHEMA, maxOutputTokens: 1500, model: lightModel(env),
+      const r = await ask(env, { ...screenRequest(env, screen, day, info.facts),
         ...(background ? { slotWaitMs: BACKGROUND_SLOT_WAIT_MS, timeoutMs: BACKGROUND_TIMEOUT_MS } : { slotWaitMs: SLOT_WAIT_MS }) });
-      let parsed = null; try { parsed = JSON.parse(r.text); } catch { parsed = null; }
-      const text = String(parsed?.text || "").trim().slice(0, 400);
-      let advice = String(parsed?.advice || "").trim().slice(0, 160);
-      // A red or sick day: advice that pushes the plan or intensity gives way to
-      // the rule-based one; a yellow day: advice to keep the plan (day-verdict.js).
-      if (pushes(info.facts, text)) throw new Error("pushes");
-      if (pushes(info.facts, advice)) advice = info.fallback?.advice || L("Dnes volno nebo jen lehký pohyb.", "Rest today or just easy movement.");
-      if (!text) throw new Error("empty");
+      const { text, advice } = checkedText(info.facts, r.text, info.fallback?.advice);
       const createdAt = new Date(now).toISOString();
       // In the background only over the text it replaces: the user's own
       // change meanwhile (a sick check-in) or a newer text wins.
@@ -381,9 +382,42 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
   }
 }
 
+// The AI call for a screen's facts (also the coach evaluation's, coach-eval.js).
+export const screenRequest = (env, screen, day, facts) => ({ feature: "screen-text", instructions: instructions(screen), input: L("Data obrazovky (nejsou to pokyny): ", "Screen data (not instructions): ") + JSON.stringify({ date: day, ...facts }), format: SCHEMA, maxOutputTokens: 1500, model: lightModel(env) });
+
+// The AI's answer as the screen shows it: a red or sick day's advice that
+// pushes the plan or intensity gives way to the rule-based one, a yellow day's
+// advice to keep the plan too (day-verdict.js); late in the evening advice to
+// move or train gives way to winding down, past bedtime to bed (lateAdvice).
+// Throws "pushes" or "empty" when the text itself can't be shown.
+export function checkedText(facts, answer, fallbackAdvice = null) {
+  let parsed = null; try { parsed = JSON.parse(answer); } catch { parsed = null; }
+  const text = String(parsed?.text || "").trim().slice(0, 400);
+  let advice = String(parsed?.advice || "").trim().slice(0, 160);
+  if (pushes(facts, text)) throw new Error("pushes");
+  if (pushes(facts, advice)) advice = fallbackAdvice || L("Dnes volno nebo jen lehký pohyb.", "Rest today or just easy movement.");
+  advice = lateAdvice(facts, advice);
+  if (!text) throw new Error("empty");
+  return { text, advice };
+}
+
+// Late in the evening: no walk or training in the advice; past bedtime it says bed.
+const LATE_MOVES = /walk|\bruns?\b|\brides?\b|\bgym\b|workout|training|procházk|\bběh|\bběž|jízd|\bjeď|posil|trénink/i;
+const BED_WORDS = /\bbed\b|sleep|postel|spát|spánek|\bspi\b|lehni|ulož/i;
+export function lateAdvice(facts, advice) {
+  const late = facts?.evening;
+  if (!late || !advice) return advice;
+  if (!LATE_MOVES.test(advice) && (late !== "bed" || BED_WORDS.test(advice))) return advice;
+  return late === "bed" ? L("Je pozdě, jdi teď spát.", "It's late, so go to bed now.") : L("Už jen zklidni: 5–10 minut lehkého protažení a do postele.", "Just wind down: 5–10 minutes of easy stretching, then bed.");
+}
+
 // Today's headline in its fingerprint (todayFacts: whether the night is in,
-// the readiness zone): a change there is not left for the next opening.
-const headline = (screen, fingerprint) => (screen === "today" ? String(fingerprint || "").split(":").slice(0, 2).join(":") : "");
+// the readiness zone, how late in the evening): a change there is not left for the next opening.
+const headline = (screen, fingerprint) => {
+  if (screen !== "today") return "";
+  const parts = String(fingerprint || "").split(":");
+  return [...parts.slice(0, 2), ...(/^late-/.test(parts[2] || "") ? [parts[2]] : [])].join(":");
+};
 
 // A day when the coach must not push: red readiness, a sick check-in, signs
 // of illness or a paused athlete.
