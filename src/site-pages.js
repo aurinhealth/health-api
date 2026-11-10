@@ -636,7 +636,7 @@ addEventListener('keydown',function(e){if(!card.classList.contains('on'))return;
 
 // The share image (link previews on X, Facebook, LinkedIn, Slack, iMessage). The networks keep an image
 // for days by its URL, so ?v= goes up whenever og-en.jpg is rendered again (a JPEG: a tenth of the PNG's size).
-const SHARE_IMAGE = '/site/og-en.jpg?v=12';
+const SHARE_IMAGE = '/site/og-en.jpg?v=13';
 const SHARE_IMAGE_ALT = 'Aurin: A coach that knows how you slept. The Today screen with readiness 78.';
 
 function sitePage({title, description, lang, origin, path, body, czech=false, index=true, jsonLd=null, status=200}) {
