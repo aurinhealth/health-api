@@ -152,6 +152,17 @@ test("an address another account uses answers as any other; it gets a notice onc
   assert.equal(JSON.stringify(env.DB.sqlite.prepare("SELECT key FROM request_limits").all()).includes("other@example.com"), false, "no address stored");
 });
 
+test("an ask refused within the minute does not use up the taken address's notice", async () => {
+  const { env, sent } = await setup();
+  const user = await member(env);
+  await member(env, "other@example.com");
+  const t0 = Date.parse("2026-10-07T08:00:00Z"), ask = (email, time) => at(time, () => change(env, user, "/app/api/account/email/start", { email }));
+  assert.equal((await ask("free@example.com", t0)).status, 200);
+  assert.equal((await ask("other@example.com", t0 + 1000)).status, 429, "as for any address within the minute");
+  assert.equal((await ask("other@example.com", t0 + 61_000)).status, 200);
+  assert.match(sent.at(-1).subject, /už má účet Aurin/);
+});
+
 test("the change is refused for the same or the owner's address, and from another site", async () => {
   const { env } = await setup();
   const user = await member(env);

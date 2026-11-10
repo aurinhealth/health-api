@@ -319,19 +319,20 @@ export async function handleEmailChange(request, env, url, session, ctx, stepUp 
       return json({ message: L("Příliš mnoho žádostí o změnu e-mailu. Zkus to později.", "Too many email change requests. Try again later.") }, 429);
     }
     const code = randomCode(), lang = requestLanguage(request);
-    // Another account has the address (security review 2026-11-09, F5): the same claim and answers as for
-    // any address, but instead of the code it gets a notice in its own account's language, at most one a
-    // day. Any address gets at most MAX_SENDS_PER_DAY mails a day from changes, whichever accounts ask.
-    // Keyed hashes, so no address is stored.
-    const keyOf = async name => name + ":" + (await signText(name + ":" + email, sessionSecret(env))).slice(0, 32);
-    const holder = await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first();
-    let message = null;
-    if (await allowRequest(db, await keyOf("email-change-to"), { day: MAX_SENDS_PER_DAY }, time)) {
-      if (!holder) message = emailChangeCodeEmail(lang, code);
-      else if (await allowRequest(db, await keyOf("email-taken"), { day: 1 }, time)) message = emailTakenEmail(await storedLanguage(db, holder.id));
-    }
-    const sent = await claimAndSend(db, env, row, code, purpose, message, time, { change: true, to: email });
+    // Another account has the address (security review 2026-11-09, F5): the same claim, answers and
+    // timing as for any address (the mail goes out after the answer), but instead of the code it gets a
+    // notice in its own account's language, at most one a day. Any address gets at most
+    // MAX_SENDS_PER_DAY mails a day from changes, whichever accounts ask. Keyed hashes, so no address is stored.
+    const sent = await claimAndSend(db, env, row, code, purpose, null, time, { change: true, to: email });
     if (sent !== "sent") return codeRefusal(sent);
+    const keyOf = async name => name + ":" + (await signText(name + ":" + email, sessionSecret(env))).slice(0, 32);
+    const mail = (async () => {
+      if (!(await allowRequest(db, await keyOf("email-change-to"), { day: MAX_SENDS_PER_DAY }, time))) return;
+      const holder = await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first();
+      if (holder && !(await allowRequest(db, await keyOf("email-taken"), { day: 1 }, time))) return;
+      await sendEmail(env, { to: email, ...(holder ? emailTakenEmail(await storedLanguage(db, holder.id)) : emailChangeCodeEmail(lang, code)) });
+    })().catch(error => console.error("E-mail change mail failed", error?.code || error?.message));
+    if (ctx?.waitUntil) ctx.waitUntil(mail); else await mail;
     return json({ status: "ok" });
   }
   const refused = await useCode(db, env, row, body?.code, purpose);
