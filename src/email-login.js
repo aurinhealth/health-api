@@ -20,7 +20,7 @@
 // (EMAIL_CHANGE_CODES_PER_DAY, 100), so they never take from the codes for signing in, and one
 // account asks for at most 2 a minute, 5 an hour and 10 a day, one caller for 5, 20 and 30.
 import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie, knownDevice, knownDeviceCookie, heldKnownDevice, keepOnlyPushToken } from "./dashboard-auth.js";
-import { allowClient, allowRequest, callerNetwork } from "./ip-rate-limit.js";
+import { allowClient, allowRequest, releaseRequest, callerNetwork } from "./ip-rate-limit.js";
 import { normalizeEmail, plainEmail, emailCodeAccess, signInEmailUser, changeUserEmail, SignupLimited, ownerEmail } from "./tenancy.js";
 import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail, stepUpCodeEmail, ownerNoticeEmail } from "./email-sender.js";
 import { siteLang } from "./site-pages.js";
@@ -206,15 +206,15 @@ async function warnAtHalf(db, env, budget, limit, now) {
   try {
     const row = await db.prepare("SELECT day, day_count FROM request_limits WHERE key = ?").bind(budget === "open" ? "email-codes:open:day" : "email-codes:day").first();
     const used = row?.day === today(now) ? Number(row.day_count) || 0 : 0;
-    if (used * 2 < limit || !(await allowRequest(db, "email-codes:warned", { day: 1 }, now))) return;
     const to = ownerEmail(env);
-    if (!to) return;
+    if (used * 2 < limit || !to || !(await allowRequest(db, "email-codes:warned", { day: 1 }, now))) return;
     const which = budget === "open" ? "pro nové adresy" : "pro přihlášení";
     console.warn(`Half of the day's sign-in codes (${budget}) are used: ${used} of ${limit}`);
+    // A notice that did not go out gives its slot back, so the next code tries again.
     await sendEmail(env, { to, ...ownerNoticeEmail(`Aurin: dnes je pryč polovina kódů ${which}`, [
       `Dnes (UTC) odešlo ${used} z ${limit} kódů ${which}. Když dojdou, registrace e-mailem do půlnoci UTC nepůjde (Apple a Google fungují dál).`,
       "Když to není nárůst skutečných uživatelů, můžou to být boti: v Cloudflare se podívej do Security → Events na /auth/email/start. Rozpočet zvedneš proměnnou EMAIL_CODES_PER_DAY ve Workeru."
-    ]) });
+    ]) }).catch(async error => { await releaseRequest(db, "email-codes:warned", now); throw error; });
   } catch (error) {
     console.error("Half-budget warning failed", error?.code || error?.message);
   }

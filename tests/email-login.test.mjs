@@ -274,6 +274,32 @@ test("at half the day's codes for new addresses the owner gets one notice that d
   for (let i = 4; i < 8; i++) await quietly(() => sendCode(env, "n" + i + "@example.com", "cs", { now }));
   assert.equal(halfWarnings.length, 1, "once a day");
   assert.equal(sent.length, 8);
+});
+
+test("a half-budget notice that fails to go out is tried again with the next code", async () => {
+  const { env } = await setup({ OPEN_SIGNUP: "true", EMAIL_CODES_PER_DAY: "10" });
+  halfWarnings.length = 0;
+  const send = env.EMAIL.send;
+  let fail = true;
+  env.EMAIL.send = async message => { if (fail && /polovina kódů/.test(message.subject)) throw new Error("down"); return send(message); };
+  const now = Date.parse("2026-10-07T08:00:00Z");
+  const errors = console.error;
+  console.error = () => {};
+  try { for (let i = 0; i < 4; i++) assert.equal(await quietly(() => sendCode(env, "n" + i + "@example.com", "cs", { now })), true, "the code goes out anyway"); }
+  finally { console.error = errors; }
+  assert.equal(halfWarnings.length, 0);
+  fail = false;
+  await quietly(() => sendCode(env, "n4@example.com", "cs", { now }));
+  assert.equal(halfWarnings.length, 1);
+});
+
+test("the half-budget notice starts again the next day", async () => {
+  const { env, sent } = await setup({ OPEN_SIGNUP: "true", EMAIL_CODES_PER_DAY: "10" });
+  halfWarnings.length = 0;
+  const now = Date.parse("2026-10-07T08:00:00Z");
+  for (let i = 0; i < 8; i++) await quietly(() => sendCode(env, "n" + i + "@example.com", "cs", { now }));
+  assert.equal(halfWarnings.length, 1, "once a day");
+  assert.equal(sent.length, 8);
   await quietly(() => sendCode(env, "x@example.com", "cs", { now: Date.parse("2026-10-08T08:00:00Z") }));
   assert.equal(halfWarnings.length, 1, "a new day starts from nothing");
 });
