@@ -65,7 +65,7 @@ struct SetupSportPage: View {
         VStack(alignment: .leading, spacing: 10) {
             SetupPageTitle(title: "Jaké sporty děláš?",
                            subtitle: "Zaškrtni všechny, které děláš, a u těch, na které trénuješ nejvíc, klepni na Hlavní. Kouč navrhuje jen tyhle.")
-            SportsPicker(choice: $focus.sports)
+            SportsPicker(choice: $focus.sports, raceNext: true)
             if focus.sports.swims {
                 SwimLevelGroup(swims100: $focus.swims100).padding(.top, 6)
             }

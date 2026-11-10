@@ -39,6 +39,8 @@ struct SportsChoice: Equatable {
         if kinds.contains(kind) {
             kinds.removeAll { $0 == kind }
             mains.removeAll { $0 == kind }
+            // One sport left: it is the main one (no Main chip with a single sport).
+            if kinds.count == 1 { mains = kinds }
         } else {
             if kinds.isEmpty { mains = [kind] }
             kinds = Self.ordered(kinds + [kind])
@@ -85,18 +87,29 @@ struct SportsChoice: Equatable {
 /// Settings → Goals show the same rows.
 struct SportsPicker: View {
     @Binding var choice: SportsChoice
+    /// The first-run setup: the race comes on the next page.
+    var raceNext = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(SportsChoice.all, id: \.0) { item in
                 row(item.0)
             }
-            Text("Bez hlavního sportu je to obecná kondice. Hlavní kolo, běh i plavání je příprava na triatlon. Závod (duatlon, triatlon, maraton) nastavíš v cíli.")
+            // Main only means something with two sports or more (onboarding review point 13).
+            if let footer {
+                Text(footer)
                 .font(Typo.caption).foregroundStyle(Palette.muted)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
+            }
         }
         .sensoryFeedback(.selection, trigger: choice)
+    }
+
+    private var footer: String? {
+        let lines = [choice.kinds.count >= 2 ? "Hlavní sport je to, na co trénuješ nejvíc." : nil, raceNext ? "Závod přidáš v dalším kroku." : nil]
+        let text = lines.compactMap { $0 }.map(L10n.tr).joined(separator: " ")
+        return text.isEmpty ? nil : text
     }
 
     private func row(_ kind: String) -> some View {
@@ -118,26 +131,28 @@ struct SportsPicker: View {
             .accessibilityLabel(SportsChoice.name(kind))
             .accessibilityAddTraits(on ? .isSelected : [])
 
-            Button { withAnimation(.snappy) { choice.toggleMain(kind) } } label: {
-                HStack(spacing: 4) {
-                    if main { Image(systemName: "star.fill").scaledFont(11, weight: .bold) }
-                    Text("Hlavní").font(Typo.small.weight(.semibold))
+            if choice.kinds.count >= 2 {
+                Button { withAnimation(.snappy) { choice.toggleMain(kind) } } label: {
+                    HStack(spacing: 4) {
+                        if main { Image(systemName: "star.fill").scaledFont(11, weight: .bold) }
+                        Text("Hlavní").font(Typo.small.weight(.semibold))
+                    }
+                    .foregroundStyle(main ? Palette.onAccent : Palette.faint)
+                    .padding(.horizontal, 12).frame(height: 32)
+                    .background { Capsule().fill(main ? Palette.green : .clear) }
+                    .overlay { Capsule().stroke(main ? .clear : Palette.hairline, lineWidth: 1.5) }
+                    .tapTarget(width: 60, height: 32)
                 }
-                .foregroundStyle(main ? Palette.onAccent : Palette.faint)
-                .padding(.horizontal, 12).frame(height: 32)
-                .background { Capsule().fill(main ? Palette.green : .clear) }
-                .overlay { Capsule().stroke(main ? .clear : Palette.hairline, lineWidth: 1.5) }
-                .contentShape(Capsule())
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.f("Hlavní sport: %@", SportsChoice.name(kind)))
+                .accessibilityAddTraits(main ? .isSelected : [])
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L10n.f("Hlavní sport: %@", SportsChoice.name(kind)))
-            .accessibilityAddTraits(main ? .isSelected : [])
 
             Button { withAnimation(.snappy) { choice.toggle(kind) } } label: {
                 Image(systemName: on ? "checkmark.circle.fill" : "circle")
                     .scaledFont(24).foregroundStyle(on ? Palette.green : Palette.faint)
                     .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
+                    .tapTarget(width: 32, height: 32)
             }
             .buttonStyle(.plain)
             .accessibilityHidden(true)

@@ -3853,7 +3853,6 @@
 /* Sports to suggest: the sports picker, Settings → Goals → Sports, ⋯ on Activity of the day, the coach chat */
 "Jaké sporty děláš?" = "Which sports do you do?";
 "Zaškrtni všechny, které děláš, a u těch, na které trénuješ nejvíc, klepni na Hlavní. Kouč navrhuje jen tyhle." = "Tick all you do and tap Main on what you train for most. The coach only suggests these.";
-"Bez hlavního sportu je to obecná kondice. Hlavní kolo, běh i plavání je příprava na triatlon. Závod (duatlon, triatlon, maraton) nastavíš v cíli." = "No Main = general fitness. Main on Ride, Run and Swim = triathlon training. A race (duathlon, triathlon, marathon) goes in your goal.";
 "Hlavní sport: %@" = "Main sport: %@";
 "Sporty k navrhování" = "Sports to suggest";
 "Kouč navrhuje" = "The coach suggests";
@@ -4183,3 +4182,6 @@
 "Podle cíle Aurin nastaví trénink i jídlo. Změníš ho kdykoli." = "Aurin sets your training and food by your goal. You can change it any time.";
 "Pošleme ti šestimístný kód, žádné heslo." = "We'll send a 6-digit code. No password.";
 "Níže je nepovinný AI kouč" = "Optional AI coach below";
+"Hlavní sport je to, na co trénuješ nejvíc." = "Your main sport is the one you train for most.";
+"Závod přidáš v dalším kroku." = "You add a race in the next step.";
+"Posuň kolečko na svůj rok, nebo ho klepnutím potvrď." = "Turn the wheel to your year, or tap it to confirm.";

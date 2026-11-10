@@ -307,7 +307,7 @@ struct PaywallView: View {
     private func topBar(back: Bool) -> some View {
         HStack {
             if back {
-                roundButton("chevron.left", label: L10n.tr("Zpět")) { go(1) }
+                BackButton(tint: Night.ink, fill: Night.card) { go(1) }
             }
             Spacer()
             roundButton("xmark", label: L10n.tr("Zavřít"), action: close)
@@ -319,6 +319,7 @@ struct PaywallView: View {
         Button(action: action) {
             Image(systemName: symbol).scaledFont(14, weight: .semibold, cap: .denseCap).foregroundStyle(Night.ink)
                 .frame(width: 36, height: 36).background(Night.card, in: Circle())
+                .tapTarget(width: 36, height: 36)
         }
         .accessibilityLabel(label)
     }

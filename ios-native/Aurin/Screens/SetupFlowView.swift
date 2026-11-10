@@ -82,11 +82,11 @@ struct SetupFlowView: View {
                     // Both sides keep their width (the hidden button and label), so the
                     // steps between them stay put from page to page.
                     ZStack {
-                        CircleButton(systemImage: "chevron.left", label: "Zpět").hidden()
+                        BackButton().hidden()
                         // No way back to a consent already given, or from the notifications
                         // to a profile already saved.
                         if index > 0 && pages[index - 1] != .consent && page != .notifications {
-                            CircleButton(systemImage: "chevron.left", label: "Zpět") { withAnimation { index -= 1 } }
+                            BackButton { withAnimation { index -= 1 } }
                         }
                     }
                     // How far along: shown once the page count is known (whether iOS asked
@@ -101,11 +101,11 @@ struct SetupFlowView: View {
                         // Without the consent the app cannot be used: the way out is signing out,
                         // or back to the paused screen when health data was paused (HealthPausedView).
                         if page == .consent && model.resumingHealth {
-                            Button("Zrušit") { model.resumingHealth = false; model.needsSetup = false }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                            Button { model.resumingHealth = false; model.needsSetup = false } label: { Text("Zrušit").tapTarget(width: 44, height: 22) }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                         } else if page == .consent {
-                            Button("Odhlásit") { Task { await model.logout() } }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                            Button { Task { await model.logout() } } label: { Text("Odhlásit").tapTarget(width: 44, height: 22) }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                         } else if skippable {
-                            Button("Přeskočit") { Task { await skip() } }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                            Button { Task { await skip() } } label: { Text("Přeskočit").tapTarget(width: 44, height: 22) }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                                 .disabled(saving)
                         }
                     }
@@ -446,11 +446,11 @@ struct SetupFlowView: View {
     }
 
     /// "Narození": the year on a wheel (no keyboard, so no year that cannot be),
-    /// open under the row after a tap.
+    /// open under the row after a tap. The year is written only when the wheel
+    /// moves or is tapped, never by opening it (onboarding review point 22).
     @ViewBuilder
     private var yearRow: some View {
         Button {
-            if birthYear.isEmpty { birthYear = String(Self.currentYear - 30) }
             withAnimation(.easeInOut(duration: 0.25)) { yearWheel.toggle() }
         } label: {
             HStack(spacing: 6) {
@@ -475,6 +475,15 @@ struct SetupFlowView: View {
             .pickerStyle(.wheel)
             .frame(height: 150)
             .clipped()
+            .opacity(birthYear.isEmpty ? 0.5 : 1)
+            // A tap keeps the year in the middle, so nobody has to spin away and back.
+            .simultaneousGesture(TapGesture().onEnded { if birthYear.isEmpty { birthYear = String(Self.currentYear - 30) } })
+            if birthYear.isEmpty {
+                Text("Posuň kolečko na svůj rok, nebo ho klepnutím potvrď.")
+                    .font(Typo.small).foregroundStyle(Palette.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16).padding(.bottom, 12)
+            }
         }
     }
 

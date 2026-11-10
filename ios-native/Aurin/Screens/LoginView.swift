@@ -22,11 +22,7 @@ struct LoginView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
                     if page == Self.signIn {
-                        Button { withAnimation { page = Self.signIn - 1 } } label: {
-                            Image(systemName: "chevron.left").scaledFont(17, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
-                                .frame(width: 40, height: 40).background(Palette.card.opacity(0.7), in: Circle())
-                        }
-                        .accessibilityLabel(L10n.tr("Zpět"))
+                        BackButton { withAnimation { page = Self.signIn - 1 } }
                     }
                     if ServerChoice.current == .staging {
                         // Nastavení → Testování → Server: this sign-in is for the test server.
