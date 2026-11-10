@@ -639,7 +639,9 @@ struct SetupFlowView: View {
         async let consent = try? api.healthConsentNeeded()
         async let connections = try? api.connections()
         let s = await status
-        let consentNeeded = await consent ?? false
+        // Unknown (the server did not answer): the consent page first, as the server
+        // takes no health data from an account without it (health_consent_required).
+        let consentNeeded = await consent ?? true
         consentFirst = consentNeeded
         if let s {
             consentOnly = consentNeeded && s.completed == true

@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb, findUser, PERSONAL_TABLES } from "../src/tenancy.js";
 import { consentStatus, saveConsent } from "../src/consent.js";
-import { pauseHealthData, resumeHealth, resumeDone, resumeFailed, finishHealthPauses, pausedRefusal, healthPaused, KEPT_TABLES, PAUSE_DELETE_ORDER, LAST_PASS_MINUTES } from "../src/health-pause.js";
+import { pauseHealthData, resumeHealth, resumeDone, resumeFailed, finishHealthPauses, pausedRefusal, consentRefusal, healthPaused, KEPT_TABLES, PAUSE_DELETE_ORDER, LAST_PASS_MINUTES } from "../src/health-pause.js";
 import { serverSource } from "./helpers/server-source.mjs";
 
 const sql = name => readFileSync(new URL("../" + name, import.meta.url), "utf8");
@@ -80,6 +80,30 @@ test("the session knows a paused account; a paused account reaches only the acco
     assert.equal(response?.status, 403, path);
     assert.equal((await response.json()).status, "health_paused");
   }
+});
+
+test("an account without the health consent sends no health data: writes and connecting wait for the consent, reading stays open", async () => {
+  const db = database();
+  db.sqlite.prepare("INSERT INTO users (id, email) VALUES (5, 'new@example.com')").run();
+  assert.equal((await findUser(db, 5, {})).healthConsent, false, "never given");
+  assert.equal((await findUser(db, 3, {})).healthConsent, true, "given");
+  await pauseHealthData(envOf(db), user);
+  assert.deepEqual([(await findUser(db, 3, {})).healthConsent, (await findUser(db, 3, {})).healthPaused], [false, true], "paused: the pause gate answers");
+  db.sqlite.prepare("UPDATE user_consents SET version = '2020-01-01' WHERE user_id = 4 AND kind = 'health'").run();
+  assert.equal((await findUser(db, 4, {})).healthConsent, true, "an older version still counts until the app asks again");
+  for (const [method, path] of [["GET", "/app/api/today"], ["GET", "/app/api/connections"], ["GET", "/app/api/onboarding"], ["POST", "/app/api/consent"], ["POST", "/app/api/me/apple"], ["POST", "/app/api/account/delete"], ["POST", "/app/api/subscription/transaction"], ["PUT", "/app/api/app-settings"], ["POST", "/app/api/push/token"], ["POST", "/app/api/passkeys"], ["POST", "/app/api/support/report"], ["DELETE", "/app/api/connections"], ["POST", "/auth/email/start"], ["GET", "/privacy"]]) assert.equal(consentRefusal(method, path), null, `${method} ${path}`);
+  for (const [method, path] of [["POST", "/app/api/health/apple"], ["POST", "/app/api/food/log"], ["POST", "/app/api/weight"], ["POST", "/app/api/morning-checkin"], ["POST", "/app/api/gym"], ["POST", "/app/api/onboarding"], ["POST", "/app/api/profile"], ["POST", "/app/api/connect/start"], ["GET", "/oauth/google/start"], ["GET", "/oauth/whoop/callback"], ["GET", "/auth/app/connect"]]) {
+    const response = consentRefusal(method, path);
+    assert.equal(response?.status, 403, `${method} ${path}`);
+    assert.equal((await response.json()).status, "health_consent_required");
+  }
+});
+
+test("the server refuses health data without the consent, after the pause gate and before connecting a service", () => {
+  const source = serverSource();
+  assert.match(source, /user\.healthConsent === false && !user\.healthPaused && !user\.isOwner\) \{ const refused = consentRefusal\(request\.method, url\.pathname\)/);
+  assert.ok(source.indexOf("pausedRefusal(request.method") < source.indexOf("consentRefusal(request.method"));
+  assert.ok(source.indexOf("consentRefusal(request.method") < source.indexOf("handleGoogleOAuth(request"), "before connecting a service");
 });
 
 const late = db => db.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, value_numeric, payload_json) VALUES (3, 'google', 'steps', 'late', '2026-10-01T08:00:00Z', 10, '{}')").run();

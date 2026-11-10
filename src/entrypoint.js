@@ -171,7 +171,7 @@ import { heatAdvice } from "./heat-advice.js";
 import { ownFitness, watchOnlyFitness, fitnessDays } from "./own-fitness.js";
 import { handleStrengthAutomation, handleAdminApi } from "./routes-admin.js";
 import { handleAccountApi } from "./routes-account.js";
-import { pausedRefusal, finishHealthPauses } from "./health-pause.js";
+import { pausedRefusal, consentRefusal, finishHealthPauses } from "./health-pause.js";
 import { firstImport } from "./first-imports.js";
 import { handleSyncApi } from "./routes-sync.js";
 import { handleGymToolsApi, handleGymPlanApi } from "./routes-gym.js";
@@ -605,6 +605,8 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (ownerOnly) return ownerOnly;
     // Health data paused (health-pause.js): only the account, consent, Pro and settings answer.
     if (signedIn && user.healthPaused && !user.isOwner) { const paused = pausedRefusal(request.method, url.pathname); if (paused) return paused; }
+    // No consent to health data yet: no health data comes in (health-pause.js consentRefusal).
+    if (signedIn && user.healthConsent === false && !user.healthPaused && !user.isOwner) { const refused = consentRefusal(request.method, url.pathname); if (refused) return refused; }
     if(signedIn&&needsAIAccess(request.method,url.pathname)){
       try{await assertAIAccess(env);}catch(error){return error.consent?Response.json({status:'ai_consent_required',message:error.message},{status:403}):Response.json({status:'subscription_required',message:error.message},{status:402});}
     }

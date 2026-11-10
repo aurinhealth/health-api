@@ -25,6 +25,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                 if let model = AppModel.live, model.phase == .signedIn { model.notePaused(true) } else { AppleHealth.shared.pauseForHealthData() }
             }
         }
+        // No health consent yet (403 health_consent_required): Apple Health sends the
+        // same days again later; the app asks for the consent (checkSetup).
+        client.onHealthConsentRequired = {
+            Task { @MainActor in
+                if let model = AppModel.live, model.phase == .signedIn, !model.needsSetup { await model.checkSetup() }
+            }
+        }
         Task { @MainActor in await PushRegistration.refresh(api: client) }
         // Syncing without the app being opened (BackgroundRefresh.swift); not
         // with the sample data of "-demo".

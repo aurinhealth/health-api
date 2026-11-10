@@ -524,13 +524,14 @@ export function publicUser(row, env) {
 }
 
 // With sessionEpoch: the epoch a session cookie has to carry (dashboard-auth.js).
-// healthPaused: the user took back the consent to health data (health-pause.js),
-// read with the row by the consents' primary key.
+// healthPaused: the user took back the consent to health data (health-pause.js);
+// healthConsent: it is given (false: never given, null: no consents table).
+// Both read with the row by the consents' primary key.
 export async function findUser(db, id, env) {
-  const row = await db.prepare("SELECT id, email, name, role, disabled, session_epoch, EXISTS (SELECT 1 FROM user_consents k WHERE k.user_id = users.id AND k.kind = 'health' AND k.withdrawn_at IS NOT NULL) AS health_paused FROM users WHERE id=?").bind(Number(id)).first()
+  const row = await db.prepare("SELECT id, email, name, role, disabled, session_epoch, (SELECT CASE WHEN k.withdrawn_at IS NULL THEN 'given' ELSE 'paused' END FROM user_consents k WHERE k.user_id = users.id AND k.kind = 'health') AS health FROM users WHERE id=?").bind(Number(id)).first()
     .catch(error => /no such table: user_consents/i.test(String(error?.message)) ? db.prepare("SELECT id, email, name, role, disabled, session_epoch FROM users WHERE id=?").bind(Number(id)).first() : Promise.reject(error));
   if (!row || row.disabled) return null;
-  return { ...publicUser(row, env), sessionEpoch: Number(row.session_epoch) || 0, healthPaused: Boolean(row.health_paused) };
+  return { ...publicUser(row, env), sessionEpoch: Number(row.session_epoch) || 0, healthPaused: row.health === 'paused', healthConsent: row.health === undefined ? null : row.health === 'given' };
 }
 
 // Signs the user out of every device: sessions carry the epoch and only the
