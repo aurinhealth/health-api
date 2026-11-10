@@ -21,8 +21,8 @@
 // account asks for at most 2 a minute, 5 an hour and 10 a day, one caller for 5, 20 and 30.
 import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie, knownDevice, knownDeviceCookie, heldKnownDevice, keepOnlyPushToken } from "./dashboard-auth.js";
 import { allowClient, allowRequest, callerNetwork } from "./ip-rate-limit.js";
-import { normalizeEmail, plainEmail, emailCodeAccess, signInEmailUser, changeUserEmail, SignupLimited } from "./tenancy.js";
-import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail, stepUpCodeEmail } from "./email-sender.js";
+import { normalizeEmail, plainEmail, emailCodeAccess, signInEmailUser, changeUserEmail, SignupLimited, ownerEmail } from "./tenancy.js";
+import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail, stepUpCodeEmail, ownerNoticeEmail } from "./email-sender.js";
 import { siteLang } from "./site-pages.js";
 import { reviewCodeActive } from "./app-review.js";
 import { L } from "./lang.js";
@@ -171,6 +171,7 @@ async function claimAndSend(db, env, email, code, purpose, message, now, { open 
     if (network && !(await allowRequest(db, "email-codes:network:" + network, { day: networkCodesPerDay(env) }, now))) { console.warn("Sign-in codes of the day for one caller are used up"); return "budget"; }
     if (open && !(await allowRequest(db, "email-codes:open:day", { day: openCodesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day for new addresses is used up"); return "budget"; }
     if (!(await allowRequest(db, "email-codes:day", { day: codesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day is used up"); return "budget"; }
+    await warnAtHalf(db, env, open ? "open" : "day", open ? openCodesPerDay(env) : codesPerDay(env), now);
   }
   // Claimed before sending, so two quick requests never send two codes or pass the daily limit; the
   // code it replaces is read in the same transaction, to put it back if the e-mail does not go out.
@@ -196,6 +197,27 @@ async function claimAndSend(db, env, email, code, purpose, message, now, { open 
     throw error;
   }
   return "sent";
+}
+
+// Half of a day's sign-in codes gone (all, or those for new addresses): the owner hears of it
+// once that day, while sign-up still works, as bots asking for codes would use it up (security
+// review 2026-11-09, F3). Never stops the code it follows.
+async function warnAtHalf(db, env, budget, limit, now) {
+  try {
+    const row = await db.prepare("SELECT day, day_count FROM request_limits WHERE key = ?").bind(budget === "open" ? "email-codes:open:day" : "email-codes:day").first();
+    const used = row?.day === today(now) ? Number(row.day_count) || 0 : 0;
+    if (used * 2 < limit || !(await allowRequest(db, "email-codes:warned:" + budget, { day: 1 }, now))) return;
+    const to = ownerEmail(env);
+    if (!to) return;
+    const which = budget === "open" ? "pro nové adresy" : "pro přihlášení";
+    console.warn(`Half of the day's sign-in codes (${budget}) are used: ${used} of ${limit}`);
+    await sendEmail(env, { to, ...ownerNoticeEmail(`Aurin: dnes je pryč polovina kódů ${which}`, [
+      `Dnes (UTC) odešlo ${used} z ${limit} kódů ${which}. Když dojdou, registrace e-mailem do půlnoci UTC nepůjde (Apple a Google fungují dál).`,
+      "Když to není nárůst skutečných uživatelů, můžou to být boti: v Cloudflare se podívej do Security → Events na /auth/email/start. Rozpočet zvedneš proměnnou EMAIL_CODES_PER_DAY ve Workeru."
+    ]) });
+  } catch (error) {
+    console.error("Half-budget warning failed", error?.code || error?.message);
+  }
 }
 
 // What the user reads when a code did not go out (claimAndSend's reason).

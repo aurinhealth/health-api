@@ -9,12 +9,14 @@ import { ensureTenancy, inviteUser, signInEmailUser, setUserDisabled, _resetTena
 import { resolvePrincipal, handleSignOutEverywhere } from "../src/dashboard-auth.js";
 
 const ORIGIN = "https://aurin.health";
+// The owner's notice at half the day's codes (email-login.js warnAtHalf) is kept apart from the codes.
+const halfWarnings = [];
 const MIGRATION = ["0014_passkeys_email_codes.sql", "0027_email_code_limits.sql"].map(name => readFileSync(new URL("../migrations/" + name, import.meta.url), "utf8")).join("\n");
 
 async function setup(extra = {}) {
   _resetTenancyForTest();
   const sent = [];
-  const env = { SESSION_SECRET: "test-secret-key", OWNER_EMAIL: "owner@example.com", DB: createD1(), EMAIL: { send: async message => { sent.push(message); return { messageId: "m" + sent.length }; } }, EMAIL_FROM: "noreply@aurin.health", ...extra };
+  const env = { SESSION_SECRET: "test-secret-key", OWNER_EMAIL: "owner@example.com", DB: createD1(), EMAIL: { send: async message => { (/polovina kódů/.test(message.subject) ? halfWarnings : sent).push(message); return { messageId: "m" + sent.length }; } }, EMAIL_FROM: "noreply@aurin.health", ...extra };
   await ensureTenancy(env.DB, env);
   env.DB.sqlite.exec(MIGRATION);
   return { env, sent };
@@ -257,6 +259,23 @@ test("addresses that get a code only through OPEN_SIGNUP use at most four fifths
   assert.equal(sent.length, 5);
   // The page answers the same either way.
   assert.deepEqual(await (await quietly(() => start(env, "junk5@example.com"))).json(), { status: "ok" });
+});
+
+test("at half the day's codes for new addresses the owner gets one notice that day, and the code still goes out", async () => {
+  const { env, sent } = await setup({ OPEN_SIGNUP: "true", EMAIL_CODES_PER_DAY: "10" });
+  halfWarnings.length = 0;
+  const now = Date.parse("2026-10-07T08:00:00Z");
+  for (let i = 0; i < 3; i++) assert.equal(await sendCode(env, "n" + i + "@example.com", "cs", { now }), true);
+  assert.equal(halfWarnings.length, 0, "3 of 8");
+  assert.equal(await quietly(() => sendCode(env, "n3@example.com", "cs", { now })), true);
+  assert.equal(halfWarnings.length, 1, "4 of 8");
+  assert.equal(halfWarnings[0].to, "owner@example.com");
+  assert.match(halfWarnings[0].text, /odešlo 4 z 8 kódů pro nové adresy/);
+  for (let i = 4; i < 8; i++) await quietly(() => sendCode(env, "n" + i + "@example.com", "cs", { now }));
+  assert.equal(halfWarnings.length, 1, "once a day");
+  assert.equal(sent.length, 8);
+  await quietly(() => sendCode(env, "x@example.com", "cs", { now: Date.parse("2026-10-08T08:00:00Z") }));
+  assert.equal(halfWarnings.length, 1, "a new day starts from nothing");
 });
 
 test("one caller takes at most a twentieth of the day's sign-in codes (point 4)", async () => {
