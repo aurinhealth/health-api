@@ -502,7 +502,7 @@ final class APIClient: @unchecked Sendable {
     }
 
     /// Foods saved before: the newest first, or the most often logged.
-    func personalFoods(frequent: Bool = false, limit: Int = 100) async throws -> [FoodProduct] {
+    func personalFoods(frequent: Bool = false, limit: Int = 50) async throws -> [FoodProduct] {
         struct Response: Decodable { let products: [FoodProduct]? }
         let response: Response = try await get("/app/api/food/personal?limit=\(limit)" + (frequent ? "&sort=frequent" : ""))
         return response.products ?? []

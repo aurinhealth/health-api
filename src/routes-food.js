@@ -164,7 +164,7 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
       const result=await saved.json();if(!saved.ok)throw new Error(L('Uložení selhalo.', 'Saving failed.'));
       let personal=null,warning=null;
       // The food for next time (and the shared catalogue) after the answer: the app waits only for the meal.
-      if(p.source!=='composed'){const saving=savePersonalFood(env.DB,p,{used:true}).catch(error=>{console.warn('personal food not saved',error?.message);return null;});
+      if(p.source!=='composed'){const saving=savePersonalFood(env.DB,p,{used:true,last:amount.amount}).catch(error=>{console.warn('personal food not saved',error?.message);return null;});
         if(ctx?.waitUntil)ctx.waitUntil(saving);else personal=await saving;}
       const google=await queueFoodGoogleSafely(env,ctx,result.id);
       warning ||= google.status==='error'?google.message:null;

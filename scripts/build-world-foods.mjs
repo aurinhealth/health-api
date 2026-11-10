@@ -8,13 +8,15 @@
 //   barcodes-<n>.pack         gzip NDJSON, bucket = digits 10-13 of the 14-digit code
 //   names/<x>.json            index nodes for keys starting with x: key -> [pack,offset,length,leaf]
 //   names-<n>.pack            gzip NDJSON, one member per node, best ranked first
+//   vocab/<x>.json            words starting with x for typo fixes: word -> foods, or [foods, 1] for a Czech word
 // A node holds every food with a name or brand word starting with its key when
 // they fit (leaf), else only the best ranked and the longer keys below it.
 import { DatabaseSync } from "node:sqlite";
 import { gzipSync } from "node:zlib";
 import { mkdirSync, openSync, writeSync, closeSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { fold, words, barcodeKey, bucketOf, NODE_LIMIT, WORLD_FOODS_FORMAT } from "../src/world-foods.js";
+import { fold, words, barcodeKey, bucketOf, NODE_LIMIT, WORLD_FOODS_FORMAT, TYPO_MIN_FOODS } from "../src/world-foods.js";
+import { macroEnergy } from "../src/food-label.js";
 
 const PACK_BYTES = 280 * 1024 * 1024; // under wrangler's 300 MiB upload limit
 const MAX_WORDS = 8;
@@ -48,6 +50,17 @@ export function rankOf(row) {
   if (GENERIC.has(row.source_id)) return 2;
   if (row.en) return 3;
   return 4;
+}
+
+// Energy that doesn't fit the macros (a typo, kJ as kcal): such a product
+// goes last. The food tables are checked already; alcohol has energy the
+// macros don't show.
+const ALCOHOL = /\b(pivo|piva|beer|bier|biere|lager|ale|ipa|radler|cider|vino|wine|wein|sekt|prosecco|champagne|vodka|rum|gin|whisky|whiskey|brandy|cognac|tequila|liker|likor|liqueur|slivovice|becherovka|martini|alkohol|alcohol)\b/;
+export function implausible(row) {
+  if (GENERIC.has(row.source_id)) return false;
+  const kcal = Number(row.kcal), estimate = macroEnergy({ protein_100g: row.protein, carbs_100g: row.carbs, fat_100g: row.fat, fiber_100g: row.fiber });
+  if (estimate == null || !Number.isFinite(kcal) || Math.abs(estimate - kcal) <= Math.max(25, kcal * .2, estimate * .2)) return false;
+  return !(kcal > estimate && ALCOHOL.test(fold([row.default_name, row.cs, row.en].join(" "))));
 }
 
 export function indexWords(row) {
@@ -99,15 +112,19 @@ export function buildRows(rows, sourceList, out, { log = console.log, version = 
   const db = new DatabaseSync(work);
   db.exec(`PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA temp_store=FILE; PRAGMA cache_size=-200000;
     CREATE TABLE rec(id INTEGER PRIMARY KEY, bkey TEXT, rank INTEGER NOT NULL, json TEXT NOT NULL);
-    CREATE TABLE post(word TEXT NOT NULL, rank INTEGER NOT NULL, id INTEGER NOT NULL);`);
+    CREATE TABLE post(word TEXT NOT NULL, rank INTEGER NOT NULL, id INTEGER NOT NULL);
+    CREATE TABLE csw(word TEXT PRIMARY KEY) WITHOUT ROWID;`);
+  const addCs = db.prepare("INSERT OR IGNORE INTO csw(word) VALUES(?)");
   const addRec = db.prepare("INSERT INTO rec(id,bkey,rank,json) VALUES(?,?,?,?)");
   const addPost = db.prepare("INSERT INTO post(word,rank,id) VALUES(?,?,?)");
-  const counts = { foods: 0, czech_market: 0, barcodes: 0, words: 0, by_source: {} };
+  const counts = { foods: 0, czech_market: 0, barcodes: 0, words: 0, implausible: 0, by_source: {} };
   db.exec("BEGIN");
   for (const row of rows) {
     if (EXCLUDED.has(row.source_id)) continue;
-    const rec = toRecord(row), rank = row.rank ?? rankOf(row), key = barcodeKey(row.barcode);
+    const rec = toRecord(row), bad = implausible(row), rank = bad ? 4 : row.rank ?? rankOf(row), key = barcodeKey(row.barcode);
     const ws = indexWords(row);
+    for (const w of words(row.cs)) addCs.run(w);
+    if (bad) counts.implausible++;
     rec.t = ws.join(" "); rec.r = rank;
     addRec.run(row.id, key, rank, JSON.stringify(rec));
     for (const w of ws) addPost.run(w, rank, row.id);
@@ -136,6 +153,18 @@ export function buildRows(rows, sourceList, out, { log = console.log, version = 
   for (let i = 0; i < 10000; i++) if (!index[i]) index[i] = [0, 0, 0];
   writeFileSync(join(dir, "barcodes.idx.json"), JSON.stringify(index));
   log(`barcodes ${(bbytes / 1048576).toFixed(0)} MB in ${bpacks.files.length} pack(s)`);
+
+  // Typo fixes (src/world-foods.js correctWord): the words of TYPO_MIN_FOODS
+  // or more foods, and every word of a Czech name, which is never changed.
+  mkdirSync(join(dir, "vocab"));
+  const vocab = new Map();
+  for (const r of db.prepare(`SELECT p.word, p.n, EXISTS(SELECT 1 FROM csw c WHERE c.word = p.word) AS cs
+      FROM (SELECT word, COUNT(*) AS n FROM post GROUP BY word) p`).iterate()) {
+    if (/\d/.test(r.word) || (r.n < TYPO_MIN_FOODS && !r.cs)) continue;
+    if (!vocab.has(r.word[0])) vocab.set(r.word[0], {});
+    vocab.get(r.word[0])[r.word] = r.cs ? [r.n, 1] : r.n;
+  }
+  for (const [x, list] of vocab) writeFileSync(join(dir, "vocab", `${x}.json`), JSON.stringify(list));
 
   // Names: nodes split by the next character until they fit NODE_LIMIT.
   const packs = new Packs(dir, "names"), manifests = new Map();
