@@ -149,6 +149,7 @@ export async function sendCode(env, email, lang = "cs", { now = Date.now(), code
 // codes are used up), "locked" (too many wrong codes today) or "budget" (all codes of the day).
 async function claimAndSend(db, env, email, code, purpose, message, now, { open = false, change = false, stepUp = false, known = null, network = null, review = false, to = email } = {}) {
   const seconds = Math.floor(now / 1000), day = today(now);
+  let shared = false;
   // The address's own limits are checked first, so a code it would not get spends no budget.
   const current = await db.prepare("SELECT sent_at, day, day_count, fail_day, fail_count FROM email_login_codes WHERE email=?").bind(email).first();
   if (current && current.sent_at > seconds - RESEND_SECONDS) return "resend";
@@ -171,7 +172,7 @@ async function claimAndSend(db, env, email, code, purpose, message, now, { open 
     if (network && !(await allowRequest(db, "email-codes:network:" + network, { day: networkCodesPerDay(env) }, now))) { console.warn("Sign-in codes of the day for one caller are used up"); return "budget"; }
     if (open && !(await allowRequest(db, "email-codes:open:day", { day: openCodesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day for new addresses is used up"); return "budget"; }
     if (!(await allowRequest(db, "email-codes:day", { day: codesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day is used up"); return "budget"; }
-    await warnAtHalf(db, env, open ? "open" : "day", open ? openCodesPerDay(env) : codesPerDay(env), now);
+    shared = true;
   }
   // Claimed before sending, so two quick requests never send two codes or pass the daily limit; the
   // code it replaces is read in the same transaction, to put it back if the e-mail does not go out.
@@ -196,6 +197,8 @@ async function claimAndSend(db, env, email, code, purpose, message, now, { open 
       .bind(previous?.code_hash ?? null, Number(previous?.expires_at) || 0, Number(previous?.attempts) || 0, email, hash).run().catch(() => {});
     throw error;
   }
+  // After the code went out, so the owner's notice never holds it up.
+  if (shared) await warnAtHalf(db, env, open ? "open" : "day", open ? openCodesPerDay(env) : codesPerDay(env), now);
   return "sent";
 }
 
