@@ -260,20 +260,22 @@ export async function aiSpendByGroup(db, day) {
 
 // The owner's Nastavení → Správa → Útraty AI: what each group spent today
 // against its brake, the day's total, yesterday and the month so far (UTC days,
-// like the brakes). One read of the days, one of the groups, one of the
-// subscriptions with Pro; a group's brake not set yet today is worked out the
-// way groupDay would.
+// like the brakes), and each group's month with the days it reached its brake.
+// One read of the days, one of today's groups, one of the month's groups (at
+// most 7 × 31 rows), one of the subscriptions with Pro; a group's brake not set
+// yet today is worked out the way groupDay would.
 export async function aiSpendingReport(env, now = new Date()) {
   const db = central(env) || env?.DB;
   await ensureAiSpendDays(db);
   const today = utcDay(now), yesterday = utcDay(new Date(now.getTime() - 864e5)), monthStart = `${today.slice(0, 7)}-01`;
-  const [days, groups, counts] = await Promise.all([
+  const [days, groups, monthRows, counts] = await Promise.all([
     db.prepare("SELECT day, cost_usd FROM ai_spend_days WHERE day >= ? AND day <= ?").bind(yesterday < monthStart ? yesterday : monthStart, today).all().then(r => r.results || []),
     db.prepare("SELECT grp, cost_usd, brake_usd FROM ai_spend_groups WHERE day = ?").bind(today).all().then(r => r.results || []),
+    db.prepare("SELECT grp, SUM(cost_usd) AS cost_usd, SUM(brake_usd IS NOT NULL AND cost_usd >= brake_usd) AS braked FROM ai_spend_groups WHERE day >= ? AND day <= ? GROUP BY grp").bind(monthStart, today).all().then(r => r.results || []),
     accountsByGroup(db, now.getTime()).catch(error => { console.error("Accounts by group not read", error?.message || error); return {}; })
   ]);
   const spentOn = day => rounded(days.find(row => row.day === day)?.cost_usd);
-  const brakes = groupBrakes(env), byGroup = Object.fromEntries(groups.map(row => [row.grp, row]));
+  const brakes = groupBrakes(env), byGroup = Object.fromEntries(groups.map(row => [row.grp, row])), byMonth = Object.fromEntries(monthRows.map(row => [row.grp, row]));
   const next = new Date(`${today}T00:00:00Z`); next.setUTCDate(next.getUTCDate() + 1);
   return {
     today: spentOn(today), yesterday: spentOn(yesterday),
@@ -282,6 +284,8 @@ export async function aiSpendingReport(env, now = new Date()) {
     groups: AI_GROUPS.filter(group => brakes[group] || byGroup[group]).map(group => {
       const row = byGroup[group], brake = brakes[group];
       return { group, spent: rounded(row?.cost_usd), brake: row?.brake_usd != null ? Number(row.brake_usd) : brakeFor(brake, counts[group] || 0), accounts: growing(brake) ? counts[group] ?? null : null };
-    })
+    }),
+    monthDays: Number(today.slice(8)),
+    monthGroups: AI_GROUPS.filter(group => brakes[group] || byMonth[group]).map(group => ({ group, spent: rounded(byMonth[group]?.cost_usd), braked: Number(byMonth[group]?.braked || 0) }))
   };
 }

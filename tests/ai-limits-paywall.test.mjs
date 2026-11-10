@@ -175,6 +175,17 @@ test("the owner sees today's spending by group against its brake, yesterday and 
   assert.deepEqual(by.new, { group: "new", spent: 0, brake: 1, accounts: null }, "a fixed brake has no accounts");
   assert.deepEqual(by.testflight, { group: "testflight", spent: 0, brake: 0.5, accounts: 1 }, "a group with no spending yet shows the brake it would get");
 
+  // The month: each group's days added up, and the days it reached its brake; last month's days don't count.
+  const sameMonth = yesterday.slice(0, 7) === today.slice(0, 7);
+  db.sqlite.prepare("INSERT INTO ai_spend_groups (day, grp, cost_usd, brake_usd) VALUES (?, 'free', 1.2, 1), ('2000-01-31', 'free', 9, 1), ('2000-01-31', 'paid', 9, 1)").run(yesterday);
+  const month = await aiSpendingReport({ RAW_DB: db, AI_GROUP_BRAKES: BRAKES });
+  assert.equal(month.monthDays, Number(today.slice(8)));
+  assert.deepEqual(month.monthGroups.map(g => g.group), ["paid", "gift", "trial", "testflight", "free", "new", "system"]);
+  const monthBy = Object.fromEntries(month.monthGroups.map(g => [g.group, g]));
+  assert.deepEqual(monthBy.paid, { group: "paid", spent: 0.7, braked: 0 });
+  assert.deepEqual(monthBy.free, sameMonth ? { group: "free", spent: 1.9, braked: 1 } : { group: "free", spent: 0.7, braked: 0 });
+  assert.deepEqual(monthBy.new, { group: "new", spent: 0, braked: 0 }, "a group with no spending this month");
+
   const user = { isAdmin: true, isOwner: false }, url = new URL("https://aurin.health/app/api/admin/ai-spending");
   const get = who => handleAdminApi(new Request(url), { RAW_DB: db, AI_GROUP_BRAKES: BRAKES }, url, { signedIn: true, user: who });
   assert.equal((await get(user)).status, 403, "an admin who isn't the owner");

@@ -2964,6 +2964,10 @@
 "pevná" = "fixed";
 "Stojí do %@" = "Stopped until %@";
 "Den začíná znovu v %@" = "Day resets at %@";
+"Období" = "Period";
+"%@ · %@ denně" = "%@ · %@ a day";
+"Na pojistce %lld×" = "Hit daily brake %lld×";
+"Měsíc ve dnech UTC jako pojistky" = "Month in UTC days, like the brakes";
 "Platící" = "Paying";
 "Pilot, dárky a ty" = "Pilot, gifts and you";
 "Bez nákupu" = "No purchase";
