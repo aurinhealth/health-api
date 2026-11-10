@@ -77,17 +77,16 @@ async function at(time, work) {
   try { return await work(); } finally { Date.now = real; }
 }
 
-test("one account asks for at most two e-mail change codes a minute and five an hour, whatever the address", async () => {
+test("one account gets at most one e-mail change code a minute and asks at most five times an hour, whatever the address", async () => {
   const { env, sent } = await setup();
   const user = await member(env);
   const t0 = Date.parse("2026-10-07T08:00:00Z"), start = (email, time, ip = "203.0.113.5") => at(time, () => change(env, user, "/app/api/account/email/start", { email }, ORIGIN, ip));
   assert.equal((await start("a1@example.com", t0)).status, 200);
-  assert.equal((await start("a2@example.com", t0)).status, 200);
-  assert.equal((await start("a3@example.com", t0, "198.51.100.7")).status, 429, "the third in a minute, even from another network");
+  assert.equal((await start("a2@example.com", t0, "198.51.100.7")).status, 429, "the second in a minute, to another address and from another network");
   const later = [];
-  for (let i = 4; i <= 7; i++) later.push((await start("a" + i + "@example.com", t0 + (i - 2) * 60_000)).status);
-  assert.deepEqual(later, [200, 200, 200, 429], "the sixth in an hour");
-  assert.equal(sent.length, 5);
+  for (let i = 2; i <= 6; i++) later.push((await start("a" + i + "@example.com", t0 + (i - 1) * 61_000)).status);
+  assert.deepEqual(later, [200, 200, 200, 429, 429], "the sixth ask in an hour (the refused one counts)");
+  assert.equal(sent.length, 4);
 });
 
 test("codes to move an account have their own day's budget and never take the sign-in codes", async () => {
@@ -141,11 +140,14 @@ test("an address another account uses answers as any other; it gets a notice onc
   assert.match(sent.at(-1).subject, /už má účet Aurin/);
   assert.doesNotMatch(sent.at(-1).text, /\b\d{6}\b/, "no code");
   assert.equal(env.DB.sqlite.prepare("SELECT COUNT(*) AS n FROM email_login_codes WHERE email = 'other@example.com'").get().n, 0, "the other account's sign-in code is left alone");
-  assert.equal((await change(env, user, "/app/api/account/email/start", { email: "other@example.com" })).status, 200);
+  const again = await at(Date.now() + 61_000, () => change(env, user, "/app/api/account/email/start", { email: "other@example.com" }));
+  assert.equal(again.status, 200);
   assert.equal(sent.length, before + 1, "one notice a day");
-  assert.equal(env.DB.sqlite.prepare("SELECT day_count FROM request_limits WHERE key = 'email-codes:change:day'").get().day_count, 1, "from the change codes' budget");
-  // No code exists for it, so no guess moves the account there.
-  assert.equal((await change(env, user, "/app/api/account/email/verify", { email: "other@example.com", code: "123456" })).status >= 400, true);
+  assert.equal(env.DB.sqlite.prepare("SELECT day_count FROM request_limits WHERE key = 'email-codes:change:day'").get().day_count, 2, "each ask claims the change codes' budget, as for any address");
+  // A code exists but was never sent, so verifying answers as a wrong code to any address does.
+  const wrong = await change(env, user, "/app/api/account/email/verify", { email: "other@example.com", code: "123456" });
+  assert.equal(wrong.status, 400);
+  assert.match((await wrong.json()).message, /nesedí/);
   assert.equal((await findUser(env.DB, user.id, env)).email, "friend@example.com");
   assert.equal(JSON.stringify(env.DB.sqlite.prepare("SELECT key FROM request_limits").all()).includes("other@example.com"), false, "no address stored");
 });
