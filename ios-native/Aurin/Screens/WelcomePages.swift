@@ -24,8 +24,18 @@ enum WelcomePage: Int, CaseIterable, Identifiable {
         switch self {
         case .opening: return ""
         case .readiness: return "Každé ráno víš, kolik tělo dnes zvládne."
-        case .training: return "Tréninky podle únavy, svalů a vybavení, které máš."
+        case .training: return "Plán na kolo, běh, plavání i posilovnu. Podle toho, jak ses vyspal."
         case .coach: return "Zeptej se na cokoli. Zná tvůj spánek, trénink i jídlo."
+        }
+    }
+
+    /// What VoiceOver reads for the sample cards (onboarding review point 20).
+    var sample: String {
+        switch self {
+        case .opening: return ""
+        case .readiness: return "Ukázka: připravenost 78, spánek 7:12, HRV 64 ms nad obvyklým."
+        case .training: return "Ukázka: dřep, série 3, 80 kg × 8, kotouče na ose a série podle svalů."
+        case .coach: return "Ukázka: dotaz „Špatná noc. Dneska nohy?“ a odpověď kouče s tréninkem nohou lehčeji."
         }
     }
 
@@ -85,6 +95,7 @@ struct WelcomePageView: View {
                     Spacer(minLength: 18)
                     visual(play)
                         .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(L10n.tr(page.sample))
                     Spacer(minLength: 8)
                 }
                 .padding(.top, 12)
@@ -218,8 +229,8 @@ private struct WelcomeReadiness: View {
                         .font(Typo.number(96)).monospacedDigit().foregroundStyle(Palette.ink)
                         .frame(width: 108, alignment: .leading)
                         .animation(.easeOut(duration: 1.3).delay(0.2), value: play.shown)
-                    (Text("Dobrá noc, třetí den. ")
-                     + Text("Dnes klidně naplno do síly.").font(Typo.sentenceItalic(17)).foregroundColor(Palette.green))
+                    (Text("Tři dobré noci v řadě. ")
+                     + Text("Dnes můžeš naplno do síly.").font(Typo.sentenceItalic(17)).foregroundColor(Palette.green))
                         .font(Typo.sentence(17)).foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.bottom, 12)

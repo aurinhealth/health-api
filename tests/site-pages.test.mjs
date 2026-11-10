@@ -257,7 +257,7 @@ test('the overview opens the parts the welcome shows with its page, in the app�
   assert.deepEqual(shown.map(m=>m[2]),texts);
   assert.equal((en('Kouč, který zná ')+en('tvůj spánek.')).trim(),'A coach that knows how you slept.');
   assert.match(html,/<h1 aria-label="A coach that knows how you slept\.">/);
-  for(const text of ['Good night, third day in a row. ','Go all in on strength today.','Keep legs, go lighter:','Bad night. Legs today?','Legs, lighter'])assert.ok(html.includes(text),text);
+  for(const text of ['Three good nights in a row. ','Go all in on strength today.','Keep legs, go lighter:','Bad night. Legs today?','Legs, lighter'])assert.ok(html.includes(text),text);
   assert.match(html,/<nav class="acts-nav" aria-label="Parts of Aurin">/);
 });
 

@@ -308,6 +308,11 @@ struct EmailLoginSheet: View {
                     Task { if sent { await verify() } else { await send() } }
                 }
                 .disabled(busy || (sent ? code.count != 6 : !email.contains("@")))
+                if !sent {
+                    Text("Pošleme ti šestimístný kód, žádné heslo.")
+                        .font(Typo.small).foregroundStyle(Palette.secondary)
+                        .frame(maxWidth: .infinity)
+                }
                 if sent {
                     Button("Poslat nový kód") { Task { code = ""; await send() } }.font(Typo.bodyStrong).foregroundStyle(Palette.muted).disabled(busy)
                 }

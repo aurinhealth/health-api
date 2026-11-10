@@ -130,7 +130,7 @@ struct SetupFlowView: View {
                 if appleOffered {
                     // Skips connecting, not "O tobě": without age, height and
                     // weight nothing (calories, strain, recovery) can be worked out.
-                    Button("Pokračovat") { withAnimation { index += 1 } }
+                    Button("Později") { withAnimation { index += 1 } }
                         .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .frame(maxWidth: .infinity).frame(height: 50)
                         .disabled(!ready || appleWorking)
@@ -168,7 +168,6 @@ struct SetupFlowView: View {
         if saving { return "Ukládám…" }
         if appleWorking { return "Moment…" }
         switch page {
-        case .time: return askNotifications ? "Pokračovat" : "Hotovo"
         case .notifications: return "Zapnout"
         default: return "Pokračovat"
         }
@@ -199,8 +198,16 @@ struct SetupFlowView: View {
         ("Odvolání", "Pozastavením zdravotních dat, nebo smazáním účtu v Nastavení → Soukromí a data, kde si předtím můžeš stáhnout všechna svoje data.")
     ]
 
-    @ViewBuilder
+    /// On a 6.1" phone the AI card starts below the fold: a short link under
+    /// the required box scrolls to it (onboarding review point 14).
     private var consentPage: some View {
+        ScrollViewReader { proxy in
+            VStack(alignment: .leading, spacing: 14) { consentContent(proxy) }
+        }
+    }
+
+    @ViewBuilder
+    private func consentContent(_ proxy: ScrollViewProxy) -> some View {
         title("Tvoje data o zdraví")
         Card {
             ForEach(Self.consentPoints, id: \.0) { point in
@@ -212,6 +219,13 @@ struct SetupFlowView: View {
         }
         checkbox("Souhlasím, aby Aurin zpracovával moje údaje o zdraví, jak je popsáno výše.", note: nil, isOn: $agree)
             .padding(.top, 4)
+        Button { withAnimation { proxy.scrollTo("ai", anchor: .top) } } label: {
+            Label("Níže je nepovinný AI kouč", systemImage: "arrow.down")
+                .font(Typo.small.weight(.medium)).foregroundStyle(Palette.muted)
+                .frame(minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
         Card {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
@@ -226,6 +240,7 @@ struct SetupFlowView: View {
                      note: "Jde to kdykoli vypnout v Nastavení.",
                      isOn: $agreeAI)
         }
+        .id("ai")
         Link("Zásady ochrany soukromí", destination: L10n.legalURL("privacy")).font(Typo.small)
     }
 
@@ -287,7 +302,7 @@ struct SetupFlowView: View {
                     Label("připojeno", systemImage: "checkmark").font(Typo.small).foregroundStyle(Palette.green)
                 }
             }
-            Text("Hodinky už posílají spánek, tep a tréninky do Apple Health. Aurin je čte, aby ti naplánoval den. Bez zeptání nic nezapisuje.")
+            Text("Aurin čte spánek, tep a tréninky z Apple Health, aby ti naplánoval den. Bez tvého svolení nic nezapisuje.")
                 .font(Typo.small).foregroundStyle(Palette.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 6) {
@@ -304,7 +319,7 @@ struct SetupFlowView: View {
     }
 
     /// Apple Health still waits for its button on its card: that is the main
-    /// step, so "Pokračovat" under the page is a quiet text button.
+    /// step, so "Později" under the page is a quiet text button.
     private var appleOffered: Bool { page == .sources && health.isAvailable && !health.enabled }
 
     private func sourceRow(_ provider: ConnectionsResponse.Provider) -> some View {
@@ -835,20 +850,21 @@ struct SetupFlowView: View {
 
     @ViewBuilder
     private var notificationsPage: some View {
-        Text("Ozveme se, když na tom záleží")
-            .font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+        // The same title as the other setup pages (SetupPageTitle).
+        Text("Ozveme se, když to bude důležité")
+            .font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.top, 24)
         // Without a watch or ring the morning readiness never comes (audit 14.6): the coach and bedtime lead.
         Text(wearable ? "Každé ráno tvoje připravenost a kouč, když je potřeba změnit plán." : "Kouč, když je potřeba změnit plán, a kdy jít spát.")
             .font(Typo.sentence(18)).foregroundStyle(Palette.secondary)
             .fixedSize(horizontal: false, vertical: true)
         VStack(spacing: 10) {
             if wearable {
-                NotificationPreview(title: L10n.tr("Připravenost 78, dobrý den na tvrdý trénink"), text: L10n.tr("Dobrá noc, třetí den v řadě. Dnes naplno do posilovny."), time: "7:02")
-                NotificationPreview(title: L10n.tr("Kouč"), text: L10n.tr("HRV je dva dny dole. Dnešní intervaly jsem posunul na čtvrtek."), time: "12:40")
+                NotificationPreview(title: L10n.tr("Připravenost 78, dobrý den na tvrdý trénink"), text: L10n.tr("Tři dobré noci v řadě. Dnes můžeš naplno do síly."), time: "7:02")
+                // As the coach's push words it (src/coach-push.js): it asks, it never moves a session itself.
+                NotificationPreview(title: L10n.tr("Dvě krátké noci za sebou"), text: L10n.tr("Dnešní intervaly vyměním za lehkou jízdu 60 min?"), time: "12:40")
             } else {
-                NotificationPreview(title: L10n.tr("Kouč"), text: L10n.tr("Včera byl těžký trénink. Dnešní intervaly jsem posunul na čtvrtek."), time: "12:40")
+                NotificationPreview(title: L10n.tr("Tělo se ještě nezotavilo"), text: L10n.tr("Dnešní intervaly vyměním za lehkou jízdu 60 min?"), time: "12:40")
             }
             NotificationPreview(title: L10n.tr("Za 30 minut do postele"),
                                 text: L10n.f("Na budík v %@ potřebuješ jít spát do %@.", ClockText.format("7:15"), ClockText.format("22:40")), time: "22:10")

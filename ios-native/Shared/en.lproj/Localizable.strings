@@ -1700,7 +1700,7 @@
 /* Sign-in and the first-run setup (LoginView, SetupFlowView, Passkeys) */
 "Pokračovat přes Apple" = "Continue with Apple";
 "Pokračovat přes Google" = "Continue with Google";
-"Pokračovat e-mailem" = "Continue with e-mail";
+"Pokračovat e-mailem" = "Continue with email";
 "Přihlásit přes passkey" = "Sign in with a passkey";
 "Příště přes Face ID" = "Next time with Face ID";
 "Aurin si uloží přístupový klíč do tvého iPhonu. Příště se přihlásíš obličejem nebo otiskem, bez kódu z e-mailu." = "Aurin saves a passkey on your iPhone. Next time you sign in with your face or fingerprint, no e-mail code.";
@@ -1710,7 +1710,6 @@
 "Tenhle přístupový klíč patří k účtu, který už neexistuje. Přihlas se jinak, iPhone ho přestane nabízet." = "This passkey belongs to an account that no longer exists. Sign in another way; your iPhone will stop offering it.";
 "Odkud brát data" = "Where to take data from";
 "Připoj svoje data" = "Connect your data";
-"Hodinky už posílají spánek, tep a tréninky do Apple Health. Aurin je čte, aby ti naplánoval den. Bez zeptání nic nezapisuje." = "Your watch already sends sleep, heart rate and workouts to Apple Health. Aurin reads them to plan your day. It writes nothing without asking.";
 "Tep a HRV" = "Heart rate & HRV";
 "Připojit Apple Health" = "Connect Apple Health";
 "Další zdroje" = "Other sources";
@@ -3359,10 +3358,7 @@
 "Kouč, který zná " = "A coach that knows ";
 "tvůj spánek." = "how you slept.";
 "Každé ráno víš, kolik tělo dnes zvládne." = "Know every morning how much your body can take today.";
-"Tréninky podle únavy, svalů a vybavení, které máš." = "Workouts built around your fatigue, muscles and equipment.";
 "Zeptej se na cokoli. Zná tvůj spánek, trénink i jídlo." = "Ask anything. It knows your sleep, training and food.";
-"Dobrá noc, třetí den. " = "Good night, third day in a row. ";
-"Dnes klidně naplno do síly." = "Go all in on strength today.";
 "Dřep" = "Squat";
 "Minulá noc" = "Last night";
 "Špatná noc. Dneska nohy?" = "Bad night. Legs today?";
@@ -3370,8 +3366,8 @@
 "Nohy nech, jen lehčeji:" = "Keep legs, go lighter:";
 " dřep 3 × 8 se 70 kg." = " squat 3 × 8 at 70 kg.";
 "Nohy, lehčeji" = "Legs, lighter";
-"Tvoje data pracují jen pro tebe." = "Your data works only for you.";
-"Nikdy je neprodáváme ani nepoužíváme k reklamě." = "We never sell it or use it for ads.";
+"Tvoje data pracují jen pro tebe." = "Your data is yours alone.";
+"Nikdy je neprodáváme ani nepoužíváme k reklamě." = "We never sell your data or use it for ads.";
 "Pokračováním souhlasíš s [podmínkami](https://aurin.health/terms?lang=cs) a [zásadami ochrany soukromí](https://aurin.health/privacy?lang=cs)." = "By continuing you agree to the [Terms](https://aurin.health/terms) and [Privacy Policy](https://aurin.health/privacy).";
 "Výživa" = "Nutrition";
 "Z fotky" = "From a photo";
@@ -3393,11 +3389,8 @@
 "Aurin potřebuje věk, výšku a váhu, aby spočítal kalorie, námahu a zotavení. Pohlaví mění výpočet kalorií a tepových zón." = "Aurin needs your age, height and weight to work out calories, strain and recovery. Sex changes how calories and heart rate zones are worked out.";
 "Zadej výšku mezi %@ a %@." = "Enter a height between %@ and %@.";
 "Zadej váhu mezi %@ a %@." = "Enter a weight between %@ and %@.";
-"Ozveme se, když na tom záleží" = "A message when it matters";
 "Každé ráno tvoje připravenost a kouč, když je potřeba změnit plán." = "Your readiness every morning, and the coach when your plan should change.";
 "Připravenost 78, dobrý den na tvrdý trénink" = "Readiness 78, good day for a hard workout";
-"Dobrá noc, třetí den v řadě. Dnes naplno do posilovny." = "Good night, third day in a row. Go all in on strength today.";
-"HRV je dva dny dole. Dnešní intervaly jsem posunul na čtvrtek." = "HRV is down two days running. I moved today’s intervals to Thursday.";
 "Za 30 minut do postele" = "Bedtime in 30 minutes";
 "Na budík v %@ potřebuješ jít spát do %@." = "To wake at %@ rested, be in bed by %@.";
 "První dny" = "First days";
@@ -3406,7 +3399,7 @@
 "Nos dnes v noci hodinky" = "Wear your watch tonight";
 "Ráno uvidíš připravenost." = "Readiness comes in the morning.";
 "Vyfoť talíř nebo naskenuj kód." = "Snap a photo or scan a barcode.";
-"Zeptej se kouče" = "Ask the coach something";
+"Zeptej se kouče" = "Ask your coach a question";
 "Zná tvůj spánek, trénink i jídlo." = "It knows your sleep, training and food.";
 "S historií z hodinek budou čísla hotová zítra. Bez ní potřebuje připravenost asi 14 nocí, než se ustálí." = "With your watch’s history the numbers are ready tomorrow. Without it, readiness needs about 14 nights to settle.";
 /* An iPhone without a watch or ring (audit 14.2–14.6). */
@@ -3416,7 +3409,6 @@
 "Připravenost počítají hodinky nebo prsten. Bez nich ti radím podle tréninku a zátěže." = "Readiness comes from a watch or ring. Without one, I base my advice on your training and load.";
 "Bez hodinek nebo prstenu spánek neměřím." = "Without a watch or ring, I can’t measure your sleep.";
 "Kouč, když je potřeba změnit plán, a kdy jít spát." = "The coach when your plan needs to change, and when to go to bed.";
-"Včera byl těžký trénink. Dnešní intervaly jsem posunul na čtvrtek." = "Yesterday was a hard session. I moved today’s intervals to Thursday.";
 "od %@ do %@ %@" = "from %@ to %@ %@";
 "naposledy %@ %@" = "latest %@ %@";
 "Začít %@ %@" = "Start %@ %@";
@@ -3732,7 +3724,6 @@
 "Jaký je tvůj hlavní sport?" = "What's your main sport?";
 "Aurin podle něj plánuje. Ostatní sporty z hodinek se počítají dál." = "Aurin plans around it. Other sports from your watch still count.";
 "Jaký je tvůj cíl?" = "What's your goal?";
-"Kouč podle něj skládá tvůj týden. Změníš ho kdykoli." = "The coach builds your week around it. You can change it any time.";
 "Víc energie, postupné zlepšení" = "More energy, steady progress";
 "Datum a vzdálenost" = "A date and a distance";
 "Jídlo i trénink k tomu" = "Eat and train for it";
@@ -4177,3 +4168,18 @@
 "teď netrénuju" = "not training now";
 "Kolik hodin týdně teď trénuješ?" = "How many hours a week do you train now?";
 "Běžný týden za poslední měsíc. První týden podle toho naplánujeme s rezervou." = "A usual week over the last month. We'll plan your first week from it, with room to spare.";
+"Plán na kolo, běh, plavání i posilovnu. Podle toho, jak ses vyspal." = "A plan for rides, runs, swims and gym. Based on how you slept.";
+"Ukázka: připravenost 78, spánek 7:12, HRV 64 ms nad obvyklým." = "Sample: readiness 78, sleep 7:12, HRV 64 ms above usual.";
+"Ukázka: dřep, série 3, 80 kg × 8, kotouče na ose a série podle svalů." = "Sample: squat, set 3, 80 kg × 8, plates on the bar and sets by muscle.";
+"Ukázka: dotaz „Špatná noc. Dneska nohy?“ a odpověď kouče s tréninkem nohou lehčeji." = "Sample: the question “Bad night. Legs today?” and the coach's answer with a lighter leg session.";
+"Tři dobré noci v řadě. " = "Three good nights in a row. ";
+"Dnes můžeš naplno do síly." = "Go all in on strength today.";
+"Tři dobré noci v řadě. Dnes můžeš naplno do síly." = "Three good nights in a row. Go all in on strength today.";
+"Dvě krátké noci za sebou" = "Two short nights in a row";
+"Tělo se ještě nezotavilo" = "Your body hasn't recovered yet";
+"Dnešní intervaly vyměním za lehkou jízdu 60 min?" = "Swap today's intervals for an easy 60 min ride?";
+"Aurin čte spánek, tep a tréninky z Apple Health, aby ti naplánoval den. Bez tvého svolení nic nezapisuje." = "Aurin reads your sleep, heart rate and workouts from Apple Health to plan your day. It writes nothing without your permission.";
+"Ozveme se, když to bude důležité" = "We'll nudge you when it matters";
+"Podle cíle Aurin nastaví trénink i jídlo. Změníš ho kdykoli." = "Aurin sets your training and food by your goal. You can change it any time.";
+"Pošleme ti šestimístný kód, žádné heslo." = "We'll send a 6-digit code. No password.";
+"Níže je nepovinný AI kouč" = "Optional AI coach below";

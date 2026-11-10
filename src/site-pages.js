@@ -868,7 +868,7 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
   const ACT_LIST = [
     ['readiness', 'Readiness', 'Know every morning how much your body can take today.', 'glow-today', ['pripravenost']],
     ['sleep', 'Sleep', 'A bedtime from your alarm and the sleep you need tonight.', 'glow-health', ['spanek']],
-    ['training', 'Training', 'Workouts built around your fatigue, muscles and equipment.', 'glow-training', ['trenink', 'posilovna', 'svaly']],
+    ['training', 'Training', 'A plan for rides, runs, swims and gym. Based on how you slept.', 'glow-training', ['trenink', 'posilovna', 'svaly']],
     ['food', 'Nutrition', 'Snap your plate or scan a barcode. AI fills in the values.', 'glow-food', ['vyziva']],
     ['coach', 'Coach', 'Ask anything. It knows your sleep, training and food.', 'glow-coach', ['kouc']],
     ['watch', 'Apple Watch', 'Your morning, your sets and your water, without taking out your phone. Comes with the iPhone app, on any Apple Watch with watchOS 10 or later.', 'glow-today', ['hodinky']]].filter(([id]) => WATCH_ON_SITE || id !== 'watch');

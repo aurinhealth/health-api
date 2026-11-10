@@ -111,7 +111,7 @@ struct SetupGoalPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SetupPageTitle(title: "Jaký je tvůj cíl?", subtitle: "Kouč podle něj skládá tvůj týden. Změníš ho kdykoli.")
+            SetupPageTitle(title: "Jaký je tvůj cíl?", subtitle: "Podle cíle Aurin nastaví trénink i jídlo. Změníš ho kdykoli.")
             ForEach(FocusChoice.goals, id: \.0) { item in
                 ChoiceCard(title: item.1, subtitle: Self.subtitles[item.0], selected: focus.goal == item.0) {
                     withAnimation(.snappy) {
