@@ -13,6 +13,9 @@ struct SetupFocus: Equatable {
     var swims100: Bool?
     var eventName = ""
     var eventDate: Date?
+    var distance = RaceDistance()
+    /// "Kolik hodin týdně teď trénuješ?": nil while not answered, 0 for "not now".
+    var weeklyHours: Double?
 
     /// From the saved profile (an earlier start on the web, or Zaměření).
     init(profile: JSONObject = [:]) {
@@ -22,6 +25,8 @@ struct SetupFocus: Equatable {
         if case .bool(let can)? = profile["swims100"] { swims100 = can }
         eventName = profile["eventName"]?.string ?? ""
         eventDate = profile["eventDate"]?.string.flatMap(Self.date)
+        distance = RaceDistance(profile: profile)
+        weeklyHours = profile["weeklyHours"]?.number
     }
 
     /// The profile with these answers (FocusChoice.applying, plus the race for "Závod").
@@ -30,7 +35,10 @@ struct SetupFocus: Equatable {
         if goal == "race" {
             next["eventName"] = .string(eventName.trimmingCharacters(in: .whitespaces))
             if let eventDate { next["eventDate"] = .string(Self.day(eventDate)) }
+            next = distance.applied(to: next)
         }
+        // The first week without a history follows it (src/adaptive-week.js startWeek).
+        if let weeklyHours { next["weeklyHours"] = weeklyHours >= 1 ? .number(weeklyHours) : .null }
         return next
     }
 
@@ -91,6 +99,15 @@ struct SetupGoalPage: View {
     @Binding var focus: SetupFocus
 
     private static let subtitles = ["fitness": "Víc energie, postupné zlepšení", "race": "Datum a vzdálenost", "lose": "Jídlo i trénink k tomu"]
+    private static let hours: [Double] = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15]
+    private static var hourOptions: [(String, String)] {
+        [("0", L10n.tr("teď netrénuju"))] + hours.map { (String(Int($0)), "\(Int($0)) h") }
+    }
+    /// A saved number on the nearest choice (7 h on 6 h, 20 h on 15 h).
+    private static func hoursChoice(_ value: Double) -> String {
+        guard value >= 1 else { return "0" }
+        return String(Int(hours.min { abs($0 - value) < abs($1 - value) } ?? value))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -114,6 +131,16 @@ struct SetupGoalPage: View {
                         .environment(\.locale, Fmt.locale)
                         .padding(.horizontal, 16)
                         .frame(minHeight: 50)
+                    SettingsDivider()
+                    RaceDistanceRows(distance: $focus.distance)
+                }
+                .padding(.top, 6)
+            }
+            if !focus.goal.isEmpty {
+                SettingsGroup(footer: "Běžný týden za poslední měsíc. První týden podle toho naplánujeme s rezervou.") {
+                    SettingsPicker(title: "Kolik hodin týdně teď trénuješ?", selection: Binding(
+                        get: { focus.weeklyHours.map { Self.hoursChoice($0) } ?? "" },
+                        set: { focus.weeklyHours = Double($0) }), options: Self.hourOptions)
                 }
                 .padding(.top, 6)
             }

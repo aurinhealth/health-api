@@ -149,7 +149,7 @@ struct SetupFlowView: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
         }
-        .task { await load() }
+        .task { Units.defaultFromRegion(); await load() }
         .task(id: syncRun) { if syncRun > 0 { await followSync() } }
         .task(id: index) {
             if page == .about { await readAppleProfile() }
@@ -541,6 +541,8 @@ struct SetupFlowView: View {
             focus.goal = focusSaved.goal
             focus.eventName = focusSaved.eventName
             focus.eventDate = focusSaved.eventDate
+            focus.distance = focusSaved.distance
+            focus.weeklyHours = focusSaved.weeklyHours
             guard await saveFocus() else { return }
             withAnimation { index += 1 }
         case .time:

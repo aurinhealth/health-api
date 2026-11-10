@@ -506,6 +506,27 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(saved["mainSport"], .string("triathlon"))
         XCTAssertEqual(saved["sports"], .array([.string("ride"), .string("run"), .string("swim")]))
         XCTAssertEqual(saved["eventDate"], .string("2027-06-13"))
+        // The race's distance (onboarding review point 2) and the weekly hours (point 10).
+        XCTAssertEqual(saved["eventSport"], .string(""), "no distance given clears it")
+        XCTAssertEqual(saved["eventKm"], .null)
+        focus.distance.choose("half-ironman")
+        focus.weeklyHours = 6
+        XCTAssertEqual(focus.distance.choice, "half-ironman")
+        let withDistance = focus.applied(to: [:])
+        XCTAssertEqual(withDistance["eventSport"], .string("tri"))
+        XCTAssertEqual(withDistance["eventKm"], .number(113))
+        XCTAssertEqual(withDistance["weeklyHours"], .number(6))
+        focus.distance.choose("own")
+        XCTAssertEqual(focus.distance.sport, "tri", "own distance keeps the sport")
+        XCTAssertNil(focus.distance.km)
+        XCTAssertEqual(focus.distance.choice, "own")
+        focus.distance.km = 42.2
+        focus.distance.sport = "run"
+        XCTAssertEqual(focus.distance.choice, "marathon", "a typed common race reads as it")
+        focus.weeklyHours = 0
+        XCTAssertEqual(focus.applied(to: [:])["weeklyHours"], .null)
+        focus.distance.choose("half-ironman")
+        focus.weeklyHours = 6
         // Ride and Run main without a duathlon, the gym too (Petr 2026-11-03).
         var choice = SportsChoice()
         choice.toggle("ride")

@@ -16,6 +16,7 @@ struct GoalsSettingsView: View {
     @State private var eventName = ""
     @State private var hasEvent = false
     @State private var eventDate = Date()
+    @State private var distance = RaceDistance()
     @State private var weeklyHours = ""
     @State private var original: JSONObject = [:]
     @State private var filled = false
@@ -76,6 +77,8 @@ struct GoalsSettingsView: View {
                         .environment(\.locale, Fmt.locale)
                         .padding(.horizontal, 16)
                         .frame(minHeight: 50)
+                    SettingsDivider()
+                    RaceDistanceRows(distance: $distance)
                 }
             }
         }
@@ -222,19 +225,20 @@ struct GoalsSettingsView: View {
         let date = p["eventDate"]?.string.flatMap { Self.isoDay.date(from: $0) }
         hasEvent = date != nil || !eventName.isEmpty
         eventDate = date ?? Calendar.current.date(byAdding: .month, value: 3, to: Date()) ?? Date()
+        distance = RaceDistance(profile: p)
         weeklyHours = (p["weeklyHours"]?.number).map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) } ?? ""
         original = changes
     }
 
     private var changes: JSONObject {
-        [
+        (hasEvent ? distance : RaceDistance()).applied(to: [
             "goal": .string(goal), "targetWeight": Self.metric(targetWeight, Units.kg, scale: 10),
             "activity": .string(activity), "sportHours": .string(sportHours),
             "sportGoal": .string(sportGoal),
             "eventName": .string(hasEvent ? eventName : ""),
             "eventDate": .string(hasEvent ? Self.isoDay.string(from: eventDate) : ""),
             "weeklyHours": .field(weeklyHours)
-        ]
+        ])
     }
 
     private func save() async {
