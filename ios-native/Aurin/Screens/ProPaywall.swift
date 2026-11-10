@@ -160,6 +160,7 @@ struct PaywallView: View {
     @State private var thanks: String?
     @State private var started = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     init(close: @escaping () -> Void, frozenTime: Double? = nil, step: Int = 0, store: ProStore = .shared, notNow: Bool = false,
          allowAI: (() async throws -> Void)? = nil) {
@@ -195,6 +196,8 @@ struct PaywallView: View {
             }
         }
         .environment(\.colorScheme, .dark)
+        // Both ways in (Paywall.present and the setup's cover) stop at the screens' cap.
+        .dynamicTypeSize(...DynamicTypeSize.screenCap)
         .environment(demo)
         .sheet(isPresented: $allPlans) {
             AllProPlans(offers: offers, selected: $plan, buying: store.purchasing || !chosen.priced, start: { allPlans = false; next() },
@@ -256,10 +259,13 @@ struct PaywallView: View {
     // MARK: - The free week
 
     /// Title, calendar and samples scroll; the price, the buttons and Apple's
-    /// terms stay pinned at the bottom, so the terms are by the button at any
-    /// text size (guideline 3.1.2, onboarding review points 4 and 16).
+    /// terms stay pinned at the bottom, so the terms are by the button
+    /// (guideline 3.1.2, onboarding review points 4 and 16). With the AI note
+    /// at accessibility text sizes the pinned part would leave the top no room,
+    /// so there the whole page scrolls, in the same order.
     private var freeWeek: some View {
-        VStack(spacing: 0) {
+        let pinned = !(typeSize.isAccessibilitySize && allowAI != nil)
+        return VStack(spacing: 0) {
             topBar(back: !notNow)
             ScrollView {
                 VStack(spacing: 0) {
@@ -268,18 +274,25 @@ struct PaywallView: View {
                     Text(verbatim: L10n.f("Celé Aurin Pro zdarma do %@", Self.dayMonth(Self.firstPayment(from: today))))
                         .font(Typo.sentence(16)).foregroundStyle(Night.muted).multilineTextAlignment(.center).padding(.top, 4)
                     WeekCalendar(today: today).padding(.horizontal, 20).padding(.top, 20)
-                    // With the AI note pinned below, the belt's heading gives way.
+                    // With the AI note by the button, the belt's heading gives way.
                     if allowAI == nil {
                         Text("VYZKOUŠEJ TENTO TÝDEN").scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Night.faint)
                             .padding(.top, 22).padding(.bottom, 10)
                     }
                     clock { time in ScreenBelt(time: time, phoneHeight: allowAI == nil ? 199 : 150) }
                         .padding(.top, allowAI == nil ? 0 : 16).padding(.bottom, 8)
+                    if !pinned { freeWeekBottom }
                 }
                 .padding(.top, 2)
             }
             .scrollBounceBehavior(.basedOnSize)
-            // The AI note is what the button allows, so it stays by the button too.
+            if pinned { freeWeekBottom }
+        }
+    }
+
+    /// The AI note (it is what the button allows), the price, the buttons and the terms.
+    private var freeWeekBottom: some View {
+        VStack(spacing: 0) {
             if allowAI != nil { aiNote.padding(.horizontal, 20).padding(.top, 10) }
             price.padding(.horizontal, 20).padding(.top, 12)
             bottom(more: false)
@@ -292,8 +305,10 @@ struct PaywallView: View {
         VStack(spacing: 2) {
             Text(verbatim: chosen.afterTrial + (chosen.kind == .yearMonthly ? ", " + L10n.tr("12 měsíců") : ""))
                 .scaledFont(22, weight: .semibold).foregroundStyle(Night.ink)
-            Text(verbatim: L10n.f("po 7 dnech zdarma, první platba %@", Self.dayMonth(Self.firstPayment(from: today))))
-                .font(Typo.small).foregroundStyle(Night.muted)
+            if withTrial {
+                Text(verbatim: L10n.f("po 7 dnech zdarma, první platba %@", Self.dayMonth(Self.firstPayment(from: today))))
+                    .font(Typo.small).foregroundStyle(Night.muted)
+            }
         }
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
@@ -301,12 +316,12 @@ struct PaywallView: View {
     }
 
     /// What allowing the AI features sends where: the setup's AI point
-    /// (AI_CONSENT_VERSION in src/consent.js) in two lines, still naming
-    /// OpenAI (USA), health data and photos (guideline 5.1.2(i)).
+    /// (AI_CONSENT_VERSION in src/consent.js) shortened, still naming OpenAI
+    /// (USA), health data, photos and the daily sending (guideline 5.1.2(i)).
     private var aiNote: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text("Aurin Pro potřebuje AI").font(.footnote.weight(.semibold)).foregroundStyle(Night.amber)
-            Text("AI funkce posílají potřebné údaje, včetně zdravotních a fotek, které pošleš, společnosti OpenAI (USA). Vypneš to kdykoli v Nastavení → Soukromí a data.")
+            Text("AI funkce posílají potřebné údaje, včetně zdravotních a fotek, které pošleš, společnosti OpenAI (USA), i automaticky každý den. Vypneš to kdykoli v Nastavení → Soukromí a data.")
                 .font(.caption).foregroundStyle(Night.muted).fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

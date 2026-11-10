@@ -3806,7 +3806,7 @@
 "Povolit AI a začít týden zdarma" = "Allow AI and start free week";
 "Aurin Pro potřebuje AI" = "Aurin Pro needs AI";
 "Týden zdarma začal. AI se nepodařilo zapnout, zapneš ji v Nastavení → Soukromí a data." = "Your free week has started. AI could not be turned on; turn it on in Settings → Privacy & data.";
-"AI funkce posílají potřebné údaje, včetně zdravotních a fotek, které pošleš, společnosti OpenAI (USA). Vypneš to kdykoli v Nastavení → Soukromí a data." = "AI features send the data they need, including health data and photos you send, to OpenAI (USA). Turn it off anytime in Settings → Privacy & data.";
+"AI funkce posílají potřebné údaje, včetně zdravotních a fotek, které pošleš, společnosti OpenAI (USA), i automaticky každý den. Vypneš to kdykoli v Nastavení → Soukromí a data." = "AI features send the data they need, including health data and photos you send, to OpenAI (USA), also automatically every day. Turn it off anytime in Settings → Privacy & data.";
 "VYZKOUŠEJ 7 DNÍ ZDARMA" = "TRY 7 DAYS FREE";
 "12MĚSÍČNÍ TARIF, VYZKOUŠEJ 7 DNÍ ZDARMA" = "12-MONTH PLAN, TRY 7 DAYS FREE";
 "V PRO JE" = "INCLUDED IN PRO";

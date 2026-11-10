@@ -1021,7 +1021,8 @@ final class SnapshotTests: XCTestCase {
         // The same with the AI features left off in the setup (1.0.1 point 2): the note and "Povolit AI a začít týden zdarma",
         // at the safe-area height of a 6.1" iPhone (852 − 59 − 34), so the image shows the page fits.
         try render("paywall-setup-end-ai", height: 759, window: true) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true), notNow: true, allowAI: {}) }
-        // Large text (onboarding review point 16): the top scrolls, the price, both buttons and the terms stay at the bottom.
+        // Large text (onboarding review point 16): at XXL the top scrolls and the price, both buttons and the terms stay at the
+        // bottom; at AX1 with the AI note the whole page scrolls, so nothing is pushed off the screen.
         for (name, size) in [("xxl", DynamicTypeSize.xxLarge), ("ax1", .accessibility1)] {
             try render("paywall-setup-end-ai-\(name)", height: 759, typeSize: size, window: true) {
                 PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true), notNow: true, allowAI: {})
