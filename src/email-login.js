@@ -22,10 +22,10 @@
 import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie, knownDevice, knownDeviceCookie, heldKnownDevice, keepOnlyPushToken } from "./dashboard-auth.js";
 import { allowClient, allowRequest, callerSite } from "./ip-rate-limit.js";
 import { normalizeEmail, plainEmail, emailCodeAccess, signInEmailUser, changeUserEmail, SignupLimited } from "./tenancy.js";
-import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail, stepUpCodeEmail } from "./email-sender.js";
+import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail, emailTakenEmail, stepUpCodeEmail } from "./email-sender.js";
 import { siteLang } from "./site-pages.js";
 import { reviewCodeActive } from "./app-review.js";
-import { L } from "./lang.js";
+import { L, storedLanguage } from "./lang.js";
 
 const CODE_SECONDS = 10 * 60;
 const RESEND_SECONDS = 60;
@@ -183,7 +183,7 @@ async function claimAndSend(db, env, email, code, purpose, message, now, { open 
   if (!(Number(claimed.meta?.changes) > 0)) return "resend";
   await db.prepare("DELETE FROM email_login_codes WHERE sent_at < ?").bind(seconds - STALE_SECONDS).run().catch(() => {});
   try {
-    await sendEmail(env, { to, ...message });
+    if (message) await sendEmail(env, { to, ...message });
   } catch (error) {
     // Nobody got the new code: the one before it works again, and tries on either still count.
     const previous = before.results?.[0];
@@ -291,7 +291,10 @@ export async function handleEmailChange(request, env, url, session, ctx, stepUp 
   if (!emailConfigured(env)) return json({ message: L("Posílání e-mailů není zapnuté.", "Sending emails isn't turned on.") }, 404);
   if (request.headers.get("Origin") !== new URL(request.url).origin) return json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, 403);
   const db = env.RAW_DB || env.DB, user = session.user, body = await request.json().catch(() => ({}));
-  const email = normalizeEmail(body?.email), purpose = "email-change:" + user.id;
+  // The code lives in the account's own row, not the address's (as step-up codes do), and is bound to
+  // the address: a free and a taken address then answer alike at every step, and asking to move here
+  // never touches another account's sign-in code.
+  const email = normalizeEmail(body?.email), row = "email-change:" + user.id, purpose = row + ":" + email;
   if (email.length > 254 || !EMAIL_PATTERN.test(email) || !plainEmail(body?.email)) return emailChangeRefusal("invalid");
   if (url.pathname === "/app/api/account/email/start") {
     if (email === normalizeEmail(user.email)) return emailChangeRefusal("same");
@@ -303,14 +306,24 @@ export async function handleEmailChange(request, env, url, session, ctx, stepUp 
     if (!(await allowRequest(db, "email-change:user:" + user.id, CHANGE_USER_LIMITS, time)) || !(await allowClient(db, request, sessionSecret(env), "email-change", time, CHANGE_CLIENT_LIMITS))) {
       return json({ message: L("Příliš mnoho žádostí o změnu e-mailu. Zkus to později.", "Too many email change requests. Try again later.") }, 429);
     }
-    if (await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first()) return emailChangeRefusal("taken");
     const code = randomCode(), lang = requestLanguage(request);
-    const sent = await claimAndSend(db, env, email, code, purpose, emailChangeCodeEmail(lang, code), time, { change: true });
-    if (sent === "resend") return json({ message: L("Kód na tuhle adresu jsme poslali před chvílí. Další můžeš chtít za minutu.", "We sent a code to this address a moment ago. You can ask for another in a minute.") }, 429);
+    // Another account has the address (security review 2026-11-09, F5): the same claim, answers and
+    // timing as for any address (the mail goes out after the answer), but instead of the code it gets a
+    // notice in its own account's language, at most one a day. Any address gets at most
+    // MAX_SENDS_PER_DAY mails a day from changes, whichever accounts ask. Keyed hashes, so no address is stored.
+    const sent = await claimAndSend(db, env, row, code, purpose, null, time, { change: true, to: email });
     if (sent !== "sent") return codeRefusal(sent);
+    const keyOf = async name => name + ":" + (await signText(name + ":" + email, sessionSecret(env))).slice(0, 32);
+    const mail = (async () => {
+      if (!(await allowRequest(db, await keyOf("email-change-to"), { day: MAX_SENDS_PER_DAY }, time))) return;
+      const holder = await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first();
+      if (holder && !(await allowRequest(db, await keyOf("email-taken"), { day: 1 }, time))) return;
+      await sendEmail(env, { to: email, ...(holder ? emailTakenEmail(await storedLanguage(db, holder.id)) : emailChangeCodeEmail(lang, code)) });
+    })().catch(error => console.error("E-mail change mail failed", error?.code || error?.message));
+    if (ctx?.waitUntil) ctx.waitUntil(mail); else await mail;
     return json({ status: "ok" });
   }
-  const refused = await useCode(db, env, email, body?.code, purpose);
+  const refused = await useCode(db, env, row, body?.code, purpose);
   if (refused) return refused;
   const known = await heldKnownDevice(request, env, db, user.id);
   const changed = await changeUserEmail(db, env, user.id, email);
