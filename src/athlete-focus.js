@@ -113,7 +113,8 @@ export function athleteFocus(profile, today) {
     goal: f.sportGoal || null,
     // Sports done regularly in the last year (effectiveProfile), none when unknown.
     ...(Array.isArray(profile?.regularSports) && profile.regularSports.length ? { regular: profile.regularSports.filter(k => typeof k === "string").slice(0, 4) } : {}),
-    ...(f.swims100 === false && ["swimming", "triathlon"].includes(f.mainSport) ? { cannotSwim100m: true } : {}),
+    // Whenever the coach may suggest a swim: a main sport, a chosen side sport, or no list chosen.
+    ...(f.swims100 === false && (mains.includes("swim") || !f.sports || f.sports.includes("swim")) ? { cannotSwim100m: true } : {}),
     event: (f.eventName || f.eventDate) && (daysLeft == null || daysLeft >= 0) ? { name: f.eventName || null, date: f.eventDate || null, daysLeft } : null
   };
 }

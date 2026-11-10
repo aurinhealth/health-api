@@ -10,7 +10,10 @@ test("can't swim 100 m yet: lessons from the coach, no open water", () => {
   assert.equal(normalizeFocus({ swims100: "no" }).swims100, undefined);
   const focus = athleteFocus({ mainSport: "triathlon", swims100: false }, "2026-07-06");
   assert.equal(focus.cannotSwim100m, true);
-  assert.equal(athleteFocus({ mainSport: "cycling", swims100: false }, "2026-07-06").cannotSwim100m, undefined);
+  assert.equal(athleteFocus({ mainSport: "cycling", sports: ["ride"], swims100: false }, "2026-07-06").cannotSwim100m, undefined);
+  // Swimming as a side sport, or no sports chosen, keeps the safety line (onboarding review point 6).
+  assert.equal(athleteFocus({ mainSports: ["ride"], sports: ["ride", "swim"], swims100: false }, "2026-07-06").cannotSwim100m, true);
+  assert.equal(athleteFocus({ mainSport: "cycling", swims100: false }, "2026-07-06").cannotSwim100m, true);
   assert.match(withFocus("Jsi trenér Aurin.", focus), /lekc|lessons/);
   const prefs = sanitizeWeekPlan({ weeklyActivities: 3, availability: [60, 0, 60, 0, 60, 0, 0].map(minutes => ({ minutes, preferredSports: ["swim"] })) });
   const p = weekProposal({ prefs, start: "2026-07-06", today: "2026-07-06", state: { status: "active" }, focus: { ...focus, sport: "swimming" }, openWater: "season" });
