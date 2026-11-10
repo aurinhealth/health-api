@@ -992,6 +992,8 @@ struct PlannedWorkoutView: View {
         return Button { Task { await environment(indoor: indoor) } } label: {
             action(title, filled: current, busy: working == (indoor ? .indoor : .outdoor), tick: current)
         }
+        // Until the plan says where it is, the Undo would not know where to go back.
+        .disabled(environmentNow == nil)
         .accessibilityAddTraits(current ? .isSelected : [])
     }
 
@@ -1056,7 +1058,8 @@ struct PlannedWorkoutView: View {
         .accessibilityLabel(busy ? L10n.tr("Ukládám…") : L10n.tr(title))
     }
 
-    /// Moved: the screen closes and the toast says where, with "Vrátit".
+    /// Moved: the screen closes and the toast says where, with "Vrátit" (no
+    /// haptic: the screen is gone before it would play).
     private func move() async {
         let date = AppModel.localDate(moveDate)
         working = .move
@@ -1064,10 +1067,18 @@ struct PlannedWorkoutView: View {
         defer { working = nil }
         do {
             let note = try await PlanSessionActions.move(model, session: session, to: date, time: nil)
-            changed += 1
-            let model: AppModel = self.model, session = self.session
+            let model: AppModel = self.model, session = self.session, time = shownTime
             model.undoToast = PlanToast(title: L10n.f("Přesunuto na %@", Fmt.weekdayName(date)), note: note, cancelled: false, undo: {
-                do { try await PlanSessionActions.moveBack(model, session: session, from: date) } catch { model.notice = error.localizedDescription }
+                do {
+                    // Back to the day and the time it had here (Čas may have changed it).
+                    if let eventId = session.eventId {
+                        let _: PlannedChange = try await model.api.reschedulePlanned(eventId: eventId, to: session.date, time: time ?? "")
+                    } else {
+                        try await PlanSessionActions.moveBack(model, session: session, from: date)
+                    }
+                } catch {
+                    model.notice = error.localizedDescription
+                }
                 async let training: Void = model.refreshTraining()
                 await model.refresh()
                 await training
@@ -1102,9 +1113,7 @@ struct PlannedWorkoutView: View {
     /// The place changes on this screen: its button fills, the plan comes back
     /// drawn for it (indoor FTP, no heat advice) and the toast offers "Vrátit".
     private func environment(indoor: Bool) async {
-        guard let id = session.eventId, environmentNow != (indoor ? "indoor" : "outdoor") else { return }
-        // The place to go back to; before the plan has loaded, the other one.
-        let before = environmentNow ?? (indoor ? "outdoor" : "indoor")
+        guard let id = session.eventId, let before = environmentNow, before != (indoor ? "indoor" : "outdoor") else { return }
         working = indoor ? .indoor : .outdoor
         error = nil
         defer { working = nil }

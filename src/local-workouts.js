@@ -114,8 +114,8 @@ export async function editLocalWorkout(env,id,change,fetchImpl=fetch){
   }else{
     const next={...event,...change};
     const link=await db.prepare('SELECT workout_id FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=?').bind(db.userId,row.id).first();
-    // Indoors: the place picked in the app, else a Virtual type (a pool swim has none).
-    const indoor=typeof next.indoor==='boolean'?next.indoor:/Virtual/.test(next.type);
+    // Indoors: the place picked in the app, else the type (VirtualRide, VirtualRun, a pool Swim).
+    const indoor=typeof next.indoor==='boolean'?next.indoor:/Virtual/.test(next.type)||next.type==='Swim';
     const key=link?'pfd-library:'+link.workout_id+':'+next.start_date_local.slice(0,10)+(indoor?'':':outdoor'):row.event_key;
     await storeLocalEvent(db,next,{key,id:row.id});
     if(link)await db.prepare('UPDATE workout_schedule_links SET intervals_external_id=? WHERE user_id=? AND intervals_event_id=?').bind(key,db.userId,row.id).run();
