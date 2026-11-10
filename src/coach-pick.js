@@ -60,8 +60,8 @@ export function rankOptions({ ride, run, swim = null, mainSport = "general", mai
   const options = [
     endurance("ride", ride),
     endurance("run", run),
-    { kind: "gym", title: lowerTired ? L("Posilovna na horní polovinu", "Gym upper body") : L("Posilovna na celé tělo", "Gym full body"), detail: lowerTired ? L("60 min, nohy nech odpočinout", "60 min, let the legs rest") : L("60 min", "60 min") },
-    swim ? endurance("swim", swim) : { kind: "swim", title: L("Plavání s technikou", "Swim technique"), detail: L("45 min, 1 800 m", "45 min, 1800 m"), lines: [[L("Rozplavání", "Warm-up"), "200 m"], [L("Technika", "Drills"), L("8 × 50 m, pauza 20 s", "8 × 50 m, 20 s rest")], [L("Plynule", "Steady"), L("1 000 m lehce", "1,000 m easy")], [L("Vyplavání", "Cool-down"), "200 m"]] },
+    { kind: "gym", title: lowerTired ? L("Posilovna na horní polovinu", "Upper-body gym") : L("Posilovna na celé tělo", "Full-body gym"), detail: lowerTired ? L("60 min, nohy nech odpočinout", "60 min, let the legs rest") : L("60 min", "60 min") },
+    swim ? endurance("swim", swim) : { kind: "swim", title: L("Technika plavání", "Swim technique"), detail: L("45 min, 1 800 m", "45 min, 1800 m"), lines: [[L("Rozplavání", "Warm-up"), "200 m"], [L("Technika", "Drills"), L("8 × 50 m, pauza 20 s", "8 × 50 m, 20 s rest")], [L("Plynule", "Steady"), L("1 000 m lehce", "1,000 m easy")], [L("Vyplavání", "Cool-down"), "200 m"]] },
     { kind: "sauna", title: L("Sauna", "Sauna"), detail: L("3 × 12 min", "3 × 12 min"), lines: [[L("3 kola", "3 rounds"), L("12 min v sauně", "12 min in the sauna")], [L("Mezi tím", "Between"), L("5 min venku nebo sprcha", "5 min outside or a shower")], [L("Pití", "Drink"), L("0,5 l vody", "0.5 l of water")]] },
     { kind: "rest", title: L("Volno", "Day off"), detail: L("Procházka 30 min a protažení", "A 30 min walk and stretching"), lines: [[L("Procházka", "Walk"), "30 min"], [L("Protažení", "Stretching"), "15 min"]] }
   ];

@@ -491,6 +491,6 @@ jobs:
           anonymous="$(curl -sS -o /dev/null -w '%{http_code}' "https://$HOST/app/api/daily")"
           [ "$anonymous" = "401" ] || { echo "API must reject anonymous requests, got HTTP $anonymous"; exit 1; }
           home="$(curl -fsS -D "$RUNNER_TEMP/home-headers" "https://$HOST/")"
-          grep -q "TEST SERVER" <<< "$home" || { echo "The test server's badge is missing"; exit 1; }
+          grep -q "Test server" <<< "$home" || { echo "The test server's badge is missing"; exit 1; }
           grep -qiE '^x-robots-tag: noindex' "$RUNNER_TEMP/home-headers" || { echo "The test server must stay out of search engines"; exit 1; }
           echo "Test server: https://$HOST (${SHA::7})" >> "$GITHUB_STEP_SUMMARY"
