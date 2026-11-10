@@ -130,7 +130,7 @@ struct AppIconChoice: Identifiable, Equatable {
             seasonKeys.indices.map { AppIconChoice(id: style.key + "-" + seasonKeys[$0], name: seasonNames[$0], rule: .season($0)) }
         }),
         Section(title: "Odměna", icons: styles.map { AppIconChoice(id: $0.key + "-streak", name: $0.name, rule: .streak(30)) }),
-        Section(title: "Speciální · Aurin Pro", icons: proIcons.map { AppIconChoice(id: "pro-" + $0.id, name: $0.name, rule: .pro) })
+        Section(title: "Speciální pro Aurin Pro", icons: proIcons.map { AppIconChoice(id: "pro-" + $0.id, name: $0.name, rule: .pro) })
     ]
 }
 
@@ -341,7 +341,7 @@ struct AppIconLockedSheet: View {
 
     private var title: String {
         if case .season = icon.rule { return L10n.tr(icon.name) }
-        return L10n.tr(icon.name) + " · " + section
+        return L10n.tr(icon.name) + ", " + section
     }
 
     private var rule: String {

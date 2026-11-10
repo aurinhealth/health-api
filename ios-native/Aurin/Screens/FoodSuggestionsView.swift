@@ -16,9 +16,9 @@ struct FoodSuggestionsView: View {
     var body: some View {
         SettingsPage(title: "Návrhy oprav") {
             Picker("Druh", selection: $kind) {
-                Text(L10n.f("Opravy · %d", list?.pending?["correction"] ?? 0)).tag("correction")
-                Text(L10n.f("Hlášení · %d", list?.pending?["report"] ?? 0)).tag("report")
-                Text(L10n.f("Nové · %d", list?.pending?["new_food"] ?? 0)).tag("new_food")
+                Text(L10n.f("Opravy (%d)", list?.pending?["correction"] ?? 0)).tag("correction")
+                Text(L10n.f("Hlášení (%d)", list?.pending?["report"] ?? 0)).tag("report")
+                Text(L10n.f("Nové (%d)", list?.pending?["new_food"] ?? 0)).tag("new_food")
             }
             .pickerStyle(.segmented)
             Picker("Stav", selection: $status) {
@@ -93,7 +93,7 @@ struct FoodSuggestionDetail: View {
 
     var body: some View {
         SettingsPage(title: suggestion.name) {
-            Text(([suggestion.after["brand"]?.string, suggestion.barcode.map { "EAN " + $0 }].compactMap { $0 }).joined(separator: " · "))
+            Text(([suggestion.after["brand"]?.string, suggestion.barcode.map { "EAN " + $0 }].compactMap { $0 }).joined(separator: ", "))
                 .font(Typo.caption).foregroundStyle(Palette.muted).frame(maxWidth: .infinity)
             if isNew {
                 SettingsGroup(title: L10n.f("Na 100 %@", suggestion.after["nutrition_basis"]?.string == "ml" ? "ml" : "g")) {
@@ -167,7 +167,7 @@ struct FoodSuggestionDetail: View {
     /// "Porce 1 g → 19 g" for the list: the first change; a new food: its brand and code.
     static func summary(_ s: FoodSuggestion) -> String {
         if s.kind == "new_food" {
-            return [s.after["brand"]?.string, s.barcode.map { "EAN " + $0 }].compactMap { $0 }.joined(separator: " · ")
+            return [s.after["brand"]?.string, s.barcode.map { "EAN " + $0 }].compactMap { $0 }.joined(separator: ", ")
         }
         guard let key = s.changes.first, let field = fields.first(where: { $0.key == key }) else { return "" }
         let more = s.changes.count > 1 ? " +\(s.changes.count - 1)" : ""
@@ -209,7 +209,7 @@ struct FoodReportDetail: View {
 
     var body: some View {
         SettingsPage(title: report.name) {
-            Text(([report.before["brand"]?.string, report.barcode.map { "EAN " + $0 }].compactMap { $0 }).joined(separator: " · "))
+            Text(([report.before["brand"]?.string, report.barcode.map { "EAN " + $0 }].compactMap { $0 }).joined(separator: ", "))
                 .font(Typo.caption).foregroundStyle(Palette.muted).frame(maxWidth: .infinity)
             SettingsGroup(title: "Hlášení") {
                 SettingsRow(title: "Co nesedí", value: Self.reason(report.reason), chevron: false)
@@ -269,9 +269,9 @@ struct FoodReportDetail: View {
         L10n.tr(FoodReportSheet.reasons.first { $0.code == code }?.title ?? "Něco jiného")
     }
 
-    /// "Energie nebo živiny · 2×" for the list.
+    /// "Energie nebo živiny, 2×" for the list.
     static func summary(_ r: FoodSuggestion) -> String {
-        reason(r.reason) + ((r.reports ?? 1) > 1 ? " · \(r.reports ?? 1)×" : "")
+        reason(r.reason) + ((r.reports ?? 1) > 1 ? ", \(r.reports ?? 1)×" : "")
     }
 
     private func reject() async {

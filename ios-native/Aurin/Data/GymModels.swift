@@ -125,7 +125,7 @@ struct GymProposal: Codable, Equatable {
     /// The length the server settled on, when it chose it (autoLength).
     var minutes: Int? = nil
 
-    /// The exercises in order with their work sets, "3 × 8–10 · 40 kg".
+    /// The exercises in order with their work sets, "3 × 8–10, 40 kg".
     var exercises: [(name: String, sets: Int, reps: String, kg: String)] {
         var out: [(name: String, sets: Int, reps: String, kg: String)] = []
         for row in rows {

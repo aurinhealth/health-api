@@ -406,12 +406,12 @@ struct TrainingModeView: View {
         day.planName?.nilIfBlank ?? L10n.tr("Posilovna")
     }
 
-    /// "Cvik 2 z 5 · 6/16 sérií".
+    /// "Cvik 2 z 5, 6/16 sérií".
     private func progressLine(_ day: GymDay) -> String {
         let done: Int = day.exercises.reduce(0) { $0 + $1.doneCount }
         let total: Int = day.exercises.reduce(0) { $0 + $1.workCount }
         let position = L10n.f("Cvik %@ z %@", String(min(index, day.exercises.count - 1) + 1), String(day.exercises.count))
-        return position + " · " + L10n.plural("%lld/%lld sérií", done, total)
+        return position + ", " + L10n.plural("%lld/%lld sérií", done, total)
     }
 
     // MARK: The exercise
@@ -632,7 +632,7 @@ struct TrainingModeView: View {
     /// A set's weight loaded as plates (a weight as shown); nil when no plates go on it.
     private func plateTarget(_ set: GymSet, in exercise: GymExercise, shown: String) -> PlateTarget? {
         guard let usual = usualBar(exercise) else { return nil }
-        return PlateTarget(id: set.row, exercise: exercise.name, title: set.warmup ? exercise.name : L10n.f("%@ · série %@", exercise.name, set.number),
+        return PlateTarget(id: set.row, exercise: exercise.name, title: set.warmup ? exercise.name : L10n.f("%@, série %@", exercise.name, set.number),
                            kg: LiftWeight.number(LiftWeight.kgText(shown)), usual: usual)
     }
 
@@ -755,12 +755,12 @@ struct TrainingModeView: View {
         }
     }
 
-    /// "15 kg × 5–8 · 3 série": the first set still to do and the sets left.
+    /// "15 kg × 5–8, 3 série": the first set still to do and the sets left.
     private func nextLoad(_ next: GymExercise) -> String {
         let left: Int = next.workCount - next.doneCount
         let count: String = L10n.plural("%lld sérií", left)
         guard let set = next.sets.first(where: { !$0.done && $0.work }) else { return count }
-        return GymLiveActivity.load(set, in: next) + " · " + count
+        return GymLiveActivity.load(set, in: next) + ", " + count
     }
 
     /// The arrow that unfolds the sets of Teď or Další.
@@ -1131,11 +1131,11 @@ struct TrainingModeView: View {
         let part: GymDayPart? = { if case .part(let part) = target { return part }; return nil }()
         let symbol = part?.kind.symbol ?? "dumbbell"
         let color = part?.kind.color ?? Palette.secondary
-        let label = L10n.tr("Na řadě") + " · " + L10n.tr(part?.kind.title ?? "Posilovna")
+        let label = L10n.tr("Na řadě") + ", " + L10n.tr(part?.kind.title ?? "Posilovna")
         let name = part.map { L10n.tr($0.kind.title) } ?? current(day)?.name ?? L10n.tr("Posilovna")
         let left: [GymExercise] = day.exercises.filter { $0.sets.contains { !$0.done } }
         let setsLeft: Int = left.reduce(0) { $0 + $1.workCount - $1.doneCount }
-        let gymLine: String = L10n.plural("%lld cviků", left.count) + " · " + L10n.plural("%lld sérií", setsLeft)
+        let gymLine: String = L10n.plural("%lld cviků", left.count) + ", " + L10n.plural("%lld sérií", setsLeft)
         let detail: String = part.map { parts.subtitle($0, day: day) } ?? gymLine
         let start: String = part?.kind == .stretching ? "Spustit protažení" : part?.kind == .warmup ? "Spustit rozcvičku" : "Spustit posilku"
         return VStack(spacing: 14) {
@@ -1239,7 +1239,7 @@ struct TrainingModeView: View {
 
     private func nowLine(_ exercise: GymExercise, _ set: GymSet) -> String {
         let which: String = set.warmup ? L10n.tr("rozcvička") : set.drop ? L10n.tr("dropset") : L10n.f("série %@", set.number)
-        return exercise.name + " · " + which
+        return exercise.name + ", " + which
     }
 
     /// "80 kg × 8".
@@ -1628,7 +1628,7 @@ struct TrainingModeView: View {
                 NavigationLink(value: AppRoute.liveGym(date, true)) {
                     VStack(spacing: 2) {
                         Label("Zopakovat minulou", systemImage: "arrow.counterclockwise").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        Text(verbatim: Fmt.capitalized(Fmt.relativeDay(last, today: date)) + " · " + L10n.plural("%lld cviků", count))
+                        Text(verbatim: Fmt.capitalized(Fmt.relativeDay(last, today: date)) + ", " + L10n.plural("%lld cviků", count))
                             .font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                     .frame(maxWidth: .infinity).frame(height: 60).background(Palette.card, in: Capsule())
@@ -1948,7 +1948,7 @@ struct TrainingModeView: View {
         let left = day?.exercises.filter { $0.name == name }.flatMap(\.sets).filter { !$0.done && !$0.warmup }.count ?? 0
         let sets = left > 0 ? L10n.plural("Zbývá %lld sérií", left) : nil
         let muscle = catalog.first { $0.name == name }?.muscle?.nilIfBlank
-        let line = [muscle, sets].compactMap { $0 }.joined(separator: " · ")
+        let line = [muscle, sets].compactMap { $0 }.joined(separator: ", ")
         return line.isEmpty ? nil : line
     }
 

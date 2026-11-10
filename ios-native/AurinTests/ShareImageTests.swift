@@ -13,7 +13,7 @@ final class ShareImageTests: XCTestCase {
 
     /// A ride with a route, power and zones, like an Intervals.icu detail.
     private var ride: ShareWorkout {
-        var w = ShareWorkout(title: "Kolo · tempo", sport: "ride")
+        var w = ShareWorkout(title: "Kolo, tempo", sport: "ride")
         w.date = "2026-10-08"
         w.start = "17:30"
         w.minutes = 72

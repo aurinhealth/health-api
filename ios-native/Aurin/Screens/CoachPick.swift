@@ -31,13 +31,13 @@ struct CoachPick: Decodable, Equatable {
         var symbol: String { CoachPick.symbol(kind) }
         var color: Color { CoachPick.color(kind) }
 
-        /// "1 h 05 · 72 TSS · trenažér" for a ride or run, else the server's line.
+        /// "1 h 05, 72 TSS, trenažér" for a ride or run, else the server's line.
         var subtitle: String? {
             guard let w = workout else { return detail }
             var parts = [detail ?? w.duration_minutes.map { Fmt.duration(Int($0)) } ?? ""]
             if let load = w.target_load, load > 0 { parts.append(Fmt.int(load) + " TSS") }
             if w.environment == "indoor" { parts.append(L10n.tr(kind == "run" ? "pás" : "trenažér")) }
-            return parts.filter { !$0.isEmpty }.joined(separator: " · ")
+            return parts.filter { !$0.isEmpty }.joined(separator: ", ")
         }
     }
     let date: String?
@@ -247,7 +247,7 @@ struct CoachPickCard: View {
                             HStack(spacing: 12) {
                                 PickIcon(option: best, size: 32)
                                 Text(verbatim: best.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
-                                if let length = best.subtitle?.components(separatedBy: " · ").first {
+                                if let length = best.subtitle?.replacingOccurrences(of: ", ", with: ", ").components(separatedBy: ", ").first {
                                     Text(verbatim: length).font(Typo.small).foregroundStyle(Palette.muted).lineLimit(1)
                                 }
                                 Spacer(minLength: 0)

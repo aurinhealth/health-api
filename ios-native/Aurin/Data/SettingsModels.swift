@@ -172,7 +172,7 @@ struct TrainingProfileResponse: Decodable, Equatable {
     var runHrModel: String? = nil
     var runHrAuto: String? = nil
     var swimZoneModel: SwimZoneModel? = nil
-    /// Where each threshold comes from and how old it is ("Test 20 min · před
+    /// Where each threshold comes from and how old it is ("Test 20 min, před
     /// 3 týdny", "Odhad podle věku"), by key (ftp, lthr, maxHr, runThresholdPace,
     /// runLthr, swimCss), in the app language; absent from older servers.
     var notes: [String: String]? = nil

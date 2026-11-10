@@ -8,7 +8,7 @@ import Foundation
 /// language (GymLiveActivity); the widget extension only draws them.
 struct GymActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
-        /// "Posilovna · 3 z 5 cviků".
+        /// "Posilovna, 3 z 5 cviků".
         var header: String
         /// The set now, or after the rest: "Dřep".
         var exercise: String
@@ -22,7 +22,7 @@ struct GymActivityAttributes: ActivityAttributes {
         var reps: String?
         /// "3/4" of a work set (nil for a warm-up or a drop set).
         var setShort: String?
-        /// The next exercise: "Bench · 60 kg × 10".
+        /// The next exercise: "Bench, 60 kg × 10".
         var then: String?
         /// The sheet row of the set, for Série hotová.
         var row: Int?

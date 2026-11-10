@@ -52,14 +52,14 @@ extension APIClient {
     }
 }
 
-/// Posilovna · historie: "Levá a pravá strana".
+/// Posilovna, historie: "Levá a pravá strana".
 struct GymSidesView: View {
     let items: [GymSideBalance.Item]
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: "Levá a pravá strana") {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: "Posilovna · historie").padding(.top, 24)
+                SectionLabel(text: "Historie posilovny").padding(.top, 24)
                 Text("Levá a pravá strana").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 Card {
                     VStack(alignment: .leading, spacing: 16) {
