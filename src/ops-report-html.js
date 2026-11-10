@@ -81,7 +81,7 @@ export function opsReportHtml({ date, rows = [], room = null, stuck = null, acco
     const waits = shown.some(row => row.waited);
     const head = cell("Co", { pad: "4px 0" }) + cell("Kolikrát", { align: "right", pad: "4px 0" }) + cell("Nejdéle", { align: "right", pad: "4px 0 4px 12px" }) + (waits ? cell("Čekal na", { align: "right", pad: "4px 0 4px 12px" }) : "");
     const body = shown.map(row => rowHtml([
-      cell(`${DOT[row.light]} ${escape(routeLabel(row.service))}<br><span style="font-size:12px;color:#a1a1aa">${escape(row.service)}${row.rows ? ` · ${row.rows.toLocaleString("cs-CZ")} řádků` : ""}</span>`),
+      cell(`${DOT[row.light]} ${escape(routeLabel(row.service))}<br><span style="font-size:12px;color:#a1a1aa">${escape(row.service)}${row.rows ? `, ${row.rows.toLocaleString("cs-CZ")} řádků` : ""}</span>`),
       cell(`${row.count}×`, { align: "right", nowrap: true }), cell(seconds(row.ms), { align: "right", nowrap: true, pad: "7px 0 7px 12px" }), ...(waits ? [cell(escape(row.waited || "–"), { align: "right", pad: "7px 0 7px 12px" })] : [])
     ]));
     if (rest.length) body.push(`<tr style="border-top:1px solid #e4e4e7"><td colspan="${waits ? 4 : 3}" style="padding:7px 0;color:#71717a;font-size:13px;line-height:1.5">Další: ${escape(rest.map(r => `${routeLabel(r.service)} ${r.count}× (${seconds(r.ms)})`).join(", "))}</td></tr>`);
@@ -95,13 +95,13 @@ export function opsReportHtml({ date, rows = [], room = null, stuck = null, acco
     const near = ai.named.filter(m => m.share != null && m.share >= 80);
     for (const m of near) important.push(`${m.who} má za měsíc ${m.share} % stropu AI.`);
     const body = ai.users.map(u => rowHtml([cell(escape(u.who)), cell(escape(money(u.cost)), { align: "right", nowrap: true, pad: "7px 0 7px 12px" }), cell(escape(u.features.map(f => `${f.name} ${f.calls}×`).join(", ")), { align: "right", muted: true, pad: "7px 0 7px 12px" })]));
-    const monthLine = [...ai.named.map(m => `${m.who} ${money(m.cost)}${m.share != null ? ` (${m.share} %)` : ""}`), ai.others.count ? `${ai.named.length ? "ostatní " : ""}${ai.others.count} ${ai.others.count === 1 ? "účet" : ai.others.count <= 4 ? "účty" : "účtů"} dohromady ${money(ai.others.cost)}` : ""].filter(Boolean).join(" · ");
+    const monthLine = [...ai.named.map(m => `${m.who} ${money(m.cost)}${m.share != null ? ` (${m.share} %)` : ""}`), ai.others.count ? `${ai.named.length ? "ostatní " : ""}${ai.others.count} ${ai.others.count === 1 ? "účet" : ai.others.count <= 4 ? "účty" : "účtů"} dohromady ${money(ai.others.cost)}` : ""].filter(Boolean).join(", ");
     const top = Math.min(100, Math.max(0, ...ai.named.map(m => m.share || 0)));
     const bar = ai.limit && ai.named.length ? `<div style="height:8px;background:#e4e4e7;border-radius:4px;margin:6px 0 0"><div style="width:${top}%;height:8px;background:${top >= 80 ? "#ef4444" : top >= 50 ? "#f59e0b" : "#22c55e"};border-radius:4px"></div></div>` : "";
-    parts.push(heading(`AI včera: ${money(ai.total)} · ${ai.calls} dotazů${ai.cachedShare != null ? ` · ${ai.cachedShare} % vstupu z cache` : ""}`, near.length ? "orange" : "green")
+    parts.push(heading(`AI včera: ${money(ai.total)}, ${ai.calls} dotazů${ai.cachedShare != null ? `, ${ai.cachedShare} % vstupu z cache` : ""}`, near.length ? "orange" : "green")
       + table(null, body) + `<p style="margin:10px 0 0;font-size:14px">Za měsíc${ai.limit ? ` (strop ${escape(usd(ai.limit))} na účet)` : ""}: ${escape(monthLine)}</p>` + bar
-      + ((ai.prices || []).length ? `<p style="margin:14px 0 4px;font-size:14px">Cena jednoho dotazu podle skupiny (průměr · p95)</p>`
-        + table(null, ai.prices.map(p => rowHtml([cell(escape(p.name)), cell(escape(`${money(p.average)} · ${money(p.p95)}`), { align: "right", nowrap: true, pad: "7px 0 7px 12px" }), cell(escape(`${p.calls}×`), { align: "right", muted: true, pad: "7px 0 7px 12px" })]))) : ""));
+      + ((ai.prices || []).length ? `<p style="margin:14px 0 4px;font-size:14px">Cena jednoho dotazu podle skupiny (průměr, p95)</p>`
+        + table(null, ai.prices.map(p => rowHtml([cell(escape(p.name)), cell(escape(`${money(p.average)}, ${money(p.p95)}`), { align: "right", nowrap: true, pad: "7px 0 7px 12px" }), cell(escape(`${p.calls}×`), { align: "right", muted: true, pad: "7px 0 7px 12px" })]))) : ""));
   } else if (aiLines) parts.push(heading("AI", null) + aiLines.split("\n").filter(Boolean).map(line => paragraph(line.replace(/^- /, "• "))).join(""));
 
   if (accounts) {
@@ -123,7 +123,7 @@ export function opsReportHtml({ date, rows = [], room = null, stuck = null, acco
   return `<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>`
     + `<body style="margin:0;padding:24px 16px;background:#f4f4f5;color:#18181b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">`
     + `<div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;padding:24px">`
-    + `<p style="margin:0;font-size:13px;color:#71717a">Aurin · přehled za ${escape(date)} (UTC)</p>`
+    + `<p style="margin:0;font-size:13px;color:#71717a">Aurin, přehled za ${escape(date)} (UTC)</p>`
     + `<p style="margin:6px 0 18px;font-size:20px;font-weight:700">${escape(title)}</p>${box}${parts.join("")}`
     + `<p style="margin:24px 0 0;font-size:12px;color:#a1a1aa">Podrobnosti jsou v Cloudflare → Workers → health-api → Logs.</p>`
     + `</div></body></html>`;

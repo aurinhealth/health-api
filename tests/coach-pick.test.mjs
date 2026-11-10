@@ -9,7 +9,7 @@ const coach = (status, kind = "tempo", minutes = 65, lower = 0, reasons = []) =>
 test("a rested cyclist gets the ride the coach chose, the rest under Jiné možnosti", () => {
   const r = rankOptions({ ride: coach("green"), run: coach("green", "endurance", 40), mainSport: "cycling", sports: ["ride", "run", "strength"] });
   assert.equal(r.options[0].kind, "ride");
-  assert.equal(r.options[0].title, "Kolo · tempo");
+  assert.equal(r.options[0].title, "Kolo: tempo");
   assert.equal(r.options[0].best, true);
   assert.equal(r.options[0].action, "library");
   assert.deepEqual(r.options.map(o => o.kind).sort(), ["gym", "rest", "ride", "run", "sauna", "swim"]);
@@ -31,7 +31,7 @@ test("a bad night recommends a day off with a walk, the sauna second at most, an
 test("tired legs make the gym upper body; declines push an option down", () => {
   const r = rankOptions({ ride: coach("yellow", "endurance", 60, 2), run: coach("yellow", "endurance"), mainSport: "strength", sports: ["strength", "ride"] });
   const gym = r.options.find(o => o.kind === "gym");
-  assert.equal(gym.title, "Posilovna · horní polovina");
+  assert.equal(gym.title, "Posilovna na horní polovinu");
   const declined = rankOptions({ ride: coach("yellow", "endurance", 60, 2), run: coach("yellow", "endurance"), mainSport: "strength", sports: ["strength", "ride"], declines: [{ top: r.options[0].kind }, { top: r.options[0].kind }, { top: r.options[0].kind }] });
   assert.notEqual(declined.options[0].kind, r.options[0].kind);
 });
@@ -62,7 +62,7 @@ test("after a ride the activity says what was done, then recommends stretching",
   const best = r.options[0];
   assert.equal(best.kind, "rest");
   assert.equal(best.title, "Protažení");
-  assert.equal(best.detail, "15 min · večer procházka 30 min");
+  assert.equal(best.detail, "15 min, večer procházka 30 min");
   assert.equal(best.reason, "Dnes máš za sebou kolo, 1 h 07, 74 TSS. Doporučuju 15 minut protažení a večer lehkou procházku.");
   assert.equal(doneSentence([{ kind: "run", minutes: 40 }]), "Dnes máš za sebou běh, 40 min.");
 });
@@ -89,8 +89,8 @@ test("the ready workouts are reused only while the options stay the same", async
 
 test("the lines of a workout and a gym plan", () => {
   const steps = [{ repeats: 1, steps: [{ durationSeconds: 600, percentLow: 50, percentHigh: 60, wattsLow: 130, wattsHigh: 156 }] }, { repeats: 3, steps: [{ durationSeconds: 480, percentLow: 80, percentHigh: 85, wattsLow: 208, wattsHigh: 221, note: "tempo" }, { durationSeconds: 180, percentLow: 50, percentHigh: 55 }] }, { repeats: 1, steps: [{ durationSeconds: 300, percentLow: 50, percentHigh: 55, wattsLow: 130, wattsHigh: 143 }] }];
-  assert.deepEqual(workoutLines(steps, "ride"), [["Rozjetí", "10 min · 143 W"], ["3 × tempo", "8 min · 215 W"], ["Vyjetí", "5 min · 137 W"]]);
-  assert.deepEqual(gymLines([["Typ", "Cvik"], ["WORK", "Bench press", 1, "70", 8], ["WORK", "Bench press", 2, "70", 8], ["WARMUP", "Bench press", 1, "40", 10], ["WORK", "Shyby", 1, "", 6]]), [["Bench press", "2 × 8 · 70 kg"], ["Shyby", "1 × 6"]]);
+  assert.deepEqual(workoutLines(steps, "ride"), [["Rozjetí", "10 min, 143 W"], ["3 × tempo", "8 min, 215 W"], ["Vyjetí", "5 min, 137 W"]]);
+  assert.deepEqual(gymLines([["Typ", "Cvik"], ["WORK", "Bench press", 1, "70", 8], ["WORK", "Bench press", 2, "70", 8], ["WARMUP", "Bench press", 1, "40", 10], ["WORK", "Shyby", 1, "", 6]]), [["Bench press", "2 × 8, 70 kg"], ["Shyby", "1 × 6"]]);
 });
 
 test("Aktivita dne asks for the ready workouts only when the options change, the AI only for the best", async () => {

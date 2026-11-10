@@ -6,8 +6,8 @@ import { intervalsText } from './workout-model.js';
 
 // Names: the Czech words of a name; numbers and the rest stay.
 const NAME_RULES = [
-  [/^Norský double threshold · dopolední/, 'Norwegian double threshold · morning'],
-  [/^Norský double threshold · odpolední/, 'Norwegian double threshold · afternoon'],
+  [/^Norský double threshold, dopolední/, 'Norwegian double threshold, morning'],
+  [/^Norský double threshold, odpolední/, 'Norwegian double threshold, afternoon'],
   [/^Norský (\S+) \(běh\)/, 'Norwegian $1 (run)'],
   [/^Norský /, 'Norwegian '],
   [/^Tempo se zrychleními /, 'Tempo with surges '],

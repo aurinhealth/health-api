@@ -13,7 +13,7 @@ test("test server pages carry a badge and stay out of search engines", async () 
   assert.equal(isStaging(config.vars), false);
   const page = await markStaging(new Response("<html><body><p>Hi</p></body></html>", { headers: { "content-type": "text/html; charset=utf-8" } }));
   assert.equal(page.headers.get("X-Robots-Tag"), "noindex, nofollow");
-  assert.match(await page.text(), /TEST · staging<\/div><\/body>/);
+  assert.match(await page.text(), /TEST SERVER<\/div><\/body>/);
   const api = await markStaging(Response.json({ status: "ok" }, { status: 401, headers: { "X-Storage-Routing": "1" } }));
   assert.equal(api.status, 401);
   assert.equal(api.headers.get("X-Storage-Routing"), "1");

@@ -79,7 +79,7 @@ test("Today's plan lists workouts and tonight's bedtime in time order", () => {
   assert.deepEqual(t.plan.map(p => p.kind), ["workout", "bedtime"]);
   assert.equal(t.plan[0].time, null, "a planned session has no clock: it comes after the last record");
   assert.equal(t.plan[0].status, "planned");
-  assert.equal(t.plan[0].detail, "45 min · 45 TSS");
+  assert.equal(t.plan[0].detail, "45 min, 45 TSS");
   assert.equal(t.plan[0].done, false);
   assert.match(t.plan[1].time, /^\d{2}:\d{2}$/);
   assert.equal(t.tonight.wake, "07:00", "the usual wake time (07:02) to 5 minutes");
@@ -120,7 +120,7 @@ test("Den: a done ride carries its distance, power and what it added to the stra
   const training = {
     planned: [],
     completed: [
-      { id: "activity:i2", source: "intervals", start: DATE + "T17:30:00", durationHours: 1.2, tss: 85, name: "Kolo · tempo", type: "Ride", payload: { distance: 34600, icu_average_watts: 198.4 } },
+      { id: "activity:i2", source: "intervals", start: DATE + "T17:30:00", durationHours: 1.2, tss: 85, name: "Kolo, tempo", type: "Ride", payload: { distance: 34600, icu_average_watts: 198.4 } },
       { id: "watch:1", family: "apple-health", start: DATE + "T07:00:00", durationHours: 0.5, name: "Běh", type: "Run", payload: { exercise: { metricsSummary: { distanceMillimeters: 5200000, averagePowerWatts: 0 } } } }
     ],
     matched: []
@@ -329,7 +329,7 @@ test("without a plan the strain target follows readiness under the usual day, ne
   const free = today({ recovery: { yesterday: {}, tomorrow: {}, gym: {} } });
   assert.equal(free.strain.target.rest, false);
   assert.match(free.strain.target.plan, /^bez plánu/);
-  assert.equal(withLang("en", () => today({ recovery: null })).strain.target.plan.replace(" · not above your usual volume", ""), "no plan");
+  assert.equal(withLang("en", () => today({ recovery: null })).strain.target.plan.replace(", not above your usual volume", ""), "no plan");
   // A plan around today: planned or done yesterday or tomorrow, a gym plan, a running Aurin plan.
   for (const recovery of [{ tomorrow: { planned: [{ name: "Intervaly" }] } }, { yesterday: { matched: [{ name: "Tempo" }] } }, { gym: { "2026-10-15": { exercises: ["Dřep"] } } }]) {
     const t = today({ recovery });

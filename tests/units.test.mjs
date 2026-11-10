@@ -76,9 +76,9 @@ const runReview = () => buildRunReview({ activity, detail: { activity: { distanc
 test("the run review talks in pace per mile for an imperial athlete; the data stays metric", () => {
   const r = withLang("en", () => withUnits("imperial", runReview));
   assert.equal(r.chart.refLabel, "threshold 8:03/mi");
-  assert.deepEqual(r.table.rows[0], ["1", "8:06/mi · 5:00", "165 / 170"]);
+  assert.deepEqual(r.table.rows[0], ["1", "8:06/mi, 5:00", "165 / 170"]);
   assert.match(JSON.stringify(r), /the last was 26 s\/mi slower/);
-  assert.deepEqual(r.actions, ["Completed: 42 min · 5 mi · 70 TSS."]);
+  assert.deepEqual(r.actions, ["Completed: 42 min, 5 mi, 70 TSS."]);
   const metric = withLang("en", runReview);
   assert.equal(metric.chart.refLabel, "threshold 5:00/km");
   assert.match(JSON.stringify(metric), /the last was 16 s\/km slower/);

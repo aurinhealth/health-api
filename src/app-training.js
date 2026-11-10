@@ -284,7 +284,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
       tss: round(num(w?.tss)),
       strain: plannedStrain(num(w?.tss)),
       exercises: gymCard ? plan.exercises.slice(0, 12) : [],
-      // Each exercise with its sets × reps · weight, and the muscles it works most (gymPlanSummary).
+      // Each exercise with its sets × reps, weight, and the muscles it works most (gymPlanSummary).
       lines: gymCard && Array.isArray(plan.lines) ? plan.lines.slice(0, 30) : [],
       muscles: gymCard && Array.isArray(plan.muscles) ? plan.muscles : [],
       description: cardDescription(w?.description),

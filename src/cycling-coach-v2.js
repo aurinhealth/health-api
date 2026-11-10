@@ -662,7 +662,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   // Nemoc ticked in Deník today, or yesterday (morning-checkin.js readinessCheckin):
   // rest today like the status Nemoc, without setting it (audit wave 2, 9.1).
   const sickDay=!policy.paused&&checkin==="sick"&&manualReadiness===manualReadinessFor("sick")&&daysAhead===0;
-  const pause=policy.paused?policy:sickDay?{headline:L("Nemoc v Deníku · odpočinek","Sick in your Journal · rest"),guidance:[L("V Deníku máš Nemoc: dnes bez tréninku a odpočívej.","You marked Sick in your Journal: no training today, rest."),L("Když budeš nemocný déle, přepni stav na Nemoc.","If you stay ill, switch your status to Sick.")]}:null;
+  const pause=policy.paused?policy:sickDay?{headline:L("Nemoc v Deníku, odpočinek","Sick in your Journal, rest"),guidance:[L("V Deníku máš Nemoc: dnes bez tréninku a odpočívej.","You marked Sick in your Journal: no training today, rest."),L("Když budeš nemocný déle, přepni stav na Nemoc.","If you stay ill, switch your status to Sick.")]}:null;
   const missing=[];
   if(sleepMinutes==null)missing.push("recent sleep duration");
   if(tsb==null)missing.push("current CTL/ATL/TSB");
@@ -676,7 +676,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     sport,
     date:targetDate,
     // flags: the recovery model's warnings (respiration_elevated, skin_temp_elevated, wrist_temp_elevated, hrv_trend_down) and a tired or sick check-in.
-    // The "HRV +15 · Tep −8 · Spánek −13" row under the readiness on Health:
+    // The "HRV +15, Tep −8, Spánek −13" row under the readiness on Health:
     // points each signal added to or took from 70, never beats or ms.
     readiness:{score,status:readiness,todayZone:ready.zone||null,todayScore:ready.score??null,todayParts:ready.score==null?[]:[...readinessParts(body),...(body.score!=null&&ready.score<body.score?[{key:"checkin",points:ready.score-body.score}]:[])],reasons:readinessReasons,awaitingNight,noBodyData,flags:[...(body.flags||[]),...(["tired","sick"].includes(checkin)?["checkin_"+checkin]:[])],provisional:!!ready.provisional,sleepMinutes,ctl,atl,tsb,rampRate:ramp,hrv,restingHr:rhr,wristTempDeviation:bw?.deviation??null,manualReadiness:manualReadiness??null},
     load:{bikeTssRolling7d:Math.round(tss7),hardBikeDaysRolling7d:hard7,domainLoadRolling7d:domains,lowerBodyGymSignals48h:lowerGym.length},
