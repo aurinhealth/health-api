@@ -15,7 +15,10 @@ export const CONSENT_VERSION = '2026-11-06';
 // 2026-11-06: the coach's memory and the journal's sensitive items named.
 // 2026-11-10: its own card under the health box, naming OpenAI (USA) at its box
 // and that OpenAI does not train on it (release 1.0.1 point 1). The health text
-// only lost the AI paragraph that moved there, so CONSENT_VERSION stays.
+// only lost the AI paragraph that moved there, so CONSENT_VERSION stays: under
+// '2026-11-06' builds up to 553 showed the AI paragraph inside the health text,
+// builds from 1.0.1 show it on the AI card (both texts in git history of
+// ios-native/Aurin/Screens/SetupFlowView.swift, consentPoints).
 // A new AI version does not ask again: only the health version does. Its page
 // sends the AI box as ticked, so an AI consent to an older text ends there
 // unless it is ticked again.

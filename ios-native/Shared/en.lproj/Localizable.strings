@@ -3391,7 +3391,7 @@
 "Zaškrtni první políčko, ať můžeš pokračovat." = "Tick the first box to continue.";
 "Později" = "Later";
 "Tvůj AI kouč" = "Your AI coach";
-"Kouč, jeho denní shrnutí, jeho paměť a jídlo z fotky posílají potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI (USA). Ta je nepoužívá k trénování svých modelů. Cyklus a citlivé položky deníku jen po jejich zapnutí." = "The coach, its daily summary, its memory and food from a photo send the data they need, incl. health data and photos you send, to OpenAI (USA). OpenAI does not use it to train its models. Cycle and sensitive journal items only after you turn them on.";
+"Kouč, jeho denní shrnutí na Dnes, Tréninku a Jídle, jeho paměť po dni s chatem, rozpoznání jídla z fotky a hodnocení tréninku a týdne posílají potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI (USA). Ta je nepoužívá k trénování svých modelů. Cyklus a citlivé položky deníku jen po jejich zapnutí." = "The coach, its daily summary on Today, Training and Food, its memory after a chat day, food recognition from a photo and workout and week reviews send the data they need, incl. health data and photos you send, to OpenAI (USA). OpenAI does not use it to train its models. Cycle and sensitive journal items only after you turn them on.";
 "Jde to kdykoli vypnout v Nastavení." = "You can turn it off any time in Settings.";
 "Aurin potřebuje věk, výšku a váhu, aby spočítal kalorie, námahu a zotavení. Pohlaví mění výpočet kalorií a tepových zón." = "Aurin needs your age, height and weight to work out calories, strain and recovery. Sex changes how calories and heart rate zones are worked out.";
 "Zadej výšku mezi %@ a %@." = "Enter a height between %@ and %@.";

@@ -217,7 +217,7 @@ struct SetupFlowView: View {
                     Text("nepovinné").foregroundStyle(Palette.muted)
                 }
                 .font(Typo.bodyStrong)
-                Text("Kouč, jeho denní shrnutí, jeho paměť a jídlo z fotky posílají potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI (USA). Ta je nepoužívá k trénování svých modelů. Cyklus a citlivé položky deníku jen po jejich zapnutí.")
+                Text("Kouč, jeho denní shrnutí na Dnes, Tréninku a Jídle, jeho paměť po dni s chatem, rozpoznání jídla z fotky a hodnocení tréninku a týdne posílají potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI (USA). Ta je nepoužívá k trénování svých modelů. Cyklus a citlivé položky deníku jen po jejich zapnutí.")
                     .font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
             checkbox("Posílat data, která AI funkce potřebují, společnosti OpenAI (USA)",
