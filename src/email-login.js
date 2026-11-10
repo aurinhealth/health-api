@@ -25,7 +25,7 @@ import { normalizeEmail, plainEmail, emailCodeAccess, signInEmailUser, changeUse
 import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail, emailTakenEmail, stepUpCodeEmail } from "./email-sender.js";
 import { siteLang } from "./site-pages.js";
 import { reviewCodeActive } from "./app-review.js";
-import { L } from "./lang.js";
+import { L, storedLanguage } from "./lang.js";
 
 const CODE_SECONDS = 10 * 60;
 const RESEND_SECONDS = 60;
@@ -317,11 +317,12 @@ export async function handleEmailChange(request, env, url, session, ctx, stepUp 
     }
     const code = randomCode(), lang = requestLanguage(request);
     // Another account has the address: the same answer as a sent code (security review 2026-11-09, F5),
-    // and the address gets a notice instead, at most one a day (keyed hash, so no address is stored),
+    // and the address gets a notice instead, in its own account's language, at most one a day (keyed hash, so no address is stored),
     // from the e-mail change codes' budget of the day.
-    if (await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first()) {
+    const holder = await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first();
+    if (holder) {
       const key = "email-taken:" + (await signText("email-taken:" + email, sessionSecret(env))).slice(0, 32);
-      if (await allowRequest(db, key, { day: 1 }, time) && await allowRequest(db, "email-codes:change:day", { day: changeCodesPerDay(env) }, time)) await sendEmail(env, { to: email, ...emailTakenEmail(lang) }).catch(error => console.error("E-mail taken notice failed", error?.code || error?.message));
+      if (await allowRequest(db, key, { day: 1 }, time) && await allowRequest(db, "email-codes:change:day", { day: changeCodesPerDay(env) }, time)) await sendEmail(env, { to: email, ...emailTakenEmail(await storedLanguage(db, holder.id)) }).catch(error => console.error("E-mail taken notice failed", error?.code || error?.message));
       return json({ status: "ok" });
     }
     const sent = await claimAndSend(db, env, email, code, purpose, emailChangeCodeEmail(lang, code), time, { change: true });
