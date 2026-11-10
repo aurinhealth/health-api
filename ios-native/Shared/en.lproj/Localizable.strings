@@ -3803,8 +3803,8 @@
 "zátěž" = "strain";
 "Začít 7denní zkoušku zdarma" = "Start 7-day free trial";
 "Povolit AI a začít týden zdarma" = "Allow AI and start free week";
-"Kouč potřebuje zapnutou AI" = "The coach needs AI turned on";
-"Pošle potřebné údaje, včetně zdravotních, společnosti OpenAI v USA. Vypneš to v Nastavení → Soukromí a data." = "It sends the data it needs, including health data, to OpenAI in the USA. You can turn it off in Settings → Privacy & data.";
+"Aurin Pro potřebuje AI" = "Aurin Pro needs AI";
+"Kouč, jídlo z fotky a hodnocení pošlou potřebné údaje, včetně zdravotních a fotek, které pošleš, společnosti OpenAI v USA, a to i každý den kvůli shrnutí kouče. Vypneš to kdykoli v Nastavení → Soukromí a data." = "The coach, food from a photo and ratings send the data they need, including health data and photos you send, to OpenAI in the USA, also daily for the coach's summary. Turn it off anytime in Settings → Privacy & data.";
 "VYZKOUŠEJ 7 DNÍ ZDARMA" = "TRY 7 DAYS FREE";
 "12MĚSÍČNÍ TARIF · VYZKOUŠEJ 7 DNÍ ZDARMA" = "12-MONTH PLAN · TRY 7 DAYS FREE";
 "V PRO JE" = "INCLUDED IN PRO";

@@ -279,11 +279,12 @@ struct PaywallView: View {
         }
     }
 
-    /// What allowing the AI features sends where, like the coach's own consent card.
+    /// What allowing the AI features sends where, in the words of the setup's AI
+    /// point (AI_CONSENT_VERSION in src/consent.js), shortened.
     private var aiNote: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text("Kouč potřebuje zapnutou AI").font(.footnote.weight(.semibold)).foregroundStyle(Night.amber)
-            Text("Pošle potřebné údaje, včetně zdravotních, společnosti OpenAI v USA. Vypneš to v Nastavení → Soukromí a data.")
+            Text("Aurin Pro potřebuje AI").font(.footnote.weight(.semibold)).foregroundStyle(Night.amber)
+            Text("Kouč, jídlo z fotky a hodnocení pošlou potřebné údaje, včetně zdravotních a fotek, které pošleš, společnosti OpenAI v USA, a to i každý den kvůli shrnutí kouče. Vypneš to kdykoli v Nastavení → Soukromí a data.")
                 .font(.caption).foregroundStyle(Night.muted).fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
