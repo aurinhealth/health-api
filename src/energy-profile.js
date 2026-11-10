@@ -221,7 +221,8 @@ export function trendAdjustment(goalKey, trend, weightKg = null, heightCm = null
     if (rate > goal * 1.5) return { adjustment: step(rate - goal), reason: "gain_above_target" };
     return { adjustment: 0, reason: "within_target_range" };
   }
-  if (rate > 0.25) return { adjustment: step(rate), reason: "gaining_while_maintaining" };
+  // Below BMI 18.5 a losing goal plans maintenance: gaining is never cut back there.
+  if (rate > 0.25) return (GOALS[goalKey]?.kgPerWeek ?? -0.5) < 0 ? { adjustment: 0, reason: "within_target_range" } : { adjustment: step(rate), reason: "gaining_while_maintaining" };
   if (rate < -0.25) return { adjustment: step(rate), reason: "losing_while_maintaining" };
   return { adjustment: 0, reason: "within_target_range" };
 }

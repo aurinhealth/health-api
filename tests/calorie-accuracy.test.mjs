@@ -159,6 +159,7 @@ test("below BMI 18.5 a losing goal plans maintenance, no deficit", async () => {
   assert.equal(weeklyGoalKg("lose_0.5", 46), -0.46, "without the height only the 1 % cap applies");
   // Still losing while the goal says lose: the trend is judged against maintaining.
   assert.equal(trendAdjustment("lose_0.5", { samples: 5, weeklyRateKg: -0.4, spanDays: 28 }, 46, 160).reason, "losing_while_maintaining");
+  assert.equal(trendAdjustment("lose_0.5", { samples: 5, weeklyRateKg: 0.4, spanDays: 28 }, 46, 160).adjustment, 0, "gaining is not cut back below BMI 18.5");
 });
 
 test("on a training day the target never falls below resting metabolism plus the training", async () => {
