@@ -41,7 +41,7 @@ struct FoodProductEditor: View {
                 }
                 if !product.perPortion {
                     SettingsGroup(title: "Porce") {
-                        SettingsField(title: "Název porce", text: $servingName, keyboard: .default, placeholder: "porce")
+                        SettingsField(title: "Název porce", text: $servingName, keyboard: .default, placeholder: "např. plechovka, kus")
                         SettingsDivider()
                         SettingsField(title: "Váha jedné porce", text: $serving, unit: product.unit)
                         SettingsDivider()
