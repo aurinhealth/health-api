@@ -254,9 +254,10 @@ test("one network opens a few new accounts a day; invited addresses, the owner a
   assert.equal(await mayCreateAccount(db, open, "invited@example.com", { request: from("203.0.113.5") }), true);
   assert.equal(await mayCreateAccount(db, open, "owner@example.com", { request: from("203.0.113.5") }), true);
   assert.equal(await mayCreateAccount(db, open, "other@example.com", { request: from("198.51.100.7") }), true);
-  // Every address of one IPv6 /64 is the same network.
-  for (let i = 1; i <= NEW_ACCOUNT_LIMITS.hour; i++) await mayCreateAccount(db, open, `v${i}@example.com`, { request: from(`2001:db8:1:2::${i}`) });
-  await assert.rejects(mayCreateAccount(db, open, "v9@example.com", { request: from("2001:db8:1:2::99") }), SignupLimited);
+  // Every address of one IPv6 /48 is the same site, whichever /64 of it asks.
+  for (let i = 1; i <= NEW_ACCOUNT_LIMITS.hour; i++) await mayCreateAccount(db, open, `v${i}@example.com`, { request: from(`2001:db8:1:${i}::${i}`) });
+  await assert.rejects(mayCreateAccount(db, open, "v9@example.com", { request: from("2001:db8:1:ffff::99") }), SignupLimited);
+  assert.equal(await mayCreateAccount(db, open, "w@example.com", { request: from("2001:db8:2:1::1") }), true, "another /48");
 });
 
 test("signing in to an existing account is never held by the new-account limit", async () => {

@@ -2,7 +2,7 @@ import { L } from './lang.js';
 import { routedUserDb } from './user-data-routing.js';
 import { inheritAiLimits } from './ai-limit-memory.js';
 import { readOnlySql, withD1Retry } from './d1-retry.js';
-import { allowClient, releaseClient } from './ip-rate-limit.js';
+import { allowSite, releaseSite } from './ip-rate-limit.js';
 import { sessionSecret } from './dashboard-auth.js';
 // Multi-user support: every personal row carries user_id, requests run with a
 // user-scoped env, and the schema upgrade that adds user_id to existing tables.
@@ -616,7 +616,7 @@ export async function emailCodeAccess(db, env, email, now = Date.now()) {
 // release needs. Otherwise only invited addresses and the owner do.
 export const openSignup = env => String(env?.OPEN_SIGNUP || "").trim() === "true";
 
-// New accounts one caller (a network, ip-rate-limit.js) may open by open sign-up, so
+// New accounts one caller (a site: an IPv4 address or an IPv6 /48, ip-rate-limit.js) may open by open sign-up, so
 // one machine cannot make free accounts in bulk to use up the AI (ai-total.js).
 // Invited addresses and the owner are not counted.
 export const NEW_ACCOUNT_LIMITS = { hour: 3, day: 5 };
@@ -654,7 +654,7 @@ export async function mayCreateAccount(db, env, address, { request = null } = {}
   if (room && room.free < RESERVE_OPEN_BELOW) room = await openReserveShards(db, env, { capacity: room }).catch(() => room);
   if (room && room.free <= 0) return waitlist(db, address, "the user databases are full");
   if (!invited && request) {
-    if (!(await allowClient(db, request, sessionSecret(env), "signup", Date.now(), NEW_ACCOUNT_LIMITS))) {
+    if (!(await allowSite(db, request, sessionSecret(env), "signup", Date.now(), NEW_ACCOUNT_LIMITS))) {
       console.warn("New account refused: too many from one network today");
       throw new SignupLimited();
     }
@@ -676,7 +676,7 @@ export async function createAccount(db, env, address, name = null, { request = n
     // No account came of the place this network claimed: it gets it back.
     if (made !== "created" && request && signupClaims.has(request)) {
       signupClaims.delete(request);
-      await releaseClient(db, request, sessionSecret(env), "signup").catch(error => console.warn("Sign-up place not given back", error?.message || error));
+      await releaseSite(db, request, sessionSecret(env), "signup").catch(error => console.warn("Sign-up place not given back", error?.message || error));
     }
   }
 }
