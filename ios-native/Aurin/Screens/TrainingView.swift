@@ -12,6 +12,9 @@ struct TrainingView: View {
     @State private var jumpDay: DayJump?
     /// Where today's Začít trénink is (NextSession writes, the floating copy reads).
     @State private var startSpot = StartSpot()
+    /// Scrolled down: the tab bar is two circles and the floating button sits between them.
+    @Environment(\.compactTabBar) private var compactBar
+    @Environment(\.wideLayout) private var wide
 
     var body: some View {
         NavigationStack(path: model.path(.training)) {
@@ -49,10 +52,10 @@ struct TrainingView: View {
             // The page's bottom from a background, which the floating button never moves.
             .background {
                 Color.clear.onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY.rounded() } action: { bottom in
-                    let floor = bottom > 0 ? bottom - StartButtonSpot.barZone : 0
-                    if startSpot.floor != floor { startSpot.floor = floor }
+                    startSpot.place(bottom: bottom, compact: compactBar)
                 }
             }
+            .onChange(of: compactBar) { _, compact in startSpot.place(bottom: startSpot.bottom, compact: compact) }
             .overlay(alignment: .bottom) {
                 floatingStartButton
             }
@@ -87,8 +90,9 @@ struct TrainingView: View {
     }
 
     /// Today's Začít trénink while its place in the card is under the tab bar
-    /// (or further down): the same button floats just above the bar. Not with
-    /// a hidden workout's bar there, nor over an undo toast.
+    /// (or further down): the same button floats just above the bar, or with the
+    /// bar scrolled to two circles in its row between them. Not with a hidden
+    /// workout's bar there, nor over an undo toast.
     private var floatingStart: String? {
         guard toast == nil, model.minimizedGym == nil, !model.immersive else { return nil }
         return startSpot.underBar
@@ -101,17 +105,21 @@ struct TrainingView: View {
             if let date = floatingStart {
                 NavigationLink(value: AppRoute.trainingMode(date)) {
                     Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
-                        .frame(maxWidth: .infinity).frame(height: 54)
+                        .frame(maxWidth: .infinity).frame(height: compactBar ? StartButtonSpot.circle : 54)
                         .background(Palette.green, in: Capsule())
                         .shadow(color: Palette.green.opacity(0.3), radius: 12, y: 6)
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, 28)
-                .padding(.bottom, StartButtonSpot.barZone + StartButtonSpot.gap)
+                // In the compact bar's row: between its circles, as wide as the bar (RootView).
+                .padding(.horizontal, compactBar ? StartButtonSpot.circle + StartButtonSpot.gap : 28)
+                .frame(maxWidth: compactBar && wide ? WideLayout.tabBarWidth : .infinity)
+                .padding(.horizontal, compactBar ? StartButtonSpot.barSide : 0)
+                .padding(.bottom, compactBar ? StartButtonSpot.barBottom : StartButtonSpot.barZone + StartButtonSpot.gap)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .animation(.snappy, value: floatingStart == nil)
+        .animation(.snappy, value: compactBar)
     }
 
     private func undo(_ t: PlanToast) {
@@ -447,6 +455,9 @@ struct TodaySessions: View {
 
 /// Today's Začít trénink on Training floats above the tab bar while its place
 /// in the card is under the bar or further down (review 2026-11-02, point 3).
+/// Scrolled down, the bar is two circles and the button sits in their row, so
+/// it no longer covers the last exercise and its "why today" (design review
+/// 2026-11-10, point 11).
 enum StartButtonSpot {
     /// The tab bar (60 pt, Dynamic Type can grow it) and its gap above the
     /// bottom of the safe area (RootView).
@@ -454,6 +465,22 @@ enum StartButtonSpot {
     /// The floating button's gap above the bar. The card's button hands over
     /// at the same line, so the swap happens where the two would overlap.
     static let gap: CGFloat = 8
+    /// The compact bar (RootView, TabBar): its circles, its side and bottom gaps.
+    static let circle: CGFloat = 52
+    static let barSide: CGFloat = 20
+    static let barBottom: CGFloat = 8
+
+    /// The line the card's button hands over at, `gap` under it: with the
+    /// compact bar where the floating button's bottom is, so the swap does not jump.
+    static func floor(bottom: CGFloat, compact: Bool) -> CGFloat {
+        guard bottom > 0 else { return 0 }
+        return bottom - (compact ? barBottom - gap : barZone)
+    }
+}
+
+extension EnvironmentValues {
+    /// The tab bar is scrolled to its compact form (RootView), for Training's floating button.
+    @Entry var compactTabBar = false
 }
 
 /// Where today's Začít trénink is on Training: NextSession writes, TrainingView's
@@ -462,10 +489,18 @@ enum StartButtonSpot {
 final class StartSpot {
     /// The day of the button while it sits under the tab bar or further down.
     var underBar: String?
-    /// The top of the tab bar on screen (global), 0 before it is measured.
+    /// The line the card's button hands over at (global), 0 before it is measured.
     var floor: CGFloat = 0
+    /// The page's bottom (global), kept for when the bar changes its form.
+    @ObservationIgnored var bottom: CGFloat = 0
     /// The day whose button floats right now: its button in the card is hidden.
     var floating: String?
+
+    func place(bottom: CGFloat, compact: Bool) {
+        self.bottom = bottom
+        let floor = StartButtonSpot.floor(bottom: bottom, compact: compact)
+        if self.floor != floor { self.floor = floor }
+    }
 
     func report(_ day: String, under: Bool) {
         if under { if underBar != day { underBar = day } }
