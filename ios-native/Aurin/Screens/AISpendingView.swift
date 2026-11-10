@@ -164,8 +164,11 @@ struct AISpendingView: View {
 
     static func usd(_ value: Double) -> String { String(format: "$%.2f", value) }
 
+    /// The UTC month, like the totals (at 00:30 on 1 December in Prague it is still November).
     private static var monthName: String {
-        Date().formatted(Date.FormatStyle().month(.wide).locale(L10n.locale)).capitalized(with: L10n.locale)
+        var style = Date.FormatStyle().month(.wide).locale(L10n.locale)
+        style.timeZone = .gmt
+        return Date().formatted(style).capitalized(with: L10n.locale)
     }
 
     static func name(_ group: String) -> String {
