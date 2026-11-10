@@ -664,7 +664,7 @@ ${[['run', '5 km', '24 min', WA.red], ['bike', '20 km', '33 min', WA.amber], ['r
 <div class="aw-go">${ic('play')}Open in Workout</div></div></div>`;
 
 export const WATCH = [
-  ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness with what the day calls for, sleep, strain and HRV, as on Today, and what’s next today in one line. Wrist down, the numbers hide.', watchHome],
+  ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness with what the day calls for, sleep, strain and HRV, as on Today, and what’s next today in one line. Wrist down, they stay, dimmed.', watchHome],
   ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown, and the rest counts down and taps you when it’s time. Leave the iPhone in your locker: the watch keeps your sets, even without signal, and hands them over later. Nothing planned? With your iPhone nearby, build one for your rested muscles from the watch.', watchGym],
   ['glow-training', 'Race day, one tap.', 'A duathlon, aquabike, aquathlon or triathlon from your plan shows as one card, its legs in race order, and starts as one multisport workout: the watch times each leg and each change. Tap it for each leg’s target.', watchRace],
   ['glow-health', 'Water in one tap.', 'What’s left to eat today, the macros, and +250 ml for a glass of water. Your iPhone gets it at once.', watchFood],
