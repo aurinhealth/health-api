@@ -1102,10 +1102,10 @@ async function computeWeekTargets(env,ctx,start,prefs,{original=false}={}){
   const weather=await weekWeather(prefs.location,start,env).catch(()=>({}));
   const history=await planningHistory(env,start,30).catch(()=>[]),runCap=weeklyRunCap(history,start);
   const plan=await planForWeek(env,ctx,start);
-  const hrvDown=hrvWeekTrendDown(hrvSourceRows(wellness,(await googleHealthFor(env,ctx,today).catch(()=>({})))?.wellness,start),start),eventDate=plan.plan?null:athleteFocus(await dashboardProfile(env).catch(()=>null),today).event?.date||null;
+  const hrvDown=hrvWeekTrendDown(hrvSourceRows(wellness,(await googleHealthFor(env,ctx,today).catch(()=>({})))?.wellness,start),start),event=plan.plan?null:athleteFocus(await dashboardProfile(env).catch(()=>null),today).event,eventDate=event?.date||null,taperDays=event?.taperDays??7;
   const build=p=>{
     const roles=planWeekRoles(prefs.days,{...p.roles,...roleTime(prefs,start)});
-    let targets=weekTargets({roles,ctl,lastWeekLoad,weekLoads:weekLoadsBefore(wellness,start),hrvDown,rampRate:[...wellness].reverse().find(r=>Number.isFinite(Number(r.rampRate)))?.rampRate??null,days,today,weekStart:start,plan:p.load,eventDate});
+    let targets=weekTargets({roles,ctl,lastWeekLoad,weekLoads:weekLoadsBefore(wellness,start),hrvDown,rampRate:[...wellness].reverse().find(r=>Number.isFinite(Number(r.rampRate)))?.rampRate??null,days,today,weekStart:start,plan:p.load,eventDate,taperDays});
     // A plan needs its sessions even before there is a fitness history.
     if(plan.plan&&targets.status!=='ok')targets=estimatedTargets(roles,start,today,days,history);
     return capWeekTargets(capRunVolume(p.apply(targets),runCap,runCommitted),prefs,[],weather);
@@ -2034,7 +2034,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(request.method==='POST'&&start)prefs=await getWeekPlan(env.DB,start);
       const monday=start?mondayOfDate(start):mondayOfDate(localToday());
       const targets=await computeWeekTargets(env,ctx,monday,prefs).catch(error=>({status:'error',message:error.message,items:[]}));
-      const historyEstimate=activityHistoryEstimate(await planningHistory(env,localToday(),21),localToday());
+      const historyEstimate=activityHistoryEstimate(await planningHistory(env,localToday(),21),localToday(),athleteFocus(await dashboardProfile(env).catch(()=>null),localToday()).weeklyHours);
       return Response.json({status:'ok',prefs,roles:planWeekRoles(prefs.days,{...(await planForWeek(env,ctx,monday)).roles,...roleTime(prefs,monday)}),start:monday,targets,historyEstimate,sports:await suggestedSports(env.DB,env.USER_ID)},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
