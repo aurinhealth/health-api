@@ -238,10 +238,11 @@ final class SmokeTests: XCTestCase {
             if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "How should I train today")).firstMatch) {
                 pause(8)
                 shot("kouc-odpoved")
-                // A second question, so the conversation fills the screen.
-                if ask("What should I eat after training?", send: "Send") {
+                // More questions the sample day answers from its own numbers, so the
+                // conversation fills the screen.
+                for (i, question) in ["Why 78 after only 7 hours of sleep?", "What should I eat before the gym?", "Will my legs be ready for Saturday?"].enumerated() where ask(question, send: "Send") {
                     pause(8)
-                    shot("kouc-odpoved-2")
+                    shot("kouc-odpoved-\(i + 2)")
                 }
             }
         }
@@ -299,7 +300,10 @@ final class SmokeTests: XCTestCase {
             pause(3)
             if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Jak mám dnes trénovat")).firstMatch) {
                 pause(8)
-                if ask("Co sníst po tréninku?", send: "Odeslat") { pause(8) }
+                for (i, question) in ["Proč mám 78 po pouhých 7 hodinách spánku?", "Co sníst před posilovnou?", "Budou nohy v sobotu připravené?"].enumerated() where ask(question, send: "Odeslat") {
+                    pause(8)
+                    shot("kouc-odpoved-\(i + 2)")
+                }
                 shot("kouc-odpoved")
             }
         }
