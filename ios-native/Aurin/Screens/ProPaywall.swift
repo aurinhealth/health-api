@@ -263,18 +263,18 @@ struct PaywallView: View {
             Text(verbatim: L10n.f("Celé Aurin Pro zdarma do %@", Self.dayMonth(Self.firstPayment(from: today))))
                 .font(Typo.sentence(16)).foregroundStyle(Night.muted).padding(.top, 4)
             WeekCalendar(today: today).padding(.horizontal, 20).padding(.top, 20)
-            Text("VYZKOUŠEJ TENTO TÝDEN").scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Night.faint)
-                .padding(.top, 22).padding(.bottom, 10)
-            clock { time in ScreenBelt(time: time) }
-                .frame(maxHeight: .infinity, alignment: .top)
-            if allowAI != nil {
-                // In place of the price line: the price and renewal stay in the fine print under the button.
-                aiNote.padding(.horizontal, 20).padding(.bottom, 4)
-            } else {
-                Text(verbatim: L10n.f("Od %@ %@", Self.dayMonth(Self.firstPayment(from: today)), chosen.afterTrial)
-                     + (chosen.kind == .yearMonthly ? " · " + L10n.tr("12 měsíců") : ""))
-                    .font(Typo.small).foregroundStyle(Night.muted).padding(.bottom, 12)
+            // With the AI note the belt's heading gives way, so the price line still fits on a 6.1" phone.
+            if allowAI == nil {
+                Text("VYZKOUŠEJ TENTO TÝDEN").scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Night.faint)
+                    .padding(.top, 22).padding(.bottom, 10)
             }
+            clock { time in ScreenBelt(time: time) }
+                .padding(.top, allowAI == nil ? 0 : 18)
+                .frame(maxHeight: .infinity, alignment: .top)
+            if allowAI != nil { aiNote.padding(.horizontal, 20).padding(.bottom, 10) }
+            Text(verbatim: L10n.f("Od %@ %@", Self.dayMonth(Self.firstPayment(from: today)), chosen.afterTrial)
+                 + (chosen.kind == .yearMonthly ? " · " + L10n.tr("12 měsíců") : ""))
+                .font(Typo.small).foregroundStyle(Night.muted).padding(.bottom, 12)
             bottom(more: false)
         }
     }
@@ -284,7 +284,7 @@ struct PaywallView: View {
     private var aiNote: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text("Aurin Pro potřebuje AI").font(.footnote.weight(.semibold)).foregroundStyle(Night.amber)
-            Text("Kouč, jídlo z fotky a hodnocení pošlou potřebné údaje, včetně zdravotních a fotek, které pošleš, společnosti OpenAI v USA, a to i každý den kvůli shrnutí kouče. Vypneš to kdykoli v Nastavení → Soukromí a data.")
+            Text("Kouč, jídlo z fotky a hodnocení pošlou potřebné údaje, včetně zdravotních a fotek, které pošleš, společnosti OpenAI v USA, a to i každý den kvůli shrnutí kouče a v noci kvůli jeho paměti. Vypneš to kdykoli v Nastavení → Soukromí a data.")
                 .font(.caption).foregroundStyle(Night.muted).fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -392,9 +392,12 @@ struct PaywallView: View {
             do {
                 switch try await store.purchase(offer.product, monthly: offer.kind == .yearMonthly) {
                 case .purchased(let trial):
-                    // The button said so; should it fail, the coach asks again with its own card.
-                    if let allowAI { try? await allowAI() }
-                    thanks = L10n.tr(trial ? "Týden zdarma začal. Kouč, jídlo z fotky a hodnocení jsou odemčené." : "Aurin Pro je aktivní. Díky!")
+                    // The button said so; should it fail, the thanks says where to turn AI on.
+                    if let allowAI, (try? await allowAI()) == nil {
+                        thanks = L10n.tr("Týden zdarma začal. AI se nepodařilo zapnout, zapneš ji v Nastavení → Soukromí a data.")
+                    } else {
+                        thanks = L10n.tr(trial ? "Týden zdarma začal. Kouč, jídlo z fotky a hodnocení jsou odemčené." : "Aurin Pro je aktivní. Díky!")
+                    }
                 case .pending:
                     notice = L10n.tr("Nákup čeká na schválení. Až ho App Store potvrdí, Aurin Pro se odemkne sám.")
                 case .cancelled:
