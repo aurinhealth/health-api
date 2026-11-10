@@ -200,9 +200,16 @@ export function proTester(env) {
   return String(env?.PRO_TESTER_EMAILS || '').split(/[,\s]+/).some(listed => listed.toLowerCase() === email);
 }
 
-// Pro: a listed tester, or a purchase that counts.
+// PRO_TESTFLIGHT=true (Worker secret) gives Pro to every account last seen on a
+// TestFlight build, also the anonymous testers of the public link; their AI group
+// stays "testflight". App Review uses the same Sandbox: the review account is left
+// out, a reviewer's own new account is not (Review Notes ask for the review account;
+// switch it off if Apple says the paywall is missing). Petr, 10 Nov 2026.
+const testflightPro = (env, row) => env?.PRO_TESTFLIGHT === 'true' && Number(row?.testflight) === 1 && !isReviewAccount(env);
+
+// Pro: a listed tester, a TestFlight account with PRO_TESTFLIGHT, or a purchase that counts.
 export function proActive(env, row, now = Date.now()) {
-  return proTester(env) || purchaseActive(env, row, now);
+  return proTester(env) || testflightPro(env, row) || purchaseActive(env, row, now);
 }
 
 // Pro bought and not expired; alone, it is what Settings shows (storePurchase).
@@ -218,7 +225,7 @@ function purchaseActive(env, row, now = Date.now()) {
 // The account's plan row as proActive reads it; null without one.
 export async function subscriptionRow(env) {
   const db = env.DB, id = env.USER_ID ?? db.userId;
-  return withColumns(db, () => db.prepare('SELECT plan,valid_until,store_environment FROM subscriptions WHERE user_id=?').bind(id).first());
+  return withColumns(db, () => db.prepare('SELECT plan,valid_until,store_environment,testflight FROM subscriptions WHERE user_id=?').bind(id).first());
 }
 
 // What the App Store says about the account's purchase, for /app/api/subscription.
