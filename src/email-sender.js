@@ -84,6 +84,11 @@ export function stepUpCodeEmail(lang, code) {
   return { subject: t.subject(code), text: `${t.intro}\n\n${code}\n\n${t.outro}\n`, html: htmlEmail(lang === "en" ? "en" : "cs", [t.intro, t.outro], code) };
 }
 
+// A notice to the owner (Czech, as the owner reads them).
+export function ownerNoticeEmail(subject, paragraphs) {
+  return { subject, text: paragraphs.join("\n\n") + "\n", html: htmlEmail("cs", paragraphs) };
+}
+
 // When a security notice happened, in the user's own zone (user-time.js) and named,
 // "7 October 2026 at 10:00 CEST", so nobody abroad reads Prague time as their own.
 function noticeTime(en, date, zone) {

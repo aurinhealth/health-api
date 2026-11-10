@@ -7,12 +7,14 @@ import { ensureTenancy, inviteUser, signInEmailUser, signInGoogleUser, findUser,
 import { resolvePrincipal, sessionMatchesUser } from "../src/dashboard-auth.js";
 
 const ORIGIN = "https://aurin.health";
+// The owner's notice at half the day's codes (email-login.js warnAtHalf) is kept apart from the codes.
+const halfWarnings = [];
 const MIGRATION = ["0014_passkeys_email_codes.sql", "0027_email_code_limits.sql"].map(name => readFileSync(new URL("../migrations/" + name, import.meta.url), "utf8")).join("\n");
 
 async function setup(extra = {}) {
   _resetTenancyForTest();
   const sent = [];
-  const env = { SESSION_SECRET: "test-secret-key", OWNER_EMAIL: "owner@example.com", DB: createD1(), EMAIL: { send: async message => { sent.push(message); return { messageId: "m" + sent.length }; } }, EMAIL_FROM: "noreply@aurin.health", ...extra };
+  const env = { SESSION_SECRET: "test-secret-key", OWNER_EMAIL: "owner@example.com", DB: createD1(), EMAIL: { send: async message => { (/polovina kódů/.test(message.subject) ? halfWarnings : sent).push(message); return { messageId: "m" + sent.length }; } }, EMAIL_FROM: "noreply@aurin.health", ...extra };
   await ensureTenancy(env.DB, env);
   env.DB.sqlite.exec(MIGRATION);
   env.RAW_DB = env.DB;
