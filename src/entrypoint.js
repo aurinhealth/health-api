@@ -66,7 +66,7 @@ import { explainWorkout, athleteSteps, athleteMinutes } from "./workout-explanat
 import { libraryBricks } from "./brick-workouts.js";
 import { aiWorkoutPick } from "./ai-workout-pick.js";
 import { composeWorkout, poorFit, fewMatches, composeKey, libraryKind, COMPOSE_VARIANTS } from "./ai-workout-compose.js";
-import { rankOptions, saunaSigns, dayChoice, recentKinds, sportReturns, pickState, savePick, undoSkip, lessKinds, setLess, pickSignature, storedDetails, storeDetails, claimDetails, finishDetails, AI_RETRY_MS, AI_BUDGET_MS, workoutLines, gymLines } from "./coach-pick.js";
+import { rankOptions, lateOptions, pickEvening, markEvening, eveningPhase, saunaSigns, dayChoice, recentKinds, sportReturns, pickState, savePick, undoSkip, lessKinds, setLess, pickSignature, storedDetails, storeDetails, claimDetails, finishDetails, AI_RETRY_MS, AI_BUDGET_MS, workoutLines, gymLines } from "./coach-pick.js";
 import { activityKindOf } from "./activity-match.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, capabilitiesWithLevel, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
@@ -1475,7 +1475,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const date=localToday();
     if(request.method==='POST'){
       if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-      try{const body=await request.json();return Response.json(await savePick(env.DB,env.USER_ID,{date,kind:String(body.kind||''),top:String(body.top||'')}));}catch(error){return Response.json({message:error.message},{status:400})}
+      try{const body=await request.json(),evening=await pickEvening(env.DB,env.USER_ID,date).catch(()=>null);return Response.json(await savePick(env.DB,env.USER_ID,{date,kind:String(body.kind||''),top:String(body.top||''),evening}));}catch(error){return Response.json({message:error.message},{status:400})}
     }
     // "Vrátit" after Odmítnout.
     if(request.method==='DELETE'){
@@ -1503,10 +1503,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // alcohol, Nemoc or an injury in the journal drops the sauna (coach-pick.js saunaSigns).
       const risks=await risking;
       const noSauna=saunaSigns(readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile}))||!!risks.alcohol||!!risks.injury||!!risks.sick;
-      const ranked=rankOptions({ride,run,swim,mainSport:eff.mainSport||'general',mains,allowed,sports:recent.sports,today:recent.today,declines:state.declines,less,planned,done:recent.done,athleteStatus:athlete?.status||'active',noSauna});
-      // The ready workouts stay while the options do (pickSignature), so a sync
-      // that changes nothing asks the AI nothing.
-      const signature=pickSignature(ranked);
+      // Late in the evening only winding down, past tonight's bedtime (as Today shows it) only bed.
+      // Today is built for its bedtime only from 17:00 to 4:00.
+      const clock=localNow().slice(11,16),hour=Number(clock.slice(0,2));
+      const bedtime=hour>=17||hour<4?(()=>{try{return buildToday({date,hour,daily:inputs.daily,health:inputs.health,fitness:inputs.fitness,sleep:{sessions:inputs.health?.sleep||[]},profile:eff,checkin:inputs.checkin}).tonight?.bedtime||null;}catch{return null;}})():null;
+      const day=rankOptions({ride,run,swim,mainSport:eff.mainSport||'general',mains,allowed,sports:recent.sports,today:recent.today,declines:state.declines,less,planned,done:recent.done,athleteStatus:athlete?.status||'active',noSauna});
+      const evening=eveningPhase(clock,bedtime),ranked=lateOptions(day,evening,{today:recent.today,done:recent.done});
+      // The ready workouts stay while the options do (pickSignature, of the day's
+      // ranking, so the late card keeps them too), and a sync that changes nothing asks the AI nothing.
+      const signature=pickSignature(day);
       let details=await storedDetails(env.DB,env.USER_ID,date,signature).catch(()=>null);
       // The best ride or run's AI workout (~5 s) is written after the answer:
       // the rules' workout shows at once, marked aiPending, and the AI's takes
@@ -1542,6 +1547,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const detail=d.minutes?d.minutes+' min'+(o.detail.includes(', ')?o.detail.slice(o.detail.indexOf(', ')):''):o.detail;
         return {...o,detail,lines:d.lines,...(d.workout?{workout:d.workout}:{}),...(d.gym?{gym:d.gym}:{}),...(heat?{heat}:{})};
       });
+      // The late phase is kept with the day's details, so "Dát na dnes" on the late card adds no walk (coach-pick.js savePick).
+      if(evening&&details.evening!==evening){details.evening=evening;const marking=markEvening(env.DB,env.USER_ID,date,evening).catch(()=>{});if(ctx?.waitUntil)ctx.waitUntil(marking);else await marking;}
       return Response.json({status:'ok',date,...ranked,options,less,chosen:dayChoice({chosen:state.chosen,planned}),...(details.aiPending?{aiPending:true}:{})},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
@@ -2786,7 +2793,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const kept=session.user?.id!=null?recentScreen(session.user.id,path):null;
     const screenData=()=>kept?Promise.resolve(kept):handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():null).catch(()=>null);
     // The screen's data plus what only the coach reads (long-term facts, Training's readiness).
-    const load=()=>Promise.all([screenData(),coachTextExtras(env,ctx,internalAuth,screen).catch(()=>({}))]).then(([data,extra])=>data?{...data,...extra}:data);
+    // Today's text knows the local time, so late in the evening it says to wind down or go to bed (screen-texts.js todayFacts).
+    const load=()=>Promise.all([screenData(),coachTextExtras(env,ctx,internalAuth,screen).catch(()=>({}))]).then(([data,extra])=>data?{...data,...extra,...(screen==='today'?{clock:localNow().slice(11,16)}:{})}:data);
     try{return Response.json({...await screenText(env,{screen,load,later:work=>ctx.waitUntil(work)}),paywall:paywallOn(env)},{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({status:'error',message:error.message},{status:500});}
   }

@@ -117,6 +117,38 @@ export function rankOptions({ ride, run, swim = null, mainSport = "general", mai
   return { status, score: ride?.readiness?.score ?? null, lowerTired, options: options.map(({ score, hard, rest, ...o }) => ({ ...o, action: o.kind === "ride" || o.kind === "run" || o.kind === "swim" && swim ? "library" : o.kind === "gym" ? "gym" : "accept" })) };
 }
 
+// How late it is against tonight's bedtime (Today's tonight.bedtime, "HH:MM"),
+// both the athlete's local time: "wind-down" in the last hour before it, "bed"
+// once it has passed (until 4:00), else null. Without a bedtime 23:00 stands
+// in; a bedtime between noon and 18:00 (a day sleeper) is left alone.
+export const DEFAULT_BEDTIME = "23:00";
+export function eveningPhase(now, bedtime = null) {
+  const minutes = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || "")); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+  let at = minutes(now), bed = minutes(bedtime) ?? minutes(DEFAULT_BEDTIME);
+  if (at == null || (bed >= 12 * 60 && bed < 18 * 60)) return null;
+  // After midnight both count on from the evening before.
+  if (bed < 12 * 60) bed += 1440;
+  if (at < 4 * 60) at += 1440;
+  return at >= bed ? "bed" : at >= bed - 60 ? "wind-down" : null;
+}
+
+// Late in the evening (eveningPhase) the day's activity is the wind-down (no
+// walk, no training), past bedtime only bed; the other options stay under
+// Další možnosti. A sick day keeps its rest as it is. The route keeps the
+// day's ranking for pickSignature, so the day's ready workouts stay.
+export function lateOptions(ranked, evening, { today = [], done = [] } = {}) {
+  const i = ranked.options.findIndex(o => o.kind === "rest");
+  if (!evening || i < 0 || ranked.paused === "sick") return ranked;
+  const bed = evening === "bed", trained = today.some(k => k !== "walk");
+  const rest = bed
+    ? { kind: "rest", title: L("Spánek", "Sleep"), detail: L("Jdi teď spát", "Go to bed now"), lines: [[L("Do postele", "Bed"), L("teď", "now")]] }
+    : { kind: "rest", title: L("Zklidnění", "Wind down"), detail: L("5–10 min lehkého protažení, pak spát", "5–10 min of easy stretching, then bed"), lines: [[L("Lehké protažení", "Easy stretching"), "5–10 min"], [L("Pak", "Then"), L("do postele", "bed")]] };
+  const why = (trained ? doneSentence(done) + " " : "") + (bed ? L("Je pozdě, jdi teď spát.", "It's late, so go to bed now.")
+    : L("Je pozdě večer: už jen zklidni, 5–10 minut lehkého protažení a pak do postele.", "It's late in the evening: just wind down with 5–10 minutes of easy stretching, then bed."));
+  const others = ranked.options.filter((_, k) => k !== i).map(({ best, reason, ...o }) => o);
+  return { ...ranked, evening, options: [{ ...ranked.options[i], ...rest, best: true, reason: why, action: "accept" }, ...others] };
+}
+
 // The night's signs that take the sauna off the list, any one of them: a
 // raised temperature or breathing rate in sleep, or a resting heart rate two
 // usual spreads above its normal (readiness components, recovery-model.js).
@@ -236,13 +268,17 @@ export function dayChoice({ chosen = null, planned = [] } = {}) {
 // the day off is a walk and stretching. A ride or run is in the calendar and
 // the gym in its plan already (the app saves those before the choice).
 export const PICK_PLAN = { swim: ["swim"], sauna: ["sauna"], rest: ["walk", "stretch"] };
+// Late in the evening (lateOptions) the day off is only the stretching, past bedtime nothing.
+const LATE_REST = { "wind-down": ["stretch"], bed: [] };
 
 // The athlete's choice for the day; another than the coach's top is a decline of it.
+// evening (the late card the athlete saw, pickEvening): the rest puts no walk
+// into the plan, and the late card's top is no recommendation to learn from.
 // "skip" (Odmítnout) takes nothing: Aktivita dne leaves Dnes for the day and
 // the coach's top counts as declined.
 // The choice goes into the day's plan; a changed mind takes the earlier
 // choice's rows out again (unless already done).
-export async function savePick(db, userId, { date, kind, top }) {
+export async function savePick(db, userId, { date, kind, top, evening = null }) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) || !(KINDS.includes(kind) || kind === SKIP)) throw new Error(L("Neplatná volba.", "Invalid choice."));
   await db.prepare(TABLE).run();
   const before = (await db.prepare("SELECT kind FROM coach_picks WHERE user_id=? AND date=?").bind(userId, date).first())?.kind || null;
@@ -250,11 +286,13 @@ export async function savePick(db, userId, { date, kind, top }) {
     await ensureRecoveryTable(db);
     for (const k of PICK_PLAN[before]) await db.prepare("DELETE FROM recovery_sessions WHERE user_id=? AND date=? AND kind=? AND done_at IS NULL").bind(userId, date, k).run();
   }
-  if (PICK_PLAN[kind]) {
+  const plan = kind === "rest" && LATE_REST[evening] ? LATE_REST[evening] : PICK_PLAN[kind];
+  if (plan?.length) {
     await ensureRecoveryTable(db);
     const there = new Set(((await db.prepare("SELECT kind FROM recovery_sessions WHERE user_id=? AND date=?").bind(userId, date).all()).results || []).map(r => r.kind));
-    for (const k of PICK_PLAN[kind]) if (!there.has(k)) await addRecovery(db, { date, kind: k });
+    for (const k of plan) if (!there.has(k)) await addRecovery(db, { date, kind: k });
   }
+  if (LATE_REST[evening]) top = null;
   await db.prepare("INSERT INTO coach_picks (user_id, date, kind, top, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, date) DO UPDATE SET kind=excluded.kind, top=COALESCE(coach_picks.top, excluded.top), created_at=excluded.created_at")
     .bind(userId, date, kind, KINDS.includes(top) ? top : null, new Date().toISOString()).run();
   return { status: "ok", chosen: kind };
@@ -301,6 +339,16 @@ export async function storedDetails(db, userId, date, signature) {
   const row = await db.prepare("SELECT signature, details_json FROM coach_pick_details WHERE user_id=? AND date=?").bind(userId, date).first();
   if (!row || row.signature !== signature) return null;
   try { return JSON.parse(row.details_json); } catch { return null; }
+}
+
+// The late phase the day's card was last shown in (lateOptions), kept with the day's details.
+export async function pickEvening(db, userId, date) {
+  await db.prepare(DETAILS_TABLE).run();
+  const row = await db.prepare("SELECT json_extract(details_json, '$.evening') AS evening FROM coach_pick_details WHERE user_id=? AND date=?").bind(userId, date).first().catch(() => null);
+  return LATE_REST[row?.evening] ? row.evening : null;
+}
+export async function markEvening(db, userId, date, evening) {
+  await db.prepare("UPDATE coach_pick_details SET details_json=json_set(details_json, '$.evening', ?) WHERE user_id=? AND date=?").bind(evening, userId, date).run();
 }
 
 export async function storeDetails(db, userId, date, signature, details) {

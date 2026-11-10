@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { COACH_EVAL_SCENARIOS, scenarioById, scenarioContext, checkReply, cardKind, runScenario, runComposeScenario, handleCoachEval, COACH_EVAL_DATE, coachEvalPrincipal, COACH_EVAL_AUDIENCE, COACH_EVAL_WORKFLOWS, effortsBackToBackText, quotesInstructions, HIDDEN_ANSWER } from '../src/coach-eval.js';
+import { COACH_EVAL_SCENARIOS, runScreenScenario, scenarioById, scenarioContext, checkReply, cardKind, runScenario, runComposeScenario, handleCoachEval, COACH_EVAL_DATE, coachEvalPrincipal, COACH_EVAL_AUDIENCE, COACH_EVAL_WORKFLOWS, effortsBackToBackText, quotesInstructions, HIDDEN_ANSWER } from '../src/coach-eval.js';
 import { coachInstructionsFor, assistantTask, safetyNote } from '../src/coach-assistant.js';
 import { MAIN_SPORTS } from '../src/athlete-focus.js';
 import { withLang } from '../src/lang.js';
@@ -15,7 +15,7 @@ const failed = (id, reply) => checkReply(scenarioById(id), reply, now, date).fil
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
-  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'S50', 'S51', 'S52', 'S53', 'S54', 'S55', 'S56', 'S57', 'S58', 'S59', 'S60', 'S61', 'S62', 'S63', 'S64', 'S65', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
+  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'S50', 'S51', 'S52', 'S53', 'S54', 'S55', 'S56', 'S57', 'S58', 'S59', 'S60', 'S61', 'S62', 'S63', 'S64', 'S65', 'S66', 'S67', 'S68', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
   const zone = id => scenarioContext(scenarioById(id), date, now).ctx.cyclingCoachV2.readiness;
   assert.equal(zone('S01').todayZone, 'green');
   for (const id of ['S02', 'S03', 'S08']) assert.equal(zone(id).status, 'red', id);
@@ -101,7 +101,7 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.equal((await handleCoachEval(post({}), staging, null)).status, 401);
   assert.equal((await handleCoachEval(post({}), staging, { kind: 'system' })).status, 401);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
-  assert.equal(list.scenarios.length, 68);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
+  assert.equal(list.scenarios.length, 71);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
   const run = async (env, s) => ({ id: s.id, status: 'ok', lang: lang() });
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
@@ -745,4 +745,26 @@ test('run 56: "buduje vytrvalost" is a reason for S44; "nejde o známku nemoci" 
   const failed = (id, answer) => checkReply(scenarioById(id), { proposed: [], kept: [], answer }, null, COACH_EVAL_DATE).filter(c => !c.ok).map(c => c.name);
   assert.ok(!failed('S44', 'Zóna 2 je lehké tempo, při kterém můžeš mluvit v celých větách. Dnešní „Lehký běh 40 min“ tak buduje vytrvalost bez velké únavy nohou.').includes('řekne důvod'));
   assert.ok(failed('S38', 'Teplota zápěstí byla ve spánku o 1,1 °C nad tvým normálem. Nejde o známku nemoci, ale dnes bych zůstal bez intenzity.').includes('teplotu nenazve nemocí ani jejím začátkem (MDR)'));
+});
+
+test('late evening (Petr 2026-11-10, 23:49): Today\'s sentence gets the hour, the app drops a walk after bedtime, the chat plays 23:40', async () => {
+  const seen = [];
+  const ask = answer => async (_env, req) => { seen.push(req); return { text: JSON.stringify(answer), model: 'stub' }; };
+  const s66 = scenarioById('S66');
+  const bad = await withLang('en', () => runScreenScenario({}, s66, { ask: ask({ text: 'You slept 5 h 31.', advice: 'Take an evening walk and aim for your 21:10 bedtime.' }) }));
+  assert.match(seen[0].input, /"now":"23:49"/);
+  assert.match(seen[0].input, /"evening":"bed"/);
+  assert.match(seen[0].instructions, /bedtimeTonight has passed/);
+  assert.equal(bad.passed, true, 'the app shows bed instead of the walk');
+  assert.equal(bad.checks.find(c => /míří k večerce/.test(c.name)).ok, false);
+  assert.match(bad.answer, /Rada v aplikaci:\*\* It's late, so go to bed now\./);
+  const good = await withLang('en', () => runScreenScenario({}, s66, { ask: ask({ text: 'Your ride is done and bedtime has passed.', advice: 'Go to bed now.' }) }));
+  assert.ok(good.checks.every(c => c.ok), JSON.stringify(good.checks));
+  const s67 = await runScreenScenario({}, scenarioById('S67'), { ask: ask({ text: 'Jízda dnes už nebude.', advice: 'Už jen zklidni a v 22:10 do postele.' }) });
+  assert.match(seen.at(-1).input, /"evening":"wind-down"/);
+  assert.ok(s67.checks.every(c => c.ok), JSON.stringify(s67.checks));
+  const s68 = scenarioById('S68');
+  let now = null;
+  await runScenario({}, s68, { ask: async (_env, _m, ctx) => { now = ctx.now; return { status: 'ok', answer: 'Je pozdě, jdi spát.', actions: [] }; } });
+  assert.equal(now, COACH_EVAL_DATE + ' 23:40');
 });
