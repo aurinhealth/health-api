@@ -529,7 +529,13 @@ struct ProductRow: View {
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(product.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(2)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(product.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(2)
+                    if product.isTableFood {
+                        Image(systemName: "checkmark.circle.fill").font(.subheadline).foregroundStyle(Palette.green)
+                            .accessibilityLabel(Text("z tabulky složení potravin"))
+                    }
+                }
                 Text(subtitle).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
             }
             Spacer(minLength: 8)
@@ -546,12 +552,17 @@ struct ProductRow: View {
     }
 
     private var subtitle: String {
+        // A basic food: "1 šálek (237 ml) · USDA".
+        if product.isTableFood, let size = product.usableServing {
+            return "1 " + product.servingName + " (" + Fmt.int(size) + " " + product.unit + ") · " + (product.source_name ?? "USDA")
+        }
         let amount = !product.perPortion ? Fmt.int(product.defaultAmount) + " " + product.unit
             : product.defaultAmount == 1 ? L10n.tr("1 porce") : L10n.f("%@ porce", FoodAmountView.text(product.defaultAmount))
         let source: String? = switch product.source {
         case "personal", "manual": L10n.tr("moje potravina")
         case "recipe", "composed": L10n.tr("moje jídlo")
         case "ai", "ai_lookup": L10n.tr("dohledáno AI")
+        case "table": product.source_name ?? "USDA"
         default: product.source == nil ? nil : L10n.tr("katalog")
         }
         return [product.brand, amount, source].compactMap { $0 }.joined(separator: " · ")

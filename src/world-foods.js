@@ -6,6 +6,7 @@
 // shared-foods.js) and are listed before it. Its Open Food Facts products are
 // replaced every 14 days (scripts/refresh-world-foods.mjs).
 import { lang } from './lang.js';
+import { searchStaples } from './staples.js';
 
 export const WORLD_FOODS_FORMAT = 1;
 export const NODE_LIMIT = 1500;
@@ -185,27 +186,39 @@ export function correctWord(word, vocab) {
   return best ? best.w : word;
 }
 
+// Basic foods from the food tables come first (staples.js), then the catalogue
+// without them.
 export async function searchWorldFoods(env, { name = '', barcode = '', language = lang() } = {}) {
+  const found = await catalogueFoods(env, { name, barcode, language });
+  if (barcode) return found.foods;
+  const basic = searchStaples(found.query, name, language);
+  const staples = basic.length ? basic : searchStaples(found.typed, name, language);
+  const keys = new Set(staples.map(p => p.catalog_key));
+  return [...staples, ...found.foods.filter(p => !keys.has(p.catalog_key))];
+}
+
+async function catalogueFoods(env, { name, barcode, language }) {
+  const typed = [...new Set(words(name))], none = { foods: [], query: typed, typed };
   const bucket = env.FOOD_CATALOG_R2;
-  if (!bucket) return [];
+  if (!bucket) return none;
   const current = await json(bucket, 'current.json');
   const version = current?.format === WORLD_FOODS_FORMAT ? current.version : null;
-  if (!version) return [];
+  if (!version) return none;
   const code = barcodeKey(barcode);
   if (code) {
     const index = await json(bucket, `${version}/barcodes.idx.json`);
     const [pack, offset, length] = index?.[bucketOf(code)] || [0, 0, 0];
     const rows = await gzipLines(bucket, `${version}/barcodes-${pack}.pack`, offset, length);
-    return rows.filter(r => barcodeKey(r.b) === code).slice(0, RESULTS).map(r => toProduct(r, language));
+    return { ...none, foods: rows.filter(r => barcodeKey(r.b) === code).slice(0, RESULTS).map(r => toProduct(r, language)) };
   }
-  if (barcode) return [];
-  const typed = [...new Set(words(name))];
+  if (barcode) return none;
   const query = await Promise.all(typed.map(async w => w.length < 4 ? w : correctWord(w, await json(bucket, `${version}/vocab/${w[0]}.json`))));
   let start = fold(name).trim();
   typed.forEach((w, i) => { if (query[i] !== w) start = start.replace(new RegExp(`\\b${w}\\b`), query[i]); });
   const found = await namesFound(bucket, version, query, start, language);
   // A fixed word that finds nothing: the words as typed.
-  return found.length || query.every((w, i) => w === typed[i]) ? found : namesFound(bucket, version, typed, fold(name).trim(), language);
+  if (found.length || query.every((w, i) => w === typed[i])) return { foods: found, query, typed };
+  return { foods: await namesFound(bucket, version, typed, fold(name).trim(), language), query: typed, typed };
 }
 
 async function namesFound(bucket, version, query, start, language) {
