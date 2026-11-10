@@ -14,6 +14,10 @@ struct GymSessionView: View {
 
     @State private var exercise = 0
     @State private var kg: Double = 0
+    /// The weight and reps the screen itself put in (a new set, the iPhone's
+    /// draft): not sent back to the iPhone. Sent, they wrote the watch's older
+    /// plan over a weight just changed on the iPhone (Petr 2026-11-09).
+    @State private var putIn: [Double]?
     @State private var reps: Double = 8
     @State private var row: Int?
     /// The set the crown's numbers were loaded for (Lift.fieldKey).
@@ -40,6 +44,8 @@ struct GymSessionView: View {
     @StateObject private var run = GymPartRun()
     /// An exercise picked in ≡ before the first set: the parts before the exercises wait.
     @State private var skipBefore = false
+    /// A part before them ended: the exercises wait for Start gym ("Up next").
+    @State private var gymWaits = false
     /// The set just done, rated during the rest that follows it.
     @State private var rated: Rated?
     /// The tile the crown turns: the weight, or the reps after a tap on them.
@@ -105,11 +111,17 @@ struct GymSessionView: View {
                     paused
                 } else if let part = shownPart, let day = store.sheetDay, let parts = store.dayParts {
                     GymPartView(run: run, part: part, parts: parts, day: day) {
-                        if store.gym?.allDone == true, nextAfter == nil { summary = true }
+                        if store.gym?.allDone == true {
+                            if nextAfter == nil { summary = true }
+                        } else {
+                            gymWaits = true
+                        }
                     }
                     .id(part)
                 } else if store.gym?.allDone == true {
                     GymSummary(finish: finish)
+                } else if gymWaits, let gym = store.gym, !gym.exercises.isEmpty {
+                    gymReady(gym)
                 } else if let end = restEnd, end > now {
                     rest(until: end)
                 } else if let gym = store.gym, gym.exercises.isEmpty {
@@ -143,6 +155,7 @@ struct GymSessionView: View {
                         exercise = picked
                         restEnd = nil
                         skipBefore = true
+                        gymWaits = false
                         run.close()
                         list = false
                     } moved: { current in
@@ -150,7 +163,7 @@ struct GymSessionView: View {
                     } openPart: { part in
                         store.reopenPart(part)
                         restEnd = nil
-                        run.open(part, minutes: store.dayParts?.choice(part).minutes ?? 0)
+                        run.open(part, minutes: store.dayParts?.choice(part).minutes ?? 0, begun: true)
                         list = false
                     } end: {
                         list = false
@@ -204,6 +217,8 @@ struct GymSessionView: View {
         // A set, a change or a pause here or on the iPhone: "Still working out?"
         // waits another 10 min (GymWorkout.worked).
         .onChange(of: store.gym) { _, _ in workout.worked() }
+        // A set done (here or on the iPhone): the exercises waiting for Start gym have begun.
+        .onChange(of: store.gym?.setsDone ?? 0) { before, after in if after > before { gymWaits = false } }
         .onChange(of: exercise) { _, _ in workout.worked() }
         .onChange(of: kg) { _, _ in workout.worked() }
         .onChange(of: reps) { _, _ in workout.worked() }
@@ -218,7 +233,8 @@ struct GymSessionView: View {
         // The next part before the first set or after the last, from its start.
         .onChange(of: shownPart, initial: true) { _, part in
             guard let part, run.part != part else { return }
-            run.open(part, minutes: store.dayParts?.choice(part).minutes ?? 0)
+            // The workout begins with it: it runs at once; one after another part waits for its Start.
+            run.open(part, minutes: store.dayParts?.choice(part).minutes ?? 0, begun: nothingDoneYet)
         }
         .onChange(of: workout.pausedAt) { _, at in run.paused(at != nil); workout.worked() }
         // The rest the same as in Training mode on the iPhone, both ways.
@@ -265,10 +281,63 @@ struct GymSessionView: View {
     /// What is on the screen, for each part's and exercise's own time.
     private var focusKey: String? {
         guard workout.start != nil, !summary else { return nil }
-        if let part = shownPart { return part.rawValue }
+        // Up next, waiting for its Start: the time goes to no part meanwhile.
+        if let part = shownPart {
+            let waits: Bool = part.isCardio ? run.started == nil : !run.begun
+            if waits, run.part == part { return Self.waitKey }
+            return part.rawValue
+        }
+        if gymWaits, store.gym?.allDone != true { return Self.waitKey }
         guard let gym = store.gym, let lift = currentLift(in: gym),
               let e = gym.exercises.first(where: { $0.lifts.contains { $0.row == lift.row } }) else { return nil }
+        // The rest before an exercise not begun yet: its own time starts when the rest ends.
+        if restEnd != nil, !e.lifts.contains(where: \.done) { return Self.waitKey }
         return GymWorkout.exerciseKey(e)
+    }
+
+    /// The time between a part's end and the next one's Start (GymWorkout.segments): no row shows it.
+    static let waitKey = "_waiting"
+
+    /// Nothing done or skipped yet: the workout begins with the part on the screen.
+    private var nothingDoneYet: Bool {
+        guard let gym = store.gym, let day = store.sheetDay, let parts = store.dayParts else { return true }
+        // Step by step, not one && line: Xcode 27.1's optimiser crashed on such a Bool getter (#760).
+        if gym.exercises.contains(where: { $0.lifts.contains(where: \.done) }) { return false }
+        if parts.visible(day).contains(where: { store.partFinished($0) }) { return false }
+        return true
+    }
+
+    /// "Up next · Gym": the exercises came on after the part before and wait for Start gym.
+    private func gymReady(_ gym: WatchGym) -> some View {
+        let left = gym.exercises.filter { $0.lifts.contains { !$0.done } }
+        let sets = left.reduce(0) { $0 + $1.lifts.filter { !$0.done && !$0.warmup }.count }
+        let first = currentLift(in: gym).flatMap { lift in gym.exercises.first { $0.lifts.contains { $0.row == lift.row } } }
+        let exercises = W.tr("\(left.count) \(left.count == 1 ? "cvik" : (2...4).contains(left.count) ? "cviky" : "cviků")",
+                             "\(left.count) \(left.count == 1 ? "exercise" : "exercises")")
+        let setsLine = W.tr("\(sets) \((1...4).contains(sets) ? "série" : "sérií")", "\(sets) \(sets == 1 ? "set" : "sets")")
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(W.tr("NA ŘADĚ · POSILOVNA", "UP NEXT · GYM")).watchFont(12, .semibold).foregroundStyle(W.secondary)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Text(verbatim: first.map { $0.shown ?? $0.name } ?? W.tr("Posilovna", "Gym")).watchFont(16, .semibold).foregroundStyle(W.ink)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                Text(exercises + " · " + setsLine).watchFont(12).foregroundStyle(W.secondary)
+                Button {
+                    gymWaits = false
+                    workout.worked()
+                    WKInterfaceDevice.current().play(.start)
+                } label: {
+                    Text(W.tr("Spustit posilku", "Start gym")).watchFont(15, .semibold).foregroundStyle(.black)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .frame(maxWidth: .infinity).frame(height: 32)
+                        .background(W.ink, in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+                GymLiveCells()
+            }
+        }
     }
 
     /// The next part after the exercises not done or skipped yet.
@@ -336,6 +405,7 @@ struct GymSessionView: View {
             let shown = GymText.shown(draft.kg, machineLb: gym.machineLb(row: row))
             if abs(shown - kg) >= 0.05 { kg = shown }
             if Double(draft.reps) != reps { reps = Double(draft.reps) }
+            putIn = [kg, reps]
         }
     }
 
@@ -456,7 +526,7 @@ struct GymSessionView: View {
             switch next.turn {
             case .partner?: text += W.tr(" · pak ", " · then ") + gym.exercises[next.exercise].title
             case .round?: text += W.tr(" · pak pauza \(lift.rest) s", " · rest \(lift.rest) s after")
-            case nil: text += W.tr(" · pak pauza \(gym.restExercises) s", " · rest \(gym.restExercises) s after")
+            case nil: text += W.tr(" · pak pauza \(gym.restBefore(next.exercise)) s", " · rest \(gym.restBefore(next.exercise)) s after")
             }
         }
         return text
@@ -593,7 +663,8 @@ struct GymSessionView: View {
             clock.foregroundStyle(W.ink)
             HStack(spacing: 2) {
                 Image(systemName: "heart.fill").watchFont(12)
-                Text(workout.heartRate.map { W.number($0) } ?? "–")
+                // As the Heart tile says it: a bare dash here told nothing (Petr 2026-11-09).
+                Text(workout.heartRate.map { W.number($0) } ?? (workout.noHealth ? W.tr("Povol ve Zdraví", "Allow in Health") : "–"))
             }
             .foregroundStyle(W.pink)
             .accessibilityElement(children: .combine)
@@ -661,7 +732,8 @@ struct GymSessionView: View {
 
     /// The set at hand as it is now, to the iPhone; not what came from it.
     private func sendDraft(_ gym: WatchGym) {
-        guard let row else { return }
+        guard let row, putIn != [kg, reps] else { return }
+        putIn = nil
         store.sendDraft(WatchGym.Draft(date: gym.date, row: row, kg: GymText.kgOf(kg, machineLb: gym.machineLb(row: row)), reps: Int(reps)))
     }
 
@@ -671,6 +743,13 @@ struct GymSessionView: View {
         row = lift.row
         kg = GymText.shown(lift.kg ?? 0, machineLb: gym.machineLb(row: lift.row))
         reps = Double(lift.reps ?? 8)
+        // What the iPhone already has in its fields for this set, when it came
+        // before the watch moved on to it (the iPhone sends it as it moves on).
+        if let draft = store.phoneDraft, draft.date == gym.date, draft.row == lift.row {
+            kg = GymText.shown(draft.kg, machineLb: gym.machineLb(row: lift.row))
+            reps = Double(draft.reps)
+        }
+        putIn = [kg, reps]
         // Each new set starts on the weight.
         selected = .kg
         focusCrown()
@@ -709,7 +788,7 @@ struct GymSessionView: View {
         // A superset: its partner straight on, the set's rest after each round (as on the iPhone).
         case .partner?: seconds = 0
         case .round?: seconds = lift.rest
-        case nil: seconds = next.newExercise ? gym.restExercises : (next.lift.drop || otherSide ? 0 : lift.rest)
+        case nil: seconds = next.newExercise ? gym.restBefore(next.exercise) : (next.lift.drop || otherSide ? 0 : lift.rest)
         }
         if seconds > 0 {
             restTotal = Double(seconds)

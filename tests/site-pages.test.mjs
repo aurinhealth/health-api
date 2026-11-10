@@ -325,7 +325,8 @@ test('app screens on the site are real shots, not an empty screen', () => {
 });
 
 // Right under the hero's form, the watches and rings Aurin reads, as plain names in one row: only devices the app
-// supports (Apple Watch through Apple Health, Fitbit and Pixel Watch through Google Health, WHOOP and Ultrahuman directly).
+// supports (Apple Watch through Apple Health, Fitbit through Google Health, WHOOP and Ultrahuman directly). Pixel Watch
+// pairs only with Android, so it is not named.
 test('the hero names the wearables Aurin reads under the form, and no device it does not support',async()=>{
   const html=await overviewPage().text();
   const hero=html.slice(html.indexOf('<div class="hero">'),html.indexOf('<section class="morning">'));
@@ -336,8 +337,9 @@ test('the hero names the wearables Aurin reads under the form, and no device it 
   assert.deepEqual([...list.slice(0,list.indexOf('</ul>')).matchAll(/<li[^>]*>(?:([^<]+)|[\s\S]*?alt="([^"]+)"[\s\S]*?)<\/li>/g)].map(m=>m[1]||m[2]),WEARABLES);
   for(const [file] of Object.values(WORDMARKS))for(const c of ['black','white'])assert.ok(existsSync(new URL(`../public/site/logos/${file}-${c}.svg`,import.meta.url)),file+'-'+c);
   assert.deepEqual(Object.keys(WORDMARKS),['WHOOP','Ultrahuman'],'Apple and Google allow no device wordmark');
-  assert.deepEqual(WEARABLES,['Apple Watch','Fitbit','Pixel Watch','WHOOP','Ultrahuman']);
+  assert.deepEqual(WEARABLES,['Apple Watch','Fitbit','WHOOP','Ultrahuman']);
   assert.doesNotMatch(hero,/garmin|oura|strava|polar|coros|amazfit/i);
+  assert.doesNotMatch(html,/pixel watch/i,'Pixel Watch pairs only with Android');
   assert.match(hero,/Works with what you already wear/);
 });
 
@@ -401,8 +403,8 @@ test('the launch terms drop only the testing sentences and keep the change rules
   for(const re of testing.cs){assert.match(cs,re);assert.doesNotMatch(csPro,re);}
   assert.match(enPro,/<p>Aurin Pro adds Aurin Intelligence/);
   assert.match(csPro,/<p>Aurin Pro přidává funkce Aurin Intelligence/);
-  assert.match(enPro,/Last updated: 15 December 2026/);
-  assert.match(csPro,/Poslední změna: 15. prosince 2026/);
+  assert.match(enPro,/Last updated: 10 November 2026/);
+  assert.match(csPro,/Poslední změna: 10. listopadu 2026/);
   for(const t of [en,enPro]){
     assert.match(t,/only for a good reason/);
     assert.match(t,/at least 30 days ahead by e-mail and in the app\. You can then end the subscription without any fee, including the remaining payments/);

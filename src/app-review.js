@@ -6,7 +6,7 @@
 // Health upload and the rest of the app work as for anyone.
 import { L } from "./lang.js";
 
-export const REVIEW_AI_MONTHLY_LIMIT_USD = 0.5;
+export const REVIEW_AI_MONTHLY_LIMIT_USD = 2;
 
 const normalized = value => String(value || "").trim().toLowerCase();
 

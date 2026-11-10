@@ -224,6 +224,9 @@ struct GymBuilderView: View {
     var quick = false
     /// From the Odpočaté chip (Cviky): the focus is the rested muscles.
     var rested = false
+    /// "Sestavit krátký trénink" (Cviky, no big muscle rested): 30 minutes of
+    /// the smaller muscles rested today (MuscleFatigue.shortFocus).
+    var short = false
     @State private var day: Date = Date()
     @State private var minutes = 60
     @State private var focus = "auto"
@@ -301,9 +304,10 @@ struct GymBuilderView: View {
             }
             if template == nil, model.musclesStale { await model.loadMuscles() }
             // What is rested today picks the focus, until the athlete picks one.
-            if rested, template == nil, proposal == nil, !focusPreset, model.muscles?.restedFocus.isEmpty == false {
+            if rested, template == nil, proposal == nil, !focusPreset, !restedIds.isEmpty {
                 focusPreset = true
                 focus = "rested"
+                if short, !lengthPicked { minutes = 30; lengthPicked = true }
             }
             if template == nil, proposal == nil, focus == "auto", !focusPreset, let preset = model.muscles?.focus {
                 focusPreset = true
@@ -825,8 +829,9 @@ struct GymBuilderView: View {
                         lengthPicked: lengthPicked, at: Date()).save()
     }
 
-    /// The rested muscles the Odpočaté focus asks for (MuscleFatigue.restedFocus).
-    private var restedIds: [String] { model.muscles?.restedFocus ?? [] }
+    /// The rested muscles the Odpočaté focus asks for (MuscleFatigue.restedFocus,
+    /// or shortFocus for the short session).
+    private var restedIds: [String] { (short ? model.muscles?.shortFocus : model.muscles?.restedFocus) ?? [] }
 
     /// another: "Jiný návrh", the same setup with other exercises than shown so far.
     private func preview(another: Bool = false) async {

@@ -106,6 +106,9 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
   assert.equal((await handleCoachEval(post({ id: 'S99' }), staging, { kind: 'coach-eval' }, { run })).status, 404);
+  // A failed situation keeps its message: a 502 would reach the workflow as Cloudflare's "Bad gateway" page (run 57).
+  const failed = await handleCoachEval(post({ id: 'S38' }), staging, { kind: 'coach-eval' }, { run: async () => { throw new Error('AI je dnes přetížená.'); } });
+  assert.equal(failed.status, 200);assert.deepEqual(await failed.json(), { id: 'S38', title: scenarioById('S38').title, status: 'error', message: 'AI je dnes přetížená.' });
   // The token is checked against the evaluation's own audience and workflow.
   let options = null;
   assert.deepEqual(await coachEvalPrincipal(post({}), staging, async (request, fetchImpl, o) => { options = o; return {}; }), { kind: 'coach-eval' });
@@ -736,4 +739,10 @@ test('run 53: a kept Nemoc card is no dropped card, though the app keeps it with
   const status = { type: 'status', date: COACH_EVAL_DATE, status: 'sick', reason: 'Horečka.' };
   assert.ok(!failed([status], [{ type: 'status', status: 'sick', reason: 'Horečka.' }]).includes('text neslibuje kartu, kterou aplikace zahodila'));
   assert.ok(failed([status], []).includes('text neslibuje kartu, kterou aplikace zahodila'));
+});
+
+test('run 56: "buduje vytrvalost" is a reason for S44; "nejde o známku nemoci" still names an illness for S38', () => {
+  const failed = (id, answer) => checkReply(scenarioById(id), { proposed: [], kept: [], answer }, null, COACH_EVAL_DATE).filter(c => !c.ok).map(c => c.name);
+  assert.ok(!failed('S44', 'Zóna 2 je lehké tempo, při kterém můžeš mluvit v celých větách. Dnešní „Lehký běh 40 min“ tak buduje vytrvalost bez velké únavy nohou.').includes('řekne důvod'));
+  assert.ok(failed('S38', 'Teplota zápěstí byla ve spánku o 1,1 °C nad tvým normálem. Nejde o známku nemoci, ale dnes bych zůstal bez intenzity.').includes('teplotu nenazve nemocí ani jejím začátkem (MDR)'));
 });

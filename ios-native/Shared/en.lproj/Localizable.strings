@@ -663,6 +663,7 @@
 "Sestavit trénink" = "Build workout";
 "Sestavit z odpočatých" = "Build workout from rested";
 "Velké svaly se ještě zotavují. Zkus krátký trénink středu těla nebo volno." = "Big muscles are still recovering. Try a short core session or a rest day.";
+"Sestavit krátký trénink" = "Build a short session";
 "Sestavuji…" = "Building…";
 "Seznam" = "List";
 "Silový trénink" = "Strength training";
@@ -3766,7 +3767,7 @@
 "12 plateb · %@" = "12 payments · %@";
 "7 DNÍ ZDARMA" = "7 DAYS FREE";
 "Aurin Pro" = "Aurin Pro";
-"Celé Aurin Pro zdarma do %@." = "All of Pro, free until %@.";
+"Celé Aurin Pro zdarma do %@" = "All of Pro, free until %@";
 "DNES" = "TODAY";
 "Dnes se nic neúčtuje. Po 7 dnech " = "Nothing is charged today. After 7 days ";
 "Dnes zdarma, připomínka za 4 dny, první platba %@." = "Free today, a reminder in 4 days, first payment %@.";
@@ -4148,3 +4149,11 @@
 "Zahodit" = "Discard";
 
 "Zatím neuloženo · z %@" = "Not saved yet · from %@";
+
+/* Each part of the workout waits for its own Start (Režim tréninku). */
+"Na řadě" = "Up next";
+"nezačato" = "not started";
+"Přeskočit sekci" = "Skip section";
+"Spustit rozcvičku" = "Start warm-up";
+"Spustit protažení" = "Start stretching";
+"Spustit posilku" = "Start gym";

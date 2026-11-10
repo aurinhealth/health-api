@@ -316,6 +316,14 @@ struct StretchTimerView: View {
                     }
                 }
                 .buttonStyle(.plain)
+                if let onClose {
+                    // In Režim tréninku: the rest of the part left out (forgot to switch it off).
+                    Button { finished = true; onClose() } label: {
+                        Text(verbatim: L10n.tr("Přeskočit sekci")).font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                            .frame(maxWidth: .infinity).frame(minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
         .padding(onClose == nil ? 20 : 16)

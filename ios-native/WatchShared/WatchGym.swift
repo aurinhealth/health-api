@@ -10,7 +10,8 @@ struct WatchGym: Codable, Equatable, Sendable {
     var date: String
     var title: String?
     var minutes: Int?
-    /// The rest before the next exercise (Nastavení → Posilovna → Pauzy).
+    /// The rest before the next exercise (Nastavení → Posilovna → Pauzy);
+    /// GymRestSettingsView.byExercise (−1) for each exercise's own, `restBefore`.
     var restExercises: Int
     var exercises: [Exercise]
     /// The day's sheet itself (GymDay.values), so the watch can go on without
@@ -33,12 +34,22 @@ struct WatchGym: Codable, Equatable, Sendable {
         var note: String? = nil
         /// The best set before today by the estimated one-rep max: a set past it is a record.
         var record: Last? = nil
+        /// The plan's rest for its work sets ("[Pauza 150 s]"), the rest before
+        /// it when Mezi cviky is Podle cviku; nil from an older iPhone.
+        var rest: Int? = nil
         /// In pounds while the app is in kilos: a machine in lb (LiftUnits on the iPhone).
         var pounds: Bool? = nil
         /// The bar its plates go on, in the chosen unit (20 kg, 45 lb; 0 a
         /// plate-loaded machine), for the rest's "20 + 2,5 / side"; nil when none go on.
         var bar: Double? = nil
         var title: String { shown ?? name }
+    }
+
+    /// The rest before exercise `index`: the length chosen, else the plan's
+    /// for that exercise, 120 s without one (GymRestSettingsView.before on the iPhone).
+    func restBefore(_ index: Int) -> Int {
+        guard restExercises < 0 else { return restExercises }
+        return exercises.indices.contains(index) ? exercises[index].rest ?? 120 : 120
     }
 
     /// One row of the sheet: a set, or one side of a set done by sides.

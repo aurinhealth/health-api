@@ -637,8 +637,9 @@ extension WatchGym {
             }
             let shown = ExerciseName.shown(exercise.name)
             let letter = (exercise.superset ?? "").trimmingCharacters(in: .whitespaces).uppercased()
+            let set = exercise.sets.first { !$0.done && $0.work } ?? exercise.sets.first { !$0.done }
             return WatchGym.Exercise(name: exercise.name, shown: shown == exercise.name ? nil : shown, lifts: lifts,
-                                     superset: letter.isEmpty ? nil : letter)
+                                     superset: letter.isEmpty ? nil : letter, rest: set?.plannedRest)
         }
         self.init(date: date, title: day.planName, minutes: day.plannedMinutes, restExercises: restExercises,
                   exercises: day.cancelled == true ? [] : exercises, sheet: day.values)

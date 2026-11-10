@@ -83,6 +83,13 @@ test("a Sandbox purchase counts only on the test server", async () => {
   assert.equal((await buy(staging, pack({ environment: "Sandbox", productId: "health.aurin.app.coach.messages100" }))).left, 100);
 });
 
+test("App Review's Sandbox purchase on the live server adds the messages to the review account only", async () => {
+  const review = setup({ APP_REVIEW_EMAIL: "review@aurin.health", USER_EMAIL: "Review@aurin.health" }).user(1);
+  assert.equal((await buy(review, pack({ environment: "Sandbox" }))).left, 40);
+  const other = setup({ APP_REVIEW_EMAIL: "review@aurin.health", USER_EMAIL: "someone@example.com" }).user(1);
+  assert.equal((await buy(other, pack({ environment: "Sandbox", transactionId: "3000000009", originalTransactionId: "3000000009" }))).left, 0);
+});
+
 test("Apple's refund takes the pack's messages away, the used ones stay used", async () => {
   const { raw, user } = setup();
   const env = user(1);
@@ -98,6 +105,50 @@ test("Apple's refund takes the pack's messages away, the used ones stay used", a
   assert.equal((await response.json()).refunded, true);
   assert.equal(await packMessagesLeft(env), 100);
   assert.equal((await packPurchases(env)).find(p => p.messages === 40).refunded, true);
+});
+
+const refund = (raw, tx) => handleAppStoreNotification(new Request("https://aurin.health/webhooks/app-store", { method: "POST", body: JSON.stringify({ signedPayload: jws({
+  notificationType: "REFUND", notificationUUID: crypto.randomUUID(), version: "2.0", signedDate: now + 1000,
+  data: { bundleId: "health.aurin.app", environment: "Production", appAppleId: 6740000000, signedTransactionInfo: jws(tx) }
+}) }) }), { DB: raw }, { roots });
+
+test("a pack Apple refunded before the app sent it adds no messages afterwards", async () => {
+  const { raw, user } = setup();
+  const env = user(1);
+  const token = await appAccountToken(env);
+  assert.equal((await refund(raw, pack({ appAccountToken: token, revocationDate: now + 1000, signedDate: now + 1000 }))).status, 200);
+  // The record from before the refund, which the app (or anyone holding it) sends later.
+  await assert.rejects(buy(env, pack()), { status: 409 });
+  assert.equal(await packMessagesLeft(env), 0);
+  assert.deepEqual(await packPurchases(env), []);
+});
+
+test("a pack record that itself says refunded adds no messages and takes away the ones it gave", async () => {
+  const { user } = setup();
+  const env = user(1);
+  const revoked = { revocationDate: now + 1000, signedDate: now + 2000 };
+  const unknown = await buy(env, pack(revoked));
+  assert.deepEqual([unknown.status, unknown.added, unknown.refunded, unknown.left], ["ok", false, true, 0], "answered, so the app closes the purchase");
+  await assert.rejects(buy(env, pack()), { status: 409 }, "the record from before the refund gives nothing either");
+  // A pack the account already has.
+  await buy(env, pack({ transactionId: "3000000002", originalTransactionId: "3000000002" }));
+  assert.equal(await packMessagesLeft(env), 40);
+  const known = await buy(env, pack({ transactionId: "3000000002", originalTransactionId: "3000000002", ...revoked }));
+  assert.deepEqual([known.added, known.refunded, known.left], [false, true, 0]);
+});
+
+test("a refund that crosses the app's send of the pack leaves no messages", async () => {
+  const { raw, user } = setup();
+  const token = await appAccountToken(user(1));
+  assert.equal(await packMessagesLeft(user(1)), 0);
+  // Apple's refund lands after the send looked for the pack's mark and before it wrote the purchase.
+  let crossed = false;
+  const central = { ...raw, batch: async statements => {
+    if (!crossed) { crossed = true; await refund(raw, pack({ appAccountToken: token, revocationDate: now + 1000, signedDate: now + 1000 })); }
+    return raw.batch(statements);
+  } };
+  await assert.rejects(buy({ ...user(1), RAW_DB: central }, pack()), { status: 409 });
+  assert.equal(await packMessagesLeft(user(1)), 0);
 });
 
 test("the coach takes bought messages after the week's and the conversation's extra ones", async () => {

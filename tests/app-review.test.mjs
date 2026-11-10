@@ -60,9 +60,9 @@ async function tryCode(env, code, time) {
   } finally { Date.now = real; }
 }
 
-test("the fixed review code stops working after twenty wrong tries in all, however many days they take", async () => {
+test("wrong tries on the fixed review code do not add up over the days: nobody locks the reviewer out for good", async () => {
   const { env } = await reviewSetup({ APP_REVIEW_UNTIL: "2999-12-31" });
-  // Ten wrong tries a day stay under the daily lock of an address, but add up.
+  // Ten wrong tries a day stay under the daily lock of an address.
   for (const day of ["2026-10-07", "2026-10-08"]) {
     for (let round = 0; round < 2; round++) {
       const time = Date.parse(day + "T08:00:00Z") + round * 61_000;
@@ -72,11 +72,7 @@ test("the fixed review code stops working after twenty wrong tries in all, howev
   }
   const later = Date.parse("2026-10-09T08:00:00Z");
   assert.equal(await sendCode(env, "review@example.com", "en", { now: later }), true);
-  assert.equal(await tryCode(env, "246810", later + 1000), 429, "the right code no longer signs in");
-  // A new APP_REVIEW_CODE starts over.
-  const renewed = { ...env, APP_REVIEW_CODE: "975310" };
-  assert.equal(await sendCode(renewed, "review@example.com", "en", { now: later + 61_000 }), true);
-  assert.equal(await tryCode(renewed, "975310", later + 62_000), 200);
+  assert.equal(await tryCode(env, "246810", later + 1000), 200, "the right code still signs in");
 });
 
 test("the fixed review code is never for the owner or an admin", async () => {
@@ -131,7 +127,7 @@ test("the review account's AI budget is a small fixed monthly cap", async () => 
   try {
     const db = grantAiConsent(createD1(), 7), env = { DB: scopedDb(db, 7), USER_ID: 7, OPENAI_API_KEY: "k", ...review };
     await aiAllowance(env);
-    db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, 0.5)").run(localToday());
+    db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, ?)").run(localToday(), REVIEW_AI_MONTHLY_LIMIT_USD);
     await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => error.limit === true && /zase k dispozici od/.test(error.message));
     assert.equal(calls, 0);
   } finally { globalThis.fetch = realFetch; }
