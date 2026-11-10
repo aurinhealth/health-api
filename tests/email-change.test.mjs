@@ -143,6 +143,7 @@ test("an address another account uses answers as any other; it gets a notice onc
   assert.equal(env.DB.sqlite.prepare("SELECT COUNT(*) AS n FROM email_login_codes WHERE email = 'other@example.com'").get().n, 0, "the other account's sign-in code is left alone");
   assert.equal((await change(env, user, "/app/api/account/email/start", { email: "other@example.com" })).status, 200);
   assert.equal(sent.length, before + 1, "one notice a day");
+  assert.equal(env.DB.sqlite.prepare("SELECT day_count FROM request_limits WHERE key = 'email-codes:change:day'").get().day_count, 1, "from the change codes' budget");
   // No code exists for it, so no guess moves the account there.
   assert.equal((await change(env, user, "/app/api/account/email/verify", { email: "other@example.com", code: "123456" })).status >= 400, true);
   assert.equal((await findUser(env.DB, user.id, env)).email, "friend@example.com");
