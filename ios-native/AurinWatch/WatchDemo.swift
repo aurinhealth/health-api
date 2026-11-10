@@ -51,7 +51,7 @@ enum WatchDemo {
 
     static var snapshot: WatchSnapshot {
         let rhr = (0..<29).map { [53.0, 50, 51, 52][$0 % 4] } + [48]
-        let hrv = (0..<29).map { [55.0, 62, 60, 58, 56, 54, 61, 59, 57][$0 % 9] } + [64]
+        let hrv = (0..<27).map { [55.0, 62, 60, 58, 56, 54, 61, 59, 57][$0 % 9] } + [62, 62, 64]
         return WatchSnapshot(
             date: day(0), updated: now, language: english ? "en" : "cs", readiness: 78, zone: "green", verdict: "hard",
             headline: tr("Jak dnes začít", "How to start today"),
@@ -74,24 +74,25 @@ enum WatchDemo {
                                        bedtime: "22:10", inBed: 545, sleep: 510))
     }
 
-    /// The sample week around today: done before it, planned after it, in
-    /// all four sports (only the days of this week show on the watch).
+    /// The sample week around today: done before it, planned after it (only
+    /// the days of this week show on the watch).
     private static var week: [WatchSnapshot.Session] {
         typealias S = WatchSnapshot.Session
+        // The same week as the phone's sample calendar (DemoCalendar), yesterday first.
         let before: [(String, String, String, Int)] = [
-            ("Intervaly 4×8", "Intervals 4×8", "ride", 72),
-            ("Plavání 2 km", "Swim 2 km", "swim", 45),
-            ("Běh", "Run", "run", 54),
-            ("Kolo", "Ride", "ride", 60),
-            ("Posilovna · horní tělo", "Gym · upper body", "strength", 50),
-            ("Lehký běh", "Easy run", "run", 40)]
+            ("Běh 14 km", "Run 14 km", "run", 72),
+            ("Sweet spot 3×12", "Sweet spot 3×12", "ride", 75),
+            ("Posilovna · dolní tělo", "Gym · lower body", "strength", 60),
+            ("Procházka", "Walk", "walk", 70),
+            ("Dlouhý běh", "Long run", "run", 96),
+            ("Lehká jízda Z2", "Easy ride Z2", "ride", 72)]
         let after: [(String, String, String, Int)] = [
             ("Lehká jízda Z2", "Easy ride Z2", "ride", 72),
             ("Dlouhý běh", "Long run", "run", 96),
-            ("Plavání, technika", "Swim technique", "swim", 45),
-            ("Regenerace", "Recovery", "ride", 30),
-            ("Posilovna · dolní tělo", "Gym · lower body", "strength", 50),
-            ("Dlouhá jízda", "Long ride", "ride", 150)]
+            ("Procházka", "Walk", "walk", 70),
+            ("Posilovna · dolní tělo", "Gym · lower body", "strength", 60),
+            ("Sweet spot 3×12", "Sweet spot 3×12", "ride", 75),
+            ("Běh 14 km", "Run 14 km", "run", 72)]
         var sessions = before.enumerated().reversed().map {
             S(date: day(-$0.offset - 1), time: nil, title: tr($0.element.0, $0.element.1), sport: $0.element.2, minutes: $0.element.3, done: true)
         }
@@ -101,7 +102,8 @@ enum WatchDemo {
             sessions.append(S(date: day(0), time: "07:30", title: tr("Ranní běh", "Morning run"), sport: "run", minutes: 42, done: true))
             sessions.append(S(date: day(0), time: "17:30", title: tr("Silový trénink, celé tělo", "Strength, full body"), sport: "strength", minutes: 45, done: false))
         }
-        sessions += after.enumerated().map {
+        // A walk is never planned (DemoCalendar drops planned walks).
+        sessions += after.enumerated().filter { $0.element.2 != "walk" }.map {
             S(date: day($0.offset + 1), time: nil, title: tr($0.element.0, $0.element.1), sport: $0.element.2, minutes: $0.element.3, done: false)
         }
         return sessions
@@ -149,16 +151,16 @@ enum WatchDemo {
                                 plannedReps: planned, done: false, rest: rest) }
         }
         var squat = [L(row: 7, number: "1", warmup: true, drop: false, kg: 40, reps: 8, plannedReps: "8", done: true, rest: 60)]
-        squat += sets(8, 4, 80, 8, "6-8", rest: 150)
+        squat += sets(8, 4, 80, 3, "3", rest: 150)
         squat[1].done = true
         squat[1].intensity = "M"
         return WatchGym(
             date: day(0), title: tr("Celé tělo", "Full body"), minutes: 45, restExercises: 120,
             exercises: [
                 WatchGym.Exercise(name: "Dřep", shown: tr("Dřep", "Squat"), lifts: squat),
-                WatchGym.Exercise(name: "Tlak na lavici", shown: tr("Tlak na lavici", "Bench press"), lifts: sets(12, 3, 62.5, 8, "8", rest: 90)),
-                WatchGym.Exercise(name: "Přítahy", shown: tr("Přítahy", "Rows"), lifts: sets(15, 3, 50, 10, "10", rest: 90)),
-                WatchGym.Exercise(name: "Rumunský mrtvý tah", shown: tr("Rumunský mrtvý tah", "Romanian deadlift"), lifts: sets(18, 3, 70, 8, "8", rest: 120)),
-                WatchGym.Exercise(name: "Výpady", shown: tr("Výpady", "Lunges"), lifts: sets(21, 3, 16, 10, "10", rest: 90))])
+                WatchGym.Exercise(name: "Tlak na lavici", shown: tr("Tlak na lavici", "Bench press"), lifts: sets(12, 4, 62.5, 6, "6", rest: 90)),
+                WatchGym.Exercise(name: "Přítahy", shown: tr("Přítahy", "Rows"), lifts: sets(16, 4, 50, 8, "8", rest: 90)),
+                WatchGym.Exercise(name: "Tlaky s jednoručkami nad hlavu", shown: tr("Tlaky s jednoručkami nad hlavu", "DB shoulder press"), lifts: sets(20, 3, 16, 10, "10", rest: 75)),
+                WatchGym.Exercise(name: "Pallof press", shown: "Pallof press", lifts: sets(23, 3, 10, 10, "10", rest: 60))])
     }
 }

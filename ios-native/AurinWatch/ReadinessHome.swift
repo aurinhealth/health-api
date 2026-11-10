@@ -12,8 +12,6 @@ import SwiftUI
 /// for last night" with "–" for readiness, sleep and HRV (Today audit 20).
 struct ReadinessHome: View {
     let s: WatchSnapshot
-    /// Always On (wrist down): the morning's numbers hide (Today audit 17).
-    @Environment(\.isLuminanceReduced) private var dimmed
     /// Why `s` is not this morning's numbers; nil when it is.
     var stale: Stale? = nil
     /// Turns to the Training page (the gym's Start); nil when that page is off.
@@ -111,7 +109,7 @@ struct ReadinessHome: View {
             heroNumber
             // The day's verdict under the number, the iPhone's line (src/day-verdict.js) in short.
             // Only this morning's: an older day's verdict would read as advice for today.
-            if let verdict, !dimmed, stale == nil {
+            if let verdict, stale == nil {
                 Text(verdict.text)
                     .watchFont(14, .semibold)
                     .foregroundStyle(verdict.color)
@@ -141,7 +139,7 @@ struct ReadinessHome: View {
                 .font(W.serif(46))
                 .lineLimit(1)
             } else {
-                Text(dimmed ? "––" : s.readiness.map { String($0) } ?? "–")
+                Text(s.readiness.map { String($0) } ?? "–")
                     .font(W.serif(52))
                     .foregroundStyle(older ? W.muted : W.ink)
                     .lineLimit(1)
@@ -150,10 +148,10 @@ struct ReadinessHome: View {
                 Text(title)
                     .watchFont(12, .medium)
                     .foregroundStyle(W.secondary)
-                    .lineLimit(stale == .night || dimmed ? 2 : 1)
+                    .lineLimit(stale == .night ? 2 : 1)
                     .minimumScaleFactor(0.8)
                     .fixedSize(horizontal: false, vertical: true)
-                if let pill, verdict == nil, !dimmed {
+                if let pill, verdict == nil {
                     Text(pill.text)
                         .watchFont(12, .semibold)
                         .foregroundStyle(pill.color)
@@ -170,7 +168,6 @@ struct ReadinessHome: View {
 
     /// Beside the number: what the page waits for, else "Readiness".
     private var title: String {
-        if dimmed { return W.tr("Zvedni zápěstí", "Raise your wrist") }
         return switch stale {
         case .loading: W.tr("Načítám dnešek…", "Getting today…")
         case .night: W.tr("Čekám na poslední noc", "Waiting for last night")
@@ -267,7 +264,7 @@ struct ReadinessHome: View {
 
     private var gauges: some View {
         HStack(spacing: 0) {
-            ForEach(Array([sleep, strain, hrv].map(shown).enumerated()), id: \.offset) { index, gauge in
+            ForEach(Array([sleep, strain, hrv].enumerated()), id: \.offset) { index, gauge in
                 if index > 0 { Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1) }
                 NavigationLink(value: gauge.page) { cell(gauge) }
                     .buttonStyle(.plain)
@@ -320,18 +317,6 @@ struct ReadinessHome: View {
         case .hrv: W.green
         default: W.muted
         }
-    }
-
-    /// Always On: the name stays, the number, bar and note hide.
-    private func shown(_ g: Gauge) -> Gauge {
-        guard dimmed else { return g }
-        var g = g
-        g.value = "––"
-        g.unit = nil
-        g.bar = nil
-        g.note = nil
-        g.color = W.muted
-        return g
     }
 
     /// The night against its need: the band is half an hour either side (TodayView).

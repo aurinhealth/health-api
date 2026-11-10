@@ -178,19 +178,6 @@ struct SmallValue {
     /// The day's goal in the same units as `fraction` (sleep: the need ± half
     /// an hour; strain: today's band), marked on the Day complication's steps.
     var goal: ClosedRange<Double>? = nil
-
-    /// Always On (wrist down): the ring empty and the number "––" (Today audit 17).
-    func hidden(_ name: String) -> SmallValue {
-        var v = self
-        v.fraction = 0
-        v.color = C.stale
-        v.text = "––"
-        v.line = name + " ––"
-        v.until = nil
-        v.arrow = nil
-        v.goal = nil
-        return v
-    }
 }
 
 enum Small {
@@ -248,16 +235,6 @@ enum Small {
         case .workout: "figure.strengthtraining.traditional"
         case .alarm: "alarm.fill"
         }
-    }
-
-    /// The morning's and health numbers, hidden in Always On (Today audit 17);
-    /// the workout, the alarm, food and drinks stay. Aurin through the day and
-    /// the alarm hide while they show readiness or the night.
-    static func shown(_ m: SmallMetric, _ v: SmallValue, dimmed: Bool) -> SmallValue {
-        guard dimmed else { return v }
-        if [.readiness, .sleep, .strain, .hrv, .restingHR].contains(m) { return v.hidden(name(m)) }
-        if v.symbol == symbol(.readiness) { return v.hidden(name(m == .alarm ? .sleep : .readiness)) }
-        return v
     }
 
     static func value(_ m: SmallMetric, _ s: WatchSnapshot?, at now: Date) -> SmallValue {
@@ -464,16 +441,13 @@ enum Small {
 
 struct SmallView: View {
     let metric: SmallMetric
-    let given: SmallValue
+    let value: SmallValue
     @Environment(\.widgetFamily) private var family
-    @Environment(\.isLuminanceReduced) private var dimmed
 
     init(metric: SmallMetric, value: SmallValue) {
         self.metric = metric
-        self.given = value
+        self.value = value
     }
-
-    private var value: SmallValue { Small.shown(metric, given, dimmed: dimmed) }
 
     var body: some View {
         // One sentence for VoiceOver ("Readiness 72"), not the ring's pieces (watch audit G1).
@@ -637,11 +611,10 @@ enum WideComplication {
 struct WideView: View {
     let kind: WideKind
     let entry: DayEntry
-    /// Always On: readiness, sleep, strain and HRV hide (Today audit 17).
-    @Environment(\.isLuminanceReduced) private var dimmed
-
+    // Always On (wrist down) keeps the numbers: the watch's own Always On
+    // settings hide a complication's data, a locked watch hides it (privacySensitive).
     private func shown(_ m: SmallMetric) -> SmallValue {
-        Small.shown(m, Small.value(m, entry.snapshot, at: entry.date), dimmed: dimmed)
+        Small.value(m, entry.snapshot, at: entry.date)
     }
 
     private var today: WatchSnapshot? {
@@ -692,7 +665,7 @@ struct WideView: View {
             VStack(alignment: .leading, spacing: 1) {
                 if let today {
                     // The app's word for the zone (high, moderate, low), as on Today.
-                    head(tr("DNES", "TODAY") + (dimmed ? "" : today.zone.map { " · " + zoneWord($0) } ?? ""), dimmed ? C.muted : C.zone(today.zone))
+                    head(tr("DNES", "TODAY") + (today.zone.map { " · " + zoneWord($0) } ?? ""), C.zone(today.zone))
                     if let next {
                         Text(next.name)
                             .font(.system(size: 13, weight: .semibold)).lineLimit(2).minimumScaleFactor(0.8)
@@ -755,10 +728,10 @@ struct WideView: View {
             readinessRing(r)
             VStack(alignment: .leading, spacing: 1) {
                 if let today {
-                    head(dimmed ? tr("RÁNO", "MORNING") : tr("RÁNO · ", "MORNING · ") + (today.zone.map(zoneWord) ?? ""), dimmed ? C.muted : C.zone(today.zone))
-                    Text(dimmed ? tr("Spánek ––", "Sleep ––") : today.sleep?.minutes.map { tr("Spánek ", "Slept ") + Days.hm($0) } ?? tr("Spánek –", "Sleep –"))
+                    head(tr("RÁNO · ", "MORNING · ") + (today.zone.map(zoneWord) ?? ""), C.zone(today.zone))
+                    Text(today.sleep?.minutes.map { tr("Spánek ", "Slept ") + Days.hm($0) } ?? tr("Spánek –", "Sleep –"))
                         .font(.system(size: 14, weight: .semibold)).lineLimit(1)
-                    if !dimmed, !today.awaitingNight, let hrv = today.hrv?.value {
+                    if !today.awaitingNight, let hrv = today.hrv?.value {
                         Text(hrvLine(hrv, today.hrv))
                         .font(.system(size: 11)).foregroundStyle(C.muted).lineLimit(1)
                     }
@@ -851,10 +824,10 @@ struct WideView: View {
                     Text(last.name + tr(" hotovo", " done")).lineLimit(1)
                 }
                 .font(.system(size: 12, weight: .semibold)).foregroundStyle(C.green).widgetAccentable()
-                let added = dimmed ? nil : today?.strain.training
+                let added = today?.strain.training
                 Text(Days.join([last.minutes.map(Days.minutes), added.map(addedStrain)]))
                     .font(.system(size: 15, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
-                if !dimmed, let score = today?.strain.score {
+                if let score = today?.strain.score {
                     Text(dayStrain(score))
                     .font(.system(size: 11)).foregroundStyle(C.muted)
                 }

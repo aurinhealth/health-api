@@ -142,12 +142,12 @@ struct FoodContent: View {
         // A wide window: the day's numbers and the widgets on the left, the meals on the right.
         WideColumns {
             HStack(alignment: .lastTextBaseline, spacing: 12) {
-                Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
+                Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                 if let target = food.target {
                     // With its parts the target opens where the numbers come from.
                     let more = food.targetParts != nil ? " ›" : ""
                     let over = (food.kcal ?? 0).rounded() - target.rounded()
-                    Group {
+                    let label = Group {
                         if over >= 1 {
                             // Past the target (its workouts done and planned included): a calm note
                             // in rust, as a limit past on the macros, not the number in red.
@@ -161,7 +161,19 @@ struct FoodContent: View {
                                 .font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
                         }
                     }
-                    .onTapGesture { if food.targetParts != nil { showingParts = true } }
+                    if food.targetParts != nil {
+                        // A real button, 44 pt tall to tap, read by VoiceOver as one (design review 2026-11-10, point 12).
+                        Button { showingParts = true } label: {
+                            label.frame(minWidth: 44, minHeight: 44, alignment: .leading).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(L10n.tr("Cíl dne"))
+                        .accessibilityValue(over >= 1
+                            ? L10n.f("%@ kcal navíc", Fmt.int(over)) + ", " + L10n.f("z %@ kcal", Fmt.int(target))
+                            : L10n.f("%@ kcal", Fmt.int(target)))
+                    } else {
+                        label
+                    }
                 }
             }
             .padding(.top, 30)

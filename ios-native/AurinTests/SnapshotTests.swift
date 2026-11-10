@@ -223,7 +223,7 @@ final class SnapshotTests: XCTestCase {
         var day = DemoData.gym
         XCTAssertEqual(day.planName, "Celé tělo")
         let exercises = day.exercises
-        XCTAssertEqual(exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy", "Rumunský mrtvý tah", "Výpady"])
+        XCTAssertEqual(exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy", "Tlaky s jednoručkami nad hlavu", "Pallof press"])
         XCTAssertEqual(exercises[0].sets.count, 5)
         XCTAssertTrue(exercises[0].sets[0].warmup)
         XCTAssertEqual(exercises[0].doneCount, 1)
@@ -239,12 +239,12 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(day.exercises[0].doneCount, 1)
 
         day.replace(exercise: "Dřep", with: "Leg press")
-        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Leg press", "Tlak na lavici", "Přítahy", "Rumunský mrtvý tah", "Výpady"], "done sets keep the old name")
+        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Leg press", "Tlak na lavici", "Přítahy", "Tlaky s jednoručkami nad hlavu", "Pallof press"], "done sets keep the old name")
 
         let body = day.saveBody
         guard case .array(let rows) = body["values"], case .array(let full) = body["fullValues"] else { return XCTFail("body") }
         XCTAssertEqual(full.count, rows.count + 7)
-        XCTAssertEqual(rows.count, 17)
+        XCTAssertEqual(rows.count, 19, "warm-up + 4 squat, 4 bench, 4 rows, 3 DB shoulder press, 3 Pallof")
     }
 
     func testTrainingSessionsDecode() {
@@ -631,9 +631,9 @@ final class SnapshotTests: XCTestCase {
     func testPlanEditing() {
         var day = DemoData.gym
         day.moveExercise(from: 2, to: 0)
-        XCTAssertEqual(day.exercises.map(\.name), ["Přítahy", "Dřep", "Tlak na lavici", "Rumunský mrtvý tah", "Výpady"])
+        XCTAssertEqual(day.exercises.map(\.name), ["Přítahy", "Dřep", "Tlak na lavici", "Tlaky s jednoručkami nad hlavu", "Pallof press"])
         day.moveExercise(from: 0, to: 3)
-        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy", "Rumunský mrtvý tah", "Výpady"])
+        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy", "Tlaky s jednoručkami nad hlavu", "Pallof press"])
         XCTAssertEqual(day.planName, "Celé tělo", "the head of the sheet stays")
 
         let sets = day.exercises[1].sets.count
@@ -993,6 +993,9 @@ final class SnapshotTests: XCTestCase {
         try render("paywall-free-week", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true)) }
         // The end of the first setup (point 7): no way back, "Teď ne" under the button.
         try render("paywall-setup-end", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true), notNow: true) }
+        // The same with the AI features left off in the setup (1.0.1 point 2): the note and "Povolit AI a začít týden zdarma",
+        // at the safe-area height of a 6.1" iPhone (852 − 59 − 34), so the image shows the page fits.
+        try render("paywall-setup-end-ai", height: 759) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true), notNow: true, allowAI: {}) }
         // "View more plans" (variant 8c): where the year can be paid monthly (CZ) and where it can't (US).
         let czech = ProOffer.plans(yearly: "1 490 Kč", monthly: "199 Kč", perMonth: "124 Kč",
                                    commitment: ProStore.Commitment(monthly: "149 Kč", total: "1 788 Kč"), trial: true)

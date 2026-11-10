@@ -260,7 +260,7 @@ struct MetricHeadline: View {
     var body: some View {
         Text(caption).font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 24)
         HStack(alignment: .lastTextBaseline, spacing: 10) {
-            Text(verbatim: value).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
+            Text(verbatim: value).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
             Text(verbatim: unit).font(Typo.small).foregroundStyle(Palette.faint)
             if let status { Pill(text: status.text, foreground: status.color, background: status.color.opacity(0.14)) }
         }
