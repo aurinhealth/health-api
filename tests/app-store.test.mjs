@@ -573,10 +573,14 @@ test("a Sandbox purchase gives Pro on the live server only to the owner and the 
   assert.equal(proTester({ ...listed, APP_REVIEW_EMAIL: "tester@aurin.health" }), false, "the review account is never a Pro tester");
   // PRO_TESTFLIGHT=true: every account last seen on TestFlight has Pro, without a purchase; App Review never.
   const until = row(raw, 1).valid_until;
-  raw.sqlite.prepare("UPDATE subscriptions SET testflight=1, valid_until='2000-01-01T00:00:00Z' WHERE user_id=1").run();
+  raw.sqlite.prepare("UPDATE subscriptions SET testflight=1, install_hash=NULL, valid_until='2000-01-01T00:00:00Z' WHERE user_id=1").run();
   assert.equal((await subscriptionStatus(live)).plan, "free", "a TestFlight account without the switch");
   const allTesters = { ...live, PRO_TESTFLIGHT: "true" };
+  assert.equal((await subscriptionStatus(allTesters)).plan, "free", "a TestFlight record without Apple's install id does not");
+  raw.sqlite.prepare("UPDATE subscriptions SET install_hash='h1' WHERE user_id=1").run();
   assert.deepEqual([(await subscriptionStatus(allTesters)).plan, await plansUnlocked(allTesters)], ["ai", true], "every TestFlight account with the switch");
+  assert.equal(await aiGroup({ ...allTesters }), "testflight", "with the testers' AI limits");
+  assert.equal((await storePurchase(allTesters)).active, false, "Settings shows no purchase");
   assert.equal((await subscriptionStatus({ ...allTesters, APP_REVIEW_EMAIL: "review@aurin.health", USER_EMAIL: "review@aurin.health" })).plan, "free", "the review account still meets the paywall");
   raw.sqlite.prepare("UPDATE subscriptions SET testflight=0 WHERE user_id=1").run();
   assert.equal((await subscriptionStatus(allTesters)).plan, "free", "an App Store account does not");
