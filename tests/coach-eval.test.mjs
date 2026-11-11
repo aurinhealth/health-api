@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { COACH_EVAL_SCENARIOS, runScreenScenario, scenarioById, scenarioContext, checkReply, cardKind, runScenario, runComposeScenario, handleCoachEval, COACH_EVAL_DATE, coachEvalPrincipal, COACH_EVAL_AUDIENCE, COACH_EVAL_WORKFLOWS, effortsBackToBackText, quotesInstructions, HIDDEN_ANSWER } from '../src/coach-eval.js';
+import { COACH_EVAL_SCENARIOS, runCheckerScenario, runScreenScenario, scenarioById, scenarioContext, checkReply, cardKind, runScenario, runComposeScenario, handleCoachEval, COACH_EVAL_DATE, coachEvalPrincipal, COACH_EVAL_AUDIENCE, COACH_EVAL_WORKFLOWS, effortsBackToBackText, quotesInstructions, HIDDEN_ANSWER } from '../src/coach-eval.js';
 import { coachInstructionsFor, assistantTask, safetyNote } from '../src/coach-assistant.js';
 import { MAIN_SPORTS } from '../src/athlete-focus.js';
 import { withLang } from '../src/lang.js';
@@ -15,7 +15,7 @@ const failed = (id, reply) => checkReply(scenarioById(id), reply, now, date).fil
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
-  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'S50', 'S51', 'S52', 'S53', 'S54', 'S55', 'S56', 'S57', 'S58', 'S59', 'S60', 'S61', 'S62', 'S63', 'S64', 'S65', 'S66', 'S67', 'S68', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
+  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'S50', 'S51', 'S52', 'S53', 'S54', 'S55', 'S56', 'S57', 'S58', 'S59', 'S60', 'S61', 'S62', 'S63', 'S64', 'S65', 'S66', 'S67', 'S68', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03', ...Array.from({ length: 10 }, (_, i) => 'K' + String(i + 1).padStart(2, '0'))]);
   const zone = id => scenarioContext(scenarioById(id), date, now).ctx.cyclingCoachV2.readiness;
   assert.equal(zone('S01').todayZone, 'green');
   for (const id of ['S02', 'S03', 'S08']) assert.equal(zone(id).status, 'red', id);
@@ -101,7 +101,7 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.equal((await handleCoachEval(post({}), staging, null)).status, 401);
   assert.equal((await handleCoachEval(post({}), staging, { kind: 'system' })).status, 401);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
-  assert.equal(list.scenarios.length, 71);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
+  assert.equal(list.scenarios.length, 81);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
   const run = async (env, s) => ({ id: s.id, status: 'ok', lang: lang() });
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
@@ -778,4 +778,50 @@ test('late evening (Petr 2026-11-10, 23:49): Today\'s sentence gets the hour, th
   assert.equal(spin('Dnes už bych šel spát, ani lehké protočení už ne. VO2max bych zrušil.'), true);
   for (const good of ['Šlapání už dnes vynech a jdi spát.', 'Na šlapání je pozdě, jdi spát.', 'Zítra ráno vyjeď na 60 min.']) assert.equal(spin(good), true, good);
   for (const bad of ['Bez tlaku, dej si 20 minut lehkého šlapání.', 'Projeď se 20 minut.', 'Dej si 20 minut lehkého běhu.']) assert.equal(spin(bad), false, bad);
+});
+
+test('the AI checker reads each answer as a warning and K01–K10 test the checker itself', async () => {
+  const { checkCoachAnswer } = await import('../src/coach-checker.js');
+  // The checker sends the data, message, answer and cards to the light model and keeps only known categories.
+  let sent = null;
+  const fake = flags => async (env, request) => { sent = request; return { text: JSON.stringify({ flags }), model: 'gpt-6-luna', usage: { input_tokens: 1000, output_tokens: 20 } }; };
+  const found = await checkCoachAnswer({}, { context: { ftp: 265 }, message: 'Co dnes?', answer: 'FTP 285 W.', actions: [{ type: 'rest', date, minutes: 0, reason: '' }] },
+    { ask: fake([{ cat: 'NUMBERS', quote: 'FTP 285 W', why: 'data 265' }, { cat: 'STYLE', quote: 'x', why: 'y' }]) });
+  assert.equal(sent.feature, 'coach-check');assert.equal(sent.model, 'gpt-6-luna');assert.equal(sent.format.type, 'json_schema');
+  assert.ok(sent.input.includes('"ftp":265') && sent.input.includes('FTP 285 W.') && sent.input.includes('{"type":"rest","date":"' + date + '"}'));
+  assert.deepEqual(found.flags.map(f => f.cat), ['NUMBERS']);
+  assert.ok(found.usd > 0);
+  await assert.rejects(checkCoachAnswer({}, { context: {}, message: '', answer: '' }, { ask: async () => ({ text: 'nope' }) }));
+
+  // In a situation its finding is a quality check (a warning), so the run still passes.
+  const ask = answer => async () => ({ status: 'ok', answer, actions: [], visuals: [], model: 'm' });
+  const flagged = async () => ({ flags: [{ cat: 'MDR', quote: 'bojuje s virem', why: 'diagnóza' }], model: 'gpt-6-luna', ms: 900, usd: 0.002 });
+  const result = await runScenario({}, scenarioById('S02'), { ask: ask(czech), check: flagged, date, now });
+  const check = result.checks.find(c => c.name === 'AI kontrolor bez nálezu');
+  assert.equal(check.ok, false);assert.equal(check.severity, 'quality');assert.ok(check.detail.includes('bojuje s virem'));
+  assert.equal(result.passed, true);assert.equal(result.checker.usd, 0.002);
+  // A failing checker is a warning too; without an OpenAI key (and no test checker) it does not run.
+  const broken = await runScenario({}, scenarioById('S02'), { ask: ask(czech), check: async () => { throw new Error('timeout'); }, date, now });
+  assert.ok(broken.checks.find(c => c.name === 'AI kontrolor bez nálezu').detail.includes('timeout'));
+  assert.ok(!(await runScenario({}, scenarioById('S02'), { ask: ask(czech), date, now })).checks.some(c => c.name === 'AI kontrolor bez nálezu'));
+  // A hidden answer stays hidden: the finding shows only its category.
+  const hidden = await runScenario({}, scenarioById('S07'), { ask: ask('To ti neprozradím.'), check: flagged, date, now });
+  assert.ok(!JSON.stringify(hidden).includes('bojuje s virem'));
+
+  // K01–K10: a planted fault must be named by its category, a clean answer gets nothing.
+  const k03 = scenarioById('K03');
+  assert.equal(k03.message, scenarioById('S04').message);
+  let context = null;
+  const seen = cat => async (env, request) => { context = request.context; return { flags: cat ? [{ cat, quote: 'q', why: 'w' }] : [], model: 'gpt-6-luna', ms: 800, usd: 0.001 }; };
+  const k = await runCheckerScenario({}, k03, { check: seen('PAIN'), date, now });
+  assert.equal(k.checks[0].name, 'kontrolor najde PAIN');assert.equal(k.checks[0].ok, true);assert.equal(k.task, 'checker');
+  assert.ok(context.wellnessSeries || context.health || Object.keys(context).length > 5);
+  assert.equal((await runCheckerScenario({}, k03, { check: seen('MDR'), date, now })).checks[0].ok, false);
+  assert.equal((await runCheckerScenario({}, scenarioById('K09'), { check: seen(null), date, now })).checks[0].ok, true);
+  assert.equal((await runCheckerScenario({}, scenarioById('K10'), { check: seen('PAIN'), date, now })).checks[0].ok, false);
+  // A failing checker fails the K check as a warning, never the run, and a clean answer does not pass on it.
+  const down = await runCheckerScenario({}, scenarioById('K09'), { check: async () => { throw new Error('429'); }, date, now });
+  assert.equal(down.status, 'ok');assert.equal(down.checks[0].ok, false);assert.ok(down.checks[0].detail.includes('429'));assert.equal(down.passed, true);
+  // runScenario sends a K situation to the checker, not to the coach.
+  assert.equal((await runScenario({}, k03, { ask: async () => { throw new Error('no coach'); }, check: seen('PAIN'), date, now })).checks[0].ok, true);
 });
