@@ -1062,7 +1062,7 @@ struct ActionCard: View {
                     if canUndo { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
                     Text(result).font(Typo.caption.weight(.medium))
                     if canUndo {
-                        Button(action: undo) { Text("Vrátit").font(Typo.caption.weight(.medium)) }
+                        Button(action: undo) { Text("Vrátit").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted) }
                             .buttonStyle(.plain).padding(.leading, 6)
                     }
                 }
@@ -1552,7 +1552,7 @@ struct CoachThinkingLine: View {
 }
 
 /// One row wherever the app waits for AI: the dots, the step and, from 3 s, a
-/// faint "4 s" on the right. VoiceOver reads the step only, not the seconds.
+/// faint "4 s" after it as its own label. VoiceOver reads the step only, not the seconds.
 struct CoachWaitRow: View {
     let text: String
     var since: Date? = nil
@@ -1567,7 +1567,6 @@ struct CoachWaitRow: View {
                     Text(verbatim: text).foregroundStyle(Palette.muted)
                         .contentTransition(.opacity)
                         .animation(.easeInOut(duration: 0.25), value: text)
-                    Spacer(minLength: 0)
                     if seconds >= 3 {
                         Text(verbatim: L10n.f("%lld s", seconds)).foregroundStyle(Palette.faint).monospacedDigit()
                     }
