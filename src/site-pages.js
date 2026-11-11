@@ -69,8 +69,9 @@ p{margin:0}
 /* Cloudflare's "Verify you are human", only when Cloudflare asks for it. */
 .wl .ts{display:flex;justify-content:center}.wl .ts iframe{margin-top:12px}.wl.sent .ts{display:none}
 
-/* Grain over the whole page: printed paper rather than a flat screen. */
-.site body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.05;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+/* Grain over the whole page: printed paper rather than a flat screen. Black noise at varying alpha darkens like
+   multiply did, without a blend mode that made every moving piece repaint the whole screen behind it. */
+.site body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.035;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -.333 -.333 -.333 0 .622'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 
 /* Shared pieces of the overview. */
 .eyebrow{font-size:var(--fs-12);font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--green);margin-bottom:16px}
@@ -362,15 +363,15 @@ main:focus{outline:none}
   .js .sun{opacity:0;transform:translateY(40px);animation:lift 1.1s cubic-bezier(.16,1,.3,1) forwards}
   .sun .rg{animation:spread 4s linear infinite}.sun .rg:nth-child(3){animation-delay:-1.33s}.sun .rg:nth-child(4){animation-delay:-2.67s}
   @keyframes spread{from{transform:scale(.47);opacity:.9}to{transform:scale(1);opacity:0}}
-  .sun .mark{animation:bob 4.8s ease-in-out infinite}
-  @keyframes bob{50%{transform:translateY(-6px)}}
+  .sun .mark{will-change:transform;animation:bob 4.8s ease-in-out infinite}
+  @keyframes bob{50%{transform:translate3d(0,-6px,0)}}
   .js .lock .shackle{transform:translateY(-14px);transition:transform .5s cubic-bezier(.34,1.8,.5,1) .5s}.js .promise.in .lock .shackle{transform:none}
   .js .reveal{opacity:0;transform:translateY(28px);transition:opacity .8s ease,transform .8s cubic-bezier(.16,1,.3,1)}
   .js .reveal.in{opacity:1;transform:none}
   .js .part{transform:translate(-24px,24px) scale(.94);clip-path:inset(0 100% 0 0 round 22px);transition:opacity .5s,transform .9s cubic-bezier(.2,.8,.2,1),clip-path 1s cubic-bezier(.2,.8,.2,1) .1s}
   .js .flip .part{transform:translate(24px,24px) scale(.94);clip-path:inset(0 0 0 100% round 22px)}
-  .js .part.on,.js .flip .part.on{transform:none;clip-path:inset(0 0 0 0 round 22px);animation:float 6s ease-in-out 1.2s infinite}
-  @keyframes float{50%{transform:translateY(-8px)}}
+  .js .part.on,.js .flip .part.on{transform:none;clip-path:inset(0 0 0 0 round 22px);will-change:transform;animation:float 6s ease-in-out 1.2s infinite}
+  @keyframes float{50%{transform:translate3d(0,-8px,0)}}
   .js .auto .step.on .bar{display:block}
   .js .auto .step.on .bar i{animation:fill var(--dur,6.5s) linear forwards}
   .js .auto:is(.paused,.held) .step.on .bar i{animation-play-state:paused}
