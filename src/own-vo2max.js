@@ -187,12 +187,13 @@ export function rideFactor(estimates, previous = null) {
 }
 
 // HUNT 3 Fitness Study reference (Loe et al. 2013, PLoS ONE 8:e64319, table
-// 4): mean VO2peak of healthy Norwegians by age group (20–29 … 70+), as a
-// straight line through the groups' middles (least squares): men 43.95 at 50
-// and 0.384 less a year, women 35.2 and 0.318. A line, not the table's steps:
+// 2): mean VO2peak of healthy Norwegians by age group (20–29 … 70+; men 54.4,
+// 49.1, 47.2, 42.6, 39.2, 35.3, women 43.0, 40.0, 38.4, 34.4, 31.1, 28.3), as a
+// straight line through the groups' middles 25 … 75 (least squares): men 44.63
+// at 50 and 0.371 less a year, women 35.87 and 0.298. A line, not the table's steps:
 // between 35 and 45 the men's means differ by 2 ml/kg/min only, so a table
 // would move the age by 5 years for 1 ml/kg/min.
-const NORMS = { male: { at50: 43.95, perYear: 0.3837 }, female: { at50: 35.2, perYear: 0.3183 } };
+const NORMS = { male: { at50: 44.63, perYear: 0.3709 }, female: { at50: 35.87, perYear: 0.2977 } };
 const normOf = (sex, age) => NORMS[sex].at50 - NORMS[sex].perYear * (age - 50);
 // Fitness age (NTNU's idea): the age whose average VO2max equals this one, kept to 20–90.
 export function fitnessAge(vo2, sex) {

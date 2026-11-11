@@ -71,18 +71,18 @@ test("the resting layer: HUNT with BMI, Uth without height or weight", () => {
 });
 
 test("fitness age from the HUNT 3 norms", () => {
-  // The line through the HUNT 3 means: men 43.95 at 50, 0.384 a year.
-  assert.equal(fitnessAge(43.95, "male"), 50);
-  assert.equal(fitnessAge(47.8, "male"), 40);
-  assert.equal(fitnessAge(35.2, "female"), 50);
+  // The line through the HUNT 3 means: men 44.63 at 50, 0.371 a year (Loe 2013, table 2).
+  assert.equal(fitnessAge(44.63, "male"), 50);
+  assert.equal(fitnessAge(48.34, "male"), 40);
+  assert.equal(fitnessAge(35.87, "female"), 50);
   assert.equal(fitnessAge(70, "male"), 20);
   assert.equal(fitnessAge(10, "female"), 90);
-  // Older means lower, smoothly: 1 ml/kg/min is about 2.6 years for a man.
-  near(fitnessAge(46.8, "male") - fitnessAge(47.8, "male"), 2.6, 0.1);
+  // Older means lower, smoothly: 1 ml/kg/min is about 2.7 years for a man.
+  near(fitnessAge(46.8, "male") - fitnessAge(47.8, "male"), 2.7, 0.1);
   // Unknown sex: the mean of both.
   near(fitnessAge(44, null), (fitnessAge(44, "male") + fitnessAge(44, "female")) / 2, 0.1);
-  assert.equal(normVo2(50, "male"), 44);
-  assert.equal(normVo2(25, "female"), 43.2);
+  assert.equal(normVo2(50, "male"), 44.6);
+  assert.equal(normVo2(25, "female"), 43.3);
 });
 
 test("composite age: half the fitness gap plus capped habits, at least three of them", () => {
