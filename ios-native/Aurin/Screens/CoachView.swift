@@ -1051,9 +1051,8 @@ struct ActionCard: View {
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark").font(.caption.weight(.bold))
                     Text(verbatim: change).font(Typo.caption.weight(.medium))
-                    Text("·")
                     Button { adjust("undo", nil) } label: { Text("Vrátit").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted) }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.plain).padding(.leading, 6)
                 }
                 .foregroundStyle(Palette.green)
                 .disabled(adjusting != nil)
@@ -1063,9 +1062,8 @@ struct ActionCard: View {
                     if canUndo { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
                     Text(result).font(Typo.caption.weight(.medium))
                     if canUndo {
-                        Text("·")
                         Button(action: undo) { Text("Vrátit").font(Typo.caption.weight(.medium)) }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.plain).padding(.leading, 6)
                     }
                 }
                 .foregroundStyle(Palette.green)
@@ -1104,7 +1102,7 @@ struct ActionCard: View {
         .background(Palette.amberSoft.opacity(0.6), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    /// Kratší · Delší · Lehčí · Těžší, then Jiný den with the days ahead; a
+    /// Kratší, Delší, Lehčí, Těžší, then Jiný den with the days ahead; a
     /// choice that doesn't fit the day is grey.
     @ViewBuilder private func quickChoices(_ quick: CoachAction.Quick) -> some View {
         HStack(spacing: 6) {
@@ -1209,14 +1207,14 @@ struct PlanProposalBlock: View {
         }
     }
 
-    /// "Závod: ne 21. 3. · 21,1 km", "Délka: 12 týdnů od 28. 12.", "Týdně: 4 běhy · 3–6 h".
+    /// "Závod: ne 21. 3., 21,1 km", "Délka: 12 týdnů od 28. 12.", "Týdně: 4 běhy, 3–6 h".
     private var rows: [(String, String)] {
         var out: [(String, String)] = []
         let day = { (d: String) in Fmt.weekdayShort(d) + " " + Fmt.dayMonth(d) }
         let weeks = action.weeksCount ?? action.trainingPlan?.weeks.count ?? 0
         let length = L10n.plural("%lld týdnů", weeks)
         if let race = action.raceDate {
-            out.append((L10n.tr("Závod"), day(race) + (action.raceKm.map { " · " + raceDistance($0) } ?? "")))
+            out.append((L10n.tr("Závod"), day(race) + (action.raceKm.map { ", " + raceDistance($0) } ?? "")))
             out.append((L10n.tr("Délka"), action.startDate.map { L10n.plural("%lld týdnů od %@", weeks, Fmt.dayMonth(action.firstDay ?? $0)) } ?? length))
         } else {
             if let start = action.firstDay ?? action.startDate { out.append((L10n.tr("Začátek"), day(start))) }
@@ -1230,7 +1228,7 @@ struct PlanProposalBlock: View {
             }
             if let m = card.minutes, let lo = m.first, let hi = m.last, hi > 0 {
                 let h = { (x: Int) in String(format: "%.0f", (Double(x) / 60).rounded()) }
-                text += " · " + (h(lo) == h(hi) ? h(hi) : h(lo) + "–" + h(hi)) + " h"
+                text += ", " + (h(lo) == h(hi) ? h(hi) : h(lo) + "–" + h(hi)) + " h"
             }
             out.append((L10n.tr("Týdně"), text))
         }
@@ -1238,7 +1236,7 @@ struct PlanProposalBlock: View {
     }
 }
 
-/// The proposed session on the coach's card: "Naplánovat · Pá 16. 10.", its
+/// The proposed session on the coach's card: "Naplánovat Pá 16. 10.", its
 /// name, the profile with length, TSS and the hardest step, or the gym
 /// exercises with their sets and weights.
 struct WorkoutPreviewBlock: View {
@@ -1247,7 +1245,7 @@ struct WorkoutPreviewBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(L10n.tr("Naplánovat") + (action.date.map { " · " + Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) } ?? ""), systemImage: "wand.and.stars")
+            Label(L10n.tr("Naplánovat") + (action.date.map { " " + Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) } ?? ""), systemImage: "wand.and.stars")
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
             if let workout = preview.workout {
                 Text(verbatim: workout.name).font(Typo.sentence(22)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
@@ -1266,7 +1264,11 @@ struct WorkoutPreviewBlock: View {
                         HStack {
                             Text(verbatim: e.name).foregroundStyle(Palette.ink)
                             Spacer(minLength: 8)
-                            Text(verbatim: "\(max(1, e.sets))×\(e.reps)" + (e.kg.isEmpty ? "" : " · \(e.kg) kg")).foregroundStyle(Palette.secondary).monospacedDigit()
+                            HStack(spacing: 12) {
+                                Text(verbatim: "\(max(1, e.sets))×\(e.reps)")
+                                if !e.kg.isEmpty { Text(verbatim: "\(e.kg) kg") }
+                            }
+                            .foregroundStyle(Palette.secondary).monospacedDigit()
                         }
                         .font(Typo.caption)
                         .padding(.vertical, 7)
@@ -1283,8 +1285,8 @@ struct WorkoutPreviewBlock: View {
         }
     }
 
-    /// "1 h · 62 TSS · 88–93 % FTP": the length, the load and the hardest step.
-    /// A swim: "45 min · 1 900 m · 1:48 /100 m" in the pool, "1 h · ≈ 2 000 m · by time outside" in open water.
+    /// "1 h, 62 TSS, 88–93 % FTP": the length, the load and the hardest step.
+    /// A swim: "45 min, 1 900 m, 1:48 /100 m" in the pool, "1 h, ≈ 2 000 m, by time outside" in open water.
     private func numbers(_ w: LibraryWorkout) -> String {
         var parts: [String] = []
         if let m = w.duration_minutes ?? action.minutes, m > 0 { parts.append(Fmt.duration(Int(m.rounded()))) }
@@ -1296,7 +1298,7 @@ struct WorkoutPreviewBlock: View {
                     let slow = top.paceSlow, let fast = top.paceFast {
                 parts.append(ZonesSettingsView.pace((slow + fast) / 2) + " /100 m")
             }
-            return parts.joined(separator: " · ")
+            return parts.joined(separator: ", ")
         }
         if let tss = w.target_load, tss > 0 { parts.append("\(Int(tss.rounded())) TSS") }
         if (action.sport ?? "ride") == "ride", let top = WorkoutProfile.segments(w.steps ?? []).max(by: { $0.percent < $1.percent })?.step,
@@ -1304,7 +1306,7 @@ struct WorkoutPreviewBlock: View {
             let lo = top.percentLow ?? hi
             parts.append((lo == hi ? "\(Int(hi))" : "\(Int(lo))–\(Int(hi))") + " % FTP")
         }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -1549,8 +1551,8 @@ struct CoachThinkingLine: View {
     }
 }
 
-/// One row wherever the app waits for AI: the dots, the step and "· 4 s" from
-/// 3 s. VoiceOver reads the step only, not the seconds.
+/// One row wherever the app waits for AI: the dots, the step and, from 3 s, a
+/// faint "4 s" on the right. VoiceOver reads the step only, not the seconds.
 struct CoachWaitRow: View {
     let text: String
     var since: Date? = nil
@@ -1561,11 +1563,16 @@ struct CoachWaitRow: View {
             CoachDots(size: 6, spacing: 4)
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let seconds = Int(context.date.timeIntervalSince(since ?? appeared))
-                (Text(verbatim: text).foregroundColor(Palette.muted)
-                    + Text(verbatim: seconds >= 3 ? " · " + L10n.f("%lld s", seconds) : "").foregroundColor(Palette.faint))
-                    .font(Typo.small)
-                    .contentTransition(.opacity)
-                    .animation(.easeInOut(duration: 0.25), value: text)
+                HStack(spacing: 8) {
+                    Text(verbatim: text).foregroundStyle(Palette.muted)
+                        .contentTransition(.opacity)
+                        .animation(.easeInOut(duration: 0.25), value: text)
+                    Spacer(minLength: 0)
+                    if seconds >= 3 {
+                        Text(verbatim: L10n.f("%lld s", seconds)).foregroundStyle(Palette.faint).monospacedDigit()
+                    }
+                }
+                .font(Typo.small)
             }
         }
         .accessibilityElement(children: .ignore)
