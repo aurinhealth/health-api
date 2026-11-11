@@ -527,6 +527,8 @@ struct CoachView: View {
         let asked = Date()
         askedAt = asked
         defer { sending = false; progress = nil }
+        // An answer that failed or was cut keeps no steps: they would spin on without an end.
+        defer { edit(id) { if $0.answeredIn == nil { $0.steps = [] } } }
         // A switch to another app mid-answer: iOS gives about half a minute
         // more before the connection is frozen and lost.
         let background = FinishInBackground("Coach answer")

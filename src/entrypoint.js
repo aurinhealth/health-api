@@ -2425,7 +2425,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if(reviews.length)coachCtx.completedRideReviews=reviews;
         step(reviewStep(reviewed,'done'));
         step(todayStep(inputs.daily?.training?.planned||[]));
-        step(notesStep(coachNotes,usedMemories(athleteState)));
+        step(notesStep(notes.filter(r=>r.notes).map(r=>({text:r.notes})),usedMemories(athleteState)));
         if(blockHistory)Object.assign(coachCtx,{blockHistory,blockFitness:compactWellness(inputs.fitness.wellness,{date,days:90})||[],historyPeriod:{from:shiftDate(date,-84),to:date,source:'cached activities; missing records remain unknown'}});
       }else focus=await dashboardProfile(env).then(profile=>athleteFocus(profile,date)).catch(()=>null);
       Object.assign(coachCtx,{userInitiated:true,...(focus?.cannotSwim100m?{cannotSwim100m:true}:{}),athleteState:athleteState.status,statusNote:athleteState.note,statusUntil:athleteState.statusUntil,...(askIfBetter?{askIfBetter:true}:{}),...(BROKEN_WORDS.test(message)?{gymStations:stationList()}:{}),...(athleteState.cancelled?.length?{cancelledSessions:athleteState.cancelled}:{}),preferenceMemory:memory?[...new Set([...usedMemories(athleteState),memory])]:usedMemories(athleteState),...memoryCtx,...(sportChanges?{sportsToSuggestChange:{turnedOff:noSport}}:{}),...(ghost?{ghostChat:true}:{}),...(coachCtx.focus?{}:{focus}),conversation});

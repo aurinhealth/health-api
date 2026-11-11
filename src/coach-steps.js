@@ -52,15 +52,16 @@ export function todayStep(planned = []) {
     planned.length ? L('Dnes v plánu: ', 'Planned for today: ') + planned.slice(0, 3).map(line).join('; ') + '.' : L('Na dnešek nemáš nic naplánováno.', 'Nothing is planned for today.'));
 }
 
-// The athlete's own notes for the coach and what he remembers: counts, and the
-// newest note in the athlete's words (shown only inside the step's sheet).
+// The athlete's own notes to finished workouts (coach_reflections.notes, never
+// the coach's AI-written reflection text) and what the coach remembers: counts,
+// and the newest note in the athlete's words (shown only inside the step's sheet).
 export function notesStep(notes = [], memories = []) {
   if (!notes.length && !memories.length) return null;
   const parts = [];
   if (notes.length) parts.push(L(`Poznámky: ${notes.length}`, `${notes.length} ${notes.length === 1 ? 'note' : 'notes'}`));
   if (memories.length) parts.push(L(`co si o tobě pamatuji: ${memories.length}`, `${memories.length} ${memories.length === 1 ? 'thing' : 'things'} I remember about you`));
   const newest = notes[0]?.text ? ' ' + L('Nejnovější: ', 'Newest: ') + '„' + short(notes[0].text) + '“' : '';
-  return coachStep('notes', 'doc.text', L('Čtu tvoje poznámky pro kouče', 'Reading your notes for the coach'), parts.join(', ') + '.' + newest);
+  return coachStep('notes', 'doc.text', L('Čtu tvoje poznámky a co si pamatuji', 'Reading your notes and what I remember'), parts.join(', ') + '.' + newest);
 }
 
 export const writingStep = (status = 'running') => coachStep('writing', 'pencil', L('Píšu odpověď', 'Writing your answer'), null, status);
