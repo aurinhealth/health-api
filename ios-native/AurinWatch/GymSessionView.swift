@@ -317,7 +317,7 @@ struct GymSessionView: View {
         let setsLine = W.tr("\(sets) \((1...4).contains(sets) ? "série" : "sérií")", "\(sets) \(sets == 1 ? "set" : "sets")")
         return ScrollView {
             VStack(alignment: .leading, spacing: 5) {
-                Text(W.tr("POSILOVNA NA ŘADĚ", "GYM UP NEXT")).watchFont(12, .semibold).foregroundStyle(W.secondary)
+                Text(W.tr("NA ŘADĚ: POSILOVNA", "UP NEXT: GYM")).watchFont(12, .semibold).foregroundStyle(W.secondary)
                     .lineLimit(1).minimumScaleFactor(0.7)
                 Text(verbatim: first.map { $0.shown ?? $0.name } ?? W.tr("Posilovna", "Gym")).watchFont(16, .semibold).foregroundStyle(W.ink)
                     .lineLimit(1).minimumScaleFactor(0.7)
