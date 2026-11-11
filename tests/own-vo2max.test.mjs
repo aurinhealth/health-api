@@ -105,7 +105,10 @@ test("composite age: study-based years, capped, needs VO2max and two of sleep, g
   // The biggest gains first: waist, then sleep, gym, activity and steps.
   assert.deepEqual(Object.keys(tired.gains).slice(0, 2), ["waist", "sleep"]);
   // Sleep never lowers below the cap, long sleep adds nothing.
-  assert.equal(compositeAge({ age: 30, sex: "female", vo2max: normVo2(30, "female"), sleepHours: 9.5, gymPerWeek: 0 }).value, 30);
+  const rested = compositeAge({ age: 30, sex: "female", vo2max: normVo2(30, "female"), sleepHours: 9.5, gymPerWeek: 0 });
+  assert.equal(rested.value, 30);
+  // Only measured habits are suggested: no steps or activity here.
+  assert.deepEqual(Object.keys(rested.gains), ["strength"]);
 });
 
 test("the ride factor is learned from both sports in the window, else carried over", () => {

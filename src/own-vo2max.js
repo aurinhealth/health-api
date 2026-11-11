@@ -226,7 +226,14 @@ export function compositeAge(input) {
   // What each habit could still gain: the age again with that habit at its
   // target (7 h of regular sleep, gym weekly, 300 activity minutes, the step
   // plateau, a waist at the limit), the biggest first; under 0.3 years left out.
-  const targets = { sleep: { sleepHours: Math.max(7, input.sleepHours ?? 7), sleepSpreadMin: Math.min(30, input.sleepSpreadMin ?? 30) }, strength: { gymPerWeek: Math.max(1, input.gymPerWeek ?? 0) }, activity: { activityMinutes: Math.max(300, input.activityMinutes ?? 0) }, steps: { steps: Math.max(input.age >= 60 ? 7000 : 9000, input.steps ?? 0) }, waist: input.waist != null ? { waist: Math.min(input.waist, input.sex === "female" ? 80 : 94) } : null };
+  const has = k => input[k] != null;
+  const targets = {
+    sleep: has("sleepHours") || has("sleepSpreadMin") ? { ...(has("sleepHours") && { sleepHours: Math.max(7, input.sleepHours) }), ...(has("sleepSpreadMin") && { sleepSpreadMin: Math.min(30, input.sleepSpreadMin) }) } : null,
+    strength: has("gymPerWeek") ? { gymPerWeek: Math.max(1, input.gymPerWeek) } : null,
+    activity: has("activityMinutes") ? { activityMinutes: Math.max(300, input.activityMinutes) } : null,
+    steps: has("steps") ? { steps: Math.max(input.age >= 60 ? 7000 : 9000, input.steps) } : null,
+    waist: has("waist") ? { waist: Math.min(input.waist, input.sex === "female" ? 80 : 94) } : null
+  };
   const gains = Object.entries(targets).filter(([, t]) => t).map(([k, t]) => [k, round1(result.value - (compositeYears({ ...input, ...t })?.value ?? result.value))]).filter(([, g]) => g >= 0.3).sort((a, b) => b[1] - a[1]);
   return { ...result, gains: Object.fromEntries(gains) };
 }
@@ -330,7 +337,7 @@ export function estimateDay(inputs) {
   const value = limit == null ? raw : clamp(raw, prev.vo2max - limit, prev.vo2max + limit);
   const fit = fitnessAge(value, sex);
   const habitsActivity = activityHabits(recent, athlete), sleep = sleepHabits(inputs.sleep);
-    const composite = compositeAge({ age, sex, vo2max: value, sleepHours: sleep.hours, sleepSpreadMin: sleep.spreadMin, activityMinutes: habitsActivity.minutes, gymPerWeek: habitsActivity.gymPerWeek, steps: n(inputs.steps), restHr, waist: n(inputs.waist) });
+  const composite = compositeAge({ age, sex, vo2max: value, sleepHours: sleep.hours, sleepSpreadMin: sleep.spreadMin, activityMinutes: habitsActivity.minutes, gymPerWeek: habitsActivity.gymPerWeek, steps: n(inputs.steps), restHr, waist: n(inputs.waist) });
   return {
     date, vo2max: round1(value), confidence, fitnessAge: fit, compositeAge: composite?.value ?? null, rideFactor: factor.value,
     details: {
@@ -338,7 +345,7 @@ export function estimateDay(inputs) {
       resting: resting ? { ...resting, weight: REST_WEIGHT, activityIndex: pa } : null,
       workouts: Object.fromEntries(Object.entries(bySport).map(([k, b]) => [k, { count: b.count, weight: round2(b.weight), mean: round1(b.sum / b.weight), median: round1(median(b.values)) }])),
       rideFactorLearned: factor.learned,
-      composite: composite ? { parts: composite.parts, sleep, activity: habitsActivity } : null
+      composite: composite ? { parts: composite.parts, gains: composite.gains, sleep, activity: habitsActivity } : null
     }
   };
 }
