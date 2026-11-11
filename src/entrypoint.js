@@ -117,6 +117,7 @@ import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedR
 import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
 import { coachEvalPrincipal, handleCoachEval } from "./coach-eval.js";
+import { checkedCoachAnswer, coachCheckOn } from "./coach-checker.js";
 import { limitBody, publicBodyLimit, SIGNED_IN_BODY_LIMIT } from "./body-limit.js";
 import { accountRateLimit } from "./account-rate-limit.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleSignOut, endConnectSession, sessionSecret, foreignOriginChange, sessionMatchesUser, slidingSession } from "./dashboard-auth.js";
@@ -2432,7 +2433,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const library=searched?await searchWorkoutLibrary(env.DB,libraryAsk.query,libraryAsk.filters):{workouts:[]};
       coachCtx.workoutLibraryRecommendations=(library.workouts||[]).map(w=>({id:w.id,name:w.name,sport:w.sport||sport,source:w.source_name,sourceKind:w.source_kind,system:w.primary_system,durationMinutes:w.duration_minutes,targetLoad:w.target_load,difficulty:w.difficulty,suitability:w.suitability,challengeGap:w.challenge_gap,structure:w.intervals_description,reasons:w.reasons}));
       onProgress(L('Kouč píše…', 'The coach is writing…'));
-      const contextMs=Date.now()-started,answer=await askCoach(env,message,coachCtx,{focus,actions:true,task,onAnswer,image});
+      // With the live check on, the athlete sees the answer only after the
+      // checker read it (coach-checker.js), so nothing streams. A photo message
+      // is not checked: the checker does not see the photo the coach read.
+      const contextMs=Date.now()-started,checking=coachCheckOn(env)&&!image;
+      let answer=await askCoach(env,message,coachCtx,{focus,actions:true,task,onAnswer:checking?null:onAnswer,image}),check=null;
+      if(checking&&answer.status==='ok'){
+        const rewrite=note=>askCoach(env,message,{...coachCtx,conversation:[...(coachCtx.conversation||[]),{role:'assistant',content:String(answer.answer||'')},{role:'user',content:note}]},{focus,actions:true,task,image});
+        ({answer,check}=await checkedCoachAnswer(env,answer,{context:coachCtx,message,rewrite}));
+      }
       // The answer is written; the app keeps the line under it while the proposals are checked.
       if(Array.isArray(answer.actions)&&answer.actions.length)onProgress(L('Kontroluji návrhy…', 'Checking the proposals…'));
       coachCtx.userMessage=message;coachCtx.appContext=coachCtx.appContext||appContext;coachCtx.gymPlan=appContext.sport==='gym'?selected?.gymPlan:inputs.gym;
@@ -2476,7 +2485,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // A ghost chat left while its answer was written keeps no proposal either.
       for(const action of ghost&&!chatId?[]:actions){const own=action.type==='workout'?quick:null,draft={kind:'coach_action',action,chatId,...(messageId?{messageId}:{}),...(own?{quick:own}:{}),...(ghost?{ghost:true}:{})};const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling',message,JSON.stringify(draft)).run();const options=own?quickOptions(action,own):null;proposals.push({...action,draftId:ins.meta?.last_row_id,...(options?{quick:options}:{})});}
       delete answer.memory;
-      return {...answer,chatId,messageId,actions:proposals,coachAllowance,memorySaved:memory||saves[0]?.text||null,memoryChanges:{saved:memory||saves[0]?.text||null,saves:memory?[{text:memory,group:null}]:saves,forgotten:[],updated:[]},memoryProposals:changes,...(sportChanges?{sportChanges}:{}),costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
+      return {...answer,chatId,messageId,actions:proposals,coachAllowance,memorySaved:memory||saves[0]?.text||null,memoryChanges:{saved:memory||saves[0]?.text||null,saves:memory?[{text:memory,group:null}]:saves,forgotten:[],updated:[]},memoryProposals:changes,...(sportChanges?{sportChanges}:{}),...(check?{check}:{}),costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
     };
     // A message whose answer failed goes back to the allowance, unless part of
     // the answer already reached the chat.
