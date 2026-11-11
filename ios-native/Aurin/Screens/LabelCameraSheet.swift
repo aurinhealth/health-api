@@ -127,7 +127,7 @@ struct LabelCameraSheet: View {
     }
 
     private func load(_ item: PhotosPickerItem) async {
-        guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) else {
+        guard let data = try? await item.loadTransferable(type: Data.self), let image = await UIImage.photo(data) else {
             error = L10n.tr("Obrázek se nepodařilo načíst.")
             return
         }
@@ -230,7 +230,7 @@ final class PhotoCamera: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sen
     }
 
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        let image = photo.fileDataRepresentation().flatMap(UIImage.init(data:))
+        let image = photo.fileDataRepresentation().flatMap { UIImage.downsampled($0) }
         queue.async { [self] in
             pending?.resume(returning: image)
             pending = nil

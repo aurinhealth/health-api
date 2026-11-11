@@ -124,7 +124,7 @@ struct ShareSheet: View {
             guard let item = pickedPhoto else { return }
             pickedPhoto = nil
             Task {
-                guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) else { return }
+                guard let data = try? await item.loadTransferable(type: Data.self), let image = await UIImage.photo(data) else { return }
                 flowPhoto = SharePhoto.fitted(image)
                 photoFlow = .place(fromLibrary: true)
             }

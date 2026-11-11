@@ -111,6 +111,11 @@ test("the app's crashes are flagged with the latest one", () => {
   assert.deepEqual(reportFindings({ crashes }, null), ["2 crash(es) in the app in the last two weeks, latest 2026-10-14T07:00:00Z 1.0 (412) 1 code 2 signal 11 Loadwise +0x1a2b"]);
 });
 
+test("the app's freezes are flagged with the latest one", () => {
+  const hangs = [{ at: "2026-11-11T07:00:00Z", app: "1.0.1 (556)", ios: "26.1", seconds: 2.4, frames: ["Aurin +0x1a2b", "SwiftUI +0x40"] }, { at: "2026-11-09T07:00:00Z", app: "1.0.1 (555)", ios: "26.1", seconds: 0.6, frames: [] }];
+  assert.deepEqual(reportFindings({ hangs }, null), ["2 freeze(s) in the app in the last two weeks, latest 2026-11-11T07:00:00Z 1.0.1 (556) 2.4 s Aurin +0x1a2b"]);
+});
+
 test("nothing to flag says so", () => {
   assert.deepEqual(reportFindings({ connections: [{ id: "google", connected: true, lastSuccessAt: new Date().toISOString() }], lastErrors: {} }, { syncs: [{ name: "connection_google", status: "ok" }], failedSends: [] }), []);
   assert.deepEqual(reportFindings(null, null), []);
